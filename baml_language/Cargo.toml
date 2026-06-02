@@ -17,6 +17,9 @@ members = [
   # The failures surface via `cargo test`'s
   # `build_diagnostics::no_build_failures` test.
   "sdk_tests/crates/nodejs_typescript",
+  # Native RUSTC_WRAPPER shim (see tools_sccache/src/main.rs); the Windows
+  # counterpart to the tools/baml-sccache POSIX script, built explicitly in CI.
+  "tools_sccache",
 ]
 exclude = [
   # Generated Python rig-test outputs do not contain Cargo manifests, but the

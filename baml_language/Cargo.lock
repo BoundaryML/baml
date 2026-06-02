@@ -1655,6 +1655,7 @@ dependencies = [
  "bex_external_types",
  "bex_heap",
  "bex_vm_types",
+ "borsh",
  "crossbeam-channel",
  "log",
  "lsp-server",
@@ -2153,6 +2154,7 @@ dependencies = [
  "serde",
  "serde_json",
  "toml 0.8.23",
+ "toml_edit 0.22.27",
 ]
 
 [[package]]
@@ -7035,6 +7037,7 @@ dependencies = [
  "baml_db",
  "baml_project",
  "baml_workspace",
+ "borsh",
  "codegen_nodejs",
  "codegen_python",
 ]
@@ -8207,6 +8210,10 @@ dependencies = [
  "sys_types",
  "web-time",
 ]
+
+[[package]]
+name = "tools_sccache"
+version = "0.1.0"
 
 [[package]]
 name = "tower"

@@ -1,14 +1,18 @@
 //! Tests for the `interface` declaration and `implements I { ... }` blocks
 //! introduced by BEP-044.
 //!
-//! These tests exercise the parser + AST lowering + per-file interface
-//! validation. They do **not** exercise method dispatch at runtime — that is
-//! tracked separately as TIR/MIR work (see BEP-044 §"Method Disambiguation").
+//! These tests exercise the full pipeline: parser + AST lowering + per-file
+//! interface validation, plus method dispatch, default-body resolution,
+//! `.as<I>` projections, generic monomorphisation, and reflection executed
+//! end-to-end through the BAML VM (see BEP-044 §"Method Disambiguation").
 //!
-//! The shape of each test:
-//!   1. Compile a self-contained BAML snippet through the project pipeline.
-//!   2. Collect compile errors that originate in the user file.
-//!   3. Assert presence (or absence) of specific diagnostic codes / messages.
+//! The shape of each test is one of:
+//!   1. Compile-time: compile a self-contained BAML snippet through the
+//!      project pipeline, collect compile errors that originate in the user
+//!      file, and assert presence (or absence) of specific diagnostic codes /
+//!      messages.
+//!   2. Runtime (`#[tokio::test]`): execute the program through the VM and
+//!      pin the returned value.
 //!
 //! Coverage groups roughly track BEP-044's "Corner Cases" matrix:
 //!   • happy-path parsing of `interface`, `requires`, `implements`
@@ -854,13 +858,10 @@ fn interface_default_method_body_gets_exhaustiveness_checking() {
 
 #[test]
 fn calling_method_through_interface_typed_param() {
-    // A function parameter typed as the interface should expose the
-    // interface's methods on the value, even though the value is a concrete
-    // class. Currently this only checks the interface's `required_methods`
-    // can be referenced; method-call resolution falls through to the
-    // class's flattened methods list when the call is unqualified.
+    // A function parameter typed as the interface exposes the interface's
+    // methods on the value, even though the value is a concrete class.
     //
-    // This test pins down that interface-typed parameters accept concrete
+    // This test pins that interface-typed parameters accept concrete
     // instances and that fields declared on the interface are visible
     // through the interface-typed variable.
     assert_no_interface_errors(
@@ -2137,6 +2138,468 @@ async fn match_destructures_interface_fields() {
     );
 }
 
+/// Destructuring an interface head (`Animal { name } => ...`) binds the
+/// interface's fields directly, dispatching through the implementor's field
+/// view. Because every implementor provides the interface's declared fields,
+/// the pattern matches all of them — a single `Animal { name }` arm is
+/// exhaustive over an `Animal` scrutinee (no `_` needed).
+#[tokio::test]
+async fn match_destructures_interface_fields_directly() {
+    let output = baml_test!(
+        r#"
+        interface Animal {
+            name: string
+            function speak(self) -> string
+        }
+        class Dog {
+            name: string
+            implements Animal {
+                function speak(self) -> string { return "Woof!" }
+            }
+        }
+        class Cat {
+            nickname: string
+            implements Animal {
+                name as nickname
+                function speak(self) -> string { return "Meow." }
+            }
+        }
+        function describe(a: Animal) -> string {
+            return match (a) {
+                Animal { name } => "animal: " + name
+            }
+        }
+        function main() -> string {
+            let dog: Animal = Dog { name: "Rex" }
+            let cat: Animal = Cat { nickname: "Luna" }
+            return describe(dog) + " / " + describe(cat)
+        }
+    "#
+    );
+    assert_eq!(
+        output.result.unwrap(),
+        BexExternalValue::String("animal: Rex / animal: Luna".into())
+    );
+}
+
+#[tokio::test]
+async fn match_interface_destructure_respects_field_subpatterns() {
+    let output = baml_test!(
+        r#"
+        interface Switch {
+            active: bool
+        }
+        class Lamp {
+            active: bool
+            implements Switch {}
+        }
+
+        function describe(s: Switch) -> string {
+            return match (s) {
+                Switch { active: true } => "on"
+                Switch { active: false } => "off"
+            }
+        }
+        function main() -> string {
+            let s: Switch = Lamp { active: false }
+            return describe(s)
+        }
+    "#
+    );
+    assert_eq!(
+        output.result.unwrap(),
+        BexExternalValue::String("off".into())
+    );
+}
+
+#[test]
+fn mixed_interface_and_concrete_destructures_do_not_require_wildcard() {
+    assert_zero_compile_errors(
+        r#"
+        interface Animal {
+            name: string
+        }
+        class Dog {
+            name: string
+            breed: string
+            implements Animal {}
+        }
+
+        function describe(a: Animal) -> string {
+            return match (a) {
+                Dog { breed: "Lab" } => "lab"
+                Animal { name: string } => "animal"
+            }
+        }
+        "#,
+    );
+}
+
+#[test]
+fn interface_destructure_before_concrete_destructure_is_unreachable_not_nonexhaustive() {
+    let errors = collect_compile_errors(
+        r#"
+        interface Animal {
+            name: string
+        }
+        class Dog {
+            name: string
+            breed: string
+            implements Animal {}
+        }
+
+        function describe(a: Animal) -> string {
+            return match (a) {
+                Animal { name: string } => "animal"
+                Dog { breed: "Lab" } => "lab"
+            }
+        }
+        "#,
+    );
+    assert!(
+        errors.iter().any(|e| e.starts_with("[E0063]")),
+        "expected unreachable-arm error, got:\n  {}",
+        errors.join("\n  ")
+    );
+    assert!(
+        !errors.iter().any(|e| e.starts_with("[E0062]")),
+        "expected no non-exhaustive error, got:\n  {}",
+        errors.join("\n  ")
+    );
+}
+
+#[test]
+fn concrete_then_interface_destructure_covers_remaining_implementor_values() {
+    assert_zero_compile_errors(
+        r#"
+        interface Animal {
+            friendly: bool
+        }
+        class Dog {
+            friendly: bool
+            breed: string
+            implements Animal {}
+        }
+
+        function describe(a: Animal) -> string {
+            return match (a) {
+                Dog { friendly: true } => "friendly dog"
+                Animal { friendly: true } => "other friendly animal"
+                Animal { friendly: false } => "other animal"
+            }
+        }
+        "#,
+    );
+}
+
+#[test]
+fn mixed_interface_and_concrete_destructures_project_aliased_fields() {
+    assert_zero_compile_errors(
+        r#"
+        interface Toggle {
+            on: bool
+        }
+        class Widget {
+            label: string
+            enabled: bool
+            implements Toggle {
+                on as enabled
+            }
+        }
+
+        function describe(t: Toggle) -> string {
+            return match (t) {
+                Widget { enabled: true } => "on"
+                Toggle { on: true } => "other on"
+                Toggle { on: false } => "off"
+            }
+        }
+        "#,
+    );
+}
+
+#[test]
+fn mixed_interface_and_generic_concrete_destructures_project_class_type_args() {
+    assert_zero_compile_errors(
+        r#"
+        interface Slot<T> {
+            value: T
+        }
+        class Pair<L, R> {
+            left: L
+            right: R
+            implements Slot<L> {
+                value as left
+            }
+        }
+
+        function describe(s: Slot<int>) -> string {
+            return match (s) {
+                Pair<int, string> { right: "seven" } => "pair"
+                Slot<int> { value: int } => "slot"
+            }
+        }
+        "#,
+    );
+}
+
+#[test]
+fn mixed_interface_and_generic_concrete_destructures_project_swapped_class_type_args() {
+    assert_zero_compile_errors(
+        r#"
+        interface Cell<T> {
+            item: T
+        }
+        class Pair<L, R> {
+            left: L
+            right: R
+            implements Cell<R> {
+                item as right
+            }
+        }
+
+        function describe(c: Cell<string>) -> string {
+            return match (c) {
+                Pair<int, string> { left: 7 } => "pair"
+                Cell<string> { item: string } => "cell"
+            }
+        }
+        "#,
+    );
+}
+
+#[test]
+fn mixed_interface_and_generic_concrete_destructures_project_second_implements_block() {
+    assert_zero_compile_errors(
+        r#"
+        interface Slot<T> {
+            value: T
+        }
+        class Pair<L, R> {
+            left: L
+            right: R
+            implements Slot<L> {
+                value as left
+            }
+            implements Slot<R> {
+                value as right
+            }
+        }
+
+        function describe(s: Slot<string>) -> string {
+            return match (s) {
+                Pair<int, string> { left: 7 } => "pair"
+                Slot<string> { value: string } => "slot"
+            }
+        }
+        "#,
+    );
+}
+
+#[test]
+fn generic_interface_and_concrete_destructures_still_report_partial_coverage() {
+    assert_compile_error_code(
+        r#"
+        interface Slot<T> {
+            value: T
+        }
+        class Pair<L, R> {
+            left: L
+            right: R
+            implements Slot<L> {
+                value as left
+            }
+        }
+
+        function describe(s: Slot<int>) -> string {
+            return match (s) {
+                Pair<int, string> { right: "seven" } => "pair"
+                Slot<int> { value: 1 } => "one"
+            }
+        }
+        "#,
+        "E0062",
+    );
+}
+
+#[test]
+fn union_of_generic_interfaces_allows_mixed_interface_and_concrete_destructures() {
+    assert_zero_compile_errors(
+        r#"
+        interface Slot<T> {
+            value: T
+        }
+        class Pair<L, R> {
+            left: L
+            right: R
+            implements Slot<L> {
+                value as left
+            }
+        }
+
+        interface Cargo<T> {
+            payload: T
+        }
+        class Box<T> {
+            inner: T
+            label: string
+            implements Cargo<T> {
+                payload as inner
+            }
+        }
+
+        function describe(x: Slot<int> | Cargo<string>) -> string {
+            return match (x) {
+                Pair<int, string> { right: "tag" } => "pair"
+                Slot<int> { value: int } => "slot"
+                Box<string> { label: "crate" } => "box"
+                Cargo<string> { payload: string } => "cargo"
+            }
+        }
+        "#,
+    );
+}
+
+#[test]
+fn union_of_generic_interfaces_reports_missing_interface_branch() {
+    assert_compile_error_code(
+        r#"
+        interface Slot<T> {
+            value: T
+        }
+        class Pair<L, R> {
+            left: L
+            right: R
+            implements Slot<L> {
+                value as left
+            }
+        }
+
+        interface Cargo<T> {
+            payload: T
+        }
+        class Box<T> {
+            inner: T
+            label: string
+            implements Cargo<T> {
+                payload as inner
+            }
+        }
+
+        function describe(x: Slot<int> | Cargo<string>) -> string {
+            return match (x) {
+                Pair<int, string> { right: "tag" } => "pair"
+                Slot<int> { value: int } => "slot"
+            }
+        }
+        "#,
+        "E0062",
+    );
+}
+
+#[test]
+fn union_of_interfaces_allows_mixed_interface_and_concrete_destructures() {
+    assert_zero_compile_errors(
+        r#"
+        interface Animal {
+            awake: bool
+        }
+        class Dog {
+            awake: bool
+            breed: string
+            implements Animal {}
+        }
+
+        interface Vehicle {
+            running: bool
+        }
+        class Car {
+            running: bool
+            make: string
+            implements Vehicle {}
+        }
+
+        function describe(x: Animal | Vehicle) -> string {
+            return match (x) {
+                Dog { awake: true } => "dog"
+                Animal { awake: true } => "animal"
+                Animal { awake: false } => "animal"
+                Car { running: true } => "car"
+                Vehicle { running: true } => "vehicle"
+                Vehicle { running: false } => "vehicle"
+            }
+        }
+        "#,
+    );
+}
+
+#[test]
+fn mixed_interface_and_concrete_destructures_still_report_partial_coverage() {
+    assert_compile_error_code(
+        r#"
+        interface Animal {
+            name: string
+            friendly: bool
+        }
+        class Dog {
+            name: string
+            friendly: bool
+            implements Animal {}
+        }
+
+        function describe(a: Animal) -> string {
+            return match (a) {
+                Dog { friendly: true } => "friendly"
+                Animal { name: "Rex" } => "rex"
+            }
+        }
+        "#,
+        "E0062",
+    );
+}
+
+/// Narrowing an interface-typed value with a concrete-implementor *destructure*
+/// pattern (`Dog { name } => ...`) also works — it binds the class's own fields.
+#[tokio::test]
+async fn match_destructures_concrete_implementor_fields() {
+    let output = baml_test!(
+        r#"
+        interface Animal {
+            name: string
+            function speak(self) -> string
+        }
+        class Dog {
+            name: string
+            breed: string
+            implements Animal {
+                function speak(self) -> string { return "Woof!" }
+            }
+        }
+        class Cat {
+            name: string
+            implements Animal {
+                function speak(self) -> string { return "Meow." }
+            }
+        }
+        function describe(a: Animal) -> string {
+            return match (a) {
+                Dog { name, breed } => name + " the " + breed
+                Cat { name } => name + " the cat"
+                _ => "other"
+            }
+        }
+        function main() -> string {
+            let a: Animal = Dog { name: "Rex", breed: "Lab" }
+            return describe(a)
+        }
+    "#
+    );
+    assert_eq!(
+        output.result.unwrap(),
+        BexExternalValue::String("Rex the Lab".into())
+    );
+}
+
 #[tokio::test]
 async fn match_open_interface_with_wildcard_works() {
     let output = baml_test!(
@@ -3137,9 +3600,8 @@ fn as_requires_interface_target() {
 
 #[tokio::test]
 async fn dispatch_through_function_call_result() {
-    // `f().speak()` where `f()` returns an interface-typed value should
-    // dispatch dynamically. Today the MIR intercepts only direct local
-    // receivers, so the type-tag switch isn't emitted here.
+    // `f().speak()` where `f()` returns an interface-typed value dispatches
+    // dynamically on the runtime class of the call result.
     let output = baml_test!(
         r#"
         interface Animal {
@@ -3193,7 +3655,7 @@ async fn dispatch_through_array_index_with_field_access() {
 #[tokio::test]
 async fn dispatch_through_field_access_chain() {
     // `wrapper.animal.speak()` — receiver is a field access, not a
-    // local. Path interception needs to recognize this longer chain.
+    // local. Dispatch fires on the runtime class reached through the chain.
     let output = baml_test!(
         r#"
         interface Animal {
@@ -3768,10 +4230,10 @@ async fn default_call_with_computed_argument_expression() {
 #[test]
 fn default_keyword_inside_lambda_inside_implements_block() {
     // `default.log(msg)` referenced from inside a lambda nested in the
-    // override. Lambdas inherit access to `self` but the BEP-044 keyword
-    // scoping rules don't reach this far yet, so this is a compile-time
-    // failure today. Pin it and flip to a runtime check when lambdas
-    // start tracking the enclosing implements-block context.
+    // override is a compile error: per BEP-044, the `default` magic
+    // identifier does not capture across closure boundaries — a lambda body
+    // sees it as an unresolved name. (Bind the default's result outside the
+    // lambda first if you need it.)
     assert_compile_error_contains(
         r#"
         interface Logger {
@@ -6387,12 +6849,17 @@ fn bounded_type_var_rule_conservatively_overlaps_in_body_generic_class_rule() {
 // ═══════════════════════════════════════════════════════════════════════════
 // BEP-044 regression suite — derived from a CLI fuzz/stress sweep (45 findings).
 //
-// Every test below pins behavior that is currently BROKEN. They are expected to
-// FAIL on `canary` and to start passing as each defect is fixed. Numbers map to
-// _plan/baml_interface_findings.md. Positive cases run the program end-to-end and
-// assert the concrete result; "must-reject" cases assert the diagnostic that
-// should fire. Finding #30 (a too-weak existing test) is covered by
-// `fuzz_bug29_*` below, which asserts the canonical `let d: Dog =>` form narrows.
+// Each test below is a regression guard pinning the corrected behavior for a
+// finding from that sweep; the doc comment on each names the original defect it
+// guards against. All of these PASS now — positive cases run the program
+// end-to-end and assert the concrete result; "must-reject" cases assert the
+// diagnostic that fires. Numbers map to _plan/baml_interface_findings.md.
+// Finding #30 (a too-weak existing test) is covered by `fuzz_bug29_*` below,
+// which asserts the canonical `let d: Dog =>` form narrows.
+//
+// EXCEPTION: findings #1 and #2 (`fuzz_bug01_*`, `fuzz_bug02_*`) remain
+// `#[ignore]`d — they need interface methods as first-class values
+// (`let f = Interface.method` with dynamic dispatch), which is not implemented.
 // ═══════════════════════════════════════════════════════════════════════════
 
 /// Finding #1 [crash]: Interface method reference on required (abstract) method crashes at runtime
@@ -6729,8 +7196,8 @@ function main() -> bool {
     let rr: Slot<string> = p
     let lv = rl.get()
     let rv = rr.get()
-    // Expected: lv == 42 && rv == "world"
-    // Actual:   lv == 42 && rv == 42  (second dispatch picks first impl block)
+    // Each interface view dispatches to its own impl block:
+    // lv == 42 (Slot<int>) && rv == "world" (Slot<string>).
     return lv == 42 && rv == "world"
 }
 "##
@@ -6761,8 +7228,8 @@ function main() -> bool {
     let p: GenPair<int, string> = GenPair { left: 7, right: "seven" }
     let i: Slot<int> = p
     let s: Slot<string> = p
-    // Expected: i.value == 7 && s.value == "seven"
-    // Actual: i.value == 7 && s.value == 7 (wrong impl selected)
+    // Each field-link view selects the impl block matching its type arg:
+    // i.value == 7 (Slot<int>) && s.value == "seven" (Slot<string>).
     return i.value == 7 && s.value == "seven"
 }
 "##
@@ -7115,7 +7582,7 @@ class Impl {
 
 function main() -> string {
     let x = Impl {}
-    return x.process()  // Expected: E0121; Actual: compiles and returns "REQUIRED"
+    return x.process()  // E0121: ambiguous between the default and required `process`
 }
 "##,
         "E0121",
@@ -7141,7 +7608,7 @@ class Multi {
 
 function main() -> int {
     let m = Multi {}
-    return m.convert()  // picks Converter<int> silently
+    return m.convert()  // E0121: ambiguous between Converter<int> and Converter<string>
 }
 "##,
         "E0121",
@@ -7232,7 +7699,8 @@ function main() -> string {
         true => Dog {}
         false => Cat {}
     }
-    // result is Dog | Cat union - calling any method crashes the VM
+    // result is a Dog | Cat union; `speak()` is present on every member, so
+    // the call dispatches on the runtime class (Dog here).
     return result.speak()
 }
 "##
@@ -7313,8 +7781,8 @@ class IntBox {
 }
 
 function main() -> bool {
-    // IntBox only implements Box<int>, NOT Box<string>
-    // Expected: false. Actual: true (wrong!)
+    // IntBox only implements Box<int>, NOT Box<string>, so this is false —
+    // `implements` respects the generic type argument.
     return reflect.type_of<IntBox>().implements(reflect.type_of<Box<string>>())
 }
 "##
@@ -7336,8 +7804,8 @@ class IntBox {
 }
 
 function main() -> bool {
-    // Box<string>.implemented_by(IntBox) should be false
-    // IntBox only implements Box<int>
+    // Box<string>.implemented_by(IntBox) is false — IntBox only implements
+    // Box<int>, and `implemented_by` respects the type argument.
     return reflect.type_of<Box<string>>().implemented_by(reflect.type_of<IntBox>())
 }
 "##
@@ -7364,8 +7832,8 @@ class StringBox {
 }
 
 function main() -> int {
-    // Box<int>.implementors() should return [IntBox] (length 1)
-    // But actually returns both IntBox and StringBox (length 2)
+    // Box<int>.implementors() returns just [IntBox] (length 1) — the type
+    // argument filters out StringBox (which implements Box<string>).
     return reflect.type_of<Box<int>>().implementors().length()
 }
 "##
@@ -7838,17 +8306,16 @@ fn ambiguous_method_namespace_qualified_fix_compiles() {
 // run through `baml-cli`; findings are recorded in `_plan/wf3/FINDINGS.md`, and
 // every test below names the originating `_plan/wf3/<area>/<file>` repro.
 //
-// Like the `fuzz_*` suite above, the bug / desired-direction tests pin the
-// CORRECT behavior and are expected to FAIL on current code (reproducing the
-// defect) and to start passing as each is fixed. Tests suffixed `_pins` pin
-// behavior that is correct today (sometimes subtle or surprising) so a
-// regression is caught.
+// Like the `fuzz_*` suite above, each test is a regression guard that PASSES
+// now; its doc comment names the original defect it guards against. Tests
+// suffixed `_pins` pin behavior that was already correct (sometimes subtle or
+// surprising) so a regression is caught.
 // ═══════════════════════════════════════════════════════════════════════════
 
-// ── Crashes (type-checker-accepted code that panics the VM) ──────────────────
+// ── Formerly crashes (type-checker-accepted code that panicked the VM) ───────
 
-/// wf3 #1 [crash]: generic `Sub<T> requires Base<T>` whose default method calls
-/// the parent's required method via `self` crashes the VM when dispatched
+/// wf3 #1 [was: crash]: generic `Sub<T> requires Base<T>` whose default method
+/// calls the parent's required method via `self` — now dispatches correctly
 /// through an interface-typed var. `_plan/wf3/generics-core/gen_requires_generic.baml`
 #[tokio::test]
 async fn wf3_generic_requires_chain_default_delegation_runtime() {
@@ -7879,8 +8346,8 @@ async fn wf3_generic_requires_chain_default_delegation_runtime() {
     assert_eq!(output.result.unwrap(), BexExternalValue::Int(77));
 }
 
-/// wf3 #2 [crash]: chained Form2 blanket impls (`Loud for T where T: Printable`,
-/// `Printable for T where T: Named`) crash the VM.
+/// wf3 #2 [was: crash]: chained Form2 blanket impls (`Loud for T where T:
+/// Printable`, `Printable for T where T: Named`) now dispatch correctly.
 /// `_plan/wf3/generics-bounds-blanket/p8b_blanket_on_blanket_min.baml`
 #[tokio::test]
 async fn wf3_blanket_on_blanket_chain_runtime() {
@@ -7908,10 +8375,10 @@ async fn wf3_blanket_on_blanket_chain_runtime() {
     );
 }
 
-/// wf3 #3 [crash/unsound]: a phantom impl type param
+/// wf3 #3 [was: crash/unsound]: a phantom impl type param
 /// (`implements<T> Tagged<T> for Holder` where `T` appears only in the interface
-/// args) must be rejected at compile time — today it compiles, is accepted as
-/// `Tagged<int|string|bool>`, and crashes the VM.
+/// args) is now rejected at compile time — previously it compiled, was accepted
+/// as `Tagged<int|string|bool>`, and crashed the VM.
 /// `_plan/wf3/generics-bounds-blanket/p13c_phantom_single.baml`
 #[test]
 fn wf3_phantom_impl_type_param_is_rejected() {
@@ -7935,12 +8402,12 @@ fn wf3_phantom_impl_type_param_is_rejected() {
     );
 }
 
-/// wf3 #4 [crash]: `default.<field>` type-checks as `string` but reads `null`,
-/// then `string + any` crashes the VM. Expected: `default.name` resolves to the
-/// field like `self.name`/`self.as<Named>.name` do (all read "Bob"). (If the
-/// language instead restricts `default` to call position — see
-/// `wf3_default_as_bare_value_is_rejected` — this should become a compile error,
-/// not a crash.) `_plan/wf3/default-methods/p6d_default_vs_self_field.baml`
+/// wf3 #4 [was: crash]: `default.<field>` now resolves to the field like
+/// `self.name`/`self.as<Named>.name` do (all read "Bob"); previously it
+/// type-checked as `string` but read `null`, then `string + any` crashed the
+/// VM. (`default` as a bare value is still rejected — see
+/// `wf3_default_as_bare_value_is_rejected`.)
+/// `_plan/wf3/default-methods/p6d_default_vs_self_field.baml`
 #[tokio::test]
 async fn wf3_default_field_access_does_not_crash() {
     let output = baml_test!(
@@ -8071,10 +8538,10 @@ async fn wf3_reflect_implemented_by_generic_arg_substitution_runtime() {
     assert_eq!(output.result.unwrap(), BexExternalValue::Bool(true));
 }
 
-/// wf3 #8 [high/soundness]: a `-> Self` method in `Box`'s implements block has
-/// `Self = Box`; returning a `Cup` must be a compile error. Today it compiles and
-/// a `Box`-typed value backed by a runtime `Cup` reads a non-existent field.
-/// `_plan/wf3/self-types/self_wrong_class_field_access.baml`
+/// wf3 #8 [was: high/soundness]: a `-> Self` method in `Box`'s implements block
+/// has `Self = Box`; returning a `Cup` is now a compile error. Previously it
+/// compiled and a `Box`-typed value backed by a runtime `Cup` read a
+/// non-existent field. `_plan/wf3/self-types/self_wrong_class_field_access.baml`
 #[test]
 fn wf3_self_return_wrong_concrete_class_is_rejected() {
     let errors = collect_compile_errors(
@@ -8677,8 +9144,8 @@ async fn wf3_self_interface_field_access_via_projection_runtime() {
 
 /// wf3 [low/design]: a `throws` narrower than the interface's declaration
 /// (`throws NetworkError` where `NetworkError implements IError` and the
-/// interface declares `throws IError`) should be allowed by covariance — today
-/// it is rejected E0120 even though throwing a subtype at a throw-site is fine.
+/// interface declares `throws IError`) is now allowed by covariance, matching
+/// the fact that throwing a subtype at a throw-site is fine (previously E0120).
 /// `_plan/wf3/out-of-body-throws/oob_throws_subset.baml`
 #[test]
 fn wf3_throws_covariant_narrower_is_allowed() {

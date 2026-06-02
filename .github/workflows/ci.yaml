@@ -645,17 +645,17 @@ jobs:
           mode: walltime
           # Executes ONLY the prebuilt binaries downloaded above; no compiler runs.
           #
-          # The `vm_|engine_init` filter selects only the benches that measure
-          # *runtime* (VM execution / engine init from prebuilt bytecode). The
-          # excluded `compile_to_engine`, `startup_empty_expression`, and `e2e_*`
-          # benches time compilation inside the measured region — out of scope for
-          # this runtime perf suite.
+          # Every bench is a `vm_speedtest_*` function auto-generated from the
+          # cross-language workload corpus under tools/speedtest/workloads/*.md
+          # (see baml_tests/build.rs). They measure *pure VM execution*: the BAML
+          # is compiled and the tokio runtime is built once, OUTSIDE the measured
+          # region (see bench_vm_main), so only `main()` is timed. Sleep-based
+          # workloads are excluded at build time.
           #
-          # These benches compile the project + build the tokio runtime once,
-          # outside the measured region (see bench_vm_main), so the full suite is
+          # The `vm_speedtest` filter selects exactly that suite, which runs in
           # ~2 min/pass on the macro runner at the default 100 samples — well
           # within the timeout, no sample-count tuning needed.
-          run: cd baml_language && cargo codspeed run -m walltime 'vm_|engine_init'
+          run: cd baml_language && cargo codspeed run -m walltime 'vm_speedtest'
           token: ${{ secrets.CODSPEED_TOKEN }}
 
   # CI Failure Alert - Required status check using "skipped = success" pattern
@@ -679,7 +679,11 @@ jobs:
       - webview-tests
       # - miri-tests  # TEMPORARILY DISABLED: miri tests timing out
       - proto-sync
-      - size-gate
+      # NOTE: size-gate is intentionally NOT a required gate. It is an
+      # informational signal (PR comment + daily baseline auto-refresh), not
+      # a merge blocker: a size bump must never block the merge queue or force
+      # a full CI re-run. Drift is caught by the daily refresh PR and by
+      # reviewers eyeballing the size-gate comment, not by failing CI here.
     # Only run if something failed or was cancelled (otherwise skip → success)
     if: ${{ failure() || cancelled() }}
     steps:
@@ -700,7 +704,6 @@ jobs:
           echo "| webview-tests | ${{ needs.webview-tests.result }} |" >> $GITHUB_STEP_SUMMARY
           # echo "| miri-tests | ${{ needs.miri-tests.result }} |" >> $GITHUB_STEP_SUMMARY  # TEMPORARILY DISABLED
           echo "| proto-sync | ${{ needs.proto-sync.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| size-gate | ${{ needs.size-gate.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "::error::One or more CI jobs failed!"
           exit 1

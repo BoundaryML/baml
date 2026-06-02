@@ -527,22 +527,13 @@ fn print_fix_hint(rows: &[ReportRow]) {
     }
 
     if ctx.has_delta_violations {
-        eprintln!(
-            "hint: delta policy violated — if the size increase is intentional, update baselines with:"
-        );
+        eprintln!("hint: size grew vs the committed baseline. If this is intentional, adopt the");
+        eprintln!("      exact sizes the latest canary CI run measured (no local rebuild; all");
+        eprintln!("      platforms at once) and commit the result:");
         eprintln!();
-        eprintln!("    cargo run -p cargo-size-gate -- size-gate record");
+        eprintln!("    cargo run -p cargo-size-gate -- size-gate bake --branch canary");
         eprintln!();
-        eprintln!("  or apply this diff to the baseline files:");
-        eprintln!();
-        for row in &ctx.delta_rows {
-            let path = format!(".ci/size-gate/{}.toml", row.platform);
-            eprintln!("  # {path}");
-            for line in baseline_toml_snippet(row).lines() {
-                eprintln!("  {line}");
-            }
-            eprintln!();
-        }
+        eprintln!("  (use --branch <name> to adopt from a different branch's latest CI run.)");
     }
 
     if ctx.has_absolute_violations {
@@ -585,21 +576,18 @@ fn print_fix_hint_md(rows: &[ReportRow]) {
 
     if ctx.has_delta_violations {
         println!(
-            "**Delta policy violated** — if the size increase is intentional, update baselines:\n"
+            "**Size grew vs the committed baseline.** If this is intentional, adopt the exact \
+             sizes the latest canary CI run measured (no local rebuild; all platforms at once) \
+             and commit the result:\n"
         );
         println!("```");
-        println!("cargo run -p cargo-size-gate -- size-gate record");
+        println!("cargo run -p cargo-size-gate -- size-gate bake --branch canary");
         println!("```\n");
-        println!("<details>");
-        println!("<summary>Or apply this diff to the baseline files</summary>\n");
-        for row in &ctx.delta_rows {
-            let path = format!(".ci/size-gate/{}.toml", row.platform);
-            println!("**`{path}`**:");
-            println!("```toml");
-            println!("{}", baseline_toml_snippet(row));
-            println!("```\n");
-        }
-        println!("</details>\n");
+        println!(
+            "_Use `--branch <name>` to adopt from a different branch's latest CI run. \
+             The daily baseline-refresh job does this automatically, so most drift is \
+             corrected without any manual step._\n"
+        );
     }
 
     if ctx.has_absolute_violations {

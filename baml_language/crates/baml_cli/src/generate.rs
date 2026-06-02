@@ -1,9 +1,6 @@
 #![allow(clippy::print_stdout, clippy::print_stderr)]
 
-use std::{
-    collections::HashMap,
-    path::{Path, PathBuf},
-};
+use std::{collections::HashMap, path::PathBuf};
 
 use anyhow::{Context, Result, anyhow};
 use baml_db::{
@@ -132,9 +129,12 @@ impl GenerateArgs {
         // Build the codegen SymbolPool from the compiler database.
         let pool = baml_project::build_symbol_pool(&db);
 
-        // Collect user BAML source files keyed by path relative to
-        // `baml_src/` for inlining into `baml_sdk/baml/_inlinedbaml.py`.
-        let user_baml_files = collect_user_baml_files(&db, &source_files, &from);
+        reporter.spin("Compiling", format!("{} file(s)", source_files.len()));
+        let program = db
+            .get_bytecode()
+            .map_err(|e| anyhow!("Compilation failed: {e:?}"))?;
+        let baml_bytecode = borsh::to_vec(&program)
+            .map_err(|e| anyhow!("Failed to serialize BAML bytecode: {e}"))?;
 
         let mut total_files = 0;
 
@@ -147,9 +147,9 @@ impl GenerateArgs {
 
             let generated = match generator.output_type {
                 OutputType::PythonPydantic | OutputType::PythonPydanticV1 => {
-                    codegen_python::to_source_code(
+                    codegen_python::to_source_code_with_bytecode(
                         &pool,
-                        &user_baml_files,
+                        &baml_bytecode,
                         generator.naming_convention,
                     )
                 }
@@ -354,23 +354,4 @@ fn get_config(items: &[GeneratorConfigItem], key: &str) -> Option<String> {
         .iter()
         .find(|item| item.key.as_str() == key)
         .map(|item| item.value.clone())
-}
-
-/// Collect user BAML source files as `(rel_path, contents)` pairs.
-/// `rel_path` is relative to `baml_src/` so it matches the keys the
-/// runtime's `initialize_runtime(...)` expects in the inlined `FILES`
-/// dict.
-fn collect_user_baml_files(
-    db: &ProjectDatabase,
-    source_files: &[baml_db::SourceFile],
-    baml_src: &Path,
-) -> Vec<(PathBuf, String)> {
-    source_files
-        .iter()
-        .map(|sf| {
-            let path = sf.path(db);
-            let rel = path.strip_prefix(baml_src).unwrap_or(&path).to_path_buf();
-            (rel, sf.text(db).to_string())
-        })
-        .collect()
 }

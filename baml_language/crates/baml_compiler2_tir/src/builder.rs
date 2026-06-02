@@ -5590,7 +5590,10 @@ impl<'db> TypeInferenceBuilder<'db> {
             } else {
                 self.resolve_type_expr_silent(&ty_expr)
             };
-            if matches!(ty, Ty::Class(..) | Ty::Unknown { .. } | Ty::Error { .. }) {
+            if matches!(
+                ty,
+                Ty::Class(..) | Ty::Interface(..) | Ty::Unknown { .. } | Ty::Error { .. }
+            ) {
                 return ty;
             }
             if let Some((pat_id, fallback)) = anchor {
@@ -5610,9 +5613,13 @@ impl<'db> TypeInferenceBuilder<'db> {
             };
         }
 
-        if let Some((_source, ty @ Ty::Class(..))) =
-            self.res_ctx
-                .resolve_type(self.context.db(), class, &self.ns_context)
+        // Accept both class heads (`Dog { ... }`) and interface heads
+        // (`Animal { ... }`). An interface destructure matches any implementor
+        // and binds the interface's fields through their views — see the
+        // interface branch in `lower_class_pat`.
+        if let Some((_source, ty @ (Ty::Class(..) | Ty::Interface(..)))) = self
+            .res_ctx
+            .resolve_type(self.context.db(), class, &self.ns_context)
         {
             return ty;
         }
@@ -9058,6 +9065,191 @@ impl<'db> TypeInferenceBuilder<'db> {
             .collect()
     }
 
+    /// Interface field `(name, type)` pairs in requires-closure order with
+    /// generic substitution applied. This mirrors `resolve_interface_member`
+    /// but is side-effect-free for matrix construction.
+    fn interface_field_infos_ordered(
+        &self,
+        iface_name: &crate::ty::QualifiedTypeName,
+        iface_type_args: &[Ty],
+    ) -> Vec<(Name, Ty)> {
+        let mut out = Vec::new();
+        let mut seen = FxHashSet::default();
+        let Some(pkg_items) = self.resolve_class_pkg_items(iface_name.package()) else {
+            return out;
+        };
+        let Some(Definition::Interface(root_loc)) =
+            pkg_items.lookup_type(iface_name.namespace(), iface_name.name())
+        else {
+            return out;
+        };
+
+        let db = self.context.db();
+        let root_pkg = baml_compiler2_hir::file_package::file_package(db, root_loc.file(db));
+        for (iface_loc, closure_args) in crate::interfaces::interface_closure_locs_with_args(
+            db,
+            root_loc,
+            iface_type_args,
+            pkg_items,
+            &root_pkg.namespace_path,
+        ) {
+            let file = iface_loc.file(db);
+            let iface_tree = baml_compiler2_ppir::file_item_tree(db, file);
+            let Some(iface_data) = iface_tree.interfaces.get(&iface_loc.id(db)) else {
+                continue;
+            };
+            let iface_ns = baml_compiler2_hir::file_package::file_package(db, file)
+                .namespace_path
+                .clone();
+            let bindings =
+                crate::generics::bind_type_vars(&iface_data.generic_params, &closure_args);
+
+            for field in &iface_data.fields {
+                if !seen.insert(field.name.clone()) {
+                    continue;
+                }
+                let ty = field
+                    .type_expr
+                    .as_ref()
+                    .map(|te| {
+                        let mut diags = Vec::new();
+                        if bindings.is_empty() {
+                            crate::lower_type_expr::lower_type_expr_in_ns(
+                                db,
+                                &te.expr,
+                                pkg_items,
+                                &iface_ns,
+                                &iface_data.generic_params,
+                                &mut diags,
+                            )
+                        } else {
+                            crate::generics::lower_type_expr_with_generics(
+                                db, &te.expr, pkg_items, &iface_ns, &bindings, &mut diags,
+                            )
+                        }
+                    })
+                    .unwrap_or(Ty::Unknown {
+                        attr: TyAttr::default(),
+                    });
+                out.push((field.name.clone(), ty));
+            }
+        }
+
+        out
+    }
+
+    /// For an exact interface instantiation that a class implements, find the
+    /// concrete class field backing one interface field. Side-effect-free
+    /// counterpart to `qualified_interface_field_for_construction`.
+    fn class_field_name_for_interface_field(
+        &self,
+        class_name: &crate::ty::QualifiedTypeName,
+        class_type_args: &[Ty],
+        target_iface_name: &crate::ty::QualifiedTypeName,
+        target_iface_args: &[Ty],
+        field_name: &Name,
+    ) -> Option<Name> {
+        let pkg_items = self.resolve_class_pkg_items(class_name.package())?;
+        let Definition::Class(class_loc) =
+            pkg_items.lookup_type(class_name.namespace(), class_name.name())?
+        else {
+            return None;
+        };
+        let db = self.context.db();
+        let item_tree = baml_compiler2_ppir::file_item_tree(db, class_loc.file(db));
+        let class_data = &item_tree[class_loc.id(db)];
+        let class_ns =
+            baml_compiler2_hir::file_package::file_package(db, class_loc.file(db)).namespace_path;
+        let class_bindings =
+            crate::generics::bind_type_vars(&class_data.generic_params, class_type_args);
+
+        for impl_target in &class_data.implements {
+            let Some(root_iface_loc) = crate::interfaces::resolve_path_to_interface(
+                db,
+                &impl_target.target.expr,
+                pkg_items,
+                &class_ns,
+            ) else {
+                continue;
+            };
+
+            let root_iface_type_args = match &impl_target.target.expr {
+                TypeExpr::Path { generic_args, .. } => {
+                    let mut diags = Vec::new();
+                    generic_args
+                        .iter()
+                        .map(|arg| {
+                            if class_bindings.is_empty() {
+                                crate::lower_type_expr::lower_type_expr_in_ns(
+                                    db,
+                                    arg,
+                                    pkg_items,
+                                    &class_ns,
+                                    &class_data.generic_params,
+                                    &mut diags,
+                                )
+                            } else {
+                                crate::generics::lower_type_expr_with_generics(
+                                    db,
+                                    arg,
+                                    pkg_items,
+                                    &class_ns,
+                                    &class_bindings,
+                                    &mut diags,
+                                )
+                            }
+                        })
+                        .collect::<Vec<_>>()
+                }
+                _ => Vec::new(),
+            };
+
+            for (iface_loc, iface_type_args) in crate::interfaces::interface_closure_locs_with_args(
+                db,
+                root_iface_loc,
+                &root_iface_type_args,
+                pkg_items,
+                &class_ns,
+            ) {
+                let iface_tree = baml_compiler2_hir::file_item_tree(db, iface_loc.file(db));
+                let Some(iface_data) = iface_tree.interfaces.get(&iface_loc.id(db)) else {
+                    continue;
+                };
+                let iface_qtn = crate::lower_type_expr::qualify_def(
+                    db,
+                    Definition::Interface(iface_loc),
+                    &iface_data.name,
+                );
+                if &iface_qtn != target_iface_name
+                    || iface_type_args.len() != target_iface_args.len()
+                    || !iface_type_args
+                        .iter()
+                        .zip(target_iface_args.iter())
+                        .all(|(a, b)| self.types_equivalent(a, b))
+                {
+                    continue;
+                }
+                let Some(field) = iface_data
+                    .fields
+                    .iter()
+                    .find(|field| field.name == *field_name)
+                else {
+                    continue;
+                };
+                return Some(
+                    impl_target
+                        .field_links
+                        .iter()
+                        .find(|link| link.interface_field == field.name)
+                        .map(|link| link.class_field.clone())
+                        .unwrap_or_else(|| field.name.clone()),
+                );
+            }
+        }
+
+        None
+    }
+
     /// Check whether a class has a field or method with the given name.
     ///
     /// Unlike `lookup_class_fields`, this does NOT call `lower_type_expr_in_ns`
@@ -11971,7 +12163,7 @@ impl crate::exhaustiveness::PatCtx for TypeInferenceBuilder<'_> {
                     Ctor::Single(Ty::EnumVariant(qtn.clone(), variant, TyAttr::default()))
                 })
                 .collect(),
-            Ty::Class(qtn, _, _) => vec![Ctor::Class(qtn.clone())],
+            Ty::Class(qtn, args, _) => vec![Ctor::Class(qtn.clone(), args.clone())],
             // Open interfaces always require a wildcard — new implementors
             // can appear in any file. See BEP-044 §"Interaction with match".
             Ty::Interface(_, _, _) => vec![Ctor::NonExhaustive],
@@ -12006,6 +12198,46 @@ impl crate::exhaustiveness::PatCtx for TypeInferenceBuilder<'_> {
             .into_iter()
             .map(|ft| self.matrix_normalize_scrut(&ft))
             .collect()
+    }
+
+    fn interface_field_types(&self, ty: &Ty) -> Vec<Ty> {
+        let Ty::Interface(qtn, args, _) = ty else {
+            return Vec::new();
+        };
+        self.interface_field_infos_ordered(qtn, args)
+            .into_iter()
+            .map(|(_, ft)| self.matrix_normalize_scrut(&ft))
+            .collect()
+    }
+
+    fn interface_field_projection_for_class(
+        &self,
+        iface_ty: &Ty,
+        class_qtn: &crate::ty::QualifiedTypeName,
+        class_type_args: &[Ty],
+    ) -> Option<Vec<usize>> {
+        let Ty::Interface(iface_qtn, iface_args, _) = iface_ty else {
+            return None;
+        };
+        let class_fields = self.class_field_infos_ordered(class_qtn, class_type_args);
+        let class_indices: FxHashMap<Name, usize> = class_fields
+            .into_iter()
+            .enumerate()
+            .map(|(idx, (name, _))| (name, idx))
+            .collect();
+        let interface_fields = self.interface_field_infos_ordered(iface_qtn, iface_args);
+        let mut projection = Vec::with_capacity(interface_fields.len());
+        for (interface_field, _) in interface_fields {
+            let class_field = self.class_field_name_for_interface_field(
+                class_qtn,
+                class_type_args,
+                iface_qtn,
+                iface_args,
+                &interface_field,
+            )?;
+            projection.push(*class_indices.get(&class_field)?);
+        }
+        Some(projection)
     }
 
     fn list_element_type(&self, ty: &Ty) -> Ty {
@@ -12805,7 +13037,7 @@ impl TypeInferenceBuilder<'_> {
             Ty::Class(qtn, args, _) => {
                 let field_tys = self.class_field_types_ordered(qtn, args);
                 let fields = field_tys.into_iter().map(DPat::wildcard).collect();
-                DPat::class(qtn.clone(), fields, scrut_ty.clone())
+                DPat::class_inst(qtn.clone(), args.clone(), fields, scrut_ty.clone())
             }
             // Opaque alphabets — best-effort: wildcard. Imprecise when
             // the scrutinee is a union containing this type plus other
@@ -12867,6 +13099,68 @@ impl TypeInferenceBuilder<'_> {
         // tuple as a fallback for `report_at_pat_or_expr`.
         let class_ty =
             self.resolve_class_pattern_type(class, generic_args, Some((pat_id, at_expr)));
+
+        // BEP-044: destructuring an interface head (`Animal { name, age }`).
+        // The interface has no positional field layout — it matches any
+        // implementor and binds each named field through the interface's
+        // field view (the same projection used by `iface_value.field`). Field
+        // *types* come from the interface field view; the runtime extraction
+        // is wired by `project_interface_pattern_field` in MIR. Because every
+        // implementor necessarily provides the interface's declared fields,
+        // elided fields are wildcarded, while named fields preserve their
+        // lowered subpatterns for exhaustiveness/refutability.
+        if let Ty::Interface(iface_name, type_args, _) = &class_ty {
+            let iface_name = iface_name.clone();
+            let type_args = type_args.clone();
+            let mut by_name: FxHashMap<Name, &ast::FieldPat> = FxHashMap::default();
+            for fp in fields {
+                by_name.insert(fp.field.clone(), fp);
+            }
+
+            let field_infos = self.interface_field_infos_ordered(&iface_name, &type_args);
+            let mut declared_fields: FxHashSet<Name> = FxHashSet::default();
+            let mut sub_dpats: Vec<DPat> = Vec::with_capacity(field_infos.len());
+            let mut bindings: Vec<PatternBinding> = Vec::new();
+            for (field_name, field_ty) in field_infos {
+                declared_fields.insert(field_name.clone());
+                match by_name.get(&field_name) {
+                    Some(fp) => {
+                        let r = self.analyze_and_lower(fp.pat, &field_ty, body, at_expr);
+                        sub_dpats.push(r.dpat);
+                        bindings.extend(r.bindings);
+                    }
+                    None => sub_dpats.push(DPat::wildcard(field_ty)),
+                }
+            }
+
+            for fp in fields {
+                if declared_fields.contains(&fp.field) {
+                    continue;
+                }
+                self.report_at_pat_or_expr(
+                    TirTypeError::UnresolvedMember {
+                        base_type: class_ty.clone(),
+                        member: fp.field.clone(),
+                    },
+                    pat_id,
+                    at_expr,
+                );
+                let unknown = Ty::Unknown {
+                    attr: TyAttr::default(),
+                };
+                let r = self.analyze_and_lower(fp.pat, &unknown, body, at_expr);
+                bindings.extend(r.bindings);
+            }
+            let dpat = DPat::interface(class_ty.clone(), sub_dpats, scrut_ty.clone());
+            let matched_ty = self.intersect_pattern_flow_types(scrut_ty, &class_ty);
+            return PatternResult {
+                dpat,
+                required_ty: Some(class_ty.clone()),
+                matched_ty,
+                bindings,
+            };
+        }
+
         if !matches!(class_ty, Ty::Class(..)) {
             // Resolution failed; bail out with a wildcard so downstream
             // can keep going. Diagnostics already emitted by resolver.
@@ -12926,7 +13220,7 @@ impl TypeInferenceBuilder<'_> {
         }
 
         PatternResult {
-            dpat: DPat::class(qtn, sub_dpats, scrut_ty.clone()),
+            dpat: DPat::class_inst(qtn, args, sub_dpats, scrut_ty.clone()),
             required_ty: Some(class_ty.clone()),
             matched_ty: class_ty,
             bindings,
@@ -12943,7 +13237,7 @@ impl TypeInferenceBuilder<'_> {
 
         use crate::exhaustiveness::Ctor;
         match &w.ctor {
-            Ctor::Class(qtn) => {
+            Ctor::Class(qtn, _) => {
                 let names = self.class_field_names_ordered(qtn);
                 if w.fields.is_empty() {
                     return format!("{qtn} {{}}");
