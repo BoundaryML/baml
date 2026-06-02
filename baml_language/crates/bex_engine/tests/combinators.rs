@@ -142,13 +142,12 @@ async fn race_returns_first_to_settle() {
 
 /// `any` returns the first SUCCESS even when a faster future fails first.
 ///
-/// KNOWN ISSUE: `any` currently mis-runs. Its closure body
-/// (`__await_any` → `await futures[i]` inside a `spawn`) hits a runtime fault
-/// that surfaces as a spurious `JsonDecodeError(SpawnConfig)`. `race`, which
-/// shares the `__await_any` primitive, works — the difference is `race`'s
-/// `Array.map` native call between the `AwaitAny` resume and the `await`. Root
-/// cause is in the `AwaitAny` suspend/resume path; under investigation.
-#[ignore = "any miscompiles: AwaitAny resume path fault — see comment"]
+/// BLOCKED ON BUG 2 (fire-and-forget): the failing input `spawn { bad() }` is a
+/// child of `main`, so its unhandled "boom" is queued on `main` and surfaces at
+/// `main`'s `await any(fs)` as UnhandledThrow, before `any` skips it. `any`
+/// itself is correct (see `any_all_success_returns_a_value`); un-ignore once the
+/// fire-and-forget fix lands.
+#[ignore = "blocked on bug 2 (fire-and-forget) — any logic itself works; passes once that lands"]
 #[tokio::test]
 async fn any_returns_first_success() {
     let source = r#"
@@ -165,7 +164,11 @@ async fn any_returns_first_success() {
 }
 
 /// `any` throws `AllFailed` carrying every error when all futures fail.
-#[ignore = "any miscompiles: AwaitAny resume path fault — see any_returns_first_success"]
+///
+/// BLOCKED ON BUG 2 (fire-and-forget): the failing inputs surface at `main`'s
+/// await before `any` aggregates them. Un-ignore once the fire-and-forget fix
+/// lands.
+#[ignore = "blocked on bug 2 (fire-and-forget) — passes once that lands"]
 #[tokio::test]
 async fn any_all_fail_throws_allfailed() {
     let source = r#"
@@ -258,4 +261,20 @@ async fn bug2_fire_and_forget_bypasses_consumer() {
     "#;
     // g handles f's error and returns 7; main should see 7.
     assert_eq!(run_main(source).await.unwrap(), BexExternalValue::Int(7));
+}
+
+#[tokio::test]
+async fn any_all_success_returns_a_value() {
+    let source = r#"
+        function five() -> int { 5 }
+        function six() -> int { 6 }
+        function main() -> int {
+            let fs = [spawn { five() }, spawn { six() }];
+            await baml.future.any(fs) catch (e) { let e => -1 }
+        }
+    "#;
+    // first success wins (both succeed) — either 5 or 6; deterministic-ish but
+    // assert it's a real success, not -1 / error.
+    let r = run_main(source).await.unwrap();
+    assert!(matches!(r, BexExternalValue::Int(5) | BexExternalValue::Int(6)), "got {r:?}");
 }

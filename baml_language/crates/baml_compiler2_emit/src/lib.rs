@@ -243,8 +243,16 @@ pub fn generate_project_bytecode_with_opt(
         for local_id in item_tree.functions.keys() {
             let func_loc = FunctionLoc::new(db, *file, *local_id);
             let mir = lower_function(db, func_loc, opt);
-            // Skip intrinsic functions — they are never called via Call instruction.
-            if matches!(mir.kind, MirFunctionKind::Builtin(BuiltinKind::Intrinsic)) {
+            // Skip intrinsic and await-any functions — they are never called via
+            // a Call instruction (intrinsics lower to StatementKind::Intrinsic;
+            // `__await_any` lowers to a Terminator::AwaitAny). Pass 4 skips them
+            // too, so they must be skipped here as well or the Pass-1 indices
+            // desync from the program.globals array (off-by-one for everything
+            // after the skipped function).
+            if matches!(
+                mir.kind,
+                MirFunctionKind::Builtin(BuiltinKind::Intrinsic | BuiltinKind::AwaitAny)
+            ) {
                 continue;
             }
             let fq_name = mir.item_ref.to_string();
