@@ -108,6 +108,7 @@ pub struct LoadedFixture {
     pub baml_src: PathBuf,
     pub pool: SymbolPool,
     pub user_baml_files: Vec<UserBamlFile>,
+    pub baml_bytecode: Vec<u8>,
 }
 
 /// Resolve the workspace-root-relative path to `sdk_tests/fixtures/`
@@ -199,6 +200,11 @@ pub fn load_fixture(fixtures_root: &Path, fixture: &str) -> LoadedFixture {
     }
 
     let pool = baml_project::build_symbol_pool(&db);
+    let program = db
+        .get_bytecode()
+        .unwrap_or_else(|e| panic!("fixture `{fixture}`: bytecode compilation failed: {e:?}"));
+    let baml_bytecode = borsh::to_vec(&program)
+        .unwrap_or_else(|e| panic!("fixture `{fixture}`: bytecode serialization failed: {e}"));
     let user_baml_files: Vec<UserBamlFile> = source_files
         .iter()
         .map(|sf| {
@@ -212,6 +218,7 @@ pub fn load_fixture(fixtures_root: &Path, fixture: &str) -> LoadedFixture {
         baml_src: canonical,
         pool,
         user_baml_files,
+        baml_bytecode,
     }
 }
 

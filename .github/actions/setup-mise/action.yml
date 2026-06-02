@@ -57,3 +57,14 @@ runs:
         # every consumer's cache at once.
         cache_key_prefix: mise-baml1
         install_args: ${{ inputs.install_args }}
+        # Keep mise's shims OFF $PATH. mise-action exports the concrete
+        # installed-tool bin dirs into PATH directly, so the narrow set we
+        # asked for via install_args still resolves. But if the shims dir is
+        # on PATH, the first bare invocation of any shimmed tool (e.g. the
+        # `sccache --version` verify step, or cargo using RUSTC_WRAPPER=sccache)
+        # makes mise materialize the *whole* mise.toml environment, and with
+        # MISE_YES=1 (set by mise-action) it auto-installs every other tool in
+        # the config — cargo:bacon/cross/wasm-pack/..., protoc, pnpm, etc. That
+        # defeats install_args entirely and, on Windows where those cargo:*
+        # tools fall back to failing source compiles, it breaks the job.
+        add_shims_to_path: false
