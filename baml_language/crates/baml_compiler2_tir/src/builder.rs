@@ -2743,6 +2743,22 @@ impl<'db> TypeInferenceBuilder<'db> {
                     });
                 }
 
+                // If any arm is Unknown/Error, a member's resolution already
+                // reported the real error (e.g. an ambiguous interface method →
+                // E0121), so don't also emit a misleading
+                // `unknown | unknown is not a function`.
+                if expanded
+                    .iter()
+                    .any(|a| matches!(a, Ty::Unknown { .. } | Ty::Error { .. }))
+                {
+                    self.infer_args_for_recovery(args, body);
+                    return CheckedCallInner {
+                        result: Ty::Unknown {
+                            attr: TyAttr::default(),
+                        },
+                        bindings_from_inference: false,
+                    };
+                }
                 // Not all arms are functions — report not callable.
                 self.context.report_simple(
                     TirTypeError::NotCallable {
@@ -8064,18 +8080,15 @@ impl<'db> TypeInferenceBuilder<'db> {
         if let Some(ty) = self.try_resolve_member_on_ty(m, member) {
             return Some(ty);
         }
-        // A class member whose `member` is contributed by two or more interface
-        // field views (`implements Named { name as full }` +
-        // `implements Labeled { name as handle }`) is genuinely ambiguous — the
-        // same E0131 the single-class receiver path emits, with the `.as<I>`
-        // projection hint. Surface it directly (not suppressed) and treat the
-        // member as resolved so the union doesn't also blame it with a misleading
-        // "no member" (E0007).
-        if let Ty::Class(class_name, _, _) = m {
-            let field_sources = self.class_interface_field_sources(class_name, member);
-            if field_sources.len() > 1 {
-                let related = self
-                    .package_items
+        // A class member contributed by two or more interfaces is genuinely
+        // ambiguous — emit the same E0131 (field) / E0121 (method) the
+        // single-class receiver path emits, with the `.as<I>` projection hint.
+        // Surface it directly (not suppressed) and treat the member as resolved,
+        // so the union doesn't instead collapse to a misleading
+        // `unknown | unknown` (E0006) or blame the member with a false E0007.
+        if let Ty::Class(class_name, type_args, _) = m {
+            let related = || {
+                self.package_items
                     .lookup_type(class_name.namespace(), class_name.name())
                     .map(|def| {
                         vec![RelatedNote::new(
@@ -8083,7 +8096,10 @@ impl<'db> TypeInferenceBuilder<'db> {
                             "class defined here",
                         )]
                     })
-                    .unwrap_or_default();
+                    .unwrap_or_default()
+            };
+            let field_sources = self.class_interface_field_sources(class_name, member);
+            if field_sources.len() > 1 {
                 self.context.report_at_member(
                     TirTypeError::AmbiguousInterfaceField {
                         class_name: class_name.name().clone(),
@@ -8091,7 +8107,26 @@ impl<'db> TypeInferenceBuilder<'db> {
                         sources: field_sources,
                     },
                     at,
-                    related,
+                    related(),
+                );
+                return Some(Ty::Unknown {
+                    attr: TyAttr::default(),
+                });
+            }
+            let method_sources: Vec<String> = self.format_interface_method_sources(
+                self.implemented_interface_method_sources(class_name, type_args, member)
+                    .into_iter()
+                    .map(|(_, qtn, args)| (qtn, args)),
+            );
+            if method_sources.len() >= 2 {
+                self.context.report_at_member(
+                    TirTypeError::AmbiguousInterfaceMethod {
+                        class_name: class_name.name().clone(),
+                        method_name: member.clone(),
+                        sources: method_sources,
+                    },
+                    at,
+                    related(),
                 );
                 return Some(Ty::Unknown {
                     attr: TyAttr::default(),

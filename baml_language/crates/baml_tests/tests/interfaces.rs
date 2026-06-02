@@ -9523,6 +9523,36 @@ async fn union_fuzz_pr_reflection_nested_union_arg_order_insensitive() {
     assert_eq!(output.result.unwrap(), BexExternalValue::Int(11));
 }
 
+/// Calling a method that two interfaces both declare, on a *union* of classes
+/// that inherit it, must report the same E0121 ambiguity (with the `.as<I>`
+/// hint) the single-class receiver does — not collapse to a misleading
+/// `unknown | unknown is not a function` (E0006) leaking the internal sentinel.
+#[test]
+fn union_fuzz_pr_ambiguous_inherited_method_in_class_union_is_e0121() {
+    let errors = collect_compile_errors(
+        r#"
+        interface A { function f(self) -> string { return "a" } }
+        interface B { function f(self) -> string { return "b" } }
+        class C { implements A {} implements B {} }
+        class D { implements A {} implements B {} }
+        function g(x: C | D) -> string { return x.f() }
+        function main() -> string { return g(C {}) }
+        "#,
+    );
+    assert!(
+        errors.iter().any(|e| e.starts_with("[E0121]")),
+        "ambiguous inherited method on a class union must be E0121; got:\n  {}",
+        errors.join("\n  ")
+    );
+    assert!(
+        !errors
+            .iter()
+            .any(|e| e.contains("unknown |") || e.contains("is not a function")),
+        "must not leak the internal `unknown | unknown` not-a-function form (E0006); got:\n  {}",
+        errors.join("\n  ")
+    );
+}
+
 /// A function-typed interface *field* in a union must keep its declared
 /// signature: the union-member resolver used to prepend a phantom `self` to any
 /// function-typed member, turning `(int) -> string` into
