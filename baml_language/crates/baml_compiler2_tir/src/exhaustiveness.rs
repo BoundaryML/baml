@@ -1932,14 +1932,14 @@ mod tests {
             "all Optional<bool> pairs except false/false should be missing"
         );
         for expected in [
-            "user.OptionalPair { true, true }",
-            "user.OptionalPair { true, false }",
-            "user.OptionalPair { true, null }",
-            "user.OptionalPair { false, true }",
-            "user.OptionalPair { false, null }",
-            "user.OptionalPair { null, true }",
-            "user.OptionalPair { null, false }",
-            "user.OptionalPair { null, null }",
+            "OptionalPair { true, true }",
+            "OptionalPair { true, false }",
+            "OptionalPair { true, null }",
+            "OptionalPair { false, true }",
+            "OptionalPair { false, null }",
+            "OptionalPair { null, true }",
+            "OptionalPair { null, false }",
+            "OptionalPair { null, null }",
         ] {
             assert!(
                 witnesses.iter().any(|w| w == expected),
@@ -1958,10 +1958,7 @@ mod tests {
             2,
             "all pairs with a non-false right side should be missing"
         );
-        for expected in [
-            "user.OptionalPair { _, true }",
-            "user.OptionalPair { _, null }",
-        ] {
+        for expected in ["OptionalPair { _, true }", "OptionalPair { _, null }"] {
             assert!(
                 witnesses.iter().any(|w| w == expected),
                 "expected {expected} in witnesses, got {witnesses:?}"

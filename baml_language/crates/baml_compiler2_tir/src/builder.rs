@@ -8113,7 +8113,21 @@ impl<'db> TypeInferenceBuilder<'db> {
         let ty = self.resolve_member_suppressing_side_effects(at, |this| {
             this.try_registry_member(&member_ty, receiver_name.clone(), member, at, bound)
         });
-        ty.map(|t| Self::prepend_self_param_if_method(t, self_ty.clone(), bound))
+        // Only re-attach `self` for methods (mirrors the interface branch). The
+        // registry resolves `member` as a method exactly when some out-of-body
+        // interface declares it as one; a function-typed interface *field*
+        // satisfied out-of-body must keep its declared signature rather than
+        // gain a phantom `self`.
+        let is_method = !self
+            .registry_interface_method_sources(&member_ty, member)
+            .is_empty();
+        ty.map(|t| {
+            if is_method {
+                Self::prepend_self_param_if_method(t, self_ty.clone(), bound)
+            } else {
+                t
+            }
+        })
     }
 
     /// Run `f` (a member-resolution probe that may report diagnostics and record
