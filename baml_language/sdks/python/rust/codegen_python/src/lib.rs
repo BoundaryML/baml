@@ -1,7 +1,10 @@
 //! Python SDK emitter. Produces a structurally correct `baml_sdk/`
 //! tree from a `SymbolPool`: one `__init__.py` (and `.pyi` companion)
 //! per directory, plus `_inlinedbaml.py`, `_typemap.py`, and the PEP 561
-//! `py.typed` marker — all at the SDK root. Each leaf that routes at
+//! `py.typed` marker — all at the SDK root. `_inlinedbaml.py` carries
+//! the runtime payload: generated SDKs should pass serialized bytecode so
+//! Python import can skip parsing/compilation, while the source-file form is
+//! kept for small unit tests and compatibility. Each leaf that routes at
 //! least one symbol carries stub Python definitions and an `__all__`
 //! trailer.
 
@@ -88,11 +91,49 @@ const HEADER: &str = concat!(
 /// `rel_path` is relative to the `baml_src/` root (e.g. `"lorem/foo.baml"`).
 pub type UserBamlFile = (PathBuf, String);
 
+#[derive(Clone, Copy)]
+enum RuntimePayload<'a> {
+    SourceFiles(&'a [UserBamlFile]),
+    Bytecode(&'a [u8]),
+}
+
+impl RuntimePayload<'_> {
+    fn is_bytecode(self) -> bool {
+        matches!(self, RuntimePayload::Bytecode(_))
+    }
+}
+
 /// Build the Python SDK output tree for `pool`. Returned paths are
 /// relative to the `baml_sdk/` output root.
 pub fn to_source_code(
     pool: &SymbolPool,
     user_baml_files: &[UserBamlFile],
+    naming_convention: NamingConvention,
+) -> HashMap<PathBuf, String> {
+    to_source_code_internal(
+        pool,
+        RuntimePayload::SourceFiles(user_baml_files),
+        naming_convention,
+    )
+}
+
+/// Build the Python SDK output tree using precompiled BAML bytecode as the
+/// runtime payload.
+pub fn to_source_code_with_bytecode(
+    pool: &SymbolPool,
+    baml_bytecode: &[u8],
+    naming_convention: NamingConvention,
+) -> HashMap<PathBuf, String> {
+    to_source_code_internal(
+        pool,
+        RuntimePayload::Bytecode(baml_bytecode),
+        naming_convention,
+    )
+}
+
+fn to_source_code_internal(
+    pool: &SymbolPool,
+    runtime_payload: RuntimePayload<'_>,
     naming_convention: NamingConvention,
 ) -> HashMap<PathBuf, String> {
     // Only `PreserveCase` is wired up so far; `Language`-mode rewriting
@@ -167,7 +208,7 @@ pub fn to_source_code(
         let body = bodies.get(&leaf_path).unwrap_or(&empty_body);
 
         let mut content = if dir.is_empty() {
-            render_root_init(&kids)
+            render_root_init(&kids, runtime_payload.is_bytecode())
         } else {
             render_package_init(&kids)
         };
@@ -195,7 +236,7 @@ pub fn to_source_code(
     // — both root-level data modules.
     out.insert(
         PathBuf::from("_inlinedbaml.py"),
-        render_inlinedbaml(user_baml_files),
+        render_inlinedbaml(runtime_payload),
     );
 
     // Codegen-emitted typemap (25b2 Phase 2 / 25a2 §4.1): three literal
@@ -322,15 +363,19 @@ fn append_lazy_children_block(out: &mut String, children: &BTreeSet<String>) {
 /// accesses in `<top>.<intermediate>.<bare>` annotations still works
 /// because every intermediate package has its own `__getattr__` that
 /// resolves children via `importlib`.
-fn render_root_init(top_children: &BTreeSet<String>) -> String {
+fn render_root_init(top_children: &BTreeSet<String>, use_bytecode: bool) -> String {
     let mut out = String::new();
     out.push_str("from __future__ import annotations\n\n");
     out.push_str("from baml_core import BamlRuntime, set_type_map\n");
     out.push_str("from . import _inlinedbaml\n");
     out.push_str("from ._typemap import _TYPE_MAP\n\n");
-    out.push_str("BamlRuntime.initialize_runtime(\n");
-    out.push_str("    \"baml_src\", _inlinedbaml.FILES\n");
-    out.push_str(")\n\n");
+    if use_bytecode {
+        out.push_str("BamlRuntime.initialize_runtime_from_bytecode(_inlinedbaml.BYTECODE)\n\n");
+    } else {
+        out.push_str("BamlRuntime.initialize_runtime(\n");
+        out.push_str("    \"baml_src\", _inlinedbaml.FILES\n");
+        out.push_str(")\n\n");
+    }
     out.push_str("set_type_map(_TYPE_MAP)\n");
     if !top_children.is_empty() {
         append_lazy_children_block(&mut out, top_children);
@@ -374,7 +419,14 @@ struct InlinedEntry {
     contents: String,
 }
 
-fn render_inlinedbaml(files: &[UserBamlFile]) -> String {
+fn render_inlinedbaml(payload: RuntimePayload<'_>) -> String {
+    match payload {
+        RuntimePayload::SourceFiles(files) => render_inlinedbaml_source(files),
+        RuntimePayload::Bytecode(bytecode) => render_inlinedbaml_bytecode(bytecode),
+    }
+}
+
+fn render_inlinedbaml_source(files: &[UserBamlFile]) -> String {
     use askama::Template;
     let mut entries: Vec<(&PathBuf, &String)> = files.iter().map(|(p, c)| (p, c)).collect();
     entries.sort_by(|a, b| a.0.cmp(b.0));
@@ -390,6 +442,13 @@ fn render_inlinedbaml(files: &[UserBamlFile]) -> String {
     let mut out = InlinedBaml { entries }
         .render()
         .expect("inlinedbaml template should always render");
+    out.push('\n');
+    out
+}
+
+fn render_inlinedbaml_bytecode(bytecode: &[u8]) -> String {
+    let mut out = String::from("from __future__ import annotations\n\nBYTECODE: bytes = ");
+    out.push_str(&py_bytes(bytecode));
     out.push('\n');
     out
 }
@@ -414,6 +473,32 @@ pub(crate) fn py_string(s: &str) -> String {
         }
     }
     out.push('"');
+    out
+}
+
+/// Render bytes as adjacent Python bytes literals. Chunking keeps generated
+/// lines manageable without adding any runtime decode step.
+pub(crate) fn py_bytes(bytes: &[u8]) -> String {
+    const CHUNK_SIZE: usize = 80;
+
+    if bytes.is_empty() {
+        return "b\"\"".to_string();
+    }
+
+    let mut out = String::from("(\n");
+    for chunk in bytes.chunks(CHUNK_SIZE) {
+        out.push_str("    b\"");
+        for &byte in chunk {
+            match byte {
+                b'\\' => out.push_str("\\\\"),
+                b'"' => out.push_str("\\\""),
+                0x20..=0x7e => out.push(byte as char),
+                _ => write!(out, "\\x{byte:02x}").unwrap(),
+            }
+        }
+        out.push_str("\"\n");
+    }
+    out.push(')');
     out
 }
 
@@ -1314,6 +1399,26 @@ mod tests {
         let mo = inl.find("main.baml").unwrap();
         assert!(lo < mo);
         assert!(inl.contains("\"class Foo {}\\n\""));
+    }
+
+    #[test]
+    fn bytecode_payload_initializes_runtime_from_bytecode() {
+        let pool: SymbolPool = HashMap::new();
+        let bytecode = b"\x00BAML\"\n\xff";
+        let out = to_source_code_with_bytecode(&pool, bytecode, NamingConvention::PreserveCase);
+
+        let root = &out[&PathBuf::from("__init__.py")];
+        assert!(
+            root.contains("BamlRuntime.initialize_runtime_from_bytecode(_inlinedbaml.BYTECODE)")
+        );
+        assert!(!root.contains("BamlRuntime.initialize_runtime("));
+        assert!(!root.contains("_inlinedbaml.FILES"));
+
+        let inl = &out[&PathBuf::from("_inlinedbaml.py")];
+        assert!(inl.starts_with(HEADER));
+        assert!(inl.contains("BYTECODE: bytes = ("));
+        assert!(inl.contains("b\"\\x00BAML\\\"\\x0a\\xff\""));
+        assert!(!inl.contains("FILES: dict[str, str]"));
     }
 
     #[test]
