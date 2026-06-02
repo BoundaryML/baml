@@ -335,7 +335,7 @@ jobs:
     timeout-minutes: 5
     steps:
       - name: Download ARM musl archive
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: baml-language-archive-aarch64-unknown-linux-musl
           path: dist
@@ -536,7 +536,7 @@ jobs:
     if: needs.prepare.outputs.should_run == 'true' && needs.prepare.outputs.publish == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           ref: ${{ needs.prepare.outputs.checkout_ref }}
 
