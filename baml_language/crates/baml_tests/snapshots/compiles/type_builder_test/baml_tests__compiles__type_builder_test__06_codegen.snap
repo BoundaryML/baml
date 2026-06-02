@@ -1,9 +1,11 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 30572
 ---
-function user.Fn() -> string {
-    load_type string
+function user.Fn(client: baml.llm.Client) -> string {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
     load_const "openai/gpt-4o"
     load_const baml.llm.ClientType.Primitive
     alloc_variant baml.llm.ClientType
@@ -11,13 +13,22 @@ function user.Fn() -> string {
     load_const null
     load_const 0
     init_instance baml.llm.Client .name, .client_type, .sub_clients, .retry, .counter
+    store_var client
+
+  L0:
+    load_type string
+    load_var client
     load_const "Fn"
     alloc_map 0
     call baml.llm.call_llm_function
     return
 }
 
-function user.Fn$build_request() -> baml.http.Request {
+function user.Fn$build_request(client: baml.llm.Client) -> baml.http.Request {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
     load_const "openai/gpt-4o"
     load_const baml.llm.ClientType.Primitive
     alloc_variant baml.llm.ClientType
@@ -25,13 +36,21 @@ function user.Fn$build_request() -> baml.http.Request {
     load_const null
     load_const 0
     init_instance baml.llm.Client .name, .client_type, .sub_clients, .retry, .counter
+    store_var client
+
+  L0:
+    load_var client
     load_const "Fn"
     alloc_map 0
     call baml.llm.build_request
     return
 }
 
-function user.Fn$build_request_stream() -> baml.http.Request {
+function user.Fn$build_request_stream(client: baml.llm.Client) -> baml.http.Request {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
     load_const "openai/gpt-4o"
     load_const baml.llm.ClientType.Primitive
     alloc_variant baml.llm.ClientType
@@ -39,20 +58,42 @@ function user.Fn$build_request_stream() -> baml.http.Request {
     load_const null
     load_const 0
     init_instance baml.llm.Client .name, .client_type, .sub_clients, .retry, .counter
+    store_var client
+
+  L0:
+    load_var client
     load_const "Fn"
     alloc_map 0
     call baml.llm.build_request_stream
     return
 }
 
-function user.Fn$parse(json: string) -> string {
+function user.Fn$parse(json: string, client: baml.llm.Client) -> string {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const "openai/gpt-4o"
+    load_const baml.llm.ClientType.Primitive
+    alloc_variant baml.llm.ClientType
+    alloc_array 0
+    load_const null
+    load_const 0
+    init_instance baml.llm.Client .name, .client_type, .sub_clients, .retry, .counter
+    store_var client
+
+  L0:
     load_const "Fn"
     load_var json
     call baml.llm.parse
     return
 }
 
-function user.Fn$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream<null | string, string> {
+function user.Fn$parse_stream(sse: baml.http.SseStream, client: baml.llm.Client) -> baml.llm.Stream<null | string, string> {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
     load_const "openai/gpt-4o"
     load_const baml.llm.ClientType.Primitive
     alloc_variant baml.llm.ClientType
@@ -60,13 +101,20 @@ function user.Fn$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream<null 
     load_const null
     load_const 0
     init_instance baml.llm.Client .name, .client_type, .sub_clients, .retry, .counter
-    load_var sse
+    store_var client
+
+  L0:
+    load_var2 2 1
     load_const "Fn"
     call baml.llm.Client.__make_stream
     return
 }
 
-function user.Fn$render_prompt() -> baml.llm.PromptAst {
+function user.Fn$render_prompt(client: baml.llm.Client) -> baml.llm.PromptAst {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
     load_const "openai/gpt-4o"
     load_const baml.llm.ClientType.Primitive
     alloc_variant baml.llm.ClientType
@@ -74,13 +122,21 @@ function user.Fn$render_prompt() -> baml.llm.PromptAst {
     load_const null
     load_const 0
     init_instance baml.llm.Client .name, .client_type, .sub_clients, .retry, .counter
+    store_var client
+
+  L0:
+    load_var client
     load_const "Fn"
     alloc_map 0
     call baml.llm.render_prompt
     return
 }
 
-function user.Fn$stream() -> baml.llm.Stream<null | string, string> {
+function user.Fn$stream(client: baml.llm.Client) -> baml.llm.Stream<null | string, string> {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
     load_const "openai/gpt-4o"
     load_const baml.llm.ClientType.Primitive
     alloc_variant baml.llm.ClientType
@@ -88,6 +144,10 @@ function user.Fn$stream() -> baml.llm.Stream<null | string, string> {
     load_const null
     load_const 0
     init_instance baml.llm.Client .name, .client_type, .sub_clients, .retry, .counter
+    store_var client
+
+  L0:
+    load_var client
     load_const "Fn"
     alloc_map 0
     call baml.llm.stream_llm_function

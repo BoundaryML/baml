@@ -118,14 +118,3 @@ function Bar(a: string, b: int | bool) -> int {
 //    │     
 //    │     Note: Error code: E0001
 // ───╯
-// error: type mismatch: expected baml.llm.Client, got () -> unknown throws never
-//    ╭─[ functions_v2_duplicate_names.baml:4:2 ]
-//    │
-//  4 │ ╭─▶ }
-//    ┆ ┆   
-//  9 │ ├─▶ }
-//    │ │       
-//    │ ╰─────── type mismatch: expected baml.llm.Client, got () -> unknown throws never
-//    │     
-//    │     Note: Error code: E0001
-// ───╯
