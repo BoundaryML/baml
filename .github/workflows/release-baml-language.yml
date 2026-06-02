@@ -1,6 +1,6 @@
 name: BAML Language Release
 
-# Channel-aware replacement for the alpha language release workflow.
+# Channel-aware replacement for the legacy BAML language release workflow.
 # Release workflows run packaging smoke tests only; the full suite runs in CI.
 
 on:

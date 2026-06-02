@@ -64,3 +64,7 @@ Homebrew and AUR publish only wrapper packages when `wrapper_changed == true`. T
 ## Rollback
 
 Rollback is a code revert plus mutable pointer repair. Leave immutable artifacts in place and move channel pointers to a fixed version.
+
+## Legacy Alpha Consumers
+
+`tools/baml-bench` still resolves `baml-language-*-alpha.*` GitHub pre-releases and downloads a matching release binary. That is separate service logic, not part of the new release graph. Before deleting the old alpha release assets entirely, either migrate that service to `manifest/v1/{canary,nightly}.json` or explicitly retire the benchmark builder path.

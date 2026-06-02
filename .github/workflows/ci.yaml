@@ -74,10 +74,17 @@ jobs:
           if git diff --quiet "${MERGE_BASE}...HEAD" -- \
             ':baml_language/**' \
             ':scripts/baml-language-version' \
+            ':scripts/baml-wrapper-version' \
+            ':scripts/baml-release-manifests' \
+            ':scripts/baml-package-manager-artifacts' \
             ':scripts/install.sh' \
             ':scripts/install.ps1' \
+            ':packaging/aur/**' \
+            ':tools/pkg_boundaryml_com/**' \
             ':.github/workflows/ci.yaml' \
             ':.github/workflows/release-baml-language.yml' \
+            ':.github/workflows/publish-python-pypi.yml' \
+            ':.github/workflows/build-python-sdk.reusable.yaml' \
             ':.github/workflows/cargo-tests.reusable.yaml' \
             ':.github/workflows/size-gate.reusable.yaml' \
             ':.github/workflows/wasm-pack-tests.reusable.yaml' \
@@ -306,8 +313,33 @@ jobs:
       - name: "Validate baml_language release metadata"
         run: scripts/baml-language-version check
 
-      - name: "Validate alpha version computation"
-        run: test "$(scripts/baml-language-version compute --alpha-number 1842)" = "$(scripts/baml-language-version show)-alpha.1842"
+      - name: "Validate canary/nightly version computation"
+        env:
+          BAML_LANGUAGE_VERSION_DATE: "20260522"
+        run: |
+          set -euo pipefail
+          canary="$(scripts/baml-language-version show)"
+          test "$(scripts/baml-language-version compute --channel canary)" = "$canary"
+          test "$(scripts/baml-language-version compute --channel canary --pypi)" = "$canary"
+
+          nightly="$(scripts/baml-language-version compute --channel nightly)"
+          pypi="$(scripts/baml-language-version compute --channel nightly --pypi)"
+          python3 - "$canary" "$nightly" "$pypi" <<'PY'
+          import re
+          import sys
+
+          canary, nightly, pypi = sys.argv[1:]
+          major, minor, patch = [int(part) for part in canary.split(".")]
+          base = f"{major}.{minor}.{patch + 1}"
+          match = re.fullmatch(rf"{re.escape(base)}-nightly\.20260522\.([a-z])", nightly)
+          if not match:
+              raise SystemExit(f"unexpected nightly version: {nightly}")
+
+          index = ord(match.group(1)) - ord("a")
+          expected_pypi = f"{base}.dev20260522{index:02d}"
+          if pypi != expected_pypi:
+              raise SystemExit(f"unexpected nightly PyPI version: {pypi} != {expected_pypi}")
+          PY
 
   # Call reusable workflows
   cargo-tests:
