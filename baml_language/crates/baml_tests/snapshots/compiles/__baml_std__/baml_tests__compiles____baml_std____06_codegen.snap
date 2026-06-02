@@ -278,8 +278,7 @@ function baml.Float.to_json(self: baml.Float) -> baml.json.json {
 function baml.Float.to_radians(self: baml.Float) -> float {
     call baml.Float.pi
     store_var _3
-    load_var self
-    load_var _3
+    load_var2 1 2
     bin_op *
     load_const 180.0
     div_float
@@ -622,8 +621,7 @@ function baml.env.get_or_panic(key: string) -> string {
     load_var key
     sys_op baml.env.get
     store_var _2
-    load_var _2
-    load_var _2
+    load_var2 2 2
     load_const null
     cmp_op ==
     pop_jump_if_false L0
@@ -797,10 +795,8 @@ function baml.errors.HostCallable.to_json(self: baml.errors.HostCallable) -> bam
     load_field .category
     call baml.Int.to_json
     store_var _18
-    load_var _2
-    load_var _5
-    load_var _8
-    load_var _11
+    load_var2 2 3
+    load_var2 4 5
     load_var _18
     load_const "message"
     load_const "class_name"
@@ -1069,8 +1065,7 @@ function baml.errors.Timeout.to_json(self: baml.errors.Timeout) -> baml.json.jso
     store_var _5
 
   L2:
-    load_var _2
-    load_var _5
+    load_var2 2 3
     load_const "message"
     load_const "duration_ms"
     alloc_map 2
@@ -1462,12 +1457,9 @@ function baml.glob.ScanOptions.to_json(self: baml.glob.ScanOptions) -> baml.json
     store_var _37
 
   L17:
-    load_var _2
-    load_var _9
-    load_var _16
-    load_var _23
-    load_var _30
-    load_var _37
+    load_var2 2 3
+    load_var2 4 5
+    load_var2 6 7
     load_const "cwd"
     load_const "dot"
     load_const "absolute"
@@ -1911,10 +1903,8 @@ function baml.llm.AzureOpenAiOptions.to_json(self: baml.llm.AzureOpenAiOptions) 
     store_var _19
 
   L8:
-    load_var _2
-    load_var _9
-    load_var _16
-    load_var _19
+    load_var2 2 3
+    load_var2 4 5
     load_const "resource_name"
     load_const "deployment_id"
     load_const "api_version"
@@ -2199,16 +2189,11 @@ function baml.llm.BedrockOptions.to_json(self: baml.llm.BedrockOptions) -> baml.
     store_var _65
 
   L29:
-    load_var _2
-    load_var _9
-    load_var _16
-    load_var _23
-    load_var _30
-    load_var _37
-    load_var _44
-    load_var _51
-    load_var _58
-    load_var _65
+    load_var2 2 3
+    load_var2 4 5
+    load_var2 6 7
+    load_var2 8 9
+    load_var2 10 11
     load_const "region"
     load_const "endpoint_url"
     load_const "access_key_id"
@@ -2237,14 +2222,11 @@ function baml.llm.Client.__make_stream(self: baml.llm.Client, sse: baml.http.Sse
     sys_op baml.llm.PrimitiveClient.new_stream_accumulator
     store_var acc
     load_const null
-    load_var return_type
-    load_var stream_return_type
+    load_var2 5 6
     sys_op baml.llm.StreamCache.new
     store_var cache
-    load_var primitive
-    load_var acc
-    load_var sse
-    load_var cache
+    load_var2 4 7
+    load_var2 2 8
     load_type #0
     load_type #1
     init_instance<2> baml.llm.Stream ._client, ._acc, ._sse, ._cache
@@ -2293,10 +2275,8 @@ function baml.llm.Client.build_attempt_with_state(self: baml.llm.Client, planner
     load_var self
     load_field .counter
     store_var _28
-    load_var planner_state
-    load_var _27
-    load_var _28
-    load_var self
+    load_var2 2 10
+    load_var2 11 1
     load_field .sub_clients
     container_len
     call baml.llm.PlannerState.rr_pick_index
@@ -2323,8 +2303,7 @@ function baml.llm.Client.build_attempt_with_state(self: baml.llm.Client, planner
     store_var __for_idx
 
   L5:
-    load_var __for_idx
-    load_var _9
+    load_var2 6 5
     container_len
     cmp_int_op <
     pop_jump_if_false L6
@@ -2335,8 +2314,7 @@ function baml.llm.Client.build_attempt_with_state(self: baml.llm.Client, planner
     jump L12
 
   L7:
-    load_var _9
-    load_var __for_idx
+    load_var2 5 6
     load_array_element
     load_var planner_state
     call baml.llm.Client.build_plan_with_state
@@ -2345,8 +2323,7 @@ function baml.llm.Client.build_attempt_with_state(self: baml.llm.Client, planner
     store_var __for_idx_1
 
   L8:
-    load_var __for_idx_1
-    load_var _15
+    load_var2 8 7
     container_len
     cmp_int_op <
     pop_jump_if_false L9
@@ -2360,8 +2337,7 @@ function baml.llm.Client.build_attempt_with_state(self: baml.llm.Client, planner
     jump L5
 
   L10:
-    load_var steps
-    load_var _15
+    load_var2 4 7
     load_var __for_idx_1
     load_array_element
     call baml.Array.push
@@ -2402,8 +2378,7 @@ function baml.llm.Client.build_plan_with_state(self: baml.llm.Client, planner_st
     jump L1
 
   L0:
-    load_var self
-    load_var planner_state
+    load_var2 1 2
     call baml.llm.Client.build_attempt_with_state
     jump L4
 
@@ -2421,8 +2396,7 @@ function baml.llm.Client.build_plan_with_state(self: baml.llm.Client, planner_st
     store_var attempt
 
   L2:
-    load_var attempt
-    load_var r
+    load_var2 7 4
     load_field .max_retries
     cmp_int_op <=
     pop_jump_if_false L3
@@ -2444,8 +2418,7 @@ function baml.llm.Client.build_plan_with_state(self: baml.llm.Client, planner_st
     load_var current_delay
     call baml.math.trunc
     store_var delay
-    load_var current_delay
-    load_var r
+    load_var2 6 4
     load_field .multiplier
     mul_float
     store_var_load_var next
@@ -2470,16 +2443,14 @@ function baml.llm.Client.build_plan_with_state(self: baml.llm.Client, planner_st
     store_var current_delay
 
   L8:
-    load_var self
-    load_var planner_state
+    load_var2 1 2
     call baml.llm.Client.build_attempt_with_state
     store_var _26
     load_const 0
     store_var __for_idx
 
   L9:
-    load_var __for_idx
-    load_var _26
+    load_var2 11 10
     container_len
     cmp_int_op <
     pop_jump_if_false L10
@@ -2493,8 +2464,7 @@ function baml.llm.Client.build_plan_with_state(self: baml.llm.Client, planner_st
     jump L2
 
   L11:
-    load_var result
-    load_var _26
+    load_var2 5 10
     load_var __for_idx
     load_array_element
     load_field .primitive_client
@@ -2561,8 +2531,7 @@ function baml.llm.Client.execute_once_oneshot(self: baml.llm.Client, context: ba
     store_var __for_idx
 
   L5:
-    load_var __for_idx
-    load_var _35
+    load_var2 14 13
     container_len
     cmp_int_op <
     pop_jump_if_false L6
@@ -2575,11 +2544,9 @@ function baml.llm.Client.execute_once_oneshot(self: baml.llm.Client, context: ba
 
   L7:
     load_type #0
-    load_var _35
-    load_var __for_idx
+    load_var2 13 14
     load_array_element
-    load_var context
-    load_var active_delay_ms
+    load_var2 2 3
     call baml.llm.Client.execute_oneshot
     jump L8
     load_var e
@@ -2599,20 +2566,17 @@ function baml.llm.Client.execute_once_oneshot(self: baml.llm.Client, context: ba
     store_var primitive
     load_type #0
     store_var return_type
-    load_var primitive
-    load_var context
+    load_var2 4 2
     load_field .jinja_string
     load_var context
     load_field .args
     load_var return_type
     sys_op baml.llm.PrimitiveClient.render_prompt
     store_var prompt
-    load_var primitive
-    load_var prompt
+    load_var2 4 6
     sys_op baml.llm.PrimitiveClient.specialize_prompt
     store_var specialized
-    load_var primitive
-    load_var specialized
+    load_var2 4 7
     load_var return_type
     sys_op baml.llm.PrimitiveClient.build_request
     sys_op baml.http.send
@@ -2652,8 +2616,7 @@ function baml.llm.Client.execute_once_oneshot(self: baml.llm.Client, context: ba
     load_var http_response
     sys_op baml.http.Response.text
     store_var body
-    load_var primitive
-    load_var body
+    load_var2 4 9
     load_type #0
     sys_op baml.llm.PrimitiveClient.parse
     jump L15
@@ -2730,8 +2693,7 @@ function baml.llm.Client.execute_once_stream(self: baml.llm.Client, context: bam
     store_var __for_idx
 
   L5:
-    load_var __for_idx
-    load_var _22
+    load_var2 10 9
     container_len
     cmp_int_op <
     pop_jump_if_false L6
@@ -2745,11 +2707,9 @@ function baml.llm.Client.execute_once_stream(self: baml.llm.Client, context: bam
   L7:
     load_type #0
     load_type #1
-    load_var _22
-    load_var __for_idx
+    load_var2 9 10
     load_array_element
-    load_var context
-    load_var active_delay_ms
+    load_var2 2 3
     call baml.llm.Client.execute_stream
     jump L8
     load_var e
@@ -2769,26 +2729,22 @@ function baml.llm.Client.execute_once_stream(self: baml.llm.Client, context: bam
     store_var primitive
     load_type #1
     store_var return_type
-    load_var primitive
-    load_var context
+    load_var2 4 2
     load_field .jinja_string
     load_var context
     load_field .args
     load_var return_type
     sys_op baml.llm.PrimitiveClient.render_prompt
     store_var prompt
-    load_var primitive
-    load_var prompt
+    load_var2 4 6
     sys_op baml.llm.PrimitiveClient.specialize_prompt
     store_var specialized
-    load_var primitive
-    load_var specialized
+    load_var2 4 7
     load_var return_type
     sys_op baml.llm.PrimitiveClient.build_request_stream
     sys_op baml.http.fetch_sse
     store_var sse
-    load_var self
-    load_var sse
+    load_var2 1 8
     load_var context
     load_field .function_name
     call baml.llm.Client.__make_stream
@@ -2810,8 +2766,7 @@ function baml.llm.Client.execute_oneshot(self: baml.llm.Client, context: baml.ll
 
   L0:
     load_type #0
-    load_var self
-    load_var context
+    load_var2 1 2
     load_var inherited_delay_ms
     call baml.llm.Client.execute_once_oneshot
     jump L9
@@ -2827,8 +2782,7 @@ function baml.llm.Client.execute_oneshot(self: baml.llm.Client, context: baml.ll
     store_var attempt
 
   L2:
-    load_var attempt
-    load_var r
+    load_var2 7 5
     load_field .max_retries
     cmp_int_op <=
     pop_jump_if_false L3
@@ -2849,8 +2803,7 @@ function baml.llm.Client.execute_oneshot(self: baml.llm.Client, context: baml.ll
     load_var current_delay
     call baml.math.trunc
     store_var attempt_delay
-    load_var current_delay
-    load_var r
+    load_var2 6 5
     load_field .multiplier
     mul_float
     store_var_load_var next
@@ -2875,8 +2828,7 @@ function baml.llm.Client.execute_oneshot(self: baml.llm.Client, context: baml.ll
     store_var current_delay
 
   L7:
-    load_var attempt
-    load_var r
+    load_var2 7 5
     load_field .max_retries
     cmp_int_op ==
     pop_jump_if_false L8
@@ -2885,8 +2837,7 @@ function baml.llm.Client.execute_oneshot(self: baml.llm.Client, context: baml.ll
 
   L8:
     load_type #0
-    load_var self
-    load_var context
+    load_var2 1 2
     load_var attempt_delay
     call baml.llm.Client.execute_once_oneshot
     jump L9
@@ -2913,8 +2864,7 @@ function baml.llm.Client.execute_stream(self: baml.llm.Client, context: baml.llm
   L0:
     load_type #0
     load_type #1
-    load_var self
-    load_var context
+    load_var2 1 2
     load_var inherited_delay_ms
     call baml.llm.Client.execute_once_stream
     jump L9
@@ -2930,8 +2880,7 @@ function baml.llm.Client.execute_stream(self: baml.llm.Client, context: baml.llm
     store_var attempt
 
   L2:
-    load_var attempt
-    load_var r
+    load_var2 7 5
     load_field .max_retries
     cmp_int_op <=
     pop_jump_if_false L3
@@ -2952,8 +2901,7 @@ function baml.llm.Client.execute_stream(self: baml.llm.Client, context: baml.llm
     load_var current_delay
     call baml.math.trunc
     store_var attempt_delay
-    load_var current_delay
-    load_var r
+    load_var2 6 5
     load_field .multiplier
     mul_float
     store_var_load_var next
@@ -2978,8 +2926,7 @@ function baml.llm.Client.execute_stream(self: baml.llm.Client, context: baml.llm
     store_var current_delay
 
   L7:
-    load_var attempt
-    load_var r
+    load_var2 7 5
     load_field .max_retries
     cmp_int_op ==
     pop_jump_if_false L8
@@ -2989,8 +2936,7 @@ function baml.llm.Client.execute_stream(self: baml.llm.Client, context: baml.llm
   L8:
     load_type #0
     load_type #1
-    load_var self
-    load_var context
+    load_var2 1 2
     load_var attempt_delay
     call baml.llm.Client.execute_once_stream
     jump L9
@@ -3088,10 +3034,8 @@ function baml.llm.Client.to_json(self: baml.llm.Client) -> baml.json.json {
     load_field .counter
     call baml.Int.to_json
     store_var _20
-    load_var _2
-    load_var _5
-    load_var _10
-    load_var _13
+    load_var2 2 3
+    load_var2 4 5
     load_var _20
     load_const "name"
     load_const "client_type"
@@ -3257,10 +3201,8 @@ function baml.llm.MediaUrlHandler.to_json(self: baml.llm.MediaUrlHandler) -> bam
     store_var _23
 
   L11:
-    load_var _2
-    load_var _9
-    load_var _16
-    load_var _23
+    load_var2 2 3
+    load_var2 4 5
     load_const "image"
     load_const "audio"
     load_const "video"
@@ -3323,8 +3265,7 @@ function baml.llm.PlannerState.rr_local_offset(self: baml.llm.PlannerState, clie
     store_var __for_idx
 
   L0:
-    load_var __for_idx
-    load_var _4
+    load_var2 5 4
     container_len
     cmp_int_op <
     pop_jump_if_false L1
@@ -3335,8 +3276,7 @@ function baml.llm.PlannerState.rr_local_offset(self: baml.llm.PlannerState, clie
     return
 
   L2:
-    load_var _4
-    load_var __for_idx
+    load_var2 4 5
     load_array_element
     load_var client_name
     cmp_op ==
@@ -3355,8 +3295,7 @@ function baml.llm.PlannerState.rr_local_offset(self: baml.llm.PlannerState, clie
 }
 
 function baml.llm.PlannerState.rr_pick_index(self: baml.llm.PlannerState, client_name: string, counter: int, sub_client_count: int) -> int {
-    load_var self
-    load_var client_name
+    load_var2 1 2
     call baml.llm.PlannerState.rr_local_offset
     store_var local_offset
     load_var self
@@ -3364,8 +3303,7 @@ function baml.llm.PlannerState.rr_pick_index(self: baml.llm.PlannerState, client
     load_var client_name
     call baml.Array.push
     pop 1
-    load_var counter
-    load_var local_offset
+    load_var2 3 5
     add_int
     load_var sub_client_count
     mod_int
@@ -3901,10 +3839,8 @@ function baml.llm.VertexAiOptions.to_json(self: baml.llm.VertexAiOptions) -> bam
     store_var _23
 
   L11:
-    load_var _2
-    load_var _9
-    load_var _16
-    load_var _23
+    load_var2 2 3
+    load_var2 4 5
     load_const "credentials"
     load_const "credentials_content"
     load_const "location"
@@ -3926,13 +3862,11 @@ function baml.llm.build_request(client: baml.llm.Client, function_name: string, 
     load_var client
     call baml.llm.Client.to_primitive_client
     store_var primitive_client
-    load_var client
-    load_var function_name
+    load_var2 1 2
     load_var args
     call baml.llm.render_prompt
     store_var specialized_prompt
-    load_var primitive_client
-    load_var specialized_prompt
+    load_var2 5 6
     load_var return_type
     sys_op baml.llm.PrimitiveClient.build_request
     return
@@ -3945,13 +3879,11 @@ function baml.llm.build_request_stream(client: baml.llm.Client, function_name: s
     load_var client
     call baml.llm.Client.to_primitive_client
     store_var primitive_client
-    load_var client
-    load_var function_name
+    load_var2 1 2
     load_var args
     call baml.llm.render_prompt
     store_var specialized_prompt
-    load_var primitive_client
-    load_var specialized_prompt
+    load_var2 5 6
     load_var return_type
     sys_op baml.llm.PrimitiveClient.build_request_stream
     return
@@ -3962,10 +3894,8 @@ function baml.llm.call_llm_function(client: baml.llm.Client, function_name: stri
     sys_op baml.llm.get_jinja_template
     store_var jinja_string
     load_type #0
-    load_var client
-    load_var jinja_string
-    load_var args
-    load_var function_name
+    load_var2 1 4
+    load_var2 3 2
     init_instance baml.llm.ExecutionContext .jinja_string, .args, .function_name
     load_const 0
     call baml.llm.Client.execute_oneshot
@@ -3992,12 +3922,10 @@ function baml.llm.parse(function_name: string, json: string) -> unknown {
     sys_op baml.llm.get_stream_return_type
     store_var stream_return_type
     load_const null
-    load_var return_type
-    load_var stream_return_type
+    load_var2 3 4
     sys_op baml.llm.StreamCache.new
     store_var cache
-    load_var json
-    load_var cache
+    load_var2 2 5
     load_type #0
     load_type #1
     sys_op baml.llm.__sap_parse_final
@@ -4014,14 +3942,11 @@ function baml.llm.render_prompt(client: baml.llm.Client, function_name: string, 
     load_var client
     call baml.llm.Client.to_primitive_client
     store_var primitive_client
-    load_var primitive_client
-    load_var jinja_string
-    load_var args
-    load_var return_type
+    load_var2 6 4
+    load_var2 3 5
     sys_op baml.llm.PrimitiveClient.render_prompt
     store_var prompt
-    load_var primitive_client
-    load_var prompt
+    load_var2 6 7
     sys_op baml.llm.PrimitiveClient.specialize_prompt
     return
 }
@@ -4032,10 +3957,8 @@ function baml.llm.stream_llm_function(client: baml.llm.Client, function_name: st
     store_var jinja_string
     load_type #0
     load_type #1
-    load_var client
-    load_var jinja_string
-    load_var args
-    load_var function_name
+    load_var2 1 4
+    load_var2 3 2
     init_instance baml.llm.ExecutionContext .jinja_string, .args, .function_name
     load_const 0
     call baml.llm.Client.execute_stream
@@ -4699,10 +4622,8 @@ function baml.sys.ProcessOptions.to_json(self: baml.sys.ProcessOptions) -> baml.
     store_var _23
 
   L11:
-    load_var _2
-    load_var _9
-    load_var _16
-    load_var _23
+    load_var2 2 3
+    load_var2 4 5
     load_const "cwd"
     load_const "env"
     load_const "timeout_ms"

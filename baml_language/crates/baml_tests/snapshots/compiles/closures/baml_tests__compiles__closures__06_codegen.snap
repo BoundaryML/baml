@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 7540
 ---
 function user.Box.from_json(j: baml.json.json) -> Box<void> {
     load_var j
@@ -39,14 +38,12 @@ function user.Calculator.compute(self: Calculator, a: int, b: int) -> int {
     jump L1
 
   L0:
-    load_var a
-    load_var b
+    load_var2 2 3
     mul_int
     jump L2
 
   L1:
-    load_var a
-    load_var b
+    load_var2 2 3
     add_int
 
   L2:
@@ -263,14 +260,12 @@ function user.RangeCheck.from_json(j: baml.json.json) -> RangeCheck {
 }
 
 function user.RangeCheck.is_valid(self: RangeCheck, n: int) -> bool {
-    load_var n
-    load_var self
+    load_var2 2 1
     load_field .min
     cmp_int_op >=
     jump_if_false L0
     pop 1
-    load_var n
-    load_var self
+    load_var2 2 1
     load_field .max
     cmp_int_op <=
 
@@ -292,16 +287,14 @@ function user.RangeCheck.to_json(self: RangeCheck) -> baml.json.json {
 }
 
 function user.apply(f: (int, int) -> int throws never, a: int, b: int) -> int {
-    load_var a
-    load_var b
+    load_var2 2 3
     load_var f
     call_indirect
     return
 }
 
 function user.apply_to_each(items: Employee[], f: (Employee) -> string throws never) -> string[] {
-    load_var items
-    load_var f
+    load_var2 1 2
     call baml.Array.map
     return
 }
@@ -411,8 +404,7 @@ function user.test_strategy() -> int[] {
     load_const 4
     call user.apply
     store_var _7
-    load_var _5
-    load_var _7
+    load_var2 1 2
     alloc_array 2
     return
 }

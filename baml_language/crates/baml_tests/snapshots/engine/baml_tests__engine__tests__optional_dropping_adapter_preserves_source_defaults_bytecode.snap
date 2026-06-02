@@ -18,8 +18,7 @@ function combine(x: int, a: int, b: int) -> int {
     store_var b
 
   L1:
-    load_var x
-    load_var a
+    load_var2 1 2
     add_int
     load_var b
     add_int

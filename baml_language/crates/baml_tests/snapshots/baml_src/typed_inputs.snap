@@ -67,8 +67,7 @@ function typed_inputs.$init_test_ns_typed_inputs_typed_inputs(registry: testing.
 }
 
 function typed_inputs.add(a: int, b: int) -> int {
-    load_var a
-    load_var b
+    load_var2 1 2
     add_int
     return
 }
@@ -94,8 +93,7 @@ function typed_inputs.double(x: int) -> int {
 }
 
 function typed_inputs.get_value(m: map<string, int>, key: string) -> int {
-    load_var m
-    load_var key
+    load_var2 1 2
     load_map_element
     return
 }
@@ -151,8 +149,7 @@ function typed_inputs.sum(arr: int[]) -> int {
     store_var __for_idx
 
   L0:
-    load_var __for_idx
-    load_var arr
+    load_var2 3 1
     container_len
     cmp_int_op <
     pop_jump_if_false L1
@@ -163,8 +160,7 @@ function typed_inputs.sum(arr: int[]) -> int {
     return
 
   L2:
-    load_var total
-    load_var arr
+    load_var2 2 1
     load_var __for_idx
     load_array_element
     add_int

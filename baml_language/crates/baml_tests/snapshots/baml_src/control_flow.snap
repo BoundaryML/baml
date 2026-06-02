@@ -226,8 +226,7 @@ function control_flow.concat_oks(items: (control_flow.Ok | control_flow.Err)[]) 
     return
 
   L2:
-    load_var items
-    load_var i
+    load_var2 1 3
     load_array_element
     store_var item
     load_var i
@@ -238,8 +237,7 @@ function control_flow.concat_oks(items: (control_flow.Ok | control_flow.Err)[]) 
     store_var_load_var _9
     is_type control_flow.Ok
     pop_jump_if_false L0
-    load_var acc
-    load_var _9
+    load_var2 2 5
     load_field .value
     bin_op +
     store_var acc
@@ -521,8 +519,7 @@ function control_flow.pick_first_ok(items: (control_flow.Ok | control_flow.Err)[
     load_const 3
     cmp_int_op <
     pop_jump_if_false L1
-    load_var items
-    load_var i
+    load_var2 1 3
     load_array_element
     store_var_load_var _9
     is_type control_flow.Ok

@@ -79,25 +79,21 @@ function functions.$init_test_ns_functions_functions(registry: testing.TestColle
 }
 
 function functions.add(a: int, b: int) -> int {
-    load_var a
-    load_var b
+    load_var2 1 2
     add_int
     return
 }
 
 function functions.call_twice(f: (int, int) -> int throws never, x: int, y: int) -> int {
-    load_var x
-    load_var y
+    load_var2 2 3
     load_var f
     call_indirect
     store_var _4
-    load_var x
-    load_var y
+    load_var2 2 3
     load_var f
     call_indirect
     store_var _5
-    load_var _4
-    load_var _5
+    load_var2 4 5
     add_int
     return
 }

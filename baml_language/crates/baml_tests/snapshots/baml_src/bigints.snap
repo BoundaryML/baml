@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/tests/baml_src.rs
-assertion_line: 140
 ---
 function bigints.$init_test_ns_bigints_bigints(registry: testing.TestCollector) -> null {
     load_var registry
@@ -680,8 +679,7 @@ function bigints.$init_test_ns_bigints_bigints(registry: testing.TestCollector) 
 }
 
 function bigints.BigintBox.set(self: bigints.BigintBox, x: void) -> void {
-    load_var self
-    load_var x
+    load_var2 1 2
     store_field .v
     load_var x
     return
@@ -741,8 +739,7 @@ function bigints.bigint_compound_assign_nonliteral_fn() -> bigint {
     store_var x
     call user.bigints.bigint_nonliteral_inc
     store_var _4
-    load_var x
-    load_var _4
+    load_var2 1 2
     add_bigint
     store_var_load_var x
     load_const 1
@@ -822,8 +819,7 @@ function bigints.bigint_mul_preflight_fn() -> bigint {
     load_const 200000000n
     call baml.Bigint.pow
     store_var b
-    load_var a
-    load_var b
+    load_var2 1 2
     mul_bigint
     return
 }

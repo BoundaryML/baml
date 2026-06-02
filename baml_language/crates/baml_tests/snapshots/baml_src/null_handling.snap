@@ -264,8 +264,7 @@ function null_handling.nh_null_coalesce_lazy_non_null(value: int?) -> int {
     store_var ?2
     load_const 0
     store_deref ?2
-    load_var value
-    load_var value
+    load_var2 1 1
     load_const null
     cmp_op ==
     pop_jump_if_false L0
@@ -287,8 +286,7 @@ function null_handling.nh_null_coalesce_null_lhs(value: int?) -> int {
     store_var ?2
     load_const 0
     store_deref ?2
-    load_var value
-    load_var value
+    load_var2 1 1
     load_const null
     cmp_op ==
     pop_jump_if_false L0

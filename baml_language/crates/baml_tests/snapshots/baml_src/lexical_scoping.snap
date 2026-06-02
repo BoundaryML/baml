@@ -257,8 +257,7 @@ function lexical_scoping.for_loop_restores_outer() -> int {
     store_var __for_idx
 
   L0:
-    load_var __for_idx
-    load_var _2
+    load_var2 2 1
     container_len
     cmp_int_op <
     pop_jump_if_false L1
@@ -269,8 +268,7 @@ function lexical_scoping.for_loop_restores_outer() -> int {
     return
 
   L2:
-    load_var _2
-    load_var __for_idx
+    load_var2 1 2
     load_array_element
     store_var x
     load_var __for_idx
@@ -313,8 +311,7 @@ function lexical_scoping.match_and_catch_main() -> int {
     store_var _4
     call user.lexical_scoping.catch_base_uses_outer_lambda
     store_var _6
-    load_var _2
-    load_var _4
+    load_var2 1 2
     load_const 100
     mul_int
     add_int
@@ -454,8 +451,7 @@ function lexical_scoping.rule2_for_outer_mutation_escapes() -> int {
     store_var __for_idx
 
   L0:
-    load_var __for_idx
-    load_var _2
+    load_var2 3 2
     container_len
     cmp_int_op <
     pop_jump_if_false L1
