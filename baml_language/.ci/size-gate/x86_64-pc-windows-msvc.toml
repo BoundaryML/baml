@@ -3,9 +3,9 @@ recorded_at = "2026-05-29T20:30:00Z"
 git_sha = "06e5b7ce1"
 
 [artifacts.baml-cli]
-file_bytes = 17325568
-stripped_bytes = 17325568
-gzip_bytes = 8425232
+file_bytes = 16287232
+stripped_bytes = 16287232
+gzip_bytes = 7386896
 
 [artifacts.packed-program]
 file_bytes = 11852121
