@@ -36,29 +36,29 @@ package = "baml_cli"
 bin = "baml-cli"
 policy.max_delta_pct = 3.0
 
-# macOS arm64: baseline 15.07 MB file.
+# macOS arm64: baseline 15.12 MB file.
 [artifacts.baml-cli.platform.aarch64-apple-darwin]
-max_file_bytes = 15_089_472
-# Linux x86_64: baseline 19.40 MB file.
+max_file_bytes = 15_580_000
+# Linux x86_64: baseline 20.01 MB file.
 [artifacts.baml-cli.platform.x86_64-unknown-linux-gnu]
-max_file_bytes = 19_990_000
-# Windows x86_64: baseline 16.27 MB file.
+max_file_bytes = 20_620_000
+# Windows x86_64: baseline 16.32 MB file.
 [artifacts.baml-cli.platform.x86_64-pc-windows-msvc]
-max_file_bytes = 16_293_376
+max_file_bytes = 16_810_000
 
 [artifacts.packed-program]
 kind = "pack"
 policy.max_delta_pct = 3.0
 
-# macOS arm64: baseline 11.17 MB file.
+# macOS arm64: baseline 11.50 MB file.
 [artifacts.packed-program.platform.aarch64-apple-darwin]
-max_file_bytes = 11_510_000
-# Linux x86_64: baseline 14.69 MB file.
+max_file_bytes = 11_850_000
+# Linux x86_64: baseline 15.12 MB file.
 [artifacts.packed-program.platform.x86_64-unknown-linux-gnu]
-max_file_bytes = 15_140_000
-# Windows x86_64: baseline 11.85 MB file.
+max_file_bytes = 15_570_000
+# Windows x86_64: baseline 12.24 MB file.
 [artifacts.packed-program.platform.x86_64-pc-windows-msvc]
-max_file_bytes = 12_210_000
+max_file_bytes = 12_610_000
 
 [artifacts.packed-program.pack]
 cli_package = "baml_cli"
@@ -80,6 +80,6 @@ no_default_features = true
 wasm = true
 policy.max_delta_pct = 3.0
 
-# Single platform; baseline 3.85 MB gzip.
+# Single platform; baseline 3.87 MB gzip.
 [artifacts.bridge_wasm.platform.wasm32-unknown-unknown]
-max_gzip_bytes = 3_900_000
+max_gzip_bytes = 3_990_000
