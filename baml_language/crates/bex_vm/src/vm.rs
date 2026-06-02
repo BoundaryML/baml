@@ -919,6 +919,7 @@ fn value_type_tag(value: Value) -> i64 {
                 Object::Function(_) => type_tags::FUNCTION,
                 Object::Closure(_) => type_tags::FUNCTION,
                 Object::BoundMethod(_) => type_tags::FUNCTION,
+                Object::GenericFunction(_) => type_tags::FUNCTION,
                 Object::HostClosure(_) => type_tags::FUNCTION,
                 Object::Cell(_) => type_tags::UNKNOWN,
                 Object::Future(_) => type_tags::FUTURE,
@@ -2097,6 +2098,22 @@ impl BexVm {
                     }
                 }
             }
+            Object::GenericFunction(gf) => {
+                // Resolve the inner function via its global slot.
+                let inner_value = self.globals.get(self.proof(), gf.function);
+                let func_ptr = self.as_object_ptr(inner_value, FunctionType::Callable.into())?;
+                // SAFETY: function globals hold compile-time Function objects.
+                let func_obj = unsafe { func_ptr.get() };
+                match func_obj {
+                    Object::Function(f) => f.real_local_count,
+                    _ => {
+                        return Err(VmInternalError::TypeError {
+                            expected: Type::Object(ObjectType::Function(FunctionType::Any)),
+                            got: Type::Object(ObjectType::of(func_obj)),
+                        });
+                    }
+                }
+            }
             _ => {
                 return Err(VmInternalError::TypeError {
                     expected: Type::Object(ObjectType::Any),
@@ -2543,6 +2560,21 @@ impl BexVm {
                     }),
                 }
             }
+            Object::GenericFunction(gf) => {
+                // Keep the GenericFunction ptr as callee identity (so
+                // execute_call_from_locals_offset can extract type_args); resolve
+                // the inner function via its global slot for arity.
+                let inner_value = self.globals.get(self.proof(), gf.function);
+                let func_ptr = self.as_object_ptr(inner_value, expected_type.into())?;
+                let func_obj = unsafe { func_ptr.get() };
+                match func_obj {
+                    Object::Function(callee_fn) => Ok((callee_ptr, callee_fn.arity)),
+                    _ => Err(VmInternalError::TypeError {
+                        expected: expected_type.into(),
+                        got: ObjectType::of(func_obj).into(),
+                    }),
+                }
+            }
             _ => Err(VmInternalError::TypeError {
                 expected: expected_type.into(),
                 got: ObjectType::of(obj).into(),
@@ -2648,6 +2680,14 @@ impl BexVm {
             _ => Box::new([]),
         };
 
+        // For GenericFunction callees (`let f = foo<int>; f(x)`), the bound
+        // concrete type args seed frame.type_args so type-reifying bodies
+        // (reflect.type_of<T>, json natives) resolve T at runtime.
+        let gf_type_args: Box<[baml_type::Ty]> = match self.get_object(callee_ptr) {
+            Object::GenericFunction(gf) => gf.type_args.clone(),
+            _ => Box::new([]),
+        };
+
         // For BoundMethod callees, extract the receiver's class_type_args so
         // they can seed frame.type_args before call-site explicit type args are
         // appended.  This implements the De Bruijn ordering:
@@ -2687,6 +2727,27 @@ impl BexVm {
                 // compile-time object pool or TLAB, with lifetime at least as long
                 // as the BoundMethod.
                 let func_obj: &'static Object = unsafe { bm.function.get() };
+                match func_obj {
+                    Object::Function(f) => f,
+                    _ => {
+                        return Err(VmInternalError::TypeError {
+                            expected: FunctionType::Callable.into(),
+                            got: ObjectType::of(func_obj).into(),
+                        }
+                        .into());
+                    }
+                }
+            }
+            Object::GenericFunction(gf) => {
+                // Resolve the base function via its global slot, mirroring the
+                // MakeBoundMethod opcode (the pooled GenericFunction stores a
+                // GlobalIndex, not a HeapPtr).
+                let gidx = gf.function;
+                let callee_value = self.globals.get(self.proof(), gidx);
+                let func_ptr = self.as_object_ptr(callee_value, FunctionType::Callable.into())?;
+                // SAFETY: the function global slot holds a compile-time Function
+                // object whose lifetime spans the whole program.
+                let func_obj: &'static Object = unsafe { func_ptr.get() };
                 match func_obj {
                     Object::Function(f) => f,
                     _ => {
@@ -2741,8 +2802,26 @@ impl BexVm {
                 // SmallVec avoids heap allocation for calls with ≤4 args (the common case).
                 let args: SmallVec<[Value; 4]> = self.stack.drain(locals_offset..).collect();
 
+                // For a GenericFunction-valued native callee
+                // (`let f = baml.json.from_string<User>; f(s)`), seed the native's
+                // type args so it reads them via `current_call_type_args()` — the
+                // direct-call path sets these from LoadType operands, but an
+                // indirect call through the value carries them on `gf_type_args`.
+                let restore_pending = if !gf_type_args.is_empty() {
+                    Some(std::mem::replace(
+                        &mut self.pending_call_type_args,
+                        gf_type_args.to_vec(),
+                    ))
+                } else {
+                    None
+                };
+                let native_result = func(self, &args);
+                if let Some(prev) = restore_pending {
+                    self.pending_call_type_args = prev;
+                }
+
                 // Run Rust native function, converting NativeCallResult → VmError.
-                match func(self, &args) {
+                match native_result {
                     NativeCallResult::Done(v) => {
                         self.stack.push(v);
                     }
@@ -2850,6 +2929,9 @@ impl BexVm {
                 // never be both simultaneously.
                 let initial_type_args = if !bound_method_class_type_args.is_empty() {
                     bound_method_class_type_args
+                } else if !gf_type_args.is_empty() {
+                    // GenericFunction value (`foo<int>`): seed its concrete args.
+                    gf_type_args
                 } else {
                     closure_type_args
                 };
@@ -3236,6 +3318,14 @@ impl BexVm {
                 // SAFETY: See doc comment — same lifetime guarantee applies to the
                 // inner function referenced by the bound method.
                 let func_obj: &'static Object = unsafe { bm.function.get() };
+                func_obj.as_function()
+            }
+            Object::GenericFunction(gf) => {
+                // Resolve the inner function via its global slot.
+                let inner_value = self.globals.get(self.proof(), gf.function);
+                let func_ptr = self.as_object_ptr(inner_value, FunctionType::Callable.into())?;
+                // SAFETY: function globals hold compile-time Function objects.
+                let func_obj: &'static Object = unsafe { func_ptr.get() };
                 func_obj.as_function()
             }
             _ => Err(VmInternalError::TypeError {

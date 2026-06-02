@@ -3248,10 +3248,8 @@ impl LoweringContext<'_> {
                 self.lower_expr(base, dest);
             }
 
-            AstExpr::GenericApply { base, .. } => {
-                // `foo<int>` — generic instantiation as a value. Type arguments
-                // are erased at runtime; the value is the base callable.
-                self.lower_expr(base, dest);
+            AstExpr::GenericApply { base, type_args } => {
+                self.lower_generic_apply(base, &type_args, dest);
             }
 
             AstExpr::OptionalMemberAccess { base, member } => {
@@ -5515,6 +5513,116 @@ impl LoweringContext<'_> {
             operands.push(Operand::Copy(Place::local(temp)));
         }
         operands
+    }
+
+    /// Lower `foo<int>` (a `GenericApply` value). If the base resolves to a
+    /// function `ItemRef` and all type args are fully concrete, emit a pooled,
+    /// interned `Constant::GenericFunction` (pointer-stable; seeds
+    /// `frame.type_args` when called). Otherwise fall back to lowering the base
+    /// value with type args erased — for exotic bases (bound methods, lambdas)
+    /// or param-dependent args (`foo<T>` inside a generic function).
+    fn lower_generic_apply(&mut self, base: AstExprId, type_args: &[AstTypeExpr], dest: Place) {
+        if let Some(item) = self.try_resolve_generic_apply_base(base)
+            && let Some(concrete) = self.concrete_type_args(type_args)
+        {
+            self.builder.assign(
+                dest,
+                Rvalue::Use(Operand::Constant(Constant::GenericFunction {
+                    item,
+                    type_args: concrete,
+                })),
+            );
+            return;
+        }
+        self.lower_expr(base, dest);
+    }
+
+    /// Resolve a `GenericApply` base to the underlying function `ItemRef` (free
+    /// function or static/interface method). `None` for bound methods, lambdas,
+    /// or anything that is not a function path.
+    fn try_resolve_generic_apply_base(&self, base: AstExprId) -> Option<ItemRef> {
+        use baml_compiler2_tir::inference::MemberResolution;
+        let is_fn = |r: &MemberResolution<'_>| {
+            matches!(
+                r,
+                MemberResolution::Free { .. }
+                    | MemberResolution::UnboundMethod { .. }
+                    | MemberResolution::InterfaceDefaultMethod { .. }
+            )
+        };
+        let key = self.expr_metadata_key(base);
+        // Multi-segment paths: static methods, qualified free fns (e.g. baml.json.from_string).
+        if let Some(item) = self
+            .path_member_resolutions
+            .get(&key)
+            .and_then(|rs| rs.last())
+            .filter(|r| is_fn(r))
+            .and_then(|r| resolution_to_item_ref(self.db, r))
+        {
+            return Some(item);
+        }
+        // Flat / package resolutions.
+        if let Some(item) = self
+            .resolutions
+            .get(&key)
+            .filter(|r| is_fn(r))
+            .and_then(|r| resolution_to_item_ref(self.db, r))
+        {
+            return Some(item);
+        }
+        // Single-name free function / builtin.
+        if let AstExpr::Path(segments) = &self.body.exprs[base]
+            && segments.len() == 1
+        {
+            let span_start = self
+                .source_map
+                .as_ref()
+                .map(|sm| sm.expr_span(base).start())
+                .unwrap_or_default();
+            match resolve_name_at_in_scope(
+                self.db,
+                self.file,
+                span_start,
+                &segments[0],
+                self.scope_func_name.as_ref(),
+            ) {
+                ResolvedName::Item(def @ Definition::Function(_))
+                | ResolvedName::Builtin(def @ Definition::Function(_)) => {
+                    return Some(def_to_item_ref(self.db, def));
+                }
+                _ => {}
+            }
+        }
+        None
+    }
+
+    /// Resolve `GenericApply` AST type args to fully-concrete `Ty`s. `None` if
+    /// any arg depends on an enclosing generic param (a `TypeArgRef` template) —
+    /// those cannot be a compile-time-pooled constant.
+    fn concrete_type_args(&self, type_args: &[AstTypeExpr]) -> Option<Vec<Ty>> {
+        use baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns;
+        let generic_params = self.enclosing_generic_params();
+        let pkg_info = file_package(self.db, self.file);
+        let pkg_id = PackageId::new(self.db, pkg_info.package);
+        let pkg_items = package_items(self.db, pkg_id);
+        let mut out = Vec::with_capacity(type_args.len());
+        for type_arg in type_args {
+            let mut diags = Vec::new();
+            let tir_ty = lower_type_expr_in_ns(
+                self.db,
+                type_arg,
+                pkg_items,
+                &pkg_info.namespace_path,
+                &generic_params,
+                &mut diags,
+            );
+            let template = self.ty_to_template(&tir_ty, &generic_params);
+            if !template.is_fully_concrete() {
+                return None;
+            }
+            out.push(template.substitute(&[]));
+        }
+        Some(out)
     }
 }
 

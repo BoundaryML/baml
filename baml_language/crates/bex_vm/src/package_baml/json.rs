@@ -389,6 +389,7 @@ pub fn value_to_serde(vm: &BexVm, v: Value) -> serde_json::Value {
             | Object::RustData(_)
             | Object::Closure(_)
             | Object::BoundMethod(_)
+            | Object::GenericFunction(_)
             | Object::HostClosure(_)
             | Object::Cell(_) => serde_json::Value::Null,
             #[cfg(feature = "heap_debug")]

@@ -244,6 +244,9 @@ impl BexEngine {
             Object::BoundMethod(_) => Err(EngineError::CannotConvert {
                 type_name: "bound_method".to_string(),
             }),
+            Object::GenericFunction(_) => Err(EngineError::CannotConvert {
+                type_name: "generic_function".to_string(),
+            }),
             Object::HostClosure(_) => Err(EngineError::CannotConvert {
                 type_name: "host_closure".to_string(),
             }),
@@ -1137,6 +1140,7 @@ fn find_matching_union_member(value: Value, members: &[Ty]) -> Option<&Ty> {
                 Object::Function(_)
                 | Object::Closure(_)
                 | Object::BoundMethod(_)
+                | Object::GenericFunction(_)
                 | Object::HostClosure(_)
                 | Object::Cell(_)
                 | Object::Class(_)
@@ -1245,6 +1249,7 @@ pub(crate) fn vm_arg_to_external(vm: &BexVm, value: Value) -> BexExternalValue {
                 Object::Function(_)
                 | Object::Closure(_)
                 | Object::BoundMethod(_)
+                | Object::GenericFunction(_)
                 | Object::HostClosure(_)
                 | Object::Cell(_)
                 | Object::Class(_)

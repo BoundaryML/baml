@@ -774,6 +774,16 @@ pub enum Constant {
     /// Carried from TIR resolution through lowering. Converted to a
     /// runtime string only in the emit phase.
     Function(ItemRef),
+    /// A generic function instantiated with concrete type arguments
+    /// (`foo<int>` referenced as a value). Emitted as a pooled, interned
+    /// `Object::GenericFunction` so identical instantiations share one object
+    /// (pointer-stable identity) and calling it seeds `frame.type_args`.
+    GenericFunction {
+        /// The base generic function.
+        item: ItemRef,
+        /// The concrete type arguments (fully resolved, no type parameters).
+        type_args: Vec<Ty>,
+    },
     /// An enum variant value.
     EnumVariant {
         /// Structured reference to the enum type.

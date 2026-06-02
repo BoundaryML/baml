@@ -1849,6 +1849,39 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 let inst = self.emit(Instruction::LoadGlobal(GlobalIndex::from_raw(*global_idx)));
                 self.set_operand(inst, OperandMeta::Global(name_str));
             }
+            Constant::GenericFunction { item, type_args } => {
+                // `foo<int>` as a value. Resolve the base function's global slot
+                // (like `Constant::Function`), then pool an interned
+                // `Object::GenericFunction`. Interning by (function, type_args)
+                // over the shared object pool makes identical instantiations
+                // share ONE pooled object → pointer-stable `foo<int> === foo<int>`.
+                let name_str = item.to_string();
+                let global_idx = *self
+                    .globals
+                    .get(&name_str)
+                    .unwrap_or_else(|| panic!("undefined function: {name_str}"));
+                let gidx = GlobalIndex::from_raw(global_idx);
+                let existing = self.objects.iter().position(|o| {
+                    matches!(o, Object::GenericFunction(gf)
+                        if gf.function == gidx && gf.type_args.as_ref() == type_args.as_slice())
+                });
+                let pool_idx = match existing {
+                    Some(idx) => idx,
+                    None => {
+                        let idx = self.objects.len();
+                        self.objects
+                            .push(Object::GenericFunction(bex_vm_types::GenericFunction {
+                                function: gidx,
+                                type_args: type_args.clone().into_boxed_slice(),
+                            }));
+                        idx
+                    }
+                };
+                let const_idx =
+                    self.add_constant(ConstValue::Object(ObjectIndex::from_raw(pool_idx)));
+                let inst = self.emit(Instruction::LoadConst(const_idx));
+                self.set_operand(inst, OperandMeta::Const(format!("{name_str}<...>")));
+            }
             Constant::EnumVariant { enum_ref, variant } => {
                 let enum_name_str = enum_ref.to_string();
                 // Gracefully handle undefined enum references (e.g. cross-package

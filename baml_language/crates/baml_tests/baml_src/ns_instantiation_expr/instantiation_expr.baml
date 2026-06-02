@@ -1,15 +1,14 @@
 // Runtime tests for generic instantiation expressions: `let f = foo<int>`.
 //
-// Type arguments are ERASED at runtime, so an instantiated value behaves like
-// the bare callable. For type args that only affect parameter/return types this
-// is fully correct (see `identity_int_value_runs`). For a body that reflects on
-// its own type parameter it is a known limitation (see the pinned test below) —
-// this will be fixed when function mocking reifies the type argument.
+// `foo<int>` (concrete type args) is a pooled, interned value: identical
+// instantiations share one object (pointer-stable identity), and calling the
+// value seeds frame.type_args so type-reifying bodies (reflect.type_of<T>,
+// json natives) resolve T at runtime — i.e. it behaves exactly like the
+// equivalent direct call `foo<int>(...)`.
 
 function identity<T>(x: T) -> T { x }
 
-// The common case: `<int>` only affects the value's static type. Erasing it at
-// runtime is correct — calling the value runs the underlying function.
+// The value runs end-to-end: calling it invokes the underlying function.
 function identity_int_value_fn() -> int {
     let f = identity<int>;
     f(5)
@@ -17,6 +16,18 @@ function identity_int_value_fn() -> int {
 
 test "identity_int_value_runs" {
     assert.is_true(baml.deep_equals(identity_int_value_fn(), 5))
+}
+
+// Pointer-stable identity: two evaluations of `identity<int>` are interned to
+// the SAME pooled object, and a different specialization is a different object.
+function identity_same_specialization() -> bool {
+    let a = identity<int>;
+    let b = identity<int>;
+    baml.deep_equals(a, b)
+}
+
+test "same_specialization_is_identical" {
+    assert.is_true(identity_same_specialization())
 }
 
 // Multiple bound type args: `pair<int, string>` specializes both params and
@@ -38,16 +49,36 @@ function describe<T>() -> string {
     reflect.type_of<T>().to_string()
 }
 
-// KNOWN LIMITATION (erasure): an *uncalled* generic reference loses its type
-// argument at runtime, so `reflect.type_of<T>` resolves to "unknown" instead of
-// the bound type. Pinned so the boundary cannot silently change. Calling
-// directly — `describe<User>()` — still returns the bound type (see the
-// ns_reflect_type_of_generic fixture).
+// reflect.type_of<T> through an UNCALLED value now resolves T correctly (the
+// value carries its type args and seeds frame.type_args when called).
 function describe_user_value_fn() -> string {
     let f = describe<User>;
     f()
 }
 
-test "describe_user_value_is_unknown_known_limitation" {
-    assert.is_true(baml.deep_equals(describe_user_value_fn(), "unknown"))
+test "reflect_type_of_through_value" {
+    assert.is_true(baml.deep_equals(describe_user_value_fn(), "instantiation_expr.User"))
+}
+
+// Type-reifying native through a value: `baml.json.from_string<User>` decodes
+// using T=User seeded from the value (previously a runtime crash under erasure).
+function from_string_value_fn() -> User {
+    let f = baml.json.from_string<User>;
+    f("{\"name\":\"Ada\"}")
+}
+
+test "json_native_through_value" {
+    assert.is_true(baml.deep_equals(from_string_value_fn(), User { name: "Ada" }))
+}
+
+// Param-dependent instantiation (`identity<T>` where T is the enclosing
+// function's type param) cannot be a compile-time-pooled constant; it falls
+// back to erasure but still runs for param/return-only type args.
+function forward<T>(x: T) -> T {
+    let f = identity<T>;
+    f(x)
+}
+
+test "param_dependent_instantiation_runs" {
+    assert.is_true(baml.deep_equals(forward<int>(7), 7))
 }

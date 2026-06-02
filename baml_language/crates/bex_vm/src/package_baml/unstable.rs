@@ -136,6 +136,7 @@ fn format_value_recursive(vm: &BexVm, value: Value, depth: usize) -> Result<Stri
                 Ok(format!("<closure captures={}>", closure.captures.len()))
             }
             Object::BoundMethod(_) => Ok("<bound_method>".to_string()),
+            Object::GenericFunction(_) => Ok("<generic_function>".to_string()),
             Object::HostClosure(_) => Ok("<host_closure>".to_string()),
             Object::Cell(cell) => Ok(format!("<cell {}>", cell.load())),
             #[cfg(feature = "heap_debug")]
