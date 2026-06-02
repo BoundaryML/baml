@@ -254,13 +254,16 @@ fn format_cursor_hover_results(results: &[CursorHoverResult]) -> String {
         ));
 
         for line in result.actual_text.lines() {
+            // The expectation parser skips empty `//` lines (they double as
+            // section separators), so blank lines in the hover markdown — e.g.
+            // the blank line before a `Run \`baml describe …\`` hint — cannot
+            // round-trip. Drop them here so actual matches the parsed expected.
             if line.is_empty() {
-                output.push_str("//\n");
-            } else {
-                output.push_str("// ");
-                output.push_str(line);
-                output.push('\n');
+                continue;
             }
+            output.push_str("// ");
+            output.push_str(line);
+            output.push('\n');
         }
     }
 

@@ -35,6 +35,24 @@ function CompoundAssignments() -> int {
 
 //----
 //- diagnostics
+// error: operator `Add` cannot be applied to `int` and `"five"`
+//     ╭─[ invalid_assignment_compound_ops.baml:15:2 ]
+//     │
+//  15 │     c += "five";
+//     │     ┬  
+//     │     ╰── operator `Add` cannot be applied to `int` and `"five"`
+//     │ 
+//     │ Note: Error code: E0004
+// ────╯
+// error: operator `Add` cannot be applied to `string` and `100`
+//     ╭─[ invalid_assignment_compound_ops.baml:19:2 ]
+//     │
+//  19 │     d += 100;
+//     │     ┬  
+//     │     ╰── operator `Add` cannot be applied to `string` and `100`
+//     │ 
+//     │ Note: Error code: E0004
+// ────╯
 // error: operator `Add` cannot be applied to `int` and `true`
 //     ╭─[ invalid_assignment_compound_ops.baml:23:2 ]
 //     │

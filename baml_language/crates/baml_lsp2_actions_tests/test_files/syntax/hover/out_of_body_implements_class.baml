@@ -20,7 +20,9 @@ implements Animal for Dog {
 // hover at hover_out_of_body_implements_class.baml:5:10
 // ```baml
 // class Dog {
-//     name: string
+//     name: string,
 //     implements Animal {}
 // }
 // ```
+//
+// Run `baml describe Dog` for methods and details.
