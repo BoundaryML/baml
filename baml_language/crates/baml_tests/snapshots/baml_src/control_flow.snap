@@ -304,8 +304,7 @@ function control_flow.describe_else_message(r: control_flow.Ok | control_flow.Er
 
 function control_flow.describe_or_pattern(r: control_flow.Ok | control_flow.Warn | control_flow.Err) -> string {
     load_var r
-    pop 1
-    load_const false
+    is_type control_flow.Ok
     pop_jump_if_false L0
     jump L2
 
@@ -546,8 +545,7 @@ function control_flow.pick_first_ok(items: (control_flow.Ok | control_flow.Err)[
 
 function control_flow.pick_let_else(r: control_flow.Ok | control_flow.Warn | control_flow.Err) -> string {
     load_var r
-    pop 1
-    load_const false
+    is_type control_flow.Ok
     pop_jump_if_false L0
     jump L2
 
