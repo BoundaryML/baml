@@ -23,15 +23,15 @@ from . import fixer
 
 log = logging.getLogger("notion_fixer")
 
-NOTION_TOKEN = os.environ.get("NOTION_TOKEN", "")
-NOTION_SKILL_DB_ID = os.environ.get("NOTION_SKILL_DB_ID", "")
-NOTION_LANG_DB_ID = os.environ.get("NOTION_LANG_DB_ID", "")
-SLACK_BOT_TOKEN = os.environ.get("SLACK_BOT_TOKEN", "")
-SLACK_FIX_CHANNEL = os.environ.get("SLACK_FIX_CHANNEL", "")
+NOTION_TOKEN = os.environ.get("ATB_NOTION_TOKEN", "")
+NOTION_SKILL_DB_ID = os.environ.get("ATB_NOTION_SKILL_DB_ID", "")
+NOTION_LANG_DB_ID = os.environ.get("ATB_NOTION_LANG_DB_ID", "")
+SLACK_BOT_TOKEN = os.environ.get("ATB_SLACK_BOT_TOKEN", "")
+SLACK_FIX_CHANNEL = os.environ.get("ATB_SLACK_FIX_CHANNEL", "")
 # We launch the fix agent through Cursor's Cloud Agents API directly (a Slack
 # mention from an app/API can't trigger Cursor). SLACK_BOT_TOKEN is used only for
 # the visibility note posted on dispatch, not to trigger anything.
-CURSOR_API_KEY = os.environ.get("CURSOR_API_KEY", "")
+CURSOR_API_KEY = os.environ.get("ATB_CURSOR_API_KEY", "")
 CURSOR_MODEL = os.environ.get("CURSOR_MODEL") or None
 
 STATUS_CONFIRMED = os.environ.get("NOTION_STATUS_CONFIRMED", "confirmed issue")
@@ -225,7 +225,7 @@ async def _amain() -> None:
     the client on exit.
     """
     logging.basicConfig(level=os.environ.get("LOG_LEVEL", "INFO"))
-    service = ServiceClient(os.environ["SERVICE_URL"], os.environ.get("SERVICE_TOKEN", ""))
+    service = ServiceClient(os.environ["SERVICE_URL"], os.environ.get("ATB_SERVICE_TOKEN", ""))
     try:
         await asyncio.gather(NotionPush(service).run(), FixDispatch(service).run())
     finally:

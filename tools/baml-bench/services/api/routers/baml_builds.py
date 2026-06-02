@@ -35,7 +35,7 @@ def _gh_headers(accept: str = "application/vnd.github+json") -> dict[str, str]:
         A headers dict including a bearer token when GITHUB_TOKEN is set.
     """
     h = {"Accept": accept}
-    token = os.environ.get("GITHUB_TOKEN")
+    token = os.environ.get("ATB_GITHUB_TOKEN")
     if token:
         h["Authorization"] = f"Bearer {token}"
     return h

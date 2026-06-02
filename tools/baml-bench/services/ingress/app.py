@@ -27,8 +27,8 @@ from bench_core.service_client import ServiceClient
 log = logging.getLogger("uvicorn.error")
 
 SERVICE_URL = os.environ["SERVICE_URL"]
-SERVICE_TOKEN = os.environ.get("SERVICE_TOKEN", "")
-SLACK_SIGNING_SECRET = os.environ.get("SLACK_SIGNING_SECRET", "")
+SERVICE_TOKEN = os.environ.get("ATB_SERVICE_TOKEN", "")
+SLACK_SIGNING_SECRET = os.environ.get("ATB_SLACK_SIGNING_SECRET", "")
 # When set, /notion/webhook requires a valid X-Notion-Signature over the raw body
 # (HMAC-SHA256 keyed by this token, the value shown in the Notion webhook UI).
 # Left empty, signature verification is skipped (current default behavior).

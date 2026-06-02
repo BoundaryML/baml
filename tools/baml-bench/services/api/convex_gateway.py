@@ -139,6 +139,6 @@ def gateway_from_env() -> ConvexGateway:
     """
     return ConvexGateway(
         url=os.environ["CONVEX_URL"],
-        admin_key=os.environ.get("CONVEX_ADMIN_KEY"),
+        admin_key=os.environ.get("ATB_CONVEX_ADMIN_KEY"),
         poll_interval=float(os.environ.get("CONVEX_POLL_INTERVAL_SECS", "2.0")),
     )

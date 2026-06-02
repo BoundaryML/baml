@@ -17,7 +17,7 @@ import tarfile
 import httpx
 
 REPO_SLUG = os.environ.get("BAML_REPO_SLUG", "BoundaryML/baml")
-GITHUB_TOKEN = os.environ.get("GITHUB_TOKEN", "")
+GITHUB_TOKEN = os.environ.get("ATB_GITHUB_TOKEN", "")
 # GitHub API base; env-overridable for consistency with the other API clients.
 GITHUB_API_BASE = os.environ.get("GITHUB_API_BASE", "https://api.github.com")
 

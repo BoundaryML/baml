@@ -17,7 +17,7 @@ from . import blobs
 from .routers.table import make_router
 from .routers.baml_builds import make_baml_router
 
-SERVICE_TOKEN = os.environ.get("SERVICE_TOKEN", "")
+SERVICE_TOKEN = os.environ.get("ATB_SERVICE_TOKEN", "")
 TABLES = ["tasks", "trophies", "issues", "bamlBuilds"]
 
 

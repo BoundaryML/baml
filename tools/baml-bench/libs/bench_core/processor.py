@@ -189,7 +189,7 @@ def run_processor(proc_factory) -> None:
     logging.basicConfig(level=os.environ.get("LOG_LEVEL", "INFO"))
     service = ServiceClient(
         base_url=os.environ["SERVICE_URL"],
-        token=os.environ.get("SERVICE_TOKEN", ""),
+        token=os.environ.get("ATB_SERVICE_TOKEN", ""),
     )
 
     async def _main() -> None:

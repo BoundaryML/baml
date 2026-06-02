@@ -122,7 +122,7 @@ async def _amain() -> None:
     Builds the shared ServiceClient and closes it on exit.
     """
     logging.basicConfig(level=os.environ.get("LOG_LEVEL", "INFO"))
-    service = ServiceClient(os.environ["SERVICE_URL"], os.environ.get("SERVICE_TOKEN", ""))
+    service = ServiceClient(os.environ["SERVICE_URL"], os.environ.get("ATB_SERVICE_TOKEN", ""))
     try:
         while True:
             await _cycle(service)

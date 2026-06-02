@@ -43,7 +43,7 @@ class ProxyClient:
             "http://claude-proxy:9090") and the proxy token.
         """
         raw = os.environ.get("CLAUDE_PROXY_URLS", "http://claude-proxy:9090")
-        return cls(raw.split(","), os.environ.get("CLAUDE_PROXY_TOKEN", ""))
+        return cls(raw.split(","), os.environ.get("ATB_CLAUDE_PROXY_TOKEN", ""))
 
     async def run_agent(self, req: RunAgentRequest, *, timeout: float = 7200.0) -> AgentResult:
         """Run an agent by POSTing /run-agent to a randomly chosen proxy.

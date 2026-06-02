@@ -31,14 +31,14 @@ from . import runner
 
 log = logging.getLogger("claude_proxy")
 
-PROXY_TOKEN = os.environ.get("CLAUDE_PROXY_TOKEN", "")
+PROXY_TOKEN = os.environ.get("ATB_CLAUDE_PROXY_TOKEN", "")
 STAGING_ROOT = Path(os.environ.get("STAGING_ROOT", "/tmp/staging"))
 BAML_CACHE_DIR = Path(os.environ.get("BAML_CACHE_DIR", "/var/baml-cache"))
 CLAUDE_BIN = os.environ.get("CLAUDE_BIN", "claude")
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
 DEFAULT_TIMEOUT = int(os.environ.get("CLAUDE_INVOCATION_TIMEOUT_SECS", "1800"))
 SERVICE_URL = os.environ.get("SERVICE_URL", "")
-SERVICE_TOKEN = os.environ.get("SERVICE_TOKEN", "")
+SERVICE_TOKEN = os.environ.get("ATB_SERVICE_TOKEN", "")
 ALLOWED_MODELS = {"claude-sonnet-4-6", "claude-haiku-4-5", "claude-opus-4-7"}
 
 _baml_locks: dict[str, asyncio.Lock] = {}
