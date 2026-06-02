@@ -181,6 +181,35 @@ impl QualifiedTypeName {
     pub fn render_user_facing(&self) -> String {
         self.render_qualified(true)
     }
+
+    /// If this names a builtin `baml` companion class that has a lowercase
+    /// primitive/keyword alias, return that alias: `baml.String` → `string`,
+    /// `baml.media.Image` → `image`, `baml.json.json` → `json`. Returns `None`
+    /// for any other type (including user types and non-aliased `baml` types
+    /// such as `baml.json.JsonObject`).
+    ///
+    /// This is the single collapse rule used by the describe/hover canonical
+    /// type printer; it must stay in sync with
+    /// [`PrimitiveType::builtin_class_path`].
+    pub fn builtin_alias(&self) -> Option<&'static str> {
+        if self.package().as_str() != "baml" {
+            return None;
+        }
+        // `json` is the `baml.json.json` type alias, not a `PrimitiveType`.
+        if self.namespace.len() == 1
+            && self.namespace[0].as_str() == "json"
+            && self.name.as_str() == "json"
+        {
+            return Some("json");
+        }
+        let path: Vec<&str> = self
+            .namespace
+            .iter()
+            .map(Name::as_str)
+            .chain(std::iter::once(self.name.as_str()))
+            .collect();
+        PrimitiveType::from_builtin_class_path(&path).map(|p| p.alias())
+    }
 }
 
 /// The reserved implicit root package for user-authored code. It is the
@@ -440,6 +469,45 @@ impl PrimitiveType {
             baml_base::Literal::String(_) => Self::String,
             baml_base::Literal::Bool(_) => Self::Bool,
         }
+    }
+
+    /// The lowercase primitive/keyword spelling for this type (`string`, `int`,
+    /// `image`, …). Single source of truth — the [`fmt::Display`] impl delegates
+    /// here.
+    pub fn alias(&self) -> &'static str {
+        match self {
+            Self::Int => "int",
+            Self::Bigint => "bigint",
+            Self::Float => "float",
+            Self::String => "string",
+            Self::Bool => "bool",
+            Self::Null => "null",
+            Self::Uint8Array => "uint8array",
+            Self::Image => "image",
+            Self::Audio => "audio",
+            Self::Video => "video",
+            Self::Pdf => "pdf",
+        }
+    }
+
+    /// Inverse of [`builtin_class_path`](Self::builtin_class_path): map a class
+    /// path (relative to the `baml` package, e.g. `["media", "Image"]`) back to
+    /// the primitive it is the companion class for.
+    pub fn from_builtin_class_path(path: &[&str]) -> Option<Self> {
+        const ALL: [PrimitiveType; 11] = [
+            PrimitiveType::Int,
+            PrimitiveType::Bigint,
+            PrimitiveType::Float,
+            PrimitiveType::Bool,
+            PrimitiveType::Null,
+            PrimitiveType::String,
+            PrimitiveType::Uint8Array,
+            PrimitiveType::Image,
+            PrimitiveType::Audio,
+            PrimitiveType::Video,
+            PrimitiveType::Pdf,
+        ];
+        ALL.into_iter().find(|p| p.builtin_class_path() == path)
     }
 }
 
@@ -841,18 +909,81 @@ impl fmt::Display for Ty {
 
 impl fmt::Display for PrimitiveType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            PrimitiveType::Int => write!(f, "int"),
-            PrimitiveType::Bigint => write!(f, "bigint"),
-            PrimitiveType::Float => write!(f, "float"),
-            PrimitiveType::String => write!(f, "string"),
-            PrimitiveType::Bool => write!(f, "bool"),
-            PrimitiveType::Null => write!(f, "null"),
-            PrimitiveType::Image => write!(f, "image"),
-            PrimitiveType::Audio => write!(f, "audio"),
-            PrimitiveType::Video => write!(f, "video"),
-            PrimitiveType::Pdf => write!(f, "pdf"),
-            PrimitiveType::Uint8Array => write!(f, "uint8array"),
+        write!(f, "{}", self.alias())
+    }
+}
+
+#[cfg(test)]
+mod alias_tests {
+    use baml_base::Name;
+
+    use super::*;
+
+    #[test]
+    fn primitive_alias_class_path_roundtrips() {
+        for p in [
+            PrimitiveType::Int,
+            PrimitiveType::Bigint,
+            PrimitiveType::Float,
+            PrimitiveType::String,
+            PrimitiveType::Bool,
+            PrimitiveType::Null,
+            PrimitiveType::Uint8Array,
+            PrimitiveType::Image,
+            PrimitiveType::Audio,
+            PrimitiveType::Video,
+            PrimitiveType::Pdf,
+        ] {
+            let path = p.builtin_class_path();
+            assert_eq!(
+                PrimitiveType::from_builtin_class_path(path),
+                Some(p.clone()),
+                "round-trip failed for {p:?} via {path:?}"
+            );
+            // The alias matches the Display spelling.
+            assert_eq!(p.alias(), p.to_string());
         }
+    }
+
+    #[test]
+    fn from_builtin_class_path_rejects_unknown() {
+        assert_eq!(PrimitiveType::from_builtin_class_path(&["Nope"]), None);
+        assert_eq!(
+            PrimitiveType::from_builtin_class_path(&["media", "Nope"]),
+            None
+        );
+    }
+
+    fn baml_qtn(namespace: &[&str], name: &str) -> QualifiedTypeName {
+        QualifiedTypeName::new(
+            Name::new("baml"),
+            namespace.iter().copied().map(Name::new).collect(),
+            Name::new(name),
+        )
+    }
+
+    #[test]
+    fn builtin_alias_collapses_primitive_classes() {
+        assert_eq!(baml_qtn(&[], "String").builtin_alias(), Some("string"));
+        assert_eq!(baml_qtn(&[], "Int").builtin_alias(), Some("int"));
+        assert_eq!(baml_qtn(&["media"], "Image").builtin_alias(), Some("image"));
+        assert_eq!(baml_qtn(&["media"], "Pdf").builtin_alias(), Some("pdf"));
+    }
+
+    #[test]
+    fn builtin_alias_handles_json_special_case() {
+        // `json` is the `baml.json.json` type alias, not a `PrimitiveType`.
+        assert_eq!(baml_qtn(&["json"], "json").builtin_alias(), Some("json"));
+        // A non-aliased `baml.json` type collapses to nothing.
+        assert_eq!(baml_qtn(&["json"], "JsonObject").builtin_alias(), None);
+    }
+
+    #[test]
+    fn builtin_alias_ignores_user_and_unaliased_types() {
+        // User-package `String` is never collapsed.
+        let user = QualifiedTypeName::new(Name::new("user"), vec![], Name::new("String"));
+        assert_eq!(user.builtin_alias(), None);
+        // A `baml` class without a primitive alias is not collapsed.
+        assert_eq!(baml_qtn(&[], "SomethingElse").builtin_alias(), None);
     }
 }

@@ -550,27 +550,165 @@ fn suggest_is_case_insensitive() {
     );
 }
 
-// ── Truncation hint tests ────────────────────────────────────────────────────
+// ── Class method tests ───────────────────────────────────────────────────────
 
-/// Truncated output shows `[INFO]` hint with correct line counts.
+/// A project of user classes with methods: instance-only (`User`), mixed
+/// instance + static (`Counter`), and a generic class with a cross-type
+/// dependency (`Wrapper<T>` referencing `WrapperMarker`).
+fn methods_project() -> ProjectDatabase {
+    make_db(&[(
+        "methods.baml",
+        r#"
+class User {
+    name string
+    age int
+
+    function Greet(self) -> string {
+        "Hello"
+    }
+
+    function IsAdult(self) -> bool {
+        self.age >= 18
+    }
+}
+
+class Counter {
+    count int
+
+    function increment(self) -> Counter {
+        Counter { count: self.count + 1 }
+    }
+
+    function make() -> Counter {
+        Counter { count: 0 }
+    }
+}
+
+class WrapperMarker {
+    reason string
+}
+
+class Wrapper<T> {
+    value T
+
+    function get_value(self) -> T {
+        self.value
+    }
+
+    function get_or_marker(self) -> T | WrapperMarker {
+        self.value
+    }
+}
+"#,
+    )])
+}
+
+/// A user class with only instance methods: each shows its canonical signature
+/// in a `methods:` section, and the body block is fields-only.
 #[test]
-fn render_describe_truncation_hint() {
-    // Use a builtin with many methods (e.g., String, which has ~40+ methods).
+fn render_describe_class_with_methods() {
+    let db = methods_project();
+    let files = baml_compiler2_hir::compiler2_all_files(&db);
+    let descs = baml_lsp2_actions::describe(&db, &files, "User");
+    assert_eq!(descs.len(), 1);
+    insta::assert_snapshot!(capture_description(&db, &descs[0], 30));
+}
+
+/// A class with both an instance method (`increment`) and a static method
+/// (`make`) renders both `methods:` and `static_methods:` sections.
+#[test]
+fn render_describe_class_with_static_methods() {
+    let db = methods_project();
+    let files = baml_compiler2_hir::compiler2_all_files(&db);
+    let descs = baml_lsp2_actions::describe(&db, &files, "Counter");
+    assert_eq!(descs.len(), 1);
+    let output = capture_description(&db, &descs[0], 30);
+    assert!(output.contains("methods:"));
+    assert!(output.contains("static_methods:"));
+    insta::assert_snapshot!(output);
+}
+
+/// A generic class renders `class Wrapper<T>` in the body, type-variable return
+/// types (`-> T`), and a cross-type dependency (`WrapperMarker`).
+#[test]
+fn render_describe_generic_class_with_methods() {
+    let db = methods_project();
+    let files = baml_compiler2_hir::compiler2_all_files(&db);
+    let descs = baml_lsp2_actions::describe(&db, &files, "Wrapper");
+    assert_eq!(descs.len(), 1);
+    insta::assert_snapshot!(capture_description(&db, &descs[0], 30));
+}
+
+/// `baml describe string` resolves the builtin `baml.String` class via its
+/// lowercase alias and renders it (header shows `(string)`).
+#[test]
+fn render_describe_alias_string() {
+    let db = simple_project();
+    insta::assert_snapshot!(describe_via_dispatch(&db, "string"));
+}
+
+/// Lowercase primitive/keyword aliases route to their builtin `baml` class.
+#[test]
+fn dispatch_lowercase_aliases_resolve_to_items() {
+    let db = simple_project();
+    for alias in ["string", "int", "bigint", "float", "bool", "image", "json"] {
+        assert!(
+            matches!(dispatch(&db, alias), Some(ResolvedTarget::Item(_))),
+            "alias `{alias}` should resolve to a builtin class item"
+        );
+    }
+}
+
+// ── Truncation / budget tests ────────────────────────────────────────────────
+
+/// Methods are always discoverable. They are rendered after the body and
+/// bypass the body budget entirely, so even at budget 5 every method of
+/// `String` (40+) is still present, and the `methods:`/`static_methods:`
+/// sections are byte-identical regardless of budget.
+#[test]
+fn render_describe_methods_never_truncated() {
     let db = simple_project();
     let files = baml_compiler2_hir::compiler2_all_files(&db);
     let descs = baml_lsp2_actions::describe(&db, &files, "String");
     assert_eq!(descs.len(), 1);
-    let output = capture_description(&db, &descs[0], 30);
-    // The output should contain the [INFO] hint since String has more than 30 lines.
+
+    let tight = capture_description(&db, &descs[0], 5);
+    let full = capture_description(&db, &descs[0], 1000);
+
+    for needle in [
+        "methods:",
+        "function to_json(self) -> json",
+        "static_methods:",
+        "function from_code_points(unicode: int[]) -> string",
+    ] {
+        assert!(
+            tight.contains(needle),
+            "`{needle}` missing from describe output under budget 5:\n{tight}"
+        );
+    }
+
+    // The method sections are unaffected by the budget (only the body block is).
+    let methods_onward = |s: &str| s[s.find("\nmethods:").expect("methods section")..].to_string();
+    assert_eq!(methods_onward(&tight), methods_onward(&full));
+}
+
+/// A class with a fields-only body (no docstring) renders identically at a tight
+/// budget and a generous one — the body fits any reasonable budget. This is the
+/// spec's `baml describe User --budget 5` guarantee.
+#[test]
+fn render_describe_fields_only_body_fits_tight_budget() {
+    let db = methods_project();
+    let files = baml_compiler2_hir::compiler2_all_files(&db);
+    let descs = baml_lsp2_actions::describe(&db, &files, "User");
+    assert_eq!(descs.len(), 1);
+
+    let tight = capture_description(&db, &descs[0], 5);
+    let full = capture_description(&db, &descs[0], 1000);
     assert!(
-        output.contains("[INFO] Showing"),
-        "expected [INFO] truncation hint in output:\n{output}"
+        !tight.contains("[INFO] Showing"),
+        "fields-only body must not truncate at budget 5:\n{tight}"
     );
-    assert!(
-        output.contains("--budget"),
-        "expected --budget in truncation hint:\n{output}"
-    );
-    insta::assert_snapshot!(output);
+    assert_eq!(tight, full);
 }
 
 /// Full budget shows no truncation hint.

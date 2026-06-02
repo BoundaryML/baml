@@ -444,6 +444,30 @@ fn text_match_to_json(
     })
 }
 
+/// Serialize a class's methods (instance or static) to JSON, carrying the
+/// canonical signature, first-line docstring, and full definition line range.
+fn method_json(
+    db: &ProjectDatabase,
+    project_root: &std::path::Path,
+    methods: &[describe::MethodRef],
+) -> Vec<serde_json::Value> {
+    methods
+        .iter()
+        .map(|m| {
+            let m_path = relative_path(&m.file.path(db), project_root);
+            let text = m.file.text(db);
+            serde_json::json!({
+                "name": m.name,
+                "signature": m.signature,
+                "docstring": m.docstring,
+                "file": m_path.to_string_lossy(),
+                "line_start": line_number_at_offset(text, m.item_range.start().into()),
+                "line_end": line_number_at_offset(text, m.item_range.end().into()),
+            })
+        })
+        .collect()
+}
+
 /// Build a budget-aware JSON value for a `SymbolDescription`.
 pub fn description_to_json(
     db: &ProjectDatabase,
@@ -479,24 +503,8 @@ pub fn description_to_json(
                 "text": r.line_text.trim(),
             })
         }).collect::<Vec<_>>(),
-        "instance_methods": desc.instance_methods.iter().map(|m| {
-            let m_path = relative_path(&m.file.path(db), project_root);
-            serde_json::json!({
-                "name": m.name,
-                "kind": m.kind.as_str(),
-                "file": m_path.to_string_lossy(),
-                "line": line_number_at_offset(m.file.text(db), m.name_span.start().into()),
-            })
-        }).collect::<Vec<_>>(),
-        "static_methods": desc.static_methods.iter().map(|m| {
-            let m_path = relative_path(&m.file.path(db), project_root);
-            serde_json::json!({
-                "name": m.name,
-                "kind": m.kind.as_str(),
-                "file": m_path.to_string_lossy(),
-                "line": line_number_at_offset(m.file.text(db), m.name_span.start().into()),
-            })
-        }).collect::<Vec<_>>(),
+        "instance_methods": method_json(db, project_root, &desc.instance_methods),
+        "static_methods": method_json(db, project_root, &desc.static_methods),
         "container": desc.container.as_ref().map(|c| {
             let c_path = relative_path(&c.file.path(db), project_root);
             serde_json::json!({

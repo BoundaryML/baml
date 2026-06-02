@@ -2,7 +2,7 @@
 source: crates/baml_cli/src/describe_command_tests.rs
 expression: output
 ---
-field model  ns_llm/models.baml:3
+field model  ns_llm/models.baml:3-3
 
     model string
 

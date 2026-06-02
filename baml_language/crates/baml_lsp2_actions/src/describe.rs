@@ -58,11 +58,35 @@ pub struct SymbolDescription {
     /// Sites where this symbol is used.
     pub references: Vec<RefSite>,
     /// Instance methods (first param `self`) for classes.
-    pub instance_methods: Vec<DepRef>,
+    pub instance_methods: Vec<MethodRef>,
     /// Static methods (no `self` param) for classes.
-    pub static_methods: Vec<DepRef>,
+    pub static_methods: Vec<MethodRef>,
     /// The containing class/enum for members.
     pub container: Option<DepRef>,
+    /// Canonical fully-qualified name to print in the header, shown only when
+    /// the symbol is not at package root (`root.ns.Foo`) or is a builtin with a
+    /// lowercase alias (`string`). `None` for a top-level user symbol at package
+    /// root (e.g. `User`), where the bare name in the header is already canonical.
+    pub canonical_fqn: Option<String>,
+}
+
+/// A method of a class, surfaced in `describe` so methods are always
+/// discoverable regardless of body truncation. Unlike [`DepRef`] (dependency
+/// tracking) this carries the full canonical signature, first-line docstring,
+/// and full definition range needed to render a method listing.
+#[derive(Clone, Serialize)]
+pub struct MethodRef {
+    pub name: String,
+    /// Canonical one-line signature, e.g. `function Greet(self) -> string`.
+    pub signature: String,
+    /// First line of the method's docstring, if any.
+    pub docstring: Option<String>,
+    #[serde(skip)]
+    pub file: SourceFile,
+    pub file_path: String,
+    /// Byte range of the full method definition (1-based line range when rendered).
+    #[serde(serialize_with = "serialize_range")]
+    pub item_range: TextRange,
 }
 
 /// A symbol referenced in the signature of another symbol.
@@ -248,7 +272,34 @@ fn describe_top_level(
     let resolved_type = resolve_type_for_item(db, file, sym);
 
     // ── Reference finding ────────────────────────────────────────────────────
-    let references = find_references(db, files, file, sym.name_span);
+    let references = find_references(db, files, file, sym.name_span, item_range);
+
+    // ── Methods + canonical FQN (classes) ────────────────────────────────────
+    let (instance_methods, static_methods, canonical_fqn) = class_methods_and_fqn(db, file, sym);
+
+    // For classes, the body block is fields-only: methods are surfaced in their
+    // own never-truncated sections, so the raw CST slice (which includes method
+    // bodies) is replaced by the canonical fields-only reconstruction (`shape`),
+    // prefixed with the full `///` docstring (CLI consumers render the body as
+    // the single source of the docstring).
+    let full_body = if matches!(sym.kind, DefinitionKind::Class) {
+        let mut body = String::new();
+        if let Some(doc) = &docstring {
+            for line in doc.lines() {
+                if line.is_empty() {
+                    body.push_str("///\n");
+                } else {
+                    body.push_str("/// ");
+                    body.push_str(line);
+                    body.push('\n');
+                }
+            }
+        }
+        body.push_str(&shape);
+        body
+    } else {
+        full_body
+    };
 
     Some(SymbolDescription {
         name: sym.name.clone(),
@@ -263,9 +314,10 @@ fn describe_top_level(
         resolved_type,
         dependencies,
         references,
-        instance_methods: Vec::new(),
-        static_methods: Vec::new(),
+        instance_methods,
+        static_methods,
         container: None,
+        canonical_fqn,
     })
 }
 
@@ -319,7 +371,7 @@ fn describe_member(
     let resolved_type = resolve_member_type(db, file, sym);
 
     // References to this field/variant.
-    let references = find_references(db, files, file, sym.name_span);
+    let references = find_references(db, files, file, sym.name_span, member_range);
 
     // Move the container dependency from dependencies to the container field.
     let container = if !dependencies.is_empty() {
@@ -344,6 +396,7 @@ fn describe_member(
         instance_methods: Vec::new(),
         static_methods: Vec::new(),
         container,
+        canonical_fqn: None,
     })
 }
 
@@ -424,6 +477,7 @@ fn describe_locals(db: &dyn Db, files: &[SourceFile], name: &str) -> Vec<SymbolD
                     instance_methods: Vec::new(),
                     static_methods: Vec::new(),
                     container: None,
+                    canonical_fqn: None,
                 });
             }
 
@@ -536,6 +590,7 @@ fn describe_locals(db: &dyn Db, files: &[SourceFile], name: &str) -> Vec<SymbolD
                         instance_methods: Vec::new(),
                         static_methods: Vec::new(),
                         container: None,
+                        canonical_fqn: None,
                     });
                 }
             }
@@ -769,13 +824,224 @@ fn build_shape(db: &dyn Db, file: SourceFile, sym: &SymbolInfo) -> String {
     };
 
     let type_info = type_info_for_definition(db, def);
-    // Reuse the hover markdown but strip the ```baml fences.
-    let md = type_info.to_hover_markdown();
-    md.trim()
-        .strip_prefix("```baml\n")
-        .and_then(|s| s.strip_suffix("\n```"))
-        .unwrap_or(&md)
-        .to_string()
+    // The canonical block (fields-only for classes), without fences/docstring/hint.
+    type_info.to_describe_block()
+}
+
+// ── Class methods ──────────────────────────────────────────────────────────────
+
+/// A method gathered from a class, before splitting into instance/static and
+/// projecting into the public [`MethodRef`] / `MethodSig` shapes.
+struct CollectedMethod {
+    name: String,
+    signature: String,
+    docstring: Option<String>,
+    file: SourceFile,
+    file_path: String,
+    item_range: TextRange,
+    is_instance: bool,
+}
+
+/// Collect a class's methods (resolved canonical signatures) in source order,
+/// skipping auto-derived plumbing (`to_json`/`from_json`, …). Shared spine for
+/// [`collect_class_methods`] (describe) and [`class_method_sigs`] (hover).
+fn collect_class_methods_impl(
+    db: &dyn Db,
+    class_loc: baml_compiler2_hir::loc::ClassLoc<'_>,
+) -> Vec<CollectedMethod> {
+    use baml_compiler2_tir::package_interface::ExportedType;
+
+    let file = class_loc.file(db);
+    let item_tree = baml_compiler2_hir::file_item_tree(db, file);
+    let class_data = &item_tree[class_loc.id(db)];
+
+    // Resolved param/return/throws types come from the package interface, which
+    // lowers class methods 1:1 with `class_data.methods` (same order, including
+    // auto-derived entries), so positional indices line up.
+    let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
+    let pkg_id = baml_compiler2_hir::package::PackageId::new(db, pkg_info.package.clone());
+    let iface = baml_compiler2_tir::package_interface::package_interface(db, pkg_id);
+    let exported = iface
+        .lookup_type(&pkg_info.namespace_path, &class_data.name)
+        .and_then(|t| match t {
+            ExportedType::Class { methods, .. } => Some(methods),
+            _ => None,
+        });
+
+    let file_path = file_path_string(db, file);
+    let mut out = Vec::new();
+    for (idx, method_id) in class_data.methods.iter().enumerate() {
+        let m = &item_tree[*method_id];
+        if matches!(
+            m.origin,
+            baml_compiler2_ast::ast::FunctionOrigin::AutoDerive
+        ) {
+            continue;
+        }
+        let is_instance = m.params.first().is_some_and(|p| p.name.as_str() == "self");
+        let signature = render_method_signature(db, file, m, exported.and_then(|ms| ms.get(idx)));
+        let docstring = m
+            .docstring
+            .as_ref()
+            .map(|d| d.lines().next().unwrap_or("").to_string());
+        out.push(CollectedMethod {
+            name: m.name.as_str().to_string(),
+            signature,
+            docstring,
+            file,
+            file_path: file_path.clone(),
+            item_range: m.span,
+            is_instance,
+        });
+    }
+    out
+}
+
+/// Render the canonical one-line signature for a method:
+/// `function <name>(<params>) -> <ret>[ throws <t>]`. Uses resolved types from
+/// the package interface (`exported`) when available, falling back to the
+/// unresolved source `TypeExpr` rendering otherwise. The `self` parameter is
+/// shown bare (no type), as written.
+fn render_method_signature(
+    db: &dyn Db,
+    file: SourceFile,
+    m: &baml_compiler2_hir::item_tree::Function,
+    exported: Option<&baml_compiler2_tir::package_interface::ExportedFunction>,
+) -> String {
+    let params: Vec<String> = m
+        .params
+        .iter()
+        .enumerate()
+        .map(|(i, p)| {
+            let pname = p.name.as_str();
+            if i == 0 && pname == "self" {
+                return "self".to_string();
+            }
+            let ty = exported
+                .and_then(|ef| ef.params.get(i))
+                .map(|fp| crate::utils::display_ty_canonical_for_file(db, file, &fp.ty))
+                .or_else(|| {
+                    p.type_expr
+                        .as_ref()
+                        .map(|te| crate::utils::display_type_expr(&te.expr))
+                })
+                .unwrap_or_else(|| "unknown".to_string());
+            let opt = if p.default.is_some() { "?" } else { "" };
+            format!("{pname}{opt}: {ty}")
+        })
+        .collect();
+
+    let ret = if m.return_type.is_some() {
+        let ty = exported
+            .map(|ef| crate::utils::display_ty_canonical_for_file(db, file, &ef.return_type))
+            .or_else(|| {
+                m.return_type
+                    .as_ref()
+                    .map(|te| crate::utils::display_type_expr(&te.expr))
+            })
+            .unwrap_or_default();
+        format!(" -> {ty}")
+    } else {
+        String::new()
+    };
+
+    // Show `throws T` only for a real throw contract — `never` (the method does
+    // not throw) is omitted. Mirrors the function-signature convention.
+    let throws = match exported {
+        Some(ef) if !matches!(ef.callable_throws, baml_compiler2_tir::ty::Ty::Never { .. }) => {
+            format!(
+                " throws {}",
+                crate::utils::display_ty_canonical_for_file(db, file, &ef.callable_throws)
+            )
+        }
+        Some(_) => String::new(),
+        None => m
+            .throws
+            .as_ref()
+            .map(|te| format!(" throws {}", crate::utils::display_type_expr(&te.expr)))
+            .unwrap_or_default(),
+    };
+
+    format!(
+        "function {}({}){ret}{throws}",
+        m.name.as_str(),
+        params.join(", ")
+    )
+}
+
+/// Build `(instance_methods, static_methods)` for a class's describe output.
+/// Instance methods have a `self` first parameter; the rest are static.
+fn collect_class_methods(
+    db: &dyn Db,
+    class_loc: baml_compiler2_hir::loc::ClassLoc<'_>,
+) -> (Vec<MethodRef>, Vec<MethodRef>) {
+    let mut instance = Vec::new();
+    let mut statics = Vec::new();
+    for m in collect_class_methods_impl(db, class_loc) {
+        let bucket = if m.is_instance {
+            &mut instance
+        } else {
+            &mut statics
+        };
+        bucket.push(MethodRef {
+            name: m.name,
+            signature: m.signature,
+            docstring: m.docstring,
+            file: m.file,
+            file_path: m.file_path,
+            item_range: m.item_range,
+        });
+    }
+    (instance, statics)
+}
+
+/// Method signatures for the hover/`type_info` renderer (no docstring/range).
+pub(crate) fn class_method_sigs(
+    db: &dyn Db,
+    class_loc: baml_compiler2_hir::loc::ClassLoc<'_>,
+) -> Vec<crate::type_info::MethodSig> {
+    collect_class_methods_impl(db, class_loc)
+        .into_iter()
+        .map(|m| crate::type_info::MethodSig {
+            name: m.name,
+            signature: m.signature,
+            is_instance: m.is_instance,
+        })
+        .collect()
+}
+
+/// Resolve a top-level symbol's methods (for classes) and canonical FQN.
+///
+/// The canonical FQN is returned as `Some` only when it differs from the bare
+/// `sym.name` — i.e. when the header should show it in parentheses (a builtin
+/// alias like `string`, or a namespaced/dependency type like
+/// `root.ns.Foo`). A user type at package root returns `None`.
+fn class_methods_and_fqn(
+    db: &dyn Db,
+    file: SourceFile,
+    sym: &SymbolInfo,
+) -> (Vec<MethodRef>, Vec<MethodRef>, Option<String>) {
+    let name = baml_base::Name::new(&sym.name);
+    let resolved =
+        baml_compiler2_tir::resolve::resolve_name_at(db, file, sym.name_span.start(), &name);
+    let (baml_compiler2_tir::resolve::ResolvedName::Item(def)
+    | baml_compiler2_tir::resolve::ResolvedName::Builtin(def)) = resolved
+    else {
+        return (Vec::new(), Vec::new(), None);
+    };
+
+    let qtn = baml_compiler2_tir::lower_type_expr::qualify_def(db, def, &name);
+    let fqn = crate::utils::canonical_fqn_string(&qtn);
+    let canonical_fqn = (fqn != sym.name).then_some(fqn);
+
+    let (instance, statics) = match def {
+        baml_compiler2_hir::contributions::Definition::Class(class_loc) => {
+            collect_class_methods(db, class_loc)
+        }
+        _ => (Vec::new(), Vec::new()),
+    };
+
+    (instance, statics, canonical_fqn)
 }
 
 // ── Type resolution ──────────────────────────────────────────────────────────
@@ -930,6 +1196,13 @@ fn find_dependencies(
             for (_field_name, ty, _attrs) in &resolved.fields {
                 collect_ty_deps(db, files, ty, &mut deps, &mut seen);
             }
+            // NOTE: types referenced only in method signatures (e.g. the spec's
+            // `WrapperMarker` in `-> T | WrapperMarker`) are intentionally NOT
+            // surfaced as dependencies yet. The class dependency path
+            // (`collect_ty_deps` → `resolve_dep_from_outline`) matches on the
+            // canonical `pkg.Name` string against short outline names, so it
+            // does not resolve user types reliably today; fixing that — and
+            // adding method-signature deps on top — is a separate follow-up.
         }
         baml_compiler2_hir::contributions::Definition::Enum(_) => {
             // Enums are self-contained, no type dependencies.
@@ -1167,13 +1440,16 @@ fn find_references(
     _files: &[SourceFile],
     file: SourceFile,
     name_span: TextRange,
+    item_range: TextRange,
 ) -> Vec<RefSite> {
     let locations = usages_at(db, file, name_span.start());
 
     locations
         .into_iter()
-        // Exclude the definition site itself.
-        .filter(|loc| !(loc.file == file && loc.range == name_span))
+        // Exclude references inside the symbol's own definition (the name token
+        // and any self-references in its body — e.g. a class used in its own
+        // method signatures/bodies). `references` lists *external* usages.
+        .filter(|loc| !(loc.file == file && item_range.contains(loc.range.start())))
         .map(|loc| {
             let text = loc.file.text(db);
             let (line_number, line_text) = line_at_offset(text, loc.range.start());
