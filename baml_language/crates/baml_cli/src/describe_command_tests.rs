@@ -659,6 +659,39 @@ fn dispatch_lowercase_aliases_resolve_to_items() {
     }
 }
 
+/// Comment stripping is CST-token based, so a line that *looks* like a comment
+/// but lives inside a block string (e.g. an LLM prompt) is preserved, while a
+/// real `//` comment is removed. A line-based stripper would corrupt the string.
+#[test]
+fn describe_preserves_comment_like_lines_inside_strings() {
+    let db = make_db(&[(
+        "prompt.baml",
+        r##"
+function PromptFn() -> string {
+    // a real comment that must be stripped
+    #"
+// not a comment — this is prompt content
+keep this line
+"#
+}
+"##,
+    )]);
+    let files = baml_compiler2_hir::compiler2_all_files(&db);
+    let descs = baml_lsp2_actions::describe(&db, &files, "PromptFn");
+    assert_eq!(descs.len(), 1);
+    let output = capture_description(&db, &descs[0], 30);
+
+    assert!(
+        !output.contains("a real comment that must be stripped"),
+        "real `//` comment should be stripped:\n{output}"
+    );
+    assert!(
+        output.contains("not a comment — this is prompt content")
+            && output.contains("keep this line"),
+        "comment-like lines inside a block string must be preserved:\n{output}"
+    );
+}
+
 // ── Truncation / budget tests ────────────────────────────────────────────────
 
 /// Methods are always discoverable. They are rendered after the body and

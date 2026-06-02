@@ -253,11 +253,9 @@ fn describe_top_level(
     sym: &SymbolInfo,
 ) -> Option<SymbolDescription> {
     let file = sym.file;
-    let file_text = file.text(db);
 
     // ── CST body extraction ──────────────────────────────────────────────────
     let item_range = find_item_range(db, file, sym.name_span, sym.kind)?;
-    let full_body = slice_text(file_text, item_range);
 
     // ── Shape generation ─────────────────────────────────────────────────────
     let shape = build_shape(db, file, sym);
@@ -277,11 +275,12 @@ fn describe_top_level(
     // ── Methods + canonical FQN (classes) ────────────────────────────────────
     let (instance_methods, static_methods, canonical_fqn) = class_methods_and_fqn(db, file, sym);
 
-    // For classes, the body block is fields-only: methods are surfaced in their
-    // own never-truncated sections, so the raw CST slice (which includes method
-    // bodies) is replaced by the canonical fields-only reconstruction (`shape`),
-    // prefixed with the full `///` docstring (CLI consumers render the body as
-    // the single source of the docstring).
+    // Body block, with non-doc comments removed (CST-token based, so `//`
+    // inside string/prompt literals is never touched):
+    // - class: fields-only reconstruction (methods get their own sections),
+    //   prefixed with the full `///` docstring;
+    // - builtin function: the signature only, never the native body block;
+    // - everything else: the real source body.
     let full_body = if matches!(sym.kind, DefinitionKind::Class) {
         let mut body = String::new();
         if let Some(doc) = &docstring {
@@ -297,16 +296,10 @@ fn describe_top_level(
         }
         body.push_str(&shape);
         body
-    } else if let Some(sig) = builtin_body_signature(db, file, sym, item_range) {
-        // Builtin function: show the signature, never the native body block.
-        sig
     } else {
-        full_body
+        let body_range = builtin_signature_range(db, file, sym, item_range).unwrap_or(item_range);
+        clean_body_source(db, file, body_range)
     };
-    // Strip ordinary `//` comments (e.g. `//baml:mut_vm`) from the body; only
-    // `///` docs belong in describe output. (No-op for the reconstructed class
-    // body, which already contains only `///` docstring lines + fields.)
-    let full_body = strip_non_doc_comments(&full_body);
 
     Some(SymbolDescription {
         name: sym.name.clone(),
@@ -338,11 +331,10 @@ fn describe_member(
     sym: &SymbolInfo,
 ) -> Option<SymbolDescription> {
     let file = sym.file;
-    let file_text = file.text(db);
 
     // Find the member's CST node (FIELD or ENUM_VARIANT).
     let member_range = find_member_range(db, file, sym.name_span, sym.kind)?;
-    let full_body = strip_non_doc_comments(&slice_text(file_text, member_range));
+    let full_body = clean_body_source(db, file, member_range);
 
     // Shape: "field_name type" or "VariantName" with container context.
     let shape = if let Some(ref container) = sym.container_name {
@@ -462,12 +454,7 @@ fn describe_locals(db: &dyn Db, files: &[SourceFile], name: &str) -> Vec<SymbolD
                     .collect();
 
                 // Get the full function body for context display.
-                let file_text = file.text(db);
-                let func_body = file_text
-                    .get(usize::from(func.span.start())..usize::from(func.span.end()))
-                    .unwrap_or("")
-                    .to_string();
-                let func_body = strip_non_doc_comments(&func_body);
+                let func_body = clean_body_source(db, file, func.span);
 
                 results.push(SymbolDescription {
                     name: name.to_string(),
@@ -576,12 +563,7 @@ fn describe_locals(db: &dyn Db, files: &[SourceFile], name: &str) -> Vec<SymbolD
                         })
                         .collect();
 
-                    let file_text = file.text(db);
-                    let func_body = file_text
-                        .get(usize::from(func.span.start())..usize::from(func.span.end()))
-                        .unwrap_or("")
-                        .to_string();
-                    let func_body = strip_non_doc_comments(&func_body);
+                    let func_body = clean_body_source(db, file, func.span);
 
                     results.push(SymbolDescription {
                         name: name.to_string(),
@@ -1481,51 +1463,86 @@ fn file_path_string(db: &dyn Db, file: SourceFile) -> String {
 }
 
 /// Slice a text range from file text, trimming leading blank lines.
-fn slice_text(text: &str, range: TextRange) -> String {
+/// The source text over `range` with non-doc comments removed.
+///
+/// Comment removal is **CST-token based**: only `LINE_COMMENT` (excluding `///`
+/// docs), `BLOCK_COMMENT`, and `HEADER_COMMENT` tokens are dropped. A `//`
+/// sequence inside a string/prompt literal (`#"…"#`) is a string token, not a
+/// comment token, so it is never touched. A whole-line comment is removed with
+/// its indentation and trailing newline; a trailing inline comment is removed
+/// in place, keeping the code before it. `///` doc comments are kept.
+fn clean_body_source(db: &dyn Db, file: SourceFile, range: TextRange) -> String {
+    let text = file.text(db);
     let start: usize = range.start().into();
     let end: usize = range.end().into();
-    if end <= text.len() {
-        text[start..end].trim_start_matches('\n').to_string()
-    } else {
-        String::new()
-    }
-}
+    let Some(src) = text.get(start..end) else {
+        return String::new();
+    };
 
-/// Remove standalone non-doc comment lines from a rendered body.
-///
-/// Doc comments (`///`) are documentation and kept; ordinary line comments
-/// (`//`, e.g. directives like `//baml:mut_vm`) are implementation noise.
-/// Only whole-line comments are stripped — trailing inline comments are left
-/// alone (stripping them safely would require lexing to avoid `//` inside
-/// string literals).
-///
-/// Builtin implementation markers (`$rust_function`, …) are *not* handled here;
-/// they live inside the body block, which is removed structurally for builtin
-/// functions (see [`builtin_body_signature`]).
-fn strip_non_doc_comments(body: &str) -> String {
-    body.lines()
-        .filter(|line| {
-            let trimmed = line.trim_start();
-            !trimmed.starts_with("//") || trimmed.starts_with("///")
-        })
-        .collect::<Vec<_>>()
-        .join("\n")
+    // Deletion intervals, relative to `src`, for every non-doc comment token.
+    let tree = baml_compiler_parser::syntax_tree(db, file);
+    let mut deletions: Vec<(usize, usize)> = Vec::new();
+    for token in tree
+        .descendants_with_tokens()
+        .filter_map(baml_compiler_syntax::NodeOrToken::into_token)
+    {
+        if !token.kind().is_comment() {
+            continue;
+        }
+        if token.kind() == SyntaxKind::LINE_COMMENT && token.text().starts_with("///") {
+            continue; // keep doc comments
+        }
+        let tr = token.text_range();
+        let (ts, te): (usize, usize) = (tr.start().into(), tr.end().into());
+        if ts < start || te > end {
+            continue;
+        }
+        let (mut del_start, mut del_end) = (ts - start, te - start);
+        // Whole-line comment → also drop its indentation and trailing newline.
+        let line_start = src[..del_start].rfind('\n').map_or(0, |i| i + 1);
+        if src[line_start..del_start].trim().is_empty() {
+            del_start = line_start;
+            if let Some(rest) = src.get(del_end..) {
+                if rest.starts_with("\r\n") {
+                    del_end += 2;
+                } else if rest.starts_with('\n') {
+                    del_end += 1;
+                }
+            }
+        }
+        deletions.push((del_start, del_end));
+    }
+    deletions.sort_unstable();
+
+    let mut out = String::with_capacity(src.len());
+    let mut cursor = 0;
+    for (del_start, del_end) in deletions {
+        if del_start >= cursor {
+            out.push_str(&src[cursor..del_start]);
+            cursor = del_end;
+        } else {
+            cursor = cursor.max(del_end);
+        }
+    }
+    out.push_str(&src[cursor..]);
+
+    out.trim_start_matches('\n').trim_end().to_string()
 }
 
 /// If `sym` is a function with a builtin (native) body — `$rust_function`,
-/// `$rust_io_function`, `$compiler_intrinsic` — return its source with the
-/// body block removed, so the implementation marker is never exposed. The
-/// body's start is found via the CST node boundary, so this is robust to any
-/// body formatting and to braces appearing in the docstring.
+/// `$rust_io_function`, `$compiler_intrinsic` — return the range of its
+/// signature (everything before the body block), so the body and its
+/// implementation marker are never shown. The body block start comes from the
+/// CST node boundary, so this is robust to any body formatting.
 ///
 /// Returns `None` for user functions (whose body is meaningful and shown) and
 /// non-function symbols.
-fn builtin_body_signature(
+fn builtin_signature_range(
     db: &dyn Db,
     file: SourceFile,
     sym: &SymbolInfo,
     item_range: TextRange,
-) -> Option<String> {
+) -> Option<TextRange> {
     if sym.kind != DefinitionKind::Function {
         return None;
     }
@@ -1550,7 +1567,7 @@ fn builtin_body_signature(
         return None;
     }
 
-    // Slice the source up to the body block node, dropping `{ … }` entirely.
+    // Find the body block node and cut the range just before it.
     let tree = baml_compiler_parser::syntax_tree(db, file);
     let token = match tree.token_at_offset(sym.name_span.start()) {
         rowan::TokenAtOffset::Single(t) => t,
@@ -1569,11 +1586,10 @@ fn builtin_body_signature(
         )
     })?;
 
-    let start: usize = item_range.start().into();
-    let end: usize = body_node.text_range().start().into();
-    let text = file.text(db);
-    let sig = text.get(start..end)?.trim_start_matches('\n').trim_end();
-    Some(sig.to_string())
+    Some(TextRange::new(
+        item_range.start(),
+        body_node.text_range().start(),
+    ))
 }
 
 /// Find the 1-based line number and full line text at a byte offset.
@@ -1610,35 +1626,4 @@ fn serialize_range<S: serde::Serializer>(range: &TextRange, s: S) -> Result<S::O
     state.serialize_field("start", &u32::from(range.start()))?;
     state.serialize_field("end", &u32::from(range.end()))?;
     state.end()
-}
-
-#[cfg(test)]
-mod strip_comment_tests {
-    use super::strip_non_doc_comments;
-
-    #[test]
-    fn keeps_doc_comments_strips_line_comments() {
-        let body =
-            "/// A doc comment.\n//baml:mut_vm\nfunction f() -> int {\n  // inner note\n  1\n}";
-        let out = strip_non_doc_comments(body);
-        assert_eq!(
-            out, "/// A doc comment.\nfunction f() -> int {\n  1\n}",
-            "should keep `///` lines and drop standalone `//` lines"
-        );
-    }
-
-    #[test]
-    fn keeps_empty_doc_lines_and_indented_doc_comments() {
-        let body = "///\n  /// indented doc\n  //baml:directive\n  field int";
-        let out = strip_non_doc_comments(body);
-        assert_eq!(out, "///\n  /// indented doc\n  field int");
-    }
-
-    #[test]
-    fn leaves_trailing_inline_comments_untouched() {
-        // Whole-line comments are stripped; trailing inline comments are not
-        // (stripping them safely would require lexing string literals).
-        let body = "let x = 1 // trailing";
-        assert_eq!(strip_non_doc_comments(body), "let x = 1 // trailing");
-    }
 }
