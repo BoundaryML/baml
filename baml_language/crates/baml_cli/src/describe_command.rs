@@ -164,11 +164,19 @@ pub fn dispatch<'db>(db: &'db ProjectDatabase, name: &str) -> Option<ResolvedTar
 
     // Lowercase primitive/keyword aliases resolve to their builtin `baml`
     // companion class — `string` → `baml.String`, `image` → `baml.media.Image`,
-    // `json` → `baml.json.json`. Checked before the keyword crosswalk so
-    // `baml describe string` shows the class (with its methods), not keyword docs.
-    if let Some(class_path) = builtin_alias_class_path(name) {
+    // `json` → `baml.json.json`. Also handles drilling into a member,
+    // `string.length` → `baml.String.length`. Checked before the keyword
+    // crosswalk so `baml describe string` shows the class (with its methods),
+    // not keyword docs.
+    let (alias_head, alias_rest) = name.split_once('.').unwrap_or((name, ""));
+    if let Some(class_path) = builtin_alias_class_path(alias_head) {
         let baml_pkg = baml_compiler2_hir::package::PackageId::new(db, baml_db::Name::new("baml"));
-        return baml_lsp2_actions::resolve_target(db, baml_pkg, class_path);
+        let target = if alias_rest.is_empty() {
+            class_path.to_string()
+        } else {
+            format!("{class_path}.{alias_rest}")
+        };
+        return baml_lsp2_actions::resolve_target(db, baml_pkg, &target);
     }
 
     // Check for keyword (BAML or TS/JS crosswalk) before package routing.
@@ -623,7 +631,11 @@ pub fn write_description(
 /// ends so the range covers the real declaration: the start is the first line
 /// that is neither blank nor a comment (the `class`/`function`/… line), and the
 /// end is the last line carrying non-whitespace (the closing brace).
-fn definition_line_range(text: &str, start_off: usize, end_off: usize) -> (usize, usize) {
+pub(crate) fn definition_line_range(
+    text: &str,
+    start_off: usize,
+    end_off: usize,
+) -> (usize, usize) {
     let end_off = end_off.min(text.len());
     let span = text.get(start_off..end_off).unwrap_or("");
 
@@ -647,6 +659,9 @@ fn definition_line_range(text: &str, start_off: usize, end_off: usize) -> (usize
     while real_end > real_start && bytes[real_end].is_ascii_whitespace() {
         real_end -= 1;
     }
+    // A span with no content (empty or comment-only) would leave
+    // `real_end < real_start`; clamp so the range never reverses.
+    real_end = real_end.max(real_start);
 
     (
         line_number_at_offset(text, real_start),

@@ -201,6 +201,14 @@ pub fn describe_item_member(
     parent_def: Definition<'_>,
     member_name: &str,
 ) -> Option<SymbolDescription> {
+    // A class method drills into the method itself — signature + body — which
+    // the field/variant member path below cannot render.
+    if let Definition::Class(class_loc) = parent_def {
+        if let Some(desc) = describe_class_method(db, files, class_loc, member_name) {
+            return Some(desc);
+        }
+    }
+
     let (parent_file, parent_name_span) = crate::utils::definition_span(db, parent_def)?;
 
     // Get the parent's name from the source text.
@@ -1018,6 +1026,117 @@ pub(crate) fn class_method_sigs(
             is_instance: m.is_instance,
         })
         .collect()
+}
+
+/// Describe a single class method (drill-in): its canonical signature, source
+/// body, docstring, and owning class. The body is shown for user methods; a
+/// builtin/native body (`$rust_function`, …) is elided to just the signature.
+/// Returns `None` if the class has no such (non-auto-derived) method.
+fn describe_class_method(
+    db: &dyn Db,
+    files: &[SourceFile],
+    class_loc: baml_compiler2_hir::loc::ClassLoc<'_>,
+    member_name: &str,
+) -> Option<SymbolDescription> {
+    use baml_compiler2_tir::package_interface::ExportedType;
+
+    let file = class_loc.file(db);
+    let item_tree = baml_compiler2_hir::file_item_tree(db, file);
+    let class_data = &item_tree[class_loc.id(db)];
+
+    // Locate the (non-auto-derived) method by name.
+    let (idx, method_id) = class_data.methods.iter().enumerate().find(|(_, mid)| {
+        let m = &item_tree[**mid];
+        m.name.as_str() == member_name
+            && !matches!(
+                m.origin,
+                baml_compiler2_ast::ast::FunctionOrigin::AutoDerive
+            )
+    })?;
+    let m = &item_tree[*method_id];
+
+    let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
+    let pkg_id = baml_compiler2_hir::package::PackageId::new(db, pkg_info.package.clone());
+    let iface = baml_compiler2_tir::package_interface::package_interface(db, pkg_id);
+    let ef = iface
+        .lookup_type(&pkg_info.namespace_path, &class_data.name)
+        .and_then(|t| match t {
+            ExportedType::Class { methods, .. } => exported_method(methods, idx, &m.name),
+            _ => None,
+        });
+    let signature = render_method_signature(db, file, m, ef);
+
+    // Drill-in shows the body; a builtin native body is elided to the signature.
+    let full_body = if matches!(
+        m.body,
+        Some(baml_compiler2_ast::ast::FunctionBodyDef::Builtin(_))
+    ) {
+        signature.clone()
+    } else {
+        clean_body_source(db, file, m.span)
+    };
+
+    let name_span = function_def_name_span(db, file, m.span, member_name)
+        .unwrap_or_else(|| TextRange::empty(m.span.start()));
+
+    // The owning class is the container.
+    let container =
+        crate::utils::definition_span(db, Definition::Class(class_loc)).map(|(cfile, cspan)| {
+            DepRef {
+                name: class_data.name.as_str().to_string(),
+                kind: DefinitionKind::Class,
+                file_path: file_path_string(db, cfile),
+                file: cfile,
+                name_span: cspan,
+            }
+        });
+
+    let references = find_references(db, files, file, name_span, m.span);
+
+    Some(SymbolDescription {
+        name: m.name.as_str().to_string(),
+        kind: DefinitionKind::Method,
+        file_path: file_path_string(db, file),
+        file,
+        name_span,
+        item_range: m.span,
+        shape: signature.clone(),
+        full_body,
+        docstring: m.docstring.clone(),
+        resolved_type: Some(signature),
+        dependencies: Vec::new(),
+        references,
+        instance_methods: Vec::new(),
+        static_methods: Vec::new(),
+        container,
+        canonical_fqn: None,
+    })
+}
+
+/// The byte range of a method's name token within its `FUNCTION_DEF` node.
+/// `span` is the method's full source span. Used to anchor reference search at
+/// the name (not the leading `function` keyword / trivia).
+fn function_def_name_span(
+    db: &dyn Db,
+    file: SourceFile,
+    span: TextRange,
+    name: &str,
+) -> Option<TextRange> {
+    let tree = baml_compiler_parser::syntax_tree(db, file);
+    let node = match tree.covering_element(span) {
+        rowan::NodeOrToken::Node(n) => n,
+        rowan::NodeOrToken::Token(t) => t.parent()?,
+    };
+    let func = if node.kind() == SyntaxKind::FUNCTION_DEF {
+        node
+    } else {
+        node.ancestors()
+            .find(|n| n.kind() == SyntaxKind::FUNCTION_DEF)?
+    };
+    func.children_with_tokens()
+        .filter_map(rowan::NodeOrToken::into_token)
+        .find(|t| t.kind() == SyntaxKind::WORD && t.text() == name)
+        .map(|t| t.text_range())
 }
 
 /// The resolved exported signature for the method at index `idx`, verified to

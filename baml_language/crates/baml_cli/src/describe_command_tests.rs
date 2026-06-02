@@ -9,7 +9,9 @@ use baml_db::baml_compiler2_hir;
 use baml_lsp2_actions::ResolvedTarget;
 use baml_project::ProjectDatabase;
 
-use crate::describe_command::{dispatch, write_description, write_keyword, write_listing};
+use crate::describe_command::{
+    definition_line_range, dispatch, write_description, write_keyword, write_listing,
+};
 
 // ── Test helpers ────────────────────────────────────────────────────────────
 
@@ -690,6 +692,65 @@ keep this line
             && output.contains("keep this line"),
         "comment-like lines inside a block string must be preserved:\n{output}"
     );
+}
+
+/// Drilling into a user method (`User.Greet`) renders its signature and body.
+#[test]
+fn describe_user_method_drill_in_shows_body() {
+    let db = methods_project();
+    let output = describe_via_dispatch(&db, "User.Greet");
+    assert!(
+        output.contains("function Greet(self) -> string"),
+        "expected method signature:\n{output}"
+    );
+    assert!(
+        output.contains("\"Hello\""),
+        "drill-in should show the method body:\n{output}"
+    );
+    assert!(
+        output.contains("container:") && output.contains("User"),
+        "owning class should be the container:\n{output}"
+    );
+    insta::assert_snapshot!(output);
+}
+
+/// Drilling into a builtin method (`string.length`, via the alias) resolves and
+/// shows the signature, with the native body elided.
+#[test]
+fn describe_builtin_method_drill_in_via_alias() {
+    let db = simple_project();
+    let output = describe_via_dispatch(&db, "string.length");
+    assert!(
+        output.contains("function length(self) -> int"),
+        "expected resolved builtin method signature:\n{output}"
+    );
+    assert!(
+        !output.contains("$rust_function"),
+        "native body marker must not appear:\n{output}"
+    );
+    assert!(
+        !output.starts_with("NOT FOUND") && !output.starts_with("NO DESCRIPTION"),
+        "`string.length` should resolve via the alias:\n{output}"
+    );
+}
+
+// ── definition_line_range tests ──────────────────────────────────────────────
+
+#[test]
+fn definition_line_range_trims_leading_trivia_and_trailing_ws() {
+    // line 1 blank, 2 doc, 3 comment, 4 decl, 5 body, 6 close brace, 7 trailing
+    let text = "\n/// doc\n// note\nclass Foo {\n  x int\n}\n";
+    // Range covers the whole thing (trivia-inclusive node range).
+    let (start, end) = definition_line_range(text, 0, text.len());
+    assert_eq!((start, end), (4, 6), "start at `class`, end at `}}`");
+}
+
+#[test]
+fn definition_line_range_comment_only_span_does_not_reverse() {
+    // A span with no declaration content must never yield start > end.
+    let text = "// just a comment\n// another\n";
+    let (start, end) = definition_line_range(text, 0, text.len());
+    assert!(start <= end, "range must not reverse: {start}-{end}");
 }
 
 // ── Truncation / budget tests ────────────────────────────────────────────────
