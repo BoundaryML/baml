@@ -43,6 +43,11 @@ jobs:
           # cargo-tests.reusable.yaml; see the cache strategy comment there.
           save-if: false
 
+      # Separate step so if fetch is slow, build is fast.
+      - name: "Fetch cargo dependencies"
+        run: cargo fetch --target wasm32-unknown-unknown
+        working-directory: baml_language
+
       # node + pnpm come from setup-node2 above; we only need mise for
       # wasm-pack here.
       - name: "Install mise"
@@ -96,6 +101,11 @@ jobs:
           # cargo-tests.reusable.yaml; see the cache strategy comment there.
           save-if: false
 
+      # Separate step so if fetch is slow, build is fast.
+      - name: "Fetch cargo dependencies"
+        run: cargo fetch --target wasm32-unknown-unknown
+        working-directory: baml_language
+
       # node + pnpm come from setup-node2 above; we only need mise for
       # wasm-pack here.
       - name: "Install mise"
@@ -138,6 +148,11 @@ jobs:
           # Read-only consumer. The canary saver lives in
           # cargo-tests.reusable.yaml; see the cache strategy comment there.
           save-if: false
+
+      # Separate step so if fetch is slow, build is fast.
+      - name: "Fetch cargo dependencies"
+        run: cargo fetch --target wasm32-unknown-unknown
+        working-directory: baml_language
 
       # node + pnpm come from setup-node2 above; we only need mise for
       # wasm-pack here.

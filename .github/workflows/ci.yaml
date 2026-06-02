@@ -277,6 +277,11 @@ jobs:
           path: ~/.cache/pre-commit
           key: pre-commit-${{ hashFiles('.pre-commit-config.yaml') }}
 
+      # Separate step so if fetch is slow, build is fast.
+      - name: "Fetch cargo dependencies"
+        run: cargo fetch
+        working-directory: baml_language
+
       - name: "Run prek"
         run: |
           echo '```console' > "$GITHUB_STEP_SUMMARY"
@@ -384,6 +389,11 @@ jobs:
           rustup override set nightly
         working-directory: baml_language
 
+      # Separate step so if fetch is slow, build is fast.
+      - name: "Fetch cargo dependencies"
+        run: cargo +nightly fetch
+        working-directory: baml_language
+
       - name: "Run Miri tests on bex_heap"
         run: cargo miri test -p bex_heap --lib
         working-directory: baml_language
@@ -420,6 +430,11 @@ jobs:
         uses: ./.github/actions/setup-mise
         with:
           install_args: "node npm:pnpm protoc protoc-gen-go"
+
+      # Separate step so if fetch is slow, build is fast.
+      - name: "Fetch cargo dependencies"
+        run: cargo fetch
+        working-directory: baml_language
 
       # Rust (prost) + Python (protoc) — both driven by bridge_ctypes/build.rs.
       # Writes Python pb2/pyi into baml_language/sdks/python/src/baml_core/cffi/v1/.
@@ -538,6 +553,11 @@ jobs:
         uses: taiki-e/install-action@v2
         with:
           tool: cargo-codspeed@4.7.0
+
+      # Separate step so if fetch is slow, build is fast.
+      - name: "Fetch cargo dependencies"
+        run: cargo fetch
+        working-directory: baml_language
 
       # Only runtime_benchmark — cache_profile is a macOS/kperf harness that's a
       # no-op on Linux, so there's no reason to build or run it here.

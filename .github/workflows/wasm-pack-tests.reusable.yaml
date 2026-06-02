@@ -46,6 +46,11 @@ jobs:
           # cargo-tests.reusable.yaml; see the cache strategy comment there.
           save-if: false
 
+      # Separate step so if fetch is slow, build is fast.
+      - name: "Fetch cargo dependencies"
+        run: cargo fetch --target wasm32-unknown-unknown
+        working-directory: baml_language
+
       # Only wasm-pack is needed here.
       - name: "Install mise"
         uses: ./.github/actions/setup-mise
