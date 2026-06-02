@@ -408,7 +408,7 @@ pub fn contains_typevar(ty: &Ty) -> bool {
 /// distinguish *rigid* type variables (the pinned `Self`, caller-scope generic
 /// params) — which must be checked — from genuinely-uninferred ones (callee
 /// generics, free inference/effect vars) — which are deferred.
-pub fn contains_typevar_where(ty: &Ty, pred: &impl Fn(&Name) -> bool) -> bool {
+pub fn contains_typevar_where(ty: &Ty, pred: &dyn Fn(&Name) -> bool) -> bool {
     match ty {
         Ty::TypeVar(name, _) => pred(name),
         Ty::List(inner, _) | Ty::Optional(inner, _) | Ty::EvolvingList(inner, _) => {
@@ -419,21 +419,27 @@ pub fn contains_typevar_where(ty: &Ty, pred: &impl Fn(&Name) -> bool) -> bool {
         }
         Ty::Union(tys, _) => tys.iter().any(|t| contains_typevar_where(t, pred)),
         Ty::Function {
+            generic_params,
             generic_param_bounds,
             params,
             ret,
             throws,
             ..
         } => {
+            // A function type's own generic params are local binders: a type var
+            // bound here is not the caller-scope/rigid var the outer `pred`
+            // reasons about, so shadow them out before recursing into its body.
+            let shadowed = |name: &Name| !generic_params.iter().any(|g| g == name) && pred(name);
+            let shadowed: &dyn Fn(&Name) -> bool = &shadowed;
             generic_param_bounds.iter().any(|bound| {
                 bound
                     .as_ref()
-                    .is_some_and(|b| contains_typevar_where(b, pred))
+                    .is_some_and(|b| contains_typevar_where(b, shadowed))
             }) || params
                 .iter()
-                .any(|param| contains_typevar_where(&param.ty, pred))
-                || contains_typevar_where(ret, pred)
-                || contains_typevar_where(throws, pred)
+                .any(|param| contains_typevar_where(&param.ty, shadowed))
+                || contains_typevar_where(ret, shadowed)
+                || contains_typevar_where(throws, shadowed)
         }
         Ty::Class(_, type_args, _) | Ty::Interface(_, type_args, _) => {
             type_args.iter().any(|t| contains_typevar_where(t, pred))

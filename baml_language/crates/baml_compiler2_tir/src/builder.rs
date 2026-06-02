@@ -2605,10 +2605,16 @@ impl<'db> TypeInferenceBuilder<'db> {
                 // skips TypeVar→TypeVar binds, so without this a callee
                 // `T extends Equatable` matched against a caller `U` would never
                 // have `U`'s bound verified — letting an unbounded `U` reach a
-                // bounded position and trap at runtime. A concrete binding always
-                // wins (it is seeded first and `infer_bindings_allow_typevars`
-                // only fills gaps), and these binds are used solely for the bound
-                // check — never for the call's result type.
+                // bounded position and trap at runtime. These binds are used
+                // solely for the bound check — never for the call's result type.
+                //
+                // The seed `bindings` are inserted first; `infer_bindings` then
+                // *unions* any additional actuals into a binding (it does not skip
+                // when one is already present), so a param matched against both a
+                // concrete `C` and a caller `U` yields `C | U` here. That stays
+                // sound for the *interface* bounds we check: `C | U <: I` iff every
+                // member is a subtype of `I`, so unioning neither invents nor hides
+                // a bound violation.
                 let mut bound_check_bindings = bindings.clone();
                 for (param, arg) in &param_arg_pairs {
                     let arg_ty = self
@@ -8291,10 +8297,23 @@ impl<'db> TypeInferenceBuilder<'db> {
             let iface_name = iface_name.clone();
             let type_args = type_args.clone();
             let self_ty = Ty::Interface(iface_name.clone(), type_args.clone(), TyAttr::default());
+            // A union member that is a bare interface is an existential ("dyn")
+            // receiver, so a method with an extra `Self` parameter is not callable
+            // on it (object safety). `resolve_interface_member` reports this, but
+            // the call below suppresses its diagnostics — so surface it here,
+            // outside the suppressed region (mirrors `union_interface_method_ambiguity`).
+            if bound && self.interface_method_has_extra_self_param(&iface_name, member) {
+                self.context.report_simple(
+                    TirTypeError::InvalidSelfCallThroughInterface {
+                        interface_name: iface_name.name().clone(),
+                        method_name: member.clone(),
+                    },
+                    at,
+                );
+            }
             let ty = self.resolve_member_suppressing_side_effects(at, |this| {
-                // A union member that is a bare interface is an existential
-                // ("dyn") receiver, so `Self`-parameter methods stay subject to
-                // the object-safety restriction.
+                // The object-safety restriction (reported above) still applies;
+                // resolution proceeds to recover the member's shape for the union.
                 this.resolve_interface_member(
                     &iface_name,
                     &type_args,
@@ -8731,15 +8750,18 @@ impl<'db> TypeInferenceBuilder<'db> {
         let Definition::Interface(root_loc) = def else {
             return None;
         };
-        // Record the rigid `Self` variable for a Self-pinned call so the call
-        // site treats it like `ty::Param` (never inferred from an argument,
-        // checked by identity). Keyed by the member-access expr, which is the
-        // callee of the eventual method call. Only a rigid type-variable receiver
-        // pins this way; a concrete receiver substitutes `Self` to its own type
-        // and is checked by subtyping, not identity.
-        if let SelfReceiver::RigidVar(pin) = self_recv {
-            self.self_pinned_rigid_var.insert(at, pin.clone());
-        }
+        // The rigid `Self` variable for a Self-pinned call. Only a rigid
+        // type-variable receiver pins this way; a concrete receiver substitutes
+        // `Self` to its own type and is checked by subtyping, not identity. It is
+        // recorded into `self_pinned_rigid_var` only once a `Self`-pinned *method*
+        // actually resolves below (not for a field or an absent member), keyed by
+        // the member-access expr — the callee of the eventual method call — so the
+        // call site treats it like `ty::Param` (never inferred, checked by
+        // identity).
+        let rigid_pin: Option<Name> = match self_recv {
+            SelfReceiver::RigidVar(pin) => Some(pin.clone()),
+            _ => None,
+        };
         let db = self.context.db();
         let root_pkg = baml_compiler2_hir::file_package::file_package(db, root_loc.file(db));
         let pkg_ns = &root_pkg.namespace_path;
@@ -9056,6 +9078,9 @@ impl<'db> TypeInferenceBuilder<'db> {
                         func_loc,
                     },
                 );
+                if let Some(pin) = &rigid_pin {
+                    self.self_pinned_rigid_var.insert(at, pin.clone());
+                }
                 self.interface_method_generic_params
                     .insert(at, (member.clone(), function_generic_params));
                 return Some(fn_ty);
@@ -9290,6 +9315,9 @@ impl<'db> TypeInferenceBuilder<'db> {
                             attr,
                         };
                     }
+                }
+                if let Some(pin) = &rigid_pin {
+                    self.self_pinned_rigid_var.insert(at, pin.clone());
                 }
                 self.interface_method_generic_params
                     .insert(at, (member.clone(), function_generic_params));
@@ -10147,6 +10175,66 @@ impl<'db> TypeInferenceBuilder<'db> {
                                 .iter()
                                 .any(|&fn_id| iface_tree[fn_id].name == *member)
                     })
+            })
+    }
+
+    /// Whether `member`, resolved through `iface_qtn`'s closure, has a non-`self`
+    /// parameter typed with `Self` — i.e. it is *not* callable on a bare interface
+    /// ("dyn"/existential) receiver (object safety). Mirrors the existential guard
+    /// in [`Self::resolve_interface_member`], for callers that need the answer
+    /// where that resolution's diagnostics are suppressed (e.g. the union-member
+    /// path).
+    fn interface_method_has_extra_self_param(
+        &self,
+        iface_qtn: &crate::ty::QualifiedTypeName,
+        member: &Name,
+    ) -> bool {
+        let db = self.context.db();
+        let Some(pkg_items) = self.resolve_class_pkg_items(iface_qtn.package()) else {
+            return false;
+        };
+        let Some(Definition::Interface(root_loc)) =
+            pkg_items.lookup_type(iface_qtn.namespace(), iface_qtn.name())
+        else {
+            return false;
+        };
+        let root_pkg = baml_compiler2_hir::file_package::file_package(db, root_loc.file(db));
+        crate::interfaces::interface_closure_locs(db, root_loc, pkg_items, &root_pkg.namespace_path)
+            .into_iter()
+            .any(|iface_loc| {
+                let iface_tree = baml_compiler2_hir::file_item_tree(db, iface_loc.file(db));
+                let Some(iface_data) = iface_tree.interfaces.get(&iface_loc.id(db)) else {
+                    return false;
+                };
+                // Required method: params carry `type_expr: Option<SpannedTypeExpr>`.
+                if let Some(sig) = iface_data
+                    .required_methods
+                    .iter()
+                    .find(|s| s.name == *member)
+                {
+                    return sig
+                        .params
+                        .iter()
+                        .filter(|param| param.name.as_str() != "self")
+                        .filter_map(|param| param.type_expr.as_ref())
+                        .any(|te| Self::type_expr_contains_self(&te.expr));
+                }
+                // Default method: an elaborated function signature with `ty: TypeExpr`.
+                if let Some(&fn_id) = iface_data
+                    .default_methods
+                    .iter()
+                    .find(|&&fn_id| iface_tree[fn_id].name == *member)
+                {
+                    let func_loc =
+                        baml_compiler2_hir::loc::FunctionLoc::new(db, iface_loc.file(db), fn_id);
+                    let sig = baml_compiler2_ppir::elaborated_function_signature(db, func_loc);
+                    return sig
+                        .params
+                        .iter()
+                        .filter(|param| param.name.as_str() != "self")
+                        .any(|param| Self::type_expr_contains_self(&param.ty));
+                }
+                false
             })
     }
 

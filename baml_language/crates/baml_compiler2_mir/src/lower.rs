@@ -3692,9 +3692,15 @@ impl<'db> LoweringContext<'db> {
             // interface-typed receiver (`let f = x.eq`): no single concrete method
             // exists statically, so bind the implementor's method by the
             // receiver's runtime type (captured now). Mirrors the direct-call
-            // dispatch in `lower_call`, but yields a bound value. A field access
-            // falls through — the switch emits nothing when the final segment is
-            // not a method of the interface.
+            // dispatch in `lower_call`, but yields a bound value. Candidates are
+            // resolved *before* lowering the receiver so a field access (no method
+            // candidates) falls through without lowering the prefix twice.
+            //
+            // Unlike the direct-call path this does not strip a trailing
+            // type-qualifier segment (`x.Iface.method`): a qualified method
+            // *reference* resolves through TIR's `member_resolutions` / flat
+            // `resolutions` above and returns before reaching here, so the
+            // receiver is always `segments[..len-1]`.
             if segments.len() >= 2
                 && let Some(&recv_root_local) = self.locals.get(&segments[0])
             {
@@ -3712,19 +3718,19 @@ impl<'db> LoweringContext<'db> {
                     .as_ref()
                     .and_then(|ty| self.interface_dispatch_target_for_tir_ty(ty))
                 {
-                    let receiver_segments = &segments[..segments.len() - 1];
-                    let recv_local = self.lower_path_receiver_to_local(
-                        expr_id,
-                        receiver_segments,
-                        recv_root_local,
-                    );
-                    if self.emit_interface_bound_method_switch(
-                        recv_local,
+                    let resolved = self.interface_method_candidates_for(
                         &iface_tn,
                         &iface_type_args,
                         &method_name,
-                        &dest,
-                    ) {
+                    );
+                    if !resolved.is_empty() {
+                        let receiver_segments = &segments[..segments.len() - 1];
+                        let recv_local = self.lower_path_receiver_to_local(
+                            expr_id,
+                            receiver_segments,
+                            recv_root_local,
+                        );
+                        self.emit_bound_method_candidate_switch(recv_local, &resolved, &dest);
                         return;
                     }
                 }
@@ -6039,23 +6045,20 @@ impl<'db> LoweringContext<'db> {
         // interface-typed receiver (`let f = x.eq`): there is no single concrete
         // method to bind statically, so bind the implementor's method by the
         // receiver's runtime type (captured now — its type is fixed at this
-        // point). A field access falls through: the switch emits nothing when
-        // the member is not a method of the interface.
+        // point). Resolve candidates *before* lowering the receiver so a field
+        // access (no method candidates) falls through to the field path below
+        // without evaluating the receiver expression twice.
         if let Some(recv_tir_ty) = self.expr_types.get(&self.expr_metadata_key(base)).cloned()
             && let Some((iface_tn, iface_type_args)) =
                 self.interface_dispatch_target_for_tir_ty(&recv_tir_ty)
         {
-            let recv_op = self.lower_to_operand(base);
-            let recv_local = self.builder.temp(self.expr_ty(base));
-            self.builder
-                .assign(Place::local(recv_local), Rvalue::Use(recv_op));
-            if self.emit_interface_bound_method_switch(
-                recv_local,
-                &iface_tn,
-                &iface_type_args,
-                field,
-                &dest,
-            ) {
+            let resolved = self.interface_method_candidates_for(&iface_tn, &iface_type_args, field);
+            if !resolved.is_empty() {
+                let recv_op = self.lower_to_operand(base);
+                let recv_local = self.builder.temp(self.expr_ty(base));
+                self.builder
+                    .assign(Place::local(recv_local), Rvalue::Use(recv_op));
+                self.emit_bound_method_candidate_switch(recv_local, &resolved, &dest);
                 return;
             }
         }
@@ -6867,33 +6870,24 @@ impl<'db> LoweringContext<'db> {
         true
     }
 
-    /// Like [`Self::emit_interface_dispatch_switch`], but produces a *bound method
-    /// value* rather than calling the method. For `let f = x.eq` where `x`'s
-    /// static type is a generic `T extends I` (or a bare interface), there is no
-    /// single concrete method to bind at compile time, so switch on the
-    /// receiver's runtime type and bind the matching implementor's concrete
-    /// method. The receiver value is captured at bind time (its runtime type is
+    /// Per-arm analogue of [`Self::emit_method_candidate_switch`] that *binds* the
+    /// matching implementor's method as a bound-method value rather than calling
+    /// it. For `let f = x.eq` where `x`'s static type is a generic `T extends I`
+    /// (or a bare interface) there is no single concrete method to bind at compile
+    /// time, so this switches on the receiver's runtime type and binds the right
+    /// concrete method. The receiver is captured at bind time (its runtime type is
     /// fixed then), so a later `f(y)` calls the correct concrete method — exactly
     /// as `x.eq(y)` would dispatch directly.
     ///
-    /// Returns `false` (emitting nothing) when no implementor provides `method`
-    /// — e.g. the member is a field, not a method — so callers fall through to
-    /// their normal lowering.
-    fn emit_interface_bound_method_switch(
+    /// `resolved` must be non-empty: callers resolve candidates first (via
+    /// [`Self::interface_method_candidates_for`]) so they can tell a method from a
+    /// field — and avoid lowering the receiver — *before* committing to this path.
+    fn emit_bound_method_candidate_switch(
         &mut self,
         recv_local: Local,
-        iface_tn: &TypeName,
-        iface_type_args: &[Tir2Ty],
-        method: &Name,
+        resolved: &[InterfaceMethodCandidate],
         dest: &Place,
-    ) -> bool {
-        // Same candidate resolution as the direct-call dispatch — reuse it so the
-        // two stay in lockstep (the only difference is the per-arm action below).
-        let resolved = self.interface_method_candidates_for(iface_tn, iface_type_args, method);
-        if resolved.is_empty() {
-            return false;
-        }
-
+    ) {
         let bb_entry = self.builder.current_block();
         let bb_join = self.builder.create_block();
         let bb_otherwise = self.builder.create_block();
@@ -6930,7 +6924,6 @@ impl<'db> LoweringContext<'db> {
         self.builder.unreachable();
 
         self.builder.set_current_block(bb_join);
-        true
     }
 
     fn try_lower_interface_field_access(

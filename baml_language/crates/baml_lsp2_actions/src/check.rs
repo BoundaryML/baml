@@ -264,27 +264,43 @@ pub fn check_file(db: &dyn Db, file: SourceFile) -> Vec<Diagnostic> {
             let param_ty = if param.name.as_str() == "self"
                 && matches!(param.ty, baml_compiler2_ast::TypeExpr::Unknown { .. })
             {
-                enclosing_class_id
-                    .as_ref()
-                    .and_then(|class_id| {
-                        let class_data = &item_tree[*class_id];
-                        pkg_items
-                            .lookup_type(&pkg_info.namespace_path, &class_data.name)
-                            .map(|def| {
-                                Ty::Class(
-                                    baml_compiler2_tir::lower_type_expr::qualify_def(
-                                        db,
-                                        def,
-                                        &class_data.name,
-                                    ),
-                                    vec![],
-                                    TyAttr::default(),
-                                )
-                            })
-                    })
-                    .unwrap_or(Ty::Unknown {
+                // `self`'s type is the enclosing receiver: the class for an in-body
+                // method, or the impl's `for` target for an out-of-body
+                // `implement I for C` method (mirroring the body path in
+                // `tir::inference`). Falling back to `Unknown` would otherwise
+                // leave `self` untyped in the latter case.
+                if let Some(class_id) = enclosing_class_id.as_ref() {
+                    let class_data = &item_tree[*class_id];
+                    pkg_items
+                        .lookup_type(&pkg_info.namespace_path, &class_data.name)
+                        .map(|def| {
+                            Ty::Class(
+                                baml_compiler2_tir::lower_type_expr::qualify_def(
+                                    db,
+                                    def,
+                                    &class_data.name,
+                                ),
+                                vec![],
+                                TyAttr::default(),
+                            )
+                        })
+                        .unwrap_or(Ty::Unknown {
+                            attr: TyAttr::default(),
+                        })
+                } else if let Some(imp) = enclosing_impl {
+                    baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns(
+                        db,
+                        &imp.for_target.expr,
+                        pkg_items,
+                        &pkg_info.namespace_path,
+                        &generic_params,
+                        &mut type_errors,
+                    )
+                } else {
+                    Ty::Unknown {
                         attr: TyAttr::default(),
-                    })
+                    }
+                }
             } else {
                 lower_sig_te(&param.ty, &generic_params, &mut type_errors)
             };
@@ -1994,6 +2010,23 @@ fn validate_interface_extends_fields(
     }
 }
 
+/// Follow a chain of `Ty::TypeAlias` to its underlying definition, so callers
+/// reason about the concrete type rather than the opaque alias. Bounded to avoid
+/// looping on a (malformed) cyclic alias.
+fn expand_type_alias(ty: &Ty, aliases: &std::collections::HashMap<QualifiedTypeName, Ty>) -> Ty {
+    let mut current = ty.clone();
+    for _ in 0..64 {
+        let Ty::TypeAlias(qtn, _) = &current else {
+            break;
+        };
+        match aliases.get(qtn) {
+            Some(next) => current = next.clone(),
+            None => break,
+        }
+    }
+    current
+}
+
 #[allow(clippy::too_many_arguments)]
 fn validate_implements_for<'db>(
     db: &'db dyn Db,
@@ -2048,8 +2081,13 @@ fn validate_implements_for<'db>(
     // concrete implementor for dispatch to recover. (`Ty::Unknown` only arises
     // from an already-diagnosed unresolved target, so it is matched here purely
     // as defence-in-depth.)
+    //
+    // Aliases are expanded first so the gate sees through them — otherwise
+    // `type U = int | string; implements I for U {}` would slip past as an
+    // opaque `Ty::TypeAlias`.
+    let resolved_target = expand_type_alias(&target_ty, aliases);
     if matches!(
-        &target_ty,
+        &resolved_target,
         Ty::Interface(..) | Ty::Union(..) | Ty::Optional(..) | Ty::Unknown { .. }
     ) {
         diagnostics.push(
