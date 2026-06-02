@@ -300,6 +300,10 @@ fn describe_top_level(
     } else {
         full_body
     };
+    // Strip ordinary `//` comments (e.g. `//baml:mut_vm`) from the body; only
+    // `///` docs belong in describe output. (No-op for the reconstructed class
+    // body, which already contains only `///` docstring lines + fields.)
+    let full_body = strip_non_doc_comments(&full_body);
 
     Some(SymbolDescription {
         name: sym.name.clone(),
@@ -335,7 +339,7 @@ fn describe_member(
 
     // Find the member's CST node (FIELD or ENUM_VARIANT).
     let member_range = find_member_range(db, file, sym.name_span, sym.kind)?;
-    let full_body = slice_text(file_text, member_range);
+    let full_body = strip_non_doc_comments(&slice_text(file_text, member_range));
 
     // Shape: "field_name type" or "VariantName" with container context.
     let shape = if let Some(ref container) = sym.container_name {
@@ -460,6 +464,7 @@ fn describe_locals(db: &dyn Db, files: &[SourceFile], name: &str) -> Vec<SymbolD
                     .get(usize::from(func.span.start())..usize::from(func.span.end()))
                     .unwrap_or("")
                     .to_string();
+                let func_body = strip_non_doc_comments(&func_body);
 
                 results.push(SymbolDescription {
                     name: name.to_string(),
@@ -573,6 +578,7 @@ fn describe_locals(db: &dyn Db, files: &[SourceFile], name: &str) -> Vec<SymbolD
                         .get(usize::from(func.span.start())..usize::from(func.span.end()))
                         .unwrap_or("")
                         .to_string();
+                    let func_body = strip_non_doc_comments(&func_body);
 
                     results.push(SymbolDescription {
                         name: name.to_string(),
@@ -1482,6 +1488,24 @@ fn slice_text(text: &str, range: TextRange) -> String {
     }
 }
 
+/// Remove standalone non-doc comment lines from a body.
+///
+/// Doc comments (`///`) are documentation and are kept. Ordinary line comments
+/// (`//`, e.g. directives like `//baml:mut_vm`) are implementation noise and
+/// have no place in describe output. Only whole-line comments are stripped;
+/// trailing inline comments are left alone (stripping them safely would require
+/// lexing to avoid `//` inside string literals).
+fn strip_non_doc_comments(body: &str) -> String {
+    body.lines()
+        .filter(|line| {
+            let trimmed = line.trim_start();
+            // Keep everything except standalone non-doc (`//`, not `///`) comments.
+            !trimmed.starts_with("//") || trimmed.starts_with("///")
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
 /// Find the 1-based line number and full line text at a byte offset.
 fn line_at_offset(text: &str, offset: text_size::TextSize) -> (usize, String) {
     let offset: usize = offset.into();
@@ -1516,4 +1540,35 @@ fn serialize_range<S: serde::Serializer>(range: &TextRange, s: S) -> Result<S::O
     state.serialize_field("start", &u32::from(range.start()))?;
     state.serialize_field("end", &u32::from(range.end()))?;
     state.end()
+}
+
+#[cfg(test)]
+mod strip_comment_tests {
+    use super::strip_non_doc_comments;
+
+    #[test]
+    fn keeps_doc_comments_strips_line_comments() {
+        let body =
+            "/// A doc comment.\n//baml:mut_vm\nfunction f() -> int {\n  // inner note\n  1\n}";
+        let out = strip_non_doc_comments(body);
+        assert_eq!(
+            out, "/// A doc comment.\nfunction f() -> int {\n  1\n}",
+            "should keep `///` lines and drop standalone `//` lines"
+        );
+    }
+
+    #[test]
+    fn keeps_empty_doc_lines_and_indented_doc_comments() {
+        let body = "///\n  /// indented doc\n  //baml:directive\n  field int";
+        let out = strip_non_doc_comments(body);
+        assert_eq!(out, "///\n  /// indented doc\n  field int");
+    }
+
+    #[test]
+    fn leaves_trailing_inline_comments_untouched() {
+        // Whole-line comments are stripped; trailing inline comments are not
+        // (stripping them safely would require lexing string literals).
+        let body = "let x = 1 // trailing";
+        assert_eq!(strip_non_doc_comments(body), "let x = 1 // trailing");
+    }
 }
