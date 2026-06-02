@@ -178,6 +178,23 @@ function main() -> string {{
 }
 
 #[tokio::test]
+async fn tagged_template_for_body_interp_with_nested_lambda_capturing_loop_local() {
+    // Adversarial: a `${for}` body whose interpolation contains a NESTED lambda
+    // that captures BOTH the loop-local (`x`) and an enclosing local (`outer`).
+    // Exercises capture handling inside the flatten block's loop.
+    let output = baml_test!(&format!(
+        r#"{RENDER_TAG}
+function main() -> string {{
+  let outer = "O"
+  let xs = ["a", "b"]
+  render`${{for (let x in xs)}}${{["1"].map((y) -> {{ x + outer + y }}).join("")}}${{endfor}}`
+}}
+"#
+    ));
+    assert_eq!(output.result, ok_string("aO1bO1"));
+}
+
+#[tokio::test]
 async fn tagged_template_nested_for_in_if() {
     // Nested control flow: a `${for}` inside a taken `${if}` branch.
     let output = baml_test!(&format!(
