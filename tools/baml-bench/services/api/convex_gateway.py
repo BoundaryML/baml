@@ -129,14 +129,22 @@ class ConvexGateway:
             await asyncio.sleep(self._poll)
 
 
-def gateway_from_env() -> ConvexGateway:
-    """Construct a ConvexGateway from environment variables.
+def gateway_from_env():
+    """Construct the configured Convex gateway from environment variables.
 
-    Reads CONVEX_URL, CONVEX_ADMIN_KEY, and CONVEX_POLL_INTERVAL_SECS.
+    With ``CONVEX_BACKEND=memory`` returns an in-process MemoryGateway (no Convex
+    deployment, no Docker) — for local dev and fast tests. Otherwise (the default)
+    returns a ConvexGateway from CONVEX_URL, CONVEX_ADMIN_KEY, and
+    CONVEX_POLL_INTERVAL_SECS.
 
     Returns:
-        A ConvexGateway configured from the environment.
+        A gateway exposing query/mutation/action/subscribe_counts.
     """
+    if os.environ.get("CONVEX_BACKEND", "").lower() == "memory":
+        from .memory_gateway import MemoryGateway
+        return MemoryGateway(
+            poll_interval=float(os.environ.get("CONVEX_POLL_INTERVAL_SECS", "0.1")),
+        )
     return ConvexGateway(
         url=os.environ["CONVEX_URL"],
         admin_key=os.environ.get("ATB_CONVEX_ADMIN_KEY"),
