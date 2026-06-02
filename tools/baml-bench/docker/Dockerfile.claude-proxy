@@ -9,6 +9,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
     && apt-get install -y --no-install-recommends nodejs \
     && npm install -g @anthropic-ai/claude-code@2.1.139 \
+    && curl -1sLf 'https://artifacts-cli.infisical.com/setup.deb.sh' | bash \
+    && apt-get update && apt-get install -y --no-install-recommends infisical \
     && rm -rf /var/lib/apt/lists/*
 
 # Non-root user; pre-create ~/.claude (Claude Code session/state dir) and the baml cache so
@@ -23,6 +25,10 @@ COPY libs ./libs
 COPY services ./services
 RUN pip install --no-cache-dir -e .
 
+# Runtime secret injection: pull from Infisical when a machine identity is set.
+COPY docker/with-infisical /usr/local/bin/with-infisical
+RUN chmod +x /usr/local/bin/with-infisical
+
 ENV PYTHONUNBUFFERED=1 PYTHONPATH=/app/libs:/app \
     STAGING_ROOT=/tmp/staging \
     BAML_CACHE_DIR=/var/baml-cache \
@@ -30,4 +36,5 @@ ENV PYTHONUNBUFFERED=1 PYTHONPATH=/app/libs:/app \
 
 USER cproxy
 EXPOSE 9090
+ENTRYPOINT ["/usr/local/bin/with-infisical"]
 CMD ["python", "-m", "services.claude_proxy"]

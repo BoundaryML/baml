@@ -3,8 +3,9 @@
 # `command:` in docker-compose.
 FROM python:3.12-slim
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    ca-certificates git \
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl git \
+    && curl -1sLf 'https://artifacts-cli.infisical.com/setup.deb.sh' | bash \
+    && apt-get update && apt-get install -y --no-install-recommends infisical \
     && rm -rf /var/lib/apt/lists/*
 
 # Bake the BAML skill into the image so the baml-worker can inject it on Fly
@@ -20,8 +21,12 @@ COPY services ./services
 
 RUN pip install --no-cache-dir -e .
 
-# Drop root at runtime. Pre-create /data/blobs owned by the unprivileged user so
-# a fresh named volume mounted there inherits writable ownership.
+# Runtime secret injection: pull from Infisical when a machine identity is set.
+COPY docker/with-infisical /usr/local/bin/with-infisical
+RUN chmod +x /usr/local/bin/with-infisical
+
+# Run as an unprivileged user. /data is pre-created and owned here for local use;
+# a persistent disk mounted at /data is chowned to this user once at provisioning.
 RUN groupadd -r -g 1000 appuser \
     && useradd -r -u 1000 -g appuser -d /app -s /usr/sbin/nologin appuser \
     && mkdir -p /data/blobs \
@@ -29,5 +34,7 @@ RUN groupadd -r -g 1000 appuser \
 
 ENV PYTHONUNBUFFERED=1 PYTHONPATH=/app/libs:/app
 USER appuser
+# Wrap the service command so it pulls secrets from Infisical at runtime.
+ENTRYPOINT ["/usr/local/bin/with-infisical"]
 # default command; overridden per service in docker-compose
 CMD ["python", "-m", "services.api"]

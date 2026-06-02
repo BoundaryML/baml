@@ -1,0 +1,50 @@
+#!/bin/sh
+# Runtime secret injection for baml-bench services.
+#
+# When an Infisical machine identity is configured (INFISICAL_CLIENT_ID set), log
+# in via universal auth and run the service command through `infisical run`, so the
+# container pulls its secrets from the shared boundary-tools project at startup.
+# Secrets are namespaced with an `ATB_` prefix and each service reads its own under
+# the `ATB_<NAME>` key (ANTHROPIC_API_KEY is stored unprefixed). Run interactively
+# (by hand on a server) it prompts for any missing client id, secret, or project
+# id; run non-interactively with no identity (docker-compose services, Fly, CI) it
+# executes the command directly against the local .env. This runs as the image's
+# unprivileged user; persistent /data ownership is a host provisioning concern
+# (e.g. chown the mounted disk once at setup), not handled here.
+set -e
+
+# Interactively fill in any missing machine-identity settings. Guarded on a TTY so
+# detached/non-interactive runs never block; they fall through to the path below.
+if [ -t 0 ]; then
+  if [ -z "${INFISICAL_CLIENT_ID:-}" ]; then
+    printf 'Infisical Client ID: ' >&2
+    read -r INFISICAL_CLIENT_ID || true
+  fi
+  if [ -n "${INFISICAL_CLIENT_ID:-}" ] && [ -z "${INFISICAL_CLIENT_SECRET:-}" ]; then
+    printf 'Infisical Client Secret: ' >&2
+    stty -echo 2>/dev/null || true
+    read -r INFISICAL_CLIENT_SECRET || true
+    stty echo 2>/dev/null || true
+    printf '\n' >&2
+  fi
+  if [ -n "${INFISICAL_CLIENT_ID:-}" ] && [ -z "${INFISICAL_PROJECT_ID:-}" ]; then
+    printf 'Infisical Project ID: ' >&2
+    read -r INFISICAL_PROJECT_ID || true
+  fi
+  export INFISICAL_CLIENT_ID INFISICAL_CLIENT_SECRET INFISICAL_PROJECT_ID
+fi
+
+if [ -n "${INFISICAL_CLIENT_ID:-}" ]; then
+  token="$(infisical login --method=universal-auth \
+    --client-id="$INFISICAL_CLIENT_ID" \
+    --client-secret="$INFISICAL_CLIENT_SECRET" \
+    --plain --silent)"
+  exec infisical run \
+    --projectId "$INFISICAL_PROJECT_ID" \
+    --env "${INFISICAL_ENV:-prod}" \
+    --path "${INFISICAL_PATH:-/}" \
+    --token "$token" \
+    -- "$@"
+fi
+
+exec "$@"
