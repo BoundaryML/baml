@@ -382,6 +382,7 @@ pub fn contains_typevar(ty: &Ty) -> bool {
         }
         Ty::Map(k, v, _) | Ty::EvolvingMap(k, v, _) => contains_typevar(k) || contains_typevar(v),
         Ty::Union(tys, _) => tys.iter().any(contains_typevar),
+        Ty::Future(value, error, _) => contains_typevar(value) || contains_typevar(error),
         Ty::Function {
             generic_param_bounds,
             params,
@@ -429,6 +430,10 @@ pub fn contains_inferable_typevar(ty: &Ty, generic_params: &[Name]) -> bool {
         Ty::Union(tys, _) => tys
             .iter()
             .any(|t| contains_inferable_typevar(t, generic_params)),
+        Ty::Future(value, error, _) => {
+            contains_inferable_typevar(value, generic_params)
+                || contains_inferable_typevar(error, generic_params)
+        }
         Ty::Function {
             generic_param_bounds,
             params,

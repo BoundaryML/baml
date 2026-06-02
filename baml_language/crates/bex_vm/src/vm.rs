@@ -5085,26 +5085,40 @@ impl BexVm {
                     // captures, if it is already a closure).
                     let callable_ptr =
                         self.as_object_ptr(callable, FunctionType::Callable.into())?;
-                    let (function_ptr, captures): (HeapPtr, Vec<Value>) =
-                        match self.get_object(callable_ptr) {
-                            Object::Function(_) => (callable_ptr, Vec::new()),
-                            Object::Closure(c) => (c.function, c.captures.to_vec()),
-                            // GenericFunction / BoundMethod do not reach here: TIR
-                            // rejects type args on an already-specialized (non-
-                            // generic) value, static methods take the pooled
-                            // ItemRef path, and lambdas are not generic.
-                            other => {
-                                return Err(VmInternalError::TypeError {
-                                    expected: FunctionType::Callable.into(),
-                                    got: ObjectType::of(other).into(),
-                                }
-                                .into());
+                    // If the callable is already a closure, carry over its
+                    // captures AND its existing `captured_type_args` (the
+                    // outer/class generic environment it was created with), then
+                    // append the new instantiation args in call order — otherwise
+                    // a later indirect call would seed an incomplete
+                    // `frame.type_args`.
+                    let (function_ptr, captures, mut captured_type_args): (
+                        HeapPtr,
+                        Vec<Value>,
+                        Vec<baml_type::Ty>,
+                    ) = match self.get_object(callable_ptr) {
+                        Object::Function(_) => (callable_ptr, Vec::new(), Vec::new()),
+                        Object::Closure(c) => (
+                            c.function,
+                            c.captures.to_vec(),
+                            c.captured_type_args.to_vec(),
+                        ),
+                        // GenericFunction / BoundMethod do not reach here: TIR
+                        // rejects type args on an already-specialized (non-
+                        // generic) value, static methods take the pooled
+                        // ItemRef path, and lambdas are not generic.
+                        other => {
+                            return Err(VmInternalError::TypeError {
+                                expected: FunctionType::Callable.into(),
+                                got: ObjectType::of(other).into(),
                             }
-                        };
+                            .into());
+                        }
+                    };
+                    captured_type_args.extend(type_args);
                     let closure = Object::Closure(Closure {
                         function: function_ptr,
                         captures: captures.into_boxed_slice(),
-                        captured_type_args: type_args.into_boxed_slice(),
+                        captured_type_args: captured_type_args.into_boxed_slice(),
                     });
                     let ptr = self.tlab.alloc(closure);
                     self.stack.push(Value::object(ptr));
