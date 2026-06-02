@@ -3544,6 +3544,62 @@ fn multi_self_method_rejected_on_interface_typed_receiver() {
     );
 }
 
+#[tokio::test]
+async fn concrete_receiver_inherited_default_self_param_method() {
+    // A `Self`-parameter default method inherited (not overridden) by a concrete
+    // class is callable directly on a value of that class: the receiver is a
+    // single concrete type, so `Self` resolves to it and the object-safety
+    // restriction (which only guards bare interface receivers) does not apply.
+    let output = baml_test!(
+        r#"
+        interface Equals {
+            function eq(self, other: Self) -> bool
+            function neq(self, other: Self) -> bool {
+                return !self.eq(other)
+            }
+        }
+        class Num {
+            v: int
+            implements Equals {
+                function eq(self, other: Self) -> bool { return self.v == other.v }
+            }
+        }
+        function main() -> bool {
+            return Num { v: 1 }.neq(Num { v: 2 })
+        }
+        "#
+    );
+    assert_eq!(output.result.unwrap(), BexExternalValue::Bool(true));
+}
+
+#[test]
+fn concrete_receiver_self_param_method_rejects_wrong_arg() {
+    // `Self` on a concrete receiver resolves to that concrete type, so a
+    // mismatched argument is a type error — checked by ordinary subtyping, not
+    // silently accepted.
+    assert_compile_error_contains(
+        r#"
+        interface Equals {
+            function eq(self, other: Self) -> bool
+            function neq(self, other: Self) -> bool {
+                return !self.eq(other)
+            }
+        }
+        class Num {
+            v: int
+            implements Equals {
+                function eq(self, other: Self) -> bool { return self.v == other.v }
+            }
+        }
+        class Other { w: int }
+        function main() -> bool {
+            return Num { v: 1 }.neq(Other { w: 2 })
+        }
+        "#,
+        "got Other",
+    );
+}
+
 #[test]
 fn default_method_returning_self_is_compile_error() {
     assert_compile_error_contains(
