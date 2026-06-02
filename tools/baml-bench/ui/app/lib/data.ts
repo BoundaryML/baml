@@ -80,6 +80,7 @@ export type Issue = {
   description: string;
   status: string;
   evidence?: Array<{ trophyId?: string; call_index?: number | null }>;
+  notionSyncStatus?: "dirty" | "syncing" | "synced";
   notionPageId?: string | null;
   fixSlackTs?: string | null; // set to the Cursor agent ref once dispatched
   firstSeenAt: number;

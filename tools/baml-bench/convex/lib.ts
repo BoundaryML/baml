@@ -5,7 +5,7 @@
 //
 // The one operation that MUST be transactional is `claim`: Convex
 // mutations are serializable with OCC, so among N racers exactly one
-// flips a given row out of the claimable value — no double-processing.
+// flips a given row out of the claimable value - no double-processing.
 
 import { QueryCtx, MutationCtx } from "./_generated/server";
 
@@ -84,7 +84,7 @@ export async function countClaimable(
 
 // ---------- mutations ----------
 
-// Convex treats `v.optional(T)` as "absent or T" — a literal null is NOT
+// Convex treats `v.optional(T)` as "absent or T" - a literal null is NOT
 // valid. The Python client serializes None -> null, so we strip null keys
 // (no schema field legitimately stores null) to mean "field absent".
 function stripNulls<T extends Record<string, any>>(obj: T): T {
@@ -270,48 +270,4 @@ export async function heartbeatDoc(
     leaseExpiresAt: Date.now() + args.leaseMs,
     updatedAt: Date.now(),
   });
-}
-
-/**
- * Sweep rows stuck in a claimed state past their lease.
- *
- * Requeues expired rows to `requeueValue`, or marks them "failed" once `attempts`
- * reaches `maxAttempts`, recovering work stranded by crashed processors. Scans at
- * most 100 rows per call.
- *
- * @param ctx - Convex mutation context.
- * @param table - Table to sweep.
- * @param args - Reap parameters.
- * @param args.claimedValue - The claimed value whose stale rows are swept (e.g. "running").
- * @param args.requeueValue - Value to requeue still-retryable rows to (e.g. "queued").
- * @param args.field - Status field to read and write (defaults to "status").
- * @param args.maxAttempts - Attempt count at or above which a row is failed instead of requeued.
- * @returns The number of rows reaped.
- */
-export async function reapStaleDocs(
-  ctx: MutationCtx,
-  table: Table,
-  args: { claimedValue: string; requeueValue: string; field?: string; maxAttempts: number },
-) {
-  const field = args.field ?? "status";
-  const now = Date.now();
-  const stale = await ctx.db
-    .query(table as any)
-    .withIndex("by_lease" as any, (q: any) => q.eq(field, args.claimedValue))
-    .take(100);
-  let reaped = 0;
-  for (const row of stale as any[]) {
-    if ((row.leaseExpiresAt ?? Infinity) >= now) continue;
-    const toFail = (row.attempts ?? 0) >= args.maxAttempts;
-    await ctx.db.patch(row._id, {
-      [field]: toFail ? "failed" : args.requeueValue,
-      lastError: toFail ? "lease expired, max attempts reached" : "lease expired, requeued",
-      claimedBy: undefined,
-      claimedAt: undefined,
-      leaseExpiresAt: undefined,
-      updatedAt: now,
-    });
-    reaped++;
-  }
-  return reaped;
 }

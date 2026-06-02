@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 
 import type { LiveState } from "./lib/data";
+import { ago } from "./lib/format";
 
 const STAGE: Record<string, string> = {
   worker: "ok", dedup: "warn", "notion-sync": "link", "baml-build": "mute",
@@ -14,18 +15,6 @@ const TONE: Record<string, string> = {
   open: "warn", confirmed: "link", approved: "ok", fixing: "warn",
   cursor: "link", closed: "mute", rejected: "mute", ready: "ok", building: "warn",
 };
-
-/**
- * Formats an elapsed duration as a compact relative age.
- * @param ms - the duration in milliseconds
- * @returns a short string like "12s", "5m", or "3h"
- */
-function ago(ms: number): string {
-  const s = Math.round(ms / 1000);
-  if (s < 60) return `${s}s`;
-  const m = Math.round(s / 60);
-  return m < 60 ? `${m}m` : `${Math.round(m / 60)}h`;
-}
 
 /**
  * Hook that polls /api/state every 3s and exposes the latest live snapshot,
@@ -96,7 +85,7 @@ export default function LiveDashboard({ initial }: { initial: LiveState }) {
           Agents write BAML against canary; each run becomes a trophy, findings dedupe into issues.
         </p>
         <p className="mute" style={{ fontSize: 13 }}>
-          ${s.totals.costUsd} est · canary {readyBuild ? readyBuild.sha.slice(0, 8) : "—"} ·{" "}
+          ${s.totals.costUsd.toFixed(2)} est · canary {readyBuild ? readyBuild.sha.slice(0, 8) : "—"} ·{" "}
           <button className="linkbtn" onClick={() => setLive((v) => !v)}>{live ? "live ⏸" : "paused ▶"}</button>
           {" "}· {s.generatedAt}
         </p>
@@ -143,7 +132,7 @@ export default function LiveDashboard({ initial }: { initial: LiveState }) {
                 <td className="mono mute">{r.source}</td>
                 <td className="r mono">{r.turns ?? "-"}</td>
                 <td className="r mono">{r.apiCalls ?? "-"}</td>
-                <td className="r mono">${r.costUsd ?? 0}</td>
+                <td className="r mono">${(r.costUsd ?? 0).toFixed(2)}</td>
                 <td className="r mono">{r.findings || ""}</td>
                 <td className="r mono mute">{ago(now - r.createdAt)}</td>
               </tr>

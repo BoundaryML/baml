@@ -6,15 +6,10 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
 import type { LiveState } from "./lib/data";
+import { ago } from "./lib/format";
 import { usePolledState } from "./live-dashboard";
 
 const cnt = (o: Record<string, number>) => Object.values(o).reduce((a, b) => a + b, 0);
-const ago = (ms: number) => {
-  const s = Math.round(ms / 1000);
-  if (s < 60) return `${s}s`;
-  const m = Math.round(s / 60);
-  return m < 60 ? `${m}m` : `${Math.round(m / 60)}h`;
-};
 
 // inflight stage -> the graph element id it belongs to
 const STAGE_EL: Record<string, string> = {

@@ -354,7 +354,7 @@ details.turn-tool pre {
   padding: 8px 10px;
   margin: 4px 0 0 18px;
   white-space: pre-wrap;
-  word-break: break-word;
+  overflow-wrap: break-word;
   border: 1px solid var(--rule);
   max-height: 300px;
   overflow: auto;
@@ -522,7 +522,7 @@ ol.ordered li::before {
   font-size: 12.5px;
   line-height: 1.5;
   white-space: pre-wrap;
-  word-break: break-word;
+  overflow-wrap: break-word;
 }
 
 .tool-result { color: var(--mute); }
@@ -623,7 +623,7 @@ a.sq:hover { border-color: var(--fg); }
 
 .sq-stage { font-size: 12px; text-transform: lowercase; letter-spacing:.02em;
   color: var(--mute); display:flex; align-items:center; gap:6px; }
-.sq .dot { width:7px; height:7px; border-radius:50%; background: currentColor; opacity:.7; }
+.sq .dot { width:7px; height:7px; border-radius:50%; background: currentcolor; opacity:.7; }
 .sq-ok .dot { color: var(--ok);} .sq-warn .dot{ color: var(--warn);}
 .sq-hot .dot { color: var(--hot);} .sq-link .dot{ color: var(--link);} .sq-mute .dot{color:var(--mute);}
 .sq-body { flex:1; margin-top: 8px; font-size: 14px; line-height: 1.32;
@@ -652,7 +652,7 @@ a.sq:hover { border-color: var(--fg); }
   font-family: ui-monospace, Menlo, monospace; font-size: 12px; color: var(--mute); }
 .chip { display:inline-flex; align-items:center; white-space:nowrap; }
 .dot { display:inline-block; width:7px; height:7px; border-radius:50%;
-  background: currentColor; margin-right: 6px; }
+  background: currentcolor; margin-right: 6px; }
 .dot-ok { color: var(--ok);} .dot-warn { color: var(--warn);} .dot-hot { color: var(--hot);}
 .dot-link { color: var(--link);} .dot-mute { color: var(--mute);}
 
@@ -689,7 +689,7 @@ a.sq:hover { border-color: var(--fg); }
 .dbnode-rows { margin-top:auto; display:flex; flex-direction:column; gap:3px;
   font-family: ui-monospace, Menlo, monospace; font-size: 11.5px; color: var(--mute); }
 .chip { display:inline-flex; align-items:center; white-space:nowrap; }
-.dot { display:inline-block; width:7px; height:7px; border-radius:50%; background:currentColor; margin-right:6px; }
+.dot { display:inline-block; width:7px; height:7px; border-radius:50%; background:currentcolor; margin-right:6px; }
 .dot-ok{color:var(--ok)} .dot-warn{color:var(--warn)} .dot-hot{color:var(--hot)}
 .dot-link{color:var(--link)} .dot-mute{color:var(--mute)}
 

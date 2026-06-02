@@ -86,6 +86,9 @@ class BamlDedup(Processor):
         for it in items:
             if it.get("kind") not in ("skill", "language"):
                 continue
+            if not it.get("title"):
+                log.warning("baml-dedup: skipping issue item with no title (kind=%s)", it.get("kind"))
+                continue
             await self._upsert(it)
 
         for t in batch:
@@ -136,12 +139,16 @@ class BamlDedup(Processor):
             it: A single agent-produced issue item with kind, title, evidence, etc.
         """
         now = int(time.time() * 1000)
-        evidence = [
-            {"trophyId": e.get("report_id"), "call_index": e.get("call_index"),
-             "turn_index": e.get("call_index")}
-            for e in (it.get("evidence") or [])
-            if e.get("report_id")
-        ]
+        evidence = []
+        for e in (it.get("evidence") or []):
+            if not e.get("report_id"):
+                continue
+            entry = {"trophyId": e.get("report_id"), "call_index": e.get("call_index")}
+            # Prefer the explicit turn index; only include it when actually present
+            # (don't conflate it with call_index, which misleads consumers).
+            if e.get("turn_index") is not None:
+                entry["turn_index"] = e["turn_index"]
+            evidence.append(entry)
         existing_id = it.get("id")
         if existing_id:
             existing = await self.service.get("issues", existing_id)
@@ -158,8 +165,8 @@ class BamlDedup(Processor):
                 await self.service.update("issues", existing_id, patch)
                 return
         await self.service.create("issues", {
-            "kind": it["kind"],
-            "title": it["title"],
+            "kind": it.get("kind"),
+            "title": it.get("title"),
             "description": it.get("description", ""),
             "suggestion": it.get("suggestion"),
             "category": it.get("category") or "bug",

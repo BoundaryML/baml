@@ -25,8 +25,13 @@ class ProxyClient:
                 slashes stripped.
             token: Bearer token sent on requests; an empty string sends no
                 Authorization header.
+
+        Raises:
+            ValueError: If no non-empty proxy URL is provided.
         """
         self.urls = [u.rstrip("/") for u in urls if u.strip()]
+        if not self.urls:
+            raise ValueError("no valid proxy URLs provided for ProxyClient")
         self._headers = {"Authorization": f"Bearer {token}"} if token else {}
 
     @classmethod

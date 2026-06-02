@@ -195,9 +195,14 @@ class BamlWorker(Processor):
         log.info("running task %s (baml=%s)", task_id, baml_version)
         result = await self.proxy.run_agent(req)
 
-        # Stash the full transcript as a blob (the trophy links it).
+        # Stash the full transcript as a blob (the trophy links it). put_transcript
+        # creates the pointer *after* this task was claimed, so use its returned id
+        # rather than the stale claim-time item.
+        transcript_storage_id = item.get("transcriptStorageId")
         if result.transcript:
-            await self.service.put_transcript(self.table, task_id, result.transcript)
+            transcript_storage_id = await self.service.put_transcript(
+                self.table, task_id, result.transcript
+            )
         turn_log = result.turn_log or []
         metrics = {
             "turns": result.turns,
@@ -258,7 +263,7 @@ class BamlWorker(Processor):
             "bamlVersion": baml_version,
             "metrics": metrics,
             "hostMetadata": result.host_metadata,
-            "transcriptStorageId": item.get("transcriptStorageId"),
+            "transcriptStorageId": transcript_storage_id,
             "turnLog": turn_log,
             "summary": summary,
             "whatWentWell": analysis.get("what_went_well") or [],

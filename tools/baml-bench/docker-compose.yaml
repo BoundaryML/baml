@@ -138,6 +138,7 @@ services:
       SERVICE_TOKEN: ${SERVICE_TOKEN:-devservicetoken}
       SLACK_SIGNING_SECRET: ${SLACK_SIGNING_SECRET:-}
       SLACK_BOT_TOKEN: ${SLACK_BOT_TOKEN:-}
+      NOTION_VERIFICATION_TOKEN: ${NOTION_VERIFICATION_TOKEN:-}
     ports:
       - "${INGRESS_PORT:-8081}:8081"
     depends_on: [api]

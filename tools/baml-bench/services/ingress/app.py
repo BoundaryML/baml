@@ -8,13 +8,15 @@ Every handler calls the service API (never Convex directly):
 
 from __future__ import annotations
 
+import hashlib
+import hmac
 import logging
 import os
 import re
 from collections import OrderedDict
 from typing import Any, Optional
 
-from fastapi import BackgroundTasks, FastAPI, Header, Request, Response
+from fastapi import BackgroundTasks, FastAPI, Header, HTTPException, Request, Response
 
 from bench_core import slack_client
 from bench_core.service_client import ServiceClient
@@ -27,6 +29,10 @@ log = logging.getLogger("uvicorn.error")
 SERVICE_URL = os.environ["SERVICE_URL"]
 SERVICE_TOKEN = os.environ.get("SERVICE_TOKEN", "")
 SLACK_SIGNING_SECRET = os.environ.get("SLACK_SIGNING_SECRET", "")
+# When set, /notion/webhook requires a valid X-Notion-Signature over the raw body
+# (HMAC-SHA256 keyed by this token, the value shown in the Notion webhook UI).
+# Left empty, signature verification is skipped (current default behavior).
+NOTION_VERIFICATION_TOKEN = os.environ.get("NOTION_VERIFICATION_TOKEN", "")
 
 app = FastAPI(title="baml-bench-ingress")
 _service = ServiceClient(SERVICE_URL, SERVICE_TOKEN)
@@ -156,11 +162,16 @@ async def slack_events(request: Request,
 
 
 @app.post("/notion/webhook")
-async def notion_webhook(request: Request) -> Response:
+async def notion_webhook(request: Request,
+                         x_notion_signature: str = Header(default="")) -> Response:
     """Approve the issue a Notion webhook points at (the fix dispatcher claims it).
 
     Notion fires when an issue's Status becomes 'approved'. We find the issue by
     page id and flip it to approved.
+
+    When ``NOTION_VERIFICATION_TOKEN`` is configured, the request's
+    ``X-Notion-Signature`` (``sha256=<hmac>`` over the raw body) is verified first
+    and a mismatch is rejected with 401.
 
     Notion's integration webhooks put the *page* id under ``entity.id`` (or
     ``data.id`` for automation webhooks); the top-level ``id`` is the
@@ -169,20 +180,32 @@ async def notion_webhook(request: Request) -> Response:
     hyphenation is retried before giving up.
 
     Args:
-        request: The inbound webhook request (JSON body read directly).
+        request: The inbound webhook request (raw body read for verification).
+        x_notion_signature: Notion's ``X-Notion-Signature`` header.
 
     Returns:
         A Response: 200 for the verification handshake or a handled/unmatched
-        event, 400 when no page id can be found in the payload.
+        event, 401 on a bad signature, 400 when no page id can be found.
     """
     import json
-    body = json.loads(await request.body() or b"{}")
+    raw = await request.body()
+    body = json.loads(raw or b"{}")
 
-    # Subscription verification handshake: Notion sends this once when the
-    # webhook is created and expects a 200 (the token is shown in the UI).
+    # Subscription verification handshake: Notion sends this once when the webhook
+    # is created and expects a 200. Do not log the token value (it is shown in the
+    # Notion UI; copy it into NOTION_VERIFICATION_TOKEN from there).
     if "verification_token" in body:
-        log.info("notion webhook verification token=%s", body.get("verification_token"))
+        log.info("notion webhook: received subscription verification request")
         return Response(status_code=200)
+
+    # Optional signature verification (no-op unless a token is configured).
+    if NOTION_VERIFICATION_TOKEN:
+        expected = "sha256=" + hmac.new(
+            NOTION_VERIFICATION_TOKEN.encode(), raw, hashlib.sha256
+        ).hexdigest()
+        if not hmac.compare_digest(x_notion_signature, expected):
+            log.warning("notion webhook: bad signature")
+            return Response(status_code=401)
 
     page_id = (
         body.get("page_id")                       # synthetic / explicit
@@ -234,14 +257,20 @@ async def bug_trigger(payload: dict) -> dict[str, str]:
     """Create a task from a bug report.
 
     Args:
-        payload: The request body. Requires ``prompt``; optional ``notionPageId``
-            (recorded as the proposer's Notion page).
+        payload: The request body. Requires a non-empty ``prompt``; optional
+            ``notionPageId`` (recorded as the proposer's Notion page).
 
     Returns:
         A dict ``{"id": <task id>}`` for the created task.
+
+    Raises:
+        HTTPException: 400 when ``prompt`` is missing or empty.
     """
+    prompt = (payload.get("prompt") or "").strip() if isinstance(payload, dict) else ""
+    if not prompt:
+        raise HTTPException(status_code=400, detail="prompt required")
     tid = await _service.create("tasks", {
-        "source": "bug_report", "prompt": payload["prompt"],
+        "source": "bug_report", "prompt": prompt,
         "notionProposerPageId": payload.get("notionPageId"), "status": "queued",
     })
     return {"id": tid}

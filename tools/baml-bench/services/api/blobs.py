@@ -26,8 +26,9 @@ def _path(storage_id: str) -> Path:
     Raises:
         ValueError: When the resolved path escapes BLOB_DIR (path traversal).
     """
+    base = BLOB_DIR.resolve()
     p = (BLOB_DIR / storage_id).resolve()
-    if not str(p).startswith(str(BLOB_DIR.resolve())):
+    if not p.is_relative_to(base):
         raise ValueError(f"path traversal in storage id: {storage_id}")
     return p
 

@@ -19,14 +19,14 @@ CHUNK = 1900
 
 
 def _chunks(text: str, size: int = CHUNK) -> list[str]:
-    """Split text into line-aligned chunks each no larger than a size limit.
+    """Split text into chunks each no larger than a size limit.
 
-    Breaks only on line boundaries, so a single line longer than the limit is
-    kept whole in its own chunk.
+    Prefers line boundaries, but hard-splits any single line longer than the
+    limit so no chunk ever exceeds ``size`` (and nothing is later truncated).
 
     Args:
         text: The text to split.
-        size: Soft maximum chunk length in characters.
+        size: Maximum chunk length in characters.
 
     Returns:
         The chunks in order; always at least one chunk (possibly empty).
@@ -34,6 +34,13 @@ def _chunks(text: str, size: int = CHUNK) -> list[str]:
     out: list[str] = []
     cur = ""
     for line in text.splitlines(keepends=True):
+        # Hard-split a single overlong line into size-sized pieces.
+        while len(line) > size:
+            if cur:
+                out.append(cur)
+                cur = ""
+            out.append(line[:size])
+            line = line[size:]
         if len(cur) + len(line) > size and cur:
             out.append(cur)
             cur = ""

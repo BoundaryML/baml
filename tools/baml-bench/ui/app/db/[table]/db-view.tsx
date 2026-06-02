@@ -4,6 +4,7 @@ import Link from "next/link";
 
 import type { LiveState } from "../../lib/data";
 import { issueStatusLabel } from "../../lib/data";
+import { ago } from "../../lib/format";
 import { usePolledState } from "../../live-dashboard";
 
 const TONE: Record<string, string> = {
@@ -14,17 +15,6 @@ const TONE: Record<string, string> = {
 };
 const ACTIVE = new Set(["running", "deduping", "syncing", "building"]);
 
-/**
- * Formats an elapsed duration as a compact relative age.
- * @param ms - the duration in milliseconds
- * @returns a short string like "12s", "5m", or "3h"
- */
-function ago(ms: number): string {
-  const s = Math.round(ms / 1000);
-  if (s < 60) return `${s}s`;
-  const m = Math.round(s / 60);
-  return m < 60 ? `${m}m` : `${Math.round(m / 60)}h`;
-}
 const pill = (v: string) => <span className={`statpill ${TONE[v] ?? ""}`}>{v}</span>;
 
 /**

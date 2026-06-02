@@ -19,7 +19,7 @@ lives in the docstrings themselves.
 
 ### `libs/bench_core/notion_client.py`
 
-- **`_chunks(text, size)`** - Split text into line-aligned chunks each no larger than a size limit.
+- **`_chunks(text, size)`** - Split text into chunks each no larger than a size limit.
 - **`_paragraph(text)`** - Build a Notion paragraph block wrapping the given text.
 - **`class NotionClient`** - Minimal Notion REST client for creating and updating issue pages.
     - `__init__(token)` - Build the auth, version, and content-type headers for Notion requests.
@@ -142,7 +142,7 @@ lives in the docstrings themselves.
 - **`_gh_headers()`** - Build the GitHub API request headers, adding auth when a token is set.
 - **`_platform_triple()`** - Return the glibc Linux target triple for this machine's architecture.
 - **`_extract_baml(targz)`** - Extract the baml binary from a gzipped release tarball.
-- **`fetch_baml(tag)`** - Download the alpha release `tag` asset for this platform; return the
+- **`fetch_baml(tag)`** - Download the alpha release `tag` asset for this platform; return the baml binary bytes.
 
 ### `services/baml_dedup/__main__.py`
 
@@ -183,19 +183,20 @@ lives in the docstrings themselves.
 
 ### `services/claude_proxy/app.py`
 
+- **`_safe_staging(prefix, raw, field)`** - Resolve a staging directory for a caller-supplied id, rejecting traversal.
 - **`_get_api_key()`** - Return the Anthropic API key.
 - **`_require_bearer(authorization)`** - Reject the request unless its bearer token matches the proxy token.
 - **`_ensure_baml(sha)`** - Return the dir containing the `baml` binary for `sha`, caching on miss.
 - **`healthz()`** - Liveness probe that always reports the service is up.
 - **`run_agent(req, authorization)`** - Run a Claude Code agent over staged files and return transcript + metrics.
-- **`check_baml(req, authorization)`** - Compile/run a minimal repro with the version-cached baml on PATH (no
+- **`check_baml(req, authorization)`** - Compile/run a minimal repro with the version-cached baml on PATH (no claude). Used by the worker to verify a finding's repro reproduces.
 
 ### `services/claude_proxy/runner.py`
 
 - **`validate_relative_path(rel)`** - Reject paths that are empty, absolute, or contain parent traversal.
 - **`materialize_files(staging, files)`** - Write each file's content into the staging directory, creating parents.
 - **`spawn_claude(claude_bin, cwd, prompt, model, max_turns, system_prompt, baml_bin_dir, timeout_secs, anthropic_api_key)`** - Run `claude -p -` and return (stdout, stderr, exit_code).
-- **`run_command(cwd, command, baml_bin_dir, timeout_secs)`** - Run a shell command (e.g. `baml build`) in cwd with the version-cached
+- **`run_command(cwd, command, baml_bin_dir, timeout_secs)`** - Run a shell command (e.g. `baml build`) in cwd with the version-cached baml on PATH. Returns (stdout, stderr, exit_code, timed_out). exit_code -9 signals a wall-clock timeout.
 - **`parse_claude_session(stdout)`** - Extract the final JSON summary line of `claude -p --output-format json`.
 - **`session_log_path(staging, session_id)`** - Compute the path to claude's session jsonl log for a staging dir.
 - **`_preview(s, is_error)`** - Truncate a string to a preview, keeping head and tail for errors.
@@ -220,7 +221,7 @@ lives in the docstrings themselves.
 - **`healthz()`** - Liveness probe.
 - **`_create_slack_task(event, text, eid)`** - Create a Slack-sourced task off the request path.
 - **`slack_events(request, background_tasks, x_slack_signature, x_slack_request_timestamp, x_slack_retry_num)`** - Handle the Slack Events API callback (URL verification + app mentions).
-- **`notion_webhook(request)`** - Approve the issue a Notion webhook points at (the fix dispatcher claims it).
+- **`notion_webhook(request, x_notion_signature)`** - Approve the issue a Notion webhook points at (the fix dispatcher claims it).
 - **`_toggle_uuid_hyphens(value)`** - Return the alternate hyphenation of a Notion id.
 - **`bug_trigger(payload)`** - Create a task from a bug report.
 
@@ -282,7 +283,6 @@ lives in the docstrings themselves.
 - **`claimDoc`** - Atomically claim the oldest claimable row for a table.
 - **`transitionDoc`** - Move a row to a new status and, unless told otherwise, release its claim.
 - **`heartbeatDoc`** - Extend a claimed row's lease so a live worker isn't reaped.
-- **`reapStaleDocs`** - Sweep rows stuck in a claimed state past their lease.
 
 ### `convex/maintenance.ts`
 
@@ -355,6 +355,10 @@ lives in the docstrings themselves.
 - **`RunDetail`** - A run-detail bundle for the run page: the trophy, its task, and a readable baml version.
 - **`loadRun`** - Loads a single run's detail: its trophy, the originating task, and a readable baml label.
 - **`loadTask`** - Loads a task plus the id of any trophy it has produced (used to redirect to the result).
+
+### `ui/app/lib/format.ts`
+
+- **`ago`** - Formats an elapsed duration in milliseconds as a compact relative age.
 
 ### `ui/app/live-dashboard.tsx`
 

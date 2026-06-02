@@ -16,17 +16,26 @@ OUT = HERE / "reference.md"
 
 
 def first_line(doc: str | None) -> str:
-    """Return the first line of a docstring, or an undocumented placeholder.
+    """Collapse a docstring's first paragraph to one line, or an undocumented placeholder.
+
+    Takes everything up to the first blank line (so a summary that wraps across
+    several physical lines reads as one full sentence) and normalizes whitespace.
 
     Args:
         doc: The raw docstring/JSDoc summary text, or None.
 
     Returns:
-        The first non-empty line, whitespace-collapsed, or "_(undocumented)_".
+        The first paragraph as a single whitespace-normalized line, or
+        "_(undocumented)_" when there is no docstring.
     """
     if not doc:
         return "_(undocumented)_"
-    return " ".join(doc.strip().splitlines()[0].split())
+    para: list[str] = []
+    for ln in doc.strip().splitlines():
+        if not ln.strip():
+            break
+        para.append(ln.strip())
+    return " ".join(" ".join(para).split())
 
 
 def sig(args: ast.arguments) -> str:
@@ -61,7 +70,7 @@ def py_section(path: Path) -> list[str]:
     Returns:
         Markdown lines: a section header plus one bullet per symbol.
     """
-    tree = ast.parse(path.read_text())
+    tree = ast.parse(path.read_text(encoding="utf-8"))
     rel = path.relative_to(ROOT)
     lines = [f"### `{rel}`", ""]
     for node in tree.body:
@@ -99,7 +108,7 @@ def ts_section(path: Path) -> list[str]:
     Returns:
         Markdown lines: a section header plus one bullet per exported symbol.
     """
-    text = path.read_text()
+    text = path.read_text(encoding="utf-8")
     rel = path.relative_to(ROOT)
     lines = [f"### `{rel}`", ""]
     for block, name in EXPORT.findall(text):

@@ -1,4 +1,4 @@
-"""claude-proxy — HTTP wrapper around the Claude Code CLI.
+"""claude-proxy - HTTP wrapper around the Claude Code CLI.
 
 Single endpoint /run-agent: stage files, ensure the requested baml sha is
 cached locally (pulled once from the service), spawn claude with that baml
@@ -11,6 +11,7 @@ import asyncio
 import hmac
 import logging
 import os
+import re
 import shutil
 import time
 from pathlib import Path
@@ -41,6 +42,34 @@ SERVICE_TOKEN = os.environ.get("SERVICE_TOKEN", "")
 ALLOWED_MODELS = {"claude-sonnet-4-6", "claude-haiku-4-5", "claude-opus-4-7"}
 
 _baml_locks: dict[str, asyncio.Lock] = {}
+
+# Staging dir names are built from caller-supplied ids; restrict them to a safe
+# charset so they cannot escape STAGING_ROOT via path separators or traversal.
+_SAFE_ID = re.compile(r"^[A-Za-z0-9._-]+$")
+
+
+def _safe_staging(prefix: str, raw: str, field: str) -> Path:
+    """Resolve a staging directory for a caller-supplied id, rejecting traversal.
+
+    Args:
+        prefix: Literal prefix for the directory name (e.g. ``"check-"``).
+        raw: The caller-supplied id (``cell_id`` / ``check_id``).
+        field: Field name used in the error message.
+
+    Returns:
+        The staging path ``STAGING_ROOT / f"{prefix}{id}"``.
+
+    Raises:
+        HTTPException: 400 when the id is empty, has disallowed characters, or
+            resolves outside STAGING_ROOT.
+    """
+    rid = (raw or "").strip()
+    if not rid or not _SAFE_ID.match(rid):
+        raise HTTPException(400, f"{field} required or invalid")
+    p = (STAGING_ROOT / f"{prefix}{rid}").resolve()
+    if not p.is_relative_to(STAGING_ROOT.resolve()):
+        raise HTTPException(400, f"{field} required or invalid")
+    return p
 
 
 def _get_api_key() -> str:
@@ -148,10 +177,7 @@ async def run_agent(req: RunAgentRequest, authorization: str = Header(default=""
     _require_bearer(authorization)
     if req.model not in ALLOWED_MODELS:
         raise HTTPException(403, "model not allowed")
-    if not req.cell_id.strip():
-        raise HTTPException(400, "cell_id required")
-
-    staging = STAGING_ROOT / req.cell_id
+    staging = _safe_staging("", req.cell_id, "cell_id")
     out = AgentResult(cell_id=req.cell_id, status="error", host_metadata=runner.host_metadata())
     started = time.monotonic()
     try:
@@ -238,16 +264,13 @@ async def check_baml(req: CheckBamlRequest, authorization: str = Header(default=
         HTTPException: 400 when check_id is missing.
     """
     _require_bearer(authorization)
-    if not req.check_id.strip():
-        raise HTTPException(400, "check_id required")
-
-    staging = STAGING_ROOT / f"check-{req.check_id}"
+    staging = _safe_staging("check-", req.check_id, "check_id")
     out = CheckBamlResult(check_id=req.check_id)
     try:
         runner.materialize_files(staging, req.files)
         # baml commands require a project (baml.toml) and `generate` needs a
         # generator block. Provision minimal ones so the repro exercises real
-        # compile/run behavior, not the project gate — unless the repro ships
+        # compile/run behavior, not the project gate - unless the repro ships
         # its own. A type error still surfaces before generator resolution, so
         # this never masks a should_fail repro.
         if "baml.toml" not in req.files and not (staging / "baml.toml").exists():

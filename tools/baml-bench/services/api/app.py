@@ -1,4 +1,4 @@
-"""baml-bench API — the central HTTP API and sole Convex gateway.
+"""baml-bench API - the central HTTP API and sole Convex gateway.
 
 Exposes uniform CRUD + queue verbs + SSE per table (tasks, trophies,
 issues, bamlBuilds), the baml version endpoints, and transcript blobs.
@@ -7,6 +7,7 @@ Bearer-token auth on every route.
 
 from __future__ import annotations
 
+import hmac
 import os
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Response
@@ -35,8 +36,7 @@ async def require_bearer(authorization: str = Header(default="")) -> None:
     if not SERVICE_TOKEN:
         return  # dev mode: no token configured
     expected = f"Bearer {SERVICE_TOKEN}"
-    # constant-time-ish compare
-    if len(authorization) != len(expected) or authorization != expected:
+    if not hmac.compare_digest(authorization or "", expected):
         raise HTTPException(401, "unauthorized")
 
 

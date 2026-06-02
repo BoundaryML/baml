@@ -1,4 +1,4 @@
-"""The Processor base — one event-driven claim loop reused by every stage.
+"""The Processor base - one event-driven claim loop reused by every stage.
 
 A subclass declares which table/value it consumes, how it claims (status
 or another field), and implements `process(item)`. The base handles: SSE
@@ -122,11 +122,15 @@ class Processor:
         try:
             while True:
                 await asyncio.sleep(self.heartbeat_secs)
-                await self.service.heartbeat(self.table, item_id, self.lease_ms)
+                try:
+                    await self.service.heartbeat(self.table, item_id, self.lease_ms)
+                except Exception:  # noqa: BLE001
+                    # A transient heartbeat failure must not kill the loop, or the
+                    # lease would stop being renewed and the reaper would steal the
+                    # in-flight item; log and keep renewing on the next tick.
+                    log.warning("heartbeat error for %s/%s", self.table, item_id)
         except asyncio.CancelledError:
             pass
-        except Exception:  # noqa: BLE001
-            log.warning("heartbeat error for %s/%s", self.table, item_id)
 
     async def _poll_backstop(self) -> None:
         """Periodically drain the queue to backstop dropped SSE wake-ups.
