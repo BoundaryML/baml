@@ -161,10 +161,23 @@ impl std::fmt::Display for CallId {
 /// is the same `VmRustFnError` the VM uses for `$rust_function` errors and
 /// `throw` opcodes, so a sysop error is delivered through the VM's normal
 /// exception-unwinding path without bespoke routing.
+///
+/// For the host-callable sysop, a successful host *throw* (the host
+/// language ran a callable and the callable raised something) is carried
+/// via [`Self::host_thrown`] rather than `kind`: it holds the decoded
+/// thrown value as a [`BexExternalValue`] so the engine can run the
+/// declared-throws contract check against `E` and either inject the value
+/// as a catchable throw (on-contract) or as a
+/// `baml.panics.HostContractViolation` (off-contract). When
+/// `host_thrown` is `Some`, `kind` carries a sentinel
+/// `VmBamlError::HostCallable` that mirrors the surfaced value's
+/// metadata for `Display` / `std::error::Error::source`, but the
+/// engine reads `host_thrown` for the actual semantic.
 #[derive(Debug, PartialEq, Clone)]
 pub struct OpError {
     pub fn_name: SysOp,
     pub kind: bex_vm_types::errors::VmRustFnError,
+    pub host_thrown: Option<Box<BexExternalValue>>,
 }
 
 impl std::fmt::Display for OpError {
@@ -186,6 +199,7 @@ impl OpError {
             kind: bex_vm_types::errors::VmRustFnError::Panic(
                 bex_vm_types::errors::VmPanic::Cancelled,
             ),
+            host_thrown: None,
         }
     }
 
@@ -197,13 +211,29 @@ impl OpError {
         Self {
             fn_name,
             kind: kind.into(),
+            host_thrown: None,
         }
     }
 
-    /// Construct a structured host-callable error.
+    /// Construct an `OpError` representing a host throw: the host language
+    /// invoked a callable and the callable raised something the bridge
+    /// decoded to `value`. The engine runs the declared-throws contract
+    /// check against `value` and either re-injects it as a catchable
+    /// throw or produces a `HostContractViolation` panic.
     ///
-    /// Used by `complete_host_call` when the host returns `is_error != 0`
-    /// with a `HostCallableError` proto payload.
+    /// Convenience wrapper around [`OpErrorBody::host_thrown_value`] for
+    /// callers (such as `host_dispatch::complete_with_throw`) that produce
+    /// a [`SysOpResult`]-bound `OpError` directly rather than going through
+    /// the [`SysOpOutput`] glue.
+    pub fn host_thrown_value(fn_name: SysOp, value: BexExternalValue) -> Self {
+        OpErrorBody::host_thrown_value(value).into_op_error(fn_name)
+    }
+
+    /// Construct a structured host-callable error (legacy compatibility
+    /// for the `HostCallableError` proto path). Prefer
+    /// [`Self::host_thrown_value`] for new code so the engine sees the
+    /// actual thrown `BexExternalValue` and runs the unified contract
+    /// check.
     pub fn host_callable(
         fn_name: SysOp,
         class_name: String,
@@ -223,6 +253,7 @@ impl OpError {
                     category,
                 },
             ),
+            host_thrown: None,
         }
     }
 }
@@ -232,16 +263,100 @@ pub use bex_vm_types::{
     errors::{VmBamlError, VmPanic, VmRustFnError},
 };
 
-/// `?` conversion for sysop bodies that propagate an `OpFuture`'s
-/// `Result<_, OpError>` into a closure returning `Result<_, VmRustFnError>`.
+/// Sysop-body error carrier: every field of [`OpError`] except `fn_name`.
 ///
-/// Drops `fn_name` — the engine has already attributed the failure to the
-/// originating `SysOp` upstream (the `OpError` only existed to carry that
-/// attribution to the engine boundary). Used by `host_impls::call_host_value`
-/// when awaiting a `SysOpResult::Async` future inside an `async_op` closure.
-impl From<OpError> for bex_vm_types::errors::VmRustFnError {
+/// Used as the error type of [`SysOpOutput::Async`] futures so the body never
+/// has to know which [`SysOp`] variant it belongs to; the glue layer attaches
+/// `fn_name` at the [`SysOpOutput::into_result`] boundary.
+///
+/// Carries `host_thrown` end-to-end so the host-callable throw path can
+/// deliver the decoded thrown `BexExternalValue` to the engine without going
+/// through a lossy intermediate type. Every other sysop simply leaves it as
+/// `None`.
+#[derive(Debug)]
+pub struct OpErrorBody {
+    pub kind: bex_vm_types::errors::VmRustFnError,
+    pub host_thrown: Option<Box<BexExternalValue>>,
+}
+
+impl OpErrorBody {
+    /// Construct an `OpErrorBody` carrying a host-thrown value. The engine's
+    /// `materialize_host_throw` reads `host_thrown` to run the declared-throws
+    /// contract check; `kind` is set to a sentinel `HostCallable` so the
+    /// `Display`/`Error::source` chain still reads coherently if anyone
+    /// inspects it.
+    pub fn host_thrown_value(value: BexExternalValue) -> Self {
+        let (sentinel_class, sentinel_message) = match &value {
+            BexExternalValue::Instance { class_name, fields } => {
+                let msg = fields.get("message").and_then(|v| match v {
+                    BexExternalValue::String(s) => Some(s.as_str().to_string()),
+                    _ => None,
+                });
+                (class_name.as_str().to_string(), msg.unwrap_or_default())
+            }
+            other => (
+                "baml.errors.HostCallable".to_string(),
+                format!("host threw {other:?}"),
+            ),
+        };
+        Self {
+            kind: bex_vm_types::errors::VmRustFnError::BamlError(
+                bex_vm_types::errors::VmBamlError::HostCallable {
+                    class_name: sentinel_class,
+                    message: sentinel_message,
+                    traceback: None,
+                    language: None,
+                    category: 0,
+                },
+            ),
+            host_thrown: Some(Box::new(value)),
+        }
+    }
+
+    /// Attach the originating [`SysOp`], yielding a full [`OpError`] ready
+    /// for [`SysOpResult`].
+    pub fn into_op_error(self, fn_name: SysOp) -> OpError {
+        OpError {
+            fn_name,
+            kind: self.kind,
+            host_thrown: self.host_thrown,
+        }
+    }
+}
+
+impl std::fmt::Display for OpErrorBody {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // `host_thrown` is purely a side-channel for the engine; the
+        // human-facing message lives on `kind`.
+        std::fmt::Display::fmt(&self.kind, f)
+    }
+}
+
+/// Blanket `?`-coercion: any error type that converts into
+/// [`VmRustFnError`] (i.e. [`VmBamlError`], [`VmPanic`], [`VmRustFnError`]
+/// itself, etc.) auto-converts into an [`OpErrorBody`] with no
+/// `host_thrown` payload.
+impl<E: Into<bex_vm_types::errors::VmRustFnError>> From<E> for OpErrorBody {
+    fn from(kind: E) -> Self {
+        Self {
+            kind: kind.into(),
+            host_thrown: None,
+        }
+    }
+}
+
+/// `?` conversion for sysop bodies that await a `SysOpResult::Async` future
+/// (whose error type is the full [`OpError`]) inside an `async_op` closure
+/// returning `Result<_, OpErrorBody>`. Preserves every field of `OpError`
+/// (including `host_thrown`); `fn_name` is dropped because the surrounding
+/// closure will have its own [`SysOp`] attached at the
+/// [`SysOpOutput::into_result`] boundary.
+impl From<OpError> for OpErrorBody {
     fn from(op_err: OpError) -> Self {
-        op_err.kind
+        Self {
+            kind: op_err.kind,
+            host_thrown: op_err.host_thrown,
+        }
     }
 }
 
@@ -351,8 +466,18 @@ pub enum SysOpResult {
 pub enum SysOpOutput<T = BexExternalValue> {
     /// Operation completed synchronously.
     Ready(Result<T, bex_vm_types::errors::VmRustFnError>),
-    /// Operation is async.
-    Async(Pin<Box<dyn Future<Output = Result<T, bex_vm_types::errors::VmRustFnError>> + Send>>),
+    /// Operation is async. The future yields an [`OpErrorBody`] on failure
+    /// so that bodies awaiting an inner [`SysOpResult::Async`] (whose
+    /// error type is [`OpError`]) can propagate fields beyond `kind`
+    /// — notably `host_thrown`, set by
+    /// `sys_native::host_dispatch::complete_with_throw` — through `?`
+    /// without going through a lossy intermediate type.
+    ///
+    /// Most sysop bodies just `?` from `VmBamlError`/`VmRustFnError`,
+    /// which auto-convert via [`OpErrorBody`]'s blanket `From` impl with
+    /// `host_thrown = None`. The host-callable sysop is the one site
+    /// that actively threads a non-`None` `host_thrown`.
+    Async(Pin<Box<dyn Future<Output = Result<T, OpErrorBody>> + Send>>),
 }
 
 impl<T> SysOpOutput<T> {
@@ -392,6 +517,19 @@ impl<T: Send + 'static> SysOpOutput<T> {
     pub fn async_op(
         fut: impl Future<Output = Result<T, bex_vm_types::errors::VmRustFnError>> + Send + 'static,
     ) -> Self {
+        Self::Async(Box::pin(
+            async move { fut.await.map_err(OpErrorBody::from) },
+        ))
+    }
+
+    /// Async constructor for bodies that need to thread a non-`None`
+    /// `host_thrown` through to the engine. Only the host-callable sysop
+    /// uses this; every other sysop calls [`Self::async_op`] and lets the
+    /// blanket `VmRustFnError → OpErrorBody` conversion fill `host_thrown`
+    /// with `None`.
+    pub fn async_op_with_throw(
+        fut: impl Future<Output = Result<T, OpErrorBody>> + Send + 'static,
+    ) -> Self {
         Self::Async(Box::pin(fut))
     }
 }
@@ -408,7 +546,7 @@ impl<T: AsBexExternalValue + Send + 'static> SysOpOutput<T> {
             Self::Async(fut) => SysOpResult::Async(Box::pin(async move {
                 fut.await
                     .map(AsBexExternalValue::into_bex_external_value)
-                    .map_err(|err| OpError::new(op, err))
+                    .map_err(|body| body.into_op_error(op))
             })),
         }
     }
@@ -428,7 +566,7 @@ impl<T: Send + 'static> SysOpOutput<T> {
             Self::Ready(Ok(v)) => SysOpResult::Ready(Ok(f(v))),
             Self::Ready(Err(err)) => SysOpResult::Ready(Err(OpError::new(op, err))),
             Self::Async(fut) => SysOpResult::Async(Box::pin(async move {
-                fut.await.map(f).map_err(|err| OpError::new(op, err))
+                fut.await.map(f).map_err(|body| body.into_op_error(op))
             })),
         }
     }

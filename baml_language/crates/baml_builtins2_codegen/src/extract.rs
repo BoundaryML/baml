@@ -1046,7 +1046,7 @@ mod tests {
             .iter()
             .find(|b| b.path == "baml.fs.open")
             .unwrap();
-        assert_eq!(fs_open.throws, throws(&["Io"]));
+        assert_eq!(fs_open.throws, throws(&["Io", "InvalidArgument"]));
 
         let net_connect = io_builtins
             .iter()

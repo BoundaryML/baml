@@ -17,11 +17,7 @@
 //! and bridge_cffi → sys_native is the one-way dependency direction.
 
 use bex_project::{BexExternalValue, HostReleaseFn, host_release_dispatch};
-use bridge_ctypes::{
-    HANDLE_TABLE,
-    baml_core::cffi::{HostCallableError, InboundValue},
-    inbound_to_external,
-};
+use bridge_ctypes::{HANDLE_TABLE, baml_core::cffi::InboundValue, inbound_to_external};
 use prost::Message;
 use sys_native::host_dispatch;
 /// Signature for invocation requests from BAML to the host.
@@ -148,37 +144,58 @@ pub extern "C" fn complete_host_call(
             ),
         }
     } else {
-        // Error: decode HostCallableError → OpError.
-        let mapped = if bytes.is_empty() {
-            OpError::new(
-                SysOp::BamlHostCallHostValue,
-                VmBamlError::HostCallable {
-                    class_name: String::new(),
-                    message: "host callable returned error with no payload".to_string(),
-                    traceback: None,
-                    language: None,
-                    category: 0,
-                },
-            )
-        } else {
-            match HostCallableError::decode(bytes) {
-                Ok(err) => OpError::host_callable(
-                    SysOp::BamlHostCallHostValue,
-                    err.class_name,
-                    err.message,
-                    err.traceback,
-                    err.language,
-                    err.category,
-                ),
-                Err(e) => OpError::new(
-                    SysOp::BamlHostCallHostValue,
-                    VmBamlError::ParseError {
-                        message: format!("complete_host_call error-payload decode failure: {e}"),
-                    },
-                ),
+        // Throw: decode `InboundValue` → `BexExternalValue` → engine.
+        //
+        // The host bridge SDK wraps native exceptions in a synthetic
+        // `Instance` of class `baml.errors.HostCallable` carrying
+        // `message` / `class_name` / `language` / `traceback` fields
+        // (and a hidden `HostValue(arc, kind=Error)` reference field, on
+        // bridges that support same-host round-trip). Codegenned BAML
+        // values flow through as their own `Instance` / primitive
+        // shape. Either way, the engine's `materialize_host_throw`
+        // runs the declared-throws contract check on this value and
+        // either materialises it as a catchable throw or escalates to
+        // a `HostContractViolation` panic.
+        if bytes.is_empty() {
+            // Defensive: an empty throw payload is an SDK bug, but
+            // surface it as a structurally-valid `baml.errors.HostCallable`
+            // so the engine's unified contract check can still route it.
+            let stub = BexExternalValue::Instance {
+                class_name: "baml.errors.HostCallable".to_string(),
+                fields: ::indexmap::IndexMap::new(),
+            };
+            host_dispatch::complete_with_throw(call_id, stub);
+            return;
+        }
+        let inbound = match InboundValue::decode(bytes) {
+            Ok(v) => v,
+            Err(e) => {
+                host_dispatch::complete_with_error(
+                    call_id,
+                    OpError::new(
+                        SysOp::BamlHostCallHostValue,
+                        VmBamlError::ParseError {
+                            message: format!(
+                                "complete_host_call throw-payload decode failure: {e}"
+                            ),
+                        },
+                    ),
+                );
+                return;
             }
         };
-        host_dispatch::complete_with_error(call_id, mapped);
+        match inbound_to_external(inbound, &HANDLE_TABLE) {
+            Ok(v) => host_dispatch::complete_with_throw(call_id, v),
+            Err(e) => host_dispatch::complete_with_error(
+                call_id,
+                OpError::new(
+                    SysOp::BamlHostCallHostValue,
+                    VmBamlError::ParseError {
+                        message: format!("complete_host_call throw-payload decode failure: {e}"),
+                    },
+                ),
+            ),
+        }
     }
 }
 
@@ -227,21 +244,36 @@ mod tests {
         }
     }
 
-    /// Verify `complete_host_call` with an error payload completes with OpError.
+    /// Verify `complete_host_call(is_error=1)` decodes the `InboundValue`
+    /// payload into a `BexExternalValue` and delivers it through the
+    /// host-throw path (`OpError.host_thrown = Some(...)`). The engine
+    /// runs the contract check on this value downstream — here we just
+    /// pin the wire-side decode + delivery.
     #[tokio::test]
-    async fn complete_host_call_error_payload_completes_error() {
-        use bridge_ctypes::baml_core::cffi::HostCallableErrorCategory;
+    async fn complete_host_call_throw_payload_delivers_external_value() {
+        use bridge_ctypes::baml_core::cffi::{
+            InboundClassValue, InboundMapEntry, InboundValue,
+            inbound_map_entry::Key as InboundMapKey, inbound_value::Value as InboundValueVariant,
+        };
         use prost::Message;
         use sys_types::{SysOp, SysOpResult};
 
-        let err_proto = HostCallableError {
-            class_name: "ValueError".to_string(),
-            message: "bad input".to_string(),
-            traceback: None,
-            language: Some("python".to_string()),
-            category: HostCallableErrorCategory::HostCallableHostError as i32,
+        // Build an InboundValue.Class for `baml.errors.HostCallable` with a
+        // `message` field — mirrors what an SDK encodes when raising a
+        // native host exception through the bridge.
+        let message_entry = InboundMapEntry {
+            key: Some(InboundMapKey::StringKey("message".to_string())),
+            value: Some(InboundValue {
+                value: Some(InboundValueVariant::StringValue("bad input".to_string())),
+            }),
         };
-        let encoded = err_proto.encode_to_vec();
+        let inbound = InboundValue {
+            value: Some(InboundValueVariant::ClassValue(InboundClassValue {
+                name: "baml.errors.HostCallable".to_string(),
+                fields: vec![message_entry],
+            })),
+        };
+        let encoded = inbound.encode_to_vec();
 
         let (result, completion) = SysOpResult::pending(SysOp::BamlHostCallHostValue);
         let id = host_dispatch::next_call_id();
@@ -255,8 +287,22 @@ mod tests {
         match result {
             sys_types::SysOpResult::Async(fut) => {
                 let err = fut.await.expect_err("should be error");
-                let msg = err.to_string();
-                assert!(msg.contains("bad input"), "error message missing: {msg}");
+                let thrown = err
+                    .host_thrown
+                    .as_deref()
+                    .expect("throw payload should set OpError.host_thrown");
+                match thrown {
+                    BexExternalValue::Instance { class_name, fields } => {
+                        assert_eq!(class_name, "baml.errors.HostCallable");
+                        match fields.get("message") {
+                            Some(BexExternalValue::String(s)) => {
+                                assert_eq!(s.as_str(), "bad input");
+                            }
+                            other => panic!("expected `message: String`, got {other:?}"),
+                        }
+                    }
+                    other => panic!("expected Instance, got {other:?}"),
+                }
             }
             sys_types::SysOpResult::Ready(_) => panic!("expected async"),
         }

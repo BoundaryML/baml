@@ -76,6 +76,21 @@ pub enum VmPanic {
     /// system can't rule out negative values.
     #[error("negative bit shift: {message}")]
     NegativeBitShift { message: String },
+
+    /// A host callable returned a value of the wrong type, or threw a value
+    /// that does not match its declared `throws` contract `E`. Surfaces in
+    /// BAML as `baml.panics.HostContractViolation`.
+    ///
+    /// `class_name` / `language` are populated when the violation arose from
+    /// a host throw (echoing the offending host exception's identity) and
+    /// `None` when it arose from a wrong-type return (no exception class to
+    /// echo).
+    #[error("host contract violation: {message} [class={class_name:?}, lang={language:?}]")]
+    HostContractViolation {
+        message: String,
+        class_name: Option<String>,
+        language: Option<String>,
+    },
 }
 
 /// An error value from the BAML standard library. Maps 1:1 to a `baml.errors.*` class.
@@ -132,6 +147,29 @@ pub enum VmBamlError {
 }
 
 impl VmBamlError {
+    /// Fully-qualified BAML class name this error surfaces as (e.g.
+    /// `"baml.errors.Io"`). Mirrors the codegen-generated `ErrorClass`
+    /// enum in `bex_vm`; kept here so crates that only depend on
+    /// `bex_vm_types` (notably `sys_native`'s `host_impls`) can check a
+    /// thrown `VmBamlError` against a declared `Ty` without round-tripping
+    /// through a heap-allocated `Instance`.
+    pub fn class_name(&self) -> &'static str {
+        match self {
+            Self::InvalidArgument { .. } => "baml.errors.InvalidArgument",
+            Self::ParseError { .. } => "baml.errors.ParseError",
+            Self::Io { .. } => "baml.errors.Io",
+            Self::Timeout { .. } => "baml.errors.Timeout",
+            Self::Unsupported { .. } => "baml.errors.Unsupported",
+            Self::AccessError { .. } => "baml.errors.AccessError",
+            Self::RenderPrompt { .. } => "baml.errors.RenderPrompt",
+            Self::NotImplemented { .. } => "baml.errors.NotImplemented",
+            Self::LlmClient { .. } => "baml.errors.LlmClient",
+            Self::DevOther { .. } => "baml.errors.DevOther",
+            Self::HostPanic { .. } => "baml.errors.HostPanic",
+            Self::HostCallable { .. } => "baml.errors.HostCallable",
+        }
+    }
+
     /// Map this `baml.errors.*` value to its contract-level
     /// [`SysOpErrorCategory`] — the finite set of categories that sysop
     /// `#[throws(...)]` annotations reference.

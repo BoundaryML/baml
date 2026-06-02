@@ -1929,6 +1929,7 @@ mod tests {
             SysOpResult::Ready(Err(OpError {
                 fn_name: SysOp::BamlFsOpen,
                 kind: VmRustFnError::BamlError(VmBamlError::Unsupported { .. }),
+                ..
             }))
         ));
 
@@ -1939,6 +1940,7 @@ mod tests {
             SysOpResult::Ready(Err(OpError {
                 fn_name: SysOp::BamlSysShell,
                 kind: VmRustFnError::BamlError(VmBamlError::Unsupported { .. }),
+                ..
             }))
         ));
     }

@@ -2445,6 +2445,24 @@ impl BexVm {
                 let msg = Value::object(self.alloc_string(message));
                 (PanicClass::NegativeBitShift, vec![msg])
             }
+            // Field order matches the `HostContractViolation` class in
+            // `ns_panics/panics.baml`: message, class_name?, language?.
+            // The optionals surface as `Null` when absent.
+            VmPanic::HostContractViolation {
+                message,
+                class_name,
+                language,
+            } => {
+                let msg = Value::object(self.alloc_string(message));
+                let class_name_val =
+                    class_name.map_or(Value::NULL, |c| Value::object(self.alloc_string(c)));
+                let language_val =
+                    language.map_or(Value::NULL, |l| Value::object(self.alloc_string(l)));
+                (
+                    PanicClass::HostContractViolation,
+                    vec![msg, class_name_val, language_val],
+                )
+            }
         };
         self.alloc_panic_value(class, fields)
     }

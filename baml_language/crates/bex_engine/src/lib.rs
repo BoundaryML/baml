@@ -101,7 +101,7 @@ pub use conversion::test_arg_to_external;
 // Re-export CancellationToken for callers.
 pub use function_call_context::{FunctionCallContext, FunctionCallContextBuilder};
 pub use sys_types::{CallId, ClassDefinition, ClassFieldDefinition};
-use sys_types::{OpError, SysOpResult, VmBamlError};
+use sys_types::{OpError, SysOpResult};
 use thiserror::Error;
 pub use tokio_util::sync::CancellationToken;
 use web_time::{Instant, SystemTime};
@@ -538,15 +538,6 @@ fn _default_round_robin_start() -> usize {
     }
 }
 
-/// `HostCallableErrorCategory::HostCallableInvalidArgument` as a plain `i32`.
-///
-/// `bex_engine` depends on `bridge_ctypes` only as a dev-dependency, so the
-/// generated proto enum is not reachable from the library target. The value
-/// is pinned to the proto definition
-/// (`baml_core.cffi.v1.HostCallableErrorCategory`); a wire-numbering change
-/// would be caught by the bridge round-trip tests that own the enum.
-const HOST_CALLABLE_INVALID_ARGUMENT: i32 = 2;
-
 /// Extract an owned `Ty` from a `SysOp::BamlHostCallHostValue` type-arg operand
 /// (an `Object::Type(Box<Ty>)`).
 ///
@@ -580,6 +571,22 @@ fn host_call_type_arg(ty_arg: Option<Value>) -> Option<baml_type::Ty> {
 /// [`BexVm::try_handle_external_exception`] so it unwinds through the
 /// standard VM exception machinery; an in-BAML `catch` matches it like any
 /// other throw.
+/// Pull `class_name` / `language` String fields out of a thrown
+/// `BexExternalValue::Instance` so a host-contract-violation panic can
+/// echo the host's exception identity in its diagnostics. Non-Instance
+/// values return `(None, None)` — the panic message still gets a
+/// human-readable diagnostic from `validate_host_return`.
+fn extract_host_diagnostics(value: &BexExternalValue) -> (Option<String>, Option<String>) {
+    let BexExternalValue::Instance { fields, .. } = value else {
+        return (None, None);
+    };
+    let get = |name| match fields.get(name) {
+        Some(BexExternalValue::String(s)) if !s.is_empty() => Some(s.as_str().to_string()),
+        _ => None,
+    };
+    (get("class_name"), get("language"))
+}
+
 pub(crate) fn op_error_to_throw_value(
     vm: &mut bex_vm::BexVm,
     op_err: OpError,
@@ -1905,14 +1912,25 @@ impl BexEngine {
     /// or process-exit path); `Err` only for engine-internal failures during
     /// value materialization or unwinding (every catchable `VmRustFnError`
     /// variant produces a throw value via [`op_error_to_throw_value`]).
+    ///
+    /// When `op_err.host_thrown` is `Some`, the host language has thrown
+    /// a BAML value. The engine runs the declared-throws contract check
+    /// (`throws_type`) against the value using the same
+    /// `validate_host_return` machinery that's used for return-value
+    /// validation; on-contract → the value is materialised on the heap
+    /// and injected as a catchable throw; off-contract → it becomes a
+    /// `baml.panics.HostContractViolation` panic instead.
     async fn inject_host_call_throw(
         self: &Arc<Self>,
         thread: &mut ActiveHeapPermit<BexThread>,
-        op_err: OpError,
+        mut op_err: OpError,
         throws_type: Option<&Ty>,
     ) -> Result<Option<ThreadOutcome>, EngineError> {
-        let vm_value = op_error_to_throw_value(&mut thread.vm, op_err)
-            .map_err(EngineError::VmInternalError)?;
+        let vm_value = if let Some(thrown_external) = op_err.host_thrown.take() {
+            self.materialize_host_throw(thread, *thrown_external, throws_type)?
+        } else {
+            op_error_to_throw_value(&mut thread.vm, op_err).map_err(EngineError::VmInternalError)?
+        };
         match thread.vm.try_handle_external_exception(vm_value) {
             Ok(()) => Ok(None),
             Err(bex_vm::errors::VmError::ThrownUnhandled { value, trace }) => Ok(Some(
@@ -1933,6 +1951,65 @@ impl BexEngine {
                 Err(EngineError::TracedVmInternalError { source, trace })
             }
         }
+    }
+
+    /// Materialise a host-thrown `BexExternalValue` into a heap `Value`,
+    /// running the declared-throws contract check (`contract`, the
+    /// `type_arg_1` `E` from the sysop signature) along the way.
+    ///
+    /// * **On-contract** (or `contract` is `None`) → convert the external
+    ///   value to a heap `Value` and return it; the caller injects it as
+    ///   a catchable throw.
+    /// * **Off-contract** → synthesise a `baml.panics.HostContractViolation`
+    ///   panic `Value` carrying the host class identity for diagnostics
+    ///   (when the thrown value is an `Instance` with `class_name` /
+    ///   `language` fields).
+    ///
+    /// Uses the existing `bex_external_types::validate_host_return` guard
+    /// (shallow class-identity check, shared with the return-value path)
+    /// followed by the engine-side schema-aware
+    /// [`Self::validate_host_return_schema`] (deep field-type check, also
+    /// shared with the return-value path). Same source of truth as the
+    /// return-side check — no separate type-identity logic.
+    fn materialize_host_throw(
+        self: &Arc<Self>,
+        thread: &mut ActiveHeapPermit<BexThread>,
+        thrown: BexExternalValue,
+        contract: Option<&Ty>,
+    ) -> Result<Value, EngineError> {
+        let mismatch = contract.and_then(|e| {
+            // Shallow first: cheap class-identity / scalar-tag check that
+            // doesn't need the resolved class schema. On a hit, also run
+            // the schema-aware deep check so class field types are
+            // validated against the declared `Ty::Class`.
+            match bex_external_types::validate_host_return(&thrown, e) {
+                Err(err) => Some(err.to_string()),
+                Ok(()) => self.validate_host_return_schema(&thrown, e).err(),
+            }
+        });
+        if let Some(reason) = mismatch {
+            // Off-contract: surface as `baml.panics.HostContractViolation`.
+            // Echo the host's class identity into the panic metadata when
+            // the throw arrived as an `Instance` — the common case: a
+            // bridge SDK wraps a native exception as a
+            // `baml.errors.HostCallable` instance with the host class
+            // recorded in its fields.
+            let (host_class, host_language) = extract_host_diagnostics(&thrown);
+            let panic = bex_vm::errors::VmPanic::HostContractViolation {
+                message: format!(
+                    "host callable threw a value that is not in its declared \
+                     throws contract ({}): {reason}",
+                    contract
+                        .map_or_else(|| "unknown".to_string(), std::string::ToString::to_string),
+                ),
+                class_name: host_class,
+                language: host_language,
+            };
+            return Ok(thread.vm.panic_to_exception_value(panic));
+        }
+        // On-contract: materialise into a heap `Value` so the VM unwinder
+        // can carry it.
+        self.convert_external_to_vm_value(thread, thrown)
     }
 
     /// True if `value` is an `Object::Instance` whose class is
@@ -2418,14 +2495,19 @@ impl BexEngine {
                                 && let Err(message) =
                                     self.validate_host_return_schema(&external, ret_ty)
                             {
+                                // A wrong-return-type at the engine-level
+                                // schema check is the same kind of contract
+                                // breach as the FFI-boundary guard catches:
+                                // the host returned a value that doesn't
+                                // inhabit `T`. Surface as
+                                // `baml.panics.HostContractViolation`
+                                // (panic, not catchable).
                                 let op_err = OpError::new(
                                     SysOp::BamlHostCallHostValue,
-                                    VmBamlError::HostCallable {
-                                        class_name: "TypeError".to_string(),
+                                    sys_types::VmPanic::HostContractViolation {
                                         message,
-                                        traceback: None,
+                                        class_name: None,
                                         language: None,
-                                        category: HOST_CALLABLE_INVALID_ARGUMENT,
                                     },
                                 );
                                 if let Some(outcome) = self

@@ -73,7 +73,7 @@ impl io::IoClassHttpResponse for PlaygroundHttp {
 
         match fetch_info {
             Some((cid, fetch_id)) => match native_result {
-                SysOpOutput::Async(fut) => SysOpOutput::async_op(async move {
+                SysOpOutput::Async(fut) => SysOpOutput::async_op_with_throw(async move {
                     let text = fut.await?;
                     let _ = state.broadcast_tx.send(WsOutMessage::FetchLogUpdate {
                         call_id: cid,
@@ -113,7 +113,7 @@ impl io::IoClassHttpResponse for PlaygroundHttp {
 
         match fetch_info {
             Some((cid, fetch_id)) => match native_result {
-                SysOpOutput::Async(fut) => SysOpOutput::async_op(async move {
+                SysOpOutput::Async(fut) => SysOpOutput::async_op_with_throw(async move {
                     let bytes = fut.await?;
                     let _ = state.broadcast_tx.send(WsOutMessage::FetchLogUpdate {
                         call_id: cid,
@@ -198,7 +198,7 @@ impl io::IoNamespaceHttp for PlaygroundHttp {
         );
 
         match native_result {
-            SysOpOutput::Async(fut) => SysOpOutput::async_op(async move {
+            SysOpOutput::Async(fut) => SysOpOutput::async_op_with_throw(async move {
                 let result = fut.await;
                 let elapsed = start.elapsed().as_millis() as u64;
                 match &result {

@@ -234,6 +234,27 @@ pub fn complete_with_error(call_id: u32, err: OpError) {
     }
 }
 
+/// Complete an in-flight host-callable call with a *thrown value* — the
+/// host language invoked the callable and the callable raised the
+/// decoded `BexExternalValue`. The engine will run the declared-throws
+/// contract check against `value` and either inject it as a catchable
+/// throw or as a `baml.panics.HostContractViolation` panic; see
+/// `bex_engine`'s host-throw delivery path.
+///
+/// Unlike [`complete_with_error`] (which delivers an inherent error from
+/// the bridge / infrastructure layer), this carries a host *throw* that
+/// must be checked against `E` before it can become an unwind value.
+pub fn complete_with_throw(call_id: u32, value: BexExternalValue) {
+    if let Some(c) = take(call_id) {
+        c.complete(Err(OpError::host_thrown_value(
+            sys_types::SysOp::BamlHostCallHostValue,
+            value,
+        )));
+    } else {
+        tracing::warn!("complete_host_call(throw) for unknown call id {call_id}");
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::collections::HashSet;

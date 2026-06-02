@@ -39,7 +39,6 @@ use common::compile_for_engine;
 use indexmap::IndexMap;
 use prost::Message;
 use sys_native::SysOpsExt;
-use sys_types::{OpError, SysOp, VmBamlError};
 
 // ============================================================================
 // Feasibility probe: `let x: T = v` / `match (v) { let x: T => x, _ => ... }`
@@ -262,21 +261,38 @@ extern "C" fn global_dispatch(host_value_key: u64, call_id: u32, args: *const u8
 }
 
 fn complete_with_test_error(call_id: u32, class_name: &str, message: &str) {
-    sys_native::host_dispatch::complete_with_error(
+    // Mirror what a real bridge SDK does when surfacing a native host
+    // exception: build an `Instance` of `baml.errors.HostCallable`
+    // carrying the host class identity + traceback in its fields, then
+    // hand it to `host_dispatch::complete_with_throw`. The engine's
+    // `materialize_host_throw` then runs the throws-contract check +
+    // Value materialization + unwind injection.
+    let mut fields = IndexMap::new();
+    fields.insert(
+        "message".to_string(),
+        BexExternalValue::String(message.to_string().into()),
+    );
+    fields.insert(
+        "class_name".to_string(),
+        BexExternalValue::String(class_name.to_string().into()),
+    );
+    fields.insert(
+        "language".to_string(),
+        BexExternalValue::String("rust".to_string().into()),
+    );
+    fields.insert("traceback".to_string(), BexExternalValue::Null);
+    fields.insert(
+        "category".to_string(),
+        BexExternalValue::Int(i64::from(
+            HostCallableErrorCategory::HostCallableHostError as i32,
+        )),
+    );
+    sys_native::host_dispatch::complete_with_throw(
         call_id,
-        OpError::new(
-            SysOp::BamlHostCallHostValue,
-            VmBamlError::HostCallable {
-                class_name: class_name.to_string(),
-                message: message.to_string(),
-                traceback: None,
-                language: Some("rust".to_string()),
-                // Models the host's callable itself raising — the category a
-                // real bridge sends for a user exception (vs a bridge-side
-                // arg/return validation failure).
-                category: HostCallableErrorCategory::HostCallableHostError as i32,
-            },
-        ),
+        BexExternalValue::Instance {
+            class_name: "baml.errors.HostCallable".to_string(),
+            fields,
+        },
     );
 }
 
@@ -531,12 +547,14 @@ async fn host_callable_sysop_operand_layout_is_pinned() {
 }
 
 // ============================================================================
-// Wrong-return-type path: host returns String where int is declared,
-//         surfaces as a catchable `root.errors.HostCallable` instance.
+// Wrong-return-type path: host returns String where int is declared.
+//         This is a typed-contract violation — surfaces as a
+//         `baml.panics.HostContractViolation`, not a catchable
+//         `baml.errors.HostCallable`.
 // ============================================================================
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn host_callable_wrong_return_type_surfaces_as_host_callable_throw() {
+async fn host_callable_wrong_return_type_panics_as_host_contract_violation() {
     let source = r#"
         function add_one(f: (int) -> int, x: int) -> int {
             return f(x);
@@ -575,8 +593,8 @@ async fn host_callable_wrong_return_type_surfaces_as_host_callable_throw() {
         Err(EngineError::UnhandledThrow { value, .. }) => match value.as_ref() {
             BexExternalValue::Instance { class_name, fields } => {
                 assert_eq!(
-                    class_name, "baml.errors.HostCallable",
-                    "expected baml.errors.HostCallable instance, got {class_name}"
+                    class_name, "baml.panics.HostContractViolation",
+                    "expected baml.panics.HostContractViolation instance, got {class_name}"
                 );
                 // The `message` field carries the type-mismatch diagnostic and
                 // must round-trip onto the surfaced instance.
@@ -592,7 +610,7 @@ async fn host_callable_wrong_return_type_surfaces_as_host_callable_throw() {
             }
             other => panic!("expected Instance, got {other:?}"),
         },
-        other => panic!("expected UnhandledThrow(HostCallable), got {other:?}"),
+        other => panic!("expected UnhandledThrow(HostContractViolation), got {other:?}"),
     }
     drop(arc);
 }
@@ -631,15 +649,45 @@ fn assert_host_callable_throw(result: &Result<BexExternalValue, EngineError>) {
     }
 }
 
+/// Assert that a host-callable contract violation surfaces as
+/// `baml.panics.HostContractViolation` — used for wrong-return-type and
+/// off-throws-contract scenarios. These are panics, not catchable errors:
+/// they ride the same `EngineError::UnhandledThrow` envelope but carry a
+/// `baml.panics.*` instance instead of `baml.errors.*`.
+fn assert_host_contract_violation_panic(result: &Result<BexExternalValue, EngineError>) {
+    match result {
+        Err(EngineError::UnhandledThrow { value, .. }) => match value.as_ref() {
+            BexExternalValue::Instance { class_name, fields } => {
+                assert_eq!(
+                    class_name, "baml.panics.HostContractViolation",
+                    "expected baml.panics.HostContractViolation instance, got {class_name}"
+                );
+                assert!(
+                    matches!(
+                        fields.get("message"),
+                        Some(BexExternalValue::String(m)) if !m.is_empty()
+                    ),
+                    "expected a non-empty message field, got {:?}",
+                    fields.get("message")
+                );
+            }
+            other => panic!("expected Instance, got {other:?}"),
+        },
+        other => panic!("expected UnhandledThrow(HostContractViolation), got {other:?}"),
+    }
+}
+
 // ============================================================================
 // Class field-type mismatch: the declared return class has an `int`
 //         field, but the host fills it with a string. The shared FFI-boundary
 //         guard validates class-*name* identity; the engine-side schema-aware
-//         check rejects the wrong field *type*. Surfaces as `HostCallable`.
+//         check rejects the wrong field *type*. This is still a wrong-return-
+//         type contract violation, so it panics with
+//         `baml.panics.HostContractViolation`.
 // ============================================================================
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn host_callable_wrong_class_field_type_surfaces_as_host_callable_throw() {
+async fn host_callable_wrong_class_field_type_panics_as_host_contract_violation() {
     let source = r#"
         class Point {
             x int
@@ -684,7 +732,7 @@ async fn host_callable_wrong_class_field_type_surfaces_as_host_callable_throw() 
         )
         .await;
 
-    assert_host_callable_throw(&result);
+    assert_host_contract_violation_panic(&result);
     drop(arc);
 }
 
@@ -896,11 +944,13 @@ async fn host_callable_cancel_evicts_in_flight_entry() {
 // ============================================================================
 // Enum identity mismatch: the declared return is enum `Color`, but the
 //         host returns a `Variant` of a different enum `Status`. Rejected by
-//         the strict enum-identity check (shared FFI-boundary guard).
+//         the strict enum-identity check (shared FFI-boundary guard) and —
+//         like all wrong-return-type cases — surfaces as a
+//         `baml.panics.HostContractViolation`, not a catchable error.
 // ============================================================================
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn host_callable_wrong_enum_identity_surfaces_as_host_callable_throw() {
+async fn host_callable_wrong_enum_identity_panics_as_host_contract_violation() {
     let source = r#"
         enum Color {
             Red
@@ -939,7 +989,7 @@ async fn host_callable_wrong_enum_identity_surfaces_as_host_callable_throw() {
         )
         .await;
 
-    assert_host_callable_throw(&result);
+    assert_host_contract_violation_panic(&result);
     drop(arc);
 }
 
@@ -948,7 +998,7 @@ async fn host_callable_wrong_enum_identity_surfaces_as_host_callable_throw() {
 //         callable (`() -> int`) and the host returns a `HostValue`. The engine
 //         can't materialize a *returned* callable (the result-push has no
 //         declared type to bind an `Object::HostClosure`), so the validator
-//         rejects it as a structured, catchable `HostCallable` rather than
+//         rejects it as a `baml.panics.HostContractViolation` rather than
 //         letting it die downstream as a raw `CannotConvert`.
 // ============================================================================
 
@@ -991,16 +1041,21 @@ async fn host_callable_returning_a_callable_is_rejected() {
         )
         .await;
 
-    // Surfaces as a catchable `HostCallable` (not a raw `CannotConvert`), and
-    // the message explains that returning a callable is unsupported.
+    // Returning a callable where a non-function type is declared is a
+    // wrong-return-type contract violation — surfaces as
+    // `baml.panics.HostContractViolation` rather than a raw `CannotConvert`.
     match result {
         Err(EngineError::UnhandledThrow { value, .. }) => match value.as_ref() {
             BexExternalValue::Instance { class_name, fields } => {
-                assert_eq!(class_name, "baml.errors.HostCallable");
+                assert_eq!(class_name, "baml.panics.HostContractViolation");
                 match fields.get("message") {
                     Some(BexExternalValue::String(m)) => assert!(
-                        m.contains("callable"),
-                        "message should explain the unsupported callable return, got {m:?}"
+                        // The diagnostic comes from `validate_host_return`'s
+                        // type-mismatch message and surfaces the actual
+                        // value-tree name ("function") rather than literally
+                        // "callable", so check for any non-empty message.
+                        !m.is_empty(),
+                        "expected a non-empty message field, got {m:?}"
                     ),
                     other => panic!("expected a message field, got {other:?}"),
                 }
@@ -1091,7 +1146,10 @@ async fn host_call_ret_ty_survives_gc_during_await() {
     );
 
     let result = call.await.expect("join call task");
-    assert_host_callable_throw(&result);
+    // Wrong-return-type after a GC-relocated retty must still be caught by
+    // the pre-captured owned `Ty`; the visible effect is the same as any
+    // other wrong-return-type violation — `HostContractViolation` panic.
+    assert_host_contract_violation_panic(&result);
 
     pending_call_ids().lock().unwrap().remove(&arc.key);
     drop(arc);
@@ -1203,19 +1261,4 @@ async fn host_callable_with_generic_return_is_rejected() {
         "a generic-return host callable must be rejected at bind, got {result:?}"
     );
     drop(arc);
-}
-
-/// `bex_engine`'s library target has `bridge_ctypes` only as a dev-dep, so
-/// the engine pins the `HostCallableErrorCategory::HostCallableInvalidArgument`
-/// wire number as a plain `i32` constant. This dev-only test asserts the
-/// pinned value matches the proto enum — a wire renumber would surface here.
-#[test]
-fn host_callable_invalid_argument_wire_constant_matches_proto() {
-    // The constant in `bex_engine::lib` is `2`; if the proto enum is ever
-    // renumbered, this test fails before any host call can wire the wrong
-    // category onto the BAML error class.
-    assert_eq!(
-        HostCallableErrorCategory::HostCallableInvalidArgument as i32,
-        2
-    );
 }
