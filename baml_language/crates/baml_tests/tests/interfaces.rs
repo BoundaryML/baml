@@ -3601,6 +3601,77 @@ fn concrete_receiver_self_param_method_rejects_wrong_arg() {
 }
 
 #[test]
+fn unbounded_generic_forwarded_to_bounded_call_is_rejected() {
+    // Soundness: forwarding an *unbounded* generic `U` into a call requiring
+    // `T extends Equatable` must be rejected — even though the offending type is
+    // itself a type variable. Ordinary inference skips TypeVar→TypeVar binds, so
+    // the bound is checked via the captured correspondence; otherwise `U` (any
+    // type) would reach `eq` and trap at runtime.
+    assert_compile_error_contains(
+        r#"
+        interface Equatable {
+            function eq(self, other: Self) -> bool
+        }
+        function same<T extends Equatable>(x: T) -> bool {
+            return x.eq(x)
+        }
+        function forward<U>(x: U) -> bool {
+            return same(x)
+        }
+        "#,
+        "expected Equatable",
+    );
+}
+
+#[test]
+fn unbounded_generic_forwarded_through_container_is_rejected() {
+    // The same hole, leaked through container structure (`U[]` → `T[]`).
+    assert_compile_error_contains(
+        r#"
+        interface Equatable {
+            function eq(self, other: Self) -> bool
+        }
+        function firstEq<T extends Equatable>(xs: T[]) -> bool {
+            return xs[0].eq(xs[0])
+        }
+        function forward<U>(xs: U[]) -> bool {
+            return firstEq(xs)
+        }
+        "#,
+        "expected Equatable",
+    );
+}
+
+#[tokio::test]
+async fn bounded_generic_forwarded_to_bounded_call_is_accepted() {
+    // The matching case: a properly-bounded `V extends Equatable` forwarded into
+    // `same<T extends Equatable>` satisfies the bound and compiles + runs.
+    let output = baml_test!(
+        r#"
+        interface Equatable {
+            function eq(self, other: Self) -> bool
+        }
+        class Pair {
+            a: int
+            implements Equatable {
+                function eq(self, other: Self) -> bool { return self.a == other.a }
+            }
+        }
+        function same<T extends Equatable>(x: T) -> bool {
+            return x.eq(x)
+        }
+        function forward<V extends Equatable>(x: V) -> bool {
+            return same(x)
+        }
+        function main() -> bool {
+            return forward<Pair>(Pair { a: 1 })
+        }
+        "#
+    );
+    assert_eq!(output.result.unwrap(), BexExternalValue::Bool(true));
+}
+
+#[test]
 fn default_method_returning_self_is_compile_error() {
     assert_compile_error_contains(
         r#"

@@ -2599,11 +2599,34 @@ impl<'db> TypeInferenceBuilder<'db> {
                     }
                 }
 
+                // Capture caller type-variable correspondences so generic
+                // *bounds* are checked even when a callee parameter is matched
+                // against another type variable. Ordinary inference (`bindings`)
+                // skips TypeVar→TypeVar binds, so without this a callee
+                // `T extends Equatable` matched against a caller `U` would never
+                // have `U`'s bound verified — letting an unbounded `U` reach a
+                // bounded position and trap at runtime. A concrete binding always
+                // wins (it is seeded first and `infer_bindings_allow_typevars`
+                // only fills gaps), and these binds are used solely for the bound
+                // check — never for the call's result type.
+                let mut bound_check_bindings = bindings.clone();
+                for (param, arg) in &param_arg_pairs {
+                    let arg_ty = self
+                        .expressions
+                        .get(arg)
+                        .cloned()
+                        .unwrap_or_else(|| self.infer_expr(*arg, body));
+                    crate::generics::infer_bindings_allow_typevars(
+                        &param.ty,
+                        &arg_ty,
+                        &mut bound_check_bindings,
+                    );
+                }
                 self.validate_function_generic_bounds(
                     expr_id,
                     generic_params,
                     generic_param_bounds,
-                    &bindings,
+                    &bound_check_bindings,
                 );
 
                 // Final argument validation after bindings are known. This is
