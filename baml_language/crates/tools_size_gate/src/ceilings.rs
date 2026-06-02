@@ -24,12 +24,14 @@ use crate::{
 /// artifacts (binaries) and `max_gzip_bytes` for gzip-gated ones (WASM).
 /// Existing tables and comments are preserved; only the numeric value on
 /// the ceiling key is replaced.
+///
+/// Returns `true` if the config file was changed on disk.
 pub(crate) fn sync_ceilings(
     workspace_root: &Path,
     config: &Config,
     measurements: &BTreeMap<String, BTreeMap<String, ArtifactMeasurement>>,
     margin_pct: f64,
-) -> Result<()> {
+) -> Result<bool> {
     let config_path = workspace_root.join(".cargo/size-gate.toml");
     let content = std::fs::read_to_string(&config_path)
         .with_context(|| format!("failed to read config: {}", config_path.display()))?;
@@ -66,12 +68,12 @@ pub(crate) fn sync_ceilings(
     let rendered = doc.to_string();
     if rendered == content {
         eprintln!("ceilings unchanged in {}", config_path.display());
-        return Ok(());
+        return Ok(false);
     }
     std::fs::write(&config_path, rendered)
         .with_context(|| format!("failed to write config: {}", config_path.display()))?;
     eprintln!("updated {updates} ceiling(s) in {}", config_path.display());
-    Ok(())
+    Ok(true)
 }
 
 /// `bytes` grown by `margin_pct`, rounded up to the next whole byte.

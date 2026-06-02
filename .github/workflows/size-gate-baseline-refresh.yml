@@ -25,13 +25,14 @@ on:
     - cron: "17 9 * * *"
   workflow_dispatch:
     inputs:
+      branch:
+        description: "Branch whose latest CI sizes to adopt"
+        required: false
+        default: "canary"
       margin_pct:
         description: "Ceiling margin above each recorded size (percent)"
         required: false
         default: "3.0"
-      run_id:
-        description: "Adopt this specific CI run id (default: latest successful canary run)"
-        required: false
 
 permissions:
   contents: read
@@ -56,99 +57,6 @@ jobs:
           ref: canary
           persist-credentials: false
 
-      - name: "Select the canary CI run to adopt + download its reports"
-        id: find
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          RUN_ID_INPUT: ${{ inputs.run_id }}
-        run: |
-          set -euo pipefail
-
-          # The four per-platform report artifacts a complete CI run uploads.
-          # We require ALL of them so a refresh never bakes a partial set
-          # (which would leave some platforms on a stale baseline).
-          need=(size-gate-linux size-gate-macos size-gate-windows size-gate-wasm)
-
-          # True if run $1 has all four size-gate report artifacts.
-          has_all_reports() {
-            local names
-            names=$(gh api --paginate \
-              "repos/${GITHUB_REPOSITORY}/actions/runs/$1/artifacts" \
-              --jq '.artifacts[].name')
-            local n
-            for n in "${need[@]}"; do
-              grep -qxF "$n" <<<"$names" || return 1
-            done
-            return 0
-          }
-
-          if [ -n "${RUN_ID_INPUT:-}" ]; then
-            candidates="$RUN_ID_INPUT"
-          else
-            # Newest-first *completed* canary CI runs, regardless of overall
-            # conclusion. Canary CI is frequently red for reasons unrelated
-            # to size (flaky tests, etc.) while the size-gate jobs themselves
-            # pass and upload valid reports — so the run conclusion is the
-            # wrong signal. We also deliberately do NOT skip runs whose
-            # size-gate flagged a violation: a run that's red because size
-            # grew past the old gate is exactly when a refresh PR should
-            # open. The reviewed (auto-merging) PR is the backstop.
-            candidates=$(gh run list \
-              --workflow ci.yaml \
-              --branch canary \
-              --status completed \
-              --limit 20 \
-              --json databaseId \
-              --jq '.[].databaseId')
-          fi
-
-          run_id=""
-          for id in $candidates; do
-            if has_all_reports "$id"; then
-              run_id="$id"
-              break
-            fi
-            echo "run $id: missing one or more size-gate reports — skipping"
-          done
-
-          if [ -z "$run_id" ]; then
-            echo "::error::No recent completed canary run has all four size-gate reports." >&2
-            exit 1
-          fi
-
-          head_sha=$(gh run view "$run_id" --json headSha --jq '.headSha')
-
-          # `size-gate-*` matches the per-platform reports and NOT the
-          # `cargo-timings-size-gate-*` artifacts (different prefix).
-          gh run download "$run_id" --pattern 'size-gate-*' --dir reports
-
-          # Guard: every downloaded report must parse and carry artifacts.
-          # Also count how many flagged a violation vs the prior baseline —
-          # informational, surfaced in the PR so the reviewer knows the
-          # refresh is re-pegging a real jump.
-          count=0
-          violations=0
-          while IFS= read -r f; do
-            jq -e '.artifacts | type == "array"' "$f" >/dev/null \
-              || { echo "::error::unparseable size-gate report: $f" >&2; exit 1; }
-            count=$((count + 1))
-            if jq -e '.ok == false' "$f" >/dev/null; then
-              violations=$((violations + 1))
-            fi
-          done < <(find reports -name 'size-gate-*.json')
-
-          if [ "$count" -lt "${#need[@]}" ]; then
-            echo "::error::Expected ${#need[@]} size-gate reports, downloaded $count." >&2
-            exit 1
-          fi
-
-          {
-            echo "run_id=$run_id"
-            echo "head_sha=$head_sha"
-            echo "violations=$violations"
-          } >> "$GITHUB_OUTPUT"
-          echo "Adopting size-gate reports from run $run_id ($head_sha); $violations report(s) flagged a violation vs the prior baseline."
-
       - name: "Install Rust toolchain"
         run: rustup show
         working-directory: baml_language
@@ -161,40 +69,44 @@ jobs:
           shared-key: "linux-cargo"
           save-if: false
 
-      - name: "Bake baselines + ceilings (no rebuild)"
+      - name: "Adopt latest CI sizes (bake --branch)"
+        id: bake
         working-directory: baml_language
         env:
+          # `bake --branch` shells out to `gh` to find the newest completed
+          # CI run on the branch that has all four size-gate reports, download
+          # them, and adopt them. This is the SAME path a developer runs
+          # locally to fix a stale baseline — one tool, one code path.
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BRANCH: ${{ inputs.branch || 'canary' }}
           MARGIN_PCT: ${{ inputs.margin_pct || '3.0' }}
-          HEAD_SHA: ${{ steps.find.outputs.head_sha }}
+          REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
-          mapfile -t reports < <(find "$GITHUB_WORKSPACE/reports" -name 'size-gate-*.json' | sort)
-          if [ "${#reports[@]}" -eq 0 ]; then
-            echo "::error::No size-gate JSON reports were downloaded." >&2
-            exit 1
-          fi
           cargo run -p cargo-size-gate -- size-gate bake \
-            "${reports[@]}" \
+            --branch "$BRANCH" \
+            --repo "$REPO" \
             --margin-pct "$MARGIN_PCT" \
-            --git-sha "$HEAD_SHA"
+            --download-dir "$GITHUB_WORKSPACE/reports" \
+            --summary-out "$GITHUB_WORKSPACE/summary.json"
 
-      - name: "Summarize the proposed baseline"
+      - name: "Build the PR body"
         working-directory: baml_language
         env:
-          HEAD_SHA: ${{ steps.find.outputs.head_sha }}
-          RUN_ID: ${{ steps.find.outputs.run_id }}
-          VIOLATIONS: ${{ steps.find.outputs.violations }}
           SERVER_URL: ${{ github.server_url }}
           REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
+          run_id=$(jq -r '.run_id // ""' "$GITHUB_WORKSPACE/summary.json")
+          head_sha=$(jq -r '.head_sha // ""' "$GITHUB_WORKSPACE/summary.json")
+          violations=$(jq -r '.violations // 0' "$GITHUB_WORKSPACE/summary.json")
           mapfile -t reports < <(find "$GITHUB_WORKSPACE/reports" -name 'size-gate-*.json' | sort)
           cargo run -p cargo-size-gate -- size-gate agg "${reports[@]}" > "$GITHUB_WORKSPACE/refresh-body.md"
           {
-            echo "Adopted from canary CI run [\`$HEAD_SHA\`]($SERVER_URL/$REPO/actions/runs/$RUN_ID)."
+            echo "Adopted from CI run [\`$head_sha\`]($SERVER_URL/$REPO/actions/runs/$run_id)."
             echo ""
-            if [ "$VIOLATIONS" -gt 0 ]; then
-              echo "> ⚠️ **$VIOLATIONS platform report(s) exceeded the *previous* gate** — this refresh re-pegs the baseline and ceilings to the sizes below. Confirm the growth is intentional before merging."
+            if [ "$violations" -gt 0 ]; then
+              echo "> ⚠️ **$violations platform report(s) exceeded the *previous* gate** — this refresh re-pegs the baseline and ceilings to the sizes below. Confirm the growth is intentional before merging."
               echo ""
             fi
             cat "$GITHUB_WORKSPACE/refresh-body.md"
