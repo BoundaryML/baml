@@ -3848,7 +3848,6 @@ impl<'db> LoweringContext<'db> {
             };
             if let Some((iface_tn, iface_type_args)) = interface_prefix
                 && self.try_lower_interface_field_access(
-                    expr_id,
                     base_local,
                     &iface_tn,
                     &iface_type_args,
@@ -5978,7 +5977,6 @@ impl<'db> LoweringContext<'db> {
                 .interface_receiver_for_field_access(base, unwrapped_ty)
                 .is_some_and(|(iface_tn, iface_type_args)| {
                     self.try_lower_interface_field_access(
-                        expr_id,
                         base_local,
                         &iface_tn,
                         &iface_type_args,
@@ -6525,7 +6523,6 @@ impl<'db> LoweringContext<'db> {
 
     fn try_lower_interface_field_access(
         &mut self,
-        _expr_id: AstExprId,
         recv_local: Local,
         iface_tn: &TypeName,
         iface_type_args: &[Tir2Ty],
@@ -9304,6 +9301,21 @@ impl LoweringContext<'_> {
         field_pat_id: AstPatId,
         field: &Name,
     ) -> Option<Local> {
+        // BEP-044: an interface head (`Animal { name } => …`) has no positional
+        // field layout — the MIR `Ty` has no interface variant, so it would
+        // otherwise masquerade as a `Ty::Class`. Branch on the raw TIR type and
+        // project the field through the interface field-view dispatch instead.
+        if matches!(
+            self.pat_types.get(&self.pat_metadata_key(class_pat_id)),
+            Some(Tir2Ty::Interface(..))
+        ) {
+            return self.project_interface_pattern_field(
+                scrutinee,
+                class_pat_id,
+                field_pat_id,
+                field,
+            );
+        }
         let class_tn = self.class_pattern_type_name(class_pat_id)?;
         let field_idx = self
             .class_fields
@@ -9329,6 +9341,35 @@ impl LoweringContext<'_> {
             })),
         );
         Some(field_local)
+    }
+
+    /// BEP-044: project a field bound by an *interface* destructure pattern
+    /// (`Animal { name } => …`). The scrutinee's concrete runtime class is not
+    /// known statically, so we can't index a fixed field slot. Instead we reuse
+    /// the interface field-view dispatch (`try_lower_interface_field_access`) —
+    /// the same code that lowers `iface_value.name` — to read the linked field
+    /// off whichever implementor the value actually is.
+    fn project_interface_pattern_field(
+        &mut self,
+        scrutinee: Local,
+        class_pat_id: AstPatId,
+        field_pat_id: AstPatId,
+        field: &Name,
+    ) -> Option<Local> {
+        let tir_ty = self
+            .pat_types
+            .get(&self.pat_metadata_key(class_pat_id))?
+            .clone();
+        let (iface_tn, iface_args) = self.interface_dispatch_target_for_tir_ty(&tir_ty)?;
+        let field_local = self.builder.temp(self.pat_ty(field_pat_id));
+        self.try_lower_interface_field_access(
+            scrutinee,
+            &iface_tn,
+            &iface_args,
+            field,
+            &Place::local(field_local),
+        )
+        .then_some(field_local)
     }
 
     fn const_int_local(&mut self, value: i64) -> Local {

@@ -55,6 +55,23 @@ impl BamlRuntime {
             Err(e) => Err(bridge_error_to_sdk_panic(e)),
         }
     }
+
+    /// Initialize the process-global runtime from serialized BAML bytecode.
+    ///
+    /// Generated SDKs use this path so importing `baml_sdk` can skip parsing
+    /// and compiling the inlined BAML source files.
+    ///
+    /// # Arguments
+    /// * `bytecode` - borsh-encoded BAML bytecode program
+    #[staticmethod]
+    fn initialize_runtime_from_bytecode(bytecode: Vec<u8>) -> PyResult<Self> {
+        match bridge_cffi::initialize_runtime_from_bytecode(&bytecode) {
+            Ok(_bex) => Ok(BamlRuntime),
+            // Handle-returning site: can't hand back envelope bytes, so an
+            // SDK setup failure surfaces as BamlPanic(SdkPanic) (32c).
+            Err(e) => Err(bridge_error_to_sdk_panic(e)),
+        }
+    }
 }
 
 // Manual stub declarations for methods with complex parameter types
