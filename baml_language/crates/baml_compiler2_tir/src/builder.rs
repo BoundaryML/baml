@@ -1495,6 +1495,12 @@ impl<'db> TypeInferenceBuilder<'db> {
         expr_id: ExprId,
     ) -> Ty {
         let base_ty = self.infer_expr(base, body);
+        // If the base already failed to type-check, propagate its
+        // `Unknown`/`Error` instead of cascading a second `TypeIsNotGeneric`
+        // diagnostic (mirrors the normal call path).
+        if matches!(base_ty, Ty::Unknown { .. } | Ty::Error { .. }) {
+            return base_ty;
+        }
         let Ty::Function {
             generic_params,
             generic_param_bounds,

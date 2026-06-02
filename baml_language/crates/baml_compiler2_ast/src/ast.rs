@@ -394,6 +394,11 @@ impl ExprBody {
                 .map(smol_str::SmolStr::as_str)
                 .collect::<Vec<_>>()
                 .join("."),
+            Expr::GenericApply { base, type_args } => {
+                let base = self.display_expr_inner(*base, depth + 1);
+                let tys: Vec<String> = type_args.iter().map(ToString::to_string).collect();
+                format!("{base}<{}>", tys.join(", "))
+            }
             Expr::MemberAccess { base, member } => {
                 format!("{}.{member}", self.display_expr_inner(*base, depth + 1))
             }

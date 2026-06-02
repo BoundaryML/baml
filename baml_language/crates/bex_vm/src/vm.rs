@@ -1446,6 +1446,13 @@ impl BexVm {
             self.get_object(function)
         );
 
+        // Normalize a `GenericFunction` entry point to its concrete inner
+        // function (`dispatch_ptr`) and the stored specialization
+        // (`effective_type_args`), so the bytecode frame and the native/sysop
+        // trampoline both see a real `Object::Function`, never a
+        // `GenericFunction` pointer.
+        let mut dispatch_ptr = function;
+        let mut effective_type_args = type_args;
         let callable_kind = match self.get_object(function) {
             Object::Function(f) => f.kind,
             Object::Closure(closure) => {
@@ -1456,12 +1463,12 @@ impl BexVm {
                 }
             }
             Object::GenericFunction(gf) => {
-                // Resolve the inner function via its global slot.
+                effective_type_args = gf.type_args.to_vec();
                 let inner = self.globals.get(self.proof(), gf.function);
-                let func_ptr = self
+                dispatch_ptr = self
                     .as_object_ptr(inner, FunctionType::Callable.into())
                     .expect("generic function global resolves to a function");
-                match unsafe { func_ptr.get() } {
+                match unsafe { dispatch_ptr.get() } {
                     Object::Function(f) => f.kind,
                     other => unreachable!("expect generic function inner, got {other:?}"),
                 }
@@ -1471,23 +1478,23 @@ impl BexVm {
 
         match callable_kind {
             FunctionKind::Bytecode => {
-                self.pending_call_type_args.clone_from(&type_args);
+                self.pending_call_type_args.clone_from(&effective_type_args);
                 self.stack.extend(args.iter().copied());
                 self.frames.push(Frame::Bytecode(BytecodeFrame {
-                    function,
+                    function: dispatch_ptr,
                     instruction_ptr: 0,
                     locals_offset: StackIndex::from_raw(0),
-                    type_args,
+                    type_args: effective_type_args,
                     faulting_pc: 0,
                 }));
 
                 // Entry functions need the same frame-local pre-allocation as normal
                 // bytecode calls now that INIT_LOCALS is gone from bytecode.
-                self.allocate_real_locals_for_frame(function)
+                self.allocate_real_locals_for_frame(dispatch_ptr)
                     .expect("entry point must be a valid function frame");
             }
             FunctionKind::Native(_) | FunctionKind::SysOp(_) => {
-                self.push_trampoline_frame(function, args, type_args, callable_kind);
+                self.push_trampoline_frame(dispatch_ptr, args, effective_type_args, callable_kind);
             }
             FunctionKind::NativeUnresolved => {
                 unreachable!("entry point kind is not directly invokable: {callable_kind:?}");

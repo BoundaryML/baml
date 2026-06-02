@@ -2031,11 +2031,20 @@ impl LoweringContext {
             .as_ref()
             .map(Self::lower_generic_args_node)
             .unwrap_or_default();
-        // Mark these args as consumed so lowering the callee subtree below does
-        // not also wrap them into an `Expr::GenericApply` (`foo<int>(x)` keeps
-        // its callee a plain path; the `<int>` lives on the `Call`).
-        if let Some(args_node) = &callee_generic_args {
-            self.consumed_generic_args.insert(args_node.text_range());
+        // Mark EVERY `GENERIC_ARGS` node in the callee subtree as consumed, so
+        // lowering the callee/receiver below does not wrap any of them into an
+        // `Expr::GenericApply`. `foo<int>(x)` keeps its callee a plain path (the
+        // `<int>` lives on the `Call`); for `Container<int>.method<U>(x)` the
+        // call uses the method-level `<U>` as its type args while the receiver
+        // `<int>` fills the class's generic params (BEP-039) — neither is a
+        // value-position instantiation, so both must be suppressed here.
+        if let Some(n) = &callee_node {
+            for ga in n
+                .descendants()
+                .filter(|d| d.kind() == SyntaxKind::GENERIC_ARGS)
+            {
+                self.consumed_generic_args.insert(ga.text_range());
+            }
         }
 
         let callee = if let Some(n) = callee_node {
