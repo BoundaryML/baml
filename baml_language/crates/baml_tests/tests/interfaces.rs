@@ -9622,6 +9622,77 @@ fn union_fuzz_pr_concrete_arm_not_callable_despite_recovery_arm() {
     );
 }
 
+/// Calling a method on a union of interfaces where some class implements two of
+/// them (the method declared by both) is ambiguous for that class — a value of
+/// the union could be that class — so reject with E0121 rather than silently
+/// dispatching to the first interface's default ("from-A").
+#[test]
+fn union_fuzz_pr_shared_implementor_method_in_iface_union_is_e0121() {
+    let errors = collect_compile_errors(
+        r#"
+        interface A { function m(self) -> string { return "from-A" } }
+        interface B { function m(self) -> string { return "from-B" } }
+        class C { implements A {} implements B {} }
+        function call(x: A | B) -> string { return x.m() }
+        function main() -> string { let c: A = C {}; return call(c) }
+        "#,
+    );
+    assert!(
+        errors.iter().any(|e| e.starts_with("[E0121]")),
+        "a union of interfaces with a shared ambiguous implementor must be E0121; got:\n  {}",
+        errors.join("\n  ")
+    );
+}
+
+/// A union with the *same* interface that is unambiguous (only one implementor
+/// per interface) must still compile and dispatch.
+#[tokio::test]
+async fn union_fuzz_pr_disjoint_implementors_iface_union_dispatches() {
+    let output = baml_test!(
+        r#"
+        interface A { function m(self) -> string { return "a" } }
+        interface B { function m(self) -> string { return "b" } }
+        class Dog { implements A {} }
+        class Cat { implements B {} }
+        function call(x: A | B) -> string { return x.m() }
+        function main() -> string {
+          let d: A = Dog {}
+          let c: B = Cat {}
+          return call(d) + call(c)
+        }
+        "#
+    );
+    assert_eq!(
+        output.result.unwrap(),
+        BexExternalValue::String("ab".into())
+    );
+}
+
+/// Reflection generic-arg equivalence must use a one-to-one matching of union
+/// members: `Box<int | int>` must NOT be treated as `Box<int | string>` just
+/// because both `int`s on the left match the single `int` on the right.
+#[tokio::test]
+async fn union_fuzz_pr_reflection_duplicate_union_members_not_equivalent() {
+    let output = baml_test!(
+        r#"
+        interface Box<T> { function get(self) -> T }
+        class UBox {
+          value: int
+          implements Box<int | int> { function get(self) -> int | int { return self.value } }
+        }
+        function main() -> int {
+          let ub = reflect.type_of<UBox>()
+          let a = 0
+          // UBox implements Box<int | int>, NOT Box<int | string>.
+          if ub.implements(reflect.type_of<Box<int | int>>()) { a = a + 1 }
+          if ub.implements(reflect.type_of<Box<int | string>>()) { a = a + 10 }
+          return a
+        }
+        "#
+    );
+    assert_eq!(output.result.unwrap(), BexExternalValue::Int(1));
+}
+
 /// F1 [crash]: reading a field declared by an interface member of a union
 /// (`x.name` on `Dog | Named`) type-checks, then the VM aborts with
 /// `expected map, got instance`. SHOULD dispatch on the runtime class -> "Rex".

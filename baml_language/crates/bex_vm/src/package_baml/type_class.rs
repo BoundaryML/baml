@@ -102,11 +102,26 @@ fn ty_args_equivalent(a: &[baml_type::Ty], b: &[baml_type::Ty]) -> bool {
 fn ty_equivalent(a: &baml_type::Ty, b: &baml_type::Ty) -> bool {
     use baml_type::Ty;
     match (a, b) {
-        // Unordered-set comparison of union members (recursive). Equal lengths +
-        // every `a` member matching some `b` member is set equality for the
-        // deduplicated unions the compiler produces.
+        // Order-insensitive comparison of union members via a one-to-one
+        // matching: each `a` member must pair with a *distinct* equivalent `b`
+        // member. A plain `all(|x| any(|y| ...))` would wrongly accept
+        // `int | int` as equivalent to `int | string` (both members of the left
+        // match the single `int` on the right), so consume each matched member.
         (Ty::Union(am, _), Ty::Union(bm, _)) => {
-            am.len() == bm.len() && am.iter().all(|x| bm.iter().any(|y| ty_equivalent(x, y)))
+            if am.len() != bm.len() {
+                return false;
+            }
+            let mut used = vec![false; bm.len()];
+            'next_a: for x in am {
+                for (j, y) in bm.iter().enumerate() {
+                    if !used[j] && ty_equivalent(x, y) {
+                        used[j] = true;
+                        continue 'next_a;
+                    }
+                }
+                return false;
+            }
+            true
         }
         // Recurse into nested generic instantiations (`Box<Slot<int | string>>`).
         (Ty::Class(an, aa, _), Ty::Class(bn, ba, _)) => an == bn && ty_args_equivalent(aa, ba),

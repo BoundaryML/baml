@@ -7676,6 +7676,25 @@ impl<'db> TypeInferenceBuilder<'db> {
                 // If ALL members have the field, return Union(resolved_types).
                 // If any member is missing the field, report per-member errors.
                 let members = members.clone();
+                // A shared implementor of two of the union's interfaces makes an
+                // unqualified method call ambiguous (E0121) — reject it instead
+                // of silently picking the first interface's default.
+                if let Some((class_name, sources)) =
+                    self.union_interface_method_ambiguity(&members, member)
+                {
+                    self.context.report_at_member(
+                        TirTypeError::AmbiguousInterfaceMethod {
+                            class_name,
+                            method_name: member.clone(),
+                            sources,
+                        },
+                        at,
+                        Vec::new(),
+                    );
+                    return Ty::Unknown {
+                        attr: TyAttr::default(),
+                    };
+                }
                 let mut resolved: Vec<(Ty, Option<Ty>)> = Vec::with_capacity(members.len());
                 for m in &members {
                     let r = self.resolve_union_member_ty(m, member, at, bound);
@@ -7999,6 +8018,26 @@ impl<'db> TypeInferenceBuilder<'db> {
                 // Use report_at_segment for missing members so the span points at the
                 // segment token, not the full path.
                 let members = members.clone();
+                // A shared implementor of two of the union's interfaces makes an
+                // unqualified method call ambiguous (E0121) — reject it instead
+                // of silently picking the first interface's default.
+                if let Some((class_name, sources)) =
+                    self.union_interface_method_ambiguity(&members, member)
+                {
+                    self.context.report_at_segment(
+                        TirTypeError::AmbiguousInterfaceMethod {
+                            class_name,
+                            method_name: member.clone(),
+                            sources,
+                        },
+                        path_id,
+                        seg_idx,
+                        Vec::new(),
+                    );
+                    return Ty::Unknown {
+                        attr: TyAttr::default(),
+                    };
+                }
                 let mut resolved: Vec<(Ty, Option<Ty>)> = Vec::with_capacity(members.len());
                 for m in &members {
                     let r = self.resolve_union_member_ty(m, member, path_id, bound);
@@ -8040,6 +8079,65 @@ impl<'db> TypeInferenceBuilder<'db> {
                 self.resolve_member(base_ty, member, path_id, bound)
             }
         }
+    }
+
+    /// Conservative ambiguity check for accessing `member` (a method) on a union
+    /// whose members include interfaces. If some class implements two or more of
+    /// the union's interfaces and `member` is declared by ≥2 of them, then a
+    /// value of the union could be that class — for which a direct
+    /// `value.member()` is rejected as ambiguous (E0121). The static union type
+    /// admits such a class, so the call is genuinely ambiguous; report it rather
+    /// than silently dispatching to the first interface's default.
+    ///
+    /// Returns `(class_name, formatted_sources)` for the E0121 diagnostic, or
+    /// `None` when no shared implementor makes the call ambiguous.
+    fn union_interface_method_ambiguity(
+        &self,
+        members: &[Ty],
+        member: &Name,
+    ) -> Option<(Name, Vec<String>)> {
+        let iface_qtns: FxHashSet<crate::ty::QualifiedTypeName> = members
+            .iter()
+            .filter_map(|m| match m {
+                Ty::Interface(qtn, _, _) => Some(qtn.clone()),
+                _ => None,
+            })
+            .collect();
+        // A single interface can't have a cross-member shared-implementor clash.
+        if iface_qtns.len() < 2 {
+            return None;
+        }
+        let db = self.context.db();
+        let registry = crate::interfaces::package_implements_registry(db, self.package_id);
+        let mut seen: FxHashSet<crate::ty::QualifiedTypeName> = FxHashSet::default();
+        for rule in &registry.interface_impl_rules {
+            let Ty::Interface(rule_iface, _, _) = &rule.interface_ty else {
+                continue;
+            };
+            if !iface_qtns.contains(rule_iface) {
+                continue;
+            }
+            let Ty::Class(class_qtn, _, _) = &rule.for_ty_pattern else {
+                continue;
+            };
+            if !seen.insert(class_qtn.clone()) {
+                continue;
+            }
+            // Which of THIS union's interfaces declare `member` on the class.
+            let sources: Vec<(crate::ty::QualifiedTypeName, Vec<Ty>)> = self
+                .implemented_interface_method_sources(class_qtn, &[], member)
+                .into_iter()
+                .filter(|(_, qtn, _)| iface_qtns.contains(qtn))
+                .map(|(_, qtn, args)| (qtn, args))
+                .collect();
+            if sources.len() >= 2 {
+                return Some((
+                    class_qtn.name().clone(),
+                    self.format_interface_method_sources(sources.into_iter()),
+                ));
+            }
+        }
+        None
     }
 
     /// Resolve `member` on one constituent `m` of a union receiver.
