@@ -1417,6 +1417,7 @@ impl BexVm {
         let type_args = match self.get_object(function) {
             Object::Function(_) => vec![],
             Object::Closure(closure) => closure.captured_type_args.to_vec(),
+            Object::GenericFunction(gf) => gf.type_args.to_vec(),
             other => panic!("expect function or closure as entry point, got {other:?}"),
         };
         self.set_entry_point_with_type_args(function, args, type_args);
@@ -1439,7 +1440,7 @@ impl BexVm {
         debug_assert!(
             matches!(
                 self.get_object(function),
-                Object::Function(_) | Object::Closure(_)
+                Object::Function(_) | Object::Closure(_) | Object::GenericFunction(_)
             ),
             "expect function or closure as entry point, got {:?}",
             self.get_object(function)
@@ -1452,6 +1453,17 @@ impl BexVm {
                 match func_obj {
                     Object::Function(f) => f.kind,
                     other => unreachable!("expect closure function, got {other:?}"),
+                }
+            }
+            Object::GenericFunction(gf) => {
+                // Resolve the inner function via its global slot.
+                let inner = self.globals.get(self.proof(), gf.function);
+                let func_ptr = self
+                    .as_object_ptr(inner, FunctionType::Callable.into())
+                    .expect("generic function global resolves to a function");
+                match unsafe { func_ptr.get() } {
+                    Object::Function(f) => f.kind,
+                    other => unreachable!("expect generic function inner, got {other:?}"),
                 }
             }
             other => unreachable!("expect function or closure as entry point, got {other:?}"),

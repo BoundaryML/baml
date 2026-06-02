@@ -244,6 +244,14 @@ fn deep_equals_recursive(
 
                 (Object::Function(_), Object::Function(_)) => a_ptr == b_ptr,
 
+                // GenericFunction values compare structurally (same base
+                // function + same type args). The interned/pooled case already
+                // short-circuits via the `a_ptr == b_ptr` fast path above; this
+                // arm covers non-pooled copies (e.g. from `baml.deep_copy`).
+                (Object::GenericFunction(a_gf), Object::GenericFunction(b_gf)) => {
+                    a_gf.function == b_gf.function && a_gf.type_args == b_gf.type_args
+                }
+
                 (Object::Future(a_fut), Object::Future(b_fut)) => {
                     match (a_fut.read(), b_fut.read()) {
                         (FutureRead::Ready(a_val), FutureRead::Ready(b_val)) => {

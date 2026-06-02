@@ -30,6 +30,18 @@ test "same_specialization_is_identical" {
     assert.is_true(identity_same_specialization())
 }
 
+// A deep-copied generic-function value compares equal to the original: the
+// pooled/interned case short-circuits on pointer identity, and `deep_equals`
+// also compares non-pooled copies structurally (function + type args).
+function identity_deep_copy_equal() -> bool {
+    let f = identity<int>;
+    baml.deep_equals(f, baml.deep_copy(f))
+}
+
+test "deep_copy_compares_equal" {
+    assert.is_true(identity_deep_copy_equal())
+}
+
 // Multiple bound type args: `pair<int, string>` specializes both params and
 // runs end-to-end, returning the second (string) argument.
 function pair<A, B>(a: A, b: B) -> B { b }

@@ -15,26 +15,32 @@ function instantiation_expr.$init_test_ns_instantiation_expr_instantiation_expr(
     call testing.TestCollector.register_test
     pop 1
     load_var registry
-    load_const "pair_two_type_args_value_runs"
+    load_const "deep_copy_compares_equal"
     make_closure .<lambda($init_test_ns_instantiation_expr_instantiation_expr, 2)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
-    load_const "reflect_type_of_through_value"
+    load_const "pair_two_type_args_value_runs"
     make_closure .<lambda($init_test_ns_instantiation_expr_instantiation_expr, 3)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
-    load_const "json_native_through_value"
+    load_const "reflect_type_of_through_value"
     make_closure .<lambda($init_test_ns_instantiation_expr_instantiation_expr, 4)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
-    load_const "param_dependent_instantiation_runs"
+    load_const "json_native_through_value"
     make_closure .<lambda($init_test_ns_instantiation_expr_instantiation_expr, 5)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "param_dependent_instantiation_runs"
+    make_closure .<lambda($init_test_ns_instantiation_expr_instantiation_expr, 6)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
@@ -69,6 +75,16 @@ function instantiation_expr.from_string_value_fn() -> instantiation_expr.User {
 
 function instantiation_expr.identity(x: void) -> void {
     load_var x
+    return
+}
+
+function instantiation_expr.identity_deep_copy_equal() -> bool {
+    load_const user.instantiation_expr.identity<...>
+    call baml.deep_copy
+    store_var _3
+    load_const user.instantiation_expr.identity<...>
+    load_var _3
+    call baml.deep_equals
     return
 }
 
