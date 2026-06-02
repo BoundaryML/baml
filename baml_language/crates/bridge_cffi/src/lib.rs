@@ -16,7 +16,6 @@ use std::{
     sync::{Arc, RwLock},
 };
 
-use bex_engine::BexEngine;
 use bex_project::Bex;
 use bridge_ctypes::{DecodeFromBuffer, HANDLE_TABLE, kwargs_to_bex_values};
 use futures::future::FutureExt;
@@ -112,20 +111,16 @@ pub fn initialize_runtime(
 
 /// Initialize the global runtime from serialized BAML bytecode.
 ///
-/// The payload is the same borsh-encoded [`bex_vm_types::Program`] that
-/// `baml pack` embeds in its pack envelope.
+/// The payload is the same borsh-encoded `bex_vm_types::Program` that
+/// `baml pack` embeds in its pack envelope. Decoding and engine construction
+/// live behind `bex_project::new_from_bytecode` so the bridge stays on the
+/// `bex_project` surface rather than reaching into bex internals.
 pub fn initialize_runtime_from_bytecode(bytecode: &[u8]) -> Result<Arc<dyn Bex>, BridgeError> {
-    let program: bex_vm_types::Program = borsh::from_slice(bytecode)
-        .map_err(|e| BridgeError::Internal(format!("Failed to deserialize BAML bytecode: {e}")))?;
-
-    let engine = BexEngine::new(
-        program,
-        Arc::new(bex_project::SysOps::native()),
+    let rt: Arc<dyn Bex> = bex_project::new_from_bytecode(
+        bytecode,
+        bex_project::SysOps::native(),
         runtime_event_sink(),
-        vec![],
-    )
-    .map_err(bex_project::RuntimeError::from)?;
-    let rt: Arc<dyn Bex> = Arc::new(engine);
+    )?;
 
     replace_runtime(rt.clone())?;
 
