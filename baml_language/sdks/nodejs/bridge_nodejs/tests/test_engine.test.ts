@@ -1,7 +1,7 @@
 // test_engine.test.ts — mirrors bridge_python/tests/test_engine.py
 
 import { BamlRuntime, callFunctionSync, callFunction,
-         AbortController, getVersion, flushEvents } from '../index';
+         AbortController, getRuntime, getVersion, flushEvents } from '../index';
 
 const BAML_SOURCE = `
 function ReturnOne() -> int {
@@ -46,7 +46,7 @@ function RectOrDirection(useRect: bool) -> Rect | Direction {
 `;
 
 function makeRuntime(bamlSource: string): BamlRuntime {
-    return BamlRuntime.fromFiles('.', { 'main.baml': bamlSource });
+    return BamlRuntime.initializeRuntime('.', { 'main.baml': bamlSource });
 }
 
 describe('Basics', () => {
@@ -63,6 +63,13 @@ describe('Basics', () => {
 
     test('flush_events runs without error', () => {
         expect(() => flushEvents()).not.toThrow();
+    });
+
+    test('getRuntime returns initialized runtime', () => {
+        // initializeRuntime sets the process-global singleton; getRuntime fetches it.
+        makeRuntime(BAML_SOURCE);
+        const rt = getRuntime();
+        expect(callFunctionSync(rt, 'ReturnOne', {}).result()).toBe(1);
     });
 });
 

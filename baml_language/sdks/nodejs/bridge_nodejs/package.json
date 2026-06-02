@@ -1,8 +1,14 @@
 {
-  "name": "@boundaryml/baml-node",
+  "name": "@boundaryml/baml-core-node",
   "version": "0.0.0-beta",
   "main": "index.js",
   "types": "index.d.ts",
+  "files": [
+    "*.js",
+    "*.d.ts",
+    "proto",
+    "*.node"
+  ],
   "napi": {
     "binaryName": "baml_node",
     "targets": [
@@ -22,8 +28,9 @@
     "build:napi-release": "napi build --js ./native.js --dts ./native.d.ts --platform --release && cp native.d.ts typescript_src/native.d.ts",
     "build:ts_build": "tsc -p tsconfig.json",
     "build:tag-generated-files": "node typescript_src/tag-generated-files.js",
-    "build:debug": "pnpm build:proto && pnpm build:napi-debug && pnpm build:ts_build && pnpm build:tag-generated-files",
-    "build:release": "pnpm build:proto && pnpm build:napi-release && pnpm build:ts_build && pnpm build:tag-generated-files",
+    "build:copy-proto": "node typescript_src/copy-proto.js",
+    "build:debug": "pnpm build:proto && pnpm build:napi-debug && pnpm build:ts_build && pnpm build:tag-generated-files && pnpm build:copy-proto",
+    "build:release": "pnpm build:proto && pnpm build:napi-release && pnpm build:ts_build && pnpm build:tag-generated-files && pnpm build:copy-proto",
     "test": "jest"
   },
   "devDependencies": {
@@ -36,7 +43,7 @@
     "typescript": "^5.4.5"
   },
   "dependencies": {
-    "protobufjs": "^7.4.0"
+    "protobufjs": "^7.6.2"
   },
   "jest": {
     "preset": "ts-jest",
