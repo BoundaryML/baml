@@ -8048,7 +8048,16 @@ impl<'db> TypeInferenceBuilder<'db> {
             // The union-callee fold requires every arm to share a shape and
             // skips `self` for method calls, so re-attach a `self` param here
             // to match the class arms (`(self: Animal) -> R`, not `() -> R`).
-            return ty.map(|t| Self::prepend_self_param_if_method(t, self_ty.clone(), bound));
+            // Only for actual methods — a function-typed interface *field* must
+            // keep its declared signature rather than gain a phantom `self`.
+            let is_method = self.interface_closure_declares_method(&iface_name, member);
+            return ty.map(|t| {
+                if is_method {
+                    Self::prepend_self_param_if_method(t, self_ty.clone(), bound)
+                } else {
+                    t
+                }
+            });
         }
         // Class / primitive member: the read-only probe handles its own fields
         // and methods.

@@ -9465,6 +9465,92 @@ async fn union_fuzz_class_only_union_method_dispatch() {
     );
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// PR #3638 review follow-ups: extra union cases surfaced by CodeRabbit/Cursor on
+// the F1–F17 fix branch. Each reproduced a real bug before the follow-up fix.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// A class-only union whose members satisfy a method only through an *inherited*
+/// interface default (`class Dog { implements Greeter {} }`) used to type-check
+/// and then crash the VM (`expected map, got instance`) because the union
+/// dispatch resolved only direct class methods. It must dispatch the inherited
+/// default on the runtime class.
+#[tokio::test]
+async fn union_fuzz_pr_class_union_inherited_default_method() {
+    let output = baml_test!(
+        r#"
+        interface Greeter {
+          function greet(self) -> string { return "hello" }
+        }
+        class Dog { implements Greeter {} }
+        class Cat { implements Greeter {} }
+        function describe(x: Dog | Cat) -> string { return x.greet() }
+        function main() -> string { return describe(Dog {}) + "/" + describe(Cat {}) }
+        "#
+    );
+    assert_eq!(
+        output.result.unwrap(),
+        BexExternalValue::String("hello/hello".into())
+    );
+}
+
+/// Reflection generic-arg equivalence must treat unions nested inside wrappers
+/// (`Box<(int | string)?>`) order-insensitively too — the `Optional`/`List`/`Map`
+/// layers used to fall back to structural equality and defeat the union-set
+/// comparison, so the reversed `Box<(string | int)?>` answered `false`.
+#[tokio::test]
+async fn union_fuzz_pr_reflection_nested_union_arg_order_insensitive() {
+    let output = baml_test!(
+        r#"
+        interface Box<T> { function get(self) -> T }
+        class UBox {
+          value: int
+          implements Box<(int | string)?> {
+            function get(self) -> (int | string)? { return self.value }
+          }
+        }
+        function main() -> int {
+          let ub = reflect.type_of<UBox>()
+          let fwd = reflect.type_of<Box<(int | string)?>>()
+          let rev = reflect.type_of<Box<(string | int)?>>()
+          let a = 0
+          if ub.implements(fwd) { a = a + 1 }
+          if ub.implements(rev) { a = a + 10 }
+          return a
+        }
+        "#
+    );
+    assert_eq!(output.result.unwrap(), BexExternalValue::Int(11));
+}
+
+/// A function-typed interface *field* in a union must keep its declared
+/// signature: the union-member resolver used to prepend a phantom `self` to any
+/// function-typed member, turning `(int) -> string` into
+/// `(self: I, int) -> string` and breaking the union callee shape.
+#[tokio::test]
+async fn union_fuzz_pr_function_typed_interface_field_in_union() {
+    let output = baml_test!(
+        r#"
+        interface HasHandler { handler: (int) -> string }
+        class A {
+          handler: (int) -> string
+          label: string
+          implements HasHandler {}
+        }
+        function getHandler(x: HasHandler | A) -> (int) -> string { return x.handler }
+        function main() -> string {
+          let a: HasHandler = A { handler: (n: int) -> string { return "handled" }, label: "a" }
+          let h = getHandler(a)
+          return h(5)
+        }
+        "#
+    );
+    assert_eq!(
+        output.result.unwrap(),
+        BexExternalValue::String("handled".into())
+    );
+}
+
 /// F1 [crash]: reading a field declared by an interface member of a union
 /// (`x.name` on `Dog | Named`) type-checks, then the VM aborts with
 /// `expected map, got instance`. SHOULD dispatch on the runtime class -> "Rex".
@@ -9576,9 +9662,12 @@ fn union_fuzz_f04_string_plus_int_is_type_error_not_vm_crash() {
         "#,
     );
     assert!(
-        !errors.is_empty(),
-        "`string + int` must be rejected by the type-checker (it currently infers `string` \
-         but the VM aborts with `cannot apply binary operation: string + int`); got no errors"
+        errors
+            .iter()
+            .any(|e| e.starts_with("[E0004]") && e.contains("Add")),
+        "`string + int` must be rejected with an InvalidBinaryOp (E0004) naming `Add` \
+         (it used to infer `string` and abort the VM); got:\n  {}",
+        errors.join("\n  ")
     );
 }
 
@@ -9808,10 +9897,13 @@ fn union_fuzz_f11_conflicting_union_field_read_is_rejected() {
         "#,
     );
     assert!(
-        !errors.is_empty(),
+        errors
+            .iter()
+            .any(|e| e.starts_with("[E0001]") && e.contains("bool")),
         "reading a field with conflicting types across union-interface members must be \
-         rejected — it currently type-checks even against a `bool` target (soundness hole); \
-         got no compile errors"
+         rejected with a type mismatch (E0001) against the `bool` target — it used to \
+         type-check unsoundly against any target; got:\n  {}",
+        errors.join("\n  ")
     );
 }
 
@@ -9880,6 +9972,14 @@ fn union_fuzz_f13_exhaustiveness_witness_does_not_leak_user_prefix() {
           return describe(d)
         }
         "#,
+    );
+    // First require the E0062 non-exhaustive-match diagnostic to actually fire,
+    // so the no-`user.` check below can't pass vacuously if exhaustiveness ever
+    // stops being reported.
+    assert!(
+        errors.iter().any(|e| e.starts_with("[E0062]")),
+        "expected an E0062 non-exhaustive-match error; got:\n  {}",
+        errors.join("\n  ")
     );
     assert!(
         errors.iter().all(|e| !e.contains("user.")),

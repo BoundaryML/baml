@@ -6466,25 +6466,21 @@ impl<'db> LoweringContext<'db> {
         members: &[Tir2Ty],
         method: &Name,
     ) -> Option<Vec<InterfaceMethodCandidate>> {
-        // Pure class unions are handled by `try_lower_union_dispatch`; only step
-        // in when an interface member is present.
-        if !members.iter().any(|m| matches!(m, Tir2Ty::Interface(..))) {
-            return None;
-        }
+        // This runs only after `emit_union_class_dispatch` (the direct-method
+        // class-union path) has declined, so it also covers a *pure class* union
+        // whose members satisfy `method` through an inherited interface default
+        // (`class Dog { implements Greeter {} }`), not just unions that name an
+        // interface member directly.
         let mut candidates: Vec<InterfaceMethodCandidate> = Vec::new();
         for member in members {
             match member {
                 Tir2Ty::Class(qtn, _, _) => {
                     let class_tn = qtn_to_type_name(qtn);
-                    let item_ref = self.class_method_item_ref_by_name(&class_tn, method)?;
-                    candidates.push(InterfaceMethodCandidate {
-                        guard: InterfaceDispatchGuard::Type(Ty::Class(
-                            class_tn,
-                            Vec::new(),
-                            TyAttr::default(),
-                        )),
-                        item_ref,
-                    });
+                    let member_candidates = self.class_member_method_candidates(&class_tn, method);
+                    if member_candidates.is_empty() {
+                        return None;
+                    }
+                    candidates.extend(member_candidates);
                 }
                 Tir2Ty::Interface(..) => {
                     let (iface_tn, iface_type_args) =
@@ -6500,6 +6496,79 @@ impl<'db> LoweringContext<'db> {
             }
         }
         Some(candidates)
+    }
+
+    /// Dispatch candidates for calling `method` on a concrete-class union member.
+    /// A direct own/override method dispatches on the class tag; otherwise the
+    /// method may be supplied by an interface the class implements — an inherited
+    /// `implements I {}` default, a field-link, or an out-of-body
+    /// `implements I for C` — so fall back to the same implementor resolution
+    /// used for interface arms. Without this, a `Dog | Cat` union whose members
+    /// satisfy a method only through an inherited default resolved to nothing and
+    /// the call dispatched as a map read (VM `expected map, got instance`).
+    fn class_member_method_candidates(
+        &self,
+        class_tn: &TypeName,
+        method: &Name,
+    ) -> Vec<InterfaceMethodCandidate> {
+        if let Some(item_ref) = self.class_method_item_ref_by_name(class_tn, method) {
+            return vec![InterfaceMethodCandidate {
+                guard: InterfaceDispatchGuard::Type(Ty::Class(
+                    class_tn.clone(),
+                    Vec::new(),
+                    TyAttr::default(),
+                )),
+                item_ref,
+            }];
+        }
+        let Some(class_loc) = self.resolve_class_loc_by_type_name(class_tn) else {
+            return Vec::new();
+        };
+        let class_tree = file_item_tree(self.db, class_loc.file(self.db));
+        let class_data = &class_tree[class_loc.id(self.db)];
+        let mut out = Vec::new();
+        for impl_block in &class_data.implements {
+            if let Some((iface_tn, iface_args)) =
+                self.resolve_implements_target_view(&impl_block.target, class_loc)
+            {
+                out.extend(self.resolve_implementor_method_candidates(
+                    class_tn,
+                    &iface_tn,
+                    &iface_args,
+                    method,
+                ));
+            }
+        }
+        out
+    }
+
+    /// Field-read candidates for a concrete-class union member whose `field` is
+    /// supplied by an interface view (`implements Named { name as full }`) rather
+    /// than a class-owned slot. Mirrors [`class_member_method_candidates`].
+    fn class_member_field_candidates(
+        &self,
+        class_tn: &TypeName,
+        field: &Name,
+    ) -> Vec<InterfaceFieldCandidate> {
+        let Some(class_loc) = self.resolve_class_loc_by_type_name(class_tn) else {
+            return Vec::new();
+        };
+        let class_tree = file_item_tree(self.db, class_loc.file(self.db));
+        let class_data = &class_tree[class_loc.id(self.db)];
+        let mut out = Vec::new();
+        for impl_block in &class_data.implements {
+            if let Some((iface_tn, iface_args)) =
+                self.resolve_implements_target_view(&impl_block.target, class_loc)
+            {
+                out.extend(self.resolve_implementor_interface_field_candidates(
+                    class_tn,
+                    &iface_tn,
+                    &iface_args,
+                    field,
+                ));
+            }
+        }
+        out
     }
 
     /// Emit a class-tag dispatch switch for a method call whose receiver
@@ -6746,27 +6815,37 @@ impl<'db> LoweringContext<'db> {
         field: &Name,
         dest: &Place,
     ) -> bool {
-        if !members.iter().any(|m| matches!(m, Tir2Ty::Interface(..))) {
-            return false;
-        }
+        // Runs only after `lower_union_class_field_access` declines, so it also
+        // covers a pure class union whose `field` is supplied by an interface
+        // view rather than a class-owned slot.
         let mut resolved: Vec<InterfaceFieldCandidate> = Vec::new();
         for member in members {
             match member {
                 Tir2Ty::Class(qtn, _, _) => {
                     let class_tn = qtn_to_type_name(qtn);
-                    let Some(field_idx) = self
+                    if let Some(field_idx) = self
                         .class_fields
                         .get(&class_tn)
                         .and_then(|fields| fields.get(field.as_str()))
                         .copied()
-                    else {
-                        return false;
-                    };
-                    resolved.push(InterfaceFieldCandidate {
-                        impl_tn: class_tn,
-                        guard: InterfaceClassGuard::Any,
-                        field_idx,
-                    });
+                    {
+                        resolved.push(InterfaceFieldCandidate {
+                            impl_tn: class_tn,
+                            guard: InterfaceClassGuard::Any,
+                            field_idx,
+                        });
+                    } else {
+                        // The field may be supplied by an interface view
+                        // (`implements Named { name as full }`) rather than a
+                        // class-owned slot. Resolve it through the class's
+                        // implemented interfaces, mirroring the method path.
+                        let member_candidates =
+                            self.class_member_field_candidates(&class_tn, field);
+                        if member_candidates.is_empty() {
+                            return false;
+                        }
+                        resolved.extend(member_candidates);
+                    }
                 }
                 Tir2Ty::Interface(..) => {
                     let Some((iface_tn, iface_type_args)) =
@@ -7648,9 +7727,13 @@ impl<'db> LoweringContext<'db> {
                         ) else {
                             continue;
                         };
-                        if !out.iter().any(|(tn, _)| tn == impl_tn) {
-                            out.push((impl_tn.clone(), guard));
-                        }
+                        // Push every matching guard — a generic class can satisfy
+                        // the requested instantiation through more than one
+                        // type-arg projection (`Pair<L, R>` implementing
+                        // `Slot<L>` and `Slot<R>`), and dropping all but the first
+                        // would make some runtime values fail the `is` test.
+                        // Redundant identical branches are harmless (both succeed).
+                        out.push((impl_tn.clone(), guard));
                     }
                 }
             }
@@ -10522,15 +10605,17 @@ impl LoweringContext<'_> {
         if self.pattern_contains_structural(pat_id) {
             return None;
         }
-        // A generic-interface pattern (`Slot<int>`) cannot be discriminated by a
+        // A generic-interface pattern (`Slot<int>`, or one nested in a union /
+        // optional like `Slot<int> | Slot<string>`) cannot be discriminated by a
         // flat type-tag switch: every instantiation shares the bare interface's
-        // implementor tags, so two arms (`Slot<int>` / `Slot<string>`) would
-        // collide and the first would wrongly capture both. Disqualify the
-        // switch so the match-chain runtime test — which filters implementors by
-        // the specific instantiation — is used instead.
-        if let Some(Tir2Ty::Interface(_, type_args, _)) =
-            self.pat_types.get(&self.pat_metadata_key(pat_id))
-            && !type_args.is_empty()
+        // implementor tags, so arms would collide and the first would wrongly
+        // capture all of them. Disqualify the switch (recursively) so the
+        // match-chain runtime test — which filters implementors by the specific
+        // instantiation — is used instead.
+        if self
+            .pat_types
+            .get(&self.pat_metadata_key(pat_id))
+            .is_some_and(Self::tir_ty_needs_generic_interface_test)
         {
             return None;
         }

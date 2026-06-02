@@ -110,6 +110,21 @@ fn ty_equivalent(a: &baml_type::Ty, b: &baml_type::Ty) -> bool {
         }
         // Recurse into nested generic instantiations (`Box<Slot<int | string>>`).
         (Ty::Class(an, aa, _), Ty::Class(bn, ba, _)) => an == bn && ty_args_equivalent(aa, ba),
+        // Recurse through container/optional wrappers so a union nested inside
+        // them is still compared order-insensitively (`Box<(int | string)?>` ==
+        // `Box<(string | int)?>`); otherwise the wrapper would fall to the
+        // structural `==` below and defeat the union-set comparison.
+        (Ty::Optional(ai, _), Ty::Optional(bi, _)) | (Ty::List(ai, _), Ty::List(bi, _)) => {
+            ty_equivalent(ai, bi)
+        }
+        (
+            Ty::Map {
+                key: ak, value: av, ..
+            },
+            Ty::Map {
+                key: bk, value: bv, ..
+            },
+        ) => ty_equivalent(ak, bk) && ty_equivalent(av, bv),
         _ => a == b,
     }
 }
