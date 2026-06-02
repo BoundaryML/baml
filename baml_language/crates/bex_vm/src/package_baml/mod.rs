@@ -32,6 +32,7 @@ mod stack_trace;
 mod string;
 mod sys;
 mod time;
+mod toml;
 mod type_class;
 mod uint8array;
 mod unstable;

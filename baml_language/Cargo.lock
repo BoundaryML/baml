@@ -1440,6 +1440,7 @@ dependencies = [
  "thiserror 2.0.18",
  "time",
  "tokio",
+ "toml 0.8.23",
  "web-time",
 ]
 
