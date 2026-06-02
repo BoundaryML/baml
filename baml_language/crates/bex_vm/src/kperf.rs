@@ -99,8 +99,12 @@ mod imp {
                 eprintln!("[kperf] kpc_force_all_ctrs_set failed (need sudo); disabled");
                 return false;
             }
-            set_counting(KPC_CLASS_FIXED_MASK);
-            set_thread(KPC_CLASS_FIXED_MASK);
+            // kpc_* return 0 on success; bail (fail closed) on any error so a
+            // failed setup never feeds zeroed reads into the wrapping deltas.
+            if set_counting(KPC_CLASS_FIXED_MASK) != 0 || set_thread(KPC_CLASS_FIXED_MASK) != 0 {
+                eprintln!("[kperf] failed to enable counting (need sudo?); disabled");
+                return false;
+            }
             let n = count(KPC_CLASS_FIXED_MASK);
             if n < 2 {
                 eprintln!("[kperf] fixed counter count {n} < 2; disabled");
@@ -115,33 +119,41 @@ mod imp {
         }
     }
 
-    /// Read (cycles, instructions) for the current thread. Apple fixed PMCs are
+    /// Read (cycles, instructions) for the current thread, or `None` if the
+    /// counters aren't live or the kernel rejects the read. Apple fixed PMCs are
     /// [cycles, instructions, ...].
     #[inline]
-    fn read() -> (u64, u64) {
+    fn read() -> Option<(u64, u64)> {
         let f = GET_THREAD.load(Ordering::Relaxed);
         if f == 0 {
-            return (0, 0);
+            return None;
         }
         let get_thread: GetThread = unsafe { std::mem::transmute(f as usize as *const c_void) };
         let n = N_FIXED.load(Ordering::Relaxed);
         let mut buf = [0u64; 32];
-        get_thread(0, n, buf.as_mut_ptr());
-        (buf[0], buf[1])
+        // Non-zero return (e.g. EINVAL on too-small a buffer) means the values
+        // are garbage; reject so they don't become huge wrapped deltas.
+        if get_thread(0, n, buf.as_mut_ptr()) != 0 {
+            return None;
+        }
+        Some((buf[0], buf[1]))
     }
 
-    /// Snapshot at the start of an `exec()` call.
+    /// Snapshot at the start of an `exec()` call. `None` if the read failed.
     #[inline]
-    pub fn exec_start() -> (u64, u64) {
+    pub fn exec_start() -> Option<(u64, u64)> {
         read()
     }
 
     /// Accumulate the delta over an `exec()` call plus the ops it dispatched.
+    /// Skips the sample entirely if either the start or end read failed.
     #[inline]
-    pub fn exec_end(start: (u64, u64), ops: u64) {
-        let (c1, i1) = read();
-        ACC_CYCLES.fetch_add(c1.wrapping_sub(start.0), Ordering::Relaxed);
-        ACC_INSTRS.fetch_add(i1.wrapping_sub(start.1), Ordering::Relaxed);
+    pub fn exec_end(start: Option<(u64, u64)>, ops: u64) {
+        let (Some((c0, i0)), Some((c1, i1))) = (start, read()) else {
+            return;
+        };
+        ACC_CYCLES.fetch_add(c1.wrapping_sub(c0), Ordering::Relaxed);
+        ACC_INSTRS.fetch_add(i1.wrapping_sub(i0), Ordering::Relaxed);
         ACC_OPS.fetch_add(ops, Ordering::Relaxed);
         EXEC_CALLS.fetch_add(1, Ordering::Relaxed);
     }
@@ -182,11 +194,11 @@ mod shim {
         false
     }
     #[inline]
-    pub fn exec_start() -> (u64, u64) {
-        (0, 0)
+    pub fn exec_start() -> Option<(u64, u64)> {
+        None
     }
     #[inline]
-    pub fn exec_end(_start: (u64, u64), _ops: u64) {}
+    pub fn exec_end(_start: Option<(u64, u64)>, _ops: u64) {}
 }
 #[cfg(not(all(target_os = "macos", target_arch = "aarch64")))]
 pub use shim::{enabled, exec_end, exec_start};

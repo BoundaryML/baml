@@ -363,7 +363,8 @@ function user.test_generic_bind() -> int {
 function user.test_mutation_after_bind() -> int {
     load_const 0
     init_instance user.Counter .value
-    store_var_load_var c
+    store_var c
+    load_var c
     make_bound_method user.Counter.increment
     store_var inc
     load_var c

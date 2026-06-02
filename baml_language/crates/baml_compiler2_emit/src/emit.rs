@@ -1153,8 +1153,13 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
         // are never affected:
         //  - StoreVar(slot); LoadVar(slot)  -> StoreVarLoadVar(slot)   (store-keep)
         //  - LoadVar(a);     LoadVar(slot)  -> LoadVar2(a, slot)       (load pair)
+        //
+        // Skip fusion when a sequence point is pending: the rewrite happens in
+        // place on the previous instruction, so it would swallow the new op's
+        // sequence point / line entry (the standalone `emit` path below records
+        // it). Cheap correctness guard for debugger stepping & line attribution.
         let n = self.bytecode.instructions.len();
-        if n > self.current_block_start {
+        if n > self.current_block_start && !self.pending_sequence_point {
             match self.bytecode.instructions[n - 1] {
                 Instruction::StoreVar(prev) if prev == slot => {
                     self.bytecode.instructions[n - 1] = Instruction::StoreVarLoadVar(slot);
@@ -1178,8 +1183,9 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
     /// In-place rewrite confined to the current basic block, like
     /// [`Self::emit_load_var`].
     fn emit_store_var(&mut self, slot: usize) {
+        // See `emit_load_var`: don't fuse across a pending sequence point.
         let n = self.bytecode.instructions.len();
-        if n > self.current_block_start {
+        if n > self.current_block_start && !self.pending_sequence_point {
             if let Instruction::StoreVar(a) = self.bytecode.instructions[n - 1] {
                 self.bytecode.instructions[n - 1] = Instruction::StoreVar2(a, slot);
                 self.set_var_operand(n - 1, slot);

@@ -233,7 +233,8 @@ function functions.mutable_variables_fn() -> int {
     load_const 3
     store_var y
     load_const 5
-    store_var_load_var y
+    store_var y
+    load_var y
     return
 }
 

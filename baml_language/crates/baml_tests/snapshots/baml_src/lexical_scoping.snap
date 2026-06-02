@@ -437,7 +437,8 @@ function lexical_scoping.rule2_block_outer_mutation_escapes() -> int {
     load_const 1
     store_var x
     load_const 2
-    store_var_load_var x
+    store_var x
+    load_var x
     return
 }
 
@@ -475,7 +476,8 @@ function lexical_scoping.rule2_pre_shadow_mutation_escapes_post_shadow_does_not(
     load_const 1
     store_var x
     load_const 2
-    store_var_load_var x
+    store_var x
+    load_var x
     return
 }
 

@@ -281,7 +281,8 @@ function closures.closures_generic_unwrap() -> int {
 function closures.closures_mutation_after_bind() -> int {
     load_const 0
     init_instance user.closures.ClsCounter .value
-    store_var_load_var c
+    store_var c
+    load_var c
     make_bound_method user.closures.ClsCounter.increment
     store_var inc
     load_var c

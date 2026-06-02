@@ -2055,6 +2055,15 @@ impl BexVm {
             .into());
         }
 
+        // Persist the caller's live PC before pushing the interrupt frame.
+        // Once this frame is no longer innermost, unwinding/stack-trace lookups
+        // read its `faulting_pc` (no longer updated per-op under lazy `cur_pc`),
+        // so it must capture the instruction we interrupted. Mirrors
+        // `execute_call_from_locals_offset`.
+        if let Some(Frame::Bytecode(bf)) = self.frames.last_mut() {
+            bf.faulting_pc = self.cur_pc;
+        }
+
         // Index of the frame that starts the interrupt code.
         self.interrupt_frame = Some(self.frames.len());
 
@@ -3333,7 +3342,7 @@ impl BexVm {
         let (kp_start, ops_start) = if kp {
             (crate::kperf::exec_start(), self.op_count)
         } else {
-            ((0, 0), 0)
+            (None, 0)
         };
 
         let result = match self.exec_inner() {

@@ -395,7 +395,8 @@ function watch.watch_catch_arm_fallthrough_fn() -> int {
     load_const null
     watch x
     load_const 5
-    store_var_load_var x
+    store_var x
+    load_var x
     store_var result
     unwatch x
 
@@ -584,7 +585,8 @@ function watch.watch_default_filter_fn() -> int {
     load_const 0
     store_var value
     load_const 6
-    store_var_load_var value
+    store_var value
+    load_var value
     unwatch value
     return
 }
@@ -603,7 +605,8 @@ function watch.watch_early_return_unwatches_fn() -> int {
 
   L0:
     load_const 99
-    store_var_load_var x
+    store_var x
+    load_var x
     unwatch x
     jump L2
 
@@ -730,7 +733,8 @@ function watch.watch_match_arm_fallthrough_entry(input: int) -> int {
     load_const null
     watch x
     load_const 5
-    store_var_load_var x
+    store_var x
+    load_var x
     store_var result
     unwatch x
 
@@ -876,7 +880,8 @@ function watch.watch_primitive_fn() -> int {
     load_const null
     watch value
     load_const 1
-    store_var_load_var value
+    store_var value
+    load_var value
     unwatch value
     return
 }
@@ -946,7 +951,8 @@ function watch.watch_switch_arm_fallthrough_entry(input: int) -> int {
     load_const null
     watch x
     load_const 5
-    store_var_load_var x
+    store_var x
+    load_var x
     store_var result
     unwatch x
     jump L5

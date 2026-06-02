@@ -3405,7 +3405,8 @@ function patterns_new_runtime.test_for_let_chain_alias_capture() -> int {
   L2:
     load_var2 2 3
     load_array_element
-    store_var_load_var _6
+    store_var _6
+    load_var _6
     store_var a
     load_const null
     make_cell
@@ -3490,7 +3491,8 @@ function patterns_new_runtime.test_for_let_chain_trailing_type() -> int {
   L2:
     load_var2 2 3
     load_array_element
-    store_var_load_var row
+    store_var row
+    load_var row
     container_len
     store_var _13
     load_var2 1 5
