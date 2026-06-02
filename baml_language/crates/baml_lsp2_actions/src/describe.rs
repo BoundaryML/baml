@@ -297,6 +297,9 @@ fn describe_top_level(
         }
         body.push_str(&shape);
         body
+    } else if let Some(sig) = builtin_body_signature(db, file, sym, item_range) {
+        // Builtin function: show the signature, never the native body block.
+        sig
     } else {
         full_body
     };
@@ -1488,22 +1491,89 @@ fn slice_text(text: &str, range: TextRange) -> String {
     }
 }
 
-/// Remove standalone non-doc comment lines from a body.
+/// Remove standalone non-doc comment lines from a rendered body.
 ///
-/// Doc comments (`///`) are documentation and are kept. Ordinary line comments
-/// (`//`, e.g. directives like `//baml:mut_vm`) are implementation noise and
-/// have no place in describe output. Only whole-line comments are stripped;
-/// trailing inline comments are left alone (stripping them safely would require
-/// lexing to avoid `//` inside string literals).
+/// Doc comments (`///`) are documentation and kept; ordinary line comments
+/// (`//`, e.g. directives like `//baml:mut_vm`) are implementation noise.
+/// Only whole-line comments are stripped — trailing inline comments are left
+/// alone (stripping them safely would require lexing to avoid `//` inside
+/// string literals).
+///
+/// Builtin implementation markers (`$rust_function`, …) are *not* handled here;
+/// they live inside the body block, which is removed structurally for builtin
+/// functions (see [`builtin_body_signature`]).
 fn strip_non_doc_comments(body: &str) -> String {
     body.lines()
         .filter(|line| {
             let trimmed = line.trim_start();
-            // Keep everything except standalone non-doc (`//`, not `///`) comments.
             !trimmed.starts_with("//") || trimmed.starts_with("///")
         })
         .collect::<Vec<_>>()
         .join("\n")
+}
+
+/// If `sym` is a function with a builtin (native) body — `$rust_function`,
+/// `$rust_io_function`, `$compiler_intrinsic` — return its source with the
+/// body block removed, so the implementation marker is never exposed. The
+/// body's start is found via the CST node boundary, so this is robust to any
+/// body formatting and to braces appearing in the docstring.
+///
+/// Returns `None` for user functions (whose body is meaningful and shown) and
+/// non-function symbols.
+fn builtin_body_signature(
+    db: &dyn Db,
+    file: SourceFile,
+    sym: &SymbolInfo,
+    item_range: TextRange,
+) -> Option<String> {
+    if sym.kind != DefinitionKind::Function {
+        return None;
+    }
+
+    // Confirm the body is builtin (not a user expression) via the HIR.
+    let name = baml_base::Name::new(&sym.name);
+    let resolved =
+        baml_compiler2_tir::resolve::resolve_name_at(db, file, sym.name_span.start(), &name);
+    let (baml_compiler2_tir::resolve::ResolvedName::Item(def)
+    | baml_compiler2_tir::resolve::ResolvedName::Builtin(def)) = resolved
+    else {
+        return None;
+    };
+    let Definition::Function(func_loc) = def else {
+        return None;
+    };
+    let item_tree = baml_compiler2_hir::file_item_tree(db, func_loc.file(db));
+    if !matches!(
+        item_tree[func_loc.id(db)].body,
+        Some(baml_compiler2_ast::ast::FunctionBodyDef::Builtin(_))
+    ) {
+        return None;
+    }
+
+    // Slice the source up to the body block node, dropping `{ … }` entirely.
+    let tree = baml_compiler_parser::syntax_tree(db, file);
+    let token = match tree.token_at_offset(sym.name_span.start()) {
+        rowan::TokenAtOffset::Single(t) => t,
+        rowan::TokenAtOffset::Between(_, right) => right,
+        rowan::TokenAtOffset::None => return None,
+    };
+    let func_node = token
+        .parent_ancestors()
+        .find(|n| n.kind() == SyntaxKind::FUNCTION_DEF)?;
+    let body_node = func_node.descendants().find(|n| {
+        matches!(
+            n.kind(),
+            SyntaxKind::EXPR_FUNCTION_BODY
+                | SyntaxKind::LLM_FUNCTION_BODY
+                | SyntaxKind::FUNCTION_BODY
+        )
+    })?;
+
+    let start: usize = item_range.start().into();
+    let end: usize = body_node.text_range().start().into();
+    let text = file.text(db);
+    let sig = text.get(start..end)?.trim_start_matches('\n').trim_end();
+    Some(sig.to_string())
 }
 
 /// Find the 1-based line number and full line text at a byte offset.
