@@ -36,7 +36,7 @@
     "typescript": "^5.4.5"
   },
   "dependencies": {
-    "protobufjs": "^7.4.0"
+    "protobufjs": "^7.5.8"
   },
   "jest": {
     "preset": "ts-jest",
