@@ -9581,6 +9581,47 @@ async fn union_fuzz_pr_function_typed_interface_field_in_union() {
     );
 }
 
+/// Reading an interface-member field through an *optional* union (`(Dog |
+/// Named)?` via `?.`) must dispatch on the runtime class like the non-optional
+/// union does — the field lowering used to match only a bare `Union`, so the
+/// `Optional`-wrapped union fell through and crashed the VM
+/// (`expected map, got instance`).
+#[tokio::test]
+async fn union_fuzz_pr_optional_union_interface_field() {
+    let output = baml_test!(
+        r#"
+        interface Named { name: string }
+        class Dog { name: string  implements Named {} }
+        function readName(x: (Dog | Named)?) -> string? { return x?.name }
+        function main() -> string? { return readName(Dog { name: "Rex" }) }
+        "#
+    );
+    assert_eq!(
+        output.result.unwrap(),
+        BexExternalValue::String("Rex".into())
+    );
+}
+
+/// A concrete non-function arm in a union callee must still be reported as
+/// not-callable even when another arm is in recovery (`int | <unresolved>`).
+/// The E0006-suppression added for ambiguous-method unions must only fire when
+/// *every* non-function arm is already in recovery, not on any recovery arm.
+#[test]
+fn union_fuzz_pr_concrete_arm_not_callable_despite_recovery_arm() {
+    let errors = collect_compile_errors(
+        r#"
+        function f(x: int | DoesNotExist) -> string { return x() }
+        function main() -> string { return "ok" }
+        "#,
+    );
+    assert!(
+        errors.iter().any(|e| e.starts_with("[E0006]")),
+        "the concrete `int` arm of an `int | <recovery>` callee must still be \
+         reported not-callable (E0006); got:\n  {}",
+        errors.join("\n  ")
+    );
+}
+
 /// F1 [crash]: reading a field declared by an interface member of a union
 /// (`x.name` on `Dog | Named`) type-checks, then the VM aborts with
 /// `expected map, got instance`. SHOULD dispatch on the runtime class -> "Rex".

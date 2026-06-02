@@ -3918,10 +3918,10 @@ impl<'db> LoweringContext<'db> {
             // Receiver prefix may be a union containing an interface member
             // (`(Dog | Named).name`): dispatch the field read on the runtime
             // class across all members' implementors.
-            if let Some(Tir2Ty::Union(members, _)) = self
+            if let Some(members) = self
                 .path_segment_types
                 .get(&(self.current_metadata_scope, expr_id, seg_idx - 1))
-                .cloned()
+                .and_then(Self::tir_union_members)
                 && self.lower_union_iface_field_access(base_local, &members, seg, &target_place)
             {
                 if is_last {
@@ -4689,10 +4689,10 @@ impl LoweringContext<'_> {
                 // union of concrete classes (a local or field chain bound to a
                 // `match`/`if` whose arms are different classes). Same receiver
                 // type slot, same field-chain lowering.
-                else if let Some(Tir2Ty::Union(members, _)) = self
+                else if let Some(members) = self
                     .path_segment_types
                     .get(&(self.current_metadata_scope, callee, prefix_idx))
-                    .cloned()
+                    .and_then(Self::tir_union_members)
                 {
                     let receiver_segments = &segments[..segments.len() - 1];
                     let recv_local = self.lower_path_receiver_to_local(
@@ -6069,11 +6069,7 @@ impl<'db> LoweringContext<'db> {
                 || self
                     .expr_types
                     .get(&self.expr_metadata_key(base))
-                    .cloned()
-                    .and_then(|t| match t {
-                        Tir2Ty::Union(members, _) => Some(members),
-                        _ => None,
-                    })
+                    .and_then(Self::tir_union_members)
                     .is_some_and(|members| {
                         self.lower_union_iface_field_access(base_local, &members, field, &dest)
                     });
@@ -6416,8 +6412,10 @@ impl<'db> LoweringContext<'db> {
         args: &[AstExprId],
         dest: &Place,
     ) -> bool {
-        let Some(Tir2Ty::Union(members, _)) =
-            self.expr_types.get(&self.expr_metadata_key(base)).cloned()
+        let Some(members) = self
+            .expr_types
+            .get(&self.expr_metadata_key(base))
+            .and_then(Self::tir_union_members)
         else {
             return false;
         };
@@ -6443,8 +6441,10 @@ impl<'db> LoweringContext<'db> {
         args: &[AstExprId],
         dest: &Place,
     ) -> bool {
-        let Some(Tir2Ty::Union(members, _)) =
-            self.expr_types.get(&self.expr_metadata_key(base)).cloned()
+        let Some(members) = self
+            .expr_types
+            .get(&self.expr_metadata_key(base))
+            .and_then(Self::tir_union_members)
         else {
             return false;
         };
@@ -9436,6 +9436,18 @@ impl LoweringContext<'_> {
     ) {
         let mut visited = HashSet::new();
         self.emit_is_tir_type_branch_inner(scrutinee, ty, success, failure, &mut visited);
+    }
+
+    /// The members of a union receiver, transparently unwrapping `Optional`
+    /// layers — `(Dog | Named)?` after a null check still dispatches the
+    /// field/method on the underlying union. Returns `None` when `ty` isn't a
+    /// (optionally-wrapped) union.
+    fn tir_union_members(ty: &Tir2Ty) -> Option<Vec<Tir2Ty>> {
+        match ty {
+            Tir2Ty::Union(members, _) => Some(members.clone()),
+            Tir2Ty::Optional(inner, _) => Self::tir_union_members(inner),
+            _ => None,
+        }
     }
 
     /// Whether `ty` is (or contains, inside a union/optional) a *generic*

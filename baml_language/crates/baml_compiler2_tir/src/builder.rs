@@ -2743,14 +2743,23 @@ impl<'db> TypeInferenceBuilder<'db> {
                     });
                 }
 
-                // If any arm is Unknown/Error, a member's resolution already
-                // reported the real error (e.g. an ambiguous interface method →
-                // E0121), so don't also emit a misleading
-                // `unknown | unknown is not a function`.
-                if expanded
+                // When *every* non-function arm is already in recovery
+                // (Unknown/Error), a member's resolution already reported the
+                // real error (e.g. an ambiguous interface method → E0121), so
+                // don't also emit a misleading `unknown | unknown is not a
+                // function`. But if a concrete non-function arm remains (e.g.
+                // `int | unknown`), that arm is genuinely not callable and must
+                // still be diagnosed.
+                let has_recovery_arm = expanded
                     .iter()
-                    .any(|a| matches!(a, Ty::Unknown { .. } | Ty::Error { .. }))
-                {
+                    .any(|a| matches!(a, Ty::Unknown { .. } | Ty::Error { .. }));
+                let has_concrete_non_function_arm = expanded.iter().any(|a| {
+                    !matches!(
+                        a,
+                        Ty::Function { .. } | Ty::Unknown { .. } | Ty::Error { .. }
+                    )
+                });
+                if has_recovery_arm && !has_concrete_non_function_arm {
                     self.infer_args_for_recovery(args, body);
                     return CheckedCallInner {
                         result: Ty::Unknown {
