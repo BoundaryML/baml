@@ -49,3 +49,41 @@ function call_with_throwing(callback: (int) -> string throws baml.errors.HostCal
         _ => "caught:" + e.class_name
     }
 }
+
+// User-defined error class returned from a host callable. The Python side
+// raises `BamlError(value=ValidationError(...))`; the bridge unwraps the
+// inner pydantic value and emits it as its real BAML class so the catch
+// matches on the user's declared throws and `e.code` / `e.message` /
+// `e.fields` resolve to typed fields (not opaque metadata strings).
+class ValidationError {
+    code int
+    message string
+    fields string[]
+}
+
+function call_with_typed_throws(
+    callback: (int) -> string throws ValidationError,
+    x: int,
+) -> string {
+    callback(x) catch (e) {
+        // Typed catch arm: only matches when the thrown value's
+        // concrete BAML class is `ValidationError`, proving the
+        // host-thrown pydantic model arrived with its real class
+        // identity (not as an opaque `HostCallable` metadata blob).
+        // Surface `e.message` so the test can verify the typed
+        // catch actually fired and read a real BAML class field.
+        ValidationError => "caught: " + e.message
+    }
+}
+
+// Same as `call_with_typed_throws` but never catches — exercises the
+// propagation path where the host-thrown codegenned class flows back
+// out to the Python caller unhandled, surfacing as a
+// `BamlError(value=ValidationError(...))` pydantic instance with its
+// typed fields preserved end-to-end.
+function call_with_typed_throws_propagating(
+    callback: (int) -> string throws ValidationError,
+    x: int,
+) -> string throws ValidationError {
+    callback(x)
+}

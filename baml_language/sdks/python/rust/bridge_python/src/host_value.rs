@@ -137,6 +137,35 @@ pub extern "C" fn host_release_callback(host_value_key: u64) {
     drop_registry_entry(host_value_key);
 }
 
+/// Look up the host-registered Python object referenced by a
+/// `BamlPyHandle` whose `handle_type` is `HOST_VALUE_CALLABLE` /
+/// `HOST_VALUE_ERROR`, returning a fresh strong reference if the entry
+/// is still live. Used by the outbound error decoder in
+/// `baml_core.proto` to rehydrate a `baml.errors.HostCallable` thrown
+/// by BAML back to the original Python exception object on same-host
+/// round-trip.
+///
+/// Returns `None` if the handle is the wrong kind, the entry has been
+/// released (last `HostValueArc` clone already dropped), or the key
+/// never existed in this runtime's registry (cross-runtime handle):
+/// callers should fall back to a metadata-built exception in that case.
+#[gen_stub_pyfunction]
+#[pyfunction]
+pub fn lookup_host_value(
+    py: Python<'_>,
+    handle: &crate::py_handle::BamlPyHandle,
+) -> Option<Py<PyAny>> {
+    use bridge_ctypes::baml_core::cffi::BamlHandleType;
+    let ht_i32 = i32::try_from(handle.handle_type).ok()?;
+    if ht_i32 != BamlHandleType::HostValueCallable as i32
+        && ht_i32 != BamlHandleType::HostValueError as i32
+    {
+        return None;
+    }
+    let table = REGISTRY.table.lock().ok()?;
+    table.get(&handle.handle_key).map(|obj| obj.clone_ref(py))
+}
+
 /// Release a host callable the inbound encoder registered but never handed to
 /// the engine — the encode-error rollback path.
 ///
