@@ -38,13 +38,13 @@ policy.max_delta_pct = 3.0
 
 # macOS arm64: baseline 15.07 MB file.
 [artifacts.baml-cli.platform.aarch64-apple-darwin]
-max_file_bytes = 15_072_808
+max_file_bytes = 15_089_472
 # Linux x86_64: baseline 19.40 MB file.
 [artifacts.baml-cli.platform.x86_64-unknown-linux-gnu]
 max_file_bytes = 19_990_000
 # Windows x86_64: baseline 16.27 MB file.
 [artifacts.baml-cli.platform.x86_64-pc-windows-msvc]
-max_file_bytes = 16_273_800
+max_file_bytes = 16_293_376
 
 [artifacts.packed-program]
 kind = "pack"

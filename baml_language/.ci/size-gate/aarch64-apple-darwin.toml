@@ -5,7 +5,7 @@ git_sha = "56b8a69e9"
 [artifacts.baml-cli]
 file_bytes = 15089472
 stripped_bytes = 15089504
-gzip_bytes = 7230931
+gzip_bytes = 7231176
 
 [artifacts.packed-program]
 file_bytes = 11170322
