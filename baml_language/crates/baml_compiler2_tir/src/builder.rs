@@ -8998,6 +8998,118 @@ impl<'db> TypeInferenceBuilder<'db> {
         out
     }
 
+    /// For an exact interface instantiation that a class implements, find the
+    /// concrete class field backing one interface field. Side-effect-free
+    /// counterpart to `qualified_interface_field_for_construction`.
+    fn class_field_name_for_interface_field(
+        &self,
+        class_name: &crate::ty::QualifiedTypeName,
+        class_type_args: &[Ty],
+        target_iface_name: &crate::ty::QualifiedTypeName,
+        target_iface_args: &[Ty],
+        field_name: &Name,
+    ) -> Option<Name> {
+        let pkg_items = self.resolve_class_pkg_items(class_name.package())?;
+        let Definition::Class(class_loc) =
+            pkg_items.lookup_type(class_name.namespace(), class_name.name())?
+        else {
+            return None;
+        };
+        let db = self.context.db();
+        let item_tree = baml_compiler2_ppir::file_item_tree(db, class_loc.file(db));
+        let class_data = &item_tree[class_loc.id(db)];
+        let class_ns =
+            baml_compiler2_hir::file_package::file_package(db, class_loc.file(db)).namespace_path;
+        let class_bindings =
+            crate::generics::bind_type_vars(&class_data.generic_params, class_type_args);
+
+        for impl_target in &class_data.implements {
+            let Some(root_iface_loc) = crate::interfaces::resolve_path_to_interface(
+                db,
+                &impl_target.target.expr,
+                pkg_items,
+                &class_ns,
+            ) else {
+                continue;
+            };
+
+            let root_iface_type_args = match &impl_target.target.expr {
+                TypeExpr::Path { generic_args, .. } => {
+                    let mut diags = Vec::new();
+                    generic_args
+                        .iter()
+                        .map(|arg| {
+                            if class_bindings.is_empty() {
+                                crate::lower_type_expr::lower_type_expr_in_ns(
+                                    db,
+                                    arg,
+                                    pkg_items,
+                                    &class_ns,
+                                    &class_data.generic_params,
+                                    &mut diags,
+                                )
+                            } else {
+                                crate::generics::lower_type_expr_with_generics(
+                                    db,
+                                    arg,
+                                    pkg_items,
+                                    &class_ns,
+                                    &class_bindings,
+                                    &mut diags,
+                                )
+                            }
+                        })
+                        .collect::<Vec<_>>()
+                }
+                _ => Vec::new(),
+            };
+
+            for (iface_loc, iface_type_args) in crate::interfaces::interface_closure_locs_with_args(
+                db,
+                root_iface_loc,
+                &root_iface_type_args,
+                pkg_items,
+                &class_ns,
+            ) {
+                let iface_tree = baml_compiler2_hir::file_item_tree(db, iface_loc.file(db));
+                let Some(iface_data) = iface_tree.interfaces.get(&iface_loc.id(db)) else {
+                    continue;
+                };
+                let iface_qtn = crate::lower_type_expr::qualify_def(
+                    db,
+                    Definition::Interface(iface_loc),
+                    &iface_data.name,
+                );
+                if &iface_qtn != target_iface_name
+                    || iface_type_args.len() != target_iface_args.len()
+                    || !iface_type_args
+                        .iter()
+                        .zip(target_iface_args.iter())
+                        .all(|(a, b)| self.types_equivalent(a, b))
+                {
+                    continue;
+                }
+                let Some(field) = iface_data
+                    .fields
+                    .iter()
+                    .find(|field| field.name == *field_name)
+                else {
+                    continue;
+                };
+                return Some(
+                    impl_target
+                        .field_links
+                        .iter()
+                        .find(|link| link.interface_field == field.name)
+                        .map(|link| link.class_field.clone())
+                        .unwrap_or_else(|| field.name.clone()),
+                );
+            }
+        }
+
+        None
+    }
+
     /// Check whether a class has a field or method with the given name.
     ///
     /// Unlike `lookup_class_fields`, this does NOT call `lower_type_expr_in_ns`
@@ -11956,6 +12068,35 @@ impl crate::exhaustiveness::PatCtx for TypeInferenceBuilder<'_> {
             .into_iter()
             .map(|(_, ft)| self.matrix_normalize_scrut(&ft))
             .collect()
+    }
+
+    fn interface_field_projection_for_class(
+        &self,
+        iface_ty: &Ty,
+        class_qtn: &crate::ty::QualifiedTypeName,
+    ) -> Option<Vec<usize>> {
+        let Ty::Interface(iface_qtn, iface_args, _) = iface_ty else {
+            return None;
+        };
+        let class_fields = self.class_field_infos_ordered(class_qtn, &[]);
+        let class_indices: FxHashMap<Name, usize> = class_fields
+            .into_iter()
+            .enumerate()
+            .map(|(idx, (name, _))| (name, idx))
+            .collect();
+        let interface_fields = self.interface_field_infos_ordered(iface_qtn, iface_args);
+        let mut projection = Vec::with_capacity(interface_fields.len());
+        for (interface_field, _) in interface_fields {
+            let class_field = self.class_field_name_for_interface_field(
+                class_qtn,
+                &[],
+                iface_qtn,
+                iface_args,
+                &interface_field,
+            )?;
+            projection.push(*class_indices.get(&class_field)?);
+        }
+        Some(projection)
     }
 
     fn list_element_type(&self, ty: &Ty) -> Ty {

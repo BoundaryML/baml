@@ -2212,6 +2212,173 @@ async fn match_interface_destructure_respects_field_subpatterns() {
     );
 }
 
+#[test]
+fn mixed_interface_and_concrete_destructures_do_not_require_wildcard() {
+    assert_zero_compile_errors(
+        r#"
+        interface Animal {
+            name: string
+        }
+        class Dog {
+            name: string
+            breed: string
+            implements Animal {}
+        }
+
+        function describe(a: Animal) -> string {
+            return match (a) {
+                Dog { breed: "Lab" } => "lab"
+                Animal { name: string } => "animal"
+            }
+        }
+        "#,
+    );
+}
+
+#[test]
+fn interface_destructure_before_concrete_destructure_is_unreachable_not_nonexhaustive() {
+    let errors = collect_compile_errors(
+        r#"
+        interface Animal {
+            name: string
+        }
+        class Dog {
+            name: string
+            breed: string
+            implements Animal {}
+        }
+
+        function describe(a: Animal) -> string {
+            return match (a) {
+                Animal { name: string } => "animal"
+                Dog { breed: "Lab" } => "lab"
+            }
+        }
+        "#,
+    );
+    assert!(
+        errors.iter().any(|e| e.starts_with("[E0063]")),
+        "expected unreachable-arm error, got:\n  {}",
+        errors.join("\n  ")
+    );
+    assert!(
+        !errors.iter().any(|e| e.starts_with("[E0062]")),
+        "expected no non-exhaustive error, got:\n  {}",
+        errors.join("\n  ")
+    );
+}
+
+#[test]
+fn concrete_then_interface_destructure_covers_remaining_implementor_values() {
+    assert_zero_compile_errors(
+        r#"
+        interface Animal {
+            friendly: bool
+        }
+        class Dog {
+            friendly: bool
+            breed: string
+            implements Animal {}
+        }
+
+        function describe(a: Animal) -> string {
+            return match (a) {
+                Dog { friendly: true } => "friendly dog"
+                Animal { friendly: true } => "other friendly animal"
+                Animal { friendly: false } => "other animal"
+            }
+        }
+        "#,
+    );
+}
+
+#[test]
+fn mixed_interface_and_concrete_destructures_project_aliased_fields() {
+    assert_zero_compile_errors(
+        r#"
+        interface Toggle {
+            on: bool
+        }
+        class Widget {
+            label: string
+            enabled: bool
+            implements Toggle {
+                on as enabled
+            }
+        }
+
+        function describe(t: Toggle) -> string {
+            return match (t) {
+                Widget { enabled: true } => "on"
+                Toggle { on: true } => "other on"
+                Toggle { on: false } => "off"
+            }
+        }
+        "#,
+    );
+}
+
+#[test]
+fn union_of_interfaces_allows_mixed_interface_and_concrete_destructures() {
+    assert_zero_compile_errors(
+        r#"
+        interface Animal {
+            awake: bool
+        }
+        class Dog {
+            awake: bool
+            breed: string
+            implements Animal {}
+        }
+
+        interface Vehicle {
+            running: bool
+        }
+        class Car {
+            running: bool
+            make: string
+            implements Vehicle {}
+        }
+
+        function describe(x: Animal | Vehicle) -> string {
+            return match (x) {
+                Dog { awake: true } => "dog"
+                Animal { awake: true } => "animal"
+                Animal { awake: false } => "animal"
+                Car { running: true } => "car"
+                Vehicle { running: true } => "vehicle"
+                Vehicle { running: false } => "vehicle"
+            }
+        }
+        "#,
+    );
+}
+
+#[test]
+fn mixed_interface_and_concrete_destructures_still_report_partial_coverage() {
+    assert_compile_error_code(
+        r#"
+        interface Animal {
+            name: string
+            friendly: bool
+        }
+        class Dog {
+            name: string
+            friendly: bool
+            implements Animal {}
+        }
+
+        function describe(a: Animal) -> string {
+            return match (a) {
+                Dog { friendly: true } => "friendly"
+                Animal { name: "Rex" } => "rex"
+            }
+        }
+        "#,
+        "E0062",
+    );
+}
+
 /// Narrowing an interface-typed value with a concrete-implementor *destructure*
 /// pattern (`Dog { name } => ...`) also works — it binds the class's own fields.
 #[tokio::test]

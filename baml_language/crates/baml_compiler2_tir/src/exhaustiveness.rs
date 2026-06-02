@@ -608,6 +608,17 @@ pub trait PatCtx {
         Vec::new()
     }
 
+    /// When an interface pattern row is specialized through an implementing
+    /// class ctor, map each interface field slot to the class field slot that
+    /// supplies it. Test contexts that do not model interfaces can decline.
+    fn interface_field_projection_for_class(
+        &self,
+        _iface_ty: &Ty,
+        _class_qtn: &QualifiedTypeName,
+    ) -> Option<Vec<usize>> {
+        None
+    }
+
     /// For a slice ctor at column type `ty` (an array/list type), return the
     /// sub-pattern types — which is just the element type repeated `arity`
     /// times.
@@ -723,7 +734,13 @@ impl<'p> Matrix<'p> {
     /// matches rustc's approach — Or-pattern alternatives become independent
     /// rows, but their `useful` flags aggregate at the source-arm level
     /// because they share an `ArmId`.
-    fn specialize<'a>(&self, ctor: &Ctor, sub_tys: &[Ty], wild_pad: &'a [DPat]) -> Matrix<'a>
+    fn specialize<'a>(
+        &self,
+        cx: &dyn PatCtx,
+        ctor: &Ctor,
+        sub_tys: &[Ty],
+        wild_pad: &'a [DPat],
+    ) -> Matrix<'a>
     where
         'p: 'a,
     {
@@ -774,11 +791,20 @@ impl<'p> Matrix<'p> {
                         useful: row.useful,
                     });
                 }
-                _ if !head.ctor.covers(ctor) => {
-                    // Row's pattern doesn't accept any value of shape `ctor`.
-                    // Skip — this row can't contribute to this specialization.
-                }
                 _ => {
+                    let interface_projection = match (&head.ctor, ctor) {
+                        (Ctor::Interface(iface_ty), Ctor::Class(class_qtn)) => {
+                            cx.interface_field_projection_for_class(iface_ty, class_qtn)
+                        }
+                        _ => None,
+                    };
+                    if !head.ctor.covers(ctor) && interface_projection.is_none() {
+                        // Row's pattern doesn't accept any value of shape
+                        // `ctor`. Skip — this row can't contribute to this
+                        // specialization.
+                        continue;
+                    }
+
                     // Project the row's fields into the `arity` slots.
                     // Default to wildcards; then place the head's actual
                     // fields at their correct positions.
@@ -793,31 +819,42 @@ impl<'p> Matrix<'p> {
                     // cover `[true, false]`.
                     let mut pats: Vec<&DPat> = (0..arity).map(|i| &wild_pad[i]).collect();
                     let head_arity = head.fields.len();
-                    match &head.ctor {
-                        Ctor::Slice(SliceShape::Variable { prefix, suffix })
-                            if head_arity != arity =>
-                        {
-                            for (i, fld) in head.fields.iter().enumerate() {
-                                let new_idx = if i < *prefix {
-                                    i
-                                } else {
-                                    // Suffix slot j (counted from end of
-                                    // head's suffix): j = i - prefix from
-                                    // start; rightmost position is
-                                    // arity - suffix + j.
-                                    debug_assert!(i >= *prefix && i < prefix + suffix);
-                                    i + arity - head_arity
-                                };
-                                pats[new_idx] = fld;
-                            }
-                        }
-                        _ => {
-                            for (i, fld) in head.fields.iter().enumerate() {
-                                if i < arity {
-                                    pats[i] = fld;
+                    match interface_projection {
+                        Some(projection) => {
+                            for (interface_idx, class_idx) in projection.into_iter().enumerate() {
+                                if let Some(fld) = head.fields.get(interface_idx)
+                                    && class_idx < arity
+                                {
+                                    pats[class_idx] = fld;
                                 }
                             }
                         }
+                        None => match &head.ctor {
+                            Ctor::Slice(SliceShape::Variable { prefix, suffix })
+                                if head_arity != arity =>
+                            {
+                                for (i, fld) in head.fields.iter().enumerate() {
+                                    let new_idx = if i < *prefix {
+                                        i
+                                    } else {
+                                        // Suffix slot j (counted from end of
+                                        // head's suffix): j = i - prefix from
+                                        // start; rightmost position is
+                                        // arity - suffix + j.
+                                        debug_assert!(i >= *prefix && i < prefix + suffix);
+                                        i + arity - head_arity
+                                    };
+                                    pats[new_idx] = fld;
+                                }
+                            }
+                            _ => {
+                                for (i, fld) in head.fields.iter().enumerate() {
+                                    if i < arity {
+                                        pats[i] = fld;
+                                    }
+                                }
+                            }
+                        },
                     }
                     pats.extend_from_slice(tail);
                     new_rows.push(Row {
@@ -1015,7 +1052,7 @@ fn compute_exhaustiveness(cx: &dyn PatCtx, matrix: &mut Matrix<'_>, witnesses: &
         let sub_tys = ctor_sub_tys(cx, ctor, &col_ty);
         let wild_pad: Vec<DPat> = sub_tys.iter().cloned().map(DPat::wildcard).collect();
 
-        let mut sub_matrix = matrix.specialize(ctor, &sub_tys, &wild_pad);
+        let mut sub_matrix = matrix.specialize(cx, ctor, &sub_tys, &wild_pad);
         let mut sub_witnesses = WitnessMatrix::empty();
         compute_exhaustiveness(cx, &mut sub_matrix, &mut sub_witnesses);
 
