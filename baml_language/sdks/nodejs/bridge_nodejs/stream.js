@@ -5,7 +5,6 @@
  * Proto:  baml_language/crates/bridge_ctypes/types/baml_core/cffi/v1/*.proto
  * Build:  cd baml_language/crates/bridge_nodejs && pnpm build:debug
  */
-"use strict";
 // stream.ts — pure-TS analog of sdks/python/src/baml_core/_stream.py.
 //
 // BamlStream wraps a BamlHandle whose HANDLE_TABLE row is a
@@ -21,13 +20,12 @@
 // (`$stream_async`); the per-chunk `next`/`final` pulls here are unrelated to
 // that function-level distinction. The wrapper exposes both sync and async
 // pulls, as Python does.
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.BamlStream = void 0;
-const native_1 = require("./native");
-const proto_1 = require("./proto");
+import { getRuntime } from './native.js';
+import { encodeCallArgs, decodeCallResult } from './proto.js';
 const STREAM_NEXT_FN = 'baml.llm.Stream.next';
 const STREAM_FINAL_FN = 'baml.llm.Stream.final';
-class BamlStream {
+export class BamlStream {
+    _handle;
     constructor(handle) {
         this._handle = handle;
     }
@@ -52,17 +50,16 @@ class BamlStream {
         return (await this._callAsync(STREAM_FINAL_FN));
     }
     _callSync(fqn) {
-        const rt = (0, native_1.getRuntime)();
-        const argsProto = (0, proto_1.encodeCallArgs)({ self: this }, /* syncMode */ true);
+        const rt = getRuntime();
+        const argsProto = encodeCallArgs({ self: this }, /* syncMode */ true);
         const resultBytes = rt.callFunctionSync(fqn, argsProto, null, null, null);
-        return (0, proto_1.decodeCallResult)(resultBytes);
+        return decodeCallResult(resultBytes);
     }
     async _callAsync(fqn) {
-        const rt = (0, native_1.getRuntime)();
-        const argsProto = (0, proto_1.encodeCallArgs)({ self: this });
+        const rt = getRuntime();
+        const argsProto = encodeCallArgs({ self: this });
         const resultBytes = await rt.callFunction(fqn, argsProto, null, null, null);
-        return (0, proto_1.decodeCallResult)(resultBytes);
+        return decodeCallResult(resultBytes);
     }
 }
-exports.BamlStream = BamlStream;
 //# sourceMappingURL=stream.js.map

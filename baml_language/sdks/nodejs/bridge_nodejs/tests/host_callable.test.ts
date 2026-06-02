@@ -16,18 +16,18 @@
 // bridge sidesteps this by running async callables on a fresh asyncio
 // loop in the dispatch thread (different I/O architecture).
 //
-// Why the suite runs jest with `forceExit` (see package.json): each
+// Why the suite relies on Vitest's forced teardown: each
 // registered callable holds a strong (`weak::<false>`) ThreadsafeFunction
 // ref that pins the libuv loop until the engine releases it, and release
 // is GC/drain-driven (`host_release_callback`). A runtime dropped at the
 // end of a test isn't guaranteed to have collected its `HostClosure`
-// before the process exits, so the ref can outlive the test and keep jest
-// from exiting on its own. `forceExit` lets jest terminate once the tests
+// before the process exits, so the ref can outlive the test and keep the
+// runner from exiting on its own. Vitest terminates once the tests
 // themselves have completed.
 
-import { BamlRuntime } from '../native';
-import { callFunction, callFunctionSync } from '../index';
-import { encodeCallArgs } from '../proto';
+import { BamlRuntime } from '../native.js';
+import { callFunction, callFunctionSync } from '../index.js';
+import { encodeCallArgs } from '../proto.js';
 
 const CALLBACK_BAML = `
 function CallCb(callback: (int) -> string, x: int) -> string {
@@ -164,7 +164,7 @@ describe('host-callable sync-call guard', () => {
         // Encoding scalar-only kwargs in sync mode must succeed; the guard
         // only trips on a JS `function`. (We avoid encoding a function on
         // the async path here: that would register a `weak::<false>` tsfn
-        // which pins the libuv loop and could keep jest from exiting.)
+        // which pins the libuv loop and could keep the runner from exiting.)
         expect(() => encodeCallArgs({ x: 1, s: 'ok' }, /* syncMode */ true)).not.toThrow();
         // A function in sync mode trips the guard before any registration.
         expect(() => encodeCallArgs({ cb: () => 0 }, /* syncMode */ true)).toThrow(/host callable/i);

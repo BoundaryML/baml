@@ -68,14 +68,8 @@ Targets in tree:
   `build_diagnostics` test).
 - **`sdk_test_typescript_node`** — TypeScript on Node.js. Two
   checks per fixture: `tsc` (`node node_modules/typescript/bin/tsc
-  --noEmit`) and `jest` (`pnpm exec jest`).
-  Every test in this crate — `tsc`, `jest`, and
-  `build_diagnostics` — is `#[ignore]`d while
-  [`codegen_nodejs`](../sdks/nodejs/codegen_nodejs/) is a stub that
-  panics: every fixture records a `codegen` diagnostic and
-  `baml_sdk/` stays empty, so the toolchain commands can't pass.
-  Drop the `#[ignore]`s when the emitter lands (`IGNORE_REASON` in
-  `sdk_tests/harness_setup/src/typescript_node.rs`). The native
+  --noEmit`) and `vitest` (`pnpm exec vitest run`).
+  The native
   `.node` addon build and per-fixture `pnpm install` live in
   [`crates/typescript_node/setup.sh`](./crates/typescript_node/setup.sh)
   (Unix) and the parallel
@@ -221,8 +215,8 @@ sdk_tests/
    - Symlinks each file in
      `crates/<generator>/<fixture>/customizable/` into
      `crates/<generator>/<fixture>/generated/` (python) — or
-     copies (`typescript_node`, because node + ts-jest follow
-     symlinks during module resolution and break out of the
+     copies (`typescript_node`, because Node.js follows
+     symlinks during module resolution and can break out of the
      generated dir's `node_modules`).
    - Writes `crates/<generator>/<fixture>/generated/pyproject.toml`
      (or `package.json` + `tsconfig.json` for `typescript_node`)

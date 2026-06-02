@@ -64,7 +64,7 @@ pub(crate) fn route(name: &Name) -> LeafPath {
 
 /// Sanitize a path segment so it's a usable module/file identifier.
 /// JavaScript has many reserved words, but unlike Python's `assert` the
-/// segments we emit today (`import * as <seg> from "./<seg>"`,
+/// segments we emit today (`import * as <seg> from "./<seg>/index.js"`,
 /// directory names) tolerate contextual keywords like `assert`, so this
 /// is a no-op pass-through for now. The function exists so Phase 4 / 6
 /// can extend the sanitization set cheaply if a vendor package or
@@ -207,7 +207,7 @@ mod tests {
     #[test]
     fn assert_package_segment_passes_through() {
         // Unlike Python (where `assert` collides with a keyword and is
-        // renamed to `assert_`), `import * as assert from "./assert"` is
+        // renamed to `assert_`), `import * as assert from "./assert/index.js"` is
         // legal TypeScript because `assert` is only a contextual keyword.
         // The segment passes through unchanged.
         let lp = route(&name("assert", &[], "is_true"));

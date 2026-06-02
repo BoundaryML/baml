@@ -1,11 +1,11 @@
-//! Runs the Jest test suite for bridge_nodejs.
+//! Runs the Vitest test suite for bridge_nodejs.
 //! Mirrors bridge_python/tests/run_pytest.rs.
 
 use std::process::Command;
 
 #[test]
 #[ignore]
-fn jest() {
+fn vitest() {
     let manifest_dir = std::env!("CARGO_MANIFEST_DIR");
 
     // Step 1: Install npm dependencies
@@ -24,11 +24,11 @@ fn jest() {
         .expect("failed to run pnpm build:debug");
     assert!(build.success(), "pnpm build:debug failed");
 
-    // Step 3: Run Jest tests
+    // Step 3: Run Vitest tests
     let test = Command::new("pnpm")
         .arg("test")
         .current_dir(manifest_dir)
         .status()
         .expect("failed to run pnpm test");
-    assert!(test.success(), "Jest tests failed");
+    assert!(test.success(), "Vitest tests failed");
 }

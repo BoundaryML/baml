@@ -1,8 +1,14 @@
 {
   "name": "@boundaryml/baml-core-node",
   "version": "0.0.0-beta",
-  "main": "index.js",
-  "types": "index.d.ts",
+  "type": "module",
+  "types": "./index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./index.d.ts",
+      "import": "./index.js"
+    }
+  },
   "files": [
     "*.js",
     "*.d.ts",
@@ -23,34 +29,24 @@
     ]
   },
   "scripts": {
-    "build:proto": "node node_modules/protobufjs-cli/bin/pbjs -t static-module -w commonjs -p ../../../crates/bridge_ctypes/types -o typescript_src/proto/baml_cffi.js ../../../crates/bridge_ctypes/types/baml_core/cffi/v1/baml_inbound.proto ../../../crates/bridge_ctypes/types/baml_core/cffi/v1/baml_outbound.proto && node node_modules/protobufjs-cli/bin/pbts -o typescript_src/proto/baml_cffi.d.ts typescript_src/proto/baml_cffi.js",
-    "build:napi-debug": "napi build --js ./native.js --dts ./native.d.ts --platform && cp native.d.ts typescript_src/native.d.ts",
-    "build:napi-release": "napi build --js ./native.js --dts ./native.d.ts --platform --release && cp native.d.ts typescript_src/native.d.ts",
+    "build:proto": "node node_modules/protobufjs-cli/bin/pbjs -t static-module -w es6 -p ../../../crates/bridge_ctypes/types -o typescript_src/proto/baml_cffi.js ../../../crates/bridge_ctypes/types/baml_core/cffi/v1/baml_inbound.proto ../../../crates/bridge_ctypes/types/baml_core/cffi/v1/baml_outbound.proto && node node_modules/protobufjs-cli/bin/pbts -o typescript_src/proto/baml_cffi.d.ts typescript_src/proto/baml_cffi.js",
+    "build:napi-debug": "napi build --js ./native.js --esm --dts ./native.d.ts --platform && node typescript_src/copy-native-dts.js",
+    "build:napi-release": "napi build --js ./native.js --esm --dts ./native.d.ts --platform --release && node typescript_src/copy-native-dts.js",
     "build:ts_build": "tsc -p tsconfig.json",
     "build:tag-generated-files": "node typescript_src/tag-generated-files.js",
     "build:copy-proto": "node typescript_src/copy-proto.js",
     "build:debug": "pnpm build:proto && pnpm build:napi-debug && pnpm build:ts_build && pnpm build:tag-generated-files && pnpm build:copy-proto",
     "build:release": "pnpm build:proto && pnpm build:napi-release && pnpm build:ts_build && pnpm build:tag-generated-files && pnpm build:copy-proto",
-    "test": "jest"
+    "test": "vitest run"
   },
   "devDependencies": {
-    "@napi-rs/cli": "3.0.4",
-    "@types/jest": "^29.5.0",
+    "@napi-rs/cli": "3.7.0",
     "@types/node": "^20.0.0",
-    "jest": "^29.7.0",
     "protobufjs-cli": "^1.2.0",
-    "ts-jest": "^29.1.0",
-    "typescript": "^5.4.5"
+    "typescript": "^5.4.5",
+    "vitest": "^3.2.3"
   },
   "dependencies": {
     "protobufjs": "^7.6.2"
-  },
-  "jest": {
-    "preset": "ts-jest",
-    "testEnvironment": "node",
-    "testMatch": [
-      "**/tests/**/*.test.ts"
-    ],
-    "forceExit": true
   }
 }

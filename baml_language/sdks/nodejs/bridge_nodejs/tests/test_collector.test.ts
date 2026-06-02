@@ -1,6 +1,6 @@
 // test_collector.test.ts — mirrors bridge_python/tests/test_collector.py
 
-import { Collector } from '../index';
+import { Collector } from '../index.js';
 
 describe('Collector', () => {
     test('constructor with default name', () => {

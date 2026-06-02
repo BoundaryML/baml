@@ -5,29 +5,29 @@
 // confirm each generated namespace imports cleanly and that the
 // representative symbols listed in 18a are reachable at runtime.
 
-import { describe, it, expect } from "@jest/globals";
+import { describe, it, expect } from "vitest";
 
-import * as bamlSdk from "./baml_sdk";
-import { Foo } from "./baml_sdk";
-import { Resume } from "./baml_sdk/lorem";
-import { Thing } from "./baml_sdk/a/b";
-import * as primitives from "./baml_sdk/primitives";
-import * as media from "./baml_sdk/media";
-import * as enums from "./baml_sdk/enums";
-import * as literals from "./baml_sdk/literals";
-import * as classRefs from "./baml_sdk/class_refs";
-import * as aliases from "./baml_sdk/aliases";
-import * as aliasesConsumer from "./baml_sdk/aliases_consumer";
-import * as optional from "./baml_sdk/optional";
-import * as lists from "./baml_sdk/lists";
-import * as maps from "./baml_sdk/maps";
-import * as unions from "./baml_sdk/unions";
-import * as recursion from "./baml_sdk/recursion";
-import * as generics from "./baml_sdk/generics";
-import * as forwardRefs from "./baml_sdk/forward_refs";
-import * as complexModels from "./baml_sdk/complex_models";
-import * as lorem from "./baml_sdk/lorem";
-import * as a from "./baml_sdk/a";
+import * as bamlSdk from "./baml_sdk/index.js";
+import { Foo } from "./baml_sdk/index.js";
+import { Resume } from "./baml_sdk/lorem/index.js";
+import { Thing } from "./baml_sdk/a/b/index.js";
+import * as primitives from "./baml_sdk/primitives/index.js";
+import * as media from "./baml_sdk/media/index.js";
+import * as enums from "./baml_sdk/enums/index.js";
+import * as literals from "./baml_sdk/literals/index.js";
+import * as classRefs from "./baml_sdk/class_refs/index.js";
+import * as aliases from "./baml_sdk/aliases/index.js";
+import * as aliasesConsumer from "./baml_sdk/aliases_consumer/index.js";
+import * as optional from "./baml_sdk/optional/index.js";
+import * as lists from "./baml_sdk/lists/index.js";
+import * as maps from "./baml_sdk/maps/index.js";
+import * as unions from "./baml_sdk/unions/index.js";
+import * as recursion from "./baml_sdk/recursion/index.js";
+import * as generics from "./baml_sdk/generics/index.js";
+import * as forwardRefs from "./baml_sdk/forward_refs/index.js";
+import * as complexModels from "./baml_sdk/complex_models/index.js";
+import * as lorem from "./baml_sdk/lorem/index.js";
+import * as a from "./baml_sdk/a/index.js";
 
 describe("type_shapes — namespace imports", () => {
   it("baml_sdk root imports cleanly", () => {

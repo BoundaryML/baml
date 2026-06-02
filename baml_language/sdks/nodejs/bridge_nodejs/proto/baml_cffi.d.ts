@@ -6,7 +6,7 @@
  * Build:  cd baml_language/crates/bridge_nodejs && pnpm build:debug
  */
 import * as $protobuf from "protobufjs";
-import Long = require("long");
+import Long from "long";
 /** Namespace baml_core. */
 export namespace baml_core {
 

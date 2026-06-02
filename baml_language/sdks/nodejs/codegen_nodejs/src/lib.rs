@@ -14,7 +14,7 @@
 //! differences: the in-directory filename (`__init__.py` → `index.ts`), and
 //! that Node emits no declaration file — the Python `__init__.pyi` stub has
 //! no `.d.ts` counterpart, because the generated `.ts` is already fully
-//! typed. Re-exports use TS syntax (`export * as child from "./child"`).
+//! typed. Re-exports use TS syntax (`export * as child from "./child/index.js"`).
 
 mod emit;
 mod leaf;
@@ -295,7 +295,7 @@ mod tests {
         assert!(root.contains(HEADER_LEN_MARKER));
         assert!(root.contains("initializeRuntimeFromBytecode(_inlinedbaml.BYTECODE);"));
         assert!(root.contains("setTypeMap(_TYPE_MAP);"));
-        assert!(root.contains("export * as baml from \"./baml\";"));
+        assert!(root.contains("export * as baml from \"./baml/index.js\";"));
         assert!(!root.contains("export const b"));
         assert!(!root.contains("BAML_PLACEHOLDER"));
     }
@@ -354,7 +354,7 @@ mod tests {
         pool.insert(n.clone(), class_sym(&n, 0));
         let out = emit_sdk(&pool);
         let vendor = &out[&PathBuf::from("vendor/index.ts")];
-        assert!(vendor.contains("export * as aws from \"./aws\";"));
+        assert!(vendor.contains("export * as aws from \"./aws/index.js\";"));
         assert!(!vendor.contains("export const"));
         assert!(!vendor.contains("export * from"));
     }
@@ -369,7 +369,8 @@ mod tests {
         assert!(out.contains_key(&PathBuf::from("vendor/aws/index.ts")));
         assert!(out.contains_key(&PathBuf::from("vendor/aws/s3/index.ts")));
         assert!(
-            out[&PathBuf::from("vendor/aws/index.ts")].contains("export * as s3 from \"./s3\";")
+            out[&PathBuf::from("vendor/aws/index.ts")]
+                .contains("export * as s3 from \"./s3/index.js\";")
         );
         assert!(out[&PathBuf::from("vendor/aws/s3/index.ts")].contains("export class Bucket {"));
     }
@@ -398,7 +399,7 @@ mod tests {
         assert!(leaf.contains("export class Resume$stream {"));
         let typemap = &out[&PathBuf::from("_typemap.ts")];
         assert!(typemap.contains(
-            "\"user.lorem.Resume$stream\": () => require(\"./lorem\")[\"Resume$stream\"],"
+            "\"user.lorem.Resume$stream\": () => (__leaf_"
         ));
     }
 

@@ -5,16 +5,16 @@
  * Proto:  baml_language/crates/bridge_ctypes/types/baml_core/cffi/v1/*.proto
  * Build:  cd baml_language/crates/bridge_nodejs && pnpm build:debug
  */
-import { BamlRuntime, AbortController, HostSpanManager, Collector as NativeCollector, FunctionLog as NativeFunctionLog, Timing, Usage, LLMCall } from './native';
-export { BamlRuntime, AbortController, BamlHandle, HostSpanManager, getRuntime, getVersion, flushEvents } from './native';
-export { Timing, Usage, LLMCall } from './native';
-export { takeHandleFromTable, putHandleIntoTable, _seedFunctionRefHandle, _seedGenericMediaHandle, } from './native';
-export { BamlImage, BamlAudio, BamlVideo, BamlPdf } from './native';
-export { BamlStream } from './stream';
-export { encodeCallArgs, decodeCallResult } from './proto';
-export { CtxManager } from './ctx_manager';
-export { BamlTypeMap, setTypeMap, getTypeMap } from './typemap';
-export { defineFunction, defineInstanceFunction, UNSET } from './define_function';
+import { BamlRuntime, AbortController, HostSpanManager, Collector as NativeCollector, FunctionLog as NativeFunctionLog, Timing, Usage, LLMCall } from './native.js';
+export { BamlRuntime, AbortController, BamlHandle, HostSpanManager, getRuntime, getVersion, flushEvents } from './native.js';
+export { Timing, Usage, LLMCall } from './native.js';
+export { takeHandleFromTable, putHandleIntoTable, _seedFunctionRefHandle, _seedGenericMediaHandle, } from './native.js';
+export { BamlImage, BamlAudio, BamlVideo, BamlPdf } from './native.js';
+export { BamlStream } from './stream.js';
+export { encodeCallArgs, decodeCallResult } from './proto.js';
+export { CtxManager } from './ctx_manager.js';
+export { BamlTypeMap, setTypeMap, getTypeMap } from './typemap.js';
+export { defineFunction, defineInstanceFunction, UNSET } from './define_function.js';
 /**
  * Free-function runtime initializer used by generated `baml_sdk/index.ts`:
  * `initializeRuntime("baml_src", _inlinedbaml.FILES)`. Thin wrapper over the
@@ -27,7 +27,7 @@ export declare function initializeRuntime(srcDir: string, files: Record<string, 
  * codegen embeds precompiled BAML bytecode.
  */
 export declare function initializeRuntimeFromBytecode(bytecode: Buffer | Uint8Array): void;
-export { BamlError, BamlInvalidArgumentError, BamlClientError, BamlCancelledError, BamlPanic, wrapNativeError, } from './errors';
+export { BamlError, BamlInvalidArgumentError, BamlClientError, BamlCancelledError, BamlPanic, wrapNativeError, } from './errors.js';
 export declare class FunctionResult {
     private _value;
     constructor(value: unknown);

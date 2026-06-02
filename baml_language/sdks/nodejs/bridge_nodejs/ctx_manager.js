@@ -5,30 +5,29 @@
  * Proto:  baml_language/crates/bridge_ctypes/types/baml_core/cffi/v1/*.proto
  * Build:  cd baml_language/crates/bridge_nodejs && pnpm build:debug
  */
-"use strict";
 // ctx_manager.ts — mirrors bridge_python/python_src/baml_py/ctx_manager.py
 // Uses AsyncLocalStorage for async context isolation (Node.js built-in).
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.CtxManager = void 0;
-const node_async_hooks_1 = require("node:async_hooks");
-const native_1 = require("./native");
-const exit_hook_1 = require("./exit_hook");
-class CtxManager {
+import { AsyncLocalStorage } from 'node:async_hooks';
+import { HostSpanManager, flushEvents } from './native.js';
+import { installFlushOnExit } from './exit_hook.js';
+export class CtxManager {
+    rt;
+    ctx;
     constructor(rt) {
         this.rt = rt;
-        this.ctx = new node_async_hooks_1.AsyncLocalStorage();
+        this.ctx = new AsyncLocalStorage();
         // FIXME: Eagerly creates HostSpanManager before the runtime may be fully initialized.
         // Legacy engine/ was also eager (rt.createContextManager() in constructor).
         // bridge_python lazily creates HostSpanManager per-thread on first access.
         // Leaving as-is: get() and reset() already create fresh managers, and the legacy
         // engine/ had the same eager pattern without reported issues.
-        this.ctx.enterWith(new native_1.HostSpanManager());
-        (0, exit_hook_1.installFlushOnExit)();
+        this.ctx.enterWith(new HostSpanManager());
+        installFlushOnExit();
     }
     get() {
         let mgr = this.ctx.getStore();
         if (!mgr) {
-            mgr = new native_1.HostSpanManager();
+            mgr = new HostSpanManager();
             this.ctx.enterWith(mgr);
         }
         return mgr;
@@ -40,7 +39,7 @@ class CtxManager {
         return mgr.contextDepth() === 0;
     }
     reset() {
-        this.ctx.enterWith(new native_1.HostSpanManager());
+        this.ctx.enterWith(new HostSpanManager());
     }
     cloneContext() {
         const mgr = this.get();
@@ -86,8 +85,7 @@ class CtxManager {
         };
     }
     flush() {
-        (0, native_1.flushEvents)();
+        flushEvents();
     }
 }
-exports.CtxManager = CtxManager;
 //# sourceMappingURL=ctx_manager.js.map

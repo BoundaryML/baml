@@ -1,7 +1,7 @@
 // Roundtrip coverage for baml_sdk/primitives — ported from
 // python_pydantic2/.../roundtrip_tests/test_primitives.py.
-import "./baml_sdk"; // initializes the BAML runtime
-import { describe, it, expect } from "@jest/globals";
+import "./baml_sdk/index.js"; // initializes the BAML runtime
+import { describe, it, expect } from "vitest";
 import {
   Primitives,
   return_int,
@@ -16,7 +16,7 @@ import {
   round_trip_bool,
   round_trip_null,
   round_trip_primitives,
-} from "./baml_sdk/primitives";
+} from "./baml_sdk/primitives/index.js";
 
 describe("roundtrip primitives", () => {
   it("return_int", () => expect(return_int()).toBeCloseTo(42));

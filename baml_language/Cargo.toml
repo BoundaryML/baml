@@ -253,9 +253,9 @@ pyo3 = { version = "0.28", default-features = false }
 pyo3-async-runtimes = { version = "0.28" }
 pyo3-build-config = "0.28"
 pyo3-stub-gen = { version = "0.22", default-features = false }
-napi = { version = "3.8.4", default-features = false }
-napi-derive = "3.5.3"
-napi-build = "2.3.1"
+napi = { version = "3.9.0", default-features = false }
+napi-derive = "3.5.6"
+napi-build = "2.3.2"
 wiremock = "0.6"
 vfs = "0.12"
 wasm-logger = "0.2.0"

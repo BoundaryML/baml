@@ -1,7 +1,7 @@
 // Roundtrip coverage for baml_sdk/forward_refs — ported from test_forward_refs.py.
 // `round_trip_node` is uninhabitable (required self-ref); import-only.
-import "./baml_sdk";
-import { describe, it, expect } from "@jest/globals";
+import "./baml_sdk/index.js";
+import { describe, it, expect } from "vitest";
 import {
   Other,
   GNode,
@@ -10,7 +10,7 @@ import {
   round_trip_rec_list_with_other,
   round_trip_node, // eslint-disable-line @typescript-eslint/no-unused-vars
   round_trip_g_node_int,
-} from "./baml_sdk/forward_refs";
+} from "./baml_sdk/forward_refs/index.js";
 
 void round_trip_node; // import-only: required self-ref is uninhabitable host-side
 

@@ -5,7 +5,7 @@
  * Proto:  baml_language/crates/bridge_ctypes/types/baml_core/cffi/v1/*.proto
  * Build:  cd baml_language/crates/bridge_nodejs && pnpm build:debug
  */
-import { BamlHandle } from './native';
+import { BamlHandle } from './native.js';
 export declare class BamlStream<TStream, TFinal> {
     private _handle;
     constructor(handle: BamlHandle);

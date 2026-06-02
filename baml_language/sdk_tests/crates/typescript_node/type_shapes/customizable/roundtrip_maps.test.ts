@@ -1,6 +1,6 @@
 // Roundtrip coverage for baml_sdk/maps — ported from test_maps.py.
-import "./baml_sdk";
-import { describe, it, expect } from "@jest/globals";
+import "./baml_sdk/index.js";
+import { describe, it, expect } from "vitest";
 import {
   Sentiment,
   Resume,
@@ -11,7 +11,7 @@ import {
   round_trip_sentiment,
   round_trip_resume,
   round_trip_map_container,
-} from "./baml_sdk/maps";
+} from "./baml_sdk/maps/index.js";
 
 describe("roundtrip maps", () => {
   it("round_trip_simple_map", () =>

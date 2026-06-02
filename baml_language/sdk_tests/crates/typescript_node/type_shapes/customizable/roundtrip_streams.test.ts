@@ -3,8 +3,8 @@
 // `baml.http.Response`-backed cases aren't host-mintable (the engine owns the
 // `_body` handle), and that handle round-trip is covered by
 // roundtrip_handles.test.ts instead.
-import "./baml_sdk";
-import { describe, it, expect } from "@jest/globals";
+import "./baml_sdk/index.js";
+import { describe, it, expect } from "vitest";
 import {
   Box,
   Resume,
@@ -16,8 +16,8 @@ import {
   // spec2: stream companions keep their `$stream` suffix and live beside
   // their base type in the same leaf — no `stream_types/` namespace.
   Resume$stream,
-} from "./baml_sdk/lorem";
-import { Foo$stream } from "./baml_sdk";
+} from "./baml_sdk/lorem/index.js";
+import { Foo$stream } from "./baml_sdk/index.js";
 
 describe("roundtrip streams", () => {
   it("round_trip_resume_stream", () => {

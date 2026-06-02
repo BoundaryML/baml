@@ -5,37 +5,28 @@
  * Proto:  baml_language/crates/bridge_ctypes/types/baml_core/cffi/v1/*.proto
  * Build:  cd baml_language/crates/bridge_nodejs && pnpm build:debug
  */
-"use strict";
 // typemap.ts — runtime BamlTypeMap, the Node analog of
 // sdks/python/src/baml_core/typemap.py.
 //
 // Codegen emits `_typemap.ts` with `BamlTypeMap.fromLazyEntries({ classes,
-// enums, typeAliases })` where each entry is a RESOLVER THUNK
-// `() => require("./lorem").Resume`. The thunk closes over a `require`
-// relative to the generated `_typemap.ts`, so resolution happens in the SDK's
-// module scope (the runtime package can't resolve a `baml_sdk/...` path). The
-// root `index.ts` calls `setTypeMap(_TYPE_MAP)` at import time; resolution is
-// lazy and memoized on first lookup, which also avoids the circular
-// `index ↔ _typemap` import deadlocking.
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.BamlTypeMap = void 0;
-exports.setTypeMap = setTypeMap;
-exports.getTypeMap = getTypeMap;
-const errors_1 = require("./errors");
-class BamlTypeMap {
-    constructor() {
-        this.classLazy = new Map();
-        this.enumLazy = new Map();
-        this.aliasLazy = new Map();
-        this.classCache = new Map();
-        this.enumCache = new Map();
-        this.aliasCache = new Map();
-        // Reverse map (constructor identity → FQN) for the encode path. Lazily
-        // built from the class/enum thunks on first `jsTypeToBamlType` call. The
-        // five stdlib media/stream wrappers encode via `instanceof` in proto.ts,
-        // so they don't need to be seeded here.
-        this.reverse = null;
-    }
+// enums, typeAliases })` where each entry is a resolver thunk over a statically
+// imported generated namespace, e.g. `() => __leaf_0.Resume`. Resolution happens
+// in the SDK's module scope (the runtime package can't resolve a
+// `baml_sdk/...` path). The root `index.ts` calls `setTypeMap(_TYPE_MAP)` at
+// import time; resolution is lazy and memoized on first lookup.
+import { BamlError } from './errors.js';
+export class BamlTypeMap {
+    classLazy = new Map();
+    enumLazy = new Map();
+    aliasLazy = new Map();
+    classCache = new Map();
+    enumCache = new Map();
+    aliasCache = new Map();
+    // Reverse map (constructor identity → FQN) for the encode path. Lazily
+    // built from the class/enum thunks on first `jsTypeToBamlType` call. The
+    // five stdlib media/stream wrappers encode via `instanceof` in proto.ts,
+    // so they don't need to be seeded here.
+    reverse = null;
     static fromLazyEntries(args) {
         const m = new BamlTypeMap();
         for (const [fqn, le] of Object.entries(args.classes))
@@ -51,16 +42,16 @@ class BamlTypeMap {
             return cache.get(fqn);
         const thunk = lazy.get(fqn);
         if (thunk === undefined)
-            throw new errors_1.BamlError(`Unknown ${kind} FQN ${fqn}`);
+            throw new BamlError(`Unknown ${kind} FQN ${fqn}`);
         let resolved;
         try {
             resolved = thunk();
         }
         catch (e) {
-            throw new errors_1.BamlError(`Failed to resolve ${kind} ${fqn}: ${String(e)}`);
+            throw new BamlError(`Failed to resolve ${kind} ${fqn}: ${String(e)}`);
         }
         if (resolved === undefined) {
-            throw new errors_1.BamlError(`Could not resolve ${kind} ${fqn} (resolver returned undefined)`);
+            throw new BamlError(`Could not resolve ${kind} ${fqn} (resolver returned undefined)`);
         }
         cache.set(fqn, resolved);
         return resolved;
@@ -109,12 +100,11 @@ class BamlTypeMap {
             this.getTypeAlias(k);
     }
 }
-exports.BamlTypeMap = BamlTypeMap;
 let _TYPE_MAP = new BamlTypeMap();
-function setTypeMap(m) {
+export function setTypeMap(m) {
     _TYPE_MAP = m;
 }
-function getTypeMap() {
+export function getTypeMap() {
     return _TYPE_MAP;
 }
 //# sourceMappingURL=typemap.js.map

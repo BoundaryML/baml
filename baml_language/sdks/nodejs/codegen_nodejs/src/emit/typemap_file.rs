@@ -5,44 +5,44 @@
 //! `BamlTypeMap.fromLazyEntries(...)` call that installs the populated map.
 //! The root `index.ts` imports `_TYPE_MAP` and calls `setTypeMap(_TYPE_MAP)`.
 //!
-//! Each thunk closes over a `require` relative to *this* file
-//! (`baml_sdk/_typemap.ts`): `() => require("./lorem").Resume`. A thunk
-//! (rather than the Python-style `[module_path, attr]` pair) is required
-//! because resolution must happen in the generated SDK's module scope — the
-//! runtime `BamlTypeMap` lives in `@boundaryml/baml-core-node` and cannot resolve
-//! a `baml_sdk/...` path. The require is deferred (lazy) so importing
-//! `_typemap.ts` does not eagerly load every leaf, and so the root's own
-//! `require(".")` does not deadlock the circular `index ↔ _typemap` import.
+//! Each thunk closes over a statically imported namespace from the generated
+//! SDK: `() => __leaf_0.Resume`. A thunk (rather than the Python-style
+//! `[module_path, attr]` pair) is required because resolution must happen in the
+//! generated SDK's module scope — the runtime `BamlTypeMap` lives in
+//! `@boundaryml/baml-core-node` and cannot resolve a `baml_sdk/...` path.
 
 use std::{collections::BTreeMap, fmt::Write as _};
 
 use crate::{emit::EmittedSymbol, leaf::LeafBody, routing::LeafPath, ts_string};
 
 /// Render `_typemap.ts` for the given grouped bodies. `sdk_root` is unused
-/// for the module path (thunks use a require relative to `_typemap.ts`); it
-/// is kept for signature parity with the Python emitter. Returns the file
-/// body (no banner; the caller prepends the standard banner uniformly).
+/// for the module path; it is kept for signature parity with the Python
+/// emitter. Returns the file body (no banner; the caller prepends the standard
+/// banner uniformly).
 pub(crate) fn render_typemap_module(
     bodies: &BTreeMap<LeafPath, LeafBody>,
     _sdk_root: &str,
 ) -> String {
-    // (source FQN, require path relative to _typemap.ts, attr name)
+    // (source FQN, module namespace alias, attr name)
     let mut classes: Vec<(String, String, String)> = Vec::new();
     let mut enums: Vec<(String, String, String)> = Vec::new();
     let mut aliases: Vec<(String, String, String)> = Vec::new();
+    let mut module_aliases: BTreeMap<LeafPath, String> = BTreeMap::new();
 
     for (leaf, body) in bodies {
-        let require_path = require_path_for_leaf(leaf);
         for (sym, _) in &body.symbols {
             match sym {
                 EmittedSymbol::Class(c) => {
-                    classes.push((c.source.to_string(), require_path.clone(), c.name.clone()));
+                    let module_alias = alias_for_leaf(&mut module_aliases, leaf);
+                    classes.push((c.source.to_string(), module_alias, c.name.clone()));
                 }
                 EmittedSymbol::Enum(e) => {
-                    enums.push((e.source.to_string(), require_path.clone(), e.name.clone()));
+                    let module_alias = alias_for_leaf(&mut module_aliases, leaf);
+                    enums.push((e.source.to_string(), module_alias, e.name.clone()));
                 }
                 EmittedSymbol::TypeAlias(a) => {
-                    aliases.push((a.source.to_string(), require_path.clone(), a.name.clone()));
+                    let module_alias = alias_for_leaf(&mut module_aliases, leaf);
+                    aliases.push((a.source.to_string(), module_alias, a.name.clone()));
                 }
                 EmittedSymbol::Function(_) => {}
             }
@@ -53,7 +53,16 @@ pub(crate) fn render_typemap_module(
     aliases.sort();
 
     let mut out = String::new();
-    out.push_str("import { BamlTypeMap } from \"@boundaryml/baml-core-node\";\n\n");
+    out.push_str("import { BamlTypeMap } from \"@boundaryml/baml-core-node\";\n");
+    for (leaf, module_alias) in &module_aliases {
+        writeln!(
+            out,
+            "import * as {module_alias} from {};",
+            ts_string(&module_path_for_leaf(leaf)),
+        )
+        .unwrap();
+    }
+    out.push('\n');
 
     write_entries(&mut out, "_CLASS_ENTRIES", &classes);
     out.push('\n');
@@ -72,13 +81,23 @@ pub(crate) fn render_typemap_module(
     out
 }
 
-/// Require path (relative to `baml_sdk/_typemap.ts`) for a leaf: `.` for the
-/// root, `./lorem` / `./vendor/aws/s3` for nested leaves.
-fn require_path_for_leaf(leaf: &LeafPath) -> String {
+fn alias_for_leaf(module_aliases: &mut BTreeMap<LeafPath, String>, leaf: &LeafPath) -> String {
+    if let Some(alias) = module_aliases.get(leaf) {
+        return alias.clone();
+    }
+    let alias = format!("__leaf_{}", module_aliases.len());
+    module_aliases.insert(leaf.clone(), alias.clone());
+    alias
+}
+
+/// Import path (relative to `baml_sdk/_typemap.ts`) for a leaf:
+/// `./index.js` for the root, `./lorem/index.js` / `./vendor/aws/s3/index.js`
+/// for nested leaves.
+fn module_path_for_leaf(leaf: &LeafPath) -> String {
     if leaf.segments.is_empty() {
-        ".".to_string()
+        "./index.js".to_string()
     } else {
-        format!("./{}", leaf.segments.join("/"))
+        format!("./{}/index.js", leaf.segments.join("/"))
     }
 }
 
@@ -88,13 +107,13 @@ fn write_entries(out: &mut String, name: &str, entries: &[(String, String, Strin
         return;
     }
     writeln!(out, "const {name}: Record<string, () => unknown> = {{").unwrap();
-    for (fqn, require_path, ts_name) in entries {
-        // A deferred resolver: `() => require("./lorem").Resume`.
+    for (fqn, module_alias, ts_name) in entries {
+        // A deferred resolver: `() => (__leaf_0 as Record<string, unknown>)["Resume"]`.
         writeln!(
             out,
-            "  {}: () => require({})[{}],",
+            "  {}: () => ({} as Record<string, unknown>)[{}],",
             ts_string(fqn),
-            ts_string(require_path),
+            module_alias,
             ts_string(ts_name),
         )
         .unwrap();
@@ -173,7 +192,10 @@ mod tests {
             ),
         );
         let out = render_typemap_module(&bodies, "baml_sdk");
-        assert!(out.contains("\"aws.s3.Bucket\": () => require(\"./vendor/aws/s3\")[\"Bucket\"],"));
+        assert!(out.contains("import * as __leaf_0 from \"./vendor/aws/s3/index.js\";"));
+        assert!(out.contains(
+            "\"aws.s3.Bucket\": () => (__leaf_0 as Record<string, unknown>)[\"Bucket\"],"
+        ));
     }
 
     #[test]
@@ -196,7 +218,10 @@ mod tests {
         );
         let out = render_typemap_module(&bodies, "baml_sdk");
         assert!(out.contains(
-            "\"user.lorem.Resume$stream\": () => require(\"./lorem\")[\"Resume$stream\"],"
+            "import * as __leaf_0 from \"./lorem/index.js\";"
+        ));
+        assert!(out.contains(
+            "\"user.lorem.Resume$stream\": () => (__leaf_0 as Record<string, unknown>)[\"Resume$stream\"],"
         ));
     }
 
@@ -212,6 +237,9 @@ mod tests {
             ),
         );
         let out = render_typemap_module(&bodies, "baml_sdk");
-        assert!(out.contains("\"user.Sentiment\": () => require(\".\")[\"Sentiment\"],"));
+        assert!(out.contains("import * as __leaf_0 from \"./index.js\";"));
+        assert!(out.contains(
+            "\"user.Sentiment\": () => (__leaf_0 as Record<string, unknown>)[\"Sentiment\"],"
+        ));
     }
 }

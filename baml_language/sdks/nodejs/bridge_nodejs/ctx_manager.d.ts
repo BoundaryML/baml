@@ -5,7 +5,7 @@
  * Proto:  baml_language/crates/bridge_ctypes/types/baml_core/cffi/v1/*.proto
  * Build:  cd baml_language/crates/bridge_nodejs && pnpm build:debug
  */
-import { HostSpanManager } from './native';
+import { HostSpanManager } from './native.js';
 export declare class CtxManager {
     private rt;
     private ctx;

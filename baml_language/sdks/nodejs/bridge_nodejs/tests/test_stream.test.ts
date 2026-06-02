@@ -4,7 +4,7 @@
 // Phase 4. Here we validate the wrapper class structure and that a stream-typed
 // value encodes without throwing (the _toHandle round-trip through the encoder).
 
-import { BamlStream, BamlHandle, _seedFunctionRefHandle, encodeCallArgs } from '../index';
+import { BamlStream, BamlHandle, _seedFunctionRefHandle, encodeCallArgs } from '../index.js';
 
 describe('BamlStream', () => {
     test('_toHandle round-trips through encodeCallArgs', () => {
