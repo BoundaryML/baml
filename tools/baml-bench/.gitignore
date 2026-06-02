@@ -29,3 +29,6 @@ docs/**/*.html
 .env
 .env.local
 .env.*.local
+
+# local ops script holding Infisical bootstrap creds
+set-infisical-secrets.sh
