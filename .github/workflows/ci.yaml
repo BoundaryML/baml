@@ -679,7 +679,11 @@ jobs:
       - webview-tests
       # - miri-tests  # TEMPORARILY DISABLED: miri tests timing out
       - proto-sync
-      - size-gate
+      # NOTE: size-gate is intentionally NOT a required gate. It is an
+      # informational signal (PR comment + daily baseline auto-refresh), not
+      # a merge blocker: a size bump must never block the merge queue or force
+      # a full CI re-run. Drift is caught by the daily refresh PR and by
+      # reviewers eyeballing the size-gate comment, not by failing CI here.
     # Only run if something failed or was cancelled (otherwise skip → success)
     if: ${{ failure() || cancelled() }}
     steps:
@@ -700,7 +704,6 @@ jobs:
           echo "| webview-tests | ${{ needs.webview-tests.result }} |" >> $GITHUB_STEP_SUMMARY
           # echo "| miri-tests | ${{ needs.miri-tests.result }} |" >> $GITHUB_STEP_SUMMARY  # TEMPORARILY DISABLED
           echo "| proto-sync | ${{ needs.proto-sync.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| size-gate | ${{ needs.size-gate.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "::error::One or more CI jobs failed!"
           exit 1

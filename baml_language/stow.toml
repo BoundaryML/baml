@@ -112,6 +112,18 @@ approved_prefixes = ["sap"]
 # Allow tools_stow folder to have package name "cargo-stow" for cargo subcommand convention
 name_exceptions = { "tools_stow" = "cargo-stow", "tools_size_gate" = "cargo-size-gate" }
 
+# forked AWS crates retain the upstream folder names while publishing
+# package names that cannot collide with the real crates.
+[[namespaces]]
+name = "forked_aws"
+name_exceptions = { "aws-bedrock" = "forked_aws_bedrock", "aws-config" = "forked_aws_config", "aws-sigv4" = "forked_aws_sigv4" }
+
+# forked Google crates follow the same package-name convention.
+[[namespaces]]
+name = "forked_google"
+approved_prefixes = ["cloud"]
+name_exceptions = { "google-cloud-auth" = "forked_google_cloud_auth" }
+
 # bex namespace configuration
 [[namespaces]]
 name = "bex"

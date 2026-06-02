@@ -12,7 +12,7 @@ use serde::{Deserialize, Serialize};
 use crate::config::{ArtifactConfig, ArtifactKind, PackConfig};
 
 /// Measurements for a single artifact.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub(crate) struct ArtifactMeasurement {
     pub file_bytes: u64,
 

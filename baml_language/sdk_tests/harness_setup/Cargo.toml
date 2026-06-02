@@ -26,6 +26,7 @@ baml_codegen_types = { workspace = true }
 baml_db = { workspace = true }
 baml_project = { workspace = true }
 baml_workspace = { workspace = true }
+borsh = { workspace = true }
 
 [package.metadata.ci]
 wasm_support = false

@@ -101,12 +101,31 @@ pub fn initialize_runtime(
 
     let rt = bex_project::new(vfs_path, bex_project::SysOps::native(), files)?;
 
+    replace_runtime(rt.clone())?;
+
+    Ok(rt)
+}
+
+/// Initialize the global runtime from serialized BAML bytecode.
+///
+/// The payload is the same borsh-encoded `bex_vm_types::Program` that
+/// `baml pack` embeds in its pack envelope. Decoding and engine construction
+/// live behind `bex_project::new_from_bytecode` so the bridge stays on the
+/// `bex_project` surface rather than reaching into bex internals.
+pub fn initialize_runtime_from_bytecode(bytecode: &[u8]) -> Result<Arc<dyn Bex>, BridgeError> {
+    let rt: Arc<dyn Bex> = bex_project::new_from_bytecode(bytecode, bex_project::SysOps::native())?;
+
+    replace_runtime(rt.clone())?;
+
+    Ok(rt)
+}
+
+fn replace_runtime(rt: Arc<dyn Bex>) -> Result<(), BridgeError> {
     let mut guard = RUNTIME_INSTANCE
         .write()
         .map_err(|_| BridgeError::LockPoisoned)?;
-    *guard = Some(rt.clone());
-
-    Ok(rt)
+    *guard = Some(rt);
+    Ok(())
 }
 
 // ============================================================================

@@ -81,6 +81,7 @@ pub fn qtn_to_type_name(qtn: &QualifiedTypeName) -> TypeName {
 /// Pre-computed type alias data for inline expansion in `convert_tir2_ty`.
 ///
 /// Bundles the alias map and recursion info that are always passed together.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct ResolvedAliases {
     pub aliases: HashMap<QualifiedTypeName, Tir2Ty>,
     pub recursive: HashSet<QualifiedTypeName>,
@@ -776,7 +777,7 @@ use baml_compiler2_ast::{
 use baml_compiler2_hir::{
     body::{FunctionBody, LetBody, let_body, let_body_source_map},
     loc::{FunctionLoc, LetLoc},
-    package::{PackageId, package_dependencies, package_items},
+    package::{PackageId, package_items},
     scope::FileScopeId,
     semantic_index::{BindingId, DefinitionSite},
 };
@@ -791,7 +792,7 @@ type ClassFieldIndices = IndexMap<TypeName, IndexMap<String, usize>>;
 type ClassFieldTypes = IndexMap<TypeName, IndexMap<String, Ty>>;
 type EnumVariantIndices = IndexMap<QualifiedTypeName, IndexMap<String, usize>>;
 type InterfaceImplementors = IndexMap<TypeName, Vec<TypeName>>;
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Eq)]
 struct InterfaceTypeImplementor {
     runtime_ty: Ty,
     tir_ty: Tir2Ty,
@@ -903,6 +904,111 @@ struct PackagePopulation<'a> {
     enum_variants: &'a mut EnumVariantIndices,
     interface_implementors: &'a mut InterfaceImplementors,
     interface_type_implementors: &'a mut InterfaceTypeImplementors,
+}
+
+/// All package-invariant data needed to construct a [`LoweringContext`]: the
+/// class/enum/interface schema maps plus resolved type aliases.
+///
+/// `LoweringContext::new` runs once per function, but every function in a
+/// package sees the *same* schema. Building this inline per function made MIR
+/// lowering `O(functions × classes)` — each function re-lowered every class
+/// field type (`populate_from_package`) and recomputed every alias
+/// (`ResolvedAliases::for_package`, which also re-runs `find_recursive_aliases`
+/// over the whole project). Computing it once in the [`package_lowering_data`]
+/// Salsa query collapses that to `O(classes)` total; the maps are then borrowed
+/// (not cloned) into each `LoweringContext`.
+#[derive(Clone, PartialEq, Eq, Default)]
+struct PackageLoweringData {
+    class_fields: ClassFieldIndices,
+    class_field_types: ClassFieldTypes,
+    enum_variants: EnumVariantIndices,
+    interface_implementors: InterfaceImplementors,
+    interface_type_implementors: InterfaceTypeImplementors,
+    resolved_aliases: ResolvedAliases,
+}
+
+/// # Safety
+///
+/// Mirrors [`baml_compiler2_hir::package::PackageItems`]'s impl. The contained
+/// maps hold no Salsa-interned (`'db`) data, so storing them by value is sound;
+/// `maybe_update` uses `PartialEq` for proper Salsa early-cutoff.
+#[allow(unsafe_code)]
+unsafe impl salsa::Update for PackageLoweringData {
+    unsafe fn maybe_update(old_pointer: *mut Self, new_value: Self) -> bool {
+        // SAFETY: `old_pointer` is valid, aligned, and Salsa-owned.
+        #[allow(unsafe_code)]
+        let old = unsafe { &*old_pointer };
+        if old == &new_value {
+            false
+        } else {
+            #[allow(unsafe_code)]
+            unsafe {
+                std::ptr::drop_in_place(old_pointer);
+                std::ptr::write(old_pointer, new_value);
+            }
+            true
+        }
+    }
+}
+
+/// Build the package-invariant [`PackageLoweringData`] once per package,
+/// memoized by Salsa and shared across every function's `LoweringContext`.
+#[salsa::tracked(returns(ref))]
+fn package_lowering_data<'db>(
+    db: &'db dyn crate::Db,
+    pkg_id: baml_compiler2_hir::package::PackageId<'db>,
+) -> PackageLoweringData {
+    use baml_compiler2_hir::package::{package_dependencies, package_items};
+
+    let resolved_aliases = ResolvedAliases::for_package(db, pkg_id);
+
+    let mut class_fields = ClassFieldIndices::default();
+    let mut class_field_types = ClassFieldTypes::default();
+    let mut enum_variants = EnumVariantIndices::default();
+    let mut interface_implementors = InterfaceImplementors::default();
+    let mut interface_type_implementors = InterfaceTypeImplementors::default();
+    {
+        let mut population = PackagePopulation {
+            class_fields: &mut class_fields,
+            class_field_types: &mut class_field_types,
+            enum_variants: &mut enum_variants,
+            interface_implementors: &mut interface_implementors,
+            interface_type_implementors: &mut interface_type_implementors,
+        };
+
+        // Dependency packages first (e.g., "baml" builtins); current-package
+        // items overwrite on collision.
+        for &dep_id in package_dependencies(db, pkg_id) {
+            let dep_items = package_items(db, dep_id);
+            let dep_name = dep_id.name(db);
+            LoweringContext::populate_from_package(
+                db,
+                dep_items,
+                &dep_name,
+                &mut population,
+                &resolved_aliases,
+            );
+        }
+
+        let pkg_items = package_items(db, pkg_id);
+        let pkg_name = pkg_id.name(db);
+        LoweringContext::populate_from_package(
+            db,
+            pkg_items,
+            &pkg_name,
+            &mut population,
+            &resolved_aliases,
+        );
+    }
+
+    PackageLoweringData {
+        class_fields,
+        class_field_types,
+        enum_variants,
+        interface_implementors,
+        interface_type_implementors,
+        resolved_aliases,
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -1019,9 +1125,12 @@ struct LoweringContext<'db> {
     // so that e.g. baml.http.Request and a user-defined Request are distinct.
     // enum_variants is keyed by QualifiedTypeName for the same reason: distinct
     // namespaces can define enums with the same short name.
-    class_fields: IndexMap<TypeName, IndexMap<String, usize>>,
-    class_field_types: IndexMap<TypeName, IndexMap<String, Ty>>,
-    enum_variants: EnumVariantIndices,
+    // Borrowed from the package-keyed `package_lowering_data` query so every
+    // function in a package shares one computation instead of rebuilding these
+    // (see [`PackageLoweringData`]).
+    class_fields: &'db ClassFieldIndices,
+    class_field_types: &'db ClassFieldTypes,
+    enum_variants: &'db EnumVariantIndices,
     /// Pre-computed type tags for class types, used by `SwitchKind::TypeTag`
     /// for union-type switch optimization (ported from MIR 1).
     class_type_tags: IndexMap<TypeName, i64>,
@@ -1029,15 +1138,17 @@ struct LoweringContext<'db> {
     /// (directly or transitively through interface `requires`). Lets the field-access
     /// and method-call lowering paths emit a type-tag switch over the
     /// implementor set when the static receiver type is an interface.
-    interface_implementors: IndexMap<TypeName, Vec<TypeName>>,
+    interface_implementors: &'db InterfaceImplementors,
     /// BEP-044: non-class concrete implementors, such as
     /// `implements Debuggable for int`. These are kept separate from
     /// `interface_implementors` because reflection/runtime metadata stores
     /// named classes, while dispatch can use primitive type tags directly.
-    interface_type_implementors: InterfaceTypeImplementors,
+    interface_type_implementors: &'db InterfaceTypeImplementors,
 
-    // Pre-computed type alias data for inline expansion in convert_tir2_ty
-    resolved_aliases: ResolvedAliases,
+    // Pre-computed type alias data for inline expansion in convert_tir2_ty.
+    // Borrowed from `package_lowering_data` (shared across every function in
+    // the package) rather than cloned per context.
+    resolved_aliases: &'db ResolvedAliases,
 
     watched_locals_stack: Vec<Local>,
 
@@ -1615,7 +1726,6 @@ impl<'db> LoweringContext<'db> {
         // --- Build class_fields / enum_variants from PackageItems ---
         let pkg_info = file_package(db, file);
         let pkg_id = PackageId::new(db, pkg_info.package.clone());
-        let resolved_aliases = ResolvedAliases::for_package(db, pkg_id);
         let pkg_items_for_bounds = package_items(db, pkg_id);
         let (bound_param_names, bound_exprs) = item_tree
             .implements_for
@@ -1647,44 +1757,9 @@ impl<'db> LoweringContext<'db> {
             }
         }
 
-        let mut class_fields: ClassFieldIndices = IndexMap::new();
-        let mut class_field_types: ClassFieldTypes = IndexMap::new();
-        let mut enum_variants: EnumVariantIndices = IndexMap::new();
-        let mut interface_implementors: InterfaceImplementors = IndexMap::new();
-        let mut interface_type_implementors: InterfaceTypeImplementors = IndexMap::new();
-        {
-            let mut package_population = PackagePopulation {
-                class_fields: &mut class_fields,
-                class_field_types: &mut class_field_types,
-                enum_variants: &mut enum_variants,
-                interface_implementors: &mut interface_implementors,
-                interface_type_implementors: &mut interface_type_implementors,
-            };
-
-            // Include classes from dependency packages first (e.g., "baml" builtins).
-            // Inserted first so current-package classes take priority on collision.
-            for &dep_id in package_dependencies(db, pkg_id) {
-                let dep_items = package_items(db, dep_id);
-                let dep_name = dep_id.name(db);
-                Self::populate_from_package(
-                    db,
-                    dep_items,
-                    &dep_name,
-                    &mut package_population,
-                    &resolved_aliases,
-                );
-            }
-
-            // Include classes from the current package (overwrites on collision).
-            let pkg_items = package_items(db, pkg_id);
-            Self::populate_from_package(
-                db,
-                pkg_items,
-                &pkg_info.package,
-                &mut package_population,
-                &resolved_aliases,
-            );
-        }
+        // Class/enum/interface schema + resolved aliases, memoized per package
+        // (was rebuilt — and every class field re-lowered — per function).
+        let pkg_data = package_lowering_data(db, pkg_id);
 
         // Build class_type_tags using the same file-iteration order as the emitter,
         // so that switch arms get the same integer tags as runtime class.type_tag fields.
@@ -1741,16 +1816,16 @@ impl<'db> LoweringContext<'db> {
             file,
             func_loc: Some(func_loc),
             scope_func_name: Some(func_data.name.clone()),
-            class_fields,
-            class_field_types,
-            enum_variants,
+            class_fields: &pkg_data.class_fields,
+            class_field_types: &pkg_data.class_field_types,
+            enum_variants: &pkg_data.enum_variants,
             class_type_tags,
-            interface_implementors,
-            interface_type_implementors,
+            interface_implementors: &pkg_data.interface_implementors,
+            interface_type_implementors: &pkg_data.interface_type_implementors,
             pending_lambdas: Vec::new(),
             capture_indices: None,
             transitive_captures_needed: Vec::new(),
-            resolved_aliases,
+            resolved_aliases: &pkg_data.resolved_aliases,
             watched_locals_stack: Vec::new(),
             synthetic_name_counts: HashMap::new(),
             chain_null_exits: Vec::new(),
@@ -1924,47 +1999,11 @@ impl<'db> LoweringContext<'db> {
         }
 
         // --- Build class_fields / enum_variants from PackageItems ---
-        let pkg_info = file_package(db, file);
-        let pkg_id = PackageId::new(db, pkg_info.package.clone());
-        let resolved_aliases = ResolvedAliases::for_package(db, pkg_id);
+        let pkg_id = PackageId::new(db, file_package(db, file).package);
 
-        let mut class_fields: ClassFieldIndices = IndexMap::new();
-        let mut class_field_types: ClassFieldTypes = IndexMap::new();
-        let mut enum_variants: EnumVariantIndices = IndexMap::new();
-        let mut interface_implementors: InterfaceImplementors = IndexMap::new();
-        let mut interface_type_implementors: InterfaceTypeImplementors = IndexMap::new();
-        {
-            let mut package_population = PackagePopulation {
-                class_fields: &mut class_fields,
-                class_field_types: &mut class_field_types,
-                enum_variants: &mut enum_variants,
-                interface_implementors: &mut interface_implementors,
-                interface_type_implementors: &mut interface_type_implementors,
-            };
-
-            // Include classes from dependency packages first.
-            for &dep_id in package_dependencies(db, pkg_id) {
-                let dep_items = package_items(db, dep_id);
-                let dep_name = dep_id.name(db);
-                Self::populate_from_package(
-                    db,
-                    dep_items,
-                    &dep_name,
-                    &mut package_population,
-                    &resolved_aliases,
-                );
-            }
-
-            // Include classes from the current package (overwrites on collision).
-            let pkg_items = package_items(db, pkg_id);
-            Self::populate_from_package(
-                db,
-                pkg_items,
-                &pkg_info.package,
-                &mut package_population,
-                &resolved_aliases,
-            );
-        }
+        // Class/enum/interface schema + resolved aliases, memoized per package
+        // (was rebuilt — and every class field re-lowered — per let binding).
+        let pkg_data = package_lowering_data(db, pkg_id);
 
         // Build class_type_tags using the same file-iteration order as the emitter,
         // so that switch arms get the same integer tags as runtime class.type_tag fields.
@@ -1995,13 +2034,13 @@ impl<'db> LoweringContext<'db> {
             file,
             func_loc: None,
             scope_func_name: Some(let_name),
-            class_fields,
-            class_field_types,
-            enum_variants,
+            class_fields: &pkg_data.class_fields,
+            class_field_types: &pkg_data.class_field_types,
+            enum_variants: &pkg_data.enum_variants,
             class_type_tags,
-            interface_implementors,
-            interface_type_implementors,
-            resolved_aliases,
+            interface_implementors: &pkg_data.interface_implementors,
+            interface_type_implementors: &pkg_data.interface_type_implementors,
+            resolved_aliases: &pkg_data.resolved_aliases,
             watched_locals_stack: Vec::new(),
             synthetic_name_counts: HashMap::new(),
             pending_lambdas: Vec::new(),
@@ -2226,7 +2265,7 @@ impl<'db> LoweringContext<'db> {
 
     fn convert_tir_ty_for_runtime(&self, ty: &Tir2Ty) -> Ty {
         let erased = self.erase_bound_typevars_for_runtime(ty);
-        convert_tir2_ty(&erased, &self.resolved_aliases)
+        convert_tir2_ty(&erased, self.resolved_aliases)
     }
 
     fn interface_dispatch_target_for_tir_ty(&self, ty: &Tir2Ty) -> Option<(TypeName, Vec<Tir2Ty>)> {
@@ -2727,11 +2766,11 @@ impl<'db> LoweringContext<'db> {
         let mut adapter_builder =
             MirBuilder::new(Name::new(&adapter_name), coercion.target_params.len());
 
-        let ret_ty = convert_tir2_ty(&coercion.target_return, &self.resolved_aliases);
+        let ret_ty = convert_tir2_ty(&coercion.target_return, self.resolved_aliases);
         let ret = adapter_builder.declare_local(Some(Name::new("_0")), ret_ty, None, false);
 
         for param in &coercion.target_params {
-            let param_ty = convert_tir2_ty(&param.ty, &self.resolved_aliases);
+            let param_ty = convert_tir2_ty(&param.ty, self.resolved_aliases);
             adapter_builder.declare_local(param.name.clone(), param_ty, None, false);
         }
 
@@ -3848,7 +3887,6 @@ impl<'db> LoweringContext<'db> {
             };
             if let Some((iface_tn, iface_type_args)) = interface_prefix
                 && self.try_lower_interface_field_access(
-                    expr_id,
                     base_local,
                     &iface_tn,
                     &iface_type_args,
@@ -3870,6 +3908,22 @@ impl<'db> LoweringContext<'db> {
                 seg,
                 &target_place,
             ) {
+                if is_last {
+                    return;
+                }
+                current_place = target_place;
+                current_ty = target_ty;
+                continue;
+            }
+            // Receiver prefix may be a union containing an interface member
+            // (`(Dog | Named).name`): dispatch the field read on the runtime
+            // class across all members' implementors.
+            if let Some(members) = self
+                .path_segment_types
+                .get(&(self.current_metadata_scope, expr_id, seg_idx - 1))
+                .and_then(Self::tir_union_members)
+                && self.lower_union_iface_field_access(base_local, &members, seg, &target_place)
+            {
                 if is_last {
                     return;
                 }
@@ -3962,8 +4016,7 @@ impl<'db> LoweringContext<'db> {
         // Build a TyTemplate with `TypeArgRef(N)` for each class-level
         // generic param, then substitute `class_type_args` so a field
         // declared as `T` resolves to the concrete receiver-side binding.
-        let template =
-            tir2_to_template(&tir_ty, &self.resolved_aliases, &class_data.generic_params);
+        let template = tir2_to_template(&tir_ty, self.resolved_aliases, &class_data.generic_params);
         template.substitute(class_type_args)
     }
 
@@ -4499,6 +4552,12 @@ impl LoweringContext<'_> {
             if self.try_lower_union_dispatch(expr_id, base_id, &member_name, args, &dest) {
                 return;
             }
+            // Receiver may be a union containing an interface member
+            // (e.g. `Animal | Vehicle`), where every member declares the
+            // method — dispatch on the runtime class across all implementors.
+            if self.try_lower_union_iface_dispatch(expr_id, base_id, &member_name, args, &dest) {
+                return;
+            }
         }
         // BEP-044: `default.<method>(...)` inside an `implements I { ... }`
         // block emits a static call to `I`'s default function, with the
@@ -4630,10 +4689,10 @@ impl LoweringContext<'_> {
                 // union of concrete classes (a local or field chain bound to a
                 // `match`/`if` whose arms are different classes). Same receiver
                 // type slot, same field-chain lowering.
-                else if let Some(Tir2Ty::Union(members, _)) = self
+                else if let Some(members) = self
                     .path_segment_types
                     .get(&(self.current_metadata_scope, callee, prefix_idx))
-                    .cloned()
+                    .and_then(Self::tir_union_members)
                 {
                     let receiver_segments = &segments[..segments.len() - 1];
                     let recv_local = self.lower_path_receiver_to_local(
@@ -4649,6 +4708,20 @@ impl LoweringContext<'_> {
                         args,
                         &dest,
                     ) {
+                        return;
+                    }
+                    // Union containing an interface member: dispatch on the
+                    // runtime class across all implementors.
+                    if let Some(candidates) =
+                        self.union_iface_method_candidates(&members, &method_name)
+                        && self.emit_method_candidate_switch(
+                            recv_local,
+                            &candidates,
+                            expr_id,
+                            args,
+                            &dest,
+                        )
+                    {
                         return;
                     }
                 }
@@ -5410,7 +5483,7 @@ impl LoweringContext<'_> {
         // drift apart again (C1). They were previously byte-for-byte twins; a
         // missing `Tir2Ty::Interface` arm in both voided generic interface args
         // to `Box<void>` (BEP-044 wf3 #6/#7).
-        tir2_to_template(ty, &self.resolved_aliases, generic_params)
+        tir2_to_template(ty, self.resolved_aliases, generic_params)
     }
 
     /// Return the list of generic parameter names in scope for the
@@ -5977,7 +6050,6 @@ impl<'db> LoweringContext<'db> {
                 .interface_receiver_for_field_access(base, unwrapped_ty)
                 .is_some_and(|(iface_tn, iface_type_args)| {
                     self.try_lower_interface_field_access(
-                        expr_id,
                         base_local,
                         &iface_tn,
                         &iface_type_args,
@@ -5992,7 +6064,14 @@ impl<'db> LoweringContext<'db> {
                     unwrapped_ty,
                     field,
                     &dest,
-                );
+                )
+                || self
+                    .expr_types
+                    .get(&self.expr_metadata_key(base))
+                    .and_then(Self::tir_union_members)
+                    .is_some_and(|members| {
+                        self.lower_union_iface_field_access(base_local, &members, field, &dest)
+                    });
             if handled_union_field {
                 return;
             }
@@ -6332,8 +6411,10 @@ impl<'db> LoweringContext<'db> {
         args: &[AstExprId],
         dest: &Place,
     ) -> bool {
-        let Some(Tir2Ty::Union(members, _)) =
-            self.expr_types.get(&self.expr_metadata_key(base)).cloned()
+        let Some(members) = self
+            .expr_types
+            .get(&self.expr_metadata_key(base))
+            .and_then(Self::tir_union_members)
         else {
             return false;
         };
@@ -6342,6 +6423,151 @@ impl<'db> LoweringContext<'db> {
         let receiver_ty = self.expr_ty(base);
         let recv_local = self.operand_to_local(receiver_op, receiver_ty);
         self.emit_union_class_dispatch(recv_local, &members, method, expr_id, args, dest)
+    }
+
+    /// A method call whose receiver is a union that contains at least one
+    /// *interface* member (e.g. `Animal | Vehicle`, where every member declares
+    /// `method`). BEP-044: a method present on every union member dispatches on
+    /// the runtime class. Expand each interface member to its implementor
+    /// candidates (and each class member to itself) and emit one class-tag
+    /// switch. Falls through (returns false) if any member contributes no
+    /// candidate, so the caller can report the real error.
+    fn try_lower_union_iface_dispatch(
+        &mut self,
+        expr_id: AstExprId,
+        base: AstExprId,
+        method: &Name,
+        args: &[AstExprId],
+        dest: &Place,
+    ) -> bool {
+        let Some(members) = self
+            .expr_types
+            .get(&self.expr_metadata_key(base))
+            .and_then(Self::tir_union_members)
+        else {
+            return false;
+        };
+        let Some(candidates) = self.union_iface_method_candidates(&members, method) else {
+            return false;
+        };
+        let receiver_op = self.lower_to_operand(base);
+        let receiver_ty = self.expr_ty(base);
+        let recv_local = self.operand_to_local(receiver_op, receiver_ty);
+        self.emit_method_candidate_switch(recv_local, &candidates, expr_id, args, dest)
+    }
+
+    /// Build the runtime-class dispatch candidates for calling `method` on a
+    /// union receiver that contains at least one interface member. Returns
+    /// `None` (caller falls through) for a pure class union (handled elsewhere)
+    /// or when any member contributes no candidate.
+    fn union_iface_method_candidates(
+        &self,
+        members: &[Tir2Ty],
+        method: &Name,
+    ) -> Option<Vec<InterfaceMethodCandidate>> {
+        // This runs only after `emit_union_class_dispatch` (the direct-method
+        // class-union path) has declined, so it also covers a *pure class* union
+        // whose members satisfy `method` through an inherited interface default
+        // (`class Dog { implements Greeter {} }`), not just unions that name an
+        // interface member directly.
+        let mut candidates: Vec<InterfaceMethodCandidate> = Vec::new();
+        for member in members {
+            match member {
+                Tir2Ty::Class(qtn, _, _) => {
+                    let class_tn = qtn_to_type_name(qtn);
+                    let member_candidates = self.class_member_method_candidates(&class_tn, method);
+                    if member_candidates.is_empty() {
+                        return None;
+                    }
+                    candidates.extend(member_candidates);
+                }
+                Tir2Ty::Interface(..) => {
+                    let (iface_tn, iface_type_args) =
+                        self.interface_dispatch_target_for_tir_ty(member)?;
+                    let member_candidates =
+                        self.interface_method_candidates_for(&iface_tn, &iface_type_args, method);
+                    if member_candidates.is_empty() {
+                        return None;
+                    }
+                    candidates.extend(member_candidates);
+                }
+                _ => return None,
+            }
+        }
+        Some(candidates)
+    }
+
+    /// Dispatch candidates for calling `method` on a concrete-class union member.
+    /// A direct own/override method dispatches on the class tag; otherwise the
+    /// method may be supplied by an interface the class implements — an inherited
+    /// `implements I {}` default, a field-link, or an out-of-body
+    /// `implements I for C` — so fall back to the same implementor resolution
+    /// used for interface arms. Without this, a `Dog | Cat` union whose members
+    /// satisfy a method only through an inherited default resolved to nothing and
+    /// the call dispatched as a map read (VM `expected map, got instance`).
+    fn class_member_method_candidates(
+        &self,
+        class_tn: &TypeName,
+        method: &Name,
+    ) -> Vec<InterfaceMethodCandidate> {
+        if let Some(item_ref) = self.class_method_item_ref_by_name(class_tn, method) {
+            return vec![InterfaceMethodCandidate {
+                guard: InterfaceDispatchGuard::Type(Ty::Class(
+                    class_tn.clone(),
+                    Vec::new(),
+                    TyAttr::default(),
+                )),
+                item_ref,
+            }];
+        }
+        let Some(class_loc) = self.resolve_class_loc_by_type_name(class_tn) else {
+            return Vec::new();
+        };
+        let class_tree = file_item_tree(self.db, class_loc.file(self.db));
+        let class_data = &class_tree[class_loc.id(self.db)];
+        let mut out = Vec::new();
+        for impl_block in &class_data.implements {
+            if let Some((iface_tn, iface_args)) =
+                self.resolve_implements_target_view(&impl_block.target, class_loc)
+            {
+                out.extend(self.resolve_implementor_method_candidates(
+                    class_tn,
+                    &iface_tn,
+                    &iface_args,
+                    method,
+                ));
+            }
+        }
+        out
+    }
+
+    /// Field-read candidates for a concrete-class union member whose `field` is
+    /// supplied by an interface view (`implements Named { name as full }`) rather
+    /// than a class-owned slot. Mirrors [`class_member_method_candidates`].
+    fn class_member_field_candidates(
+        &self,
+        class_tn: &TypeName,
+        field: &Name,
+    ) -> Vec<InterfaceFieldCandidate> {
+        let Some(class_loc) = self.resolve_class_loc_by_type_name(class_tn) else {
+            return Vec::new();
+        };
+        let class_tree = file_item_tree(self.db, class_loc.file(self.db));
+        let class_data = &class_tree[class_loc.id(self.db)];
+        let mut out = Vec::new();
+        for impl_block in &class_data.implements {
+            if let Some((iface_tn, iface_args)) =
+                self.resolve_implements_target_view(&impl_block.target, class_loc)
+            {
+                out.extend(self.resolve_implementor_interface_field_candidates(
+                    class_tn,
+                    &iface_tn,
+                    &iface_args,
+                    field,
+                ));
+            }
+        }
+        out
     }
 
     /// Emit a class-tag dispatch switch for a method call whose receiver
@@ -6418,6 +6644,24 @@ impl<'db> LoweringContext<'db> {
             method,
             args,
         } = call;
+        let resolved = self.interface_method_candidates_for(iface_tn, iface_type_args, method);
+        if resolved.is_empty() {
+            return false;
+        }
+        self.emit_method_candidate_switch(recv_local, &resolved, expr_id, args, dest)
+    }
+
+    /// Resolve every concrete-class dispatch candidate for calling `method`
+    /// through interface `iface_tn` (with `iface_type_args`): each in-body
+    /// implementor's method (or the interface default it inherits) plus every
+    /// out-of-body / primitive type implementor. Shared by the single-interface
+    /// receiver path and the union-receiver path.
+    fn interface_method_candidates_for(
+        &self,
+        iface_tn: &TypeName,
+        iface_type_args: &[Tir2Ty],
+        method: &Name,
+    ) -> Vec<InterfaceMethodCandidate> {
         let class_impls = self
             .interface_implementors
             .get(iface_tn)
@@ -6428,13 +6672,9 @@ impl<'db> LoweringContext<'db> {
             .get(iface_tn)
             .cloned()
             .unwrap_or_default();
-        if class_impls.is_empty() && type_impls.is_empty() {
-            return false;
-        }
         // Resolve the call target for every implementor. If the implementor
         // doesn't directly declare the method, fall back to the interface
-        // whose default it inherits. Skip dispatch entirely if no
-        // implementor resolves.
+        // whose default it inherits.
         let mut resolved: Vec<InterfaceMethodCandidate> = class_impls
             .iter()
             .flat_map(|impl_tn| {
@@ -6463,6 +6703,20 @@ impl<'db> LoweringContext<'db> {
                 item_ref,
             });
         }
+        resolved
+    }
+
+    /// Emit a runtime class-tag switch that calls the matching
+    /// `InterfaceMethodCandidate` for `recv_local`. Returns false (emitting
+    /// nothing) when there are no candidates.
+    fn emit_method_candidate_switch(
+        &mut self,
+        recv_local: Local,
+        resolved: &[InterfaceMethodCandidate],
+        expr_id: AstExprId,
+        args: &[AstExprId],
+        dest: &Place,
+    ) -> bool {
         if resolved.is_empty() {
             return false;
         }
@@ -6524,7 +6778,6 @@ impl<'db> LoweringContext<'db> {
 
     fn try_lower_interface_field_access(
         &mut self,
-        _expr_id: AstExprId,
         recv_local: Local,
         iface_tn: &TypeName,
         iface_type_args: &[Tir2Ty],
@@ -6545,6 +6798,94 @@ impl<'db> LoweringContext<'db> {
                 )
             })
             .collect();
+        self.emit_interface_field_candidate_switch(recv_local, &resolved, dest)
+    }
+
+    /// A field read whose receiver is a union with at least one interface member
+    /// (e.g. `(Dog | Named).name`). Each member contributes the concrete classes
+    /// it can be at runtime — a class member is itself; an interface member is
+    /// every implementor (reading the linked field view) — and we dispatch on
+    /// the runtime class. Returns false (caller falls through) if any member
+    /// contributes no candidate.
+    fn lower_union_iface_field_access(
+        &mut self,
+        recv_local: Local,
+        members: &[Tir2Ty],
+        field: &Name,
+        dest: &Place,
+    ) -> bool {
+        // Runs only after `lower_union_class_field_access` declines, so it also
+        // covers a pure class union whose `field` is supplied by an interface
+        // view rather than a class-owned slot.
+        let mut resolved: Vec<InterfaceFieldCandidate> = Vec::new();
+        for member in members {
+            match member {
+                Tir2Ty::Class(qtn, _, _) => {
+                    let class_tn = qtn_to_type_name(qtn);
+                    if let Some(field_idx) = self
+                        .class_fields
+                        .get(&class_tn)
+                        .and_then(|fields| fields.get(field.as_str()))
+                        .copied()
+                    {
+                        resolved.push(InterfaceFieldCandidate {
+                            impl_tn: class_tn,
+                            guard: InterfaceClassGuard::Any,
+                            field_idx,
+                        });
+                    } else {
+                        // The field may be supplied by an interface view
+                        // (`implements Named { name as full }`) rather than a
+                        // class-owned slot. Resolve it through the class's
+                        // implemented interfaces, mirroring the method path.
+                        let member_candidates =
+                            self.class_member_field_candidates(&class_tn, field);
+                        if member_candidates.is_empty() {
+                            return false;
+                        }
+                        resolved.extend(member_candidates);
+                    }
+                }
+                Tir2Ty::Interface(..) => {
+                    let Some((iface_tn, iface_type_args)) =
+                        self.interface_dispatch_target_for_tir_ty(member)
+                    else {
+                        return false;
+                    };
+                    let Some(impls) = self.interface_implementors.get(&iface_tn).cloned() else {
+                        return false;
+                    };
+                    let member_candidates: Vec<InterfaceFieldCandidate> = impls
+                        .iter()
+                        .flat_map(|impl_tn| {
+                            self.resolve_implementor_interface_field_candidates(
+                                impl_tn,
+                                &iface_tn,
+                                &iface_type_args,
+                                field,
+                            )
+                        })
+                        .collect();
+                    if member_candidates.is_empty() {
+                        return false;
+                    }
+                    resolved.extend(member_candidates);
+                }
+                _ => return false,
+            }
+        }
+        self.emit_interface_field_candidate_switch(recv_local, &resolved, dest)
+    }
+
+    /// Emit a runtime class-tag switch that reads `field` from `recv_local`
+    /// using whichever `InterfaceFieldCandidate` matches. Returns false
+    /// (emitting nothing) when there are no candidates.
+    fn emit_interface_field_candidate_switch(
+        &mut self,
+        recv_local: Local,
+        resolved: &[InterfaceFieldCandidate],
+        dest: &Place,
+    ) -> bool {
         if resolved.is_empty() {
             return false;
         }
@@ -7335,6 +7676,70 @@ impl<'db> LoweringContext<'db> {
             .map(|(tn, _)| tn)
     }
 
+    /// Class-tag dispatch guards for every implementor that satisfies the
+    /// *specific instantiation* `iface_tn<iface_type_args>`. Implementors of a
+    /// different instantiation (e.g. `StrSlot: Slot<string>` when the request is
+    /// `Slot<int>`) are excluded, because `interface_class_guard_for_args`
+    /// returns `None` for a non-matching argument list. Used by the runtime
+    /// `is`-type test so a generic-interface pattern respects its type argument.
+    fn interface_implementor_class_guards(
+        &self,
+        iface_tn: &TypeName,
+        iface_type_args: &[Tir2Ty],
+    ) -> Vec<(TypeName, InterfaceClassGuard)> {
+        let Some(impls) = self.interface_implementors.get(iface_tn).cloned() else {
+            return Vec::new();
+        };
+        let Some(requested_views) =
+            self.interface_closure_type_name_views(iface_tn, iface_type_args)
+        else {
+            return Vec::new();
+        };
+        let mut out: Vec<(TypeName, InterfaceClassGuard)> = Vec::new();
+        for impl_tn in &impls {
+            let Some(class_loc) = self.resolve_class_loc_by_type_name(impl_tn) else {
+                continue;
+            };
+            let item_tree = file_item_tree(self.db, class_loc.file(self.db));
+            let class_data = &item_tree[class_loc.id(self.db)];
+            for impl_block in &class_data.implements {
+                let Some((target_tn, target_args)) =
+                    self.resolve_implements_target_view(&impl_block.target, class_loc)
+                else {
+                    continue;
+                };
+                let Some(target_views) =
+                    self.interface_closure_type_name_views(&target_tn, &target_args)
+                else {
+                    continue;
+                };
+                for (target_view_tn, target_view_args) in target_views {
+                    for (requested_tn, requested_args) in &requested_views {
+                        if target_view_tn != *requested_tn {
+                            continue;
+                        }
+                        let Some(guard) = interface_class_guard_for_args(
+                            &target_view_args,
+                            requested_args,
+                            &class_data.generic_params,
+                            &self.resolved_aliases.aliases,
+                        ) else {
+                            continue;
+                        };
+                        // Push every matching guard — a generic class can satisfy
+                        // the requested instantiation through more than one
+                        // type-arg projection (`Pair<L, R>` implementing
+                        // `Slot<L>` and `Slot<R>`), and dropping all but the first
+                        // would make some runtime values fail the `is` test.
+                        // Redundant identical branches are harmless (both succeed).
+                        out.push((impl_tn.clone(), guard));
+                    }
+                }
+            }
+        }
+        out
+    }
+
     fn resolve_implementor_interface_field_candidates(
         &self,
         impl_tn: &TypeName,
@@ -7439,7 +7844,7 @@ impl<'db> LoweringContext<'db> {
                     args.iter()
                         .map(|arg| match arg {
                             Some(arg) => {
-                                tir2_to_template(arg, &self.resolved_aliases, &generic_params)
+                                tir2_to_template(arg, self.resolved_aliases, &generic_params)
                             }
                             None => TyTemplate::Wildcard,
                         })
@@ -9032,6 +9437,33 @@ impl LoweringContext<'_> {
         self.emit_is_tir_type_branch_inner(scrutinee, ty, success, failure, &mut visited);
     }
 
+    /// The members of a union receiver, transparently unwrapping `Optional`
+    /// layers — `(Dog | Named)?` after a null check still dispatches the
+    /// field/method on the underlying union. Returns `None` when `ty` isn't a
+    /// (optionally-wrapped) union.
+    fn tir_union_members(ty: &Tir2Ty) -> Option<Vec<Tir2Ty>> {
+        match ty {
+            Tir2Ty::Union(members, _) => Some(members.clone()),
+            Tir2Ty::Optional(inner, _) => Self::tir_union_members(inner),
+            _ => None,
+        }
+    }
+
+    /// Whether `ty` is (or contains, inside a union/optional) a *generic*
+    /// interface instantiation, whose runtime test must respect its type
+    /// argument. Used to opt only these patterns into the TIR-typed test path,
+    /// leaving non-interface patterns on the unchanged erased fast path.
+    fn tir_ty_needs_generic_interface_test(ty: &Tir2Ty) -> bool {
+        match ty {
+            Tir2Ty::Interface(_, args, _) => !args.is_empty(),
+            Tir2Ty::Union(members, _) => members
+                .iter()
+                .any(Self::tir_ty_needs_generic_interface_test),
+            Tir2Ty::Optional(inner, _) => Self::tir_ty_needs_generic_interface_test(inner),
+            _ => false,
+        }
+    }
+
     fn emit_is_tir_type_branch_inner(
         &mut self,
         scrutinee: Local,
@@ -9133,6 +9565,32 @@ impl LoweringContext<'_> {
                 }
 
                 visited.remove(&key);
+            }
+            // A generic-interface pattern (`Slot<int>`) must respect its type
+            // argument: test only the implementors of *that* instantiation, not
+            // every implementor of the bare interface. Without this, a
+            // `StrSlot` (only `Slot<string>`) wrongly matches a `Slot<int>` arm
+            // and feeds a string into integer code (`tagged_int_add` panic).
+            Tir2Ty::Interface(iface_qtn, type_args, _) if !type_args.is_empty() => {
+                let iface_tn = qtn_to_type_name(iface_qtn);
+                let guards = self.interface_implementor_class_guards(&iface_tn, type_args);
+                if guards.is_empty() {
+                    self.builder.goto(failure);
+                    return;
+                }
+                let mut next_check = self.builder.current_block();
+                for (idx, (impl_tn, guard)) in guards.iter().enumerate() {
+                    let bb_next = if idx + 1 == guards.len() {
+                        failure
+                    } else {
+                        self.builder.create_block()
+                    };
+                    self.builder.set_current_block(next_check);
+                    self.emit_interface_class_guard_branch(
+                        scrutinee, impl_tn, guard, success, bb_next,
+                    );
+                    next_check = bb_next;
+                }
             }
             // Singleton-valued types pin a specific runtime value, so emit
             // equality checks rather than type-tag tests. `is_type` on a
@@ -9279,7 +9737,7 @@ impl LoweringContext<'_> {
 
     fn class_pattern_type_name(&self, pat_id: AstPatId) -> Option<TypeName> {
         let tir_ty = self.pat_types.get(&self.pat_metadata_key(pat_id))?;
-        match convert_tir2_ty(tir_ty, &self.resolved_aliases) {
+        match convert_tir2_ty(tir_ty, self.resolved_aliases) {
             Ty::Class(tn, _, _) => Some(tn),
             _ => None,
         }
@@ -9303,6 +9761,21 @@ impl LoweringContext<'_> {
         field_pat_id: AstPatId,
         field: &Name,
     ) -> Option<Local> {
+        // BEP-044: an interface head (`Animal { name } => …`) has no positional
+        // field layout — the MIR `Ty` has no interface variant, so it would
+        // otherwise masquerade as a `Ty::Class`. Branch on the raw TIR type and
+        // project the field through the interface field-view dispatch instead.
+        if matches!(
+            self.pat_types.get(&self.pat_metadata_key(class_pat_id)),
+            Some(Tir2Ty::Interface(..))
+        ) {
+            return self.project_interface_pattern_field(
+                scrutinee,
+                class_pat_id,
+                field_pat_id,
+                field,
+            );
+        }
         let class_tn = self.class_pattern_type_name(class_pat_id)?;
         let field_idx = self
             .class_fields
@@ -9328,6 +9801,35 @@ impl LoweringContext<'_> {
             })),
         );
         Some(field_local)
+    }
+
+    /// BEP-044: project a field bound by an *interface* destructure pattern
+    /// (`Animal { name } => …`). The scrutinee's concrete runtime class is not
+    /// known statically, so we can't index a fixed field slot. Instead we reuse
+    /// the interface field-view dispatch (`try_lower_interface_field_access`) —
+    /// the same code that lowers `iface_value.name` — to read the linked field
+    /// off whichever implementor the value actually is.
+    fn project_interface_pattern_field(
+        &mut self,
+        scrutinee: Local,
+        class_pat_id: AstPatId,
+        field_pat_id: AstPatId,
+        field: &Name,
+    ) -> Option<Local> {
+        let tir_ty = self
+            .pat_types
+            .get(&self.pat_metadata_key(class_pat_id))?
+            .clone();
+        let (iface_tn, iface_args) = self.interface_dispatch_target_for_tir_ty(&tir_ty)?;
+        let field_local = self.builder.temp(self.pat_ty(field_pat_id));
+        self.try_lower_interface_field_access(
+            scrutinee,
+            &iface_tn,
+            &iface_args,
+            field,
+            &Place::local(field_local),
+        )
+        .then_some(field_local)
     }
 
     fn const_int_local(&mut self, value: i64) -> Local {
@@ -9598,12 +10100,23 @@ impl LoweringContext<'_> {
                         .branch(Operand::Copy(Place::Local(test_local)), success, failure);
                 }
                 _ => {
-                    let annotation_ty = self
-                        .pat_types
-                        .get(&self.pat_metadata_key(pat_id))
-                        .map(|tir_ty| convert_tir2_ty(tir_ty, &self.resolved_aliases))
-                        .unwrap_or_else(|| self.resolve_type_annotation(ty_expr));
-                    self.emit_is_type_branch(scrutinee, annotation_ty, success, failure);
+                    // A generic-interface pattern (`Slot<int>`) needs the
+                    // TIR-typed test, which preserves the type argument and
+                    // tests only the implementors of *that* instantiation —
+                    // otherwise the erased path matches every implementor and a
+                    // `Slot<string>` value falls into a `Slot<int>` arm. Other
+                    // patterns keep the erased fast path (unchanged codegen).
+                    let tir_ty = self.pat_types.get(&self.pat_metadata_key(pat_id)).cloned();
+                    if let Some(tir_ty) = &tir_ty
+                        && Self::tir_ty_needs_generic_interface_test(tir_ty)
+                    {
+                        self.emit_is_tir_type_branch(scrutinee, tir_ty, success, failure);
+                    } else {
+                        let annotation_ty = tir_ty
+                            .map(|t| convert_tir2_ty(&t, self.resolved_aliases))
+                            .unwrap_or_else(|| self.resolve_type_annotation(ty_expr));
+                        self.emit_is_type_branch(scrutinee, annotation_ty, success, failure);
+                    }
                 }
             },
             AstPattern::Or(sub_pats) => {
@@ -9829,7 +10342,7 @@ impl LoweringContext<'_> {
                 } else {
                     self.pat_types
                         .get(&self.pat_metadata_key(pat_id))
-                        .map(|ty| convert_tir2_ty(ty, &self.resolved_aliases))
+                        .map(|ty| convert_tir2_ty(ty, self.resolved_aliases))
                         .unwrap_or_else(|| self.builder.local_ty(scrutinee))
                 };
                 let local = self
@@ -10101,6 +10614,20 @@ impl LoweringContext<'_> {
     fn classify_pattern_type_tag(&self, pat_id: AstPatId) -> Option<Vec<i64>> {
         let pat = &self.body.patterns[pat_id];
         if self.pattern_contains_structural(pat_id) {
+            return None;
+        }
+        // A generic-interface pattern (`Slot<int>`, or one nested in a union /
+        // optional like `Slot<int> | Slot<string>`) cannot be discriminated by a
+        // flat type-tag switch: every instantiation shares the bare interface's
+        // implementor tags, so arms would collide and the first would wrongly
+        // capture all of them. Disqualify the switch (recursively) so the
+        // match-chain runtime test — which filters implementors by the specific
+        // instantiation — is used instead.
+        if self
+            .pat_types
+            .get(&self.pat_metadata_key(pat_id))
+            .is_some_and(Self::tir_ty_needs_generic_interface_test)
+        {
             return None;
         }
         // Bind/Array patterns may carry a `:T` type ascription; resolve

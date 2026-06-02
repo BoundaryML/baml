@@ -118,10 +118,22 @@ struct TyDisplayContext<'db> {
     current_package: Name,
     current_namespace: Vec<Name>,
     package_items: &'db PackageItems<'db>,
+    /// When set, collapse builtin companion classes to their lowercase
+    /// primitive/keyword alias (`baml.String` → `string`, `baml.json.json` →
+    /// `json`). Only the describe + hover + signature paths opt in (via
+    /// [`display_ty_canonical_for_file`]); diagnostics/completions/inlay hints
+    /// keep the un-collapsed spelling.
+    collapse_aliases: bool,
 }
 
 impl TyDisplayContext<'_> {
     fn display_qtn(&self, qtn: &QualifiedTypeName) -> String {
+        if self.collapse_aliases {
+            if let Some(alias) = qtn.builtin_alias() {
+                return alias.to_string();
+            }
+        }
+
         if qtn.package() != &self.current_package {
             // Cross-package: keep the dependency package prefix to disambiguate,
             // but never the implicit `user` package.
@@ -218,6 +230,25 @@ impl TyRenderStrategy for PlainTyRender {
 }
 
 pub fn display_ty_for_file(db: &dyn Db, file: SourceFile, ty: &Ty) -> String {
+    display_ty_for_file_impl(db, file, ty, false)
+}
+
+/// Like [`display_ty_for_file`], but collapses builtin companion classes to
+/// their lowercase primitive/keyword alias (`baml.String` → `string`,
+/// `baml.media.Image` → `image`, `baml.json.json` → `json`). This is the
+/// canonical type printer used by the describe + hover + signature paths;
+/// other call sites (diagnostics, completions, inlay hints) keep the
+/// un-collapsed [`display_ty_for_file`].
+pub fn display_ty_canonical_for_file(db: &dyn Db, file: SourceFile, ty: &Ty) -> String {
+    display_ty_for_file_impl(db, file, ty, true)
+}
+
+fn display_ty_for_file_impl(
+    db: &dyn Db,
+    file: SourceFile,
+    ty: &Ty,
+    collapse_aliases: bool,
+) -> String {
     let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
     let pkg_id = baml_compiler2_hir::package::PackageId::new(db, pkg_info.package.clone());
     let package_items = baml_compiler2_ppir::package_items(db, pkg_id);
@@ -225,8 +256,39 @@ pub fn display_ty_for_file(db: &dyn Db, file: SourceFile, ty: &Ty) -> String {
         current_package: pkg_info.package,
         current_namespace: pkg_info.namespace_path,
         package_items,
+        collapse_aliases,
     };
     ctx.display_ty(ty)
+}
+
+/// Canonical fully-qualified name string for a resolved type, used by the
+/// describe header and the LSP hover "Run `baml describe …`" hint.
+///
+/// Rules (single source of truth, matching the canonical printer):
+/// - builtin companion class with a lowercase alias → the alias (`string`);
+/// - user type at package root → its bare name (`Foo`);
+/// - user type in a namespace → `root.<ns>.<Name>`;
+/// - other dependency type → `<pkg>.<path>` (`baml.json.JsonObject`).
+pub fn canonical_fqn_string(qtn: &QualifiedTypeName) -> String {
+    if let Some(alias) = qtn.builtin_alias() {
+        return alias.to_string();
+    }
+    if qtn.is_local() {
+        if qtn.namespace().is_empty() {
+            qtn.name().to_string()
+        } else {
+            let path = qtn
+                .namespace()
+                .iter()
+                .chain(std::iter::once(qtn.name()))
+                .map(Name::as_str)
+                .collect::<Vec<_>>()
+                .join(".");
+            format!("root.{path}")
+        }
+    } else {
+        qtn.render_user_facing()
+    }
 }
 
 /// Format a resolved `Ty` as a user-friendly string without file context.
