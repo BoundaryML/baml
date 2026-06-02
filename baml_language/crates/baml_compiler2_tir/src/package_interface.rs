@@ -28,7 +28,7 @@ use crate::{
 
 /// Fully-resolved typed interface for a package.
 /// Consumers never touch dependency `ItemTree` or raw `TypeExpr`.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, salsa::Update)]
 pub struct PackageInterface {
     /// All exported types: namespace path -> name -> `ExportedType`
     pub types: FxHashMap<Vec<Name>, FxHashMap<Name, ExportedType>>,
@@ -80,20 +80,9 @@ pub enum ResolvedSource {
     Builtin,
 }
 
-/// Common output for resolved function signatures.
-pub struct ResolvedFunction {
-    pub name: Name,
-    pub params: Vec<FunctionParamTy>,
-    pub return_type: Ty,
-    pub declared_throws: Option<Ty>,
-    pub callable_throws: Ty,
-    pub generic_params: Vec<Name>,
-    pub builtin_kind: Option<BuiltinKind>,
-}
-
 /// Common output for resolved method lookups (includes class context).
 pub struct ResolvedMethod {
-    pub function: ResolvedFunction,
+    pub function: ExportedFunction,
     pub class_name: Name,
     pub class_generic_params: Vec<Name>,
 }
@@ -105,57 +94,17 @@ pub struct ResolvedMethod {
 /// other `returns(ref)` queries here made incremental invalidation unsound
 /// under rapid edits, because the cached context could outlive the referenced
 /// query storage across revisions.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, salsa::Update)]
 pub struct PackageResolutionContext<'db> {
     pub own_items: PackageItems<'db>,
     pub dep_interfaces: Vec<(Name, PackageInterface)>,
     pub own_package_name: Name,
 }
 
-// ── Salsa Update impls ─────────────────────────────────────────────────────
-
-#[allow(unsafe_code)]
-unsafe impl salsa::Update for PackageInterface {
-    unsafe fn maybe_update(old_pointer: *mut Self, new_value: Self) -> bool {
-        #[allow(unsafe_code)]
-        let old_ref = unsafe { &*old_pointer };
-        if *old_ref == new_value {
-            false
-        } else {
-            #[allow(unsafe_code)]
-            unsafe {
-                std::ptr::drop_in_place(old_pointer);
-                std::ptr::write(old_pointer, new_value);
-            }
-            true
-        }
-    }
-}
-
-#[allow(unsafe_code)]
-unsafe impl salsa::Update for PackageResolutionContext<'_> {
-    unsafe fn maybe_update(old_pointer: *mut Self, new_value: Self) -> bool {
-        #[allow(unsafe_code)]
-        let old_ref = unsafe { &*old_pointer };
-        if *old_ref == new_value {
-            false
-        } else {
-            #[allow(unsafe_code)]
-            unsafe {
-                std::ptr::drop_in_place(old_pointer);
-                std::ptr::write(old_pointer, new_value);
-            }
-            true
-        }
-    }
-}
-
 // ── PackageInterface lookup helpers ────────────────────────────────────────
 
 impl PackageInterface {
     /// Look up a type by explicit namespace and item name.
-    ///
-    /// Single hash lookup — no split-loop ambiguity.
     pub fn lookup_type(&self, namespace: &[Name], item: &Name) -> Option<&ExportedType> {
         self.types.get(namespace)?.get(item)
     }
@@ -510,7 +459,7 @@ fn build_self_type_for_class(
         ),
         _ => {
             let qtn = QualifiedTypeName::new_with_generic_params(
-                Name::new("baml"),
+                Name::new(baml_base::BAML_PACKAGE),
                 ns_path.to_vec(),
                 class_data.name.clone(),
                 class_data.generic_params.clone(),
@@ -598,9 +547,6 @@ impl<'db> PackageResolutionContext<'db> {
                 return Some(result);
             }
         }
-        // No bare fallback from non-root namespaces: cross-namespace references
-        // in the same package must start with `root`.
-
         // Try package-prefixed path (first segment is package name)
         if path.len() >= 2 {
             if path[0].as_str() == "root" {
@@ -653,25 +599,22 @@ impl<'db> PackageResolutionContext<'db> {
                 .chain(path[..path.len() - 1].iter())
                 .cloned()
                 .collect();
-            if let Some(result) = self.resolve_value_in_own(&ns, item) {
-                return Some(result);
+            if let Some(def) = self.own_items.lookup_value(&ns, item) {
+                return Some((ResolvedSource::Item, def));
             }
         }
         // When ns_context is empty, try unqualified path (same-namespace for root files)
         if ns_context.is_empty() {
-            if let Some(result) = self.resolve_value_in_own(&path[..path.len() - 1], item) {
-                return Some(result);
+            if let Some(def) = self.own_items.lookup_value(&path[..path.len() - 1], item) {
+                return Some((ResolvedSource::Item, def));
             }
         }
-        // No bare fallback from non-root namespaces — cross-namespace requires explicit qualification
-        // root.* prefix handling (parity with resolve_type)
         if path.len() >= 2 {
             if path[0].as_str() == "root" {
                 if let Some(def) = self.own_items.lookup_value(&path[1..path.len() - 1], item) {
                     return Some((ResolvedSource::Item, def));
                 }
             }
-            // dep-prefixed search (parity with resolve_type)
             for (dep_name, _dep_iface) in &self.dep_interfaces {
                 if &path[0] == dep_name {
                     let dep_pkg_id = PackageId::new(db, dep_name.clone());
@@ -683,43 +626,6 @@ impl<'db> PackageResolutionContext<'db> {
             }
         }
         None
-    }
-
-    fn resolve_value_in_own(
-        &self,
-        namespace: &[Name],
-        item: &Name,
-    ) -> Option<(ResolvedSource, Definition<'db>)> {
-        if let Some(def) = self.own_items.lookup_value(namespace, item) {
-            return Some((ResolvedSource::Item, def));
-        }
-        None
-    }
-
-    /// Look up class fields. Dual dispatch:
-    /// - Own-package: `ItemTree` -> lower fields
-    /// - Dependency: `ExportedType::Class` { fields }
-    pub fn lookup_class_fields(
-        &self,
-        db: &'db dyn crate::Db,
-        class_name: &QualifiedTypeName,
-    ) -> Vec<(Name, Ty)> {
-        let class_pkg = class_name.package();
-        if class_pkg.as_str() == self.own_package_name.as_str() {
-            self.lookup_own_class_fields(db, class_name)
-        } else {
-            for (dep_name, dep_iface) in &self.dep_interfaces {
-                if dep_name != class_pkg {
-                    continue;
-                }
-                if let Some(ExportedType::Class { fields, .. }) =
-                    dep_iface.lookup_type(class_name.namespace(), class_name.name())
-                {
-                    return fields.clone();
-                }
-            }
-            Vec::new()
-        }
     }
 
     /// Look up a class method. Dual dispatch.
@@ -745,15 +651,7 @@ impl<'db> PackageResolutionContext<'db> {
                 {
                     if let Some(method) = methods.iter().find(|m| &m.name == method_name) {
                         return Some(ResolvedMethod {
-                            function: ResolvedFunction {
-                                name: method.name.clone(),
-                                params: method.params.clone(),
-                                return_type: method.return_type.clone(),
-                                declared_throws: method.declared_throws.clone(),
-                                callable_throws: method.callable_throws.clone(),
-                                generic_params: method.generic_params.clone(),
-                                builtin_kind: method.builtin_kind,
-                            },
+                            function: method.clone(),
                             class_name: class_name.name().clone(),
                             class_generic_params: generic_params.clone(),
                         });
@@ -762,48 +660,6 @@ impl<'db> PackageResolutionContext<'db> {
             }
             None
         }
-    }
-
-    fn lookup_own_class_fields(
-        &self,
-        db: &'db dyn crate::Db,
-        class_name: &QualifiedTypeName,
-    ) -> Vec<(Name, Ty)> {
-        let Some(def) = self
-            .own_items
-            .lookup_type(class_name.namespace(), class_name.name())
-        else {
-            return Vec::new();
-        };
-        let Definition::Class(class_loc) = def else {
-            return Vec::new();
-        };
-        let item_tree = baml_compiler2_ppir::file_item_tree(db, class_loc.file(db));
-        let class_data = &item_tree[class_loc.id(db)];
-        let ns = file_package::file_package(db, class_loc.file(db)).namespace_path;
-        let mut diags = Vec::new();
-        let mut fields = Vec::new();
-        for field in &class_data.fields {
-            if let Some(te) = &field.type_expr {
-                let field_ty = lower_type_expr_in_ns(
-                    db,
-                    &te.expr,
-                    &self.own_items,
-                    &ns,
-                    &class_data.generic_params,
-                    &mut diags,
-                );
-                fields.push((field.name.clone(), field_ty));
-            } else {
-                fields.push((
-                    field.name.clone(),
-                    Ty::Unknown {
-                        attr: TyAttr::default(),
-                    },
-                ));
-            }
-        }
-        fields
     }
 
     fn lookup_own_class_method(
@@ -840,7 +696,7 @@ impl<'db> PackageResolutionContext<'db> {
             );
 
             return Some(ResolvedMethod {
-                function: ResolvedFunction {
+                function: ExportedFunction {
                     name: method_data.name.clone(),
                     params: lowered.params,
                     return_type: lowered.return_type,

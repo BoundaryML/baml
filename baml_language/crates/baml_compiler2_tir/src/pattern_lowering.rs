@@ -20,7 +20,7 @@ use baml_base::Name;
 use baml_compiler2_ast::PatId;
 
 // Ergonomic re-exports so callers don't need two `use` lines.
-pub use crate::exhaustiveness::{ArmId, WitnessPat, check_irrefutable, compute_match_usefulness};
+pub use crate::exhaustiveness::{check_irrefutable, compute_match_usefulness};
 use crate::{exhaustiveness::DPat, ty::Ty};
 
 /// Result of lowering one source pattern.

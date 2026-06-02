@@ -1,32 +1,23 @@
 use crate::ty::SYNTHETIC_EFFECT_PARAM_PREFIX;
 
-/// String-path humanizer: rewrites synthetic effect-param names
-/// (`__effect_param_N` → `callback`) in an already-rendered type string. Used
-/// only by the LSP display path, which renders via its own (context-aware)
-/// formatter; the structural [`crate::ty::Ty::render_user_facing`] handles this case
-/// directly for TIR diagnostics. (Step 2 folds the LSP path in and retires this.)
+/// Rewrites synthetic effect-param names (`__effect_param_N` → `callback`) in an
+/// already-rendered type string. Called only by the LSP display path. The
+/// prefix+digit-run predicate mirrors [`crate::ty::is_synthetic_effect_param`].
 pub fn humanize_type_string(raw: &str) -> String {
     let mut out = String::with_capacity(raw.len());
-    let bytes = raw.as_bytes();
-    let mut index = 0;
+    let mut rest = raw;
 
-    while index < bytes.len() {
-        let remainder = &raw[index..];
-        if let Some(rest) = remainder.strip_prefix(SYNTHETIC_EFFECT_PARAM_PREFIX) {
-            let digit_count = rest.bytes().take_while(u8::is_ascii_digit).count();
+    while let Some(ch) = rest.chars().next() {
+        if let Some(after_prefix) = rest.strip_prefix(SYNTHETIC_EFFECT_PARAM_PREFIX) {
+            let digit_count = after_prefix.bytes().take_while(u8::is_ascii_digit).count();
             if digit_count > 0 {
                 out.push_str("callback");
-                index += SYNTHETIC_EFFECT_PARAM_PREFIX.len() + digit_count;
+                rest = &after_prefix[digit_count..];
                 continue;
             }
         }
-
-        let ch = remainder
-            .chars()
-            .next()
-            .expect("remainder is non-empty while scanning type string");
         out.push(ch);
-        index += ch.len_utf8();
+        rest = &rest[ch.len_utf8()..];
     }
 
     out

@@ -37,16 +37,82 @@ pub fn lower_type_expr(
     )
 }
 
-/// Like [`lower_type_expr`], but resolves unqualified names relative to
-/// `ns_context` first (e.g. `["fs"]`), falling back to the package root.
-///
-/// Use this when lowering type expressions from a function/class signature
-/// that lives in a sub-namespace of its package. For example, `File` in
-/// `baml/fs.baml` (namespace `["fs"]`) resolves via `lookup_type(&["fs", "File"])`.
-/// Public wrapper for `substitute_self` so callers in other crates
-/// can pre-resolve `Self` before invoking [`lower_type_expr_in_ns`].
+/// BEP-044: walk `type_expr` and replace any `Self` reference with
+/// `replacement`. Used by signature lowering to pre-resolve `Self` to
+/// the enclosing class/interface's type expression before regular
+/// resolution runs.
 pub fn substitute_self_in(type_expr: &TypeExpr, replacement: &TypeExpr) -> TypeExpr {
-    substitute_self(type_expr, replacement)
+    match type_expr {
+        TypeExpr::Path {
+            segments,
+            generic_args,
+            attrs,
+        } => {
+            if segments.len() == 1 && generic_args.is_empty() && segments[0].as_str() == "Self" {
+                return replacement.clone();
+            }
+            TypeExpr::Path {
+                segments: segments.clone(),
+                generic_args: generic_args
+                    .iter()
+                    .map(|a| substitute_self_in(a, replacement))
+                    .collect(),
+                attrs: attrs.clone(),
+            }
+        }
+        TypeExpr::List { inner, attrs } => TypeExpr::List {
+            inner: Box::new(substitute_self_in(inner, replacement)),
+            attrs: attrs.clone(),
+        },
+        TypeExpr::Optional { inner, attrs } => TypeExpr::Optional {
+            inner: Box::new(substitute_self_in(inner, replacement)),
+            attrs: attrs.clone(),
+        },
+        TypeExpr::Map { key, value, attrs } => TypeExpr::Map {
+            key: Box::new(substitute_self_in(key, replacement)),
+            value: Box::new(substitute_self_in(value, replacement)),
+            attrs: attrs.clone(),
+        },
+        TypeExpr::Union { variants, attrs } => TypeExpr::Union {
+            variants: variants
+                .iter()
+                .map(|v| substitute_self_in(v, replacement))
+                .collect(),
+            attrs: attrs.clone(),
+        },
+        TypeExpr::Function {
+            generic_params,
+            generic_param_bounds,
+            params,
+            ret,
+            throws,
+            attrs,
+        } => TypeExpr::Function {
+            generic_params: generic_params.clone(),
+            generic_param_bounds: generic_param_bounds
+                .iter()
+                .map(|bound| {
+                    bound
+                        .as_ref()
+                        .map(|bound| substitute_self_in(bound, replacement))
+                })
+                .collect(),
+            params: params
+                .iter()
+                .map(|param| {
+                    let mut param = param.clone();
+                    param.ty = substitute_self_in(&param.ty, replacement);
+                    param
+                })
+                .collect(),
+            ret: Box::new(substitute_self_in(ret, replacement)),
+            throws: throws
+                .as_ref()
+                .map(|ty| Box::new(substitute_self_in(ty, replacement))),
+            attrs: attrs.clone(),
+        },
+        _ => type_expr.clone(),
+    }
 }
 
 /// BEP-044 generic bounds: walk `type_expr` and replace any single-
@@ -144,86 +210,8 @@ fn substitute_paths_walk(
     }
 }
 
-/// BEP-044: walk `type_expr` and replace any `Self` reference with
-/// `replacement`. Used by signature lowering to pre-resolve `Self` to
-/// the enclosing class/interface's type expression before regular
-/// resolution runs.
-fn substitute_self(type_expr: &TypeExpr, replacement: &TypeExpr) -> TypeExpr {
-    match type_expr {
-        TypeExpr::Path {
-            segments,
-            generic_args,
-            attrs,
-        } => {
-            if segments.len() == 1 && generic_args.is_empty() && segments[0].as_str() == "Self" {
-                return replacement.clone();
-            }
-            TypeExpr::Path {
-                segments: segments.clone(),
-                generic_args: generic_args
-                    .iter()
-                    .map(|a| substitute_self(a, replacement))
-                    .collect(),
-                attrs: attrs.clone(),
-            }
-        }
-        TypeExpr::List { inner, attrs } => TypeExpr::List {
-            inner: Box::new(substitute_self(inner, replacement)),
-            attrs: attrs.clone(),
-        },
-        TypeExpr::Optional { inner, attrs } => TypeExpr::Optional {
-            inner: Box::new(substitute_self(inner, replacement)),
-            attrs: attrs.clone(),
-        },
-        TypeExpr::Map { key, value, attrs } => TypeExpr::Map {
-            key: Box::new(substitute_self(key, replacement)),
-            value: Box::new(substitute_self(value, replacement)),
-            attrs: attrs.clone(),
-        },
-        TypeExpr::Union { variants, attrs } => TypeExpr::Union {
-            variants: variants
-                .iter()
-                .map(|v| substitute_self(v, replacement))
-                .collect(),
-            attrs: attrs.clone(),
-        },
-        TypeExpr::Function {
-            generic_params,
-            generic_param_bounds,
-            params,
-            ret,
-            throws,
-            attrs,
-        } => TypeExpr::Function {
-            generic_params: generic_params.clone(),
-            generic_param_bounds: generic_param_bounds
-                .iter()
-                .map(|bound| {
-                    bound
-                        .as_ref()
-                        .map(|bound| substitute_self(bound, replacement))
-                })
-                .collect(),
-            params: params
-                .iter()
-                .map(|param| {
-                    let mut param = param.clone();
-                    param.ty = substitute_self(&param.ty, replacement);
-                    param
-                })
-                .collect(),
-            ret: Box::new(substitute_self(ret, replacement)),
-            throws: throws
-                .as_ref()
-                .map(|ty| Box::new(substitute_self(ty, replacement))),
-            attrs: attrs.clone(),
-        },
-        _ => type_expr.clone(),
-    }
-}
-
 /// Build a `TypeExpr::Path` referring to a single named type, so
-/// `substitute_self` can swap `Self` for the enclosing class /
+/// `substitute_self_in` can swap `Self` for the enclosing class /
 /// interface name.
 pub fn type_expr_for_name(name: baml_base::Name) -> TypeExpr {
     TypeExpr::Path {
@@ -233,6 +221,91 @@ pub fn type_expr_for_name(name: baml_base::Name) -> TypeExpr {
     }
 }
 
+/// Resolve a type path against `package_items`, trying the `ns_context`-qualified
+/// path first, then the cross-package fallback (`root.*` or a package-named first
+/// segment). Returns the resolved [`Definition`], if any.
+fn resolve_type<'db>(
+    db: &'db dyn crate::Db,
+    package_items: &PackageItems<'db>,
+    ns_context: &[baml_base::Name],
+    path: &[baml_base::Name],
+    item: &baml_base::Name,
+) -> Option<Definition<'db>> {
+    let seg_ns = &path[..path.len() - 1];
+    // When we have a namespace context, try the qualified path first.
+    // e.g. for ns_context=["fs"], path=["File"], try namespace ["fs"] item "File".
+    let resolved = if !ns_context.is_empty() {
+        let ns: Vec<baml_base::Name> = ns_context.iter().chain(seg_ns.iter()).cloned().collect();
+        package_items.lookup_type(&ns, item)
+    } else {
+        package_items.lookup_type(seg_ns, item)
+    };
+    // Cross-package fallback: if not found in the current package and
+    // the first segment is a known package name, look in that package
+    // using the remaining segments. This supports synthetic type
+    // references like `baml.llm.PromptAst` in companion functions.
+    resolved.or_else(|| {
+        if path.len() >= 2 {
+            if path[0].as_str() == "root" {
+                package_items.lookup_type(&path[1..path.len() - 1], item)
+            } else {
+                let pkg_id = PackageId::new(db, path[0].clone());
+                let pkg = baml_compiler2_ppir::package_items(db, pkg_id);
+                pkg.lookup_type(&path[1..path.len() - 1], item)
+            }
+        } else {
+            None
+        }
+    })
+}
+
+/// Lower each generic arg in turn, surfacing any nested diagnostics.
+fn lower_args(
+    db: &dyn crate::Db,
+    generic_args: &[TypeExpr],
+    package_items: &PackageItems<'_>,
+    ns_context: &[baml_base::Name],
+    generic_params: &[baml_base::Name],
+    diagnostics: &mut Vec<TirTypeError>,
+) -> Vec<Ty> {
+    generic_args
+        .iter()
+        .map(|ga| {
+            lower_type_expr_in_ns(
+                db,
+                ga,
+                package_items,
+                ns_context,
+                generic_params,
+                diagnostics,
+            )
+        })
+        .collect()
+}
+
+/// Emit a `TypeIsNotGeneric` diagnostic if `generic_args` were supplied for a
+/// non-generic type (enum / type alias). The args are lowered separately by the
+/// caller so their own diagnostics still surface.
+fn not_generic(
+    generic_args: &[TypeExpr],
+    type_name: &baml_base::Name,
+    kind: &'static str,
+    diagnostics: &mut Vec<TirTypeError>,
+) {
+    if !generic_args.is_empty() {
+        diagnostics.push(TirTypeError::TypeIsNotGeneric {
+            type_name: type_name.clone(),
+            kind,
+        });
+    }
+}
+
+/// Like [`lower_type_expr`], but resolves unqualified names relative to
+/// `ns_context` first (e.g. `["fs"]`), falling back to the package root.
+///
+/// Use this when lowering type expressions from a function/class signature
+/// that lives in a sub-namespace of its package. For example, `File` in
+/// `baml/fs.baml` (namespace `["fs"]`) resolves via `lookup_type(&["fs", "File"])`.
 pub fn lower_type_expr_in_ns(
     db: &dyn crate::Db,
     type_expr: &TypeExpr,
@@ -248,52 +321,20 @@ pub fn lower_type_expr_in_ns(
             ..
         } => {
             let item = segments.last().expect("non-empty path");
-            let seg_ns = &segments[..segments.len() - 1];
-            // When we have a namespace context, try the qualified path first.
-            // e.g. for ns_context=["fs"], segments=["File"], try namespace ["fs"] item "File".
-            let resolved = if !ns_context.is_empty() {
-                let ns: Vec<baml_base::Name> =
-                    ns_context.iter().chain(seg_ns.iter()).cloned().collect();
-                package_items.lookup_type(&ns, item)
-            } else {
-                package_items.lookup_type(seg_ns, item)
-            };
-            // Cross-package fallback: if not found in the current package and
-            // the first segment is a known package name, look in that package
-            // using the remaining segments. This supports synthetic type
-            // references like `baml.llm.PromptAst` in companion functions.
-            let resolved = resolved.or_else(|| {
-                if segments.len() >= 2 {
-                    if segments[0].as_str() == "root" {
-                        package_items.lookup_type(&segments[1..segments.len() - 1], item)
-                    } else {
-                        let pkg_id = PackageId::new(db, segments[0].clone());
-                        let pkg = baml_compiler2_ppir::package_items(db, pkg_id);
-                        pkg.lookup_type(&segments[1..segments.len() - 1], item)
-                    }
-                } else {
-                    None
-                }
-            });
+            let resolved = resolve_type(db, package_items, ns_context, segments, item);
 
             if let Some(def) = resolved {
-                let short = segments.last().expect("non-empty path");
                 match def {
                     Definition::Class(_) => {
                         // Collect and lower generic args, storing them in Ty::Class.
-                        let lowered_args: Vec<Ty> = generic_args
-                            .iter()
-                            .map(|ga| {
-                                lower_type_expr_in_ns(
-                                    db,
-                                    ga,
-                                    package_items,
-                                    ns_context,
-                                    generic_params,
-                                    diagnostics,
-                                )
-                            })
-                            .collect();
+                        let lowered_args = lower_args(
+                            db,
+                            generic_args,
+                            package_items,
+                            ns_context,
+                            generic_params,
+                            diagnostics,
+                        );
 
                         // BEP-034: `baml.future.Future<T, E>` resolves to the
                         // dedicated `Ty::Future` variant rather than the
@@ -303,9 +344,9 @@ pub fn lower_type_expr_in_ns(
                         // `await` keys off `Ty::Future` directly. Mirrors
                         // how `int[]` resolves to `Ty::List` even though
                         // `class Array<T>` is a regular class declaration.
-                        let qtn = qualify_def(db, def, short);
+                        let qtn = qualify_def(db, def, item);
                         if qtn.name().as_str() == "Future"
-                            && qtn.package().as_str() == "baml"
+                            && qtn.package().as_str() == baml_base::BAML_PACKAGE
                             && qtn.namespace().len() == 1
                             && qtn.namespace()[0].as_str() == "future"
                             && lowered_args.len() == 2
@@ -327,60 +368,42 @@ pub fn lower_type_expr_in_ns(
                     Definition::Interface(_) => {
                         // Same generic-arg handling as `Class` — interface
                         // parameters are valid in the same positions.
-                        let lowered_args: Vec<Ty> = generic_args
-                            .iter()
-                            .map(|ga| {
-                                lower_type_expr_in_ns(
-                                    db,
-                                    ga,
-                                    package_items,
-                                    ns_context,
-                                    generic_params,
-                                    diagnostics,
-                                )
-                            })
-                            .collect();
-                        Ty::Interface(qualify_def(db, def, short), lowered_args, TyAttr::default())
+                        let lowered_args = lower_args(
+                            db,
+                            generic_args,
+                            package_items,
+                            ns_context,
+                            generic_params,
+                            diagnostics,
+                        );
+                        Ty::Interface(qualify_def(db, def, item), lowered_args, TyAttr::default())
                     }
                     Definition::Enum(_) => {
-                        // Enums are not generic — validate args and emit a diagnostic if any were supplied.
-                        for ga in generic_args {
-                            let _ = lower_type_expr_in_ns(
-                                db,
-                                ga,
-                                package_items,
-                                ns_context,
-                                generic_params,
-                                diagnostics,
-                            );
-                        }
-                        if !generic_args.is_empty() {
-                            diagnostics.push(TirTypeError::TypeIsNotGeneric {
-                                type_name: short.clone(),
-                                kind: "enum",
-                            });
-                        }
-                        Ty::Enum(qualify_def(db, def, short), TyAttr::default())
+                        // Enums are not generic — lower args (for their own
+                        // diagnostics) but flag any as not-generic.
+                        lower_args(
+                            db,
+                            generic_args,
+                            package_items,
+                            ns_context,
+                            generic_params,
+                            diagnostics,
+                        );
+                        not_generic(generic_args, item, "enum", diagnostics);
+                        Ty::Enum(qualify_def(db, def, item), TyAttr::default())
                     }
                     Definition::TypeAlias(_) => {
-                        // Type aliases are not generic — validate args and emit a diagnostic if any were supplied.
-                        for ga in generic_args {
-                            let _ = lower_type_expr_in_ns(
-                                db,
-                                ga,
-                                package_items,
-                                ns_context,
-                                generic_params,
-                                diagnostics,
-                            );
-                        }
-                        if !generic_args.is_empty() {
-                            diagnostics.push(TirTypeError::TypeIsNotGeneric {
-                                type_name: short.clone(),
-                                kind: "type alias",
-                            });
-                        }
-                        Ty::TypeAlias(qualify_def(db, def, short), TyAttr::default())
+                        // Type aliases are not generic — same handling as enums.
+                        lower_args(
+                            db,
+                            generic_args,
+                            package_items,
+                            ns_context,
+                            generic_params,
+                            diagnostics,
+                        );
+                        not_generic(generic_args, item, "type alias", diagnostics);
+                        Ty::TypeAlias(qualify_def(db, def, item), TyAttr::default())
                     }
                     // Let bindings are values, not types — produce Unknown in a type position.
                     _ => Ty::Unknown {
@@ -401,31 +424,8 @@ pub fn lower_type_expr_in_ns(
                 if segments.len() >= 2 {
                     let (variant, enum_path) = segments.split_last().unwrap();
                     let enum_short = enum_path.last().unwrap();
-                    let enum_seg_ns = &enum_path[..enum_path.len() - 1];
-                    let enum_resolved = if !ns_context.is_empty() {
-                        let ns: Vec<baml_base::Name> = ns_context
-                            .iter()
-                            .chain(enum_seg_ns.iter())
-                            .cloned()
-                            .collect();
-                        package_items.lookup_type(&ns, enum_short)
-                    } else {
-                        package_items.lookup_type(enum_seg_ns, enum_short)
-                    };
-                    let enum_resolved = enum_resolved.or_else(|| {
-                        if enum_path.len() >= 2 {
-                            if enum_path[0].as_str() == "root" {
-                                package_items
-                                    .lookup_type(&enum_path[1..enum_path.len() - 1], enum_short)
-                            } else {
-                                let pkg_id = PackageId::new(db, enum_path[0].clone());
-                                let pkg = baml_compiler2_ppir::package_items(db, pkg_id);
-                                pkg.lookup_type(&enum_path[1..enum_path.len() - 1], enum_short)
-                            }
-                        } else {
-                            None
-                        }
-                    });
+                    let enum_resolved =
+                        resolve_type(db, package_items, ns_context, enum_path, enum_short);
                     if let Some(def @ Definition::Enum(enum_loc)) = enum_resolved {
                         // Verify the variant actually exists on the enum;
                         // otherwise `Status.Typo` would silently produce a
@@ -722,39 +722,6 @@ mod tests {
     }
 
     #[test]
-    fn substitute_paths_recurses_into_function_type() {
-        let type_expr = TypeExpr::Function {
-            generic_params: Vec::new(),
-            generic_param_bounds: Vec::new(),
-            params: vec![FunctionTypeParam {
-                name: Some(Name::new("value")),
-                optional: false,
-                ty: path("T"),
-            }],
-            ret: Box::new(path("T")),
-            throws: Some(Box::new(path("E"))),
-            attrs: vec![],
-        };
-        let mut subst = std::collections::HashMap::new();
-        subst.insert(Name::new("T"), TypeExpr::String { attrs: vec![] });
-        subst.insert(Name::new("E"), TypeExpr::Bool { attrs: vec![] });
-
-        let TypeExpr::Function {
-            params,
-            ret,
-            throws,
-            ..
-        } = substitute_paths_in(&type_expr, &subst)
-        else {
-            panic!("expected function type");
-        };
-
-        assert!(matches!(params[0].ty, TypeExpr::String { .. }));
-        assert!(matches!(*ret, TypeExpr::String { .. }));
-        assert!(matches!(throws.as_deref(), Some(TypeExpr::Bool { .. })));
-    }
-
-    #[test]
     fn substitute_self_recurses_into_function_type() {
         let type_expr = TypeExpr::Function {
             generic_params: Vec::new(),
@@ -787,6 +754,39 @@ mod tests {
         assert_eq!(params[0].ty, replacement);
         assert_eq!(*ret, replacement);
         assert_eq!(throws.map(|ty| *ty), Some(replacement));
+    }
+
+    #[test]
+    fn substitute_paths_recurses_into_function_type() {
+        let type_expr = TypeExpr::Function {
+            generic_params: Vec::new(),
+            generic_param_bounds: Vec::new(),
+            params: vec![FunctionTypeParam {
+                name: Some(Name::new("value")),
+                optional: false,
+                ty: path("T"),
+            }],
+            ret: Box::new(path("T")),
+            throws: Some(Box::new(path("E"))),
+            attrs: vec![],
+        };
+        let mut subst = std::collections::HashMap::new();
+        subst.insert(Name::new("T"), TypeExpr::String { attrs: vec![] });
+        subst.insert(Name::new("E"), TypeExpr::Bool { attrs: vec![] });
+
+        let TypeExpr::Function {
+            params,
+            ret,
+            throws,
+            ..
+        } = substitute_paths_in(&type_expr, &subst)
+        else {
+            panic!("expected function type");
+        };
+
+        assert!(matches!(params[0].ty, TypeExpr::String { .. }));
+        assert!(matches!(*ret, TypeExpr::String { .. }));
+        assert!(matches!(throws.as_deref(), Some(TypeExpr::Bool { .. })));
     }
 
     #[test]

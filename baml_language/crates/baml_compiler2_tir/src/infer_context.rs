@@ -10,7 +10,7 @@
 use std::{cell::RefCell, fmt};
 
 use baml_base::{FileId, Name, SourceFile};
-use baml_compiler2_ast::{AstSourceMap, ExprId, StmtId, TypeAnnotId};
+use baml_compiler2_ast::{AstSourceMap, ExprId, StmtId};
 use baml_compiler2_hir::{
     contributions::Definition,
     loc::{ClassLoc, FunctionLoc},
@@ -801,7 +801,7 @@ impl<'db> RelatedNote<'db> {
 }
 
 /// Primary location for a diagnostic — either an expression, a statement,
-/// or a raw source span (for type annotations that lack an `ExprId`).
+/// or a raw source span.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DiagnosticLocation {
     Expr(ExprId),
@@ -811,7 +811,6 @@ pub enum DiagnosticLocation {
     /// `ExprSegment(path_id, segment_idx)` resolves to `path_segment_span(path_id, segment_idx)`.
     ExprSegment(ExprId, usize),
     Stmt(StmtId),
-    TypeAnnot(TypeAnnotId),
     Span(TextRange),
 }
 
@@ -853,9 +852,6 @@ impl<'db> TirDiagnostic<'db> {
             DiagnosticLocation::Stmt(id) => {
                 source_map.map(|sm| sm.stmt_span(*id)).unwrap_or_default()
             }
-            DiagnosticLocation::TypeAnnot(id) => source_map
-                .map(|sm| sm.type_annotation_span(*id))
-                .unwrap_or_default(),
             DiagnosticLocation::Span(range) => *range,
         };
 
@@ -988,7 +984,6 @@ impl<'db> TypeCheckDiagnostics<'db> {
 /// Diagnostic sink for a single scope inference run.
 ///
 /// Held inside `TypeInferenceBuilder` — one per `infer_scope_types` call.
-/// Modeled after Ty's `InferContext` (`context.rs:37-46`).
 pub struct InferContext<'db> {
     db: &'db dyn crate::Db,
     scope: ScopeId<'db>,
@@ -1031,8 +1026,9 @@ impl<'db> InferContext<'db> {
         }
     }
 
-    /// Toggle suppression of `UnresolvedMember` diagnostics for the
-    /// current inference run. See `suppress_member_lookup_errors`.
+    /// Toggle suppression of diagnostics that arise from synthesized
+    /// references for the current inference run. See
+    /// `suppress_member_lookup_errors`.
     pub fn set_suppress_member_lookup_errors(&self, value: bool) {
         self.suppress_member_lookup_errors.set(value);
     }
@@ -1045,20 +1041,42 @@ impl<'db> InferContext<'db> {
         self.scope
     }
 
-    /// Report a type error at a specific expression, with optional related locations.
-    pub fn report(&self, error: TirTypeError, at: ExprId, related: Vec<RelatedNote<'db>>) {
-        if self.suppress_member_lookup_errors.get() && is_synthesized_code_diag(&error) {
-            return;
-        }
+    /// Push a diagnostic with the given severity, primary location, and related notes.
+    fn push(
+        &self,
+        error: TirTypeError,
+        severity: DiagnosticSeverity,
+        primary: DiagnosticLocation,
+        related: Vec<RelatedNote<'db>>,
+    ) {
         self.diagnostics
             .borrow_mut()
             .diagnostics
             .push(TirDiagnostic {
                 error,
-                severity: DiagnosticSeverity::Error,
-                primary: DiagnosticLocation::Expr(at),
+                severity,
+                primary,
                 related,
             });
+    }
+
+    /// Push an `Error`-level diagnostic, applying the synthesized-code
+    /// suppression guard (see `suppress_member_lookup_errors`).
+    fn push_error(
+        &self,
+        error: TirTypeError,
+        primary: DiagnosticLocation,
+        related: Vec<RelatedNote<'db>>,
+    ) {
+        if self.suppress_member_lookup_errors.get() && is_synthesized_code_diag(&error) {
+            return;
+        }
+        self.push(error, DiagnosticSeverity::Error, primary, related);
+    }
+
+    /// Report a type error at a specific expression, with optional related locations.
+    pub fn report(&self, error: TirTypeError, at: ExprId, related: Vec<RelatedNote<'db>>) {
+        self.push_error(error, DiagnosticLocation::Expr(at), related);
     }
 
     /// Convenience: report an error with no related locations.
@@ -1073,18 +1091,7 @@ impl<'db> InferContext<'db> {
         at: ExprId,
         related: Vec<RelatedNote<'db>>,
     ) {
-        if self.suppress_member_lookup_errors.get() && is_synthesized_code_diag(&error) {
-            return;
-        }
-        self.diagnostics
-            .borrow_mut()
-            .diagnostics
-            .push(TirDiagnostic {
-                error,
-                severity: DiagnosticSeverity::Error,
-                primary: DiagnosticLocation::ExprMember(at),
-                related,
-            });
+        self.push_error(error, DiagnosticLocation::ExprMember(at), related);
     }
 
     /// Convenience: report at member with no related locations.
@@ -1101,34 +1108,11 @@ impl<'db> InferContext<'db> {
         segment_idx: usize,
         related: Vec<RelatedNote<'db>>,
     ) {
-        if self.suppress_member_lookup_errors.get() && is_synthesized_code_diag(&error) {
-            return;
-        }
-        self.diagnostics
-            .borrow_mut()
-            .diagnostics
-            .push(TirDiagnostic {
-                error,
-                severity: DiagnosticSeverity::Error,
-                primary: DiagnosticLocation::ExprSegment(at, segment_idx),
-                related,
-            });
-    }
-
-    /// Report a type error at a type annotation location.
-    pub fn report_at_type_annot(&self, error: TirTypeError, at: TypeAnnotId) {
-        if self.suppress_member_lookup_errors.get() && is_synthesized_code_diag(&error) {
-            return;
-        }
-        self.diagnostics
-            .borrow_mut()
-            .diagnostics
-            .push(TirDiagnostic {
-                error,
-                severity: DiagnosticSeverity::Error,
-                primary: DiagnosticLocation::TypeAnnot(at),
-                related: Vec::new(),
-            });
+        self.push_error(
+            error,
+            DiagnosticLocation::ExprSegment(at, segment_idx),
+            related,
+        );
     }
 
     /// Report a type error at a raw source span (for type annotations).
@@ -1143,70 +1127,37 @@ impl<'db> InferContext<'db> {
         span: TextRange,
         related: Vec<RelatedNote<'db>>,
     ) {
-        if self.suppress_member_lookup_errors.get() && is_synthesized_code_diag(&error) {
-            return;
-        }
-        self.diagnostics
-            .borrow_mut()
-            .diagnostics
-            .push(TirDiagnostic {
-                error,
-                severity: DiagnosticSeverity::Error,
-                primary: DiagnosticLocation::Span(span),
-                related,
-            });
-    }
-
-    /// Report a type error at a specific statement.
-    pub fn report_at_stmt(&self, error: TirTypeError, at: StmtId) {
-        self.diagnostics
-            .borrow_mut()
-            .diagnostics
-            .push(TirDiagnostic {
-                error,
-                severity: DiagnosticSeverity::Error,
-                primary: DiagnosticLocation::Stmt(at),
-                related: Vec::new(),
-            });
+        self.push_error(error, DiagnosticLocation::Span(span), related);
     }
 
     /// Report a warning-level diagnostic at a specific statement.
     pub fn report_warning_at_stmt(&self, error: TirTypeError, at: StmtId) {
-        self.diagnostics
-            .borrow_mut()
-            .diagnostics
-            .push(TirDiagnostic {
-                error,
-                severity: DiagnosticSeverity::Warning,
-                primary: DiagnosticLocation::Stmt(at),
-                related: Vec::new(),
-            });
+        self.push(
+            error,
+            DiagnosticSeverity::Warning,
+            DiagnosticLocation::Stmt(at),
+            Vec::new(),
+        );
     }
 
     /// Report a warning-level diagnostic at an expression.
     pub fn report_warning_simple(&self, error: TirTypeError, at: ExprId) {
-        self.diagnostics
-            .borrow_mut()
-            .diagnostics
-            .push(TirDiagnostic {
-                error,
-                severity: DiagnosticSeverity::Warning,
-                primary: DiagnosticLocation::Expr(at),
-                related: Vec::new(),
-            });
+        self.push(
+            error,
+            DiagnosticSeverity::Warning,
+            DiagnosticLocation::Expr(at),
+            Vec::new(),
+        );
     }
 
     /// Report a warning-level diagnostic at a raw source span.
     pub fn report_warning_at_span(&self, error: TirTypeError, span: TextRange) {
-        self.diagnostics
-            .borrow_mut()
-            .diagnostics
-            .push(TirDiagnostic {
-                error,
-                severity: DiagnosticSeverity::Warning,
-                primary: DiagnosticLocation::Span(span),
-                related: Vec::new(),
-            });
+        self.push(
+            error,
+            DiagnosticSeverity::Warning,
+            DiagnosticLocation::Span(span),
+            Vec::new(),
+        );
     }
 
     /// Consume the context and return accumulated diagnostics.

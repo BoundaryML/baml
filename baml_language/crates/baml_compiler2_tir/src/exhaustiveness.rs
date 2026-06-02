@@ -146,27 +146,9 @@ impl SliceShape {
             SliceShape::Variable { prefix, suffix } => prefix + suffix,
         }
     }
-    pub fn is_variable(&self) -> bool {
-        matches!(self, SliceShape::Variable { .. })
-    }
 }
 
 impl Ctor {
-    /// Arity for ctor types whose arity is determined by the ctor + ty
-    /// alone. `Or`'s arity comes from the `DPat`'s `fields.len()` and is not
-    /// queried through this method; callers special-case Or.
-    pub fn arity(&self, ty: &Ty, cx: &dyn PatCtx) -> usize {
-        match self {
-            Ctor::Single(_) | Ctor::Wildcard | Ctor::NonExhaustive | Ctor::Missing | Ctor::Or => 0,
-            Ctor::UnionMember(_) => 1,
-            Ctor::Slice(shape) => shape.arity(),
-            Ctor::Class(qtn, args) => cx
-                .class_field_types(qtn, &class_ty_for_ctor(qtn, args, ty))
-                .len(),
-            Ctor::Interface(iface_ty) => cx.interface_field_types(iface_ty).len(),
-        }
-    }
-
     /// Does `self` cover `other` — i.e. is every value matched by `other` also
     /// matched by `self`? Equality for most ctors; slice variable-length covers
     /// fixed slices of compatible length; wildcard covers anything. `Or` is
@@ -369,13 +351,12 @@ fn write_literal_identity(out: &mut String, lit: &Literal) {
 
 // ── Deconstructed pattern ────────────────────────────────────────────────────
 
-/// A pattern in the form the usefulness algorithm consumes. `fields.len() ==
-/// arity`. Wildcards are filled in for elided positions during lowering.
+/// A pattern in the form the usefulness algorithm consumes. The ctor arity is
+/// `fields.len()`. Wildcards are filled in for elided positions during lowering.
 #[derive(Debug, Clone)]
 pub struct DPat {
     pub ctor: Ctor,
     pub fields: Vec<DPat>,
-    pub arity: usize,
     pub ty: Ty,
 }
 
@@ -384,7 +365,6 @@ impl DPat {
         Self {
             ctor: Ctor::Wildcard,
             fields: vec![],
-            arity: 0,
             ty,
         }
     }
@@ -392,22 +372,15 @@ impl DPat {
         Self {
             ctor: Ctor::Single(ty),
             fields: vec![],
-            arity: 0,
             ty: scrutinee_ty,
         }
     }
     pub fn class(qtn: QualifiedTypeName, fields: Vec<DPat>, ty: Ty) -> Self {
-        Self {
-            ctor: Ctor::Class(qtn, Vec::new()),
-            arity: fields.len(),
-            fields,
-            ty,
-        }
+        Self::class_inst(qtn, Vec::new(), fields, ty)
     }
     pub fn class_inst(qtn: QualifiedTypeName, args: Vec<Ty>, fields: Vec<DPat>, ty: Ty) -> Self {
         Self {
             ctor: Ctor::Class(qtn, args),
-            arity: fields.len(),
             fields,
             ty,
         }
@@ -415,7 +388,6 @@ impl DPat {
     pub fn interface(iface_ty: Ty, fields: Vec<DPat>, ty: Ty) -> Self {
         Self {
             ctor: Ctor::Interface(iface_ty),
-            arity: fields.len(),
             fields,
             ty,
         }
@@ -424,7 +396,6 @@ impl DPat {
         debug_assert_eq!(shape.arity(), fields.len());
         Self {
             ctor: Ctor::Slice(shape),
-            arity: fields.len(),
             fields,
             ty,
         }
@@ -436,7 +407,6 @@ impl DPat {
         debug_assert!(alts.len() >= 2, "Or pattern needs ≥2 alternatives");
         Self {
             ctor: Ctor::Or,
-            arity: alts.len(),
             fields: alts,
             ty,
         }
@@ -447,7 +417,6 @@ impl DPat {
     pub fn union_member(member_ty: Ty, inner: DPat, scrut_ty: Ty) -> Self {
         Self {
             ctor: Ctor::UnionMember(member_ty),
-            arity: 1,
             fields: vec![inner],
             ty: scrut_ty,
         }
@@ -688,10 +657,8 @@ fn is_inhabited_default<C: PatCtx + ?Sized>(
             r
         }
         Ty::Union(members, _) => members.iter().any(|m| is_inhabited_default(m, cx, seen)),
-        // `T?` always inhabits null. `T[]` always inhabits `[]`. So both
-        // are inhabited regardless of T.
-        Ty::Optional(_, _) => true,
-        Ty::List(_, _) | Ty::EvolvingList(_, _) => true,
+        // Everything else is inhabited: e.g. `T?` always inhabits null and
+        // `T[]` always inhabits `[]`, regardless of T.
         _ => true,
     }
 }
@@ -1096,7 +1063,7 @@ fn compute_exhaustiveness(cx: &dyn PatCtx, matrix: &mut Matrix<'_>, witnesses: &
             // The original or-pattern doesn't contribute its own ctor to
             // the witness — alternatives stand on their own.
         } else {
-            let arity = ctor.arity(&col_ty, cx);
+            let arity = sub_tys.len();
             sub_witnesses.apply_ctor(ctor, arity, &col_ty);
         }
         witnesses.extend(sub_witnesses);
@@ -1174,7 +1141,7 @@ fn split_ctors(cx: &dyn PatCtx, col_ty: &Ty, matrix: &Matrix<'_>) -> (Vec<Ctor>,
     // Slice types need a special split that treats variable-length patterns
     // as covering open-ended length classes — set membership isn't enough.
     if matches!(col_ty, Ty::List(_, _) | Ty::EvolvingList(_, _)) {
-        return split_slice_ctors(&present_no_wild, has_wildcard);
+        return split_slice_ctors(&present_no_wild);
     }
 
     let all = cx.enumerate_ctors(col_ty);
@@ -1232,7 +1199,7 @@ fn split_ctors(cx: &dyn PatCtx, col_ty: &Ty, matrix: &Matrix<'_>) -> (Vec<Ctor>,
 /// into a finite set of `Fixed` lengths plus one open-ended `Variable` that
 /// covers all longer lengths. Each output slice is tagged as seen/unseen by
 /// the column.
-fn split_slice_ctors(present: &[Ctor], _has_wildcard: bool) -> (Vec<Ctor>, Vec<Ctor>) {
+fn split_slice_ctors(present: &[Ctor]) -> (Vec<Ctor>, Vec<Ctor>) {
     let column: Vec<&SliceShape> = present
         .iter()
         .filter_map(|c| {
@@ -1379,51 +1346,6 @@ mod tests {
     use super::*;
     use crate::ty::Freshness;
 
-    /// A trivial `PatCtx` for unit tests. No real class/list lookup; tests
-    /// either avoid those types or stub them.
-    struct StubCtx;
-
-    impl PatCtx for StubCtx {
-        fn enumerate_ctors(&self, ty: &Ty) -> Vec<Ctor> {
-            match ty {
-                Ty::Primitive(PrimitiveType::Bool, _) => {
-                    vec![Ctor::Single(bool_lit(true)), Ctor::Single(bool_lit(false))]
-                }
-                Ty::Primitive(PrimitiveType::Int, _)
-                | Ty::Primitive(PrimitiveType::Float, _)
-                | Ty::Primitive(PrimitiveType::String, _) => vec![Ctor::NonExhaustive],
-                Ty::Primitive(PrimitiveType::Null, _) => vec![Ctor::Single(ty.clone())],
-                Ty::Optional(inner, _) => {
-                    let mut out = self.enumerate_ctors(inner);
-                    out.push(Ctor::Single(Ty::Primitive(
-                        PrimitiveType::Null,
-                        Default::default(),
-                    )));
-                    out
-                }
-                Ty::Union(members, _) => members
-                    .iter()
-                    .flat_map(|m| self.enumerate_ctors(m))
-                    .collect(),
-                Ty::Literal(_, _, _) | Ty::EnumVariant(_, _, _) => vec![Ctor::Single(ty.clone())],
-                Ty::Never { .. } => vec![],
-                Ty::TypeVar(_, _) => vec![Ctor::NonExhaustive],
-                _ => vec![Ctor::NonExhaustive],
-            }
-        }
-
-        fn class_field_types(&self, _qtn: &QualifiedTypeName, _ty: &Ty) -> Vec<Ty> {
-            vec![]
-        }
-
-        fn list_element_type(&self, ty: &Ty) -> Ty {
-            match ty {
-                Ty::List(elem, _) | Ty::EvolvingList(elem, _) => (**elem).clone(),
-                _ => ty.clone(),
-            }
-        }
-    }
-
     fn bool_lit(v: bool) -> Ty {
         Ty::Literal(Literal::Bool(v), Freshness::Regular, Default::default())
     }
@@ -1450,7 +1372,7 @@ mod tests {
             DPat::single(bool_lit(true), bool_ty()),
             DPat::single(bool_lit(false), bool_ty()),
         ];
-        let report = compute_match_usefulness(&StubCtx, &arms, bool_ty());
+        let report = compute_match_usefulness(&TestingCtx::new(), &arms, bool_ty());
         assert!(
             report.missing.is_empty(),
             "expected exhaustive: {:?}",
@@ -1462,7 +1384,7 @@ mod tests {
     #[test]
     fn bool_non_exhaustive_missing_false() {
         let arms = vec![DPat::single(bool_lit(true), bool_ty())];
-        let report = compute_match_usefulness(&StubCtx, &arms, bool_ty());
+        let report = compute_match_usefulness(&TestingCtx::new(), &arms, bool_ty());
         assert_eq!(report.missing.len(), 1);
         assert!(matches!(report.missing[0].ctor, Ctor::Single(_)));
     }
@@ -1473,21 +1395,21 @@ mod tests {
             DPat::single(bool_lit(true), bool_ty()),
             DPat::wildcard(bool_ty()),
         ];
-        let report = compute_match_usefulness(&StubCtx, &arms, bool_ty());
+        let report = compute_match_usefulness(&TestingCtx::new(), &arms, bool_ty());
         assert!(report.missing.is_empty());
     }
 
     #[test]
     fn int_requires_wildcard() {
         let arms = vec![DPat::single(int_lit(1), int_ty())];
-        let report = compute_match_usefulness(&StubCtx, &arms, int_ty());
+        let report = compute_match_usefulness(&TestingCtx::new(), &arms, int_ty());
         assert_eq!(report.missing.len(), 1);
     }
 
     #[test]
     fn int_with_wildcard_is_exhaustive() {
         let arms = vec![DPat::single(int_lit(1), int_ty()), DPat::wildcard(int_ty())];
-        let report = compute_match_usefulness(&StubCtx, &arms, int_ty());
+        let report = compute_match_usefulness(&TestingCtx::new(), &arms, int_ty());
         assert!(report.missing.is_empty());
     }
 
@@ -1497,7 +1419,7 @@ mod tests {
             DPat::wildcard(bool_ty()),
             DPat::single(bool_lit(true), bool_ty()),
         ];
-        let report = compute_match_usefulness(&StubCtx, &arms, bool_ty());
+        let report = compute_match_usefulness(&TestingCtx::new(), &arms, bool_ty());
         assert!(report.missing.is_empty());
         assert!(
             report.unreachable_arms.contains(&ArmId(1)),
@@ -1510,7 +1432,7 @@ mod tests {
     fn typevar_requires_wildcard() {
         let tv = Ty::TypeVar(Name::new("T"), Default::default());
         let arms = vec![DPat::wildcard(tv.clone())];
-        let report = compute_match_usefulness(&StubCtx, &arms, tv);
+        let report = compute_match_usefulness(&TestingCtx::new(), &arms, tv);
         assert!(report.missing.is_empty());
     }
 
@@ -1520,7 +1442,7 @@ mod tests {
             attr: Default::default(),
         };
         let arms: Vec<DPat> = vec![];
-        let report = compute_match_usefulness(&StubCtx, &arms, never);
+        let report = compute_match_usefulness(&TestingCtx::new(), &arms, never);
         assert!(report.missing.is_empty());
     }
 
@@ -1556,51 +1478,7 @@ mod tests {
             array_bool.clone(),
         );
 
-        // The stub must enumerate Array<bool> ctors. We override below.
-        struct ArrayCtx;
-        impl PatCtx for ArrayCtx {
-            fn enumerate_ctors(&self, ty: &Ty) -> Vec<Ctor> {
-                match ty {
-                    Ty::Primitive(PrimitiveType::Bool, _) => vec![
-                        Ctor::Single(Ty::Literal(
-                            Literal::Bool(true),
-                            Freshness::Regular,
-                            Default::default(),
-                        )),
-                        Ctor::Single(Ty::Literal(
-                            Literal::Bool(false),
-                            Freshness::Regular,
-                            Default::default(),
-                        )),
-                    ],
-                    Ty::List(_, _) => {
-                        // Enumerate length-0..=N for tests; rely on Variable as catchall.
-                        let mut out = Vec::new();
-                        for n in 0..=3 {
-                            out.push(Ctor::Slice(SliceShape::Fixed(n)));
-                        }
-                        out.push(Ctor::Slice(SliceShape::Variable {
-                            prefix: 0,
-                            suffix: 0,
-                        }));
-                        out
-                    }
-                    Ty::Literal(_, _, _) => vec![Ctor::Single(ty.clone())],
-                    _ => vec![Ctor::NonExhaustive],
-                }
-            }
-            fn class_field_types(&self, _q: &QualifiedTypeName, _t: &Ty) -> Vec<Ty> {
-                vec![]
-            }
-            fn list_element_type(&self, ty: &Ty) -> Ty {
-                match ty {
-                    Ty::List(e, _) => (**e).clone(),
-                    _ => ty.clone(),
-                }
-            }
-        }
-
-        let report = compute_match_usefulness(&ArrayCtx, &[arm1, arm2], array_bool);
+        let report = compute_match_usefulness(&TestingCtx::new(), &[arm1, arm2], array_bool);
         // Many length-classes are still missing (length 0, 1, 3, variable),
         // but `[false, false]` must be among them.
         let missing_strings: Vec<String> = report.missing.iter().map(|w| w.to_string()).collect();
@@ -1634,50 +1512,7 @@ mod tests {
             ),
         ];
 
-        struct ArrayCtx;
-        impl PatCtx for ArrayCtx {
-            fn enumerate_ctors(&self, ty: &Ty) -> Vec<Ctor> {
-                match ty {
-                    Ty::Primitive(PrimitiveType::Bool, _) => vec![
-                        Ctor::Single(Ty::Literal(
-                            Literal::Bool(true),
-                            Freshness::Regular,
-                            Default::default(),
-                        )),
-                        Ctor::Single(Ty::Literal(
-                            Literal::Bool(false),
-                            Freshness::Regular,
-                            Default::default(),
-                        )),
-                    ],
-                    Ty::List(_, _) => {
-                        // Enumerate the length classes appearing in the
-                        // matrix plus a variable catchall.
-                        vec![
-                            Ctor::Slice(SliceShape::Fixed(0)),
-                            Ctor::Slice(SliceShape::Fixed(1)),
-                            Ctor::Slice(SliceShape::Variable {
-                                prefix: 2,
-                                suffix: 0,
-                            }),
-                        ]
-                    }
-                    Ty::Literal(_, _, _) => vec![Ctor::Single(ty.clone())],
-                    _ => vec![Ctor::NonExhaustive],
-                }
-            }
-            fn class_field_types(&self, _q: &QualifiedTypeName, _t: &Ty) -> Vec<Ty> {
-                vec![]
-            }
-            fn list_element_type(&self, ty: &Ty) -> Ty {
-                match ty {
-                    Ty::List(e, _) => (**e).clone(),
-                    _ => ty.clone(),
-                }
-            }
-        }
-
-        let report = compute_match_usefulness(&ArrayCtx, &arms, array_bool);
+        let report = compute_match_usefulness(&TestingCtx::new(), &arms, array_bool);
         assert!(
             report.missing.is_empty(),
             "expected exhaustive, got missing {:?}",
@@ -4404,39 +4239,8 @@ mod tests {
             pair_ty.clone(),
         );
 
-        struct PairCtx(QualifiedTypeName);
-        impl PatCtx for PairCtx {
-            fn enumerate_ctors(&self, ty: &Ty) -> Vec<Ctor> {
-                match ty {
-                    Ty::Primitive(PrimitiveType::Bool, _) => vec![
-                        Ctor::Single(Ty::Literal(
-                            Literal::Bool(true),
-                            Freshness::Regular,
-                            Default::default(),
-                        )),
-                        Ctor::Single(Ty::Literal(
-                            Literal::Bool(false),
-                            Freshness::Regular,
-                            Default::default(),
-                        )),
-                    ],
-                    Ty::Class(_, args, _) => vec![Ctor::Class(self.0.clone(), args.clone())],
-                    Ty::Literal(_, _, _) => vec![Ctor::Single(ty.clone())],
-                    _ => vec![Ctor::NonExhaustive],
-                }
-            }
-            fn class_field_types(&self, _q: &QualifiedTypeName, _t: &Ty) -> Vec<Ty> {
-                vec![
-                    Ty::Primitive(PrimitiveType::Bool, Default::default()),
-                    Ty::Primitive(PrimitiveType::Bool, Default::default()),
-                ]
-            }
-            fn list_element_type(&self, ty: &Ty) -> Ty {
-                ty.clone()
-            }
-        }
-
-        let cx = PairCtx(qtn);
+        let mut cx = TestingCtx::new();
+        cx.register(qtn, vec![bool_ty(), bool_ty()]);
         let report = compute_match_usefulness(&cx, &[arm1, arm2], pair_ty);
         let missing_strings: Vec<String> = report.missing.iter().map(|w| w.to_string()).collect();
         assert_eq!(

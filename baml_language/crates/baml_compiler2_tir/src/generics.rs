@@ -132,24 +132,6 @@ pub fn substitute_ty(ty: &Ty, bindings: &FxHashMap<Name, Ty>) -> Ty {
     }
 }
 
-// ── TypeExpr-level substitution ───────────────────────────────────────────────
-
-/// Check if a `TypeExpr` is a single-segment path that matches a bound type variable.
-///
-/// Returns `Some(bound_ty)` if the expression is `Path(["T"])` and `"T"` is in
-/// `bindings`. Returns `None` if it's not a type variable reference.
-///
-/// This is called at the `TypeExpr` level, before `lower_type_expr`, so we can
-/// intercept `T` references that would otherwise produce `Ty::Unknown`.
-fn substitute_type_expr(expr: &TypeExpr, bindings: &FxHashMap<Name, Ty>) -> Option<Ty> {
-    match expr {
-        TypeExpr::Path { segments, .. } if segments.len() == 1 => {
-            bindings.get(&segments[0]).cloned()
-        }
-        _ => None,
-    }
-}
-
 // ── Combined lowering with generic substitution ───────────────────────────────
 
 /// Lower a `TypeExpr` to `Ty` with type variable substitution applied.
@@ -179,8 +161,12 @@ pub fn lower_type_expr_with_generics(
     }
 
     // Intercept single-segment paths that are type variables.
-    if let Some(ty) = substitute_type_expr(expr, bindings) {
-        return ty;
+    if let TypeExpr::Path { segments, .. } = expr {
+        if segments.len() == 1 {
+            if let Some(ty) = bindings.get(&segments[0]).cloned() {
+                return ty;
+            }
+        }
     }
 
     // For composite types (List, Map, Optional, Union), recurse with substitution
@@ -526,82 +512,6 @@ pub fn union_ty(a: &Ty, b: &Ty) -> Ty {
         // one wins? May need a merge/lattice operation on TyAttr, or TyAttr::default() may
         // be correct if attrs describe declaration sites rather than computed types.
         Ty::Union(members, TyAttr::default())
-    }
-}
-
-/// Replace any remaining `Ty::TypeVar` with `Ty::Unknown` and emit diagnostics.
-///
-/// Called after call-site inference to ensure no type variables escape to
-/// VIR/runtime. Each erased `TypeVar` produces a `CannotInferTypeParameter`
-/// diagnostic.
-#[allow(clippy::only_used_in_recursion)] // diagnostics param kept for future use
-pub fn erase_unresolved_typevars(
-    ty: &Ty,
-    diagnostics: &mut Vec<crate::infer_context::TirTypeError>,
-) -> Ty {
-    match ty {
-        Ty::TypeVar(_, _) => {
-            // Preserve TypeVars — they represent the enclosing function's generic
-            // parameter and will be resolved at the outer call site.
-            ty.clone()
-        }
-        Ty::List(inner, attr) => Ty::List(
-            Box::new(erase_unresolved_typevars(inner, diagnostics)),
-            attr.clone(),
-        ),
-        Ty::Map(k, v, attr) => Ty::Map(
-            Box::new(erase_unresolved_typevars(k, diagnostics)),
-            Box::new(erase_unresolved_typevars(v, diagnostics)),
-            attr.clone(),
-        ),
-        Ty::Optional(inner, attr) => Ty::Optional(
-            Box::new(erase_unresolved_typevars(inner, diagnostics)),
-            attr.clone(),
-        ),
-        Ty::Function {
-            generic_params,
-            generic_param_bounds,
-            params,
-            ret,
-            throws,
-            attr,
-        } => Ty::Function {
-            generic_params: generic_params.clone(),
-            generic_param_bounds: generic_param_bounds
-                .iter()
-                .map(|bound| {
-                    bound
-                        .as_ref()
-                        .map(|ty| erase_unresolved_typevars(ty, diagnostics))
-                })
-                .collect(),
-            params: params
-                .iter()
-                .map(|param| FunctionParamTy {
-                    name: param.name.clone(),
-                    ty: erase_unresolved_typevars(&param.ty, diagnostics),
-                    mode: param.mode,
-                })
-                .collect(),
-            ret: Box::new(erase_unresolved_typevars(ret, diagnostics)),
-            throws: Box::new(erase_unresolved_typevars(throws, diagnostics)),
-            attr: attr.clone(),
-        },
-        Ty::Union(tys, attr) => Ty::Union(
-            tys.iter()
-                .map(|t| erase_unresolved_typevars(t, diagnostics))
-                .collect(),
-            attr.clone(),
-        ),
-        Ty::Class(name, type_args, attr) => Ty::Class(
-            name.clone(),
-            type_args
-                .iter()
-                .map(|t| erase_unresolved_typevars(t, diagnostics))
-                .collect(),
-            attr.clone(),
-        ),
-        other => other.clone(),
     }
 }
 

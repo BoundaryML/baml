@@ -5,11 +5,6 @@ use std::fmt;
 use baml_base::Name;
 pub use baml_base::attr::TyAttr;
 
-/// A qualified type name with separate package and local name.
-///
-/// Used in `Ty::Class`, `Ty::Enum`, and `Ty::TypeAlias` to unambiguously
-/// identify a type by its definition's package (e.g. `"user"`, `"baml"`)
-/// and its short name (e.g. `"Foo"`, `"PrimitiveClient"`).
 /// Which package a type is defined in. `Local` is the user's own (implicit
 /// root) package — the "current" package for everything a user writes;
 /// `Dep(name)` is a named dependency (e.g. `baml`). Encoding this as a type
@@ -65,6 +60,11 @@ impl PartialOrd for Package {
     }
 }
 
+/// A qualified type name with separate package and local name.
+///
+/// Used in `Ty::Class`, `Ty::Enum`, and `Ty::TypeAlias` to unambiguously
+/// identify a type by its definition's package (e.g. `"user"`, `"baml"`)
+/// and its short name (e.g. `"Foo"`, `"PrimitiveClient"`).
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct QualifiedTypeName {
     /// The package this type is defined in (`Local` for user code, `Dep` for a
@@ -119,7 +119,9 @@ impl QualifiedTypeName {
     }
 
     pub fn is_builtin_root_type(&self, name: &str) -> bool {
-        self.package().as_str() == "baml" && self.namespace.is_empty() && self.name.as_str() == name
+        self.package().as_str() == baml_base::BAML_PACKAGE
+            && self.namespace.is_empty()
+            && self.name.as_str() == name
     }
 
     /// Returns `true` if this type lives in the `baml.panics` namespace
@@ -128,20 +130,12 @@ impl QualifiedTypeName {
         baml_base::is_panic_namespace(self.package().as_str(), &self.namespace)
     }
 
-    pub fn to_path_in_package(&self) -> Vec<Name> {
-        self.namespace
-            .iter()
-            .chain(std::iter::once(&self.name))
-            .cloned()
-            .collect::<Vec<_>>()
-    }
-
     /// The dotted path `package.namespace.name` (no `<generic_params>` suffix).
     /// When `user_facing`, the reserved implicit `user` package is elided
     /// ([`RESERVED_USER_PACKAGE`]) — the single structural source of the
     /// "no `user.` in names" rule. The canonical form (`user_facing = false`)
     /// keeps the package for dumps/identity.
-    pub fn render_dotted(&self, user_facing: bool) -> String {
+    fn render_dotted(&self, user_facing: bool) -> String {
         let namespace = self
             .namespace
             .iter()
@@ -160,7 +154,7 @@ impl QualifiedTypeName {
 
     /// Like [`render_dotted`](Self::render_dotted) plus the declared
     /// `<generic_params>` suffix (e.g. `Array<T>`).
-    pub fn render_qualified(&self, user_facing: bool) -> String {
+    fn render_qualified(&self, user_facing: bool) -> String {
         let mut out = self.render_dotted(user_facing);
         if !self.generic_params.is_empty() {
             let params: Vec<_> = self
@@ -462,6 +456,19 @@ pub enum Freshness {
 /// Re-export `baml_base::Literal` as `LiteralValue` for backward compatibility.
 pub type LiteralValue = baml_base::Literal;
 
+/// Collapse a list of union members into a single `Ty` without deduplicating.
+///
+/// The canonical `0 => Never` / `1 => unwrap` / `_ => Union` shape shared by the
+/// type joins across this crate. Callers that need flattening or deduplication
+/// should do it before calling this (see [`dedup_and_collapse`]).
+pub(crate) fn union_of(members: Vec<Ty>, attr: TyAttr) -> Ty {
+    match members.len() {
+        0 => Ty::Never { attr },
+        1 => members.into_iter().next().unwrap(),
+        _ => Ty::Union(members, attr),
+    }
+}
+
 /// Flatten, deduplicate, and collapse a vec of widened types into a single `Ty`.
 ///
 /// After `widen_fresh()` has run on each union member, multiple members may
@@ -488,11 +495,7 @@ fn dedup_and_collapse(types: Vec<Ty>, attr: TyAttr) -> Ty {
             }
         }
     }
-    match members.len() {
-        0 => Ty::Never { attr },
-        1 => members.into_iter().next().unwrap(),
-        _ => Ty::Union(members, attr),
-    }
+    union_of(members, attr)
 }
 
 impl Ty {
@@ -664,12 +667,6 @@ impl Ty {
         matches!(self, Ty::Union(..) | Ty::Function { .. })
     }
 
-    /// Nested function returns need grouping so the outer `throws` clause is
-    /// visually associated with the outer callable rather than the returned one.
-    fn needs_function_result_parens(&self) -> bool {
-        matches!(self, Ty::Function { .. })
-    }
-
     /// Render with parentheses if needed for postfix (`[]`/`?`) context.
     fn render_as_postfix_base(&self, s: &dyn TyRenderStrategy) -> String {
         let inner = self.render_with(s);
@@ -681,9 +678,11 @@ impl Ty {
     }
 
     /// Render with parentheses if needed in a function-return position.
+    /// Nested function returns need grouping so the outer `throws` clause is
+    /// visually associated with the outer callable rather than the returned one.
     fn render_as_function_result(&self, s: &dyn TyRenderStrategy) -> String {
         let inner = self.render_with(s);
-        if self.needs_function_result_parens() {
+        if matches!(self, Ty::Function { .. }) {
             format!("({inner})")
         } else {
             inner

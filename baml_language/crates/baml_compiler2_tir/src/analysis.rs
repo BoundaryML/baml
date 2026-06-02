@@ -3,9 +3,6 @@
 //! Provides a reusable cache for computing per-node "facts" that propagate
 //! transitively through a dependency graph. The canonical first consumer is
 //! exception propagation analysis, but the framework is domain-agnostic.
-//!
-//! Moved from `baml_compiler_analysis` crate which was deleted in Phase 5
-//! of the compiler2 migration.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -22,12 +19,6 @@ pub struct AnalysisGraph<N: Ord + Clone, F: Ord + Clone> {
     edges: BTreeMap<N, BTreeSet<N>>,
 }
 
-impl<N: Ord + Clone, F: Ord + Clone> Default for AnalysisGraph<N, F> {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 impl<N: Ord + Clone, F: Ord + Clone> AnalysisGraph<N, F> {
     /// Create an empty graph.
     #[must_use]
@@ -41,12 +32,6 @@ impl<N: Ord + Clone, F: Ord + Clone> AnalysisGraph<N, F> {
     /// Register a node with its direct facts.
     pub fn add_node(&mut self, node: N, facts: BTreeSet<F>) {
         self.direct.insert(node.clone(), facts);
-        self.edges.entry(node).or_default();
-    }
-
-    /// Register a node with no direct facts.
-    pub fn add_node_empty(&mut self, node: N) {
-        self.direct.entry(node.clone()).or_default();
         self.edges.entry(node).or_default();
     }
 
@@ -68,18 +53,6 @@ impl<N: Ord + Clone, F: Ord + Clone> AnalysisGraph<N, F> {
             transitive,
         }
     }
-
-    /// Return the number of nodes in the graph.
-    #[must_use]
-    pub fn node_count(&self) -> usize {
-        self.direct.len()
-    }
-
-    /// Return the number of edges in the graph.
-    #[must_use]
-    pub fn edge_count(&self) -> usize {
-        self.edges.values().map(BTreeSet::len).sum()
-    }
 }
 
 /// The output of a two-pass analysis.
@@ -92,18 +65,6 @@ pub struct AnalysisResult<N: Ord, F: Ord> {
 }
 
 impl<N: Ord, F: Ord> AnalysisResult<N, F> {
-    /// Direct facts for `node`.
-    #[must_use]
-    pub fn direct(&self, node: &N) -> Option<&BTreeSet<F>> {
-        self.direct.get(node)
-    }
-
-    /// Transitive facts for `node` (direct ∪ all reachable dependencies).
-    #[must_use]
-    pub fn transitive(&self, node: &N) -> Option<&BTreeSet<F>> {
-        self.transitive.get(node)
-    }
-
     /// Iterate over all nodes and their direct facts in deterministic order.
     pub fn iter_direct(&self) -> impl Iterator<Item = (&N, &BTreeSet<F>)> {
         self.direct.iter()
@@ -112,24 +73,6 @@ impl<N: Ord, F: Ord> AnalysisResult<N, F> {
     /// Iterate over all nodes and their transitive facts in deterministic order.
     pub fn iter_transitive(&self) -> impl Iterator<Item = (&N, &BTreeSet<F>)> {
         self.transitive.iter()
-    }
-
-    /// The set of all nodes in the analysis.
-    pub fn nodes(&self) -> impl Iterator<Item = &N> {
-        self.direct.keys()
-    }
-
-    /// Facts that are *only* transitive.
-    #[must_use]
-    pub fn inherited(&self, node: &N) -> Option<BTreeSet<&F>> {
-        let trans = self.transitive.get(node)?;
-        let direct = self.direct.get(node);
-        Some(
-            trans
-                .iter()
-                .filter(|f| direct.is_none_or(|d| !d.contains(f)))
-                .collect(),
-        )
     }
 }
 

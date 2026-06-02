@@ -30,7 +30,7 @@ pub type TypeBindings = FxHashMap<Name, Ty>;
 /// original class or out-of-body `implements for` block.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum InterfaceImplOrigin {
-    InBodyClass { class_qtn: QualifiedTypeName },
+    InBodyClass,
     OutOfBody,
 }
 
@@ -56,18 +56,6 @@ pub struct InterfaceImplInstantiation {
     pub bindings: TypeBindings,
     pub for_ty: Ty,
     pub interface_ty: Ty,
-}
-
-/// Compatibility view for old callers while rule-based matching is being
-/// plumbed through the compiler.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct BlanketClassImpl {
-    pub class_qtn: QualifiedTypeName,
-    pub generic_params: Vec<Name>,
-    pub generic_param_bounds: Vec<Option<Ty>>,
-    pub interface_qtn: QualifiedTypeName,
-    pub interface_type_args: Vec<Ty>,
-    pub for_target_ty: Ty,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -132,31 +120,14 @@ impl InterfaceImplRuleIndex {
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct ImplementsRegistry {
     /// Canonical implementation rules. New interface semantics should be
-    /// expressed in terms of these rules rather than the compatibility maps
-    /// below.
+    /// expressed in terms of these rules rather than the `class_implements`
+    /// compatibility map below.
     pub interface_impl_rules: Vec<InterfaceImplRule>,
     /// Lookup tables for `interface_impl_rules`, used by subtype checks to
     /// avoid probing unrelated implementation rules.
     pub interface_impl_rule_index: InterfaceImplRuleIndex,
     /// Class QTN → interfaces it implements.
     pub class_implements: FxHashMap<QualifiedTypeName, FxHashSet<QualifiedTypeName>>,
-    /// Non-class concrete type → interfaces it implements.
-    ///
-    /// This is where top-level `implements I for int` lives. Class targets are
-    /// still stored in `class_implements` so existing class-oriented callers do
-    /// not need to special-case them.
-    pub type_implements: FxHashMap<Ty, FxHashSet<QualifiedTypeName>>,
-    /// Blanket class implementations: `implements<T> I for Container<T>`.
-    /// These cannot be keyed by a single `Ty` since the for-target contains
-    /// type variables; dispatch checks them by class QTN + arity.
-    pub blanket_class_implements: Vec<BlanketClassImpl>,
-    /// (class QTN, interface QTN) → type args used in `implements I<...>`.
-    /// Only populated for generic interfaces; non-generic implements entries
-    /// are absent (meaning: no type args to check).
-    pub implements_type_args: FxHashMap<(QualifiedTypeName, QualifiedTypeName), Vec<Ty>>,
-    /// (non-class concrete type, interface QTN) → type args used in
-    /// `implements I<...>`.
-    pub type_implements_type_args: FxHashMap<(Ty, QualifiedTypeName), Vec<Ty>>,
     /// Interface QTN → interfaces it requires (transitively), including itself.
     /// Used for interface-to-interface subtyping: `A <: B` iff `B ∈ requires_closure[A]`.
     pub interface_requires: FxHashMap<QualifiedTypeName, FxHashSet<QualifiedTypeName>>,
@@ -166,15 +137,6 @@ pub struct ImplementsRegistry {
 pub struct ResolvedInterface<'db> {
     pub loc: baml_compiler2_hir::loc::InterfaceLoc<'db>,
     pub qtn: QualifiedTypeName,
-}
-
-#[derive(Debug, Default)]
-struct RegistryCompatibilityViews {
-    class_implements: FxHashMap<QualifiedTypeName, FxHashSet<QualifiedTypeName>>,
-    type_implements: FxHashMap<Ty, FxHashSet<QualifiedTypeName>>,
-    blanket_class_implements: Vec<BlanketClassImpl>,
-    implements_type_args: FxHashMap<(QualifiedTypeName, QualifiedTypeName), Vec<Ty>>,
-    type_implements_type_args: FxHashMap<(Ty, QualifiedTypeName), Vec<Ty>>,
 }
 
 impl ImplementsRegistry {
@@ -189,15 +151,6 @@ impl ImplementsRegistry {
             .is_some_and(|set| set.contains(iface_qtn))
     }
 
-    pub fn type_implements(&self, ty: &Ty, iface_qtn: &QualifiedTypeName) -> bool {
-        match ty {
-            Ty::Class(class_qtn, _, _) => self.implements(class_qtn, iface_qtn),
-            _ => implementation_key_for_ty(ty)
-                .and_then(|key| self.type_implements.get(&key))
-                .is_some_and(|set| set.contains(iface_qtn)),
-        }
-    }
-
     /// True iff interface `sub` requires interface `sup` (transitively).
     /// Used for interface-to-interface subtyping: `A <: B` iff `A requires B`.
     pub fn interface_requires(&self, sub: &QualifiedTypeName, sup: &QualifiedTypeName) -> bool {
@@ -206,54 +159,22 @@ impl ImplementsRegistry {
             .is_some_and(|set| set.contains(sup))
     }
 
-    /// True iff `class_qtn<class_type_args>` nominally implements `iface_qtn`
-    /// via a blanket `implements<T> I for Container<T>` declaration.
-    ///
-    /// Checks: same class QTN, same interface QTN, arity matches
-    /// (type args just need to have matching arity — they unify with anything
-    /// since the blanket's vars are unconstrained for Form 1).
-    pub fn blanket_class_implements_interface(
-        &self,
-        class_qtn: &QualifiedTypeName,
-        class_type_args: &[Ty],
-        iface_qtn: &QualifiedTypeName,
-    ) -> bool {
-        self.blanket_class_implements.iter().any(|blanket| {
-            &blanket.class_qtn == class_qtn
-                && &blanket.interface_qtn == iface_qtn
-                && blanket.generic_params.len() == class_type_args.len()
-        })
-    }
-
     pub fn rule_matches_actual(
         &self,
         rule: &InterfaceImplRule,
         actual_ty: &Ty,
         requested_iface_ty: &Ty,
         aliases: &std::collections::HashMap<QualifiedTypeName, Ty>,
-        mut is_subtype: impl FnMut(&Ty, &Ty) -> bool,
+        is_subtype: impl FnMut(&Ty, &Ty) -> bool,
     ) -> Option<InterfaceImplInstantiation> {
-        let mut bindings = TypeBindings::default();
-        match_ty_pattern_into(
-            &rule.for_ty_pattern,
-            actual_ty,
-            &rule.generic_params,
-            aliases,
-            &mut bindings,
-        )?;
-        match_ty_pattern_into(
-            &rule.interface_ty,
+        instantiate_rule_inner(
+            rule,
             requested_iface_ty,
-            &rule.generic_params,
+            Some(actual_ty),
             aliases,
-            &mut bindings,
-        )?;
-        validate_rule_bounds(rule, &bindings, &mut is_subtype, true)?;
-        Some(InterfaceImplInstantiation {
-            bindings: bindings.clone(),
-            for_ty: generics::substitute_ty(&rule.for_ty_pattern, &bindings),
-            interface_ty: generics::substitute_ty(&rule.interface_ty, &bindings),
-        })
+            is_subtype,
+            true,
+        )
     }
 
     /// When `actual_ty` *almost* implements `requested_iface_ty` via a blanket
@@ -436,94 +357,88 @@ impl ImplementsRegistry {
         requested_iface_ty: &Ty,
         candidate_ty: Option<&Ty>,
         aliases: &std::collections::HashMap<QualifiedTypeName, Ty>,
-        mut is_subtype: impl FnMut(&Ty, &Ty) -> bool,
+        is_subtype: impl FnMut(&Ty, &Ty) -> bool,
     ) -> Option<InterfaceImplInstantiation> {
-        let mut bindings = TypeBindings::default();
-        if let Some(candidate_ty) = candidate_ty {
-            match_ty_pattern_into(
-                &rule.for_ty_pattern,
-                candidate_ty,
-                &rule.generic_params,
-                aliases,
-                &mut bindings,
-            )?;
-        }
-        match_ty_pattern_into(
-            &rule.interface_ty,
+        instantiate_rule_inner(
+            rule,
             requested_iface_ty,
+            candidate_ty,
+            aliases,
+            is_subtype,
+            false,
+        )
+    }
+}
+
+/// Match `rule` against `requested_iface_ty` (and, when present, `candidate_ty`)
+/// and build the resulting instantiation. `require_all_bindings` controls the
+/// bound check for params left unbound (see [`validate_rule_bounds`]).
+fn instantiate_rule_inner(
+    rule: &InterfaceImplRule,
+    requested_iface_ty: &Ty,
+    candidate_ty: Option<&Ty>,
+    aliases: &std::collections::HashMap<QualifiedTypeName, Ty>,
+    mut is_subtype: impl FnMut(&Ty, &Ty) -> bool,
+    require_all_bindings: bool,
+) -> Option<InterfaceImplInstantiation> {
+    let mut bindings = TypeBindings::default();
+    if let Some(candidate_ty) = candidate_ty {
+        match_ty_pattern_into(
+            &rule.for_ty_pattern,
+            candidate_ty,
             &rule.generic_params,
             aliases,
             &mut bindings,
         )?;
-        validate_rule_bounds(rule, &bindings, &mut is_subtype, false)?;
-        Some(InterfaceImplInstantiation {
-            bindings: bindings.clone(),
-            for_ty: generics::substitute_ty(&rule.for_ty_pattern, &bindings),
-            interface_ty: generics::substitute_ty(&rule.interface_ty, &bindings),
-        })
     }
+    match_ty_pattern_into(
+        &rule.interface_ty,
+        requested_iface_ty,
+        &rule.generic_params,
+        aliases,
+        &mut bindings,
+    )?;
+    validate_rule_bounds(rule, &bindings, &mut is_subtype, require_all_bindings)?;
+    let for_ty = generics::substitute_ty(&rule.for_ty_pattern, &bindings);
+    let interface_ty = generics::substitute_ty(&rule.interface_ty, &bindings);
+    Some(InterfaceImplInstantiation {
+        bindings,
+        for_ty,
+        interface_ty,
+    })
 }
 
 fn derive_compatibility_views(
     rules: &[InterfaceImplRule],
     all_class_qtns: &[QualifiedTypeName],
-) -> RegistryCompatibilityViews {
-    let mut views = RegistryCompatibilityViews::default();
+) -> FxHashMap<QualifiedTypeName, FxHashSet<QualifiedTypeName>> {
+    let mut class_implements: FxHashMap<QualifiedTypeName, FxHashSet<QualifiedTypeName>> =
+        FxHashMap::default();
     for class_qtn in all_class_qtns {
-        views.class_implements.entry(class_qtn.clone()).or_default();
+        class_implements.entry(class_qtn.clone()).or_default();
     }
 
     for rule in rules {
-        let Ty::Interface(iface_qtn, interface_type_args, _) = &rule.interface_ty else {
+        let Ty::Interface(iface_qtn, _, _) = &rule.interface_ty else {
             continue;
         };
-
-        match &rule.for_ty_pattern {
-            Ty::Class(class_qtn, class_args, _)
-                if matches!(rule.origin, InterfaceImplOrigin::OutOfBody)
-                    && class_args.iter().any(|arg| matches!(arg, Ty::TypeVar(..))) =>
-            {
-                views.blanket_class_implements.push(BlanketClassImpl {
-                    class_qtn: class_qtn.clone(),
-                    generic_params: rule.generic_params.clone(),
-                    generic_param_bounds: rule.generic_param_bounds.clone(),
-                    interface_qtn: iface_qtn.clone(),
-                    interface_type_args: interface_type_args.clone(),
-                    for_target_ty: rule.for_ty_pattern.clone(),
-                });
-            }
-            Ty::Class(class_qtn, _, _) => {
-                views
-                    .class_implements
-                    .entry(class_qtn.clone())
-                    .or_default()
-                    .insert(iface_qtn.clone());
-                if !interface_type_args.is_empty() {
-                    views.implements_type_args.insert(
-                        (class_qtn.clone(), iface_qtn.clone()),
-                        interface_type_args.clone(),
-                    );
-                }
-            }
-            target_ty => {
-                let Some(target_key) = implementation_key_for_ty(target_ty) else {
-                    continue;
-                };
-                views
-                    .type_implements
-                    .entry(target_key.clone())
-                    .or_default()
-                    .insert(iface_qtn.clone());
-                if !interface_type_args.is_empty() {
-                    views
-                        .type_implements_type_args
-                        .insert((target_key, iface_qtn.clone()), interface_type_args.clone());
-                }
-            }
+        let Ty::Class(class_qtn, class_args, _) = &rule.for_ty_pattern else {
+            continue;
+        };
+        // Blanket `implements<T> I for Container<T>` rules dispatch via the rule
+        // index, not the class_implements map.
+        if matches!(rule.origin, InterfaceImplOrigin::OutOfBody)
+            && class_args.iter().any(|arg| matches!(arg, Ty::TypeVar(..)))
+        {
+            continue;
         }
+        class_implements
+            .entry(class_qtn.clone())
+            .or_default()
+            .insert(iface_qtn.clone());
     }
 
-    views
+    class_implements
 }
 
 fn lower_path_generic_args(
@@ -959,9 +874,9 @@ pub fn implementation_key_for_ty(ty: &Ty) -> Option<Ty> {
 
 /// Build the per-package implements registry.
 ///
-/// Returns `(class_qtn → {iface_qtn})` covering every class in the package.
-/// Empty for packages without interfaces; cheap to keep around as a Salsa
-/// result.
+/// Returns the full [`ImplementsRegistry`] (rules, index, and requires closure)
+/// for every class in the package. Empty for packages without interfaces; cheap
+/// to keep around as a Salsa result.
 #[salsa::tracked(returns(ref))]
 pub fn package_implements_registry<'db>(
     db: &'db dyn crate::Db,
@@ -1030,9 +945,7 @@ pub fn package_implements_registry<'db>(
                             interface_args,
                             TyAttr::default(),
                         ),
-                        origin: InterfaceImplOrigin::InBodyClass {
-                            class_qtn: class_qtn.clone(),
-                        },
+                        origin: InterfaceImplOrigin::InBodyClass,
                     });
                 }
             }
@@ -1123,16 +1036,12 @@ pub fn package_implements_registry<'db>(
     }
 
     let interface_impl_rule_index = InterfaceImplRuleIndex::from_rules(&interface_impl_rules);
-    let compatibility_views = derive_compatibility_views(&interface_impl_rules, &all_class_qtns);
+    let class_implements = derive_compatibility_views(&interface_impl_rules, &all_class_qtns);
 
     ImplementsRegistry {
         interface_impl_rules,
         interface_impl_rule_index,
-        class_implements: compatibility_views.class_implements,
-        type_implements: compatibility_views.type_implements,
-        blanket_class_implements: compatibility_views.blanket_class_implements,
-        implements_type_args: compatibility_views.implements_type_args,
-        type_implements_type_args: compatibility_views.type_implements_type_args,
+        class_implements,
         interface_requires,
     }
 }
@@ -1223,8 +1132,6 @@ fn interface_closure<'db>(
 pub fn interface_closure_locs<'db>(
     db: &'db dyn crate::Db,
     root_iface: baml_compiler2_hir::loc::InterfaceLoc<'db>,
-    _pkg_items: &baml_compiler2_hir::package::PackageItems<'db>,
-    _current_ns: &[Name],
 ) -> Vec<baml_compiler2_hir::loc::InterfaceLoc<'db>> {
     let mut out: Vec<baml_compiler2_hir::loc::InterfaceLoc<'db>> = Vec::new();
     let mut seen: FxHashSet<baml_compiler2_hir::loc::InterfaceLoc<'db>> = FxHashSet::default();
@@ -1264,8 +1171,6 @@ pub fn interface_closure_locs_with_args<'db>(
     db: &'db dyn crate::Db,
     root_iface: baml_compiler2_hir::loc::InterfaceLoc<'db>,
     root_args: &[Ty],
-    _pkg_items: &baml_compiler2_hir::package::PackageItems<'db>,
-    _current_ns: &[Name],
 ) -> Vec<(baml_compiler2_hir::loc::InterfaceLoc<'db>, Vec<Ty>)> {
     let mut out: Vec<(baml_compiler2_hir::loc::InterfaceLoc<'db>, Vec<Ty>)> = Vec::new();
     let mut seen: FxHashSet<(baml_compiler2_hir::loc::InterfaceLoc<'db>, Vec<Ty>)> =
@@ -1547,10 +1452,6 @@ mod tests {
             interface_impl_rules: Vec::new(),
             interface_impl_rule_index: InterfaceImplRuleIndex::default(),
             class_implements: FxHashMap::default(),
-            type_implements: FxHashMap::default(),
-            blanket_class_implements: Vec::new(),
-            implements_type_args: FxHashMap::default(),
-            type_implements_type_args: FxHashMap::default(),
             interface_requires: FxHashMap::default(),
         };
         let rule = InterfaceImplRule {

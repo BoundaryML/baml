@@ -28,31 +28,10 @@ pub struct FunctionThrowSets {
     pub transitive: BTreeMap<Name, BTreeSet<ThrowFact>>,
 }
 
-// Safety: comparison-based replacement for Salsa early cutoff.
-#[allow(unsafe_code)]
-unsafe impl salsa::Update for FunctionThrowSets {
-    unsafe fn maybe_update(old_pointer: *mut Self, new_value: Self) -> bool {
-        // SAFETY: pointer is Salsa-owned and valid for replacement.
-        #[allow(unsafe_code)]
-        let old = unsafe { &*old_pointer };
-        if old == &new_value {
-            false
-        } else {
-            #[allow(unsafe_code)]
-            unsafe {
-                std::ptr::drop_in_place(old_pointer);
-                std::ptr::write(old_pointer, new_value);
-            }
-            true
-        }
-    }
-}
+// Comparison-based replacement for Salsa early cutoff.
+crate::impl_partial_eq_salsa_update!(FunctionThrowSets);
 
 impl FunctionThrowSets {
-    pub fn direct_for(&self, name: &Name) -> Option<&BTreeSet<ThrowFact>> {
-        self.direct.get(name)
-    }
-
     pub fn transitive_for(&self, name: &Name) -> Option<&BTreeSet<ThrowFact>> {
         self.transitive.get(name)
     }
@@ -79,7 +58,7 @@ pub fn function_throw_sets<'db>(
         crate::analysis::AnalysisGraph::new();
 
     let mut call_edges: BTreeMap<Name, BTreeSet<Name>> = BTreeMap::new();
-    let mut has_declared_contract: BTreeMap<Name, bool> = BTreeMap::new();
+    let mut has_declared_contract: BTreeSet<Name> = BTreeSet::new();
     // Track direct facts separately so we can merge cross-package facts before adding to graph
     let mut direct_facts: BTreeMap<Name, BTreeSet<ThrowFact>> = BTreeMap::new();
 
@@ -90,41 +69,19 @@ pub fn function_throw_sets<'db>(
             };
 
             let key = function_key(db, *func_loc, short_name);
-            let sig = baml_compiler2_ppir::function_signature(db, *func_loc);
-            let body = baml_compiler2_ppir::function_body(db, *func_loc);
-            let func_ns = baml_compiler2_hir::file_package::file_package(db, func_loc.file(db))
-                .namespace_path;
-
-            let declared_throws = sig.throws.as_ref().map(|te| {
-                let mut diags = Vec::new();
-                let item_tree = baml_compiler2_ppir::file_item_tree(db, func_loc.file(db));
-                let func_data = &item_tree[func_loc.id(db)];
-                let lowered = lower_type_expr_in_ns(
-                    db,
-                    te,
-                    pkg_items,
-                    &func_ns,
-                    &func_data.generic_params,
-                    &mut diags,
-                );
-                drop(diags);
-                flatten_ty_to_facts(&lowered)
-            });
-
-            let direct = if let Some(declared) = declared_throws.clone() {
-                declared
-            } else if let baml_compiler2_hir::body::FunctionBody::Expr(expr_body) = body.as_ref() {
-                collect_direct_throws(db, pkg_items, &func_ns, expr_body)
-            } else {
-                BTreeSet::new()
-            };
-
-            direct_facts.insert(key.clone(), direct);
-            has_declared_contract.insert(key.clone(), declared_throws.is_some());
-
-            if let baml_compiler2_hir::body::FunctionBody::Expr(expr_body) = body.as_ref() {
-                call_edges.insert(key, collect_call_targets(expr_body));
-            }
+            let item_tree = baml_compiler2_ppir::file_item_tree(db, func_loc.file(db));
+            let func_data = &item_tree[func_loc.id(db)];
+            process_callable(
+                db,
+                pkg_items,
+                *func_loc,
+                key,
+                &func_data.generic_params,
+                None,
+                &mut direct_facts,
+                &mut has_declared_contract,
+                &mut call_edges,
+            );
         }
 
         // Also process class methods, which are not in ns.values.
@@ -144,48 +101,17 @@ pub fn function_throw_sets<'db>(
                 let method_short = Name::new(format!("{class_name}.{method_name}"));
                 let key = function_key(db, func_loc, &method_short);
 
-                let sig = baml_compiler2_ppir::function_signature(db, func_loc);
-                let body = baml_compiler2_ppir::function_body(db, func_loc);
-
-                let method_ns =
-                    baml_compiler2_hir::file_package::file_package(db, file).namespace_path;
-                let declared_throws = sig.throws.as_ref().map(|te| {
-                    let mut diags = Vec::new();
-                    let lowered = lower_type_expr_in_ns(
-                        db,
-                        te,
-                        pkg_items,
-                        &method_ns,
-                        &method_data.generic_params,
-                        &mut diags,
-                    );
-                    drop(diags);
-                    flatten_ty_to_facts(&lowered)
-                });
-
-                let direct = if let Some(declared) = declared_throws.clone() {
-                    declared
-                } else if let baml_compiler2_hir::body::FunctionBody::Expr(expr_body) =
-                    body.as_ref()
-                {
-                    collect_direct_throws(db, pkg_items, &method_ns, expr_body)
-                } else {
-                    BTreeSet::new()
-                };
-
-                direct_facts.insert(key.clone(), direct);
-                has_declared_contract.insert(key.clone(), declared_throws.is_some());
-
-                if let baml_compiler2_hir::body::FunctionBody::Expr(expr_body) = body.as_ref() {
-                    // Rewrite "self.X" call targets to "ClassName.X" so edges
-                    // connect to the correct graph nodes.
-                    let raw_targets = collect_call_targets(expr_body);
-                    let rewritten: BTreeSet<Name> = raw_targets
-                        .into_iter()
-                        .map(|t| rewrite_self_target(&t, class_name))
-                        .collect();
-                    call_edges.insert(key, rewritten);
-                }
+                process_callable(
+                    db,
+                    pkg_items,
+                    func_loc,
+                    key,
+                    &method_data.generic_params,
+                    Some(class_name),
+                    &mut direct_facts,
+                    &mut has_declared_contract,
+                    &mut call_edges,
+                );
             }
         }
     }
@@ -193,7 +119,7 @@ pub fn function_throw_sets<'db>(
     // Process call edges: for cross-package targets, merge their throw facts
     // into the caller's direct facts; for same-package targets, add edges.
     for (from, targets) in &call_edges {
-        if has_declared_contract.get(from).copied().unwrap_or(false) {
+        if has_declared_contract.contains(from) {
             continue;
         }
         for to in targets {
@@ -203,10 +129,8 @@ pub fn function_throw_sets<'db>(
                     .entry(from.clone())
                     .or_default()
                     .extend(dep_throws.iter().cloned());
-            } else {
-                // Same-package: will add edge after nodes are added
-                // (edges added below)
             }
+            // Same-package edges are added in a later pass, once nodes exist.
         }
     }
 
@@ -217,7 +141,7 @@ pub fn function_throw_sets<'db>(
 
     // Add same-package call edges
     for (from, targets) in &call_edges {
-        if has_declared_contract.get(from).copied().unwrap_or(false) {
+        if has_declared_contract.contains(from) {
             continue;
         }
         for to in targets {
@@ -241,6 +165,61 @@ pub fn function_throw_sets<'db>(
     FunctionThrowSets { direct, transitive }
 }
 
+/// Compute the direct throw facts, declared-contract flag, and call edges for a
+/// single callable (free function or class method) and record them in the
+/// per-package maps.
+///
+/// `class_name` is `Some` for class methods, in which case `self.X` call targets
+/// are rewritten to `ClassName.X` so edges connect to the correct graph nodes.
+#[allow(clippy::too_many_arguments)]
+fn process_callable<'db>(
+    db: &'db dyn crate::Db,
+    pkg_items: &PackageItems<'db>,
+    func_loc: baml_compiler2_hir::loc::FunctionLoc<'db>,
+    key: Name,
+    generic_params: &[Name],
+    class_name: Option<&Name>,
+    direct_facts: &mut BTreeMap<Name, BTreeSet<ThrowFact>>,
+    has_declared_contract: &mut BTreeSet<Name>,
+    call_edges: &mut BTreeMap<Name, BTreeSet<Name>>,
+) {
+    let sig = baml_compiler2_ppir::function_signature(db, func_loc);
+    let body = baml_compiler2_ppir::function_body(db, func_loc);
+    let ns = baml_compiler2_hir::file_package::file_package(db, func_loc.file(db)).namespace_path;
+
+    let declared_throws = sig.throws.as_ref().map(|te| {
+        let mut diags = Vec::new();
+        let lowered = lower_type_expr_in_ns(db, te, pkg_items, &ns, generic_params, &mut diags);
+        flatten_ty_to_facts(&lowered)
+    });
+
+    let has_contract = declared_throws.is_some();
+    let direct = if let Some(declared) = declared_throws {
+        declared
+    } else if let baml_compiler2_hir::body::FunctionBody::Expr(expr_body) = body.as_ref() {
+        collect_direct_throws(db, pkg_items, &ns, expr_body)
+    } else {
+        BTreeSet::new()
+    };
+
+    direct_facts.insert(key.clone(), direct);
+    if has_contract {
+        has_declared_contract.insert(key.clone());
+    }
+
+    if let baml_compiler2_hir::body::FunctionBody::Expr(expr_body) = body.as_ref() {
+        let targets = collect_call_targets(expr_body);
+        let targets = match class_name {
+            Some(class_name) => targets
+                .into_iter()
+                .map(|t| rewrite_self_target(&t, class_name))
+                .collect(),
+            None => targets,
+        };
+        call_edges.insert(key, targets);
+    }
+}
+
 /// Build the throw-set lookup key for a function given its namespace path and short name.
 ///
 /// For top-level functions the key is just the short name; for namespaced
@@ -249,12 +228,9 @@ pub fn throw_set_key(namespace_path: &[Name], short_name: &Name) -> Name {
     if namespace_path.is_empty() {
         short_name.clone()
     } else {
-        let mut parts: Vec<String> = namespace_path
-            .iter()
-            .map(|n| n.as_str().to_string())
-            .collect();
-        parts.push(short_name.as_str().to_string());
-        Name::new(parts.join("."))
+        let mut parts = namespace_path.to_vec();
+        parts.push(short_name.clone());
+        segments_to_dotted_name(&parts)
     }
 }
 
@@ -320,13 +296,23 @@ pub fn collect_call_targets(body: &ExprBody) -> BTreeSet<Name> {
     let mut targets = BTreeSet::new();
     for (_, expr) in body.exprs.iter() {
         if let Expr::Call { callee, .. } = expr {
-            if let Some(path) = expr_to_path(*callee, body) {
-                let joined = path.iter().map(Name::as_str).collect::<Vec<_>>().join(".");
-                targets.insert(Name::new(joined));
+            if let Some(path) = crate::throws_analysis::expr_to_path_segments(*callee, body) {
+                targets.insert(segments_to_dotted_name(&path));
             }
         }
     }
     targets
+}
+
+/// Join path segments into a single dotted `Name` (e.g. `["a", "b"]` -> `"a.b"`).
+fn segments_to_dotted_name(segments: &[Name]) -> Name {
+    Name::new(
+        segments
+            .iter()
+            .map(Name::as_str)
+            .collect::<Vec<_>>()
+            .join("."),
+    )
 }
 
 /// Convert a thrown expression to a `Ty` directly, using `pkg_items` to resolve
@@ -349,7 +335,7 @@ fn throw_fact_from_expr<'db>(
         Expr::Path(segments) if !segments.is_empty() => {
             resolve_path_to_ty(db, pkg_items, ns_context, segments)
         }
-        Expr::MemberAccess { .. } => expr_to_path(expr_id, body)
+        Expr::MemberAccess { .. } => crate::throws_analysis::expr_to_path_segments(expr_id, body)
             .map(|segments| resolve_path_to_ty(db, pkg_items, ns_context, &segments))
             .unwrap_or(Ty::Unknown {
                 attr: TyAttr::default(),
@@ -468,18 +454,6 @@ fn collect_catch_binding_names(body: &ExprBody) -> HashSet<&str> {
         }
     }
     names
-}
-
-fn expr_to_path(expr_id: baml_compiler2_ast::ExprId, body: &ExprBody) -> Option<Vec<Name>> {
-    match &body.exprs[expr_id] {
-        Expr::Path(segments) if !segments.is_empty() => Some(segments.clone()),
-        Expr::MemberAccess { base, member } => {
-            let mut base_path = expr_to_path(*base, body)?;
-            base_path.push(member.clone());
-            Some(base_path)
-        }
-        _ => None,
-    }
 }
 
 /// Flatten a compound `Ty` into its leaf throw facts.

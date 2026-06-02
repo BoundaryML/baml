@@ -96,56 +96,25 @@ fn collect_narrowings(
 ) {
     let expr = &body.exprs[expr_id];
     match expr {
-        // x != null  (or null != x)
+        // x == null / x != null  (or with null on the left). For `==` the
+        // then-branch is null; for `!=` it's the non-null type. An enclosing
+        // `!` flips which branch sees null.
         Expr::Binary {
-            op: BinaryOp::Ne,
+            op: op @ (BinaryOp::Eq | BinaryOp::Ne),
             lhs,
             rhs,
         } => {
             if let Some((name, original_ty)) = null_check_name(*lhs, *rhs, body, expr_types) {
-                let (then_ty, else_ty) = if negated {
-                    // !(x != null) == x == null
-                    (
-                        Ty::Primitive(PrimitiveType::Null, TyAttr::default()),
-                        remove_null(&original_ty),
-                    )
+                let null_when_true = matches!(op, BinaryOp::Eq) ^ negated;
+                let (then_type, else_type) = if null_when_true {
+                    (null_ty(), remove_null(&original_ty))
                 } else {
-                    (
-                        remove_null(&original_ty),
-                        Ty::Primitive(PrimitiveType::Null, TyAttr::default()),
-                    )
+                    (remove_null(&original_ty), null_ty())
                 };
                 out.push(Narrowing {
                     name,
-                    then_type: then_ty,
-                    else_type: else_ty,
-                });
-            }
-        }
-
-        // x == null  (or null == x)
-        Expr::Binary {
-            op: BinaryOp::Eq,
-            lhs,
-            rhs,
-        } => {
-            if let Some((name, original_ty)) = null_check_name(*lhs, *rhs, body, expr_types) {
-                let (then_ty, else_ty) = if negated {
-                    // !(x == null) == x != null
-                    (
-                        remove_null(&original_ty),
-                        Ty::Primitive(PrimitiveType::Null, TyAttr::default()),
-                    )
-                } else {
-                    (
-                        Ty::Primitive(PrimitiveType::Null, TyAttr::default()),
-                        remove_null(&original_ty),
-                    )
-                };
-                out.push(Narrowing {
-                    name,
-                    then_type: then_ty,
-                    else_type: else_ty,
+                    then_type,
+                    else_type,
                 });
             }
         }
@@ -165,14 +134,7 @@ fn collect_narrowings(
         // simplify (literal pattern over a primitive, single non-union
         // scrutinee, no overlap, …) it falls back to the original.
         Expr::Is { scrutinee, pattern } => {
-            let Expr::Path(segments) = &body.exprs[*scrutinee] else {
-                return;
-            };
-            if segments.len() != 1 {
-                return;
-            }
-            let name = &segments[0];
-            let Some(original_ty) = expr_types.get(scrutinee) else {
+            let Some((name, original_ty)) = local_name_and_ty(*scrutinee, body, expr_types) else {
                 return;
             };
             let Some(matched_ty) = pattern_types.get(pattern) else {
@@ -193,11 +155,10 @@ fn collect_narrowings(
 
         // Truthiness: if (x) where x is optional — then-branch removes null
         Expr::Path(segments) if segments.len() == 1 => {
-            let name = &segments[0];
-            if let Some(ty) = expr_types.get(&expr_id) {
+            if let Some((name, ty)) = local_name_and_ty(expr_id, body, expr_types) {
                 // Only narrow if the type is optional / nullable
                 if is_nullable(ty) {
-                    let (then_ty, else_ty) = if negated {
+                    let (then_type, else_type) = if negated {
                         // !x — then: null/falsy, else: non-null
                         (ty.clone(), remove_null(ty))
                     } else {
@@ -206,8 +167,8 @@ fn collect_narrowings(
                     };
                     out.push(Narrowing {
                         name: name.clone(),
-                        then_type: then_ty,
-                        else_type: else_ty,
+                        then_type,
+                        else_type,
                     });
                 }
             }
@@ -220,6 +181,22 @@ fn collect_narrowings(
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
+/// If `id` is a single-segment path referring to a local whose type is known,
+/// return its name and recorded type.
+fn local_name_and_ty<'a>(
+    id: ExprId,
+    body: &'a ExprBody,
+    expr_types: &'a FxHashMap<ExprId, Ty>,
+) -> Option<(&'a Name, &'a Ty)> {
+    let Expr::Path(segments) = &body.exprs[id] else {
+        return None;
+    };
+    if segments.len() != 1 {
+        return None;
+    }
+    Some((&segments[0], expr_types.get(&id)?))
+}
+
 /// Check if a binary comparison is `name op null` or `null op name`.
 ///
 /// Returns `(variable_name, original_type)` if one side is a single-segment
@@ -231,23 +208,11 @@ fn null_check_name(
     body: &ExprBody,
     expr_types: &FxHashMap<ExprId, Ty>,
 ) -> Option<(Name, Ty)> {
-    // lhs is name, rhs is null
-    if let Expr::Path(segments) = &body.exprs[lhs] {
-        if segments.len() == 1 {
-            if let Expr::Null = &body.exprs[rhs] {
-                if let Some(ty) = expr_types.get(&lhs) {
-                    return Some((segments[0].clone(), ty.clone()));
-                }
-            }
-        }
-    }
-    // rhs is name, lhs is null
-    if let Expr::Path(segments) = &body.exprs[rhs] {
-        if segments.len() == 1 {
-            if let Expr::Null = &body.exprs[lhs] {
-                if let Some(ty) = expr_types.get(&rhs) {
-                    return Some((segments[0].clone(), ty.clone()));
-                }
+    // Whichever side is a known local, the other side must be `null`.
+    for (name_side, null_side) in [(lhs, rhs), (rhs, lhs)] {
+        if matches!(&body.exprs[null_side], Expr::Null) {
+            if let Some((name, ty)) = local_name_and_ty(name_side, body, expr_types) {
+                return Some((name.clone(), ty.clone()));
             }
         }
     }
@@ -305,12 +270,29 @@ pub(crate) fn subtract_pattern_type(scrutinee: &Ty, matched: &Ty) -> Ty {
         return scrutinee.clone();
     }
 
-    match remaining.len() {
-        0 => Ty::Never {
-            attr: TyAttr::default(),
-        },
-        1 => remaining.into_iter().next().unwrap(),
-        _ => Ty::Union(remaining, TyAttr::default()),
+    collapse_union(remaining)
+}
+
+/// Fixed `null` type constructor used by null-narrowing.
+fn null_ty() -> Ty {
+    Ty::Primitive(PrimitiveType::Null, TyAttr::default())
+}
+
+/// Fixed `never` type constructor used by union collapse.
+fn never_ty() -> Ty {
+    Ty::Never {
+        attr: TyAttr::default(),
+    }
+}
+
+/// Collapse a union member list: empty → `never`, single → that member,
+/// otherwise a `Union`. Deliberately does not dedup (see module note on
+/// shape-only comparison).
+fn collapse_union(members: Vec<Ty>) -> Ty {
+    match members.len() {
+        0 => never_ty(),
+        1 => members.into_iter().next().unwrap(),
+        _ => Ty::Union(members, TyAttr::default()),
     }
 }
 
@@ -358,17 +340,9 @@ pub fn remove_null(ty: &Ty) -> Ty {
                 .filter(|m| !matches!(m, Ty::Primitive(PrimitiveType::Null, _)))
                 .cloned()
                 .collect();
-            match filtered.len() {
-                0 => Ty::Never {
-                    attr: TyAttr::default(),
-                },
-                1 => filtered.into_iter().next().unwrap(),
-                _ => Ty::Union(filtered, TyAttr::default()),
-            }
+            collapse_union(filtered)
         }
-        Ty::Primitive(PrimitiveType::Null, _) => Ty::Never {
-            attr: TyAttr::default(),
-        },
+        Ty::Primitive(PrimitiveType::Null, _) => never_ty(),
         _ => ty.clone(),
     }
 }
@@ -401,24 +375,25 @@ pub(crate) fn apply_then_narrowings(
     saved
 }
 
+/// Restore each saved original type, removing names that weren't present before.
+fn restore_saved(saved: &[(Name, Option<Ty>)], locals: &mut FxHashMap<Name, LocalBinding>) {
+    for (name, original) in saved {
+        match original {
+            Some(ty) => set_current_type(locals, name.clone(), ty.clone()),
+            None => {
+                locals.remove(name);
+            }
+        }
+    }
+}
+
 /// Restore original types and then apply else-branch narrowings.
 pub(crate) fn restore_and_apply_else(
     narrowings: &[Narrowing],
     saved: &[(Name, Option<Ty>)],
     locals: &mut FxHashMap<Name, LocalBinding>,
 ) {
-    // Restore originals
-    for (name, original) in saved {
-        match original {
-            Some(ty) => {
-                set_current_type(locals, name.clone(), ty.clone());
-            }
-            None => {
-                locals.remove(name);
-            }
-        }
-    }
-    // Apply else narrowings
+    restore_saved(saved, locals);
     for n in narrowings {
         set_current_type(locals, n.name.clone(), n.else_type.clone());
     }
@@ -429,16 +404,7 @@ pub(crate) fn restore_narrowings(
     saved: Vec<(Name, Option<Ty>)>,
     locals: &mut FxHashMap<Name, LocalBinding>,
 ) {
-    for (name, original) in saved {
-        match original {
-            Some(ty) => {
-                set_current_type(locals, name, ty);
-            }
-            None => {
-                locals.remove(&name);
-            }
-        }
-    }
+    restore_saved(&saved, locals);
 }
 
 /// Apply else-branch narrowings after a then-branch that diverged.

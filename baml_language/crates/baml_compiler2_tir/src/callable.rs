@@ -29,61 +29,70 @@ fn join_throw_facts(facts: &BTreeSet<Ty>) -> Ty {
     }
 }
 
+/// Shared signature-lowering context for the declared/cycle-initial throws paths.
+struct SignatureLoweringCtx<'db> {
+    db: &'db dyn crate::Db,
+    sig: std::sync::Arc<baml_compiler2_hir::signature::ElaboratedFunctionSignature>,
+    pkg_info: baml_compiler2_hir::file_package::PackageInfo,
+    pkg_items: &'db baml_compiler2_hir::package::PackageItems<'db>,
+    generic_params: Vec<Name>,
+}
+
+impl<'db> SignatureLoweringCtx<'db> {
+    fn new(db: &'db dyn crate::Db, function: FunctionLoc<'db>) -> Self {
+        let file = function.file(db);
+        let item_tree = baml_compiler2_ppir::file_item_tree(db, file);
+        let sig = baml_compiler2_ppir::elaborated_function_signature(db, function);
+        let pkg_info = file_package::file_package(db, file);
+        let pkg_id = PackageId::new(db, pkg_info.package.clone());
+        let pkg_items = baml_compiler2_ppir::package_items(db, pkg_id);
+
+        let mut generic_params = enclosing_class_generic_params(&item_tree, function.id(db));
+        generic_params.extend(sig.user_generic_params.iter().cloned());
+        generic_params.extend(sig.synthetic_effect_params.iter().cloned());
+
+        Self {
+            db,
+            sig,
+            pkg_info,
+            pkg_items,
+            generic_params,
+        }
+    }
+
+    fn lower(&self, type_expr: &baml_compiler2_ast::TypeExpr) -> Ty {
+        let mut diags = Vec::new();
+        lower_type_expr_in_ns(
+            self.db,
+            type_expr,
+            self.pkg_items,
+            &self.pkg_info.namespace_path,
+            &self.generic_params,
+            &mut diags,
+        )
+    }
+}
+
 fn lowered_declared_callable_throws<'db>(
     db: &'db dyn crate::Db,
     function: FunctionLoc<'db>,
 ) -> Option<Ty> {
-    let file = function.file(db);
-    let item_tree = baml_compiler2_ppir::file_item_tree(db, file);
-    let sig = baml_compiler2_ppir::elaborated_function_signature(db, function);
-    let pkg_info = file_package::file_package(db, file);
-    let pkg_id = PackageId::new(db, pkg_info.package.clone());
-    let pkg_items = baml_compiler2_ppir::package_items(db, pkg_id);
-
-    let mut generic_params = enclosing_class_generic_params(&item_tree, function.id(db));
-    generic_params.extend(sig.user_generic_params.iter().cloned());
-    generic_params.extend(sig.synthetic_effect_params.iter().cloned());
-
-    sig.throws.as_ref().map(|declared_throws| {
-        let mut diags = Vec::new();
-        lower_type_expr_in_ns(
-            db,
-            declared_throws,
-            pkg_items,
-            &pkg_info.namespace_path,
-            &generic_params,
-            &mut diags,
-        )
-    })
+    let ctx = SignatureLoweringCtx::new(db, function);
+    ctx.sig
+        .throws
+        .as_ref()
+        .map(|declared_throws| ctx.lower(declared_throws))
 }
 
 fn signature_cycle_initial_callable_throws<'db>(
     db: &'db dyn crate::Db,
     function: FunctionLoc<'db>,
 ) -> Ty {
-    let file = function.file(db);
-    let item_tree = baml_compiler2_ppir::file_item_tree(db, file);
-    let sig = baml_compiler2_ppir::elaborated_function_signature(db, function);
-    let pkg_info = file_package::file_package(db, file);
-    let pkg_id = PackageId::new(db, pkg_info.package.clone());
-    let pkg_items = baml_compiler2_ppir::package_items(db, pkg_id);
-
-    let mut generic_params = enclosing_class_generic_params(&item_tree, function.id(db));
-    generic_params.extend(sig.user_generic_params.iter().cloned());
-    generic_params.extend(sig.synthetic_effect_params.iter().cloned());
+    let ctx = SignatureLoweringCtx::new(db, function);
 
     let mut facts = BTreeSet::new();
-    for param in &sig.params {
-        let mut diags = Vec::new();
-        let lowered = lower_type_expr_in_ns(
-            db,
-            &param.ty,
-            pkg_items,
-            &pkg_info.namespace_path,
-            &generic_params,
-            &mut diags,
-        );
-        if let Ty::Function { throws, .. } = lowered {
+    for param in &ctx.sig.params {
+        if let Ty::Function { throws, .. } = ctx.lower(&param.ty) {
             facts.extend(crate::throw_inference::flatten_ty_to_facts(&throws));
         }
     }
@@ -150,22 +159,27 @@ fn named_callee_key<'db>(
     callee_expr_id: baml_compiler2_ast::ExprId,
     body: &ExprBody,
 ) -> Option<Name> {
-    if let Some(
-        MemberResolution::Free { func_loc }
-        | MemberResolution::BoundMethod { func_loc, .. }
-        | MemberResolution::UnboundMethod { func_loc, .. },
-    ) = inference.resolution(callee_expr_id)
-    {
-        return Some(callable_key(db, *func_loc));
-    }
-
-    if let Some(
-        MemberResolution::BoundMethod { func_loc, .. }
-        | MemberResolution::UnboundMethod { func_loc, .. },
-    ) = inference
-        .path_member_resolution(callee_expr_id)
-        .and_then(|resolutions| resolutions.last())
-    {
+    let direct_func_loc = match inference.resolution(callee_expr_id) {
+        Some(
+            MemberResolution::Free { func_loc }
+            | MemberResolution::BoundMethod { func_loc, .. }
+            | MemberResolution::UnboundMethod { func_loc, .. },
+        ) => Some(func_loc),
+        _ => None,
+    };
+    let func_loc = direct_func_loc.or_else(|| {
+        match inference
+            .path_member_resolution(callee_expr_id)
+            .and_then(|resolutions| resolutions.last())
+        {
+            Some(
+                MemberResolution::BoundMethod { func_loc, .. }
+                | MemberResolution::UnboundMethod { func_loc, .. },
+            ) => Some(func_loc),
+            _ => None,
+        }
+    });
+    if let Some(func_loc) = func_loc {
         return Some(callable_key(db, *func_loc));
     }
 
@@ -178,9 +192,15 @@ fn named_callee_key<'db>(
     Some(callable_key(db, func_loc))
 }
 
-fn lookup_named_throw_summary<'db>(
+/// Look up the transitive throw set for `key`, checking the package's own
+/// function throw sets first, then each dependency interface's throw sets.
+///
+/// Shared by `callable.rs` and `builder.rs`; `dep_interfaces` is passed in so
+/// callers can use whichever resolution context they already hold.
+pub(crate) fn lookup_named_throw_summary<'db>(
     db: &'db dyn crate::Db,
     pkg_id: PackageId<'db>,
+    dep_interfaces: &[(Name, crate::package_interface::PackageInterface)],
     key: &Name,
 ) -> Option<BTreeSet<Ty>> {
     let own = function_throw_sets(db, pkg_id);
@@ -188,8 +208,7 @@ fn lookup_named_throw_summary<'db>(
         return Some(throws.clone());
     }
 
-    let res_ctx = package_resolution_context(db, pkg_id);
-    for (_dep_name, dep_iface) in &res_ctx.dep_interfaces {
+    for (_dep_name, dep_iface) in dep_interfaces {
         if let Some(throws) = dep_iface.throw_sets.transitive_for(key) {
             return Some(throws.clone());
         }
@@ -245,7 +264,8 @@ impl ThrowsAnalysisContext for CallableThrowsAnalysis<'_, '_> {
             callee_expr_id,
             body,
         )?;
-        lookup_named_throw_summary(self.db, self.pkg_id, &key)
+        let res_ctx = package_resolution_context(self.db, self.pkg_id);
+        lookup_named_throw_summary(self.db, self.pkg_id, &res_ctx.dep_interfaces, &key)
     }
 }
 
@@ -288,33 +308,57 @@ pub(crate) fn instantiated_callee_throws(
         params.as_slice()
     };
 
+    Some(substitute_throws_with_inferred_bindings(
+        effective_params,
+        &throws,
+        args,
+        call_plan,
+        |arg_expr_id| {
+            inference
+                .expression_type(arg_expr_id)
+                .cloned()
+                .unwrap_or(Ty::Unknown {
+                    attr: TyAttr::default(),
+                })
+        },
+    ))
+}
+
+/// Infer generic bindings from `(param, arg)` pairs (honoring an explicit
+/// `call_plan` when present, else positional zip) and substitute them into
+/// `throws`. `arg_ty` resolves each argument `ExprId` to its inferred type.
+///
+/// Shared by both `instantiated_callee_throws` implementations (here and in
+/// `builder.rs`) so the binding/substitution tail lives in one place.
+pub(crate) fn substitute_throws_with_inferred_bindings(
+    effective_params: &[crate::ty::FunctionParamTy],
+    throws: &Ty,
+    args: &[baml_compiler2_ast::ExprId],
+    call_plan: Option<&CallPlan>,
+    mut arg_ty: impl FnMut(baml_compiler2_ast::ExprId) -> Ty,
+) -> Ty {
     let mut bindings: FxHashMap<Name, Ty> = FxHashMap::default();
     if let Some(call_plan) = call_plan {
         for (param_index, arg_expr_id) in call_plan.provided_param_args() {
             let Some(param) = effective_params.get(param_index) else {
                 continue;
             };
-            let arg_ty = inference
-                .expression_type(arg_expr_id)
-                .cloned()
-                .unwrap_or(Ty::Unknown {
-                    attr: TyAttr::default(),
-                });
-            crate::generics::infer_bindings_allow_typevars(&param.ty, &arg_ty, &mut bindings);
+            crate::generics::infer_bindings_allow_typevars(
+                &param.ty,
+                &arg_ty(arg_expr_id),
+                &mut bindings,
+            );
         }
     } else {
         for (param, arg_expr_id) in effective_params.iter().zip(args.iter()) {
-            let arg_ty = inference
-                .expression_type(*arg_expr_id)
-                .cloned()
-                .unwrap_or(Ty::Unknown {
-                    attr: TyAttr::default(),
-                });
-            crate::generics::infer_bindings_allow_typevars(&param.ty, &arg_ty, &mut bindings);
+            crate::generics::infer_bindings_allow_typevars(
+                &param.ty,
+                &arg_ty(*arg_expr_id),
+                &mut bindings,
+            );
         }
     }
-
-    Some(crate::generics::substitute_ty(&throws, &bindings))
+    crate::generics::substitute_ty(throws, &bindings)
 }
 
 fn callable_throws_cycle_initial<'db>(

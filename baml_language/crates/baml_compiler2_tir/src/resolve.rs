@@ -111,83 +111,29 @@ pub fn resolve_name_at_in_scope<'db>(
                     crate::package_interface::ResolvedSource::Builtin => ResolvedName::Builtin(def),
                 };
             }
-            // For types, resolve_type returns Ty — we need Definition, so fall back to direct lookup
-            if let Some((_source, _ty)) =
-                res_ctx.resolve_type(db, name_path, &pkg_info.namespace_path)
+            // For types, resolve_type returns Ty — we need Definition, so fall back to direct
+            // lookup. resolve_type's success is only a guard; re-derive the Definition by
+            // walking own items (Item) then deps (Builtin, also probing the root namespace).
+            if res_ctx
+                .resolve_type(db, name_path, &pkg_info.namespace_path)
+                .is_some()
             {
-                let pkg_items = &res_ctx.own_items;
-                if let Some(def) = pkg_items.lookup_type(&pkg_info.namespace_path, name) {
+                if let Some(def) = res_ctx
+                    .own_items
+                    .lookup_type(&pkg_info.namespace_path, name)
+                {
                     return ResolvedName::Item(def);
                 }
-                // The type was found in deps — search deps.
-                // Dep builtins are in the root namespace (&[]).
                 for (dep_name, _) in &res_ctx.dep_interfaces {
-                    if let Some(dep_items) = res_ctx.items_for_package(db, dep_name) {
-                        if let Some(def) = dep_items
-                            .lookup_type(&pkg_info.namespace_path, name)
-                            .or_else(|| dep_items.lookup_type(&[], name))
-                        {
-                            return ResolvedName::Builtin(def);
-                        }
+                    if let Some(def) = res_ctx.items_for_package(db, dep_name).and_then(|dep| {
+                        dep.lookup_type(&pkg_info.namespace_path, name)
+                            .or_else(|| dep.lookup_type(&[], name))
+                    }) {
+                        return ResolvedName::Builtin(def);
                     }
                 }
             }
         }
-    }
-
-    ResolvedName::Unknown
-}
-
-/// Resolve a path expression at a given position.
-///
-/// Single-segment paths are resolved via `resolve_name_at`.
-/// Multi-segment paths are resolved by treating the first segment as either:
-/// - `root` — substituted with the current file's package
-/// - a literal package name (e.g. `baml`)
-///   The remaining segments are looked up inside that package.
-pub fn resolve_path_at<'db>(
-    db: &'db dyn crate::Db,
-    file: SourceFile,
-    at_offset: TextSize,
-    segments: &[Name],
-    scope_name: Option<&Name>,
-) -> ResolvedName<'db> {
-    if segments.is_empty() {
-        return ResolvedName::Unknown;
-    }
-
-    if segments.len() == 1 {
-        return resolve_name_at_in_scope(db, file, at_offset, &segments[0], scope_name);
-    }
-
-    // First segment: `root` maps to the current file's package,
-    // anything else is a literal package name.
-    let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
-    let pkg_name = if segments[0].as_str() == "root" {
-        pkg_info.package.clone()
-    } else {
-        segments[0].clone()
-    };
-
-    // Use PackageResolutionContext to validate access to the target package.
-    let own_pkg_id = PackageId::new(db, pkg_info.package);
-    let res_ctx = crate::package_interface::package_resolution_context(db, own_pkg_id);
-
-    let Some(pkg_items) = res_ctx.items_for_package(db, &pkg_name) else {
-        return ResolvedName::Unknown;
-    };
-
-    let after_pkg = &segments[1..];
-    // The path already includes namespace segments, so look up directly.
-    let item = after_pkg
-        .last()
-        .expect("multi-segment path has elements after pkg prefix");
-    let ns = &after_pkg[..after_pkg.len() - 1];
-    if let Some(def) = pkg_items.lookup_value(ns, item) {
-        return ResolvedName::Builtin(def);
-    }
-    if let Some(def) = pkg_items.lookup_type(ns, item) {
-        return ResolvedName::Builtin(def);
     }
 
     ResolvedName::Unknown

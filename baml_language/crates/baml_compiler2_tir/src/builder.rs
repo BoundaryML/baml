@@ -43,7 +43,6 @@ use crate::{
 // `Ty::TypeVar`). They are free functions so they can be called from both
 // `resolve_member` (mutable context) and `try_resolve_member_on_ty` (shared).
 
-/// Construct `Ty::TypeAlias` for `baml.json.json`.
 /// Render an interface instantiation for diagnostics, e.g. `Box` (no args) or
 /// `Box<int>`. Used so ambiguity/projection hints name the exact instantiation
 /// (`.as<Box<int>>`) rather than the bare interface name.
@@ -56,10 +55,11 @@ fn format_interface_display(name: &Name, args: &[Ty]) -> String {
     }
 }
 
+/// Construct `Ty::TypeAlias` for `baml.json.json`.
 fn json_alias_ty() -> Ty {
     Ty::TypeAlias(
         crate::ty::QualifiedTypeName::new(
-            Name::new("baml"),
+            Name::new(baml_base::BAML_PACKAGE),
             vec![Name::new("json")],
             Name::new("json"),
         ),
@@ -71,7 +71,7 @@ fn json_alias_ty() -> Ty {
 fn json_serialization_error_ty() -> Ty {
     Ty::Class(
         crate::ty::QualifiedTypeName::new(
-            Name::new("baml"),
+            Name::new(baml_base::BAML_PACKAGE),
             vec![Name::new("json")],
             Name::new("JsonSerializationError"),
         ),
@@ -84,7 +84,7 @@ fn json_serialization_error_ty() -> Ty {
 fn json_parse_error_ty() -> Ty {
     Ty::Class(
         crate::ty::QualifiedTypeName::new(
-            Name::new("baml"),
+            Name::new(baml_base::BAML_PACKAGE),
             vec![Name::new("json")],
             Name::new("JsonParseError"),
         ),
@@ -105,17 +105,95 @@ fn json_serialization_or_parse_error_ty() -> Ty {
     )
 }
 
-/// Construct the throws type `JsonParseError | JsonSerializationError`.
+/// Bridge table mapping a primitive/container `Ty` to the builtin companion
+/// class that backs its members (e.g. `int[]` → `Array<int>`, `string` →
+/// `String`). Returns `(class_path, type_args)` to feed
+/// `resolve_builtin_member` / `resolve_builtin_method`, or `None` when the type
+/// has no builtin companion class.
+fn builtin_companion_class(ty: &Ty) -> Option<(&'static [&'static str], Vec<Ty>)> {
+    Some(match ty {
+        Ty::List(element_ty, _) => (&["Array"], vec![element_ty.as_ref().clone()]),
+        Ty::Map(key_ty, val_ty, _) => (
+            &["Map"],
+            vec![key_ty.as_ref().clone(), val_ty.as_ref().clone()],
+        ),
+        Ty::Future(value_ty, error_ty, _) => (
+            &["future", "Future"],
+            vec![value_ty.as_ref().clone(), error_ty.as_ref().clone()],
+        ),
+        Ty::Primitive(PrimitiveType::String, _)
+        | Ty::Literal(baml_base::Literal::String(_), _, _) => (&["String"], vec![]),
+        Ty::Primitive(PrimitiveType::Int, _) | Ty::Literal(baml_base::Literal::Int(_), _, _) => {
+            (&["Int"], vec![])
+        }
+        Ty::Primitive(PrimitiveType::Bigint, _)
+        | Ty::Literal(baml_base::Literal::Bigint(_), _, _) => (&["Bigint"], vec![]),
+        Ty::Primitive(PrimitiveType::Float, _)
+        | Ty::Literal(baml_base::Literal::Float(_), _, _) => (&["Float"], vec![]),
+        Ty::Primitive(PrimitiveType::Bool, _) | Ty::Literal(baml_base::Literal::Bool(_), _, _) => {
+            (&["Bool"], vec![])
+        }
+        Ty::Primitive(PrimitiveType::Null, _) => (&["Null"], vec![]),
+        Ty::Type { .. } => (&["TypeValue"], vec![]),
+        Ty::Primitive(
+            p @ (PrimitiveType::Uint8Array
+            | PrimitiveType::Image
+            | PrimitiveType::Audio
+            | PrimitiveType::Video
+            | PrimitiveType::Pdf),
+            _,
+        ) => (p.builtin_class_path(), vec![]),
+        _ => return None,
+    })
+}
+
+/// Synthetic signature for the universal `to_json` / `from_json` methods on a
+/// generic type variable `name`. Returns `None` when `member` is neither.
 ///
-/// Used as the conservative throws clause for the universal `from_json` method
-/// on `Ty::TypeVar`.
-fn json_parse_or_serialization_error_ty() -> Ty {
-    // Same members, different ordering to match the semantic direction of
-    // each method. Could be the same union; keep separate for clarity.
-    Ty::Union(
-        vec![json_parse_error_ty(), json_serialization_error_ty()],
-        TyAttr::default(),
-    )
+/// After Phase 5b.1 every BAML type has `to_json(self) -> json` and
+/// `from_json(j: json) -> Self`. When the base type is a type-variable `T`, the
+/// concrete companion class is unknown, so the signature is synthesized
+/// directly. The throws clause is conservatively widened to
+/// `JsonSerializationError | JsonParseError` — the actual throws for any
+/// concrete `T` is a subset, so call-site throw inference stays sound.
+fn typevar_json_method_ty(name: &Name, member: &Name) -> Option<Ty> {
+    match member.as_str() {
+        "to_json" => Some(Ty::Function {
+            generic_params: Vec::new(),
+            generic_param_bounds: Vec::new(),
+            params: vec![],
+            ret: Box::new(json_alias_ty()),
+            throws: Box::new(json_serialization_or_parse_error_ty()),
+            attr: TyAttr::default(),
+        }),
+        "from_json" => Some(Ty::Function {
+            generic_params: Vec::new(),
+            generic_param_bounds: Vec::new(),
+            params: vec![FunctionParamTy::required(
+                Some(Name::new("j")),
+                json_alias_ty(),
+            )],
+            ret: Box::new(Ty::TypeVar(name.clone(), TyAttr::default())),
+            throws: Box::new(json_serialization_or_parse_error_ty()),
+            attr: TyAttr::default(),
+        }),
+        _ => None,
+    }
+}
+
+/// Synthetic signature for `to_json` on an enum: `(self) -> json` that throws
+/// `never` (enum serialization always succeeds; BEP-038).
+fn enum_to_json_method_ty(self_ty: Ty) -> Ty {
+    Ty::Function {
+        generic_params: Vec::new(),
+        generic_param_bounds: Vec::new(),
+        params: vec![FunctionParamTy::required(Some(Name::new("self")), self_ty)],
+        ret: Box::new(json_alias_ty()),
+        throws: Box::new(Ty::Never {
+            attr: TyAttr::default(),
+        }),
+        attr: TyAttr::default(),
+    }
 }
 
 fn function_generic_param_bounds_exprs(
@@ -336,6 +414,58 @@ impl ThrowsAnalysisContext for BuilderThrowsAnalysis<'_, '_> {
     }
 }
 
+/// Throws-analysis adapter used to compute the residual throw set flowing
+/// *into* a `catch` from its base expression. It reuses the shared throws
+/// walk but with three "catch base" overrides:
+/// - a nested `catch` is opaque (its clause arms are not walked, and its
+///   residual is never substituted — only its `base` is walked),
+/// - an `await` adds the awaited future's `E` parameter, and
+/// - a plain `Call` on an `OptionalMemberAccess` callee is not optional-
+///   unwrapped.
+struct CatchBaseThrowsAnalysis<'a, 'db> {
+    inner: BuilderThrowsAnalysis<'a, 'db>,
+}
+
+impl ThrowsAnalysisContext for CatchBaseThrowsAnalysis<'_, '_> {
+    fn expression_type(&self, expr_id: ExprId) -> Option<Ty> {
+        self.inner.expression_type(expr_id)
+    }
+
+    fn catch_residual_throws(&self, _expr_id: ExprId) -> Option<BTreeSet<Ty>> {
+        None
+    }
+
+    fn instantiated_callee_throws(
+        &self,
+        callee_expr_id: ExprId,
+        args: &[ExprId],
+        unwrap_optional_callee: bool,
+    ) -> Option<Ty> {
+        self.inner
+            .instantiated_callee_throws(callee_expr_id, args, unwrap_optional_callee)
+    }
+
+    fn named_callee_summary(
+        &self,
+        callee_expr_id: ExprId,
+        body: &ExprBody,
+    ) -> Option<BTreeSet<Ty>> {
+        self.inner.named_callee_summary(callee_expr_id, body)
+    }
+
+    fn walk_catch_clauses(&self) -> bool {
+        false
+    }
+
+    fn await_adds_future_error(&self) -> bool {
+        true
+    }
+
+    fn call_unwraps_optional_member_callee(&self) -> bool {
+        false
+    }
+}
+
 /// Result of resolving a member on a builtin class (Array, Map, String, media types).
 /// Distinguishes methods (which have locs) from fields (which are just types).
 enum BuiltinResolution<'db> {
@@ -470,8 +600,7 @@ pub struct TypeInferenceBuilder<'db> {
     package_items: &'db PackageItems<'db>,
     /// Current package ID (for throw-set queries).
     package_id: PackageId<'db>,
-    /// The scope being analyzed (kept for future use).
-    #[allow(dead_code)]
+    /// The scope being analyzed.
     scope: ScopeId<'db>,
     /// Declared return type for the function (used to check return statements).
     declared_return_ty: Option<Ty>,
@@ -2601,13 +2730,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                     }
                 }
 
-                let substituted_ret = crate::generics::substitute_ty(ret, &bindings);
-                let mut erase_diags = Vec::new();
-                let result =
-                    crate::generics::erase_unresolved_typevars(&substituted_ret, &mut erase_diags);
-                for d in erase_diags {
-                    self.context.report_simple(d, expr_id);
-                }
+                let result = crate::generics::substitute_ty(ret, &bindings);
 
                 CheckedCallInner {
                     result,
@@ -3504,6 +3627,61 @@ impl<'db> TypeInferenceBuilder<'db> {
         result
     }
 
+    /// Check each field of an object literal against the fields of the
+    /// `class_name<type_args>` class. Shared by `infer_object_expr` and
+    /// `check_object_expr`, which only differ in whether the class is inferred
+    /// from the literal or taken from the expected type.
+    fn check_object_fields(
+        &mut self,
+        expr_id: ExprId,
+        body: &ExprBody,
+        class_name: &crate::ty::QualifiedTypeName,
+        type_args: &[Ty],
+        fields: &[(Name, ExprId)],
+    ) {
+        let field_types: FxHashMap<Name, Ty> = self
+            .class_actual_fields_ordered(class_name, type_args)
+            .into_iter()
+            .collect();
+        for (field_name, field_expr) in fields {
+            if field_name.as_str().contains('.') {
+                let suggested = field_name
+                    .as_str()
+                    .rsplit('.')
+                    .next()
+                    .unwrap_or(field_name.as_str());
+                self.context.report_simple(
+                    TirTypeError::InterfaceFieldRequiresQualifiedConstruction {
+                        field_name: field_name.clone(),
+                        qualified_name: Name::new(suggested),
+                    },
+                    expr_id,
+                );
+                self.infer_expr(*field_expr, body);
+            } else if let Some(declared_ty) = field_types.get(field_name) {
+                if type_args.is_empty() && crate::generics::contains_typevar(declared_ty) {
+                    self.infer_expr(*field_expr, body);
+                    continue;
+                }
+                self.check_expr(*field_expr, body, declared_ty);
+            } else if !field_name.as_str().contains('.')
+                && let Some((qualified_name, declared_ty)) = self
+                    .qualified_interface_field_for_construction(class_name, type_args, field_name)
+            {
+                self.context.report_simple(
+                    TirTypeError::InterfaceFieldRequiresQualifiedConstruction {
+                        field_name: field_name.clone(),
+                        qualified_name,
+                    },
+                    expr_id,
+                );
+                self.check_expr(*field_expr, body, &declared_ty);
+            } else {
+                self.infer_expr(*field_expr, body);
+            }
+        }
+    }
+
     #[inline(never)]
     fn infer_object_expr(
         &mut self,
@@ -3587,49 +3765,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             ty => ty,
         };
         if let Ty::Class(class_name, type_args, _) = &ty {
-            let field_types: FxHashMap<Name, Ty> = self
-                .class_actual_fields_ordered(class_name, type_args)
-                .into_iter()
-                .collect();
-            for (field_name, field_expr) in fields {
-                if field_name.as_str().contains('.') {
-                    let suggested = field_name
-                        .as_str()
-                        .rsplit('.')
-                        .next()
-                        .unwrap_or(field_name.as_str());
-                    self.context.report_simple(
-                        TirTypeError::InterfaceFieldRequiresQualifiedConstruction {
-                            field_name: field_name.clone(),
-                            qualified_name: Name::new(suggested),
-                        },
-                        expr_id,
-                    );
-                    self.infer_expr(*field_expr, body);
-                } else if let Some(declared_ty) = field_types.get(field_name) {
-                    if type_args.is_empty() && crate::generics::contains_typevar(declared_ty) {
-                        self.infer_expr(*field_expr, body);
-                        continue;
-                    }
-                    self.check_expr(*field_expr, body, declared_ty);
-                } else if !field_name.as_str().contains('.')
-                    && let Some((qualified_name, declared_ty)) = self
-                        .qualified_interface_field_for_construction(
-                            class_name, type_args, field_name,
-                        )
-                {
-                    self.context.report_simple(
-                        TirTypeError::InterfaceFieldRequiresQualifiedConstruction {
-                            field_name: field_name.clone(),
-                            qualified_name,
-                        },
-                        expr_id,
-                    );
-                    self.check_expr(*field_expr, body, &declared_ty);
-                } else {
-                    self.infer_expr(*field_expr, body);
-                }
-            }
+            self.check_object_fields(expr_id, body, class_name, type_args, fields);
         } else {
             for (_, expr_id) in fields {
                 self.infer_expr(*expr_id, body);
@@ -3704,49 +3840,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             return inferred;
         }
         if let Ty::Class(class_name, type_args, _) = expected {
-            let field_types: FxHashMap<Name, Ty> = self
-                .class_actual_fields_ordered(class_name, type_args)
-                .into_iter()
-                .collect();
-            for (field_name, field_expr) in fields {
-                if field_name.as_str().contains('.') {
-                    let suggested = field_name
-                        .as_str()
-                        .rsplit('.')
-                        .next()
-                        .unwrap_or(field_name.as_str());
-                    self.context.report_simple(
-                        TirTypeError::InterfaceFieldRequiresQualifiedConstruction {
-                            field_name: field_name.clone(),
-                            qualified_name: Name::new(suggested),
-                        },
-                        expr_id,
-                    );
-                    self.infer_expr(*field_expr, body);
-                } else if let Some(declared_ty) = field_types.get(field_name) {
-                    if type_args.is_empty() && crate::generics::contains_typevar(declared_ty) {
-                        self.infer_expr(*field_expr, body);
-                        continue;
-                    }
-                    self.check_expr(*field_expr, body, declared_ty);
-                } else if !field_name.as_str().contains('.')
-                    && let Some((qualified_name, declared_ty)) = self
-                        .qualified_interface_field_for_construction(
-                            class_name, type_args, field_name,
-                        )
-                {
-                    self.context.report_simple(
-                        TirTypeError::InterfaceFieldRequiresQualifiedConstruction {
-                            field_name: field_name.clone(),
-                            qualified_name,
-                        },
-                        expr_id,
-                    );
-                    self.check_expr(*field_expr, body, &declared_ty);
-                } else {
-                    self.infer_expr(*field_expr, body);
-                }
-            }
+            self.check_object_fields(expr_id, body, class_name, type_args, fields);
             let ty = expected.clone();
             self.record_expr_type(expr_id, ty.clone());
             ty
@@ -5222,7 +5316,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 .then(|| self.snapshot_scoped_locals());
             if let Some(st_binding) = clause.stack_trace_binding {
                 let db = self.context.db();
-                let baml_name = baml_base::Name::new("baml");
+                let baml_name = baml_base::Name::new(baml_base::BAML_PACKAGE);
                 let st_ty = self
                     .res_ctx
                     .items_for_package(db, &baml_name)
@@ -5760,53 +5854,42 @@ impl<'db> TypeInferenceBuilder<'db> {
         }
     }
 
-    /// Resolve a `TypeExpr` to a `Ty`.  Tries `bare_type_sugar_to_ty` first
-    /// (handles `baml.panics.*` types and primitives), falls back to
-    /// `lower_pattern_type_expr` for user-defined types.
-    fn resolve_type_expr(&mut self, ty: &TypeExpr, at_expr: ExprId) -> Ty {
+    /// Shared core of the `resolve_type_expr*` family: try the
+    /// `bare_type_sugar_to_ty` shortcut (handles `baml.panics.*` types and
+    /// primitives) first, otherwise lower via `lower_type_expr_in_ns`,
+    /// returning any diagnostics for the caller to route to its own sink. The
+    /// shortcut path never produces diagnostics, so it returns an empty `Vec`.
+    fn lower_type_expr_collecting(&self, ty: &TypeExpr) -> (Ty, Vec<TirTypeError>) {
         if let TypeExpr::Path { segments, .. } = ty {
             if segments.len() == 1 {
                 if let Some(resolved) = bare_type_sugar_to_ty(&segments[0]) {
-                    return resolved;
-                }
-            }
-        }
-        self.lower_pattern_type_expr(ty, at_expr)
-    }
-
-    fn resolve_type_expr_silent(&self, ty: &TypeExpr) -> Ty {
-        if let TypeExpr::Path { segments, .. } = ty {
-            if segments.len() == 1 {
-                if let Some(resolved) = bare_type_sugar_to_ty(&segments[0]) {
-                    return resolved;
+                    return (resolved, Vec::new());
                 }
             }
         }
         let mut diags = Vec::new();
-        crate::lower_type_expr::lower_type_expr_in_ns(
+        let resolved = crate::lower_type_expr::lower_type_expr_in_ns(
             self.context.db(),
             ty,
             self.package_items,
             &self.ns_context,
             &self.generic_params,
             &mut diags,
-        )
+        );
+        (resolved, diags)
     }
 
-    fn lower_pattern_type_expr(&mut self, expr: &TypeExpr, at_expr: ExprId) -> Ty {
-        let mut diags = Vec::new();
-        let ty = crate::lower_type_expr::lower_type_expr_in_ns(
-            self.context.db(),
-            expr,
-            self.package_items,
-            &self.ns_context,
-            &self.generic_params,
-            &mut diags,
-        );
+    /// Resolve a `TypeExpr` to a `Ty`, reporting diagnostics at `at_expr`.
+    fn resolve_type_expr(&mut self, ty: &TypeExpr, at_expr: ExprId) -> Ty {
+        let (resolved, diags) = self.lower_type_expr_collecting(ty);
         for diag in diags {
             self.context.report_simple(diag, at_expr);
         }
-        ty
+        resolved
+    }
+
+    fn resolve_type_expr_silent(&self, ty: &TypeExpr) -> Ty {
+        self.lower_type_expr_collecting(ty).0
     }
 
     /// Same as [`Self::resolve_type_expr`], but anchors diagnostics at the
@@ -5820,22 +5903,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         pat_id: PatId,
         fallback_expr: ExprId,
     ) -> Ty {
-        if let TypeExpr::Path { segments, .. } = ty {
-            if segments.len() == 1 {
-                if let Some(resolved) = bare_type_sugar_to_ty(&segments[0]) {
-                    return resolved;
-                }
-            }
-        }
-        let mut diags = Vec::new();
-        let resolved = crate::lower_type_expr::lower_type_expr_in_ns(
-            self.context.db(),
-            ty,
-            self.package_items,
-            &self.ns_context,
-            &self.generic_params,
-            &mut diags,
-        );
+        let (resolved, diags) = self.lower_type_expr_collecting(ty);
         for diag in diags {
             self.report_at_pat_or_expr(diag, pat_id, fallback_expr);
         }
@@ -5871,7 +5939,14 @@ impl<'db> TypeInferenceBuilder<'db> {
 
     fn catch_base_throw_types(&self, base_expr_id: ExprId, body: &ExprBody) -> BTreeSet<Ty> {
         let mut out = BTreeSet::new();
-        self.collect_throw_facts_from_expr(base_expr_id, body, &mut out);
+        crate::throws_analysis::collect_throws_from_expr(
+            &CatchBaseThrowsAnalysis {
+                inner: BuilderThrowsAnalysis { builder: self },
+            },
+            base_expr_id,
+            body,
+            &mut out,
+        );
         out
     }
 
@@ -5974,19 +6049,12 @@ impl<'db> TypeInferenceBuilder<'db> {
     }
 
     fn lookup_named_throw_summary(&self, target: &Name) -> Option<BTreeSet<Ty>> {
-        let throws =
-            crate::throw_inference::function_throw_sets(self.context.db(), self.package_id);
-        if let Some(transitive) = throws.transitive_for(target) {
-            return Some(transitive.clone());
-        }
-
-        for (_dep_name, dep_iface) in &self.res_ctx.dep_interfaces {
-            if let Some(transitive) = dep_iface.throw_sets.transitive_for(target) {
-                return Some(transitive.clone());
-            }
-        }
-
-        None
+        crate::callable::lookup_named_throw_summary(
+            self.context.db(),
+            self.package_id,
+            &self.res_ctx.dep_interfaces,
+            target,
+        )
     }
 
     fn callee_uses_method_call_convention(&self, callee_expr_id: ExprId) -> bool {
@@ -6049,261 +6117,20 @@ impl<'db> TypeInferenceBuilder<'db> {
             params.as_slice()
         };
 
-        let mut bindings = FxHashMap::default();
-        if let Some(call_plan) = call_plan {
-            for (param_index, arg_expr_id) in call_plan.provided_param_args() {
-                let Some(param) = effective_params.get(param_index) else {
-                    continue;
-                };
-                let arg_ty = self
-                    .expressions
+        Some(crate::callable::substitute_throws_with_inferred_bindings(
+            effective_params,
+            &throws,
+            args,
+            call_plan,
+            |arg_expr_id| {
+                self.expressions
                     .get(&arg_expr_id)
                     .cloned()
                     .unwrap_or(Ty::Unknown {
                         attr: TyAttr::default(),
-                    });
-                crate::generics::infer_bindings_allow_typevars(&param.ty, &arg_ty, &mut bindings);
-            }
-        } else {
-            for (param, arg_expr_id) in effective_params.iter().zip(args.iter()) {
-                let arg_ty = self
-                    .expressions
-                    .get(arg_expr_id)
-                    .cloned()
-                    .unwrap_or(Ty::Unknown {
-                        attr: TyAttr::default(),
-                    });
-                crate::generics::infer_bindings_allow_typevars(&param.ty, &arg_ty, &mut bindings);
-            }
-        }
-
-        Some(crate::generics::substitute_ty(&throws, &bindings))
-    }
-
-    fn collect_throw_facts_from_expr(
-        &self,
-        expr_id: ExprId,
-        body: &ExprBody,
-        out: &mut BTreeSet<Ty>,
-    ) {
-        match &body.exprs[expr_id] {
-            Expr::Throw { value } => {
-                self.collect_throw_facts_from_expr(*value, body, out);
-                self.collect_throw_facts_from_value(*value, out);
-            }
-            Expr::Call { callee, args, .. } => {
-                self.collect_throw_facts_from_expr(*callee, body, out);
-                let arg_exprs: Vec<_> = args.iter().map(|arg| arg.expr).collect();
-                for arg in args {
-                    self.collect_throw_facts_from_expr(arg.expr, body, out);
-                }
-                crate::throws_analysis::collect_callee_escaping_throws(
-                    &BuilderThrowsAnalysis { builder: self },
-                    *callee,
-                    &arg_exprs,
-                    body,
-                    false,
-                    out,
-                );
-            }
-            Expr::If {
-                condition,
-                then_branch,
-                else_branch,
-            } => {
-                self.collect_throw_facts_from_expr(*condition, body, out);
-                self.collect_throw_facts_from_expr(*then_branch, body, out);
-                if let Some(else_expr) = else_branch {
-                    self.collect_throw_facts_from_expr(*else_expr, body, out);
-                }
-            }
-            Expr::IfLet {
-                scrutinee,
-                then_branch,
-                else_branch,
-                ..
-            } => {
-                self.collect_throw_facts_from_expr(*scrutinee, body, out);
-                self.collect_throw_facts_from_expr(*then_branch, body, out);
-                if let Some(else_expr) = else_branch {
-                    self.collect_throw_facts_from_expr(*else_expr, body, out);
-                }
-            }
-            Expr::Match {
-                scrutinee, arms, ..
-            } => {
-                self.collect_throw_facts_from_expr(*scrutinee, body, out);
-                for arm_id in arms {
-                    let arm = &body.match_arms[*arm_id];
-                    if let Some(guard) = arm.guard {
-                        self.collect_throw_facts_from_expr(guard, body, out);
-                    }
-                    self.collect_throw_facts_from_expr(arm.body, body, out);
-                }
-            }
-            Expr::Is { scrutinee, .. } => {
-                self.collect_throw_facts_from_expr(*scrutinee, body, out);
-            }
-            Expr::Binary { lhs, rhs, .. } => {
-                self.collect_throw_facts_from_expr(*lhs, body, out);
-                self.collect_throw_facts_from_expr(*rhs, body, out);
-            }
-            Expr::Unary { expr, .. } => self.collect_throw_facts_from_expr(*expr, body, out),
-            Expr::Object {
-                fields, spreads, ..
-            } => {
-                for (_, value) in fields {
-                    self.collect_throw_facts_from_expr(*value, body, out);
-                }
-                for spread in spreads {
-                    self.collect_throw_facts_from_expr(spread.expr, body, out);
-                }
-            }
-            Expr::Array { elements } => {
-                for elem in elements {
-                    self.collect_throw_facts_from_expr(*elem, body, out);
-                }
-            }
-            Expr::Map { entries } => {
-                for (key, value) in entries {
-                    self.collect_throw_facts_from_expr(*key, body, out);
-                    self.collect_throw_facts_from_expr(*value, body, out);
-                }
-            }
-            Expr::Block { stmts, tail_expr } => {
-                for stmt in stmts {
-                    self.collect_throw_facts_from_stmt(*stmt, body, out);
-                }
-                if let Some(tail) = tail_expr {
-                    self.collect_throw_facts_from_expr(*tail, body, out);
-                }
-            }
-            Expr::MemberAccess { base, .. }
-            | Expr::Upcast { base, .. }
-            | Expr::OptionalMemberAccess { base, .. } => {
-                self.collect_throw_facts_from_expr(*base, body, out);
-            }
-            Expr::Index { base, index } | Expr::OptionalIndex { base, index } => {
-                self.collect_throw_facts_from_expr(*base, body, out);
-                self.collect_throw_facts_from_expr(*index, body, out);
-            }
-            Expr::OptionalCall { callee, args } => {
-                self.collect_throw_facts_from_expr(*callee, body, out);
-                let arg_exprs: Vec<_> = args.iter().map(|arg| arg.expr).collect();
-                for arg in args {
-                    self.collect_throw_facts_from_expr(arg.expr, body, out);
-                }
-                crate::throws_analysis::collect_callee_escaping_throws(
-                    &BuilderThrowsAnalysis { builder: self },
-                    *callee,
-                    &arg_exprs,
-                    body,
-                    true,
-                    out,
-                );
-            }
-            Expr::Catch { base, .. } => {
-                self.collect_throw_facts_from_expr(*base, body, out);
-            }
-            Expr::OptionalChain { expr } => {
-                self.collect_throw_facts_from_expr(*expr, body, out);
-            }
-            Expr::Spawn {
-                name,
-                body: spawn_body,
-            } => {
-                // Spawn-body throws do NOT escape the spawning function
-                // — they are captured into the resulting `Future<T, E>`'s
-                // E parameter and only re-thrown at an `await` site. The
-                // name expression itself can throw, so walk it; do not
-                // walk spawn_body.
-                if let Some(name_id) = name {
-                    self.collect_throw_facts_from_expr(*name_id, body, out);
-                }
-                let _ = spawn_body;
-            }
-            Expr::Await { future } => {
-                // `await` re-throws the future's error. Walk the future
-                // expression (its construction can throw), AND add the
-                // future's E parameter to the throws set so the
-                // surrounding function's effective throws includes it.
-                self.collect_throw_facts_from_expr(*future, body, out);
-                if let Some(Ty::Future(_value, error, _)) = self.expressions.get(future) {
-                    out.extend(crate::throw_inference::flatten_ty_to_facts(error));
-                }
-            }
-            Expr::Lambda(_)
-            | Expr::Literal(_)
-            | Expr::ByteStringLiteral(_)
-            | Expr::Null
-            | Expr::Path(_)
-            | Expr::Missing => {}
-        }
-    }
-
-    fn collect_throw_facts_from_stmt(
-        &self,
-        stmt_id: StmtId,
-        body: &ExprBody,
-        out: &mut BTreeSet<Ty>,
-    ) {
-        match &body.stmts[stmt_id] {
-            Stmt::Expr(expr_id) => self.collect_throw_facts_from_expr(*expr_id, body, out),
-            Stmt::Let {
-                initializer,
-                else_branch,
-                ..
-            } => {
-                if let Some(init) = initializer {
-                    self.collect_throw_facts_from_expr(*init, body, out);
-                }
-                if let Some(else_expr) = else_branch {
-                    self.collect_throw_facts_from_expr(*else_expr, body, out);
-                }
-            }
-            Stmt::While {
-                condition,
-                body: while_body,
-                after,
-                ..
-            } => {
-                self.collect_throw_facts_from_expr(*condition, body, out);
-                self.collect_throw_facts_from_expr(*while_body, body, out);
-                if let Some(after_stmt) = after {
-                    self.collect_throw_facts_from_stmt(*after_stmt, body, out);
-                }
-            }
-            Stmt::For {
-                collection,
-                body: for_body,
-                ..
-            } => {
-                self.collect_throw_facts_from_expr(*collection, body, out);
-                self.collect_throw_facts_from_expr(*for_body, body, out);
-            }
-            Stmt::Return(expr) => {
-                if let Some(expr) = expr {
-                    self.collect_throw_facts_from_expr(*expr, body, out);
-                }
-            }
-            Stmt::Assign { target, value } | Stmt::AssignOp { target, value, .. } => {
-                self.collect_throw_facts_from_expr(*target, body, out);
-                self.collect_throw_facts_from_expr(*value, body, out);
-            }
-            Stmt::Throw { value } => {
-                self.collect_throw_facts_from_expr(*value, body, out);
-                self.collect_throw_facts_from_value(*value, out);
-            }
-            Stmt::Break | Stmt::Continue | Stmt::Missing | Stmt::HeaderComment { .. } => {}
-        }
-    }
-
-    fn collect_throw_facts_from_value(&self, value_expr_id: ExprId, out: &mut BTreeSet<Ty>) {
-        let unknown_ty = Ty::Unknown {
-            attr: TyAttr::default(),
-        };
-        let thrown_ty = self.expressions.get(&value_expr_id).unwrap_or(&unknown_ty);
-        out.extend(crate::throw_inference::flatten_ty_to_facts(thrown_ty));
+                    })
+            },
+        ))
     }
 
     fn call_target_name(&self, callee_expr_id: ExprId, body: &ExprBody) -> Option<Name> {
@@ -6487,17 +6314,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 // 2. Primitive static access (e.g. image.from_url)
                 if segments.len() == 2 {
                     let name = segments[0].as_str();
-                    let class_path: &[&str] = match name {
-                        "image" => &["media", "Image"],
-                        "audio" => &["media", "Audio"],
-                        "video" => &["media", "Video"],
-                        "pdf" => &["media", "Pdf"],
-                        "string" => &["String"],
-                        "int" => &["Int"],
-                        "bigint" => &["Bigint"],
-                        "float" => &["Float"],
-                        _ => &[],
-                    };
+                    let class_path = primitive_static_class_path(name);
                     if !class_path.is_empty() {
                         if let Some(ty) =
                             self.resolve_builtin_member(class_path, &[], &segments[1], expr_id)
@@ -7064,6 +6881,30 @@ impl<'db> TypeInferenceBuilder<'db> {
         }
     }
 
+    /// Unwrap a builtin-bridge member resolution, or report `UnresolvedMember`
+    /// at `at` and fall back to `Ty::Unknown`. Shared by every builtin-companion
+    /// bridge arm in `resolve_member`.
+    fn builtin_or_unresolved(
+        &mut self,
+        opt: Option<Ty>,
+        base_ty: &Ty,
+        member: &Name,
+        at: ExprId,
+    ) -> Ty {
+        opt.unwrap_or_else(|| {
+            self.context.report_at_member_simple(
+                TirTypeError::UnresolvedMember {
+                    base_type: base_ty.clone(),
+                    member: member.clone(),
+                },
+                at,
+            );
+            Ty::Unknown {
+                attr: TyAttr::default(),
+            }
+        })
+    }
+
     /// Resolve a member access on a known base type.
     ///
     /// For class types, checks data fields. For enum types, validates variants.
@@ -7339,19 +7180,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 // BEP-038 specifies the enum JSON representation as its variant name string.
                 // Throws `never` — enum serialization always succeeds.
                 if member.as_str() == "to_json" {
-                    return Ty::Function {
-                        generic_params: Vec::new(),
-                        generic_param_bounds: Vec::new(),
-                        params: vec![FunctionParamTy::required(
-                            Some(Name::new("self")),
-                            base_ty.clone(),
-                        )],
-                        ret: Box::new(json_alias_ty()),
-                        throws: Box::new(Ty::Never {
-                            attr: TyAttr::default(),
-                        }),
-                        attr: TyAttr::default(),
-                    };
+                    return enum_to_json_method_ty(base_ty.clone());
                 }
 
                 // Validate that the variant exists
@@ -7394,212 +7223,27 @@ impl<'db> TypeInferenceBuilder<'db> {
                     attr: TyAttr::default(),
                 }
             }
-            Ty::List(element_ty, _) => {
-                // Bridge: int[] → Array<int> — resolve via builtin Array class.
-                self.resolve_builtin_member(&["Array"], &[element_ty.as_ref().clone()], member, at)
-                    .unwrap_or_else(|| {
-                        self.context.report_at_member_simple(
-                            TirTypeError::UnresolvedMember {
-                                base_type: base_ty.clone(),
-                                member: member.clone(),
-                            },
-                            at,
-                        );
-                        Ty::Unknown {
-                            attr: TyAttr::default(),
-                        }
-                    })
-            }
-            Ty::Map(key_ty, val_ty, _) => {
-                // Bridge: map<string, int> → Map<string, int>
-                self.resolve_builtin_member(
-                    &["Map"],
-                    &[key_ty.as_ref().clone(), val_ty.as_ref().clone()],
-                    member,
-                    at,
-                )
-                .unwrap_or_else(|| {
-                    self.context.report_at_member_simple(
-                        TirTypeError::UnresolvedMember {
-                            base_type: base_ty.clone(),
-                            member: member.clone(),
-                        },
-                        at,
-                    );
-                    Ty::Unknown {
-                        attr: TyAttr::default(),
-                    }
-                })
-            }
-            Ty::Future(value_ty, error_ty, _) => {
-                // Bridge: Future<T, E> → baml.future.Future class
-                self.resolve_builtin_member(
-                    &["future", "Future"],
-                    &[value_ty.as_ref().clone(), error_ty.as_ref().clone()],
-                    member,
-                    at,
-                )
-                .unwrap_or_else(|| {
-                    self.context.report_at_member_simple(
-                        TirTypeError::UnresolvedMember {
-                            base_type: base_ty.clone(),
-                            member: member.clone(),
-                        },
-                        at,
-                    );
-                    Ty::Unknown {
-                        attr: TyAttr::default(),
-                    }
-                })
-            }
-            Ty::Primitive(PrimitiveType::String, _)
-            | Ty::Literal(baml_base::Literal::String(_), _, _) => {
-                // Bridge: string / string-literal → String class
-                self.resolve_builtin_member(&["String"], &[], member, at)
-                    .unwrap_or_else(|| {
-                        self.context.report_at_member_simple(
-                            TirTypeError::UnresolvedMember {
-                                base_type: base_ty.clone(),
-                                member: member.clone(),
-                            },
-                            at,
-                        );
-                        Ty::Unknown {
-                            attr: TyAttr::default(),
-                        }
-                    })
-            }
-            // int literal / int → Int companion class
+            // int literal / int → Int companion class, with a registry fallback
+            // (`try_registry_member`) that the other companion bridges lack.
             Ty::Primitive(PrimitiveType::Int, _)
-            | Ty::Literal(baml_base::Literal::Int(_), _, _) => self
-                .resolve_builtin_member(&["Int"], &[], member, at)
-                .or_else(|| self.try_registry_member(base_ty, Name::new("int"), member, at, bound))
-                .unwrap_or_else(|| {
-                    self.context.report_at_member_simple(
-                        TirTypeError::UnresolvedMember {
-                            base_type: base_ty.clone(),
-                            member: member.clone(),
-                        },
-                        at,
-                    );
-                    Ty::Unknown {
-                        attr: TyAttr::default(),
-                    }
-                }),
-            // bigint literal / bigint → Bigint companion class
-            Ty::Primitive(PrimitiveType::Bigint, _)
-            | Ty::Literal(baml_base::Literal::Bigint(_), _, _) => self
-                .resolve_builtin_member(&["Bigint"], &[], member, at)
-                .unwrap_or_else(|| {
-                    self.context.report_at_member_simple(
-                        TirTypeError::UnresolvedMember {
-                            base_type: base_ty.clone(),
-                            member: member.clone(),
-                        },
-                        at,
-                    );
-                    Ty::Unknown {
-                        attr: TyAttr::default(),
-                    }
-                }),
-            // float literal / float → Float companion class
-            Ty::Primitive(PrimitiveType::Float, _)
-            | Ty::Literal(baml_base::Literal::Float(_), _, _) => self
-                .resolve_builtin_member(&["Float"], &[], member, at)
-                .unwrap_or_else(|| {
-                    self.context.report_at_member_simple(
-                        TirTypeError::UnresolvedMember {
-                            base_type: base_ty.clone(),
-                            member: member.clone(),
-                        },
-                        at,
-                    );
-                    Ty::Unknown {
-                        attr: TyAttr::default(),
-                    }
-                }),
-            // bool literal / bool → Bool companion class
-            Ty::Primitive(PrimitiveType::Bool, _)
-            | Ty::Literal(baml_base::Literal::Bool(_), _, _) => self
-                .resolve_builtin_member(&["Bool"], &[], member, at)
-                .unwrap_or_else(|| {
-                    self.context.report_at_member_simple(
-                        TirTypeError::UnresolvedMember {
-                            base_type: base_ty.clone(),
-                            member: member.clone(),
-                        },
-                        at,
-                    );
-                    Ty::Unknown {
-                        attr: TyAttr::default(),
-                    }
-                }),
-            // null / Null companion class
-            Ty::Primitive(PrimitiveType::Null, _) => self
-                .resolve_builtin_member(&["Null"], &[], member, at)
-                .unwrap_or_else(|| {
-                    self.context.report_at_member_simple(
-                        TirTypeError::UnresolvedMember {
-                            base_type: base_ty.clone(),
-                            member: member.clone(),
-                        },
-                        at,
-                    );
-                    Ty::Unknown {
-                        attr: TyAttr::default(),
-                    }
-                }),
-            Ty::Type { .. } => {
-                // Bridge: type → TypeValue companion class (provides `.to_string()`, etc.)
-                self.resolve_builtin_member(&["TypeValue"], &[], member, at)
-                    .unwrap_or_else(|| {
-                        self.context.report_at_member_simple(
-                            TirTypeError::UnresolvedMember {
-                                base_type: base_ty.clone(),
-                                member: member.clone(),
-                            },
-                            at,
-                        );
-                        Ty::Unknown {
-                            attr: TyAttr::default(),
-                        }
-                    })
+            | Ty::Literal(baml_base::Literal::Int(_), _, _) => {
+                let r = self
+                    .resolve_builtin_member(&["Int"], &[], member, at)
+                    .or_else(|| {
+                        self.try_registry_member(base_ty, Name::new("int"), member, at, bound)
+                    });
+                self.builtin_or_unresolved(r, base_ty, member, at)
             }
-            Ty::Primitive(
-                p @ (PrimitiveType::Uint8Array
-                | PrimitiveType::Image
-                | PrimitiveType::Audio
-                | PrimitiveType::Video
-                | PrimitiveType::Pdf),
-                _,
-            ) => {
-                // Bridge: media / binary primitives with builtin companion classes
-                self.resolve_builtin_member(p.builtin_class_path(), &[], member, at)
-                    .unwrap_or_else(|| {
-                        self.context.report_at_member_simple(
-                            TirTypeError::UnresolvedMember {
-                                base_type: base_ty.clone(),
-                                member: member.clone(),
-                            },
-                            at,
-                        );
-                        Ty::Unknown {
-                            attr: TyAttr::default(),
-                        }
-                    })
+            // Bridge: primitives/containers (List, Map, Future, String, Bigint,
+            // Float, Bool, Null, Type, media) → their builtin companion class.
+            _ if builtin_companion_class(base_ty).is_some() => {
+                let (class_path, type_args) = builtin_companion_class(base_ty).unwrap();
+                let r = self.resolve_builtin_member(class_path, &type_args, member, at);
+                self.builtin_or_unresolved(r, base_ty, member, at)
             }
-            // Universal `to_json` / `from_json` on generic type variables.
-            //
-            // After Phase 5b.1, every BAML type has `to_json(self) -> json` and
-            // `from_json(j: json) -> Self`. When the base type is a type-variable
-            // `T` (e.g. inside `class Array<T>`), the compiler cannot look up the
-            // concrete companion class; instead we synthesize the expected method
-            // signature directly. The throws clause is conservatively widened to
-            // `JsonSerializationError | JsonParseError` — the actual throws for any
-            // concrete T is a subset, so call-site throw inference stays sound.
-            // BEP-044 generic bound: when `T extends I` is in scope and
-            // the member isn't a universal builtin (`to_json` /
-            // `from_json`), delegate to `I`'s contract.
+            // BEP-044 generic bound: when `T extends I` is in scope and the
+            // member isn't a universal builtin (`to_json` / `from_json`),
+            // delegate to `I`'s contract.
             Ty::TypeVar(name, _)
                 if member.as_str() != "to_json"
                     && member.as_str() != "from_json"
@@ -7608,32 +7252,12 @@ impl<'db> TypeInferenceBuilder<'db> {
                 let bound_ty = self.generic_param_bounds[name].clone();
                 self.resolve_member(&bound_ty, member, at, bound)
             }
-            Ty::TypeVar(_, _) if member.as_str() == "to_json" => {
-                // Type-check: every BAML type has `to_json(self) -> json` after Phase 5b.1.
-                // No MemberResolution stored — the concrete dispatch is deferred to Phase 5b.4
-                // (native Array/Map impls) and never runs with an unresolved TypeVar at runtime.
-                Ty::Function {
-                    generic_params: Vec::new(),
-                    generic_param_bounds: Vec::new(),
-                    params: vec![],
-                    ret: Box::new(json_alias_ty()),
-                    throws: Box::new(json_serialization_or_parse_error_ty()),
-                    attr: TyAttr::default(),
-                }
-            }
-            Ty::TypeVar(name, _) if member.as_str() == "from_json" => {
-                // Type-check: every BAML type has `from_json(j: json) -> Self` after Phase 5b.1.
-                Ty::Function {
-                    generic_params: Vec::new(),
-                    generic_param_bounds: Vec::new(),
-                    params: vec![FunctionParamTy::required(
-                        Some(Name::new("j")),
-                        json_alias_ty(),
-                    )],
-                    ret: Box::new(Ty::TypeVar(name.clone(), TyAttr::default())),
-                    throws: Box::new(json_parse_or_serialization_error_ty()),
-                    attr: TyAttr::default(),
-                }
+            // Universal `to_json` / `from_json` on generic type variables.
+            // No MemberResolution stored — concrete dispatch is deferred to
+            // Phase 5b.4 (native Array/Map impls) and never runs with an
+            // unresolved TypeVar at runtime.
+            Ty::TypeVar(name, _) if typevar_json_method_ty(name, member).is_some() => {
+                typevar_json_method_ty(name, member).unwrap()
             }
             Ty::Union(members, _) => {
                 // For union types, try to resolve the field on each member.
@@ -7732,13 +7356,9 @@ impl<'db> TypeInferenceBuilder<'db> {
             return false;
         };
         let db = self.context.db();
-        for (iface_loc, iface_args) in crate::interfaces::interface_closure_locs_with_args(
-            db,
-            sub_loc,
-            sub_args,
-            pkg_items,
-            sub_qtn.namespace(),
-        ) {
+        for (iface_loc, iface_args) in
+            crate::interfaces::interface_closure_locs_with_args(db, sub_loc, sub_args)
+        {
             let iface_tree = baml_compiler2_hir::file_item_tree(db, iface_loc.file(db));
             let Some(iface_data) = iface_tree.interfaces.get(&iface_loc.id(db)) else {
                 continue;
@@ -7913,19 +7533,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 // `to_json` on an enum (path-segment form): same as the
                 // `resolve_member_on_ty` arm above — variant name as JSON string.
                 if member.as_str() == "to_json" {
-                    return Ty::Function {
-                        generic_params: Vec::new(),
-                        generic_param_bounds: Vec::new(),
-                        params: vec![FunctionParamTy::required(
-                            Some(Name::new("self")),
-                            base_ty.clone(),
-                        )],
-                        ret: Box::new(json_alias_ty()),
-                        throws: Box::new(Ty::Never {
-                            attr: TyAttr::default(),
-                        }),
-                        attr: TyAttr::default(),
-                    };
+                    return enum_to_json_method_ty(base_ty.clone());
                 }
 
                 // Use the no-side-effect helper.
@@ -8022,80 +7630,17 @@ impl<'db> TypeInferenceBuilder<'db> {
                 }
                 None
             }
-            Ty::List(element_ty, _) => self
-                .resolve_builtin_method(&["Array"], &[element_ty.as_ref().clone()], member)
-                .map(BuiltinResolution::into_ty),
-            Ty::Map(key_ty, val_ty, _) => self
-                .resolve_builtin_method(
-                    &["Map"],
-                    &[key_ty.as_ref().clone(), val_ty.as_ref().clone()],
-                    member,
-                )
-                .map(BuiltinResolution::into_ty),
-            Ty::Future(value_ty, error_ty, _) => self
-                .resolve_builtin_method(
-                    &["future", "Future"],
-                    &[value_ty.as_ref().clone(), error_ty.as_ref().clone()],
-                    member,
-                )
-                .map(BuiltinResolution::into_ty),
-            Ty::Primitive(PrimitiveType::String, _)
-            | Ty::Literal(baml_base::Literal::String(_), _, _) => self
-                .resolve_builtin_method(&["String"], &[], member)
-                .map(BuiltinResolution::into_ty),
-            Ty::Primitive(PrimitiveType::Int, _)
-            | Ty::Literal(baml_base::Literal::Int(_), _, _) => self
-                .resolve_builtin_method(&["Int"], &[], member)
-                .map(BuiltinResolution::into_ty),
-            Ty::Primitive(PrimitiveType::Bigint, _)
-            | Ty::Literal(baml_base::Literal::Bigint(_), _, _) => self
-                .resolve_builtin_method(&["Bigint"], &[], member)
-                .map(BuiltinResolution::into_ty),
-            Ty::Primitive(PrimitiveType::Float, _)
-            | Ty::Literal(baml_base::Literal::Float(_), _, _) => self
-                .resolve_builtin_method(&["Float"], &[], member)
-                .map(BuiltinResolution::into_ty),
-            Ty::Primitive(PrimitiveType::Bool, _)
-            | Ty::Literal(baml_base::Literal::Bool(_), _, _) => self
-                .resolve_builtin_method(&["Bool"], &[], member)
-                .map(BuiltinResolution::into_ty),
-            Ty::Primitive(PrimitiveType::Null, _) => self
-                .resolve_builtin_method(&["Null"], &[], member)
-                .map(BuiltinResolution::into_ty),
-            Ty::Primitive(
-                p @ (PrimitiveType::Uint8Array
-                | PrimitiveType::Image
-                | PrimitiveType::Audio
-                | PrimitiveType::Video
-                | PrimitiveType::Pdf),
-                _,
-            ) => self
-                .resolve_builtin_method(p.builtin_class_path(), &[], member)
-                .map(BuiltinResolution::into_ty),
-            Ty::Type { .. } => self
-                .resolve_builtin_method(&["TypeValue"], &[], member)
-                .map(BuiltinResolution::into_ty),
+            // Bridge primitives/containers to their builtin companion class.
+            _ if builtin_companion_class(ty).is_some() => {
+                let (class_path, type_args) = builtin_companion_class(ty).unwrap();
+                self.resolve_builtin_method(class_path, &type_args, member)
+                    .map(BuiltinResolution::into_ty)
+            }
             // Universal `to_json` / `from_json` on generic type variables.
             // Mirrors the arm in `resolve_member` — no side effects needed here.
-            Ty::TypeVar(_, _) if member.as_str() == "to_json" => Some(Ty::Function {
-                generic_params: Vec::new(),
-                generic_param_bounds: Vec::new(),
-                params: vec![],
-                ret: Box::new(json_alias_ty()),
-                throws: Box::new(json_serialization_or_parse_error_ty()),
-                attr: TyAttr::default(),
-            }),
-            Ty::TypeVar(name, _) if member.as_str() == "from_json" => Some(Ty::Function {
-                generic_params: Vec::new(),
-                generic_param_bounds: Vec::new(),
-                params: vec![FunctionParamTy::required(
-                    Some(Name::new("j")),
-                    json_alias_ty(),
-                )],
-                ret: Box::new(Ty::TypeVar(name.clone(), TyAttr::default())),
-                throws: Box::new(json_parse_or_serialization_error_ty()),
-                attr: TyAttr::default(),
-            }),
+            Ty::TypeVar(name, _) if typevar_json_method_ty(name, member).is_some() => {
+                typevar_json_method_ty(name, member)
+            }
             Ty::Optional(inner, _) => {
                 // Drill through Optional to resolve the member on the inner type
                 self.try_resolve_member_on_ty(inner, member)
@@ -8158,9 +7703,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             ) else {
                 continue;
             };
-            for iface_loc in
-                crate::interfaces::interface_closure_locs(db, iface_loc, pkg_items, class_ns)
-            {
+            for iface_loc in crate::interfaces::interface_closure_locs(db, iface_loc) {
                 let iface_tree = baml_compiler2_hir::file_item_tree(db, iface_loc.file(db));
                 let Some(iface_data) = iface_tree.interfaces.get(&iface_loc.id(db)) else {
                     continue;
@@ -8197,10 +7740,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             return false;
         };
         let db = self.context.db();
-        let root_pkg = baml_compiler2_hir::file_package::file_package(db, root_loc.file(db));
-        let pkg_ns = &root_pkg.namespace_path;
-        for iface_loc in crate::interfaces::interface_closure_locs(db, root_loc, pkg_items, pkg_ns)
-        {
+        for iface_loc in crate::interfaces::interface_closure_locs(db, root_loc) {
             let iface_tree = baml_compiler2_hir::file_item_tree(db, iface_loc.file(db));
             let Some(iface_data) = iface_tree.interfaces.get(&iface_loc.id(db)) else {
                 continue;
@@ -8243,16 +7783,10 @@ impl<'db> TypeInferenceBuilder<'db> {
             return None;
         };
         let db = self.context.db();
-        let root_pkg = baml_compiler2_hir::file_package::file_package(db, root_loc.file(db));
-        let pkg_ns = &root_pkg.namespace_path;
 
-        for (iface_loc, iface_type_args) in crate::interfaces::interface_closure_locs_with_args(
-            db,
-            root_loc,
-            iface_type_args,
-            pkg_items,
-            pkg_ns,
-        ) {
+        for (iface_loc, iface_type_args) in
+            crate::interfaces::interface_closure_locs_with_args(db, root_loc, iface_type_args)
+        {
             let file = iface_loc.file(db);
             let iface_tree = baml_compiler2_hir::file_item_tree(db, file);
             let Some(iface_data) = iface_tree.interfaces.get(&iface_loc.id(db)) else {
@@ -8840,17 +8374,9 @@ impl<'db> TypeInferenceBuilder<'db> {
         class_name: &crate::ty::QualifiedTypeName,
         class_type_args: &[Ty],
     ) -> FxHashMap<Name, Ty> {
-        self.class_all_fields_ordered(class_name, class_type_args, true)
+        self.class_actual_fields_ordered(class_name, class_type_args)
             .into_iter()
             .collect()
-    }
-
-    fn class_actual_fields_ordered(
-        &self,
-        class_name: &crate::ty::QualifiedTypeName,
-        class_type_args: &[Ty],
-    ) -> Vec<(Name, Ty)> {
-        self.class_all_fields_ordered(class_name, class_type_args, false)
     }
 
     /// Compute the full ordered field list for `class_name`.
@@ -8862,11 +8388,10 @@ impl<'db> TypeInferenceBuilder<'db> {
     /// `resolve_class_fields` query and collected once at file level. This
     /// helper is used from expression/pattern checking, so it must not
     /// re-emit those diagnostics at every class use site.
-    fn class_all_fields_ordered(
+    fn class_actual_fields_ordered(
         &self,
         class_name: &crate::ty::QualifiedTypeName,
         class_type_args: &[Ty],
-        _include_aliases: bool,
     ) -> Vec<(Name, Ty)> {
         let mut out: Vec<(Name, Ty)> = Vec::new();
         let Some(pkg_items_for_class) = self.resolve_class_pkg_items(class_name.package()) else {
@@ -8899,27 +8424,14 @@ impl<'db> TypeInferenceBuilder<'db> {
         out
     }
 
-    /// Class field `(name, type)` pairs in **declaration order** with
-    /// generic substitution applied. Single item-tree walk shared by every
-    /// pattern-lowering caller that needs ordered field info — replaces a
-    /// previous pair of helpers (`class_field_types_ordered` +
-    /// `class_field_names_ordered`) that walked the tree twice.
-    fn class_field_infos_ordered(
-        &self,
-        class_name: &crate::ty::QualifiedTypeName,
-        class_type_args: &[Ty],
-    ) -> Vec<(Name, Ty)> {
-        self.class_actual_fields_ordered(class_name, class_type_args)
-    }
-
     /// Class field types in declaration order. Thin projection over
-    /// [`Self::class_field_infos_ordered`].
+    /// [`Self::class_actual_fields_ordered`].
     fn class_field_types_ordered(
         &self,
         class_name: &crate::ty::QualifiedTypeName,
         class_type_args: &[Ty],
     ) -> Vec<Ty> {
-        self.class_field_infos_ordered(class_name, class_type_args)
+        self.class_actual_fields_ordered(class_name, class_type_args)
             .into_iter()
             .map(|(_, ty)| ty)
             .collect()
@@ -8946,13 +8458,9 @@ impl<'db> TypeInferenceBuilder<'db> {
 
         let db = self.context.db();
         let root_pkg = baml_compiler2_hir::file_package::file_package(db, root_loc.file(db));
-        for (iface_loc, closure_args) in crate::interfaces::interface_closure_locs_with_args(
-            db,
-            root_loc,
-            iface_type_args,
-            pkg_items,
-            &root_pkg.namespace_path,
-        ) {
+        for (iface_loc, closure_args) in
+            crate::interfaces::interface_closure_locs_with_args(db, root_loc, iface_type_args)
+        {
             let file = iface_loc.file(db);
             let iface_tree = baml_compiler2_ppir::file_item_tree(db, file);
             let Some(iface_data) = iface_tree.interfaces.get(&iface_loc.id(db)) else {
@@ -9068,8 +8576,6 @@ impl<'db> TypeInferenceBuilder<'db> {
                 db,
                 root_iface_loc,
                 &root_iface_type_args,
-                pkg_items,
-                &class_ns,
             ) {
                 let iface_tree = baml_compiler2_hir::file_item_tree(db, iface_loc.file(db));
                 let Some(iface_data) = iface_tree.interfaces.get(&iface_loc.id(db)) else {
@@ -9146,9 +8652,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             ) else {
                 continue;
             };
-            for iface_loc in
-                crate::interfaces::interface_closure_locs(db, iface_loc, pkg_items, &ns)
-            {
+            for iface_loc in crate::interfaces::interface_closure_locs(db, iface_loc) {
                 let iface_tree = baml_compiler2_hir::file_item_tree(db, iface_loc.file(db));
                 let Some(iface_data) = iface_tree.interfaces.get(&iface_loc.id(db)) else {
                     continue;
@@ -9242,8 +8746,6 @@ impl<'db> TypeInferenceBuilder<'db> {
                 db,
                 root_iface_loc,
                 &root_iface_type_args,
-                pkg_items,
-                &class_ns,
             ) {
                 let iface_tree = baml_compiler2_hir::file_item_tree(db, iface_loc.file(db));
                 let Some(iface_data) = iface_tree.interfaces.get(&iface_loc.id(db)) else {
@@ -9346,13 +8848,9 @@ impl<'db> TypeInferenceBuilder<'db> {
                 Ty::Interface(_, args, _) => args,
                 _ => Vec::new(),
             };
-            for (iface_loc, iface_args) in crate::interfaces::interface_closure_locs_with_args(
-                db,
-                root_iface_loc,
-                &root_args,
-                pkg_items,
-                &ns,
-            ) {
+            for (iface_loc, iface_args) in
+                crate::interfaces::interface_closure_locs_with_args(db, root_iface_loc, &root_args)
+            {
                 let iface_tree = baml_compiler2_hir::file_item_tree(db, iface_loc.file(db));
                 let Some(iface_data) = iface_tree.interfaces.get(&iface_loc.id(db)) else {
                     continue;
@@ -9484,13 +8982,8 @@ impl<'db> TypeInferenceBuilder<'db> {
             // spuriously appearing as N (which produced a false E0121). A real
             // override (e.g. both `Base` and `Left` declare `id`) still yields
             // two distinct declarers across the two blocks → genuine E0121.
-            let closure = crate::interfaces::interface_closure_locs_with_args(
-                db,
-                root_iface_loc,
-                &root_args,
-                pkg_items,
-                &ns,
-            );
+            let closure =
+                crate::interfaces::interface_closure_locs_with_args(db, root_iface_loc, &root_args);
             let mut declarer: Option<(Name, crate::ty::QualifiedTypeName, Vec<Ty>)> = None;
             for (iface_loc, iface_args) in &closure {
                 let iface_tree = baml_compiler2_hir::file_item_tree(db, iface_loc.file(db));
@@ -9555,7 +9048,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             return false;
         };
         let root_pkg = baml_compiler2_hir::file_package::file_package(db, root_loc.file(db));
-        crate::interfaces::interface_closure_locs(db, root_loc, pkg_items, &root_pkg.namespace_path)
+        crate::interfaces::interface_closure_locs(db, root_loc)
             .into_iter()
             .any(|iface_loc| {
                 let iface_tree = baml_compiler2_hir::file_item_tree(db, iface_loc.file(db));
@@ -9649,7 +9142,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             return false;
         };
         let root_pkg = baml_compiler2_hir::file_package::file_package(db, root_loc.file(db));
-        crate::interfaces::interface_closure_locs(db, root_loc, pkg_items, &root_pkg.namespace_path)
+        crate::interfaces::interface_closure_locs(db, root_loc)
             .into_iter()
             .any(|iface_loc| {
                 let iface_tree = baml_compiler2_hir::file_item_tree(db, iface_loc.file(db));
@@ -10029,13 +9522,6 @@ impl<'db> TypeInferenceBuilder<'db> {
     /// Returns `Some(method_ty)` if the base is a recognized primitive type name
     /// and the field is a valid static method on the corresponding builtin class.
     /// Returns `None` to fall through to normal `FieldAccess` resolution.
-    /// Try to resolve a `FieldAccess` chain rooted at `Path(["baml"])` as a
-    /// builtin package access: `baml.Array.length`, `baml.media.Image.from_url`.
-    ///
-    /// Walks the `FieldAccess` chain to extract the class path and member name,
-    /// then delegates to `resolve_builtin_member`.
-    /// Try to resolve a `FieldAccess` chain as a package access path.
-    ///
     fn try_primitive_static_access(
         &mut self,
         at: ExprId,
@@ -10053,17 +9539,10 @@ impl<'db> TypeInferenceBuilder<'db> {
         let name = segments[0].as_str();
 
         // Map lowercase primitive type names to their builtin class paths.
-        let class_path: &[&str] = match name {
-            "image" => &["media", "Image"],
-            "audio" => &["media", "Audio"],
-            "video" => &["media", "Video"],
-            "pdf" => &["media", "Pdf"],
-            "string" => &["String"],
-            "int" => &["Int"],
-            "bigint" => &["Bigint"],
-            "float" => &["Float"],
-            _ => return None,
-        };
+        let class_path = primitive_static_class_path(name);
+        if class_path.is_empty() {
+            return None;
+        }
 
         self.resolve_builtin_member(class_path, &[], field, at)
     }
@@ -10117,7 +9596,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         let db = self.context.db();
         let baml_items = self
             .res_ctx
-            .items_for_package(db, &baml_base::Name::new("baml"))?;
+            .items_for_package(db, &baml_base::Name::new(baml_base::BAML_PACKAGE))?;
 
         // Look up the class by path (e.g. &["Array"] or &["media", "Image"]).
         let path: Vec<Name> = class_path.iter().map(baml_base::Name::new).collect();
@@ -10152,9 +9631,11 @@ impl<'db> TypeInferenceBuilder<'db> {
                 let mut diags = Vec::new();
                 // Build the class type for self parameter resolution.
                 // For generics, apply type_args (e.g. Array<int>).
-                let builtin_class_ty = if type_args.is_empty() {
-                    let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
-                    Ty::Class(
+                let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
+                let builtin_class_ty = match (class_data.name.as_str(), type_args) {
+                    // No type args: carry the class's generic params on the
+                    // qualified name (e.g. unapplied `Array<T>`).
+                    (_, []) => Ty::Class(
                         crate::ty::QualifiedTypeName::new_with_generic_params(
                             pkg_info.package,
                             pkg_info.namespace_path,
@@ -10163,47 +9644,15 @@ impl<'db> TypeInferenceBuilder<'db> {
                         ),
                         vec![],
                         TyAttr::default(),
-                    )
-                } else if type_args.len() == 1 {
-                    // Single type arg: Array<T> → List(T), special-case common containers
-                    match class_data.name.as_str() {
-                        "Array" => Ty::List(Box::new(type_args[0].clone()), TyAttr::default()),
-                        _ => {
-                            let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
-                            Ty::Class(
-                                crate::ty::QualifiedTypeName::new(
-                                    pkg_info.package,
-                                    pkg_info.namespace_path,
-                                    class_data.name.clone(),
-                                ),
-                                type_args.to_vec(),
-                                TyAttr::default(),
-                            )
-                        }
-                    }
-                } else if type_args.len() == 2 {
-                    match class_data.name.as_str() {
-                        "Map" => Ty::Map(
-                            Box::new(type_args[0].clone()),
-                            Box::new(type_args[1].clone()),
-                            TyAttr::default(),
-                        ),
-                        _ => {
-                            let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
-                            Ty::Class(
-                                crate::ty::QualifiedTypeName::new(
-                                    pkg_info.package,
-                                    pkg_info.namespace_path,
-                                    class_data.name.clone(),
-                                ),
-                                type_args.to_vec(),
-                                TyAttr::default(),
-                            )
-                        }
-                    }
-                } else {
-                    let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
-                    Ty::Class(
+                    ),
+                    // Container special cases: Array<T> → List(T), Map<K, V> → Map(K, V).
+                    ("Array", [elem]) => Ty::List(Box::new(elem.clone()), TyAttr::default()),
+                    ("Map", [key, value]) => Ty::Map(
+                        Box::new(key.clone()),
+                        Box::new(value.clone()),
+                        TyAttr::default(),
+                    ),
+                    _ => Ty::Class(
                         crate::ty::QualifiedTypeName::new(
                             pkg_info.package,
                             pkg_info.namespace_path,
@@ -10211,7 +9660,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                         ),
                         type_args.to_vec(),
                         TyAttr::default(),
-                    )
+                    ),
                 };
 
                 let params: Vec<FunctionParamTy> = sig
@@ -12079,7 +11528,7 @@ impl crate::exhaustiveness::PatCtx for TypeInferenceBuilder<'_> {
         let Ty::Interface(iface_qtn, iface_args, _) = iface_ty else {
             return None;
         };
-        let class_fields = self.class_field_infos_ordered(class_qtn, class_type_args);
+        let class_fields = self.class_actual_fields_ordered(class_qtn, class_type_args);
         let class_indices: FxHashMap<Name, usize> = class_fields
             .into_iter()
             .enumerate()
@@ -13060,8 +12509,8 @@ impl TypeInferenceBuilder<'_> {
 
         // Walk the class definition's fields in declaration order. One
         // item-tree walk gives both names and types — see
-        // `class_field_infos_ordered`.
-        let field_infos = self.class_field_infos_ordered(&qtn, &args);
+        // `class_actual_fields_ordered`.
+        let field_infos = self.class_actual_fields_ordered(&qtn, &args);
 
         let mut sub_dpats: Vec<DPat> = Vec::with_capacity(field_infos.len());
         let mut bindings: Vec<PatternBinding> = Vec::new();
@@ -13423,5 +12872,22 @@ fn bare_type_sugar_to_ty(name: &Name) -> Option<Ty> {
         "video" => Some(Ty::Primitive(PrimitiveType::Video, TyAttr::default())),
         "pdf" => Some(Ty::Primitive(PrimitiveType::Pdf, TyAttr::default())),
         _ => None,
+    }
+}
+
+/// Map a lowercase primitive type name to its builtin class path (e.g.
+/// `image` → `["media", "Image"]`). Returns `&[]` for names that are not
+/// builtin primitives.
+fn primitive_static_class_path(name: &str) -> &'static [&'static str] {
+    match name {
+        "image" => &["media", "Image"],
+        "audio" => &["media", "Audio"],
+        "video" => &["media", "Video"],
+        "pdf" => &["media", "Pdf"],
+        "string" => &["String"],
+        "int" => &["Int"],
+        "bigint" => &["Bigint"],
+        "float" => &["Float"],
+        _ => &[],
     }
 }

@@ -227,13 +227,11 @@ impl StructuralTy {
             return false;
         }
 
-        // Void is only compatible with itself (handled by reflexivity above)
-        if matches!(self, StructuralTy::Void) || matches!(other, StructuralTy::Void) {
-            return false;
-        }
-
-        // Type is only compatible with itself (handled by reflexivity above)
-        if matches!(self, StructuralTy::Type) || matches!(other, StructuralTy::Type) {
+        // Void and Type are only compatible with themselves (handled by
+        // reflexivity above)
+        if matches!(self, StructuralTy::Void | StructuralTy::Type)
+            || matches!(other, StructuralTy::Void | StructuralTy::Type)
+        {
             return false;
         }
 
@@ -256,9 +254,6 @@ impl StructuralTy {
                 let unfolded = substitute(body, var, other);
                 self_ty.is_subtype_of(&unfolded, assumptions)
             }
-
-            // TyVar (inside Mu bodies)
-            (StructuralTy::TyVar(v1), StructuralTy::TyVar(v2)) => v1 == v2,
 
             // Null <: Optional<T>
             (StructuralTy::Null, StructuralTy::Optional(_)) => true,
@@ -323,15 +318,10 @@ impl StructuralTy {
                 StructuralTy::Map { key: k2, value: v2 },
             ) => k1.is_subtype_of(k2, assumptions) && v1.is_subtype_of(v2, assumptions),
 
-            // Numeric types do not widen across representations: `int` is
-            // neither a subtype of `bigint` (i64 vs heap BigInt) nor of `float`
-            // (i64 values past 2^53 are not exactly representable as f64). Write
-            // the target literal explicitly (`1n`, `1.0`), or rely on the
-            // `bigint × int` operators / the FFI boundary to convert at runtime.
-
-            // Literal types are subtypes of their (same-representation) base
-            // type only: `literal 1 <: int`, `1n <: bigint`. An int literal is
-            // NOT a subtype of `bigint` — write `1n`.
+            // A literal is a subtype of its same-representation base type only:
+            // `literal 1 <: int`, `1n <: bigint`. No numeric widening across
+            // representations — an int literal is NOT a subtype of `bigint`
+            // (write `1n`) or `float`.
             (StructuralTy::Literal(LiteralValue::Int(_)), StructuralTy::Int) => true,
             (StructuralTy::Literal(LiteralValue::Bigint(_)), StructuralTy::Bigint) => true,
             (StructuralTy::Literal(LiteralValue::Float(_)), StructuralTy::Float) => true,
@@ -365,12 +355,6 @@ impl StructuralTy {
                 }
                 function_params_subtype(params1, params2, assumptions)
             }
-
-            // TypeVar (generic parameter) is opaque — only subtypes itself
-            // (reflexivity above) and BuiltinUnknown (early check above).
-            // Placed here rather than as an early guard so that Union/Optional
-            // decomposition rules above can match first (e.g. T <: T | U).
-            (StructuralTy::TypeVar(v1), StructuralTy::TypeVar(v2)) => v1 == v2,
 
             _ => false,
         };
@@ -690,7 +674,7 @@ fn ty_has_cycle(
 // INVALID CYCLE DETECTION (Tarjan's SCC + structural edges)
 // ═══════════════════════════════════════════════════════════════════════════
 //
-// Mirrors the approach in `baml_compiler_tir/src/cycles.rs`:
+// Tarjan's SCC over the alias dependency graph:
 // 1. Build a dependency graph tracking structural vs non-structural edges.
 //    "Structural" means the reference goes through List or Map, which provide
 //    a termination point (empty container). Optional and Union are pass-through.
@@ -851,8 +835,8 @@ fn extract_type_alias_deps(
 
 // ── Tarjan's SCC ─────────────────────────────────────────────────────────────
 //
-// Adapted from `baml_compiler_tir/src/cycles.rs` — deterministic ordering
-// via sorted traversal, component reversal, and rotation to minimum element.
+// Deterministic ordering via sorted traversal, component reversal, and
+// rotation to minimum element.
 
 /// State of each node for Tarjan's algorithm.
 #[derive(Clone, Copy)]

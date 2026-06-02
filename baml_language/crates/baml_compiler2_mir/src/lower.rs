@@ -880,8 +880,6 @@ fn register_class_for_interface_closure<'db>(
     db: &'db dyn crate::Db,
     root_iface_loc: baml_compiler2_hir::loc::InterfaceLoc<'db>,
     root_iface_args: &[Tir2Ty],
-    pkg_items: &baml_compiler2_hir::package::PackageItems<'db>,
-    namespace_path: &[Name],
     class_tn: &TypeName,
     interface_implementors: &mut InterfaceImplementors,
 ) {
@@ -889,8 +887,6 @@ fn register_class_for_interface_closure<'db>(
         db,
         root_iface_loc,
         root_iface_args,
-        pkg_items,
-        namespace_path,
     ) {
         if let Some(iface_tn) = interface_type_name_from_loc(db, iface_loc) {
             push_unique_interface_implementor(interface_implementors, iface_tn, class_tn);
@@ -1284,7 +1280,7 @@ impl<'db> LoweringContext<'db> {
                                 continue;
                             };
                             for iface_loc in baml_compiler2_tir::interfaces::interface_closure_locs(
-                                db, iface_loc, pkg_items, &pkg_ns,
+                                db, iface_loc,
                             ) {
                                 let iface_tree =
                                     baml_compiler2_hir::file_item_tree(db, iface_loc.file(db));
@@ -1382,8 +1378,6 @@ impl<'db> LoweringContext<'db> {
                                     db,
                                     root_iface_loc,
                                     &root_iface_args_tir,
-                                    pkg_items,
-                                    &pkg_info.namespace_path,
                                     &class_tn,
                                     out.interface_implementors,
                                 );
@@ -1457,8 +1451,6 @@ impl<'db> LoweringContext<'db> {
                                 db,
                                 root_iface_loc,
                                 &root_iface_args_tir,
-                                pkg_items,
-                                &pkg_info.namespace_path,
                                 &class_tn,
                                 out.interface_implementors,
                             );
@@ -1486,8 +1478,6 @@ impl<'db> LoweringContext<'db> {
                         db,
                         root_iface_loc,
                         &root_iface_args_tir,
-                        pkg_items,
-                        &pkg_info.namespace_path,
                     )
                 {
                     let Some(iface_tn) = interface_type_name_from_loc(db, iface_loc) else {
@@ -2342,31 +2332,25 @@ impl<'db> LoweringContext<'db> {
         else {
             return false;
         };
-        let root_pkg =
-            baml_compiler2_hir::file_package::file_package(self.db, root_loc.file(self.db));
-        baml_compiler2_tir::interfaces::interface_closure_locs(
-            self.db,
-            root_loc,
-            pkg_items,
-            &root_pkg.namespace_path,
-        )
-        .into_iter()
-        .any(|iface_loc| {
-            let iface_tree = baml_compiler2_hir::file_item_tree(self.db, iface_loc.file(self.db));
-            iface_tree
-                .interfaces
-                .get(&iface_loc.id(self.db))
-                .is_some_and(|iface_data| {
-                    iface_data
-                        .required_methods
-                        .iter()
-                        .any(|s| s.name == *method)
-                        || iface_data
-                            .default_methods
+        baml_compiler2_tir::interfaces::interface_closure_locs(self.db, root_loc)
+            .into_iter()
+            .any(|iface_loc| {
+                let iface_tree =
+                    baml_compiler2_hir::file_item_tree(self.db, iface_loc.file(self.db));
+                iface_tree
+                    .interfaces
+                    .get(&iface_loc.id(self.db))
+                    .is_some_and(|iface_data| {
+                        iface_data
+                            .required_methods
                             .iter()
-                            .any(|&fn_id| iface_tree[fn_id].name == *method)
-                })
-        })
+                            .any(|s| s.name == *method)
+                            || iface_data
+                                .default_methods
+                                .iter()
+                                .any(|&fn_id| iface_tree[fn_id].name == *method)
+                    })
+            })
     }
 
     fn expr_ty(&self, expr_id: AstExprId) -> Ty {
@@ -6884,8 +6868,6 @@ impl<'db> LoweringContext<'db> {
                                     Tir2Ty::Interface(_, args, _) => args,
                                     _ => &[],
                                 },
-                                file_pkg_items,
-                                &file_pkg_info.namespace_path,
                             )
                         {
                             let iface_tree = baml_compiler2_hir::file_item_tree(
@@ -7002,8 +6984,6 @@ impl<'db> LoweringContext<'db> {
                 self.db,
                 requested_root_loc,
                 iface_type_args,
-                iface_pkg_items,
-                &iface_ns,
             )
             .into_iter()
             .filter_map(|(loc, args)| {
@@ -7108,8 +7088,6 @@ impl<'db> LoweringContext<'db> {
                         self.db,
                         root_iface_loc,
                         &root_iface_args,
-                        pkg_items,
-                        &pkg_info.namespace_path,
                     )
                 {
                     let iface_tree = baml_compiler2_hir::file_item_tree(

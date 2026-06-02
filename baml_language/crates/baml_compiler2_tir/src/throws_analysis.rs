@@ -22,6 +22,33 @@ pub(crate) trait ThrowsAnalysisContext {
 
     fn named_callee_summary(&self, callee_expr_id: ExprId, body: &ExprBody)
     -> Option<BTreeSet<Ty>>;
+
+    /// Whether a `catch` expression's clause arms should be walked and have
+    /// their throws collected. The default (`true`) treats a `catch` as a
+    /// normal sub-expression whose handler bodies can themselves throw. The
+    /// "catch base" walk used to compute the residual throws *flowing into* a
+    /// catch overrides this to `false` so a nested catch is opaque (only its
+    /// `base` is walked, never its clauses).
+    fn walk_catch_clauses(&self) -> bool {
+        true
+    }
+
+    /// Whether an `await` expression should add the awaited future's `E`
+    /// (error) parameter to the throws set. The default (`false`) only walks
+    /// the future sub-expression. The "catch base" walk overrides this to
+    /// `true` so an `await` inside a `catch` base re-throws the future's error.
+    fn await_adds_future_error(&self) -> bool {
+        false
+    }
+
+    /// Whether a plain `Call` whose callee is an `OptionalMemberAccess`
+    /// (`obj?.method()`) should unwrap the optional wrapper before reading the
+    /// callee's throws. The default (`true`) mirrors the type-inference
+    /// fast-path. The "catch base" walk overrides this to `false` to preserve
+    /// its original (non-unwrapping) behavior.
+    fn call_unwraps_optional_member_callee(&self) -> bool {
+        true
+    }
 }
 
 pub(crate) fn expr_to_path_segments(expr_id: ExprId, body: &ExprBody) -> Option<Vec<Name>> {
@@ -47,6 +74,18 @@ pub(crate) fn collect_escaping_throws<C: ThrowsAnalysisContext>(
     out
 }
 
+/// Collect the throws of a single expression (and everything it transitively
+/// evaluates) into `out`. Used to compute the residual throw set flowing into
+/// a `catch` from its base expression.
+pub(crate) fn collect_throws_from_expr<C: ThrowsAnalysisContext>(
+    context: &C,
+    expr_id: ExprId,
+    body: &ExprBody,
+    out: &mut BTreeSet<Ty>,
+) {
+    collect_from_expr(context, expr_id, body, out);
+}
+
 fn collect_value_throw_facts<C: ThrowsAnalysisContext>(
     context: &C,
     value_expr_id: ExprId,
@@ -68,21 +107,13 @@ pub(crate) fn collect_callee_escaping_throws<C: ThrowsAnalysisContext>(
     unwrap_optional_callee: bool,
     out: &mut BTreeSet<Ty>,
 ) {
-    let mut accounted = false;
-
     if let Some(throws) =
         context.instantiated_callee_throws(callee_expr_id, args, unwrap_optional_callee)
     {
         out.extend(flatten_ty_to_facts(&throws));
-        accounted = true;
-    }
-
-    if !accounted && let Some(summary) = context.named_callee_summary(callee_expr_id, body) {
+    } else if let Some(summary) = context.named_callee_summary(callee_expr_id, body) {
         out.extend(summary);
-        accounted = true;
-    }
-
-    if !accounted {
+    } else {
         out.insert(Ty::Unknown {
             attr: TyAttr::default(),
         });
@@ -174,7 +205,8 @@ fn collect_from_expr<C: ThrowsAnalysisContext>(
             // mirrors the type-inference fast-path in `builder.rs` that routes
             // `Call { callee: OptionalMemberAccess }` through
             // `finalize_optional_callee_call`.
-            let unwrap_optional = matches!(&body.exprs[*callee], Expr::OptionalMemberAccess { .. });
+            let unwrap_optional = context.call_unwraps_optional_member_callee()
+                && matches!(&body.exprs[*callee], Expr::OptionalMemberAccess { .. });
             collect_callee_escaping_throws(
                 context,
                 *callee,
@@ -198,10 +230,12 @@ fn collect_from_expr<C: ThrowsAnalysisContext>(
             } else {
                 collect_from_expr(context, *base, body, out);
             }
-            for clause in clauses {
-                for arm_id in &clause.arms {
-                    let arm = &body.catch_arms[*arm_id];
-                    collect_from_expr(context, arm.body, body, out);
+            if context.walk_catch_clauses() {
+                for clause in clauses {
+                    for arm_id in &clause.arms {
+                        let arm = &body.catch_arms[*arm_id];
+                        collect_from_expr(context, arm.body, body, out);
+                    }
                 }
             }
         }
@@ -303,7 +337,16 @@ fn collect_from_expr<C: ThrowsAnalysisContext>(
             let _ = spawn_body;
         }
         Expr::Await { future } => {
+            // `await` re-throws the future's error. Walk the future
+            // expression (its construction can throw); when configured,
+            // also add the future's `E` parameter to the throws set so the
+            // surrounding scope's throws include it.
             collect_from_expr(context, *future, body, out);
+            if context.await_adds_future_error() {
+                if let Some(Ty::Future(_value, error, _)) = context.expression_type(*future) {
+                    out.extend(flatten_ty_to_facts(&error));
+                }
+            }
         }
         Expr::Lambda(_)
         | Expr::Literal(_)
