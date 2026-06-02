@@ -119,8 +119,8 @@ impl TypeInfo {
     /// The canonical BAML block for this item, without code fences, docstring,
     /// or any trailing hint/note. For a class this is the **fields-only** body
     /// (`class Foo {\n    bar: int,\n}`): methods are surfaced separately by
-    /// `describe`, never inside the body block. Shared by [`to_hover_markdown`]
-    /// (which wraps it) and `describe::build_shape`.
+    /// `describe`, never inside the body block. Shared by
+    /// [`Self::to_hover_markdown`] (which wraps it) and `describe::build_shape`.
     pub fn to_describe_block(&self) -> String {
         match self {
             TypeInfo::Function {
