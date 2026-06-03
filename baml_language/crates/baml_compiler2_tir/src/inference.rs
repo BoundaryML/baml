@@ -375,7 +375,7 @@ fn enclosing_function_generic_env_from_let(
                 return Some(generic_env_for_function_data(ctx, scope, func_data));
             }
             ScopeKind::Let => current = scope.parent,
-            _ => break,
+            _ => current = scope.parent,
         }
     }
     None
@@ -1631,7 +1631,7 @@ pub fn infer_scope_types<'db>(
                                         pkg_items,
                                         &pkg_info.namespace_path,
                                         &env,
-                                        func_data.span,
+                                        lambda_span,
                                     );
                                     add_lambda_params_to_builder(
                                         db,
@@ -1705,7 +1705,7 @@ pub fn infer_scope_types<'db>(
                                         pkg_items,
                                         &pkg_info.namespace_path,
                                         &env,
-                                        ancestor_scope.range,
+                                        lambda_span,
                                     );
                                     add_lambda_params_to_builder(
                                         db,

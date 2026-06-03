@@ -315,7 +315,7 @@ fn class_generic_bound_rejects_wrong_compound_type() {
 }
 
 #[test]
-fn class_generic_bound_accepts_interface_implementors_inside_compound_types() {
+fn class_generic_bound_accepts_interface_implementors_inside_function_types() {
     assert_no_compile_errors(
         r#"
         interface Named {
@@ -329,14 +329,6 @@ fn class_generic_bound_accepts_interface_implementors_inside_compound_types() {
 
         type DogFactory = () -> Dog
 
-        class ListBox<T extends Named[]> {
-            value: T
-        }
-
-        class MapBox<T extends map<string, Named>> {
-            value: T
-        }
-
         class FunctionBox<T extends () -> Named> {
             cb: T
         }
@@ -346,12 +338,41 @@ fn class_generic_bound_accepts_interface_implementors_inside_compound_types() {
         }
 
         function main() -> int {
-            let xs = ListBox<Dog[]> { value: [Dog { name: "Rex" }] }
-            let directory = MapBox<map<string, Dog>> { value: { "rex": Dog { name: "Rex" } } }
             let factory = FunctionBox<DogFactory> { cb: make_dog }
             return 1
         }
         "#,
+    );
+}
+
+#[test]
+fn class_generic_bound_rejects_interface_implementors_inside_invariant_containers() {
+    assert_compile_error_contains_any(
+        r#"
+        interface Named {
+            name: string
+        }
+
+        class Dog {
+            name: string
+            implements Named {}
+        }
+
+        class ListBox<T extends Named[]> {
+            value: T
+        }
+
+        class MapBox<T extends map<string, Named>> {
+            value: T
+        }
+
+        function main() -> int {
+            let xs = ListBox<Dog[]> { value: [Dog { name: "Rex" }] }
+            let directory = MapBox<map<string, Dog>> { value: { "rex": Dog { name: "Rex" } } }
+            return 1
+        }
+        "#,
+        &["Named[]", "map<string, Named>", "type mismatch"],
     );
 }
 

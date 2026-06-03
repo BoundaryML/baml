@@ -1408,22 +1408,26 @@ impl<'db> TypeInferenceBuilder<'db> {
             (Ty::Class(class_name, expected_args, _), Ty::List(actual_inner, _))
                 if class_name.is_builtin_root_type("Array") && expected_args.len() == 1 =>
             {
-                self.is_subtype(actual_inner, &expected_args[0])
+                self.container_arg_subtype_without_nominal(actual_inner, &expected_args[0])
             }
             (Ty::Class(class_name, expected_args, _), Ty::EvolvingList(actual_inner, _))
                 if class_name.is_builtin_root_type("Array") && expected_args.len() == 1 =>
             {
-                self.is_subtype(actual_inner, &expected_args[0])
+                self.container_arg_subtype_without_nominal(actual_inner, &expected_args[0])
             }
             (
                 Ty::Class(class_name, expected_args, _),
                 Ty::Map(actual_key, actual_val, _) | Ty::EvolvingMap(actual_key, actual_val, _),
             ) if class_name.is_builtin_root_type("Map") && expected_args.len() == 2 => {
-                self.is_subtype(actual_key, &expected_args[0])
-                    && self.is_subtype(actual_val, &expected_args[1])
+                self.container_arg_subtype_without_nominal(actual_key, &expected_args[0])
+                    && self.container_arg_subtype_without_nominal(actual_val, &expected_args[1])
             }
             _ => false,
         }
+    }
+
+    fn container_arg_subtype_without_nominal(&self, actual: &Ty, expected: &Ty) -> bool {
+        crate::normalize::is_subtype_of(actual, expected, &self.aliases)
     }
 
     fn function_coercion_for(
@@ -12223,14 +12227,12 @@ impl<'db> TypeInferenceBuilder<'db> {
         }
 
         match (sub, sup) {
-            (
-                Ty::List(sub_inner, _) | Ty::EvolvingList(sub_inner, _),
-                Ty::List(sup_inner, _) | Ty::EvolvingList(sup_inner, _),
-            ) => Some(self.is_subtype(sub_inner, sup_inner)),
-            (
-                Ty::Map(sub_key, sub_value, _) | Ty::EvolvingMap(sub_key, sub_value, _),
-                Ty::Map(sup_key, sup_value, _) | Ty::EvolvingMap(sup_key, sup_value, _),
-            ) => Some(self.is_subtype(sub_key, sup_key) && self.is_subtype(sub_value, sup_value)),
+            (Ty::List(..) | Ty::EvolvingList(..), Ty::List(..) | Ty::EvolvingList(..)) => {
+                Some(crate::normalize::is_subtype_of(sub, sup, &self.aliases))
+            }
+            (Ty::Map(..) | Ty::EvolvingMap(..), Ty::Map(..) | Ty::EvolvingMap(..)) => {
+                Some(crate::normalize::is_subtype_of(sub, sup, &self.aliases))
+            }
             (Ty::Future(sub_value, sub_error, _), Ty::Future(sup_value, sup_error, _)) => {
                 Some(self.is_subtype(sub_value, sup_value) && self.is_subtype(sub_error, sup_error))
             }

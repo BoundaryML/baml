@@ -215,12 +215,10 @@ impl ImplementsRegistry {
     }
 
     pub fn type_implements(&self, ty: &Ty, iface_qtn: &QualifiedTypeName) -> bool {
-        match ty {
-            Ty::Class(class_qtn, _, _) => self.implements(class_qtn, iface_qtn),
-            _ => implementation_key_for_ty(ty)
-                .and_then(|key| self.type_implements.get(&key))
-                .is_some_and(|set| set.contains(iface_qtn)),
-        }
+        let aliases = std::collections::HashMap::default();
+        self.type_implements_qtn_via_rule(ty, iface_qtn, &aliases, |actual, bound| {
+            self.compatibility_subtype(actual, bound)
+        })
     }
 
     /// True iff interface `sub` requires interface `sup` (transitively).
@@ -229,6 +227,69 @@ impl ImplementsRegistry {
         self.interface_requires
             .get(sub)
             .is_some_and(|set| set.contains(sup))
+    }
+
+    fn type_implements_qtn_via_rule(
+        &self,
+        actual_ty: &Ty,
+        iface_qtn: &QualifiedTypeName,
+        aliases: &std::collections::HashMap<QualifiedTypeName, Ty>,
+        mut is_subtype: impl FnMut(&Ty, &Ty) -> bool,
+    ) -> bool {
+        self.interface_impl_rule_index
+            .by_interface
+            .get(iface_qtn)
+            .is_some_and(|indices| {
+                indices.iter().any(|idx| {
+                    let Some(rule) = self.interface_impl_rules.get(*idx) else {
+                        return false;
+                    };
+                    let mut bindings = TypeBindings::default();
+                    match_ty_pattern_into(
+                        &rule.for_ty_pattern,
+                        actual_ty,
+                        &rule.generic_params,
+                        aliases,
+                        &mut bindings,
+                    )
+                    .is_some()
+                        && validate_rule_bounds(rule, &bindings, &mut is_subtype, true).is_some()
+                })
+            })
+    }
+
+    fn compatibility_subtype(&self, actual: &Ty, bound: &Ty) -> bool {
+        if actual == bound {
+            return true;
+        }
+
+        if let Ty::Union(members, _) = actual
+            && !members.is_empty()
+        {
+            return members
+                .iter()
+                .all(|member| self.compatibility_subtype(member, bound));
+        }
+
+        if let Ty::Interface(iface_qtn, iface_args, associated_bindings, _) = bound
+            && !matches!(actual, Ty::Interface(..))
+        {
+            let aliases = std::collections::HashMap::default();
+            let requested_iface_ty = Ty::Interface(
+                iface_qtn.clone(),
+                iface_args.clone(),
+                associated_bindings.clone(),
+                TyAttr::default(),
+            );
+            return self.type_implements_interface_via_rule(
+                actual,
+                &requested_iface_ty,
+                &aliases,
+                |inner_actual, inner_bound| self.compatibility_subtype(inner_actual, inner_bound),
+            );
+        }
+
+        normalize::is_subtype_of(actual, bound, &std::collections::HashMap::default())
     }
 
     /// True iff `class_qtn<class_type_args>` nominally implements `iface_qtn`
@@ -518,16 +579,18 @@ fn derive_compatibility_views(
                 });
             }
             Ty::Class(class_qtn, _, _) => {
-                views
-                    .class_implements
-                    .entry(class_qtn.clone())
-                    .or_default()
-                    .insert(iface_qtn.clone());
-                if !interface_type_args.is_empty() {
-                    views.implements_type_args.insert(
-                        (class_qtn.clone(), iface_qtn.clone()),
-                        interface_type_args.clone(),
-                    );
+                if rule.generic_param_bounds.iter().all(Option::is_none) {
+                    views
+                        .class_implements
+                        .entry(class_qtn.clone())
+                        .or_default()
+                        .insert(iface_qtn.clone());
+                    if !interface_type_args.is_empty() {
+                        views.implements_type_args.insert(
+                            (class_qtn.clone(), iface_qtn.clone()),
+                            interface_type_args.clone(),
+                        );
+                    }
                 }
             }
             target_ty => {
@@ -1747,6 +1810,73 @@ mod tests {
         )
         .expect("nested list arg should bind T");
         assert_eq!(bindings.get(&Name::new("T")), Some(&int()));
+    }
+
+    #[test]
+    fn compatibility_type_implements_respects_generic_bounds() {
+        let dog_qtn = qtn(&[], "Dog");
+        let box_qtn = qtn(&[], "Box");
+        let named_qtn = qtn(&[], "Named");
+        let printable_qtn = qtn(&[], "Printable");
+        let rules = vec![
+            InterfaceImplRule {
+                generic_params: vec![],
+                generic_param_bounds: vec![],
+                for_ty_pattern: Ty::Class(dog_qtn.clone(), vec![], TyAttr::default()),
+                interface_ty: Ty::Interface(named_qtn.clone(), vec![], vec![], TyAttr::default()),
+                origin: InterfaceImplOrigin::InBodyClass { class_qtn: dog_qtn },
+            },
+            InterfaceImplRule {
+                generic_params: vec![Name::new("T")],
+                generic_param_bounds: vec![Some(Ty::Interface(
+                    named_qtn,
+                    vec![],
+                    vec![],
+                    TyAttr::default(),
+                ))],
+                for_ty_pattern: Ty::Class(box_qtn.clone(), vec![type_var("T")], TyAttr::default()),
+                interface_ty: Ty::Interface(
+                    printable_qtn.clone(),
+                    vec![],
+                    vec![],
+                    TyAttr::default(),
+                ),
+                origin: InterfaceImplOrigin::InBodyClass {
+                    class_qtn: box_qtn.clone(),
+                },
+            },
+        ];
+        let views = derive_compatibility_views(&rules, std::slice::from_ref(&box_qtn));
+        let mut registry = ImplementsRegistry {
+            interface_impl_rule_index: InterfaceImplRuleIndex::from_rules(&rules),
+            interface_impl_rules: rules,
+            class_implements: views.class_implements,
+            type_implements: views.type_implements,
+            blanket_class_implements: views.blanket_class_implements,
+            implements_type_args: views.implements_type_args,
+            type_implements_type_args: views.type_implements_type_args,
+            interface_requires: FxHashMap::default(),
+        };
+
+        assert!(!registry.implements(&box_qtn, &printable_qtn));
+        assert!(registry.type_implements(
+            &Ty::Class(
+                box_qtn.clone(),
+                vec![Ty::Class(qtn(&[], "Dog"), vec![], TyAttr::default())],
+                TyAttr::default(),
+            ),
+            &printable_qtn,
+        ));
+        assert!(!registry.type_implements(
+            &Ty::Class(box_qtn, vec![int()], TyAttr::default()),
+            &printable_qtn,
+        ));
+
+        registry.class_implements.clear();
+        assert!(!registry.type_implements(
+            &Ty::Class(qtn(&[], "Box"), vec![int()], TyAttr::default()),
+            &printable_qtn,
+        ));
     }
 
     #[test]
