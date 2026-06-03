@@ -499,6 +499,10 @@ impl Printable for WhileLetStmt {
         if let Some(let_keyword) = &self.let_keyword {
             printer.print_raw_token(let_keyword);
             printer.print_str(" ");
+            let (_, trailing) = printer.trivia.get_for_range_split(let_keyword.span());
+            if printer.print_trivia_squished(trailing) > 0 {
+                printer.print_str(" ");
+            }
         }
         printer.print(&self.pattern, shape.clone());
         printer.print_str(" ");

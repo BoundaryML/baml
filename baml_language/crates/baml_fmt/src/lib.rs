@@ -580,4 +580,28 @@ mod const_format_tests {
         let source = "function f(items: int[]) -> int {\n    const sum = 0;\n    for (const item in items) {\n        sum += item;\n    }\n    sum\n}\n";
         assert_formats_to(source, source);
     }
+
+    #[test]
+    fn test_const_binding_keyword_trailing_trivia_preserved() {
+        let source = "function f() -> int {\n    const /*keep*/ x = 1;\n    x\n}\n";
+        assert_formats_to(source, source);
+    }
+
+    #[test]
+    fn test_const_wildcard_keyword_trailing_trivia_preserved() {
+        let source = "function f() -> int {\n    const /*keep*/ _ = 1;\n    0\n}\n";
+        assert_formats_to(source, source);
+    }
+
+    #[test]
+    fn test_const_destructure_keyword_trailing_trivia_preserved() {
+        let source = "class Foo {\n    a: int,\n}\n\nfunction f(foo: Foo) -> int {\n    const /*keep*/ Foo { a } = foo;\n    a\n}\n";
+        assert_formats_to(source, source);
+    }
+
+    #[test]
+    fn test_while_const_array_keyword_trailing_trivia_preserved() {
+        let source = "function f(xs: int[]) -> int {\n    while const /*keep*/ [x] = xs {\n        break;\n    }\n    0\n}\n";
+        assert_formats_to(source, source);
+    }
 }

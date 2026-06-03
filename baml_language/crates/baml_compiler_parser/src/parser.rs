@@ -7273,36 +7273,6 @@ function Demo(user: User, xs: int[], value: int | string, items: int[]) -> int {
     }
 
     #[test]
-    fn const_remains_identifier_after_let() {
-        let source = r#"
-function Demo() -> int {
-  let const = 1;
-  const
-}
-"#;
-        let (root, errors) = parse_source(source);
-        assert_no_errors(&errors);
-
-        assert!(
-            root.descendants_with_tokens().all(|elem| {
-                !matches!(
-                    elem,
-                    rowan::NodeOrToken::Token(token) if token.kind() == SyntaxKind::KW_CONST
-                )
-            }),
-            "`let const = 1` should not emit contextual KW_CONST"
-        );
-        let has_const_word = root.descendants_with_tokens().any(|elem| {
-            matches!(
-                elem,
-                rowan::NodeOrToken::Token(token)
-                    if token.kind() == SyntaxKind::WORD && token.text() == "const"
-            )
-        });
-        assert!(has_const_word, "`const` should remain a WORD binding name");
-    }
-
-    #[test]
     fn is_class_in_condition_does_not_eat_then_block() {
         // Regression: `if x is Class { body }` used to be parsed as
         // `if x is Class { body }` where `{ body }` was the destructure

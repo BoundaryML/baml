@@ -87,6 +87,15 @@ fn print_trivia_squished_spaced(
     trivia_len
 }
 
+fn print_binding_keyword_with_trailing_trivia(printer: &mut Printer, keyword: &t::BindingKeyword) {
+    printer.print_raw_token(keyword);
+    printer.print_str(" ");
+    let (_, trailing) = printer.trivia.get_for_range_split(keyword.span());
+    if print_trivia_squished_spaced(printer, trailing, false, false) > 0 {
+        printer.print_str(" ");
+    }
+}
+
 /// Top-level pattern AST node — corresponds to a [`SyntaxKind::PATTERN`].
 #[derive(Debug)]
 pub enum MatchPattern {
@@ -215,8 +224,7 @@ impl WildcardPattern {
 impl Printable for WildcardPattern {
     fn print(&self, _shape: Shape, printer: &mut Printer) -> PrintInfo {
         if let Some(let_kw) = &self.let_keyword {
-            printer.print_raw_token(let_kw);
-            printer.print_str(" ");
+            print_binding_keyword_with_trailing_trivia(printer, let_kw);
         }
         printer.print_raw_token(&self.underscore);
         PrintInfo::default_single_line()
@@ -268,8 +276,7 @@ impl BindingPattern {
 
 impl Printable for BindingPattern {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
-        printer.print_raw_token(&self.let_keyword);
-        printer.print_str(" ");
+        print_binding_keyword_with_trailing_trivia(printer, &self.let_keyword);
         printer.print_raw_token(&self.name);
         let mut info = PrintInfo::default_single_line();
         if let Some((colon, pattern)) = &self.subpat {
@@ -405,8 +412,7 @@ impl DestructurePattern {
 
     fn print_path(&self, printer: &mut Printer) {
         if let Some(let_kw) = &self.let_keyword {
-            printer.print_raw_token(let_kw);
-            printer.print_str(" ");
+            print_binding_keyword_with_trailing_trivia(printer, let_kw);
         }
         printer.print_raw_token(&self.first);
         for (dot, word) in &self.rest {
