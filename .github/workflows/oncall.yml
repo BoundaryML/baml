@@ -88,7 +88,7 @@ jobs:
           else
             echo "has_changes=true" >> "$GITHUB_OUTPUT"
           fi
-      - uses: peter-evans/create-pull-request@v6
+      - uses: peter-evans/create-pull-request@v8
         if: steps.check_changes.outputs.has_changes == 'true'
         with:
           token: ${{ secrets.SAM_GITHUB_BOUNDARYML_READWRITE }}

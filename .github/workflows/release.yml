@@ -369,7 +369,7 @@ jobs:
             awk '/^## \[/{if (p) exit; if ($2 == "[${{ needs.determine-version.outputs.version_string }}]") p=1} p' CHANGELOG.md | sed '1d' > CHANGELOG.txt
           fi
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           name: ${{ needs.determine-version.outputs.version_string }}
           tag_name: ${{ needs.determine-version.outputs.version_string }}

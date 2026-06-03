@@ -23,7 +23,7 @@ jobs:
           ref: main
           token: ${{ secrets.SAM_BAML_ZED_GITHUB_TOKEN }}
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
         with:
           version: latest
           run_install: true
