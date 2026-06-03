@@ -75,7 +75,9 @@ def main() -> None:
     (args.out / "version").mkdir(parents=True, exist_ok=True)
     released_at = dt.datetime.now(dt.UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
-    vsix = next(args.vsix_dir.glob("*.vsix"))
+    vsix = next(args.vsix_dir.glob("*.vsix"), None)
+    if vsix is None:
+        raise SystemExit(f"no .vsix files found in --vsix-dir {args.vsix_dir}")
     toolchain = {
         "schema": 1,
         "version": args.version,

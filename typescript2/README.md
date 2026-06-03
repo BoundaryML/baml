@@ -82,7 +82,7 @@ What `pnpm vscode:package` does:
 4. Builds the VS Code extension host bundle:
 
    ```bash
-   pnpm --filter app-vscode-ext build
+   pnpm --filter baml-language build
    ```
 
 5. Stages runtime assets into the extension package:

@@ -16,6 +16,7 @@ use serde::{Deserialize, Serialize};
 const CONFIG_FILE: &str = "config.toml";
 const STATE_FILE: &str = "state.toml";
 const CHANNEL_CACHE_TTL: Duration = Duration::from_secs(24 * 60 * 60);
+const HTTP_TIMEOUT: Duration = Duration::from_secs(30);
 
 #[derive(Debug, Default, Serialize, Deserialize)]
 struct Config {
@@ -94,7 +95,12 @@ fn main() {
 
 fn run() -> Result<i32> {
     let mut args: Vec<String> = env::args().skip(1).collect();
-    if args.iter().any(|arg| arg == "--version" || arg == "-V") {
+    #[cfg(windows)]
+    if args.first().map(String::as_str) == Some("--replace") {
+        args.remove(0);
+        return replace_running_exe(args).map(|()| 0);
+    }
+    if matches!(args.first().map(String::as_str), Some("--version" | "-V")) {
         println!("baml {}", env!("CARGO_PKG_VERSION"));
         return Ok(0);
     }
@@ -290,14 +296,14 @@ fn project_toolchain_selector() -> Result<Option<(PathBuf, String)>> {
         let candidate = dir.join("baml.toml");
         if candidate.exists() {
             let text = fs::read_to_string(&candidate)?;
-            if let Ok(config) = toml::from_str::<ProjectConfig>(&text) {
-                if let Some(toolchain) = config.toolchain {
-                    if let Some(version) = toolchain.version {
-                        return Ok(Some((candidate, version)));
-                    }
-                    if let Some(channel) = toolchain.channel {
-                        return Ok(Some((candidate, channel)));
-                    }
+            let config = toml::from_str::<ProjectConfig>(&text)
+                .with_context(|| format!("failed to parse {}", candidate.display()))?;
+            if let Some(toolchain) = config.toolchain {
+                if let Some(version) = toolchain.version {
+                    return Ok(Some((candidate, version)));
+                }
+                if let Some(channel) = toolchain.channel {
+                    return Ok(Some((candidate, channel)));
                 }
             }
         }
@@ -431,7 +437,10 @@ fn fetch_manifest(selector: &str, override_url: Option<&str>) -> Result<Toolchai
         Some(text) => text,
         None => {
             fetched_remote = true;
-            reqwest::blocking::get(&url)
+            let client = http_client()?;
+            client
+                .get(&url)
+                .send()
                 .with_context(|| format!("failed to fetch {url}"))?
                 .error_for_status()
                 .with_context(|| format!("failed to fetch {url}"))?
@@ -621,6 +630,17 @@ fn self_update() -> Result<()> {
         use std::os::unix::fs::PermissionsExt;
         fs::set_permissions(&tmp, fs::Permissions::from_mode(0o755))?;
     }
+    #[cfg(windows)]
+    {
+        std::process::Command::new(&current)
+            .arg("--replace")
+            .arg(&tmp)
+            .arg(&current)
+            .spawn()
+            .with_context(|| format!("failed to spawn updater {}", current.display()))?;
+        println!("updating BAML wrapper to {}", manifest.version);
+        return Ok(());
+    }
     fs::rename(tmp, current)?;
     println!("updated BAML wrapper to {}", manifest.version);
     Ok(())
@@ -630,7 +650,10 @@ fn fetch_wrapper_manifest() -> Result<WrapperManifest> {
     let base = baml_release::manifest_base_url();
     let url = format!("{base}/wrapper.json");
     let cache_path = manifest_cache_dir(&base).join("wrapper.json");
-    let text = reqwest::blocking::get(&url)
+    let client = http_client()?;
+    let text = client
+        .get(&url)
+        .send()
         .with_context(|| format!("failed to fetch {url}"))?
         .error_for_status()
         .with_context(|| format!("failed to fetch {url}"))?
@@ -641,6 +664,47 @@ fn fetch_wrapper_manifest() -> Result<WrapperManifest> {
         serde_json::from_str(&text).context("invalid wrapper manifest")?;
     manifest.validate()?;
     Ok(manifest)
+}
+
+fn http_client() -> Result<reqwest::blocking::Client> {
+    reqwest::blocking::Client::builder()
+        .timeout(HTTP_TIMEOUT)
+        .build()
+        .context("failed to build HTTP client")
+}
+
+#[cfg(windows)]
+fn replace_running_exe(args: Vec<String>) -> Result<()> {
+    if args.len() != 2 {
+        anyhow::bail!("usage: baml --replace <tmp> <current>");
+    }
+    let tmp = PathBuf::from(&args[0]);
+    let current = PathBuf::from(&args[1]);
+    let mut last_error = None;
+    for _ in 0..60 {
+        std::thread::sleep(Duration::from_millis(250));
+        match fs::remove_file(&current) {
+            Ok(()) => match fs::rename(&tmp, &current) {
+                Ok(()) => return Ok(()),
+                Err(err) => last_error = Some(err),
+            },
+            Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
+                match fs::rename(&tmp, &current) {
+                    Ok(()) => return Ok(()),
+                    Err(err) => last_error = Some(err),
+                }
+            }
+            Err(err) => last_error = Some(err),
+        }
+    }
+    Err(anyhow!(
+        "failed to replace {} with {}: {}",
+        current.display(),
+        tmp.display(),
+        last_error
+            .map(|err| err.to_string())
+            .unwrap_or_else(|| "timed out".to_string())
+    ))
 }
 
 fn write_text_atomic(path: &Path, text: &str) -> Result<()> {

@@ -18,7 +18,7 @@ import {
 } from './compat';
 
 const clients = new Map<string, LanguageClient>();
-let knownProjects: string[] = [];
+const knownProjects = new Map<string, string[]>();
 let currentServerState: 'starting' | 'running' | 'stopped' | 'error' = 'starting';
 let statusBarItem: vscode.StatusBarItem | undefined;
 let extensionContext: vscode.ExtensionContext | undefined;
@@ -46,8 +46,9 @@ function buildStatusTooltip(serverState: 'starting' | 'running' | 'stopped' | 'e
   md.appendMarkdown(`---\n\n`);
   md.appendMarkdown(`[$(output) Open Logs](command:baml.openLogs)\n\n`);
 
-  if (knownProjects.length > 0) {
-    for (const project of knownProjects) {
+  const projects = Array.from(new Set(Array.from(knownProjects.values()).flat())).sort();
+  if (projects.length > 0) {
+    for (const project of projects) {
       const encoded = encodeURIComponent(JSON.stringify(project));
       md.appendMarkdown(`[$(play) Open Playground — ${projectLabel(project)}](command:baml.openPlayground?${encoded})\n\n`);
     }
@@ -137,6 +138,14 @@ function findBamlProjectRoot(uri: vscode.Uri): string {
   return workspaceRoot ?? path.dirname(uri.fsPath);
 }
 
+function projectKeyForPath(projectPath: string): string {
+  try {
+    return findBamlProjectRoot(vscode.Uri.file(projectPath));
+  } catch {
+    return projectPath;
+  }
+}
+
 async function ensureClient(projectRoot: string): Promise<LanguageClient> {
   const existing = clients.get(projectRoot);
   if (existing) {
@@ -181,12 +190,12 @@ async function ensureClient(projectRoot: string): Promise<LanguageClient> {
     clientOptions,
   );
   clients.set(projectRoot, client);
-  wireClient(client);
+  wireClient(projectRoot, client);
   await client.start();
   return client;
 }
 
-function wireClient(client: LanguageClient) {
+function wireClient(projectRoot: string, client: LanguageClient) {
   if (!extensionContext) {
     return;
   }
@@ -201,7 +210,7 @@ function wireClient(client: LanguageClient) {
         validateServerCompatibility(client);
         break;
       case State.Stopped:
-        knownProjects = [];
+        knownProjects.delete(projectRoot);
         updateStatusBar('stopped');
         break;
     }
@@ -220,7 +229,7 @@ function wireClient(client: LanguageClient) {
   client.onNotification(
     'baml/listProjects',
     (params: { projects: string[] }) => {
-      knownProjects = params.projects ?? [];
+      knownProjects.set(projectRoot, params.projects ?? []);
       refreshTooltip();
     },
   );
@@ -310,7 +319,9 @@ export async function activate(context: vscode.ExtensionContext) {
   // NativePlaygroundSender can decide how to open it (and attach the port).
   context.subscriptions.push(
     vscode.commands.registerCommand('baml.openPlayground', async (projectPath?: string) => {
-      const client = projectPath ? clients.get(projectPath) : activeClient();
+      const client = projectPath
+        ? clients.get(projectKeyForPath(projectPath)) ?? activeClient()
+        : activeClient();
       if (!client || client.state !== State.Running) {
         vscode.window.showWarningMessage('BAML Language Server is not running.');
         return;

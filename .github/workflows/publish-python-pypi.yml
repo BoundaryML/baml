@@ -32,7 +32,6 @@ concurrency:
 
 permissions:
   contents: read
-  id-token: write
 
 jobs:
   # Version comes from the stamped checkout prepared by the release graph.

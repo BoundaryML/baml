@@ -48,7 +48,10 @@ def fail(message: str) -> None:
 
 def read_version() -> Version:
     text = WRAPPER_CARGO_TOML.read_text(encoding="utf-8")
-    match = re.search(r'^version = "([^"]+)"$', text, flags=re.MULTILINE)
+    section = re.search(r"(?ms)^\[package\]\s*(.*?)(?:^\[|\Z)", text)
+    if not section:
+        fail("baml wrapper Cargo.toml must contain a [package] table")
+    match = re.search(r'^version = "([^"]+)"$', section.group(1), flags=re.MULTILINE)
     if not match:
         fail("baml wrapper Cargo.toml must contain literal [package].version")
     try:

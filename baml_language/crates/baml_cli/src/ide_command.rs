@@ -27,7 +27,7 @@ pub(crate) enum IdeCommand {
 pub(crate) struct IdeInstallArgs {
     #[arg(long)]
     pub cursor: bool,
-    #[arg(long)]
+    #[arg(long, conflicts_with = "cursor")]
     pub code: bool,
 }
 
@@ -66,9 +66,6 @@ impl IdeInstallArgs {
     }
 
     fn resolve_editor(&self) -> Result<OsString> {
-        if self.cursor && self.code {
-            return Err(anyhow!("choose only one of --cursor or --code"));
-        }
         if self.cursor {
             return Ok(OsString::from("cursor"));
         }

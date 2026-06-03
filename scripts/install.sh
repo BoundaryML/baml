@@ -42,8 +42,11 @@ case "$system:$machine" in
   *) echo "error: unsupported platform $system $machine" >&2; exit 2 ;;
 esac
 
-tmp="${TMPDIR:-/tmp}/baml-install.$$"
-mkdir -p "$tmp"
+tmp="$(mktemp -d "${TMPDIR:-/tmp}/baml-install.XXXXXX")"
+if [ -z "$tmp" ] || [ ! -d "$tmp" ]; then
+  echo "error: failed to create temporary directory" >&2
+  exit 3
+fi
 cleanup() { rm -rf "$tmp"; }
 trap cleanup EXIT INT TERM
 
@@ -75,11 +78,13 @@ if [ "$actual" != "$sha256" ]; then
   exit 4
 fi
 
+raw_entries="$tmp/entries.raw.txt"
 entries="$tmp/entries.txt"
 case "$archive" in
-  *.zip) unzip -Z1 "$archive" > "$entries" ;;
-  *) tar -tzf "$archive" > "$entries" ;;
+  *.zip) unzip -Z1 "$archive" > "$raw_entries" ;;
+  *) tar -tzf "$archive" > "$raw_entries" ;;
 esac
+sed 's#^\./##' "$raw_entries" > "$entries"
 
 if grep -Eq '(^/|(^|/)\.\.(/|$)|baml-cli|baml-pack-host|baml-vscode\.vsix)' "$entries"; then
   echo "error: wrapper archive layout is not safe" >&2

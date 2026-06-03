@@ -230,7 +230,7 @@ PyPI cannot. Python uses PEP 440, so nightly releases are translated:
 | `0.11.1-nightly.20260522.a` | `0.11.1.dev2026052200` |
 | `0.11.1-nightly.20260522.b` | `0.11.1.dev2026052201` |
 
-Python users still see the canonical BAML version from `baml_core.__version__` and `baml_core.get_version()`. PyPI stores the PEP 440 form because it must. All other foresseable SDKs don't have any issues with this system.
+Python users still see the canonical BAML version from `baml_core.__version__` and `baml_core.get_version()`. PyPI stores the PEP 440 form because it must. All other foreseeable SDKs don't have any issues with this system.
 
 ### Deprecated Version Plumbing
 

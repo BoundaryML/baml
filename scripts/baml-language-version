@@ -349,7 +349,12 @@ def stamp(plan: ReleasePlan) -> None:
         text = re.sub(r'^__version__ = ".*"$', version_line.rstrip(), text, count=1, flags=re.MULTILINE)
     else:
         marker = "atexit.register(flush_events)\n"
-        text = text.replace(marker, marker + "\n" + version_line, 1)
+        if marker in text:
+            text = text.replace(marker, marker + "\n" + version_line, 1)
+        else:
+            text = text.rstrip() + "\n\n" + version_line
+    if '__version__ = "' not in text:
+        fail(f"failed to stamp __version__ in {PY_INIT.relative_to(ROOT)}")
     PY_INIT.write_text(text, encoding="utf-8")
 
 

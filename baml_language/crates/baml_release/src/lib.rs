@@ -54,6 +54,11 @@ impl Product {
 pub enum FetchError {
     #[error("network error fetching {url}: {source}")]
     Network { url: String, source: reqwest::Error },
+    #[error("HTTP {status} fetching {url}")]
+    HttpStatus {
+        url: String,
+        status: reqwest::StatusCode,
+    },
     #[error("manifest 404 for version {version} (not released yet?)")]
     ManifestNotFound { version: String },
     #[error("manifest schema {got} not supported (max {max}); run `baml self-update`")]
@@ -152,7 +157,6 @@ impl Fetcher {
     pub fn install_to_toolchain_root(&self, root: &Path) -> Result<PathBuf, FetchError> {
         fs::create_dir_all(root)?;
         let _lock = InstallLock::acquire(root.join(format!(".{}.lock", self.spec.version)))?;
-        let archive = self.fetch_archive()?;
         let install_dir = root.join(&self.spec.version);
         if fs::read_to_string(install_dir.join("VERSION"))
             .map(|version| version.trim() == self.spec.version)
@@ -161,6 +165,7 @@ impl Fetcher {
             return Ok(install_dir);
         }
 
+        let archive = self.fetch_archive()?;
         let tmp_dir = root.join(format!(".{}.tmp", self.spec.version));
         if tmp_dir.exists() {
             fs::remove_dir_all(&tmp_dir)?;
@@ -380,6 +385,12 @@ fn download_bytes(url: &str) -> Result<Vec<u8>, FetchError> {
             Ok(response)
                 if response.status().is_server_error() || response.status().is_redirection() =>
             {
+                if response.status().is_redirection() {
+                    return Err(FetchError::HttpStatus {
+                        url: url.to_string(),
+                        status: response.status(),
+                    });
+                }
                 last_error = response.error_for_status().err();
             }
             Ok(response) => {
@@ -399,10 +410,17 @@ fn download_bytes(url: &str) -> Result<Vec<u8>, FetchError> {
             thread::sleep(Duration::from_secs(2));
         }
     }
-    Err(FetchError::Network {
-        url: url.to_string(),
-        source: last_error.expect("retry loop should capture a network error"),
-    })
+    if let Some(source) = last_error {
+        Err(FetchError::Network {
+            url: url.to_string(),
+            source,
+        })
+    } else {
+        Err(FetchError::HttpStatus {
+            url: url.to_string(),
+            status: reqwest::StatusCode::INTERNAL_SERVER_ERROR,
+        })
+    }
 }
 
 pub fn extract_binary_from_archive(

@@ -85,10 +85,10 @@ end
 '''
 
 
-def aur_srcinfo(pkgbuild: str, pkgname: str, version: str, arch_lines: list[str]) -> str:
+def aur_srcinfo(pkgname: str, pkgdesc: str, version: str, arch_lines: list[str]) -> str:
     lines = [
         f"pkgbase = {pkgname}",
-        f"\tpkgdesc = BAML wrapper - toolchain manager and launcher",
+        f"\tpkgdesc = {pkgdesc}",
         f"\tpkgver = {version}",
         "\tpkgrel = 1",
         "\turl = https://github.com/BoundaryML/baml",
@@ -146,8 +146,8 @@ def main() -> None:
 
     (aur_dir / "baml-bin" / ".SRCINFO").write_text(
         aur_srcinfo(
-            aur_bin,
             "baml-bin",
+            "BAML wrapper - toolchain manager and launcher (prebuilt binary)",
             pkgver,
             [
                 f"\tsource_x86_64 = https://github.com/BoundaryML/baml/releases/download/baml-wrapper-{args.version}/baml-wrapper-{args.version}-x86_64-unknown-linux-gnu.tar.gz",
@@ -159,8 +159,8 @@ def main() -> None:
     )
     (aur_dir / "baml" / ".SRCINFO").write_text(
         aur_srcinfo(
-            aur_source,
             "baml",
+            "BAML wrapper - toolchain manager and launcher (built from source)",
             pkgver,
             [
                 "\tmakedepends = rust",
