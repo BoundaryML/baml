@@ -488,3 +488,32 @@ function uses() -> int {
     }
     "#);
 }
+
+/// Explicit type args applied to a parenthesized generic lambda
+/// (`(<T>(x: T) -> T { x })<int>`). The base of the `GenericApply` is an inline
+/// anonymous generic function, not a path. It is specialized to `(int) -> int`,
+/// so calling it with a `string` is a type error.
+#[test]
+fn paren_generic_lambda_instantiation() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+function caller() -> int {
+    let f = (<T>(x: T) -> T { x })<int>;
+    f("string")
+}
+"#,
+    );
+    insta::assert_snapshot!(render_tir(&db, file), @r#"
+    function user.caller() -> int throws never {
+      { : int
+        let f = <T>(x: T) -> T { ... }<...> : (x: int) -> int throws never
+        f("string") : int
+      }
+      !! 75..83: type mismatch: expected int, got "string"
+    }
+    lambda user.caller {
+    }
+    "#);
+}

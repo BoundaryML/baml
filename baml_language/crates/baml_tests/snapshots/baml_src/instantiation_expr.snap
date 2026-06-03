@@ -92,12 +92,39 @@ function instantiation_expr.$init_test_ns_instantiation_expr_instantiation_expr(
     load_const null
     call testing.TestCollector.register_test
     pop 1
+    load_var registry
+    load_const "paren_generic_lambda_value_runs"
+    make_closure .<lambda($init_test_ns_instantiation_expr_instantiation_expr, 15)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "paren_generic_lambda_direct_runs"
+    make_closure .<lambda($init_test_ns_instantiation_expr_instantiation_expr, 16)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "bound_generic_lambda_runs"
+    make_closure .<lambda($init_test_ns_instantiation_expr_instantiation_expr, 17)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
     load_const null
     return
 }
 
 function instantiation_expr.GenBox.pick(self: instantiation_expr.GenBox, x: void) -> void {
     load_var x
+    return
+}
+
+function instantiation_expr.bound_generic_lambda() -> int {
+    load_const 9
+    load_type int
+    make_closure .<lambda(bound_generic_lambda, 0)>, 0
+    make_generic_function_from_value ntypeargs=1
+    call_indirect
     return
 }
 
@@ -218,6 +245,23 @@ function instantiation_expr.pair_value_fn() -> string {
     load_const 1
     load_const "hello"
     load_const user.instantiation_expr.pair<...>
+    call_indirect
+    return
+}
+
+function instantiation_expr.paren_generic_lambda_direct() -> int {
+    load_type int
+    load_const 7
+    make_closure .<lambda(paren_generic_lambda_direct, 0)>, 0
+    call_indirect
+    return
+}
+
+function instantiation_expr.paren_generic_lambda_value() -> int {
+    load_const 5
+    load_type int
+    make_closure .<lambda(paren_generic_lambda_value, 0)>, 0
+    make_generic_function_from_value ntypeargs=1
     call_indirect
     return
 }

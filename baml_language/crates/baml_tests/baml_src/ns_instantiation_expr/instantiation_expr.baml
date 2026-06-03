@@ -204,3 +204,36 @@ function bound_method_value() -> int {
 test "bound_method_value_runs" {
     assert.is_true(baml.deep_equals(bound_method_value(), 7))
 }
+
+// Explicit type args applied to a parenthesized GENERIC LAMBDA — the base of the
+// `<int>` is not a function reference but an inline anonymous generic function.
+// The lambda is a closure at runtime; specializing it goes through the runtime
+// value path (MakeGenericFunctionFromValue).
+function paren_generic_lambda_value() -> int {
+    let f = (<T>(x: T) -> T { x })<int>;
+    f(5)
+}
+
+test "paren_generic_lambda_value_runs" {
+    assert.is_true(baml.deep_equals(paren_generic_lambda_value(), 5))
+}
+
+// Same generic lambda, called directly with the type args (no intermediate let).
+function paren_generic_lambda_direct() -> int {
+    (<T>(x: T) -> T { x })<int>(7)
+}
+
+test "paren_generic_lambda_direct_runs" {
+    assert.is_true(baml.deep_equals(paren_generic_lambda_direct(), 7))
+}
+
+// A generic lambda bound to a local, then instantiated as a value.
+function bound_generic_lambda() -> int {
+    let g = <T>(x: T) -> T { x };
+    let h = g<int>;
+    h(9)
+}
+
+test "bound_generic_lambda_runs" {
+    assert.is_true(baml.deep_equals(bound_generic_lambda(), 9))
+}
