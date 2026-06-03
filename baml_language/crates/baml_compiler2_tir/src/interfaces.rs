@@ -1009,9 +1009,16 @@ fn bind_type_var(
 fn contains_bound_typevar(ty: &Ty, generic_params: &[Name]) -> bool {
     match ty {
         Ty::TypeVar(name, _) => generic_params.contains(name),
-        Ty::Class(_, args, _) | Ty::Interface(_, args, _, _) | Ty::Union(args, _) => args
+        Ty::Class(_, args, _) | Ty::Union(args, _) => args
             .iter()
             .any(|arg| contains_bound_typevar(arg, generic_params)),
+        Ty::Interface(_, args, associated_bindings, _) => {
+            args.iter()
+                .any(|arg| contains_bound_typevar(arg, generic_params))
+                || associated_bindings
+                    .iter()
+                    .any(|(_, ty)| contains_bound_typevar(ty, generic_params))
+        }
         Ty::List(inner, _) | Ty::EvolvingList(inner, _) | Ty::Optional(inner, _) => {
             contains_bound_typevar(inner, generic_params)
         }
@@ -1725,6 +1732,22 @@ mod tests {
         )
         .expect("nested list arg should bind T");
         assert_eq!(bindings.get(&Name::new("T")), Some(&int()));
+    }
+
+    #[test]
+    fn contains_bound_typevar_checks_interface_associated_bindings() {
+        let ty = Ty::Interface(
+            qtn(&[], "Source"),
+            vec![],
+            vec![(
+                Name::new("Item"),
+                Ty::List(Box::new(type_var("T")), TyAttr::default()),
+            )],
+            TyAttr::default(),
+        );
+
+        assert!(contains_bound_typevar(&ty, &[Name::new("T")]));
+        assert!(!contains_bound_typevar(&ty, &[Name::new("U")]));
     }
 
     #[test]
