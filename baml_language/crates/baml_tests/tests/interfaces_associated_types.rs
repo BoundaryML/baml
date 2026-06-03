@@ -2939,3 +2939,83 @@ async fn runtime_destructure_filters_by_associated_type_binding() {
     );
     assert_eq!(output.result.unwrap(), BexExternalValue::Int(9));
 }
+
+#[tokio::test]
+async fn reflection_implements_respects_associated_type_bindings() {
+    let output = baml_test!(
+        r#"
+        interface Source {
+            type Item
+        }
+
+        class IntSource {
+            implements Source {
+                type Item = int
+            }
+        }
+
+        class StringSource {
+            implements Source {
+                type Item = string
+            }
+        }
+
+        function main() -> int {
+            let score = 0
+            if reflect.type_of<IntSource>().implements(reflect.type_of<Source<Item = int>>()) {
+                score = score + 1
+            }
+            if reflect.type_of<IntSource>().implements(reflect.type_of<Source<Item = string>>()) {
+                score = score + 10
+            }
+            if reflect.type_of<StringSource>().implements(reflect.type_of<Source<Item = string>>()) {
+                score = score + 100
+            }
+            if reflect.type_of<StringSource>().implements(reflect.type_of<Source<Item = int>>()) {
+                score = score + 1000
+            }
+            return score
+        }
+        "#
+    );
+    assert_eq!(output.result.unwrap(), BexExternalValue::Int(101));
+}
+
+#[tokio::test]
+async fn reflection_implementors_respects_associated_type_bindings() {
+    let output = baml_test!(
+        r#"
+        interface Source {
+            type Item
+        }
+
+        class IntSource {
+            implements Source {
+                type Item = int
+            }
+        }
+
+        class StringSource {
+            implements Source {
+                type Item = string
+            }
+        }
+
+        function main() -> int {
+            let int_impls = reflect.type_of<Source<Item = int>>().implementors()
+            let string_impls = reflect.type_of<Source<Item = string>>().implementors()
+            let score = 0
+            score = score + int_impls.length()
+            if int_impls.length() > 0 && int_impls[0] == reflect.type_of<IntSource>() {
+                score = score + 10
+            }
+            score = score + (string_impls.length() * 100)
+            if string_impls.length() > 0 && string_impls[0] == reflect.type_of<StringSource>() {
+                score = score + 1000
+            }
+            return score
+        }
+        "#
+    );
+    assert_eq!(output.result.unwrap(), BexExternalValue::Int(1111));
+}

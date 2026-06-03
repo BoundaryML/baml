@@ -344,20 +344,21 @@ pub fn convert_tir2_ty(ty: &Tir2Ty, resolved: &ResolvedAliases) -> Ty {
                 .collect();
             Ty::Class(qtn_to_type_name(qtn), resolved_args, attr.clone())
         }
-        // Interfaces (BEP-044) lower to `Class` at the MIR/runtime layer.
-        //
-        // Rationale: runtime values typed as an interface are always concrete
-        // class instances. The interface-vs-class distinction is purely a
-        // compile-time concept used for nominal subtyping and method
-        // dispatch. Preserving the interface name lets the runtime treat the
-        // interface as an opaque nominal type if we ever need to reflect on
-        // values held at an interface type.
-        Tir2Ty::Interface(qtn, type_args, _, attr) => {
+        Tir2Ty::Interface(qtn, type_args, associated_bindings, attr) => {
             let resolved_args: Vec<Ty> = type_args
                 .iter()
                 .map(|a| convert_tir2_ty(a, resolved))
                 .collect();
-            Ty::Class(qtn_to_type_name(qtn), resolved_args, attr.clone())
+            let resolved_bindings = associated_bindings
+                .iter()
+                .map(|(name, ty)| (name.clone(), convert_tir2_ty(ty, resolved)))
+                .collect();
+            Ty::Interface(
+                qtn_to_type_name(qtn),
+                resolved_args,
+                resolved_bindings,
+                attr.clone(),
+            )
         }
         Tir2Ty::Enum(qtn, attr) => Ty::Enum(qtn_to_type_name(qtn), attr.clone()),
         Tir2Ty::TypeAlias(qtn, attr) => {
@@ -600,30 +601,38 @@ pub fn tir2_to_template(
                 ))
             }
         }
-        // Interfaces lower to `Class` at the MIR/runtime layer (see
-        // `convert_tir2_ty`). Mirror the `Class` arm exactly so a generic
-        // interface instantiation like `Box<U>` keeps a `TypeArgRef` for the
-        // per-frame `TyTemplate::substitute(type_args)` to fill in. Without
-        // this arm the value fell through to `other` and `convert_tir2_ty`
-        // voided the type var, baking `Box<void>` (BEP-044 wf3 #6/#7).
-        Tir2Ty::Interface(qtn, type_args, _, attr) => {
+        Tir2Ty::Interface(qtn, type_args, associated_bindings, attr) => {
             if type_args
                 .iter()
                 .any(baml_compiler2_tir::generics::contains_typevar)
+                || associated_bindings
+                    .iter()
+                    .any(|(_, ty)| baml_compiler2_tir::generics::contains_typevar(ty))
             {
                 let template_args: Vec<TyTemplate> = type_args
                     .iter()
                     .map(|a| tir2_to_template(a, resolved, generic_params))
                     .collect();
-                TyTemplate::Class(qtn_to_type_name(qtn), template_args)
+                let template_bindings = associated_bindings
+                    .iter()
+                    .map(|(name, ty)| {
+                        (name.clone(), tir2_to_template(ty, resolved, generic_params))
+                    })
+                    .collect();
+                TyTemplate::Interface(qtn_to_type_name(qtn), template_args, template_bindings)
             } else {
                 let resolved_args: Vec<Ty> = type_args
                     .iter()
                     .map(|a| convert_tir2_ty(a, resolved))
                     .collect();
-                TyTemplate::Concrete(Ty::Class(
+                let resolved_bindings = associated_bindings
+                    .iter()
+                    .map(|(name, ty)| (name.clone(), convert_tir2_ty(ty, resolved)))
+                    .collect();
+                TyTemplate::Concrete(Ty::Interface(
                     qtn_to_type_name(qtn),
                     resolved_args,
+                    resolved_bindings,
                     attr.clone(),
                 ))
             }
@@ -6257,6 +6266,9 @@ impl<'db> LoweringContext<'db> {
             Ty::Class(tn, _, _) if self.interface_implementors.contains_key(tn) => {
                 Some((tn.clone(), Vec::new(), Vec::new()))
             }
+            Ty::Interface(tn, _, _, _) if self.interface_implementors.contains_key(tn) => {
+                Some((tn.clone(), Vec::new(), Vec::new()))
+            }
             _ => None,
         }
     }
@@ -6274,9 +6286,20 @@ impl<'db> LoweringContext<'db> {
         {
             return Some(target);
         }
+        if prefix_idx == 0
+            && let Some(target) = self
+                .path_root_types
+                .get(&self.expr_metadata_key(expr_id))
+                .and_then(|ty| self.interface_dispatch_target_for_tir_ty(ty))
+        {
+            return Some(target);
+        }
 
         match current_ty {
             Ty::Class(tn, _, _) if self.interface_implementors.contains_key(tn) => {
+                Some((tn.clone(), Vec::new(), Vec::new()))
+            }
+            Ty::Interface(tn, _, _, _) if self.interface_implementors.contains_key(tn) => {
                 Some((tn.clone(), Vec::new(), Vec::new()))
             }
             _ => None,
@@ -9746,14 +9769,11 @@ impl LoweringContext<'_> {
         success: BlockId,
         failure: BlockId,
     ) {
-        // BEP-044: testing a value against an *interface* type means "is its
-        // runtime class an implementor". Interfaces lower to `Ty::Class`, so an
-        // interface name shows up here as a class whose `TypeName` is a key in
-        // the implementor table. Expand it to a disjunction over the concrete
-        // implementors and reuse the class-identity `IsType` path below — this
-        // is what lets `catch (e) { let err: IError => ... }` match a thrown
-        // class that implements `IError`.
-        if let Ty::Class(tn, _, _) = &ty
+        // BEP-044/BEP-057: testing a value against an *interface* type means
+        // "is its runtime class an implementor". Interface types used to lower
+        // to `Ty::Class`; they now lower to `Ty::Interface` so reflection can
+        // retain associated bindings. Accept both runtime shapes here.
+        if let Ty::Class(tn, _, _) | Ty::Interface(tn, _, _, _) = &ty
             && let Some(impls) = self.interface_implementors.get(tn).cloned()
         {
             if impls.is_empty() {
@@ -10151,10 +10171,9 @@ impl LoweringContext<'_> {
         field_pat_id: AstPatId,
         field: &Name,
     ) -> Option<Local> {
-        // BEP-044: an interface head (`Animal { name } => …`) has no positional
-        // field layout — the MIR `Ty` has no interface variant, so it would
-        // otherwise masquerade as a `Ty::Class`. Branch on the raw TIR type and
-        // project the field through the interface field-view dispatch instead.
+        // BEP-044: an interface head (`Animal { name } => ...`) has no
+        // positional field layout. Branch on the raw TIR type so interface
+        // patterns project through field-view dispatch instead of class slots.
         if matches!(
             self.pat_types.get(&self.pat_metadata_key(class_pat_id)),
             Some(Tir2Ty::Interface(..))

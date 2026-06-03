@@ -956,47 +956,68 @@ pub fn generate_project_bytecode_with_opt(
     {
         use std::collections::HashSet;
 
+        use bex_vm_types::types::{InterfaceAssociatedBindings, InterfaceImplementors};
+
         // Per interface name: the classes that implement it, each paired with
-        // the *interface type args* that instantiation used (BEP-044). Reflection
-        // (`implements` / `implementors`) compares these so `Box<int>` and
-        // `Box<string>` are distinguished. Empty args = non-generic interface
-        // (or a blanket impl whose args can't be made concrete) → matches any.
-        let mut inverted: indexmap::IndexMap<
-            baml_type::TypeName,
-            Vec<(baml_type::TypeName, Vec<baml_type::Ty>)>,
-        > = indexmap::IndexMap::new();
+        // the interface type args and associated type bindings that instantiation
+        // used. Reflection (`implements` / `implementors`) compares these so
+        // `Box<int>` and `Box<string>`, as well as `Source<Item = int>` and
+        // `Source<Item = string>`, are distinguished. Empty args/bindings match
+        // any instantiation for that dimension.
+        let mut inverted: InterfaceImplementors = indexmap::IndexMap::new();
         // Dedup key: (interface qualified name, class/primitive dedup key,
-        // interface type args). The args are keyed *structurally* (`Vec<Ty>`,
-        // which derives `Eq`/`Hash`) rather than by `format!("{:?}")` — `Debug`
-        // is not contractually unique across distinct types, so two distinct
-        // `Ty` values with a colliding `Debug` string would have silently dropped
-        // a legitimate implementor entry.
-        let mut seen_pairs: HashSet<(String, String, Vec<baml_type::Ty>)> = HashSet::new();
+        // interface type args, associated bindings). The args/bindings are keyed
+        // structurally rather than by `format!("{:?}")` — `Debug` is not
+        // contractually unique across distinct types.
+        let mut seen_pairs: HashSet<(
+            String,
+            String,
+            Vec<baml_type::Ty>,
+            InterfaceAssociatedBindings,
+        )> = HashSet::new();
         for (pkg_name, cache) in &alias_caches {
             let pkg_id = PackageId::new(db, pkg_name.clone());
             let registry = baml_compiler2_tir::interfaces::package_implements_registry(db, pkg_id);
-            let mut add_impl = |iface_qtn: &baml_compiler2_tir::ty::QualifiedTypeName,
-                                class_name: baml_type::TypeName,
-                                dedup_key: String,
-                                iface_args: Vec<baml_type::Ty>| {
-                let iface_name = baml_compiler2_mir::qtn_to_type_name(iface_qtn);
-                if seen_pairs.insert((iface_qtn.to_string(), dedup_key, iface_args.clone())) {
-                    inverted
-                        .entry(iface_name)
-                        .or_default()
-                        .push((class_name, iface_args));
-                }
-            };
+            let mut add_impl =
+                |iface_qtn: &baml_compiler2_tir::ty::QualifiedTypeName,
+                 class_name: baml_type::TypeName,
+                 dedup_key: String,
+                 iface_args: Vec<baml_type::Ty>,
+                 iface_assoc: Vec<(Name, baml_type::Ty)>| {
+                    let iface_name = baml_compiler2_mir::qtn_to_type_name(iface_qtn);
+                    if seen_pairs.insert((
+                        iface_qtn.to_string(),
+                        dedup_key,
+                        iface_args.clone(),
+                        iface_assoc.clone(),
+                    )) {
+                        inverted.entry(iface_name).or_default().push((
+                            class_name,
+                            iface_args,
+                            iface_assoc,
+                        ));
+                    }
+                };
 
             for rule in &registry.interface_impl_rules {
-                let baml_compiler2_tir::ty::Ty::Interface(iface_qtn, iface_type_args, _, _) =
-                    &rule.interface_ty
+                let baml_compiler2_tir::ty::Ty::Interface(
+                    iface_qtn,
+                    iface_type_args,
+                    iface_associated_bindings,
+                    _,
+                ) = &rule.interface_ty
                 else {
                     continue;
                 };
                 let converted_iface_args: Vec<baml_type::Ty> = iface_type_args
                     .iter()
                     .map(|a| baml_compiler2_mir::convert_tir2_ty(a, cache))
+                    .collect();
+                let converted_iface_assoc: Vec<(Name, baml_type::Ty)> = iface_associated_bindings
+                    .iter()
+                    .map(|(name, ty)| {
+                        (name.clone(), baml_compiler2_mir::convert_tir2_ty(ty, cache))
+                    })
                     .collect();
                 match &rule.for_ty_pattern {
                     baml_compiler2_tir::ty::Ty::Class(class_qtn, _, _) => {
@@ -1005,11 +1026,20 @@ pub fn generate_project_bytecode_with_opt(
                         } else {
                             converted_iface_args.clone()
                         };
+                        let iface_assoc = if iface_associated_bindings
+                            .iter()
+                            .any(|(_, ty)| contains_tir_type_var(ty))
+                        {
+                            Vec::new()
+                        } else {
+                            converted_iface_assoc.clone()
+                        };
                         add_impl(
                             iface_qtn,
                             baml_compiler2_mir::qtn_to_type_name(class_qtn),
                             class_qtn.to_string(),
                             iface_args,
+                            iface_assoc,
                         );
                     }
                     // BEP-044 wf3 #G19: an out-of-body `implements I for <primitive>`
@@ -1037,6 +1067,7 @@ pub fn generate_project_bytecode_with_opt(
                                 tn,
                                 format!("prim:{prim_name}"),
                                 converted_iface_args,
+                                converted_iface_assoc.clone(),
                             );
                         }
                     }
@@ -1073,6 +1104,7 @@ pub fn generate_project_bytecode_with_opt(
                                     baml_compiler2_mir::qtn_to_type_name(class_qtn),
                                     class_qtn.to_string(),
                                     Vec::new(),
+                                    Vec::new(),
                                 );
                             }
                         }
@@ -1094,7 +1126,7 @@ pub fn generate_project_bytecode_with_opt(
             )
         };
         for impls in inverted.values_mut() {
-            impls.sort_by(|(a, _), (b, _)| impl_sort_key(a).cmp(&impl_sort_key(b)));
+            impls.sort_by(|(a, _, _), (b, _, _)| impl_sort_key(a).cmp(&impl_sort_key(b)));
         }
         program.interface_implementors = inverted;
     }
