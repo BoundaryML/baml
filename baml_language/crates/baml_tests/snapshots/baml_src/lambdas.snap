@@ -221,8 +221,7 @@ function lambdas.lambdas_captures_loop_variable_accumulation() -> int {
     store_var __for_idx
 
   L0:
-    load_var __for_idx
-    load_var _4
+    load_var2 3 2
     container_len
     cmp_int_op <
     pop_jump_if_false L1
@@ -233,8 +232,7 @@ function lambdas.lambdas_captures_loop_variable_accumulation() -> int {
     return
 
   L2:
-    load_var _4
-    load_var __for_idx
+    load_var2 2 3
     load_array_element
     load_var sum
     make_closure .<lambda(lambdas_captures_loop_variable_accumulation, 0)>, 1
@@ -258,8 +256,7 @@ function lambdas.lambdas_captures_multiple_variables() -> int {
     store_deref ?1
     load_const 5
     store_deref ?2
-    load_var a
-    load_var b
+    load_var2 1 2
     make_closure .<lambda(lambdas_captures_multiple_variables, 0)>, 2
     call_indirect
     return
@@ -414,8 +411,7 @@ function lambdas.lambdas_issue_a_interleaved_capture_reads_writes() -> int {
     load_var get_x
     call_indirect
     store_var c
-    load_var a
-    load_var b
+    load_var2 4 5
     add_int
     load_var c
     add_int
