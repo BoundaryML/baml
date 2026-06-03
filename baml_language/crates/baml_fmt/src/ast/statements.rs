@@ -4,8 +4,8 @@ use rowan::TextRange;
 use super::tokens as t;
 use crate::{
     ast::{
-        BlockExpr, Expression, FromCST, HeaderComment, KnownKind, ParenExpr, StrongAstError,
-        SyntaxNodeIter, TestExprDecl, TestSetDecl, Token,
+        BlockExpr, Expression, FromCST, HeaderComment, KnownKind, MatchPattern, ParenExpr,
+        StrongAstError, SyntaxNodeIter, TestExprDecl, TestSetDecl, Token,
     },
     printer::{PrintInfo, PrintMultiLine, Printable, Printer, Shape},
     trivia_classifier::TriviaSliceExt,
@@ -27,6 +27,7 @@ pub enum Statement {
     Expr(ExpressionStmt),
     Let(LetStmt),
     While(WhileStmt),
+    WhileLet(WhileLetStmt),
     Return(ReturnStmt),
     Break(BreakStmt),
     Continue(ContinueStmt),
@@ -49,6 +50,7 @@ impl FromCST for Statement {
             }
             SyntaxKind::RETURN_STMT => ReturnStmt::from_cst(elem).map(Statement::Return),
             SyntaxKind::WHILE_STMT => WhileStmt::from_cst(elem).map(Statement::While),
+            SyntaxKind::WHILE_LET_STMT => WhileLetStmt::from_cst(elem).map(Statement::WhileLet),
             SyntaxKind::FOR_EXPR => ForStmt::from_cst(elem).map(Statement::For),
             SyntaxKind::BREAK_STMT => BreakStmt::from_cst(elem).map(Statement::Break),
             SyntaxKind::CONTINUE_STMT => ContinueStmt::from_cst(elem).map(Statement::Continue),
@@ -69,6 +71,7 @@ impl Printable for Statement {
             Statement::Expr(expression_stmt) => expression_stmt.print(shape, printer),
             Statement::Let(let_stmt) => let_stmt.print(shape, printer),
             Statement::While(while_stmt) => while_stmt.print(shape, printer),
+            Statement::WhileLet(while_let_stmt) => while_let_stmt.print(shape, printer),
             Statement::Return(return_stmt) => return_stmt.print(shape, printer),
             Statement::Break(break_stmt) => break_stmt.print(shape, printer),
             Statement::Continue(continue_stmt) => continue_stmt.print(shape, printer),
@@ -94,6 +97,7 @@ impl Printable for Statement {
             Statement::Expr(expr) => expr.leftmost_token(),
             Statement::Let(let_stmt) => let_stmt.leftmost_token(),
             Statement::While(while_stmt) => while_stmt.leftmost_token(),
+            Statement::WhileLet(while_let_stmt) => while_let_stmt.leftmost_token(),
             Statement::Return(return_stmt) => return_stmt.leftmost_token(),
             Statement::Break(break_stmt) => break_stmt.leftmost_token(),
             Statement::Continue(continue_stmt) => continue_stmt.leftmost_token(),
@@ -110,6 +114,7 @@ impl Printable for Statement {
             Statement::Expr(expr) => expr.rightmost_token(),
             Statement::Let(let_stmt) => let_stmt.rightmost_token(),
             Statement::While(while_stmt) => while_stmt.rightmost_token(),
+            Statement::WhileLet(while_let_stmt) => while_let_stmt.rightmost_token(),
             Statement::Return(return_stmt) => return_stmt.rightmost_token(),
             Statement::Break(break_stmt) => break_stmt.rightmost_token(),
             Statement::Continue(continue_stmt) => continue_stmt.rightmost_token(),
@@ -395,6 +400,110 @@ impl Printable for WhileStmt {
         };
         printer.print(&self.condition, condition_shape);
 
+        printer.print_str(" ");
+
+        let body_shape = Shape {
+            width: shape.width,
+            indent: shape.indent,
+            first_line_offset: 0, // irrelevant since body new-lines immediately after `{`
+        };
+        printer.print(&self.body, body_shape);
+        PrintInfo::default_multi_lined()
+    }
+    fn leftmost_token(&self) -> TextRange {
+        self.keyword.span()
+    }
+    fn rightmost_token(&self) -> TextRange {
+        self.body.rightmost_token()
+    }
+}
+
+/// Corresponds to a [`SyntaxKind::WHILE_LET_STMT`] node.
+///
+/// `while let PATTERN = SCRUTINEE { BODY }`. Combines `WhileStmt`'s statement
+/// framing with `if let`'s `pattern = scrutinee` head, but — like `if let` and
+/// unlike plain `while` — emits no parens around the scrutinee, and has no
+/// `else` clause (loops produce unit).
+#[derive(Debug)]
+pub struct WhileLetStmt {
+    pub keyword: t::While,
+    /// Standalone leading `let`, present only for top-level array-pattern heads
+    /// (`while let [x] = xs`), where the parser keeps `let` at the statement
+    /// level instead of inside the pattern. For binding / class / type heads the
+    /// `let` lives inside `pattern` and this is `None`. Mirrors
+    /// `LetStmt::let_keyword`.
+    pub let_keyword: Option<t::Let>,
+    pub pattern: MatchPattern,
+    pub equals: t::Equals,
+    pub scrutinee: Box<Expression>,
+    pub body: BlockExpr,
+}
+
+impl FromCST for WhileLetStmt {
+    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
+        let node = StrongAstError::assert_is_node(elem)?;
+        StrongAstError::assert_kind_node(&node, SyntaxKind::WHILE_LET_STMT)?;
+
+        let mut it = SyntaxNodeIter::new(&node);
+
+        // KW_WHILE
+        let keyword = it.expect_parse()?;
+
+        // Optional standalone KW_LET for top-level array-pattern heads
+        // (`while let [x] = xs`); for other heads `let` is inside the pattern.
+        let let_keyword = it
+            .next_if_kind(SyntaxKind::KW_LET)
+            .map(t::Let::from_cst)
+            .transpose()?;
+
+        // PATTERN (carries its own leading `let` unless consumed above)
+        let pattern = it.expect_parse()?;
+
+        // `=` separator between pattern and scrutinee
+        let equals = it.expect_parse()?;
+
+        // Scrutinee: any expression
+        let scrutinee_elem = it.expect_next("while-let scrutinee expression")?;
+        let scrutinee = Box::new(Expression::from_cst(scrutinee_elem)?);
+
+        // BLOCK_EXPR body (no else clause)
+        let body: BlockExpr = it.expect_parse()?;
+
+        it.expect_end()?;
+
+        Ok(WhileLetStmt {
+            keyword,
+            let_keyword,
+            pattern,
+            equals,
+            scrutinee,
+            body,
+        })
+    }
+}
+
+impl KnownKind for WhileLetStmt {
+    fn kind() -> SyntaxKind {
+        SyntaxKind::WHILE_LET_STMT
+    }
+}
+
+impl Printable for WhileLetStmt {
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        printer.print_raw_token(&self.keyword);
+        printer.print_str(" ");
+        // A standalone `let` is present only for array-pattern heads; for other
+        // heads the `let` lives inside the pattern. No parens around the pattern
+        // or scrutinee (mirrors `if let`, unlike plain `while`).
+        if let Some(let_keyword) = &self.let_keyword {
+            printer.print_raw_token(let_keyword);
+            printer.print_str(" ");
+        }
+        printer.print(&self.pattern, shape.clone());
+        printer.print_str(" ");
+        printer.print_raw_token(&self.equals);
+        printer.print_str(" ");
+        printer.print(&*self.scrutinee, shape.clone());
         printer.print_str(" ");
 
         let body_shape = Shape {
