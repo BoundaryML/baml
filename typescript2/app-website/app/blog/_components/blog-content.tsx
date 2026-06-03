@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import type { Post } from '../_lib/get-posts';
-import { BlogPosts } from './blog-posts';
+import { BlogList } from './blog-list';
 import { HeroSection } from './hero-section';
 
 interface BlogContentProps {
@@ -36,7 +36,7 @@ export function BlogContent({ initialPosts }: BlogContentProps) {
         onCategoryChange={setSelectedCategory}
         selectedCategory={selectedCategory}
       />
-      <BlogPosts posts={filteredPosts} />
+      <BlogList posts={filteredPosts} />
     </>
   );
 }
