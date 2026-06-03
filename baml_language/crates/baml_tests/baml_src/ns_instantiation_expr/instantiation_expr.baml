@@ -169,3 +169,38 @@ function describe_via_local_value_param<T>() -> string {
 test "local_value_param_dependent_reflects_T" {
     assert.is_true(baml.deep_equals(describe_via_local_value_param<int>(), "int"))
 }
+
+// A type-reifying NATIVE specialized through a bare runtime value. `g` holds the
+// native; `g<User>` wraps it in a closure carrying T=User; the call routes
+// through the native-callee branch, which now seeds the native from the
+// closure's captured type args (not only the pooled GenericFunction's), so the
+// JSON decode resolves T=User. (Previously: "missing type argument".)
+function from_string_via_local_value() -> User {
+    let g = baml.json.from_string;
+    let h = g<User>;
+    h("{\"name\":\"Ada\"}")
+}
+
+test "native_through_local_value_seeds_T" {
+    assert.is_true(baml.deep_equals(from_string_via_local_value(), User { name: "Ada" }))
+}
+
+// A generic instance METHOD referenced as a bound value with explicit type args.
+// `p.pick<int>` builds a BoundMethod (carrying the receiver `p`) and specializes
+// it; the value cannot be closure-wrapped without losing the receiver, so it is
+// passed through with the receiver intact (type args erased — correct for a body
+// that does not reify T). (Previously: a runtime crash.)
+class GenBox {
+    v int
+    function pick<T>(self, x: T) -> T { x }
+}
+
+function bound_method_value() -> int {
+    let p = GenBox { v: 1 };
+    let f = p.pick<int>;
+    f(7)
+}
+
+test "bound_method_value_runs" {
+    assert.is_true(baml.deep_equals(bound_method_value(), 7))
+}

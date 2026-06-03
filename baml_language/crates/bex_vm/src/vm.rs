@@ -2821,15 +2821,24 @@ impl BexVm {
                 // SmallVec avoids heap allocation for calls with ≤4 args (the common case).
                 let args: SmallVec<[Value; 4]> = self.stack.drain(locals_offset..).collect();
 
-                // For a GenericFunction-valued native callee
-                // (`let f = baml.json.from_string<User>; f(s)`), seed the native's
-                // type args so it reads them via `current_call_type_args()` — the
-                // direct-call path sets these from LoadType operands, but an
-                // indirect call through the value carries them on `gf_type_args`.
-                let restore_pending = if !gf_type_args.is_empty() {
+                // For a generic-instantiation-valued native callee, seed the
+                // native's type args so it reads them via
+                // `current_call_type_args()` — the direct-call path sets these
+                // from LoadType operands, but an indirect call through the value
+                // carries them on the wrapper. A pooled `GenericFunction`
+                // (`let f = baml.json.from_string<User>`) carries them on
+                // `gf_type_args`; a closure-wrapped value
+                // (`let g = baml.json.from_string; let f = g<User>`) carries them
+                // on the closure's `captured_type_args`. Use whichever is set.
+                let native_type_args: &[baml_type::Ty] = if !gf_type_args.is_empty() {
+                    &gf_type_args
+                } else {
+                    &closure_type_args
+                };
+                let restore_pending = if !native_type_args.is_empty() {
                     Some(std::mem::replace(
                         &mut self.pending_call_type_args,
-                        gf_type_args.to_vec(),
+                        native_type_args.to_vec(),
                     ))
                 } else {
                     None
@@ -5085,43 +5094,43 @@ impl BexVm {
                     // captures, if it is already a closure).
                     let callable_ptr =
                         self.as_object_ptr(callable, FunctionType::Callable.into())?;
-                    // If the callable is already a closure, carry over its
-                    // captures AND its existing `captured_type_args` (the
-                    // outer/class generic environment it was created with), then
-                    // append the new instantiation args in call order — otherwise
-                    // a later indirect call would seed an incomplete
-                    // `frame.type_args`.
-                    let (function_ptr, captures, mut captured_type_args): (
-                        HeapPtr,
-                        Vec<Value>,
-                        Vec<baml_type::Ty>,
-                    ) = match self.get_object(callable_ptr) {
-                        Object::Function(_) => (callable_ptr, Vec::new(), Vec::new()),
-                        Object::Closure(c) => (
-                            c.function,
-                            c.captures.to_vec(),
-                            c.captured_type_args.to_vec(),
-                        ),
-                        // GenericFunction / BoundMethod do not reach here: TIR
-                        // rejects type args on an already-specialized (non-
-                        // generic) value, static methods take the pooled
-                        // ItemRef path, and lambdas are not generic.
-                        other => {
-                            return Err(VmInternalError::TypeError {
-                                expected: FunctionType::Callable.into(),
-                                got: ObjectType::of(other).into(),
-                            }
-                            .into());
+                    // A plain function or closure is wrapped in a closure
+                    // carrying the type args (closures carry over their existing
+                    // `captured_type_args` — the outer/class generic environment
+                    // — then append the new instantiation args in call order, so
+                    // a later indirect call seeds a complete `frame.type_args`).
+                    //
+                    // A `BoundMethod` (`let f = p.method<int>`) cannot be wrapped
+                    // in a closure without losing its receiver, so it is passed
+                    // through unchanged: the explicit type args are dropped, but
+                    // the call still dispatches with the correct `self`. This is
+                    // correct for the common case of a method that does not reify
+                    // `T` at runtime, and — unlike closure-wrapping it — never
+                    // crashes. (`GenericFunction` does not reach here: TIR rejects
+                    // type args on an already-specialized value.)
+                    let wrap: Option<(HeapPtr, Vec<Value>, Vec<baml_type::Ty>)> =
+                        match self.get_object(callable_ptr) {
+                            Object::Function(_) => Some((callable_ptr, Vec::new(), Vec::new())),
+                            Object::Closure(c) => Some((
+                                c.function,
+                                c.captures.to_vec(),
+                                c.captured_type_args.to_vec(),
+                            )),
+                            _ => None,
+                        };
+                    match wrap {
+                        Some((function_ptr, captures, mut captured_type_args)) => {
+                            captured_type_args.extend(type_args);
+                            let closure = Object::Closure(Closure {
+                                function: function_ptr,
+                                captures: captures.into_boxed_slice(),
+                                captured_type_args: captured_type_args.into_boxed_slice(),
+                            });
+                            let ptr = self.tlab.alloc(closure);
+                            self.stack.push(Value::object(ptr));
                         }
-                    };
-                    captured_type_args.extend(type_args);
-                    let closure = Object::Closure(Closure {
-                        function: function_ptr,
-                        captures: captures.into_boxed_slice(),
-                        captured_type_args: captured_type_args.into_boxed_slice(),
-                    });
-                    let ptr = self.tlab.alloc(closure);
-                    self.stack.push(Value::object(ptr));
+                        None => self.stack.push(callable),
+                    }
                 }
 
                 // ── LoadDeref / StoreDeref ────────────────────────────────────

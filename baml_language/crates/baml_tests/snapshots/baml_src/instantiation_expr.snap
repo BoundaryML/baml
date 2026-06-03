@@ -80,7 +80,35 @@ function instantiation_expr.$init_test_ns_instantiation_expr_instantiation_expr(
     load_const null
     call testing.TestCollector.register_test
     pop 1
+    load_var registry
+    load_const "native_through_local_value_seeds_T"
+    make_closure .<lambda($init_test_ns_instantiation_expr_instantiation_expr, 13)>, 0
     load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "bound_method_value_runs"
+    make_closure .<lambda($init_test_ns_instantiation_expr_instantiation_expr, 14)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_const null
+    return
+}
+
+function instantiation_expr.GenBox.pick(self: instantiation_expr.GenBox, x: void) -> void {
+    load_var x
+    return
+}
+
+function instantiation_expr.bound_method_value() -> int {
+    load_const 7
+    load_type int
+    load_const 1
+    init_instance user.instantiation_expr.GenBox .v
+    make_bound_method user.instantiation_expr.GenBox.pick
+    make_generic_function_from_value ntypeargs=1
+    call_indirect
     return
 }
 
@@ -130,6 +158,15 @@ function instantiation_expr.forward_reflect() -> string {
 function instantiation_expr.from_string_value_fn() -> instantiation_expr.User {
     load_const "{\"name\":\"Ada\"}"
     load_const baml.json.from_string<...>
+    call_indirect
+    return
+}
+
+function instantiation_expr.from_string_via_local_value() -> instantiation_expr.User {
+    load_const "{\"name\":\"Ada\"}"
+    load_type instantiation_expr.User
+    load_global baml.json.from_string
+    make_generic_function_from_value ntypeargs=1
     call_indirect
     return
 }
