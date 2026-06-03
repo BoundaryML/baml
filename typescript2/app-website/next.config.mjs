@@ -147,13 +147,26 @@ const nextConfig = {
       });
     }
 
-    config.experiments = {
-      ...config.experiments,
-      asyncWebAssembly: true,
-      syncWebAssembly: true,
-      topLevelAwait: true,
-      layers: true,
-    };
+    // These experiments are for the WASM playground in the client/server
+    // bundles. Do NOT apply them to the Edge runtime — overriding Next's stock
+    // Edge experiments (notably `layers`) produces a middleware bundle that
+    // fails to initialize on Vercel Edge (MIDDLEWARE_INVOCATION_FAILED).
+    if (nextRuntime !== 'edge') {
+      config.experiments = {
+        ...config.experiments,
+        asyncWebAssembly: true,
+        syncWebAssembly: true,
+        topLevelAwait: true,
+        layers: true,
+      };
+    }
+
+    // `typescript` is bundled for the in-editor autocomplete (@valtown/codemirror-ts).
+    // Its lib does an optional `require('source-map-support')`, which isn't a
+    // dependency and uses Node APIs — stop webpack from trying to resolve it.
+    config.plugins.push(
+      new webpack.IgnorePlugin({ resourceRegExp: /^source-map-support$/ }),
+    );
 
     return config;
   },
