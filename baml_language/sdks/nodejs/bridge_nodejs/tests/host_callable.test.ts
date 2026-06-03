@@ -25,9 +25,9 @@
 // runner from exiting on its own. Vitest terminates once the tests
 // themselves have completed.
 
-import { BamlRuntime } from '../native.js';
-import { callFunction, callFunctionSync } from '../index.js';
-import { encodeCallArgs } from '../proto.js';
+import { BamlRuntime } from '../dist/native.js';
+import { callFunction, callFunctionSync } from '../dist/index.js';
+import { encodeCallArgs } from '../dist/proto.js';
 
 const CALLBACK_BAML = `
 function CallCb(callback: (int) -> string, x: int) -> string {

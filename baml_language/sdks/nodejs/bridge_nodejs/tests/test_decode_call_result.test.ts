@@ -5,9 +5,9 @@
 //   2. error/panic arms surface a BamlError/BamlPanic carrying the decoded
 //      value, BAML trace, and class FQN — not just a formatted string.
 
-import { baml_core } from '../proto/baml_cffi.js';
-import { decodeCallResult } from '../index.js';
-import { BamlError, BamlPanic } from '../index.js';
+import { baml_core } from '../dist/proto/baml_cffi.js';
+import { decodeCallResult } from '../dist/index.js';
+import { BamlError, BamlPanic } from '../dist/index.js';
 
 const { BamlOutboundResult, BamlOutboundValue } = baml_core.cffi.v1;
 

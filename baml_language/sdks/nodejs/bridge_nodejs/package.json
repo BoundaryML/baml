@@ -2,18 +2,15 @@
   "name": "@boundaryml/baml-core-node",
   "version": "0.0.0-beta",
   "type": "module",
-  "types": "./index.d.ts",
+  "types": "./dist/index.d.ts",
   "exports": {
     ".": {
-      "types": "./index.d.ts",
-      "import": "./index.js"
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
     }
   },
   "files": [
-    "*.js",
-    "*.d.ts",
-    "proto",
-    "*.node"
+    "dist"
   ],
   "napi": {
     "binaryName": "baml_node",
@@ -29,17 +26,20 @@
     ]
   },
   "scripts": {
+    "build:clean": "node typescript_src/clean-dist.js",
     "build:proto": "node node_modules/protobufjs-cli/bin/pbjs -t static-module -w es6 -p ../../../crates/bridge_ctypes/types -o typescript_src/proto/baml_cffi.js ../../../crates/bridge_ctypes/types/baml_core/cffi/v1/baml_inbound.proto ../../../crates/bridge_ctypes/types/baml_core/cffi/v1/baml_outbound.proto && node node_modules/protobufjs-cli/bin/pbts -o typescript_src/proto/baml_cffi.d.ts typescript_src/proto/baml_cffi.js",
-    "build:napi-debug": "napi build --js ./native.js --esm --dts ./native.d.ts --platform && node typescript_src/copy-native-dts.js",
-    "build:napi-release": "napi build --js ./native.js --esm --dts ./native.d.ts --platform --release && node typescript_src/copy-native-dts.js",
+    "build:napi-debug": "napi build --js ./dist/native.js --esm --dts ./dist/native.d.ts --platform && node typescript_src/copy-native-dts.js",
+    "build:napi-release": "napi build --js ./dist/native.js --esm --dts ./dist/native.d.ts --platform --release && node typescript_src/copy-native-dts.js",
     "build:ts_build": "tsc -p tsconfig.json",
     "build:tag-generated-files": "node typescript_src/tag-generated-files.js",
     "build:copy-proto": "node typescript_src/copy-proto.js",
-    "build:debug": "pnpm build:proto && pnpm build:napi-debug && pnpm build:ts_build && pnpm build:tag-generated-files && pnpm build:copy-proto",
-    "build:release": "pnpm build:proto && pnpm build:napi-release && pnpm build:ts_build && pnpm build:tag-generated-files && pnpm build:copy-proto",
+    "build:debug": "pnpm build:clean && pnpm build:proto && pnpm build:napi-debug && pnpm build:ts_build && pnpm build:copy-proto && pnpm build:tag-generated-files",
+    "build:release": "pnpm build:clean && pnpm build:proto && pnpm build:napi-release && pnpm build:ts_build && pnpm build:copy-proto && pnpm build:tag-generated-files",
+    "attw": "attw --pack",
     "test": "vitest run"
   },
   "devDependencies": {
+    "@arethetypeswrong/cli": "0.18.3",
     "@napi-rs/cli": "3.7.0",
     "@types/node": "^20.0.0",
     "protobufjs-cli": "^1.2.0",

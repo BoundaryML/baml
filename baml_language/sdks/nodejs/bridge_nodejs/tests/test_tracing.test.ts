@@ -1,6 +1,6 @@
 // test_tracing.test.ts — mirrors bridge_python/tests/test_tracing.py
 
-import { BamlRuntime, HostSpanManager, CtxManager } from '../index.js';
+import { BamlRuntime, HostSpanManager, CtxManager } from '../dist/index.js';
 
 const BAML_SRC = `
 function ReturnOne() -> int {

@@ -234,6 +234,23 @@ fn write_fixtures_tests_rs(out_dir: &Path, fixtures: &[FixtureTests]) {
     buf.push_str(&format!(
         "::sdk_test_harness_runner::setup_guard!({SETUP_ENV_VAR:?});\n"
     ));
+    buf.push_str(&format!(
+        r#"
+mod bridge_nodejs {{
+    #[test]
+    fn attw() {{
+        ::sdk_test_harness_runner::run_workspace_cmd(
+            "sdks/nodejs/bridge_nodejs",
+            "pnpm exec attw --pack",
+            "{cache_subdir}",
+            "{cache_env_var}",
+        );
+    }}
+}}
+"#,
+        cache_subdir = CACHE_SUBDIR,
+        cache_env_var = CACHE_ENV_VAR,
+    ));
     for fixture in fixtures {
         let name = &fixture.name;
         buf.push_str(&format!(

@@ -8,7 +8,7 @@ import {
     setTypeMap,
     getTypeMap,
     BamlError,
-} from '../index.js';
+} from '../dist/index.js';
 
 describe('BamlTypeMap', () => {
     test('empty map getClass throws BamlError', () => {

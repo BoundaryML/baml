@@ -10,8 +10,8 @@
     "declarationMap": true,
     "sourceMap": true,
     "rootDir": "./typescript_src",
-    "outDir": "./"
+    "outDir": "./dist"
   },
   "include": ["typescript_src/**/*.ts"],
-  "exclude": ["node_modules", "tests", "proto"]
+  "exclude": ["node_modules", "tests", "proto", "dist"]
 }

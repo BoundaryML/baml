@@ -53,6 +53,39 @@ pub fn run_test_cmd(fixture: &str, cmd: &str, cache_subdir: &str, cache_env_var:
     run_test_cmd_with_env(fixture, cmd, cache_subdir, cache_env_var, &[]);
 }
 
+/// Run a toolchain command from a workspace-relative directory. Used for
+/// package-level checks that do not belong to a generated fixture app.
+pub fn run_workspace_cmd(relative_dir: &str, cmd: &str, cache_subdir: &str, cache_env_var: &str) {
+    let manifest = PathBuf::from(
+        env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR not set; run via `cargo test`"),
+    );
+    let workspace_root = workspace_root_from_manifest(&manifest);
+    let dir = workspace_root.join(relative_dir);
+    assert!(
+        dir.exists(),
+        "workspace command dir not found at {}",
+        dir.display()
+    );
+
+    let cache_dir = workspace_root.join("target").join(cache_subdir);
+    assert!(
+        !cmd.contains('"') && !cmd.contains('\''),
+        "run_workspace_cmd does not handle quoted args: `{cmd}`"
+    );
+    let mut words = cmd.split_whitespace();
+    let prog = words.next().unwrap_or_else(|| panic!("empty command"));
+    let args: Vec<&str> = words.collect();
+
+    let output = run_test_process(prog, &args, &dir, &cache_dir, cache_env_var, &[])
+        .unwrap_or_else(|e| panic!("failed to spawn `{cmd}` in `{relative_dir}`: {e}"));
+    assert!(
+        output.status.success(),
+        "workspace command `{cmd}` in `{relative_dir}` failed:\nstdout: {}\nstderr: {}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
 /// Same as [`run_test_cmd`] but threads additional environment
 /// variables into the child process.
 pub fn run_test_cmd_with_env(
@@ -74,10 +107,7 @@ pub fn run_test_cmd_with_env(
 
     // sdk-test crates live at `<workspace>/sdk_tests/crates/<generator>/`,
     // so the workspace root is the 3rd ancestor of the manifest dir.
-    let workspace_root = manifest
-        .ancestors()
-        .nth(3)
-        .expect("sdk-test crate not at <workspace>/sdk_tests/crates/<generator>/");
+    let workspace_root = workspace_root_from_manifest(&manifest);
     let cache_dir = workspace_root.join("target").join(cache_subdir);
 
     assert!(
@@ -96,6 +126,13 @@ pub fn run_test_cmd_with_env(
         String::from_utf8_lossy(&output.stdout),
         String::from_utf8_lossy(&output.stderr)
     );
+}
+
+fn workspace_root_from_manifest(manifest: &Path) -> &Path {
+    manifest
+        .ancestors()
+        .nth(3)
+        .expect("sdk-test crate not at <workspace>/sdk_tests/crates/<generator>/")
 }
 
 /// Assert the generated TypeScript Node SDK fixture is native ESM output, not

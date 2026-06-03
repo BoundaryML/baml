@@ -8,12 +8,27 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const raw = fs.readFileSync(path.join(__dirname, 'generated-header.txt'), 'utf8').trimEnd();
 const header = '/**\n' + raw.split('\n').map(l => (' * ' + l).trimEnd()).join('\n') + '\n */\n';
 
+function collectGeneratedFiles(dir, relPrefix = '') {
+  const files = [];
+  if (!fs.existsSync(dir)) {
+    return files;
+  }
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    const rel = path.join(relPrefix, entry.name);
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      files.push(...collectGeneratedFiles(full, rel));
+    } else if (entry.name.endsWith('.js') || entry.name.endsWith('.d.ts')) {
+      files.push(path.join('dist', rel));
+    }
+  }
+  return files;
+}
+
 const files = [
-  ...fs.readdirSync(path.join(__dirname, '..')).filter(f => f.endsWith('.js') || f.endsWith('.d.ts')),
+  ...collectGeneratedFiles(path.join(__dirname, '..', 'dist')),
   'typescript_src/proto/baml_cffi.js',
   'typescript_src/proto/baml_cffi.d.ts',
-  'proto/baml_cffi.js',
-  'proto/baml_cffi.d.ts',
 ];
 
 for (const f of files) {

@@ -52,7 +52,9 @@ echo "==> pnpm build:debug in sdks/nodejs/bridge_nodejs"
 #    The per-fixture `package.json` `file:`-points at bridge_nodejs, so
 #    the install resolves the dev toolchain (vitest, typescript)
 #    plus the `@boundaryml/baml-core-node` runtime dep against the addon we
-#    just built.
+#    just built. `--force` is load-bearing: pnpm otherwise treats the fixture
+#    lockfile as current and may keep a stale packed copy of the local `file:`
+#    dependency when bridge_nodejs build output changes.
 for fixture_dir in */generated; do
     [[ -d "$fixture_dir" ]] || continue
     echo "==> pnpm install in $fixture_dir"
@@ -61,7 +63,7 @@ for fixture_dir in */generated; do
     # pre-generated ESM `baml_cffi.js` at
     # runtime). Without this flag pnpm 9+ exits non-zero with
     # ERR_PNPM_IGNORED_BUILDS, which `set -e` would treat as a fatal abort.
-    (cd "$fixture_dir" && pnpm install --ignore-workspace --ignore-scripts)
+    (cd "$fixture_dir" && pnpm install --force --ignore-workspace --ignore-scripts)
 done
 
 # Per-run breadcrumb for the `setup_guard::ran` test. See the

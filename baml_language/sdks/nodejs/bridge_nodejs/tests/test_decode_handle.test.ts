@@ -7,7 +7,7 @@ import {
     _seedGenericMediaHandle,
     takeHandleFromTable,
     putHandleIntoTable,
-} from '../index.js';
+} from '../dist/index.js';
 
 describe('handle table dispatch', () => {
     test('function ref handle round-trips through takeHandleFromTable', () => {
