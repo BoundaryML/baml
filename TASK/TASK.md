@@ -107,7 +107,7 @@ This plan replaces, not adds. Concrete deletions, each gated by a corresponding 
 | File / path | Action | Reason |
 |---|---|---|
 | [.github/workflows/release-baml-language-alpha.yml](.github/workflows/release-baml-language-alpha.yml) | DELETE | Replaced by the new release graph orchestrator, with `release-baml-language.yml` as the entrypoint (Phase 2.1). |
-| [.github/workflows/release-sdk.yaml](.github/workflows/release-sdk.yaml) | RENAME / INTEGRATE | Rename to `.github/workflows/publish-python-pypi.yml` and invoke it from the BAML language release graph. This is the current Python `baml_core` release workflow, and the new name scales to future SDK publish workflows such as `publish-typescript-npm.yml`, `publish-ruby-rubygems.yml`, and `publish-java-maven.yml`. Update or validate the PyPI trusted-publisher binding for project `baml-core` after the rename. Keep OIDC trusted publishing; do not add username/password or API-token secrets. |
+| [.github/workflows/release-sdk.yaml](.github/workflows/release-sdk.yaml) | FOLD / DELETE | Fold the Python `baml_core` build into the BAML language release graph through `build-python-sdk.reusable.yaml`, and keep the final PyPI trusted-publishing upload as a top-level job in `.github/workflows/release-baml-language.yml`. PyPI binds trusted publishing to the workflow identity that performs the upload, so do not keep a separate `publish-python-pypi.yml` production publisher. Configure PyPI's trusted-publisher binding for project `baml-core` to authorize `release-baml-language.yml`. Keep OIDC trusted publishing; do not add username/password or API-token secrets. |
 | [.github/workflows/release-cli.yaml](.github/workflows/release-cli.yaml) | DELETE | Broken (`uses:` references nonexistent `build-cli-release-reusable.yaml`; actual file is `build-cli-release.reusable.yaml`). Has been silently failing on every `release` event including nightly alpha prereleases. Engine's [release.yml](.github/workflows/release.yml) L80-85 already invokes the build directly. This file is dead. |
 | [.github/workflows/release-pkg-boundaryml-com.yml](.github/workflows/release-pkg-boundaryml-com.yml) | FOLD into release graph | Currently `workflow_dispatch`-only and its own TODO says "tie this into the release process". Becomes the `publish-pkg-boundaryml-com` job in the new release graph, reusing the existing `pkg-boundaryml-com-github-release` IAM role. |
 | `release.toml` single-table form | REPLACE | One human-edited `[release] canary_version = "X.Y.Z"` table. Nightly versions are derived by CI from that canary version, so no one manually edits nightly release state. The old single `[channel]` table only ever had one reader (`scripts/baml-language-version`), so no compat shim needed. |
@@ -716,7 +716,7 @@ Goal: replace [.github/workflows/release-baml-language-alpha.yml](.github/workfl
 
 ### 2.1 New release graph orchestrator
 
-Create `.github/workflows/release-baml-language.yml` as the release graph entrypoint (replaces the alpha file; old file deleted in same PR). It may call focused reusable/focused workflows for Rust, Python, TypeScript/VSIX, and publishing. Triggers:
+Create `.github/workflows/release-baml-language.yml` as the release graph entrypoint (replaces the alpha file; old file deleted in same PR). It may call focused reusable/focused workflows for Rust, Python, and TypeScript/VSIX builds. Final registry publish jobs stay top-level when the registry's OIDC/trusted-publisher identity is bound to the workflow file that performs the upload. Triggers:
 
 - `workflow_run` on successful `CI - BAML Language` push to the `canary` branch -> channel `nightly`, auto-publish
 - If the source commit advanced `[release].canary_version` and that canary version has not already been published, the same workflow run also publishes `canary` for that commit.
@@ -781,9 +781,9 @@ Each `publish-*` job:
 - Reads the shared `release-manifest.json` written by the gate job
 - Is the **only** code path that talks to the corresponding registry/tap/etc
 
-`publish-pypi` should be implemented through a focused workflow named `.github/workflows/publish-python-pypi.yml`, renamed from the current [.github/workflows/release-sdk.yaml](.github/workflows/release-sdk.yaml) Python `baml_core` release path. The name is intentionally language-plus-registry, so future SDK publish workflows can follow the same pattern: `publish-typescript-npm.yml`, `publish-ruby-rubygems.yml`, `publish-java-maven.yml`, etc. Because PyPI trusted publishing is bound to the GitHub workflow identity, update or explicitly validate the PyPI trusted-publisher binding for project `baml-core` as part of the rename. Keep OIDC trusted publishing; do not add username/password or API-token secrets.
+SDK symmetry rule: build/package jobs may be reusable, but final registry publish jobs must live in the workflow identity accepted by that registry's trusted-publisher/OIDC model. For PyPI, the `baml_core` wheel build uses `build-python-sdk.reusable.yaml`, while the final `pypa/gh-action-pypi-publish` step is a top-level `publish-pypi` job in `.github/workflows/release-baml-language.yml`. Future SDKs should follow the same product shape: reusable SDK builders, top-level `publish-npm` / `publish-rubygems` / `publish-maven` jobs when those registries bind publishing to the caller workflow identity.
 
-Implementation gate: pause before enabling or relying on the renamed `publish-python-pypi.yml` workflow and remind the user to update PyPI's trusted publisher configuration in the PyPI portal. The user should go to PyPI, open the `baml-core` project, navigate to the publishing/trusted-publisher settings, and update the GitHub workflow filename from `.github/workflows/release-sdk.yaml` to `.github/workflows/publish-python-pypi.yml` for the `BoundaryML/baml` repository and the intended publishing environment/ref. Do not proceed with a production PyPI publish until the user confirms this portal change is complete, or until a dry-run/validation proves the existing binding still authorizes the renamed workflow.
+Implementation gate: pause before enabling or relying on production PyPI publishing and remind the user to update PyPI's trusted publisher configuration in the PyPI portal. The user should go to PyPI, open the `baml-core` project, navigate to the publishing/trusted-publisher settings, and configure the GitHub workflow filename as `.github/workflows/release-baml-language.yml` for the `BoundaryML/baml` repository. Leave the PyPI environment blank unless the top-level `publish-pypi` job declares a matching GitHub Actions `environment`. Do not proceed with a production PyPI publish until the user confirms this portal change is complete, or until a validation run proves the binding authorizes the top-level publish job.
 
 ### 2.3 Build matrix expansion
 
@@ -1432,7 +1432,7 @@ Tests/merge criteria for this subsection:
 ### 3.4 Deprecation banners and workflow cleanup
 
 - Old install command (`brew install BoundaryML/baml/baml`) keeps working via GitHub repo redirect; on next `brew update` the formula's `caveats` block tells users to re-tap as `boundaryml/tap/baml`. Banner lands with the tap rename and is removed after the migration window.
-- Workflow files [release-baml-language-alpha.yml](.github/workflows/release-baml-language-alpha.yml), [release-pkg-boundaryml-com.yml](.github/workflows/release-pkg-boundaryml-com.yml), and [release-cli.yaml](.github/workflows/release-cli.yaml) are deleted on the replacement branch before merge to `canary`. [release-sdk.yaml](.github/workflows/release-sdk.yaml) is renamed to `.github/workflows/publish-python-pypi.yml` and invoked by the release graph after the PyPI trusted-publisher binding for `baml-core` is updated or validated. The rollback path is reverting the branch merge, which restores the old files exactly as they were.
+- Workflow files [release-baml-language-alpha.yml](.github/workflows/release-baml-language-alpha.yml), [release-pkg-boundaryml-com.yml](.github/workflows/release-pkg-boundaryml-com.yml), [release-cli.yaml](.github/workflows/release-cli.yaml), and [release-sdk.yaml](.github/workflows/release-sdk.yaml) are deleted or folded into the replacement branch before merge to `canary`. The Python wheel builder remains reusable, but the PyPI trusted-publishing upload lives in the top-level release graph after the PyPI trusted-publisher binding for `baml-core` is updated or validated. The rollback path is reverting the branch merge, which restores the old files exactly as they were.
 
 ### 3.5 Docs
 
@@ -1442,7 +1442,7 @@ Tests/merge criteria for this subsection:
   - Required contents: `brew install boundaryml/tap/baml` installs the wrapper only; package-manager installs do not bootstrap toolchains; `curl ... | sh -s` installs the wrapper and default canary toolchain; Docker/CI install example using `--no-modify-path`; PATH behavior and `~/.baml/env`; `baml toolchain use canary`; `baml toolchain use nightly`; `baml toolchain install <version>`; `baml toolchain update`; `baml self-update`; package-manager wrapper upgrade behavior (`brew upgrade baml`, AUR upgrade); IDE setup with `baml ide install --cursor` and `baml ide install --code`.
 - `TASK/docs/release-maintainer.md`
   - Audience: maintainers and implementation agents.
-  - Required contents: release graph overview; canary vs nightly model; how to bump canary; how nightly suffixes are chosen; release workflow concurrency rule; dry-run release workflow and `BAML_MANIFEST_BASE_URL`; production publish guards; PyPI trusted-publisher portal pause; Homebrew/AUR wrapper release flow; rerun/idempotency behavior; rollback / mutable pointer repair flow.
+  - Required contents: release graph overview; canary vs nightly model; how to bump canary; how nightly suffixes are chosen; release workflow concurrency rule; dry-run release workflow and `BAML_MANIFEST_BASE_URL`; production publish guards; registry publisher identity rule; PyPI trusted-publisher portal pause; Homebrew/AUR wrapper release flow; rerun/idempotency behavior; rollback / mutable pointer repair flow.
 - `TASK/docs/toolchain-system.md`
   - Audience: engineers.
   - Required contents: wrapper vs toolchain product boundary; `~/.baml` layout; `config.toml` user intent; `state.toml` active channel resolutions; manifest cache role; manifest schema; network/cache policy; `toolchain use` vs `toolchain install` semantics; VSIX/LSP/playground compatibility protocol; one-LSP-per-BAML-project-root model; direct `baml-cli` warning behavior; `baml pack` fetcher unification.
@@ -1453,7 +1453,7 @@ Tests/merge criteria for this subsection:
 
 Not in this plan, called out so they're tracked:
 
-- npm SDK publish path. Plumbing: add a `publish-npm` job that reads the shared release manifest; package source lives separately in `typescript2/` so it can publish independently when ready.
+- npm SDK publish path. Plumbing: add a reusable Node SDK build/package job plus a top-level `publish-npm` job that reads the shared release manifest; package source lives separately in `typescript2/` so it can build independently when ready, while publishing still follows the release graph's registry identity rule.
 - apt repo (`apt install baml`). Until then, the bash installer covers Linux.
 - Code signing / notarization (macOS, Windows). Significant build-matrix complexity; add when there's actual user friction.
 - "Release in a branch with zeroed sub-versions" idea: explicitly rejected; problem solved instead by patching versions in CI rather than committing them.
@@ -1483,12 +1483,12 @@ This work lands on a dedicated feature branch and merges to `canary` only when t
 
 The end state after merge to `canary`:
 
-- One coherent BAML language release graph, with one release plan and fan-out/fan-in gates. It may be implemented as an orchestrator plus focused reusable/focused workflows for Rust, Python, TypeScript/VSIX, and publishing.
+- One coherent BAML language release graph, with one release plan and fan-out/fan-in gates. It may be implemented as an orchestrator plus focused reusable/focused workflows for Rust, Python, and TypeScript/VSIX builds. Final registry publish jobs are top-level whenever trusted publishing is bound to the workflow identity.
 - Deleted old language-release workflows:
   - `.github/workflows/release-baml-language-alpha.yml`
   - `.github/workflows/release-pkg-boundaryml-com.yml`
   - `.github/workflows/release-cli.yaml`
-- `.github/workflows/release-sdk.yaml` is renamed to `.github/workflows/publish-python-pypi.yml`, invoked by the release graph, and covered by an updated or validated PyPI trusted-publisher binding for `baml-core`. It must not remain as an independent, separately-versioned release path.
+- `.github/workflows/release-sdk.yaml` is folded into the release graph and deleted. Python wheel builds use `.github/workflows/build-python-sdk.reusable.yaml`; the top-level `publish-pypi` job in `.github/workflows/release-baml-language.yml` is covered by an updated or validated PyPI trusted-publisher binding for `baml-core`. No separate PyPI publisher workflow remains as an independent, separately-versioned release path.
 - One version script: `scripts/baml-language-version`.
 - One shared fetcher crate: `baml_release`.
 - One manifest system and one hosting domain: `pkg.boundaryml.com`.
@@ -1502,7 +1502,7 @@ The end state after merge to `canary`:
 | 2 | Versioning foundation: `release.toml` canary intent schema, `scripts/baml-language-version` rewrite (`canary` / derived `nightly`, nightly suffix selection, `--pypi`, `release-plan.json`, `stamp`, `sync`, metadata checks), stamped `baml_version` module, removal of `BAML_RELEASE_VERSION`, and `baml_release` extraction from pack with no behavior change. | Low-Med |
 | 3 | Wrapper and manifest foundation: new `baml_language/crates/baml/`, manifest schema structs, install/list/use/uninstall/update/self-update skeletons, `baml.toml [toolchain]` parsing, test fixtures. | Med |
 | 4 | New release graph from scratch: plan job, build matrices, smoke gate, separate publish jobs, toolchain manifest publish, Python `baml_core` publish, wrapper archives, Homebrew/AUR wrapper publishing only on wrapper-version changes, VSIX packaging, and archive-layout checks. | High |
-| 5 | Hard cleanup on the same branch: delete the old alpha/pkg/CLI release workflows, rename `release-sdk.yaml` to `publish-python-pypi.yml`, update or validate the PyPI trusted-publisher binding, and remove old install-page behavior that is replaced by `install.sh` / `install.ps1` and docs. No old release code remains as an independent fallback path inside the repo. | Med |
+| 5 | Hard cleanup on the same branch: delete the old alpha/pkg/CLI release workflows, fold `release-sdk.yaml` into the top-level release graph, update or validate the PyPI trusted-publisher binding for `release-baml-language.yml`, and remove old install-page behavior that is replaced by `install.sh` / `install.ps1` and docs. No old release code remains as an independent fallback path inside the repo. | Med |
 | 6 | Polish: `baml ide install`, wrapper self-update/refuse-when-managed, docs for install matrix, channel selection, `baml.toml [toolchain]`, PyPI translation, and migration notes. | Low |
 
 ### Branch validation
@@ -1558,7 +1558,7 @@ Merge the branch to `canary` only when all are true:
 2. The generated manifest is byte-identical (modulo `released_at`) to a checked-in reference fixture for at least one nightly version.
 3. `baml toolchain use <channel-or-v>` against a dry-run manifest, using `BAML_MANIFEST_BASE_URL` and a temporary `BAML_HOME`, installs and selects a toolchain from a clean macOS, Linux, and Windows VM.
 4. `baml pack --target <non-host-target>` succeeds against the new release graph's dry-run manifest/artifacts and fetches `baml-pack-host` through the new shared fetcher path, not through alpha-release-only assets.
-5. The branch deletes or integrates the old language-release workflows listed above, and `publish-python-pypi.yml` is invoked by the release graph rather than running as an independent separately-versioned publish path.
+5. The branch deletes or integrates the old language-release workflows listed above, and PyPI publishing happens in the top-level release graph rather than through an independent separately-versioned publish path.
 6. Engineer-on-call has read the rollback playbook and is available for the first nightly release after merge.
 
 ### Rollback

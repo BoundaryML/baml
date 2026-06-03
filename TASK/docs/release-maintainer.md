@@ -57,7 +57,7 @@ Production publishes are guarded to `refs/heads/canary`. Mutable pointers (`cana
 
 Automatic canary branch releases publish nightly by default. If the source commit advances `baml_language/release.toml` and `baml-language-<canary_version>` does not already exist, the workflow publishes canary first and queues a serialized nightly run after the canary manifest is live.
 
-The renamed PyPI workflow is `.github/workflows/publish-python-pypi.yml`. Before production PyPI publishing, update or validate the PyPI trusted-publisher binding for project `baml-core` so it authorizes this workflow filename.
+The Python wheel build is reusable, but the PyPI upload is a top-level `publish-pypi` job in `.github/workflows/release-baml-language.yml`. Registry publish jobs stay top-level whenever OIDC/trusted publishing is bound to the workflow identity that performs the upload. Before production PyPI publishing, update or validate the PyPI trusted-publisher binding for project `baml-core` so it authorizes `release-baml-language.yml`; leave the PyPI environment blank unless the job declares a matching GitHub Actions `environment`.
 
 Homebrew and AUR publish only wrapper packages when `wrapper_changed == true`. Toolchain releases never dispatch package-manager updates. `scripts/baml-package-manager-artifacts` generates the formula and AUR files from wrapper archive checksums; publish jobs refuse to run unless the Homebrew token or AUR SSH key is configured.
 
