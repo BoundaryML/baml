@@ -30,7 +30,8 @@ function equal(actual: unknown, expected: unknown) -> null {
 /// Asserts that `actual` and `expected` floats differ by no more than `epsilon`.
 /// Panics with the observed delta if `abs(actual - expected) > epsilon`.
 function approx_equal(actual: float, expected: float, epsilon: float) -> null {
-  let delta = (actual - expected).abs();
+  let difference = actual - expected;
+  let delta = difference.abs();
   if (!(delta <= epsilon)) {
     baml.sys.panic(
       "assertion failed: expected approximately equal floats (actual: " +
