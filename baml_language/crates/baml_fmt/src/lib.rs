@@ -471,3 +471,63 @@ mod let_else_format_tests {
         assert_formats_to(source, source);
     }
 }
+
+#[cfg(test)]
+mod while_let_format_tests {
+    //! Formatter tests for `while let PATTERN = SCRUTINEE { ... }`.
+
+    use super::*;
+
+    fn assert_formats_to(source: &str, expected: &str) {
+        let options = FormatOptions::default();
+        let formatted = format(source, &options).expect("formatter should succeed on `while let`");
+        assert_eq!(
+            formatted, expected,
+            "formatter output didn't match expected\n--- got ---\n{formatted}\n--- want ---\n{expected}"
+        );
+        let second = format(&formatted, &options).expect("formatter should be idempotent");
+        assert_eq!(formatted, second, "formatter should be idempotent");
+    }
+
+    #[test]
+    fn test_while_let_basic() {
+        // No parens around the scrutinee (mirrors `if let`, unlike plain
+        // `while` which canonicalises parens); the body canonicalises to a
+        // multi-line block, and there is no trailing semicolon.
+        let source = "function f(r: int | null) -> int {\n    while let v: int = r {\n        break;\n    }\n    0\n}\n";
+        assert_formats_to(source, source);
+    }
+
+    #[test]
+    fn test_while_let_destructure() {
+        let source = "class Item {\n    value: int,\n}\n\nfunction f(it: Item | null) -> int {\n    while let Item { value } = it {\n        break;\n    }\n    0\n}\n";
+        assert_formats_to(source, source);
+    }
+
+    #[test]
+    fn test_while_let_array_pattern() {
+        // Array-pattern head: the parser keeps `let` as a statement-level token
+        // (outside the PATTERN node), so the formatter must round-trip it via
+        // the optional `let_keyword` field. Before the fix, `from_cst` errored
+        // here because it expected a PATTERN right after `while`.
+        let options = FormatOptions::default();
+        let source = "function f(xs: int[]) -> int {\n    while let [a, b] = xs {\n        break;\n    }\n    0\n}\n";
+        let formatted = format(source, &options)
+            .expect("formatter should succeed on a while-let array-pattern head");
+        assert!(
+            formatted.contains("while let [") && formatted.contains("= xs"),
+            "while-let array-pattern head should round-trip with its `let`; got:\n{formatted}"
+        );
+        let second = format(&formatted, &options).expect("formatter should be idempotent");
+        assert_eq!(formatted, second, "formatter should be idempotent");
+    }
+
+    #[test]
+    fn test_plain_while_unchanged() {
+        // Regression: plain `while (cond) { … }` keeps its parens and must
+        // not pick up while-let formatting.
+        let source =
+            "function f(b: bool) -> int {\n    while (b) {\n        break;\n    }\n    0\n}\n";
+        assert_formats_to(source, source);
+    }
+}

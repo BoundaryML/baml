@@ -150,8 +150,7 @@ function user.BacktickM3ForLoop(xs: string[]) -> string {
     store_var __for_idx
 
   L0:
-    load_var __for_idx
-    load_var xs
+    load_var2 3 1
     container_len
     cmp_int_op <
     pop_jump_if_false L1
@@ -164,8 +163,7 @@ function user.BacktickM3ForLoop(xs: string[]) -> string {
   L2:
     load_var  __m3_for
     store_var _9
-    load_var xs
-    load_var __for_idx
+    load_var2 1 3
     load_array_element
     call baml.String.to_string
     store_var _12

@@ -1,8 +1,8 @@
 {
   "compilerOptions": {
-    "target": "ES2020",
-    "module": "commonjs",
-    "moduleResolution": "node",
+    "target": "ES2022",
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
@@ -10,7 +10,8 @@
     "resolveJsonModule": true,
     "noEmit": true,
     "preserveSymlinks": true,
-    "rootDir": "."
+    "rootDir": ".",
+    "types": ["node", "vitest"]
   },
   "include": ["**/*.ts"],
   "exclude": ["node_modules"]

@@ -1,6 +1,6 @@
 // Roundtrip coverage for baml_sdk/literals — ported from test_literals.py.
-import "./baml_sdk";
-import { describe, it, expect } from "@jest/globals";
+import "./baml_sdk/index.js";
+import { describe, it, expect } from "vitest";
 import {
   Literals,
   return_literal42,
@@ -15,7 +15,7 @@ import {
   round_trip_literal_true,
   round_trip_literal_false,
   round_trip_literals,
-} from "./baml_sdk/literals";
+} from "./baml_sdk/literals/index.js";
 
 describe("roundtrip literals", () => {
   it("return_literals", () => {

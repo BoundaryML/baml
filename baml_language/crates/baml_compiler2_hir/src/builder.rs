@@ -415,6 +415,33 @@ impl<'db> SemanticIndexBuilder<'db> {
                 }
                 self.pop_scope();
             }
+            ast::Stmt::WhileLet {
+                pattern,
+                scrutinee,
+                body: loop_body,
+            } => {
+                // Scrutinee is evaluated in the enclosing scope (re-evaluated
+                // each iteration, but lexically outside the loop body) —
+                // mirrors `Stmt::While`'s condition and `Stmt::For`'s
+                // collection. Walk it BEFORE pushing the body scope so its
+                // paths don't falsely resolve to the loop's own bindings.
+                self.walk_expr(*scrutinee, body, source_map, true);
+
+                // Push ONE Block scope spanning the whole while-let statement,
+                // mirroring `Stmt::While` / `Stmt::For`. The pattern bindings
+                // live in THIS scope and are visible to the body (which adds
+                // its own nested block scope); they vanish after the loop.
+                self.push_scope(ScopeKind::Block, None, source_map.stmt_span(stmt_id));
+                self.register_local_pattern(
+                    *pattern,
+                    DefinitionSite::Statement(stmt_id),
+                    body,
+                    source_map,
+                    source_map.pattern_span(*pattern).start(),
+                );
+                self.walk_expr(*loop_body, body, source_map, true);
+                self.pop_scope();
+            }
             ast::Stmt::Return(expr) => {
                 if let Some(expr) = expr {
                     self.walk_expr(*expr, body, source_map, true);
@@ -1170,6 +1197,9 @@ impl<'db> SemanticIndexBuilder<'db> {
                 self.item_tree
                     .method_to_iface_target
                     .insert(fid, impl_block.target.clone());
+                self.item_tree
+                    .method_to_iface_associated_type_bindings
+                    .insert(fid, impl_block.associated_type_bindings.clone());
                 method_ids.push(fid);
             }
         }
@@ -1199,6 +1229,9 @@ impl<'db> SemanticIndexBuilder<'db> {
             self.item_tree
                 .method_to_iface_target
                 .insert(fid, imp.interface_target.clone());
+            self.item_tree
+                .method_to_iface_associated_type_bindings
+                .insert(fid, imp.associated_type_bindings.clone());
             method_ids.push(fid);
         }
         if has_generic_params {
@@ -1255,6 +1288,14 @@ impl<'db> SemanticIndexBuilder<'db> {
                 .push(MemberSite {
                     range: field.name_span,
                     kind: DefinitionKind::Field,
+                });
+        }
+        for assoc in &i.associated_types {
+            seen.entry(assoc.name.clone())
+                .or_default()
+                .push(MemberSite {
+                    range: assoc.name_span,
+                    kind: DefinitionKind::AssociatedType,
                 });
         }
         for sig in &i.required_methods {
@@ -1783,6 +1824,14 @@ impl<'db> SemanticIndexBuilder<'db> {
                         .as_ref()
                         .is_some_and(|throws| Self::type_expr_contains_rust(throws))
             }
+            ast::TypeExpr::AssociatedTypeProjection {
+                base, interface, ..
+            } => {
+                Self::type_expr_contains_rust(base)
+                    || interface
+                        .as_ref()
+                        .is_some_and(|interface| Self::type_expr_contains_rust(interface))
+            }
             _ => false,
         }
     }
@@ -1845,6 +1894,7 @@ impl<'db> SemanticIndexBuilder<'db> {
                 .map(Name::as_str)
                 .collect::<Vec<_>>()
                 .join("."),
+            ast::TypeExpr::AssociatedTypeProjection { .. } => type_expr.to_string(),
             ast::TypeExpr::Int { .. } => "int".to_string(),
             ast::TypeExpr::Bigint { .. } => "bigint".to_string(),
             ast::TypeExpr::Float { .. } => "float".to_string(),

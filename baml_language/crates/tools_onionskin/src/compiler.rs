@@ -2594,6 +2594,25 @@ impl CompilerRunner {
                                 status,
                             );
                         }
+                        Stmt::WhileLet {
+                            scrutinee,
+                            body: body_expr,
+                            ..
+                        } => {
+                            let scrut_desc = expr_desc(*scrutinee, body);
+                            let line = format!("{pad}while let ... = {scrut_desc}");
+                            writeln!(output, "{line}").ok();
+                            output_annotated.push((line, status));
+                            render_expr(
+                                *body_expr,
+                                body,
+                                inference,
+                                indent + 2,
+                                output,
+                                output_annotated,
+                                status,
+                            );
+                        }
                         Stmt::Assign { target, value } => {
                             let target_desc = expr_desc(*target, body);
                             let val_desc = expr_desc(*value, body);
@@ -3279,6 +3298,17 @@ impl CompilerRunner {
                             let mut line = vec![DetailSpan::Code(format!("{pad}  while ("))];
                             line.extend(expr_desc_spans(*condition, body, inference));
                             line.push(DetailSpan::Code(")".into()));
+                            lines.push(line);
+                            Self::render_expr_to_lines(*wb, body, inference, indent + 4, lines);
+                        }
+                        Stmt::WhileLet {
+                            scrutinee,
+                            body: wb,
+                            ..
+                        } => {
+                            let mut line =
+                                vec![DetailSpan::Code(format!("{pad}  while let ... = "))];
+                            line.extend(expr_desc_spans(*scrutinee, body, inference));
                             lines.push(line);
                             Self::render_expr_to_lines(*wb, body, inference, indent + 4, lines);
                         }

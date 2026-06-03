@@ -1,16 +1,16 @@
 // Roundtrip coverage for the symbol-collision suite — ported from
 // test_symbol_collisions.py. Three distinct `Bar` classes at different
 // namespace depths plus the consumers (`Ipsum`, `Deep`).
-import "./baml_sdk";
-import { describe, it, expect } from "@jest/globals";
-import { make_foo_bar, round_trip_foo_bar } from "./baml_sdk/symbol_collisions/foo";
-import { make_fizz_foo_bar, round_trip_fizz_foo_bar } from "./baml_sdk/symbol_collisions/fizz/foo";
+import "./baml_sdk/index.js";
+import { describe, it, expect } from "vitest";
+import { make_foo_bar, round_trip_foo_bar } from "./baml_sdk/symbol_collisions/foo/index.js";
+import { make_fizz_foo_bar, round_trip_fizz_foo_bar } from "./baml_sdk/symbol_collisions/fizz/foo/index.js";
 import {
   make_fizz_buzz_foo_bar,
   round_trip_fizz_buzz_foo_bar,
-} from "./baml_sdk/symbol_collisions/fizz/buzz/foo";
-import { make_ipsum, round_trip_ipsum } from "./baml_sdk/symbol_collisions/lorem";
-import { make_deep, round_trip_deep } from "./baml_sdk/symbol_collisions/a/b/c/d";
+} from "./baml_sdk/symbol_collisions/fizz/buzz/foo/index.js";
+import { make_ipsum, round_trip_ipsum } from "./baml_sdk/symbol_collisions/lorem/index.js";
+import { make_deep, round_trip_deep } from "./baml_sdk/symbol_collisions/a/b/c/d/index.js";
 
 describe("roundtrip symbol_collisions", () => {
   it("round_trip_foo_bar", () => {

@@ -14,8 +14,8 @@
 // that function-level distinction. The wrapper exposes both sync and async
 // pulls, as Python does.
 
-import { BamlHandle, getRuntime } from './native';
-import { encodeCallArgs, decodeCallResult } from './proto';
+import { BamlHandle, getRuntime } from './native.js';
+import { encodeCallArgs, decodeCallResult } from './proto.js';
 
 const STREAM_NEXT_FN = 'baml.llm.Stream.next';
 const STREAM_FINAL_FN = 'baml.llm.Stream.final';

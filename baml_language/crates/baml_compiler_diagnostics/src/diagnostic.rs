@@ -76,6 +76,9 @@ pub enum DiagnosticId {
     /// `let … else` pattern that covers every value — the else branch is
     /// dead. Suggest replacing with a plain `let` binding.
     IrrefutablePatternInLetElse,
+    /// `while let` pattern that always matches — the loop never exits via
+    /// pattern failure. Suggest a plain `while`/`loop`.
+    IrrefutablePatternInWhileLet,
     DuplicateAttribute,
     UnknownAttribute,
     InvalidAttributeContext,
@@ -304,6 +307,7 @@ impl DiagnosticId {
             DiagnosticId::IrrefutablePatternInIfLet => "E0112",
             DiagnosticId::LetElseMustDiverge => "E0113",
             DiagnosticId::IrrefutablePatternInLetElse => "E0114",
+            DiagnosticId::IrrefutablePatternInWhileLet => "E0137",
             DiagnosticId::DuplicateAttribute => "E0014",
             DiagnosticId::UnknownAttribute => "E0015",
             DiagnosticId::InvalidAttributeContext => "E0016",

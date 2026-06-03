@@ -555,6 +555,7 @@ fn cross_namespace_type_resolution_via_root() {
         &baml_compiler2_ast::TypeExpr::Path {
             segments,
             generic_args: vec![],
+            associated_type_bindings: vec![],
             attrs: vec![],
         },
         pkg_items,
@@ -581,6 +582,7 @@ fn cross_namespace_type_resolution_via_root() {
         &baml_compiler2_ast::TypeExpr::Path {
             segments,
             generic_args: vec![],
+            associated_type_bindings: vec![],
             attrs: vec![],
         },
         pkg_items,
@@ -621,6 +623,7 @@ fn same_namespace_resolution_no_prefix() {
         &baml_compiler2_ast::TypeExpr::Path {
             segments,
             generic_args: vec![],
+            associated_type_bindings: vec![],
             attrs: vec![],
         },
         pkg_items,
@@ -677,6 +680,7 @@ fn nested_namespace_resolution() {
         &baml_compiler2_ast::TypeExpr::Path {
             segments,
             generic_args: vec![],
+            associated_type_bindings: vec![],
             attrs: vec![],
         },
         pkg_items,
@@ -715,6 +719,7 @@ fn bare_name_cross_namespace_rejected() {
         &baml_compiler2_ast::TypeExpr::Path {
             segments,
             generic_args: vec![],
+            associated_type_bindings: vec![],
             attrs: vec![],
         },
         pkg_items,
@@ -758,6 +763,7 @@ fn multi_segment_bare_path_rejected() {
         &baml_compiler2_ast::TypeExpr::Path {
             segments,
             generic_args: vec![],
+            associated_type_bindings: vec![],
             attrs: vec![],
         },
         pkg_items,

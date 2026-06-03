@@ -1,12 +1,12 @@
 // Roundtrip coverage for baml_sdk/aliases — ported from test_aliases.py.
-import "./baml_sdk";
-import { describe, it, expect } from "@jest/globals";
+import "./baml_sdk/index.js";
+import { describe, it, expect } from "vitest";
 import {
   AliasContainer,
   round_trip_string_list,
   round_trip_rec_list,
   round_trip_alias_container,
-} from "./baml_sdk/aliases";
+} from "./baml_sdk/aliases/index.js";
 
 describe("roundtrip aliases", () => {
   it("round_trip_string_list", () =>

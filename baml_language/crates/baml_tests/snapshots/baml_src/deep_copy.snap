@@ -106,7 +106,8 @@ function deep_copy.deep_copy_circular_helper() -> int {
     load_const 1
     alloc_array 0
     init_instance user.deep_copy.Node .value, .children
-    store_var_load_var a
+    store_var a
+    load_var a
     load_const 2
     load_var a
     alloc_array 1
@@ -269,7 +270,8 @@ function deep_copy.deep_equals_circular_helper() -> bool {
     load_const 1
     alloc_array 0
     init_instance user.deep_copy.Node .value, .children
-    store_var_load_var a1
+    store_var a1
+    load_var a1
     load_const 2
     load_var a1
     alloc_array 1
@@ -279,15 +281,15 @@ function deep_copy.deep_equals_circular_helper() -> bool {
     load_const 1
     alloc_array 0
     init_instance user.deep_copy.Node .value, .children
-    store_var_load_var a2
+    store_var a2
+    load_var a2
     load_const 2
     load_var a2
     alloc_array 1
     init_instance user.deep_copy.Node .value, .children
     alloc_array 1
     store_field .children
-    load_var a1
-    load_var a2
+    load_var2 1 2
     call baml.deep_equals
     return
 }

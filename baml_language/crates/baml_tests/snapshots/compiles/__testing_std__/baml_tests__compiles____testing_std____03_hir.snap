@@ -22,8 +22,8 @@ class testing.TestCollector {
 }
 class testing.TestRegistration {
   name: string
-  body: testing.TestBody
-  runner: testing.TestRunner?
+  body: TestBody
+  runner: TestRunner?
 }
 class testing.TestRegistry {
   collector: testing.TestCollector
@@ -32,11 +32,11 @@ class testing.TestRegistry {
 }
 class testing.TestSetRegistration {
   name: string
-  collector: testing.TestSetBody
-  runner: testing.TestSetRunner?
+  collector: TestSetBody
+  runner: TestSetRunner?
 }
 type testing.SerializedTestDef = testing.SerializedTest | testing.SerializedTestSet
-function testing.$invoke_collector(collector: testing.TestSetBody, c: testing.TestCollector) -> void  [expr] {
+function testing.$invoke_collector(collector: TestSetBody, c: testing.TestCollector) -> void  [expr] {
   {  } collector(c)
 }
 function testing.expand_set(self: ?, name: string) -> testing.SerializedTestDef[]  [expr] {
@@ -69,20 +69,20 @@ function testing.new(collector: testing.TestCollector) -> testing.TestRegistry  
 function testing.new(prefix: string) -> testing.TestCollector  [expr] {
   {  } testing.TestCollector { prefix: prefix, tests: [], testsets: [] }
 }
-function testing.register_test(self: ?, name: string, body: testing.TestBody, runner: testing.TestRunner?) -> void  [expr] {
+function testing.register_test(self: ?, name: string, body: TestBody, runner: TestRunner?) -> void  [expr] {
   { let full_name = if (self.prefix Eq "") {  } name else {  } self.prefix Add "/" Add name; let count = 0; let hash_prefix = full_name Add "#"; for t in self.tests {  } if (t.name Eq full_name Or t.name.starts_with(hash_prefix)) { count Add= 1 } else {  } null; let final_name = if (count Gt 0) {  } full_name Add "#" Add baml.unstable.string(count Add 1) else {  } full_name; let _ = self.tests.push(testing.TestRegistration { name: final_name, body: body, runner: runner }) }
 }
-function testing.register_test_set(self: ?, name: string, collector: testing.TestSetBody, runner: testing.TestSetRunner?) -> void  [expr] {
+function testing.register_test_set(self: ?, name: string, collector: TestSetBody, runner: TestSetRunner?) -> void  [expr] {
   { let full_name = if (self.prefix Eq "") {  } name else {  } self.prefix Add "/" Add name; let count = 0; let hash_prefix = full_name Add "#"; for ts in self.testsets {  } if (ts.name Eq full_name Or ts.name.starts_with(hash_prefix)) { count Add= 1 } else {  } null; let final_name = if (count Gt 0) {  } full_name Add "#" Add baml.unstable.string(count Add 1) else {  } full_name; let _ = self.testsets.push(testing.TestSetRegistration { name: final_name, collector: collector, runner: runner }) }
 }
-function testing.run_test(self: ?, name: string) -> testing.TestReport  [expr] {
+function testing.run_test(self: ?, name: string) -> TestReport  [expr] {
   { for t in self.collector.tests {  } if (t.name Eq name) { return root.run_test(t.body, t.runner) }; for k in self.expansions.keys() { let sub = self.expansions[k] } if (name.starts_with(k Add "/")) { return sub.run_test(name) }; throw "Test not found: " Add name }
 }
-function testing.run_test(body: testing.TestBody, runner: testing.TestRunner?) -> testing.TestReport  [expr] {
-  { let base_run: testing.TestReportThunk = () -> TestReport { { let start = baml.sys.now_ms(); let result = { body() } RunReport { outcome: "pass", duration_ms: 0 } catch_all (e) { _ => {  } RunReport { outcome: "fail", duration_ms: 0 } } } TestReport { outcome: result.outcome, runs: [RunReport { outcome: result.outcome, duration_ms: baml.sys.now_ms() Sub start }] } } } match (runner) { null => base_run(), r: testing.TestRunner => { let wrapped: testing.TestReportThunk = r(base_run) } wrapped() }
+function testing.run_test(body: TestBody, runner: TestRunner?) -> TestReport  [expr] {
+  { let base_run: TestReportThunk = () -> TestReport { { let start = baml.sys.now_ms(); let result = { body() } RunReport { outcome: "pass", duration_ms: 0 } catch_all (e) { _ => {  } RunReport { outcome: "fail", duration_ms: 0 } } } TestReport { outcome: result.outcome, runs: [RunReport { outcome: result.outcome, duration_ms: baml.sys.now_ms() Sub start }] } } } match (runner) { null => base_run(), r: TestRunner => { let wrapped: TestReportThunk = r(base_run) } wrapped() }
 }
-function testing.run_testset(run_children: testing.TestSetReportThunk, runner: testing.TestSetRunner?) -> testing.TestSetReport  [expr] {
-  {  } match (runner) { null => run_children(), r: testing.TestSetRunner => { let wrapped: testing.TestSetReportThunk = r(run_children) } wrapped() }
+function testing.run_testset(run_children: TestSetReportThunk, runner: TestSetRunner?) -> TestSetReport  [expr] {
+  {  } match (runner) { null => run_children(), r: TestSetRunner => { let wrapped: TestSetReportThunk = r(run_children) } wrapped() }
 }
 function testing.serialize(self: ?) -> testing.SerializedTestDef[]  [expr] {
   { let items: testing.SerializedTestDef[] = []; for t in self.collector.tests {  } items.push(testing.SerializedTest { type: "test", name: t.name }); for ts in self.collector.testsets { let expanded = self.expansions.get(ts.name) } match (expanded) { sub: testing.TestRegistry => {  } items.push(testing.SerializedTestSet { name: ts.name, items: sub.serialize(), loadingTimeMs: sub.loading_time_ms }), null => {  } items.push(testing.SerializedTest { type: "lazyTestSet", name: ts.name }) }; return items }
@@ -130,7 +130,7 @@ type testing.Outcome = "pass" | "fail" | "error"
 type testing.TestBody = () -> void throws unknown
 type testing.TestReportThunk = () -> testing.TestReport throws never
 type testing.TestRunner = (testing.TestReportThunk) -> testing.TestReportThunk throws never
-type testing.TestSetBody = (testing.TestCollector) -> void throws unknown
+type testing.TestSetBody = (TestCollector) -> void throws unknown
 type testing.TestSetReportThunk = () -> testing.TestSetReport throws never
 type testing.TestSetRunner = (testing.TestSetReportThunk) -> testing.TestSetReportThunk throws never
 function testing.from_json(j: baml.json.json) -> testing.RunReport  [expr] {

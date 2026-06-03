@@ -26,7 +26,7 @@ jobs:
     runs-on: blacksmith-4vcpu-ubuntu-2404
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v6
+      - uses: useblacksmith/checkout@v1
         with:
           persist-credentials: false
 
@@ -45,6 +45,11 @@ jobs:
           # Read-only consumer. The canary saver lives in
           # cargo-tests.reusable.yaml; see the cache strategy comment there.
           save-if: false
+
+      # Separate step so if fetch is slow, build is fast.
+      - name: "Fetch cargo dependencies"
+        run: cargo fetch --target wasm32-unknown-unknown
+        working-directory: baml_language
 
       # Only wasm-pack is needed here.
       - name: "Install mise"

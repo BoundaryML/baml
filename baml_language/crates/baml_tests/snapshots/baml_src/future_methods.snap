@@ -42,7 +42,8 @@ function future_methods.methods_after_cancel() -> baml.future.FutureState {
     spawn
     store_var _3
     load_var _3
-    store_var_load_var f
+    store_var f
+    load_var f
     call baml.future.Future.cancel
     pop 1
     load_var f
@@ -104,7 +105,8 @@ function future_methods.methods_on_pending_future() -> baml.future.FutureState {
     spawn
     store_var _3
     load_var _3
-    store_var_load_var f
+    store_var f
+    load_var f
     call baml.future.Future.is_settled
     pop 1
     load_var f

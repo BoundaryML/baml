@@ -55,6 +55,11 @@ macro_rules! define_keyword_tokens {
 define_keyword_tokens! {
     "class" => SyntaxKind::KW_CLASS => Class;
     "enum" => SyntaxKind::KW_ENUM => Enum;
+    "interface" => SyntaxKind::KW_INTERFACE => Interface;
+    "implements" => SyntaxKind::KW_IMPLEMENTS => Implements;
+    "implement" => SyntaxKind::KW_IMPLEMENT => Implement;
+    "extends" => SyntaxKind::KW_EXTENDS => Extends;
+    "requires" => SyntaxKind::KW_REQUIRES => Requires;
     "function" => SyntaxKind::KW_FUNCTION => Function;
     "client" => SyntaxKind::KW_CLIENT => Client;
     "generator" => SyntaxKind::KW_GENERATOR => Generator;

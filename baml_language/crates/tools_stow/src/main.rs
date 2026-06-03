@@ -67,6 +67,12 @@ pub struct Namespace {
     /// Approved multi-word prefixes (e.g., "compiler" for `baml_compiler`_*)
     #[serde(default)]
     pub approved_prefixes: Vec<String>,
+    /// Approved full suffixes accepted verbatim (everything after the namespace
+    /// prefix), e.g. "`python_pydantic2`" for `sdkgen_python_pydantic2`. Use this
+    /// when the whole multi-word tail is meaningful and shouldn't be validated
+    /// part-by-part via `approved_prefixes`.
+    #[serde(default)]
+    pub approved_suffixes: Vec<String>,
     /// Test crates exempt from "must have prefix crate" rule
     #[serde(default)]
     pub test_crate_exceptions: Vec<String>,
@@ -192,6 +198,7 @@ impl Config {
             self.namespaces = vec![Namespace {
                 name: "baml".into(),
                 approved_prefixes: std::mem::take(&mut self.approved_prefixes),
+                approved_suffixes: vec![],
                 test_crate_exceptions: std::mem::take(&mut self.test_crate_exceptions),
                 dependency_rules: vec![],
                 name_exceptions: HashMap::new(),
@@ -920,6 +927,13 @@ fn check_crate_naming_convention(
 
     // Remove the namespace prefix (e.g., "baml_" or "bex_")
     let suffix = &crate_name[namespace.name.len() + 1..];
+
+    // Accept the whole tail verbatim if it's an approved suffix
+    // (e.g. sdkgen_python_pydantic2 -> "python_pydantic2").
+    if namespace.approved_suffixes.iter().any(|s| s == suffix) {
+        return errors;
+    }
+
     let parts: Vec<&str> = suffix.split('_').collect();
 
     match parts.len() {

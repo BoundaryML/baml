@@ -6,14 +6,11 @@ use anyhow::Result;
 use clap::{CommandFactory, Parser, Subcommand};
 
 pub(crate) const fn release_version() -> &'static str {
-    match option_env!("BAML_RELEASE_VERSION") {
-        Some(version) => version,
-        None => env!("CARGO_PKG_VERSION"),
-    }
+    baml_version::CANONICAL_VERSION
 }
 
 #[derive(Parser, Debug)]
-#[command(author, version = release_version(), about = "A CLI tool for working with BAML. Learn more at https://docs.boundaryml.com.", long_about = None)]
+#[command(name = "baml-cli", author, version = release_version(), about = "A CLI tool for working with BAML. Learn more at https://docs.boundaryml.com.", long_about = None)]
 #[command(styles = crate::reporter::CLAP_STYLING)]
 #[command(propagate_version = true)]
 pub(crate) struct RuntimeCli {
@@ -88,6 +85,9 @@ pub(crate) enum Commands {
     #[command(about = "Package a BAML target as a standalone executable")]
     Pack(crate::pack_command::PackArgs),
 
+    #[command(about = "Install or manage IDE integration assets")]
+    Ide(crate::ide_command::IdeArgs),
+
     #[command(about = "Starts a language server", name = "lsp")]
     LanguageServer(crate::lsp::LanguageServerArgs),
     // #[command(about = "Start an interactive REPL for BAML expressions", hide = true)]
@@ -149,6 +149,7 @@ impl RuntimeCli {
             Commands::New(args) => args.run(),
             Commands::Run(args) => args.run(),
             Commands::Pack(args) => args.run(),
+            Commands::Ide(args) => args.run(),
             Commands::Describe(args) => args.run(),
             Commands::Generate(args) => args.run(),
             Commands::Grep(args) => args.run(),
@@ -177,7 +178,6 @@ mod tests {
 
     #[test]
     fn release_version_matches_compile_time_setting() {
-        let expected = option_env!("BAML_RELEASE_VERSION").unwrap_or(env!("CARGO_PKG_VERSION"));
-        assert_eq!(release_version(), expected);
+        assert_eq!(release_version(), baml_version::CANONICAL_VERSION);
     }
 }

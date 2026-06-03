@@ -2,8 +2,8 @@
 // cases are intentionally encode-back tests: the host receives a generated
 // class instance with an embedded BamlHandle, calls generated stdlib methods
 // with that same instance, and the engine must see the original handle state.
-import { baml } from "./baml_sdk";
-import { describe, it, expect, beforeAll, afterAll } from "@jest/globals";
+import { baml } from "./baml_sdk/index.js";
+import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import * as http from "node:http";
 import * as fs from "node:fs";
 import * as os from "node:os";

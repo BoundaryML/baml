@@ -589,6 +589,55 @@ async fn host_callable_wrong_class_field_type_surfaces_as_host_callable_throw() 
     drop(arc);
 }
 
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn host_callable_wrong_generic_class_field_type_surfaces_as_host_callable_throw() {
+    let source = r#"
+        class Box<T> {
+            value T
+        }
+        function make_box(f: () -> Box<int>) -> Box<int> {
+            return f();
+        }
+    "#;
+
+    // Behaviour: return a Box whose generic `value` field is instantiated as
+    // `int`, but the host fills it with a string.
+    let arc = register_host_callable(|_items| {
+        let mut fields = IndexMap::new();
+        fields.insert(
+            "value".to_string(),
+            BexExternalValue::String("oops".to_string().into()),
+        );
+        FakeReturn::Ok(BexExternalValue::Instance {
+            class_name: "Box".to_string(),
+            fields,
+        })
+    });
+
+    let snapshot = compile_for_engine(source);
+    let engine = Arc::new(
+        BexEngine::new(
+            snapshot,
+            Arc::new(sys_native::SysOps::native()),
+            None,
+            Vec::new(),
+        )
+        .expect("Failed to create engine"),
+    );
+
+    let result = engine
+        .call_function(
+            "make_box",
+            vec![BexExternalValue::HostValue(Arc::clone(&arc))],
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+            true,
+        )
+        .await;
+
+    assert_host_callable_throw(&result);
+    drop(arc);
+}
+
 // ============================================================================
 // Cancel eviction: a hung host call leaves an in-flight `CompletionHandle`
 //        in the `host_dispatch` table; cancelling the BAML call drops the

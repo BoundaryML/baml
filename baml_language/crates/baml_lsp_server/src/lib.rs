@@ -51,7 +51,7 @@ use playground_ws::WsOutMessage;
 use tokio::net::TcpListener;
 
 pub fn version() -> &'static str {
-    env!("CARGO_PKG_VERSION")
+    baml_version::CANONICAL_VERSION
 }
 
 /// Build `SysOps` for a playground-connected project.

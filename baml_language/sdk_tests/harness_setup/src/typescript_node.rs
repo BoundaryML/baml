@@ -1,12 +1,12 @@
 //! Node.js + TypeScript sdk-test target — build-script side.
 //!
 //! Mirrors [`crate::python_pydantic2`] but for the
-//! TypeScript/Node.js toolchain (pnpm + tsc + jest).
+//! TypeScript/Node.js toolchain (pnpm + tsc + vitest).
 //!
-//! `codegen_nodejs::to_source_code` runs directly (no `catch_unwind`):
+//! `sdkgen_typescript_node::to_source_code` runs directly (no `catch_unwind`):
 //! the emitter has landed, so a panic is a real bug and aborts the build
 //! loudly. Each fixture's `baml_sdk/` is generated, then the per-fixture
-//! `tsc` / `jest` tests run under `cargo nextest`.
+//! `tsc` / `vitest` tests run under `cargo nextest`.
 //!
 //! **pnpm steps live in
 //! `sdk_tests/crates/typescript_node/setup.sh`** (Unix) or
@@ -42,7 +42,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use codegen_nodejs::NamingConvention;
+use sdkgen_typescript_node::NamingConvention;
 
 use crate::{
     BuildDiagnostics, copy_customizable, discover_fixtures, fixtures_root_from_manifest,
@@ -50,18 +50,13 @@ use crate::{
 };
 
 /// Per-fixture package.json. `__PACKAGE_NAME__` is substituted per
-/// fixture. The dev toolchain (jest + ts-jest + typescript + types)
+/// fixture. The dev toolchain (vitest + typescript + types)
 /// plus the BAML runtime dep on `@boundaryml/baml-core-node` (which
 /// `file:`-points at the bridge_nodejs source tree five levels up:
 /// `crates/typescript_node/<F>/generated/` →
 /// `crates/typescript_node/<F>/` → `crates/typescript_node/` →
 /// `crates/` → `sdk_tests/` → `baml_language/`) is resolved by
 /// `setup.sh`'s per-fixture `pnpm install`.
-///
-/// `haste.enableSymlinks = true` + `watchman = false` are required:
-/// `customizable/*.test.ts` files are symlinked into the generated
-/// dir, and jest's default haste module map skips symlinks (watchman
-/// can't track them, so the two flags move together).
 ///
 /// Lives at `src/templates/package.json` so editors give it real
 /// JSON syntax highlighting + schema validation.
@@ -74,7 +69,7 @@ const PACKAGE_JSON_TEMPLATE: &str = include_str!("templates/package.json");
 /// `preserveSymlinks`, TypeScript resolves the test file to its
 /// realpath under `customizable/` and then walks up from there
 /// looking for `node_modules` — which doesn't exist outside the
-/// generated dir, so `@jest/globals` (and every other dev dep)
+/// generated dir, so test-framework packages (and every other dev dep)
 /// fails to resolve. With the flag, the resolver stays in the
 /// symlink's view of the world and finds
 /// `<F>/generated/node_modules/`.
@@ -83,7 +78,7 @@ const TSCONFIG_JSON: &str = include_str!("templates/tsconfig.json");
 /// Shared pnpm store dir (`<workspace>/target/<CACHE_SUBDIR>`) —
 /// `setup.sh` exports `CACHE_ENV_VAR=<that path>` during install, and
 /// `sdk_test_harness_runner::run_test_cmd` sets the same env var when
-/// invoking tsc/jest. Harmless for tsc/jest (they don't read pnpm
+/// invoking tsc/vitest. Harmless for tsc/vitest (they don't read pnpm
 /// config) but keeps the harness_runner API uniform with python's uv
 /// cache plumbing.
 const CACHE_SUBDIR: &str = "pnpm-store";
@@ -118,7 +113,7 @@ pub fn run_all() {
         codegen_fixture(&fixtures_root, fixture, &manifest_dir, &mut diagnostics);
         fixture_tests.push(FixtureTests {
             name: fixture.clone(),
-            has_jest_tests: has_jest_tests(&manifest_dir.join(fixture).join("customizable")),
+            has_vitest_tests: has_vitest_tests(&manifest_dir.join(fixture).join("customizable")),
         });
     }
 
@@ -134,7 +129,7 @@ pub fn run_all() {
 
 struct FixtureTests {
     name: String,
-    has_jest_tests: bool,
+    has_vitest_tests: bool,
 }
 
 fn codegen_fixture(
@@ -162,7 +157,7 @@ fn codegen_fixture(
     // and downgraded to an empty `baml_sdk/`.
     let pool = loaded.pool;
     let baml_bytecode = loaded.baml_bytecode;
-    let output = codegen_nodejs::to_source_code_with_bytecode(
+    let output = sdkgen_typescript_node::to_source_code_with_bytecode(
         &pool,
         &baml_bytecode,
         NamingConvention::PreserveCase,
@@ -190,17 +185,9 @@ fn codegen_fixture(
 
     let custom = fixture_root.join("customizable");
     if custom.exists() {
-        // Copy (rather than symlink, as python does) because node /
-        // ts-jest follow symlinks during module resolution: the
-        // realpath of a symlinked `*.test.ts` lives under
-        // `customizable/` where there is no `node_modules`, so
-        // `@jest/globals` (and every other dev dep) fails to resolve.
-        // Setting `NODE_OPTIONS=--preserve-symlinks` to keep jest in
-        // the symlink view also breaks `pnpm` itself (its CLI is
-        // installed via symlink and uses a relative `require`).
-        // Copying is cheaper than fighting that, and build.rs's
-        // `rerun-if-changed` watch on `customizable/` re-stages on
-        // edits.
+        // Copying keeps test module resolution inside `generated/`, where the
+        // fixture-local node_modules lives. It also avoids pnpm/symlink
+        // interactions in setup scripts.
         let copy_result = panic::catch_unwind(panic::AssertUnwindSafe(|| {
             copy_customizable(&custom, &generated);
         }));
@@ -247,6 +234,23 @@ fn write_fixtures_tests_rs(out_dir: &Path, fixtures: &[FixtureTests]) {
     buf.push_str(&format!(
         "::sdk_test_harness_runner::setup_guard!({SETUP_ENV_VAR:?});\n"
     ));
+    buf.push_str(&format!(
+        r#"
+mod bridge_nodejs {{
+    #[test]
+    fn attw() {{
+        ::sdk_test_harness_runner::run_workspace_cmd(
+            "sdks/nodejs/bridge_nodejs",
+            "pnpm exec attw --pack --profile esm-only",
+            "{cache_subdir}",
+            "{cache_env_var}",
+        );
+    }}
+}}
+"#,
+        cache_subdir = CACHE_SUBDIR,
+        cache_env_var = CACHE_ENV_VAR,
+    ));
     for fixture in fixtures {
         let name = &fixture.name;
         buf.push_str(&format!(
@@ -262,6 +266,11 @@ mod {fixture} {{
     }}
 
     #[test]
+    fn esm_output() {{
+        ::sdk_test_harness_runner::assert_typescript_node_generated_esm("{fixture}");
+    }}
+
+    #[test]
     fn tsc() {{
         cmd("node node_modules/typescript/bin/tsc --noEmit");
     }}
@@ -271,12 +280,12 @@ mod {fixture} {{
             cache_env_var = CACHE_ENV_VAR,
         ));
 
-        if fixture.has_jest_tests {
+        if fixture.has_vitest_tests {
             buf.push_str(
                 r#"
     #[test]
-    fn jest() {
-        cmd("pnpm exec jest");
+    fn vitest() {
+        cmd("pnpm exec vitest run");
     }
 "#,
             );
@@ -292,7 +301,7 @@ mod {fixture} {{
     fs::write(&target, buf).unwrap();
 }
 
-fn has_jest_tests(dir: &Path) -> bool {
+fn has_vitest_tests(dir: &Path) -> bool {
     let Ok(entries) = fs::read_dir(dir) else {
         return false;
     };
@@ -300,7 +309,7 @@ fn has_jest_tests(dir: &Path) -> bool {
     for entry in entries.flatten() {
         let path = entry.path();
         if path.is_dir() {
-            if has_jest_tests(&path) {
+            if has_vitest_tests(&path) {
                 return true;
             }
         } else if path

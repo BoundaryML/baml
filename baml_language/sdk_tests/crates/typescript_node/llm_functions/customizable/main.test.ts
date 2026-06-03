@@ -16,13 +16,13 @@
 // header on `*$build_request`); that's deferred until the nodejs
 // runtime's request-introspection API is settled.
 
-import { describe, it, expect } from "@jest/globals";
+import { describe, it, expect } from "vitest";
 
-import * as bamlSdk from "./baml_sdk";
-import * as lorem from "./baml_sdk/lorem";
-import * as ipsum from "./baml_sdk/ipsum";
-import { Resume, StreamingDoc } from "./baml_sdk/lorem";
-import { Sentiment } from "./baml_sdk/ipsum";
+import * as bamlSdk from "./baml_sdk/index.js";
+import * as lorem from "./baml_sdk/lorem/index.js";
+import * as ipsum from "./baml_sdk/ipsum/index.js";
+import { Resume, StreamingDoc } from "./baml_sdk/lorem/index.js";
+import { Sentiment } from "./baml_sdk/ipsum/index.js";
 
 describe("llm_functions — namespace imports", () => {
   it("baml_sdk root imports cleanly", () => {

@@ -1,7 +1,7 @@
 // test_engine.test.ts — mirrors bridge_python/tests/test_engine.py
 
 import { BamlRuntime, callFunctionSync, callFunction,
-         AbortController, getRuntime, getVersion, flushEvents } from '../index';
+         AbortController, getRuntime, getVersion, flushEvents } from '../dist/index.js';
 
 const BAML_SOURCE = `
 function ReturnOne() -> int {

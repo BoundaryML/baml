@@ -20,8 +20,8 @@ edition = "2021"
 publish = false
 
 [dependencies]
-codegen_python = { workspace = true }
-codegen_nodejs = { workspace = true }
+sdkgen_python_pydantic2 = { workspace = true }
+sdkgen_typescript_node = { workspace = true }
 baml_codegen_types = { workspace = true }
 baml_db = { workspace = true }
 baml_project = { workspace = true }

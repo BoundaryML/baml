@@ -81,7 +81,11 @@ enum StructuralTy {
     /// Interface type (BEP-044). Distinct from `Class` so that nominal
     /// `class T implements I` subtyping doesn't accidentally fire on the
     /// structural class-name match.
-    Interface(QualifiedTypeName, Vec<StructuralTy>),
+    Interface(
+        QualifiedTypeName,
+        Vec<StructuralTy>,
+        Vec<(Name, StructuralTy)>,
+    ),
     Enum(QualifiedTypeName),
     EnumVariant(QualifiedTypeName, Name),
     // Constructors
@@ -105,6 +109,12 @@ enum StructuralTy {
     TyVar(QualifiedTypeName),
     /// A generic type parameter — opaque, only subtypes itself and `BuiltinUnknown`.
     TypeVar(Name),
+    /// Symbolic associated type projection — opaque unless already resolved.
+    AssociatedTypeProjection {
+        base: Box<StructuralTy>,
+        interface: Option<Box<StructuralTy>>,
+        member: Name,
+    },
     // Special
     Never,
     Void,
@@ -129,9 +139,23 @@ impl StructuralTy {
             StructuralTy::Class(qn, args) => {
                 StructuralTy::Class(qn, args.into_iter().map(Self::canonicalize).collect())
             }
-            StructuralTy::Interface(qn, args) => {
-                StructuralTy::Interface(qn, args.into_iter().map(Self::canonicalize).collect())
-            }
+            StructuralTy::Interface(qn, args, associated_bindings) => StructuralTy::Interface(
+                qn,
+                args.into_iter().map(Self::canonicalize).collect(),
+                associated_bindings
+                    .into_iter()
+                    .map(|(name, ty)| (name, ty.canonicalize()))
+                    .collect(),
+            ),
+            StructuralTy::AssociatedTypeProjection {
+                base,
+                interface,
+                member,
+            } => StructuralTy::AssociatedTypeProjection {
+                base: Box::new(base.canonicalize()),
+                interface: interface.map(|interface| Box::new(interface.canonicalize())),
+                member,
+            },
             StructuralTy::Optional(inner) => StructuralTy::Optional(Box::new(inner.canonicalize())),
             StructuralTy::List(inner) => StructuralTy::List(Box::new(inner.canonicalize())),
             StructuralTy::Map { key, value } => StructuralTy::Map {
@@ -371,6 +395,18 @@ impl StructuralTy {
             // Placed here rather than as an early guard so that Union/Optional
             // decomposition rules above can match first (e.g. T <: T | U).
             (StructuralTy::TypeVar(v1), StructuralTy::TypeVar(v2)) => v1 == v2,
+            (
+                StructuralTy::AssociatedTypeProjection {
+                    base: lb,
+                    interface: li,
+                    member: lm,
+                },
+                StructuralTy::AssociatedTypeProjection {
+                    base: rb,
+                    interface: ri,
+                    member: rm,
+                },
+            ) => lm == rm && lb == rb && li == ri,
 
             _ => false,
         };
@@ -484,12 +520,27 @@ fn substitute(
                 .map(|t| substitute(t, var, replacement))
                 .collect(),
         ),
-        StructuralTy::Interface(qn, args) => StructuralTy::Interface(
+        StructuralTy::Interface(qn, args, associated_bindings) => StructuralTy::Interface(
             qn.clone(),
             args.iter()
                 .map(|t| substitute(t, var, replacement))
                 .collect(),
+            associated_bindings
+                .iter()
+                .map(|(name, ty)| (name.clone(), substitute(ty, var, replacement)))
+                .collect(),
         ),
+        StructuralTy::AssociatedTypeProjection {
+            base,
+            interface,
+            member,
+        } => StructuralTy::AssociatedTypeProjection {
+            base: Box::new(substitute(base, var, replacement)),
+            interface: interface
+                .as_ref()
+                .map(|interface| Box::new(substitute(interface, var, replacement))),
+            member: member.clone(),
+        },
         StructuralTy::Mu { var: v, body } if v != var => StructuralTy::Mu {
             var: v.clone(),
             body: Box::new(substitute(body, var, replacement)),
@@ -544,12 +595,22 @@ fn normalize_impl(
                 .collect();
             StructuralTy::Class(qn.clone(), args)
         }
-        Ty::Interface(qn, type_args, _) => {
+        Ty::Interface(qn, type_args, associated_bindings, _) => {
             let args = type_args
                 .iter()
                 .map(|t| normalize_impl(t, aliases, recursive, expanding))
                 .collect();
-            StructuralTy::Interface(qn.clone(), args)
+            let mut associated_bindings: Vec<_> = associated_bindings
+                .iter()
+                .map(|(name, ty)| {
+                    (
+                        name.clone(),
+                        normalize_impl(ty, aliases, recursive, expanding),
+                    )
+                })
+                .collect();
+            associated_bindings.sort_by(|(lhs, _), (rhs, _)| lhs.cmp(rhs));
+            StructuralTy::Interface(qn.clone(), args, associated_bindings)
         }
         Ty::Enum(qn, _) => StructuralTy::Enum(qn.clone()),
         Ty::EnumVariant(qn, v, _) => StructuralTy::EnumVariant(qn.clone(), v.clone()),
@@ -610,6 +671,18 @@ fn normalize_impl(
             throws: Box::new(normalize_impl(throws, aliases, recursive, expanding)),
         },
         Ty::TypeVar(name, _) => StructuralTy::TypeVar(name.clone()),
+        Ty::AssociatedTypeProjection {
+            base,
+            interface,
+            member,
+            ..
+        } => StructuralTy::AssociatedTypeProjection {
+            base: Box::new(normalize_impl(base, aliases, recursive, expanding)),
+            interface: interface.as_ref().map(|interface| {
+                Box::new(normalize_impl(interface, aliases, recursive, expanding))
+            }),
+            member: member.clone(),
+        },
         // `$rust_type` — opaque Rust-managed state. Treated as Unknown
         // in the structural type system (cannot be constructed or destructured
         // by user code).
@@ -667,9 +740,25 @@ fn ty_has_cycle(
         Ty::Union(types, _) => types
             .iter()
             .any(|t| ty_has_cycle(t, aliases, visited, stack)),
-        Ty::Class(_, type_args, _) | Ty::Interface(_, type_args, _) => type_args
+        Ty::Class(_, type_args, _) => type_args
             .iter()
             .any(|t| ty_has_cycle(t, aliases, visited, stack)),
+        Ty::Interface(_, type_args, associated_bindings, _) => {
+            type_args
+                .iter()
+                .any(|t| ty_has_cycle(t, aliases, visited, stack))
+                || associated_bindings
+                    .iter()
+                    .any(|(_, ty)| ty_has_cycle(ty, aliases, visited, stack))
+        }
+        Ty::AssociatedTypeProjection {
+            base, interface, ..
+        } => {
+            ty_has_cycle(base, aliases, visited, stack)
+                || interface
+                    .as_ref()
+                    .is_some_and(|interface| ty_has_cycle(interface, aliases, visited, stack))
+        }
         Ty::Function {
             params,
             ret,
@@ -813,12 +902,34 @@ fn extract_type_alias_deps(
                     visit(m, aliases, non_structural, structural, in_structural);
                 }
             }
-            Ty::Class(_, type_args, _) | Ty::Interface(_, type_args, _) => {
+            Ty::Class(_, type_args, _) => {
                 // Nominal type_args are pass-through for cycle classification.
                 // User-defined nominal types are not structural guards like List/Map,
                 // so their generic arguments inherit the surrounding context.
                 for t in type_args {
                     visit(t, aliases, non_structural, structural, in_structural);
+                }
+            }
+            Ty::Interface(_, type_args, associated_bindings, _) => {
+                for t in type_args {
+                    visit(t, aliases, non_structural, structural, in_structural);
+                }
+                for (_, ty) in associated_bindings {
+                    visit(ty, aliases, non_structural, structural, in_structural);
+                }
+            }
+            Ty::AssociatedTypeProjection {
+                base, interface, ..
+            } => {
+                visit(base, aliases, non_structural, structural, in_structural);
+                if let Some(interface) = interface {
+                    visit(
+                        interface,
+                        aliases,
+                        non_structural,
+                        structural,
+                        in_structural,
+                    );
                 }
             }
             Ty::Function {
@@ -2481,7 +2592,12 @@ mod tests {
         let mut aliases = HashMap::new();
         aliases.insert(
             qn("A"),
-            Ty::Interface(qn("BoxLike"), vec![type_alias("A")], TyAttr::default()),
+            Ty::Interface(
+                qn("BoxLike"),
+                vec![type_alias("A")],
+                vec![],
+                TyAttr::default(),
+            ),
         );
 
         let recursive = find_recursive_aliases(&aliases);

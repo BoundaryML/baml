@@ -449,6 +449,7 @@ pub fn ppir_expansion_items(db: &dyn Db, file: SourceFile) -> PpirExpansionItems
                     expr: ast::TypeExpr::Path {
                         segments: vec![Name::new("baml"), Name::new("llm"), Name::new("Stream")],
                         generic_args: vec![stream_type_expr, original_return_type_expr],
+                        associated_type_bindings: vec![],
                         attrs: vec![],
                     },
                     span,
@@ -457,13 +458,23 @@ pub fn ppir_expansion_items(db: &dyn Db, file: SourceFile) -> PpirExpansionItems
                 // --- $stream companion ---
                 // Calls baml.llm.stream_llm_function(CLIENT, "FuncName", map { args })
                 {
-                    let param_names: Vec<Name> =
-                        func.params.iter().map(|p| p.name.clone()).collect();
+                    let param_names: Vec<Name> = func
+                        .params
+                        .iter()
+                        .filter(|p| p.name.as_str() != "client")
+                        .map(|p| p.name.clone())
+                        .collect();
+                    let client_arg_name = if func.params.iter().any(|p| p.name.as_str() == "client")
+                    {
+                        Some("client")
+                    } else {
+                        client_name.as_deref()
+                    };
                     let (body, source_map) = ast::synthesize_llm_builtin_call(
                         "stream_llm_function",
                         func.name.as_str(),
                         &param_names,
-                        client_name.as_deref(),
+                        client_arg_name,
                         Vec::new(),
                         span,
                     );
@@ -489,7 +500,13 @@ pub fn ppir_expansion_items(db: &dyn Db, file: SourceFile) -> PpirExpansionItems
 
                 // --- $parse_stream companion ---
                 // Requires a client (calls CLIENT.__make_stream).
-                if let Some(ref client_name) = client_name {
+                if let Some(client_arg_name) = func
+                    .params
+                    .iter()
+                    .find(|p| p.name.as_str() == "client")
+                    .map(|_| "client")
+                    .or(client_name.as_deref())
+                {
                     let sse_param = ast::Param {
                         name: Name::new("sse"),
                         type_expr: Some(ast::SpannedTypeExpr {
@@ -500,6 +517,7 @@ pub fn ppir_expansion_items(db: &dyn Db, file: SourceFile) -> PpirExpansionItems
                                     Name::new("SseStream"),
                                 ],
                                 generic_args: vec![],
+                                associated_type_bindings: vec![],
                                 attrs: vec![],
                             },
                             span,
@@ -509,15 +527,24 @@ pub fn ppir_expansion_items(db: &dyn Db, file: SourceFile) -> PpirExpansionItems
                         name_span,
                     };
 
-                    let (body, source_map) =
-                        ast::synthesize_llm_make_stream_call(func.name.as_str(), client_name, span);
+                    let (body, source_map) = ast::synthesize_llm_make_stream_call(
+                        func.name.as_str(),
+                        client_arg_name,
+                        span,
+                    );
+                    let mut params = vec![sse_param];
+                    if let Some(client_param) =
+                        func.params.iter().find(|p| p.name.as_str() == "client")
+                    {
+                        params.push(client_param.clone());
+                    }
 
                     let companion = ast::FunctionDef {
                         name: SmolStr::new(format!("{}$parse_stream", func.name)),
                         generic_params: func.generic_params.clone(),
                         generic_param_bounds: func.generic_param_bounds.clone(),
-                        params: vec![sse_param],
-                        defaults: ast::FunctionDefaults::empty(),
+                        params,
+                        defaults: func.defaults.clone(),
                         return_type: Some(stream_return_type),
                         throws: None,
                         body: Some(ast::FunctionBodyDef::Expr(body, source_map)),
