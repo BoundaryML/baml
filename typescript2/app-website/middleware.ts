@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from 'next/server';
-import { detectAgentMode } from '@/lib/agent-detect';
+import { detectAgentMode } from './lib/agent-detect';
 
 export function middleware(req: NextRequest) {
   if (req.nextUrl.searchParams.get('from') === 'toggle') {
