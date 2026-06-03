@@ -13,7 +13,7 @@
     "build": "turbo run build",
     "vscode:package": "pnpm run vscode:package:clean && pnpm run vscode:package:build && pnpm run vscode:package:stage && pnpm run vscode:package:vsix",
     "vscode:package:clean": "rm -rf app-vscode-webview/dist app-vscode-ext/dist app-vscode-ext/*.vsix",
-    "vscode:package:build": "pnpm run build:wasm && pnpm --filter app-vscode-webview build && pnpm --filter baml-language build",
+    "vscode:package:build": "pnpm run build:wasm && pnpm --filter @b/pkg-proto generate && pnpm --filter app-vscode-webview build && pnpm --filter baml-language build",
     "vscode:package:stage": "rm -rf app-vscode-ext/dist/playground && mkdir -p app-vscode-ext/dist/playground && cp -R app-vscode-webview/dist/. app-vscode-ext/dist/playground/",
     "vscode:package:vsix": "cd app-vscode-ext && pnpm dlx @vscode/vsce package --no-dependencies --allow-missing-repository --skip-license",
     "typecheck": "turbo run typecheck",
