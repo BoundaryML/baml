@@ -2519,14 +2519,12 @@ function baml.llm.Client.execute_once_oneshot(self: baml.llm.Client, context: ba
     load_type #0
     load_var self
     load_field .sub_clients
-    load_var _50
-    load_var self
+    load_var2 16 1
     load_field .sub_clients
     container_len
     mod_int
     load_array_element
-    load_var context
-    load_var active_delay_ms
+    load_var2 2 3
     call baml.llm.Client.execute_oneshot
     jump L15
 
@@ -2691,14 +2689,12 @@ function baml.llm.Client.execute_once_stream(self: baml.llm.Client, context: bam
     load_type #1
     load_var self
     load_field .sub_clients
-    load_var _38
-    load_var self
+    load_var2 12 1
     load_field .sub_clients
     container_len
     mod_int
     load_array_element
-    load_var context
-    load_var active_delay_ms
+    load_var2 2 3
     call baml.llm.Client.execute_stream
     jump L10
 
