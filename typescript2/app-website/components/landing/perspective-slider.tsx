@@ -1,9 +1,5 @@
 'use client';
 
-import { BAML } from '@boundaryml/baml-lezer';
-import { EditorView, lineNumbers } from '@codemirror/view';
-import { vscodeLightInit } from '@uiw/codemirror-theme-vscode';
-import CodeMirror from '@uiw/react-codemirror';
 import { useReducedMotion } from 'motion/react';
 import {
   type CSSProperties,
@@ -13,6 +9,7 @@ import {
   useRef,
   useState,
 } from 'react';
+import { useIsMobile } from '@/hooks/use-media-query';
 
 const BG = '#ffffff';
 const INK = '#1A1612';
@@ -26,133 +23,160 @@ const GUTTER_BG = '#F5F1E5';
 const MONO =
   '"IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace';
 
-const BAML_CODE = `enum RiskTier {
-  low
-  review
-  block
-}
-
-class LineItem {
-  sku         string?
-  name        string
-  quantity    int
-  unit_price  float
-  confidence  float @stream.done
-}
-
-class InvoiceDraft {
-  vendor      string @stream.done
-  currency    string
-  due_date    string?
-  total       float @stream.done
-  line_items  LineItem[]
-}
-
-class ValidationIssue {
-  path      string
-  severity  "warn" | "error"
-  message   string
+const BAML_CODE = `class LineItem {
+    name      string
+    quantity  int
+    price     float
 }
 
 class Invoice {
-  vendor       string
-  amount_due   float
-  due_date     string?
-  risk         RiskTier
-  issues       ValidationIssue[]
+    vendor      string
+    total       float
+    due_date    string?
+    line_items  LineItem[]
 }
 
-class ParseFailure {
-  reason string
-  retryable bool
+class ValidationIssue {
+    path      string
+    severity  string
+    message   string
 }
 
-function ExtractInvoice(
-  text: string,
-  locale: string
-) -> InvoiceDraft throws ParseFailure {
-  client GPT4o
-  prompt #"
-    Extract a normalized invoice draft.
-    Prefer ISO dates and preserve uncertain line items.
-    {{ ctx.output_format }}
-
-    Locale: {{ locale }}
-    {{ _.role("user") }}
-    {{ text }}
-  "#
+enum RiskTier {
+    Low,
+    Review,
+    Block,
 }
 
-function ValidateInvoice(draft: InvoiceDraft) -> ValidationIssue[] {
-  let line_total = draft.line_items
-    .map((item) => item.quantity * item.unit_price)
-    .sum();
-
-  if ((line_total - draft.total).abs() > 0.02) {
-    [ValidationIssue {
-      path: "total",
-      severity: "error",
-      message: "line item sum does not match total",
-    }]
-  } else {
-    []
-  }
+class Report {
+    risk    RiskTier
+    issues  ValidationIssue[]
+    total   float
 }
 
-function RiskScore(draft: InvoiceDraft) -> RiskTier {
-  if (draft.total > 25000.0) { RiskTier.block }
-  else if (draft.currency != "USD") { RiskTier.review }
-  else { RiskTier.low }
+function Abs(x: float) -> float {
+    if x < 0.0 { -x } else { x }
 }
 
-function ExtractAndReview(text: string) -> Invoice {
-  let draft = ExtractInvoice(text, "en-US") catch (err) {
-    _: ParseFailure => ExtractInvoice(text, "auto")
-  };
-
-  Invoice {
-    vendor: draft.vendor.trim(),
-    amount_due: draft.total,
-    due_date: draft.due_date,
-    risk: RiskScore(draft),
-    issues: ValidateInvoice(draft),
-  }
+function LineTotal(items: LineItem[]) -> float {
+    let total = 0.0;
+    for (let item in items) {
+        total += item.quantity * item.price;
+    }
+    return total;
 }
 
-testset "invoice-review" {
-  test "flags mismatched totals" {
-    let invoice = ExtractAndReview("Acme invoice 1001...");
-    assert.equal(invoice.risk, RiskTier.review);
-    assert.contains(invoice.issues.map((i) => i.path), "total");
-  }
+function ValidateInvoice(inv: Invoice) -> ValidationIssue[] {
+    let issues: ValidationIssue[] = [];
+    if Abs(LineTotal(inv.line_items) - inv.total) > 0.02 {
+        issues.push(ValidationIssue {
+            path: "total",
+            severity: "error",
+            message: "line item sum does not match total",
+        });
+    }
+    if inv.due_date == null {
+        issues.push(ValidationIssue {
+            path: "due_date",
+            severity: "warn",
+            message: "missing due date",
+        });
+    }
+    return issues;
+}
+
+function RiskScore(inv: Invoice) -> RiskTier {
+    if inv.total > 25000.0 {
+        return RiskTier.Block;
+    }
+    if inv.due_date == null {
+        return RiskTier.Review;
+    }
+    return RiskTier.Low;
+}
+
+function Review(inv: Invoice) -> Report {
+    return Report {
+        risk: RiskScore(inv),
+        issues: ValidateInvoice(inv),
+        total: inv.total,
+    };
+}
+
+// ── Optional: same pipeline starting from raw text. Requires OPENAI_API_KEY.
+
+client<llm> OpenAI {
+    provider openai
+    options {
+        model "gpt-4o-mini"
+        api_key env.OPENAI_API_KEY
+    }
+}
+
+function ExtractInvoice(text: string) -> Invoice {
+    client OpenAI
+    prompt #"
+        Extract a structured invoice from the text below.
+
+        {{ ctx.output_format }}
+
+        {{ _.role("user") }}
+        {{ text }}
+    "#
 }`;
 
-// ── Code panel ────────────────────────────────────────────────────────────────
+// ── Code panel (shiki-highlighted) ────────────────────────────────────────────
 
-const codeMirrorTheme = vscodeLightInit({
-  settings: {
-    background: CODE_BG,
-    fontFamily: MONO,
-    fontSize: '13px',
-    foreground: INK,
-    gutterActiveForeground: MUTED,
-    gutterBackground: GUTTER_BG,
-    gutterBorder: BORDER,
-    gutterForeground: '#B8B0A0',
-    lineHighlight: 'transparent',
-    selection: 'rgba(109,40,217,0.18)',
-    selectionMatch: 'rgba(109,40,217,0.12)',
-  },
-});
+type CodeToken = { content: string; color?: string };
+type CodeTokens = CodeToken[][];
 
-const codeMirrorExtensions = [
-  BAML(),
-  lineNumbers(),
-  EditorView.editable.of(false),
-  EditorView.lineWrapping,
-];
+function useTokenizedBaml(code: string): CodeTokens {
+  const [out, setOut] = useState<CodeTokens>(() =>
+    code.split('\n').map((line) => [{ content: line }] as CodeToken[]),
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const { createHighlighter } = await import('shiki');
+        const { bamlTextmate, bamlJinjaTextmate } = await import(
+          '@/lib/mdx/shiki-grammars'
+        );
+        const highlighter = await createHighlighter({
+          langs: [bamlJinjaTextmate, bamlTextmate],
+          themes: ['github-light'],
+        });
+        const r = highlighter.codeToTokens(code, {
+          // biome-ignore lint/suspicious/noExplicitAny: bamlTextmate lang name
+          lang: 'baml' as any,
+          theme: 'github-light',
+        });
+        if (cancelled) return;
+        setOut(
+          r.tokens.map((line) =>
+            line.map((t) => ({ content: t.content, color: t.color })),
+          ),
+        );
+      } catch {
+        /* fall back to plain text */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [code]);
+
+  return out;
+}
 
 function CodePanel() {
+  const tokens = useTokenizedBaml(BAML_CODE);
+  const LINE_HEIGHT = 20;
+  const LINE_NUM_WIDTH = 44;
+  const PAD_TOP = 12;
+  const PAD_LEFT = 16;
+
   return (
     <div
       style={{
@@ -219,21 +243,66 @@ function CodePanel() {
       <div
         style={{
           background: CODE_BG,
+          display: 'flex',
           flex: 1,
+          fontFamily: MONO,
+          fontSize: 13,
+          lineHeight: `${LINE_HEIGHT}px`,
           minHeight: 0,
           overflow: 'auto',
         }}
       >
-        <CodeMirror
-          basicSetup={false}
-          editable={false}
-          extensions={codeMirrorExtensions}
-          height="100%"
-          readOnly
-          style={{ background: CODE_BG, fontFamily: MONO, height: '100%' }}
-          theme={codeMirrorTheme}
-          value={BAML_CODE}
-        />
+        <div
+          aria-hidden
+          style={{
+            background: GUTTER_BG,
+            borderRight: `1px solid ${BORDER}`,
+            color: '#B8B0A0',
+            flexShrink: 0,
+            fontVariantNumeric: 'tabular-nums',
+            padding: `${PAD_TOP}px 8px`,
+            textAlign: 'right',
+            userSelect: 'none',
+            width: LINE_NUM_WIDTH,
+          }}
+        >
+          {tokens.map((_, i) => (
+            <div key={`ln-${i}`} style={{ height: LINE_HEIGHT }}>
+              {i + 1}
+            </div>
+          ))}
+        </div>
+        <pre
+          style={{
+            background: 'transparent',
+            color: INK,
+            flex: 1,
+            margin: 0,
+            minWidth: 0,
+            padding: `${PAD_TOP}px ${PAD_LEFT}px`,
+            tabSize: 4,
+            whiteSpace: 'pre',
+          }}
+        >
+          <code style={{ background: 'transparent', fontFamily: MONO }}>
+            {tokens.map((line, i) => (
+              <div key={`l-${i}`} style={{ minHeight: LINE_HEIGHT }}>
+                {line.length === 0 ? (
+                  <span>&#8203;</span>
+                ) : (
+                  line.map((tok, j) => (
+                    <span
+                      key={`t-${i}-${j}`}
+                      style={{ color: tok.color || INK }}
+                    >
+                      {tok.content}
+                    </span>
+                  ))
+                )}
+              </div>
+            ))}
+          </code>
+        </pre>
       </div>
     </div>
   );
@@ -261,59 +330,46 @@ type GraphEdge = {
   active?: boolean;
 };
 
-// Single horizontal flow keeps the eye moving left-to-right and gives
-// ExtractInvoice room to breathe as the visual centerpiece.
+// Single horizontal flow: Invoice → Review() → Report. Pure BAML — no LLM.
 const VIEW_W = 760;
 const VIEW_H = 360;
 
 const GRAPH_NODES: GraphNode[] = [
   {
     id: 'input',
-    kind: 'input',
-    label: 'text',
+    kind: 'class',
+    label: 'Invoice',
     state: 'success',
-    x: 24,
-    y: 154,
-    w: 100,
-    h: 52,
-  },
-  {
-    id: 'extract',
-    kind: 'llm',
-    label: 'ExtractInvoice',
-    client: 'GPT-4o',
-    state: 'running',
-    x: 156,
+    x: 30,
     y: 70,
     w: 220,
     h: 220,
   },
   {
-    id: 'draft',
-    kind: 'class',
-    label: 'InvoiceDraft',
-    state: 'running',
-    x: 400,
-    y: 76,
-    w: 196,
-    h: 208,
-  },
-  {
     id: 'review',
     kind: 'function',
-    label: 'ExtractAndReview',
-    state: 'idle',
-    x: 620,
-    y: 154,
-    w: 128,
-    h: 52,
+    label: 'Review',
+    state: 'success',
+    x: 296,
+    y: 158,
+    w: 168,
+    h: 44,
+  },
+  {
+    id: 'report',
+    kind: 'class',
+    label: 'Report',
+    state: 'success',
+    x: 510,
+    y: 70,
+    w: 220,
+    h: 220,
   },
 ];
 
 const GRAPH_EDGES: GraphEdge[] = [
-  { from: 'input', to: 'extract', active: true },
-  { from: 'extract', to: 'draft', active: true },
-  { from: 'draft', to: 'review' },
+  { from: 'input', to: 'review', active: true },
+  { from: 'review', to: 'report', active: true },
 ];
 
 // Editorial palette specific to the graph panel — pulled from the same token
@@ -466,38 +522,15 @@ function chipForKind(kind: GraphNode['kind']): {
   };
 }
 
-// Tokens for the streaming JSON preview inside the LLM node — github-light.
-type Tok = { t: string; c?: string };
+// github-light tokens for the JSON-shaped previews.
 const COL = {
   key: '#8250DF',
   str: '#0A3069',
   num: '#0550AE',
   punct: '#6E7781',
   brace: '#1F2328',
+  enum: '#953800',
 };
-const STREAM_LINES: Tok[][] = [
-  [{ t: '{', c: COL.brace }],
-  [
-    { t: '  ' },
-    { t: '"vendor"', c: COL.key },
-    { t: ': ', c: COL.punct },
-    { t: '"Acme Corp"', c: COL.str },
-    { t: ',', c: COL.punct },
-  ],
-  [
-    { t: '  ' },
-    { t: '"total"', c: COL.key },
-    { t: ': ', c: COL.punct },
-    { t: '1247.50', c: COL.num },
-    { t: ',', c: COL.punct },
-  ],
-  [
-    { t: '  ' },
-    { t: '"due_date"', c: COL.key },
-    { t: ': ', c: COL.punct },
-    { t: '"2026-06-▌"', c: COL.str },
-  ],
-];
 
 function NodeShell({
   n,
@@ -601,80 +634,9 @@ function NodeHeader({ n, accent }: { n: GraphNode; accent: string }) {
   );
 }
 
-function StreamingPreview() {
-  return (
-    <div
-      style={{
-        background: CODE_BG,
-        border: `1px solid ${G.border}`,
-        borderRadius: 8,
-        flex: 1,
-        margin: '0 12px 12px',
-        minHeight: 0,
-        overflow: 'hidden',
-        padding: '10px 12px',
-      }}
-    >
-      <div
-        style={{
-          alignItems: 'center',
-          color: G.accent,
-          display: 'flex',
-          fontFamily: MONO,
-          fontSize: 9,
-          fontWeight: 700,
-          gap: 6,
-          letterSpacing: '0.12em',
-          marginBottom: 6,
-          textTransform: 'uppercase',
-        }}
-      >
-        <span
-          style={{
-            background: G.accent,
-            borderRadius: '50%',
-            display: 'inline-block',
-            height: 5,
-            width: 5,
-          }}
-        />
-        streaming
-      </div>
-      <pre
-        style={{
-          color: G.ink,
-          fontFamily: MONO,
-          fontSize: 10.5,
-          lineHeight: 1.5,
-          margin: 0,
-          whiteSpace: 'pre',
-        }}
-      >
-        {STREAM_LINES.map((line, i) => (
-          <div key={`stream-${i}`}>
-            {line.map((tok, j) => (
-              <span key={`stream-${i}-${j}`} style={{ color: tok.c }}>
-                {tok.t}
-              </span>
-            ))}
-          </div>
-        ))}
-      </pre>
-    </div>
-  );
-}
+type FieldRow = { k: string; v: string; vc: string };
 
-function ResultPreview() {
-  type Row =
-    | { k: string; v: string; vc: string; status: 'done' }
-    | { k: string; v: string; vc: string; status: 'partial' }
-    | { k: string; status: 'pending' };
-  const rows: Row[] = [
-    { k: 'vendor', v: '"Acme Corp"', vc: COL.str, status: 'done' },
-    { k: 'total', v: '1247.50', vc: COL.num, status: 'done' },
-    { k: 'due_date', v: '"2026-06-▌"', vc: COL.str, status: 'partial' },
-    { k: 'line_items', status: 'pending' },
-  ];
+function FieldsPreview({ label, rows }: { label: string; rows: FieldRow[] }) {
   return (
     <div
       style={{
@@ -711,7 +673,7 @@ function ResultPreview() {
             width: 5,
           }}
         />
-        InvoiceDraft · partial
+        {label}
       </div>
       <div style={{ display: 'grid', rowGap: 4 }}>
         {rows.map((r) => (
@@ -725,40 +687,38 @@ function ResultPreview() {
               gap: 8,
               gridTemplateColumns: '78px 1fr',
               lineHeight: 1.4,
-              opacity: r.status === 'pending' ? 0.7 : 1,
             }}
           >
             <span style={{ color: COL.key }}>{r.k}</span>
-            {r.status === 'pending' ? (
-              <span
-                style={{
-                  alignItems: 'center',
-                  color: G.eyebrow,
-                  display: 'inline-flex',
-                  gap: 6,
-                }}
-              >
-                <span
-                  style={{
-                    background:
-                      'repeating-linear-gradient(90deg, rgba(26,22,18,0.18) 0 6px, transparent 6px 10px)',
-                    borderRadius: 2,
-                    display: 'inline-block',
-                    height: 7,
-                    width: 56,
-                  }}
-                />
-                <span style={{ fontSize: 9, opacity: 0.85 }}>pending</span>
-              </span>
-            ) : (
-              <span style={{ color: r.vc }}>{r.v}</span>
-            )}
+            <span
+              style={{
+                color: r.vc,
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {r.v}
+            </span>
           </div>
         ))}
       </div>
     </div>
   );
 }
+
+const INVOICE_ROWS: FieldRow[] = [
+  { k: 'vendor', v: '"Acme Corp"', vc: COL.str },
+  { k: 'total', v: '1247.50', vc: COL.num },
+  { k: 'due_date', v: 'null', vc: COL.enum },
+  { k: 'line_items', v: 'LineItem[3]', vc: COL.brace },
+];
+
+const REPORT_ROWS: FieldRow[] = [
+  { k: 'risk', v: 'RiskTier.Review', vc: COL.enum },
+  { k: 'issues', v: 'ValidationIssue[1]', vc: COL.brace },
+  { k: 'total', v: '1247.50', vc: COL.num },
+];
 
 function GraphPanel({ runningPulse }: { runningPulse: boolean }) {
   const nodeById: Record<string, GraphNode> = Object.fromEntries(
@@ -1043,19 +1003,17 @@ function GraphPanel({ runningPulse }: { runningPulse: boolean }) {
                           ? G.success
                           : G.eyebrow;
 
-                    if (n.kind === 'llm') {
-                      return (
-                        <NodeShell key={n.id} n={n}>
-                          <NodeHeader accent={accent} n={n} />
-                          <StreamingPreview />
-                        </NodeShell>
-                      );
-                    }
                     if (n.kind === 'class') {
+                      const isInput = n.id === 'input';
                       return (
                         <NodeShell key={n.id} n={n}>
                           <NodeHeader accent={accent} n={n} />
-                          <ResultPreview />
+                          <FieldsPreview
+                            label={
+                              isInput ? 'Invoice · input' : 'Report · output'
+                            }
+                            rows={isInput ? INVOICE_ROWS : REPORT_ROWS}
+                          />
                         </NodeShell>
                       );
                     }
@@ -1334,6 +1292,8 @@ export function PerspectiveSlider() {
   const [dragging, setDragging] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const reduced = useReducedMotion();
+  const isMobile = useIsMobile();
+  const [view, setView] = useState<'agent' | 'you'>('agent');
 
   const updateFromClientX = useCallback((clientX: number) => {
     const el = containerRef.current;
@@ -1385,6 +1345,155 @@ export function PerspectiveSlider() {
     cursor: dragging ? 'grabbing' : 'ew-resize',
   };
 
+  if (isMobile) {
+    const tabStyle = (active: boolean): CSSProperties => ({
+      alignItems: 'center',
+      background: active ? BG : 'transparent',
+      border: 'none',
+      borderRadius: 8,
+      boxShadow: active ? '0 1px 3px rgba(26,22,18,0.12)' : 'none',
+      color: active ? INK : EYEBROW,
+      cursor: 'pointer',
+      display: 'flex',
+      flex: 1,
+      fontFamily: MONO,
+      fontSize: 11,
+      fontWeight: 600,
+      gap: 7,
+      justifyContent: 'center',
+      letterSpacing: '0.08em',
+      padding: '10px 6px',
+      textTransform: 'uppercase',
+      transition: 'background-color 160ms ease, color 160ms ease',
+    });
+
+    return (
+      <section
+        aria-label="What you see vs what your agent sees"
+        style={{
+          background: BG,
+          borderTop: `1px solid ${BORDER}`,
+          color: INK,
+          padding: '72px 0 88px',
+          width: '100%',
+        }}
+      >
+        <style>{`
+          @keyframes baml-perspective-dash { to { stroke-dashoffset: -20; } }
+          @keyframes baml-perspective-spin { to { transform: rotate(360deg); } }
+          @keyframes baml-perspective-blink { 0%, 60% { opacity: 1; } 61%, 100% { opacity: 0; } }
+        `}</style>
+        <div style={{ margin: '0 auto', maxWidth: 1200, padding: '0 20px' }}>
+          <div style={{ marginBottom: 32, textAlign: 'center' }}>
+            <h2
+              style={{
+                color: INK,
+                fontSize: 'clamp(1.9rem, 8vw, 2.4rem)',
+                fontWeight: 600,
+                letterSpacing: '-0.025em',
+                lineHeight: 1.08,
+                margin: 0,
+              }}
+            >
+              What you see vs.{' '}
+              <span style={{ color: ACCENT }}>what your agent sees</span>.
+            </h2>
+            <p
+              style={{
+                color: MUTED,
+                fontSize: 15,
+                lineHeight: 1.6,
+                margin: '16px auto 0',
+                maxWidth: 540,
+              }}
+            >
+              BAML is the contract both sides read. Your agent gets typed source
+              it can navigate, refactor, and test. You get the same program as
+              an executable graph. Tap to switch perspectives.
+            </p>
+          </div>
+
+          <div
+            style={{
+              background: CARD_BG,
+              border: `1px solid ${BORDER}`,
+              borderRadius: 16,
+              boxShadow:
+                '0 1px 0 rgba(0,0,0,0.02), 0 24px 60px -32px rgba(26,22,18,0.25)',
+              overflow: 'hidden',
+              padding: 12,
+              position: 'relative',
+            }}
+          >
+            {/* Segmented toggle */}
+            <div
+              style={{
+                background: '#F0ECE0',
+                borderRadius: 10,
+                display: 'flex',
+                gap: 4,
+                marginBottom: 12,
+                padding: 4,
+              }}
+            >
+              <button
+                aria-pressed={view === 'agent'}
+                onClick={() => setView('agent')}
+                style={tabStyle(view === 'agent')}
+                type="button"
+              >
+                <span
+                  aria-hidden
+                  style={{
+                    background: ACCENT,
+                    borderRadius: '50%',
+                    height: 8,
+                    width: 8,
+                  }}
+                />
+                agent sees
+              </button>
+              <button
+                aria-pressed={view === 'you'}
+                onClick={() => setView('you')}
+                style={tabStyle(view === 'you')}
+                type="button"
+              >
+                <span
+                  aria-hidden
+                  style={{
+                    background: INK,
+                    borderRadius: '50%',
+                    height: 8,
+                    width: 8,
+                  }}
+                />
+                you see
+              </button>
+            </div>
+
+            <div
+              style={{
+                borderRadius: 10,
+                height: 'min(520px, 64vh)',
+                minHeight: 340,
+                overflow: 'hidden',
+                position: 'relative',
+                width: '100%',
+              }}
+            >
+              {view === 'agent' ? (
+                <CodePanel />
+              ) : (
+                <GraphPanel runningPulse={!reduced} />
+              )}
+            </div>
+          </div>
+        </div>
+      </section>
+    );
+  }
+
   return (
     <section
       aria-label="What you see vs what your agent sees"
@@ -1416,18 +1525,6 @@ export function PerspectiveSlider() {
         }}
       >
         <div style={{ marginBottom: 56, textAlign: 'center' }}>
-          <p
-            style={{
-              color: EYEBROW,
-              fontSize: 13,
-              fontWeight: 500,
-              letterSpacing: '0.12em',
-              margin: 0,
-              textTransform: 'uppercase',
-            }}
-          >
-            Same program. Two views.
-          </p>
           <h2
             style={{
               color: INK,
@@ -1438,18 +1535,8 @@ export function PerspectiveSlider() {
               margin: '14px 0 0',
             }}
           >
-            What you see —{' '}
-            <span
-              style={{
-                color: ACCENT,
-                fontFamily: 'var(--font-serif)',
-                fontStyle: 'italic',
-                fontWeight: 500,
-              }}
-            >
-              what your agent sees
-            </span>
-            .
+            What you see vs.{' '}
+            <span style={{ color: ACCENT }}>what your agent sees</span>.
           </h2>
           <p
             style={{

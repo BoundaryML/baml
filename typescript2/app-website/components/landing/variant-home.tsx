@@ -1,15 +1,29 @@
 'use client';
 
 import { AnimatePresence, motion } from 'motion/react';
+import dynamic from 'next/dynamic';
+import Image from 'next/image';
+import Link from 'next/link';
 import posthog from 'posthog-js';
 import type React from 'react';
 import { useEffect, useState } from 'react';
 
-import Image from 'next/image';
-import { CompactPerspectivePanel } from '@/components/landing/perspective-slider';
+import { useIsDesktop } from '@/hooks/use-media-query';
 import Marquee from '../magicui/marquee';
 import { ScriptCopyBtn } from '../magicui/script-copy-btn';
 import { Navbar } from '../navbar';
+
+const BamlPlayground = dynamic(
+  () => import('@/playground/BamlPlayground').then((m) => m.BamlPlayground),
+  {
+    loading: () => (
+      <div className="flex h-full w-full items-center justify-center text-sm text-[#5C5852]">
+        Loading playground...
+      </div>
+    ),
+    ssr: false,
+  },
+);
 
 const TRUST_LOGOS: { alt: string; src: string }[] = [
   { alt: 'SAP', src: '/testimonials/logos/sapLogo.png' },
@@ -556,6 +570,7 @@ const installOptions: {
 
 const HeroSection = () => {
   const [installPath, setInstallPath] = useState<InstallPath>('claude');
+  const isDesktop = useIsDesktop();
 
   const selected =
     installOptions.find((option) => option.id === installPath) ??
@@ -665,7 +680,25 @@ const HeroSection = () => {
         style={customStyles.heroRight}
       >
         <div className="absolute inset-0 min-h-0 overflow-hidden">
-          <CompactPerspectivePanel />
+          {isDesktop ? (
+            <BamlPlayground />
+          ) : (
+            <Link
+              className="group relative block h-full w-full"
+              href="/how-the-playground-works"
+            >
+              <Image
+                alt="BAML playground preview"
+                className="object-cover object-top"
+                fill
+                sizes="100vw"
+                src="/bamlPlaygroundLightScreenshot.png"
+              />
+              <div className="absolute inset-x-0 bottom-0 bg-white/90 px-4 py-3 text-center text-[13px] text-[#1A1612]">
+                Open on desktop to try the playground live
+              </div>
+            </Link>
+          )}
         </div>
       </div>
     </section>
@@ -728,7 +761,7 @@ const FeatureIndex = () => {
 };
 
 const StatementSection = () => (
-  <section style={customStyles.statementSection}>
+  <section className="statement-section" style={customStyles.statementSection}>
     <div style={customStyles.statementText}>
       <p style={customStyles.statementP}>Agents write it. Agents run in it.</p>
       <p style={customStyles.statementP}>
@@ -866,7 +899,7 @@ const BamlCodeWindow = () => (
 
 const ExhibitSection = () => (
   <section>
-    <div style={customStyles.exhibitHeader}>
+    <div className="exhibit-header" style={customStyles.exhibitHeader}>
       <h2 style={customStyles.exhibitTitle}>The agent is the program.</h2>
     </div>
     <div className="exhibit-grid-responsive" style={customStyles.exhibitGrid}>
@@ -893,14 +926,19 @@ export function VariantHome() {
     const style = document.createElement('style');
     style.textContent = `
       @media (max-width: 1024px) {
-        .hero-responsive { grid-template-columns: 1fr !important; }
+        .hero-responsive { grid-template-columns: minmax(0, 1fr) !important; }
+        .hero-responsive > div { min-width: 0 !important; }
         .hero-right-responsive { border-top: 1px solid #D9D3C4; border-right: none !important; }
-        .exhibit-grid-responsive { grid-template-columns: 1fr !important; }
+        .exhibit-grid-responsive { grid-template-columns: minmax(0, 1fr) !important; }
+        .exhibit-grid-responsive > div { min-width: 0 !important; border-right: none !important; }
       }
       @media (max-width: 600px) {
-        .nav-responsive { grid-template-columns: 1fr auto !important; gap: 12px; padding: 16px !important; }
         .index-row-responsive { grid-template-columns: 40px 1fr !important; }
         .hero-right-responsive { display: none !important; }
+        .hero-responsive > div:first-child { padding: 32px 20px 0 !important; }
+        .statement-section { padding: 36px 20px !important; }
+        .exhibit-header { padding: 28px 20px 16px !important; }
+        .exhibit-grid-responsive > div { padding: 28px 20px !important; }
       }
     `;
     document.head.appendChild(style);

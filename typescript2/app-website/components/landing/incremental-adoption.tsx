@@ -3,11 +3,15 @@
 import {
   AnimatePresence,
   motion,
+  useMotionValue,
   useMotionValueEvent,
   useReducedMotion,
   useScroll,
 } from 'motion/react';
 import { useEffect, useRef, useState } from 'react';
+import { useIsMobile } from '@/hooks/use-media-query';
+
+type ScrollYProgress = ReturnType<typeof useScroll>['scrollYProgress'];
 
 // Tokens
 const BG = '#ffffff';
@@ -27,6 +31,15 @@ const LINE_HEIGHT = 20;
 const lineCenterY = (n: number) =>
   TAB_HEIGHT + 1 + CODE_PAD_TOP + (n - 0.5) * LINE_HEIGHT;
 const SECTION_STICKY_TOP = '130px';
+
+// Step thresholds for scroll progress. Must match the thresholds in
+// `useMotionValueEvent` inside `IncrementalAdoption` below.
+const STEP_RANGES: ReadonlyArray<[number, number]> = [
+  [0, 0.22],
+  [0.22, 0.48],
+  [0.48, 0.74],
+  [0.74, 1],
+];
 
 // ── Code sources ─────────────────────────────────────────────────────────────
 
@@ -58,17 +71,13 @@ def extract_invoice(text: str) -> Invoice | None:
     return response.choices[0].message.parsed
 `;
 
-const STEP_2_BAML = `class LineItem {
-  name  string
-  qty   int
-  price float
-}
+const STEP_2_BAML = `class LineItem { name string  qty int  price float }
 
 class Invoice {
-  vendor     string
-  total      float
-  due_date   string
-  line_items LineItem[]
+  vendor      string
+  total       float
+  due_date    string
+  line_items  LineItem[]
 }
 
 function ExtractInvoice(text: string) -> Invoice {
@@ -83,10 +92,7 @@ function ExtractInvoice(text: string) -> Invoice {
 
 const STEP_2_PY = `from baml_client import b
 
-# typed result. your python app stays in python.
 invoice = b.ExtractInvoice(raw_pdf_text)
-print(invoice.total)               # typed float
-print(invoice.line_items[0].name)  # typed string
 
 invoice.
 `;
@@ -211,7 +217,7 @@ const STEPS: Step[] = [
         filename: 'invoice.baml',
         annotations: [
           {
-            lineNumber: 14,
+            lineNumber: 10,
             text: 'BAML injects the schema.\nthe model knows what to return.',
           },
         ],
@@ -223,7 +229,7 @@ const STEPS: Step[] = [
         filename: 'main.py',
         annotations: [
           {
-            lineNumber: 4,
+            lineNumber: 3,
             text: 'fully typed in your app.\nIDE knows the shape.',
           },
         ],
@@ -493,8 +499,8 @@ const COMPLETION_ITEMS: { name: string; type: string }[] = [
 ];
 
 function AutocompletePopover() {
-  // Anchor: line 8 (`invoice.`), one char past the dot.
-  const top = lineCenterY(8) + LINE_HEIGHT / 2 + 4;
+  // Anchor: line 5 (`invoice.`), one char past the dot.
+  const top = lineCenterY(5) + LINE_HEIGHT / 2 + 4;
   const charPx = 8.1;
   const left = LINE_NUM_WIDTH + CODE_PAD_LEFT + 8 * charPx;
 
@@ -593,6 +599,7 @@ function AnnotatedBlock({
     >
       <div style={{ minWidth: 0, position: 'relative', width: '100%' }}>
         <CodeBlock filename={block.filename} tokens={tokens} />
+        {block.key === 's2-py' && <AutocompletePopover />}
         {block.annotations.map((a, i) => (
           <motion.div
             animate={{ opacity: 1, scaleX: 1 }}
@@ -612,7 +619,6 @@ function AnnotatedBlock({
             transition={{ delay: 0.15 + i * 0.08, duration: 0.35 }}
           />
         ))}
-        {block.key === 's2-py' && <AutocompletePopover />}
       </div>
       <div style={{ position: 'relative' }}>
         {block.annotations.map((a, i) => (
@@ -649,11 +655,7 @@ function AnnotatedBlock({
 
 // ── Migration progress artifact ──────────────────────────────────────────────
 
-function MigrationProgress({
-  activeStep,
-}: {
-  activeStep: number;
-}) {
+function MigrationProgress({ activeStep }: { activeStep: number }) {
   const SIZE = 60;
   const STROKE = 4;
   const RADIUS = (SIZE - STROKE) / 2;
@@ -847,7 +849,13 @@ function MigrationProgress({
 
 // ── Sticky code panel with per-step transitions ──────────────────────────────
 
-function StickyPanel({ activeStep }: { activeStep: number }) {
+function StickyPanel({
+  activeStep,
+  scrollYProgress,
+}: {
+  activeStep: number;
+  scrollYProgress: ScrollYProgress;
+}) {
   const reduced = useReducedMotion();
   const tokens = useTokenized([
     { code: STEP_1_PY, lang: 'python' },
@@ -867,13 +875,56 @@ function StickyPanel({ activeStep }: { activeStep: number }) {
     's4-baml': tokens[4],
   };
 
+  const containerRef = useRef<HTMLDivElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
+  const y = useMotionValue(0);
+  const [edgeFade, setEdgeFade] = useState<{ top: number; bottom: number }>({
+    top: 0,
+    bottom: 0,
+  });
+
+  // Drives a translateY on the inner content as the user scrolls within
+  // the current step's progress range — so tall snippets reveal their
+  // bottom without ever capturing wheel events from the page.
+  const applyPan = (latest: number) => {
+    const container = containerRef.current;
+    const content = contentRef.current;
+    if (!container || !content) return;
+    const overflow = Math.max(0, content.scrollHeight - container.clientHeight);
+    if (overflow === 0) {
+      y.set(0);
+      setEdgeFade({ top: 0, bottom: 0 });
+      return;
+    }
+    const [start, end] = STEP_RANGES[activeStep] ?? [0, 1];
+    const within = Math.max(0, Math.min(1, (latest - start) / (end - start)));
+    y.set(-overflow * within);
+    // Fade in/out the top and bottom edge masks based on how much can be
+    // panned in each direction (ramps in over the first 24px of pan).
+    setEdgeFade({
+      top: Math.min(1, (overflow * within) / 24),
+      bottom: Math.min(1, (overflow * (1 - within)) / 24),
+    });
+  };
+
+  useMotionValueEvent(scrollYProgress, 'change', applyPan);
+
+  // Recompute pan when the active step (and therefore content height) changes.
+  useEffect(() => {
+    applyPan(scrollYProgress.get());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeStep, tokens]);
+
+  const FADE = 64;
+
   return (
     <div
       className="step-code-scroll"
+      ref={containerRef}
       style={{
         height: '100%',
         minHeight: 520,
-        overflowY: 'auto',
+        overflow: 'hidden',
         paddingRight: 8,
         position: 'relative',
         width: '100%',
@@ -885,12 +936,14 @@ function StickyPanel({ activeStep }: { activeStep: number }) {
           exit={{ opacity: 0 }}
           initial={{ opacity: 0 }}
           key={`step-${activeStep}`}
+          ref={contentRef}
           style={{
             display: 'flex',
             flexDirection: 'column',
             gap: 12,
             minHeight: '100%',
             position: 'relative',
+            y,
           }}
           transition={fadeT}
         >
@@ -908,6 +961,125 @@ function StickyPanel({ activeStep }: { activeStep: number }) {
           ))}
         </motion.div>
       </AnimatePresence>
+      <div
+        aria-hidden
+        style={{
+          background: `linear-gradient(to bottom, ${BG}, rgba(255,255,255,0))`,
+          height: FADE,
+          left: 0,
+          opacity: edgeFade.top,
+          pointerEvents: 'none',
+          position: 'absolute',
+          right: 8,
+          top: 0,
+          transition: 'opacity 150ms ease-out',
+        }}
+      />
+      <div
+        aria-hidden
+        style={{
+          background: `linear-gradient(to top, ${BG}, rgba(255,255,255,0))`,
+          bottom: 0,
+          height: FADE,
+          left: 0,
+          opacity: edgeFade.bottom,
+          pointerEvents: 'none',
+          position: 'absolute',
+          right: 8,
+          transition: 'opacity 150ms ease-out',
+        }}
+      />
+    </div>
+  );
+}
+
+// ── Mobile: simplified static stack (no scroll choreography) ──────────────────
+
+function MobileAdoption() {
+  const tokens = useTokenized([
+    { code: STEP_1_PY, lang: 'python' },
+    { code: STEP_2_BAML, lang: 'baml' },
+    { code: STEP_2_PY, lang: 'python' },
+    { code: STEP_3_BAML, lang: 'baml' },
+    { code: STEP_4_BAML, lang: 'baml' },
+  ]);
+  const tokensByKey: Record<string, CodeTokens> = {
+    's1-py': tokens[0],
+    's2-baml': tokens[1],
+    's2-py': tokens[2],
+    's3-baml': tokens[3],
+    's4-baml': tokens[4],
+  };
+
+  return (
+    <div
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 48,
+        margin: '0 auto',
+        maxWidth: 520,
+        padding: '0 20px',
+      }}
+    >
+      <h2
+        style={{
+          color: INK,
+          fontSize: 'clamp(2rem, 9vw, 2.6rem)',
+          fontWeight: 600,
+          letterSpacing: '-0.03em',
+          lineHeight: 1.0,
+          margin: 0,
+        }}
+      >
+        Adopt BAML Incrementally
+      </h2>
+      {STEPS.map((s, i) => (
+        <div key={`m-step-${i}`}>
+          <div
+            style={{
+              color: ACCENT,
+              fontSize: 11,
+              fontWeight: 600,
+              letterSpacing: '0.14em',
+              textTransform: 'uppercase',
+            }}
+          >
+            {s.marker}
+          </div>
+          <h3
+            style={{
+              color: INK,
+              fontSize: '1.3rem',
+              fontWeight: 600,
+              letterSpacing: '-0.02em',
+              lineHeight: 1.15,
+              margin: '12px 0 0',
+            }}
+          >
+            {s.heading}
+          </h3>
+          <p
+            style={{
+              color: MUTED,
+              fontSize: 15,
+              lineHeight: 1.6,
+              margin: '12px 0 18px',
+            }}
+          >
+            {s.body}
+          </p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            {s.blocks.map((b) => (
+              <CodeBlock
+                filename={b.filename}
+                key={b.key}
+                tokens={tokensByKey[b.key]}
+              />
+            ))}
+          </div>
+        </div>
+      ))}
     </div>
   );
 }
@@ -916,6 +1088,7 @@ function StickyPanel({ activeStep }: { activeStep: number }) {
 
 export function IncrementalAdoption() {
   const ref = useRef<HTMLDivElement>(null);
+  const isMobile = useIsMobile();
   const { scrollYProgress } = useScroll({
     offset: ['start start', 'end end'],
     target: ref,
@@ -931,6 +1104,22 @@ export function IncrementalAdoption() {
     if (idx !== activeStep) setActiveStep(idx);
   });
 
+  if (isMobile) {
+    return (
+      <section
+        aria-label="Incremental BAML adoption"
+        style={{
+          background: BG,
+          color: INK,
+          padding: '72px 0 96px',
+          width: '100%',
+        }}
+      >
+        <MobileAdoption />
+      </section>
+    );
+  }
+
   return (
     <section
       aria-label="Incremental BAML adoption"
@@ -943,6 +1132,7 @@ export function IncrementalAdoption() {
       }}
     >
       <div
+        className="adoption-grid"
         style={{
           display: 'grid',
           gap: 40,
@@ -972,6 +1162,7 @@ export function IncrementalAdoption() {
             const stickyTop = STACK_TOP_BASE + i * STACK_TAB_HEIGHT;
             return (
               <section
+                className="adoption-step"
                 key={`step-text-${i}`}
                 style={{
                   minHeight: '120vh',
@@ -1059,6 +1250,7 @@ export function IncrementalAdoption() {
         </div>
 
         <div
+          className="adoption-visual"
           style={{
             alignSelf: 'start',
             display: 'flex',
@@ -1081,7 +1273,10 @@ export function IncrementalAdoption() {
             <MigrationProgress activeStep={activeStep} />
           </div>
           <div style={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
-            <StickyPanel activeStep={activeStep} />
+            <StickyPanel
+              activeStep={activeStep}
+              scrollYProgress={scrollYProgress}
+            />
           </div>
         </div>
       </div>
