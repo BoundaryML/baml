@@ -1,0 +1,114 @@
+#!/usr/bin/env python3
+"""Manage the BAML wrapper package version."""
+
+from __future__ import annotations
+
+import argparse
+import re
+import sys
+from dataclasses import dataclass
+from pathlib import Path
+
+
+ROOT = Path(__file__).resolve().parents[1]
+WRAPPER_CARGO_TOML = ROOT / "baml_language" / "crates" / "baml" / "Cargo.toml"
+SEMVER_RE = re.compile(r"^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$")
+
+
+@dataclass(frozen=True)
+class Version:
+    major: int
+    minor: int
+    patch: int
+
+    @classmethod
+    def parse(cls, value: str) -> "Version":
+        match = SEMVER_RE.fullmatch(value)
+        if not match:
+            raise ValueError(f"invalid wrapper version {value!r}; expected MAJOR.MINOR.PATCH")
+        return cls(*(int(part) for part in match.groups()))
+
+    def __str__(self) -> str:
+        return f"{self.major}.{self.minor}.{self.patch}"
+
+    def bump_major(self) -> "Version":
+        return Version(self.major + 1, 0, 0)
+
+    def bump_minor(self) -> "Version":
+        return Version(self.major, self.minor + 1, 0)
+
+    def bump_patch(self) -> "Version":
+        return Version(self.major, self.minor, self.patch + 1)
+
+
+def fail(message: str) -> None:
+    print(f"error: {message}", file=sys.stderr)
+    raise SystemExit(1)
+
+
+def read_version() -> Version:
+    text = WRAPPER_CARGO_TOML.read_text(encoding="utf-8")
+    section = re.search(r"(?ms)^\[package\]\s*(.*?)(?:^\[|\Z)", text)
+    if not section:
+        fail("baml wrapper Cargo.toml must contain a [package] table")
+    match = re.search(r'^version = "([^"]+)"$', section.group(1), flags=re.MULTILINE)
+    if not match:
+        fail("baml wrapper Cargo.toml must contain literal [package].version")
+    try:
+        return Version.parse(match.group(1))
+    except ValueError as exc:
+        fail(str(exc))
+
+
+def write_version(version: Version) -> None:
+    text = WRAPPER_CARGO_TOML.read_text(encoding="utf-8")
+    new_text, count = re.subn(
+        r'^version = "[^"]+"$',
+        f'version = "{version}"',
+        text,
+        count=1,
+        flags=re.MULTILINE,
+    )
+    if count != 1:
+        fail("failed to update wrapper version")
+    WRAPPER_CARGO_TOML.write_text(new_text, encoding="utf-8")
+
+
+def check() -> None:
+    text = WRAPPER_CARGO_TOML.read_text(encoding="utf-8")
+    if "version.workspace" in text:
+        fail("wrapper crate must not inherit version.workspace")
+    version = read_version()
+    print(f"ok: wrapper_version {version}")
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    subparsers = parser.add_subparsers(dest="command", required=True)
+    subparsers.add_parser("show")
+    subparsers.add_parser("check")
+
+    bump = subparsers.add_parser("bump")
+    group = bump.add_mutually_exclusive_group(required=True)
+    group.add_argument("--major", action="store_true")
+    group.add_argument("--minor", action="store_true")
+    group.add_argument("--patch", action="store_true")
+
+    args = parser.parse_args()
+    if args.command == "show":
+        print(read_version())
+    elif args.command == "check":
+        check()
+    elif args.command == "bump":
+        version = read_version()
+        if args.major:
+            version = version.bump_major()
+        elif args.minor:
+            version = version.bump_minor()
+        else:
+            version = version.bump_patch()
+        write_version(version)
+
+
+if __name__ == "__main__":
+    main()

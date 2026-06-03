@@ -195,22 +195,19 @@ function reflect_type_of.type_of_to_string_works_as_map_key_fn() -> int {
     load_type reflect_type_of.User
     call baml.TypeValue.to_string
     store_var _2
-    load_var m
-    load_var _2
+    load_var2 1 2
     load_const 1
     store_map_element
     load_type int
     call baml.TypeValue.to_string
     store_var _4
-    load_var m
-    load_var _4
+    load_var2 1 3
     load_const 2
     store_map_element
     load_type reflect_type_of.User
     call baml.TypeValue.to_string
     store_var _7
-    load_var m
-    load_var _7
+    load_var2 1 4
     load_map_element
     return
 }

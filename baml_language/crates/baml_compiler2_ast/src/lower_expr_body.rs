@@ -517,6 +517,7 @@ impl LoweringContext {
                         SyntaxKind::RETURN_STMT => self.lower_return_stmt(node),
                         SyntaxKind::THROW_STMT => self.lower_throw_stmt(node),
                         SyntaxKind::WHILE_STMT => self.lower_while_stmt(node),
+                        SyntaxKind::WHILE_LET_STMT => self.lower_while_let_stmt(node),
                         SyntaxKind::FOR_EXPR => self.lower_for_stmt(node),
                         SyntaxKind::BREAK_STMT => self.alloc_stmt(Stmt::Break, node.text_range()),
                         SyntaxKind::CONTINUE_STMT => {
@@ -1218,6 +1219,52 @@ impl LoweringContext {
         )
     }
 
+    fn lower_while_let_stmt(&mut self, node: &SyntaxNode) -> StmtId {
+        // CST shape: `while let PATTERN = SCRUTINEE BODY_BLOCK`.
+        // The first PATTERN node is the pattern; remaining children are
+        // [0]=scrutinee, [1]=body (mirrors `lower_if_let_expr` minus else).
+        let mut pattern = None;
+        let mut exprs: Vec<ExprId> = Vec::new();
+        for elem in node.children_with_tokens() {
+            match elem {
+                rowan::NodeOrToken::Node(child) => {
+                    if child.kind() == SyntaxKind::PATTERN {
+                        if pattern.is_none() {
+                            pattern = Some(self.lower_pattern(&child));
+                        }
+                    } else {
+                        exprs.push(self.lower_expr(&child));
+                    }
+                }
+                rowan::NodeOrToken::Token(token) => {
+                    if let Some(expr_id) = self.try_lower_bare_token(&token) {
+                        exprs.push(expr_id);
+                    }
+                }
+            }
+        }
+
+        let pattern =
+            pattern.unwrap_or_else(|| self.alloc_pattern(Pattern::Wildcard, node.text_range()));
+        let scrutinee = exprs
+            .first()
+            .copied()
+            .unwrap_or_else(|| self.alloc_expr(Expr::Missing, node.text_range()));
+        let body = exprs
+            .get(1)
+            .copied()
+            .unwrap_or_else(|| self.alloc_expr(Expr::Missing, node.text_range()));
+
+        self.alloc_stmt(
+            Stmt::WhileLet {
+                pattern,
+                scrutinee,
+                body,
+            },
+            node.text_range(),
+        )
+    }
+
     fn lower_match_expr(&mut self, node: &SyntaxNode) -> ExprId {
         let mut scrutinee = None;
         let mut scrutinee_type = None;
@@ -1583,7 +1630,7 @@ impl LoweringContext {
     /// Lower a `DESTRUCTURE_PATTERN` (`(let)? PATH ('<' types '>')? '{' field_list '}'`).
     fn lower_destructure_pattern(&mut self, node: &SyntaxNode) -> PatId {
         // Path tokens live between (the optional) `KW_LET` and either
-        // `GENERIC_ARGS` or `L_BRACE`.
+        // `GENERIC_ARGS`, `TYPE_ARGS`, or `L_BRACE`.
         // Collect WORD tokens in that range, ignoring DOTs.
         let mut class: Vec<Name> = Vec::new();
         for elem in node.children_with_tokens() {
@@ -1594,19 +1641,35 @@ impl LoweringContext {
                     SyntaxKind::L_BRACE => break,
                     _ => {}
                 },
-                rowan::NodeOrToken::Node(n) if n.kind() == SyntaxKind::GENERIC_ARGS => break,
+                rowan::NodeOrToken::Node(n)
+                    if n.kind() == SyntaxKind::GENERIC_ARGS
+                        || n.kind() == SyntaxKind::TYPE_ARGS =>
+                {
+                    break;
+                }
                 rowan::NodeOrToken::Node(_) => {}
             }
         }
 
-        let generic_args: Vec<TypeExpr> = node
+        let args_node = node
             .children()
-            .find(|n| n.kind() == SyntaxKind::GENERIC_ARGS)
+            .find(|n| n.kind() == SyntaxKind::GENERIC_ARGS || n.kind() == SyntaxKind::TYPE_ARGS);
+
+        let generic_args: Vec<TypeExpr> = args_node
+            .as_ref()
             .into_iter()
-            .flat_map(|args_node| args_node.children())
+            .flat_map(rowan::SyntaxNode::children)
             .filter(|n| n.kind() == SyntaxKind::TYPE_EXPR)
             .filter_map(baml_compiler_syntax::ast::TypeExpr::cast)
             .map(|te| crate::lower_type_expr::lower_type_expr_node(&te))
+            .collect();
+
+        let associated_type_bindings = args_node
+            .into_iter()
+            .filter(|args_node| args_node.kind() == SyntaxKind::TYPE_ARGS)
+            .flat_map(|args_node| args_node.children())
+            .filter_map(baml_compiler_syntax::ast::AssociatedTypeDecl::cast)
+            .filter_map(|binding| crate::lower_type_expr::lower_associated_type_binding(&binding))
             .collect();
 
         let fields: Vec<FieldPat> = node
@@ -1619,6 +1682,7 @@ impl LoweringContext {
             Pattern::Class {
                 class,
                 generic_args,
+                associated_type_bindings,
                 fields,
             },
             node.text_range(),
@@ -3357,6 +3421,7 @@ impl LoweringContext {
                 expr: TypeExpr::Path {
                     segments: vec![Name::new("testing"), Name::new("TestCollector")],
                     generic_args: vec![],
+                    associated_type_bindings: vec![],
                     attrs: vec![],
                 },
                 span,

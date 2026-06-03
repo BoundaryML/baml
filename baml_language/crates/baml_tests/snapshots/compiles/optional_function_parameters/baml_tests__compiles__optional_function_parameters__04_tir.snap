@@ -55,19 +55,19 @@ function user.HostEntry(query: string, max_results: int = 10, filter: string? = 
       }
   }
 }
-function user.AskDocs(query: string, max_results: int = 10, filter: string = DefaultFilter()) -> string throws never {
-  baml.llm.call_llm_function<T>(TestClient, "AskDocs", map { "query": query, "max_results": max_results, "filter": filter }) : string
+function user.AskDocs(query: string, max_results: int = 10, filter: string = DefaultFilter(), client: baml.llm.Client = TestClient) -> string throws never {
+  baml.llm.call_llm_function<T>(client, "AskDocs", map { "query": query, "max_results": max_results, "filter": filter }) : string
 }
-function user.AskDocs$render_prompt(query: string, max_results: int = 10, filter: string = DefaultFilter()) -> baml.llm.PromptAst throws never {
-  baml.llm.render_prompt(TestClient, "AskDocs", map { "query": query, "max_results": max_results, "filter": filter }) : baml.llm.PromptAst
+function user.AskDocs$render_prompt(query: string, max_results: int = 10, filter: string = DefaultFilter(), client: baml.llm.Client = TestClient) -> baml.llm.PromptAst throws never {
+  baml.llm.render_prompt(client, "AskDocs", map { "query": query, "max_results": max_results, "filter": filter }) : baml.llm.PromptAst
 }
-function user.AskDocs$build_request(query: string, max_results: int = 10, filter: string = DefaultFilter()) -> baml.http.Request throws never {
-  baml.llm.build_request(TestClient, "AskDocs", map { "query": query, "max_results": max_results, "filter": filter }) : baml.http.Request
+function user.AskDocs$build_request(query: string, max_results: int = 10, filter: string = DefaultFilter(), client: baml.llm.Client = TestClient) -> baml.http.Request throws never {
+  baml.llm.build_request(client, "AskDocs", map { "query": query, "max_results": max_results, "filter": filter }) : baml.http.Request
 }
-function user.AskDocs$build_request_stream(query: string, max_results: int = 10, filter: string = DefaultFilter()) -> baml.http.Request throws never {
-  baml.llm.build_request_stream(TestClient, "AskDocs", map { "query": query, "max_results": max_results, "filter": filter }) : baml.http.Request
+function user.AskDocs$build_request_stream(query: string, max_results: int = 10, filter: string = DefaultFilter(), client: baml.llm.Client = TestClient) -> baml.http.Request throws never {
+  baml.llm.build_request_stream(client, "AskDocs", map { "query": query, "max_results": max_results, "filter": filter }) : baml.http.Request
 }
-function user.AskDocs$parse(json: string) -> string throws never {
+function user.AskDocs$parse(json: string, client: baml.llm.Client = TestClient) -> string throws never {
   baml.llm.parse<TFinal>("AskDocs", json) : string
 }
 class user.SearchService {
@@ -91,11 +91,11 @@ function user.SearchService.from_json(j: baml.json.json) -> user.SearchService t
 }
 type user.Searcher$stream = unknown
 type user.NarrowSearcher$stream = unknown
-function user.AskDocs$stream(query: string, max_results: int = 10, filter: string = DefaultFilter()) -> baml.llm.Stream<null | string, string> throws never {
-  baml.llm.stream_llm_function(TestClient, "AskDocs", map { "query": query, "max_results": max_results, "filter": filter }) : baml.llm.Stream<null | string, string>
+function user.AskDocs$stream(query: string, max_results: int = 10, filter: string = DefaultFilter(), client: baml.llm.Client = TestClient) -> baml.llm.Stream<null | string, string> throws never {
+  baml.llm.stream_llm_function(client, "AskDocs", map { "query": query, "max_results": max_results, "filter": filter }) : baml.llm.Stream<null | string, string>
 }
-function user.AskDocs$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream<null | string, string> throws never {
-  TestClient.__make_stream(sse, "AskDocs") : unknown
+function user.AskDocs$parse_stream(sse: baml.http.SseStream, client: baml.llm.Client = TestClient) -> baml.llm.Stream<null | string, string> throws never {
+  client.__make_stream(sse, "AskDocs") : baml.llm.Stream<null | string, string>
 }
 class user.SearchService$stream {
   base: null | string

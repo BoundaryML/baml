@@ -14,7 +14,7 @@ use baml_db::{
 };
 use baml_project::ProjectDatabase;
 use clap::Args;
-use codegen_python::{NamingConvention, OutputType};
+use sdkgen_python_pydantic2::{NamingConvention, OutputType};
 
 use crate::{project_load::load_project_from_reporting, reporter::Reporter};
 
@@ -147,12 +147,17 @@ impl GenerateArgs {
 
             let generated = match generator.output_type {
                 OutputType::PythonPydantic | OutputType::PythonPydanticV1 => {
-                    codegen_python::to_source_code_with_bytecode(
+                    sdkgen_python_pydantic2::to_source_code_with_bytecode(
                         &pool,
                         &baml_bytecode,
                         generator.naming_convention,
                     )
                 }
+                OutputType::TypescriptNode => sdkgen_typescript_node::to_source_code_with_bytecode(
+                    &pool,
+                    &baml_bytecode,
+                    generator.naming_convention,
+                ),
             };
 
             std::fs::create_dir_all(&output_dir).with_context(|| {
@@ -228,7 +233,7 @@ fn discover_generators(
                 *id,
                 generator_item,
                 "output_type",
-                r#"one of: "python/pydantic", "python/pydantic/v1""#,
+                r#"one of: "python/pydantic", "python/pydantic/v1", "typescript/node""#,
                 &source_map,
                 file_id,
                 &mut diags,

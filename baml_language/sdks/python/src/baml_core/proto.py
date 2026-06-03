@@ -498,7 +498,14 @@ def _decode_class(class_value, type_map: BamlTypeMap) -> Any:
     }
     # Emit always fully qualifies, so the engine FQN already matches
     # what the typemap consumes (`12a-namespace-rules.md §5`).
-    cls = type_map.get_class(class_value.name.name)
+    try:
+        cls = type_map.get_class(class_value.name.name)
+    except BamlError:
+        # Bare bridge tests and other non-generated runtimes may receive
+        # stdlib/user error classes without a generated typemap installed.
+        # Preserve the thrown value's fields instead of masking the original
+        # error with an "Unknown class FQN" decode failure.
+        return field_dict
 
     # Media stdlib classes (`baml.media.*`) are PyO3 types wrapping a
     # `BamlPyHandle`. The engine emits them as

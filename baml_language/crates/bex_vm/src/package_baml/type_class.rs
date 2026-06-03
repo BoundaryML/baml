@@ -1,4 +1,4 @@
-use bex_vm_types::types::{Object, Value};
+use bex_vm_types::types::{InterfaceAssociatedBindings, InterfaceImplementorEntry, Object, Value};
 
 use super::{BamlClassTypeValue, PackageBamlImpl};
 use crate::BexVm;
@@ -32,7 +32,7 @@ impl BamlClassTypeValue for PackageBamlImpl {
         let Some(class_name) = ty_name(vm, *self_value) else {
             return false;
         };
-        let Some((iface_name, iface_args)) = ty_name_and_args(vm, *other) else {
+        let Some((iface_name, iface_args, iface_assoc)) = ty_name_args_and_assoc(vm, *other) else {
             return false;
         };
         // BEP-044: a generic interface request (`Box<string>`) must match only
@@ -41,11 +41,12 @@ impl BamlClassTypeValue for PackageBamlImpl {
         vm.interface_implementors
             .get(&iface_name)
             .is_some_and(|impls| {
-                impls.iter().any(|(impl_class, impl_args)| {
+                impls.iter().any(|(impl_class, impl_args, impl_assoc)| {
                     *impl_class == class_name
                         && (iface_args.is_empty()
                             || impl_args.is_empty()
                             || ty_args_equivalent(impl_args, &iface_args))
+                        && associated_bindings_equivalent(impl_assoc, &iface_assoc)
                 })
             })
     }
@@ -66,7 +67,8 @@ impl BamlClassTypeValue for PackageBamlImpl {
     /// `Object::Array` allocation. The element `Object::Type` values are
     /// allocated here because they each require a fresh TLAB slot.
     fn implementors(vm: &mut BexVm, self_value: &Value) -> Vec<Value> {
-        let Some((iface_name, iface_args)) = ty_name_and_args(vm, *self_value) else {
+        let Some((iface_name, iface_args, iface_assoc)) = ty_name_args_and_assoc(vm, *self_value)
+        else {
             return Vec::new();
         };
         let Some(entries) = vm.interface_implementors.get(&iface_name).cloned() else {
@@ -76,12 +78,13 @@ impl BamlClassTypeValue for PackageBamlImpl {
             .into_iter()
             // Keep only implementors recorded at the requested instantiation
             // (any, when the request or implementor entry carries no type args).
-            .filter(|(_, impl_args)| {
-                iface_args.is_empty()
+            .filter(|(_, impl_args, impl_assoc)| {
+                (iface_args.is_empty()
                     || impl_args.is_empty()
-                    || ty_args_equivalent(impl_args, &iface_args)
+                    || ty_args_equivalent(impl_args, &iface_args))
+                    && associated_bindings_equivalent(impl_assoc, &iface_assoc)
             })
-            .map(|(name, _)| {
+            .map(|(name, _, _)| {
                 let ty = baml_type::Ty::Class(name, Vec::new(), baml_type::TyAttr::default());
                 Value::object(vm.tlab.alloc(Object::Type(Box::new(ty))))
             })
@@ -125,6 +128,9 @@ fn ty_equivalent(a: &baml_type::Ty, b: &baml_type::Ty) -> bool {
         }
         // Recurse into nested generic instantiations (`Box<Slot<int | string>>`).
         (Ty::Class(an, aa, _), Ty::Class(bn, ba, _)) => an == bn && ty_args_equivalent(aa, ba),
+        (Ty::Interface(an, aa, ab, _), Ty::Interface(bn, ba, bb, _)) => {
+            an == bn && ty_args_equivalent(aa, ba) && associated_bindings_exactly_equivalent(ab, bb)
+        }
         // Recurse through container/optional wrappers so a union nested inside
         // them is still compared order-insensitively (`Box<(int | string)?>` ==
         // `Box<(string | int)?>`); otherwise the wrapper would fall to the
@@ -144,18 +150,45 @@ fn ty_equivalent(a: &baml_type::Ty, b: &baml_type::Ty) -> bool {
     }
 }
 
+fn associated_bindings_equivalent(
+    impl_bindings: &InterfaceAssociatedBindings,
+    requested_bindings: &InterfaceAssociatedBindings,
+) -> bool {
+    requested_bindings.is_empty()
+        || requested_bindings
+            .iter()
+            .all(|(requested_name, requested_ty)| {
+                impl_bindings
+                    .iter()
+                    .find(|(impl_name, _)| impl_name == requested_name)
+                    .is_some_and(|(_, impl_ty)| ty_equivalent(impl_ty, requested_ty))
+            })
+}
+
+fn associated_bindings_exactly_equivalent(
+    a: &InterfaceAssociatedBindings,
+    b: &InterfaceAssociatedBindings,
+) -> bool {
+    a.len() == b.len()
+        && associated_bindings_equivalent(a, b)
+        && associated_bindings_equivalent(b, a)
+}
+
 /// Like [`ty_name`] but also returns the type's generic arguments (e.g.
 /// `[string]` for `Box<string>`). Used by reflection to discriminate generic
 /// interface instantiations.
-fn ty_name_and_args(vm: &BexVm, value: Value) -> Option<(baml_type::TypeName, Vec<baml_type::Ty>)> {
+fn ty_name_args_and_assoc(vm: &BexVm, value: Value) -> Option<InterfaceImplementorEntry> {
     let ptr = value.as_object_ptr()?;
     let Object::Type(ty) = vm.get_object(ptr) else {
         return None;
     };
     match ty.as_ref() {
-        baml_type::Ty::Class(name, args, _) => Some((name.clone(), args.clone())),
-        baml_type::Ty::Enum(name, _) => Some((name.clone(), Vec::new())),
-        other => primitive_type_name(other).map(|name| (name, Vec::new())),
+        baml_type::Ty::Class(name, args, _) => Some((name.clone(), args.clone(), Vec::new())),
+        baml_type::Ty::Interface(name, args, associated_bindings, _) => {
+            Some((name.clone(), args.clone(), associated_bindings.clone()))
+        }
+        baml_type::Ty::Enum(name, _) => Some((name.clone(), Vec::new(), Vec::new())),
+        other => primitive_type_name(other).map(|name| (name, Vec::new(), Vec::new())),
     }
 }
 
@@ -192,7 +225,9 @@ fn ty_name(vm: &BexVm, value: Value) -> Option<baml_type::TypeName> {
         return None;
     };
     match ty.as_ref() {
-        baml_type::Ty::Class(name, _, _) | baml_type::Ty::Enum(name, _) => Some(name.clone()),
+        baml_type::Ty::Class(name, _, _)
+        | baml_type::Ty::Interface(name, _, _, _)
+        | baml_type::Ty::Enum(name, _) => Some(name.clone()),
         other => primitive_type_name(other),
     }
 }

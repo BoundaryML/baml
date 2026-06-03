@@ -1148,19 +1148,51 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
     }
 
     fn emit_load_var(&mut self, slot: usize) {
-        if matches!(
-            self.bytecode.instructions.last(),
-            Some(Instruction::StoreVar(prev_slot)) if *prev_slot == slot
-        ) {
-            let last_idx = self.bytecode.instructions.len() - 1;
-            if last_idx >= self.current_block_start {
-                self.bytecode.instructions[last_idx] = Instruction::StoreVarLoadVar(slot);
-                self.set_var_operand(last_idx, slot);
-                return;
+        // Superinstruction peepholes (CPython-style, operand-movement only),
+        // confined to the current basic block so jump targets / block addresses
+        // are never affected:
+        //  - StoreVar(slot); LoadVar(slot)  -> StoreVarLoadVar(slot)   (store-keep)
+        //  - LoadVar(a);     LoadVar(slot)  -> LoadVar2(a, slot)       (load pair)
+        //
+        // Skip fusion when a sequence point is pending: the rewrite happens in
+        // place on the previous instruction, so it would swallow the new op's
+        // sequence point / line entry (the standalone `emit` path below records
+        // it). Cheap correctness guard for debugger stepping & line attribution.
+        let n = self.bytecode.instructions.len();
+        if n > self.current_block_start && !self.pending_sequence_point {
+            match self.bytecode.instructions[n - 1] {
+                Instruction::StoreVar(prev) if prev == slot => {
+                    self.bytecode.instructions[n - 1] = Instruction::StoreVarLoadVar(slot);
+                    self.set_var_operand(n - 1, slot);
+                    return;
+                }
+                Instruction::LoadVar(a) => {
+                    self.bytecode.instructions[n - 1] = Instruction::LoadVar2(a, slot);
+                    return;
+                }
+                _ => {}
             }
         }
 
         let inst = self.emit(Instruction::LoadVar(slot));
+        self.set_var_operand(inst, slot);
+    }
+
+    /// Emit a store to a (non-captured) local slot, folding `StoreVar(a);
+    /// StoreVar(slot)` into `StoreVar2(a, slot)` (`STORE_FAST_STORE_FAST`).
+    /// In-place rewrite confined to the current basic block, like
+    /// [`Self::emit_load_var`].
+    fn emit_store_var(&mut self, slot: usize) {
+        // See `emit_load_var`: don't fuse across a pending sequence point.
+        let n = self.bytecode.instructions.len();
+        if n > self.current_block_start && !self.pending_sequence_point {
+            if let Instruction::StoreVar(a) = self.bytecode.instructions[n - 1] {
+                self.bytecode.instructions[n - 1] = Instruction::StoreVar2(a, slot);
+                self.set_var_operand(n - 1, slot);
+                return;
+            }
+        }
+        let inst = self.emit(Instruction::StoreVar(slot));
         self.set_var_operand(inst, slot);
     }
 
@@ -1908,9 +1940,9 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                             // Captured local: store through the cell.
                             self.emit(Instruction::StoreDeref(slot));
                         } else {
-                            // Normal local: direct slot store.
-                            let inst = self.emit(Instruction::StoreVar(slot));
-                            self.set_var_operand(inst, slot);
+                            // Normal local: direct slot store (folds a preceding
+                            // StoreVar into StoreVar2).
+                            self.emit_store_var(slot);
                         }
                     }
                     LocalStoreBehavior::KeepOnStack => {

@@ -3,9 +3,13 @@
 // TODO: baml_runtime is disabled for now
 // use baml_runtime::RuntimeCliDefaults;
 
+use std::io::Write as _;
+
 fn main() {
     // TODO: baml_log is disabled for now
     // baml_log::init()?;
+
+    warn_if_direct_invocation();
 
     let argv: Vec<String> = std::env::args().collect();
 
@@ -22,4 +26,20 @@ fn main() {
         }
     };
     std::process::exit(exit_code.into());
+}
+
+fn warn_if_direct_invocation() {
+    if env_flag("BAML_WRAPPER_EXEC") || env_flag("BAML_CLI_ALLOW_DIRECT") {
+        return;
+    }
+    let _ = writeln!(
+        std::io::stderr(),
+        "warning: using the internal BAML toolchain binary directly is not recommended. Use `baml` instead."
+    );
+}
+
+fn env_flag(name: &str) -> bool {
+    std::env::var(name)
+        .map(|value| matches!(value.trim().to_ascii_lowercase().as_str(), "1" | "true"))
+        .unwrap_or(false)
 }

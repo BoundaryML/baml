@@ -181,11 +181,9 @@ function watch.$init_test_ns_watch_watch(registry: testing.TestCollector) -> nul
 }
 
 function watch.WPointWithSet.set(self: watch.WPointWithSet, x: int, y: int) -> watch.WPointWithSet {
-    load_var self
-    load_var x
+    load_var2 1 2
     store_field .x
-    load_var self
-    load_var y
+    load_var2 1 3
     store_field .y
     load_var self
     return
@@ -341,13 +339,11 @@ function watch.watch_break_unwatches_fn() -> int {
     store_var __for_idx
 
   L0:
-    load_var __for_idx
-    load_var _2
+    load_var2 3 2
     container_len
     cmp_int_op <
     pop_jump_if_false L3
-    load_var _2
-    load_var __for_idx
+    load_var2 2 3
     load_array_element
     store_var x
     load_const "x"
@@ -364,8 +360,7 @@ function watch.watch_break_unwatches_fn() -> int {
     load_const 9
     add_int
     store_var x
-    load_var total
-    load_var x
+    load_var2 1 4
     add_int
     store_var total
     unwatch x
@@ -400,7 +395,8 @@ function watch.watch_catch_arm_fallthrough_fn() -> int {
     load_const null
     watch x
     load_const 5
-    store_var_load_var x
+    store_var x
+    load_var x
     store_var result
     unwatch x
 
@@ -485,8 +481,7 @@ function watch.watch_continue_unwatches_fn() -> int {
     store_var __for_idx
 
   L0:
-    load_var __for_idx
-    load_var _2
+    load_var2 3 2
     container_len
     cmp_int_op <
     pop_jump_if_false L1
@@ -497,8 +492,7 @@ function watch.watch_continue_unwatches_fn() -> int {
     return
 
   L2:
-    load_var _2
-    load_var __for_idx
+    load_var2 2 3
     load_array_element
     store_var x
     load_const "x"
@@ -515,8 +509,7 @@ function watch.watch_continue_unwatches_fn() -> int {
     load_const 10
     add_int
     store_var x
-    load_var total
-    load_var x
+    load_var2 1 4
     add_int
     store_var total
     unwatch x
@@ -556,20 +549,16 @@ function watch.watch_cyclic_graph_fn() -> int {
     load_const "v4"
     load_const null
     watch v4
-    load_var v1
-    load_var v2
+    load_var2 1 2
     alloc_array 1
     store_field .edges
-    load_var v2
-    load_var v3
+    load_var2 2 3
     alloc_array 1
     store_field .edges
-    load_var v3
-    load_var v4
+    load_var2 3 4
     alloc_array 1
     store_field .edges
-    load_var v4
-    load_var v1
+    load_var2 4 1
     alloc_array 1
     store_field .edges
     load_var v2
@@ -596,7 +585,8 @@ function watch.watch_default_filter_fn() -> int {
     load_const 0
     store_var value
     load_const 6
-    store_var_load_var value
+    store_var value
+    load_var value
     unwatch value
     return
 }
@@ -615,7 +605,8 @@ function watch.watch_early_return_unwatches_fn() -> int {
 
   L0:
     load_const 99
-    store_var_load_var x
+    store_var x
+    load_var x
     unwatch x
     jump L2
 
@@ -637,8 +628,7 @@ function watch.watch_for_throw_fails() -> int {
     store_var __for_idx
 
   L0:
-    load_var __for_idx
-    load_var _1
+    load_var2 2 1
     container_len
     cmp_int_op <
     pop_jump_if_false L1
@@ -649,8 +639,7 @@ function watch.watch_for_throw_fails() -> int {
     return
 
   L2:
-    load_var _1
-    load_var __for_idx
+    load_var2 1 2
     load_array_element
     store_var x
     load_const "x"
@@ -744,7 +733,8 @@ function watch.watch_match_arm_fallthrough_entry(input: int) -> int {
     load_const null
     watch x
     load_const 5
-    store_var_load_var x
+    store_var x
+    load_var x
     store_var result
     unwatch x
 
@@ -831,8 +821,7 @@ function watch.watch_nested_object_added_fn() -> int {
     init_instance user.watch.WValue .value
     init_instance user.watch.WPointV .x, .y
     store_var p
-    load_var vec
-    load_var p
+    load_var2 1 2
     store_field .p
     load_var p
     load_field .x
@@ -891,7 +880,8 @@ function watch.watch_primitive_fn() -> int {
     load_const null
     watch value
     load_const 1
-    store_var_load_var value
+    store_var value
+    load_var value
     unwatch value
     return
 }
@@ -961,7 +951,8 @@ function watch.watch_switch_arm_fallthrough_entry(input: int) -> int {
     load_const null
     watch x
     load_const 5
-    store_var_load_var x
+    store_var x
+    load_var x
     store_var result
     unwatch x
     jump L5

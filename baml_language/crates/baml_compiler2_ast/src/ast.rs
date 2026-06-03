@@ -43,6 +43,15 @@ pub enum TypeExpr {
         segments: Vec<Name>,
         /// Generic type arguments (e.g., `<T>` in `Stream<T>`). Empty for non-generic paths.
         generic_args: Vec<TypeExpr>,
+        /// Named associated type bindings in type positions, e.g. `Iterator<Item = int>`.
+        associated_type_bindings: Vec<AssociatedTypeBinding>,
+        attrs: Vec<RawAttribute>,
+    },
+    /// Associated type projection: `Base.Item` or `(Base as Interface).Item`.
+    AssociatedTypeProjection {
+        base: Box<TypeExpr>,
+        interface: Option<Box<TypeExpr>>,
+        member: Name,
         attrs: Vec<RawAttribute>,
     },
     /// Primitive types
@@ -142,6 +151,7 @@ impl TypeExpr {
     pub fn attrs(&self) -> &[RawAttribute] {
         match self {
             Self::Path { attrs, .. }
+            | Self::AssociatedTypeProjection { attrs, .. }
             | Self::Int { attrs }
             | Self::Bigint { attrs }
             | Self::Float { attrs }
@@ -170,6 +180,7 @@ impl TypeExpr {
     pub fn attrs_mut(&mut self) -> &mut Vec<RawAttribute> {
         match self {
             Self::Path { attrs, .. }
+            | Self::AssociatedTypeProjection { attrs, .. }
             | Self::Int { attrs }
             | Self::Bigint { attrs }
             | Self::Float { attrs }
@@ -213,6 +224,7 @@ impl std::fmt::Display for TypeExpr {
             TypeExpr::Path {
                 segments,
                 generic_args,
+                associated_type_bindings,
                 ..
             } => {
                 let path = segments
@@ -221,17 +233,39 @@ impl std::fmt::Display for TypeExpr {
                     .collect::<Vec<_>>()
                     .join(".");
                 write!(f, "{path}")?;
-                if !generic_args.is_empty() {
+                if !generic_args.is_empty() || !associated_type_bindings.is_empty() {
                     write!(f, "<")?;
-                    for (i, arg) in generic_args.iter().enumerate() {
-                        if i > 0 {
+                    let mut first = true;
+                    for arg in generic_args {
+                        if !first {
                             write!(f, ", ")?;
                         }
+                        first = false;
                         write!(f, "{arg}")?;
+                    }
+                    for binding in associated_type_bindings {
+                        if !first {
+                            write!(f, ", ")?;
+                        }
+                        first = false;
+                        write!(f, "{} = {}", binding.name, binding.ty)?;
                     }
                     write!(f, ">")?;
                 }
                 Ok(())
+            }
+            TypeExpr::AssociatedTypeProjection {
+                base,
+                interface,
+                member,
+                ..
+            } => {
+                if let Some(interface) = interface {
+                    write!(f, "({base} as {interface}).{member}")
+                } else {
+                    write_postfix_base(f, base)?;
+                    write!(f, ".{member}")
+                }
             }
             TypeExpr::Int { .. } => write!(f, "int"),
             TypeExpr::Bigint { .. } => write!(f, "bigint"),
@@ -325,6 +359,14 @@ pub struct FunctionTypeParam {
     pub name: Option<Name>,
     pub optional: bool,
     pub ty: TypeExpr,
+}
+
+/// Named associated type binding used inside type applications:
+/// `Iterator<Item = int>`.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct AssociatedTypeBinding {
+    pub name: Name,
+    pub ty: Box<TypeExpr>,
 }
 
 /// A type expression with its source span — used in item definitions
@@ -798,6 +840,20 @@ pub enum Stmt {
         after: Option<StmtId>,
         origin: LoopOrigin,
     },
+    /// `while let PATTERN = SCRUTINEE { BODY }` — loops as long as the
+    /// refutable `pattern` matches `scrutinee`. Bindings introduced by
+    /// `pattern` are in scope inside `body` only and are re-bound each
+    /// iteration. Exits when the pattern fails to match. Like `Stmt::While`
+    /// it produces no value (unit) and supports `break`/`continue`. Unlike
+    /// `Stmt::Let`, the pattern is expected to be *refutable*; an irrefutable
+    /// pattern earns a downstream warning. Has no `else` clause and (unlike
+    /// `Stmt::While`) no `after`/`origin` — those exist only for desugared
+    /// C-style `for` loops.
+    WhileLet {
+        pattern: PatId,
+        scrutinee: ExprId,
+        body: ExprId,
+    },
     /// For-in loop: `for let <binding> in <collection> { <body> }`.
     ///
     /// Kept as a first-class node (not desugared to While) so that:
@@ -872,6 +928,7 @@ pub enum Pattern {
     Class {
         class: Vec<Name>,
         generic_args: Vec<TypeExpr>,
+        associated_type_bindings: Vec<AssociatedTypeBinding>,
         fields: Vec<FieldPat>,
     },
     /// `[prefix..., ..rest?, suffix...]` or `[…]: T` — array destructure
@@ -1306,6 +1363,8 @@ pub struct InterfaceDef {
     /// Field signatures declared on the interface. Interface fields cannot
     /// have default values — see BEP-044 §"Interface Fields".
     pub fields: Vec<FieldDef>,
+    /// Associated type declarations on the interface (BEP-057).
+    pub associated_types: Vec<AssociatedTypeDef>,
     /// Required methods (no body). Implementing classes must provide a body.
     pub required_methods: Vec<MethodSigDef>,
     /// Default methods (with body). Implementing classes inherit unless they override.
@@ -1344,6 +1403,8 @@ pub struct ImplementsBlockDef {
     /// Explicit mappings from interface fields to class fields:
     /// `interface_field as class_field`.
     pub field_links: Vec<InterfaceFieldLinkDef>,
+    /// Associated type bindings, e.g. `type Item = int`.
+    pub associated_type_bindings: Vec<AssociatedTypeBindingDef>,
     /// Method overrides / definitions inside this `implements` block.
     pub methods: Vec<FunctionDef>,
     /// True when this block came from top-level `implements I for T`.
@@ -1382,9 +1443,28 @@ pub struct ImplementsForDef {
     pub for_target: SpannedTypeExpr,
     /// Explicit mappings from interface fields to class fields.
     pub field_links: Vec<InterfaceFieldLinkDef>,
+    /// Associated type bindings, e.g. `type Item = int`.
+    pub associated_type_bindings: Vec<AssociatedTypeBindingDef>,
     /// Method definitions inside the block.
     pub methods: Vec<FunctionDef>,
     pub span: TextRange,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AssociatedTypeDef {
+    pub name: Name,
+    pub bound: Option<SpannedTypeExpr>,
+    pub default: Option<SpannedTypeExpr>,
+    pub span: TextRange,
+    pub name_span: TextRange,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AssociatedTypeBindingDef {
+    pub name: Name,
+    pub type_expr: Option<SpannedTypeExpr>,
+    pub span: TextRange,
+    pub name_span: TextRange,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

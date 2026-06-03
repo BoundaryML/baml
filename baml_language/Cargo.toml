@@ -2,14 +2,14 @@
 members = [
   "crates/*",
   "forks/*",
-  "sdks/go/codegen_go",
+  "sdks/go/sdkgen_go",
   "sdks/nodejs/bridge_nodejs",
-  "sdks/nodejs/codegen_nodejs",
+  "sdks/nodejs/sdkgen_typescript_node",
   "sdks/python/rust/*",
   "sdk_tests/harness_setup",
   "sdk_tests/harness_runner",
   "sdk_tests/crates/python_pydantic2",
-  # `sdk_tests/crates/nodejs_typescript`'s build.rs runs codegen +
+  # `sdk_tests/crates/typescript_node`'s build.rs runs codegen +
   # `pnpm install` but soft-fails into `$OUT_DIR/build_diagnostics.txt`
   # if pnpm is missing or install fails (see
   # `sdk_tests/harness_setup/src/lib.rs::BuildDiagnostics` —
@@ -17,7 +17,7 @@ members = [
   # `cargo build` / `cargo doc` succeeds without pnpm installed.
   # The failures surface via `cargo test`'s
   # `build_diagnostics::no_build_failures` test.
-  "sdk_tests/crates/nodejs_typescript",
+  "sdk_tests/crates/typescript_node",
   # Native RUSTC_WRAPPER shim (see tools_sccache/src/main.rs); the Windows
   # counterpart to the tools/baml-sccache POSIX script, built explicitly in CI.
   "tools_sccache",
@@ -64,9 +64,9 @@ baml_builtins_codegen = { path = "crates/baml_builtins_codegen" }
 baml_builtins2 = { path = "crates/baml_builtins2" }
 baml_builtins2_codegen = { path = "crates/baml_builtins2_codegen" }
 baml_builtins_macros = { path = "crates/baml_builtins_macros" }
-codegen_go = { path = "sdks/go/codegen_go" }
-codegen_nodejs = { path = "sdks/nodejs/codegen_nodejs" }
-codegen_python = { path = "sdks/python/rust/codegen_python" }
+sdkgen_go = { path = "sdks/go/sdkgen_go" }
+sdkgen_typescript_node = { path = "sdks/nodejs/sdkgen_typescript_node" }
+sdkgen_python_pydantic2 = { path = "sdks/python/rust/sdkgen_python_pydantic2" }
 baml_codegen_types = { path = "crates/baml_codegen_types" }
 baml_compiler2_ast = { path = "crates/baml_compiler2_ast" }
 baml_compiler2_hir = { path = "crates/baml_compiler2_hir" }
@@ -94,7 +94,9 @@ baml_lsp2_actions = { path = "crates/baml_lsp2_actions" }
 baml_lsp_server = { path = "crates/baml_lsp_server", default-features = false }
 baml_lsp_types = { path = "crates/baml_lsp_types" }
 baml_project = { path = "crates/baml_project" }
+baml_release = { path = "crates/baml_release" }
 baml_tests = { path = "crates/baml_tests" }
+baml_version = { path = "crates/baml_version" }
 tools_onionskin = { path = "crates/tools_onionskin" }
 bex_vm = { path = "crates/bex_vm" }
 bex_vm_types = { path = "crates/bex_vm_types" }
@@ -253,9 +255,9 @@ pyo3 = { version = "0.28", default-features = false }
 pyo3-async-runtimes = { version = "0.28" }
 pyo3-build-config = "0.28"
 pyo3-stub-gen = { version = "0.22", default-features = false }
-napi = { version = "3.8.4", default-features = false }
-napi-derive = "3.5.3"
-napi-build = "2.3.1"
+napi = { version = "3.9.0", default-features = false }
+napi-derive = "3.5.6"
+napi-build = "2.3.2"
 wiremock = "0.6"
 vfs = "0.12"
 wasm-logger = "0.2.0"

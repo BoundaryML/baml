@@ -15,7 +15,7 @@ use std::{
     sync::Arc,
 };
 
-use baml_base::Name;
+use baml_base::{Name, SourceFile};
 use baml_compiler2_ast::{
     self as ast, AstSourceMap, Expr as AstExpr, ExprBody, ExprId, FunctionDef, PatId,
 };
@@ -118,7 +118,11 @@ fn inference_owner_scope(
 }
 
 fn enclosing_type_generics(
+    db: &dyn crate::Db,
+    file: SourceFile,
     item_tree: &baml_compiler2_hir::item_tree::ItemTree,
+    pkg_items: &PackageItems<'_>,
+    ns_context: &[Name],
     type_name: &Name,
 ) -> Option<(Vec<Name>, Vec<Option<ast::TypeExpr>>)> {
     for class_data in item_tree.classes.values() {
@@ -130,16 +134,134 @@ fn enclosing_type_generics(
         }
     }
 
-    for iface_data in item_tree.interfaces.values() {
+    for (local_id, iface_data) in &item_tree.interfaces {
         if iface_data.name == *type_name {
-            return Some((
-                iface_data.generic_params.clone(),
-                iface_data.generic_param_bounds.clone(),
+            let iface_loc = InterfaceLoc::new(db, file, *local_id);
+            return Some(interface_type_level_params_and_bounds(
+                db, iface_loc, iface_data, pkg_items, ns_context,
             ));
         }
     }
 
     None
+}
+
+fn interface_type_level_params_and_bounds(
+    db: &dyn crate::Db,
+    iface_loc: InterfaceLoc<'_>,
+    iface_data: &baml_compiler2_hir::item_tree::Interface,
+    pkg_items: &PackageItems<'_>,
+    ns_context: &[Name],
+) -> (Vec<Name>, Vec<Option<ast::TypeExpr>>) {
+    let mut params = iface_data.generic_params.clone();
+    params.extend(
+        iface_data
+            .associated_types
+            .iter()
+            .map(|assoc| assoc.name.clone()),
+    );
+
+    let mut bounds = iface_data.generic_param_bounds.clone();
+    bounds.extend(
+        iface_data
+            .associated_types
+            .iter()
+            .map(|assoc| assoc.bound.as_ref().map(|bound| bound.expr.clone())),
+    );
+
+    let own_associated: FxHashSet<Name> = iface_data
+        .associated_types
+        .iter()
+        .map(|assoc| assoc.name.clone())
+        .collect();
+    let inherited = inherited_interface_associated_type_names(db, iface_loc, pkg_items, ns_context);
+    let mut counts: FxHashMap<Name, usize> = FxHashMap::default();
+    for name in &inherited {
+        *counts.entry(name.clone()).or_default() += 1;
+    }
+    for name in inherited {
+        if counts.get(&name).copied().unwrap_or_default() == 1
+            && !own_associated.contains(&name)
+            && !params.contains(&name)
+        {
+            params.push(name);
+            bounds.push(None);
+        }
+    }
+
+    (params, bounds)
+}
+
+fn inherited_interface_associated_type_names(
+    db: &dyn crate::Db,
+    iface_loc: InterfaceLoc<'_>,
+    pkg_items: &PackageItems<'_>,
+    ns_context: &[Name],
+) -> Vec<Name> {
+    type InterfaceVisitKey = (
+        SourceFile,
+        baml_compiler2_hir::ids::LocalItemId<baml_compiler2_hir::ids::InterfaceMarker>,
+    );
+
+    fn walk(
+        db: &dyn crate::Db,
+        iface_loc: InterfaceLoc<'_>,
+        pkg_items: &PackageItems<'_>,
+        ns_context: &[Name],
+        seen: &mut FxHashSet<InterfaceVisitKey>,
+        out: &mut Vec<Name>,
+    ) {
+        if !seen.insert((iface_loc.file(db), iface_loc.id(db))) {
+            return;
+        }
+        let item_tree = baml_compiler2_hir::file_item_tree(db, iface_loc.file(db));
+        let Some(iface_data) = item_tree.interfaces.get(&iface_loc.id(db)) else {
+            return;
+        };
+        for required in &iface_data.requires {
+            let Some(required_loc) = crate::interfaces::resolve_path_to_interface(
+                db,
+                &required.expr,
+                pkg_items,
+                ns_context,
+            ) else {
+                continue;
+            };
+            let required_tree = baml_compiler2_hir::file_item_tree(db, required_loc.file(db));
+            if let Some(required_iface) = required_tree.interfaces.get(&required_loc.id(db)) {
+                out.extend(
+                    required_iface
+                        .associated_types
+                        .iter()
+                        .map(|assoc| assoc.name.clone()),
+                );
+            }
+            let required_pkg =
+                baml_compiler2_hir::file_package::file_package(db, required_loc.file(db));
+            let required_pkg_id = PackageId::new(db, required_pkg.package.clone());
+            let required_pkg_items = baml_compiler2_ppir::package_items(db, required_pkg_id);
+            walk(
+                db,
+                required_loc,
+                required_pkg_items,
+                &required_pkg.namespace_path,
+                seen,
+                out,
+            );
+        }
+    }
+
+    let mut seen = FxHashSet::default();
+    let mut out = Vec::new();
+    walk(db, iface_loc, pkg_items, ns_context, &mut seen, &mut out);
+    out
+}
+
+fn type_bindings_for_params(params: &[Name]) -> FxHashMap<Name, Ty> {
+    params
+        .iter()
+        .map(|param| (param.clone(), Ty::TypeVar(param.clone(), TyAttr::default())))
+        .collect()
 }
 
 fn install_generic_param_bounds(
@@ -151,17 +273,18 @@ fn install_generic_param_bounds(
     span: TextRange,
 ) {
     let mut bounds: FxHashMap<Name, Ty> = FxHashMap::default();
+    let type_bindings = type_bindings_for_params(&env.params);
     for (name, bound) in env.bound_param_names.iter().zip(env.bound_exprs.iter()) {
         let Some(bound_te) = bound else {
             continue;
         };
         let mut diags = Vec::new();
-        let bound_ty = crate::lower_type_expr::lower_type_expr_in_ns(
+        let bound_ty = crate::generics::lower_type_expr_with_generics(
             db,
             bound_te,
             pkg_items,
             ns_context,
-            &env.params,
+            &type_bindings,
             &mut diags,
         );
         for diag in diags {
@@ -184,61 +307,72 @@ fn apply_generic_env(
     install_generic_param_bounds(db, builder, pkg_items, ns_context, env, span);
 }
 
+#[derive(Clone, Copy)]
+struct GenericLookupContext<'a, 'db> {
+    db: &'a dyn crate::Db,
+    file: SourceFile,
+    index: &'a baml_compiler2_hir::semantic_index::FileSemanticIndex<'db>,
+    item_tree: &'a baml_compiler2_hir::item_tree::ItemTree,
+    pkg_items: &'a PackageItems<'db>,
+    ns_context: &'a [Name],
+}
+
 fn parent_type_generic_env(
-    index: &baml_compiler2_hir::semantic_index::FileSemanticIndex<'_>,
-    item_tree: &baml_compiler2_hir::item_tree::ItemTree,
+    ctx: GenericLookupContext<'_, '_>,
     parent_scope_id: Option<FileScopeId>,
 ) -> Option<(Name, Vec<Name>, Vec<Option<ast::TypeExpr>>)> {
-    let parent = &index.scopes[parent_scope_id?.index() as usize];
+    let parent = &ctx.index.scopes[parent_scope_id?.index() as usize];
     if !matches!(parent.kind, ScopeKind::Class) {
         return None;
     }
     let type_name = parent.name.clone()?;
-    let (params, bounds) = enclosing_type_generics(item_tree, &type_name)?;
+    let (params, bounds) = enclosing_type_generics(
+        ctx.db,
+        ctx.file,
+        ctx.item_tree,
+        ctx.pkg_items,
+        ctx.ns_context,
+        &type_name,
+    )?;
     Some((type_name, params, bounds))
 }
 
 fn prepend_parent_type_generics(
+    ctx: GenericLookupContext<'_, '_>,
     env: &mut GenericEnv,
-    index: &baml_compiler2_hir::semantic_index::FileSemanticIndex<'_>,
-    item_tree: &baml_compiler2_hir::item_tree::ItemTree,
     parent_scope_id: Option<FileScopeId>,
 ) -> Option<Name> {
     let (type_name, parent_generics, parent_bounds) =
-        parent_type_generic_env(index, item_tree, parent_scope_id)?;
+        parent_type_generic_env(ctx, parent_scope_id)?;
     env.prepend_declared(&parent_generics, &parent_bounds);
     Some(type_name)
 }
 
 fn generic_env_for_function_data(
-    index: &baml_compiler2_hir::semantic_index::FileSemanticIndex<'_>,
-    item_tree: &baml_compiler2_hir::item_tree::ItemTree,
+    ctx: GenericLookupContext<'_, '_>,
     function_scope: &baml_compiler2_hir::scope::Scope,
     func_data: &baml_compiler2_hir::item_tree::Function,
 ) -> GenericEnv {
     let mut env = GenericEnv::from_params(func_data.generic_params.clone());
     env.add_bounds_for_declared_params(&func_data.generic_params, &func_data.generic_param_bounds);
-    prepend_parent_type_generics(&mut env, index, item_tree, function_scope.parent);
+    prepend_parent_type_generics(ctx, &mut env, function_scope.parent);
     env
 }
 
 fn enclosing_function_generic_env_from_let(
-    index: &baml_compiler2_hir::semantic_index::FileSemanticIndex<'_>,
-    item_tree: &baml_compiler2_hir::item_tree::ItemTree,
+    ctx: GenericLookupContext<'_, '_>,
     let_scope: &baml_compiler2_hir::scope::Scope,
 ) -> Option<GenericEnv> {
     let mut current = let_scope.parent;
     while let Some(fsi) = current {
-        let scope = &index.scopes[fsi.index() as usize];
+        let scope = &ctx.index.scopes[fsi.index() as usize];
         match scope.kind {
             ScopeKind::Function => {
-                let func_data = item_tree
-                    .functions
-                    .values()
-                    .find(|fd| fd.span == scope.range && scope.name.as_ref() == Some(&fd.name))?;
-                return Some(generic_env_for_function_data(
-                    index, item_tree, scope, func_data,
-                ));
+                let func_data =
+                    ctx.item_tree.functions.values().find(|fd| {
+                        fd.span == scope.range && scope.name.as_ref() == Some(&fd.name)
+                    })?;
+                return Some(generic_env_for_function_data(ctx, scope, func_data));
             }
             ScopeKind::Let => current = scope.parent,
             _ => break,
@@ -268,12 +402,13 @@ fn lower_type_expr_at_span_in_env(
     } else {
         type_expr.clone()
     };
-    let ty = crate::lower_type_expr::lower_type_expr_in_ns(
+    let type_bindings = type_bindings_for_params(&env.params);
+    let ty = crate::generics::lower_type_expr_with_generics(
         db,
         &resolved_expr,
         pkg_items,
         ns_context,
-        &env.params,
+        &type_bindings,
         &mut diags,
     );
     for diag in diags {
@@ -306,24 +441,6 @@ fn validate_spanned_type_expr_generic_bounds(
     );
 }
 
-fn lower_type_expr_silent_in_env(
-    db: &dyn crate::Db,
-    pkg_items: &PackageItems<'_>,
-    ns_context: &[Name],
-    env: &GenericEnv,
-    type_expr: &ast::TypeExpr,
-) -> Ty {
-    let mut diags = Vec::new();
-    crate::lower_type_expr::lower_type_expr_in_ns(
-        db,
-        type_expr,
-        pkg_items,
-        ns_context,
-        &env.params,
-        &mut diags,
-    )
-}
-
 fn extend_env_with_lambda_generics(mut env: GenericEnv, func_def: &FunctionDef) -> GenericEnv {
     env.append_unique_declared(&func_def.generic_params, &func_def.generic_param_bounds);
     env
@@ -338,6 +455,7 @@ fn add_lambda_params_to_builder(
     func_def: &FunctionDef,
     contextual_param_tys: Option<&[FunctionParamTy]>,
 ) {
+    let type_bindings = type_bindings_for_params(&env.params);
     for (i, param) in func_def.params.iter().enumerate() {
         let param_ty = param
             .type_expr
@@ -346,7 +464,17 @@ fn add_lambda_params_to_builder(
             // function type. Here we only need local parameter types for the
             // lambda body; reporting again would duplicate diagnostics in the
             // child lambda scope.
-            .map(|ste| lower_type_expr_silent_in_env(db, pkg_items, ns_context, env, &ste.expr))
+            .map(|ste| {
+                let mut diags = Vec::new();
+                crate::generics::lower_type_expr_with_generics(
+                    db,
+                    &ste.expr,
+                    pkg_items,
+                    ns_context,
+                    &type_bindings,
+                    &mut diags,
+                )
+            })
             .or_else(|| {
                 contextual_param_tys
                     .and_then(|pts| pts.get(i))
@@ -920,7 +1048,17 @@ pub fn infer_scope_types<'db>(
                     if let Some(imp) = enclosing_impl {
                         env.prepend_declared(&imp.generic_params, &imp.generic_param_bounds);
                     } else if let Some((type_name, parent_generics, parent_bounds)) =
-                        parent_type_generic_env(index, &item_tree, scope.parent)
+                        parent_type_generic_env(
+                            GenericLookupContext {
+                                db,
+                                file,
+                                index,
+                                item_tree: &item_tree,
+                                pkg_items,
+                                ns_context: &pkg_info.namespace_path,
+                            },
+                            scope.parent,
+                        )
                     {
                         for mp in &sig.user_generic_params {
                             if parent_generics.iter().any(|cp| cp == mp) {
@@ -1003,6 +1141,172 @@ pub fn infer_scope_types<'db>(
                         let sig_sm = baml_compiler2_ppir::elaborated_function_signature_source_map(
                             db, func_loc,
                         );
+                        let mut type_bindings: FxHashMap<Name, Ty> = FxHashMap::default();
+                        for param in &env.params {
+                            type_bindings.insert(
+                                param.clone(),
+                                Ty::TypeVar(param.clone(), TyAttr::default()),
+                            );
+                        }
+                        if let Some(target) = item_tree.method_to_iface_target.get(local_id)
+                            && let Some(iface_loc) = crate::interfaces::resolve_path_to_interface(
+                                db,
+                                &target.expr,
+                                pkg_items,
+                                &pkg_info.namespace_path,
+                            )
+                        {
+                            let iface_file = iface_loc.file(db);
+                            let iface_tree = baml_compiler2_hir::file_item_tree(db, iface_file);
+                            if let Some(iface_data) = iface_tree.interfaces.get(&iface_loc.id(db)) {
+                                let iface_ns =
+                                    baml_compiler2_hir::file_package::file_package(db, iface_file)
+                                        .namespace_path;
+                                let mut iface_type_bindings = type_bindings.clone();
+                                if let baml_compiler2_ast::TypeExpr::Path { generic_args, .. } =
+                                    &target.expr
+                                {
+                                    for (param, arg) in
+                                        iface_data.generic_params.iter().zip(generic_args)
+                                    {
+                                        let mut arg_diags = Vec::new();
+                                        let ty = crate::generics::lower_type_expr_with_generics(
+                                            db,
+                                            arg,
+                                            pkg_items,
+                                            &pkg_info.namespace_path,
+                                            &type_bindings,
+                                            &mut arg_diags,
+                                        );
+                                        for diag in arg_diags {
+                                            builder.report_at_span(diag, target.span);
+                                        }
+                                        iface_type_bindings.insert(param.clone(), ty.clone());
+                                        type_bindings.entry(param.clone()).or_insert(ty);
+                                    }
+                                }
+                                let explicit_bindings = item_tree
+                                    .method_to_iface_associated_type_bindings
+                                    .get(local_id)
+                                    .cloned()
+                                    .unwrap_or_default();
+                                for assoc in &iface_data.associated_types {
+                                    if let Some(binding) =
+                                        explicit_bindings.iter().find(|b| b.name == assoc.name)
+                                        && let Some(te) = &binding.type_expr
+                                    {
+                                        let resolved = if let Some(replacement) = &self_replacement
+                                        {
+                                            crate::lower_type_expr::substitute_self_in(
+                                                &te.expr,
+                                                replacement,
+                                            )
+                                        } else {
+                                            te.expr.clone()
+                                        };
+                                        let mut binding_diags = Vec::new();
+                                        let ty = crate::generics::lower_type_expr_with_generics(
+                                            db,
+                                            &resolved,
+                                            pkg_items,
+                                            &pkg_info.namespace_path,
+                                            &type_bindings,
+                                            &mut binding_diags,
+                                        );
+                                        for diag in binding_diags {
+                                            builder.report_at_span(diag, te.span);
+                                        }
+                                        type_bindings.insert(assoc.name.clone(), ty.clone());
+                                        iface_type_bindings.insert(assoc.name.clone(), ty);
+                                        continue;
+                                    }
+                                    if let Some(default) = &assoc.default {
+                                        let mut default_diags = Vec::new();
+                                        let ty = crate::generics::lower_type_expr_with_generics(
+                                            db,
+                                            &default.expr,
+                                            pkg_items,
+                                            &iface_ns,
+                                            &iface_type_bindings,
+                                            &mut default_diags,
+                                        );
+                                        for diag in default_diags {
+                                            builder.report_at_span(diag, default.span);
+                                        }
+                                        type_bindings.insert(assoc.name.clone(), ty.clone());
+                                        iface_type_bindings.insert(assoc.name.clone(), ty);
+                                    }
+                                }
+                            }
+                        } else if let Some(iface_name) = &enclosing_class_name
+                            && let Some(def) =
+                                pkg_items.lookup_type(&pkg_info.namespace_path, iface_name)
+                            && let baml_compiler2_hir::contributions::Definition::Interface(
+                                iface_loc,
+                            ) = def
+                        {
+                            let iface_file = iface_loc.file(db);
+                            let iface_tree = baml_compiler2_hir::file_item_tree(db, iface_file);
+                            if let Some(iface_data) = iface_tree.interfaces.get(&iface_loc.id(db)) {
+                                let iface_qtn =
+                                    crate::lower_type_expr::qualify_def(db, def, iface_name);
+                                let iface_args: Vec<Ty> = iface_data
+                                    .generic_params
+                                    .iter()
+                                    .map(|param| Ty::TypeVar(param.clone(), TyAttr::default()))
+                                    .collect();
+                                let iface_ty =
+                                    Ty::Interface(iface_qtn, iface_args, vec![], TyAttr::default());
+                                let iface_ns =
+                                    baml_compiler2_hir::file_package::file_package(db, iface_file)
+                                        .namespace_path;
+                                for assoc in &iface_data.associated_types {
+                                    if let Some(default) = &assoc.default {
+                                        let mut default_diags = Vec::new();
+                                        let ty = crate::generics::lower_type_expr_with_generics(
+                                            db,
+                                            &default.expr,
+                                            pkg_items,
+                                            &iface_ns,
+                                            &type_bindings,
+                                            &mut default_diags,
+                                        );
+                                        for diag in default_diags {
+                                            builder.report_at_span(diag, default.span);
+                                        }
+                                        type_bindings.insert(assoc.name.clone(), ty);
+                                    } else {
+                                        type_bindings.insert(
+                                            assoc.name.clone(),
+                                            Ty::AssociatedTypeProjection {
+                                                base: Box::new(iface_ty.clone()),
+                                                interface: Some(Box::new(iface_ty.clone())),
+                                                member: assoc.name.clone(),
+                                                attr: TyAttr::default(),
+                                            },
+                                        );
+                                    }
+                                }
+                            }
+                        }
+                        let lower_with_self = |te: &baml_compiler2_ast::TypeExpr,
+                                               diags: &mut Vec<
+                            crate::infer_context::TirTypeError,
+                        >| {
+                            let resolved = if let Some(replacement) = &self_replacement {
+                                crate::lower_type_expr::substitute_self_in(te, replacement)
+                            } else {
+                                te.clone()
+                            };
+                            crate::generics::lower_type_expr_with_generics(
+                                db,
+                                &resolved,
+                                pkg_items,
+                                &pkg_info.namespace_path,
+                                &type_bindings,
+                                diags,
+                            )
+                        };
 
                         // Get declared return type
                         let return_ty = sig
@@ -1010,18 +1314,13 @@ pub fn infer_scope_types<'db>(
                             .as_ref()
                             .map(|te| {
                                 let span = sig_sm.return_type_span.unwrap_or(func_data.span);
-                                lower_type_expr_at_span_in_env(
-                                    db,
-                                    &mut builder,
-                                    pkg_items,
-                                    &pkg_info.namespace_path,
-                                    &env,
-                                    te,
-                                    TypeExprLoweringOptions {
-                                        span,
-                                        self_replacement: self_replacement.as_ref(),
-                                    },
-                                )
+                                let mut diags = Vec::new();
+                                let ty = lower_with_self(te, &mut diags);
+                                for diag in diags {
+                                    builder.report_at_span(diag, span);
+                                }
+                                builder.validate_type_generic_bounds_at_span(span, &ty);
+                                ty
                             })
                             .unwrap_or(Ty::Unknown {
                                 attr: TyAttr::default(),
@@ -1093,7 +1392,12 @@ pub fn infer_scope_types<'db>(
                                                                     .collect()
                                                             })
                                                             .unwrap_or_default();
-                                                        Ty::Interface(qtn, iface_args, TyAttr::default())
+                                                        Ty::Interface(
+                                                            qtn,
+                                                            iface_args,
+                                                            vec![],
+                                                            TyAttr::default(),
+                                                        )
                                                     }
                                                     _ => Ty::Class(qtn, vec![], TyAttr::default()),
                                                 }
@@ -1105,18 +1409,13 @@ pub fn infer_scope_types<'db>(
                                 }
                             } else {
                                 param_ty_validated = true;
-                                lower_type_expr_at_span_in_env(
-                                    db,
-                                    &mut builder,
-                                    pkg_items,
-                                    &pkg_info.namespace_path,
-                                    &env,
-                                    &param.ty,
-                                    TypeExprLoweringOptions {
-                                        span: param_type_span,
-                                        self_replacement: self_replacement.as_ref(),
-                                    },
-                                )
+                                let mut param_diags = Vec::new();
+                                let ty = lower_with_self(&param.ty, &mut param_diags);
+                                for diag in param_diags {
+                                    builder.report_at_span(diag, param_type_span);
+                                }
+                                builder.validate_type_generic_bounds_at_span(param_type_span, &ty);
+                                ty
                             };
                             if !param_ty_validated {
                                 builder.validate_type_generic_bounds_at_span(
@@ -1313,8 +1612,14 @@ pub fn infer_scope_types<'db>(
 
                                     let env = extend_env_with_lambda_generics(
                                         generic_env_for_function_data(
-                                            index,
-                                            &item_tree,
+                                            GenericLookupContext {
+                                                db,
+                                                file,
+                                                index,
+                                                item_tree: &item_tree,
+                                                pkg_items,
+                                                ns_context: &pkg_info.namespace_path,
+                                            },
                                             ancestor_scope,
                                             func_data,
                                         ),
@@ -1381,8 +1686,14 @@ pub fn infer_scope_types<'db>(
 
                                     let env = extend_env_with_lambda_generics(
                                         enclosing_function_generic_env_from_let(
-                                            index,
-                                            &item_tree,
+                                            GenericLookupContext {
+                                                db,
+                                                file,
+                                                index,
+                                                item_tree: &item_tree,
+                                                pkg_items,
+                                                ns_context: &pkg_info.namespace_path,
+                                            },
                                             ancestor_scope,
                                         )
                                         .unwrap_or_default(),
@@ -1447,15 +1758,20 @@ pub fn infer_scope_types<'db>(
                 }
                 break;
             }
-            for iface_data in item_tree.interfaces.values() {
+            for (local_id, iface_data) in &item_tree.interfaces {
                 if iface_data.span != scope.range || scope.name.as_ref() != Some(&iface_data.name) {
                     continue;
                 }
-                let mut iface_env = GenericEnv::from_params(iface_data.generic_params.clone());
-                iface_env.add_bounds_for_declared_params(
-                    &iface_data.generic_params,
-                    &iface_data.generic_param_bounds,
+                let iface_loc = InterfaceLoc::new(db, file, *local_id);
+                let (iface_params, iface_bounds) = interface_type_level_params_and_bounds(
+                    db,
+                    iface_loc,
+                    iface_data,
+                    pkg_items,
+                    &pkg_info.namespace_path,
                 );
+                let mut iface_env = GenericEnv::from_params(iface_params.clone());
+                iface_env.add_bounds_for_declared_params(&iface_params, &iface_bounds);
                 let self_replacement =
                     crate::lower_type_expr::type_expr_for_name(iface_data.name.clone());
                 apply_generic_env(

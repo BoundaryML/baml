@@ -1192,8 +1192,7 @@ function floats.float_random_distinct_values() -> bool {
     jump L2
 
   L1:
-    load_var max_seen
-    load_var min_seen
+    load_var2 2 1
     sub_float
     load_const 0.5
     cmp_float_op >
@@ -1202,16 +1201,14 @@ function floats.float_random_distinct_values() -> bool {
   L2:
     call baml.Float.random
     store_var r
-    load_var r
-    load_var min_seen
+    load_var2 4 1
     cmp_float_op <
     pop_jump_if_false L3
     load_var r
     store_var min_seen
 
   L3:
-    load_var r
-    load_var max_seen
+    load_var2 4 2
     cmp_float_op >
     pop_jump_if_false L4
     load_var r

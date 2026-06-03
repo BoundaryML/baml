@@ -42,8 +42,6 @@ jobs:
       thir: ${{ steps.check_thir.outputs.changed }}
       # Flag for codegen changes
       codegen: ${{ steps.check_codegen.outputs.changed }}
-      # Flag for BEP changes
-      beps: ${{ steps.check_beps.outputs.changed }}
       # Flag for docs/frontend changes
       docs: ${{ steps.check_docs.outputs.changed }}
       # Flag for typescript2/webview changes
@@ -52,8 +50,12 @@ jobs:
       unsafe: ${{ steps.check_unsafe.outputs.changed }}
       # Flag for proto codegen changes - triggers generated file sync check
       proto: ${{ steps.check_proto.outputs.changed }}
+      # Flag that is raised when perf benchmarks (CodSpeed) should run: always
+      # after merge (push to main/canary) and on manual dispatch; on PRs only
+      # when the PR title/body or a commit message opts in.
+      run_perf: ${{ steps.check_perf.outputs.run }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: useblacksmith/checkout@v1
         with:
           fetch-depth: 0
           persist-credentials: false
@@ -74,8 +76,18 @@ jobs:
           if git diff --quiet "${MERGE_BASE}...HEAD" -- \
             ':baml_language/**' \
             ':scripts/baml-language-version' \
+            ':scripts/baml-wrapper-version' \
+            ':scripts/baml-release-manifests' \
+            ':scripts/baml-package-manager-artifacts' \
+            ':scripts/install.sh' \
+            ':scripts/install.ps1' \
+            ':packaging/aur/**' \
+            ':tools/pkg_boundaryml_com/**' \
             ':.github/workflows/ci.yaml' \
-            ':.github/workflows/release-baml-language-alpha.yml' \
+            ':.github/workflows/release-baml-language.yml' \
+            ':.github/workflows/publish-python-pypi.yml' \
+            ':.github/workflows/build-python-sdk.reusable.yaml' \
+            ':.github/workflows/build-nodejs-sdk.reusable.yaml' \
             ':.github/workflows/cargo-tests.reusable.yaml' \
             ':.github/workflows/size-gate.reusable.yaml' \
             ':.github/workflows/wasm-pack-tests.reusable.yaml' \
@@ -163,20 +175,6 @@ jobs:
             echo "changed=true" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Check if BEPs changed
-        id: check_beps
-        env:
-          MERGE_BASE: ${{ steps.merge_base.outputs.sha }}
-        run: |
-          if git diff --quiet "${MERGE_BASE}...HEAD" -- \
-            ':beps/**' \
-            ':.github/workflows/beps.reusable.yaml' \
-          ; then
-            echo "changed=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "changed=true" >> "$GITHUB_OUTPUT"
-          fi
-
       - name: Check if docs changed
         id: check_docs
         env:
@@ -236,6 +234,74 @@ jobs:
             echo "changed=true" >> "$GITHUB_OUTPUT"
           fi
 
+      # Decide whether perf benchmarks (CodSpeed) should run for this event.
+      # Policy: benchmarks run AFTER MERGE (push to main/canary) only when the
+      # merge actually touched baml_language/, and on manual dispatch. On PRs
+      # they are OPT-IN — they no longer run on every code change. A PR opts in
+      # by mentioning one of the perf markers in its title, body, OR any of its
+      # commit messages. merge_group is always skipped (the PR already had its
+      # chance to run).
+      - name: Check perf benchmark opt-in
+        id: check_perf
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+          MERGE_BASE: ${{ steps.merge_base.outputs.sha }}
+          PUSH_BEFORE: ${{ github.event.before }}
+          PUSH_AFTER: ${{ github.sha }}
+        run: |
+          # Any of these, case-insensitive, in the PR title/body or a commit
+          # message opts a PR into a perf run. Keep in sync with the instructions
+          # posted by the "Perf benchmarks (PR notice)" job below.
+          PATTERN='RUN_CODSPEED=1|run-perf|/perf'
+
+          # After merge (push to canary/main): only run when the merge actually
+          # touched baml_language/. NOTE: we diff the pushed range (before..after)
+          # directly rather than reuse determine_changes' `code` flag — on a push
+          # the merge-base of HEAD and origin/<branch> collapses to HEAD, so that
+          # diff is always empty here. The push payload's before/after are the
+          # real merged range.
+          if [ "$EVENT_NAME" = "push" ]; then
+            if [ -z "$PUSH_BEFORE" ] || [ "$PUSH_BEFORE" = "0000000000000000000000000000000000000000" ]; then
+              # Branch creation / unknown previous tip — nothing to diff against,
+              # so run to be safe rather than silently skip.
+              echo "run=true" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            if git diff --quiet "$PUSH_BEFORE" "$PUSH_AFTER" -- ':baml_language/**'; then
+              echo "run=false" >> "$GITHUB_OUTPUT"
+            else
+              echo "run=true" >> "$GITHUB_OUTPUT"
+            fi
+            exit 0
+          fi
+
+          # Manual dispatch always runs.
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # Never run in the merge queue — it already ran (or was opted out) on
+          # the PR.
+          if [ "$EVENT_NAME" = "merge_group" ]; then
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # On PRs: opt in via the PR title/body or any commit message in the PR.
+          if printf '%s\n%s' "$PR_TITLE" "$PR_BODY" | grep -qiE "$PATTERN"; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if [ -n "$MERGE_BASE" ] && git log --format='%B' "${MERGE_BASE}..HEAD" | grep -qiE "$PATTERN"; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "run=false" >> "$GITHUB_OUTPUT"
+
   # Lint checks
   prek:
     name: "Pre-commit Checks"
@@ -245,7 +311,7 @@ jobs:
     timeout-minutes: 20
     steps:
       - name: "Checkout Branch"
-        uses: actions/checkout@v6
+        uses: useblacksmith/checkout@v1
         with:
           persist-credentials: false
 
@@ -263,7 +329,7 @@ jobs:
 
       # prek hooks invoke cargo (from rustup), mise tasks that shell out
       # to cargo, and python scripts that begin with `#!/usr/bin/env -S
-      # uv run --script` (e.g. bep:readme, validate-markdown). We don't
+      # uv run --script` (e.g. validate-markdown). We don't
       # need go/ruby/node/etc here, just the prek binary itself + a
       # python/uv pair for the hook scripts.
       - name: "Install mise"
@@ -276,6 +342,11 @@ jobs:
         with:
           path: ~/.cache/pre-commit
           key: pre-commit-${{ hashFiles('.pre-commit-config.yaml') }}
+
+      # Separate step so if fetch is slow, build is fast.
+      - name: "Fetch cargo dependencies"
+        run: cargo fetch
+        working-directory: baml_language
 
       - name: "Run prek"
         run: |
@@ -296,7 +367,7 @@ jobs:
     timeout-minutes: 5
     steps:
       - name: "Checkout"
-        uses: actions/checkout@v6
+        uses: useblacksmith/checkout@v1
         with:
           fetch-depth: 0
           persist-credentials: false
@@ -304,8 +375,33 @@ jobs:
       - name: "Validate baml_language release metadata"
         run: scripts/baml-language-version check
 
-      - name: "Validate alpha version computation"
-        run: test "$(scripts/baml-language-version compute --alpha-number 1842)" = "$(scripts/baml-language-version show)-alpha.1842"
+      - name: "Validate canary/nightly version computation"
+        env:
+          BAML_LANGUAGE_VERSION_DATE: "20260522"
+        run: |
+          set -euo pipefail
+          canary="$(scripts/baml-language-version show)"
+          test "$(scripts/baml-language-version compute --channel canary)" = "$canary"
+          test "$(scripts/baml-language-version compute --channel canary --pypi)" = "$canary"
+
+          nightly="$(scripts/baml-language-version compute --channel nightly)"
+          pypi="$(scripts/baml-language-version compute --channel nightly --pypi)"
+          python3 - "$canary" "$nightly" "$pypi" <<'PY'
+          import re
+          import sys
+
+          canary, nightly, pypi = sys.argv[1:]
+          major, minor, patch = [int(part) for part in canary.split(".")]
+          base = f"{major}.{minor}.{patch + 1}"
+          match = re.fullmatch(rf"{re.escape(base)}-nightly\.20260522\.([a-z])", nightly)
+          if not match:
+              raise SystemExit(f"unexpected nightly version: {nightly}")
+
+          index = ord(match.group(1)) - ord("a")
+          expected_pypi = f"{base}.dev20260522{index:02d}"
+          if pypi != expected_pypi:
+              raise SystemExit(f"unexpected nightly PyPI version: {pypi} != {expected_pypi}")
+          PY
 
   # Call reusable workflows
   cargo-tests:
@@ -331,21 +427,6 @@ jobs:
     if: needs.determine_changes.outputs.code == 'true' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/canary'
     uses: ./.github/workflows/wasm-pack-tests.reusable.yaml
     secrets: inherit
-
-  beps:
-    name: "BEPs"
-    needs: determine_changes
-    uses: ./.github/workflows/beps.reusable.yaml
-    with:
-      beps_changed: ${{ needs.determine_changes.outputs.beps }}
-      is_canary: ${{ github.ref == 'refs/heads/canary' }}
-      is_pr: ${{ github.event_name == 'pull_request' }}
-    secrets: inherit
-    permissions:
-      id-token: write
-      contents: read
-      pull-requests: write
-      deployments: write
 
   docs:
     name: "Docs"
@@ -374,7 +455,7 @@ jobs:
     timeout-minutes: 25
     steps:
       - name: "Checkout"
-        uses: actions/checkout@v6
+        uses: useblacksmith/checkout@v1
         with:
           persist-credentials: false
 
@@ -382,6 +463,11 @@ jobs:
         run: |
           rustup toolchain install nightly --component miri
           rustup override set nightly
+        working-directory: baml_language
+
+      # Separate step so if fetch is slow, build is fast.
+      - name: "Fetch cargo dependencies"
+        run: cargo +nightly fetch
         working-directory: baml_language
 
       - name: "Run Miri tests on bex_heap"
@@ -396,7 +482,7 @@ jobs:
     timeout-minutes: 20
     steps:
       - name: "Checkout"
-        uses: actions/checkout@v6
+        uses: useblacksmith/checkout@v1
         with:
           persist-credentials: false
 
@@ -420,6 +506,11 @@ jobs:
         uses: ./.github/actions/setup-mise
         with:
           install_args: "node npm:pnpm protoc protoc-gen-go"
+
+      # Separate step so if fetch is slow, build is fast.
+      - name: "Fetch cargo dependencies"
+        run: cargo fetch
+        working-directory: baml_language
 
       # Rust (prost) + Python (protoc) — both driven by bridge_ctypes/build.rs.
       # Writes Python pb2/pyi into baml_language/sdks/python/src/baml_core/cffi/v1/.
@@ -495,19 +586,14 @@ jobs:
     name: "benchmarks build (baml)"
     runs-on: blacksmith-8vcpu-ubuntu-2204-arm
     needs: determine_changes
-    # Runs automatically on ANY change under baml_language/ (determine_changes'
-    # `code` flag = `git diff ... ':baml_language/**'`), so every PR that could
-    # affect perf is measured. Also runs on push to main/canary, and on manual
-    # opt-in (RUN_CODSPEED=1 in the PR body) for PRs that don't touch
-    # baml_language/. Skipped in merge_group (already ran on the PR).
-    if: |
-      github.event_name != 'merge_group' &&
-      (
-        needs.determine_changes.outputs.code == 'true' ||
-        github.ref == 'refs/heads/main' ||
-        github.ref == 'refs/heads/canary' ||
-        contains(github.event.pull_request.body, 'RUN_CODSPEED=1')
-      )
+    # Perf benchmarks run AFTER MERGE (push to main/canary, only when the merge
+    # touched baml_language/) and on manual dispatch. On PRs they are OPT-IN: a
+    # PR runs them only when its title/body or a commit message mentions a perf
+    # marker (RUN_CODSPEED=1, run-perf, /perf). See the `check_perf` step for the
+    # policy
+    # and the "Perf benchmarks (PR notice)" job for the comment PRs get when
+    # benchmarks are skipped. Skipped in merge_group (already settled on the PR).
+    if: needs.determine_changes.outputs.run_perf == 'true'
     timeout-minutes: 30
     steps:
       - name: "Checkout Branch"
@@ -538,6 +624,11 @@ jobs:
         uses: taiki-e/install-action@v2
         with:
           tool: cargo-codspeed@4.7.0
+
+      # Separate step so if fetch is slow, build is fast.
+      - name: "Fetch cargo dependencies"
+        run: cargo fetch
+        working-directory: baml_language
 
       # Only runtime_benchmark — cache_profile is a macOS/kperf harness that's a
       # no-op on Linux, so there's no reason to build or run it here.
@@ -581,14 +672,8 @@ jobs:
     needs:
       - determine_changes
       - benchmarks-build
-    if: |
-      github.event_name != 'merge_group' &&
-      (
-        needs.determine_changes.outputs.code == 'true' ||
-        github.ref == 'refs/heads/main' ||
-        github.ref == 'refs/heads/canary' ||
-        contains(github.event.pull_request.body, 'RUN_CODSPEED=1')
-      )
+    # Same gate as benchmarks-build — see determine_changes' `check_perf` step.
+    if: needs.determine_changes.outputs.run_perf == 'true'
     timeout-minutes: 30
     steps:
       - name: "Checkout Branch"
@@ -641,6 +726,19 @@ jobs:
           # phase into seconds. Fails fast and loud if the cache ever misses,
           # instead of silently re-cloning for half an hour.
           CARGO_NET_OFFLINE: "true"
+          # Adaptive sampling: cap each bench at ~2s of wall time instead of
+          # CodSpeed walltime's fixed 100 samples/bench. divan then runs as many
+          # samples as fit the budget — ~100 for cheap benches (full statistical
+          # power kept), down to 1 for the heavy O(n²)/1M-iter workloads (whose
+          # run-to-run variance is already tiny, so a single sample suffices).
+          #
+          # WHY: at fixed 100 samples the suite blew past the 30-min timeout. The
+          # long pole was compute::bubble_sort_5k — ~14s/sample on the (≈5×
+          # slower than local) codspeed-macro runner × 100 = ~23min for ONE
+          # bench. With this cap the whole 36-bench suite finishes in ~2 min.
+          # Measured locally: fixed-100 bubble_sort alone >90s; with the budget
+          # the full suite ran in 80s. Tune the budget here, not in code.
+          DIVAN_MAX_TIME: "2"
         with:
           mode: walltime
           # Executes ONLY the prebuilt binaries downloaded above; no compiler runs.
@@ -652,11 +750,68 @@ jobs:
           # region (see bench_vm_main), so only `main()` is timed. Sleep-based
           # workloads are excluded at build time.
           #
-          # The `vm_speedtest` filter selects exactly that suite, which runs in
-          # ~2 min/pass on the macro runner at the default 100 samples — well
-          # within the timeout, no sample-count tuning needed.
+          # The `vm_speedtest` filter selects exactly that suite; DIVAN_MAX_TIME
+          # (above) bounds each bench so the pass stays well under the timeout.
           run: cd baml_language && cargo codspeed run -m walltime 'vm_speedtest'
           token: ${{ secrets.CODSPEED_TOKEN }}
+
+  # Leaves (and keeps up to date) a single sticky comment on each PR explaining
+  # the perf-benchmark policy: either confirming benchmarks were triggered, or —
+  # when they were skipped — telling the author exactly how to opt in. Runs on
+  # every PR event so the same comment is edited in place (no spam) and flips
+  # between the two states as the author edits the PR / pushes commits.
+  perf-pr-notice:
+    name: "Perf benchmarks (PR notice)"
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    needs: determine_changes
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork == false
+    permissions:
+      pull-requests: write
+    steps:
+      - name: "Comment perf opt-in instructions"
+        uses: actions/github-script@v7
+        env:
+          RUN_PERF: ${{ needs.determine_changes.outputs.run_perf }}
+        with:
+          script: |
+            // Hidden marker so we find & update our own comment instead of
+            // posting a new one on every push.
+            const marker = '<!-- perf-benchmarks-pr-notice -->';
+            const triggered = process.env.RUN_PERF === 'true';
+            const body = triggered
+              ? [
+                  marker,
+                  '### 🏎️ Performance benchmarks are running for this PR',
+                  '',
+                  'CodSpeed perf benchmarks were triggered because this PR opted in. ' +
+                    'Results will appear in the CodSpeed check / dashboard once they finish.',
+                ].join('\n')
+              : [
+                  marker,
+                  '### ⏭️ Performance benchmarks were skipped',
+                  '',
+                  'Perf benchmarks (CodSpeed) are **opt-in** on pull requests — they no ' +
+                    'longer run on every push. They always run automatically after merge ' +
+                    'to `canary`/`main`.',
+                  '',
+                  'To run them on **this** PR, do any of the following, then push a commit ' +
+                    '(or re-run CI):',
+                  '',
+                  '- Add `RUN_CODSPEED=1` to the PR description, **or**',
+                  '- Include `run-perf` or `/perf` in the PR title or any commit message.',
+                ].join('\n');
+
+            const { owner, repo } = context.repo;
+            const issue_number = context.issue.number;
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              owner, repo, issue_number,
+            });
+            const existing = comments.find((c) => c.body && c.body.includes(marker));
+            if (existing) {
+              await github.rest.issues.updateComment({ owner, repo, comment_id: existing.id, body });
+            } else {
+              await github.rest.issues.createComment({ owner, repo, issue_number, body });
+            }
 
   # CI Failure Alert - Required status check using "skipped = success" pattern
   # See: https://devopsdirective.com/posts/2025/08/github-actions-required-checks-for-conditional-jobs/
@@ -674,7 +829,6 @@ jobs:
       - release-metadata
       - cargo-tests
       - wasm-pack-tests
-      - beps
       - docs
       - webview-tests
       # - miri-tests  # TEMPORARILY DISABLED: miri tests timing out
@@ -699,7 +853,6 @@ jobs:
           echo "| release-metadata | ${{ needs.release-metadata.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| cargo-tests | ${{ needs.cargo-tests.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| wasm-pack-tests | ${{ needs.wasm-pack-tests.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| beps | ${{ needs.beps.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| docs | ${{ needs.docs.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| webview-tests | ${{ needs.webview-tests.result }} |" >> $GITHUB_STEP_SUMMARY
           # echo "| miri-tests | ${{ needs.miri-tests.result }} |" >> $GITHUB_STEP_SUMMARY  # TEMPORARILY DISABLED

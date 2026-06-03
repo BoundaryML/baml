@@ -375,7 +375,8 @@ impl TypeCtx {
                 sap_model::Ty::Resolved(TyResolved::LiteralBool(BoolLiteralTy(*b))),
                 convert_ty_attrs(attr),
             ),
-            baml_type::Ty::Class(type_name, _, attr) => {
+            baml_type::Ty::Class(type_name, _, attr)
+            | baml_type::Ty::Interface(type_name, _, _, attr) => {
                 if self.sap_parseable.get(type_name).is_some_and(|v| !v) {
                     return Err(ConvertError::NonParsableType(Box::new(ty.clone())));
                 }
@@ -491,6 +492,7 @@ impl TypeCtx {
                             innermost_name = name;
                         }
                         baml_type::Ty::Class(name, _, inner_attr)
+                        | baml_type::Ty::Interface(name, _, _, inner_attr)
                         | baml_type::Ty::Enum(name, inner_attr) => {
                             attr = merge_ty_attrs(&attr, inner_attr);
                             innermost_name = name;
@@ -568,6 +570,7 @@ impl TypeCtx {
             | ::baml_type::Ty::Media(..)
             | ::baml_type::Ty::Literal(..)
             | ::baml_type::Ty::Class(..)
+            | ::baml_type::Ty::Interface(..)
             | ::baml_type::Ty::Enum(..)
             | ::baml_type::Ty::EnumVariant(..) => (AttrLiteral::Never, AttrLiteral::Never),
             ::baml_type::Ty::Null { .. } | ::baml_type::Ty::Optional(..) => {
@@ -753,7 +756,9 @@ fn is_sap_parseable(ty: &baml_type::Ty) -> Result<Vec<TypeName>, ()> {
         | baml_type::Ty::Null { .. }
         | baml_type::Ty::Literal(..) => Ok(Vec::new()),
         baml_type::Ty::Uint8Array { .. } | baml_type::Ty::Media(..) => Err(()),
-        baml_type::Ty::Class(name, _, _) => Ok(vec![name.clone()]),
+        baml_type::Ty::Class(name, _, _) | baml_type::Ty::Interface(name, _, _, _) => {
+            Ok(vec![name.clone()])
+        }
         baml_type::Ty::Enum(..) | baml_type::Ty::EnumVariant(..) => Ok(Vec::new()),
         baml_type::Ty::Optional(inner, _) => is_sap_parseable(inner),
         baml_type::Ty::List(inner, _) => is_sap_parseable(inner),
