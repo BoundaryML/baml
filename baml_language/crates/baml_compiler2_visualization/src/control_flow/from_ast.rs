@@ -678,6 +678,7 @@ impl<'a> AstGraphBuilder<'a> {
                 class,
                 generic_args,
                 fields,
+                ..
             } => {
                 let class_path: Vec<_> = class.iter().map(baml_base::Name::as_str).collect();
                 let generic_args = if generic_args.is_empty() {

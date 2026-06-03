@@ -15,11 +15,12 @@ use rowan::ast::AstNode;
 use crate::{
     DeclarativeMeta, LoweringDiagnostic,
     ast::{
-        AstSourceMap, BuiltinKind, CallArg, ConfigItemDef, EnumDef, Expr, ExprBody, ExprId,
-        FieldDef, FunctionBodyDef, FunctionDef, FunctionDefaults, GeneratorDef, ImplementsBlockDef,
-        ImplementsForDef, InterfaceDef, InterfaceFieldLinkDef, Interpolation, Item, LetDef,
-        LetOrigin, LlmBodyDef, MethodSigDef, Param, RawAttribute, RawAttributeArg, RawPrompt,
-        SpannedTypeExpr, TemplateStringDef, TestDef, TypeAliasDef, VariantDef,
+        AssociatedTypeBindingDef, AssociatedTypeDef, AstSourceMap, BuiltinKind, CallArg,
+        ConfigItemDef, EnumDef, Expr, ExprBody, ExprId, FieldDef, FunctionBodyDef, FunctionDef,
+        FunctionDefaults, GeneratorDef, ImplementsBlockDef, ImplementsForDef, InterfaceDef,
+        InterfaceFieldLinkDef, Interpolation, Item, LetDef, LetOrigin, LlmBodyDef, MethodSigDef,
+        Param, RawAttribute, RawAttributeArg, RawPrompt, SpannedTypeExpr, TemplateStringDef,
+        TestDef, TypeAliasDef, VariantDef,
     },
     companions::expand_companions,
     lower_expr_body, lower_type_expr,
@@ -196,6 +197,7 @@ pub fn lower_file_with_path(
                 class.implements.push(ImplementsBlockDef {
                     target: imp.interface_target,
                     field_links: imp.field_links,
+                    associated_type_bindings: imp.associated_type_bindings,
                     methods: imp.methods,
                     is_out_of_body: true,
                     span: imp.span,
@@ -1197,6 +1199,11 @@ fn lower_interface(
         .filter_map(|sig| lower_method_sig(&sig, diags))
         .collect();
 
+    let associated_types = iface
+        .associated_types()
+        .filter_map(|decl| lower_associated_type_def(&decl, diags))
+        .collect();
+
     let default_methods = iface
         .default_methods()
         .filter_map(|f| lower_function(f.syntax(), diags, env_var_refs))
@@ -1208,11 +1215,86 @@ fn lower_interface(
         generic_param_bounds,
         requires,
         fields,
+        associated_types,
         required_methods,
         default_methods,
         attributes: lower_attributes_from_node(node),
         docstring: crate::docstring::extract_docstring(node),
         span: node.text_range(),
+        name_span: name_token.text_range(),
+    })
+}
+
+fn lower_associated_type_def(
+    decl: &ast::AssociatedTypeDecl,
+    diags: &mut Vec<LoweringDiagnostic>,
+) -> Option<AssociatedTypeDef> {
+    let Some(name_token) = decl.name() else {
+        diags.push(LoweringDiagnostic::MissingItemName {
+            item_kind: "associated type",
+            span: decl.syntax().text_range(),
+        });
+        return None;
+    };
+    let name = Name::new(name_token.text());
+    let bound = decl.bound().map(|te| {
+        let expr = lower_type_expr::lower_type_expr_node(&te);
+        let span = te.syntax().text_range();
+        check_unknown_type(
+            &expr,
+            format!("bound of associated type `{name}`"),
+            span,
+            diags,
+        );
+        SpannedTypeExpr { expr, span }
+    });
+    let default = decl.default_or_binding().map(|te| {
+        let expr = lower_type_expr::lower_type_expr_node(&te);
+        let span = te.syntax().text_range();
+        check_unknown_type(
+            &expr,
+            format!("default of associated type `{name}`"),
+            span,
+            diags,
+        );
+        SpannedTypeExpr { expr, span }
+    });
+    Some(AssociatedTypeDef {
+        name,
+        bound,
+        default,
+        span: decl.syntax().text_range(),
+        name_span: name_token.text_range(),
+    })
+}
+
+fn lower_associated_type_binding_def(
+    decl: &ast::AssociatedTypeDecl,
+    diags: &mut Vec<LoweringDiagnostic>,
+) -> Option<AssociatedTypeBindingDef> {
+    let Some(name_token) = decl.name() else {
+        diags.push(LoweringDiagnostic::MissingItemName {
+            item_kind: "associated type binding",
+            span: decl.syntax().text_range(),
+        });
+        return None;
+    };
+    let name = Name::new(name_token.text());
+    let type_expr = decl.default_or_binding().map(|te| {
+        let expr = lower_type_expr::lower_type_expr_node(&te);
+        let span = te.syntax().text_range();
+        check_unknown_type(
+            &expr,
+            format!("binding of associated type `{name}`"),
+            span,
+            diags,
+        );
+        SpannedTypeExpr { expr, span }
+    });
+    Some(AssociatedTypeBindingDef {
+        name,
+        type_expr,
+        span: decl.syntax().text_range(),
         name_span: name_token.text_range(),
     })
 }
@@ -1333,6 +1415,11 @@ fn lower_implements_block(
         .filter_map(|link| lower_interface_field_link(&link, diags))
         .collect();
 
+    let associated_type_bindings = block
+        .associated_type_bindings()
+        .filter_map(|decl| lower_associated_type_binding_def(&decl, diags))
+        .collect();
+
     let methods = block
         .methods()
         .filter_map(|f| lower_function(f.syntax(), diags, env_var_refs))
@@ -1341,6 +1428,7 @@ fn lower_implements_block(
     Some(ImplementsBlockDef {
         target,
         field_links,
+        associated_type_bindings,
         methods,
         is_out_of_body: false,
         span: block.syntax().text_range(),
@@ -1413,6 +1501,11 @@ fn lower_implements_for(
         .filter_map(|link| lower_interface_field_link(&link, diags))
         .collect();
 
+    let associated_type_bindings = imp
+        .associated_type_bindings()
+        .filter_map(|decl| lower_associated_type_binding_def(&decl, diags))
+        .collect();
+
     let methods = imp
         .methods()
         .filter_map(|f| lower_function(f.syntax(), diags, env_var_refs))
@@ -1423,6 +1516,7 @@ fn lower_implements_for(
         interface_target,
         for_target,
         field_links,
+        associated_type_bindings,
         methods,
         span: node.text_range(),
     })
@@ -1708,6 +1802,7 @@ fn synthesize_init_test_function(
             expr: crate::ast::TypeExpr::Path {
                 segments: vec![Name::new("testing"), Name::new("TestCollector")],
                 generic_args: vec![],
+                associated_type_bindings: vec![],
                 attrs: vec![],
             },
             span,
@@ -1825,6 +1920,7 @@ fn synthesize_register_call(
                     expr: crate::ast::TypeExpr::Path {
                         segments: vec![Name::new("testing"), Name::new("TestCollector")],
                         generic_args: vec![],
+                        associated_type_bindings: vec![],
                         attrs: vec![],
                     },
                     span,

@@ -32,6 +32,7 @@ pub enum DefinitionKind {
 
     // Intra-item members
     Field,
+    AssociatedType,
     Method,
     Variant,
     Binding,
@@ -53,6 +54,7 @@ impl DefinitionKind {
             Self::RetryPolicy => "retry_policy",
             Self::Let => "let",
             Self::Field => "field",
+            Self::AssociatedType => "associated type",
             Self::Method => "method",
             Self::Variant => "variant",
             Self::Binding => "binding",
@@ -63,7 +65,10 @@ impl DefinitionKind {
     /// Whether this kind uses dot-qualified names (e.g. `Foo.bar`).
     /// Members of a type use dot notation; locals use "in" phrasing.
     pub fn is_member(self) -> bool {
-        matches!(self, Self::Field | Self::Method | Self::Variant)
+        matches!(
+            self,
+            Self::Field | Self::AssociatedType | Self::Method | Self::Variant
+        )
     }
 }
 

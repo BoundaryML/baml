@@ -473,6 +473,74 @@ impl<'a> Parser<'a> {
             .is_some_and(|t| t.kind == TokenKind::Less)
     }
 
+    /// True for a type-level associated type projection: `(T as I).Item`.
+    fn looks_like_associated_type_projection(&self) -> bool {
+        let mut i = self.skip_trivia_and_comments_from(self.current);
+        if self
+            .tokens
+            .get(i)
+            .is_none_or(|t| t.kind != TokenKind::LParen)
+        {
+            return false;
+        }
+        i += 1;
+
+        let mut paren_depth = 1_i32;
+        let mut angle_depth = 0_i32;
+        let mut saw_as = false;
+        let mut rparen_idx = None;
+
+        while i < self.tokens.len() {
+            let new_i = self.skip_comment_at(i);
+            if new_i != i {
+                i = new_i;
+                continue;
+            }
+            let token = &self.tokens[i];
+            if self.is_basic_trivia(token.kind) {
+                i += 1;
+                continue;
+            }
+            match token.kind {
+                TokenKind::LParen => paren_depth += 1,
+                TokenKind::RParen => {
+                    if paren_depth == 1 && angle_depth == 0 {
+                        rparen_idx = Some(i);
+                        break;
+                    }
+                    paren_depth -= 1;
+                }
+                TokenKind::Less => angle_depth += 1,
+                TokenKind::Greater => angle_depth -= 1,
+                TokenKind::GreaterGreater => angle_depth -= 2,
+                TokenKind::Word if token.text == "as" && paren_depth == 1 && angle_depth == 0 => {
+                    saw_as = true;
+                }
+                _ => {}
+            }
+            i += 1;
+        }
+
+        if !saw_as {
+            return false;
+        }
+        let Some(rparen_idx) = rparen_idx else {
+            return false;
+        };
+        let dot_idx = self.skip_trivia_and_comments_from(rparen_idx + 1);
+        if self
+            .tokens
+            .get(dot_idx)
+            .is_none_or(|t| t.kind != TokenKind::Dot)
+        {
+            return false;
+        }
+        let member_idx = self.skip_trivia_and_comments_from(dot_idx + 1);
+        self.tokens
+            .get(member_idx)
+            .is_some_and(|t| t.kind == TokenKind::Word)
+    }
+
     /// Check if there's a newline before the next non-trivia token.
     /// Comments are treated as trivia for this purpose.
     fn has_newline_ahead(&self) -> bool {
@@ -2178,51 +2246,74 @@ impl<'a> Parser<'a> {
 
             // Check for generic arguments: map<K, V>
             if self.at(TokenKind::Less) {
-                self.type_args_depth += 1;
-                self.with_node(SyntaxKind::TYPE_ARGS, |p| {
-                    p.bump(); // <
-
-                    p.parse_type();
-
-                    while p.pending_greaters == 0 && p.eat(TokenKind::Comma) {
-                        p.parse_type();
-                    }
-
-                    p.expect_greater();
-                });
-                self.type_args_depth -= 1;
-
-                // If we just exited the outermost generic and have pending '>', report error
-                if self.type_args_depth == 0 && self.pending_greaters > 0 {
-                    if let Some(span) = self.pending_greater_span {
-                        self.error(
-                            format!(
-                                "Unmatched '>' in type expression (found {} extra)",
-                                self.pending_greaters
-                            ),
-                            span,
-                        );
-                    }
-                    for _ in 0..self.pending_greaters {
-                        self.events.push(Event::Token {
-                            kind: SyntaxKind::GREATER,
-                            text: ">".to_string(),
-                        });
-                    }
-                    self.pending_greaters = 0;
-                    self.pending_greater_span = None;
-                }
+                self.parse_type_args();
             }
         } else if self.at(TokenKind::LParen) {
             // Could be:
             // 1. Parenthesized type: (int | string)
             // 2. Function type: (x: int, y: int) -> bool  OR  (int, int) -> bool
+            // 3. Associated type projection: (T as Iterator<T>).Item
             //
-            // We parse the contents as function type parameters (which can be either
-            // `name: type` or just `type`), then check for `->` to determine which case.
-            self.parse_paren_or_function_type(consume_union);
+            // Projections have their own `as` separator and trailing `.Member`,
+            // so parse those before the general paren/function path.
+            if self.looks_like_associated_type_projection() {
+                self.parse_associated_type_projection();
+            } else {
+                // We parse the contents as function type parameters (which can be either
+                // `name: type` or just `type`), then check for `->` to determine which case.
+                self.parse_paren_or_function_type(consume_union);
+            }
         } else {
             self.error_unexpected_token("type".to_string());
+        }
+    }
+
+    fn looks_like_named_type_arg_binding(&self) -> bool {
+        let current = self.skip_trivia_and_comments_from(self.current);
+        if self
+            .tokens
+            .get(current)
+            .is_none_or(|token| token.kind != TokenKind::Word)
+        {
+            return false;
+        }
+        let next = self.skip_trivia_and_comments_from(current + 1);
+        self.tokens
+            .get(next)
+            .is_some_and(|t| t.kind == TokenKind::Equals)
+    }
+
+    fn parse_type_arg_or_associated_binding(&mut self) {
+        if self.looks_like_named_type_arg_binding() {
+            self.with_node(SyntaxKind::ASSOCIATED_TYPE_DECL, |p| {
+                // Named associated binding inside a type application:
+                // `Iterator<Item = int>`. There is no contextual `type`
+                // token here; the name is the associated type being bound.
+                p.bump(); // name
+                p.expect(TokenKind::Equals);
+                p.parse_type();
+            });
+        } else {
+            self.parse_type();
+        }
+    }
+
+    /// Parse `(Base as Interface).Member` inside the surrounding `TYPE_EXPR`.
+    fn parse_associated_type_projection(&mut self) {
+        self.expect(TokenKind::LParen);
+        self.parse_type();
+        if self.at_contextual_kw("as") {
+            self.bump();
+        } else {
+            self.error_unexpected_token("`as`".to_string());
+        }
+        self.parse_type();
+        self.expect(TokenKind::RParen);
+        self.expect(TokenKind::Dot);
+        if self.at(TokenKind::Word) {
+            self.bump();
+        } else {
+            self.error_unexpected_token("associated type name".to_string());
         }
     }
 
@@ -2597,6 +2688,11 @@ impl<'a> Parser<'a> {
                     p.parse_atat_attribute();
                 } else if p.at(TokenKind::Function) {
                     p.parse_interface_method();
+                } else if p.at_contextual_kw("type") {
+                    p.parse_associated_type_decl(false);
+                    if !p.eat(TokenKind::Comma) {
+                        p.eat(TokenKind::Semicolon);
+                    }
                 } else if p.at(TokenKind::Word) {
                     p.parse_field();
                     if !p.eat(TokenKind::Comma) {
@@ -2817,6 +2913,11 @@ impl<'a> Parser<'a> {
                             == Some(TokenKind::Function))
                 {
                     p.parse_function();
+                } else if p.at_contextual_kw("type") {
+                    p.parse_associated_type_decl(true);
+                    if !p.eat(TokenKind::Comma) {
+                        p.eat(TokenKind::Semicolon);
+                    }
                 } else if p.looks_like_interface_field_link() {
                     p.parse_interface_field_link();
                     if !p.eat(TokenKind::Comma) {
@@ -2910,6 +3011,11 @@ impl<'a> Parser<'a> {
                             == Some(TokenKind::Function))
                 {
                     p.parse_function();
+                } else if p.at_contextual_kw("type") {
+                    p.parse_associated_type_decl(true);
+                    if !p.eat(TokenKind::Comma) {
+                        p.eat(TokenKind::Semicolon);
+                    }
                 } else if p.looks_like_interface_field_link() {
                     p.parse_interface_field_link();
                     if !p.eat(TokenKind::Comma) {
@@ -2929,6 +3035,44 @@ impl<'a> Parser<'a> {
             }
 
             p.expect(TokenKind::RBrace);
+        });
+    }
+
+    /// Parse BEP-057 associated type declarations and bindings:
+    /// - interface body: `type Item`, `type Item extends Bound`, `type Item = Default`
+    /// - implements body: `type Item = Concrete`
+    fn parse_associated_type_decl(&mut self, require_binding: bool) {
+        self.with_node(SyntaxKind::ASSOCIATED_TYPE_DECL, |p| {
+            if p.at_contextual_kw("type") {
+                p.bump();
+            } else {
+                p.error_unexpected_token("`type`".to_string());
+            }
+
+            if p.at(TokenKind::Word) {
+                p.bump();
+            } else {
+                p.error_unexpected_token("associated type name".to_string());
+            }
+
+            if p.at(TokenKind::Extends) {
+                p.bump();
+                if p.is_at_type_start() {
+                    p.parse_type();
+                } else {
+                    p.error_unexpected_token("associated type bound".to_string());
+                }
+            }
+
+            if p.eat(TokenKind::Equals) {
+                if p.is_at_type_start() {
+                    p.parse_type();
+                } else {
+                    p.error_unexpected_token("associated type binding".to_string());
+                }
+            } else if require_binding {
+                p.error_unexpected_token("associated type binding (`= Type`)".to_string());
+            }
         });
     }
 
@@ -3935,7 +4079,11 @@ impl<'a> Parser<'a> {
             // Paren-type-suffix paren consumes `|` because the whole
             // expression is unambiguously one type — `(int | string)[] | float`
             // parses as the union type `(int | string)[] | float`.
-            if self.looks_like_function_type_paren() {
+            if self.looks_like_associated_type_projection() {
+                self.with_node(SyntaxKind::TYPE_PATTERN, |p| {
+                    p.parse_type_with(/* consume_union = */ false);
+                });
+            } else if self.looks_like_function_type_paren() {
                 self.with_node(SyntaxKind::TYPE_PATTERN, |p| {
                     p.parse_type_with(/* consume_union = */ false);
                 });
@@ -4184,6 +4332,7 @@ impl<'a> Parser<'a> {
                 TokenKind::Word
                 | TokenKind::Dot
                 | TokenKind::Comma
+                | TokenKind::Equals
                 | TokenKind::LBracket
                 | TokenKind::RBracket
                 | TokenKind::Question
@@ -4234,7 +4383,7 @@ impl<'a> Parser<'a> {
         if self.suppress_destructure_pattern_depth == 0 && self.looks_like_destructure_pattern() {
             self.parse_path();
             if self.at(TokenKind::Less) && self.looks_like_generic_args() {
-                self.parse_generic_args();
+                self.parse_type_args();
             }
             self.parse_destructure_field_list();
             self.wrap_events_in_node(start, SyntaxKind::DESTRUCTURE_PATTERN);
@@ -4273,7 +4422,7 @@ impl<'a> Parser<'a> {
         self.with_node(SyntaxKind::DESTRUCTURE_PATTERN, |p| {
             p.parse_path();
             if p.at(TokenKind::Less) && p.looks_like_generic_args() {
-                p.parse_generic_args();
+                p.parse_type_args();
             }
             p.parse_destructure_field_list();
         });
@@ -5371,6 +5520,7 @@ impl<'a> Parser<'a> {
                 TokenKind::Word
                 | TokenKind::Dot
                 | TokenKind::Comma
+                | TokenKind::Equals
                 | TokenKind::LBracket
                 | TokenKind::RBracket
                 | TokenKind::Question
@@ -5396,6 +5546,49 @@ impl<'a> Parser<'a> {
             kind,
             Some(TokenKind::LParen | TokenKind::LBrace | TokenKind::Dot)
         )
+    }
+
+    /// Parse type arguments in a type context: `<Type, Assoc = Type, ...>`.
+    fn parse_type_args(&mut self) {
+        self.type_args_depth += 1;
+        self.with_node(SyntaxKind::TYPE_ARGS, |p| {
+            p.expect(TokenKind::Less);
+
+            if !p.at(TokenKind::Greater) && !p.at(TokenKind::GreaterGreater) {
+                p.parse_type_arg_or_associated_binding();
+
+                while p.pending_greaters == 0 && p.eat(TokenKind::Comma) {
+                    if p.at(TokenKind::Greater) || p.at(TokenKind::GreaterGreater) {
+                        break; // Trailing comma
+                    }
+                    p.parse_type_arg_or_associated_binding();
+                }
+            }
+
+            p.expect_greater();
+        });
+        self.type_args_depth -= 1;
+
+        // If we just exited the outermost generic and have pending '>', report error.
+        if self.type_args_depth == 0 && self.pending_greaters > 0 {
+            if let Some(span) = self.pending_greater_span {
+                self.error(
+                    format!(
+                        "Unmatched '>' in type expression (found {} extra)",
+                        self.pending_greaters
+                    ),
+                    span,
+                );
+            }
+            for _ in 0..self.pending_greaters {
+                self.events.push(Event::Token {
+                    kind: SyntaxKind::GREATER,
+                    text: ">".to_string(),
+                });
+            }
+            self.pending_greaters = 0;
+            self.pending_greater_span = None;
+        }
     }
 
     /// Parse generic arguments: <Type1, Type2, ...>

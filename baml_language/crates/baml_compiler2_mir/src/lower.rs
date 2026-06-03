@@ -205,7 +205,7 @@ fn infer_interface_class_bindings(
                 && infer_interface_class_bindings(fth, ath, class_params, aliases, bindings)
         }
         (Tir2Ty::Class(fqtn, fargs, _), Tir2Ty::Class(aqtn, aargs, _))
-        | (Tir2Ty::Interface(fqtn, fargs, _), Tir2Ty::Interface(aqtn, aargs, _))
+        | (Tir2Ty::Interface(fqtn, fargs, _, _), Tir2Ty::Interface(aqtn, aargs, _, _))
             if fqtn == aqtn && fargs.len() == aargs.len() =>
         {
             fargs
@@ -225,7 +225,9 @@ fn infer_interface_class_bindings(
 
 fn interface_class_guard_for_args(
     impl_iface_args: &[Tir2Ty],
+    impl_iface_assoc: &[(Name, Tir2Ty)],
     requested_iface_args: &[Tir2Ty],
+    requested_iface_assoc: &[(Name, Tir2Ty)],
     class_params: &[Name],
     aliases: &HashMap<QualifiedTypeName, Tir2Ty>,
 ) -> Option<InterfaceClassGuard> {
@@ -251,6 +253,20 @@ fn interface_class_guard_for_args(
             return None;
         }
     }
+    for (requested_name, requested_ty) in requested_iface_assoc {
+        let (_, impl_ty) = impl_iface_assoc
+            .iter()
+            .find(|(impl_name, _)| impl_name == requested_name)?;
+        if !infer_interface_class_bindings(
+            impl_ty,
+            requested_ty,
+            class_params,
+            aliases,
+            &mut bindings,
+        ) {
+            return None;
+        }
+    }
     let substituted_args: Vec<_> = impl_iface_args
         .iter()
         .map(|arg| baml_compiler2_tir::generics::substitute_ty(arg, &bindings))
@@ -261,6 +277,23 @@ fn interface_class_guard_for_args(
         aliases,
     ) {
         return None;
+    }
+    let substituted_assoc: Vec<_> = impl_iface_assoc
+        .iter()
+        .map(|(name, ty)| {
+            (
+                name.clone(),
+                baml_compiler2_tir::generics::substitute_ty(ty, &bindings),
+            )
+        })
+        .collect();
+    for (requested_name, requested_ty) in requested_iface_assoc {
+        let (_, impl_ty) = substituted_assoc
+            .iter()
+            .find(|(impl_name, _)| impl_name == requested_name)?;
+        if !baml_compiler2_tir::normalize::is_same_normalized_type(impl_ty, requested_ty, aliases) {
+            return None;
+        }
     }
     if class_params.is_empty() {
         return Some(InterfaceClassGuard::Any);
@@ -311,7 +344,7 @@ pub fn convert_tir2_ty(ty: &Tir2Ty, resolved: &ResolvedAliases) -> Ty {
         // dispatch. Preserving the interface name lets the runtime treat the
         // interface as an opaque nominal type if we ever need to reflect on
         // values held at an interface type.
-        Tir2Ty::Interface(qtn, type_args, attr) => {
+        Tir2Ty::Interface(qtn, type_args, _, attr) => {
             let resolved_args: Vec<Ty> = type_args
                 .iter()
                 .map(|a| convert_tir2_ty(a, resolved))
@@ -415,6 +448,7 @@ pub fn convert_tir2_ty(ty: &Tir2Ty, resolved: &ResolvedAliases) -> Ty {
         }
         Tir2Ty::Unknown { attr } => Ty::Void { attr: attr.clone() }, // error recovery
         Tir2Ty::Error { attr } => Ty::Void { attr: attr.clone() },   // error recovery
+        Tir2Ty::AssociatedTypeProjection { attr, .. } => Ty::Void { attr: attr.clone() },
         // Demonstration-only hardcode for `baml.llm.Stream<TStream, TFinal>`'s
         // typevars (see thoughts/sam-projects/bridge-python/21d…).
         // The two stdlib names lower to `Ty::BuiltinUnknown` so the
@@ -564,7 +598,7 @@ pub fn tir2_to_template(
         // per-frame `TyTemplate::substitute(type_args)` to fill in. Without
         // this arm the value fell through to `other` and `convert_tir2_ty`
         // voided the type var, baking `Box<void>` (BEP-044 wf3 #6/#7).
-        Tir2Ty::Interface(qtn, type_args, attr) => {
+        Tir2Ty::Interface(qtn, type_args, _, attr) => {
             if type_args
                 .iter()
                 .any(baml_compiler2_tir::generics::contains_typevar)
@@ -792,11 +826,13 @@ type ClassFieldIndices = IndexMap<TypeName, IndexMap<String, usize>>;
 type ClassFieldTypes = IndexMap<TypeName, IndexMap<String, Ty>>;
 type EnumVariantIndices = IndexMap<QualifiedTypeName, IndexMap<String, usize>>;
 type InterfaceImplementors = IndexMap<TypeName, Vec<TypeName>>;
+type InterfaceTypeView = (TypeName, Vec<Tir2Ty>, Vec<(Name, Tir2Ty)>);
 #[derive(Clone, PartialEq, Eq)]
 struct InterfaceTypeImplementor {
     runtime_ty: Ty,
     tir_ty: Tir2Ty,
     iface_args: Vec<Tir2Ty>,
+    iface_assoc: Vec<(Name, Tir2Ty)>,
 }
 type InterfaceTypeImplementors = IndexMap<TypeName, Vec<InterfaceTypeImplementor>>;
 
@@ -824,6 +860,73 @@ fn lower_interface_target_args<'db>(
             .collect(),
         _ => Vec::new(),
     }
+}
+
+fn lower_interface_target_associated_bindings<'db>(
+    db: &'db dyn crate::Db,
+    target: &baml_compiler2_ast::TypeExpr,
+    associated_type_bindings: &[baml_compiler2_ast::AssociatedTypeBindingDef],
+    pkg_items: &baml_compiler2_hir::package::PackageItems<'db>,
+    namespace_path: &[Name],
+    generic_params: &[Name],
+    diags: &mut Vec<baml_compiler2_tir::infer_context::TirTypeError>,
+) -> Vec<(Name, Tir2Ty)> {
+    let Some(target_loc) = baml_compiler2_tir::interfaces::resolve_path_to_interface(
+        db,
+        target,
+        pkg_items,
+        namespace_path,
+    ) else {
+        return Vec::new();
+    };
+    let target_tree = baml_compiler2_hir::file_item_tree(db, target_loc.file(db));
+    let Some(target_data) = target_tree.interfaces.get(&target_loc.id(db)) else {
+        return Vec::new();
+    };
+    let target_args =
+        lower_interface_target_args(db, target, pkg_items, namespace_path, generic_params, diags);
+    let mut bindings =
+        baml_compiler2_tir::generics::bind_type_vars(&target_data.generic_params, &target_args);
+    for param in generic_params {
+        bindings.entry(param.clone()).or_insert_with(|| {
+            Tir2Ty::TypeVar(param.clone(), baml_compiler2_tir::ty::TyAttr::default())
+        });
+    }
+    let target_iface_pkg = baml_compiler2_hir::file_package::file_package(db, target_loc.file(db));
+    target_data
+        .associated_types
+        .iter()
+        .filter_map(|assoc| {
+            if let Some(binding) = associated_type_bindings
+                .iter()
+                .find(|binding| binding.name == assoc.name)
+                && let Some(type_expr) = &binding.type_expr
+            {
+                let ty = baml_compiler2_tir::generics::lower_type_expr_with_generics(
+                    db,
+                    &type_expr.expr,
+                    pkg_items,
+                    namespace_path,
+                    &bindings,
+                    diags,
+                );
+                bindings.insert(assoc.name.clone(), ty.clone());
+                return Some((assoc.name.clone(), ty));
+            }
+            assoc.default.as_ref().map(|default| {
+                let ty = baml_compiler2_tir::generics::lower_type_expr_with_generics(
+                    db,
+                    &default.expr,
+                    pkg_items,
+                    &target_iface_pkg.namespace_path,
+                    &bindings,
+                    diags,
+                );
+                bindings.insert(assoc.name.clone(), ty.clone());
+                (assoc.name.clone(), ty)
+            })
+        })
+        .collect()
 }
 
 fn class_type_name_from_qtn(db: &dyn crate::Db, class_qtn: &QualifiedTypeName) -> Option<TypeName> {
@@ -885,13 +988,16 @@ fn register_class_for_interface_closure<'db>(
     class_tn: &TypeName,
     interface_implementors: &mut InterfaceImplementors,
 ) {
-    for (iface_loc, _iface_args) in baml_compiler2_tir::interfaces::interface_closure_locs_with_args(
-        db,
-        root_iface_loc,
-        root_iface_args,
-        pkg_items,
-        namespace_path,
-    ) {
+    for (iface_loc, _iface_args, _iface_assoc) in
+        baml_compiler2_tir::interfaces::interface_closure_locs_with_args_and_assoc(
+            db,
+            root_iface_loc,
+            root_iface_args,
+            &[],
+            pkg_items,
+            namespace_path,
+        )
+    {
         if let Some(iface_tn) = interface_type_name_from_loc(db, iface_loc) {
             push_unique_interface_implementor(interface_implementors, iface_tn, class_tn);
         }
@@ -1017,6 +1123,7 @@ struct InterfaceDispatchCall<'a> {
     recv_local: Local,
     iface_tn: &'a TypeName,
     iface_type_args: &'a [Tir2Ty],
+    iface_assoc: &'a [(Name, Tir2Ty)],
     method: &'a Name,
     args: &'a [AstExprId],
 }
@@ -1480,12 +1587,22 @@ impl<'db> LoweringContext<'db> {
                     &imp.generic_params,
                     &mut diags,
                 );
+                let root_iface_assoc_tir = lower_interface_target_associated_bindings(
+                    db,
+                    &imp.interface_target.expr,
+                    &imp.associated_type_bindings,
+                    pkg_items,
+                    &pkg_info.namespace_path,
+                    &imp.generic_params,
+                    &mut diags,
+                );
 
-                for (iface_loc, iface_args) in
-                    baml_compiler2_tir::interfaces::interface_closure_locs_with_args(
+                for (iface_loc, iface_args, iface_assoc) in
+                    baml_compiler2_tir::interfaces::interface_closure_locs_with_args_and_assoc(
                         db,
                         root_iface_loc,
                         &root_iface_args_tir,
+                        &root_iface_assoc_tir,
                         pkg_items,
                         &pkg_info.namespace_path,
                     )
@@ -1495,12 +1612,15 @@ impl<'db> LoweringContext<'db> {
                     };
                     let entry = out.interface_type_implementors.entry(iface_tn).or_default();
                     if !entry.iter().any(|implementor| {
-                        implementor.runtime_ty == target_ty && implementor.iface_args == iface_args
+                        implementor.runtime_ty == target_ty
+                            && implementor.iface_args == iface_args
+                            && implementor.iface_assoc == iface_assoc
                     }) {
                         entry.push(InterfaceTypeImplementor {
                             runtime_ty: target_ty.clone(),
                             tir_ty: target_ty_tir.clone(),
                             iface_args,
+                            iface_assoc,
                         });
                     }
                 }
@@ -2268,11 +2388,13 @@ impl<'db> LoweringContext<'db> {
         convert_tir2_ty(&erased, self.resolved_aliases)
     }
 
-    fn interface_dispatch_target_for_tir_ty(&self, ty: &Tir2Ty) -> Option<(TypeName, Vec<Tir2Ty>)> {
+    fn interface_dispatch_target_for_tir_ty(&self, ty: &Tir2Ty) -> Option<InterfaceTypeView> {
         match ty {
-            Tir2Ty::Interface(qtn, type_args, _) => {
-                Some((qtn_to_type_name(qtn), type_args.clone()))
-            }
+            Tir2Ty::Interface(qtn, type_args, associated_bindings, _) => Some((
+                qtn_to_type_name(qtn),
+                type_args.clone(),
+                associated_bindings.clone(),
+            )),
             Tir2Ty::TypeVar(name, _) => self
                 .generic_param_bounds
                 .get(name)
@@ -2281,7 +2403,7 @@ impl<'db> LoweringContext<'db> {
                 let tn = qtn_to_type_name(qtn);
                 self.interface_implementors
                     .contains_key(&tn)
-                    .then(|| (tn, type_args.clone()))
+                    .then(|| (tn, type_args.clone(), Vec::new()))
             }
             _ => None,
         }
@@ -2291,14 +2413,14 @@ impl<'db> LoweringContext<'db> {
     /// method is provided by a blanket / out-of-body `implements … for …` rule
     /// (not an in-body block), find the single interface that provides `method`
     /// so a direct `recv.method()` dispatches through the normal interface
-    /// switch. Returns the interface `(TypeName, type_args)`. TIR has already
-    /// rejected the ambiguous (>1 interface) case with E0121, so the first
-    /// declaring match is unambiguous for a compiling program.
+    /// switch. Returns the interface view. TIR has already rejected the
+    /// ambiguous (>1 interface) case with E0121, so the first declaring match
+    /// is unambiguous for a compiling program.
     fn registry_dispatch_target_for_concrete(
         &self,
         recv_ty: &Tir2Ty,
         method: &Name,
-    ) -> Option<(TypeName, Vec<Tir2Ty>)> {
+    ) -> Option<InterfaceTypeView> {
         // Only concrete receivers — interfaces/type-vars dispatch via the
         // arms above.
         if !matches!(recv_ty, Tir2Ty::Class(..) | Tir2Ty::Primitive(..)) {
@@ -2320,11 +2442,11 @@ impl<'db> LoweringContext<'db> {
             };
             let iface_ty =
                 baml_compiler2_tir::generics::substitute_ty(&rule.interface_ty, &bindings);
-            let Tir2Ty::Interface(iface_qtn, iface_args, _) = iface_ty else {
+            let Tir2Ty::Interface(iface_qtn, iface_args, iface_assoc, _) = iface_ty else {
                 continue;
             };
             if self.mir_interface_declares_method(&iface_qtn, method) {
-                return Some((qtn_to_type_name(&iface_qtn), iface_args));
+                return Some((qtn_to_type_name(&iface_qtn), iface_args, iface_assoc));
             }
         }
         None
@@ -3885,11 +4007,12 @@ impl<'db> LoweringContext<'db> {
                     local
                 }
             };
-            if let Some((iface_tn, iface_type_args)) = interface_prefix
+            if let Some((iface_tn, iface_type_args, iface_assoc)) = interface_prefix
                 && self.try_lower_interface_field_access(
                     base_local,
                     &iface_tn,
                     &iface_type_args,
+                    &iface_assoc,
                     seg,
                     &target_place,
                 )
@@ -4628,7 +4751,7 @@ impl LoweringContext<'_> {
                     .path_segment_types
                     .get(&(self.current_metadata_scope, callee, recv_seg_idx))
                     .cloned();
-                let iface_dispatch_opt: Option<(TypeName, Vec<Tir2Ty>)> = if segments.len() == 2 {
+                let iface_dispatch_opt: Option<InterfaceTypeView> = if segments.len() == 2 {
                     if let Some(target) = recv_tir_ty
                         .as_ref()
                         .and_then(|ty| self.interface_dispatch_target_for_tir_ty(ty))
@@ -4637,7 +4760,7 @@ impl LoweringContext<'_> {
                     } else {
                         match self.builder.local_ty(recv_root_local) {
                             Ty::Class(n, _, _) if self.interface_implementors.contains_key(&n) => {
-                                Some((n, Vec::new()))
+                                Some((n, Vec::new(), Vec::new()))
                             }
                             _ => None,
                         }
@@ -4655,7 +4778,7 @@ impl LoweringContext<'_> {
                         .as_ref()
                         .and_then(|ty| self.registry_dispatch_target_for_concrete(ty, &method_name))
                 });
-                if let Some((iface_tn, iface_type_args)) = iface_dispatch_opt {
+                if let Some((iface_tn, iface_type_args, iface_assoc)) = iface_dispatch_opt {
                     // Decide how many leading segments form the receiver
                     // value (the rest are type qualifiers).
                     let prefix_is_qualifier = segments.len() >= 3
@@ -4677,6 +4800,7 @@ impl LoweringContext<'_> {
                             recv_local,
                             iface_tn: &iface_tn,
                             iface_type_args: &iface_type_args,
+                            iface_assoc: &iface_assoc,
                             method: &method_name,
                             args,
                         },
@@ -6049,11 +6173,12 @@ impl<'db> LoweringContext<'db> {
         } else {
             let handled_interface_field = self
                 .interface_receiver_for_field_access(base, unwrapped_ty)
-                .is_some_and(|(iface_tn, iface_type_args)| {
+                .is_some_and(|(iface_tn, iface_type_args, iface_assoc)| {
                     self.try_lower_interface_field_access(
                         base_local,
                         &iface_tn,
                         &iface_type_args,
+                        &iface_assoc,
                         field,
                         &dest,
                     )
@@ -6111,7 +6236,7 @@ impl<'db> LoweringContext<'db> {
         &self,
         base: AstExprId,
         unwrapped_ty: &Ty,
-    ) -> Option<(TypeName, Vec<Tir2Ty>)> {
+    ) -> Option<InterfaceTypeView> {
         if let Some(target) = self
             .expr_types
             .get(&self.expr_metadata_key(base))
@@ -6122,7 +6247,7 @@ impl<'db> LoweringContext<'db> {
 
         match unwrapped_ty {
             Ty::Class(tn, _, _) if self.interface_implementors.contains_key(tn) => {
-                Some((tn.clone(), Vec::new()))
+                Some((tn.clone(), Vec::new(), Vec::new()))
             }
             _ => None,
         }
@@ -6133,7 +6258,7 @@ impl<'db> LoweringContext<'db> {
         expr_id: AstExprId,
         prefix_idx: usize,
         current_ty: &Ty,
-    ) -> Option<(TypeName, Vec<Tir2Ty>)> {
+    ) -> Option<InterfaceTypeView> {
         if let Some(target) = self
             .path_segment_types
             .get(&(self.current_metadata_scope, expr_id, prefix_idx))
@@ -6144,7 +6269,7 @@ impl<'db> LoweringContext<'db> {
 
         match current_ty {
             Ty::Class(tn, _, _) if self.interface_implementors.contains_key(tn) => {
-                Some((tn.clone(), Vec::new()))
+                Some((tn.clone(), Vec::new(), Vec::new()))
             }
             _ => None,
         }
@@ -6334,7 +6459,7 @@ impl<'db> LoweringContext<'db> {
             .expr_types
             .get(&self.expr_metadata_key(base))
             .and_then(|ty| self.interface_dispatch_target_for_tir_ty(ty));
-        let Some((iface_tn, iface_type_args)) = dispatch_target else {
+        let Some((iface_tn, iface_type_args, iface_assoc)) = dispatch_target else {
             return false;
         };
         // Lower receiver to a local we can copy from in every arm.
@@ -6347,6 +6472,7 @@ impl<'db> LoweringContext<'db> {
                 recv_local,
                 iface_tn: &iface_tn,
                 iface_type_args: &iface_type_args,
+                iface_assoc: &iface_assoc,
                 method,
                 args,
             },
@@ -6483,10 +6609,14 @@ impl<'db> LoweringContext<'db> {
                     candidates.extend(member_candidates);
                 }
                 Tir2Ty::Interface(..) => {
-                    let (iface_tn, iface_type_args) =
+                    let (iface_tn, iface_type_args, iface_assoc) =
                         self.interface_dispatch_target_for_tir_ty(member)?;
-                    let member_candidates =
-                        self.interface_method_candidates_for(&iface_tn, &iface_type_args, method);
+                    let member_candidates = self.interface_method_candidates_for(
+                        &iface_tn,
+                        &iface_type_args,
+                        &iface_assoc,
+                        method,
+                    );
                     if member_candidates.is_empty() {
                         return None;
                     }
@@ -6528,13 +6658,16 @@ impl<'db> LoweringContext<'db> {
         let class_data = &class_tree[class_loc.id(self.db)];
         let mut out = Vec::new();
         for impl_block in &class_data.implements {
-            if let Some((iface_tn, iface_args)) =
-                self.resolve_implements_target_view(&impl_block.target, class_loc)
-            {
+            if let Some((iface_tn, iface_args, iface_assoc)) = self.resolve_implements_target_view(
+                &impl_block.target,
+                &impl_block.associated_type_bindings,
+                class_loc,
+            ) {
                 out.extend(self.resolve_implementor_method_candidates(
                     class_tn,
                     &iface_tn,
                     &iface_args,
+                    &iface_assoc,
                     method,
                 ));
             }
@@ -6557,13 +6690,16 @@ impl<'db> LoweringContext<'db> {
         let class_data = &class_tree[class_loc.id(self.db)];
         let mut out = Vec::new();
         for impl_block in &class_data.implements {
-            if let Some((iface_tn, iface_args)) =
-                self.resolve_implements_target_view(&impl_block.target, class_loc)
-            {
+            if let Some((iface_tn, iface_args, iface_assoc)) = self.resolve_implements_target_view(
+                &impl_block.target,
+                &impl_block.associated_type_bindings,
+                class_loc,
+            ) {
                 out.extend(self.resolve_implementor_interface_field_candidates(
                     class_tn,
                     &iface_tn,
                     &iface_args,
+                    &iface_assoc,
                     field,
                 ));
             }
@@ -6642,10 +6778,12 @@ impl<'db> LoweringContext<'db> {
             recv_local,
             iface_tn,
             iface_type_args,
+            iface_assoc,
             method,
             args,
         } = call;
-        let resolved = self.interface_method_candidates_for(iface_tn, iface_type_args, method);
+        let resolved =
+            self.interface_method_candidates_for(iface_tn, iface_type_args, iface_assoc, method);
         if resolved.is_empty() {
             return false;
         }
@@ -6661,6 +6799,7 @@ impl<'db> LoweringContext<'db> {
         &self,
         iface_tn: &TypeName,
         iface_type_args: &[Tir2Ty],
+        iface_assoc: &[(Name, Tir2Ty)],
         method: &Name,
     ) -> Vec<InterfaceMethodCandidate> {
         let class_impls = self
@@ -6683,6 +6822,7 @@ impl<'db> LoweringContext<'db> {
                     impl_tn,
                     iface_tn,
                     iface_type_args,
+                    iface_assoc,
                     method,
                 )
             })
@@ -6691,10 +6831,14 @@ impl<'db> LoweringContext<'db> {
             if !self.interface_tir_type_args_match(&implementor.iface_args, iface_type_args) {
                 continue;
             }
+            if !self.interface_tir_assoc_match(&implementor.iface_assoc, iface_assoc) {
+                continue;
+            }
             let Some(item_ref) = self.resolve_type_implementor_method(
                 &implementor.tir_ty,
                 iface_tn,
                 iface_type_args,
+                iface_assoc,
                 method,
             ) else {
                 continue;
@@ -6782,6 +6926,7 @@ impl<'db> LoweringContext<'db> {
         recv_local: Local,
         iface_tn: &TypeName,
         iface_type_args: &[Tir2Ty],
+        iface_assoc: &[(Name, Tir2Ty)],
         field: &Name,
         dest: &Place,
     ) -> bool {
@@ -6795,6 +6940,7 @@ impl<'db> LoweringContext<'db> {
                     impl_tn,
                     iface_tn,
                     iface_type_args,
+                    iface_assoc,
                     field,
                 )
             })
@@ -6848,7 +6994,7 @@ impl<'db> LoweringContext<'db> {
                     }
                 }
                 Tir2Ty::Interface(..) => {
-                    let Some((iface_tn, iface_type_args)) =
+                    let Some((iface_tn, iface_type_args, iface_assoc)) =
                         self.interface_dispatch_target_for_tir_ty(member)
                     else {
                         return false;
@@ -6863,6 +7009,7 @@ impl<'db> LoweringContext<'db> {
                                 impl_tn,
                                 &iface_tn,
                                 &iface_type_args,
+                                &iface_assoc,
                                 field,
                             )
                         })
@@ -6940,6 +7087,7 @@ impl<'db> LoweringContext<'db> {
         impl_tn: &TypeName,
         iface_tn: &TypeName,
         iface_type_args: &[Tir2Ty],
+        iface_assoc: &[(Name, Tir2Ty)],
         method: &Name,
     ) -> Vec<InterfaceMethodCandidate> {
         let Some(class_loc) = self.resolve_class_loc_by_type_name(impl_tn) else {
@@ -6948,7 +7096,7 @@ impl<'db> LoweringContext<'db> {
         let class_tree = file_item_tree(self.db, class_loc.file(self.db));
         let class_data = &class_tree[class_loc.id(self.db)];
         let Some(requested_views) =
-            self.interface_closure_type_name_views(iface_tn, iface_type_args)
+            self.interface_closure_type_name_views(iface_tn, iface_type_args, iface_assoc)
         else {
             return Vec::new();
         };
@@ -6961,14 +7109,21 @@ impl<'db> LoweringContext<'db> {
             let Some(target) = class_tree.method_to_iface_target.get(&method_id) else {
                 continue;
             };
+            let method_assoc_bindings = class_tree
+                .method_to_iface_associated_type_bindings
+                .get(&method_id)
+                .map(|bindings| bindings.as_slice())
+                .unwrap_or(&[]);
             // BEP-044: this override only satisfies requests resolving to the
             // interface that owns `method` within the block's closure — so a
             // `B::foo` override never leaks into a request for `A::foo` when
             // `B requires A` and both declare `foo`.
-            let provider_view = self.method_provider_view(target, class_loc, method);
+            let provider_view =
+                self.method_provider_view(target, method_assoc_bindings, class_loc, method);
             for (requested_idx, matched_iface_tn, guard) in self
                 .implements_target_matches_requested_views(
                     target,
+                    method_assoc_bindings,
                     class_loc,
                     &requested_views,
                     &class_data.generic_params,
@@ -6998,10 +7153,16 @@ impl<'db> LoweringContext<'db> {
         }
 
         for impl_block in &class_data.implements {
-            let provider_view = self.method_provider_view(&impl_block.target, class_loc, method);
+            let provider_view = self.method_provider_view(
+                &impl_block.target,
+                &impl_block.associated_type_bindings,
+                class_loc,
+                method,
+            );
             for (requested_idx, matched_iface_tn, guard) in self
                 .implements_target_matches_requested_views(
                     &impl_block.target,
+                    &impl_block.associated_type_bindings,
                     class_loc,
                     &requested_views,
                     &class_data.generic_params,
@@ -7096,6 +7257,15 @@ impl<'db> LoweringContext<'db> {
                                 .collect(),
                             _ => Vec::new(),
                         };
+                    let root_iface_assoc_tir = lower_interface_target_associated_bindings(
+                        self.db,
+                        &imp.interface_target.expr,
+                        &imp.associated_type_bindings,
+                        file_pkg_items,
+                        &file_pkg_info.namespace_path,
+                        &imp.generic_params,
+                        &mut diags,
+                    );
                     let bounds = imp
                         .generic_param_bounds
                         .iter()
@@ -7119,6 +7289,7 @@ impl<'db> LoweringContext<'db> {
                         interface_ty: Tir2Ty::Interface(
                             root_iface_qtn,
                             root_iface_args_tir,
+                            root_iface_assoc_tir,
                             baml_compiler2_tir::ty::TyAttr::default(),
                         ),
                         origin: baml_compiler2_tir::interfaces::InterfaceImplOrigin::OutOfBody,
@@ -7133,7 +7304,7 @@ impl<'db> LoweringContext<'db> {
                         self.db,
                         PackageId::new(self.db, file_pkg_info.package.clone()),
                     );
-                    for (requested_idx, (requested_tn, requested_args)) in
+                    for (requested_idx, (requested_tn, requested_args, requested_assoc)) in
                         requested_views.iter().enumerate()
                     {
                         let Some(requested_iface_qtn) = self.resolve_qtn_by_type_name(requested_tn)
@@ -7143,6 +7314,7 @@ impl<'db> LoweringContext<'db> {
                         let requested_iface_ty = Tir2Ty::Interface(
                             requested_iface_qtn,
                             requested_args.clone(),
+                            requested_assoc.clone(),
                             baml_compiler2_tir::ty::TyAttr::default(),
                         );
                         let Some(instantiation) = registry
@@ -7182,14 +7354,17 @@ impl<'db> LoweringContext<'db> {
                             _ => continue,
                         };
 
-                        for (iface_loc, current_iface_args) in
-                            baml_compiler2_tir::interfaces::interface_closure_locs_with_args(
+                        let (inst_iface_args, inst_iface_assoc): (&[Tir2Ty], &[(Name, Tir2Ty)]) =
+                            match &instantiation.interface_ty {
+                                Tir2Ty::Interface(_, args, assoc, _) => (args, assoc),
+                                _ => (&[], &[]),
+                            };
+                        for (iface_loc, current_iface_args, current_iface_assoc) in
+                            baml_compiler2_tir::interfaces::interface_closure_locs_with_args_and_assoc(
                                 self.db,
                                 root_iface_loc,
-                                match &instantiation.interface_ty {
-                                    Tir2Ty::Interface(_, args, _) => args,
-                                    _ => &[],
-                                },
+                                inst_iface_args,
+                                inst_iface_assoc,
                                 file_pkg_items,
                                 &file_pkg_info.namespace_path,
                             )
@@ -7218,6 +7393,10 @@ impl<'db> LoweringContext<'db> {
                                 || !self.interface_tir_type_args_match(
                                     &current_iface_args,
                                     requested_args,
+                                )
+                                || !self.interface_tir_assoc_match(
+                                    &current_iface_assoc,
+                                    requested_assoc,
                                 )
                             {
                                 continue;
@@ -7290,11 +7469,31 @@ impl<'db> LoweringContext<'db> {
         )
     }
 
+    fn interface_tir_assoc_match(
+        &self,
+        impl_iface_assoc: &[(Name, Tir2Ty)],
+        iface_assoc: &[(Name, Tir2Ty)],
+    ) -> bool {
+        iface_assoc.iter().all(|(requested_name, requested_ty)| {
+            impl_iface_assoc
+                .iter()
+                .find(|(impl_name, _)| impl_name == requested_name)
+                .is_some_and(|(_, impl_ty)| {
+                    baml_compiler2_tir::normalize::is_same_normalized_type(
+                        impl_ty,
+                        requested_ty,
+                        &self.resolved_aliases.aliases,
+                    )
+                })
+        })
+    }
+
     fn interface_closure_type_name_views(
         &self,
         iface_tn: &TypeName,
         iface_type_args: &[Tir2Ty],
-    ) -> Option<Vec<(TypeName, Vec<Tir2Ty>)>> {
+        iface_assoc: &[(Name, Tir2Ty)],
+    ) -> Option<Vec<InterfaceTypeView>> {
         let iface_pkg_name = iface_tn.module_path.first()?;
         let iface_pkg_items = self.resolve_class_pkg_items_by_name(iface_pkg_name);
         let iface_ns: Vec<Name> = iface_tn.module_path.iter().skip(1).cloned().collect();
@@ -7304,15 +7503,16 @@ impl<'db> LoweringContext<'db> {
             return None;
         };
         Some(
-            baml_compiler2_tir::interfaces::interface_closure_locs_with_args(
+            baml_compiler2_tir::interfaces::interface_closure_locs_with_args_and_assoc(
                 self.db,
                 requested_root_loc,
                 iface_type_args,
+                iface_assoc,
                 iface_pkg_items,
                 &iface_ns,
             )
             .into_iter()
-            .filter_map(|(loc, args)| {
+            .filter_map(|(loc, args, assoc)| {
                 let tree = baml_compiler2_hir::file_item_tree(self.db, loc.file(self.db));
                 let iface_data = tree.interfaces.get(&loc.id(self.db))?;
                 let iface_pkg =
@@ -7326,6 +7526,7 @@ impl<'db> LoweringContext<'db> {
                         display_name: iface_data.name.clone(),
                     },
                     args,
+                    assoc,
                 ))
             })
             .collect(),
@@ -7337,9 +7538,11 @@ impl<'db> LoweringContext<'db> {
         impl_ty_tir: &Tir2Ty,
         iface_tn: &TypeName,
         iface_type_args: &[Tir2Ty],
+        iface_assoc: &[(Name, Tir2Ty)],
         method: &Name,
     ) -> Option<ItemRef> {
-        let requested_views = self.interface_closure_type_name_views(iface_tn, iface_type_args)?;
+        let requested_views =
+            self.interface_closure_type_name_views(iface_tn, iface_type_args, iface_assoc)?;
 
         for file in compiler2_all_files(self.db) {
             let pkg_info = file_package(self.db, file);
@@ -7408,12 +7611,31 @@ impl<'db> LoweringContext<'db> {
                     .iter()
                     .map(|a| baml_compiler2_tir::generics::substitute_ty(a, &bindings))
                     .collect();
+                let raw_iface_assoc = lower_interface_target_associated_bindings(
+                    self.db,
+                    &imp.interface_target.expr,
+                    &imp.associated_type_bindings,
+                    pkg_items,
+                    &pkg_info.namespace_path,
+                    &imp.generic_params,
+                    &mut diags,
+                );
+                let root_iface_assoc: Vec<_> = raw_iface_assoc
+                    .iter()
+                    .map(|(name, ty)| {
+                        (
+                            name.clone(),
+                            baml_compiler2_tir::generics::substitute_ty(ty, &bindings),
+                        )
+                    })
+                    .collect();
 
-                for (current_iface_loc, current_iface_args) in
-                    baml_compiler2_tir::interfaces::interface_closure_locs_with_args(
+                for (current_iface_loc, current_iface_args, current_iface_assoc) in
+                    baml_compiler2_tir::interfaces::interface_closure_locs_with_args_and_assoc(
                         self.db,
                         root_iface_loc,
                         &root_iface_args,
+                        &root_iface_assoc,
                         pkg_items,
                         &pkg_info.namespace_path,
                     )
@@ -7438,16 +7660,19 @@ impl<'db> LoweringContext<'db> {
                         module_path: iface_module_path,
                         display_name: iface_data.name.clone(),
                     };
-                    if !requested_views
-                        .iter()
-                        .any(|(requested_tn, requested_args)| {
+                    if !requested_views.iter().any(
+                        |(requested_tn, requested_args, requested_assoc)| {
                             current_iface_tn == *requested_tn
                                 && self.interface_tir_type_args_match(
                                     &current_iface_args,
                                     requested_args,
                                 )
-                        })
-                    {
+                                && self.interface_tir_assoc_match(
+                                    &current_iface_assoc,
+                                    requested_assoc,
+                                )
+                        },
+                    ) {
                         continue;
                     }
 
@@ -7509,21 +7734,24 @@ impl<'db> LoweringContext<'db> {
     fn implements_target_matches_requested_views(
         &self,
         target: &baml_compiler2_ast::SpannedTypeExpr,
+        associated_type_bindings: &[baml_compiler2_ast::AssociatedTypeBindingDef],
         class_loc: baml_compiler2_hir::loc::ClassLoc<'db>,
-        requested_views: &[(TypeName, Vec<Tir2Ty>)],
+        requested_views: &[InterfaceTypeView],
         class_params: &[Name],
     ) -> Vec<(usize, TypeName, InterfaceClassGuard)> {
-        let Some((target_tn, target_args)) = self.resolve_implements_target_view(target, class_loc)
+        let Some((target_tn, target_args, target_assoc)) =
+            self.resolve_implements_target_view(target, associated_type_bindings, class_loc)
         else {
             return Vec::new();
         };
-        let Some(target_views) = self.interface_closure_type_name_views(&target_tn, &target_args)
+        let Some(target_views) =
+            self.interface_closure_type_name_views(&target_tn, &target_args, &target_assoc)
         else {
             return Vec::new();
         };
         let mut out = Vec::new();
-        for (target_view_tn, target_view_args) in target_views {
-            for (requested_idx, (requested_tn, requested_args)) in
+        for (target_view_tn, target_view_args, target_view_assoc) in target_views {
+            for (requested_idx, (requested_tn, requested_args, requested_assoc)) in
                 requested_views.iter().enumerate()
             {
                 if target_view_tn != *requested_tn {
@@ -7531,7 +7759,9 @@ impl<'db> LoweringContext<'db> {
                 }
                 let Some(guard) = interface_class_guard_for_args(
                     &target_view_args,
+                    &target_view_assoc,
                     requested_args,
+                    requested_assoc,
                     class_params,
                     &self.resolved_aliases.aliases,
                 ) else {
@@ -7578,8 +7808,9 @@ impl<'db> LoweringContext<'db> {
     fn resolve_implements_target_view(
         &self,
         target: &baml_compiler2_ast::SpannedTypeExpr,
+        associated_type_bindings: &[baml_compiler2_ast::AssociatedTypeBindingDef],
         class_loc: baml_compiler2_hir::loc::ClassLoc<'db>,
-    ) -> Option<(TypeName, Vec<Tir2Ty>)> {
+    ) -> Option<InterfaceTypeView> {
         let class_file = class_loc.file(self.db);
         let class_pkg = baml_compiler2_hir::file_package::file_package(self.db, class_file);
         let class_pkg_id = PackageId::new(self.db, class_pkg.package.clone());
@@ -7616,7 +7847,54 @@ impl<'db> LoweringContext<'db> {
                 .collect(),
             _ => Vec::new(),
         };
-        Some((qtn_to_type_name(&target_qtn), target_args))
+        let target_iface_pkg =
+            baml_compiler2_hir::file_package::file_package(self.db, target_loc.file(self.db));
+        let mut bindings =
+            baml_compiler2_tir::generics::bind_type_vars(&target_data.generic_params, &target_args);
+        for param in &class_data.generic_params {
+            bindings.entry(param.clone()).or_insert_with(|| {
+                Tir2Ty::TypeVar(param.clone(), baml_compiler2_tir::ty::TyAttr::default())
+            });
+        }
+        let associated_bindings = target_data
+            .associated_types
+            .iter()
+            .filter_map(|assoc| {
+                if let Some(binding) = associated_type_bindings
+                    .iter()
+                    .find(|binding| binding.name == assoc.name)
+                    && let Some(type_expr) = &binding.type_expr
+                {
+                    let ty = baml_compiler2_tir::generics::lower_type_expr_with_generics(
+                        self.db,
+                        &type_expr.expr,
+                        class_pkg_items,
+                        &class_pkg.namespace_path,
+                        &bindings,
+                        &mut diags,
+                    );
+                    bindings.insert(assoc.name.clone(), ty.clone());
+                    return Some((assoc.name.clone(), ty));
+                }
+                assoc.default.as_ref().map(|default| {
+                    let ty = baml_compiler2_tir::generics::lower_type_expr_with_generics(
+                        self.db,
+                        &default.expr,
+                        class_pkg_items,
+                        &target_iface_pkg.namespace_path,
+                        &bindings,
+                        &mut diags,
+                    );
+                    bindings.insert(assoc.name.clone(), ty.clone());
+                    (assoc.name.clone(), ty)
+                })
+            })
+            .collect();
+        Some((
+            qtn_to_type_name(&target_qtn),
+            target_args,
+            associated_bindings,
+        ))
     }
 
     /// True iff the interface named by `iface_tn` declares `field` directly in
@@ -7666,15 +7944,18 @@ impl<'db> LoweringContext<'db> {
     fn method_provider_view(
         &self,
         target: &baml_compiler2_ast::SpannedTypeExpr,
+        associated_type_bindings: &[baml_compiler2_ast::AssociatedTypeBindingDef],
         class_loc: baml_compiler2_hir::loc::ClassLoc<'db>,
         method: &Name,
     ) -> Option<TypeName> {
-        let (target_tn, target_args) = self.resolve_implements_target_view(target, class_loc)?;
-        let views = self.interface_closure_type_name_views(&target_tn, &target_args)?;
+        let (target_tn, target_args, target_assoc) =
+            self.resolve_implements_target_view(target, associated_type_bindings, class_loc)?;
+        let views =
+            self.interface_closure_type_name_views(&target_tn, &target_args, &target_assoc)?;
         views
             .into_iter()
-            .find(|(tn, _)| self.interface_declares_method(tn, method))
-            .map(|(tn, _)| tn)
+            .find(|(tn, _, _)| self.interface_declares_method(tn, method))
+            .map(|(tn, _, _)| tn)
     }
 
     /// Class-tag dispatch guards for every implementor that satisfies the
@@ -7687,12 +7968,13 @@ impl<'db> LoweringContext<'db> {
         &self,
         iface_tn: &TypeName,
         iface_type_args: &[Tir2Ty],
+        iface_assoc: &[(Name, Tir2Ty)],
     ) -> Vec<(TypeName, InterfaceClassGuard)> {
         let Some(impls) = self.interface_implementors.get(iface_tn).cloned() else {
             return Vec::new();
         };
         let Some(requested_views) =
-            self.interface_closure_type_name_views(iface_tn, iface_type_args)
+            self.interface_closure_type_name_views(iface_tn, iface_type_args, iface_assoc)
         else {
             return Vec::new();
         };
@@ -7704,24 +7986,30 @@ impl<'db> LoweringContext<'db> {
             let item_tree = file_item_tree(self.db, class_loc.file(self.db));
             let class_data = &item_tree[class_loc.id(self.db)];
             for impl_block in &class_data.implements {
-                let Some((target_tn, target_args)) =
-                    self.resolve_implements_target_view(&impl_block.target, class_loc)
+                let Some((target_tn, target_args, target_assoc)) = self
+                    .resolve_implements_target_view(
+                        &impl_block.target,
+                        &impl_block.associated_type_bindings,
+                        class_loc,
+                    )
                 else {
                     continue;
                 };
                 let Some(target_views) =
-                    self.interface_closure_type_name_views(&target_tn, &target_args)
+                    self.interface_closure_type_name_views(&target_tn, &target_args, &target_assoc)
                 else {
                     continue;
                 };
-                for (target_view_tn, target_view_args) in target_views {
-                    for (requested_tn, requested_args) in &requested_views {
+                for (target_view_tn, target_view_args, target_view_assoc) in target_views {
+                    for (requested_tn, requested_args, requested_assoc) in &requested_views {
                         if target_view_tn != *requested_tn {
                             continue;
                         }
                         let Some(guard) = interface_class_guard_for_args(
                             &target_view_args,
+                            &target_view_assoc,
                             requested_args,
+                            requested_assoc,
                             &class_data.generic_params,
                             &self.resolved_aliases.aliases,
                         ) else {
@@ -7746,6 +8034,7 @@ impl<'db> LoweringContext<'db> {
         impl_tn: &TypeName,
         iface_tn: &TypeName,
         iface_type_args: &[Tir2Ty],
+        iface_assoc: &[(Name, Tir2Ty)],
         field: &Name,
     ) -> Vec<InterfaceFieldCandidate> {
         let Some(class_loc) = self.resolve_class_loc_by_type_name(impl_tn) else {
@@ -7754,7 +8043,7 @@ impl<'db> LoweringContext<'db> {
         let item_tree = file_item_tree(self.db, class_loc.file(self.db));
         let class_data = &item_tree[class_loc.id(self.db)];
         let Some(requested_views) =
-            self.interface_closure_type_name_views(iface_tn, iface_type_args)
+            self.interface_closure_type_name_views(iface_tn, iface_type_args, iface_assoc)
         else {
             return Vec::new();
         };
@@ -7766,24 +8055,26 @@ impl<'db> LoweringContext<'db> {
         // impl-block ordering and read the wrong class field.
         let owning_view_tn: Option<TypeName> = requested_views
             .iter()
-            .find(|(tn, _)| self.interface_declares_field(tn, field))
-            .map(|(tn, _)| tn.clone());
+            .find(|(tn, _, _)| self.interface_declares_field(tn, field))
+            .map(|(tn, _, _)| tn.clone());
         let mut out = Vec::new();
 
         for impl_block in &class_data.implements {
-            let Some((target_tn, target_args)) =
-                self.resolve_implements_target_view(&impl_block.target, class_loc)
-            else {
+            let Some((target_tn, target_args, target_assoc)) = self.resolve_implements_target_view(
+                &impl_block.target,
+                &impl_block.associated_type_bindings,
+                class_loc,
+            ) else {
                 continue;
             };
             let Some(target_views) =
-                self.interface_closure_type_name_views(&target_tn, &target_args)
+                self.interface_closure_type_name_views(&target_tn, &target_args, &target_assoc)
             else {
                 continue;
             };
 
-            for (target_view_tn, target_view_args) in target_views {
-                for (requested_tn, requested_args) in &requested_views {
+            for (target_view_tn, target_view_args, target_view_assoc) in target_views {
+                for (requested_tn, requested_args, requested_assoc) in &requested_views {
                     if target_view_tn != *requested_tn {
                         continue;
                     }
@@ -7795,7 +8086,9 @@ impl<'db> LoweringContext<'db> {
                     }
                     let Some(guard) = interface_class_guard_for_args(
                         &target_view_args,
+                        &target_view_assoc,
                         requested_args,
+                        requested_assoc,
                         &class_data.generic_params,
                         &self.resolved_aliases.aliases,
                     ) else {
@@ -9450,17 +9743,19 @@ impl LoweringContext<'_> {
         }
     }
 
-    /// Whether `ty` is (or contains, inside a union/optional) a *generic*
-    /// interface instantiation, whose runtime test must respect its type
-    /// argument. Used to opt only these patterns into the TIR-typed test path,
-    /// leaving non-interface patterns on the unchanged erased fast path.
-    fn tir_ty_needs_generic_interface_test(ty: &Tir2Ty) -> bool {
+    /// Whether `ty` is (or contains, inside a union/optional) an interface view
+    /// whose runtime test must respect type arguments or associated bindings.
+    /// Used to opt only these patterns into the TIR-typed test path, leaving
+    /// non-interface patterns on the unchanged erased fast path.
+    fn tir_ty_needs_interface_shape_test(ty: &Tir2Ty) -> bool {
         match ty {
-            Tir2Ty::Interface(_, args, _) => !args.is_empty(),
-            Tir2Ty::Union(members, _) => members
-                .iter()
-                .any(Self::tir_ty_needs_generic_interface_test),
-            Tir2Ty::Optional(inner, _) => Self::tir_ty_needs_generic_interface_test(inner),
+            Tir2Ty::Interface(_, args, associated_bindings, _) => {
+                !args.is_empty() || !associated_bindings.is_empty()
+            }
+            Tir2Ty::Union(members, _) => {
+                members.iter().any(Self::tir_ty_needs_interface_shape_test)
+            }
+            Tir2Ty::Optional(inner, _) => Self::tir_ty_needs_interface_shape_test(inner),
             _ => false,
         }
     }
@@ -9567,14 +9862,19 @@ impl LoweringContext<'_> {
 
                 visited.remove(&key);
             }
-            // A generic-interface pattern (`Slot<int>`) must respect its type
-            // argument: test only the implementors of *that* instantiation, not
-            // every implementor of the bare interface. Without this, a
-            // `StrSlot` (only `Slot<string>`) wrongly matches a `Slot<int>` arm
-            // and feeds a string into integer code (`tagged_int_add` panic).
-            Tir2Ty::Interface(iface_qtn, type_args, _) if !type_args.is_empty() => {
+            // An associated or generic interface pattern (`Slot<int>`,
+            // `Source<Item=int>`) must respect its full interface view: test
+            // only the implementors of *that* view, not every implementor of
+            // the bare interface.
+            Tir2Ty::Interface(iface_qtn, type_args, associated_bindings, _)
+                if !type_args.is_empty() || !associated_bindings.is_empty() =>
+            {
                 let iface_tn = qtn_to_type_name(iface_qtn);
-                let guards = self.interface_implementor_class_guards(&iface_tn, type_args);
+                let guards = self.interface_implementor_class_guards(
+                    &iface_tn,
+                    type_args,
+                    associated_bindings,
+                );
                 if guards.is_empty() {
                     self.builder.goto(failure);
                     return;
@@ -9821,12 +10121,14 @@ impl LoweringContext<'_> {
             .pat_types
             .get(&self.pat_metadata_key(class_pat_id))?
             .clone();
-        let (iface_tn, iface_args) = self.interface_dispatch_target_for_tir_ty(&tir_ty)?;
+        let (iface_tn, iface_args, iface_assoc) =
+            self.interface_dispatch_target_for_tir_ty(&tir_ty)?;
         let field_local = self.builder.temp(self.pat_ty(field_pat_id));
         self.try_lower_interface_field_access(
             scrutinee,
             &iface_tn,
             &iface_args,
+            &iface_assoc,
             field,
             &Place::local(field_local),
         )
@@ -10109,7 +10411,7 @@ impl LoweringContext<'_> {
                     // patterns keep the erased fast path (unchanged codegen).
                     let tir_ty = self.pat_types.get(&self.pat_metadata_key(pat_id)).cloned();
                     if let Some(tir_ty) = &tir_ty
-                        && Self::tir_ty_needs_generic_interface_test(tir_ty)
+                        && Self::tir_ty_needs_interface_shape_test(tir_ty)
                     {
                         self.emit_is_tir_type_branch(scrutinee, tir_ty, success, failure);
                     } else {
@@ -10627,7 +10929,7 @@ impl LoweringContext<'_> {
         if self
             .pat_types
             .get(&self.pat_metadata_key(pat_id))
-            .is_some_and(Self::tir_ty_needs_generic_interface_test)
+            .is_some_and(Self::tir_ty_needs_interface_shape_test)
         {
             return None;
         }

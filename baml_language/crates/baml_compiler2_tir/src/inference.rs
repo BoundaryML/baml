@@ -752,6 +752,156 @@ pub fn infer_scope_types<'db>(
                                     crate::lower_type_expr::type_expr_for_name(cn.clone())
                                 })
                             });
+                        let mut type_bindings: rustc_hash::FxHashMap<Name, Ty> =
+                            rustc_hash::FxHashMap::default();
+                        for param in &generic_params {
+                            type_bindings.insert(
+                                param.clone(),
+                                Ty::TypeVar(param.clone(), TyAttr::default()),
+                            );
+                        }
+                        if let Some(target) = item_tree.method_to_iface_target.get(local_id)
+                            && let Some(iface_loc) = crate::interfaces::resolve_path_to_interface(
+                                db,
+                                &target.expr,
+                                pkg_items,
+                                &pkg_info.namespace_path,
+                            )
+                        {
+                            let iface_file = iface_loc.file(db);
+                            let iface_tree = baml_compiler2_hir::file_item_tree(db, iface_file);
+                            if let Some(iface_data) = iface_tree.interfaces.get(&iface_loc.id(db)) {
+                                let iface_ns =
+                                    baml_compiler2_hir::file_package::file_package(db, iface_file)
+                                        .namespace_path;
+                                let mut iface_type_bindings = type_bindings.clone();
+                                if let baml_compiler2_ast::TypeExpr::Path { generic_args, .. } =
+                                    &target.expr
+                                {
+                                    for (param, arg) in
+                                        iface_data.generic_params.iter().zip(generic_args)
+                                    {
+                                        let mut arg_diags = Vec::new();
+                                        let ty = crate::generics::lower_type_expr_with_generics(
+                                            db,
+                                            arg,
+                                            pkg_items,
+                                            &pkg_info.namespace_path,
+                                            &type_bindings,
+                                            &mut arg_diags,
+                                        );
+                                        for diag in arg_diags {
+                                            builder.report_at_span(diag, target.span);
+                                        }
+                                        iface_type_bindings.insert(param.clone(), ty.clone());
+                                        type_bindings.entry(param.clone()).or_insert(ty);
+                                    }
+                                }
+                                let explicit_bindings = item_tree
+                                    .method_to_iface_associated_type_bindings
+                                    .get(local_id)
+                                    .cloned()
+                                    .unwrap_or_default();
+                                for assoc in &iface_data.associated_types {
+                                    if explicit_bindings.iter().any(|b| b.name == assoc.name) {
+                                        continue;
+                                    }
+                                    if let Some(default) = &assoc.default {
+                                        let mut default_diags = Vec::new();
+                                        let ty = crate::generics::lower_type_expr_with_generics(
+                                            db,
+                                            &default.expr,
+                                            pkg_items,
+                                            &iface_ns,
+                                            &iface_type_bindings,
+                                            &mut default_diags,
+                                        );
+                                        for diag in default_diags {
+                                            builder.report_at_span(diag, default.span);
+                                        }
+                                        type_bindings.insert(assoc.name.clone(), ty.clone());
+                                        iface_type_bindings.insert(assoc.name.clone(), ty);
+                                    }
+                                }
+                                for binding in &explicit_bindings {
+                                    let Some(te) = &binding.type_expr else {
+                                        continue;
+                                    };
+                                    let resolved = if let Some(replacement) = &self_replacement {
+                                        crate::lower_type_expr::substitute_self_in(
+                                            &te.expr,
+                                            replacement,
+                                        )
+                                    } else {
+                                        te.expr.clone()
+                                    };
+                                    let mut binding_diags = Vec::new();
+                                    let ty = crate::generics::lower_type_expr_with_generics(
+                                        db,
+                                        &resolved,
+                                        pkg_items,
+                                        &pkg_info.namespace_path,
+                                        &type_bindings,
+                                        &mut binding_diags,
+                                    );
+                                    for diag in binding_diags {
+                                        builder.report_at_span(diag, te.span);
+                                    }
+                                    type_bindings.insert(binding.name.clone(), ty.clone());
+                                    iface_type_bindings.insert(binding.name.clone(), ty);
+                                }
+                            }
+                        } else if let Some(iface_name) = &enclosing_class_name
+                            && let Some(def) =
+                                pkg_items.lookup_type(&pkg_info.namespace_path, iface_name)
+                            && let baml_compiler2_hir::contributions::Definition::Interface(
+                                iface_loc,
+                            ) = def
+                        {
+                            let iface_file = iface_loc.file(db);
+                            let iface_tree = baml_compiler2_hir::file_item_tree(db, iface_file);
+                            if let Some(iface_data) = iface_tree.interfaces.get(&iface_loc.id(db)) {
+                                let iface_qtn =
+                                    crate::lower_type_expr::qualify_def(db, def, iface_name);
+                                let iface_args: Vec<Ty> = iface_data
+                                    .generic_params
+                                    .iter()
+                                    .map(|param| Ty::TypeVar(param.clone(), TyAttr::default()))
+                                    .collect();
+                                let iface_ty =
+                                    Ty::Interface(iface_qtn, iface_args, vec![], TyAttr::default());
+                                let iface_ns =
+                                    baml_compiler2_hir::file_package::file_package(db, iface_file)
+                                        .namespace_path;
+                                for assoc in &iface_data.associated_types {
+                                    if let Some(default) = &assoc.default {
+                                        let mut default_diags = Vec::new();
+                                        let ty = crate::generics::lower_type_expr_with_generics(
+                                            db,
+                                            &default.expr,
+                                            pkg_items,
+                                            &iface_ns,
+                                            &type_bindings,
+                                            &mut default_diags,
+                                        );
+                                        for diag in default_diags {
+                                            builder.report_at_span(diag, default.span);
+                                        }
+                                        type_bindings.insert(assoc.name.clone(), ty);
+                                    } else {
+                                        type_bindings.insert(
+                                            assoc.name.clone(),
+                                            Ty::AssociatedTypeProjection {
+                                                base: Box::new(iface_ty.clone()),
+                                                interface: Some(Box::new(iface_ty.clone())),
+                                                member: assoc.name.clone(),
+                                                attr: TyAttr::default(),
+                                            },
+                                        );
+                                    }
+                                }
+                            }
+                        }
                         let lower_with_self = |te: &baml_compiler2_ast::TypeExpr,
                                                diags: &mut Vec<
                             crate::infer_context::TirTypeError,
@@ -761,12 +911,12 @@ pub fn infer_scope_types<'db>(
                             } else {
                                 te.clone()
                             };
-                            crate::lower_type_expr::lower_type_expr_in_ns(
+                            crate::generics::lower_type_expr_with_generics(
                                 db,
                                 &resolved,
                                 pkg_items,
                                 &pkg_info.namespace_path,
-                                &generic_params,
+                                &type_bindings,
                                 diags,
                             )
                         };
@@ -859,7 +1009,12 @@ pub fn infer_scope_types<'db>(
                                                                     .collect()
                                                             })
                                                             .unwrap_or_default();
-                                                        Ty::Interface(qtn, iface_args, TyAttr::default())
+                                                        Ty::Interface(
+                                                            qtn,
+                                                            iface_args,
+                                                            vec![],
+                                                            TyAttr::default(),
+                                                        )
                                                     }
                                                     _ => Ty::Class(qtn, vec![], TyAttr::default()),
                                                 }
@@ -871,22 +1026,7 @@ pub fn infer_scope_types<'db>(
                                 }
                             } else {
                                 let mut param_diags = Vec::new();
-                                let resolved_te = if let Some(replacement) = &self_replacement {
-                                    crate::lower_type_expr::substitute_self_in(
-                                        &param.ty,
-                                        replacement,
-                                    )
-                                } else {
-                                    param.ty.clone()
-                                };
-                                let ty = crate::lower_type_expr::lower_type_expr_in_ns(
-                                    db,
-                                    &resolved_te,
-                                    pkg_items,
-                                    &pkg_info.namespace_path,
-                                    &generic_params,
-                                    &mut param_diags,
-                                );
+                                let ty = lower_with_self(&param.ty, &mut param_diags);
                                 if !param_diags.is_empty() {
                                     let span = sig_sm
                                         .param_type_spans

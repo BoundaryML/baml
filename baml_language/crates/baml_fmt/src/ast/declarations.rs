@@ -1029,6 +1029,9 @@ impl FromCST for ClassDecl {
                 SyntaxKind::FUNCTION_DEF => {
                     items.push(ClassItem::Function(FunctionDecl::from_cst(elem)?));
                 }
+                SyntaxKind::IMPLEMENTS_BLOCK => {
+                    items.push(ClassItem::Unknown(elem.text_range()));
+                }
                 SyntaxKind::BLOCK_ATTRIBUTE => {
                     items.push(ClassItem::BlockAttribute(BlockAttribute::from_cst(elem)?));
                 }
@@ -1296,6 +1299,7 @@ pub enum ClassItem {
     Field(ClassField, Option<ClassFieldDelimiter>),
     Function(FunctionDecl),
     BlockAttribute(BlockAttribute),
+    Unknown(TextRange),
 }
 
 impl FromCST for ClassItem {
@@ -1306,9 +1310,11 @@ impl FromCST for ClassItem {
             SyntaxKind::BLOCK_ATTRIBUTE => {
                 ClassItem::BlockAttribute(BlockAttribute::from_cst(elem)?)
             }
+            SyntaxKind::IMPLEMENTS_BLOCK => ClassItem::Unknown(elem.text_range()),
             found => {
                 return Err(StrongAstError::UnexpectedKindDesc {
-                    expected_desc: "FIELD, FUNCTION_DEF, or BLOCK_ATTRIBUTE".into(),
+                    expected_desc: "FIELD, FUNCTION_DEF, IMPLEMENTS_BLOCK, or BLOCK_ATTRIBUTE"
+                        .into(),
                     found,
                     at: elem.text_range(),
                 });
@@ -1340,6 +1346,10 @@ impl Printable for ClassItem {
             }
             ClassItem::Function(function) => function.print(shape, printer),
             ClassItem::BlockAttribute(attr) => attr.print(shape, printer),
+            ClassItem::Unknown(range) => {
+                printer.print_input_range(*range);
+                PrintInfo::default_multi_lined()
+            }
         }
     }
     fn leftmost_token(&self) -> TextRange {
@@ -1347,6 +1357,7 @@ impl Printable for ClassItem {
             ClassItem::Field(field, _) => field.leftmost_token(),
             ClassItem::Function(function) => function.leftmost_token(),
             ClassItem::BlockAttribute(attr) => attr.leftmost_token(),
+            ClassItem::Unknown(range) => *range,
         }
     }
     fn rightmost_token(&self) -> TextRange {
@@ -1358,6 +1369,7 @@ impl Printable for ClassItem {
             },
             ClassItem::Function(function) => function.rightmost_token(),
             ClassItem::BlockAttribute(attr) => attr.rightmost_token(),
+            ClassItem::Unknown(range) => *range,
         }
     }
 }

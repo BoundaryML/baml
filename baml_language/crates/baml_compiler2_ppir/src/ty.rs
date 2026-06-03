@@ -307,6 +307,7 @@ impl PpirTy {
                 attrs,
             },
             TypeExpr::BuiltinUnknown { .. }
+            | TypeExpr::AssociatedTypeProjection { .. }
             | TypeExpr::Type { .. }
             | TypeExpr::Function { .. }
             | TypeExpr::Unknown { .. } => PpirTy::CannotBeStreamed {
@@ -324,6 +325,7 @@ impl PpirTy {
             } => TypeExpr::Path {
                 segments: path.clone(),
                 generic_args: generic_args.iter().map(PpirTy::to_type_expr).collect(),
+                associated_type_bindings: vec![],
                 attrs: vec![],
             },
             PpirTy::Int { .. } => TypeExpr::Int { attrs: vec![] },

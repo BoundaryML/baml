@@ -339,6 +339,7 @@ pub fn display_type_expr(te: &TypeExpr) -> String {
                 .map(|n| n.as_str().to_string())
                 .unwrap_or_else(|| "unknown".to_string())
         }
+        TypeExpr::AssociatedTypeProjection { .. } => te.to_string(),
         TypeExpr::Int { .. } => "int".to_string(),
         TypeExpr::Bigint { .. } => "bigint".to_string(),
         TypeExpr::Float { .. } => "float".to_string(),

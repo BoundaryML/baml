@@ -838,6 +838,7 @@ fn definition_kind_to_lsp_symbol_kind(
         DefinitionKind::Field => lsp_types::SymbolKind::FIELD,
         DefinitionKind::Method => lsp_types::SymbolKind::METHOD,
         DefinitionKind::Variant => lsp_types::SymbolKind::ENUM_MEMBER,
+        DefinitionKind::AssociatedType => lsp_types::SymbolKind::TYPE_PARAMETER,
         // Locals don't appear in the outline but handle them gracefully.
         DefinitionKind::Binding | DefinitionKind::Parameter => lsp_types::SymbolKind::VARIABLE,
     }

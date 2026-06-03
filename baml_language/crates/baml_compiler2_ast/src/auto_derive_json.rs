@@ -90,12 +90,14 @@ fn class_self_type(class: &ClassDef) -> TypeExpr {
         .map(|gp| TypeExpr::Path {
             segments: vec![gp.clone()],
             generic_args: vec![],
+            associated_type_bindings: vec![],
             attrs: vec![],
         })
         .collect();
     TypeExpr::Path {
         segments: vec![class.name.clone()],
         generic_args,
+        associated_type_bindings: vec![],
         attrs: vec![],
     }
 }
@@ -105,6 +107,7 @@ fn json_type() -> TypeExpr {
     TypeExpr::Path {
         segments: vec![Name::new("baml"), Name::new("json"), Name::new("json")],
         generic_args: vec![],
+        associated_type_bindings: vec![],
         attrs: vec![],
     }
 }
@@ -114,6 +117,7 @@ fn baml_json_class(name: &str) -> TypeExpr {
     TypeExpr::Path {
         segments: vec![Name::new("baml"), Name::new("json"), Name::new(name)],
         generic_args: vec![],
+        associated_type_bindings: vec![],
         attrs: vec![],
     }
 }
@@ -658,6 +662,7 @@ fn build_from_json_body(class: &ClassDef, span: TextRange) -> (ExprBody, AstSour
             .unwrap_or(TypeExpr::Path {
                 segments: vec![Name::new("unknown")],
                 generic_args: vec![],
+                associated_type_bindings: vec![],
                 attrs: vec![],
             });
 
@@ -703,6 +708,7 @@ fn build_from_json_body(class: &ClassDef, span: TextRange) -> (ExprBody, AstSour
         .map(|gp| TypeExpr::Path {
             segments: vec![gp.clone()],
             generic_args: vec![],
+            associated_type_bindings: vec![],
             attrs: vec![],
         })
         .collect();

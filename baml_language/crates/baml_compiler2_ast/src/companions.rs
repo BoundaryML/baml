@@ -122,6 +122,7 @@ fn make_llm_companion(
         expr: TypeExpr::Path {
             segments: return_type_path.iter().map(Name::new).collect(),
             generic_args: vec![],
+            associated_type_bindings: vec![],
             attrs: vec![],
         },
         span: parent.span,

@@ -73,6 +73,7 @@ pub(crate) mod support {
                 class,
                 generic_args,
                 fields,
+                ..
             } => {
                 let class_path = class
                     .iter()
@@ -1342,6 +1343,21 @@ pub(crate) mod support {
                     )
                 }
                 baml_compiler2_ast::TypeExpr::BuiltinUnknown { .. } => "unknown".into(),
+                baml_compiler2_ast::TypeExpr::AssociatedTypeProjection {
+                    base,
+                    interface,
+                    member,
+                    ..
+                } => {
+                    let base = type_expr_to_string_hir(base, pkg_prefix, local_type_names);
+                    if let Some(interface) = interface {
+                        let interface =
+                            type_expr_to_string_hir(interface, pkg_prefix, local_type_names);
+                        format!("({base} as {interface}).{member}")
+                    } else {
+                        format!("{base}.{member}")
+                    }
+                }
                 baml_compiler2_ast::TypeExpr::Type { .. } => "type".into(),
                 baml_compiler2_ast::TypeExpr::Rust { .. } => "$rust_type".into(),
                 baml_compiler2_ast::TypeExpr::Error { .. } => "error".into(),
@@ -1376,6 +1392,7 @@ pub(crate) mod support {
                     class,
                     generic_args,
                     fields,
+                    ..
                 } => {
                     let class_path = class
                         .iter()

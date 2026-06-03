@@ -54,7 +54,7 @@ fn contains_tir_type_var(ty: &baml_compiler2_tir::ty::Ty) -> bool {
 
     match ty {
         Ty::TypeVar(..) => true,
-        Ty::Class(_, args, _) | Ty::Interface(_, args, _) | Ty::Union(args, _) => {
+        Ty::Class(_, args, _) | Ty::Interface(_, args, _, _) | Ty::Union(args, _) => {
             args.iter().any(contains_tir_type_var)
         }
         Ty::List(inner, _) | Ty::EvolvingList(inner, _) | Ty::Optional(inner, _) => {
@@ -985,7 +985,7 @@ pub fn generate_project_bytecode_with_opt(
             };
 
             for rule in &registry.interface_impl_rules {
-                let baml_compiler2_tir::ty::Ty::Interface(iface_qtn, iface_type_args, _) =
+                let baml_compiler2_tir::ty::Ty::Interface(iface_qtn, iface_type_args, _, _) =
                     &rule.interface_ty
                 else {
                     continue;

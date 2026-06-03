@@ -3190,7 +3190,7 @@ impl<'db> TypeInferenceBuilder<'db> {
     ) -> Ty {
         let base_ty = self.infer_expr(base, body);
         let mut diags = Vec::new();
-        let target_ty = crate::lower_type_expr::lower_type_expr_in_ns(
+        let mut target_ty = crate::lower_type_expr::lower_type_expr_in_ns(
             self.context.db(),
             target,
             self.package_items,
@@ -3198,10 +3198,40 @@ impl<'db> TypeInferenceBuilder<'db> {
             &self.generic_params,
             &mut diags,
         );
+        if let (
+            Ty::Class(class_qtn, class_args, _),
+            Ty::Interface(iface_qtn, iface_args, associated_bindings, attr),
+        ) = (&base_ty, &target_ty)
+            && associated_bindings.is_empty()
+        {
+            let projected_interface =
+                Ty::Interface(iface_qtn.clone(), iface_args.clone(), vec![], attr.clone());
+            let completed_bindings: Vec<(Name, Ty)> = self
+                .interface_associated_type_names(iface_qtn)
+                .into_iter()
+                .filter_map(|name| {
+                    self.resolve_class_associated_projection(
+                        class_qtn,
+                        class_args,
+                        Some(&projected_interface),
+                        &name,
+                    )
+                    .map(|ty| (name, ty))
+                })
+                .collect();
+            if !completed_bindings.is_empty() {
+                target_ty = Ty::Interface(
+                    iface_qtn.clone(),
+                    iface_args.clone(),
+                    completed_bindings,
+                    attr.clone(),
+                );
+            }
+        }
         for diag in diags {
             self.context.report_simple(diag, expr_id);
         }
-        let valid_target = matches!(target_ty, Ty::Interface(_, _, _));
+        let valid_target = matches!(target_ty, Ty::Interface(_, _, _, _));
         if !valid_target && !matches!(target_ty, Ty::Unknown { .. } | Ty::Error { .. }) {
             self.context.report_simple(
                 TirTypeError::InvalidInterfaceUpcastTarget {
@@ -3218,7 +3248,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             // than emitting a generic `type mismatch`. (Interface→sibling
             // projections keep the type-mismatch form, which names both
             // interfaces.)
-            if let (Ty::Interface(_, _, _), false) =
+            if let (Ty::Interface(_, _, _, _), false) =
                 (&target_ty, matches!(base_ty, Ty::Interface(..)))
             {
                 self.context.report_simple(
@@ -3544,6 +3574,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 let ty_expr = TypeExpr::Path {
                     segments: path.segments().to_vec(),
                     generic_args: obj_type_args.to_vec(),
+                    associated_type_bindings: Vec::new(),
                     attrs: Vec::new(),
                 };
                 crate::lower_type_expr::lower_type_expr_in_ns(
@@ -3685,6 +3716,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             &TypeExpr::Path {
                 segments: path.segments().to_vec(),
                 generic_args: Vec::new(),
+                associated_type_bindings: Vec::new(),
                 attrs: Vec::new(),
             },
             self.package_items,
@@ -4363,7 +4395,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                     // BEP-044 wf3 #18: coercing a concrete class to an interface
                     // it provides via >1 in-body block at this instantiation is
                     // ambiguous (`Getter<L>`+`Getter<R>` collapse at `Pair<int,int>`).
-                    if let (Ty::Class(cqtn, ctargs, _), Ty::Interface(iqtn, iargs, _)) =
+                    if let (Ty::Class(cqtn, ctargs, _), Ty::Interface(iqtn, iargs, _, _)) =
                         (&inferred, expected)
                         && self.class_interface_instantiation_count(cqtn, ctargs, iqtn, iargs) > 1
                     {
@@ -4983,7 +5015,6 @@ impl<'db> TypeInferenceBuilder<'db> {
             &matrix_arms,
             scrutinee_ty_for_matrix,
         );
-
         // Exhaustiveness diagnostic.
         if report.missing.is_empty() {
             self.exhaustive_matches.insert(match_expr_id);
@@ -5467,12 +5498,14 @@ impl<'db> TypeInferenceBuilder<'db> {
         &mut self,
         class: &[Name],
         generic_args: &[TypeExpr],
+        associated_type_bindings: &[baml_compiler2_ast::AssociatedTypeBinding],
         anchor: Option<(PatId, ExprId)>,
     ) -> Ty {
-        if !generic_args.is_empty() {
+        if !generic_args.is_empty() || !associated_type_bindings.is_empty() {
             let ty_expr = TypeExpr::Path {
                 segments: class.to_vec(),
                 generic_args: generic_args.to_vec(),
+                associated_type_bindings: associated_type_bindings.to_vec(),
                 attrs: Vec::new(),
             };
             let ty = if let Some((pat_id, fallback)) = anchor {
@@ -5552,8 +5585,16 @@ impl<'db> TypeInferenceBuilder<'db> {
     fn ty_contains_recovery_unknown(ty: &Ty) -> bool {
         match ty {
             Ty::Unknown { .. } | Ty::BuiltinUnknown { .. } | Ty::Error { .. } => true,
-            Ty::Class(_, args, _) | Ty::Interface(_, args, _) | Ty::Union(args, _) => {
+            Ty::Class(_, args, _) | Ty::Interface(_, args, _, _) | Ty::Union(args, _) => {
                 args.iter().any(Self::ty_contains_recovery_unknown)
+            }
+            Ty::AssociatedTypeProjection {
+                base, interface, ..
+            } => {
+                Self::ty_contains_recovery_unknown(base)
+                    || interface
+                        .as_ref()
+                        .is_some_and(|interface| Self::ty_contains_recovery_unknown(interface))
             }
             Ty::List(elem, _) | Ty::EvolvingList(elem, _) | Ty::Optional(elem, _) => {
                 Self::ty_contains_recovery_unknown(elem)
@@ -5592,11 +5633,19 @@ impl<'db> TypeInferenceBuilder<'db> {
 
     fn ty_contains_unfilled_generic_class(ty: &Ty) -> bool {
         match ty {
-            Ty::Class(qn, type_args, _) | Ty::Interface(qn, type_args, _) => {
+            Ty::Class(qn, type_args, _) | Ty::Interface(qn, type_args, _, _) => {
                 type_args.is_empty() && !qn.generic_params.is_empty()
                     || type_args
                         .iter()
                         .any(Self::ty_contains_unfilled_generic_class)
+            }
+            Ty::AssociatedTypeProjection {
+                base, interface, ..
+            } => {
+                Self::ty_contains_unfilled_generic_class(base)
+                    || interface.as_ref().is_some_and(|interface| {
+                        Self::ty_contains_unfilled_generic_class(interface)
+                    })
             }
             Ty::Union(args, _) => args.iter().any(Self::ty_contains_unfilled_generic_class),
             Ty::List(elem, _) | Ty::EvolvingList(elem, _) | Ty::Optional(elem, _) => {
@@ -5673,9 +5722,15 @@ impl<'db> TypeInferenceBuilder<'db> {
             ast::Pattern::Class {
                 class,
                 generic_args,
+                associated_type_bindings,
                 ..
             } => {
-                let class_ty = self.resolve_class_pattern_type(class, generic_args, None);
+                let class_ty = self.resolve_class_pattern_type(
+                    class,
+                    generic_args,
+                    associated_type_bindings,
+                    None,
+                );
                 if self.class_pattern_missing_generic_args(&class_ty, generic_args) {
                     return None;
                 }
@@ -6440,7 +6495,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             }
             // Multi-segment: thread the interface through the segment-
             // resolver so each suffix segment dispatches against `I`.
-            let iface_ty = Ty::Interface(iface_qtn, Vec::new(), TyAttr::default());
+            let iface_ty = Ty::Interface(iface_qtn, Vec::new(), vec![], TyAttr::default());
             self.path_root_types.insert(expr_id, iface_ty.clone());
             let mut current_ty = iface_ty;
             for (idx, seg) in segments[1..].iter().enumerate() {
@@ -6896,7 +6951,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 }
                 Definition::Interface(_) => {
                     let iface_qtn = crate::lower_type_expr::qualify_def(db, def, name);
-                    return Some(Ty::Interface(iface_qtn, vec![], TyAttr::default()));
+                    return Some(Ty::Interface(iface_qtn, vec![], vec![], TyAttr::default()));
                 }
                 _ => {}
             }
@@ -7071,6 +7126,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 ),
                 Definition::Interface(_) => Ty::Interface(
                     crate::lower_type_expr::qualify_def(db, def, name),
+                    vec![],
                     vec![],
                     TyAttr::default(),
                 ),
@@ -7271,9 +7327,15 @@ impl<'db> TypeInferenceBuilder<'db> {
                 {
                     let iface_qtn = iface_qtn.clone();
                     let iface_args = iface_args.clone();
-                    if let Some(ty) =
-                        self.resolve_interface_member(&iface_qtn, &iface_args, member, at, bound)
-                    {
+                    if let Some(ty) = self.resolve_interface_member(
+                        &iface_qtn,
+                        &iface_args,
+                        &[],
+                        member,
+                        at,
+                        bound,
+                        Some(base_ty),
+                    ) {
                         return ty;
                     }
                 }
@@ -7329,10 +7391,16 @@ impl<'db> TypeInferenceBuilder<'db> {
                     attr: TyAttr::default(),
                 }
             }
-            Ty::Interface(iface_name, type_args, _) => {
-                if let Some(ty) =
-                    self.resolve_interface_member(iface_name, type_args, member, at, bound)
-                {
+            Ty::Interface(iface_name, type_args, associated_bindings, _) => {
+                if let Some(ty) = self.resolve_interface_member(
+                    iface_name,
+                    type_args,
+                    associated_bindings,
+                    member,
+                    at,
+                    bound,
+                    Some(base_ty),
+                ) {
                     return ty;
                 }
                 // Known interface but member not found — error.
@@ -7642,6 +7710,20 @@ impl<'db> TypeInferenceBuilder<'db> {
                     && self.generic_param_bounds.contains_key(name) =>
             {
                 let bound_ty = self.generic_param_bounds[name].clone();
+                if let Ty::Interface(iface_qtn, iface_args, associated_bindings, _) = &bound_ty {
+                    let receiver_ty = Ty::TypeVar(name.clone(), TyAttr::default());
+                    if let Some(ty) = self.resolve_interface_member(
+                        iface_qtn,
+                        iface_args,
+                        associated_bindings,
+                        member,
+                        at,
+                        bound,
+                        Some(&receiver_ty),
+                    ) {
+                        return ty;
+                    }
+                }
                 self.resolve_member(&bound_ty, member, at, bound)
             }
             Ty::TypeVar(_, _) if member.as_str() == "to_json" => {
@@ -7769,15 +7851,47 @@ impl<'db> TypeInferenceBuilder<'db> {
     }
 
     fn types_equivalent(&self, a: &Ty, b: &Ty) -> bool {
-        crate::normalize::is_same_normalized_type(a, b, &self.aliases)
+        self.associated_projection_views_equivalent(a, b)
+            || crate::normalize::is_same_normalized_type(a, b, &self.aliases)
+    }
+
+    fn interface_type_with_default_associated_bindings(&self, ty: Ty) -> Ty {
+        let Ty::Interface(iface_qtn, iface_args, associated_bindings, attr) = ty else {
+            return ty;
+        };
+        let Some(pkg_items) = self.resolve_class_pkg_items(iface_qtn.package()) else {
+            return Ty::Interface(iface_qtn, iface_args, associated_bindings, attr);
+        };
+        let Some(Definition::Interface(iface_loc)) =
+            pkg_items.lookup_type(iface_qtn.namespace(), iface_qtn.name())
+        else {
+            return Ty::Interface(iface_qtn, iface_args, associated_bindings, attr);
+        };
+        let db = self.context.db();
+        let pkg = baml_compiler2_hir::file_package::file_package(db, iface_loc.file(db));
+        let completed = crate::interfaces::interface_closure_locs_with_args_and_assoc(
+            db,
+            iface_loc,
+            &iface_args,
+            &associated_bindings,
+            pkg_items,
+            &pkg.namespace_path,
+        )
+        .into_iter()
+        .next()
+        .map(|(_, _, assoc)| assoc)
+        .unwrap_or_else(|| associated_bindings.clone());
+        Ty::Interface(iface_qtn, iface_args, completed, attr)
     }
 
     fn interface_requires_instantiation(
         &self,
         sub_qtn: &crate::ty::QualifiedTypeName,
         sub_args: &[Ty],
+        sub_associated_bindings: &[(Name, Ty)],
         sup_qtn: &crate::ty::QualifiedTypeName,
         sup_args: &[Ty],
+        sup_associated_bindings: &[(Name, Ty)],
     ) -> bool {
         let Some(pkg_items) = self.resolve_class_pkg_items(sub_qtn.package()) else {
             return false;
@@ -7788,13 +7902,16 @@ impl<'db> TypeInferenceBuilder<'db> {
             return false;
         };
         let db = self.context.db();
-        for (iface_loc, iface_args) in crate::interfaces::interface_closure_locs_with_args(
-            db,
-            sub_loc,
-            sub_args,
-            pkg_items,
-            sub_qtn.namespace(),
-        ) {
+        for (iface_loc, iface_args, iface_assoc) in
+            crate::interfaces::interface_closure_locs_with_args_and_assoc(
+                db,
+                sub_loc,
+                sub_args,
+                sub_associated_bindings,
+                pkg_items,
+                sub_qtn.namespace(),
+            )
+        {
             let iface_tree = baml_compiler2_hir::file_item_tree(db, iface_loc.file(db));
             let Some(iface_data) = iface_tree.interfaces.get(&iface_loc.id(db)) else {
                 continue;
@@ -7810,6 +7927,12 @@ impl<'db> TypeInferenceBuilder<'db> {
                     .iter()
                     .zip(sup_args.iter())
                     .all(|(a, b)| self.types_equivalent(a, b))
+                && sup_associated_bindings.iter().all(|(sup_name, sup_ty)| {
+                    iface_assoc
+                        .iter()
+                        .find(|(iface_name, _)| iface_name == sup_name)
+                        .is_some_and(|(_, iface_ty)| self.types_equivalent(iface_ty, sup_ty))
+                })
             {
                 return true;
             }
@@ -7935,10 +8058,16 @@ impl<'db> TypeInferenceBuilder<'db> {
                     attr: TyAttr::default(),
                 }
             }
-            Ty::Interface(iface_name, type_args, _) => {
-                if let Some(ty) =
-                    self.resolve_interface_member(iface_name, type_args, member, path_id, bound)
-                {
+            Ty::Interface(iface_name, type_args, associated_bindings, _) => {
+                if let Some(ty) = self.resolve_interface_member(
+                    iface_name,
+                    type_args,
+                    associated_bindings,
+                    member,
+                    path_id,
+                    bound,
+                    Some(base_ty),
+                ) {
                     return ty;
                 }
                 let iface_def = self
@@ -8099,7 +8228,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         let iface_qtns: FxHashSet<crate::ty::QualifiedTypeName> = members
             .iter()
             .filter_map(|m| match m {
-                Ty::Interface(qtn, _, _) => Some(qtn.clone()),
+                Ty::Interface(qtn, _, _, _) => Some(qtn.clone()),
                 _ => None,
             })
             .collect();
@@ -8111,7 +8240,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         let registry = crate::interfaces::package_implements_registry(db, self.package_id);
         let mut seen: FxHashSet<crate::ty::QualifiedTypeName> = FxHashSet::default();
         for rule in &registry.interface_impl_rules {
-            let Ty::Interface(rule_iface, _, _) = &rule.interface_ty else {
+            let Ty::Interface(rule_iface, _, _, _) = &rule.interface_ty else {
                 continue;
             };
             if !iface_qtns.contains(rule_iface) {
@@ -8159,12 +8288,26 @@ impl<'db> TypeInferenceBuilder<'db> {
         at: ExprId,
         bound: bool,
     ) -> Option<Ty> {
-        if let Ty::Interface(iface_name, type_args, _) = m {
+        if let Ty::Interface(iface_name, type_args, associated_bindings, _) = m {
             let iface_name = iface_name.clone();
             let type_args = type_args.clone();
-            let self_ty = Ty::Interface(iface_name.clone(), type_args.clone(), TyAttr::default());
+            let associated_bindings = associated_bindings.clone();
+            let self_ty = Ty::Interface(
+                iface_name.clone(),
+                type_args.clone(),
+                associated_bindings.clone(),
+                TyAttr::default(),
+            );
             let ty = self.resolve_member_suppressing_side_effects(at, |this| {
-                this.resolve_interface_member(&iface_name, &type_args, member, at, bound)
+                this.resolve_interface_member(
+                    &iface_name,
+                    &type_args,
+                    &associated_bindings,
+                    member,
+                    at,
+                    bound,
+                    Some(&self_ty),
+                )
             });
             // A bound interface *method* comes back self-stripped, but class
             // method members of the same union keep `self` (the unbound form).
@@ -8445,7 +8588,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             // to the arm that actually lacks it (`Swimmer`) instead of falsely
             // blaming `Animal` too. The only caller is union-member resolution,
             // which needs Some/None; a precise member type isn't required here.
-            Ty::Interface(iface_qtn, _, _) => (self
+            Ty::Interface(iface_qtn, _, _, _) => (self
                 .interface_closure_declares_method(iface_qtn, member)
                 || self.interface_closure_declares_field(iface_qtn, member))
             .then(|| Ty::Unknown {
@@ -8550,6 +8693,68 @@ impl<'db> TypeInferenceBuilder<'db> {
         false
     }
 
+    fn add_interface_associated_type_bindings(
+        &self,
+        iface_name: &crate::ty::QualifiedTypeName,
+        iface_data: &baml_compiler2_hir::item_tree::Interface,
+        iface_type_args: &[Ty],
+        associated_bindings: &[(Name, Ty)],
+        pkg_items: &PackageItems<'_>,
+        iface_ns: &[Name],
+        receiver_projection_base: Option<&Ty>,
+        qualify_symbolic_projection: bool,
+        bindings: &mut FxHashMap<Name, Ty>,
+        diagnostics: &mut Vec<TirTypeError>,
+    ) {
+        for assoc in &iface_data.associated_types {
+            if let Some((_, ty)) = associated_bindings
+                .iter()
+                .find(|(name, _)| name == &assoc.name)
+            {
+                bindings.insert(assoc.name.clone(), ty.clone());
+                continue;
+            }
+            if let Some(default) = &assoc.default {
+                let ty = crate::generics::lower_type_expr_with_generics(
+                    self.context.db(),
+                    &default.expr,
+                    pkg_items,
+                    iface_ns,
+                    bindings,
+                    diagnostics,
+                );
+                bindings.insert(assoc.name.clone(), ty);
+                continue;
+            }
+            if let Some(base) = receiver_projection_base {
+                let projection_interface = Ty::Interface(
+                    iface_name.clone(),
+                    if iface_type_args.is_empty() {
+                        iface_data
+                            .generic_params
+                            .iter()
+                            .map(|generic| Ty::TypeVar(generic.clone(), TyAttr::default()))
+                            .collect()
+                    } else {
+                        iface_type_args.to_vec()
+                    },
+                    associated_bindings.to_vec(),
+                    TyAttr::default(),
+                );
+                bindings.insert(
+                    assoc.name.clone(),
+                    Ty::AssociatedTypeProjection {
+                        base: Box::new(base.clone()),
+                        interface: qualify_symbolic_projection
+                            .then(|| Box::new(projection_interface)),
+                        member: assoc.name.clone(),
+                        attr: TyAttr::default(),
+                    },
+                );
+            }
+        }
+    }
+
     /// a matching field or method. Default methods (with bodies) are
     /// resolved via `FunctionLoc` like class methods. Required methods are
     /// lowered straight from the `InterfaceMethodSig` since they don't have
@@ -8559,9 +8764,11 @@ impl<'db> TypeInferenceBuilder<'db> {
         &mut self,
         iface_name: &crate::ty::QualifiedTypeName,
         iface_type_args: &[Ty],
+        associated_bindings: &[(Name, Ty)],
         member: &Name,
         at: ExprId,
         bound: bool,
+        receiver_projection_base: Option<&Ty>,
     ) -> Option<Ty> {
         let pkg_items = self.resolve_class_pkg_items(iface_name.package())?;
         let def = pkg_items.lookup_type(iface_name.namespace(), iface_name.name())?;
@@ -8572,13 +8779,16 @@ impl<'db> TypeInferenceBuilder<'db> {
         let root_pkg = baml_compiler2_hir::file_package::file_package(db, root_loc.file(db));
         let pkg_ns = &root_pkg.namespace_path;
 
-        for (iface_loc, iface_type_args) in crate::interfaces::interface_closure_locs_with_args(
-            db,
-            root_loc,
-            iface_type_args,
-            pkg_items,
-            pkg_ns,
-        ) {
+        for (iface_loc, iface_type_args, iface_associated_bindings) in
+            crate::interfaces::interface_closure_locs_with_args_and_assoc(
+                db,
+                root_loc,
+                iface_type_args,
+                associated_bindings,
+                pkg_items,
+                pkg_ns,
+            )
+        {
             let file = iface_loc.file(db);
             let iface_tree = baml_compiler2_hir::file_item_tree(db, file);
             let Some(iface_data) = iface_tree.interfaces.get(&iface_loc.id(db)) else {
@@ -8587,6 +8797,12 @@ impl<'db> TypeInferenceBuilder<'db> {
             let iface_ns = baml_compiler2_hir::file_package::file_package(db, file)
                 .namespace_path
                 .clone();
+            let current_iface_qtn = crate::lower_type_expr::qualify_def(
+                db,
+                Definition::Interface(iface_loc),
+                &iface_data.name,
+            );
+            let qualify_symbolic_projection = current_iface_qtn != *iface_name;
 
             // Field lookup: walk this interface's own fields.
             for field in &iface_data.fields {
@@ -8610,24 +8826,30 @@ impl<'db> TypeInferenceBuilder<'db> {
                     .as_ref()
                     .map(|te| {
                         let mut diags = Vec::new();
-                        let ty = if iface_type_args.is_empty() {
-                            crate::lower_type_expr::lower_type_expr_in_ns(
-                                db,
-                                &te.expr,
-                                pkg_items,
-                                &iface_ns,
-                                &iface_data.generic_params,
-                                &mut diags,
-                            )
-                        } else {
-                            let bindings = crate::generics::bind_type_vars(
-                                &iface_data.generic_params,
-                                &iface_type_args,
-                            );
-                            crate::generics::lower_type_expr_with_generics(
-                                db, &te.expr, pkg_items, &iface_ns, &bindings, &mut diags,
-                            )
-                        };
+                        let mut bindings = crate::generics::bind_type_vars(
+                            &iface_data.generic_params,
+                            &iface_type_args,
+                        );
+                        for generic_param in &iface_data.generic_params {
+                            bindings.entry(generic_param.clone()).or_insert_with(|| {
+                                Ty::TypeVar(generic_param.clone(), TyAttr::default())
+                            });
+                        }
+                        self.add_interface_associated_type_bindings(
+                            &current_iface_qtn,
+                            iface_data,
+                            &iface_type_args,
+                            &iface_associated_bindings,
+                            pkg_items,
+                            &iface_ns,
+                            receiver_projection_base,
+                            qualify_symbolic_projection,
+                            &mut bindings,
+                            &mut diags,
+                        );
+                        let ty = crate::generics::lower_type_expr_with_generics(
+                            db, &te.expr, pkg_items, &iface_ns, &bindings, &mut diags,
+                        );
                         for diag in diags {
                             self.context.report_at_span(diag, te.span);
                         }
@@ -8664,6 +8886,18 @@ impl<'db> TypeInferenceBuilder<'db> {
                         .entry(generic_param.clone())
                         .or_insert_with(|| Ty::TypeVar(generic_param.clone(), TyAttr::default()));
                 }
+                self.add_interface_associated_type_bindings(
+                    &current_iface_qtn,
+                    iface_data,
+                    &iface_type_args,
+                    &iface_associated_bindings,
+                    pkg_items,
+                    &iface_ns,
+                    receiver_projection_base,
+                    qualify_symbolic_projection,
+                    &mut bindings,
+                    &mut diags,
+                );
                 for generic_param in &sig.user_generic_params {
                     bindings
                         .entry(generic_param.clone())
@@ -8679,7 +8913,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 }
                 all_generic_params.extend(sig.user_generic_params.iter().cloned());
                 let iface_ty = Ty::Interface(
-                    iface_name.clone(),
+                    current_iface_qtn.clone(),
                     if iface_type_args.is_empty() {
                         iface_data
                             .generic_params
@@ -8689,6 +8923,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                     } else {
                         iface_type_args
                     },
+                    iface_associated_bindings.to_vec(),
                     TyAttr::default(),
                 );
                 let callable_throws = crate::callable::callable_throws(db, func_loc).clone();
@@ -8880,6 +9115,19 @@ impl<'db> TypeInferenceBuilder<'db> {
                         .entry(generic_param.clone())
                         .or_insert_with(|| Ty::TypeVar(generic_param.clone(), TyAttr::default()));
                 }
+                let mut diags = Vec::new();
+                self.add_interface_associated_type_bindings(
+                    &current_iface_qtn,
+                    iface_data,
+                    &iface_type_args,
+                    &iface_associated_bindings,
+                    pkg_items,
+                    &iface_ns,
+                    receiver_projection_base,
+                    qualify_symbolic_projection,
+                    &mut bindings,
+                    &mut diags,
+                );
                 for generic_param in &sig.generic_params {
                     bindings
                         .entry(generic_param.clone())
@@ -8895,7 +9143,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 }
                 all_generic_params.extend(sig.generic_params.iter().cloned());
                 let iface_ty = Ty::Interface(
-                    iface_name.clone(),
+                    current_iface_qtn.clone(),
                     if iface_type_args.is_empty() {
                         iface_data
                             .generic_params
@@ -8905,9 +9153,9 @@ impl<'db> TypeInferenceBuilder<'db> {
                     } else {
                         iface_type_args
                     },
+                    iface_associated_bindings.to_vec(),
                     TyAttr::default(),
                 );
-                let mut diags = Vec::new();
                 let receiver_ty = receiver_generic
                     .as_ref()
                     .map(|name| Ty::TypeVar(name.clone(), TyAttr::default()))
@@ -9087,6 +9335,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 .cloned()
                 .map(crate::lower_type_expr::type_expr_for_name)
                 .collect(),
+            associated_type_bindings: Vec::new(),
             attrs: Vec::new(),
         }
     }
@@ -9254,13 +9503,12 @@ impl<'db> TypeInferenceBuilder<'db> {
     /// Interface field `(name, type)` pairs in requires-closure order with
     /// generic substitution applied. This mirrors `resolve_interface_member`
     /// but is side-effect-free for matrix construction.
-    fn interface_field_infos_ordered(
-        &self,
-        iface_name: &crate::ty::QualifiedTypeName,
-        iface_type_args: &[Ty],
-    ) -> Vec<(Name, Ty)> {
+    fn interface_field_infos_ordered_for_ty(&self, iface_ty: &Ty) -> Vec<(Name, Ty)> {
         let mut out = Vec::new();
         let mut seen = FxHashSet::default();
+        let Ty::Interface(iface_name, iface_type_args, associated_bindings, _) = iface_ty else {
+            return out;
+        };
         let Some(pkg_items) = self.resolve_class_pkg_items(iface_name.package()) else {
             return out;
         };
@@ -9272,13 +9520,16 @@ impl<'db> TypeInferenceBuilder<'db> {
 
         let db = self.context.db();
         let root_pkg = baml_compiler2_hir::file_package::file_package(db, root_loc.file(db));
-        for (iface_loc, closure_args) in crate::interfaces::interface_closure_locs_with_args(
-            db,
-            root_loc,
-            iface_type_args,
-            pkg_items,
-            &root_pkg.namespace_path,
-        ) {
+        for (iface_loc, closure_args, closure_assoc) in
+            crate::interfaces::interface_closure_locs_with_args_and_assoc(
+                db,
+                root_loc,
+                iface_type_args,
+                associated_bindings,
+                pkg_items,
+                &root_pkg.namespace_path,
+            )
+        {
             let file = iface_loc.file(db);
             let iface_tree = baml_compiler2_ppir::file_item_tree(db, file);
             let Some(iface_data) = iface_tree.interfaces.get(&iface_loc.id(db)) else {
@@ -9287,8 +9538,32 @@ impl<'db> TypeInferenceBuilder<'db> {
             let iface_ns = baml_compiler2_hir::file_package::file_package(db, file)
                 .namespace_path
                 .clone();
-            let bindings =
+            let current_iface_qtn = crate::lower_type_expr::qualify_def(
+                db,
+                Definition::Interface(iface_loc),
+                &iface_data.name,
+            );
+            let qualify_symbolic_projection = current_iface_qtn != *iface_name;
+            let mut bindings =
                 crate::generics::bind_type_vars(&iface_data.generic_params, &closure_args);
+            for generic_param in &iface_data.generic_params {
+                bindings
+                    .entry(generic_param.clone())
+                    .or_insert_with(|| Ty::TypeVar(generic_param.clone(), TyAttr::default()));
+            }
+            let mut diags = Vec::new();
+            self.add_interface_associated_type_bindings(
+                &current_iface_qtn,
+                iface_data,
+                &closure_args,
+                &closure_assoc,
+                pkg_items,
+                &iface_ns,
+                Some(iface_ty),
+                qualify_symbolic_projection,
+                &mut bindings,
+                &mut diags,
+            );
 
             for field in &iface_data.fields {
                 if !seen.insert(field.name.clone()) {
@@ -9298,21 +9573,9 @@ impl<'db> TypeInferenceBuilder<'db> {
                     .type_expr
                     .as_ref()
                     .map(|te| {
-                        let mut diags = Vec::new();
-                        if bindings.is_empty() {
-                            crate::lower_type_expr::lower_type_expr_in_ns(
-                                db,
-                                &te.expr,
-                                pkg_items,
-                                &iface_ns,
-                                &iface_data.generic_params,
-                                &mut diags,
-                            )
-                        } else {
-                            crate::generics::lower_type_expr_with_generics(
-                                db, &te.expr, pkg_items, &iface_ns, &bindings, &mut diags,
-                            )
-                        }
+                        crate::generics::lower_type_expr_with_generics(
+                            db, &te.expr, pkg_items, &iface_ns, &bindings, &mut diags,
+                        )
                     })
                     .unwrap_or(Ty::Unknown {
                         attr: TyAttr::default(),
@@ -9390,13 +9653,16 @@ impl<'db> TypeInferenceBuilder<'db> {
                 _ => Vec::new(),
             };
 
-            for (iface_loc, iface_type_args) in crate::interfaces::interface_closure_locs_with_args(
-                db,
-                root_iface_loc,
-                &root_iface_type_args,
-                pkg_items,
-                &class_ns,
-            ) {
+            for (iface_loc, iface_type_args, _iface_assoc) in
+                crate::interfaces::interface_closure_locs_with_args_and_assoc(
+                    db,
+                    root_iface_loc,
+                    &root_iface_type_args,
+                    &[],
+                    pkg_items,
+                    &class_ns,
+                )
+            {
                 let iface_tree = baml_compiler2_hir::file_item_tree(db, iface_loc.file(db));
                 let Some(iface_data) = iface_tree.interfaces.get(&iface_loc.id(db)) else {
                     continue;
@@ -9564,13 +9830,16 @@ impl<'db> TypeInferenceBuilder<'db> {
                 _ => Vec::new(),
             };
 
-            for (iface_loc, iface_type_args) in crate::interfaces::interface_closure_locs_with_args(
-                db,
-                root_iface_loc,
-                &root_iface_type_args,
-                pkg_items,
-                &class_ns,
-            ) {
+            for (iface_loc, iface_type_args, _iface_assoc) in
+                crate::interfaces::interface_closure_locs_with_args_and_assoc(
+                    db,
+                    root_iface_loc,
+                    &root_iface_type_args,
+                    &[],
+                    pkg_items,
+                    &class_ns,
+                )
+            {
                 let iface_tree = baml_compiler2_hir::file_item_tree(db, iface_loc.file(db));
                 let Some(iface_data) = iface_tree.interfaces.get(&iface_loc.id(db)) else {
                     continue;
@@ -9669,16 +9938,19 @@ impl<'db> TypeInferenceBuilder<'db> {
                 &class_data.generic_params,
                 &mut diags,
             ) {
-                Ty::Interface(_, args, _) => args,
+                Ty::Interface(_, args, _, _) => args,
                 _ => Vec::new(),
             };
-            for (iface_loc, iface_args) in crate::interfaces::interface_closure_locs_with_args(
-                db,
-                root_iface_loc,
-                &root_args,
-                pkg_items,
-                &ns,
-            ) {
+            for (iface_loc, iface_args, _iface_assoc) in
+                crate::interfaces::interface_closure_locs_with_args_and_assoc(
+                    db,
+                    root_iface_loc,
+                    &root_args,
+                    &[],
+                    pkg_items,
+                    &ns,
+                )
+            {
                 let iface_tree = baml_compiler2_hir::file_item_tree(db, iface_loc.file(db));
                 let Some(iface_data) = iface_tree.interfaces.get(&iface_loc.id(db)) else {
                     continue;
@@ -9721,7 +9993,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             baml_compiler2_hir::file_package::file_package(db, class_loc.file(db)).namespace_path;
         for impl_target in &class_data.implements {
             let mut diags = Vec::new();
-            if let Ty::Interface(qtn, args, _) = crate::lower_type_expr::lower_type_expr_in_ns(
+            if let Ty::Interface(qtn, args, _, _) = crate::lower_type_expr::lower_type_expr_in_ns(
                 db,
                 &impl_target.target.expr,
                 pkg_items,
@@ -9797,7 +10069,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 &class_data.generic_params,
                 &mut diags,
             );
-            let Ty::Interface(_root_qtn, root_args, _) = lowered else {
+            let Ty::Interface(_root_qtn, root_args, _, _) = lowered else {
                 continue;
             };
 
@@ -9810,15 +10082,16 @@ impl<'db> TypeInferenceBuilder<'db> {
             // spuriously appearing as N (which produced a false E0121). A real
             // override (e.g. both `Base` and `Left` declare `id`) still yields
             // two distinct declarers across the two blocks → genuine E0121.
-            let closure = crate::interfaces::interface_closure_locs_with_args(
+            let closure = crate::interfaces::interface_closure_locs_with_args_and_assoc(
                 db,
                 root_iface_loc,
                 &root_args,
+                &[],
                 pkg_items,
                 &ns,
             );
             let mut declarer: Option<(Name, crate::ty::QualifiedTypeName, Vec<Ty>)> = None;
-            for (iface_loc, iface_args) in &closure {
+            for (iface_loc, iface_args, _iface_assoc) in &closure {
                 let iface_tree = baml_compiler2_hir::file_item_tree(db, iface_loc.file(db));
                 let Some(iface_data) = iface_tree.interfaces.get(&iface_loc.id(db)) else {
                     continue;
@@ -9939,7 +10212,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 &class_data.generic_params,
                 &mut diags,
             );
-            if let Ty::Interface(qtn, args, _) = lowered
+            if let Ty::Interface(qtn, args, _, _) = lowered
                 && &qtn == target_iface_qtn
             {
                 let subst: Vec<Ty> = args
@@ -10009,7 +10282,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 continue;
             };
             let iface_ty = crate::generics::substitute_ty(&rule.interface_ty, &b);
-            let Ty::Interface(iface_qtn, iface_args, _) = iface_ty else {
+            let Ty::Interface(iface_qtn, iface_args, _, _) = iface_ty else {
                 continue;
             };
             if !self.interface_closure_declares_method(&iface_qtn, member) {
@@ -10017,7 +10290,12 @@ impl<'db> TypeInferenceBuilder<'db> {
             }
             // Confirm via the full rule check so generic bounds are honored
             // (e.g. `implements<T extends Named> Printable for Box<T>`).
-            let requested = Ty::Interface(iface_qtn.clone(), iface_args.clone(), TyAttr::default());
+            let requested = Ty::Interface(
+                iface_qtn.clone(),
+                iface_args.clone(),
+                vec![],
+                TyAttr::default(),
+            );
             if !registry.type_implements_interface_via_rule(
                 base_ty,
                 &requested,
@@ -10089,7 +10367,21 @@ impl<'db> TypeInferenceBuilder<'db> {
             [(iface_qtn, iface_args)] => {
                 let iface_qtn = iface_qtn.clone();
                 let iface_args = iface_args.clone();
-                self.resolve_interface_member(&iface_qtn, &iface_args, member, at, bound)
+                let receiver_ty = Ty::Interface(
+                    iface_qtn.clone(),
+                    iface_args.clone(),
+                    vec![],
+                    TyAttr::default(),
+                );
+                self.resolve_interface_member(
+                    &iface_qtn,
+                    &iface_args,
+                    &[],
+                    member,
+                    at,
+                    bound,
+                    Some(&receiver_ty),
+                )
             }
             _ => {
                 let sources = self.format_interface_method_sources(reg.iter().cloned());
@@ -10243,6 +10535,78 @@ impl<'db> TypeInferenceBuilder<'db> {
                 // surface as `Ty::Class(<class>)`.
                 let self_replacement =
                     crate::lower_type_expr::type_expr_for_name(class_data.name.clone());
+
+                if let Some(target) = item_tree.method_to_iface_target.get(&method_id)
+                    && let Some(iface_loc) = crate::interfaces::resolve_path_to_interface(
+                        db,
+                        &target.expr,
+                        pkg_items_for_class,
+                        &ns_context,
+                    )
+                {
+                    let iface_file = iface_loc.file(db);
+                    let iface_tree = baml_compiler2_hir::file_item_tree(db, iface_file);
+                    if let Some(iface_data) = iface_tree.interfaces.get(&iface_loc.id(db)) {
+                        let iface_ns =
+                            baml_compiler2_hir::file_package::file_package(db, iface_file)
+                                .namespace_path;
+                        if let baml_compiler2_ast::TypeExpr::Path { generic_args, .. } =
+                            &target.expr
+                        {
+                            for (param, arg) in iface_data.generic_params.iter().zip(generic_args) {
+                                let ty = crate::generics::lower_type_expr_with_generics(
+                                    db,
+                                    arg,
+                                    pkg_items_for_class,
+                                    &ns_context,
+                                    &bindings,
+                                    &mut diags,
+                                );
+                                bindings.insert(param.clone(), ty);
+                            }
+                        }
+
+                        let explicit_bindings = item_tree
+                            .method_to_iface_associated_type_bindings
+                            .get(&method_id)
+                            .cloned()
+                            .unwrap_or_default();
+                        for assoc in &iface_data.associated_types {
+                            if explicit_bindings.iter().any(|b| b.name == assoc.name) {
+                                continue;
+                            }
+                            if let Some(default) = &assoc.default {
+                                let ty = crate::generics::lower_type_expr_with_generics(
+                                    db,
+                                    &default.expr,
+                                    pkg_items_for_class,
+                                    &iface_ns,
+                                    &bindings,
+                                    &mut diags,
+                                );
+                                bindings.insert(assoc.name.clone(), ty);
+                            }
+                        }
+                        for binding in &explicit_bindings {
+                            let Some(te) = &binding.type_expr else {
+                                continue;
+                            };
+                            let resolved = crate::lower_type_expr::substitute_self_in(
+                                &te.expr,
+                                &self_replacement,
+                            );
+                            let ty = crate::generics::lower_type_expr_with_generics(
+                                db,
+                                &resolved,
+                                pkg_items_for_class,
+                                &ns_context,
+                                &bindings,
+                                &mut diags,
+                            );
+                            bindings.insert(binding.name.clone(), ty);
+                        }
+                    }
+                }
 
                 let callable_throws = crate::callable::callable_throws(db, func_loc).clone();
                 let generic_param_bounds = lower_generic_param_bounds(
@@ -11051,6 +11415,514 @@ impl<'db> TypeInferenceBuilder<'db> {
             .fold(types[0].clone(), |acc, t| Self::join_types(&acc, t))
     }
 
+    fn resolve_associated_projections_deep(&self, ty: &Ty) -> Ty {
+        match ty {
+            Ty::AssociatedTypeProjection {
+                base,
+                interface,
+                member,
+                attr,
+            } => {
+                let projected = Ty::AssociatedTypeProjection {
+                    base: Box::new(self.resolve_associated_projections_deep(base)),
+                    interface: interface.as_ref().map(|interface| {
+                        Box::new(self.resolve_associated_projections_deep(interface))
+                    }),
+                    member: member.clone(),
+                    attr: attr.clone(),
+                };
+                self.resolve_associated_projection(&projected)
+                    .map(|resolved| self.resolve_associated_projections_deep(&resolved))
+                    .unwrap_or(projected)
+            }
+            Ty::Optional(inner, attr) => Ty::Optional(
+                Box::new(self.resolve_associated_projections_deep(inner)),
+                attr.clone(),
+            ),
+            Ty::List(inner, attr) => Ty::List(
+                Box::new(self.resolve_associated_projections_deep(inner)),
+                attr.clone(),
+            ),
+            Ty::EvolvingList(inner, attr) => Ty::EvolvingList(
+                Box::new(self.resolve_associated_projections_deep(inner)),
+                attr.clone(),
+            ),
+            Ty::Map(key, value, attr) => Ty::Map(
+                Box::new(self.resolve_associated_projections_deep(key)),
+                Box::new(self.resolve_associated_projections_deep(value)),
+                attr.clone(),
+            ),
+            Ty::EvolvingMap(key, value, attr) => Ty::EvolvingMap(
+                Box::new(self.resolve_associated_projections_deep(key)),
+                Box::new(self.resolve_associated_projections_deep(value)),
+                attr.clone(),
+            ),
+            Ty::Union(members, attr) => Ty::Union(
+                members
+                    .iter()
+                    .map(|member| self.resolve_associated_projections_deep(member))
+                    .collect(),
+                attr.clone(),
+            ),
+            Ty::Function {
+                generic_params,
+                generic_param_bounds,
+                params,
+                ret,
+                throws,
+                attr,
+            } => Ty::Function {
+                generic_params: generic_params.clone(),
+                generic_param_bounds: generic_param_bounds
+                    .iter()
+                    .map(|bound| {
+                        bound
+                            .as_ref()
+                            .map(|bound| self.resolve_associated_projections_deep(bound))
+                    })
+                    .collect(),
+                params: params
+                    .iter()
+                    .map(|param| FunctionParamTy {
+                        name: param.name.clone(),
+                        ty: self.resolve_associated_projections_deep(&param.ty),
+                        mode: param.mode,
+                    })
+                    .collect(),
+                ret: Box::new(self.resolve_associated_projections_deep(ret)),
+                throws: Box::new(self.resolve_associated_projections_deep(throws)),
+                attr: attr.clone(),
+            },
+            _ => ty.clone(),
+        }
+    }
+
+    fn resolve_associated_projection(&self, ty: &Ty) -> Option<Ty> {
+        let Ty::AssociatedTypeProjection {
+            base,
+            interface,
+            member,
+            ..
+        } = ty
+        else {
+            return None;
+        };
+        let expanded_base = self.interface_type_with_default_associated_bindings(
+            self.expand_alias_chains(base.as_ref().clone()),
+        );
+        match &expanded_base {
+            Ty::Class(class_qtn, class_args, _) => self.resolve_class_associated_projection(
+                class_qtn,
+                class_args,
+                interface.as_deref(),
+                member,
+            ),
+            Ty::Interface(iface_qtn, iface_args, associated_bindings, _) => self
+                .resolve_interface_associated_projection(
+                    iface_qtn,
+                    iface_args,
+                    associated_bindings,
+                    interface.as_deref(),
+                    member,
+                ),
+            _ => None,
+        }
+    }
+
+    fn resolve_interface_associated_projection(
+        &self,
+        iface_qtn: &crate::ty::QualifiedTypeName,
+        iface_args: &[Ty],
+        associated_bindings: &[(Name, Ty)],
+        projected_interface: Option<&Ty>,
+        member: &Name,
+    ) -> Option<Ty> {
+        let Some(pkg_items) = self.resolve_class_pkg_items(iface_qtn.package()) else {
+            return None;
+        };
+        let Some(Definition::Interface(iface_loc)) =
+            pkg_items.lookup_type(iface_qtn.namespace(), iface_qtn.name())
+        else {
+            return None;
+        };
+        let db = self.context.db();
+        let pkg = baml_compiler2_hir::file_package::file_package(db, iface_loc.file(db));
+        let mut matches = Vec::new();
+        for (current_loc, current_args, current_assoc) in
+            crate::interfaces::interface_closure_locs_with_args_and_assoc(
+                db,
+                iface_loc,
+                iface_args,
+                associated_bindings,
+                pkg_items,
+                &pkg.namespace_path,
+            )
+        {
+            let current_tree = baml_compiler2_hir::file_item_tree(db, current_loc.file(db));
+            let Some(current_iface) = current_tree.interfaces.get(&current_loc.id(db)) else {
+                continue;
+            };
+            if !current_iface
+                .associated_types
+                .iter()
+                .any(|assoc| assoc.name == *member)
+            {
+                continue;
+            }
+            let current_qtn = crate::lower_type_expr::qualify_def(
+                db,
+                Definition::Interface(current_loc),
+                &current_iface.name,
+            );
+            if !self.associated_projection_interface_view_matches(
+                &current_qtn,
+                &current_args,
+                &current_assoc,
+                projected_interface,
+            ) {
+                continue;
+            }
+            if let Some((_, ty)) = current_assoc.iter().find(|(name, _)| name == member) {
+                matches.push(ty.clone());
+            }
+        }
+        if matches.len() == 1 {
+            matches.into_iter().next()
+        } else {
+            None
+        }
+    }
+
+    fn interface_associated_type_names(
+        &self,
+        iface_qtn: &crate::ty::QualifiedTypeName,
+    ) -> Vec<Name> {
+        let Some(pkg_items) = self.resolve_class_pkg_items(iface_qtn.package()) else {
+            return Vec::new();
+        };
+        let Some(Definition::Interface(iface_loc)) =
+            pkg_items.lookup_type(iface_qtn.namespace(), iface_qtn.name())
+        else {
+            return Vec::new();
+        };
+        let db = self.context.db();
+        let iface_tree = baml_compiler2_ppir::file_item_tree(db, iface_loc.file(db));
+        iface_tree
+            .interfaces
+            .get(&iface_loc.id(db))
+            .map(|iface| {
+                iface
+                    .associated_types
+                    .iter()
+                    .map(|assoc| assoc.name.clone())
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
+    fn resolve_class_associated_projection(
+        &self,
+        class_qtn: &crate::ty::QualifiedTypeName,
+        class_args: &[Ty],
+        projected_interface: Option<&Ty>,
+        member: &Name,
+    ) -> Option<Ty> {
+        let pkg_items = self.resolve_class_pkg_items(class_qtn.package())?;
+        let Some(Definition::Class(class_loc)) =
+            pkg_items.lookup_type(class_qtn.namespace(), class_qtn.name())
+        else {
+            return None;
+        };
+        let db = self.context.db();
+        let item_tree = baml_compiler2_ppir::file_item_tree(db, class_loc.file(db));
+        let class_data = &item_tree[class_loc.id(db)];
+        let class_pkg = baml_compiler2_hir::file_package::file_package(db, class_loc.file(db));
+        let class_ns = class_pkg.namespace_path;
+        let class_bindings =
+            crate::generics::bind_type_vars(&class_data.generic_params, class_args);
+        let mut matches = Vec::new();
+
+        'impls: for impl_target in &class_data.implements {
+            let Some(iface_loc) = crate::interfaces::resolve_path_to_interface(
+                db,
+                &impl_target.target.expr,
+                pkg_items,
+                &class_ns,
+            ) else {
+                continue;
+            };
+            let iface_tree = baml_compiler2_hir::file_item_tree(db, iface_loc.file(db));
+            let Some(iface_data) = iface_tree.interfaces.get(&iface_loc.id(db)) else {
+                continue;
+            };
+            if !iface_data
+                .associated_types
+                .iter()
+                .any(|assoc| assoc.name == *member)
+            {
+                continue;
+            }
+            let iface_qtn = crate::lower_type_expr::qualify_def(
+                db,
+                Definition::Interface(iface_loc),
+                &iface_data.name,
+            );
+            let mut diags = Vec::new();
+            let lowered_iface = crate::lower_type_expr::lower_type_expr_in_ns(
+                db,
+                &impl_target.target.expr,
+                pkg_items,
+                &class_ns,
+                &class_data.generic_params,
+                &mut diags,
+            );
+            let Ty::Interface(_, raw_iface_args, _, _) = lowered_iface else {
+                continue;
+            };
+            let iface_args: Vec<Ty> = raw_iface_args
+                .iter()
+                .map(|arg| crate::generics::substitute_ty(arg, &class_bindings))
+                .collect();
+            if !self.associated_projection_interface_matches(
+                &iface_qtn,
+                &iface_args,
+                projected_interface,
+            ) {
+                continue;
+            }
+            let mut iface_bindings =
+                crate::generics::bind_type_vars(&iface_data.generic_params, &iface_args);
+            for (name, ty) in &class_bindings {
+                iface_bindings
+                    .entry(name.clone())
+                    .or_insert_with(|| ty.clone());
+            }
+            let iface_pkg = baml_compiler2_hir::file_package::file_package(db, iface_loc.file(db));
+            let associated_bindings: Vec<(Name, Ty)> = iface_data
+                .associated_types
+                .iter()
+                .filter_map(|assoc| {
+                    if let Some(binding) = impl_target
+                        .associated_type_bindings
+                        .iter()
+                        .find(|binding| binding.name == assoc.name)
+                        && let Some(te) = &binding.type_expr
+                    {
+                        let mut binding_diags = Vec::new();
+                        return Some((
+                            assoc.name.clone(),
+                            crate::generics::lower_type_expr_with_generics(
+                                db,
+                                &te.expr,
+                                pkg_items,
+                                &class_ns,
+                                &iface_bindings,
+                                &mut binding_diags,
+                            ),
+                        ));
+                    }
+                    assoc.default.as_ref().map(|default| {
+                        let mut default_diags = Vec::new();
+                        (
+                            assoc.name.clone(),
+                            crate::generics::lower_type_expr_with_generics(
+                                db,
+                                &default.expr,
+                                pkg_items,
+                                &iface_pkg.namespace_path,
+                                &iface_bindings,
+                                &mut default_diags,
+                            ),
+                        )
+                    })
+                })
+                .collect();
+            if let Some(Ty::Interface(_, _, projected_associated_bindings, _)) = projected_interface
+            {
+                for (projected_name, projected_ty) in projected_associated_bindings {
+                    let Some((_, actual_ty)) = associated_bindings
+                        .iter()
+                        .find(|(actual_name, _)| actual_name == projected_name)
+                    else {
+                        continue 'impls;
+                    };
+                    if !self.types_equivalent(actual_ty, projected_ty) {
+                        continue 'impls;
+                    }
+                }
+            }
+            if let Some((_, ty)) = associated_bindings.iter().find(|(name, _)| name == member) {
+                matches.push(ty.clone());
+            }
+        }
+
+        if matches.len() == 1 {
+            matches.pop()
+        } else {
+            None
+        }
+    }
+
+    fn associated_projection_interface_matches(
+        &self,
+        iface_qtn: &crate::ty::QualifiedTypeName,
+        iface_args: &[Ty],
+        projected_interface: Option<&Ty>,
+    ) -> bool {
+        let Some(projected_interface) = projected_interface else {
+            return true;
+        };
+        let Ty::Interface(projected_qtn, projected_args, _, _) = projected_interface else {
+            return false;
+        };
+        iface_qtn == projected_qtn
+            && iface_args.len() == projected_args.len()
+            && iface_args
+                .iter()
+                .zip(projected_args.iter())
+                .all(|(a, b)| self.types_equivalent(a, b))
+    }
+
+    fn associated_projection_interface_view_matches(
+        &self,
+        iface_qtn: &crate::ty::QualifiedTypeName,
+        iface_args: &[Ty],
+        iface_assoc: &[(Name, Ty)],
+        projected_interface: Option<&Ty>,
+    ) -> bool {
+        if !self.associated_projection_interface_matches(iface_qtn, iface_args, projected_interface)
+        {
+            return false;
+        }
+        let Some(Ty::Interface(_, _, projected_assoc, _)) = projected_interface else {
+            return true;
+        };
+        projected_assoc
+            .iter()
+            .all(|(projected_name, projected_ty)| {
+                iface_assoc
+                    .iter()
+                    .find(|(actual_name, _)| actual_name == projected_name)
+                    .is_some_and(|(_, actual_ty)| self.types_equivalent(actual_ty, projected_ty))
+            })
+    }
+
+    fn associated_projection_views_equivalent(&self, a: &Ty, b: &Ty) -> bool {
+        match (a, b) {
+            (Ty::Optional(a_inner, _), Ty::Optional(b_inner, _)) => {
+                self.associated_projection_views_equivalent(a_inner, b_inner)
+            }
+            (
+                Ty::AssociatedTypeProjection {
+                    base: a_base,
+                    interface: a_interface,
+                    member: a_member,
+                    ..
+                },
+                Ty::AssociatedTypeProjection {
+                    base: b_base,
+                    interface: b_interface,
+                    member: b_member,
+                    ..
+                },
+            ) if a_member == b_member
+                && self.types_equivalent_without_projection_views(a_base, b_base) =>
+            {
+                self.associated_projection_interfaces_equivalent(
+                    a_base,
+                    a_member,
+                    a_interface.as_deref(),
+                    b_interface.as_deref(),
+                )
+            }
+            _ => false,
+        }
+    }
+
+    fn types_equivalent_without_projection_views(&self, a: &Ty, b: &Ty) -> bool {
+        crate::normalize::is_same_normalized_type(a, b, &self.aliases)
+    }
+
+    fn associated_projection_interfaces_equivalent(
+        &self,
+        base: &Ty,
+        member: &Name,
+        a: Option<&Ty>,
+        b: Option<&Ty>,
+    ) -> bool {
+        match (a, b) {
+            (None, None) => true,
+            (Some(a), Some(b)) => self.types_equivalent_without_projection_views(a, b),
+            (None, Some(projected)) | (Some(projected), None) => self
+                .unqualified_projection_source_matches_projected_interface(base, member, projected),
+        }
+    }
+
+    fn unqualified_projection_source_matches_projected_interface(
+        &self,
+        base: &Ty,
+        member: &Name,
+        projected_interface: &Ty,
+    ) -> bool {
+        let Ty::TypeVar(name, _) = base else {
+            return false;
+        };
+        let Some(Ty::Interface(bound_qtn, bound_args, bound_assoc, _)) =
+            self.generic_param_bounds.get(name)
+        else {
+            return false;
+        };
+        let Some(pkg_items) = self.resolve_class_pkg_items(bound_qtn.package()) else {
+            return false;
+        };
+        let Some(Definition::Interface(bound_loc)) =
+            pkg_items.lookup_type(bound_qtn.namespace(), bound_qtn.name())
+        else {
+            return false;
+        };
+        let db = self.context.db();
+        let pkg = baml_compiler2_hir::file_package::file_package(db, bound_loc.file(db));
+        let mut sources = Vec::new();
+        for (current_loc, current_args, current_assoc) in
+            crate::interfaces::interface_closure_locs_with_args_and_assoc(
+                db,
+                bound_loc,
+                bound_args,
+                bound_assoc,
+                pkg_items,
+                &pkg.namespace_path,
+            )
+        {
+            let current_tree = baml_compiler2_hir::file_item_tree(db, current_loc.file(db));
+            let Some(current_iface) = current_tree.interfaces.get(&current_loc.id(db)) else {
+                continue;
+            };
+            if !current_iface
+                .associated_types
+                .iter()
+                .any(|assoc| assoc.name == *member)
+            {
+                continue;
+            }
+            let current_qtn = crate::lower_type_expr::qualify_def(
+                db,
+                Definition::Interface(current_loc),
+                &current_iface.name,
+            );
+            sources.push((current_qtn, current_args, current_assoc));
+        }
+        if sources.len() != 1 {
+            return false;
+        }
+        let (source_qtn, source_args, source_assoc) = &sources[0];
+        self.associated_projection_interface_view_matches(
+            source_qtn,
+            source_args,
+            source_assoc,
+            Some(projected_interface),
+        )
+    }
+
     /// Subtype check — delegates to the normalizer which resolves type aliases
     /// and performs equirecursive structural subtyping.
     ///
@@ -11071,6 +11943,18 @@ impl<'db> TypeInferenceBuilder<'db> {
         {
             return true;
         }
+        if self.associated_projection_views_equivalent(sub, sup) {
+            return true;
+        }
+        let expanded_sub = self
+            .interface_type_with_default_associated_bindings(self.expand_alias_chains(sub.clone()));
+        let expanded_sup = self
+            .interface_type_with_default_associated_bindings(self.expand_alias_chains(sup.clone()));
+        let resolved_sub = self.resolve_associated_projections_deep(&expanded_sub);
+        let resolved_sup = self.resolve_associated_projections_deep(&expanded_sup);
+        if resolved_sub != *sub || resolved_sup != *sup {
+            return self.is_subtype(&resolved_sub, &resolved_sup);
+        }
         if let Ty::TypeVar(name, _) = sub
             && let Some(bound) = self.generic_param_bounds.get(name)
         {
@@ -11090,13 +11974,17 @@ impl<'db> TypeInferenceBuilder<'db> {
         {
             return true;
         }
-        if let Ty::Interface(iface_qtn, iface_args, _) = sup
+        if let Ty::Interface(iface_qtn, iface_args, associated_bindings, _) = sup
             && !matches!(sub, Ty::Interface(..))
         {
             let db = self.context.db();
             let registry = crate::interfaces::package_implements_registry(db, self.package_id);
-            let requested_iface_ty =
-                Ty::Interface(iface_qtn.clone(), iface_args.clone(), TyAttr::default());
+            let requested_iface_ty = Ty::Interface(
+                iface_qtn.clone(),
+                iface_args.clone(),
+                associated_bindings.clone(),
+                TyAttr::default(),
+            );
             return registry.type_implements_interface_via_rule(
                 sub,
                 &requested_iface_ty,
@@ -11108,7 +11996,11 @@ impl<'db> TypeInferenceBuilder<'db> {
         // iff A == B or A requires B (transitively). Two unrelated interfaces
         // that happen to share an implementor are NOT subtypes — the user must
         // narrow via `match`/`is` first.
-        if let (Ty::Interface(a_qtn, a_args, _), Ty::Interface(b_qtn, b_args, _)) = (sub, sup) {
+        if let (
+            Ty::Interface(a_qtn, a_args, a_associated_bindings, _),
+            Ty::Interface(b_qtn, b_args, b_associated_bindings, _),
+        ) = (sub, sup)
+        {
             let db = self.context.db();
             let registry = crate::interfaces::package_implements_registry(db, self.package_id);
             if a_qtn == b_qtn
@@ -11117,13 +12009,32 @@ impl<'db> TypeInferenceBuilder<'db> {
                     .iter()
                     .zip(b_args.iter())
                     .all(|(a, b)| self.types_equivalent(a, b))
+                && b_associated_bindings.iter().all(|(b_name, b_ty)| {
+                    a_associated_bindings
+                        .iter()
+                        .find(|(a_name, _)| a_name == b_name)
+                        .is_some_and(|(_, a_ty)| self.types_equivalent(a_ty, b_ty))
+                })
             {
                 return true;
             }
-            if registry.interface_requires(a_qtn, b_qtn) && b_args.is_empty() {
+            if a_qtn != b_qtn
+                && registry.interface_requires(a_qtn, b_qtn)
+                && b_args.is_empty()
+                && b_associated_bindings.is_empty()
+            {
                 return true;
             }
-            if self.interface_requires_instantiation(a_qtn, a_args, b_qtn, b_args) {
+            if a_qtn != b_qtn
+                && self.interface_requires_instantiation(
+                    a_qtn,
+                    a_args,
+                    a_associated_bindings,
+                    b_qtn,
+                    b_args,
+                    b_associated_bindings,
+                )
+            {
                 return true;
             }
         }
@@ -12363,7 +13274,8 @@ impl crate::exhaustiveness::PatCtx for TypeInferenceBuilder<'_> {
             | Ty::BuiltinUnknown { .. }
             | Ty::Unknown { .. }
             | Ty::Error { .. }
-            | Ty::TypeVar(_, _) => vec![Ctor::NonExhaustive],
+            | Ty::TypeVar(_, _)
+            | Ty::AssociatedTypeProjection { .. } => vec![Ctor::NonExhaustive],
             Ty::Never { .. } => vec![],
             Ty::Optional(inner, _) => {
                 let mut out = self.enumerate_ctors(inner);
@@ -12395,7 +13307,7 @@ impl crate::exhaustiveness::PatCtx for TypeInferenceBuilder<'_> {
             Ty::Class(qtn, args, _) => vec![Ctor::Class(qtn.clone(), args.clone())],
             // Open interfaces always require a wildcard — new implementors
             // can appear in any file. See BEP-044 §"Interaction with match".
-            Ty::Interface(_, _, _) => vec![Ctor::NonExhaustive],
+            Ty::Interface(_, _, _, _) => vec![Ctor::NonExhaustive],
             // Futures are non-exhaustive at the pattern level: there is
             // no surface syntax to match against `Future<T, E>` other
             // than a wildcard.
@@ -12430,10 +13342,7 @@ impl crate::exhaustiveness::PatCtx for TypeInferenceBuilder<'_> {
     }
 
     fn interface_field_types(&self, ty: &Ty) -> Vec<Ty> {
-        let Ty::Interface(qtn, args, _) = ty else {
-            return Vec::new();
-        };
-        self.interface_field_infos_ordered(qtn, args)
+        self.interface_field_infos_ordered_for_ty(ty)
             .into_iter()
             .map(|(_, ft)| self.matrix_normalize_scrut(&ft))
             .collect()
@@ -12445,7 +13354,7 @@ impl crate::exhaustiveness::PatCtx for TypeInferenceBuilder<'_> {
         class_qtn: &crate::ty::QualifiedTypeName,
         class_type_args: &[Ty],
     ) -> Option<Vec<usize>> {
-        let Ty::Interface(iface_qtn, iface_args, _) = iface_ty else {
+        let Ty::Interface(iface_qtn, iface_args, _, _) = iface_ty else {
             return None;
         };
         let class_fields = self.class_field_infos_ordered(class_qtn, class_type_args);
@@ -12454,7 +13363,7 @@ impl crate::exhaustiveness::PatCtx for TypeInferenceBuilder<'_> {
             .enumerate()
             .map(|(idx, (name, _))| (name, idx))
             .collect();
-        let interface_fields = self.interface_field_infos_ordered(iface_qtn, iface_args);
+        let interface_fields = self.interface_field_infos_ordered_for_ty(iface_ty);
         let mut projection = Vec::with_capacity(interface_fields.len());
         for (interface_field, _) in interface_fields {
             let class_field = self.class_field_name_for_interface_field(
@@ -12467,6 +13376,10 @@ impl crate::exhaustiveness::PatCtx for TypeInferenceBuilder<'_> {
             projection.push(*class_indices.get(&class_field)?);
         }
         Some(projection)
+    }
+
+    fn interface_ctor_covers_column(&self, iface_ty: &Ty, col_ty: &Ty) -> bool {
+        self.is_subtype(col_ty, iface_ty)
     }
 
     fn list_element_type(&self, ty: &Ty) -> Ty {
@@ -13053,8 +13966,11 @@ impl TypeInferenceBuilder<'_> {
             ast::Pattern::Class {
                 class,
                 generic_args,
+                associated_type_bindings,
                 ..
-            } => self.resolve_class_pattern_type(class, generic_args, None),
+            } => {
+                self.resolve_class_pattern_type(class, generic_args, associated_type_bindings, None)
+            }
             ast::Pattern::Array {
                 prefix,
                 rest,
@@ -13133,8 +14049,18 @@ impl TypeInferenceBuilder<'_> {
             ast::Pattern::Class {
                 class,
                 generic_args,
+                associated_type_bindings,
                 fields,
-            } => self.lower_class_pat(class, generic_args, fields, pat_id, scrut_ty, body, at_expr),
+            } => self.lower_class_pat(
+                class,
+                generic_args,
+                associated_type_bindings,
+                fields,
+                pat_id,
+                scrut_ty,
+                body,
+                at_expr,
+            ),
             ast::Pattern::Array {
                 prefix,
                 rest,
@@ -13302,6 +14228,14 @@ impl TypeInferenceBuilder<'_> {
                 let fields = field_tys.into_iter().map(DPat::wildcard).collect();
                 DPat::class_inst(qtn.clone(), args.clone(), fields, scrut_ty.clone())
             }
+            Ty::Interface(_, _, _, _) => {
+                let field_tys = self
+                    .interface_field_infos_ordered_for_ty(&expanded)
+                    .into_iter()
+                    .map(|(_, ty)| ty);
+                let fields = field_tys.map(DPat::wildcard).collect();
+                DPat::interface(expanded.clone(), fields, scrut_ty.clone())
+            }
             // Opaque alphabets — best-effort: wildcard. Imprecise when
             // the scrutinee is a union containing this type plus other
             // members; documented above.
@@ -13345,6 +14279,7 @@ impl TypeInferenceBuilder<'_> {
         &mut self,
         class: &[Name],
         generic_args: &[TypeExpr],
+        associated_type_bindings: &[baml_compiler2_ast::AssociatedTypeBinding],
         fields: &[ast::FieldPat],
         pat_id: PatId,
         scrut_ty: &Ty,
@@ -13360,8 +14295,12 @@ impl TypeInferenceBuilder<'_> {
         // head and its generic args at the pattern's span (same treatment
         // as `Pattern::Type` in `lower_type_pat`). `at_expr` stays in the
         // tuple as a fallback for `report_at_pat_or_expr`.
-        let class_ty =
-            self.resolve_class_pattern_type(class, generic_args, Some((pat_id, at_expr)));
+        let class_ty = self.resolve_class_pattern_type(
+            class,
+            generic_args,
+            associated_type_bindings,
+            Some((pat_id, at_expr)),
+        );
 
         // BEP-044: destructuring an interface head (`Animal { name, age }`).
         // The interface has no positional field layout — it matches any
@@ -13372,15 +14311,44 @@ impl TypeInferenceBuilder<'_> {
         // implementor necessarily provides the interface's declared fields,
         // elided fields are wildcarded, while named fields preserve their
         // lowered subpatterns for exhaustiveness/refutability.
-        if let Ty::Interface(iface_name, type_args, _) = &class_ty {
-            let iface_name = iface_name.clone();
-            let type_args = type_args.clone();
+        if let Ty::Interface(pattern_iface_qtn, pattern_args, pattern_assoc, attr) = &class_ty {
+            let effective_interface_ty = match (
+                pattern_assoc.is_empty(),
+                self.expand_alias_chains(scrut_ty.clone()),
+            ) {
+                (true, Ty::Interface(scrut_iface_qtn, scrut_args, scrut_assoc, scrut_attr))
+                    if pattern_iface_qtn == &scrut_iface_qtn
+                        && (pattern_args.is_empty()
+                            || (pattern_args.len() == scrut_args.len()
+                                && pattern_args
+                                    .iter()
+                                    .zip(scrut_args.iter())
+                                    .all(|(a, b)| self.types_equivalent(a, b)))) =>
+                {
+                    Ty::Interface(
+                        pattern_iface_qtn.clone(),
+                        if pattern_args.is_empty() {
+                            scrut_args
+                        } else {
+                            pattern_args.clone()
+                        },
+                        scrut_assoc,
+                        scrut_attr,
+                    )
+                }
+                _ => Ty::Interface(
+                    pattern_iface_qtn.clone(),
+                    pattern_args.clone(),
+                    pattern_assoc.clone(),
+                    attr.clone(),
+                ),
+            };
             let mut by_name: FxHashMap<Name, &ast::FieldPat> = FxHashMap::default();
             for fp in fields {
                 by_name.insert(fp.field.clone(), fp);
             }
 
-            let field_infos = self.interface_field_infos_ordered(&iface_name, &type_args);
+            let field_infos = self.interface_field_infos_ordered_for_ty(&effective_interface_ty);
             let mut declared_fields: FxHashSet<Name> = FxHashSet::default();
             let mut sub_dpats: Vec<DPat> = Vec::with_capacity(field_infos.len());
             let mut bindings: Vec<PatternBinding> = Vec::new();
@@ -13402,7 +14370,7 @@ impl TypeInferenceBuilder<'_> {
                 }
                 self.report_at_pat_or_expr(
                     TirTypeError::UnresolvedMember {
-                        base_type: class_ty.clone(),
+                        base_type: effective_interface_ty.clone(),
                         member: fp.field.clone(),
                     },
                     pat_id,
@@ -13414,11 +14382,11 @@ impl TypeInferenceBuilder<'_> {
                 let r = self.analyze_and_lower(fp.pat, &unknown, body, at_expr);
                 bindings.extend(r.bindings);
             }
-            let dpat = DPat::interface(class_ty.clone(), sub_dpats, scrut_ty.clone());
-            let matched_ty = self.intersect_pattern_flow_types(scrut_ty, &class_ty);
+            let dpat = DPat::interface(effective_interface_ty.clone(), sub_dpats, scrut_ty.clone());
+            let matched_ty = self.intersect_pattern_flow_types(scrut_ty, &effective_interface_ty);
             return PatternResult {
                 dpat,
-                required_ty: Some(class_ty.clone()),
+                required_ty: Some(effective_interface_ty),
                 matched_ty,
                 bindings,
             };
