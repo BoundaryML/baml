@@ -691,6 +691,40 @@ fn associated_type_default_from_qualified_interface_resolves_declaring_namespace
 }
 
 #[test]
+fn associated_type_default_can_reference_declaring_namespace_type_from_implementor_namespace() {
+    assert_zero_compile_errors_multi(&[
+        (
+            "ns_lib/types.baml",
+            r#"
+            interface Serializable {
+                type Format = Payload
+
+                function serialize(self) -> Format
+            }
+
+            class Payload {
+                data: string
+            }
+            "#,
+        ),
+        (
+            "ns_app/widget.baml",
+            r#"
+            class Widget {
+                name: string
+
+                implements root.lib.Serializable {
+                    function serialize(self) -> Format {
+                        return Format { data: self.name }
+                    }
+                }
+            }
+            "#,
+        ),
+    ]);
+}
+
+#[test]
 fn explicit_associated_type_witness_can_reference_earlier_witness() {
     assert_zero_compile_errors(
         r#"
@@ -1117,6 +1151,71 @@ fn union_associated_type_bindings_work_in_generic_bounds() {
 
         function main(source: MixedSource) -> int | string {
             return consume<MixedSource>(source)
+        }
+        "#,
+    );
+}
+
+#[test]
+fn associated_type_binding_in_generic_bound_preserves_outer_typevar() {
+    assert_zero_compile_errors(
+        r#"
+        interface Source {
+            type Item
+
+            function get(self) -> Item
+        }
+
+        class IntSource {
+            value: int
+
+            implements Source {
+                type Item = int
+
+                function get(self) -> int {
+                    return self.value
+                }
+            }
+        }
+
+        function score_bound<T, S extends Source<Item = T>>(source: S) -> T {
+            return source.get()
+        }
+
+        function main() -> int {
+            let source = IntSource { value: 42 }
+            return score_bound<int, IntSource>(source)
+        }
+        "#,
+    );
+}
+
+#[test]
+fn union_associated_type_binding_in_generic_bound_preserves_outer_typevar() {
+    assert_zero_compile_errors(
+        r#"
+        interface Source {
+            type Item
+
+            function get(self) -> Item
+        }
+
+        class MixedSource {
+            implements Source {
+                type Item = int | string
+
+                function get(self) -> int | string {
+                    return 1
+                }
+            }
+        }
+
+        function score_bound<T extends int | string, S extends Source<Item = T>>(source: S) -> T {
+            return source.get()
+        }
+
+        function main(source: MixedSource) -> int | string {
+            return score_bound<int | string, MixedSource>(source)
         }
         "#,
     );
@@ -2848,6 +2947,40 @@ async fn runtime_guard_accepts_generic_requested_associated_type_var() {
         "#
     );
     assert_eq!(output.result.unwrap(), BexExternalValue::Int(1));
+}
+
+#[tokio::test]
+async fn runtime_dispatch_substitutes_class_typevar_in_associated_type_binding() {
+    let output = baml_test!(
+        r#"
+        interface Container {
+            type Item
+
+            function get(self) -> Item
+        }
+
+        class Box<T> {
+            value: T
+
+            implements Container {
+                type Item = T
+
+                function get(self) -> T {
+                    return self.value
+                }
+            }
+        }
+
+        function unwrap(c: Container<Item = int>) -> int {
+            return c.get()
+        }
+
+        function main() -> int {
+            return unwrap(Box<int> { value: 42 })
+        }
+        "#
+    );
+    assert_eq!(output.result.unwrap(), BexExternalValue::Int(42));
 }
 
 #[tokio::test]

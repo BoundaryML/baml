@@ -1518,59 +1518,58 @@ impl<'db> TypeInferenceBuilder<'db> {
     ) -> Option<FxHashMap<Name, Ty>> {
         let db = self.context.db();
         let resolution = self.resolutions.get(&callee_id).cloned();
-        let (callee_name, declared_params, func_loc_for_bound_checks) =
-            if let Some(resolution) = resolution {
-                let (func_loc, treat_as_static_method) = match resolution {
-                    crate::inference::MemberResolution::Free { func_loc } => (func_loc, true),
-                    // `UnboundMethod` covers `Class.method` / `Class<...>.method` call
-                    // sites where the receiver is a type name.  When the call writes
-                    // `Class<...>.method(...)`, the receiver-type's `<...>` is parsed
-                    // as the call's type-args by `find_callee_generic_args` in
-                    // `lower_expr_body.rs`; those args fill the *enclosing class's*
-                    // generic params (BEP-039), so we include them in the
-                    // expected-arity check below.
-                    crate::inference::MemberResolution::UnboundMethod { func_loc, .. } => {
-                        (func_loc, true)
-                    }
-                    // BoundMethod calls (`inst.method(args)`) get class type-args
-                    // from the receiver instance's `class_type_args` at runtime, not
-                    // from the call site.
-                    crate::inference::MemberResolution::BoundMethod { func_loc, .. } => {
-                        (func_loc, false)
-                    }
-                    crate::inference::MemberResolution::InterfaceDefaultMethod {
-                        func_loc, ..
-                    } => (func_loc, false),
-                    _ => return None,
-                };
-                let sig = baml_compiler2_ppir::elaborated_function_signature(db, func_loc);
-                // Only user-declared generic params are supplied explicitly; synthetic effect params
-                // are always inferred.  For static-method-on-generic-class calls, prepend the
-                // class's generic params: type-args fill `[class_params..., function_params...]`.
-                let class_params: Vec<Name> = if treat_as_static_method {
-                    let file = func_loc.file(db);
-                    let item_tree = baml_compiler2_ppir::file_item_tree(db, file);
-                    item_tree
-                        .classes
-                        .values()
-                        .find(|class_data| class_data.methods.contains(&func_loc.id(db)))
-                        .map(|class_data| class_data.generic_params.clone())
-                        .unwrap_or_default()
-                } else {
-                    Vec::new()
-                };
-                let mut declared_params: Vec<Name> = class_params;
-                declared_params.extend(sig.user_generic_params.iter().cloned());
-                (sig.name.clone(), declared_params, Some(func_loc))
-            } else if let Some((callee_name, declared_params)) = self
-                .interface_method_generic_params
-                .get(&callee_id)
-                .cloned()
-            {
-                (callee_name, declared_params, None)
-            } else {
-                return None;
+        let (callee_name, declared_params) = if let Some(resolution) = resolution {
+            let (func_loc, treat_as_static_method) = match resolution {
+                crate::inference::MemberResolution::Free { func_loc } => (func_loc, true),
+                // `UnboundMethod` covers `Class.method` / `Class<...>.method` call
+                // sites where the receiver is a type name.  When the call writes
+                // `Class<...>.method(...)`, the receiver-type's `<...>` is parsed
+                // as the call's type-args by `find_callee_generic_args` in
+                // `lower_expr_body.rs`; those args fill the *enclosing class's*
+                // generic params (BEP-039), so we include them in the
+                // expected-arity check below.
+                crate::inference::MemberResolution::UnboundMethod { func_loc, .. } => {
+                    (func_loc, true)
+                }
+                // BoundMethod calls (`inst.method(args)`) get class type-args
+                // from the receiver instance's `class_type_args` at runtime, not
+                // from the call site.
+                crate::inference::MemberResolution::BoundMethod { func_loc, .. } => {
+                    (func_loc, false)
+                }
+                crate::inference::MemberResolution::InterfaceDefaultMethod { func_loc, .. } => {
+                    (func_loc, false)
+                }
+                _ => return None,
             };
+            let sig = baml_compiler2_ppir::elaborated_function_signature(db, func_loc);
+            // Only user-declared generic params are supplied explicitly; synthetic effect params
+            // are always inferred.  For static-method-on-generic-class calls, prepend the
+            // class's generic params: type-args fill `[class_params..., function_params...]`.
+            let class_params: Vec<Name> = if treat_as_static_method {
+                let file = func_loc.file(db);
+                let item_tree = baml_compiler2_ppir::file_item_tree(db, file);
+                item_tree
+                    .classes
+                    .values()
+                    .find(|class_data| class_data.methods.contains(&func_loc.id(db)))
+                    .map(|class_data| class_data.generic_params.clone())
+                    .unwrap_or_default()
+            } else {
+                Vec::new()
+            };
+            let mut declared_params: Vec<Name> = class_params;
+            declared_params.extend(sig.user_generic_params.iter().cloned());
+            (sig.name.clone(), declared_params)
+        } else if let Some((callee_name, declared_params)) = self
+            .interface_method_generic_params
+            .get(&callee_id)
+            .cloned()
+        {
+            (callee_name, declared_params)
+        } else {
+            return None;
+        };
 
         if type_args.len() != declared_params.len() {
             self.context.report_simple(
@@ -1609,40 +1608,6 @@ impl<'db> TypeInferenceBuilder<'db> {
             if !suppress_diags {
                 for d in diags {
                     self.context.report_simple(d, call_expr_id);
-                }
-            }
-            // BEP-044 generic-bound enforcement: when the declared
-            // parameter has a bound, the supplied `ty` must satisfy it.
-            if let Some(func_loc_for_bounds) = func_loc_for_bound_checks {
-                let file = func_loc_for_bounds.file(db);
-                let item_tree = baml_compiler2_hir::file_item_tree(db, file);
-                let func_data = item_tree.functions.get(&func_loc_for_bounds.id(db));
-                if let Some(func_data) = func_data {
-                    if let Some(idx) = func_data
-                        .generic_params
-                        .iter()
-                        .position(|n| n == param_name)
-                        && let Some(Some(bound_te)) = func_data.generic_param_bounds.get(idx)
-                    {
-                        let mut bd = Vec::new();
-                        let bound_ty = crate::lower_type_expr::lower_type_expr_in_ns(
-                            db,
-                            bound_te,
-                            self.package_items,
-                            &ns,
-                            &caller_generic_params,
-                            &mut bd,
-                        );
-                        if !self.is_subtype(&ty, &bound_ty) && !suppress_diags {
-                            self.context.report_simple(
-                                TirTypeError::TypeMismatch {
-                                    expected: bound_ty,
-                                    got: ty.clone(),
-                                },
-                                call_expr_id,
-                            );
-                        }
-                    }
                 }
             }
             bindings.insert(param_name.clone(), ty);
