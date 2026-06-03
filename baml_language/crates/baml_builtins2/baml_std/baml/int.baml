@@ -1,4 +1,4 @@
-/// A 64-bit signed integer (i64). Range: -2^63 to 2^63-1.
+/// A 63-bit signed integer. Range: -2^62 to 2^62-1.
 class Int {
   /// Serializes this integer to a JSON number.
   function to_json(self) -> baml.json.json throws never {
@@ -9,7 +9,7 @@ class Int {
   /// Returns the absolute value of `self`.
   ///
   /// Throws `InvalidArgument` for `int.min_value()` because its absolute value
-  /// (`2^63`) does not fit in an `int`.
+  /// (`2^62`) does not fit in an `int`.
   ///
   /// # Examples
   /// ```
@@ -207,7 +207,7 @@ class Int {
   ///
   /// Accepts an optional leading `+` or `-` sign followed by one or more
   /// ASCII digits. No surrounding whitespace, no underscores, no other
-  /// numeric formats. The result must fit in an `int` (`i64`).
+  /// numeric formats. The result must fit in an `int` (`-2^62` to `2^62-1`).
   ///
   /// Throws `ParseError` if `text` is empty, contains a non-digit character,
   /// or represents a value outside the `int` range.
