@@ -3019,3 +3019,44 @@ async fn reflection_implementors_respects_associated_type_bindings() {
     );
     assert_eq!(output.result.unwrap(), BexExternalValue::Int(1111));
 }
+
+#[tokio::test]
+async fn reflection_does_not_wildcard_missing_associated_type_bindings() {
+    let output = baml_test!(
+        r#"
+        interface Source {
+            type Item
+        }
+
+        class Box<T> {
+            value: T
+
+            implements Source {
+                type Item = T
+            }
+        }
+
+        function main() -> int {
+            let box_int = reflect.type_of<Box<int>>()
+            let int_source = reflect.type_of<Source<Item = int>>()
+            let string_source = reflect.type_of<Source<Item = string>>()
+
+            let score = 0
+            if box_int.implements(int_source) {
+                score = score + 1
+            }
+            if box_int.implements(string_source) {
+                score = score + 10
+            }
+            if string_source.implemented_by(box_int) {
+                score = score + 100
+            }
+            if string_source.implementors().length() > 0 {
+                score = score + 1000
+            }
+            return score
+        }
+        "#
+    );
+    assert_eq!(output.result.unwrap(), BexExternalValue::Int(0));
+}

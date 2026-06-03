@@ -155,7 +155,6 @@ fn associated_bindings_equivalent(
     requested_bindings: &InterfaceAssociatedBindings,
 ) -> bool {
     requested_bindings.is_empty()
-        || impl_bindings.is_empty()
         || requested_bindings
             .iter()
             .all(|(requested_name, requested_ty)| {
