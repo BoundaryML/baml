@@ -115,7 +115,7 @@ jobs:
 
       - name: "Open/update baseline-refresh PR"
         id: cpr
-        uses: peter-evans/create-pull-request@v6
+        uses: peter-evans/create-pull-request@v8
         with:
           # PAT (not GITHUB_TOKEN) so the PR triggers its own CI, including
           # the size-gate check that confirms the new baseline is green.
