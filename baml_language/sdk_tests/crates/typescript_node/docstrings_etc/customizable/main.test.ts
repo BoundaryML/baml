@@ -2,11 +2,11 @@
 // TypeScript does not expose JSDoc at runtime, so these assertions read
 // the generated SDK source directly.
 
-import { describe, it, expect } from "@jest/globals";
+import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
-import { Doc, Note, Priority, Sentiment } from "./baml_sdk/docs";
+import { Doc, Note, Priority, Sentiment } from "./baml_sdk/docs/index.js";
 
 const docsSource = () =>
   readFileSync(join(__dirname, "baml_sdk", "docs", "index.ts"), "utf8").replace(/\r\n/g, "\n");

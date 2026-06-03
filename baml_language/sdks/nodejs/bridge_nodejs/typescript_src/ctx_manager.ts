@@ -2,8 +2,8 @@
 // Uses AsyncLocalStorage for async context isolation (Node.js built-in).
 
 import { AsyncLocalStorage } from 'node:async_hooks';
-import { HostSpanManager, flushEvents } from './native';
-import { installFlushOnExit } from './exit_hook';
+import { HostSpanManager, flushEvents } from './native.js';
+import { installFlushOnExit } from './exit_hook.js';
 
 export class CtxManager {
     private rt: unknown;

@@ -2,15 +2,13 @@
 // sdks/python/src/baml_core/typemap.py.
 //
 // Codegen emits `_typemap.ts` with `BamlTypeMap.fromLazyEntries({ classes,
-// enums, typeAliases })` where each entry is a RESOLVER THUNK
-// `() => require("./lorem").Resume`. The thunk closes over a `require`
-// relative to the generated `_typemap.ts`, so resolution happens in the SDK's
-// module scope (the runtime package can't resolve a `baml_sdk/...` path). The
-// root `index.ts` calls `setTypeMap(_TYPE_MAP)` at import time; resolution is
-// lazy and memoized on first lookup, which also avoids the circular
-// `index ↔ _typemap` import deadlocking.
+// enums, typeAliases })` where each entry is a resolver thunk over a statically
+// imported generated namespace, e.g. `() => __leaf_0.Resume`. Resolution happens
+// in the SDK's module scope (the runtime package can't resolve a
+// `baml_sdk/...` path). The root `index.ts` calls `setTypeMap(_TYPE_MAP)` at
+// import time; resolution is lazy and memoized on first lookup.
 
-import { BamlError } from './errors';
+import { BamlError } from './errors.js';
 
 /** A deferred resolver for a generated class / enum / type alias. */
 export type LazyEntry = () => unknown;

@@ -1,6 +1,6 @@
 // Roundtrip coverage for a complex nested object graph.
-import "./baml_sdk";
-import { describe, it, expect } from "@jest/globals";
+import "./baml_sdk/index.js";
+import { describe, it, expect } from "vitest";
 import {
   AccountTier,
   AuditEvent,
@@ -14,7 +14,7 @@ import {
   ProfileOwner,
   WirePayment,
   round_trip_complex_profile,
-} from "./baml_sdk/complex_models";
+} from "./baml_sdk/complex_models/index.js";
 
 describe("roundtrip complex_models", () => {
   it("round_trip_complex_profile preserves a deeply nested mixed-shape class", () => {

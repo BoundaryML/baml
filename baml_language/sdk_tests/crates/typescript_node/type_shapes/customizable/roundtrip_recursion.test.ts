@@ -1,6 +1,6 @@
 // Roundtrip coverage for baml_sdk/recursion — ported from test_recursion.py.
-import "./baml_sdk";
-import { describe, it, expect } from "@jest/globals";
+import "./baml_sdk/index.js";
+import { describe, it, expect } from "vitest";
 import {
   IntBinaryTree,
   A,
@@ -20,7 +20,7 @@ import {
   round_trip_t4,
   round_trip_t5,
   round_trip_t6,
-} from "./baml_sdk/recursion";
+} from "./baml_sdk/recursion/index.js";
 
 describe("roundtrip recursion", () => {
   it("round_trip_int_binary_tree", () => {

@@ -1,10 +1,10 @@
 // TypeScript correspondent to test_stdlib_entrypoints.py: stdlib functions of
 // different `FunctionKind`s are callable as entry points (directly from the
 // host), not only from inside BAML. Each gets its sync + `_async` binding.
-import "./baml_sdk";
-import { describe, it, expect } from "@jest/globals";
-import { trunc, trunc_async } from "./baml_sdk/baml/math";
-import { exists, exists_async } from "./baml_sdk/baml/fs";
+import "./baml_sdk/index.js";
+import { describe, it, expect } from "vitest";
+import { trunc, trunc_async } from "./baml_sdk/baml/math/index.js";
+import { exists, exists_async } from "./baml_sdk/baml/fs/index.js";
 
 describe("function_calls — stdlib entry points", () => {
   // `baml.math.trunc(value: float) -> int` is a native `$rust_function`

@@ -1,6 +1,6 @@
 // Roundtrip coverage for baml_sdk/enums — ported from test_enums.py.
-import "./baml_sdk";
-import { describe, it, expect } from "@jest/globals";
+import "./baml_sdk/index.js";
+import { describe, it, expect } from "vitest";
 import {
   Sentiment,
   Enums,
@@ -9,7 +9,7 @@ import {
   round_trip_sentiment,
   round_trip_sentiment_positive,
   round_trip_enums,
-} from "./baml_sdk/enums";
+} from "./baml_sdk/enums/index.js";
 
 describe("roundtrip enums", () => {
   it("pick_sentiment", () => {
