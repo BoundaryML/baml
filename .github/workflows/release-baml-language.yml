@@ -240,6 +240,16 @@ jobs:
           name: release-plan
       - run: scripts/baml-language-version stamp --plan release-plan.json
       - uses: ./.github/actions/setup-node2
+      - name: Setup Rust for VSIX WASM build
+        uses: ./.github/actions/setup-rust
+        with:
+          targets: wasm32-unknown-unknown
+          workspace: baml_language
+          prefix-key: v5-rust-baml-vsix-wasm
+          cache-on-failure: true
+          enable-wasm: true
+          enable-cross: false
+          skip-protoc: true
       - run: pnpm --dir typescript2 run vscode:package
       - name: Normalize VSIX asset name
         run: |
