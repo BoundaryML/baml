@@ -92,6 +92,16 @@ function user.refutable_for_class_field_array_prefix(teams: user.Team[]) -> int 
   }
   !! 2825..2861: refutable pattern in for-let binding; refutable patterns belong in `match`
 }
+function user.irrefutable_while_let(n: int) -> int throws never {
+  { : 1
+    while let x: int = n
+      { : never
+        break
+      }
+    1 : 1
+  }
+  ?? 3348..3359: irrefutable `while let` pattern; the loop never exits by pattern failure — use a plain `while`/`loop` instead
+}
 class user.Bag {
   contents: int
 }
@@ -109,7 +119,7 @@ function user.class_destructure_unreachable_after_bare(b: user.Bag) -> int throw
       Bag { contents: int } =>
         2 : 2
   }
-  !! 3394..3395: unreachable arm
+  !! 3873..3874: unreachable arm
 }
 class user.Mixed {
   value: int | float | bool
@@ -128,7 +138,7 @@ function user.class_destructure_field_union_missing_int(m: user.Mixed) -> int th
       Mixed { value: bool } =>
         2 : 2
   }
-  !! 3872..3966: non-exhaustive match on `Mixed`; missing: user.Mixed { value: int }
+  !! 4351..4445: non-exhaustive match on `Mixed`; missing: Mixed { value: int }
 }
 class user.Pair {
   kind: int | bool
@@ -150,7 +160,7 @@ function user.class_destructure_two_field_union_missing_combination(p: user.Pair
       Pair { kind: bool, payload: int } =>
         3 : 3
   }
-  !! 4338..4504: non-exhaustive match on `Pair`; missing: user.Pair { kind: true, payload: string }, user.Pair { kind: false, payload: string }
+  !! 4817..4983: non-exhaustive match on `Pair`; missing: Pair { kind: true, payload: string }, Pair { kind: false, payload: string }
 }
 enum user.Color3
 function user.enum_with_single_missing_variant(c: user.Color3) -> int throws never {
@@ -161,7 +171,7 @@ function user.enum_with_single_missing_variant(c: user.Color3) -> int throws nev
       Color3.Blue =>
         2 : 2
   }
-  !! 5016..5090: non-exhaustive match on `Color3`; missing: user.Color3.Red
+  !! 5495..5569: non-exhaustive match on `Color3`; missing: user.Color3.Red
 }
 enum user.Direction4
 function user.enum_with_multiple_missing_variants(d: user.Direction4) -> int throws never {
@@ -170,7 +180,7 @@ function user.enum_with_multiple_missing_variants(d: user.Direction4) -> int thr
       Direction4.North =>
         1 : 1
   }
-  !! 5314..5366: non-exhaustive match on `Direction4`; missing: user.Direction4.East, user.Direction4.South, user.Direction4.West
+  !! 5793..5845: non-exhaustive match on `Direction4`; missing: user.Direction4.East, user.Direction4.South, user.Direction4.West
 }
 enum user.ExcessiveEnum
 function user.enum_with_excessive_missing_variants(e: user.ExcessiveEnum) -> int throws never {
@@ -179,7 +189,7 @@ function user.enum_with_excessive_missing_variants(e: user.ExcessiveEnum) -> int
       ExcessiveEnum.First =>
         1 : 1
   }
-  !! 5673..5728: non-exhaustive match on `ExcessiveEnum`; missing: user.ExcessiveEnum.Second, user.ExcessiveEnum.Third, user.ExcessiveEnum.Fourth, user.ExcessiveEnum.Fifth, user.ExcessiveEnum.Sixth, user.ExcessiveEnum.Seventh, user.ExcessiveEnum.Eighth, user.ExcessiveEnum.Ninth, user.ExcessiveEnum.Tenth, user.ExcessiveEnum.Eleventh, user.ExcessiveEnum.Twelfth
+  !! 6152..6207: non-exhaustive match on `ExcessiveEnum`; missing: user.ExcessiveEnum.Second, user.ExcessiveEnum.Third, user.ExcessiveEnum.Fourth, user.ExcessiveEnum.Fifth, user.ExcessiveEnum.Sixth, user.ExcessiveEnum.Seventh, user.ExcessiveEnum.Eighth, user.ExcessiveEnum.Ninth, user.ExcessiveEnum.Tenth, user.ExcessiveEnum.Eleventh, user.ExcessiveEnum.Twelfth
 }
 class user.Flagged {
   flag: bool
@@ -199,7 +209,7 @@ function user.class_field_bool_narrowing_missing_true(f: user.Flagged) -> int th
       Flagged { flag: false, note: string } =>
         2 : 2
   }
-  !! 6045..6170: non-exhaustive match on `Flagged`; missing: user.Flagged { flag: true, note: _ }
+  !! 6524..6649: non-exhaustive match on `Flagged`; missing: Flagged { flag: true, note: _ }
 }
 class user.Box2 {
   first: bool
@@ -221,7 +231,7 @@ function user.nested_class_optional_missing_combination(b: user.Box2) -> int thr
       Box2 { first: false, second: null } =>
         3 : 3
   }
-  !! 6509..6679: non-exhaustive match on `Box2`; missing: user.Box2 { first: false, second: [..] }
+  !! 6988..7158: non-exhaustive match on `Box2`; missing: Box2 { first: false, second: [..] }
 }
 function user.int_literal_non_exhaustive(n: int) -> int throws never {
   { : 1
@@ -229,7 +239,7 @@ function user.int_literal_non_exhaustive(n: int) -> int throws never {
       1 =>
         1 : 1
   }
-  !! 6804..6841: non-exhaustive match on `int`; missing: _
+  !! 7283..7320: non-exhaustive match on `int`; missing: _
 }
 class user.IntPair {
   a: int
@@ -247,7 +257,7 @@ function user.or_pattern_two_field_non_exhaustive(p: user.IntPair) -> int throws
       IntPair { a: 0 | 1, b: 2 | 3 } =>
         1 : 1
   }
-  !! 7321..7387: non-exhaustive match on `IntPair`; missing: user.IntPair { a: 0, b: _ }, user.IntPair { a: 1, b: _ }, user.IntPair { a: _, b: _ }
+  !! 7800..7866: non-exhaustive match on `IntPair`; missing: IntPair { a: 0, b: _ }, IntPair { a: 1, b: _ }, IntPair { a: _, b: _ }
 }
 function user.or_pattern_optional_int_non_exhaustive(x: int?) -> int throws never {
   { : 0 | 1
@@ -257,7 +267,7 @@ function user.or_pattern_optional_int_non_exhaustive(x: int?) -> int throws neve
       0 | 1 =>
         1 : 1
   }
-  !! 7634..7694: non-exhaustive match on `int?`; missing: int
+  !! 8113..8173: non-exhaustive match on `int?`; missing: int
 }
 function user.slice_prefix_or_suffix_non_exhaustive(xs: bool[]) -> int throws never {
   { : 0 | 1 | 2
@@ -269,7 +279,7 @@ function user.slice_prefix_or_suffix_non_exhaustive(xs: bool[]) -> int throws ne
       [.., false] =>
         2 : 2
   }
-  !! 8158..8248: non-exhaustive match on `bool[]`; missing: [false, .., true]
+  !! 8637..8727: non-exhaustive match on `bool[]`; missing: [false, .., true]
 }
 function user.slice_repeated_prefix_unreachable(xs: bool[]) -> int throws never {
   { : 1 | 2 | 3
@@ -281,7 +291,7 @@ function user.slice_repeated_prefix_unreachable(xs: bool[]) -> int throws never 
       _ =>
         3 : 3
   }
-  !! 8449..8450: unreachable arm
+  !! 8928..8929: unreachable arm
 }
 function user.slice_repeated_suffix_unreachable(xs: bool[]) -> int throws never {
   { : 1 | 2 | 3
@@ -293,7 +303,7 @@ function user.slice_repeated_suffix_unreachable(xs: bool[]) -> int throws never 
       _ =>
         3 : 3
   }
-  !! 8673..8674: unreachable arm
+  !! 9152..9153: unreachable arm
 }
 function user.slice_prefix_suffix_subsumes_fixed(xs: bool[]) -> int throws never {
   { : 1 | 2 | 3
@@ -305,7 +315,7 @@ function user.slice_prefix_suffix_subsumes_fixed(xs: bool[]) -> int throws never
       _ =>
         3 : 3
   }
-  !! 8947..8948: unreachable arm
+  !! 9426..9427: unreachable arm
 }
 class user.Team$stream {
   scores: int[]

@@ -392,7 +392,17 @@ impl ProjectTest {
         let offset: usize = desc.name_span.start().into();
         let (line, _col) = offset_to_line_col(text, offset);
 
-        writeln!(out, "{} {}  {}:{}", desc.kind, desc.name, filename, line).unwrap();
+        let fqn = desc
+            .canonical_fqn
+            .as_deref()
+            .map(|f| format!("  ({f})"))
+            .unwrap_or_default();
+        writeln!(
+            out,
+            "{} {}{}  {}:{}",
+            desc.kind, desc.name, fqn, filename, line
+        )
+        .unwrap();
         if let Some(ref doc) = desc.docstring {
             for line in doc.lines() {
                 if line.is_empty() {
@@ -404,18 +414,22 @@ impl ProjectTest {
         }
         writeln!(out, "shape: {}", desc.shape).unwrap();
         if !desc.instance_methods.is_empty() {
-            out.push_str("instance_methods:");
+            writeln!(out, "methods:").unwrap();
             for m in &desc.instance_methods {
-                write!(out, " {}", m.name).unwrap();
+                if let Some(doc) = &m.docstring {
+                    writeln!(out, "  /// {doc}").unwrap();
+                }
+                writeln!(out, "  {}", m.signature).unwrap();
             }
-            out.push('\n');
         }
         if !desc.static_methods.is_empty() {
-            out.push_str("static_methods:");
+            writeln!(out, "static_methods:").unwrap();
             for m in &desc.static_methods {
-                write!(out, " {}", m.name).unwrap();
+                if let Some(doc) = &m.docstring {
+                    writeln!(out, "  /// {doc}").unwrap();
+                }
+                writeln!(out, "  {}", m.signature).unwrap();
             }
-            out.push('\n');
         }
         if let Some(ref c) = desc.container {
             writeln!(out, "container: {}", c.name).unwrap();

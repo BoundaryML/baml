@@ -2,19 +2,19 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === TIR2 ===
-function user.Fn() -> string throws never {
-  baml.llm.call_llm_function<T>(baml.llm.Client { name: "openai/gpt-4o", client_type: baml.llm.ClientType.Primitive, sub_clients: [], retry: null, counter: 0 }, "Fn", map {  }) : string
+function user.Fn(client: baml.llm.Client = ...) -> string throws never {
+  baml.llm.call_llm_function<T>(client, "Fn", map {  }) : string
 }
-function user.Fn$render_prompt() -> baml.llm.PromptAst throws never {
-  baml.llm.render_prompt(baml.llm.Client { name: "openai/gpt-4o", client_type: baml.llm.ClientType.Primitive, sub_clients: [], retry: null, counter: 0 }, "Fn", map {  }) : baml.llm.PromptAst
+function user.Fn$render_prompt(client: baml.llm.Client = ...) -> baml.llm.PromptAst throws never {
+  baml.llm.render_prompt(client, "Fn", map {  }) : baml.llm.PromptAst
 }
-function user.Fn$build_request() -> baml.http.Request throws never {
-  baml.llm.build_request(baml.llm.Client { name: "openai/gpt-4o", client_type: baml.llm.ClientType.Primitive, sub_clients: [], retry: null, counter: 0 }, "Fn", map {  }) : baml.http.Request
+function user.Fn$build_request(client: baml.llm.Client = ...) -> baml.http.Request throws never {
+  baml.llm.build_request(client, "Fn", map {  }) : baml.http.Request
 }
-function user.Fn$build_request_stream() -> baml.http.Request throws never {
-  baml.llm.build_request_stream(baml.llm.Client { name: "openai/gpt-4o", client_type: baml.llm.ClientType.Primitive, sub_clients: [], retry: null, counter: 0 }, "Fn", map {  }) : baml.http.Request
+function user.Fn$build_request_stream(client: baml.llm.Client = ...) -> baml.http.Request throws never {
+  baml.llm.build_request_stream(client, "Fn", map {  }) : baml.http.Request
 }
-function user.Fn$parse(json: string) -> string throws never {
+function user.Fn$parse(json: string, client: baml.llm.Client = ...) -> string throws never {
   baml.llm.parse<TFinal>("Fn", json) : string
 }
 class user.TopLevelClass {
@@ -27,11 +27,11 @@ function user.TopLevelClass.from_json(j: baml.json.json) -> user.TopLevelClass t
   TopLevelClass { a: baml.json.from_json<string>(baml.json.field(j, "a")) } : user.TopLevelClass
 }
 enum user.TopLevelEnum
-function user.Fn$stream() -> baml.llm.Stream<null | string, string> throws never {
-  baml.llm.stream_llm_function(baml.llm.Client { name: "openai/gpt-4o", client_type: baml.llm.ClientType.Primitive, sub_clients: [], retry: null, counter: 0 }, "Fn", map {  }) : baml.llm.Stream<null | string, string>
+function user.Fn$stream(client: baml.llm.Client = ...) -> baml.llm.Stream<null | string, string> throws never {
+  baml.llm.stream_llm_function(client, "Fn", map {  }) : baml.llm.Stream<null | string, string>
 }
-function user.Fn$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream<null | string, string> throws never {
-  baml.llm.Client { name: "openai/gpt-4o", client_type: baml.llm.ClientType.Primitive, sub_clients: [], retry: null, counter: 0 }.__make_stream(sse, "Fn") : baml.llm.Stream<null | string, string>
+function user.Fn$parse_stream(sse: baml.http.SseStream, client: baml.llm.Client = ...) -> baml.llm.Stream<null | string, string> throws never {
+  client.__make_stream(sse, "Fn") : baml.llm.Stream<null | string, string>
 }
 class user.TopLevelClass$stream {
   a: null | string

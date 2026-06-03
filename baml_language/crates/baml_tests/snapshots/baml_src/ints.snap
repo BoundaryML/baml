@@ -565,8 +565,7 @@ function ints.count_zeros_plus_ones(n: int) -> int {
     load_var n
     call baml.Int.count_ones
     store_var _3
-    load_var _2
-    load_var _3
+    load_var2 2 3
     add_int
     return
 }
@@ -587,8 +586,7 @@ function ints.int_random_distinct_values_in_wide_range() -> bool {
     jump L2
 
   L1:
-    load_var max_seen
-    load_var min_seen
+    load_var2 2 1
     sub_int
     load_const 500
     cmp_int_op >=
@@ -599,16 +597,14 @@ function ints.int_random_distinct_values_in_wide_range() -> bool {
     load_const 1000
     call baml.Int.random
     store_var r
-    load_var r
-    load_var min_seen
+    load_var2 4 1
     cmp_int_op <
     pop_jump_if_false L3
     load_var r
     store_var min_seen
 
   L3:
-    load_var r
-    load_var max_seen
+    load_var2 4 2
     cmp_int_op >
     pop_jump_if_false L4
     load_var r
@@ -627,21 +623,18 @@ function ints.int_random_full_range_returns_some_int() -> bool {
     store_var _2
     call baml.Int.max_value
     store_var _3
-    load_var _2
-    load_var _3
+    load_var2 2 3
     call baml.Int.random
     store_var r
     call baml.Int.min_value
     store_var _6
-    load_var r
-    load_var _6
+    load_var2 1 4
     cmp_int_op >=
     jump_if_false L0
     pop 1
     call baml.Int.max_value
     store_var _8
-    load_var r
-    load_var _8
+    load_var2 1 5
     cmp_int_op <=
 
   L0:

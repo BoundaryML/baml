@@ -173,7 +173,8 @@ function maps.edit_map_key_helper() -> int {
     load_const 123
     load_const "hi"
     alloc_map 1
-    store_var_load_var map
+    store_var map
+    load_var map
     load_const "hi"
     load_const 42
     load_const 4
@@ -195,7 +196,8 @@ function maps.edit_map_key_helper() -> int {
 
 function maps.map_clear_already_empty_main() -> int {
     alloc_map 0
-    store_var_load_var m
+    store_var m
+    load_var m
     call baml.Map.clear
     pop 1
     load_var m
@@ -205,7 +207,8 @@ function maps.map_clear_already_empty_main() -> int {
 
 function maps.map_clear_makes_get_return_null_main() -> int? {
     alloc_map 0
-    store_var_load_var m
+    store_var m
+    load_var m
     load_const "a"
     load_const 1
     call baml.Map.set
@@ -221,7 +224,8 @@ function maps.map_clear_makes_get_return_null_main() -> int? {
 
 function maps.map_clear_removes_all_main() -> int {
     alloc_map 0
-    store_var_load_var m
+    store_var m
+    load_var m
     load_const "a"
     load_const 1
     call baml.Map.set
@@ -241,7 +245,8 @@ function maps.map_clear_removes_all_main() -> int {
 
 function maps.map_clear_then_reuse_main() -> int {
     alloc_map 0
-    store_var_load_var m
+    store_var m
+    load_var m
     load_const "a"
     load_const 1
     call baml.Map.set
@@ -282,7 +287,8 @@ function maps.map_delete_absent_main() -> int? {
 
 function maps.map_delete_already_deleted_main() -> int? {
     alloc_map 0
-    store_var_load_var m
+    store_var m
+    load_var m
     load_const "a"
     load_const 1
     call baml.Map.set
@@ -299,7 +305,8 @@ function maps.map_delete_already_deleted_main() -> int? {
 
 function maps.map_delete_does_not_affect_other_keys_main() -> int {
     alloc_map 0
-    store_var_load_var m
+    store_var m
+    load_var m
     load_const "a"
     load_const 1
     call baml.Map.set
@@ -334,7 +341,8 @@ function maps.map_delete_does_not_affect_other_keys_main() -> int {
 
 function maps.map_delete_returns_previous_main() -> int? {
     alloc_map 0
-    store_var_load_var m
+    store_var m
+    load_var m
     load_const "a"
     load_const 42
     call baml.Map.set
@@ -347,7 +355,8 @@ function maps.map_delete_returns_previous_main() -> int? {
 
 function maps.map_delete_shrinks_length_main() -> int {
     alloc_map 0
-    store_var_load_var m
+    store_var m
+    load_var m
     load_const "a"
     load_const 1
     call baml.Map.set
@@ -368,7 +377,8 @@ function maps.map_delete_shrinks_length_main() -> int {
 
 function maps.map_get_or_insert_does_not_overwrite_main() -> int {
     alloc_map 0
-    store_var_load_var m
+    store_var m
+    load_var m
     load_const "k"
     load_const 1
     call baml.Map.set
@@ -399,7 +409,8 @@ function maps.map_get_or_insert_does_not_overwrite_main() -> int {
 
 function maps.map_get_or_insert_grows_length_main() -> int {
     alloc_map 0
-    store_var_load_var m
+    store_var m
+    load_var m
     load_const "a"
     load_const 1
     call baml.Map.get_or_insert
@@ -424,7 +435,8 @@ function maps.map_get_or_insert_inserts_when_absent_main() -> int {
 
 function maps.map_get_or_insert_persists_main() -> int {
     alloc_map 0
-    store_var_load_var m
+    store_var m
+    load_var m
     load_const "k"
     load_const 7
     call baml.Map.get_or_insert
@@ -450,7 +462,8 @@ function maps.map_get_or_insert_persists_main() -> int {
 
 function maps.map_get_or_insert_returns_existing_main() -> int {
     alloc_map 0
-    store_var_load_var m
+    store_var m
+    load_var m
     load_const "k"
     load_const 1
     call baml.Map.set
@@ -464,7 +477,8 @@ function maps.map_get_or_insert_returns_existing_main() -> int {
 
 function maps.map_has_after_delete_main() -> bool {
     alloc_map 0
-    store_var_load_var m
+    store_var m
+    load_var m
     load_const "a"
     load_const 1
     call baml.Map.set
@@ -481,7 +495,8 @@ function maps.map_has_after_delete_main() -> bool {
 
 function maps.map_has_after_get_or_insert_main() -> bool {
     alloc_map 0
-    store_var_load_var m
+    store_var m
+    load_var m
     load_const "k"
     load_const 7
     call baml.Map.get_or_insert
@@ -512,7 +527,8 @@ function maps.map_set_first_insert_main() -> int? {
 
 function maps.map_set_grows_length_main() -> int {
     alloc_map 0
-    store_var_load_var m
+    store_var m
+    load_var m
     load_const "a"
     load_const 1
     call baml.Map.set
@@ -534,7 +550,8 @@ function maps.map_set_grows_length_main() -> int {
 
 function maps.map_set_replace_preserves_length_main() -> int {
     alloc_map 0
-    store_var_load_var m
+    store_var m
+    load_var m
     load_const "a"
     load_const 1
     call baml.Map.set
@@ -556,7 +573,8 @@ function maps.map_set_replace_preserves_length_main() -> int {
 
 function maps.map_set_replace_returns_previous_main() -> int? {
     alloc_map 0
-    store_var_load_var m
+    store_var m
+    load_var m
     load_const "a"
     load_const 1
     call baml.Map.set
@@ -570,7 +588,8 @@ function maps.map_set_replace_returns_previous_main() -> int? {
 
 function maps.map_set_then_get_main() -> int {
     alloc_map 0
-    store_var_load_var m
+    store_var m
+    load_var m
     load_const "a"
     load_const 1
     call baml.Map.set
@@ -603,7 +622,8 @@ function maps.use_map_contains_helper() -> string {
     load_const "world"
     load_const "hello"
     alloc_map 1
-    store_var_load_var map
+    store_var map
+    load_var map
     load_const "hello"
     call baml.Map.has
     pop_jump_if_false L0

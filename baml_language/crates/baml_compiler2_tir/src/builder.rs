@@ -2366,6 +2366,32 @@ impl<'db> TypeInferenceBuilder<'db> {
                 }
                 shadowed.truncate(saved_len);
             }
+            Stmt::WhileLet {
+                pattern,
+                scrutinee,
+                body: loop_body,
+            } => {
+                // Scrutinee is evaluated outside the pattern's binding scope;
+                // the pattern's names shadow within the body only — mirrors
+                // `Stmt::For` (collection then pattern then body).
+                Self::collect_default_expr_forward_references(
+                    *scrutinee,
+                    body,
+                    later_params,
+                    shadowed,
+                    refs,
+                );
+                let saved_len = shadowed.len();
+                Self::push_pattern_bindings(*pattern, body, shadowed);
+                Self::collect_default_expr_forward_references(
+                    *loop_body,
+                    body,
+                    later_params,
+                    shadowed,
+                    refs,
+                );
+                shadowed.truncate(saved_len);
+            }
             Stmt::For {
                 binding,
                 collection,
@@ -2743,6 +2769,31 @@ impl<'db> TypeInferenceBuilder<'db> {
                     });
                 }
 
+                // When *every* non-function arm is already in recovery
+                // (Unknown/Error), a member's resolution already reported the
+                // real error (e.g. an ambiguous interface method → E0121), so
+                // don't also emit a misleading `unknown | unknown is not a
+                // function`. But if a concrete non-function arm remains (e.g.
+                // `int | unknown`), that arm is genuinely not callable and must
+                // still be diagnosed.
+                let has_recovery_arm = expanded
+                    .iter()
+                    .any(|a| matches!(a, Ty::Unknown { .. } | Ty::Error { .. }));
+                let has_concrete_non_function_arm = expanded.iter().any(|a| {
+                    !matches!(
+                        a,
+                        Ty::Function { .. } | Ty::Unknown { .. } | Ty::Error { .. }
+                    )
+                });
+                if has_recovery_arm && !has_concrete_non_function_arm {
+                    self.infer_args_for_recovery(args, body);
+                    return CheckedCallInner {
+                        result: Ty::Unknown {
+                            attr: TyAttr::default(),
+                        },
+                        bindings_from_inference: false,
+                    };
+                }
                 // Not all arms are functions — report not callable.
                 self.context.report_simple(
                     TirTypeError::NotCallable {
@@ -3193,13 +3244,13 @@ impl<'db> TypeInferenceBuilder<'db> {
             // than emitting a generic `type mismatch`. (Interface→sibling
             // projections keep the type-mismatch form, which names both
             // interfaces.)
-            if let (Ty::Interface(iface_qtn, _, _), false) =
+            if let (Ty::Interface(_, _, _), false) =
                 (&target_ty, matches!(base_ty, Ty::Interface(..)))
             {
                 self.context.report_simple(
                     TirTypeError::TypeDoesNotImplementInterface {
                         value_type: base_ty,
-                        interface_name: iface_qtn.name().clone(),
+                        interface: target_ty.clone(),
                     },
                     expr_id,
                 );
@@ -4538,6 +4589,59 @@ impl<'db> TypeInferenceBuilder<'db> {
                 if let Some(after_stmt) = after {
                     self.check_stmt(*after_stmt, body);
                 }
+                false
+            }
+            Stmt::WhileLet {
+                pattern,
+                scrutinee,
+                body: while_body,
+            } => {
+                // Refutable pattern in a loop header: mirrors `if_let_expr_common`
+                // (refutable expected, warn-not-reject if irrefutable) crossed
+                // with `Stmt::While`'s scoping (snapshot/restore so body lets and
+                // narrowings don't leak past the loop). Produces unit and never
+                // diverges — the body may run zero times.
+                let scrutinee_ty = self.infer_expr(*scrutinee, body);
+                let scrutinee_name = match &body.exprs[*scrutinee] {
+                    Expr::Path(segments) if segments.len() == 1 => Some(segments[0].clone()),
+                    _ => None,
+                };
+
+                // Lower the refutable pattern against the scrutinee — same
+                // machinery as `match` arms / `if let`. Populates
+                // `pattern_types` and yields `matched_ty` + `dpat`.
+                let result = self.analyze_and_lower(*pattern, &scrutinee_ty, body, *while_body);
+
+                // Body scope: narrow the scrutinee to the matched type and
+                // register the pattern bindings for the body only, then restore.
+                let snapshot = self.snapshot_scoped_locals();
+                if let Some(name) = &scrutinee_name {
+                    self.narrow_local(name.clone(), result.matched_ty.clone());
+                }
+                self.finalize_pattern_lowering(*pattern, &result, None, None, &scrutinee_ty);
+                self.infer_expr(*while_body, body);
+                self.restore_scoped_locals(&snapshot);
+
+                // Irrefutability warning — same policy as `if let`. An
+                // irrefutable `while let` never exits via pattern failure, so it
+                // is an unconditional infinite loop with a pointless pattern;
+                // warn and suggest a plain `while`/`loop`.
+                let scrutinee_ty_for_matrix = self.matrix_normalize_scrut(&scrutinee_ty);
+                let report = crate::pattern_lowering::compute_match_usefulness(
+                    self,
+                    std::slice::from_ref(&result.dpat),
+                    scrutinee_ty_for_matrix,
+                );
+                if report.missing.is_empty() {
+                    let err = crate::infer_context::TirTypeError::IrrefutablePatternInWhileLet;
+                    if let Some(sm) = self.body_source_map.as_ref() {
+                        self.context
+                            .report_warning_at_span(err, sm.pattern_span(*pattern));
+                    } else {
+                        self.context.report_warning_simple(err, *scrutinee);
+                    }
+                }
+
                 false
             }
             // Design note: Stmt::For is kept as a first-class construct (not desugared
@@ -6273,6 +6377,14 @@ impl<'db> TypeInferenceBuilder<'db> {
                     self.collect_throw_facts_from_stmt(*after_stmt, body, out);
                 }
             }
+            Stmt::WhileLet {
+                scrutinee,
+                body: while_body,
+                ..
+            } => {
+                self.collect_throw_facts_from_expr(*scrutinee, body, out);
+                self.collect_throw_facts_from_expr(*while_body, body, out);
+            }
             Stmt::For {
                 collection,
                 body: for_body,
@@ -7456,6 +7568,9 @@ impl<'db> TypeInferenceBuilder<'db> {
             | Ty::Literal(baml_base::Literal::String(_), _, _) => {
                 // Bridge: string / string-literal → String class
                 self.resolve_builtin_member(&["String"], &[], member, at)
+                    .or_else(|| {
+                        self.try_registry_member(base_ty, Name::new("string"), member, at, bound)
+                    })
                     .unwrap_or_else(|| {
                         self.context.report_at_member_simple(
                             TirTypeError::UnresolvedMember {
@@ -7490,6 +7605,9 @@ impl<'db> TypeInferenceBuilder<'db> {
             Ty::Primitive(PrimitiveType::Bigint, _)
             | Ty::Literal(baml_base::Literal::Bigint(_), _, _) => self
                 .resolve_builtin_member(&["Bigint"], &[], member, at)
+                .or_else(|| {
+                    self.try_registry_member(base_ty, Name::new("bigint"), member, at, bound)
+                })
                 .unwrap_or_else(|| {
                     self.context.report_at_member_simple(
                         TirTypeError::UnresolvedMember {
@@ -7506,6 +7624,9 @@ impl<'db> TypeInferenceBuilder<'db> {
             Ty::Primitive(PrimitiveType::Float, _)
             | Ty::Literal(baml_base::Literal::Float(_), _, _) => self
                 .resolve_builtin_member(&["Float"], &[], member, at)
+                .or_else(|| {
+                    self.try_registry_member(base_ty, Name::new("float"), member, at, bound)
+                })
                 .unwrap_or_else(|| {
                     self.context.report_at_member_simple(
                         TirTypeError::UnresolvedMember {
@@ -7522,6 +7643,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             Ty::Primitive(PrimitiveType::Bool, _)
             | Ty::Literal(baml_base::Literal::Bool(_), _, _) => self
                 .resolve_builtin_member(&["Bool"], &[], member, at)
+                .or_else(|| self.try_registry_member(base_ty, Name::new("bool"), member, at, bound))
                 .unwrap_or_else(|| {
                     self.context.report_at_member_simple(
                         TirTypeError::UnresolvedMember {
@@ -7537,6 +7659,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             // null / Null companion class
             Ty::Primitive(PrimitiveType::Null, _) => self
                 .resolve_builtin_member(&["Null"], &[], member, at)
+                .or_else(|| self.try_registry_member(base_ty, Name::new("null"), member, at, bound))
                 .unwrap_or_else(|| {
                     self.context.report_at_member_simple(
                         TirTypeError::UnresolvedMember {
@@ -7640,10 +7763,30 @@ impl<'db> TypeInferenceBuilder<'db> {
                 // If ALL members have the field, return Union(resolved_types).
                 // If any member is missing the field, report per-member errors.
                 let members = members.clone();
-                let resolved: Vec<(Ty, Option<Ty>)> = members
-                    .iter()
-                    .map(|m| (m.clone(), self.try_resolve_member_on_ty(m, member)))
-                    .collect();
+                // A shared implementor of two of the union's interfaces makes an
+                // unqualified method call ambiguous (E0121) — reject it instead
+                // of silently picking the first interface's default.
+                if let Some((class_name, sources)) =
+                    self.union_interface_method_ambiguity(&members, member)
+                {
+                    self.context.report_at_member(
+                        TirTypeError::AmbiguousInterfaceMethod {
+                            class_name,
+                            method_name: member.clone(),
+                            sources,
+                        },
+                        at,
+                        Vec::new(),
+                    );
+                    return Ty::Unknown {
+                        attr: TyAttr::default(),
+                    };
+                }
+                let mut resolved: Vec<(Ty, Option<Ty>)> = Vec::with_capacity(members.len());
+                for m in &members {
+                    let r = self.resolve_union_member_ty(m, member, at, bound);
+                    resolved.push((m.clone(), r));
+                }
 
                 if resolved.iter().all(|(_, r)| r.is_some()) {
                     // All members have the field — return union of resolved types
@@ -7962,10 +8105,31 @@ impl<'db> TypeInferenceBuilder<'db> {
                 // Use report_at_segment for missing members so the span points at the
                 // segment token, not the full path.
                 let members = members.clone();
-                let resolved: Vec<(Ty, Option<Ty>)> = members
-                    .iter()
-                    .map(|m| (m.clone(), self.try_resolve_member_on_ty(m, member)))
-                    .collect();
+                // A shared implementor of two of the union's interfaces makes an
+                // unqualified method call ambiguous (E0121) — reject it instead
+                // of silently picking the first interface's default.
+                if let Some((class_name, sources)) =
+                    self.union_interface_method_ambiguity(&members, member)
+                {
+                    self.context.report_at_segment(
+                        TirTypeError::AmbiguousInterfaceMethod {
+                            class_name,
+                            method_name: member.clone(),
+                            sources,
+                        },
+                        path_id,
+                        seg_idx,
+                        Vec::new(),
+                    );
+                    return Ty::Unknown {
+                        attr: TyAttr::default(),
+                    };
+                }
+                let mut resolved: Vec<(Ty, Option<Ty>)> = Vec::with_capacity(members.len());
+                for m in &members {
+                    let r = self.resolve_union_member_ty(m, member, path_id, bound);
+                    resolved.push((m.clone(), r));
+                }
 
                 if resolved.iter().all(|(_, r)| r.is_some()) {
                     let field_tys: Vec<Ty> =
@@ -8001,6 +8165,255 @@ impl<'db> TypeInferenceBuilder<'db> {
                 // to resolve_member which handles them with proper error reporting.
                 self.resolve_member(base_ty, member, path_id, bound)
             }
+        }
+    }
+
+    /// Conservative ambiguity check for accessing `member` (a method) on a union
+    /// whose members include interfaces. If some class implements two or more of
+    /// the union's interfaces and `member` is declared by ≥2 of them, then a
+    /// value of the union could be that class — for which a direct
+    /// `value.member()` is rejected as ambiguous (E0121). The static union type
+    /// admits such a class, so the call is genuinely ambiguous; report it rather
+    /// than silently dispatching to the first interface's default.
+    ///
+    /// Returns `(class_name, formatted_sources)` for the E0121 diagnostic, or
+    /// `None` when no shared implementor makes the call ambiguous.
+    fn union_interface_method_ambiguity(
+        &self,
+        members: &[Ty],
+        member: &Name,
+    ) -> Option<(Name, Vec<String>)> {
+        let iface_qtns: FxHashSet<crate::ty::QualifiedTypeName> = members
+            .iter()
+            .filter_map(|m| match m {
+                Ty::Interface(qtn, _, _) => Some(qtn.clone()),
+                _ => None,
+            })
+            .collect();
+        // A single interface can't have a cross-member shared-implementor clash.
+        if iface_qtns.len() < 2 {
+            return None;
+        }
+        let db = self.context.db();
+        let registry = crate::interfaces::package_implements_registry(db, self.package_id);
+        let mut seen: FxHashSet<crate::ty::QualifiedTypeName> = FxHashSet::default();
+        for rule in &registry.interface_impl_rules {
+            let Ty::Interface(rule_iface, _, _) = &rule.interface_ty else {
+                continue;
+            };
+            if !iface_qtns.contains(rule_iface) {
+                continue;
+            }
+            let Ty::Class(class_qtn, _, _) = &rule.for_ty_pattern else {
+                continue;
+            };
+            if !seen.insert(class_qtn.clone()) {
+                continue;
+            }
+            // Which of THIS union's interfaces declare `member` on the class.
+            let sources: Vec<(crate::ty::QualifiedTypeName, Vec<Ty>)> = self
+                .implemented_interface_method_sources(class_qtn, &[], member)
+                .into_iter()
+                .filter(|(_, qtn, _)| iface_qtns.contains(qtn))
+                .map(|(_, qtn, args)| (qtn, args))
+                .collect();
+            if sources.len() >= 2 {
+                return Some((
+                    class_qtn.name().clone(),
+                    self.format_interface_method_sources(sources.into_iter()),
+                ));
+            }
+        }
+        None
+    }
+
+    /// Resolve `member` on one constituent `m` of a union receiver.
+    ///
+    /// Interface members can't be resolved by the read-only
+    /// [`try_resolve_member_on_ty`](Self::try_resolve_member_on_ty) probe — it
+    /// returns the `Ty::Unknown` sentinel, which makes a method present on
+    /// every member collapse into a non-callable `unknown | unknown` union
+    /// (BEP-044 union dispatch, formerly E0006). Resolve interface members
+    /// through the full interface machinery instead, but suppress the
+    /// diagnostics and the single-interface `MemberResolution` it records: a
+    /// union method/field access dispatches on the runtime class (see MIR
+    /// `try_lower_union_iface_dispatch` / `try_lower_interface_field_access`),
+    /// not a stored per-member resolution.
+    fn resolve_union_member_ty(
+        &mut self,
+        m: &Ty,
+        member: &Name,
+        at: ExprId,
+        bound: bool,
+    ) -> Option<Ty> {
+        if let Ty::Interface(iface_name, type_args, _) = m {
+            let iface_name = iface_name.clone();
+            let type_args = type_args.clone();
+            let self_ty = Ty::Interface(iface_name.clone(), type_args.clone(), TyAttr::default());
+            let ty = self.resolve_member_suppressing_side_effects(at, |this| {
+                this.resolve_interface_member(&iface_name, &type_args, member, at, bound)
+            });
+            // A bound interface *method* comes back self-stripped, but class
+            // method members of the same union keep `self` (the unbound form).
+            // The union-callee fold requires every arm to share a shape and
+            // skips `self` for method calls, so re-attach a `self` param here
+            // to match the class arms (`(self: Animal) -> R`, not `() -> R`).
+            // Only for actual methods — a function-typed interface *field* must
+            // keep its declared signature rather than gain a phantom `self`.
+            let is_method = self.interface_closure_declares_method(&iface_name, member);
+            return ty.map(|t| {
+                if is_method {
+                    Self::prepend_self_param_if_method(t, self_ty.clone(), bound)
+                } else {
+                    t
+                }
+            });
+        }
+        // Class / primitive member: the read-only probe handles its own fields
+        // and methods.
+        if let Some(ty) = self.try_resolve_member_on_ty(m, member) {
+            return Some(ty);
+        }
+        // A class member contributed by two or more interfaces is genuinely
+        // ambiguous — emit the same E0131 (field) / E0121 (method) the
+        // single-class receiver path emits, with the `.as<I>` projection hint.
+        // Surface it directly (not suppressed) and treat the member as resolved,
+        // so the union doesn't instead collapse to a misleading
+        // `unknown | unknown` (E0006) or blame the member with a false E0007.
+        if let Ty::Class(class_name, type_args, _) = m {
+            let related = || {
+                self.package_items
+                    .lookup_type(class_name.namespace(), class_name.name())
+                    .map(|def| {
+                        vec![RelatedNote::new(
+                            RelatedLocation::Item(def),
+                            "class defined here",
+                        )]
+                    })
+                    .unwrap_or_default()
+            };
+            let field_sources = self.class_interface_field_sources(class_name, member);
+            if field_sources.len() > 1 {
+                self.context.report_at_member(
+                    TirTypeError::AmbiguousInterfaceField {
+                        class_name: class_name.name().clone(),
+                        field_name: member.clone(),
+                        sources: field_sources,
+                    },
+                    at,
+                    related(),
+                );
+                return Some(Ty::Unknown {
+                    attr: TyAttr::default(),
+                });
+            }
+            let method_sources: Vec<String> = self.format_interface_method_sources(
+                self.implemented_interface_method_sources(class_name, type_args, member)
+                    .into_iter()
+                    .map(|(_, qtn, args)| (qtn, args)),
+            );
+            if method_sources.len() >= 2 {
+                self.context.report_at_member(
+                    TirTypeError::AmbiguousInterfaceMethod {
+                        class_name: class_name.name().clone(),
+                        method_name: member.clone(),
+                        sources: method_sources,
+                    },
+                    at,
+                    related(),
+                );
+                return Some(Ty::Unknown {
+                    attr: TyAttr::default(),
+                });
+            }
+        }
+        // Out-of-body / blanket `implements I for T` rules aren't in the type's
+        // in-body members, so a union member backed only by such a rule (e.g.
+        // `int` in `int | Dog` with `implements Debuggable for int`) is missed
+        // above. Consult the registry — suppressing diagnostics + the recorded
+        // resolution — so the member resolves (and a genuinely-lacking member
+        // like `Dog` is the only one blamed).
+        let receiver_name = match m {
+            Ty::Class(qtn, _, _) => qtn.name().clone(),
+            _ => Name::new("value"),
+        };
+        let member_ty = m.clone();
+        let self_ty = m.clone();
+        let ty = self.resolve_member_suppressing_side_effects(at, |this| {
+            this.try_registry_member(&member_ty, receiver_name.clone(), member, at, bound)
+        });
+        // Only re-attach `self` for methods (mirrors the interface branch). The
+        // registry resolves `member` as a method exactly when some out-of-body
+        // interface declares it as one; a function-typed interface *field*
+        // satisfied out-of-body must keep its declared signature rather than
+        // gain a phantom `self`.
+        let is_method = !self
+            .registry_interface_method_sources(&member_ty, member)
+            .is_empty();
+        ty.map(|t| {
+            if is_method {
+                Self::prepend_self_param_if_method(t, self_ty.clone(), bound)
+            } else {
+                t
+            }
+        })
+    }
+
+    /// Run `f` (a member-resolution probe that may report diagnostics and record
+    /// a single `MemberResolution` at `at`) and roll back both side effects.
+    /// Used by union-member resolution, where the real diagnostics/dispatch are
+    /// decided across all members (and at the MIR layer), not per-member.
+    fn resolve_member_suppressing_side_effects(
+        &mut self,
+        at: ExprId,
+        f: impl FnOnce(&mut Self) -> Option<Ty>,
+    ) -> Option<Ty> {
+        let diag_snapshot = self.context.diagnostic_count();
+        let saved_resolution = self.resolutions.remove(&at);
+        let saved_generics = self.interface_method_generic_params.remove(&at);
+        let ty = f(self);
+        self.context.truncate_diagnostics(diag_snapshot);
+        self.resolutions.remove(&at);
+        self.interface_method_generic_params.remove(&at);
+        if let Some(r) = saved_resolution {
+            self.resolutions.insert(at, r);
+        }
+        if let Some(g) = saved_generics {
+            self.interface_method_generic_params.insert(at, g);
+        }
+        ty
+    }
+
+    /// Re-attach a `self` parameter (typed `self_ty`) to a self-stripped bound
+    /// method type, so it shares the self-included shape of class method members
+    /// in a union callee. No-op for non-function types or unbound calls.
+    fn prepend_self_param_if_method(ty: Ty, self_ty: Ty, bound: bool) -> Ty {
+        match ty {
+            Ty::Function {
+                generic_params,
+                generic_param_bounds,
+                params,
+                ret,
+                throws,
+                attr,
+            } if bound => {
+                let mut with_self = Vec::with_capacity(params.len() + 1);
+                with_self.push(FunctionParamTy {
+                    name: Some(Name::new("self")),
+                    ty: self_ty,
+                    mode: FunctionParamMode::Required,
+                });
+                with_self.extend(params);
+                Ty::Function {
+                    generic_params,
+                    generic_param_bounds,
+                    params: with_self,
+                    ret,
+                    throws,
+                    attr,
+                }
+            }
+            other => other,
         }
     }
 
@@ -10735,6 +11148,16 @@ impl<'db> TypeInferenceBuilder<'db> {
     /// `implements I` block never satisfies `I`, even if it has matching
     /// fields and methods.
     fn is_subtype(&self, sub: &Ty, sup: &Ty) -> bool {
+        // Reflexivity: a type variable is a subtype of *itself*, regardless of
+        // any bound. Checked before bound-substitution below — otherwise a
+        // bounded `T extends Animal` would rewrite `sub` to `Animal` and then
+        // reject `T <: T` (the self-contradictory "expected T, got T"), which
+        // breaks `fn id<T extends Animal>(a: T) -> T { return a }`.
+        if let (Ty::TypeVar(a, _), Ty::TypeVar(b, _)) = (sub, sup)
+            && a == b
+        {
+            return true;
+        }
         if let Ty::TypeVar(name, _) = sub
             && let Some(bound) = self.generic_param_bounds.get(name)
         {
@@ -11148,6 +11571,31 @@ impl<'db> TypeInferenceBuilder<'db> {
     ///
     /// String concatenation is only valid for `Add`; other arithmetic ops on
     /// strings are invalid and return `Unknown` (triggering an error upstream).
+    /// Whether `ty` is a non-object primitive — `int`/`float`/`bigint`/`bool`/
+    /// `null` (and their literals). These are tagged values with no heap object,
+    /// so the VM cannot string-concatenate them (`exec_binop` only concatenates
+    /// two objects). String-typed and `uint8array`/media values ARE objects.
+    fn is_non_object_primitive(ty: &Ty) -> bool {
+        matches!(
+            ty,
+            Ty::Primitive(
+                PrimitiveType::Int
+                    | PrimitiveType::Float
+                    | PrimitiveType::Bigint
+                    | PrimitiveType::Bool
+                    | PrimitiveType::Null,
+                _,
+            ) | Ty::Literal(
+                baml_base::Literal::Int(_)
+                    | baml_base::Literal::Float(_)
+                    | baml_base::Literal::Bigint(_)
+                    | baml_base::Literal::Bool(_),
+                _,
+                _,
+            )
+        )
+    }
+
     fn infer_arithmetic(op: baml_compiler2_ast::BinaryOp, lhs: &Ty, rhs: &Ty) -> Ty {
         fn promote(a: PrimitiveType, b: &PrimitiveType) -> Option<PrimitiveType> {
             if a == *b {
@@ -11210,8 +11658,16 @@ impl<'db> TypeInferenceBuilder<'db> {
                 Ty::Primitive(PrimitiveType::Int, TyAttr::default())
             }
             (Some(PrimitiveType::String), _) | (_, Some(PrimitiveType::String)) => {
-                // String concatenation only for Add
-                if matches!(op, baml_compiler2_ast::BinaryOp::Add) {
+                // String concatenation, Add only. The VM concatenates any two
+                // *objects* via `as_string` (string, uint8array, …), but a
+                // non-object primitive (int/float/bigint/bool/null) has no object
+                // representation and aborts at runtime. So `string + int` must be
+                // a type error here rather than inferring `string` and crashing
+                // the VM (F4), while `string + uint8array` stays valid.
+                if matches!(op, baml_compiler2_ast::BinaryOp::Add)
+                    && !Self::is_non_object_primitive(lhs)
+                    && !Self::is_non_object_primitive(rhs)
+                {
                     Ty::Primitive(PrimitiveType::String, TyAttr::default())
                 } else {
                     Ty::Unknown {
@@ -12259,12 +12715,46 @@ impl TypeInferenceBuilder<'_> {
             && !crate::generics::contains_typevar(&scrut_for_check)
             && !self.is_subtype(&pat_natural, &scrut_for_check)
             && !self.is_subtype(&scrut_for_check, &pat_natural)
+            && !self.pattern_overlaps_scrut_member(&pat_natural, &scrut_for_check)
         {
             let err = TirTypeError::TypeMismatch {
                 expected: scrut_ty.clone(),
                 got: pat_natural,
             };
             self.report_at_pat_or_expr(err, pat_id, at_expr);
+        }
+    }
+
+    /// A match arm is valid if its pattern overlaps *any* member of a
+    /// union/optional scrutinee — the arm matches that member's values even
+    /// when other members don't (`null`, or an unrelated class). Without this,
+    /// `let a: Animal => …` over `(Dog | Cat)?` is wrongly rejected because the
+    /// whole `Dog | Cat | null` isn't a subtype of `Animal` (the `null` arm) and
+    /// `Animal` isn't a subtype of the union either.
+    fn pattern_overlaps_scrut_member(&self, pat: &Ty, scrut: &Ty) -> bool {
+        let members = self.flatten_union_optional_members(scrut);
+        // Only a genuine union/optional contributes >1 member; a scalar scrut
+        // yields itself and was already covered by the two `is_subtype` checks.
+        members.len() > 1
+            && members
+                .iter()
+                .any(|m| self.is_subtype(pat, m) || self.is_subtype(m, pat))
+    }
+
+    /// Flatten a (possibly nested) union/optional type into its leaf members,
+    /// with `null` materialized for each `Optional` layer.
+    fn flatten_union_optional_members(&self, ty: &Ty) -> Vec<Ty> {
+        match self.expand_alias_chains(ty.clone()) {
+            Ty::Union(members, _) => members
+                .iter()
+                .flat_map(|m| self.flatten_union_optional_members(m))
+                .collect(),
+            Ty::Optional(inner, _) => {
+                let mut out = self.flatten_union_optional_members(&inner);
+                out.push(Ty::Primitive(PrimitiveType::Null, TyAttr::default()));
+                out
+            }
+            other => vec![other],
         }
     }
 
@@ -12351,8 +12841,30 @@ impl TypeInferenceBuilder<'_> {
                 // `S | StreamNoYield` rather than last-write-wins.
                 let mut bindings_by_name: indexmap::IndexMap<Name, (PatId, Vec<Ty>)> =
                     indexmap::IndexMap::new();
+                // `pattern_types` is single-valued per PatId, but lowering the
+                // same nested sub-patterns once per union member overwrites
+                // their entries last-write-wins (the `insert` in
+                // `analyze_and_lower_no_subtype_check`). MIR reads those
+                // per-PatId entries to emit each pattern's runtime `is`-type
+                // test, so keeping only the last member makes e.g. `x: A | B`
+                // test only `B` — values of earlier members never match. Join
+                // the per-member writes here so the recorded type spans every
+                // member, mirroring how `matched_ty` / `bindings` are joined
+                // across members below. (MIR already ORs a union's members.)
+                let pt_before = self.pattern_types.clone();
+                let mut pt_joined: FxHashMap<PatId, Ty> = FxHashMap::default();
                 for member_ty in &targets {
                     let inner = self.analyze_and_lower_inner(pat_id, member_ty, body, at_expr);
+                    for (k, v) in &self.pattern_types {
+                        if pt_before.get(k) != Some(v) {
+                            pt_joined
+                                .entry(*k)
+                                .and_modify(|acc| {
+                                    *acc = Self::join_all(&[acc.clone(), v.clone()]);
+                                })
+                                .or_insert_with(|| v.clone());
+                        }
+                    }
                     let wrapped = crate::exhaustiveness::DPat::union_member(
                         member_ty.clone(),
                         inner.dpat,
@@ -12369,6 +12881,11 @@ impl TypeInferenceBuilder<'_> {
                             .or_insert_with(|| (b.pat_id, Vec::new()));
                         entry.1.push(b.ty);
                     }
+                }
+                // Publish the per-member-joined nested pattern types, undoing
+                // the last-write-wins clobber from the loop above.
+                for (k, v) in pt_joined {
+                    self.pattern_types.insert(k, v);
                 }
                 let joined_bindings: Vec<crate::pattern_lowering::PatternBinding> =
                     bindings_by_name
@@ -13099,10 +13616,11 @@ impl TypeInferenceBuilder<'_> {
         match &w.ctor {
             Ctor::Class(qtn, _) => {
                 let names = self.class_field_names_ordered(qtn);
+                let qtn_str = qtn.render_user_facing();
                 if w.fields.is_empty() {
-                    return format!("{qtn} {{}}");
+                    return format!("{qtn_str} {{}}");
                 }
-                let mut out = format!("{qtn} {{ ");
+                let mut out = format!("{qtn_str} {{ ");
                 for (i, fld) in w.fields.iter().enumerate() {
                     if i > 0 {
                         out.push_str(", ");

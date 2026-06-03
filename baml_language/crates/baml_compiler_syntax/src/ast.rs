@@ -904,6 +904,7 @@ impl AstNode for LetStmt {
 
 ast_node!(IfExpr, IF_EXPR);
 ast_node!(WhileStmt, WHILE_STMT);
+ast_node!(WhileLetStmt, WHILE_LET_STMT);
 ast_node!(ForExpr, FOR_EXPR);
 ast_node!(BlockExpr, BLOCK_EXPR);
 ast_node!(ReturnStmt, RETURN_STMT);
@@ -2417,6 +2418,29 @@ impl WhileStmt {
     }
 }
 
+impl WhileLetStmt {
+    /// Get the refutable pattern (the first `PATTERN` child). Mirrors the
+    /// `IF_LET_EXPR` layout: `PATTERN`, scrutinee expr, then `BLOCK_EXPR`.
+    pub fn pattern(&self) -> Option<SyntaxNode> {
+        self.syntax
+            .children()
+            .find(|n| n.kind() == SyntaxKind::PATTERN)
+    }
+
+    /// Get the scrutinee expression (the expression after `=`). It is the
+    /// first child that is neither the `PATTERN` nor the body `BLOCK_EXPR`.
+    pub fn scrutinee(&self) -> Option<SyntaxNode> {
+        self.syntax
+            .children()
+            .find(|n| !matches!(n.kind(), SyntaxKind::PATTERN | SyntaxKind::BLOCK_EXPR))
+    }
+
+    /// Get the body block expression (the `BLOCK_EXPR` child).
+    pub fn body(&self) -> Option<BlockExpr> {
+        self.syntax.children().find_map(BlockExpr::cast)
+    }
+}
+
 impl IfExpr {
     /// Get the condition expression.
     /// The condition is the first child expression of the if expression.
@@ -2776,7 +2800,10 @@ impl BlockElement {
             BlockElement::Stmt(node) => {
                 // WHILE_STMT and FOR_EXPR don't consume semicolons in the parser,
                 // so check siblings like expressions
-                if matches!(node.kind(), SyntaxKind::WHILE_STMT | SyntaxKind::FOR_EXPR) {
+                if matches!(
+                    node.kind(),
+                    SyntaxKind::WHILE_STMT | SyntaxKind::WHILE_LET_STMT | SyntaxKind::FOR_EXPR
+                ) {
                     return node
                         .siblings_with_tokens(Direction::Next)
                         .skip(1)
@@ -2823,6 +2850,7 @@ impl BlockExpr {
                         | SyntaxKind::WATCH_LET
                         | SyntaxKind::RETURN_STMT
                         | SyntaxKind::WHILE_STMT
+                        | SyntaxKind::WHILE_LET_STMT
                         | SyntaxKind::FOR_EXPR
                         | SyntaxKind::BREAK_STMT
                         | SyntaxKind::CONTINUE_STMT

@@ -18,8 +18,6 @@ pub(crate) mod resolve_media;
 mod specialize_prompt;
 pub mod stream_accumulator;
 pub(crate) mod types;
-#[cfg(target_arch = "wasm32")]
-pub(crate) mod wasm;
 
 use std::{str::FromStr, sync::Arc};
 
@@ -38,7 +36,13 @@ pub use types::LlmOpError;
 // --- Public API: only what sys_types and bex_engine tests actually use ---
 pub use types::SapStreamCache;
 
+// Selects the rustls crypto provider for the crate. No longer called directly
+// now that all HTTPS flows through `RuntimeIo` (sys_native installs its own
+// provider), but the `aws-crypto`/`ring-crypto` features are still part of the
+// workspace-wide feature chain (e.g. `sys_ops/aws-crypto` forwards here), so
+// the helper and its `rustls` dep are retained.
 #[cfg(all(not(target_arch = "wasm32"), feature = "ring-crypto"))]
+#[allow(dead_code)]
 pub(crate) fn ensure_rustls_crypto_provider() {
     let _ = rustls::crypto::ring::default_provider().install_default();
 }
@@ -48,6 +52,7 @@ pub(crate) fn ensure_rustls_crypto_provider() {
     not(feature = "ring-crypto"),
     feature = "aws-crypto"
 ))]
+#[allow(dead_code)]
 pub(crate) fn ensure_rustls_crypto_provider() {
     let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
 }
@@ -57,6 +62,7 @@ pub(crate) fn ensure_rustls_crypto_provider() {
     not(feature = "ring-crypto"),
     not(feature = "aws-crypto")
 ))]
+#[allow(dead_code)]
 pub(crate) fn ensure_rustls_crypto_provider() {}
 
 // ============================================================================

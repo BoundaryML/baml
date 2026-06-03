@@ -64,7 +64,7 @@ jobs:
     runs-on: blacksmith-16vcpu-ubuntu-2404
     timeout-minutes: 25
     steps:
-      - uses: actions/checkout@v6
+      - uses: useblacksmith/checkout@v1
         with:
           persist-credentials: false
 
@@ -94,6 +94,11 @@ jobs:
 
           direnv allow .envrc
           direnv export gha >> "$GITHUB_ENV"
+
+      # Separate step so if fetch is slow, build is fast.
+      - name: "Fetch cargo dependencies"
+        run: cargo fetch
+        working-directory: baml_language
 
       - name: "Install cargo nextest"
         uses: taiki-e/install-action@v2
@@ -187,6 +192,11 @@ jobs:
           direnv allow .envrc
           direnv export gha >> "$GITHUB_ENV"
 
+      # Separate step so if fetch is slow, build is fast.
+      - name: "Fetch cargo dependencies"
+        run: cargo fetch
+        working-directory: baml_language
+
       - name: "Install cargo nextest"
         uses: taiki-e/install-action@v2
         with:
@@ -272,6 +282,11 @@ jobs:
           direnv allow .envrc
           direnv export gha >> "$GITHUB_ENV"
 
+      # Separate step so if fetch is slow, build is fast.
+      - name: "Fetch cargo dependencies"
+        run: cargo fetch
+        working-directory: baml_language
+
       - name: "Build native sccache wrapper"
         run: |
           set -euo pipefail
@@ -331,32 +346,105 @@ jobs:
           path: baml_language/target/cargo-timings/cargo-timing-test-windows.html
           if-no-files-found: ignore
 
-  # SDK tests (codegen end-to-end). The `sdk_test_*` crates each emit a
-  # generated Python project from `.baml` sources via build.rs and then
-  # run ruff / pyright / pytest against it through `uv sync` + `uv run`.
-  # They share a single editable install of `baml_core` (the local
-  # Python SDK) anchored at `baml_language/target/uv-cache`, so multiple
-  # tests racing on `uv sync` contend on uv's editable-build lock and
-  # — on Windows — on wheel-extraction file locks. We pre-warm by
-  # running the per-crate `sync_only` test serially (so the editable
-  # build of `baml_core` and the wheel cache populate exactly once),
-  # then fan out ruff/pyright/pytest in parallel against the warm
-  # cache.
+  sdk-test-matrix:
+    name: "sdk test matrix"
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.matrix.outputs.matrix }}
+    steps:
+      - name: "Build matrix"
+        id: matrix
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const baseMatrix = [
+              {
+                "sdk-label": "python-pydantic2",
+                "package-name": "sdk_test_python_pydantic2",
+                "sdk-path": "python_pydantic2",
+                "install-args": "sccache direnv python uv",
+                "os-label": "linux",
+                "runs-on": "blacksmith-16vcpu-ubuntu-2404",
+                "rust-cache-key": "linux-cargo",
+                "timeout": 30,
+              },
+              {
+                "sdk-label": "typescript-node",
+                "package-name": "sdk_test_typescript_node",
+                "sdk-path": "typescript_node",
+                "install-args": "sccache direnv node npm:pnpm",
+                "os-label": "linux",
+                "runs-on": "blacksmith-16vcpu-ubuntu-2404",
+                "rust-cache-key": "linux-cargo",
+                "timeout": 30,
+              },
+              {
+                "sdk-label": "python-pydantic2",
+                "package-name": "sdk_test_python_pydantic2",
+                "sdk-path": "python_pydantic2",
+                "install-args": "sccache direnv python uv",
+                "os-label": "macos",
+                "runs-on": "macos-latest",
+                "rust-cache-key": "macos-cargo",
+                "timeout": 40,
+              },
+              {
+                "sdk-label": "typescript-node",
+                "package-name": "sdk_test_typescript_node",
+                "sdk-path": "typescript_node",
+                "install-args": "sccache direnv node npm:pnpm",
+                "os-label": "macos",
+                "runs-on": "macos-latest",
+                "rust-cache-key": "macos-cargo",
+                "timeout": 40,
+              },
+              {
+                "sdk-label": "python-pydantic2",
+                "package-name": "sdk_test_python_pydantic2",
+                "sdk-path": "python_pydantic2",
+                "install-args": "sccache direnv python uv",
+                "os-label": "windows",
+                "runs-on": "blacksmith-4vcpu-windows-2025",
+                "rust-cache-key": "windows-cargo",
+                "timeout": 60,
+              },
+              {
+                "sdk-label": "typescript-node",
+                "package-name": "sdk_test_typescript_node",
+                "sdk-path": "typescript_node",
+                "install-args": "sccache direnv node npm:pnpm",
+                "os-label": "windows",
+                "runs-on": "blacksmith-4vcpu-windows-2025",
+                "rust-cache-key": "windows-cargo",
+                "timeout": 60,
+              },
+            ];
+
+            const matrix = context.eventName === "merge_group"
+              ? baseMatrix.filter((entry) => entry["os-label"] === "linux")
+              : baseMatrix;
+
+            core.setOutput("matrix", JSON.stringify(matrix, null, 2));
+
+  # SDK tests (codegen end-to-end). The `sdk_test_*` generator crates emit
+  # generated Python/TypeScript projects from `.baml` sources via build.rs,
+  # then run their language-specific checks under nextest. Their setup scripts
+  # do the expensive package-manager/native-build work (`uv sync` + `maturin`
+  # for Python, `pnpm install` + NAPI build for TypeScript). Run the generated
+  # setup guards first so CI exposes setup cost/failures as a separate step; the
+  # full test step re-runs the setup scripts, but the warm path should be cheap.
+  # Keep Python and TypeScript as separate matrix entries so setup/test timing
+  # and failures are attributed to the specific SDK generator.
   sdk-tests:
-    name: "sdk tests (${{ matrix.os-label }})"
+    name: "sdk tests (${{ matrix.sdk-label }}, ${{ matrix.os-label }})"
+    needs: sdk-test-matrix
     strategy:
       fail-fast: false
       # In the merge queue (`merge_group`) only the linux leg runs — the
-      # macos/windows legs already ran on the PR. The matrix is built from a
-      # `fromJSON` literal because matrix `include` entries can't carry their
-      # own `if:`. The merge_group event is inherited from ci.yaml through the
-      # workflow_call boundary. Keep these entries in sync with the standalone
-      # cargo-test-macos/windows jobs above.
+      # macos/windows legs already ran on the PR. Keep these entries in sync
+      # with the standalone cargo-test-macos/windows jobs above.
       matrix:
-        include: >-
-          ${{ fromJSON(github.event_name == 'merge_group'
-          && '[{"os-label":"linux","runs-on":"blacksmith-16vcpu-ubuntu-2404","rust-cache-key":"linux-cargo","timeout":30}]'
-          || '[{"os-label":"linux","runs-on":"blacksmith-16vcpu-ubuntu-2404","rust-cache-key":"linux-cargo","timeout":30},{"os-label":"macos","runs-on":"macos-latest","rust-cache-key":"macos-cargo","timeout":40},{"os-label":"windows","runs-on":"blacksmith-4vcpu-windows-2025","rust-cache-key":"windows-cargo","timeout":60}]') }}
+        include: ${{ fromJSON(needs.sdk-test-matrix.outputs.matrix) }}
     runs-on: ${{ matrix.runs-on }}
     timeout-minutes: ${{ matrix.timeout }}
     steps:
@@ -368,10 +456,10 @@ jobs:
         run: rustup show
         working-directory: baml_language
 
-      - name: "Install sccache, direnv, python, and uv"
+      - name: "Install sdk test tools"
         uses: ./.github/actions/setup-mise
         with:
-          install_args: "sccache direnv python uv"
+          install_args: ${{ matrix.install-args }}
 
       - name: "Verify sccache"
         run: sccache --version
@@ -391,6 +479,11 @@ jobs:
           direnv allow .envrc
           direnv export gha >> "$GITHUB_ENV"
 
+      # Separate step so if fetch is slow, build is fast.
+      - name: "Fetch cargo dependencies"
+        run: cargo fetch
+        working-directory: baml_language
+
       # Windows-only: swap the .cmd RUSTC_WRAPPER for the native tools_sccache
       # .exe. See the matching step in `cargo-test-windows` for why.
       - name: "Build native sccache wrapper"
@@ -407,20 +500,28 @@ jobs:
           tool: cargo-nextest
 
       - name: "Build tests with --timings"
-        run: cargo test --no-run --all-features --timings
+        run: cargo test --no-run -p ${{ matrix.package-name }} --all-features --timings
+        working-directory: baml_language
+
+      - name: "Show sccache stats"
+        if: always()
+        run: sccache --show-stats
+
+      - name: "Run sdk test setup"
+        run: cargo nextest run --all-features -E 'package(=${{ matrix.package-name }}) and test(setup_guard::ran)'
         working-directory: baml_language
 
       - name: "Run sdk tests"
-        run: cargo nextest run --all-features -E 'package(/^sdk_test_/)'
+        run: cargo nextest run --all-features -E 'package(=${{ matrix.package-name }})'
         working-directory: baml_language
 
       - name: "Upload test results on failure"
         if: failure()
         uses: actions/upload-artifact@v7
         with:
-          name: sdk-test-failures-${{ matrix.os-label }}
+          name: sdk-test-failures-${{ matrix.sdk-label }}-${{ matrix.os-label }}
           path: |
-            baml_language/sdk_tests/crates/*/generated/
+            baml_language/sdk_tests/crates/${{ matrix.sdk-path }}/*/generated/
             baml_language/target/nextest/
           if-no-files-found: ignore
 
@@ -430,26 +531,26 @@ jobs:
 
       - name: "Dump sccache stats (json)"
         if: always()
-        run: sccache --show-stats --stats-format json > sccache-stats-sdk-tests-${{ matrix.os-label }}.json
+        run: sccache --show-stats --stats-format json > sccache-stats-sdk-tests-${{ matrix.sdk-label }}-${{ matrix.os-label }}.json
 
       - name: "Upload sccache stats"
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: sccache-stats-sdk-tests-${{ matrix.os-label }}
-          path: sccache-stats-sdk-tests-${{ matrix.os-label }}.json
+          name: sccache-stats-sdk-tests-${{ matrix.sdk-label }}-${{ matrix.os-label }}
+          path: sccache-stats-sdk-tests-${{ matrix.sdk-label }}-${{ matrix.os-label }}.json
           if-no-files-found: ignore
 
       - name: "Rename cargo timings"
         if: always()
-        run: mv target/cargo-timings/cargo-timing.html target/cargo-timings/cargo-timing-sdk-tests-${{ matrix.os-label }}.html
+        run: mv target/cargo-timings/cargo-timing.html target/cargo-timings/cargo-timing-sdk-tests-${{ matrix.sdk-label }}-${{ matrix.os-label }}.html
         working-directory: baml_language
       - name: "Upload cargo timings"
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: cargo-timings-sdk-tests-${{ matrix.os-label }}
-          path: baml_language/target/cargo-timings/cargo-timing-sdk-tests-${{ matrix.os-label }}.html
+          name: cargo-timings-sdk-tests-${{ matrix.sdk-label }}-${{ matrix.os-label }}
+          path: baml_language/target/cargo-timings/cargo-timing-sdk-tests-${{ matrix.sdk-label }}-${{ matrix.os-label }}.html
           if-no-files-found: ignore
 
   cargo-test-wasm:
@@ -457,7 +558,7 @@ jobs:
     runs-on: blacksmith-4vcpu-ubuntu-2404
     timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v6
+      - uses: useblacksmith/checkout@v1
         with:
           persist-credentials: false
 
@@ -489,6 +590,11 @@ jobs:
 
           direnv allow .envrc
           direnv export gha >> "$GITHUB_ENV"
+
+      # Separate step so if fetch is slow, build is fast.
+      - name: "Fetch cargo dependencies"
+        run: cargo fetch --target wasm32-unknown-unknown
+        working-directory: baml_language
 
       - name: "Build for WASM"
         run: |
@@ -539,7 +645,7 @@ jobs:
     runs-on: blacksmith-16vcpu-ubuntu-2404
     timeout-minutes: 25
     steps:
-      - uses: actions/checkout@v6
+      - uses: useblacksmith/checkout@v1
         with:
           persist-credentials: false
 
@@ -580,6 +686,13 @@ jobs:
           direnv allow .envrc
           direnv export gha >> "$GITHUB_ENV"
 
+      # Separate step so if fetch is slow, build is fast.
+      - name: "Fetch cargo dependencies"
+        env:
+          MSRV: ${{ steps.msrv.outputs.value }}
+        run: cargo "+${MSRV}" fetch
+        working-directory: baml_language
+
       - name: "Build with MSRV"
         env:
           MSRV: ${{ steps.msrv.outputs.value }}
@@ -619,7 +732,7 @@ jobs:
     runs-on: blacksmith-4vcpu-ubuntu-2404
     timeout-minutes: 25
     steps:
-      - uses: actions/checkout@v6
+      - uses: useblacksmith/checkout@v1
         with:
           persist-credentials: false
 
@@ -649,6 +762,11 @@ jobs:
 
           direnv allow .envrc
           direnv export gha >> "$GITHUB_ENV"
+
+      # Separate step so if fetch is slow, build is fast.
+      - name: "Fetch cargo dependencies"
+        run: cargo fetch
+        working-directory: baml_language
 
       - name: "Generate documentation"
         run: cargo doc --all --no-deps --timings
@@ -689,7 +807,7 @@ jobs:
     runs-on: blacksmith-4vcpu-ubuntu-2404
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v6
+      - uses: useblacksmith/checkout@v1
         with:
           persist-credentials: false
 
@@ -719,6 +837,11 @@ jobs:
 
           direnv allow .envrc
           direnv export gha >> "$GITHUB_ENV"
+
+      # Separate step so if fetch is slow, build is fast.
+      - name: "Fetch cargo dependencies"
+        run: cargo fetch
+        working-directory: baml_language
 
       - name: "Install cargo insta and nextest"
         uses: taiki-e/install-action@v2

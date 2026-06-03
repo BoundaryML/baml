@@ -1919,6 +1919,75 @@ mod tests {
     }
 
     #[test]
+    fn llm_default_client_argument_renders_in_function_and_companion_signatures() {
+        let mut pool: SymbolPool = HashMap::new();
+        let client_ty = Ty::Class(cg_name("baml", &["llm"], "Client"), vec![]);
+        let client_default = Some(FunctionArgumentDefault::Expression {
+            source: Some("GPT4".to_string()),
+        });
+        let make_args = |first_name: &str, first_ty: Ty| {
+            vec![
+                FunctionArgument {
+                    name: BaseName::new(first_name),
+                    docstring: None,
+                    ty: first_ty,
+                    default: None,
+                },
+                FunctionArgument {
+                    name: BaseName::new("client"),
+                    docstring: None,
+                    ty: client_ty.clone(),
+                    default: client_default.clone(),
+                },
+            ]
+        };
+
+        pool.insert(
+            cg_name("user", &["lorem"], "extract_resume"),
+            Symbol::Function(Function {
+                generic_params: Vec::new(),
+                name: BaseName::new("extract_resume"),
+                docstring: None,
+                arguments: make_args("resume", Ty::String),
+                return_type: Ty::String,
+                throws: None,
+                watchers: vec![],
+                origin: origin("x.baml", 0),
+            }),
+        );
+        pool.insert(
+            cg_name("user", &["lorem"], "extract_resume$build_request"),
+            Symbol::Function(Function {
+                generic_params: Vec::new(),
+                name: BaseName::new("extract_resume$build_request"),
+                docstring: None,
+                arguments: make_args("resume", Ty::String),
+                return_type: Ty::Class(cg_name("baml", &["http"], "Request"), vec![]),
+                throws: None,
+                watchers: vec![],
+                origin: origin("x.baml", 0),
+            }),
+        );
+
+        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
+        let py = &out[&PathBuf::from("lorem/__init__.py")];
+        assert!(py.contains(
+            "extract_resume       = _define_function(\"user.lorem.extract_resume\", \"sync\",  [\"resume\", \"client\"], 1)\n"
+        ));
+        assert!(py.contains(
+            "extract_resume__build_request       = _define_function(\"user.lorem.extract_resume$build_request\", \"sync\",  [\"resume\", \"client\"], 1)\n"
+        ));
+
+        let pyi = &out[&PathBuf::from("lorem/__init__.pyi")];
+        assert!(pyi.contains(
+            "def extract_resume(resume: str, *, client: baml.llm.Client = ...) -> str: ...\n"
+        ));
+        assert!(pyi.contains(
+            "def extract_resume__build_request(resume: str, *, client: baml.llm.Client = ...) -> baml.http.Request: ...\n"
+        ));
+    }
+
+    #[test]
     fn empty_collection_defaults_do_not_require_unset_import_in_pyi() {
         let mut pool: SymbolPool = HashMap::new();
         let key = cg_name("user", &["lorem"], "defaults");

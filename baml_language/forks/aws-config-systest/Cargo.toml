@@ -1,0 +1,16 @@
+[package]
+name = "aws-systest"
+version = "0.1.0"
+edition = "2021"
+
+# Standalone live harness. It is excluded from the parent workspace because it
+# enables native-only tokio/reqwest features that must not leak into workspace
+# wasm builds.
+[dependencies]
+aws-config = { path = "../aws-config", package = "forked_aws_config" }
+aws-sigv4 = { path = "../aws-sigv4", package = "forked_aws_sigv4" }
+reqwest = { version = "0.13.1", default-features = false, features = ["stream", "rustls", "json"] }
+tokio = { version = "1.36", features = ["rt", "rt-multi-thread", "macros", "time", "fs"] }
+async-trait = "0.1"
+serde_json = { version = "1.0.113", features = ["arbitrary_precision", "preserve_order"] }
+web-time = "1.1.0"

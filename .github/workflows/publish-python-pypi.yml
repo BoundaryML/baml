@@ -45,6 +45,7 @@ jobs:
     runs-on: ubuntu-latest
     needs:
       - build-python-sdk
+      - build-nodejs-sdk
     steps:
       - run: echo "::do-nothing::" >/dev/null
 

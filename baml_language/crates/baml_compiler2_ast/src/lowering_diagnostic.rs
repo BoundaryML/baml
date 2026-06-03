@@ -37,6 +37,14 @@ pub enum LoweringDiagnostic {
     /// A parameter default was parsed in a context that does not support defaults.
     UnsupportedParameterDefault { context: String, span: TextRange },
 
+    /// A user-authored LLM function declared `client`, which is reserved for
+    /// the compiler-injected client override parameter.
+    ReservedLlmClientParam {
+        function_name: String,
+        param_name: String,
+        span: TextRange,
+    },
+
     /// An enum variant has no name token.
     MissingVariantName { enum_name: String, span: TextRange },
 
@@ -162,6 +170,18 @@ impl LoweringDiagnostic {
                 format!("parameter defaults are not supported in {context}"),
                 *span,
                 "default value is not allowed here",
+            ),
+            LoweringDiagnostic::ReservedLlmClientParam {
+                function_name,
+                param_name,
+                span,
+            } => (
+                DiagnosticId::InvalidSyntax,
+                format!(
+                    "LLM function `{function_name}` cannot declare a parameter named `{param_name}`; `client` is reserved for the compiler-injected LLM client override"
+                ),
+                *span,
+                "`client` is reserved here",
             ),
             LoweringDiagnostic::MissingVariantName { enum_name, span } => (
                 DiagnosticId::MissingName,

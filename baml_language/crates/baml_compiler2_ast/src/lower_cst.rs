@@ -19,7 +19,7 @@ use crate::{
         FieldDef, FunctionBodyDef, FunctionDef, FunctionDefaults, GeneratorDef, ImplementsBlockDef,
         ImplementsForDef, InterfaceDef, InterfaceFieldLinkDef, Interpolation, Item, LetDef,
         LetOrigin, LlmBodyDef, MethodSigDef, Param, RawAttribute, RawAttributeArg, RawPrompt,
-        SpannedTypeExpr, TemplateStringDef, TestDef, TypeAliasDef, VariantDef,
+        SpannedTypeExpr, TemplateStringDef, TestDef, TypeAliasDef, TypeExpr, VariantDef,
     },
     companions::expand_companions,
     lower_expr_body, lower_type_expr,
@@ -272,7 +272,7 @@ fn lower_function(
         .collect();
     let parameter_context = format!("function `{}`", name.as_str());
 
-    let (params, defaults) = func
+    let (mut params, mut defaults) = func
         .param_list()
         .map(|pl| {
             lower_params_with_defaults(
@@ -314,8 +314,17 @@ fn lower_function(
 
     let (body, declarative_meta) = if let Some(llm) = func.llm_body() {
         let llm_body_def = lower_llm_body(&llm);
-        let param_names: Vec<Name> = params.iter().map(|p| p.name.clone()).collect();
+        reject_reserved_llm_client_params(&mut params, name.as_str(), diags);
         let client_name = llm_body_def.client.as_ref().map(|n| n.as_str().to_string());
+        if let Some(client_name) = client_name.as_deref() {
+            append_default_client_param(&mut params, &mut defaults, client_name, llm_body_def.span);
+        }
+        let param_names: Vec<Name> = params
+            .iter()
+            .filter(|p| p.name.as_str() != "client")
+            .map(|p| p.name.clone())
+            .collect();
+        let client_arg_name = client_name.as_ref().map(|_| "client");
         // Pass the LLM function's declared return type as the explicit `<T>`
         // type argument to `baml.llm.call_llm_function<T>`. This is required
         // for the runtime type-arg threading: without it, `T` falls back to
@@ -330,7 +339,7 @@ fn lower_function(
             "call_llm_function",
             name.as_str(),
             &param_names,
-            client_name.as_deref(),
+            client_arg_name,
             call_type_args,
             llm_body_def.span,
         );
@@ -521,6 +530,107 @@ pub(crate) fn lower_param(
     })
 }
 
+pub(crate) fn append_default_client_param(
+    params: &mut Vec<Param>,
+    defaults: &mut FunctionDefaults,
+    client_name: &str,
+    span: text_size::TextRange,
+) {
+    let default_expr = alloc_client_override_default_expr(defaults, client_name, span);
+    params.push(Param {
+        name: Name::new("client"),
+        type_expr: Some(SpannedTypeExpr {
+            expr: TypeExpr::Path {
+                segments: vec![Name::new("baml"), Name::new("llm"), Name::new("Client")],
+                generic_args: vec![],
+                attrs: vec![],
+            },
+            span,
+        }),
+        default: Some(crate::ast::DefaultExprId::new(default_expr)),
+        span,
+        name_span: span,
+    });
+}
+
+fn reject_reserved_llm_client_params(
+    params: &mut Vec<Param>,
+    function_name: &str,
+    diags: &mut Vec<LoweringDiagnostic>,
+) {
+    let mut reserved_spans = Vec::new();
+    params.retain(|param| {
+        if param.name.as_str() == "client" {
+            reserved_spans.push(param.name_span);
+            false
+        } else {
+            true
+        }
+    });
+
+    for span in reserved_spans {
+        diags.push(LoweringDiagnostic::ReservedLlmClientParam {
+            function_name: function_name.to_string(),
+            param_name: "client".to_string(),
+            span,
+        });
+    }
+}
+
+fn alloc_client_override_default_expr(
+    defaults: &mut FunctionDefaults,
+    client_name: &str,
+    span: text_size::TextRange,
+) -> ExprId {
+    fn alloc(defaults: &mut FunctionDefaults, expr: Expr, span: text_size::TextRange) -> ExprId {
+        let id = defaults.exprs.exprs.alloc(expr);
+        defaults.source_map.expr_spans.alloc(span);
+        id
+    }
+
+    if client_name.contains('/') {
+        // Shorthand clients are not backed by a synthesized top-level let binding,
+        // so defaults have to carry the inline Client value.
+        let name_lit = alloc(
+            defaults,
+            Expr::Literal(crate::ast::Literal::String(client_name.to_string())),
+            span,
+        );
+        let client_type = alloc(
+            defaults,
+            Expr::Path(vec![
+                Name::new("baml"),
+                Name::new("llm"),
+                Name::new("ClientType"),
+                Name::new("Primitive"),
+            ]),
+            span,
+        );
+        let sub_clients = alloc(defaults, Expr::Array { elements: vec![] }, span);
+        let retry = alloc(defaults, Expr::Null, span);
+        let counter = alloc(defaults, Expr::Literal(crate::ast::Literal::Int(0)), span);
+        alloc(
+            defaults,
+            Expr::Object {
+                type_name: Some(TypePath::from_dotted("baml.llm.Client")),
+                type_args: vec![],
+                fields: vec![
+                    (Name::new("name"), name_lit),
+                    (Name::new("client_type"), client_type),
+                    (Name::new("sub_clients"), sub_clients),
+                    (Name::new("retry"), retry),
+                    (Name::new("counter"), counter),
+                ],
+                spreads: vec![],
+            },
+            span,
+        )
+    } else {
+        // Named client declarations already lower to a top-level client let binding.
+        alloc(defaults, Expr::Path(vec![Name::new(client_name)]), span)
+    }
+}
+
 fn lower_llm_body(llm_body: &ast::LlmFunctionBody) -> LlmBodyDef {
     let span = llm_body.syntax().text_range();
 
@@ -549,8 +659,9 @@ fn lower_llm_body(llm_body: &ast::LlmFunctionBody) -> LlmBodyDef {
 /// an inline `Client { name, client_type: ClientType.Primitive, sub_clients: [], retry: null, counter: 0 }`.
 /// When `client_name` is `None`, `Expr::Null` is used as a fallback.
 ///
-/// Only `call_llm_function` passes a client; companion builtins (`render_prompt`, `build_request`)
-/// use `client_name = None` and keep their existing 2-argument signature.
+/// LLM functions and request/render/stream companions pass a client as the first argument.
+/// After default-client parameter synthesis, call sites pass `client_name = Some("client")`
+/// so explicit `client=` overrides flow through the generated body.
 ///
 /// All synthetic spans point to `span`.
 pub fn synthesize_llm_builtin_call(

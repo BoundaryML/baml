@@ -25,6 +25,20 @@ fn main() {
         eprintln!("Skipping runtime_benchmark in debug/test profile.");
         return;
     }
+    // Adaptive sampling by default: bound each bench to ~2s of wall time rather
+    // than walltime mode's fixed 100 samples/bench. divan then runs as many
+    // samples as fit the budget — ~100 for cheap benches (full statistical
+    // power), down to 1 for the heavy O(n²)/1M-iter workloads (whose run-to-run
+    // variance is already tiny). Without this the suite blows past CI's 30-min
+    // timeout: compute::bubble_sort_5k alone is ~14s/sample on the codspeed
+    // runner, so 100 samples ≈ 23min for ONE bench. CI overrides the budget via
+    // the DIVAN_MAX_TIME env var (see ci.yaml); we only set a default when the
+    // caller hasn't, so `cargo bench`/`cargo codspeed run` are adaptive too.
+    if std::env::var_os("DIVAN_MAX_TIME").is_none() {
+        // SAFETY: single-threaded here at the very top of main, before divan
+        // reads its args/env. No other thread can observe the environment.
+        unsafe { std::env::set_var("DIVAN_MAX_TIME", "2") };
+    }
     divan::main();
 }
 

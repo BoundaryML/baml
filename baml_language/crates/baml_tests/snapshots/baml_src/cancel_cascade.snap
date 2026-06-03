@@ -30,7 +30,8 @@ function cancel_cascade.cancel_from_handle_then_await_catches_cancelled() -> int
     spawn
     store_var _3
     load_var _3
-    store_var_load_var f
+    store_var f
+    load_var f
     call baml.future.Future.cancel
     pop 1
     load_var f
@@ -68,7 +69,8 @@ function cancel_cascade.cancelled_child_future_state_is_cancelled() -> baml.futu
     spawn
     store_var _6
     load_var _6
-    store_var_load_var waiter
+    store_var waiter
+    load_var waiter
     call baml.future.Future.cancel
     pop 1
     load_var waiter

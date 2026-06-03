@@ -192,7 +192,7 @@ def today_utc() -> str:
         if not re.fullmatch(r"\d{8}", override):
             fail("BAML_LANGUAGE_VERSION_DATE must be YYYYMMDD")
         return override
-    return dt.datetime.now(dt.UTC).strftime("%Y%m%d")
+    return dt.datetime.now(dt.timezone.utc).strftime("%Y%m%d")
 
 
 def command_output(command: list[str]) -> str | None:
