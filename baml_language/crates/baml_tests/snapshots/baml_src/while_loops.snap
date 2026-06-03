@@ -164,8 +164,7 @@ function while_loops.while_loops_count_down(n: int) -> int {
   L0:
     load_const true
     pop_jump_if_false L1
-    load_var result
-    load_var n
+    load_var2 2 1
     add_int
     store_var result
     load_var n
@@ -195,8 +194,7 @@ function while_loops.while_loops_factorial_break(limit: int) -> int {
     jump L2
 
   L1:
-    load_var result
-    load_var limit
+    load_var2 2 1
     mul_int
     store_var result
     load_var limit
@@ -226,8 +224,7 @@ function while_loops.while_loops_factorial_continue(limit: int) -> int {
     return
 
   L2:
-    load_var result
-    load_var limit
+    load_var2 2 1
     mul_int
     store_var result
     load_var limit
@@ -267,8 +264,7 @@ function while_loops.while_loops_fib(n: int) -> int {
     load_const 1
     sub_int
     store_var n
-    load_var a
-    load_var b
+    load_var2 2 3
     add_int
     store_var t
     load_var a
@@ -280,8 +276,7 @@ function while_loops.while_loops_fib(n: int) -> int {
 
 function while_loops.while_loops_gcd(a: int, b: int) -> int {
   L0:
-    load_var a
-    load_var b
+    load_var2 1 2
     cmp_int_op !=
     pop_jump_if_false L1
     jump L2
@@ -291,22 +286,19 @@ function while_loops.while_loops_gcd(a: int, b: int) -> int {
     return
 
   L2:
-    load_var a
-    load_var b
+    load_var2 1 2
     cmp_int_op >
     pop_jump_if_false L3
     jump L4
 
   L3:
-    load_var b
-    load_var a
+    load_var2 2 1
     sub_int
     store_var b
     jump L0
 
   L4:
-    load_var a
-    load_var b
+    load_var2 1 2
     sub_int
     store_var a
     jump L0

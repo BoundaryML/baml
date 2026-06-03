@@ -867,8 +867,7 @@ function json_auto_derive.optional_primitive_field_from_json_sum() -> int {
     store_var v2
 
   L5:
-    load_var v1
-    load_var v2
+    load_var2 5 7
     add_int
     return
 }

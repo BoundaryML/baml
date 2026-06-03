@@ -68,8 +68,7 @@ function user.FunctionWithComments(a: string, b: int) -> string {
     load_type string
     load_global user.TestClient
     load_const "FunctionWithComments"
-    load_var a
-    load_var b
+    load_var2 1 2
     load_const "a"
     load_const "b"
     alloc_map 2
@@ -80,8 +79,7 @@ function user.FunctionWithComments(a: string, b: int) -> string {
 function user.FunctionWithComments$build_request(a: string, b: int) -> baml.http.Request {
     load_global user.TestClient
     load_const "FunctionWithComments"
-    load_var a
-    load_var b
+    load_var2 1 2
     load_const "a"
     load_const "b"
     alloc_map 2
@@ -92,8 +90,7 @@ function user.FunctionWithComments$build_request(a: string, b: int) -> baml.http
 function user.FunctionWithComments$build_request_stream(a: string, b: int) -> baml.http.Request {
     load_global user.TestClient
     load_const "FunctionWithComments"
-    load_var a
-    load_var b
+    load_var2 1 2
     load_const "a"
     load_const "b"
     alloc_map 2
@@ -119,8 +116,7 @@ function user.FunctionWithComments$parse_stream(sse: baml.http.SseStream) -> bam
 function user.FunctionWithComments$render_prompt(a: string, b: int) -> baml.llm.PromptAst {
     load_global user.TestClient
     load_const "FunctionWithComments"
-    load_var a
-    load_var b
+    load_var2 1 2
     load_const "a"
     load_const "b"
     alloc_map 2
@@ -131,8 +127,7 @@ function user.FunctionWithComments$render_prompt(a: string, b: int) -> baml.llm.
 function user.FunctionWithComments$stream(a: string, b: int) -> baml.llm.Stream<null | string, string> {
     load_global user.TestClient
     load_const "FunctionWithComments"
-    load_var a
-    load_var b
+    load_var2 1 2
     load_const "a"
     load_const "b"
     alloc_map 2
