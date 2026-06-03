@@ -73,19 +73,25 @@ What `pnpm vscode:package` does:
 
    The VSIX is platform-neutral. It does not bundle `baml-cli`; the extension launches `baml lsp` through the configured `baml` wrapper or `baml` on PATH.
 
-3. Builds the packaged React webview:
+3. Generates protobuf TypeScript bindings:
+
+   ```bash
+   pnpm --filter @b/pkg-proto generate
+   ```
+
+4. Builds the packaged React webview:
 
    ```bash
    pnpm --filter app-vscode-webview build
    ```
 
-4. Builds the VS Code extension host bundle:
+5. Builds the VS Code extension host bundle:
 
    ```bash
    pnpm --filter baml-language build
    ```
 
-5. Stages runtime assets into the extension package:
+6. Stages runtime assets into the extension package:
 
    ```bash
    rm -rf app-vscode-ext/dist/playground
@@ -93,7 +99,7 @@ What `pnpm vscode:package` does:
    cp -R app-vscode-webview/dist/. app-vscode-ext/dist/playground/
    ```
 
-6. Packages the VSIX:
+7. Packages the VSIX:
 
    ```bash
    cd app-vscode-ext
