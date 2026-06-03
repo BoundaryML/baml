@@ -1,4 +1,4 @@
-//! Go SDK emitter. Stub — the API surface mirrors `codegen_python`
+//! Go SDK emitter. Stub — the API surface mirrors `sdkgen_python_pydantic2`
 //! so the `sdk_test_build::go` target and any future `baml-cli
 //! generate` wiring can be written against the final signature, but
 //! `to_source_code` panics until the real emitter lands.
@@ -20,6 +20,6 @@ pub fn to_source_code(
     _naming_convention: NamingConvention,
 ) -> HashMap<PathBuf, String> {
     unimplemented!(
-        "codegen_go::to_source_code is a stub — the Go emitter has not been implemented yet"
+        "sdkgen_go::to_source_code is a stub — the Go emitter has not been implemented yet"
     );
 }
