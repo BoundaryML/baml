@@ -1284,6 +1284,15 @@ struct LoweringContext<'db> {
     // Each entry is a fully-lowered MirFunction for one lambda expression.
     pending_lambdas: Vec<MirFunction>,
 
+    // Generic params of the enclosing lambda(s), accumulated outermost-first.
+    // Empty at top-level; `lower_lambda` extends it with the lambda's own
+    // `generic_params` while lowering its body and restores it afterward.
+    // `enclosing_generic_params()` appends this so that `reflect.type_of<T>`
+    // (and other type-arg resolution) inside a generic lambda body resolves the
+    // lambda's `T` to the correct `TypeArgRef` slot — `func_loc` only knows the
+    // enclosing top-level function's (and class's) params, never a lambda's.
+    lambda_generic_params: Vec<baml_base::Name>,
+
     // Capture map for the current lambda body.
     // `Some(map)` when lowering inside a lambda body; `None` for top-level functions.
     // Maps captured binding identity -> index into the closure's captures array.
@@ -1960,6 +1969,7 @@ impl<'db> LoweringContext<'db> {
             interface_implementors: &pkg_data.interface_implementors,
             interface_type_implementors: &pkg_data.interface_type_implementors,
             pending_lambdas: Vec::new(),
+            lambda_generic_params: Vec::new(),
             capture_indices: None,
             transitive_captures_needed: Vec::new(),
             resolved_aliases: &pkg_data.resolved_aliases,
@@ -2181,6 +2191,7 @@ impl<'db> LoweringContext<'db> {
             watched_locals_stack: Vec::new(),
             synthetic_name_counts: HashMap::new(),
             pending_lambdas: Vec::new(),
+            lambda_generic_params: Vec::new(),
             capture_indices: None,
             transitive_captures_needed: Vec::new(),
             chain_null_exits: Vec::new(),
@@ -3072,6 +3083,14 @@ impl<'db> LoweringContext<'db> {
         let saved_watched_locals = std::mem::take(&mut self.watched_locals_stack);
         let saved_current_scope = self.current_scope;
         let saved_metadata_scope = self.current_metadata_scope;
+        // Extend the enclosing-lambda generic params with this lambda's own
+        // params for the duration of its body, so `reflect.type_of<T>` (and any
+        // type-arg resolution) inside resolves `T` to the right frame slot.
+        // Appended after the enclosing params, matching the runtime layout:
+        // frame.type_args = [captured enclosing params..., this lambda's args...].
+        let saved_lambda_generic_params = self.lambda_generic_params.clone();
+        self.lambda_generic_params
+            .extend(func_def.generic_params.iter().cloned());
         // NOTE: synthetic_name_counts is intentionally NOT saved — its counter
         // keeps incrementing across the whole function for uniqueness.
         //
@@ -3200,6 +3219,7 @@ impl<'db> LoweringContext<'db> {
         self.watched_locals_stack = saved_watched_locals;
         self.current_scope = saved_current_scope;
         self.current_metadata_scope = saved_metadata_scope;
+        self.lambda_generic_params = saved_lambda_generic_params;
         self.capture_indices = saved_capture_indices;
         // Restore parent's pending_lambdas (siblings of this lambda).
         self.pending_lambdas = saved_pending_lambdas;
@@ -5669,6 +5689,10 @@ impl LoweringContext<'_> {
             .map(|class_data| class_data.generic_params.clone())
             .unwrap_or_default();
         params.extend(item_tree[func_id].generic_params.iter().cloned());
+        // Inside a (possibly nested) generic lambda body, the lambda's own
+        // type params follow the enclosing function's, matching the runtime
+        // frame.type_args layout. Empty outside any lambda.
+        params.extend(self.lambda_generic_params.iter().cloned());
         params
     }
 

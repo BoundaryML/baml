@@ -237,3 +237,39 @@ function bound_generic_lambda() -> int {
 test "bound_generic_lambda_runs" {
     assert.is_true(baml.deep_equals(bound_generic_lambda(), 9))
 }
+
+// A generic lambda whose body REFLECTS on its own type param. The lambda's `T`
+// is now threaded through MIR lowering (enclosing_generic_params appends the
+// lambda's own params), so it is seeded into the closure's frame.type_args and
+// `reflect.type_of<T>` resolves it. (Previously it reified as "void".)
+function reflecting_generic_lambda() -> string {
+    let f = (<T>() -> string { reflect.type_of<T>().to_string() })<int>;
+    f()
+}
+
+test "reflecting_generic_lambda_resolves_T" {
+    assert.is_true(baml.deep_equals(reflecting_generic_lambda(), "int"))
+}
+
+// A generic lambda inside a generic FUNCTION: the lambda's own `T` resolves to
+// the frame slot AFTER the enclosing function's `U` (here `U`=int is in scope
+// but the lambda reifies its own `T`=string), confirming the slot ordering.
+function lambda_in_generic_fn<U>() -> string {
+    let g = (<T>() -> string { reflect.type_of<T>().to_string() })<string>;
+    g()
+}
+
+test "lambda_in_generic_fn_resolves_own_T" {
+    assert.is_true(baml.deep_equals(lambda_in_generic_fn<int>(), "string"))
+}
+
+// Companion: a (non-generic) lambda inside a generic function still reifies the
+// enclosing function's `U` (no regression from threading lambda params).
+function lambda_reflects_enclosing_U<U>() -> string {
+    let g = () -> string { reflect.type_of<U>().to_string() };
+    g()
+}
+
+test "lambda_reflects_enclosing_U_resolves" {
+    assert.is_true(baml.deep_equals(lambda_reflects_enclosing_U<int>(), "int"))
+}

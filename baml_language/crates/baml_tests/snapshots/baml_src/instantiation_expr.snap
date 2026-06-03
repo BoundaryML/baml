@@ -110,6 +110,24 @@ function instantiation_expr.$init_test_ns_instantiation_expr_instantiation_expr(
     load_const null
     call testing.TestCollector.register_test
     pop 1
+    load_var registry
+    load_const "reflecting_generic_lambda_resolves_T"
+    make_closure .<lambda($init_test_ns_instantiation_expr_instantiation_expr, 18)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "lambda_in_generic_fn_resolves_own_T"
+    make_closure .<lambda($init_test_ns_instantiation_expr_instantiation_expr, 19)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "lambda_reflects_enclosing_U_resolves"
+    make_closure .<lambda($init_test_ns_instantiation_expr_instantiation_expr, 20)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
     load_const null
     return
 }
@@ -236,6 +254,22 @@ function instantiation_expr.identity_via_local_value() -> int {
     return
 }
 
+function instantiation_expr.lambda_in_generic_fn() -> string {
+    load_type string
+    load_type #0
+    make_closure .<lambda(lambda_in_generic_fn, 0)>, captures=0, ntypeargs=1
+    make_generic_function_from_value ntypeargs=1
+    call_indirect
+    return
+}
+
+function instantiation_expr.lambda_reflects_enclosing_U() -> string {
+    load_type #0
+    make_closure .<lambda(lambda_reflects_enclosing_U, 0)>, captures=0, ntypeargs=1
+    call_indirect
+    return
+}
+
 function instantiation_expr.pair(a: void, b: void) -> void {
     load_var b
     return
@@ -275,6 +309,14 @@ function instantiation_expr.qualified_value_fn() -> string {
 function instantiation_expr.qualified_value_id_fn() -> int {
     load_const 7
     load_const user.instantiation_expr.qualified.q_id<...>
+    call_indirect
+    return
+}
+
+function instantiation_expr.reflecting_generic_lambda() -> string {
+    load_type int
+    make_closure .<lambda(reflecting_generic_lambda, 0)>, 0
+    make_generic_function_from_value ntypeargs=1
     call_indirect
     return
 }
