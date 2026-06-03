@@ -5875,6 +5875,26 @@ fn implements_for_optional_target_is_rejected() {
 }
 
 #[test]
+fn implements_for_unknown_target_is_rejected() {
+    // The user-facing top type `unknown` denotes "any type" — it has no single
+    // concrete implementor for dispatch to recover, so it is rejected like a
+    // union/optional/interface (E0138). `unknown` lowers to `Ty::BuiltinUnknown`,
+    // which is distinct from the `Ty::Unknown` error-recovery sentinel, so the
+    // gate must list it explicitly.
+    assert_compile_error_code(
+        r#"
+        interface Tag {
+            function tag(self) -> int
+        }
+        implements Tag for unknown {
+            function tag(self) -> int { return 0 }
+        }
+        "#,
+        "E0138",
+    );
+}
+
+#[test]
 fn implements_for_concrete_container_target_is_allowed() {
     // A concrete type constructor (`T[]`) is a valid `for` target — the gate only
     // rejects unions / optionals / interfaces / `unknown`, not list/map/class.

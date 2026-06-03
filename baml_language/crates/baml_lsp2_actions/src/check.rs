@@ -4101,9 +4101,12 @@ fn validate_implements_for<'db>(
     // type variable). A union, optional, or bare interface ("dyn"/existential)
     // target is rejected: an optional is `T | null` (a union), so each case /
     // union member would need its own body, and an existential has no single
-    // concrete implementor for dispatch to recover. (`Ty::Unknown` only arises
-    // from an already-diagnosed unresolved target, so it is matched here purely
-    // as defence-in-depth.)
+    // concrete implementor for dispatch to recover. The user-facing top type
+    // `unknown` (`Ty::BuiltinUnknown`) is rejected for the same reason — it
+    // denotes "any type", with no single implementor to dispatch on. (The
+    // distinct `Ty::Unknown` only arises from an already-diagnosed unresolved
+    // target, so it is matched here purely as defence-in-depth.) `never` is
+    // intentionally allowed: it can never be instantiated, so the impl is vacuous.
     //
     // Aliases are expanded first so the gate sees through them — otherwise
     // `type U = int | string; implements I for U {}` would slip past as an
@@ -4111,7 +4114,11 @@ fn validate_implements_for<'db>(
     let resolved_target = expand_type_alias(&target_ty, aliases);
     if matches!(
         &resolved_target,
-        Ty::Interface(..) | Ty::Union(..) | Ty::Optional(..) | Ty::Unknown { .. }
+        Ty::Interface(..)
+            | Ty::Union(..)
+            | Ty::Optional(..)
+            | Ty::Unknown { .. }
+            | Ty::BuiltinUnknown { .. }
     ) {
         diagnostics.push(
             Diagnostic::error(
