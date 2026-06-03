@@ -1048,8 +1048,14 @@ fn contains_bound_typevar(ty: &Ty, generic_params: &[Name]) -> bool {
 
 fn contains_generic_function_binders(ty: &Ty) -> bool {
     match ty {
-        Ty::Class(_, args, _) | Ty::Interface(_, args, _, _) | Ty::Union(args, _) => {
+        Ty::Class(_, args, _) | Ty::Union(args, _) => {
             args.iter().any(contains_generic_function_binders)
+        }
+        Ty::Interface(_, args, associated_bindings, _) => {
+            args.iter().any(contains_generic_function_binders)
+                || associated_bindings
+                    .iter()
+                    .any(|(_, ty)| contains_generic_function_binders(ty))
         }
         Ty::List(inner, _) | Ty::EvolvingList(inner, _) | Ty::Optional(inner, _) => {
             contains_generic_function_binders(inner)
@@ -1748,6 +1754,24 @@ mod tests {
 
         assert!(contains_bound_typevar(&ty, &[Name::new("T")]));
         assert!(!contains_bound_typevar(&ty, &[Name::new("U")]));
+    }
+
+    #[test]
+    fn contains_generic_function_binders_checks_interface_associated_bindings() {
+        let ty = Ty::Interface(
+            qtn(&[], "Source"),
+            vec![],
+            vec![(
+                Name::new("Item"),
+                Ty::List(
+                    Box::new(function(vec!["T"], vec![None], vec![type_var("T")], int())),
+                    TyAttr::default(),
+                ),
+            )],
+            TyAttr::default(),
+        );
+
+        assert!(contains_generic_function_binders(&ty));
     }
 
     #[test]
