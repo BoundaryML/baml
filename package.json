@@ -35,10 +35,10 @@
     "@infisical/cli": "0.41.89",
     "@biomejs/biome": "1.9.4",
     "@types/node": "24.0.3",
-    "turbo": "2.5.4",
+    "turbo": "2.9.14",
     "typescript": "5.8.3",
     "vercel": "^52.0.0",
-    "vitest": "3.2.3",
+    "vitest": "4.1.0",
     "pnpm": "9.12.0"
   },
   "pnpm": {
