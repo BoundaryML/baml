@@ -2366,6 +2366,32 @@ impl<'db> TypeInferenceBuilder<'db> {
                 }
                 shadowed.truncate(saved_len);
             }
+            Stmt::WhileLet {
+                pattern,
+                scrutinee,
+                body: loop_body,
+            } => {
+                // Scrutinee is evaluated outside the pattern's binding scope;
+                // the pattern's names shadow within the body only — mirrors
+                // `Stmt::For` (collection then pattern then body).
+                Self::collect_default_expr_forward_references(
+                    *scrutinee,
+                    body,
+                    later_params,
+                    shadowed,
+                    refs,
+                );
+                let saved_len = shadowed.len();
+                Self::push_pattern_bindings(*pattern, body, shadowed);
+                Self::collect_default_expr_forward_references(
+                    *loop_body,
+                    body,
+                    later_params,
+                    shadowed,
+                    refs,
+                );
+                shadowed.truncate(saved_len);
+            }
             Stmt::For {
                 binding,
                 collection,
@@ -4565,6 +4591,59 @@ impl<'db> TypeInferenceBuilder<'db> {
                 }
                 false
             }
+            Stmt::WhileLet {
+                pattern,
+                scrutinee,
+                body: while_body,
+            } => {
+                // Refutable pattern in a loop header: mirrors `if_let_expr_common`
+                // (refutable expected, warn-not-reject if irrefutable) crossed
+                // with `Stmt::While`'s scoping (snapshot/restore so body lets and
+                // narrowings don't leak past the loop). Produces unit and never
+                // diverges — the body may run zero times.
+                let scrutinee_ty = self.infer_expr(*scrutinee, body);
+                let scrutinee_name = match &body.exprs[*scrutinee] {
+                    Expr::Path(segments) if segments.len() == 1 => Some(segments[0].clone()),
+                    _ => None,
+                };
+
+                // Lower the refutable pattern against the scrutinee — same
+                // machinery as `match` arms / `if let`. Populates
+                // `pattern_types` and yields `matched_ty` + `dpat`.
+                let result = self.analyze_and_lower(*pattern, &scrutinee_ty, body, *while_body);
+
+                // Body scope: narrow the scrutinee to the matched type and
+                // register the pattern bindings for the body only, then restore.
+                let snapshot = self.snapshot_scoped_locals();
+                if let Some(name) = &scrutinee_name {
+                    self.narrow_local(name.clone(), result.matched_ty.clone());
+                }
+                self.finalize_pattern_lowering(*pattern, &result, None, None, &scrutinee_ty);
+                self.infer_expr(*while_body, body);
+                self.restore_scoped_locals(&snapshot);
+
+                // Irrefutability warning — same policy as `if let`. An
+                // irrefutable `while let` never exits via pattern failure, so it
+                // is an unconditional infinite loop with a pointless pattern;
+                // warn and suggest a plain `while`/`loop`.
+                let scrutinee_ty_for_matrix = self.matrix_normalize_scrut(&scrutinee_ty);
+                let report = crate::pattern_lowering::compute_match_usefulness(
+                    self,
+                    std::slice::from_ref(&result.dpat),
+                    scrutinee_ty_for_matrix,
+                );
+                if report.missing.is_empty() {
+                    let err = crate::infer_context::TirTypeError::IrrefutablePatternInWhileLet;
+                    if let Some(sm) = self.body_source_map.as_ref() {
+                        self.context
+                            .report_warning_at_span(err, sm.pattern_span(*pattern));
+                    } else {
+                        self.context.report_warning_simple(err, *scrutinee);
+                    }
+                }
+
+                false
+            }
             // Design note: Stmt::For is kept as a first-class construct (not desugared
             // to While) so we can produce for-loop-specific diagnostics ("cannot iterate
             // over type X") and preserve iteration semantics for downstream codegen.
@@ -6297,6 +6376,14 @@ impl<'db> TypeInferenceBuilder<'db> {
                 if let Some(after_stmt) = after {
                     self.collect_throw_facts_from_stmt(*after_stmt, body, out);
                 }
+            }
+            Stmt::WhileLet {
+                scrutinee,
+                body: while_body,
+                ..
+            } => {
+                self.collect_throw_facts_from_expr(*scrutinee, body, out);
+                self.collect_throw_facts_from_expr(*while_body, body, out);
             }
             Stmt::For {
                 collection,

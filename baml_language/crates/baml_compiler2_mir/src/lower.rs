@@ -8210,6 +8210,87 @@ impl LoweringContext<'_> {
                 self.builder.set_current_block(bb_exit);
             }
 
+            // `while let PATTERN = SCRUTINEE { BODY }` — a loop header that
+            // re-evaluates the scrutinee and re-tests the refutable pattern each
+            // iteration. A structural cross of `AstStmt::While` (loop scaffold +
+            // LoopContext + back-edge) and `lower_if_let` (refutable
+            // `lower_pattern_test` + scoped fresh-cell binding). On match: bind
+            // + run body + jump back to the header. On miss: exit the loop.
+            AstStmt::WhileLet {
+                pattern,
+                scrutinee,
+                body,
+            } => {
+                let bb_header = self.builder.create_block();
+                let bb_body = self.builder.create_block();
+                let bb_exit = self.builder.create_block();
+
+                // `continue` re-enters the header (re-evaluates scrutinee +
+                // re-tests the pattern); `break` jumps to the exit. Save/swap/
+                // restore loop_context so nested loops work — mirrors While.
+                let prev_loop = self.loop_context.take();
+                let watched_depth = self.watched_locals_stack.len();
+                self.loop_context = Some(LoopContext {
+                    break_target: bb_exit,
+                    continue_target: bb_header,
+                    watched_locals_depth: watched_depth,
+                });
+
+                if !self.builder.is_current_terminated() {
+                    self.builder.goto(bb_header);
+                }
+
+                // Header: resolve the scrutinee to a local, then run the
+                // refutable test (match -> body, miss -> exit). For a bare-path
+                // scrutinee this resolves to its OWN local, so a body that
+                // mutates that local is observed when the header re-tests it on
+                // the next pass (re-evaluation without a copy); other expressions
+                // are re-lowered into a fresh local each pass. Mirrors
+                // `lower_if_let`'s scrutinee handling exactly.
+                self.builder.set_current_block(bb_header);
+                let scrutinee_local = self.try_resolve_to_local(scrutinee).unwrap_or_else(|| {
+                    let op = self.lower_to_operand(scrutinee);
+                    let ty = self.expr_ty(scrutinee);
+                    self.operand_to_local(op, ty)
+                });
+                self.lower_pattern_test(scrutinee_local, pattern, bb_body, bb_exit);
+
+                // Body: bind pattern locals (scoped to the body, re-bound per
+                // iteration via fresh cells so a closure created each pass
+                // captures a distinct cell), record binding_locals for
+                // go-to-definition, lower the body (result discarded), then jump
+                // back to the header.
+                self.builder.set_current_block(bb_body);
+                let saved_locals = self.locals.clone();
+                self.bind_pattern_with_fresh_cells(scrutinee_local, pattern);
+                let names: Vec<Name> = self.body.patterns[pattern]
+                    .bound_names(&self.body.patterns)
+                    .into_iter()
+                    .cloned()
+                    .collect();
+                for name in names {
+                    if let Some(&local) = self.locals.get(&name)
+                        && let Some(binding_id) =
+                            self.binding_id_for_statement_name(stmt_id, pattern, &name)
+                    {
+                        self.binding_locals.insert(binding_id, local);
+                    }
+                }
+                let body_temp = self.builder.temp(Ty::Void {
+                    attr: TyAttr::default(),
+                });
+                self.lower_expr(body, Place::local(body_temp));
+                if !self.builder.is_current_terminated() {
+                    self.emit_unwatch_to_depth(watched_depth);
+                    self.builder.goto(bb_header);
+                }
+                self.restore_locals_after_scope(saved_locals, watched_depth);
+
+                // Exit.
+                self.loop_context = prev_loop;
+                self.builder.set_current_block(bb_exit);
+            }
+
             // For-loop desugaring to index-based iteration.
             //
             // We desugar here (at MIR level) rather than at AST level because:

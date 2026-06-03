@@ -3580,6 +3580,7 @@ fn tir_type_error_to_diagnostic_id(
         TirTypeError::IrrefutablePatternInIfLet => DiagnosticId::IrrefutablePatternInIfLet,
         TirTypeError::LetElseMustDiverge { .. } => DiagnosticId::LetElseMustDiverge,
         TirTypeError::IrrefutablePatternInLetElse => DiagnosticId::IrrefutablePatternInLetElse,
+        TirTypeError::IrrefutablePatternInWhileLet => DiagnosticId::IrrefutablePatternInWhileLet,
         TirTypeError::InvalidCatchBindingType { .. } => DiagnosticId::InvalidCatchBindingType,
         TirTypeError::ThrowsContractViolation { .. }
         | TirTypeError::CallbackThrowsContractViolation { .. } => {

@@ -703,6 +703,16 @@ pub(crate) mod support {
                 writeln!(output, "{pad}while ({cond})").ok();
                 render_expr_body_untyped(body, *while_body, indent + 2, output);
             }
+            Stmt::WhileLet {
+                pattern,
+                scrutinee,
+                body: while_body,
+            } => {
+                let pat = pat_desc(*pattern, body);
+                let scrut = expr_desc(*scrutinee, body);
+                writeln!(output, "{pad}while let {pat} = {scrut}").ok();
+                render_expr_body_untyped(body, *while_body, indent + 2, output);
+            }
             Stmt::Return(Some(expr_id)) => {
                 let desc = expr_desc(*expr_id, body);
                 writeln!(output, "{pad}return {desc}").ok();
@@ -843,6 +853,16 @@ pub(crate) mod support {
             } => {
                 let cond_desc = expr_desc(*condition, body);
                 writeln!(output, "{pad}while {cond_desc}").ok();
+                render_expr(*body_expr, body, inference, indent + 2, output);
+            }
+            Stmt::WhileLet {
+                pattern,
+                scrutinee,
+                body: body_expr,
+            } => {
+                let pat = pat_desc(*pattern, body);
+                let scrut_desc = expr_desc(*scrutinee, body);
+                writeln!(output, "{pad}while let {pat} = {scrut_desc}").ok();
                 render_expr(*body_expr, body, inference, indent + 2, output);
             }
             Stmt::For {
@@ -1757,6 +1777,16 @@ pub(crate) mod support {
                 } => format!(
                     "while {} {}",
                     expr_desc_hir(*condition, body, prefix, local_type_names),
+                    expr_desc_hir(*be, body, prefix, local_type_names)
+                ),
+                Stmt::WhileLet {
+                    pattern,
+                    scrutinee,
+                    body: be,
+                } => format!(
+                    "while let {} = {} {}",
+                    pat_desc_hir(*pattern, body, prefix, local_type_names),
+                    expr_desc_hir(*scrutinee, body, prefix, local_type_names),
                     expr_desc_hir(*be, body, prefix, local_type_names)
                 ),
                 Stmt::For {

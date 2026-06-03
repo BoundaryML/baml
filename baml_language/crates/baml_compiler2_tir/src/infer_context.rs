@@ -141,6 +141,10 @@ pub enum TirTypeError {
     /// A `let … else` pattern that covers every value of the initializer
     /// type — the else branch is unreachable. Suggest using a plain `let`.
     IrrefutablePatternInLetElse,
+    /// A `while let` pattern that covers every value of the scrutinee — the
+    /// loop never exits via pattern failure (an unconditional infinite loop).
+    /// Suggest a plain `while`/`loop` instead.
+    IrrefutablePatternInWhileLet,
     /// Catch binding cannot be typed as `any` or `unknown`.
     InvalidCatchBindingType { type_name: String },
     /// Inferred escaping throws are not covered by the declared throws contract.
@@ -489,6 +493,10 @@ impl fmt::Display for TirTypeError {
             TirTypeError::IrrefutablePatternInLetElse => write!(
                 f,
                 "irrefutable `let … else` pattern; the `else` branch is unreachable — use a plain `let` binding instead"
+            ),
+            TirTypeError::IrrefutablePatternInWhileLet => write!(
+                f,
+                "irrefutable `while let` pattern; the loop never exits by pattern failure — use a plain `while`/`loop` instead"
             ),
             TirTypeError::InvalidCatchBindingType { type_name } => write!(
                 f,

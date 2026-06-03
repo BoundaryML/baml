@@ -75,6 +75,9 @@ function user.from_json(j: baml.json.json) -> user.Mixed  [expr] {
 function user.int_literal_non_exhaustive(n: int) -> int  [expr] {
   {  } match (n) { 1 => 1 }
 }
+function user.irrefutable_while_let(n: int) -> int  [expr] {
+  { while let x: int = n { break } } 1
+}
 function user.nested_class_optional_missing_combination(b: user.Box2) -> int  [expr] {
   {  } match (b) { Box2 { first: true, second: null } => 1, Box2 { first: true, second: int[] } => 2, Box2 { first: false, second: null } => 3 }
 }
