@@ -4713,6 +4713,16 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_while_stmt(&mut self) {
+        // `while let PATTERN = SCRUTINEE { ... }` is a distinct refutable form.
+        // Decided here by peeking past `while` for a `let` token — patterns
+        // always start with `let` (BAML's binding marker), and no normal
+        // expression starts with `let`, so this is unambiguous. Mirrors
+        // `parse_if_expr`'s `if` vs `if let` decision.
+        if self.peek(1).map(|t| t.kind) == Some(TokenKind::Let) {
+            self.parse_while_let_stmt();
+            return;
+        }
+
         self.with_node(SyntaxKind::WHILE_STMT, |p| {
             p.expect(TokenKind::While);
 
@@ -4727,6 +4737,47 @@ impl<'a> Parser<'a> {
                 p.parse_block_expr();
             } else {
                 p.error_unexpected_token("block after while condition".to_string());
+            }
+        });
+    }
+
+    /// Parse `while let PATTERN = SCRUTINEE { ... }`.
+    ///
+    /// Caller (`parse_while_stmt`) has already verified the sequence starts
+    /// with `while let`. Mirrors `parse_if_let_expr` (the `let` is consumed by
+    /// `parse_pattern`, BAML patterns carry their own leading `let` binding
+    /// marker), but with NO `else` branch — a loop produces unit.
+    fn parse_while_let_stmt(&mut self) {
+        self.with_node(SyntaxKind::WHILE_LET_STMT, |p| {
+            p.expect(TokenKind::While);
+            // Pattern. For top-level array patterns (`while let [a, b] = xs`),
+            // the `let` keyword has to be consumed at the statement level
+            // because `parse_let_pattern` only handles binding / destructure
+            // shapes after `let`. Mirrors `parse_if_let_expr`.
+            if p.peek(1).map(|t| t.kind) == Some(TokenKind::LBracket) {
+                p.bump(); // statement `let`
+                p.parse_pattern();
+            } else {
+                // `let` is consumed inside parse_pattern → parse_let_pattern.
+                p.parse_pattern();
+            }
+
+            if !p.eat(TokenKind::Equals) {
+                p.error_unexpected_token("'=' after while-let pattern".to_string());
+            }
+
+            // Scrutinee — exclude assignment operators (same as let-stmt and
+            // if-let), and apply condition-position destructure suppression so
+            // a trailing `is Class { ... }` doesn't eat the loop body block.
+            p.suppress_destructure_pattern_depth += 1;
+            p.parse_expr_bp(3);
+            p.suppress_destructure_pattern_depth -= 1;
+
+            // Body
+            if p.at(TokenKind::LBrace) {
+                p.parse_block_expr();
+            } else {
+                p.error_unexpected_token("block after while-let scrutinee".to_string());
             }
         });
     }
@@ -5570,6 +5621,8 @@ impl<'a> Parser<'a> {
                     }
                     p.parse_type_arg_or_associated_binding();
                 }
+            } else {
+                p.error_unexpected_token("type".to_string());
             }
 
             p.expect_greater();
@@ -7174,6 +7227,154 @@ function f(r: int | string) -> string {
         assert_eq!(
             pat_count, 1,
             "IF_LET_EXPR should have exactly one PATTERN child"
+        );
+    }
+
+    #[test]
+    fn while_let_stmt_parses() {
+        // `while let PATTERN = SCRUTINEE { ... }` produces a WHILE_LET_STMT
+        // node (distinct from WHILE_STMT), with a PATTERN child and a single
+        // BLOCK_EXPR body (no else).
+        let source = r#"
+function f(r: int | string) -> int {
+  while let v: int = r {
+    break;
+  }
+  0
+}
+"#;
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+
+        let while_let_count = root
+            .descendants()
+            .filter(|n| n.kind() == SyntaxKind::WHILE_LET_STMT)
+            .count();
+        assert_eq!(while_let_count, 1, "expected one WHILE_LET_STMT node");
+
+        // No plain WHILE_STMT should sneak in.
+        let while_count = root
+            .descendants()
+            .filter(|n| n.kind() == SyntaxKind::WHILE_STMT)
+            .count();
+        assert_eq!(
+            while_count, 0,
+            "expected no WHILE_STMT nodes for while-let form"
+        );
+
+        let while_let = root
+            .descendants()
+            .find(|n| n.kind() == SyntaxKind::WHILE_LET_STMT)
+            .unwrap();
+        let pat_count = while_let
+            .children()
+            .filter(|n| n.kind() == SyntaxKind::PATTERN)
+            .count();
+        assert_eq!(
+            pat_count, 1,
+            "WHILE_LET_STMT should have exactly one PATTERN child"
+        );
+        let block_count = while_let
+            .children()
+            .filter(|n| n.kind() == SyntaxKind::BLOCK_EXPR)
+            .count();
+        assert_eq!(
+            block_count, 1,
+            "WHILE_LET_STMT should have exactly one BLOCK_EXPR body (no else)"
+        );
+    }
+
+    #[test]
+    fn while_let_scrutinee_suppresses_destructure() {
+        // The while-let scrutinee is in condition position; a trailing
+        // `is Class { ... }` must not consume the loop body as a destructure
+        // pattern body. Mirrors `if_let_scrutinee_suppresses_destructure`.
+        let source = r#"
+class Empty {}
+
+function f(b: bool, r: int | Empty) -> int {
+  while let v: bool = r is Empty {
+    break;
+  }
+  0
+}
+"#;
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+
+        let while_let = root
+            .descendants()
+            .find(|n| n.kind() == SyntaxKind::WHILE_LET_STMT)
+            .expect("expected WHILE_LET_STMT");
+        let block_count = while_let
+            .children()
+            .filter(|n| n.kind() == SyntaxKind::BLOCK_EXPR)
+            .count();
+        assert_eq!(block_count, 1);
+        let dest_count = while_let
+            .descendants()
+            .filter(|n| n.kind() == SyntaxKind::DESTRUCTURE_PATTERN)
+            .count();
+        assert_eq!(dest_count, 0);
+    }
+
+    #[test]
+    fn while_let_accepts_top_level_array_pattern() {
+        // `while let [a, b] = xs { ... }` — the `let` followed by `[` must be
+        // consumed at statement level so the array pattern parses. Mirrors
+        // `if_let_accepts_top_level_array_pattern`.
+        let source = r#"
+function f(xs: int[]) -> int {
+  while let [a, b] = xs {
+    break;
+  }
+  0
+}
+"#;
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+
+        let while_let = root
+            .descendants()
+            .find(|n| n.kind() == SyntaxKind::WHILE_LET_STMT)
+            .expect("expected WHILE_LET_STMT");
+        let array_count = while_let
+            .descendants()
+            .filter(|n| n.kind() == SyntaxKind::ARRAY_PATTERN)
+            .count();
+        assert_eq!(
+            array_count, 1,
+            "expected exactly one ARRAY_PATTERN in the while-let"
+        );
+    }
+
+    #[test]
+    fn while_stmt_still_parses_without_pattern() {
+        // A plain `while cond { }` still produces a WHILE_STMT, not a
+        // WHILE_LET_STMT — the `let` lookahead must not misfire.
+        let source = r#"
+function f(b: bool) -> int {
+  while b {
+    break;
+  }
+  0
+}
+"#;
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+
+        let while_count = root
+            .descendants()
+            .filter(|n| n.kind() == SyntaxKind::WHILE_STMT)
+            .count();
+        assert_eq!(while_count, 1, "expected one WHILE_STMT node");
+        let while_let_count = root
+            .descendants()
+            .filter(|n| n.kind() == SyntaxKind::WHILE_LET_STMT)
+            .count();
+        assert_eq!(
+            while_let_count, 0,
+            "plain while must not produce WHILE_LET_STMT"
         );
     }
 

@@ -92,7 +92,7 @@ use bex_heap::{BexHeap, TlabHolder};
 use bex_vm::{BexVm, SpanNotification, VmExecState, vm::InterfaceImplementors};
 use bex_vm_types::{
     FunctionMeta, FunctionOrigin, GlobalPool, HeapPtr, Object, SharedGlobals, SysOp, Value,
-    VmGlobals,
+    ValueKind, VmGlobals,
 };
 pub use conversion::test_arg_to_external;
 // Re-export CancellationToken for callers.
@@ -2745,6 +2745,7 @@ impl BexEngine {
                                 // Convert VM args to fully owned values for the event
                                 let external_args: Vec<BexExternalValue> = args
                                     .iter()
+                                    .filter(|v| !matches!(v.kind(), ValueKind::OmittedArg))
                                     .map(|v| self.vm_value_to_owned(thread.proof(), *v))
                                     .collect();
 

@@ -9,7 +9,7 @@ class user.Admin {
   age: string
 }
 class user.Box {
-  value: user.T
+  value: T
 }
 class user.OptionalPerson {
   age: int?
@@ -74,7 +74,7 @@ function user.for_top_level_class_narrows_union_element_is_refutable() -> int  [
 function user.from_json(j: baml.json.json) -> user.Person  [expr] {
   user.Person { age: baml.json.from_json(baml.json.field(j, "age")), flexible_age: baml.json.from_json(baml.json.field(j, "flexible_age")), address: baml.json.from_json(baml.json.field(j, "address")) }
 }
-function user.from_json(j: baml.json.json) -> user.Box<user.T>  [expr] {
+function user.from_json(j: baml.json.json) -> user.Box<T>  [expr] {
   user.Box { value: baml.json.from_json(baml.json.field(j, "value")) }
 }
 function user.from_json(j: baml.json.json) -> user.Address  [expr] {

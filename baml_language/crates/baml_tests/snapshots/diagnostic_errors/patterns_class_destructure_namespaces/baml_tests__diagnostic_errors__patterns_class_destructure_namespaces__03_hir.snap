@@ -18,12 +18,12 @@ function user.namespaced_non_generic_class_type_pattern_rejects_type_args(respon
   {  } match (response) { root.llm.openai.Response<int> => 1 }
 }
 class user.llm.openai.Box {
-  value: user.llm.openai.T
+  value: T
 }
 class user.llm.openai.Response {
   score: int
 }
-function user.llm.openai.from_json(j: baml.json.json) -> user.llm.openai.Box<user.llm.openai.T>  [expr] {
+function user.llm.openai.from_json(j: baml.json.json) -> user.llm.openai.Box<T>  [expr] {
   user.llm.openai.Box { value: baml.json.from_json(baml.json.field(j, "value")) }
 }
 function user.llm.openai.from_json(j: baml.json.json) -> user.llm.openai.Response  [expr] {

@@ -410,6 +410,7 @@ mod tests {
         let type_expr = TypeExpr::Path {
             segments: vec![Name::new("Fizz")],
             generic_args: vec![],
+            associated_type_bindings: vec![],
             attrs: vec![make_attr("stream.done")],
         };
         let ppir_ty = PpirTy::from_type_expr(&type_expr);

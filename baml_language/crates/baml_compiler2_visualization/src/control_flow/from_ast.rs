@@ -201,6 +201,15 @@ impl<'a> AstGraphBuilder<'a> {
                 self.visit_loop(*condition, *body, *origin);
             }
 
+            // `while let` renders as a loop node gated on its scrutinee. We
+            // reuse `visit_loop` (with the `While` keyword) so the loop frame
+            // is present and nested `break`/`continue` render under it.
+            ast::Stmt::WhileLet {
+                scrutinee, body, ..
+            } => {
+                self.visit_loop(*scrutinee, *body, ast::LoopOrigin::While);
+            }
+
             ast::Stmt::Let {
                 initializer: Some(init),
                 pattern,
@@ -1163,6 +1172,7 @@ mod tests {
             let int_ty = ast::TypeExpr::Path {
                 segments: vec!["int".into()],
                 generic_args: vec![],
+                associated_type_bindings: vec![],
                 attrs: vec![],
             };
             let inner = patterns.alloc(ast::Pattern::Type(int_ty));

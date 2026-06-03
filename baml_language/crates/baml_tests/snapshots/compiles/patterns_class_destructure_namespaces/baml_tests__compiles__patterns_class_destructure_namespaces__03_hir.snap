@@ -45,10 +45,10 @@ function user.TypePatternQualifiedMatch() -> int  [expr] {
   { let response = root.llm.openai.Response { text: "ok", score: 44 } } match (response) { root.llm.openai.Response => response.score }
 }
 class user.llm.openai.Box {
-  value: user.llm.openai.T
+  value: T
 }
 class user.llm.openai.Outer {
-  inner: user.llm.openai.Box<user.llm.openai.T>
+  inner: user.llm.openai.Box<T>
 }
 class user.llm.openai.Response {
   text: string
@@ -60,10 +60,10 @@ function user.llm.openai.DestructureBareInNamespace(response: user.llm.openai.Re
 function user.llm.openai.from_json(j: baml.json.json) -> user.llm.openai.Response  [expr] {
   user.llm.openai.Response { text: baml.json.from_json(baml.json.field(j, "text")), score: baml.json.from_json(baml.json.field(j, "score")) }
 }
-function user.llm.openai.from_json(j: baml.json.json) -> user.llm.openai.Box<user.llm.openai.T>  [expr] {
+function user.llm.openai.from_json(j: baml.json.json) -> user.llm.openai.Box<T>  [expr] {
   user.llm.openai.Box { value: baml.json.from_json(baml.json.field(j, "value")) }
 }
-function user.llm.openai.from_json(j: baml.json.json) -> user.llm.openai.Outer<user.llm.openai.T>  [expr] {
+function user.llm.openai.from_json(j: baml.json.json) -> user.llm.openai.Outer<T>  [expr] {
   user.llm.openai.Outer { inner: baml.json.from_json(baml.json.field(j, "inner")) }
 }
 function user.llm.openai.to_json(self: ?) -> baml.json.json  [expr] {

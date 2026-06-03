@@ -27,7 +27,7 @@ jobs:
     timeout-minutes: 20
     continue-on-error: true
     steps:
-      - uses: actions/checkout@v6
+      - uses: useblacksmith/checkout@v1
         with:
           persist-credentials: false
 
@@ -42,6 +42,11 @@ jobs:
           # Read-only consumer. The canary saver lives in
           # cargo-tests.reusable.yaml; see the cache strategy comment there.
           save-if: false
+
+      # Separate step so if fetch is slow, build is fast.
+      - name: "Fetch cargo dependencies"
+        run: cargo fetch
+        working-directory: baml_language
 
       - name: "Run size-gate check"
         id: check
@@ -90,6 +95,11 @@ jobs:
           # Read-only consumer. The canary saver lives in
           # cargo-tests.reusable.yaml; see the cache strategy comment there.
           save-if: false
+
+      # Separate step so if fetch is slow, build is fast.
+      - name: "Fetch cargo dependencies"
+        run: cargo fetch
+        working-directory: baml_language
 
       - name: "Run size-gate check"
         id: check
@@ -146,6 +156,11 @@ jobs:
           # cargo-tests.reusable.yaml; see the cache strategy comment there.
           save-if: false
 
+      # Separate step so if fetch is slow, build is fast.
+      - name: "Fetch cargo dependencies"
+        run: cargo fetch
+        working-directory: baml_language
+
       - name: "Run size-gate check"
         id: check
         working-directory: baml_language
@@ -178,7 +193,7 @@ jobs:
     timeout-minutes: 25
     continue-on-error: true
     steps:
-      - uses: actions/checkout@v6
+      - uses: useblacksmith/checkout@v1
         with:
           persist-credentials: false
 
@@ -195,6 +210,11 @@ jobs:
           # Read-only consumer. The canary saver lives in
           # cargo-tests.reusable.yaml; see the cache strategy comment there.
           save-if: false
+
+      # Separate step so if fetch is slow, build is fast.
+      - name: "Fetch cargo dependencies"
+        run: cargo fetch --target wasm32-unknown-unknown
+        working-directory: baml_language
 
       - name: "Run size-gate check"
         id: check
@@ -231,7 +251,7 @@ jobs:
       contents: read
       pull-requests: write
     steps:
-      - uses: actions/checkout@v6
+      - uses: useblacksmith/checkout@v1
         with:
           persist-credentials: false
 
@@ -257,6 +277,11 @@ jobs:
           # The linux size-gate job already populated this cache; we just
           # consume it here.
           save-if: false
+
+      # Separate step so if fetch is slow, build is fast.
+      - name: "Fetch cargo dependencies"
+        run: cargo fetch
+        working-directory: baml_language
 
       - name: "Build cargo-size-gate"
         run: cargo build -p cargo-size-gate

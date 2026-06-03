@@ -408,8 +408,7 @@ function fs.fs_file_rw_write_bytes_fn() -> bool {
     load_const 0
     sys_op baml.fs.File.seek_from
     pop 1
-    load_var file
-    load_var bytes
+    load_var2 2 1
     sys_op baml.fs.File.write_bytes
     store_var n
     load_const "/tmp/baml_fs_file_write_bytes_src.bin"

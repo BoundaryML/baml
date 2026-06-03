@@ -415,6 +415,33 @@ impl<'db> SemanticIndexBuilder<'db> {
                 }
                 self.pop_scope();
             }
+            ast::Stmt::WhileLet {
+                pattern,
+                scrutinee,
+                body: loop_body,
+            } => {
+                // Scrutinee is evaluated in the enclosing scope (re-evaluated
+                // each iteration, but lexically outside the loop body) —
+                // mirrors `Stmt::While`'s condition and `Stmt::For`'s
+                // collection. Walk it BEFORE pushing the body scope so its
+                // paths don't falsely resolve to the loop's own bindings.
+                self.walk_expr(*scrutinee, body, source_map, true);
+
+                // Push ONE Block scope spanning the whole while-let statement,
+                // mirroring `Stmt::While` / `Stmt::For`. The pattern bindings
+                // live in THIS scope and are visible to the body (which adds
+                // its own nested block scope); they vanish after the loop.
+                self.push_scope(ScopeKind::Block, None, source_map.stmt_span(stmt_id));
+                self.register_local_pattern(
+                    *pattern,
+                    DefinitionSite::Statement(stmt_id),
+                    body,
+                    source_map,
+                    source_map.pattern_span(*pattern).start(),
+                );
+                self.walk_expr(*loop_body, body, source_map, true);
+                self.pop_scope();
+            }
             ast::Stmt::Return(expr) => {
                 if let Some(expr) = expr {
                     self.walk_expr(*expr, body, source_map, true);

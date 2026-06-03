@@ -81,14 +81,12 @@ function closures.ClsCalculator.compute(self: closures.ClsCalculator, a: int, b:
     jump L1
 
   L0:
-    load_var a
-    load_var b
+    load_var2 2 3
     mul_int
     jump L2
 
   L1:
-    load_var a
-    load_var b
+    load_var2 2 3
     add_int
 
   L2:
@@ -149,14 +147,12 @@ function closures.ClsFormatter.format(self: closures.ClsFormatter, text: string)
 }
 
 function closures.ClsRangeCheck.is_valid(self: closures.ClsRangeCheck, n: int) -> bool {
-    load_var n
-    load_var self
+    load_var2 2 1
     load_field .min
     cmp_int_op >=
     jump_if_false L0
     pop 1
-    load_var n
-    load_var self
+    load_var2 2 1
     load_field .max
     cmp_int_op <=
 
@@ -184,8 +180,7 @@ function closures.ClsWorker.risky(self: closures.ClsWorker, value: int) -> int {
 }
 
 function closures.closures_apply(f: (int, int) -> int throws never, a: int, b: int) -> int {
-    load_var a
-    load_var b
+    load_var2 2 3
     load_var f
     call_indirect
     return
@@ -286,7 +281,8 @@ function closures.closures_generic_unwrap() -> int {
 function closures.closures_mutation_after_bind() -> int {
     load_const 0
     init_instance user.closures.ClsCounter .value
-    store_var_load_var c
+    store_var c
+    load_var c
     make_bound_method user.closures.ClsCounter.increment
     store_var inc
     load_var c
@@ -327,8 +323,7 @@ function closures.closures_strategy_swap() -> int[] {
     load_const 4
     call user.closures.closures_apply
     store_var _7
-    load_var _5
-    load_var _7
+    load_var2 1 2
     alloc_array 2
     return
 }

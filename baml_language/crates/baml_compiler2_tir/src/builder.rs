@@ -2366,6 +2366,32 @@ impl<'db> TypeInferenceBuilder<'db> {
                 }
                 shadowed.truncate(saved_len);
             }
+            Stmt::WhileLet {
+                pattern,
+                scrutinee,
+                body: loop_body,
+            } => {
+                // Scrutinee is evaluated outside the pattern's binding scope;
+                // the pattern's names shadow within the body only — mirrors
+                // `Stmt::For` (collection then pattern then body).
+                Self::collect_default_expr_forward_references(
+                    *scrutinee,
+                    body,
+                    later_params,
+                    shadowed,
+                    refs,
+                );
+                let saved_len = shadowed.len();
+                Self::push_pattern_bindings(*pattern, body, shadowed);
+                Self::collect_default_expr_forward_references(
+                    *loop_body,
+                    body,
+                    later_params,
+                    shadowed,
+                    refs,
+                );
+                shadowed.truncate(saved_len);
+            }
             Stmt::For {
                 binding,
                 collection,
@@ -4597,6 +4623,59 @@ impl<'db> TypeInferenceBuilder<'db> {
                 }
                 false
             }
+            Stmt::WhileLet {
+                pattern,
+                scrutinee,
+                body: while_body,
+            } => {
+                // Refutable pattern in a loop header: mirrors `if_let_expr_common`
+                // (refutable expected, warn-not-reject if irrefutable) crossed
+                // with `Stmt::While`'s scoping (snapshot/restore so body lets and
+                // narrowings don't leak past the loop). Produces unit and never
+                // diverges — the body may run zero times.
+                let scrutinee_ty = self.infer_expr(*scrutinee, body);
+                let scrutinee_name = match &body.exprs[*scrutinee] {
+                    Expr::Path(segments) if segments.len() == 1 => Some(segments[0].clone()),
+                    _ => None,
+                };
+
+                // Lower the refutable pattern against the scrutinee — same
+                // machinery as `match` arms / `if let`. Populates
+                // `pattern_types` and yields `matched_ty` + `dpat`.
+                let result = self.analyze_and_lower(*pattern, &scrutinee_ty, body, *while_body);
+
+                // Body scope: narrow the scrutinee to the matched type and
+                // register the pattern bindings for the body only, then restore.
+                let snapshot = self.snapshot_scoped_locals();
+                if let Some(name) = &scrutinee_name {
+                    self.narrow_local(name.clone(), result.matched_ty.clone());
+                }
+                self.finalize_pattern_lowering(*pattern, &result, None, None, &scrutinee_ty);
+                self.infer_expr(*while_body, body);
+                self.restore_scoped_locals(&snapshot);
+
+                // Irrefutability warning — same policy as `if let`. An
+                // irrefutable `while let` never exits via pattern failure, so it
+                // is an unconditional infinite loop with a pointless pattern;
+                // warn and suggest a plain `while`/`loop`.
+                let scrutinee_ty_for_matrix = self.matrix_normalize_scrut(&scrutinee_ty);
+                let report = crate::pattern_lowering::compute_match_usefulness(
+                    self,
+                    std::slice::from_ref(&result.dpat),
+                    scrutinee_ty_for_matrix,
+                );
+                if report.missing.is_empty() {
+                    let err = crate::infer_context::TirTypeError::IrrefutablePatternInWhileLet;
+                    if let Some(sm) = self.body_source_map.as_ref() {
+                        self.context
+                            .report_warning_at_span(err, sm.pattern_span(*pattern));
+                    } else {
+                        self.context.report_warning_simple(err, *scrutinee);
+                    }
+                }
+
+                false
+            }
             // Design note: Stmt::For is kept as a first-class construct (not desugared
             // to While) so we can produce for-loop-specific diagnostics ("cannot iterate
             // over type X") and preserve iteration semantics for downstream codegen.
@@ -6352,6 +6431,14 @@ impl<'db> TypeInferenceBuilder<'db> {
                 if let Some(after_stmt) = after {
                     self.collect_throw_facts_from_stmt(*after_stmt, body, out);
                 }
+            }
+            Stmt::WhileLet {
+                scrutinee,
+                body: while_body,
+                ..
+            } => {
+                self.collect_throw_facts_from_expr(*scrutinee, body, out);
+                self.collect_throw_facts_from_expr(*while_body, body, out);
             }
             Stmt::For {
                 collection,
@@ -13667,8 +13754,30 @@ impl TypeInferenceBuilder<'_> {
                 // `S | StreamNoYield` rather than last-write-wins.
                 let mut bindings_by_name: indexmap::IndexMap<Name, (PatId, Vec<Ty>)> =
                     indexmap::IndexMap::new();
+                // `pattern_types` is single-valued per PatId, but lowering the
+                // same nested sub-patterns once per union member overwrites
+                // their entries last-write-wins (the `insert` in
+                // `analyze_and_lower_no_subtype_check`). MIR reads those
+                // per-PatId entries to emit each pattern's runtime `is`-type
+                // test, so keeping only the last member makes e.g. `x: A | B`
+                // test only `B` — values of earlier members never match. Join
+                // the per-member writes here so the recorded type spans every
+                // member, mirroring how `matched_ty` / `bindings` are joined
+                // across members below. (MIR already ORs a union's members.)
+                let pt_before = self.pattern_types.clone();
+                let mut pt_joined: FxHashMap<PatId, Ty> = FxHashMap::default();
                 for member_ty in &targets {
                     let inner = self.analyze_and_lower_inner(pat_id, member_ty, body, at_expr);
+                    for (k, v) in &self.pattern_types {
+                        if pt_before.get(k) != Some(v) {
+                            pt_joined
+                                .entry(*k)
+                                .and_modify(|acc| {
+                                    *acc = Self::join_all(&[acc.clone(), v.clone()]);
+                                })
+                                .or_insert_with(|| v.clone());
+                        }
+                    }
                     let wrapped = crate::exhaustiveness::DPat::union_member(
                         member_ty.clone(),
                         inner.dpat,
@@ -13685,6 +13794,11 @@ impl TypeInferenceBuilder<'_> {
                             .or_insert_with(|| (b.pat_id, Vec::new()));
                         entry.1.push(b.ty);
                     }
+                }
+                // Publish the per-member-joined nested pattern types, undoing
+                // the last-write-wins clobber from the loop above.
+                for (k, v) in pt_joined {
+                    self.pattern_types.insert(k, v);
                 }
                 let joined_bindings: Vec<crate::pattern_lowering::PatternBinding> =
                     bindings_by_name

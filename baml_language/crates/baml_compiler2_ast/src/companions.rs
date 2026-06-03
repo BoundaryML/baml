@@ -12,7 +12,7 @@ use baml_base::Name;
 
 use crate::{
     DeclarativeMeta,
-    ast::{FunctionBodyDef, FunctionDef, FunctionDefaults, Param, SpannedTypeExpr, TypeExpr},
+    ast::{FunctionBodyDef, FunctionDef, Param, SpannedTypeExpr, TypeExpr},
     lower_cst::{synthesize_llm_builtin_call, synthesize_llm_parse_call},
 };
 
@@ -77,7 +77,8 @@ fn llm_parse(parent: &FunctionDef) -> Option<FunctionDef> {
 
     let name = Name::new(format!("{}$parse", parent.name));
 
-    // Parse takes a single `json: string` parameter instead of the parent's params.
+    // Parse takes a `json: string` parameter instead of the parent's prompt
+    // params, but keeps the LLM client's default override for API consistency.
     let json_param = Param {
         name: Name::new("json"),
         type_expr: Some(SpannedTypeExpr {
@@ -93,13 +94,17 @@ fn llm_parse(parent: &FunctionDef) -> Option<FunctionDef> {
     let return_type = parent.return_type.clone();
 
     let (body, source_map) = synthesize_llm_parse_call(parent.name.as_str(), parent.span);
+    let mut params = vec![json_param];
+    if let Some(client_param) = parent.params.iter().find(|p| p.name.as_str() == "client") {
+        params.push(client_param.clone());
+    }
 
     Some(FunctionDef {
         name,
         generic_params: parent.generic_params.clone(),
         generic_param_bounds: parent.generic_param_bounds.clone(),
-        params: vec![json_param],
-        defaults: FunctionDefaults::empty(),
+        params,
+        defaults: parent.defaults.clone(),
         return_type,
         throws: None,
         body: Some(FunctionBodyDef::Expr(body, source_map)),
@@ -127,17 +132,27 @@ fn make_llm_companion(
         },
         span: parent.span,
     };
-    let param_names: Vec<Name> = parent.params.iter().map(|p| p.name.clone()).collect();
+    let param_names: Vec<Name> = parent
+        .params
+        .iter()
+        .filter(|p| p.name.as_str() != "client")
+        .map(|p| p.name.clone())
+        .collect();
     // Extract client name from parent's LLM declarative meta.
-    let client_name = match &parent.declarative_meta {
-        Some(DeclarativeMeta::Llm(llm)) => llm.client.as_ref().map(|n| n.as_str().to_string()),
+    let client_arg_name = match &parent.declarative_meta {
+        Some(DeclarativeMeta::Llm(_))
+            if parent.params.iter().any(|p| p.name.as_str() == "client") =>
+        {
+            Some("client")
+        }
+        Some(DeclarativeMeta::Llm(llm)) => llm.client.as_ref().map(smol_str::SmolStr::as_str),
         _ => None,
     };
     let (body, source_map) = synthesize_llm_builtin_call(
         target,
         parent.name.as_str(),
         &param_names,
-        client_name.as_deref(),
+        client_arg_name,
         Vec::new(),
         parent.span,
     );

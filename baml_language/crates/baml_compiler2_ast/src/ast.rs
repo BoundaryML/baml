@@ -840,6 +840,20 @@ pub enum Stmt {
         after: Option<StmtId>,
         origin: LoopOrigin,
     },
+    /// `while let PATTERN = SCRUTINEE { BODY }` — loops as long as the
+    /// refutable `pattern` matches `scrutinee`. Bindings introduced by
+    /// `pattern` are in scope inside `body` only and are re-bound each
+    /// iteration. Exits when the pattern fails to match. Like `Stmt::While`
+    /// it produces no value (unit) and supports `break`/`continue`. Unlike
+    /// `Stmt::Let`, the pattern is expected to be *refutable*; an irrefutable
+    /// pattern earns a downstream warning. Has no `else` clause and (unlike
+    /// `Stmt::While`) no `after`/`origin` — those exist only for desugared
+    /// C-style `for` loops.
+    WhileLet {
+        pattern: PatId,
+        scrutinee: ExprId,
+        body: ExprId,
+    },
     /// For-in loop: `for let <binding> in <collection> { <body> }`.
     ///
     /// Kept as a first-class node (not desugared to While) so that:

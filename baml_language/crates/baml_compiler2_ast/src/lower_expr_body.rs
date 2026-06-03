@@ -517,6 +517,7 @@ impl LoweringContext {
                         SyntaxKind::RETURN_STMT => self.lower_return_stmt(node),
                         SyntaxKind::THROW_STMT => self.lower_throw_stmt(node),
                         SyntaxKind::WHILE_STMT => self.lower_while_stmt(node),
+                        SyntaxKind::WHILE_LET_STMT => self.lower_while_let_stmt(node),
                         SyntaxKind::FOR_EXPR => self.lower_for_stmt(node),
                         SyntaxKind::BREAK_STMT => self.alloc_stmt(Stmt::Break, node.text_range()),
                         SyntaxKind::CONTINUE_STMT => {
@@ -1213,6 +1214,52 @@ impl LoweringContext {
                 scrutinee,
                 then_branch,
                 else_branch,
+            },
+            node.text_range(),
+        )
+    }
+
+    fn lower_while_let_stmt(&mut self, node: &SyntaxNode) -> StmtId {
+        // CST shape: `while let PATTERN = SCRUTINEE BODY_BLOCK`.
+        // The first PATTERN node is the pattern; remaining children are
+        // [0]=scrutinee, [1]=body (mirrors `lower_if_let_expr` minus else).
+        let mut pattern = None;
+        let mut exprs: Vec<ExprId> = Vec::new();
+        for elem in node.children_with_tokens() {
+            match elem {
+                rowan::NodeOrToken::Node(child) => {
+                    if child.kind() == SyntaxKind::PATTERN {
+                        if pattern.is_none() {
+                            pattern = Some(self.lower_pattern(&child));
+                        }
+                    } else {
+                        exprs.push(self.lower_expr(&child));
+                    }
+                }
+                rowan::NodeOrToken::Token(token) => {
+                    if let Some(expr_id) = self.try_lower_bare_token(&token) {
+                        exprs.push(expr_id);
+                    }
+                }
+            }
+        }
+
+        let pattern =
+            pattern.unwrap_or_else(|| self.alloc_pattern(Pattern::Wildcard, node.text_range()));
+        let scrutinee = exprs
+            .first()
+            .copied()
+            .unwrap_or_else(|| self.alloc_expr(Expr::Missing, node.text_range()));
+        let body = exprs
+            .get(1)
+            .copied()
+            .unwrap_or_else(|| self.alloc_expr(Expr::Missing, node.text_range()));
+
+        self.alloc_stmt(
+            Stmt::WhileLet {
+                pattern,
+                scrutinee,
+                body,
             },
             node.text_range(),
         )

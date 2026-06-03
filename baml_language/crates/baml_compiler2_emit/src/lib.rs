@@ -54,8 +54,12 @@ fn contains_tir_type_var(ty: &baml_compiler2_tir::ty::Ty) -> bool {
 
     match ty {
         Ty::TypeVar(..) => true,
-        Ty::Class(_, args, _) | Ty::Interface(_, args, _, _) | Ty::Union(args, _) => {
+        Ty::Class(_, args, _) | Ty::Union(args, _) => args.iter().any(contains_tir_type_var),
+        Ty::Interface(_, args, associated_bindings, _) => {
             args.iter().any(contains_tir_type_var)
+                || associated_bindings
+                    .iter()
+                    .any(|(_, ty)| contains_tir_type_var(ty))
         }
         Ty::List(inner, _) | Ty::EvolvingList(inner, _) | Ty::Optional(inner, _) => {
             contains_tir_type_var(inner)

@@ -344,6 +344,14 @@ pub enum SyntaxKind {
     LAMBDA_EXPR,
     THROWS_CLAUSE,
     WHILE_STMT,
+    /// `while let PATTERN = SCRUTINEE { BODY }`
+    ///
+    /// Loops while the refutable `pattern` matches `scrutinee`, exiting when
+    /// it fails to match. Pattern bindings are in scope inside `BODY` only and
+    /// are rebound each iteration. Produces unit and has no `else` clause
+    /// (unlike `IF_LET_EXPR`). Children, in order: `PATTERN`, scrutinee expr,
+    /// then `BLOCK_EXPR`.
+    WHILE_LET_STMT,
     FOR_EXPR,
     LET_STMT,
     WATCH_LET,

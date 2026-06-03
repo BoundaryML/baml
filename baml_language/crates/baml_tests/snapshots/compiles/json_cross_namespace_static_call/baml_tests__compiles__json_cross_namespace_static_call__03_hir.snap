@@ -9,15 +9,15 @@ function user.decode_root(j: baml.json.json) -> root.pkg.inner.Box<int>  [expr] 
   {  } root.pkg.inner.Box.from_json(j)
 }
 class user.pkg.inner.AutoBox {
-  value: user.pkg.inner.T
+  value: T
 }
 class user.pkg.inner.Box {
-  value: user.pkg.inner.T
+  value: T
 }
-function user.pkg.inner.from_json(j: baml.json.json) -> user.pkg.inner.Box<user.pkg.inner.T>  [expr] {
+function user.pkg.inner.from_json(j: baml.json.json) -> user.pkg.inner.Box<T>  [expr] {
   {  } user.pkg.inner.Box { value: baml.json.from_json(baml.json.field(j, "value")) }
 }
-function user.pkg.inner.from_json(j: baml.json.json) -> user.pkg.inner.AutoBox<user.pkg.inner.T>  [expr] {
+function user.pkg.inner.from_json(j: baml.json.json) -> user.pkg.inner.AutoBox<T>  [expr] {
   user.pkg.inner.AutoBox { value: baml.json.from_json(baml.json.field(j, "value")) }
 }
 function user.pkg.inner.to_json(self: ?) -> baml.json.json  [expr] {

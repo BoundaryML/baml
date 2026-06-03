@@ -1,6 +1,6 @@
 // test_tracing.test.ts — mirrors bridge_python/tests/test_tracing.py
 
-import { BamlRuntime, HostSpanManager, CtxManager } from '../index';
+import { BamlRuntime, HostSpanManager, CtxManager } from '../dist/index.js';
 
 const BAML_SRC = `
 function ReturnOne() -> int {
@@ -43,7 +43,7 @@ describe('HostSpanManager', () => {
 });
 
 describe('CtxManager', () => {
-    const rt = BamlRuntime.fromFiles('.', { 'main.baml': BAML_SRC });
+    const rt = BamlRuntime.initializeRuntime('.', { 'main.baml': BAML_SRC });
 
     test('provides isolated contexts', async () => {
         const ctxMgr = new CtxManager(rt);

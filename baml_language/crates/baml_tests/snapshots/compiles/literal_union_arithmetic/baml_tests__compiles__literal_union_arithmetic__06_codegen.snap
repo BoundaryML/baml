@@ -30,8 +30,7 @@ function user.bothSidesUnion() -> int {
     store_var _2
 
   L5:
-    load_var _1
-    load_var _2
+    load_var2 1 2
     bin_op +
     return
 }
@@ -105,8 +104,7 @@ function user.loopMatchAccum() -> int {
     store_var _6
 
   L7:
-    load_var _5
-    load_var _6
+    load_var2 3 4
     bin_op +
     store_var sum
     load_var i

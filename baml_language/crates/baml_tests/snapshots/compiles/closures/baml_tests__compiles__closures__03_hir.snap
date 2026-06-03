@@ -3,7 +3,7 @@ source: crates/baml_tests/src/generated_tests.rs
 ---
 === HIR2 ===
 class user.Box {
-  value: user.T
+  value: T
 }
 class user.Calculator {
   op: string
@@ -58,7 +58,7 @@ function user.from_json(j: baml.json.json) -> user.Formatter  [expr] {
 function user.from_json(j: baml.json.json) -> user.Employee  [expr] {
   user.Employee { first: baml.json.from_json(baml.json.field(j, "first")), last: baml.json.from_json(baml.json.field(j, "last")) }
 }
-function user.from_json(j: baml.json.json) -> user.Box<user.T>  [expr] {
+function user.from_json(j: baml.json.json) -> user.Box<T>  [expr] {
   user.Box { value: baml.json.from_json(baml.json.field(j, "value")) }
 }
 function user.from_json(j: baml.json.json) -> user.Counter  [expr] {
@@ -133,7 +133,7 @@ function user.to_json(self: ?) -> baml.json.json  [expr] {
 function user.to_json(self: ?) -> baml.json.json  [expr] {
   map { "charset": self.charset.to_json() }
 }
-function user.unwrap(self: ?) -> user.T  [expr] {
+function user.unwrap(self: ?) -> T  [expr] {
   {  } self.value
 }
 

@@ -3,9 +3,9 @@ source: crates/baml_tests/src/generated_tests.rs
 ---
 === HIR2 ===
 class user.Box {
-  value: user.T
+  value: T
 }
-function user.from_json(j: baml.json.json) -> user.Box<user.T>  [expr] {
+function user.from_json(j: baml.json.json) -> user.Box<T>  [expr] {
   user.Box { value: baml.json.from_json(baml.json.field(j, "value")) }
 }
 function user.main() -> int  [expr] {

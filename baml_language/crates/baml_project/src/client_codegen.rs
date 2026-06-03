@@ -832,6 +832,111 @@ mod tests {
         }
     }
 
+    #[test]
+    fn test_llm_functions_and_companions_get_default_client_argument() {
+        let root = Path::new("/tmp/llm_default_client_arg");
+        let mut db = ProjectDatabase::new();
+        db.set_project_root(root);
+        db.add_or_update_file(
+            root.join("main.baml").as_path(),
+            r##"
+client<llm> GPT4 {
+  provider "openai"
+  options {
+    model "gpt-4o"
+    api_key "test"
+  }
+}
+
+class Resume { name string }
+
+function ExtractResume(resume: string) -> Resume {
+  client GPT4
+  prompt #"Extract resume from {{resume}}"#
+}
+"##,
+        );
+
+        let pool = build_symbol_pool(&db);
+
+        for (bare, expected_prefix) in [
+            ("ExtractResume", &["resume"][..]),
+            ("ExtractResume$render_prompt", &["resume"][..]),
+            ("ExtractResume$build_request", &["resume"][..]),
+            ("ExtractResume$build_request_stream", &["resume"][..]),
+            ("ExtractResume$stream", &["resume"][..]),
+            ("ExtractResume$parse", &["json"][..]),
+            ("ExtractResume$parse_stream", &["sse"][..]),
+        ] {
+            let key = cg::Name {
+                pkg: Name::new("user"),
+                namespace_path: vec![],
+                name: Name::new(bare),
+            };
+            let Some(cg::Symbol::Function(func)) = pool.get(&key) else {
+                panic!("missing function {bare}");
+            };
+
+            let arg_names: Vec<&str> = func.arguments.iter().map(|a| a.name.as_str()).collect();
+            let mut expected_names = expected_prefix.to_vec();
+            expected_names.push("client");
+            assert_eq!(arg_names, expected_names, "arguments for {bare}");
+
+            let client_arg = func.arguments.last().expect("client argument");
+            assert_eq!(client_arg.name.as_str(), "client");
+            assert_eq!(
+                client_arg.default,
+                Some(cg::FunctionArgumentDefault::Expression {
+                    source: Some("GPT4".to_string()),
+                }),
+                "client default for {bare}",
+            );
+            match &client_arg.ty {
+                cg::Ty::Class(name, args) => {
+                    assert_eq!(name.to_string(), "baml.llm.Client");
+                    assert!(args.is_empty());
+                }
+                other => panic!("client type for {bare} should be baml.llm.Client, got {other:?}"),
+            }
+        }
+    }
+
+    #[test]
+    fn test_llm_function_user_client_param_is_compiler_error() {
+        let root = Path::new("/tmp/llm_reserved_client_arg");
+        let mut db = ProjectDatabase::new();
+        db.set_project_root(root);
+        db.add_or_update_file(
+            root.join("main.baml").as_path(),
+            r##"
+client<llm> GPT4 {
+  provider "openai"
+  options {
+    model "gpt-4o"
+    api_key "test"
+  }
+}
+
+function Extract(client: string, text: string) -> string {
+  client GPT4
+  prompt #"{{ text }}"#
+}
+"##,
+        );
+
+        let diagnostics = crate::collect_compiler2_diagnostics(&db);
+        assert!(
+            diagnostics.iter().any(|diag| {
+                diag.message
+                    .contains("cannot declare a parameter named `client`")
+                    && diag
+                        .message
+                        .contains("reserved for the compiler-injected LLM client override")
+            }),
+            "expected reserved `client` compiler error, got: {diagnostics:#?}"
+        );
+    }
+
     /// Smoke test: `///` on classes / fields / enums / variants must reach the
     /// `SymbolPool`. Pre-existing failure mode here was that the symbol pool
     /// was built but every `docstring` was `None` despite the AST carrying
