@@ -804,8 +804,7 @@ function patterns_new_runtime.from_array_boxes(boxes: patterns_new_runtime.BoxT<
     store_var __for_idx
 
   L0:
-    load_var __for_idx
-    load_var boxes
+    load_var2 3 1
     container_len
     cmp_int_op <
     pop_jump_if_false L1
@@ -816,8 +815,7 @@ function patterns_new_runtime.from_array_boxes(boxes: patterns_new_runtime.BoxT<
     return
 
   L2:
-    load_var total
-    load_var boxes
+    load_var2 2 1
     load_var __for_idx
     load_array_element
     load_field .value
@@ -1099,8 +1097,7 @@ function patterns_new_runtime.pick_grid(g: patterns_new_runtime.Grid1) -> int {
     load_const 1
     cmp_int_op >=
     pop_jump_if_false L1
-    load_var _29
-    load_var _29
+    load_var2 5 5
     container_len
     load_const 1
     sub_int
@@ -1118,8 +1115,7 @@ function patterns_new_runtime.pick_grid(g: patterns_new_runtime.Grid1) -> int {
     load_const 2
     cmp_int_op >=
     pop_jump_if_false L1
-    load_var _37
-    load_var _37
+    load_var2 7 7
     container_len
     load_const 2
     sub_int
@@ -1224,8 +1220,7 @@ function patterns_new_runtime.pick_pair(p: patterns_new_runtime.Pair1 | patterns
     load_const 3
     cmp_int_op >=
     pop_jump_if_false L2
-    load_var _36
-    load_var _36
+    load_var2 5 5
     container_len
     load_const 3
     sub_int
@@ -1254,8 +1249,7 @@ function patterns_new_runtime.pick_pair(p: patterns_new_runtime.Pair1 | patterns
     load_const 1
     cmp_int_op >=
     pop_jump_if_false L3
-    load_var _62
-    load_var _62
+    load_var2 7 7
     container_len
     load_const 1
     sub_int
@@ -1381,8 +1375,7 @@ function patterns_new_runtime.pick_sheet(s: patterns_new_runtime.Sheet1) -> int 
     load_const 1
     cmp_int_op >=
     pop_jump_if_false L1
-    load_var _44
-    load_var _44
+    load_var2 8 8
     container_len
     load_const 1
     sub_int
@@ -1400,8 +1393,7 @@ function patterns_new_runtime.pick_sheet(s: patterns_new_runtime.Sheet1) -> int 
     load_const 1
     cmp_int_op >=
     pop_jump_if_false L1
-    load_var _52
-    load_var _52
+    load_var2 10 10
     container_len
     load_const 1
     sub_int
@@ -1419,8 +1411,7 @@ function patterns_new_runtime.pick_sheet(s: patterns_new_runtime.Sheet1) -> int 
     load_const 2
     cmp_int_op >=
     pop_jump_if_false L1
-    load_var _60
-    load_var _60
+    load_var2 12 12
     container_len
     load_const 2
     sub_int
@@ -1693,8 +1684,7 @@ function patterns_new_runtime.score_bool_slice(xs: bool[]) -> int {
     load_const 1
     cmp_int_op >=
     pop_jump_if_false L1
-    load_var xs
-    load_var xs
+    load_var2 1 1
     container_len
     load_const 1
     sub_int
@@ -2337,16 +2327,14 @@ function patterns_new_runtime.score_outer_chain(xs: int[][]) -> int {
     load_const 2
     cmp_int_op >=
     pop_jump_if_false L0
-    load_var xs
-    load_var xs
+    load_var2 1 1
     container_len
     load_const 2
     sub_int
     load_array_element
     is_type int[]
     pop_jump_if_false L0
-    load_var xs
-    load_var xs
+    load_var2 1 1
     container_len
     load_const 1
     sub_int
@@ -2366,8 +2354,7 @@ function patterns_new_runtime.score_outer_chain(xs: int[][]) -> int {
     sub_int
     load_const 100
     mul_int
-    load_var xs
-    load_var xs
+    load_var2 1 1
     container_len
     load_const 2
     sub_int
@@ -2377,8 +2364,7 @@ function patterns_new_runtime.score_outer_chain(xs: int[][]) -> int {
     load_const 10
     mul_int
     add_int
-    load_var xs
-    load_var xs
+    load_var2 1 1
     container_len
     load_const 1
     sub_int
@@ -2502,16 +2488,14 @@ function patterns_new_runtime.score_prefix_two_suffix(xs: int[]) -> int {
     load_array_element
     is_type int
     pop_jump_if_false L0
-    load_var xs
-    load_var xs
+    load_var2 1 1
     container_len
     load_const 2
     sub_int
     load_array_element
     is_type int
     pop_jump_if_false L0
-    load_var xs
-    load_var xs
+    load_var2 1 1
     container_len
     load_const 1
     sub_int
@@ -2530,8 +2514,7 @@ function patterns_new_runtime.score_prefix_two_suffix(xs: int[]) -> int {
     load_array_element
     load_const 100
     mul_int
-    load_var xs
-    load_var xs
+    load_var2 1 1
     container_len
     load_const 2
     sub_int
@@ -2539,8 +2522,7 @@ function patterns_new_runtime.score_prefix_two_suffix(xs: int[]) -> int {
     load_const 10
     mul_int
     add_int
-    load_var xs
-    load_var xs
+    load_var2 1 1
     container_len
     load_const 1
     sub_int
@@ -2646,8 +2628,7 @@ function patterns_new_runtime.score_suffix_rest(xs: int[]) -> int {
     load_const 1
     cmp_int_op >=
     pop_jump_if_false L0
-    load_var xs
-    load_var xs
+    load_var2 1 1
     container_len
     load_const 1
     sub_int
@@ -2667,8 +2648,7 @@ function patterns_new_runtime.score_suffix_rest(xs: int[]) -> int {
     sub_int
     load_const 10
     mul_int
-    load_var xs
-    load_var xs
+    load_var2 1 1
     container_len
     load_const 1
     sub_int
@@ -2852,8 +2832,7 @@ function patterns_new_runtime.score_two_prefix(xs: int[]) -> int {
     load_array_element
     is_type int
     pop_jump_if_false L0
-    load_var xs
-    load_var xs
+    load_var2 1 1
     container_len
     load_const 1
     sub_int
@@ -2878,8 +2857,7 @@ function patterns_new_runtime.score_two_prefix(xs: int[]) -> int {
     load_const 10
     mul_int
     add_int
-    load_var xs
-    load_var xs
+    load_var2 1 1
     container_len
     load_const 1
     sub_int
@@ -3027,8 +3005,7 @@ function patterns_new_runtime.score_wrap2(v: int[][] | patterns_new_runtime.Wrap
     load_const 1
     cmp_int_op >=
     pop_jump_if_false L1
-    load_var _19
-    load_var _19
+    load_var2 3 3
     container_len
     load_const 1
     sub_int
@@ -3128,8 +3105,7 @@ function patterns_new_runtime.test_empty_generic_destruct_contextual() -> int {
     init_instance<1> user.patterns_new_runtime.BoxT .value
     call user.patterns_new_runtime.classify_box_string
     store_var _5
-    load_var _3
-    load_var _5
+    load_var2 1 2
     add_int
     return
 }
@@ -3138,18 +3114,15 @@ function patterns_new_runtime.test_five_levels_or_flipped() -> int {
     load_const 0
     init_instance user.patterns_new_runtime.Atom1 .value
     store_var_load_var stuffer_atom
-    load_var stuffer_atom
-    load_var stuffer_atom
+    load_var2 1 1
     alloc_array 3
     init_instance user.patterns_new_runtime.Slot1 .atoms
     store_var_load_var stuffer_slot
-    load_var stuffer_slot
-    load_var stuffer_slot
+    load_var2 2 2
     alloc_array 3
     init_instance user.patterns_new_runtime.Row1 .slots
     store_var_load_var stuffer_row
-    load_var stuffer_slot
-    load_var stuffer_atom
+    load_var2 2 1
     load_const 42
     init_instance user.patterns_new_runtime.Atom1 .value
     load_var stuffer_atom
@@ -3186,8 +3159,7 @@ function patterns_new_runtime.test_for_class_binds_inner_zip() -> int {
     store_var __for_idx
 
   L0:
-    load_var __for_idx
-    load_var _12
+    load_var2 3 2
     container_len
     cmp_int_op <
     pop_jump_if_false L1
@@ -3198,8 +3170,7 @@ function patterns_new_runtime.test_for_class_binds_inner_zip() -> int {
     return
 
   L2:
-    load_var product
-    load_var _12
+    load_var2 1 2
     load_var __for_idx
     load_array_element
     load_field .address
@@ -3238,8 +3209,7 @@ function patterns_new_runtime.test_for_deep_class_capture_fresh() -> int {
     store_var __for_idx
 
   L0:
-    load_var __for_idx
-    load_var _12
+    load_var2 3 2
     container_len
     cmp_int_op <
     pop_jump_if_false L1
@@ -3276,15 +3246,13 @@ function patterns_new_runtime.test_for_deep_class_capture_fresh() -> int {
     load_const null
     make_cell
     store_var zip
-    load_var _12
-    load_var __for_idx
+    load_var2 2 3
     load_array_element
     load_field .address
     load_field .coordinate
     load_field .zip
     store_deref ?4
-    load_var funcs
-    load_var zip
+    load_var2 1 4
     make_closure .<lambda(test_for_deep_class_capture_fresh, 0)>, 1
     call baml.Array.push
     pop 1
@@ -3316,8 +3284,7 @@ function patterns_new_runtime.test_for_deep_class_sums() -> int {
     store_var __for_idx
 
   L0:
-    load_var __for_idx
-    load_var _12
+    load_var2 3 2
     container_len
     cmp_int_op <
     pop_jump_if_false L1
@@ -3328,8 +3295,7 @@ function patterns_new_runtime.test_for_deep_class_sums() -> int {
     return
 
   L2:
-    load_var total
-    load_var _12
+    load_var2 1 2
     load_var __for_idx
     load_array_element
     load_field .address
@@ -3362,8 +3328,7 @@ function patterns_new_runtime.test_for_inside_class_destruct() -> int {
     store_var __for_idx
 
   L0:
-    load_var __for_idx
-    load_var _9
+    load_var2 3 2
     container_len
     cmp_int_op <
     pop_jump_if_false L1
@@ -3374,14 +3339,12 @@ function patterns_new_runtime.test_for_inside_class_destruct() -> int {
     return
 
   L2:
-    load_var _9
-    load_var __for_idx
+    load_var2 2 3
     load_array_element
     load_field .scores
     container_len
     store_var _16
-    load_var total
-    load_var _16
+    load_var2 1 4
     add_int
     store_var total
     load_var __for_idx
@@ -3406,8 +3369,7 @@ function patterns_new_runtime.test_for_let_chain_alias_capture() -> int {
     store_var __for_idx
 
   L0:
-    load_var __for_idx
-    load_var _2
+    load_var2 3 2
     container_len
     cmp_int_op <
     pop_jump_if_false L1
@@ -3441,18 +3403,17 @@ function patterns_new_runtime.test_for_let_chain_alias_capture() -> int {
     return
 
   L2:
-    load_var _2
-    load_var __for_idx
+    load_var2 2 3
     load_array_element
-    store_var_load_var _6
+    store_var _6
+    load_var _6
     store_var a
     load_const null
     make_cell
     store_var b
     load_var _6
     store_deref ?6
-    load_var funcs
-    load_var b
+    load_var2 1 6
     make_closure .<lambda(test_for_let_chain_alias_capture, 0)>, 1
     call baml.Array.push
     pop 1
@@ -3475,8 +3436,7 @@ function patterns_new_runtime.test_for_let_chain_of_bindings() -> int {
     store_var __for_idx
 
   L0:
-    load_var __for_idx
-    load_var _2
+    load_var2 3 2
     container_len
     cmp_int_op <
     pop_jump_if_false L1
@@ -3487,12 +3447,10 @@ function patterns_new_runtime.test_for_let_chain_of_bindings() -> int {
     return
 
   L2:
-    load_var _2
-    load_var __for_idx
+    load_var2 2 3
     load_array_element
     store_var _6
-    load_var total
-    load_var _6
+    load_var2 1 4
     load_var _6
     add_int
     add_int
@@ -3520,8 +3478,7 @@ function patterns_new_runtime.test_for_let_chain_trailing_type() -> int {
     store_var __for_idx
 
   L0:
-    load_var __for_idx
-    load_var _2
+    load_var2 3 2
     container_len
     cmp_int_op <
     pop_jump_if_false L1
@@ -3532,14 +3489,13 @@ function patterns_new_runtime.test_for_let_chain_trailing_type() -> int {
     return
 
   L2:
-    load_var _2
-    load_var __for_idx
+    load_var2 2 3
     load_array_element
-    store_var_load_var row
+    store_var row
+    load_var row
     container_len
     store_var _13
-    load_var total
-    load_var _13
+    load_var2 1 5
     load_const 100
     mul_int
     load_var row
@@ -3573,8 +3529,7 @@ function patterns_new_runtime.test_for_let_or_same_binding() -> int {
     store_var __for_idx
 
   L0:
-    load_var __for_idx
-    load_var _2
+    load_var2 3 2
     container_len
     cmp_int_op <
     pop_jump_if_false L1
@@ -3585,8 +3540,7 @@ function patterns_new_runtime.test_for_let_or_same_binding() -> int {
     return
 
   L2:
-    load_var _2
-    load_var __for_idx
+    load_var2 2 3
     load_array_element
     store_var_load_var _6
     is_type int
@@ -3603,8 +3557,7 @@ function patterns_new_runtime.test_for_let_or_same_binding() -> int {
     store_var x
 
   L5:
-    load_var total
-    load_var x
+    load_var2 1 5
     add_int
     store_var total
     load_var __for_idx
@@ -3626,8 +3579,7 @@ function patterns_new_runtime.test_for_let_or_six_bindings() -> int {
     store_var __for_idx
 
   L0:
-    load_var __for_idx
-    load_var _2
+    load_var2 3 2
     container_len
     cmp_int_op <
     pop_jump_if_false L1
@@ -3638,8 +3590,7 @@ function patterns_new_runtime.test_for_let_or_six_bindings() -> int {
     return
 
   L2:
-    load_var _2
-    load_var __for_idx
+    load_var2 2 3
     load_array_element
     store_var_load_var _6
     is_type int
@@ -3700,8 +3651,7 @@ function patterns_new_runtime.test_for_let_or_six_bindings() -> int {
     store_var x
 
   L13:
-    load_var total
-    load_var x
+    load_var2 1 5
     add_int
     store_var total
     load_var __for_idx
@@ -3726,8 +3676,7 @@ function patterns_new_runtime.test_for_nested_rest_irrefutable() -> int {
     store_var __for_idx
 
   L0:
-    load_var __for_idx
-    load_var _2
+    load_var2 3 2
     container_len
     cmp_int_op <
     pop_jump_if_false L1
@@ -3770,8 +3719,7 @@ function patterns_new_runtime.test_for_rest_capture_fresh_cell() -> int {
     store_var __for_idx
 
   L0:
-    load_var __for_idx
-    load_var _6
+    load_var2 3 2
     container_len
     cmp_int_op <
     pop_jump_if_false L1
@@ -3808,12 +3756,10 @@ function patterns_new_runtime.test_for_rest_capture_fresh_cell() -> int {
     load_const null
     make_cell
     store_var row
-    load_var _6
-    load_var __for_idx
+    load_var2 2 3
     load_array_element
     store_deref ?4
-    load_var funcs
-    load_var row
+    load_var2 1 4
     make_closure .<lambda(test_for_rest_capture_fresh_cell, 0)>, 1
     call baml.Array.push
     pop 1
@@ -3840,8 +3786,7 @@ function patterns_new_runtime.test_for_rest_sums_rows() -> int {
     store_var __for_idx
 
   L0:
-    load_var __for_idx
-    load_var _6
+    load_var2 3 2
     container_len
     cmp_int_op <
     pop_jump_if_false L1
@@ -3852,13 +3797,11 @@ function patterns_new_runtime.test_for_rest_sums_rows() -> int {
     return
 
   L2:
-    load_var _6
-    load_var __for_idx
+    load_var2 2 3
     load_array_element
     container_len
     store_var _12
-    load_var total
-    load_var _12
+    load_var2 1 4
     add_int
     store_var total
     load_var __for_idx
@@ -3883,8 +3826,7 @@ function patterns_new_runtime.test_for_rest_wildcard_irrefutable() -> int {
     store_var __for_idx
 
   L0:
-    load_var __for_idx
-    load_var _6
+    load_var2 3 2
     container_len
     cmp_int_op <
     pop_jump_if_false L1
@@ -3920,8 +3862,7 @@ function patterns_new_runtime.test_generic_backfills_wrapped() -> int {
     alloc_array 1
     call user.patterns_new_runtime.from_array_boxes
     store_var _7
-    load_var _3
-    load_var _5
+    load_var2 2 3
     add_int
     load_var _7
     add_int
