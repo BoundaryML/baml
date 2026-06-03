@@ -474,6 +474,15 @@ jobs:
     # normal CI (workflow_call) keeps its existing cache semantics untouched.
     env:
       WIN_SDK_EXP: ${{ github.event_name == 'push' && github.ref == 'refs/heads/sam/win-sdk-speedup' }}
+      # D (pnpm store caching) was tried and DROPPED: caching the ~hundreds-MB
+      # store via rust-cache made restore cost (+40s to +190s) >= the ~79s cold
+      # `pnpm install` it saved — a net wash/loss on Windows. See build-caching/04
+      # exp 3a/4b. The cold `pnpm install` is left as-is.
+      # B: resolve baml_core from the prebuilt wheelhouse (maturin build, see
+      # python setup.{sh,ps1}) at BOTH setup and test time — the test step's
+      # `uv run` is a separate process, so this must be a job-level env, not
+      # just exported inside setup. Empty on normal CI (editable path source).
+      UV_FIND_LINKS: ${{ (github.event_name == 'push' && github.ref == 'refs/heads/sam/win-sdk-speedup') && format('{0}/baml_language/target/wheels', github.workspace) || '' }}
     steps:
       - uses: actions/checkout@v6
         with:
@@ -491,14 +500,14 @@ jobs:
       - name: "Verify sccache"
         run: sccache --version
 
-      # EXPERIMENT (build-caching/04, approach C+D): on the win-sdk-speedup
+      # EXPERIMENT (build-caching/04, approach C): on the win-sdk-speedup
       # branch, persist `target/` (cache-targets:true + save) under a per-SDK
       # key so the cold cdylib/proc-macro link (which sccache structurally
-      # cannot cache) and the pnpm store (under target/pnpm-store) come back
-      # warm on the next run — maturin ~1m25→~14s, napi ~1m39→~5s, pnpm
-      # install warm. NOTE: needs one populating run before the warm one.
-      # Per-SDK key (not shared windows-cargo) so the python/ts targets don't
-      # clobber each other. Normal CI keeps cache-targets:false / save-if:false.
+      # cannot cache) comes back warm on the next run — maturin ~1m25→~20s,
+      # napi ~1m39→~22s, the -p build step 44→14s. NOTE: needs one populating
+      # run before the warm one. Per-SDK key (not shared windows-cargo) so the
+      # python/ts targets don't clobber each other. Normal CI keeps
+      # cache-targets:false / save-if:false.
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: "baml_language -> target"
@@ -506,14 +515,6 @@ jobs:
           cache-targets: ${{ env.WIN_SDK_EXP == 'true' }}
           save-if: ${{ env.WIN_SDK_EXP == 'true' }}
           shared-key: ${{ env.WIN_SDK_EXP == 'true' && format('windows-sdk-exp-{0}', matrix.sdk-label) || matrix.rust-cache-key }}
-          # EXPERIMENT (build-caching/04, approach D-fix): rust-cache's default
-          # cleanup deletes non-cargo dirs from target/ before saving, so the
-          # pnpm store (target/pnpm-store, set by setup.ps1/sh) and uv cache
-          # came back cold every run. cache-directories entries are cached
-          # as-is (no cleanup), so the pnpm store warms → `pnpm install` drops
-          # from ~79s (reused 0) to a few seconds. Only used on the experiment
-          # branch (whole step is normal otherwise).
-          cache-directories: ${{ env.WIN_SDK_EXP == 'true' && 'baml_language/target/pnpm-store' || '' }}
 
       - name: "Load .envrc with direnv"
         run: |

@@ -35,33 +35,22 @@ if (-not (Get-Command uv -ErrorAction SilentlyContinue)) {
     $UvBin = (mise which uv).Trim()
 }
 
-# 1. Ensure each fixture venv exists, deps are installed, and baml_core
-#    is editable-linked. Plain `uv sync` (no --reinstall): on a fresh
-#    checkout this builds the editable wheel once; afterward it's a
-#    no-op. The shared extension it points at is (re)built by step 2.
-Get-ChildItem -Directory | ForEach-Object {
-    $generated = Join-Path $_.FullName 'generated'
-    if (Test-Path $generated) {
-        Write-Host "==> uv sync in $($_.Name)/generated"
-        Push-Location $generated
-        try {
-            & $UvBin sync
-            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-        } finally {
-            Pop-Location
-        }
-    }
-}
+# EXPERIMENT (build-caching/04 approach B): build baml_core ONCE as a
+# wheel, then install that prebuilt wheel into every fixture venv. This
+# removes the redundant per-fixture editable build: plain `uv sync` used
+# to build baml_core's editable wheel under build isolation with an
+# *ephemeral* interpreter, busting pyo3's fingerprint and forcing a full
+# bridge_python rebuild every run (~113s even with a warm target/) — and
+# then `maturin develop` rebuilt it again. One `maturin build` (dev
+# profile, reuses the warm cargo target/ ~20s) replaces both.
 
-# 2. Rebuild the shared baml_core extension incrementally via maturin.
-#    The build venv is `sdks/python/.venv` — uv's default project venv,
-#    at a stable path (see setup.sh for why that matters for the cargo
-#    cache). abi3 wheels are interpreter-version-agnostic, so any
-#    >=3.10 works. `sdks/python/pyproject.toml` owns the maturin
-#    version constraint; the sync below installs dev tools without
-#    installing/building baml_core (`maturin develop` does that).
+# 1. Build the shared baml_core wheel once (sdks/python/.venv supplies maturin).
 $SdkPyVenv = Join-Path $SdkPy '.venv'
 $MaturinExe = Join-Path $SdkPyVenv 'Scripts\maturin.exe'
+$WheelDir = Join-Path $WorkspaceRoot 'target\wheels'
+# Must exist before the first uv command: CI exports UV_FIND_LINKS=$WheelDir
+# and uv errors on a missing find-links dir even when nothing needs it yet.
+New-Item -ItemType Directory -Force -Path $WheelDir | Out-Null
 Write-Host "==> uv sync (dev) in $SdkPy"
 Push-Location $SdkPy
 try {
@@ -71,14 +60,46 @@ try {
 } finally {
     Pop-Location
 }
-Write-Host '==> maturin develop (shared baml_core extension)'
+Write-Host '==> maturin build (shared baml_core wheel)'
 Push-Location $SdkPy
 try {
     $env:VIRTUAL_ENV = $SdkPyVenv
-    & $MaturinExe develop
+    & $MaturinExe build --out $WheelDir
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 } finally {
     Pop-Location
+}
+
+# 2. Per fixture: install deps + the prebuilt baml_core wheel. No
+#    per-fixture cdylib build. Strip the editable `[tool.uv.sources]
+#    baml_core` block so baml_core resolves as a normal dependency from
+#    UV_FIND_LINKS (set to $WheelDir; the local 0.1.3 wheel outranks any
+#    public release). Plain `uv sync`/`uv run` then installs the prebuilt
+#    wheel + dev tools without ever building baml_core.
+if (-not $env:UV_FIND_LINKS) { $env:UV_FIND_LINKS = $WheelDir }
+Get-ChildItem -Directory | ForEach-Object {
+    $generated = Join-Path $_.FullName 'generated'
+    if (Test-Path $generated) {
+        # Delete the [tool.uv.sources] section (header → next blank line).
+        $pp = Join-Path $generated 'pyproject.toml'
+        $lines = Get-Content $pp
+        $out = New-Object System.Collections.Generic.List[string]
+        $skip = $false
+        foreach ($line in $lines) {
+            if ($line -match '^\[tool\.uv\.sources\]$') { $skip = $true; continue }
+            if ($skip) { if ($line -match '^\s*$') { $skip = $false }; continue }
+            $out.Add($line)
+        }
+        Set-Content -Path $pp -Value $out
+        Write-Host "==> uv sync in $($_.Name)/generated"
+        Push-Location $generated
+        try {
+            & $UvBin sync
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        } finally {
+            Pop-Location
+        }
+    }
 }
 
 # Per-run breadcrumb for the in-test guard. nextest reads $NEXTEST_ENV

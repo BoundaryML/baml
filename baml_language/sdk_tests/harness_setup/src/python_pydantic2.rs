@@ -209,6 +209,10 @@ mod {fixture} {{
         );
     }}
 
+    // `uv run` resyncs first; setup.{{sh,ps1}} strip the editable
+    // [tool.uv.sources] baml_core entry and UV_FIND_LINKS points at the
+    // prebuilt wheel (build-caching/04 approach B), so the resync resolves
+    // baml_core from the wheel (no rebuild) and still installs the dev tools.
     #[test]
     fn ruff() {{
         cmd("uv run ruff check --config pyproject.toml baml_sdk");

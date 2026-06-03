@@ -17,9 +17,15 @@ $WorkspaceRoot = (Resolve-Path '..\..\..').Path
 $RepoRoot = (Resolve-Path (Join-Path $WorkspaceRoot '..')).Path
 $BridgeNodejs = Join-Path $WorkspaceRoot 'sdks\nodejs\bridge_nodejs'
 
-# Shared pnpm store under target/ so per-fixture installs hardlink from
-# one location rather than fetching N copies.
-$env:npm_config_store_dir = Join-Path $WorkspaceRoot 'target\pnpm-store'
+# Shared pnpm store so per-fixture installs hardlink from one location.
+# Defaults under target/; CI overrides via BAML_SDK_PNPM_STORE_DIR to a
+# path OUTSIDE target/ so it survives rust-cache's pre-save target cleanup
+# and can be cached (build-caching/04 D-fix).
+if ($env:BAML_SDK_PNPM_STORE_DIR) {
+    $env:npm_config_store_dir = $env:BAML_SDK_PNPM_STORE_DIR
+} else {
+    $env:npm_config_store_dir = Join-Path $WorkspaceRoot 'target\pnpm-store'
+}
 New-Item -ItemType Directory -Force -Path $env:npm_config_store_dir | Out-Null
 
 # 1. Workspace deps. bridge_nodejs is a member of the repo-root

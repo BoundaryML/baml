@@ -22,9 +22,12 @@ WORKSPACE_ROOT="$(cd ../../.. && pwd)"
 REPO_ROOT="$(cd "$WORKSPACE_ROOT/.." && pwd)"
 BRIDGE_NODEJS="$WORKSPACE_ROOT/sdks/nodejs/bridge_nodejs"
 
-# Shared pnpm store under target/ so per-fixture installs hardlink from
-# one location rather than fetching N copies.
-export npm_config_store_dir="$WORKSPACE_ROOT/target/pnpm-store"
+# Shared pnpm store so per-fixture installs hardlink from one location
+# rather than fetching N copies. Defaults under target/; CI overrides via
+# BAML_SDK_PNPM_STORE_DIR to a path OUTSIDE target/ so it survives
+# rust-cache's pre-save target cleanup and can be cached (build-caching/04
+# D-fix — under target/ it was wiped every run → pnpm install ~79s cold).
+export npm_config_store_dir="${BAML_SDK_PNPM_STORE_DIR:-$WORKSPACE_ROOT/target/pnpm-store}"
 mkdir -p "$npm_config_store_dir"
 
 # 1. Workspace deps. bridge_nodejs is a member of the repo-root

@@ -63,28 +63,42 @@ mkdir -p "$UV_CACHE_DIR"
 uv_bin="uv"
 command -v uv >/dev/null 2>&1 || uv_bin="$(mise which uv)"
 
-# 1. Ensure each fixture venv exists, deps are installed, and baml_core
-#    is editable-linked. Plain `uv sync` (no --reinstall): on a fresh
-#    checkout this builds the editable wheel once; afterward it's a
-#    no-op. The shared .so it points at is (re)built by step 2.
+# EXPERIMENT (build-caching/04 approach B): build baml_core ONCE as a
+# wheel, then install that prebuilt wheel into every fixture venv. This
+# removes the redundant per-fixture editable build — plain `uv sync` used
+# to build baml_core's editable wheel under build isolation with an
+# *ephemeral* interpreter (see the --reinstall note above), busting
+# pyo3's fingerprint and forcing a full bridge_python rebuild every run
+# (~113s even with a warm target/), and then `maturin develop` rebuilt it
+# again. One `maturin build` (dev profile, reuses the warm cargo target/
+# ~20s) replaces both.
+
+# 1. Build the shared baml_core wheel once (sdks/python/.venv supplies maturin).
+SDK_PY_VENV="$SDK_PY/.venv"
+WHEEL_DIR="$WORKSPACE_ROOT/target/wheels"
+# Must exist before the first uv command: CI exports UV_FIND_LINKS=$WHEEL_DIR
+# and uv errors on a missing find-links dir even when nothing needs it yet.
+mkdir -p "$WHEEL_DIR"
+echo "==> uv sync (dev) in $SDK_PY"
+(cd "$SDK_PY" && UV_PROJECT_ENVIRONMENT="$SDK_PY_VENV" "$uv_bin" sync --group dev --no-install-project)
+echo "==> maturin build (shared baml_core wheel)"
+(cd "$SDK_PY" && VIRTUAL_ENV="$SDK_PY_VENV" "$SDK_PY_VENV/bin/maturin" build --out "$WHEEL_DIR")
+
+# 2. Per fixture: install deps + the prebuilt baml_core wheel. No
+#    per-fixture cdylib build. Strip the editable `[tool.uv.sources]
+#    baml_core` block so baml_core resolves as a normal dependency from
+#    UV_FIND_LINKS (exported by CI to $WHEEL_DIR; the local 0.1.3 wheel
+#    outranks any public release). Plain `uv sync`/`uv run` then installs
+#    the prebuilt wheel + dev tools without ever building baml_core.
+export UV_FIND_LINKS="${UV_FIND_LINKS:-$WHEEL_DIR}"
 for fixture_dir in */generated; do
     [[ -d "$fixture_dir" ]] || continue
+    # Delete the [tool.uv.sources] section (header → next blank line).
+    sed -i.bak '/^\[tool\.uv\.sources\]$/,/^$/d' "$fixture_dir/pyproject.toml"
+    rm -f "$fixture_dir/pyproject.toml.bak"
     echo "==> uv sync in $fixture_dir"
     (cd "$fixture_dir" && "$uv_bin" sync)
 done
-
-# 2. Rebuild the shared baml_core extension incrementally via maturin.
-#    The build venv is `sdks/python/.venv` — uv's default project venv,
-#    at a stable path (see the --reinstall-package note above for why
-#    that matters). abi3 wheels are interpreter-version-agnostic, so
-#    any >=3.10 works. `sdks/python/pyproject.toml` owns the maturin
-#    version constraint; the sync below installs dev tools without
-#    installing/building baml_core (`maturin develop` does that).
-SDK_PY_VENV="$SDK_PY/.venv"
-echo "==> uv sync (dev) in $SDK_PY"
-(cd "$SDK_PY" && UV_PROJECT_ENVIRONMENT="$SDK_PY_VENV" "$uv_bin" sync --group dev --no-install-project)
-echo "==> maturin develop (shared baml_core extension)"
-(cd "$SDK_PY" && VIRTUAL_ENV="$SDK_PY_VENV" "$SDK_PY_VENV/bin/maturin" develop)
 
 # Per-run breadcrumb for the in-test guard. nextest reads $NEXTEST_ENV
 # after this script and injects these vars into the matched tests'
