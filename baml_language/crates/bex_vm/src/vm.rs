@@ -2213,6 +2213,28 @@ impl BexVm {
         Ok(None)
     }
 
+    /// Combine the two `store_local_value` yields from a fused `StoreVar2` when
+    /// at least one watched local notified. `store_local_value` only ever yields
+    /// `Notify(Variables(..))`, so when both locals notify their node lists are
+    /// concatenated into one yield — no watch event is dropped. Cold: reached
+    /// only on the watched-local path, never in normal execution.
+    #[cold]
+    #[inline(never)]
+    fn merge_store_yields(y1: Option<VmExecState>, y2: Option<VmExecState>) -> VmExecState {
+        match (y1, y2) {
+            (
+                Some(VmExecState::Notify(WatchNotification::Variables(mut n1))),
+                Some(VmExecState::Notify(WatchNotification::Variables(n2))),
+            ) => {
+                n1.extend(n2);
+                VmExecState::Notify(WatchNotification::Variables(n1))
+            }
+            // Exactly one notified (or a defensive non-`Variables` variant).
+            (Some(state), _) | (_, Some(state)) => state,
+            (None, None) => unreachable!("merge_store_yields called with both None"),
+        }
+    }
+
     pub fn error_to_exception_value(&mut self, error: VmBamlError) -> Value {
         let (class, fields) = match error {
             VmBamlError::InvalidArgument { message } => (
@@ -3978,10 +4000,14 @@ impl BexVm {
                     self.stack.push(vb);
                 }
                 // StoreVar2(a, b) == `StoreVar(a); StoreVar(b)`: pop TOS into
-                // local[a], then pop into local[b]. Both stores complete before
-                // returning; in the rare case where both are watched locals and
-                // both produce notifications, only the first is surfaced (watch
-                // granularity, not store correctness).
+                // local[a], then pop into local[b]. Both stores always complete
+                // before returning — a single fused op can't yield mid-way and
+                // resume into the second store (the saved PC is already past the
+                // whole instruction), so each `store_local_value` must run. When
+                // both are watched locals and both notify, the two node lists are
+                // merged into one yield rather than dropping the second, so no
+                // watch event is lost (equivalent to two sequential StoreVar
+                // notifications, coalesced into a single batch).
                 OpCode::StoreVar2 => {
                     let a = { read_u32_unchecked(code, pc) as usize };
                     let b = { read_u32_unchecked(code, pc) as usize };
@@ -3997,8 +4023,12 @@ impl BexVm {
                     let vb = self.stack.ensure_pop();
                     let y1 = self.store_local_value(sa, va)?;
                     let y2 = self.store_local_value(sb, vb)?;
-                    if let Some(state) = y1.or(y2) {
-                        return Ok(Some(state));
+                    // Hot path: no watched locals, both stores returned `None` —
+                    // fall through. The merge (only reached when a watched local
+                    // notifies) is outlined into a cold helper so this arm stays
+                    // a single predicted branch.
+                    if unlikely(y1.is_some() || y2.is_some()) {
+                        return Ok(Some(Self::merge_store_yields(y1, y2)));
                     }
                 }
 
