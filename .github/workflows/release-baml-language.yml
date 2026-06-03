@@ -380,6 +380,8 @@ jobs:
     needs: [plan, all-builds]
     if: ${{ needs.plan.outputs.dry_run == 'false' && github.ref == 'refs/heads/canary' }}
     runs-on: ubuntu-latest
+    env:
+      GH_REPO: ${{ github.repository }}
     permissions:
       contents: write
     steps:
