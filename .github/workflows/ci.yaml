@@ -241,11 +241,12 @@ jobs:
           fi
 
       # Decide whether perf benchmarks (CodSpeed) should run for this event.
-      # Policy: benchmarks run automatically AFTER MERGE (push to main/canary)
-      # and on manual dispatch. On PRs they are OPT-IN — they no longer run on
-      # every code change. A PR opts in by mentioning one of the perf markers in
-      # its title, body, OR any of its commit messages. merge_group is always
-      # skipped (the PR already had its chance to run).
+      # Policy: benchmarks run AFTER MERGE (push to main/canary) only when the
+      # merge actually touched baml_language/, and on manual dispatch. On PRs
+      # they are OPT-IN — they no longer run on every code change. A PR opts in
+      # by mentioning one of the perf markers in its title, body, OR any of its
+      # commit messages. merge_group is always skipped (the PR already had its
+      # chance to run).
       - name: Check perf benchmark opt-in
         id: check_perf
         env:
@@ -253,14 +254,37 @@ jobs:
           PR_TITLE: ${{ github.event.pull_request.title }}
           PR_BODY: ${{ github.event.pull_request.body }}
           MERGE_BASE: ${{ steps.merge_base.outputs.sha }}
+          PUSH_BEFORE: ${{ github.event.before }}
+          PUSH_AFTER: ${{ github.sha }}
         run: |
           # Any of these, case-insensitive, in the PR title/body or a commit
           # message opts a PR into a perf run. Keep in sync with the instructions
           # posted by the "Perf benchmarks (PR notice)" job below.
           PATTERN='RUN_CODSPEED=1|run-perf|/perf'
 
-          # Always run after merge (push to canary/main) and on manual dispatch.
-          if [ "$EVENT_NAME" = "push" ] || [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+          # After merge (push to canary/main): only run when the merge actually
+          # touched baml_language/. NOTE: we diff the pushed range (before..after)
+          # directly rather than reuse determine_changes' `code` flag — on a push
+          # the merge-base of HEAD and origin/<branch> collapses to HEAD, so that
+          # diff is always empty here. The push payload's before/after are the
+          # real merged range.
+          if [ "$EVENT_NAME" = "push" ]; then
+            if [ -z "$PUSH_BEFORE" ] || [ "$PUSH_BEFORE" = "0000000000000000000000000000000000000000" ]; then
+              # Branch creation / unknown previous tip — nothing to diff against,
+              # so run to be safe rather than silently skip.
+              echo "run=true" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            if git diff --quiet "$PUSH_BEFORE" "$PUSH_AFTER" -- ':baml_language/**'; then
+              echo "run=false" >> "$GITHUB_OUTPUT"
+            else
+              echo "run=true" >> "$GITHUB_OUTPUT"
+            fi
+            exit 0
+          fi
+
+          # Manual dispatch always runs.
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
             echo "run=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
@@ -543,10 +567,11 @@ jobs:
     name: "benchmarks build (baml)"
     runs-on: blacksmith-8vcpu-ubuntu-2204-arm
     needs: determine_changes
-    # Perf benchmarks run automatically AFTER MERGE (push to main/canary) and on
-    # manual dispatch. On PRs they are OPT-IN: a PR runs them only when its
-    # title/body or a commit message mentions a perf marker (RUN_CODSPEED=1,
-    # run-perf, /perf). See determine_changes' `check_perf` step for the policy
+    # Perf benchmarks run AFTER MERGE (push to main/canary, only when the merge
+    # touched baml_language/) and on manual dispatch. On PRs they are OPT-IN: a
+    # PR runs them only when its title/body or a commit message mentions a perf
+    # marker (RUN_CODSPEED=1, run-perf, /perf). See the `check_perf` step for the
+    # policy
     # and the "Perf benchmarks (PR notice)" job for the comment PRs get when
     # benchmarks are skipped. Skipped in merge_group (already settled on the PR).
     if: needs.determine_changes.outputs.run_perf == 'true'
