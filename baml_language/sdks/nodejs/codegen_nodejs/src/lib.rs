@@ -398,9 +398,7 @@ mod tests {
         let leaf = &out[&PathBuf::from("lorem/index.ts")];
         assert!(leaf.contains("export class Resume$stream {"));
         let typemap = &out[&PathBuf::from("_typemap.ts")];
-        assert!(typemap.contains(
-            "\"user.lorem.Resume$stream\": () => (__leaf_"
-        ));
+        assert!(typemap.contains("\"user.lorem.Resume$stream\": () => (__leaf_"));
     }
 
     #[test]

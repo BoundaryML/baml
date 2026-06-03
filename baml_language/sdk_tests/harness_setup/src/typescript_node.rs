@@ -241,7 +241,7 @@ mod bridge_nodejs {{
     fn attw() {{
         ::sdk_test_harness_runner::run_workspace_cmd(
             "sdks/nodejs/bridge_nodejs",
-            "pnpm exec attw --pack",
+            "pnpm exec attw --pack --profile esm-only",
             "{cache_subdir}",
             "{cache_env_var}",
         );

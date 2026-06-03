@@ -217,9 +217,7 @@ mod tests {
             ),
         );
         let out = render_typemap_module(&bodies, "baml_sdk");
-        assert!(out.contains(
-            "import * as __leaf_0 from \"./lorem/index.js\";"
-        ));
+        assert!(out.contains("import * as __leaf_0 from \"./lorem/index.js\";"));
         assert!(out.contains(
             "\"user.lorem.Resume$stream\": () => (__leaf_0 as Record<string, unknown>)[\"Resume$stream\"],"
         ));
