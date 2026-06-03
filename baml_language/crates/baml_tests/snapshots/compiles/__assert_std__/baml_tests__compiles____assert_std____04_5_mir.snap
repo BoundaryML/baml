@@ -4,6 +4,82 @@ source: crates/baml_tests/src/generated_tests.rs
 === MIR2 ===
 
 === MIR2 (package assert) ===
+fn assert.approx_equal(actual: float, expected: float, epsilon: float) -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: float // actual // param
+    let _2: float // expected // param
+    let _3: float // epsilon // param
+    let _4: float // difference
+    let _5: float // delta
+    let _6: bool
+    let _7: bool
+    let _8: float
+    let _9: string
+    let _10: string
+    let _11: string
+    let _12: string
+    let _13: string
+    let _14: string
+    let _15: string
+    let _16: string
+    let _17: string
+    let _18: string
+    let _19: string
+    let _20: string
+    let _21: float
+
+    bb0: {
+        _4 = copy _1 - copy _2;
+        _5 = call const fn baml.Float.abs(copy _4) -> [bb1];
+    }
+
+    bb1: {
+        _8 = copy _5;
+        _7 = copy _8 <= copy _3;
+        _6 = !copy _7;
+        branch copy _6 -> [bb3, bb2];
+    }
+
+    bb2: {
+        _0 = const null;
+        goto -> bb8;
+    }
+
+    bb3: {
+        _17 = call const fn baml.unstable.string(copy _1) -> [bb4];
+    }
+
+    bb4: {
+        _16 = const "assertion failed: expected approximately equal floats (actual: " + copy _17;
+        _15 = copy _16 + const ", expected: ";
+        _18 = call const fn baml.unstable.string(copy _2) -> [bb5];
+    }
+
+    bb5: {
+        _14 = copy _15 + copy _18;
+        _13 = copy _14 + const ", epsilon: ";
+        _19 = call const fn baml.unstable.string(copy _3) -> [bb6];
+    }
+
+    bb6: {
+        _12 = copy _13 + copy _19;
+        _11 = copy _12 + const ", delta: ";
+        _21 = copy _5;
+        _20 = call const fn baml.unstable.string(copy _21) -> [bb7];
+    }
+
+    bb7: {
+        _10 = copy _11 + copy _20;
+        _9 = copy _10 + const ")";
+        _0 = call const fn baml.sys.panic(copy _9) -> [bb8];
+    }
+
+    bb8: {
+        return;
+    }
+}
+
 fn assert.contains(haystack: string, needle: string) -> null {
     // Locals:
     let _0: null // _0 // return

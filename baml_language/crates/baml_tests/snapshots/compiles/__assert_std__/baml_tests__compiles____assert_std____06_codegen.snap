@@ -1,6 +1,57 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
 ---
+function assert.approx_equal(actual: float, expected: float, epsilon: float) -> null {
+    load_var2 1 2
+    sub_float
+    call baml.Float.abs
+    store_var delta
+    load_var2 4 3
+    cmp_float_op <=
+    unary_op !
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const null
+    jump L2
+
+  L1:
+    load_var actual
+    call baml.unstable.string
+    store_var _17
+    load_var expected
+    call baml.unstable.string
+    store_var _18
+    load_var epsilon
+    call baml.unstable.string
+    store_var _19
+    load_var delta
+    call baml.unstable.string
+    store_var _20
+    load_const "assertion failed: expected approximately equal floats (actual: "
+    load_var _17
+    bin_op +
+    load_const ", expected: "
+    bin_op +
+    load_var _18
+    bin_op +
+    load_const ", epsilon: "
+    bin_op +
+    load_var _19
+    bin_op +
+    load_const ", delta: "
+    bin_op +
+    load_var _20
+    bin_op +
+    load_const ")"
+    bin_op +
+    call baml.sys.panic
+
+  L2:
+    return
+}
+
 function assert.contains(haystack: string, needle: string) -> null {
     load_var2 1 2
     call baml.String.includes

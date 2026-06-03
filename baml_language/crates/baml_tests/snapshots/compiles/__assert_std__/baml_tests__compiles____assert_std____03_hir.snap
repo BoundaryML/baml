@@ -6,6 +6,9 @@ source: crates/baml_tests/src/generated_tests.rs
 === HIR2 (package assert) ===
 
 --- <builtin>/assert/assert.baml ---
+function assert.approx_equal(actual: float, expected: float, epsilon: float) -> null  [expr] {
+  { let difference = actual Sub expected; let delta = difference.abs() } if (Not delta Le epsilon) {  } baml.sys.panic("assertion failed:..." Add baml.unstable.string(actual) Add ", expected: " Add baml.unstable.string(expected) Add ", epsilon: " Add baml.unstable.string(epsilon) Add ", delta: " Add baml.unstable.string(delta) Add ")") else {  } null
+}
 function assert.contains(haystack: string, needle: string) -> null  [expr] {
   {  } if (Not haystack.includes(needle)) {  } baml.sys.panic("assertion failed:...") else {  } null
 }

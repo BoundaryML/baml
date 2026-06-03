@@ -42,6 +42,20 @@ function assert.equal(actual: unknown, expected: unknown) -> null throws never {
       }
   }
 }
+function assert.approx_equal(actual: float, expected: float, epsilon: float) -> null throws never {
+  { : null
+    let difference = actual - expected : float
+    let delta = difference.abs() : float
+    if (Not delta <= epsilon : bool) : null
+      { : never
+        baml.sys.panic("assertion failed:..." + baml.unstable.string(actual) + ", expected: " + baml.unstable.string(expected) + ", epsilon: " + baml.unstable.string(epsilon) + ", delta: " + baml.unstable.string(delta) + ")") : never
+      }
+    else
+      { : null
+        null : null
+      }
+  }
+}
 function assert.contains(haystack: string, needle: string) -> null throws never {
   { : null
     if (Not haystack.includes(needle) : bool) : null
