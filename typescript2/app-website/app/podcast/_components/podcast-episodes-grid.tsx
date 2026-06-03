@@ -1,9 +1,17 @@
 'use client';
 
 import { formatDistanceToNow } from 'date-fns';
-import { ArrowRight, Calendar, Code } from 'lucide-react';
+import { ArrowRight, Calendar, Code, Play } from 'lucide-react';
+import Image from 'next/image';
 import Link from 'next/link';
 import posthog from 'posthog-js';
+
+const getYouTubeVideoId = (url: string) => {
+  const match = url.match(
+    /(?:youtu\.be\/|youtube\.com\/watch\?v=|youtube\.com\/embed\/)([^&\n?#]+)/,
+  );
+  return match ? match[1] : null;
+};
 
 const INK = '#1A1612';
 const MUTED = '#5C5852';
@@ -200,7 +208,7 @@ export function PodcastEpisodesGrid({ episodes }: PodcastEpisodesGridProps) {
                         Code
                       </span>
                     )}
-                    {episode.rsvpUrl && !episode.youtubeUrl && (
+                    {episode.rsvpUrl && isUpcoming && (
                       <span
                         style={{
                           alignItems: 'center',
@@ -246,6 +254,7 @@ export function PodcastEpisodesGrid({ episodes }: PodcastEpisodesGridProps) {
           transform: translateY(-2px);
         }
         .podcast-card:hover .podcast-card-cta { color: ${ACCENT}; }
+        .podcast-card:hover .podcast-card-play { transform: scale(1.08); }
       `}</style>
     </div>
   );
@@ -258,37 +267,100 @@ function EpisodePreviewArt({
   episode: PodcastEpisode;
   isUpcoming: boolean;
 }) {
+  const youtubeId = episode.youtubeUrl
+    ? getYouTubeVideoId(episode.youtubeUrl)
+    : null;
+
+  if (youtubeId) {
+    return (
+      <>
+        <Image
+          alt={episode.title}
+          fill
+          sizes="(max-width: 720px) 100vw, 360px"
+          src={`https://img.youtube.com/vi/${youtubeId}/hqdefault.jpg`}
+          style={{ objectFit: 'cover' }}
+        />
+        <div
+          aria-hidden
+          style={{
+            alignItems: 'center',
+            background:
+              'linear-gradient(180deg, rgba(0,0,0,0.05) 0%, rgba(0,0,0,0.35) 100%)',
+            display: 'flex',
+            inset: 0,
+            justifyContent: 'center',
+            position: 'absolute',
+          }}
+        >
+          <div
+            className="podcast-card-play"
+            style={{
+              alignItems: 'center',
+              background: '#E11D2A',
+              borderRadius: '50%',
+              boxShadow: '0 8px 24px -10px rgba(0,0,0,0.55)',
+              display: 'flex',
+              height: 44,
+              justifyContent: 'center',
+              transition: 'transform 200ms ease',
+              width: 44,
+            }}
+          >
+            <Play color="#fff" fill="#fff" size={18} style={{ marginLeft: 2 }} />
+          </div>
+        </div>
+      </>
+    );
+  }
+
   return (
     <div
       aria-hidden
       style={{
         background:
-          'linear-gradient(180deg, rgba(255,255,255,0.72), rgba(255,255,255,0.18))',
+          'radial-gradient(120% 120% at 0% 0%, rgba(109,40,217,0.10) 0%, rgba(109,40,217,0) 55%), linear-gradient(180deg, #FFFFFF 0%, #F7F2E7 100%)',
+        display: 'flex',
+        flexDirection: 'column',
         inset: 0,
+        justifyContent: 'space-between',
         padding: 20,
         position: 'absolute',
       }}
     >
       <div
         style={{
+          alignItems: 'center',
           color: EYEBROW,
+          display: 'flex',
           fontFamily: MONO,
           fontSize: 10,
+          gap: 8,
           letterSpacing: '0.12em',
           textTransform: 'uppercase',
         }}
       >
-        {isUpcoming ? 'Live soon' : 'Podcast'}
+        <span style={{ color: ACCENT, fontWeight: 600 }}>
+          {episode.episodeNumber}
+        </span>
+        <span
+          style={{
+            background: BORDER,
+            borderRadius: '50%',
+            height: 3,
+            width: 3,
+          }}
+        />
+        <span>{isUpcoming ? 'Live soon' : 'ai that works'}</span>
       </div>
       <div
         style={{
           color: INK,
-          fontSize: 'clamp(1.25rem, 2.2vw, 1.8rem)',
+          fontSize: 'clamp(1.15rem, 2vw, 1.6rem)',
           fontWeight: 500,
           letterSpacing: '-0.02em',
-          lineHeight: 1.15,
-          marginTop: 22,
-          maxWidth: '88%',
+          lineHeight: 1.18,
+          maxWidth: '92%',
         }}
       >
         {episode.title}
@@ -296,11 +368,8 @@ function EpisodePreviewArt({
       <div
         style={{
           background: ACCENT,
-          bottom: 20,
           height: 2,
-          left: 20,
           opacity: 0.55,
-          position: 'absolute',
           width: 72,
         }}
       />

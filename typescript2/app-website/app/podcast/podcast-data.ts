@@ -31,6 +31,17 @@ export type PodcastEpisode = {
 const PODCAST_DATA_URL =
   'https://raw.githubusercontent.com/ai-that-works/ai-that-works/refs/heads/main/data.json';
 
+// Extracts a single-video YouTube ID. Playlist URLs (.../playlist?list=...) and
+// channel links intentionally return null so they are never treated as a
+// watchable video (no thumbnail, no "Watch" CTA, no embed).
+const getYouTubeVideoId = (url?: string | null): string | null => {
+  if (!url) return null;
+  const match = url.match(
+    /(?:youtu\.be\/|youtube\.com\/watch\?v=|youtube\.com\/embed\/)([^&\n?#]+)/,
+  );
+  return match ? match[1] : null;
+};
+
 type FallbackEpisodeInput = Omit<PodcastEpisode, 'slug'> & { slug?: string };
 
 const fallbackEpisodeData: FallbackEpisodeInput[] = [
@@ -278,7 +289,14 @@ function mapExternalEpisodes(externalEpisodes: ExternalEpisode[]): PodcastEpisod
         ? episode.media?.url ?? undefined
         : undefined;
 
-      const youtubeUrl = youtubeFromLinks ?? youtubeFromMedia;
+      // Only keep a YouTube link that points at an individual video. The feed
+      // sometimes only has the season playlist URL for recent episodes — that
+      // is not watchable on its own and must not be stored as `youtubeUrl`,
+      // otherwise the card shows a dead "Watch" CTA and no thumbnail.
+      const youtubeCandidate = youtubeFromLinks ?? youtubeFromMedia;
+      const youtubeUrl = getYouTubeVideoId(youtubeCandidate)
+        ? youtubeCandidate
+        : undefined;
       const cleanedTitle = episode.title
         .replace(/^S\d+E\d+\s*(?:-|–|—|:)\s*/i, '')
         .trim();
