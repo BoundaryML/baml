@@ -1,0 +1,14 @@
+# Standalone live system-test harness for forked_google_cloud_auth. It is
+# excluded from the parent workspace because it enables native-only
+# tokio/reqwest features that must not leak into workspace wasm builds.
+[package]
+name = "gcp-systest"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+google-cloud-auth = { path = "../google-cloud-auth", package = "forked_google_cloud_auth" }
+reqwest = { version = "0.13.1", default-features = false, features = ["stream", "rustls", "json"] }
+tokio = { version = "1.36", features = ["rt", "rt-multi-thread", "macros", "time", "fs"] }
+async-trait = "0.1"
+serde_json = { version = "1.0.113", features = ["arbitrary_precision", "preserve_order"] }

@@ -1,4 +1,4 @@
-//! Build script that generates tests from projects/ directory and benchmarks from benches/.
+//! Build script that generates tests from the projects/ directory.
 //! Each folder becomes a test module with comprehensive compiler phase tests.
 
 use std::{

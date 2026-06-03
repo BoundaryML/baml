@@ -63,14 +63,14 @@ function NonExhaustiveMatchInsideCatch(x: int, pet: Pet) -> string {
 //     │     
 //     │     Note: Error code: E0063
 // ────╯
-// error: non-exhaustive match on type Pet; missing: user.Dog { type: _ }
+// error: non-exhaustive match on type Pet; missing: Dog { type: _ }
 //     ╭─[ catch_exhaustiveness_checks.baml:27:9 ]
 //     │
 //  27 │ ╭─▶     _ => match (pet) {
 //     ┆ ┆   
 //  29 │ ├─▶     }
 //     │ │           
-//     │ ╰─────────── non-exhaustive match on type Pet; missing: user.Dog { type: _ }
+//     │ ╰─────────── non-exhaustive match on type Pet; missing: Dog { type: _ }
 //     │     
 //     │     Note: Error code: E0062
 // ────╯

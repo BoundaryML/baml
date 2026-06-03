@@ -763,6 +763,17 @@ pub enum Instruction {
     /// can emit a `CustomEvent` with full span context. Execution resumes
     /// after the engine processes the event.
     SendEvent,
+
+    // ── Operand-movement superinstructions (CPython-style) ────────────────
+    // Combine two adjacent local-movement ops into one dispatch. Pure
+    // replace-in-place at emit time (like `StoreVarLoadVar`), confined to the
+    // current basic block, so jump targets and block addresses are unaffected.
+    /// Fused `LoadVar(a); LoadVar(b)` — push `local[a]`, then `local[b]`.
+    /// (`CPython` `LOAD_FAST_LOAD_FAST`.)
+    LoadVar2(usize, usize),
+    /// Fused `StoreVar(a); StoreVar(b)` — pop into `local[a]`, then `local[b]`.
+    /// (`CPython` `STORE_FAST_STORE_FAST`.)
+    StoreVar2(usize, usize),
 }
 
 /// Compact bytecode opcodes.
@@ -914,6 +925,10 @@ pub enum OpCode {
 
     // ── u16 (3 bytes) ──────────────────────────────────────────
     MakeGenericFunctionFromValue, // u16 ntypeargs (callable popped from stack)
+
+    // ── Operand-movement superinstructions: two u32 operands (9 bytes) ──
+    LoadVar2,
+    StoreVar2,
 }
 
 impl OpCode {
@@ -1047,6 +1062,9 @@ impl OpCode {
 
             // 9-byte: opcode + u32 + i32
             Self::JumpTable => 9,
+
+            // 9-byte: opcode + u32 + u32 (operand-movement superinstructions)
+            Self::LoadVar2 | Self::StoreVar2 => 9,
         }
     }
 }
@@ -1174,6 +1192,8 @@ impl TryFrom<u8> for OpCode {
             x if x == Self::MakeGenericFunctionFromValue as u8 => {
                 Ok(Self::MakeGenericFunctionFromValue)
             }
+            x if x == Self::LoadVar2 as u8 => Ok(Self::LoadVar2),
+            x if x == Self::StoreVar2 as u8 => Ok(Self::StoreVar2),
             _ => Err(byte),
         }
     }
@@ -1298,6 +1318,8 @@ impl std::fmt::Display for OpCode {
             Self::MakeClosure => "MAKE_CLOSURE",
             Self::MakeGenericFunction => "MAKE_GENERIC_FUNCTION",
             Self::MakeGenericFunctionFromValue => "MAKE_GENERIC_FUNCTION_FROM_VALUE",
+            Self::LoadVar2 => "LOAD_VAR2",
+            Self::StoreVar2 => "STORE_VAR2",
         };
         f.write_str(name)
     }
@@ -1607,6 +1629,8 @@ impl std::fmt::Display for Instruction {
             Instruction::CaptureRef(idx) => write!(f, "CAPTURE_REF {idx}"),
             Instruction::SendEvent => f.write_str("SEND_EVENT"),
             Instruction::ContainerLen => f.write_str("CONTAINER_LEN"),
+            Instruction::LoadVar2(a, b) => write!(f, "LOAD_VAR2 {a} {b}"),
+            Instruction::StoreVar2(a, b) => write!(f, "STORE_VAR2 {a} {b}"),
         }
     }
 }
@@ -2174,6 +2198,16 @@ impl Bytecode {
                             .to_le_bytes(),
                     );
                 }
+
+                // ── Operand-movement superinstructions: two u32 operands ──
+                Instruction::LoadVar2(a, b) | Instruction::StoreVar2(a, b) => {
+                    code.extend_from_slice(
+                        &u32::try_from(*a).expect("operand fits u32").to_le_bytes(),
+                    );
+                    code.extend_from_slice(
+                        &u32::try_from(*b).expect("operand fits u32").to_le_bytes(),
+                    );
+                }
             }
         }
 
@@ -2281,6 +2315,8 @@ impl Bytecode {
             Instruction::MakeCell => OpCode::MakeCell,
             Instruction::SendEvent => OpCode::SendEvent,
             Instruction::ContainerLen => OpCode::ContainerLen,
+            Instruction::LoadVar2(..) => OpCode::LoadVar2,
+            Instruction::StoreVar2(..) => OpCode::StoreVar2,
 
             // Expanded sub-enum variants
             Instruction::BinOp(op) => match op {

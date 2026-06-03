@@ -187,7 +187,8 @@ function classes.default_point() -> classes.PointXYZW {
 function classes.field_assignment_fn() -> int {
     load_const 0
     init_instance user.classes.Data .value
-    store_var_load_var d
+    store_var d
+    load_var d
     load_const 42
     store_field .value
     load_var d
@@ -198,7 +199,8 @@ function classes.field_assignment_fn() -> int {
 function classes.field_compound_assignment_fn() -> int {
     load_const 5
     init_instance user.classes.Counter .value
-    store_var_load_var c
+    store_var c
+    load_var c
     copy 0
     load_field .value
     load_const 10
@@ -233,7 +235,8 @@ function classes.multiple_spreads_fn() -> classes.PointXYZW {
 function classes.mutable_self_method_fn() -> int {
     load_const 1
     init_instance user.classes.MutableNumber .value
-    store_var_load_var a
+    store_var a
+    load_var a
     load_const 2
     init_instance user.classes.MutableNumber .value
     call user.classes.MutableNumber.add
@@ -292,7 +295,8 @@ function classes.nested_field_assignment_fn() -> int {
     load_const 0
     init_instance user.classes.CInner .value
     init_instance user.classes.COuter .inner
-    store_var_load_var o
+    store_var o
+    load_var o
     load_field .inner
     load_const 99
     store_field .value
@@ -306,7 +310,8 @@ function classes.nested_field_compound_assignment_fn() -> int {
     load_const 5
     init_instance user.classes.CInner .value
     init_instance user.classes.COuter .inner
-    store_var_load_var o
+    store_var o
+    load_var o
     load_field .inner
     copy 0
     load_field .value

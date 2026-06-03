@@ -295,7 +295,9 @@ pub enum TirTypeError {
     /// implement interface `I`. A clearer form of the generic type-mismatch.
     TypeDoesNotImplementInterface {
         value_type: Ty,
-        interface_name: Name,
+        /// The full interface type (with any generic args), so the diagnostic
+        /// names `Cargo<int>` rather than the bare `Cargo`.
+        interface: Ty,
     },
     /// BEP-044: a value almost satisfies an interface via a blanket impl, but a
     /// generic bound (`T extends Bound`) is not met. Names the failed bound.
@@ -731,11 +733,12 @@ impl fmt::Display for TirTypeError {
             ),
             TirTypeError::TypeDoesNotImplementInterface {
                 value_type,
-                interface_name,
+                interface,
             } => write!(
                 f,
-                "type `{}` does not implement interface `{interface_name}`",
-                value_type.render_user_facing()
+                "type `{}` does not implement interface `{}`",
+                value_type.render_user_facing(),
+                interface.render_user_facing()
             ),
             TirTypeError::BlanketBoundNotSatisfied { value_type, bound } => write!(
                 f,
@@ -1039,6 +1042,20 @@ impl<'db> InferContext<'db> {
 
     pub fn db(&self) -> &'db dyn crate::Db {
         self.db
+    }
+
+    /// Number of diagnostics recorded so far. Paired with
+    /// [`truncate_diagnostics`](Self::truncate_diagnostics) to run a
+    /// speculative resolution (e.g. probing one member of a union) and roll
+    /// back any diagnostics it emitted.
+    pub fn diagnostic_count(&self) -> usize {
+        self.diagnostics.borrow().diagnostics.len()
+    }
+
+    /// Drop every diagnostic recorded after index `n` (see
+    /// [`diagnostic_count`](Self::diagnostic_count)).
+    pub fn truncate_diagnostics(&self, n: usize) {
+        self.diagnostics.borrow_mut().diagnostics.truncate(n);
     }
 
     pub fn scope(&self) -> ScopeId<'db> {

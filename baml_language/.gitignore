@@ -14,3 +14,6 @@ rpi/
 
 # insta pending snapshot scratch files (resolved by `cargo insta review`)
 *.pending-snap
+
+# Local scratch projects / fuzz repros (not part of the build)
+workflow_scratch_files/

@@ -543,8 +543,7 @@ function match_basics.classify_string_typed_fallback(s: string) -> int {
 }
 
 function match_basics.classify_sum(a: int, b: int) -> string {
-    load_var a
-    load_var b
+    load_var2 1 2
     add_int
     load_const 0
     cmp_int_op ==
@@ -552,8 +551,7 @@ function match_basics.classify_sum(a: int, b: int) -> string {
     jump L3
 
   L0:
-    load_var a
-    load_var b
+    load_var2 1 2
     add_int
     load_const 1
     cmp_int_op ==
@@ -801,8 +799,7 @@ function match_basics.match_in_loop_helper() -> int {
     store_var _6
 
   L8:
-    load_var _5
-    load_var _6
+    load_var2 3 4
     bin_op +
     store_var sum
     load_var i

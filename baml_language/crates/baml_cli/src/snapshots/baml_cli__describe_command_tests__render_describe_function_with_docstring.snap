@@ -2,7 +2,7 @@
 source: crates/baml_cli/src/describe_command_tests.rs
 expression: output
 ---
-function ExtractPoint  funcs.baml:3
+function ExtractPoint  funcs.baml:3-6
 
 /// Extract a point from text.
 function ExtractPoint(text: string) -> Point {

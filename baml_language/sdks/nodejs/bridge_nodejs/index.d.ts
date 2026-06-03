@@ -6,11 +6,28 @@
  * Build:  cd baml_language/crates/bridge_nodejs && pnpm build:debug
  */
 import { BamlRuntime, AbortController, HostSpanManager, Collector as NativeCollector, FunctionLog as NativeFunctionLog, Timing, Usage, LLMCall } from './native';
-export { BamlRuntime, AbortController, BamlHandle, HostSpanManager, getVersion, flushEvents } from './native';
+export { BamlRuntime, AbortController, BamlHandle, HostSpanManager, getRuntime, getVersion, flushEvents } from './native';
 export { Timing, Usage, LLMCall } from './native';
+export { takeHandleFromTable, putHandleIntoTable, _seedFunctionRefHandle, _seedGenericMediaHandle, } from './native';
+export { BamlImage, BamlAudio, BamlVideo, BamlPdf } from './native';
+export { BamlStream } from './stream';
 export { encodeCallArgs, decodeCallResult } from './proto';
 export { CtxManager } from './ctx_manager';
-export { BamlError, BamlInvalidArgumentError, BamlClientError, BamlCancelledError, wrapNativeError, } from './errors';
+export { BamlTypeMap, setTypeMap, getTypeMap } from './typemap';
+export { defineFunction, defineInstanceFunction, UNSET } from './define_function';
+/**
+ * Free-function runtime initializer used by generated `baml_sdk/index.ts`:
+ * `initializeRuntime("baml_src", _inlinedbaml.FILES)`. Thin wrapper over the
+ * `BamlRuntime.initializeRuntime` factory (which sets the process-global
+ * singleton reachable via `getRuntime()`).
+ */
+export declare function initializeRuntime(srcDir: string, files: Record<string, string>): void;
+/**
+ * Free-function runtime initializer used by generated `baml_sdk/index.ts` when
+ * codegen embeds precompiled BAML bytecode.
+ */
+export declare function initializeRuntimeFromBytecode(bytecode: Buffer | Uint8Array): void;
+export { BamlError, BamlInvalidArgumentError, BamlClientError, BamlCancelledError, BamlPanic, wrapNativeError, } from './errors';
 export declare class FunctionResult {
     private _value;
     constructor(value: unknown);

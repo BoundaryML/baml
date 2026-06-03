@@ -16,7 +16,8 @@
 // Renamed from `Wrapper<T>` to `WrapperMethods<T>` to avoid colliding
 // with the bare `Wrapper<T>` shape fixture in types.baml.
 //
-// Exercised by `customizable/test_generic_method.py`.
+// Exercised by `customizable/test_generic.py` and
+// `customizable/test_generic.test.ts`.
 class WrapperMethods<T> {
   value T
 

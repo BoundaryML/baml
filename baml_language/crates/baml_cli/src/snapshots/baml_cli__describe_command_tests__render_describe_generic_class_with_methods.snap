@@ -1,0 +1,18 @@
+---
+source: crates/baml_cli/src/describe_command_tests.rs
+expression: "capture_description(&db, &descs[0], 30)"
+---
+class Wrapper  methods.baml:31-41
+
+class Wrapper<T> {
+    value: T,
+}
+
+methods:
+  function get_value(self) -> T  methods.baml:34-36
+  function get_or_marker(self) -> T | WrapperMarker  methods.baml:38-40
+
+dependencies:
+  class            WrapperMarker                    methods.baml:27
+
+references (0):

@@ -24,15 +24,29 @@ pub struct BamlRuntime {}
 
 #[napi]
 impl BamlRuntime {
-    /// Create a runtime from in-memory BAML source files.
-    #[napi(factory)]
-    pub fn from_files(
+    /// Initialize the process-global runtime from in-memory BAML source
+    /// files. `bridge_cffi::initialize_runtime` is a single-slot singleton, so
+    /// a second call replaces the prior runtime; the result is also reachable
+    /// via the module-level `getRuntime()`. Renamed from `fromFiles` for
+    /// parity with `bridge_python`'s sole `initialize_runtime` constructor and
+    /// the `initializeRuntime(...)` import the spec docs use.
+    #[napi(factory, js_name = "initializeRuntime")]
+    pub fn initialize_runtime(
         root_path: String,
         files: std::collections::HashMap<String, String>,
     ) -> napi::Result<Self> {
         // `initialize_runtime` stores the `Arc<dyn Bex>` in bridge_cffi's
         // singleton; we don't keep our own copy.
         match bridge_cffi::initialize_runtime(&root_path, files) {
+            Ok(_bex) => Ok(BamlRuntime {}),
+            Err(e) => Err(bridge_error_to_napi(e)),
+        }
+    }
+
+    /// Initialize the process-global runtime from precompiled BAML bytecode.
+    #[napi(factory, js_name = "initializeRuntimeFromBytecode")]
+    pub fn initialize_runtime_from_bytecode(bytecode: Buffer) -> napi::Result<Self> {
+        match bridge_cffi::initialize_runtime_from_bytecode(bytecode.as_ref()) {
             Ok(_bex) => Ok(BamlRuntime {}),
             Err(e) => Err(bridge_error_to_napi(e)),
         }
@@ -127,6 +141,22 @@ impl BamlRuntime {
             Ok(Buffer::from(bytes))
         })
     }
+}
+
+/// Return the process-global `BamlRuntime`, or a `BamlError`-shaped
+/// `napi::Error` if `initializeRuntime` has not run yet. The handle is
+/// zero-sized; the `Arc<dyn Bex>` lives in `bridge_cffi`. Mirrors
+/// `bridge_python`'s module-level `get_runtime()`.
+#[napi(js_name = "getRuntime")]
+pub fn get_runtime() -> napi::Result<BamlRuntime> {
+    bridge_cffi::get_runtime().map_err(|e| match e {
+        bridge_cffi::BridgeError::NotInitialized => napi::Error::new(
+            napi::Status::GenericFailure,
+            "BamlError: BAML runtime has not been initialized — call BamlRuntime.initializeRuntime first.",
+        ),
+        other => bridge_error_to_napi(other),
+    })?;
+    Ok(BamlRuntime {})
 }
 
 /// Decode protobuf-encoded function arguments into `BexArgs`.

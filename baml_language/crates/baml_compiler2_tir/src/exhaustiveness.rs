@@ -507,6 +507,7 @@ impl fmt::Display for WitnessPat {
             },
             Ctor::Single(ty) => write_single_witness(f, ty),
             Ctor::Class(qtn, _) => {
+                let qtn = qtn.render_user_facing();
                 if self.fields.is_empty() {
                     return write!(f, "{qtn} {{}}");
                 }
@@ -520,6 +521,7 @@ impl fmt::Display for WitnessPat {
                 write!(f, " }}")
             }
             Ctor::Interface(ty) => {
+                let ty = ty.render_user_facing();
                 if self.fields.is_empty() {
                     return write!(f, "{ty} {{}}");
                 }
@@ -593,8 +595,12 @@ fn write_single_witness(f: &mut fmt::Formatter<'_>, ty: &Ty) -> fmt::Result {
 fn write_member_ty_witness(f: &mut fmt::Formatter<'_>, ty: &Ty) -> fmt::Result {
     match ty {
         Ty::Primitive(p, _) => write!(f, "{p}"),
-        Ty::Class(qtn, _, _) | Ty::Enum(qtn, _) => write!(f, "{qtn}"),
-        Ty::EnumVariant(qtn, variant, _) => write!(f, "{qtn}.{variant}"),
+        // Interfaces are open-world, so a union-member witness names the
+        // uncovered interface (`Animal`, `Slot<int>`) rather than collapsing to
+        // a bare `_`. Rendered user-facing (no `user.` package prefix).
+        Ty::Interface(_, _, _) => write!(f, "{}", ty.render_user_facing()),
+        Ty::Class(qtn, _, _) | Ty::Enum(qtn, _) => write!(f, "{}", qtn.render_user_facing()),
+        Ty::EnumVariant(qtn, variant, _) => write!(f, "{}.{variant}", qtn.render_user_facing()),
         Ty::Literal(_, _, _) => write_single_witness(f, ty),
         _ => write!(f, "_"),
     }
@@ -1926,14 +1932,14 @@ mod tests {
             "all Optional<bool> pairs except false/false should be missing"
         );
         for expected in [
-            "user.OptionalPair { true, true }",
-            "user.OptionalPair { true, false }",
-            "user.OptionalPair { true, null }",
-            "user.OptionalPair { false, true }",
-            "user.OptionalPair { false, null }",
-            "user.OptionalPair { null, true }",
-            "user.OptionalPair { null, false }",
-            "user.OptionalPair { null, null }",
+            "OptionalPair { true, true }",
+            "OptionalPair { true, false }",
+            "OptionalPair { true, null }",
+            "OptionalPair { false, true }",
+            "OptionalPair { false, null }",
+            "OptionalPair { null, true }",
+            "OptionalPair { null, false }",
+            "OptionalPair { null, null }",
         ] {
             assert!(
                 witnesses.iter().any(|w| w == expected),
@@ -1952,10 +1958,7 @@ mod tests {
             2,
             "all pairs with a non-false right side should be missing"
         );
-        for expected in [
-            "user.OptionalPair { _, true }",
-            "user.OptionalPair { _, null }",
-        ] {
+        for expected in ["OptionalPair { _, true }", "OptionalPair { _, null }"] {
             assert!(
                 witnesses.iter().any(|w| w == expected),
                 "expected {expected} in witnesses, got {witnesses:?}"

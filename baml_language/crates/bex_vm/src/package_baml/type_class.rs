@@ -45,7 +45,7 @@ impl BamlClassTypeValue for PackageBamlImpl {
                     *impl_class == class_name
                         && (iface_args.is_empty()
                             || impl_args.is_empty()
-                            || *impl_args == iface_args)
+                            || ty_args_equivalent(impl_args, &iface_args))
                 })
             })
     }
@@ -77,13 +77,70 @@ impl BamlClassTypeValue for PackageBamlImpl {
             // Keep only implementors recorded at the requested instantiation
             // (any, when the request or implementor entry carries no type args).
             .filter(|(_, impl_args)| {
-                iface_args.is_empty() || impl_args.is_empty() || *impl_args == iface_args
+                iface_args.is_empty()
+                    || impl_args.is_empty()
+                    || ty_args_equivalent(impl_args, &iface_args)
             })
             .map(|(name, _)| {
                 let ty = baml_type::Ty::Class(name, Vec::new(), baml_type::TyAttr::default());
                 Value::object(vm.tlab.alloc(Object::Type(Box::new(ty))))
             })
             .collect()
+    }
+}
+
+/// Compare two generic-argument lists for *semantic* equivalence. Union
+/// arguments are compared as unordered sets, so `Box<int | string>` and
+/// `Box<string | int>` are the same instantiation (union member order is
+/// semantically irrelevant — the type checker already treats `int | string`
+/// and `string | int` as identical). Falls back to structural `==` for
+/// non-union leaves.
+fn ty_args_equivalent(a: &[baml_type::Ty], b: &[baml_type::Ty]) -> bool {
+    a.len() == b.len() && a.iter().zip(b.iter()).all(|(x, y)| ty_equivalent(x, y))
+}
+
+fn ty_equivalent(a: &baml_type::Ty, b: &baml_type::Ty) -> bool {
+    use baml_type::Ty;
+    match (a, b) {
+        // Order-insensitive comparison of union members via a one-to-one
+        // matching: each `a` member must pair with a *distinct* equivalent `b`
+        // member. A plain `all(|x| any(|y| ...))` would wrongly accept
+        // `int | int` as equivalent to `int | string` (both members of the left
+        // match the single `int` on the right), so consume each matched member.
+        (Ty::Union(am, _), Ty::Union(bm, _)) => {
+            if am.len() != bm.len() {
+                return false;
+            }
+            let mut used = vec![false; bm.len()];
+            'next_a: for x in am {
+                for (j, y) in bm.iter().enumerate() {
+                    if !used[j] && ty_equivalent(x, y) {
+                        used[j] = true;
+                        continue 'next_a;
+                    }
+                }
+                return false;
+            }
+            true
+        }
+        // Recurse into nested generic instantiations (`Box<Slot<int | string>>`).
+        (Ty::Class(an, aa, _), Ty::Class(bn, ba, _)) => an == bn && ty_args_equivalent(aa, ba),
+        // Recurse through container/optional wrappers so a union nested inside
+        // them is still compared order-insensitively (`Box<(int | string)?>` ==
+        // `Box<(string | int)?>`); otherwise the wrapper would fall to the
+        // structural `==` below and defeat the union-set comparison.
+        (Ty::Optional(ai, _), Ty::Optional(bi, _)) | (Ty::List(ai, _), Ty::List(bi, _)) => {
+            ty_equivalent(ai, bi)
+        }
+        (
+            Ty::Map {
+                key: ak, value: av, ..
+            },
+            Ty::Map {
+                key: bk, value: bv, ..
+            },
+        ) => ty_equivalent(ak, bk) && ty_equivalent(av, bv),
+        _ => a == b,
     }
 }
 
