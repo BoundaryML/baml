@@ -1222,6 +1222,103 @@ fn union_associated_type_binding_in_generic_bound_preserves_outer_typevar() {
 }
 
 #[test]
+fn nested_associated_type_bindings_in_generic_bounds_preserve_outer_typevar() {
+    assert_zero_compile_errors(
+        r#"
+        interface Source {
+            type Item
+
+            function get(self) -> Item
+        }
+
+        class OptionalIntSource {
+            value: int?
+
+            implements Source {
+                type Item = int?
+
+                function get(self) -> int? {
+                    return self.value
+                }
+            }
+        }
+
+        class IntListSource {
+            value: int[]
+
+            implements Source {
+                type Item = int[]
+
+                function get(self) -> int[] {
+                    return self.value
+                }
+            }
+        }
+
+        class IntMapSource {
+            value: map<string, int>
+
+            implements Source {
+                type Item = map<string, int>
+
+                function get(self) -> map<string, int> {
+                    return self.value
+                }
+            }
+        }
+
+        class IntCallbackSource {
+            value: (x: int) -> int
+
+            implements Source {
+                type Item = (x: int) -> int
+
+                function get(self) -> (x: int) -> int {
+                    return self.value
+                }
+            }
+        }
+
+        function read_optional<T, S extends Source<Item = T?>>(source: S) -> T? {
+            return source.get()
+        }
+
+        function read_list<T, S extends Source<Item = T[]>>(source: S) -> T[] {
+            return source.get()
+        }
+
+        function read_map<T, S extends Source<Item = map<string, T>>>(source: S) -> map<string, T> {
+            return source.get()
+        }
+
+        function read_callback<T, S extends Source<Item = (x: T) -> T>>(source: S) -> (x: T) -> T {
+            return source.get()
+        }
+
+        function id(value: int) -> int {
+            return value
+        }
+
+        function use_optional() -> int? {
+            return read_optional<int, OptionalIntSource>(OptionalIntSource { value: 1 })
+        }
+
+        function use_list() -> int[] {
+            return read_list<int, IntListSource>(IntListSource { value: [2] })
+        }
+
+        function use_map() -> map<string, int> {
+            return read_map<int, IntMapSource>(IntMapSource { value: { "x": 3 } })
+        }
+
+        function use_callback() -> (x: int) -> int {
+            return read_callback<int, IntCallbackSource>(IntCallbackSource { value: id })
+        }
+        "#,
+    );
+}
+
+#[test]
 fn qualified_projections_disambiguate_union_outputs() {
     assert_zero_compile_errors(
         r#"
@@ -2977,6 +3074,58 @@ async fn runtime_dispatch_substitutes_class_typevar_in_associated_type_binding()
 
         function main() -> int {
             return unwrap(Box<int> { value: 42 })
+        }
+        "#
+    );
+    assert_eq!(output.result.unwrap(), BexExternalValue::Int(42));
+}
+
+#[tokio::test]
+async fn runtime_dispatch_substitutes_class_typevar_inside_nested_associated_binding() {
+    let output = baml_test!(
+        r#"
+        interface Source {
+            type Item
+
+            function get(self) -> Item
+        }
+
+        interface Outer {
+            type Inner
+
+            function inner(self) -> Inner
+        }
+
+        class Box<T> {
+            value: T
+
+            implements Source {
+                type Item = T
+
+                function get(self) -> T {
+                    return self.value
+                }
+            }
+        }
+
+        class OuterBox<T> {
+            source: Source<Item = T>
+
+            implements Outer {
+                type Inner = Source<Item = T>
+
+                function inner(self) -> Source<Item = T> {
+                    return self.source
+                }
+            }
+        }
+
+        function unwrap(outer: Outer<Inner = Source<Item = int>>) -> int {
+            return outer.inner().get()
+        }
+
+        function main() -> int {
+            return unwrap(OuterBox<int> { source: Box<int> { value: 42 } })
         }
         "#
     );

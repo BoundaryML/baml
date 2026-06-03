@@ -205,13 +205,35 @@ fn infer_interface_class_bindings(
                 && infer_interface_class_bindings(fth, ath, class_params, aliases, bindings)
         }
         (Tir2Ty::Class(fqtn, fargs, _), Tir2Ty::Class(aqtn, aargs, _))
-        | (Tir2Ty::Interface(fqtn, fargs, _, _), Tir2Ty::Interface(aqtn, aargs, _, _))
             if fqtn == aqtn && fargs.len() == aargs.len() =>
         {
             fargs
                 .iter()
                 .zip(aargs.iter())
                 .all(|(f, a)| infer_interface_class_bindings(f, a, class_params, aliases, bindings))
+        }
+        (
+            Tir2Ty::Interface(fqtn, fargs, f_assoc, _),
+            Tir2Ty::Interface(aqtn, aargs, a_assoc, _),
+        ) if fqtn == aqtn && fargs.len() == aargs.len() => {
+            fargs
+                .iter()
+                .zip(aargs.iter())
+                .all(|(f, a)| infer_interface_class_bindings(f, a, class_params, aliases, bindings))
+                && a_assoc.iter().all(|(name, actual_ty)| {
+                    f_assoc
+                        .iter()
+                        .find(|(formal_name, _)| formal_name == name)
+                        .is_some_and(|(_, formal_ty)| {
+                            infer_interface_class_bindings(
+                                formal_ty,
+                                actual_ty,
+                                class_params,
+                                aliases,
+                                bindings,
+                            )
+                        })
+                })
         }
         (Tir2Ty::Union(fparts, _), Tir2Ty::Union(aparts, _)) if fparts.len() == aparts.len() => {
             fparts
