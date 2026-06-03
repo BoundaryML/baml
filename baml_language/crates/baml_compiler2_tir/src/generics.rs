@@ -414,7 +414,7 @@ fn is_inferable_typevar(name: &Name, generic_params: &[Name]) -> bool {
 }
 
 /// Like [`contains_typevar`], but only counts type variables that are still
-/// *inferable* for a value call (see [`is_inferable_typevar`]). Used to tell the
+/// *inferable* for a value call (see `is_inferable_typevar`). Used to tell the
 /// callee's own unresolved params (genuine inference holes) apart from rigid
 /// ambient type vars that must be matched structurally.
 pub fn contains_inferable_typevar(ty: &Ty, generic_params: &[Name]) -> bool {
