@@ -11202,10 +11202,9 @@ impl<'db> TypeInferenceBuilder<'db> {
         }
 
         match (sub, sup) {
-            (Ty::List(sub_inner, _) | Ty::EvolvingList(sub_inner, _), Ty::List(sup_inner, _))
-            | (
+            (
                 Ty::List(sub_inner, _) | Ty::EvolvingList(sub_inner, _),
-                Ty::EvolvingList(sup_inner, _),
+                Ty::List(sup_inner, _) | Ty::EvolvingList(sup_inner, _),
             ) => Some(self.is_subtype(sub_inner, sup_inner)),
             (
                 Ty::Map(sub_key, sub_value, _) | Ty::EvolvingMap(sub_key, sub_value, _),

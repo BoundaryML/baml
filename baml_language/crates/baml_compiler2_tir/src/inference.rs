@@ -147,13 +147,11 @@ fn install_generic_param_bounds(
     builder: &mut TypeInferenceBuilder<'_>,
     pkg_items: &PackageItems<'_>,
     ns_context: &[Name],
-    generic_params: &[Name],
-    bound_param_names: &[Name],
-    bound_exprs: &[Option<ast::TypeExpr>],
+    env: &GenericEnv,
     span: TextRange,
 ) {
     let mut bounds: FxHashMap<Name, Ty> = FxHashMap::default();
-    for (name, bound) in bound_param_names.iter().zip(bound_exprs.iter()) {
+    for (name, bound) in env.bound_param_names.iter().zip(env.bound_exprs.iter()) {
         let Some(bound_te) = bound else {
             continue;
         };
@@ -163,7 +161,7 @@ fn install_generic_param_bounds(
             bound_te,
             pkg_items,
             ns_context,
-            generic_params,
+            &env.params,
             &mut diags,
         );
         for diag in diags {
@@ -183,16 +181,7 @@ fn apply_generic_env(
     span: TextRange,
 ) {
     builder.set_generic_params(env.params.clone());
-    install_generic_param_bounds(
-        db,
-        builder,
-        pkg_items,
-        ns_context,
-        &env.params,
-        &env.bound_param_names,
-        &env.bound_exprs,
-        span,
-    );
+    install_generic_param_bounds(db, builder, pkg_items, ns_context, env, span);
 }
 
 fn parent_type_generic_env(
@@ -258,6 +247,12 @@ fn enclosing_function_generic_env_from_let(
     None
 }
 
+#[derive(Clone, Copy)]
+struct TypeExprLoweringOptions<'a> {
+    span: TextRange,
+    self_replacement: Option<&'a ast::TypeExpr>,
+}
+
 fn lower_type_expr_at_span_in_env(
     db: &dyn crate::Db,
     builder: &mut TypeInferenceBuilder<'_>,
@@ -265,11 +260,10 @@ fn lower_type_expr_at_span_in_env(
     ns_context: &[Name],
     env: &GenericEnv,
     type_expr: &ast::TypeExpr,
-    span: TextRange,
-    self_replacement: Option<&ast::TypeExpr>,
+    options: TypeExprLoweringOptions<'_>,
 ) -> Ty {
     let mut diags = Vec::new();
-    let resolved_expr = if let Some(replacement) = self_replacement {
+    let resolved_expr = if let Some(replacement) = options.self_replacement {
         crate::lower_type_expr::substitute_self_in(type_expr, replacement)
     } else {
         type_expr.clone()
@@ -283,9 +277,9 @@ fn lower_type_expr_at_span_in_env(
         &mut diags,
     );
     for diag in diags {
-        builder.report_at_span(diag, span);
+        builder.report_at_span(diag, options.span);
     }
-    builder.validate_type_generic_bounds_at_span(span, &ty);
+    builder.validate_type_generic_bounds_at_span(options.span, &ty);
     ty
 }
 
@@ -305,9 +299,29 @@ fn validate_spanned_type_expr_generic_bounds(
         ns_context,
         env,
         &type_expr.expr,
-        type_expr.span,
-        self_replacement,
+        TypeExprLoweringOptions {
+            span: type_expr.span,
+            self_replacement,
+        },
     );
+}
+
+fn lower_type_expr_silent_in_env(
+    db: &dyn crate::Db,
+    pkg_items: &PackageItems<'_>,
+    ns_context: &[Name],
+    env: &GenericEnv,
+    type_expr: &ast::TypeExpr,
+) -> Ty {
+    let mut diags = Vec::new();
+    crate::lower_type_expr::lower_type_expr_in_ns(
+        db,
+        type_expr,
+        pkg_items,
+        ns_context,
+        &env.params,
+        &mut diags,
+    )
 }
 
 fn extend_env_with_lambda_generics(mut env: GenericEnv, func_def: &FunctionDef) -> GenericEnv {
@@ -328,11 +342,11 @@ fn add_lambda_params_to_builder(
         let param_ty = param
             .type_expr
             .as_ref()
-            .map(|ste| {
-                lower_type_expr_at_span_in_env(
-                    db, builder, pkg_items, ns_context, env, &ste.expr, ste.span, None,
-                )
-            })
+            // The parent scope already lowers and validates the lambda
+            // function type. Here we only need local parameter types for the
+            // lambda body; reporting again would duplicate diagnostics in the
+            // child lambda scope.
+            .map(|ste| lower_type_expr_silent_in_env(db, pkg_items, ns_context, env, &ste.expr))
             .or_else(|| {
                 contextual_param_tys
                     .and_then(|pts| pts.get(i))
@@ -906,7 +920,7 @@ pub fn infer_scope_types<'db>(
                     if let Some(imp) = enclosing_impl {
                         env.prepend_declared(&imp.generic_params, &imp.generic_param_bounds);
                     } else if let Some((type_name, parent_generics, parent_bounds)) =
-                        parent_type_generic_env(&index, &item_tree, scope.parent)
+                        parent_type_generic_env(index, &item_tree, scope.parent)
                     {
                         for mp in &sig.user_generic_params {
                             if parent_generics.iter().any(|cp| cp == mp) {
@@ -1003,8 +1017,10 @@ pub fn infer_scope_types<'db>(
                                     &pkg_info.namespace_path,
                                     &env,
                                     te,
-                                    span,
-                                    self_replacement.as_ref(),
+                                    TypeExprLoweringOptions {
+                                        span,
+                                        self_replacement: self_replacement.as_ref(),
+                                    },
                                 )
                             })
                             .unwrap_or(Ty::Unknown {
@@ -1036,8 +1052,10 @@ pub fn infer_scope_types<'db>(
                                         &pkg_info.namespace_path,
                                         &env,
                                         &imp.for_target.expr,
-                                        param_type_span,
-                                        None,
+                                        TypeExprLoweringOptions {
+                                            span: param_type_span,
+                                            self_replacement: None,
+                                        },
                                     )
                                 } else {
                                     // `self` parameter with no type annotation — infer from
@@ -1094,8 +1112,10 @@ pub fn infer_scope_types<'db>(
                                     &pkg_info.namespace_path,
                                     &env,
                                     &param.ty,
-                                    param_type_span,
-                                    self_replacement.as_ref(),
+                                    TypeExprLoweringOptions {
+                                        span: param_type_span,
+                                        self_replacement: self_replacement.as_ref(),
+                                    },
                                 )
                             };
                             if !param_ty_validated {
@@ -1293,7 +1313,7 @@ pub fn infer_scope_types<'db>(
 
                                     let env = extend_env_with_lambda_generics(
                                         generic_env_for_function_data(
-                                            &index,
+                                            index,
                                             &item_tree,
                                             ancestor_scope,
                                             func_data,
@@ -1361,7 +1381,7 @@ pub fn infer_scope_types<'db>(
 
                                     let env = extend_env_with_lambda_generics(
                                         enclosing_function_generic_env_from_let(
-                                            &index,
+                                            index,
                                             &item_tree,
                                             ancestor_scope,
                                         )
