@@ -1535,7 +1535,8 @@ impl LoweringContext {
         }
     }
 
-    /// Lower a `BINDING_PATTERN` (`let WORD`). The parser routes `let _` to
+    /// Lower a `BINDING_PATTERN` (`let WORD` / `const WORD`). The parser routes
+    /// `let _` / `const _` to
     /// `WILDCARD_PATTERN` before it ever reaches here, so the WORD's text is
     /// never `_`. The only defensive case is a malformed `let` without a
     /// following WORD (parse error like `let = 1`), which we recover as
@@ -1634,9 +1635,10 @@ impl LoweringContext {
         self.alloc_pattern(Pattern::Type(ty), node.text_range())
     }
 
-    /// Lower a `DESTRUCTURE_PATTERN` (`(let)? PATH ('<' types '>')? '{' field_list '}'`).
+    /// Lower a `DESTRUCTURE_PATTERN` (`(let|const)? PATH ('<' types '>')? '{' field_list '}'`).
     fn lower_destructure_pattern(&mut self, node: &SyntaxNode) -> PatId {
-        // Path tokens live between (the optional) `KW_LET` and either
+        // Path tokens live between the optional binding introducer
+        // (`KW_LET`/`KW_CONST`) and either
         // `GENERIC_ARGS`, `TYPE_ARGS`, or `L_BRACE`.
         // Collect WORD tokens in that range, ignoring DOTs.
         let mut class: Vec<Name> = Vec::new();
@@ -3022,7 +3024,7 @@ impl LoweringContext {
 
     fn lower_let_stmt(&mut self, node: &SyntaxNode, is_watched: bool) -> StmtId {
         // LET_STMT shape (post-pattern-rewrite):
-        //   KW_WATCH? KW_LET? PATTERN EQUALS <init-expr> (KW_ELSE BLOCK_EXPR)? SEMICOLON?
+        //   KW_WATCH? (KW_LET|KW_CONST)? PATTERN EQUALS <init-expr> (KW_ELSE BLOCK_EXPR)? SEMICOLON?
         //
         // The pattern carries its own `: T` narrow as a Chain link, so all we
         // do here is locate the PATTERN child, the initialiser child, and an

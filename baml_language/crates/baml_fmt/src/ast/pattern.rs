@@ -188,10 +188,10 @@ impl Printable for MatchPattern {
 
 // ─── Atoms ────────────────────────────────────────────────────────────────────
 
-/// `_` or `let _`.
+/// `_`, `let _`, or `const _`.
 #[derive(Debug)]
 pub struct WildcardPattern {
-    pub let_keyword: Option<t::Let>,
+    pub let_keyword: Option<t::BindingKeyword>,
     pub underscore: t::Word,
 }
 
@@ -199,8 +199,8 @@ impl WildcardPattern {
     fn from_node(node: &baml_db::baml_compiler_syntax::SyntaxNode) -> Result<Self, StrongAstError> {
         let mut it = SyntaxNodeIter::new(node);
         let let_keyword = it
-            .next_if_kind(SyntaxKind::KW_LET)
-            .map(t::Let::from_cst)
+            .next_if(|elem| matches!(elem.kind(), SyntaxKind::KW_LET | SyntaxKind::KW_CONST))
+            .map(t::BindingKeyword::from_cst)
             .transpose()?;
         let underscore_elem = it.expect_next("`_`")?;
         let underscore = t::Word::from_cst(underscore_elem)?;
@@ -232,7 +232,7 @@ impl Printable for WildcardPattern {
     }
 }
 
-/// `let WORD` or `let WORD : <pattern>` — name binding with an optional
+/// `let WORD`/`const WORD` or `let WORD : <pattern>`/`const WORD : <pattern>` — name binding with an optional
 /// sub-pattern. The sub-pattern can be a type ascription (`let x: int`),
 /// another binding (`let x: let y`), a structural destructure
 /// (`let x: [a, b]`, `let x: Class { f }`), etc. The parser folds the
@@ -240,7 +240,7 @@ impl Printable for WildcardPattern {
 /// (no `CHAIN_PATTERN` wrapper).
 #[derive(Debug)]
 pub struct BindingPattern {
-    pub let_keyword: t::Let,
+    pub let_keyword: t::BindingKeyword,
     pub name: t::Word,
     pub subpat: Option<(t::Colon, Box<MatchPattern>)>,
 }
@@ -248,7 +248,7 @@ pub struct BindingPattern {
 impl BindingPattern {
     fn from_node(node: &baml_db::baml_compiler_syntax::SyntaxNode) -> Result<Self, StrongAstError> {
         let mut it = SyntaxNodeIter::new(node);
-        let let_keyword = it.expect_parse()?;
+        let let_keyword = t::BindingKeyword::from_cst(it.expect_next("binding introducer")?)?;
         let name = it.expect_parse()?;
         let subpat = if let Some(colon_elem) = it.next_if_kind(SyntaxKind::COLON) {
             let colon = t::Colon::from_cst(colon_elem)?;
@@ -297,10 +297,10 @@ impl Printable for BindingPattern {
     }
 }
 
-/// `(let)? path.Class { field, renamed: <pattern>, ... }`.
+/// `(let|const)? path.Class { field, renamed: <pattern>, ... }`.
 #[derive(Debug)]
 pub struct DestructurePattern {
-    pub let_keyword: Option<t::Let>,
+    pub let_keyword: Option<t::BindingKeyword>,
     pub first: t::Word,
     pub rest: Vec<(t::Dot, t::Word)>,
     pub generic_args: Option<DestructureTypeArgs>,
@@ -356,8 +356,8 @@ impl DestructurePattern {
     fn from_node(node: &baml_db::baml_compiler_syntax::SyntaxNode) -> Result<Self, StrongAstError> {
         let mut it = SyntaxNodeIter::new(node);
         let let_keyword = it
-            .next_if_kind(SyntaxKind::KW_LET)
-            .map(t::Let::from_cst)
+            .next_if(|elem| matches!(elem.kind(), SyntaxKind::KW_LET | SyntaxKind::KW_CONST))
+            .map(t::BindingKeyword::from_cst)
             .transpose()?;
         let first = it.expect_parse()?;
         let mut rest = Vec::new();
