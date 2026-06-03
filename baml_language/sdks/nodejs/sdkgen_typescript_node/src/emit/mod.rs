@@ -3,7 +3,7 @@
 //! These types describe what the emitter will render to TypeScript, as
 //! opposed to `baml_codegen_types` which describes BAML-side input
 //! symbols. The fan-out logic (sync + async per callable, companion
-//! suffix rules) is a verbatim port of `codegen_python/src/emit/mod.rs`.
+//! suffix rules) is a verbatim port of `sdkgen_python_pydantic2/src/emit/mod.rs`.
 
 pub(crate) mod class;
 pub(crate) mod enum_;

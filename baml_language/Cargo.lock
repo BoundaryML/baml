@@ -734,8 +734,6 @@ dependencies = [
  "borsh",
  "clap",
  "clap-cargo",
- "codegen_nodejs",
- "codegen_python",
  "console",
  "ctrlc",
  "flate2",
@@ -745,6 +743,8 @@ dependencies = [
  "libsui",
  "regex",
  "reqwest",
+ "sdkgen_python_pydantic2",
+ "sdkgen_typescript_node",
  "serde",
  "serde_json",
  "serde_yaml",
@@ -1984,24 +1984,6 @@ name = "codegen_go"
 version = "0.0.0-beta"
 dependencies = [
  "baml_codegen_types",
-]
-
-[[package]]
-name = "codegen_nodejs"
-version = "0.0.0-beta"
-dependencies = [
- "baml_base",
- "baml_codegen_types",
-]
-
-[[package]]
-name = "codegen_python"
-version = "0.0.0-beta"
-dependencies = [
- "askama",
- "baml_base",
- "baml_codegen_types",
- "pretty_assertions",
 ]
 
 [[package]]
@@ -6447,8 +6429,8 @@ dependencies = [
  "baml_project",
  "baml_workspace",
  "borsh",
- "codegen_nodejs",
- "codegen_python",
+ "sdkgen_python_pydantic2",
+ "sdkgen_typescript_node",
 ]
 
 [[package]]
@@ -6465,6 +6447,24 @@ version = "0.1.0"
 dependencies = [
  "sdk_test_harness_runner",
  "sdk_test_harness_setup",
+]
+
+[[package]]
+name = "sdkgen_python_pydantic2"
+version = "0.0.0-beta"
+dependencies = [
+ "askama",
+ "baml_base",
+ "baml_codegen_types",
+ "pretty_assertions",
+]
+
+[[package]]
+name = "sdkgen_typescript_node"
+version = "0.0.0-beta"
+dependencies = [
+ "baml_base",
+ "baml_codegen_types",
 ]
 
 [[package]]

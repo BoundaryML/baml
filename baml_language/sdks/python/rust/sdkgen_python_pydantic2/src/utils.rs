@@ -1,4 +1,4 @@
-//! Helpers shared between the `codegen_python` emit modules.
+//! Helpers shared between the `sdkgen_python_pydantic2` emit modules.
 
 /// Format a string as a Python docstring with proper indentation.
 /// The first line starts with `"""`, subsequent lines are indented with

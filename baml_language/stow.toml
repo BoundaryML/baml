@@ -158,6 +158,10 @@ link_crates = ["baml_type",  "bex_heap", "bex_vm_types"]
 name = "codegen"
 
 [[namespaces]]
+name = "sdkgen"
+approved_prefixes = ["python", "typescript"]
+
+[[namespaces]]
 name = "surface"
 # Surface-area crates that don't fit the prefix-based namespaces — they
 # sit at the application boundary and depend on bex_* internals

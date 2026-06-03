@@ -364,9 +364,9 @@ pub fn __check_setup_ran(env_var: &str) {
 /// ::sdk_test_harness_runner::setup_guard!("SDK_TEST_PYTHON_PYDANTIC2_SETUP");
 ///
 /// // Ignored while the generator's other tests are (typescript_node
-/// // is `#[ignore]`d wholesale until codegen_nodejs lands).
+/// // is `#[ignore]`d wholesale until sdkgen_typescript_node lands).
 /// ::sdk_test_harness_runner::setup_guard!(
-///     ignore = "codegen_nodejs is a stub", "SDK_TEST_TYPESCRIPT_NODE_SETUP");
+///     ignore = "sdkgen_typescript_node is a stub", "SDK_TEST_TYPESCRIPT_NODE_SETUP");
 /// ```
 #[macro_export]
 macro_rules! setup_guard {
@@ -400,8 +400,8 @@ macro_rules! setup_guard {
 /// ::sdk_test_harness_runner::build_diagnostics!();
 ///
 /// // Skip — every fixture records a codegen failure (typescript_node
-/// // while codegen_nodejs is a stub).
-/// ::sdk_test_harness_runner::build_diagnostics!(ignore = "codegen_nodejs is a stub");
+/// // while sdkgen_typescript_node is a stub).
+/// ::sdk_test_harness_runner::build_diagnostics!(ignore = "sdkgen_typescript_node is a stub");
 /// ```
 ///
 /// `env!("OUT_DIR")` inside the expansion resolves at the macro's

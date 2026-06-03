@@ -3,7 +3,7 @@
 //! Mirrors [`crate::python_pydantic2`] but for the
 //! TypeScript/Node.js toolchain (pnpm + tsc + vitest).
 //!
-//! `codegen_nodejs::to_source_code` runs directly (no `catch_unwind`):
+//! `sdkgen_typescript_node::to_source_code` runs directly (no `catch_unwind`):
 //! the emitter has landed, so a panic is a real bug and aborts the build
 //! loudly. Each fixture's `baml_sdk/` is generated, then the per-fixture
 //! `tsc` / `vitest` tests run under `cargo nextest`.
@@ -42,7 +42,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use codegen_nodejs::NamingConvention;
+use sdkgen_typescript_node::NamingConvention;
 
 use crate::{
     BuildDiagnostics, copy_customizable, discover_fixtures, fixtures_root_from_manifest,
@@ -157,7 +157,7 @@ fn codegen_fixture(
     // and downgraded to an empty `baml_sdk/`.
     let pool = loaded.pool;
     let baml_bytecode = loaded.baml_bytecode;
-    let output = codegen_nodejs::to_source_code_with_bytecode(
+    let output = sdkgen_typescript_node::to_source_code_with_bytecode(
         &pool,
         &baml_bytecode,
         NamingConvention::PreserveCase,
