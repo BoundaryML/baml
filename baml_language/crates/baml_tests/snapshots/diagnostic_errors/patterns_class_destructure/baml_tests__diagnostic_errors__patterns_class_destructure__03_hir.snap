@@ -9,7 +9,7 @@ class user.Admin {
   age: string
 }
 class user.Box {
-  value: user.T
+  value: T
 }
 class user.OptionalPerson {
   age: int?
@@ -26,7 +26,7 @@ class user.SameNameOuter {
   field: user.SameNameInner
   other: user.SameNameInner
 }
-function user.class_destructure_box(boxed: user.Box) -> int  [expr] {
+function user.class_destructure_box(boxed: user.Box<int>) -> int  [expr] {
   { let Box<int> { value: value } = boxed } value
 }
 function user.class_destructure_duplicate_binding_name_across_fields() -> int  [expr] {
@@ -74,7 +74,7 @@ function user.for_top_level_class_narrows_union_element_is_refutable() -> int  [
 function user.from_json(j: baml.json.json) -> user.Person  [expr] {
   user.Person { age: baml.json.from_json(baml.json.field(j, "age")), flexible_age: baml.json.from_json(baml.json.field(j, "flexible_age")), address: baml.json.from_json(baml.json.field(j, "address")) }
 }
-function user.from_json(j: baml.json.json) -> user.Box  [expr] {
+function user.from_json(j: baml.json.json) -> user.Box<T>  [expr] {
   user.Box { value: baml.json.from_json(baml.json.field(j, "value")) }
 }
 function user.from_json(j: baml.json.json) -> user.Address  [expr] {
@@ -92,16 +92,16 @@ function user.from_json(j: baml.json.json) -> user.SameNameInner  [expr] {
 function user.from_json(j: baml.json.json) -> user.OptionalPerson  [expr] {
   user.OptionalPerson { age: baml.json.from_json(baml.json.field(j, "age")) }
 }
-function user.generic_class_destructure_or_pattern_same_binding_conflicting_types(v: user.Box | user.Box) -> int  [expr] {
+function user.generic_class_destructure_or_pattern_same_binding_conflicting_types(v: user.Box<int> | user.Box<string>) -> int  [expr] {
   {  } match (v) { Box<int> { value: value } | Box<string> { value: value } => 1 }
 }
-function user.generic_class_destructure_requires_type_args(boxed: user.Box) -> int  [expr] {
+function user.generic_class_destructure_requires_type_args(boxed: user.Box<int>) -> int  [expr] {
   { let Box { value: value } = boxed } value
 }
-function user.generic_class_type_pattern_in_chain_requires_type_args(boxed: user.Box) -> int  [expr] {
+function user.generic_class_type_pattern_in_chain_requires_type_args(boxed: user.Box<int>) -> int  [expr] {
   {  } match (boxed) { value: user.Box => 1 }
 }
-function user.generic_class_type_pattern_requires_type_args(boxed: user.Box) -> int  [expr] {
+function user.generic_class_type_pattern_requires_type_args(boxed: user.Box<int>) -> int  [expr] {
   {  } match (boxed) { user.Box => 1 }
 }
 function user.lambda_class_destructure_field_pattern_type_mismatch_span() -> int  [expr] {
@@ -114,7 +114,7 @@ function user.let_class_field_type_narrower_than_field_is_refutable() -> int  [e
   { let Person { flexible_age: int } = user.Person { age: 1, flexible_age: 2, address: user.Address { zip: 3 } } } 1
 }
 function user.let_generic_class_field_type_narrower_than_substituted_field_is_refutable() -> int  [expr] {
-  { let boxed: user.Box = user.Box { value: "ready" }; let Box<string> { value: int } = boxed } 1
+  { let boxed: user.Box<string> = user.Box { value: "ready" }; let Box<string> { value: int } = boxed } 1
 }
 function user.let_optional_class_field_narrower_than_field_is_refutable() -> int  [expr] {
   { let OptionalPerson { age: int } = user.OptionalPerson { age: 1 } } 1
@@ -141,7 +141,7 @@ function user.nested_class_field_type_narrower_than_field_is_refutable() -> int 
   { let Person { address: Address { zip: 1 } } = user.Person { age: 1, flexible_age: 2, address: user.Address { zip: 3 } } } 1
 }
 function user.nested_generic_class_destructure_duplicate_binding_name() -> int  [expr] {
-  { let boxed: user.Box = user.Box { value: user.SameNameInner { field: 1 } }; let Box<user.SameNameInner> { value: value: SameNameInner { field: value } } = boxed } 0
+  { let boxed: user.Box<user.SameNameInner> = user.Box { value: user.SameNameInner { field: 1 } }; let Box<user.SameNameInner> { value: value: SameNameInner { field: value } } = boxed } 0
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
   map { "age": self.age.to_json(), "flexible_age": self.flexible_age.to_json(), "address": self.address.to_json() }

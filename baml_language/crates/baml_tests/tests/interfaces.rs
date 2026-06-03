@@ -5823,7 +5823,7 @@ fn existing_concrete_implements_for_still_works() {
 #[test]
 fn implements_for_union_target_is_rejected() {
     // BEP-044: the `for` target must be a single concrete type. A union has no
-    // single implementation body, so it is rejected (E0137).
+    // single implementation body, so it is rejected (E0138).
     assert_compile_error_code(
         r#"
         interface Tag {
@@ -5833,7 +5833,7 @@ fn implements_for_union_target_is_rejected() {
             function tag(self) -> int { return 0 }
         }
         "#,
-        "E0137",
+        "E0138",
     );
 }
 
@@ -5853,14 +5853,14 @@ fn implements_for_interface_target_is_rejected() {
             function tag(self) -> int { return 0 }
         }
         "#,
-        "E0137",
+        "E0138",
     );
 }
 
 #[test]
 fn implements_for_optional_target_is_rejected() {
     // An optional is `T | null` — a union — so it has no single implementation
-    // body and is rejected just like any other union target (E0137).
+    // body and is rejected just like any other union target (E0138).
     assert_compile_error_code(
         r#"
         interface Label {
@@ -5870,7 +5870,7 @@ fn implements_for_optional_target_is_rejected() {
             function label(self) -> string { return "optional" }
         }
         "#,
-        "E0137",
+        "E0138",
     );
 }
 
@@ -5879,7 +5879,7 @@ fn implements_for_concrete_container_target_is_allowed() {
     // A concrete type constructor (`T[]`) is a valid `for` target — the gate only
     // rejects unions / optionals / interfaces / `unknown`, not list/map/class.
     // Asserts *zero* compile errors (not just the E0112–E0132 interface range) so
-    // the concreteness gate's E0137 is covered too.
+    // the concreteness gate's E0138 is covered too.
     assert_zero_compile_errors(
         r#"
         interface Tag {

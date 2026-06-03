@@ -145,6 +145,7 @@ fn type_expr_for_effect_param(name: Name) -> TypeExpr {
     TypeExpr::Path {
         segments: vec![name],
         generic_args: Vec::new(),
+        associated_type_bindings: Vec::new(),
         attrs: Vec::new(),
     }
 }
@@ -169,6 +170,7 @@ fn fill_omitted_nested_throws_with_never(type_expr: TypeExpr) -> TypeExpr {
         TypeExpr::Path {
             segments,
             generic_args,
+            associated_type_bindings,
             attrs,
         } => TypeExpr::Path {
             segments,
@@ -176,6 +178,25 @@ fn fill_omitted_nested_throws_with_never(type_expr: TypeExpr) -> TypeExpr {
                 .into_iter()
                 .map(fill_omitted_nested_throws_with_never)
                 .collect(),
+            associated_type_bindings: associated_type_bindings
+                .into_iter()
+                .map(|binding| baml_compiler2_ast::AssociatedTypeBinding {
+                    name: binding.name,
+                    ty: Box::new(fill_omitted_nested_throws_with_never(*binding.ty)),
+                })
+                .collect(),
+            attrs,
+        },
+        TypeExpr::AssociatedTypeProjection {
+            base,
+            interface,
+            member,
+            attrs,
+        } => TypeExpr::AssociatedTypeProjection {
+            base: Box::new(fill_omitted_nested_throws_with_never(*base)),
+            interface: interface
+                .map(|interface| Box::new(fill_omitted_nested_throws_with_never(*interface))),
+            member,
             attrs,
         },
         TypeExpr::Optional { inner, attrs } => TypeExpr::Optional {

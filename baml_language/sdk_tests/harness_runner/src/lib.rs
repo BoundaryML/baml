@@ -26,7 +26,7 @@
 //! [`run_test_cmd`] (the toolchain-command runner).
 
 use std::{
-    env,
+    env, fs,
     io::{self, ErrorKind},
     path::{Path, PathBuf},
     process::{Command, Output},
@@ -53,6 +53,39 @@ pub fn run_test_cmd(fixture: &str, cmd: &str, cache_subdir: &str, cache_env_var:
     run_test_cmd_with_env(fixture, cmd, cache_subdir, cache_env_var, &[]);
 }
 
+/// Run a toolchain command from a workspace-relative directory. Used for
+/// package-level checks that do not belong to a generated fixture app.
+pub fn run_workspace_cmd(relative_dir: &str, cmd: &str, cache_subdir: &str, cache_env_var: &str) {
+    let manifest = PathBuf::from(
+        env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR not set; run via `cargo test`"),
+    );
+    let workspace_root = workspace_root_from_manifest(&manifest);
+    let dir = workspace_root.join(relative_dir);
+    assert!(
+        dir.exists(),
+        "workspace command dir not found at {}",
+        dir.display()
+    );
+
+    let cache_dir = workspace_root.join("target").join(cache_subdir);
+    assert!(
+        !cmd.contains('"') && !cmd.contains('\''),
+        "run_workspace_cmd does not handle quoted args: `{cmd}`"
+    );
+    let mut words = cmd.split_whitespace();
+    let prog = words.next().unwrap_or_else(|| panic!("empty command"));
+    let args: Vec<&str> = words.collect();
+
+    let output = run_test_process(prog, &args, &dir, &cache_dir, cache_env_var, &[])
+        .unwrap_or_else(|e| panic!("failed to spawn `{cmd}` in `{relative_dir}`: {e}"));
+    assert!(
+        output.status.success(),
+        "workspace command `{cmd}` in `{relative_dir}` failed:\nstdout: {}\nstderr: {}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
 /// Same as [`run_test_cmd`] but threads additional environment
 /// variables into the child process.
 pub fn run_test_cmd_with_env(
@@ -74,10 +107,7 @@ pub fn run_test_cmd_with_env(
 
     // sdk-test crates live at `<workspace>/sdk_tests/crates/<generator>/`,
     // so the workspace root is the 3rd ancestor of the manifest dir.
-    let workspace_root = manifest
-        .ancestors()
-        .nth(3)
-        .expect("sdk-test crate not at <workspace>/sdk_tests/crates/<generator>/");
+    let workspace_root = workspace_root_from_manifest(&manifest);
     let cache_dir = workspace_root.join("target").join(cache_subdir);
 
     assert!(
@@ -96,6 +126,111 @@ pub fn run_test_cmd_with_env(
         String::from_utf8_lossy(&output.stdout),
         String::from_utf8_lossy(&output.stderr)
     );
+}
+
+fn workspace_root_from_manifest(manifest: &Path) -> &Path {
+    manifest
+        .ancestors()
+        .nth(3)
+        .expect("sdk-test crate not at <workspace>/sdk_tests/crates/<generator>/")
+}
+
+/// Assert the generated TypeScript Node SDK fixture is native ESM output, not
+/// CommonJS masquerading under a `"type": "module"` package.
+pub fn assert_typescript_node_generated_esm(fixture: &str) {
+    let manifest = PathBuf::from(
+        env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR not set; run via `cargo test`"),
+    );
+    let generated = manifest.join(fixture).join("generated");
+    assert!(
+        generated.exists(),
+        "{fixture}/generated/ not found at {} - did build.rs run?",
+        generated.display()
+    );
+
+    let package_json = fs::read_to_string(generated.join("package.json"))
+        .unwrap_or_else(|e| panic!("{fixture}: read generated/package.json: {e}"));
+    assert!(
+        package_json.contains(r#""type": "module""#),
+        "{fixture}: generated package.json must mark the fixture as ESM"
+    );
+
+    let tsconfig = fs::read_to_string(generated.join("tsconfig.json"))
+        .unwrap_or_else(|e| panic!("{fixture}: read generated/tsconfig.json: {e}"));
+    assert!(
+        tsconfig.contains(r#""module": "nodenext""#)
+            && tsconfig.contains(r#""moduleResolution": "nodenext""#),
+        "{fixture}: generated tsconfig.json must compile in NodeNext ESM mode"
+    );
+
+    let sdk_root = generated.join("baml_sdk");
+    let mut saw_esm_syntax = false;
+    for path in collect_ts_files(&sdk_root) {
+        let rel = path
+            .strip_prefix(&generated)
+            .unwrap_or(&path)
+            .display()
+            .to_string();
+        let contents =
+            fs::read_to_string(&path).unwrap_or_else(|e| panic!("{fixture}: read {rel}: {e}"));
+
+        assert!(
+            !contents.contains("module.exports")
+                && !contents.contains("exports.")
+                && !contents.contains("require("),
+            "{fixture}: generated {rel} contains CommonJS syntax"
+        );
+
+        if contents.contains("import ") || contents.contains("export ") {
+            saw_esm_syntax = true;
+        }
+
+        for (line_no, line) in contents.lines().enumerate() {
+            if let Some(specifier) = import_from_specifier(line) {
+                assert!(
+                    !specifier.starts_with('.') || specifier.ends_with(".js"),
+                    "{fixture}: generated {rel}:{} has extensionless relative import `{specifier}`",
+                    line_no + 1
+                );
+            }
+        }
+    }
+
+    assert!(
+        saw_esm_syntax,
+        "{fixture}: generated baml_sdk did not contain ESM import/export syntax"
+    );
+}
+
+fn collect_ts_files(root: &Path) -> Vec<PathBuf> {
+    let mut files = Vec::new();
+    collect_ts_files_inner(root, &mut files);
+    files
+}
+
+fn collect_ts_files_inner(dir: &Path, files: &mut Vec<PathBuf>) {
+    for entry in fs::read_dir(dir).unwrap_or_else(|e| panic!("read {}: {e}", dir.display())) {
+        let path = entry
+            .unwrap_or_else(|e| panic!("read {} entry: {e}", dir.display()))
+            .path();
+        if path.is_dir() {
+            collect_ts_files_inner(&path, files);
+        } else if path.extension().and_then(|ext| ext.to_str()) == Some("ts") {
+            files.push(path);
+        }
+    }
+}
+
+fn import_from_specifier(line: &str) -> Option<&str> {
+    let from = line.find(" from ")?;
+    let rest = line[from + " from ".len()..].trim_start();
+    let quote = rest.chars().next()?;
+    if quote != '"' && quote != '\'' {
+        return None;
+    }
+    let rest = &rest[quote.len_utf8()..];
+    let end = rest.find(quote)?;
+    Some(&rest[..end])
 }
 
 fn run_test_process(
@@ -229,9 +364,9 @@ pub fn __check_setup_ran(env_var: &str) {
 /// ::sdk_test_harness_runner::setup_guard!("SDK_TEST_PYTHON_PYDANTIC2_SETUP");
 ///
 /// // Ignored while the generator's other tests are (typescript_node
-/// // is `#[ignore]`d wholesale until codegen_nodejs lands).
+/// // is `#[ignore]`d wholesale until sdkgen_typescript_node lands).
 /// ::sdk_test_harness_runner::setup_guard!(
-///     ignore = "codegen_nodejs is a stub", "SDK_TEST_TYPESCRIPT_NODE_SETUP");
+///     ignore = "sdkgen_typescript_node is a stub", "SDK_TEST_TYPESCRIPT_NODE_SETUP");
 /// ```
 #[macro_export]
 macro_rules! setup_guard {
@@ -265,8 +400,8 @@ macro_rules! setup_guard {
 /// ::sdk_test_harness_runner::build_diagnostics!();
 ///
 /// // Skip — every fixture records a codegen failure (typescript_node
-/// // while codegen_nodejs is a stub).
-/// ::sdk_test_harness_runner::build_diagnostics!(ignore = "codegen_nodejs is a stub");
+/// // while sdkgen_typescript_node is a stub).
+/// ::sdk_test_harness_runner::build_diagnostics!(ignore = "sdkgen_typescript_node is a stub");
 /// ```
 ///
 /// `env!("OUT_DIR")` inside the expansion resolves at the macro's

@@ -232,7 +232,7 @@ impl OutputFormatContent {
         }
 
         // Render the target type with hoisting awareness
-        let message = if let Ty::Class(tn, _, _) = &self.target {
+        let message = if let Ty::Class(tn, _, _) | Ty::Interface(tn, _, _, _) = &self.target {
             if hoisted_classes.contains(tn.display_name.as_str()) {
                 let display_name = self
                     .find_class(tn.display_name.as_str())
@@ -364,7 +364,7 @@ impl OutputFormatContent {
                     Ty::List(..) => {
                         Some("Answer with a JSON Array using this schema:\n".to_string())
                     }
-                    Ty::Class(tn, _, _) => {
+                    Ty::Class(tn, _, _) | Ty::Interface(tn, _, _, _) => {
                         let end = if hoisted.contains(tn.display_name.as_str()) {
                             " "
                         } else {
@@ -409,7 +409,7 @@ impl OutputFormatContent {
         hoisted_enums: &indexmap::IndexSet<String>,
     ) -> Result<Option<String>, RenderError> {
         // Intercept hoisted classes: return just the (aliased) name
-        if let Ty::Class(tn, _, _) = ty {
+        if let Ty::Class(tn, _, _) | Ty::Interface(tn, _, _, _) = ty {
             if hoisted_classes.contains(tn.display_name.as_str()) {
                 let display_name = self
                     .find_class(tn.display_name.as_str())
@@ -446,7 +446,9 @@ impl OutputFormatContent {
 
                 // Determine if we need multiline rendering
                 let is_hoisted = match inner.as_ref() {
-                    Ty::Class(tn, _, _) => hoisted_classes.contains(tn.display_name.as_str()),
+                    Ty::Class(tn, _, _) | Ty::Interface(tn, _, _, _) => {
+                        hoisted_classes.contains(tn.display_name.as_str())
+                    }
                     Ty::TypeAlias(tn, _) => self
                         .recursive_type_aliases
                         .contains_key(tn.display_name.as_str()),
@@ -537,7 +539,7 @@ impl OutputFormatContent {
                 }
             }
 
-            Ty::Class(tn, _, _) => {
+            Ty::Class(tn, _, _) | Ty::Interface(tn, _, _, _) => {
                 if let Some(cls) = self.find_class(tn.display_name.as_str()) {
                     Ok(Some(self.render_class_hoisted(
                         cls,

@@ -31,9 +31,17 @@ function user.TestClient$new() -> null {
     return
 }
 
-function user.TestFunc(input: string) -> string {
-    load_type string
+function user.TestFunc(input: string, client: baml.llm.Client) -> string {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
     load_global user.TestClient
+    store_var client
+
+  L0:
+    load_type string
+    load_var client
     load_const "TestFunc"
     load_var input
     load_const "input"
@@ -42,8 +50,16 @@ function user.TestFunc(input: string) -> string {
     return
 }
 
-function user.TestFunc$build_request(input: string) -> baml.http.Request {
+function user.TestFunc$build_request(input: string, client: baml.llm.Client) -> baml.http.Request {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
     load_global user.TestClient
+    store_var client
+
+  L0:
+    load_var client
     load_const "TestFunc"
     load_var input
     load_const "input"
@@ -52,8 +68,16 @@ function user.TestFunc$build_request(input: string) -> baml.http.Request {
     return
 }
 
-function user.TestFunc$build_request_stream(input: string) -> baml.http.Request {
+function user.TestFunc$build_request_stream(input: string, client: baml.llm.Client) -> baml.http.Request {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
     load_global user.TestClient
+    store_var client
+
+  L0:
+    load_var client
     load_const "TestFunc"
     load_var input
     load_const "input"
@@ -62,23 +86,46 @@ function user.TestFunc$build_request_stream(input: string) -> baml.http.Request 
     return
 }
 
-function user.TestFunc$parse(json: string) -> string {
+function user.TestFunc$parse(json: string, client: baml.llm.Client) -> string {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_global user.TestClient
+    store_var client
+
+  L0:
     load_const "TestFunc"
     load_var json
     call baml.llm.parse
     return
 }
 
-function user.TestFunc$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream<null | string, string> {
-    load_var sse
+function user.TestFunc$parse_stream(sse: baml.http.SseStream, client: baml.llm.Client) -> baml.llm.Stream<null | string, string> {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_global user.TestClient
+    store_var client
+
+  L0:
+    load_var2 2 1
     load_const "TestFunc"
-    load_const null
-    call_indirect
+    call baml.llm.Client.__make_stream
     return
 }
 
-function user.TestFunc$render_prompt(input: string) -> baml.llm.PromptAst {
+function user.TestFunc$render_prompt(input: string, client: baml.llm.Client) -> baml.llm.PromptAst {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
     load_global user.TestClient
+    store_var client
+
+  L0:
+    load_var client
     load_const "TestFunc"
     load_var input
     load_const "input"
@@ -87,8 +134,16 @@ function user.TestFunc$render_prompt(input: string) -> baml.llm.PromptAst {
     return
 }
 
-function user.TestFunc$stream(input: string) -> baml.llm.Stream<null | string, string> {
+function user.TestFunc$stream(input: string, client: baml.llm.Client) -> baml.llm.Stream<null | string, string> {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
     load_global user.TestClient
+    store_var client
+
+  L0:
+    load_var client
     load_const "TestFunc"
     load_var input
     load_const "input"

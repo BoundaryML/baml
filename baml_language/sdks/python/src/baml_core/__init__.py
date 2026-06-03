@@ -36,6 +36,8 @@ from .typemap import (
 # Flush buffered trace events on process exit so nothing is lost.
 atexit.register(flush_events)
 
+__version__ = "0.11.0"
+
 
 # ---------------------------------------------------------------------------
 # FunctionLog / Collector wrappers (decode protobuf result → Python value)

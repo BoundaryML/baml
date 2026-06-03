@@ -82,7 +82,8 @@ function soundness.copy_of_mutable_param_helper(x: int) -> int {
 function soundness.cross_block_field_mutation_helper() -> int {
     load_const 1
     init_instance user.soundness.SoundBox .v
-    store_var_load_var b
+    store_var b
+    load_var b
     load_field .v
     store_var t
     load_const 1
@@ -100,7 +101,8 @@ function soundness.cross_block_field_mutation_helper() -> int {
 
 function soundness.cross_block_let_mutation_true(c: bool) -> int {
     load_const 1
-    store_var_load_var a
+    store_var a
+    load_var a
     store_var b
     load_var c
     pop_jump_if_false L0
@@ -129,7 +131,8 @@ function soundness.multiple_defs_preserve_side_effects_helper() -> int {
     call user.soundness.sound_fail
     store_var x
     load_const 2
-    store_var_load_var x
+    store_var x
+    load_var x
     return
 }
 

@@ -31,7 +31,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use codegen_python::NamingConvention;
+use sdkgen_python_pydantic2::NamingConvention;
 
 use crate::{
     BuildDiagnostics, discover_fixtures, fixtures_root_from_manifest, load_fixture,
@@ -117,7 +117,7 @@ fn codegen_fixture(
     let pool = loaded.pool;
     let baml_bytecode = loaded.baml_bytecode;
     let codegen_result = panic::catch_unwind(panic::AssertUnwindSafe(|| {
-        codegen_python::to_source_code_with_bytecode(
+        sdkgen_python_pydantic2::to_source_code_with_bytecode(
             &pool,
             &baml_bytecode,
             NamingConvention::PreserveCase,
@@ -150,7 +150,7 @@ fn codegen_fixture(
             diagnostics.record(
                 "codegen",
                 fixture,
-                "codegen_python::to_source_code panicked",
+                "sdkgen_python_pydantic2::to_source_code panicked",
             );
         }
     }

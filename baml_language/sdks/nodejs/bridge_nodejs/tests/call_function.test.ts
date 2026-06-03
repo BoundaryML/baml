@@ -6,8 +6,8 @@
  * functions — so these run without API keys.
  */
 
-import { BamlRuntime } from '../native';
-import { callFunctionSync, callFunction, FunctionResult } from '../index';
+import { BamlRuntime } from '../dist/native.js';
+import { callFunctionSync, callFunction, FunctionResult } from '../dist/index.js';
 
 // ============================================================================
 // BAML source used by tests

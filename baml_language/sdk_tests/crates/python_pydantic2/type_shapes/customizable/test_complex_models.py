@@ -97,4 +97,3 @@ def test_round_trip_complex_profile_preserves_deeply_nested_mixed_shape_class():
     )
 
     assert round_trip_complex_profile(profile) == profile
-

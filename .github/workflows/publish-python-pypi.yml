@@ -1,0 +1,161 @@
+name: Publish Python PyPI
+
+# Focused PyPI publisher for Python `baml_core`. The BAML language release
+# graph owns version planning/stamping and calls this path after its build gate.
+# Before production publishing with this renamed workflow, update or validate
+# PyPI's trusted-publisher binding for project `baml-core`.
+
+on:
+  workflow_call:
+    inputs:
+      publish:
+        description: "Publish to PyPI after building"
+        type: boolean
+        default: false
+        required: false
+      release_plan_json:
+        description: "Frozen BAML language release-plan.json content"
+        type: string
+        default: ""
+        required: false
+      source_sha:
+        description: "Exact repository commit to build"
+        type: string
+        default: ""
+        required: false
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: "Publish to PyPI after building (false = build-only rehearsal)"
+        type: boolean
+        default: false
+        required: false
+
+concurrency:
+  group: publish-python-pypi-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  # Version comes from the stamped checkout prepared by the release graph.
+  build-python-sdk:
+    uses: ./.github/workflows/build-python-sdk.reusable.yaml
+    with:
+      release_plan_json: ${{ inputs.release_plan_json }}
+      source_sha: ${{ inputs.source_sha }}
+
+  all-builds:
+    name: Assert all builds passed
+    runs-on: ubuntu-latest
+    needs:
+      - build-python-sdk
+    steps:
+      - run: echo "::do-nothing::" >/dev/null
+
+  publish-to-pypi:
+    needs: [all-builds]
+    if: ${{ inputs.publish }}
+    # Must use GitHub-hosted runner due to permissions issues with GitHub OIDC trusted publishing
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: python-sdk-*
+          path: dist
+          merge-multiple: true
+      - name: Verify wheel count
+        run: |
+          set -euo pipefail
+          find dist -maxdepth 1 -type f -print
+          wheel_count=$(find dist -maxdepth 1 -type f -name '*.whl' | wc -l | tr -d ' ')
+          if [ "$wheel_count" -lt 8 ]; then
+            echo "::error::Expected at least 8 wheels, found $wheel_count"
+            exit 1
+          fi
+          echo "Found $wheel_count wheels"
+      - name: Check existing PyPI release
+        id: pypi
+        env:
+          RELEASE_PLAN_JSON: ${{ inputs.release_plan_json }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY' >> "$GITHUB_OUTPUT"
+          import json
+          import os
+          import re
+          import sys
+          import urllib.error
+          import urllib.request
+          from pathlib import Path
+
+          plan_json = os.environ.get("RELEASE_PLAN_JSON", "").strip()
+          wheels = sorted(Path("dist").glob("baml_core-*.whl"))
+          if not wheels:
+              print("::error::No baml_core wheels found in dist", file=sys.stderr)
+              raise SystemExit(1)
+
+          if plan_json:
+              version = json.loads(plan_json)["pypi_version"]
+          else:
+              match = re.match(r"^baml_core-(.+?)-", wheels[0].name)
+              if not match:
+                  print(f"::error::Could not infer PyPI version from {wheels[0].name}", file=sys.stderr)
+                  raise SystemExit(1)
+              version = match.group(1)
+
+          local_versions = set()
+          for path in wheels:
+              match = re.match(r"^baml_core-(.+?)-", path.name)
+              if not match:
+                  print(f"::error::Could not infer PyPI version from {path.name}", file=sys.stderr)
+                  raise SystemExit(1)
+              local_versions.add(match.group(1))
+
+          if local_versions != {version}:
+              print(
+                  f"::error::Built wheels do not match PyPI version {version}: {sorted(local_versions)}",
+                  file=sys.stderr,
+              )
+              raise SystemExit(1)
+
+          local_files = sorted(path.name for path in wheels)
+          url = f"https://pypi.org/pypi/baml-core/{version}/json"
+          try:
+              with urllib.request.urlopen(url, timeout=20) as response:
+                  data = json.load(response)
+          except urllib.error.HTTPError as exc:
+              if exc.code == 404:
+                  print(f"pypi_version={version}")
+                  print("release_exists=false")
+                  print("all_files_exist=false")
+                  print(f"PyPI release {version} does not exist yet", file=sys.stderr)
+                  raise SystemExit(0)
+              raise
+
+          remote_files = {item["filename"] for item in data.get("urls", [])}
+          missing = [name for name in local_files if name not in remote_files]
+          print(f"pypi_version={version}")
+          print("release_exists=true")
+          print(f"all_files_exist={'false' if missing else 'true'}")
+          if missing:
+              print(f"PyPI release {version} exists but is missing {len(missing)} file(s); publish will use skip-existing.", file=sys.stderr)
+              for name in missing:
+                  print(f"missing: {name}", file=sys.stderr)
+          else:
+              print(f"PyPI release {version} already contains every built wheel; skipping publish.", file=sys.stderr)
+          PY
+      - name: Publish package to PyPI
+        if: ${{ steps.pypi.outputs.all_files_exist != 'true' }}
+        # OIDC trusted publisher binding configured at
+        # https://pypi.org/manage/project/baml-core/settings/publishing/
+        # — workflow filename and environment must match this file.
+        # No password / token in the repo.
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist/
+          skip-existing: true

@@ -104,11 +104,11 @@
 <polygon fill="#e4cdcd" stroke="#971a1a" stroke-width="2" points="1998.12,-1086 1913.88,-1086 1913.88,-1050 1998.12,-1050 1998.12,-1086"/>
 <text xml:space="preserve" text-anchor="middle" x="1956" y="-1063.55" font-family="Helvetica,sans-Serif" font-size="11.00">baml_builtins2</text>
 </g>
-<!-- baml_codegen_python -->
+<!-- baml_sdkgen_python_pydantic2 -->
 <g id="node5" class="node">
-<title>baml_codegen_python</title>
+<title>baml_sdkgen_python_pydantic2</title>
 <polygon fill="#9fdfde" stroke="#971a1a" stroke-width="2" points="1934.38,-334 1809.62,-334 1809.62,-298 1934.38,-298 1934.38,-334"/>
-<text xml:space="preserve" text-anchor="middle" x="1872" y="-311.55" font-family="Helvetica,sans-Serif" font-size="11.00">baml_codegen_python</text>
+<text xml:space="preserve" text-anchor="middle" x="1872" y="-311.55" font-family="Helvetica,sans-Serif" font-size="11.00">baml_sdkgen_python_pydantic2</text>
 </g>
 <!-- baml_codegen_types -->
 <g id="node6" class="node">
@@ -116,9 +116,9 @@
 <polygon fill="#9fdfde" stroke="#971a1a" stroke-width="2" points="1867,-240 1749,-240 1749,-204 1867,-204 1867,-240"/>
 <text xml:space="preserve" text-anchor="middle" x="1808" y="-217.55" font-family="Helvetica,sans-Serif" font-size="11.00">baml_codegen_types</text>
 </g>
-<!-- baml_codegen_python&#45;&gt;baml_codegen_types -->
+<!-- baml_sdkgen_python_pydantic2&#45;&gt;baml_codegen_types -->
 <g id="edge13" class="edge">
-<title>baml_codegen_python&#45;&gt;baml_codegen_types</title>
+<title>baml_sdkgen_python_pydantic2&#45;&gt;baml_codegen_types</title>
 <path fill="none" stroke="#444444" d="M1838.31,-297.43C1838.31,-297.43 1838.31,-249.37 1838.31,-249.37"/>
 <polygon fill="#444444" stroke="#444444" points="1840.76,-249.37 1838.31,-242.37 1835.86,-249.37 1840.76,-249.37"/>
 </g>

@@ -1,13 +1,36 @@
+# sccache strategy
+# ================
+#
+# These jobs compile the same release artifacts the cargo tests do, so they
+# share the sccache + Swatinem/rust-cache setup documented at the top of
+# cargo-tests.reusable.yaml: sccache holds the compiled `target/` tree (R2
+# backend), while rust-cache keeps the registry/git state (`cache-all-crates:
+# true`, `cache-targets: false`). They are read-only consumers of the shared
+# rust-cache entries written by canary in cargo-tests.reusable.yaml, and read
+# the same sccache R2 cache via .envrc.
+#
+# Secretless runs (e.g. fork PRs) still install sccache, but .envrc sees no R2
+# credentials and falls back to the runner-local cache.
 name: Size Gate (Reusable)
 
 on:
-  workflow_call: {}
+  workflow_call:
+    secrets:
+      BAML_SCCACHE_R2_ACCESS_KEY_ID:
+        required: false
+      BAML_SCCACHE_R2_SECRET_ACCESS_KEY:
+        required: false
 
 defaults:
   run:
     shell: bash
 
 env:
+  # Inputs read by .envrc; everything else (RUSTC_WRAPPER, SCCACHE_*) is set by
+  # .envrc itself so it stays the single source of truth across CI and local.
+  # The R2 credentials .envrc maps to AWS_* for sccache.
+  BAML_SCCACHE_R2_ACCESS_KEY_ID: ${{ secrets.BAML_SCCACHE_R2_ACCESS_KEY_ID }}
+  BAML_SCCACHE_R2_SECRET_ACCESS_KEY: ${{ secrets.BAML_SCCACHE_R2_SECRET_ACCESS_KEY }}
   CARGO_INCREMENTAL: 0
   CARGO_NET_RETRY: 10
   CARGO_TERM_COLOR: always
@@ -27,7 +50,7 @@ jobs:
     timeout-minutes: 20
     continue-on-error: true
     steps:
-      - uses: actions/checkout@v6
+      - uses: useblacksmith/checkout@v1
         with:
           persist-credentials: false
 
@@ -35,13 +58,35 @@ jobs:
         run: rustup show
         working-directory: baml_language
 
+      - name: "Install sccache and direnv"
+        uses: ./.github/actions/setup-mise
+        with:
+          install_args: "sccache direnv"
+
+      - name: "Verify sccache"
+        run: sccache --version
+
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: "baml_language -> target"
+          cache-all-crates: true
+          cache-targets: false
           shared-key: "linux-cargo"
           # Read-only consumer. The canary saver lives in
           # cargo-tests.reusable.yaml; see the cache strategy comment there.
           save-if: false
+
+      - name: "Load .envrc with direnv"
+        run: |
+          set -euo pipefail
+
+          direnv allow .envrc
+          direnv export gha >> "$GITHUB_ENV"
+
+      # Separate step so if fetch is slow, build is fast.
+      - name: "Fetch cargo dependencies"
+        run: cargo fetch
+        working-directory: baml_language
 
       - name: "Run size-gate check"
         id: check
@@ -61,6 +106,22 @@ jobs:
           path: baml_language/size-gate-linux.json
           if-no-files-found: ignore
 
+      - name: "Show sccache stats"
+        if: always()
+        run: sccache --show-stats
+
+      - name: "Dump sccache stats (json)"
+        if: always()
+        run: sccache --show-stats --stats-format json > sccache-stats-size-gate-linux.json
+
+      - name: "Upload sccache stats"
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: sccache-stats-size-gate-linux
+          path: sccache-stats-size-gate-linux.json
+          if-no-files-found: ignore
+
       - name: "Upload cargo timings"
         if: always()
         uses: actions/upload-artifact@v7
@@ -71,7 +132,7 @@ jobs:
 
   size-gate-macos:
     name: "size-gate (macos)"
-    runs-on: macos-latest
+    runs-on: blacksmith-6vcpu-macos-latest
     timeout-minutes: 20
     continue-on-error: true
     steps:
@@ -83,13 +144,35 @@ jobs:
         run: rustup show
         working-directory: baml_language
 
+      - name: "Install sccache and direnv"
+        uses: ./.github/actions/setup-mise
+        with:
+          install_args: "sccache direnv"
+
+      - name: "Verify sccache"
+        run: sccache --version
+
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: "baml_language -> target"
+          cache-all-crates: true
+          cache-targets: false
           shared-key: "macos-cargo"
           # Read-only consumer. The canary saver lives in
           # cargo-tests.reusable.yaml; see the cache strategy comment there.
           save-if: false
+
+      - name: "Load .envrc with direnv"
+        run: |
+          set -euo pipefail
+
+          direnv allow .envrc
+          direnv export gha >> "$GITHUB_ENV"
+
+      # Separate step so if fetch is slow, build is fast.
+      - name: "Fetch cargo dependencies"
+        run: cargo fetch
+        working-directory: baml_language
 
       - name: "Run size-gate check"
         id: check
@@ -107,6 +190,22 @@ jobs:
         with:
           name: size-gate-macos
           path: baml_language/size-gate-macos.json
+          if-no-files-found: ignore
+
+      - name: "Show sccache stats"
+        if: always()
+        run: sccache --show-stats
+
+      - name: "Dump sccache stats (json)"
+        if: always()
+        run: sccache --show-stats --stats-format json > sccache-stats-size-gate-macos.json
+
+      - name: "Upload sccache stats"
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: sccache-stats-size-gate-macos
+          path: sccache-stats-size-gate-macos.json
           if-no-files-found: ignore
 
       - name: "Upload cargo timings"
@@ -138,13 +237,50 @@ jobs:
         run: rustup show
         working-directory: baml_language
 
+      - name: "Install sccache and direnv"
+        uses: ./.github/actions/setup-mise
+        with:
+          install_args: "sccache direnv"
+
+      - name: "Verify sccache"
+        run: sccache --version
+
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: "baml_language -> target"
+          cache-all-crates: true
+          cache-targets: false
           shared-key: "windows-cargo"
           # Read-only consumer. The canary saver lives in
           # cargo-tests.reusable.yaml; see the cache strategy comment there.
           save-if: false
+
+      - name: "Load .envrc with direnv"
+        run: |
+          set -euo pipefail
+
+          direnv allow .envrc
+          direnv export gha >> "$GITHUB_ENV"
+
+      # Separate step so if fetch is slow, build is fast.
+      - name: "Fetch cargo dependencies"
+        run: cargo fetch
+        working-directory: baml_language
+
+      - name: "Build native sccache wrapper"
+        run: |
+          set -euo pipefail
+          # The native RUSTC_WRAPPER (tools_sccache crate) maps the R2 creds and
+          # execs sccache; cargo launches it via CreateProcess (32767-char
+          # limit), avoiding cmd.exe's ~8191-char limit that windows-sys' huge
+          # `--check-cfg cfg(feature, values(...))` line blows past. The binary
+          # lives in the build tree, so build it first — .envrc leaves
+          # RUSTC_WRAPPER unset until it exists, so this bootstrap compiles with
+          # plain rustc — then point RUSTC_WRAPPER at it for the cargo steps
+          # below.
+          cargo build -p tools_sccache
+          echo "RUSTC_WRAPPER=$(pwd -W)/target/debug/baml-sccache.exe" >> "$GITHUB_ENV"
+        working-directory: baml_language
 
       - name: "Run size-gate check"
         id: check
@@ -164,6 +300,22 @@ jobs:
           path: baml_language/size-gate-windows.json
           if-no-files-found: ignore
 
+      - name: "Show sccache stats"
+        if: always()
+        run: sccache --show-stats
+
+      - name: "Dump sccache stats (json)"
+        if: always()
+        run: sccache --show-stats --stats-format json > sccache-stats-size-gate-windows.json
+
+      - name: "Upload sccache stats"
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: sccache-stats-size-gate-windows
+          path: sccache-stats-size-gate-windows.json
+          if-no-files-found: ignore
+
       - name: "Upload cargo timings"
         if: always()
         uses: actions/upload-artifact@v7
@@ -178,7 +330,7 @@ jobs:
     timeout-minutes: 25
     continue-on-error: true
     steps:
-      - uses: actions/checkout@v6
+      - uses: useblacksmith/checkout@v1
         with:
           persist-credentials: false
 
@@ -188,13 +340,35 @@ jobs:
           rustup target add wasm32-unknown-unknown
         working-directory: baml_language
 
+      - name: "Install sccache and direnv"
+        uses: ./.github/actions/setup-mise
+        with:
+          install_args: "sccache direnv"
+
+      - name: "Verify sccache"
+        run: sccache --version
+
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: "baml_language -> target"
+          cache-all-crates: true
+          cache-targets: false
           shared-key: "linux-wasm"
           # Read-only consumer. The canary saver lives in
           # cargo-tests.reusable.yaml; see the cache strategy comment there.
           save-if: false
+
+      - name: "Load .envrc with direnv"
+        run: |
+          set -euo pipefail
+
+          direnv allow .envrc
+          direnv export gha >> "$GITHUB_ENV"
+
+      # Separate step so if fetch is slow, build is fast.
+      - name: "Fetch cargo dependencies"
+        run: cargo fetch --target wasm32-unknown-unknown
+        working-directory: baml_language
 
       - name: "Run size-gate check"
         id: check
@@ -214,6 +388,22 @@ jobs:
           path: baml_language/size-gate-wasm.json
           if-no-files-found: ignore
 
+      - name: "Show sccache stats"
+        if: always()
+        run: sccache --show-stats
+
+      - name: "Dump sccache stats (json)"
+        if: always()
+        run: sccache --show-stats --stats-format json > sccache-stats-size-gate-wasm.json
+
+      - name: "Upload sccache stats"
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: sccache-stats-size-gate-wasm
+          path: sccache-stats-size-gate-wasm.json
+          if-no-files-found: ignore
+
       - name: "Upload cargo timings"
         if: always()
         uses: actions/upload-artifact@v7
@@ -231,7 +421,7 @@ jobs:
       contents: read
       pull-requests: write
     steps:
-      - uses: actions/checkout@v6
+      - uses: useblacksmith/checkout@v1
         with:
           persist-credentials: false
 
@@ -250,17 +440,43 @@ jobs:
         run: rustup show
         working-directory: baml_language
 
+      - name: "Install sccache and direnv"
+        uses: ./.github/actions/setup-mise
+        with:
+          install_args: "sccache direnv"
+
+      - name: "Verify sccache"
+        run: sccache --version
+
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: "baml_language -> target"
+          cache-all-crates: true
+          cache-targets: false
           shared-key: "linux-cargo"
           # The linux size-gate job already populated this cache; we just
           # consume it here.
           save-if: false
 
+      - name: "Load .envrc with direnv"
+        run: |
+          set -euo pipefail
+
+          direnv allow .envrc
+          direnv export gha >> "$GITHUB_ENV"
+
+      # Separate step so if fetch is slow, build is fast.
+      - name: "Fetch cargo dependencies"
+        run: cargo fetch
+        working-directory: baml_language
+
       - name: "Build cargo-size-gate"
         run: cargo build -p cargo-size-gate
         working-directory: baml_language
+
+      - name: "Show sccache stats"
+        if: always()
+        run: sccache --show-stats
 
       - name: "Compose unified report"
         env:

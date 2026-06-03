@@ -248,7 +248,7 @@ pub enum Ty {
     /// determined by explicit `implements I { ... }` blocks on classes.
     /// Generic args follow the same shape as `Class` for parameterised
     /// interfaces like `Container<T>`.
-    Interface(QualifiedTypeName, Vec<Ty>, TyAttr),
+    Interface(QualifiedTypeName, Vec<Ty>, Vec<(Name, Ty)>, TyAttr),
     /// An enum type.
     Enum(QualifiedTypeName, TyAttr),
     /// An enum variant — Enum(qualified) . Variant(name).
@@ -326,6 +326,13 @@ pub enum Ty {
     /// Any `TypeVar` remaining after inference is erased to `Ty::Unknown` with
     /// a `CannotInferTypeParameter` diagnostic before reaching VIR/runtime.
     TypeVar(Name, TyAttr),
+    /// Associated type projection, e.g. `P.Output` or `(T as Iterator).Item`.
+    AssociatedTypeProjection {
+        base: Box<Ty>,
+        interface: Option<Box<Ty>>,
+        member: Name,
+        attr: TyAttr,
+    },
     /// The bottom type — expression never produces a value.
     /// Assigned to `return`, `break`, `continue`, and blocks that always diverge.
     /// `Never` is a subtype of every type: `join(Never, T) = T`.
@@ -568,7 +575,7 @@ impl Ty {
     pub fn attr(&self) -> &TyAttr {
         match self {
             Ty::Class(_, _, a)
-            | Ty::Interface(_, _, a)
+            | Ty::Interface(_, _, _, a)
             | Ty::Enum(_, a)
             | Ty::EnumVariant(_, _, a)
             | Ty::TypeAlias(_, a)
@@ -582,6 +589,7 @@ impl Ty {
             | Ty::EvolvingMap(_, _, a)
             | Ty::TypeVar(_, a)
             | Ty::Future(_, _, a) => a,
+            Ty::AssociatedTypeProjection { attr, .. } => attr,
             Ty::Function { attr, .. }
             | Ty::Never { attr }
             | Ty::Void { attr }
@@ -598,7 +606,7 @@ impl Ty {
     pub fn with_attr(mut self, new_attr: TyAttr) -> Ty {
         match &mut self {
             Ty::Class(_, _, a)
-            | Ty::Interface(_, _, a)
+            | Ty::Interface(_, _, _, a)
             | Ty::Enum(_, a)
             | Ty::EnumVariant(_, _, a)
             | Ty::TypeAlias(_, a)
@@ -612,6 +620,7 @@ impl Ty {
             | Ty::EvolvingMap(_, _, a)
             | Ty::TypeVar(_, a)
             | Ty::Future(_, _, a) => *a = new_attr,
+            Ty::AssociatedTypeProjection { attr, .. } => *attr = new_attr,
             Ty::Function { attr, .. }
             | Ty::Never { attr }
             | Ty::Void { attr }
@@ -764,7 +773,7 @@ impl Ty {
     /// funnels through here so the structure is described in exactly one place.
     pub fn render_with(&self, s: &dyn TyRenderStrategy) -> String {
         match self {
-            Ty::Class(qn, type_args, _) | Ty::Interface(qn, type_args, _) => {
+            Ty::Class(qn, type_args, _) => {
                 let mut out = s.qtn(qn, false);
                 if !type_args.is_empty() {
                     let args: Vec<_> = type_args.iter().map(|a| a.render_with(s)).collect();
@@ -773,6 +782,26 @@ impl Ty {
                     out.push('>');
                 } else if !qn.generic_params.is_empty() && s.show_unspecialized_placeholders() {
                     // Unspecialized generic — show `_` placeholders, one per declared param.
+                    let placeholders = vec!["_"; qn.generic_params.len()];
+                    out.push('<');
+                    out.push_str(&placeholders.join(", "));
+                    out.push('>');
+                }
+                out
+            }
+            Ty::Interface(qn, type_args, associated_bindings, _) => {
+                let mut out = s.qtn(qn, false);
+                if !type_args.is_empty() || !associated_bindings.is_empty() {
+                    let mut args: Vec<_> = type_args.iter().map(|a| a.render_with(s)).collect();
+                    args.extend(
+                        associated_bindings
+                            .iter()
+                            .map(|(name, ty)| format!("{name} = {}", ty.render_with(s))),
+                    );
+                    out.push('<');
+                    out.push_str(&args.join(", "));
+                    out.push('>');
+                } else if !qn.generic_params.is_empty() && s.show_unspecialized_placeholders() {
                     let placeholders = vec!["_"; qn.generic_params.len()];
                     out.push('<');
                     out.push_str(&placeholders.join(", "));
@@ -853,6 +882,23 @@ impl Ty {
                 )
             }
             Ty::TypeVar(name, _) => s.type_var(name),
+            Ty::AssociatedTypeProjection {
+                base,
+                interface,
+                member,
+                ..
+            } => {
+                if let Some(interface) = interface {
+                    format!(
+                        "({} as {}).{}",
+                        base.render_with(s),
+                        interface.render_with(s),
+                        member
+                    )
+                } else {
+                    format!("{}.{}", base.render_with(s), member)
+                }
+            }
             Ty::Never { .. } => "never".to_string(),
             Ty::Void { .. } => "void".to_string(),
             Ty::BuiltinUnknown { .. } | Ty::Unknown { .. } => "unknown".to_string(),

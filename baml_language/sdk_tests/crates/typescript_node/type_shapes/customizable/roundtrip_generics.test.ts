@@ -1,7 +1,7 @@
 // Roundtrip coverage for baml_sdk/generics — ported from test_generics.py.
 // (Concretely-instantiated generic class round trips; TS generics are erased.)
-import "./baml_sdk";
-import { describe, it, expect } from "@jest/globals";
+import "./baml_sdk/index.js";
+import { describe, it, expect } from "vitest";
 import {
   Wrapper,
   GenericLinkedList,
@@ -15,7 +15,7 @@ import {
   round_trip_box_int,
   round_trip_nested_generics,
   round_trip_differing_instantiation,
-} from "./baml_sdk/generics";
+} from "./baml_sdk/generics/index.js";
 
 describe("roundtrip generics", () => {
   it("round_trip_wrapper_int", () => {

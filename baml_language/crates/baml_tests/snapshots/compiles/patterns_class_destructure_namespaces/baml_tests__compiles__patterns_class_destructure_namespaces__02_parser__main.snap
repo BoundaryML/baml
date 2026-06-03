@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 23909
 ---
 === SYNTAX TREE ===
 SOURCE_FILE
@@ -610,7 +611,7 @@ SOURCE_FILE
               WORD "openai"
               DOT "."
               WORD "Box"
-              GENERIC_ARGS
+              TYPE_ARGS
                 LESS "<"
                 TYPE_EXPR "int"
                   WORD "int"
@@ -688,7 +689,7 @@ SOURCE_FILE
               WORD "openai"
               DOT "."
               WORD "Box"
-              GENERIC_ARGS
+              TYPE_ARGS
                 LESS "<"
                 TYPE_EXPR "string"
                   WORD "string"
@@ -1023,7 +1024,7 @@ SOURCE_FILE
               WORD "openai"
               DOT "."
               WORD "Outer"
-              GENERIC_ARGS
+              TYPE_ARGS
                 LESS "<"
                 TYPE_EXPR "int"
                   WORD "int"
@@ -1041,7 +1042,7 @@ SOURCE_FILE
                     WORD "openai"
                     DOT "."
                     WORD "Box"
-                    GENERIC_ARGS
+                    TYPE_ARGS
                       LESS "<"
                       TYPE_EXPR "int"
                         WORD "int"
@@ -1138,7 +1139,7 @@ SOURCE_FILE
               WORD "openai"
               DOT "."
               WORD "Outer"
-              GENERIC_ARGS
+              TYPE_ARGS
                 LESS "<"
                 TYPE_EXPR "string"
                   WORD "string"
@@ -1154,7 +1155,7 @@ SOURCE_FILE
                     WORD "openai"
                     DOT "."
                     WORD "Box"
-                    GENERIC_ARGS
+                    TYPE_ARGS
                       LESS "<"
                       TYPE_EXPR "string"
                         WORD "string"

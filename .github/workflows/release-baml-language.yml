@@ -1,0 +1,719 @@
+name: BAML Language Release
+
+# Channel-aware replacement for the legacy BAML language release workflow.
+# Release workflows run packaging smoke tests only; the full suite runs in CI.
+
+on:
+  workflow_run:
+    workflows: ["CI - BAML Language"]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      channel:
+        description: "Release channel to plan"
+        type: choice
+        options: [nightly, canary]
+        default: nightly
+        required: true
+      dry_run:
+        description: "Build and publish only dry-run artifacts/manifests"
+        type: boolean
+        default: true
+        required: true
+
+permissions:
+  contents: write
+  actions: read
+  id-token: write
+
+concurrency:
+  group: ${{ inputs.dry_run == true && 'baml-language-release-dryrun' || 'baml-language-release-canary' }}
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  CARGO_INCREMENTAL: 0
+  CARGO_NET_RETRY: 10
+  CARGO_TERM_COLOR: always
+  RUSTUP_MAX_RETRIES: 10
+  AWS_REGION: us-east-1
+  AWS_ROLE_ARN: arn:aws:iam::277707123528:role/pkg-boundaryml-com-github-release
+  PKG_BUCKET: pkgboundarymlcomstack-pkgboundarymlcomsitebucket4f-ybhvygkqittp
+
+jobs:
+  plan:
+    name: Plan release
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.event == 'push' &&
+       github.event.workflow_run.head_branch == 'canary')
+    runs-on: ubuntu-latest
+    outputs:
+      channel: ${{ steps.plan.outputs.channel }}
+      version: ${{ steps.plan.outputs.version }}
+      pypi_version: ${{ steps.plan.outputs.pypi_version }}
+      git_tag: ${{ steps.plan.outputs.git_tag }}
+      release_plan_json: ${{ steps.plan.outputs.release_plan_json }}
+      source_sha: ${{ steps.plan.outputs.source_sha }}
+      dry_run: ${{ steps.plan.outputs.dry_run }}
+      wrapper_version: ${{ steps.wrapper.outputs.wrapper_version }}
+      wrapper_changed: ${{ steps.wrapper.outputs.wrapper_changed }}
+      dispatch_nightly_after_canary: ${{ steps.plan.outputs.dispatch_nightly_after_canary }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
+          fetch-depth: 2
+          persist-credentials: false
+
+      - name: Compute release plan
+        id: plan
+        env:
+          INPUT_CHANNEL: ${{ inputs.channel }}
+          INPUT_DRY_RUN: ${{ inputs.dry_run }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          channel="${INPUT_CHANNEL:-nightly}"
+          dry_run="${INPUT_DRY_RUN:-false}"
+          dispatch_nightly_after_canary="false"
+          if [[ "${{ github.event_name }}" == "workflow_run" ]]; then
+            channel="nightly"
+            if git rev-parse HEAD^ >/dev/null 2>&1 && git diff --quiet HEAD^ HEAD -- baml_language/release.toml; then
+              :
+            elif git rev-parse HEAD^ >/dev/null 2>&1; then
+              canary_version="$(scripts/baml-language-version compute --channel canary)"
+              if ! gh release view "baml-language-${canary_version}" >/dev/null 2>&1; then
+                channel="canary"
+                dispatch_nightly_after_canary="true"
+              fi
+            fi
+          fi
+          scripts/baml-language-version plan --channel "$channel" --out release-plan.json
+          source_sha="$(git rev-parse HEAD)"
+          version="$(jq -r .canonical_version release-plan.json)"
+          pypi_version="$(jq -r .pypi_version release-plan.json)"
+          git_tag="$(jq -r .git_tag release-plan.json)"
+          {
+            echo "channel=$channel"
+            echo "version=$version"
+            echo "pypi_version=$pypi_version"
+            echo "git_tag=$git_tag"
+            echo "release_plan_json<<EOF"
+            cat release-plan.json
+            echo "EOF"
+            echo "source_sha=$source_sha"
+            echo "dry_run=$dry_run"
+            echo "dispatch_nightly_after_canary=$dispatch_nightly_after_canary"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Check wrapper version
+        id: wrapper
+        run: |
+          set -euo pipefail
+          wrapper_version="$(python3 - <<'PY'
+          import tomllib
+          from pathlib import Path
+          print(tomllib.loads(Path("baml_language/crates/baml/Cargo.toml").read_text())["package"]["version"])
+          PY
+          )"
+          latest=""
+          if curl -fsSL https://pkg.boundaryml.com/manifest/v1/wrapper.json -o wrapper.json; then
+            latest="$(jq -r .version wrapper.json)"
+          fi
+          changed=$([[ "$wrapper_version" != "$latest" ]] && echo true || echo false)
+          {
+            echo "wrapper_version=$wrapper_version"
+            echo "wrapper_changed=$changed"
+          } >> "$GITHUB_OUTPUT"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-plan
+          path: release-plan.json
+
+  build-toolchain:
+    name: Build toolchain (${{ matrix.target }})
+    needs: [plan, build-vsix]
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: aarch64-apple-darwin
+            os: macos-14
+          - target: x86_64-apple-darwin
+            os: macos-15-intel
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-latest
+          - target: aarch64-unknown-linux-gnu
+            os: ubuntu-24.04-arm
+          - target: x86_64-unknown-linux-musl
+            os: ubuntu-latest
+            before: |
+              sudo apt-get update
+              sudo apt-get install -y musl-tools
+              echo "CC_x86_64_unknown_linux_musl=musl-gcc" >> "$GITHUB_ENV"
+              echo "CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_LINKER=musl-gcc" >> "$GITHUB_ENV"
+          - target: aarch64-unknown-linux-musl
+            os: ubuntu-24.04-arm
+            before: |
+              sudo apt-get update
+              sudo apt-get install -y musl-tools
+              echo "CC_aarch64_unknown_linux_musl=musl-gcc" >> "$GITHUB_ENV"
+              echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER=musl-gcc" >> "$GITHUB_ENV"
+          - target: x86_64-pc-windows-msvc
+            os: windows-latest
+          - target: aarch64-pc-windows-msvc
+            os: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.plan.outputs.source_sha }}
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-plan
+      - uses: actions/download-artifact@v4
+        with:
+          name: baml-vscode-vsix
+          path: vsix
+      - name: Stamp version
+        run: scripts/baml-language-version stamp --plan release-plan.json
+      - name: Setup Rust
+        uses: ./.github/actions/setup-rust
+        with:
+          targets: ${{ matrix.target }}
+          workspace: baml_language
+          prefix-key: v5-rust-baml-language-toolchain-${{ matrix.target }}
+          cache-on-failure: true
+          enable-cross: false
+          skip-protoc: true
+      - name: Build tools setup
+        if: matrix.before
+        run: ${{ matrix.before }}
+      - name: Build CLI and pack host
+        run: cargo build --manifest-path baml_language/Cargo.toml --release --bin baml-cli --bin baml-pack-host --target "${{ matrix.target }}"
+      - name: Archive layout smoke
+        run: |
+          set -euo pipefail
+          version="${{ needs.plan.outputs.version }}"
+          target="${{ matrix.target }}"
+          mkdir -p "staging/bin" "staging/assets"
+          suffix=""
+          if [[ "$target" == *windows-msvc ]]; then suffix=".exe"; fi
+          cp "baml_language/target/$target/release/baml-cli$suffix" "staging/bin/baml-cli$suffix"
+          cp "baml_language/target/$target/release/baml-pack-host$suffix" "staging/bin/baml-pack-host$suffix"
+          vsix="$(find vsix -maxdepth 1 -name '*.vsix' -print -quit)"
+          test -n "$vsix"
+          cp "$vsix" "staging/assets/baml-vscode.vsix"
+          if test -f "staging/bin/baml$suffix"; then
+            exit 1
+          fi
+          test -f "staging/assets/baml-vscode.vsix"
+          echo "$version" > staging/VERSION
+          if [[ "$target" == *windows-msvc ]]; then
+            (cd staging && 7z a "../baml-language-$version-$target.zip" .)
+          else
+            tar -C staging -czf "baml-language-$version-$target.tar.gz" .
+          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: toolchain-${{ matrix.target }}
+          path: baml-language-${{ needs.plan.outputs.version }}-${{ matrix.target }}.*
+
+  build-vsix:
+    name: Build platform-neutral VSIX
+    needs: [plan]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.plan.outputs.source_sha }}
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-plan
+      - run: scripts/baml-language-version stamp --plan release-plan.json
+      - uses: ./.github/actions/setup-node2
+      - name: Setup Rust for VSIX WASM build
+        uses: ./.github/actions/setup-rust
+        with:
+          targets: wasm32-unknown-unknown
+          workspace: baml_language
+          prefix-key: v5-rust-baml-vsix-wasm
+          cache-on-failure: true
+          enable-wasm: true
+          enable-cross: false
+          skip-protoc: true
+      - run: pnpm --dir typescript2 run vscode:package
+      - name: Normalize VSIX asset name
+        run: |
+          set -euo pipefail
+          version="${{ needs.plan.outputs.version }}"
+          vsix="$(find typescript2/app-vscode-ext -maxdepth 1 -name '*.vsix' -print -quit)"
+          test -n "$vsix"
+          mv "$vsix" "typescript2/app-vscode-ext/baml-language-$version.vsix"
+      - name: Reject bundled native binaries
+        run: |
+          set -euo pipefail
+          vsix="typescript2/app-vscode-ext/baml-language-${{ needs.plan.outputs.version }}.vsix"
+          unzip -l "$vsix" | tee vsix-list.txt
+          ! grep -E 'dist/baml-cli|baml-cli|baml-pack-host' vsix-list.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: baml-vscode-vsix
+          path: typescript2/app-vscode-ext/*.vsix
+
+  build-wrapper:
+    name: Build wrapper (${{ matrix.target }})
+    needs: [plan]
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: aarch64-apple-darwin
+            os: macos-14
+          - target: x86_64-apple-darwin
+            os: macos-15-intel
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-latest
+          - target: aarch64-unknown-linux-gnu
+            os: ubuntu-24.04-arm
+          - target: x86_64-unknown-linux-musl
+            os: ubuntu-latest
+            before: |
+              sudo apt-get update
+              sudo apt-get install -y musl-tools
+              echo "CC_x86_64_unknown_linux_musl=musl-gcc" >> "$GITHUB_ENV"
+              echo "CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_LINKER=musl-gcc" >> "$GITHUB_ENV"
+          - target: aarch64-unknown-linux-musl
+            os: ubuntu-24.04-arm
+            before: |
+              sudo apt-get update
+              sudo apt-get install -y musl-tools
+              echo "CC_aarch64_unknown_linux_musl=musl-gcc" >> "$GITHUB_ENV"
+              echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER=musl-gcc" >> "$GITHUB_ENV"
+          - target: x86_64-pc-windows-msvc
+            os: windows-latest
+          - target: aarch64-pc-windows-msvc
+            os: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.plan.outputs.source_sha }}
+          persist-credentials: false
+      - name: Setup Rust
+        uses: ./.github/actions/setup-rust
+        with:
+          targets: ${{ matrix.target }}
+          workspace: baml_language
+          prefix-key: v5-rust-baml-wrapper-${{ matrix.target }}
+          cache-on-failure: true
+          enable-cross: false
+          skip-protoc: true
+      - name: Build tools setup
+        if: matrix.before
+        run: ${{ matrix.before }}
+      - name: Build wrapper
+        run: cargo build --manifest-path baml_language/Cargo.toml --release --bin baml --target "${{ matrix.target }}"
+      - name: Archive wrapper
+        run: |
+          set -euo pipefail
+          version="${{ needs.plan.outputs.wrapper_version }}"
+          target="${{ matrix.target }}"
+          mkdir -p staging/bin
+          suffix=""
+          if [[ "$target" == *windows-msvc ]]; then suffix=".exe"; fi
+          cp "baml_language/target/$target/release/baml$suffix" "staging/bin/baml$suffix"
+          if test -f "staging/bin/baml-cli$suffix"; then
+            exit 1
+          fi
+          if [[ "$target" == *windows-msvc ]]; then
+            (cd staging && 7z a "../baml-wrapper-$version-$target.zip" .)
+          else
+            tar -C staging -czf "baml-wrapper-$version-$target.tar.gz" .
+          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wrapper-${{ matrix.target }}
+          path: baml-wrapper-${{ needs.plan.outputs.wrapper_version }}-${{ matrix.target }}.*
+
+  all-builds:
+    name: All builds gate
+    runs-on: ubuntu-latest
+    needs: [plan, build-toolchain, build-vsix, build-wrapper]
+    steps:
+      - run: echo "all release build jobs completed"
+
+  publish-pypi:
+    name: Publish Python PyPI
+    needs: [plan, all-builds]
+    if: ${{ needs.plan.outputs.dry_run == 'false' && github.ref == 'refs/heads/canary' }}
+    uses: ./.github/workflows/publish-python-pypi.yml
+    with:
+      publish: true
+      release_plan_json: ${{ needs.plan.outputs.release_plan_json }}
+      source_sha: ${{ needs.plan.outputs.source_sha }}
+    permissions:
+      id-token: write
+      contents: read
+
+  publish-github-release:
+    name: Publish GitHub release assets
+    needs: [plan, all-builds]
+    if: ${{ needs.plan.outputs.dry_run == 'false' && github.ref == 'refs/heads/canary' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: toolchain-*
+          path: dist/toolchain
+          merge-multiple: true
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: wrapper-*
+          path: dist/wrapper
+          merge-multiple: true
+      - uses: actions/download-artifact@v4
+        with:
+          name: baml-vscode-vsix
+          path: dist/vsix
+      - name: Generate checksum sidecars
+        run: |
+          set -euo pipefail
+          find dist -type f \( -name '*.tar.gz' -o -name '*.zip' -o -name '*.vsix' \) -print0 |
+            while IFS= read -r -d '' file; do
+              (cd "$(dirname "$file")" && sha256sum "$(basename "$file")" > "$(basename "$file").sha256")
+            done
+      - name: Publish toolchain release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.plan.outputs.git_tag }}
+          VERSION: ${{ needs.plan.outputs.version }}
+        run: |
+          set -euo pipefail
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" dist/toolchain/* dist/vsix/* --clobber
+          else
+            gh release create "$TAG" dist/toolchain/* dist/vsix/* \
+              --title "BAML Language $VERSION" \
+              --notes "BAML language toolchain $VERSION"
+          fi
+      - name: Publish wrapper release
+        if: ${{ needs.plan.outputs.wrapper_changed == 'true' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          WRAPPER_VERSION: ${{ needs.plan.outputs.wrapper_version }}
+        run: |
+          set -euo pipefail
+          tag="baml-wrapper-$WRAPPER_VERSION"
+          if gh release view "$tag" >/dev/null 2>&1; then
+            gh release upload "$tag" dist/wrapper/* --clobber
+          else
+            gh release create "$tag" dist/wrapper/* \
+              --title "BAML Wrapper $WRAPPER_VERSION" \
+              --notes "BAML wrapper $WRAPPER_VERSION"
+          fi
+
+  publish-pkg-boundaryml-com:
+    name: Publish pkg.boundaryml.com manifests
+    needs: [plan, all-builds, publish-pypi, publish-github-release, publish-homebrew, publish-aur]
+    if: ${{ always() && needs.plan.outputs.dry_run == 'false' && github.ref == 'refs/heads/canary' && needs.publish-pypi.result == 'success' && needs.publish-github-release.result == 'success' && (needs.plan.outputs.wrapper_changed != 'true' || (needs.publish-homebrew.result == 'success' && needs.publish-aur.result == 'success')) }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.plan.outputs.source_sha }}
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-plan
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: toolchain-*
+          path: dist/toolchain
+          merge-multiple: true
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: wrapper-*
+          path: dist/wrapper
+          merge-multiple: true
+      - uses: actions/download-artifact@v4
+        with:
+          name: baml-vscode-vsix
+          path: dist/vsix
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: baml-language-release-${{ github.run_id }}
+      - name: Generate release manifests
+        run: |
+          set -euo pipefail
+          args=()
+          if [[ "${{ needs.plan.outputs.wrapper_changed }}" == "true" ]]; then
+            args+=(--wrapper-changed)
+          fi
+          scripts/baml-release-manifests \
+            --toolchain-dir dist/toolchain \
+            --wrapper-dir dist/wrapper \
+            --vsix-dir dist/vsix \
+            --out manifests \
+            --channel "${{ needs.plan.outputs.channel }}" \
+            --version "${{ needs.plan.outputs.version }}" \
+            --pypi-version "${{ needs.plan.outputs.pypi_version }}" \
+            --wrapper-version "${{ needs.plan.outputs.wrapper_version }}" \
+            "${args[@]}"
+      - name: Upload install scripts, index, and manifests
+        run: |
+          set -euo pipefail
+          upload_immutable() {
+            local source="$1"
+            local dest="$2"
+            local tmp
+            local err
+            tmp="$(mktemp)"
+            err="$(mktemp)"
+            if aws s3api head-object --bucket "$PKG_BUCKET" --key "$dest" >/dev/null 2>"$err"; then
+              if ! aws s3 cp "s3://$PKG_BUCKET/$dest" "$tmp" >/dev/null 2>>"$err"; then
+                echo "::error::immutable object exists but could not be read: $dest"
+                cat "$err"
+                rm -f "$tmp" "$err"
+                exit 1
+              fi
+              if cmp -s "$source" "$tmp"; then
+                echo "immutable object already exists and matches: $dest"
+              else
+                echo "::error::immutable object exists with different content: $dest"
+                rm -f "$tmp" "$err"
+                exit 1
+              fi
+            elif grep -Eq '(\(404\)|Not Found|NoSuchKey)' "$err"; then
+              aws s3 cp "$source" "s3://$PKG_BUCKET/$dest" \
+                --content-type application/json \
+                --cache-control "public, max-age=86400, immutable"
+            else
+              echo "::error::failed to inspect immutable object before upload: $dest"
+              cat "$err"
+              rm -f "$tmp" "$err"
+              exit 1
+            fi
+            rm -f "$tmp" "$err"
+          }
+
+          version="${{ needs.plan.outputs.version }}"
+          channel="${{ needs.plan.outputs.channel }}"
+          upload_immutable "manifests/version/$version.json" "manifest/v1/version/$version.json"
+          aws s3 cp "manifests/$channel.json" "s3://$PKG_BUCKET/manifest/v1/$channel.json" \
+            --content-type application/json \
+            --cache-control "public, max-age=60, must-revalidate"
+          if [[ -f manifests/wrapper.json ]]; then
+            aws s3 cp manifests/wrapper.json "s3://$PKG_BUCKET/manifest/v1/wrapper.json" \
+              --content-type application/json \
+              --cache-control "public, max-age=60, must-revalidate"
+          fi
+          aws s3 cp scripts/install.sh "s3://$PKG_BUCKET/install.sh" --content-type text/x-shellscript --cache-control "public, max-age=60, must-revalidate"
+          aws s3 cp scripts/install.ps1 "s3://$PKG_BUCKET/install.ps1" --content-type text/plain --cache-control "public, max-age=60, must-revalidate"
+          aws s3 cp tools/pkg_boundaryml_com/data/index.html "s3://$PKG_BUCKET/index.html" --content-type text/html --cache-control "public, max-age=300"
+
+  dispatch-nightly-after-canary:
+    name: Queue nightly after canary publish
+    needs: [plan, publish-pkg-boundaryml-com]
+    if: ${{ needs.plan.outputs.dispatch_nightly_after_canary == 'true' && needs.plan.outputs.dry_run == 'false' && github.ref == 'refs/heads/canary' }}
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+      contents: read
+    steps:
+      - name: Dispatch nightly release run
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh workflow run release-baml-language.yml \
+            --ref canary \
+            -f channel=nightly \
+            -f dry_run=false
+
+  publish-homebrew:
+    name: Publish Homebrew wrapper formula
+    needs: [plan, all-builds, publish-github-release]
+    if: ${{ needs.plan.outputs.wrapper_changed == 'true' && needs.plan.outputs.dry_run == 'false' && github.ref == 'refs/heads/canary' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.plan.outputs.source_sha }}
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: wrapper-*
+          path: dist/wrapper
+          merge-multiple: true
+      - name: Generate Homebrew formula
+        run: |
+          set -euo pipefail
+          scripts/baml-package-manager-artifacts \
+            --wrapper-dir dist/wrapper \
+            --version "${{ needs.plan.outputs.wrapper_version }}" \
+            --out package-manager
+      - name: Push formula to BoundaryML/homebrew-tap
+        env:
+          TOKEN: ${{ secrets.HOMEBREW_BAML_DISPATCH_TOKEN }}
+          WRAPPER_VERSION: ${{ needs.plan.outputs.wrapper_version }}
+        run: |
+          set -euo pipefail
+          test -n "$TOKEN"
+          git clone "https://x-access-token:${TOKEN}@github.com/BoundaryML/homebrew-tap.git" tap
+          cp package-manager/homebrew/Formula/baml.rb tap/Formula/baml.rb
+          cd tap
+          git config user.name "boundaryml-release-bot"
+          git config user.email "boundaryml-release-bot@users.noreply.github.com"
+          git add Formula/baml.rb
+          git commit -m "Update baml wrapper to ${WRAPPER_VERSION}" || exit 0
+          git push origin HEAD
+
+  publish-aur:
+    name: Publish AUR wrapper packages
+    needs: [plan, all-builds, publish-github-release]
+    if: ${{ needs.plan.outputs.wrapper_changed == 'true' && needs.plan.outputs.dry_run == 'false' && github.ref == 'refs/heads/canary' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.plan.outputs.source_sha }}
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: wrapper-*
+          path: dist/wrapper
+          merge-multiple: true
+      - name: Configure AUR SSH
+        env:
+          AUR_SSH_PRIVATE_KEY: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          test -n "$AUR_SSH_PRIVATE_KEY"
+          mkdir -p ~/.ssh
+          printf '%s\n' "$AUR_SSH_PRIVATE_KEY" > ~/.ssh/aur
+          chmod 600 ~/.ssh/aur
+          ssh-keyscan aur.archlinux.org >> ~/.ssh/known_hosts
+          printf 'Host aur.archlinux.org\n  IdentityFile ~/.ssh/aur\n  User aur\n' >> ~/.ssh/config
+      - name: Generate AUR package files
+        run: |
+          set -euo pipefail
+          source_sha="$(curl -fsSL "https://github.com/BoundaryML/baml/archive/refs/tags/baml-wrapper-${{ needs.plan.outputs.wrapper_version }}.tar.gz" | sha256sum | awk '{print $1}')"
+          scripts/baml-package-manager-artifacts \
+            --wrapper-dir dist/wrapper \
+            --version "${{ needs.plan.outputs.wrapper_version }}" \
+            --source-sha256 "$source_sha" \
+            --out package-manager
+      - name: Push AUR repos
+        env:
+          WRAPPER_VERSION: ${{ needs.plan.outputs.wrapper_version }}
+        run: |
+          set -euo pipefail
+          for pkg in baml baml-bin; do
+            git clone "ssh://aur@aur.archlinux.org/${pkg}.git" "aur-${pkg}"
+            cp "package-manager/aur/${pkg}/PKGBUILD" "aur-${pkg}/PKGBUILD"
+            cp "package-manager/aur/${pkg}/.SRCINFO" "aur-${pkg}/.SRCINFO"
+            cd "aur-${pkg}"
+            git config user.name "boundaryml-release-bot"
+            git config user.email "boundaryml-release-bot@users.noreply.github.com"
+            git add PKGBUILD .SRCINFO
+            git commit -m "Update baml wrapper to ${WRAPPER_VERSION}" || { cd ..; continue; }
+            git push origin HEAD
+            cd ..
+          done
+
+  dry-run-artifacts:
+    name: Generate dry-run manifests and package files
+    needs: [plan, all-builds]
+    if: ${{ needs.plan.outputs.dry_run == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.plan.outputs.source_sha }}
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: toolchain-*
+          path: dist/toolchain
+          merge-multiple: true
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: wrapper-*
+          path: dist/wrapper
+          merge-multiple: true
+      - uses: actions/download-artifact@v4
+        with:
+          name: baml-vscode-vsix
+          path: dist/vsix
+      - name: Generate dry-run files
+        run: |
+          set -euo pipefail
+          args=()
+          if [[ "${{ needs.plan.outputs.wrapper_changed }}" == "true" ]]; then
+            args+=(--wrapper-changed)
+          fi
+          scripts/baml-release-manifests \
+            --toolchain-dir dist/toolchain \
+            --wrapper-dir dist/wrapper \
+            --vsix-dir dist/vsix \
+            --out dry-run/manifest/v1 \
+            --channel "${{ needs.plan.outputs.channel }}" \
+            --version "${{ needs.plan.outputs.version }}" \
+            --pypi-version "${{ needs.plan.outputs.pypi_version }}" \
+            --wrapper-version "${{ needs.plan.outputs.wrapper_version }}" \
+            "${args[@]}"
+          scripts/baml-package-manager-artifacts \
+            --wrapper-dir dist/wrapper \
+            --version "${{ needs.plan.outputs.wrapper_version }}" \
+            --out dry-run/package-manager
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dry-run-release-files
+          path: dry-run
+      - uses: aws-actions/configure-aws-credentials@v4
+        if: ${{ github.ref == 'refs/heads/canary' }}
+        with:
+          role-to-assume: ${{ env.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: baml-language-dry-run-${{ github.run_id }}
+      - name: Upload public dry-run manifests
+        if: ${{ github.ref == 'refs/heads/canary' }}
+        run: |
+          set -euo pipefail
+          aws s3 sync dry-run/manifest/v1 "s3://$PKG_BUCKET/dryrun/${{ github.run_id }}/manifest/v1" \
+            --content-type application/json \
+            --cache-control "public, max-age=300"
+
+  dry-run-summary:
+    name: Dry-run summary
+    needs: [plan, all-builds, dry-run-artifacts]
+    if: ${{ needs.plan.outputs.dry_run == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          base="https://pkg.boundaryml.com/dryrun/${{ github.run_id }}/manifest/v1"
+          {
+            if [[ "${{ github.ref }}" == "refs/heads/canary" ]]; then
+              echo "Dry-run manifest base: $base"
+            else
+              echo "Dry-run files were uploaded as the dry-run-release-files workflow artifact."
+            fi
+            echo
+            echo 'Validation example:'
+            echo '```bash'
+            echo "BAML_HOME=\"\$(mktemp -d)\" BAML_MANIFEST_BASE_URL=\"$base\" baml toolchain use ${{ needs.plan.outputs.channel }}"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

@@ -1,6 +1,6 @@
 // Roundtrip coverage for baml_sdk/optional — ported from test_optional.py.
-import "./baml_sdk";
-import { describe, it, expect } from "@jest/globals";
+import "./baml_sdk/index.js";
+import { describe, it, expect } from "vitest";
 import {
   Resume,
   OptionalContainer,
@@ -9,7 +9,7 @@ import {
   round_trip_optional_union,
   round_trip_resume,
   round_trip_optional_container,
-} from "./baml_sdk/optional";
+} from "./baml_sdk/optional/index.js";
 
 describe("roundtrip optional", () => {
   it("round_trip_optional_int", () => {

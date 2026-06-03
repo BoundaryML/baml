@@ -86,4 +86,3 @@ class ComplexProfile {
 function round_trip_complex_profile(profile: ComplexProfile) -> ComplexProfile {
   profile
 }
-

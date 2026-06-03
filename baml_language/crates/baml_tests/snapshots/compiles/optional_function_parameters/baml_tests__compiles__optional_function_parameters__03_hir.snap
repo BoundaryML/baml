@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 18316
 ---
 === HIR2 ===
 class user.SearchService {
@@ -8,20 +7,20 @@ class user.SearchService {
 }
 type user.NarrowSearcher = (query: string, filter?: string?) -> string[]
 type user.Searcher = (query: string, max_results?: int) -> int
-function user.AskDocs(query: string, max_results: int = 10, filter: string = DefaultFilter()) -> string  [llm] {
-  baml.llm.call_llm_function(TestClient, "AskDocs", map { "query": query, "max_results": max_results, "filter": filter })
+function user.AskDocs(query: string, max_results: int = 10, filter: string = DefaultFilter(), client: baml.llm.Client = TestClient) -> string  [llm] {
+  baml.llm.call_llm_function(client, "AskDocs", map { "query": query, "max_results": max_results, "filter": filter })
 }
-function user.AskDocs$build_request(query: string, max_results: int = 10, filter: string = DefaultFilter()) -> baml.http.Request  [expr] {
-  baml.llm.build_request(TestClient, "AskDocs", map { "query": query, "max_results": max_results, "filter": filter })
+function user.AskDocs$build_request(query: string, max_results: int = 10, filter: string = DefaultFilter(), client: baml.llm.Client = TestClient) -> baml.http.Request  [expr] {
+  baml.llm.build_request(client, "AskDocs", map { "query": query, "max_results": max_results, "filter": filter })
 }
-function user.AskDocs$build_request_stream(query: string, max_results: int = 10, filter: string = DefaultFilter()) -> baml.http.Request  [expr] {
-  baml.llm.build_request_stream(TestClient, "AskDocs", map { "query": query, "max_results": max_results, "filter": filter })
+function user.AskDocs$build_request_stream(query: string, max_results: int = 10, filter: string = DefaultFilter(), client: baml.llm.Client = TestClient) -> baml.http.Request  [expr] {
+  baml.llm.build_request_stream(client, "AskDocs", map { "query": query, "max_results": max_results, "filter": filter })
 }
-function user.AskDocs$parse(json: string) -> string  [expr] {
+function user.AskDocs$parse(json: string, client: baml.llm.Client = TestClient) -> string  [expr] {
   baml.llm.parse("AskDocs", json)
 }
-function user.AskDocs$render_prompt(query: string, max_results: int = 10, filter: string = DefaultFilter()) -> baml.llm.PromptAst  [expr] {
-  baml.llm.render_prompt(TestClient, "AskDocs", map { "query": query, "max_results": max_results, "filter": filter })
+function user.AskDocs$render_prompt(query: string, max_results: int = 10, filter: string = DefaultFilter(), client: baml.llm.Client = TestClient) -> baml.llm.PromptAst  [expr] {
+  baml.llm.render_prompt(client, "AskDocs", map { "query": query, "max_results": max_results, "filter": filter })
 }
 function user.DefaultFilter() -> string  [expr] {
   {  } "none"

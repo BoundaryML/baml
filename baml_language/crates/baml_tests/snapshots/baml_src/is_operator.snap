@@ -983,8 +983,7 @@ function is_operator.is_inside_array_literal_fn() -> bool[] {
     store_var _4
 
   L5:
-    load_var _2
-    load_var _4
+    load_var2 1 2
     alloc_array 2
     return
 }

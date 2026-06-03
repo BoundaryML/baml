@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 45889
 ---
 === SYNTAX TREE ===
 SOURCE_FILE
@@ -869,7 +870,7 @@ SOURCE_FILE
             DESTRUCTURE_PATTERN
               KW_LET "let"
               WORD "Box"
-              GENERIC_ARGS
+              TYPE_ARGS
                 LESS "<"
                 TYPE_EXPR "int"
                   WORD "int"
@@ -1315,7 +1316,7 @@ SOURCE_FILE
             DESTRUCTURE_PATTERN
               KW_LET "let"
               WORD "Box"
-              GENERIC_ARGS
+              TYPE_ARGS
                 LESS "<"
                 TYPE_EXPR "string"
                   WORD "string"
@@ -1470,7 +1471,7 @@ SOURCE_FILE
               UNION_PATTERN
                 DESTRUCTURE_PATTERN
                   WORD "Box"
-                  GENERIC_ARGS
+                  TYPE_ARGS
                     LESS "<"
                     TYPE_EXPR "int"
                       WORD "int"
@@ -1487,7 +1488,7 @@ SOURCE_FILE
                 PIPE "|"
                 DESTRUCTURE_PATTERN
                   WORD "Box"
-                  GENERIC_ARGS
+                  TYPE_ARGS
                     LESS "<"
                     TYPE_EXPR "string"
                       WORD "string"
@@ -1554,7 +1555,7 @@ SOURCE_FILE
             DESTRUCTURE_PATTERN
               KW_LET "let"
               WORD "Box"
-              GENERIC_ARGS
+              TYPE_ARGS
                 LESS "<"
                 TYPE_EXPR "SameNameInner"
                   WORD "SameNameInner"
