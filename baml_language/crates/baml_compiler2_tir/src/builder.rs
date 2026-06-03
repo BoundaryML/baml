@@ -15,7 +15,7 @@
 
 use std::collections::{BTreeSet, HashMap};
 
-use baml_base::Name;
+use baml_base::{Name, SourceFile};
 use baml_compiler2_ast::{
     self as ast, AstSourceMap, Expr, ExprBody, ExprId, PatId, Stmt, StmtId, TypeExpr,
 };
@@ -93,6 +93,12 @@ fn json_parse_error_ty() -> Ty {
     )
 }
 
+#[derive(Debug, Clone, Copy)]
+enum GenericBoundValidationTarget {
+    Expr(ExprId),
+    Span(TextRange),
+}
+
 /// Construct the throws type `JsonSerializationError | JsonParseError`.
 ///
 /// Used as the conservative throws clause for the universal `to_json` method on
@@ -126,7 +132,7 @@ fn function_generic_param_bounds_exprs(
     item_tree[func_loc.id(db)].generic_param_bounds.clone()
 }
 
-fn lower_generic_param_bounds(
+pub(crate) fn lower_generic_param_bounds(
     db: &dyn crate::Db,
     bounds: &[Option<TypeExpr>],
     pkg_items: &PackageItems<'_>,
@@ -1033,6 +1039,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         for diag in diags {
             self.context.report_at_span(diag, span);
         }
+        self.validate_type_generic_bounds_at_span(span, &ty);
         ty
     }
 
@@ -3611,6 +3618,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             }
             ty => ty,
         };
+        self.validate_type_generic_bounds(expr_id, &ty);
         if let Ty::Class(class_name, type_args, _) = &ty {
             let field_types: FxHashMap<Name, Ty> = self
                 .class_actual_fields_ordered(class_name, type_args)
@@ -3728,6 +3736,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         {
             return inferred;
         }
+        self.validate_type_generic_bounds(expr_id, expected);
         if let Ty::Class(class_name, type_args, _) = expected {
             let field_types: FxHashMap<Name, Ty> = self
                 .class_actual_fields_ordered(class_name, type_args)
@@ -5442,6 +5451,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         for diag in diags {
             self.context.report_at_span(diag, span);
         }
+        self.validate_type_generic_bounds_at_span(span, &declared_ty);
         self.check_throws_surface(body, &declared_ty, span, warn_extraneous);
     }
 
@@ -5831,6 +5841,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         for diag in diags {
             self.context.report_simple(diag, at_expr);
         }
+        self.validate_type_generic_bounds(at_expr, &ty);
         ty
     }
 
@@ -5863,6 +5874,11 @@ impl<'db> TypeInferenceBuilder<'db> {
         );
         for diag in diags {
             self.report_at_pat_or_expr(diag, pat_id, fallback_expr);
+        }
+        if let Some(sm) = self.body_source_map.as_ref() {
+            self.validate_type_generic_bounds_at_span(sm.pattern_span(pat_id), &resolved);
+        } else {
+            self.validate_type_generic_bounds(fallback_expr, &resolved);
         }
         resolved
     }
@@ -10141,6 +10157,17 @@ impl<'db> TypeInferenceBuilder<'db> {
         }
     }
 
+    fn resolve_interface_loc(
+        &self,
+        qtn: &crate::ty::QualifiedTypeName,
+    ) -> Option<baml_compiler2_hir::loc::InterfaceLoc<'db>> {
+        let pkg_items = self.resolve_class_pkg_items(qtn.package())?;
+        match pkg_items.lookup_type(qtn.namespace(), qtn.name())? {
+            Definition::Interface(interface_loc) => Some(interface_loc),
+            _ => None,
+        }
+    }
+
     /// Resolve a `QualifiedTypeName` to an `EnumLoc` via `package_items` lookup.
     fn resolve_enum_loc(
         &self,
@@ -11154,6 +11181,9 @@ impl<'db> TypeInferenceBuilder<'db> {
             }
             _ => {}
         }
+        if let Some(result) = self.structural_subtype_with_nominal_interfaces(sub, sup) {
+            return result;
+        }
         // Interface-to-interface subtyping: `Interface A <: Interface B` iff
         // A extends B (transitively). The registry doesn't carry that
         // directly, but every class that implements A also implements B, so
@@ -11162,6 +11192,95 @@ impl<'db> TypeInferenceBuilder<'db> {
         // For a pure interface-to-interface check, fall through to structural
         // equality (matches today's behaviour for unrelated interfaces).
         crate::normalize::is_subtype_of(sub, sup, &self.aliases)
+    }
+
+    fn structural_subtype_with_nominal_interfaces(&self, sub: &Ty, sup: &Ty) -> Option<bool> {
+        let expanded_sub = self.expand_alias_chains(sub.clone());
+        let expanded_sup = self.expand_alias_chains(sup.clone());
+        if &expanded_sub != sub || &expanded_sup != sup {
+            return self.structural_subtype_with_nominal_interfaces(&expanded_sub, &expanded_sup);
+        }
+
+        match (sub, sup) {
+            (Ty::List(sub_inner, _) | Ty::EvolvingList(sub_inner, _), Ty::List(sup_inner, _))
+            | (
+                Ty::List(sub_inner, _) | Ty::EvolvingList(sub_inner, _),
+                Ty::EvolvingList(sup_inner, _),
+            ) => Some(self.is_subtype(sub_inner, sup_inner)),
+            (
+                Ty::Map(sub_key, sub_value, _) | Ty::EvolvingMap(sub_key, sub_value, _),
+                Ty::Map(sup_key, sup_value, _) | Ty::EvolvingMap(sup_key, sup_value, _),
+            ) => Some(self.is_subtype(sub_key, sup_key) && self.is_subtype(sub_value, sup_value)),
+            (Ty::Future(sub_value, sub_error, _), Ty::Future(sup_value, sup_error, _)) => {
+                Some(self.is_subtype(sub_value, sup_value) && self.is_subtype(sub_error, sup_error))
+            }
+            (
+                Ty::Function {
+                    generic_params: sub_generic_params,
+                    params: sub_params,
+                    ret: sub_ret,
+                    throws: sub_throws,
+                    ..
+                },
+                Ty::Function {
+                    generic_params: sup_generic_params,
+                    params: sup_params,
+                    ret: sup_ret,
+                    throws: sup_throws,
+                    ..
+                },
+            ) if sub_generic_params.is_empty() && sup_generic_params.is_empty() => Some(
+                self.is_subtype(sub_ret, sup_ret)
+                    && self.is_subtype(sub_throws, sup_throws)
+                    && self.function_params_subtype_with_nominal_interfaces(sub_params, sup_params),
+            ),
+            _ => None,
+        }
+    }
+
+    fn function_params_subtype_with_nominal_interfaces(
+        &self,
+        sub_params: &[FunctionParamTy],
+        sup_params: &[FunctionParamTy],
+    ) -> bool {
+        let sub_required: Vec<_> = sub_params
+            .iter()
+            .filter(|param| matches!(param.mode, FunctionParamMode::Required))
+            .collect();
+        let sup_required: Vec<_> = sup_params
+            .iter()
+            .filter(|param| matches!(param.mode, FunctionParamMode::Required))
+            .collect();
+
+        if sub_required.len() != sup_required.len() {
+            return false;
+        }
+
+        for (sub, sup) in sub_required.iter().zip(sup_required.iter()) {
+            if !self.is_subtype(&sup.ty, &sub.ty) {
+                return false;
+            }
+        }
+
+        for sup in sup_params
+            .iter()
+            .filter(|param| matches!(param.mode, FunctionParamMode::Optional))
+        {
+            let Some(name) = &sup.name else {
+                return false;
+            };
+            let Some(sub) = sub_params.iter().find(|param| {
+                matches!(param.mode, FunctionParamMode::Optional)
+                    && param.name.as_ref() == Some(name)
+            }) else {
+                return false;
+            };
+            if !self.is_subtype(&sup.ty, &sub.ty) {
+                return false;
+            }
+        }
+
+        true
     }
 
     fn validate_function_generic_bounds(
@@ -11188,6 +11307,182 @@ impl<'db> TypeInferenceBuilder<'db> {
                     expr_id,
                     Vec::new(),
                 );
+            }
+        }
+    }
+
+    pub(crate) fn validate_type_generic_bounds_at_span(&mut self, span: TextRange, ty: &Ty) {
+        self.validate_type_generic_bounds_with_target(GenericBoundValidationTarget::Span(span), ty);
+    }
+
+    fn validate_type_generic_bounds(&mut self, expr_id: ExprId, ty: &Ty) {
+        self.validate_type_generic_bounds_with_target(
+            GenericBoundValidationTarget::Expr(expr_id),
+            ty,
+        );
+    }
+
+    fn validate_type_generic_bounds_with_target(
+        &mut self,
+        target: GenericBoundValidationTarget,
+        ty: &Ty,
+    ) {
+        match ty {
+            Ty::Class(qtn, type_args, _) => {
+                for arg in type_args {
+                    self.validate_type_generic_bounds_with_target(target, arg);
+                }
+                self.validate_class_generic_bounds(target, qtn, type_args);
+            }
+            Ty::Interface(qtn, type_args, _) => {
+                for arg in type_args {
+                    self.validate_type_generic_bounds_with_target(target, arg);
+                }
+                self.validate_interface_generic_bounds(target, qtn, type_args);
+            }
+            Ty::List(inner, _) | Ty::EvolvingList(inner, _) => {
+                self.validate_type_generic_bounds_with_target(target, inner);
+            }
+            Ty::Map(key, value, _) | Ty::EvolvingMap(key, value, _) => {
+                self.validate_type_generic_bounds_with_target(target, key);
+                self.validate_type_generic_bounds_with_target(target, value);
+            }
+            Ty::Union(members, _) => {
+                for member in members {
+                    self.validate_type_generic_bounds_with_target(target, member);
+                }
+            }
+            Ty::Function {
+                generic_param_bounds,
+                params,
+                ret,
+                throws,
+                ..
+            } => {
+                for bound in generic_param_bounds.iter().flatten() {
+                    self.validate_type_generic_bounds_with_target(target, bound);
+                }
+                for param in params {
+                    self.validate_type_generic_bounds_with_target(target, &param.ty);
+                }
+                self.validate_type_generic_bounds_with_target(target, ret);
+                self.validate_type_generic_bounds_with_target(target, throws);
+            }
+            Ty::Future(value, error, _) => {
+                self.validate_type_generic_bounds_with_target(target, value);
+                self.validate_type_generic_bounds_with_target(target, error);
+            }
+            _ => {}
+        }
+    }
+
+    fn validate_class_generic_bounds(
+        &mut self,
+        target: GenericBoundValidationTarget,
+        qtn: &crate::ty::QualifiedTypeName,
+        type_args: &[Ty],
+    ) {
+        let Some(class_loc) = self.resolve_class_loc(qtn) else {
+            return;
+        };
+        let db = self.context.db();
+        let item_tree = baml_compiler2_hir::file_item_tree(db, class_loc.file(db));
+        let Some(class_data) = item_tree.classes.get(&class_loc.id(db)) else {
+            return;
+        };
+        self.validate_named_generic_bounds(
+            target,
+            &class_data.generic_params,
+            &class_data.generic_param_bounds,
+            class_loc.file(db),
+            type_args,
+        );
+    }
+
+    fn validate_interface_generic_bounds(
+        &mut self,
+        target: GenericBoundValidationTarget,
+        qtn: &crate::ty::QualifiedTypeName,
+        type_args: &[Ty],
+    ) {
+        let Some(interface_loc) = self.resolve_interface_loc(qtn) else {
+            return;
+        };
+        let db = self.context.db();
+        let item_tree = baml_compiler2_hir::file_item_tree(db, interface_loc.file(db));
+        let Some(interface_data) = item_tree.interfaces.get(&interface_loc.id(db)) else {
+            return;
+        };
+        self.validate_named_generic_bounds(
+            target,
+            &interface_data.generic_params,
+            &interface_data.generic_param_bounds,
+            interface_loc.file(db),
+            type_args,
+        );
+    }
+
+    fn validate_named_generic_bounds(
+        &mut self,
+        target: GenericBoundValidationTarget,
+        generic_params: &[Name],
+        generic_param_bounds: &[Option<TypeExpr>],
+        file: SourceFile,
+        type_args: &[Ty],
+    ) {
+        if generic_params.is_empty() || type_args.is_empty() {
+            return;
+        }
+        let db = self.context.db();
+        let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
+        let pkg_id = PackageId::new(db, pkg_info.package.clone());
+        let pkg_items = baml_compiler2_ppir::package_items(db, pkg_id);
+        let mut diags = Vec::new();
+        let lowered_bounds = lower_generic_param_bounds(
+            db,
+            generic_param_bounds,
+            pkg_items,
+            &pkg_info.namespace_path,
+            generic_params,
+            None,
+            &mut diags,
+        );
+        for diag in diags {
+            self.report_generic_bound_validation_error(target, diag);
+        }
+
+        let bindings = crate::generics::bind_type_vars(generic_params, type_args);
+        for idx in 0..generic_params.len() {
+            let Some(actual) = type_args.get(idx) else {
+                continue;
+            };
+            let Some(bound) = lowered_bounds.get(idx).and_then(Option::as_ref) else {
+                continue;
+            };
+            let bound = crate::generics::substitute_ty(bound, &bindings);
+            if !self.is_subtype(actual, &bound) {
+                self.report_generic_bound_validation_error(
+                    target,
+                    TirTypeError::TypeMismatch {
+                        expected: bound,
+                        got: actual.clone(),
+                    },
+                );
+            }
+        }
+    }
+
+    fn report_generic_bound_validation_error(
+        &mut self,
+        target: GenericBoundValidationTarget,
+        error: TirTypeError,
+    ) {
+        match target {
+            GenericBoundValidationTarget::Expr(expr_id) => {
+                self.context.report(error, expr_id, Vec::new());
+            }
+            GenericBoundValidationTarget::Span(span) => {
+                self.context.report_at_span(error, span);
             }
         }
     }

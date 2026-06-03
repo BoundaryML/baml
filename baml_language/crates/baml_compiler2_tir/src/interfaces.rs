@@ -1021,9 +1021,18 @@ pub fn package_implements_registry<'db>(
                             .collect(),
                         TyAttr::default(),
                     );
+                    let class_bound_tys = crate::builder::lower_generic_param_bounds(
+                        db,
+                        &class_data.generic_param_bounds,
+                        pkg_items,
+                        &class_ns,
+                        &class_data.generic_params,
+                        None,
+                        &mut diags,
+                    );
                     interface_impl_rules.push(InterfaceImplRule {
                         generic_params: class_data.generic_params.clone(),
-                        generic_param_bounds: vec![None; class_data.generic_params.len()],
+                        generic_param_bounds: class_bound_tys,
                         for_ty_pattern,
                         interface_ty: Ty::Interface(
                             iface_qtn.clone(),

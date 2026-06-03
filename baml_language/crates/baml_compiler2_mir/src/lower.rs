@@ -1727,17 +1727,40 @@ impl<'db> LoweringContext<'db> {
         let pkg_info = file_package(db, file);
         let pkg_id = PackageId::new(db, pkg_info.package.clone());
         let pkg_items_for_bounds = package_items(db, pkg_id);
-        let (bound_param_names, bound_exprs) = item_tree
+        let mut bound_param_names = Vec::new();
+        let mut bound_exprs = Vec::new();
+        if let Some(imp) = item_tree
             .implements_for
             .iter()
             .find(|imp| imp.methods.contains(&func_loc.id(db)))
-            .map(|imp| (imp.generic_params.clone(), imp.generic_param_bounds.clone()))
-            .unwrap_or_else(|| {
-                (
-                    func_data.generic_params.clone(),
-                    func_data.generic_param_bounds.clone(),
-                )
-            });
+        {
+            bound_param_names.extend(imp.generic_params.iter().cloned());
+            bound_exprs.extend(imp.generic_param_bounds.iter().cloned());
+        } else if let Some(parent_idx) = func_scope.parent {
+            let parent = &index.scopes[parent_idx.index() as usize];
+            if matches!(parent.kind, baml_compiler2_hir::scope::ScopeKind::Class)
+                && let Some(type_name) = &parent.name
+            {
+                if let Some(class_data) = item_tree
+                    .classes
+                    .values()
+                    .find(|class_data| class_data.name == *type_name)
+                {
+                    bound_param_names.extend(class_data.generic_params.iter().cloned());
+                    bound_exprs.extend(class_data.generic_param_bounds.iter().cloned());
+                } else if let Some(iface_data) = item_tree
+                    .interfaces
+                    .values()
+                    .find(|iface_data| iface_data.name == *type_name)
+                {
+                    bound_param_names.extend(iface_data.generic_params.iter().cloned());
+                    bound_exprs.extend(iface_data.generic_param_bounds.iter().cloned());
+                }
+            }
+        }
+        bound_param_names.extend(func_data.generic_params.iter().cloned());
+        bound_exprs.extend(func_data.generic_param_bounds.iter().cloned());
+        let all_generic_params = bound_param_names.clone();
         let mut generic_param_bounds: FxHashMap<Name, Tir2Ty> = FxHashMap::default();
         for (idx, name) in bound_param_names.iter().enumerate() {
             let Some(Some(bound_te)) = bound_exprs.get(idx) else {
@@ -1749,7 +1772,7 @@ impl<'db> LoweringContext<'db> {
                 bound_te,
                 pkg_items_for_bounds,
                 &pkg_info.namespace_path,
-                &bound_param_names,
+                &all_generic_params,
                 &mut diags,
             );
             if diags.is_empty() {
