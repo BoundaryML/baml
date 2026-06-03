@@ -59,6 +59,7 @@ jobs:
       git_tag: ${{ steps.plan.outputs.git_tag }}
       release_plan_json: ${{ steps.plan.outputs.release_plan_json }}
       source_sha: ${{ steps.plan.outputs.source_sha }}
+      source_branch: ${{ steps.plan.outputs.source_branch }}
       dry_run: ${{ steps.plan.outputs.dry_run }}
       wrapper_version: ${{ steps.wrapper.outputs.wrapper_version }}
       wrapper_changed: ${{ steps.wrapper.outputs.wrapper_changed }}
@@ -80,9 +81,11 @@ jobs:
           set -euo pipefail
           channel="${INPUT_CHANNEL:-nightly}"
           dry_run="${INPUT_DRY_RUN:-false}"
+          source_branch="${GITHUB_REF_NAME:-}"
           dispatch_nightly_after_canary="false"
           if [[ "${{ github.event_name }}" == "workflow_run" ]]; then
             channel="nightly"
+            source_branch="${{ github.event.workflow_run.head_branch }}"
             if git rev-parse HEAD^ >/dev/null 2>&1 && git diff --quiet HEAD^ HEAD -- baml_language/release.toml; then
               :
             elif git rev-parse HEAD^ >/dev/null 2>&1; then
@@ -107,6 +110,7 @@ jobs:
             cat release-plan.json
             echo "EOF"
             echo "source_sha=$source_sha"
+            echo "source_branch=$source_branch"
             echo "dry_run=$dry_run"
             echo "dispatch_nightly_after_canary=$dispatch_nightly_after_canary"
           } >> "$GITHUB_OUTPUT"
@@ -355,30 +359,166 @@ jobs:
           name: wrapper-${{ matrix.target }}
           path: baml-wrapper-${{ needs.plan.outputs.wrapper_version }}-${{ matrix.target }}.*
 
+  build-python-sdk:
+    name: Build Python SDK
+    needs: [plan]
+    uses: ./.github/workflows/build-python-sdk.reusable.yaml
+    permissions:
+      contents: read
+    with:
+      release_plan_json: ${{ needs.plan.outputs.release_plan_json }}
+      source_sha: ${{ needs.plan.outputs.source_sha }}
+
   all-builds:
     name: All builds gate
     runs-on: ubuntu-latest
-    needs: [plan, build-toolchain, build-vsix, build-wrapper]
+    needs: [plan, build-toolchain, build-vsix, build-wrapper, build-python-sdk]
     steps:
       - run: echo "all release build jobs completed"
 
   publish-pypi:
     name: Publish Python PyPI
     needs: [plan, all-builds]
-    if: ${{ needs.plan.outputs.dry_run == 'false' && github.ref == 'refs/heads/canary' }}
-    uses: ./.github/workflows/publish-python-pypi.yml
-    with:
-      publish: true
-      release_plan_json: ${{ needs.plan.outputs.release_plan_json }}
-      source_sha: ${{ needs.plan.outputs.source_sha }}
+    if: ${{ needs.plan.outputs.dry_run == 'false' && needs.plan.outputs.source_branch == 'canary' }}
+    # Registry OIDC jobs stay in this top-level workflow because PyPI trusted
+    # publishing is bound to the workflow identity that performs the upload.
+    runs-on: ubuntu-latest
     permissions:
       id-token: write
       contents: read
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: python-sdk-*
+          path: dist
+          merge-multiple: true
+      - name: Verify wheel count
+        run: |
+          set -euo pipefail
+          find dist -maxdepth 1 -type f -print
+          wheel_count=$(find dist -maxdepth 1 -type f -name '*.whl' | wc -l | tr -d ' ')
+          if [ "$wheel_count" -lt 8 ]; then
+            echo "::error::Expected at least 8 wheels, found $wheel_count"
+            exit 1
+          fi
+          echo "Found $wheel_count wheels"
+      - name: Check existing PyPI release
+        id: pypi
+        env:
+          RELEASE_PLAN_JSON: ${{ needs.plan.outputs.release_plan_json }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY' >> "$GITHUB_OUTPUT"
+          import hashlib
+          import json
+          import os
+          import re
+          import sys
+          import urllib.error
+          import urllib.request
+          from pathlib import Path
+
+          plan_json = os.environ.get("RELEASE_PLAN_JSON", "").strip()
+          wheels = sorted(Path("dist").glob("baml_core-*.whl"))
+          if not wheels:
+              print("::error::No baml_core wheels found in dist", file=sys.stderr)
+              raise SystemExit(1)
+
+          if plan_json:
+              version = json.loads(plan_json)["pypi_version"]
+          else:
+              match = re.match(r"^baml_core-(.+?)-", wheels[0].name)
+              if not match:
+                  print(f"::error::Could not infer PyPI version from {wheels[0].name}", file=sys.stderr)
+                  raise SystemExit(1)
+              version = match.group(1)
+
+          local_versions = set()
+          for path in wheels:
+              match = re.match(r"^baml_core-(.+?)-", path.name)
+              if not match:
+                  print(f"::error::Could not infer PyPI version from {path.name}", file=sys.stderr)
+                  raise SystemExit(1)
+              local_versions.add(match.group(1))
+
+          if local_versions != {version}:
+              print(
+                  f"::error::Built wheels do not match PyPI version {version}: {sorted(local_versions)}",
+                  file=sys.stderr,
+              )
+              raise SystemExit(1)
+
+          local_files = sorted(path.name for path in wheels)
+          url = f"https://pypi.org/pypi/baml-core/{version}/json"
+          try:
+              with urllib.request.urlopen(url, timeout=20) as response:
+                  data = json.load(response)
+          except urllib.error.HTTPError as exc:
+              if exc.code == 404:
+                  print(f"pypi_version={version}")
+                  print("release_exists=false")
+                  print("all_files_exist=false")
+                  print(f"PyPI release {version} does not exist yet", file=sys.stderr)
+                  raise SystemExit(0)
+              raise
+
+          remote_digests = {
+              item["filename"]: item.get("digests", {}).get("sha256")
+              for item in data.get("urls", [])
+          }
+          local_digests = {
+              path.name: hashlib.sha256(path.read_bytes()).hexdigest()
+              for path in wheels
+          }
+          missing = [name for name in local_files if name not in remote_digests]
+          unknown_digest = [
+              name
+              for name in local_files
+              if name in remote_digests and not remote_digests[name]
+          ]
+          mismatched = [
+              name
+              for name in local_files
+              if name in remote_digests
+              and remote_digests[name]
+              and remote_digests[name] != local_digests[name]
+          ]
+          print(f"pypi_version={version}")
+          print("release_exists=true")
+          print(f"all_files_exist={'false' if missing else 'true'}")
+          if unknown_digest:
+              print(
+                  f"::error::PyPI release {version} is missing SHA-256 metadata for: {', '.join(unknown_digest)}",
+                  file=sys.stderr,
+              )
+              raise SystemExit(1)
+          if mismatched:
+              print(
+                  f"::error::PyPI release {version} already contains conflicting file content for: {', '.join(mismatched)}",
+                  file=sys.stderr,
+              )
+              raise SystemExit(1)
+          if missing:
+              print(f"PyPI release {version} exists but is missing {len(missing)} file(s); publish will use skip-existing.", file=sys.stderr)
+              for name in missing:
+                  print(f"missing: {name}", file=sys.stderr)
+          else:
+              print(f"PyPI release {version} already contains every built wheel; skipping publish.", file=sys.stderr)
+          PY
+      - name: Publish package to PyPI
+        if: ${{ steps.pypi.outputs.all_files_exist != 'true' }}
+        # Configure PyPI trusted publishing for this workflow filename:
+        # release-baml-language.yml. Leave the PyPI environment blank unless
+        # this job grows an explicit GitHub Actions environment.
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist/
+          skip-existing: true
 
   publish-github-release:
     name: Publish GitHub release assets
     needs: [plan, all-builds]
-    if: ${{ needs.plan.outputs.dry_run == 'false' && github.ref == 'refs/heads/canary' }}
+    if: ${{ needs.plan.outputs.dry_run == 'false' && needs.plan.outputs.source_branch == 'canary' }}
     runs-on: ubuntu-latest
     env:
       GH_REPO: ${{ github.repository }}
@@ -439,7 +579,7 @@ jobs:
   publish-pkg-boundaryml-com:
     name: Publish pkg.boundaryml.com manifests
     needs: [plan, all-builds, publish-pypi, publish-github-release, publish-homebrew, publish-aur]
-    if: ${{ always() && needs.plan.outputs.dry_run == 'false' && github.ref == 'refs/heads/canary' && needs.publish-pypi.result == 'success' && needs.publish-github-release.result == 'success' && (needs.plan.outputs.wrapper_changed != 'true' || (needs.publish-homebrew.result == 'success' && needs.publish-aur.result == 'success')) }}
+    if: ${{ always() && needs.plan.outputs.dry_run == 'false' && needs.plan.outputs.source_branch == 'canary' && needs.publish-pypi.result == 'success' && needs.publish-github-release.result == 'success' && (needs.plan.outputs.wrapper_changed != 'true' || (needs.publish-homebrew.result == 'success' && needs.publish-aur.result == 'success')) }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -540,7 +680,7 @@ jobs:
   dispatch-nightly-after-canary:
     name: Queue nightly after canary publish
     needs: [plan, publish-pkg-boundaryml-com]
-    if: ${{ needs.plan.outputs.dispatch_nightly_after_canary == 'true' && needs.plan.outputs.dry_run == 'false' && github.ref == 'refs/heads/canary' }}
+    if: ${{ needs.plan.outputs.dispatch_nightly_after_canary == 'true' && needs.plan.outputs.dry_run == 'false' && needs.plan.outputs.source_branch == 'canary' }}
     runs-on: ubuntu-latest
     permissions:
       actions: write
@@ -559,7 +699,7 @@ jobs:
   publish-homebrew:
     name: Publish Homebrew wrapper formula
     needs: [plan, all-builds, publish-github-release]
-    if: ${{ needs.plan.outputs.wrapper_changed == 'true' && needs.plan.outputs.dry_run == 'false' && github.ref == 'refs/heads/canary' }}
+    if: ${{ needs.plan.outputs.wrapper_changed == 'true' && needs.plan.outputs.dry_run == 'false' && needs.plan.outputs.source_branch == 'canary' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -597,7 +737,7 @@ jobs:
   publish-aur:
     name: Publish AUR wrapper packages
     needs: [plan, all-builds, publish-github-release]
-    if: ${{ needs.plan.outputs.wrapper_changed == 'true' && needs.plan.outputs.dry_run == 'false' && github.ref == 'refs/heads/canary' }}
+    if: ${{ needs.plan.outputs.wrapper_changed == 'true' && needs.plan.outputs.dry_run == 'false' && needs.plan.outputs.source_branch == 'canary' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -697,13 +837,13 @@ jobs:
           name: dry-run-release-files
           path: dry-run
       - uses: aws-actions/configure-aws-credentials@v4
-        if: ${{ github.ref == 'refs/heads/canary' }}
+        if: ${{ needs.plan.outputs.source_branch == 'canary' }}
         with:
           role-to-assume: ${{ env.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
           role-session-name: baml-language-dry-run-${{ github.run_id }}
       - name: Upload public dry-run manifests
-        if: ${{ github.ref == 'refs/heads/canary' }}
+        if: ${{ needs.plan.outputs.source_branch == 'canary' }}
         run: |
           set -euo pipefail
           aws s3 sync dry-run/manifest/v1 "s3://$PKG_BUCKET/dryrun/${{ github.run_id }}/manifest/v1" \

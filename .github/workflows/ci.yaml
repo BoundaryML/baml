@@ -85,7 +85,6 @@ jobs:
             ':tools/pkg_boundaryml_com/**' \
             ':.github/workflows/ci.yaml' \
             ':.github/workflows/release-baml-language.yml' \
-            ':.github/workflows/publish-python-pypi.yml' \
             ':.github/workflows/build-python-sdk.reusable.yaml' \
             ':.github/workflows/build-nodejs-sdk.reusable.yaml' \
             ':.github/workflows/cargo-tests.reusable.yaml' \

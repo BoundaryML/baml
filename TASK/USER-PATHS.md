@@ -385,7 +385,7 @@ Marketplace publishing is deferred, but every toolchain release already builds a
 
 ### Python Publishing Is Handled Carefully
 
-`release-sdk.yaml` currently owns Python `baml_core` publishing and PyPI trusted publishing may be bound to that workflow identity. The implementation must resolve whether to retain that file as a focused Python publish workflow or fold/rename it after updating PyPI trusted-publisher configuration.
+`release-sdk.yaml` currently owns Python `baml_core` publishing and PyPI trusted publishing may be bound to that workflow identity. The implementation folds the wheel build into the release graph through a reusable builder and keeps the final PyPI upload in the top-level release workflow after updating PyPI trusted-publisher configuration.
 
 It must not remain an independent, separately versioned release path.
 
@@ -401,7 +401,7 @@ The replacement branch removes or integrates the old adjacent systems:
 - VSIX-bundled `baml-cli`.
 - standalone release paths that publish outside the release graph.
 
-`release-sdk.yaml` must be integrated deliberately because PyPI trusted publishing may be bound to that workflow identity. It can stay as a focused Python publish workflow invoked by the release graph, or be folded only after the PyPI trusted-publisher binding is updated or validated.
+`release-sdk.yaml` must be integrated deliberately because PyPI trusted publishing may be bound to that workflow identity. It is folded into the release graph only after the PyPI trusted-publisher binding is updated or validated for the top-level release workflow.
 
 ## What We Are Not Doing In V1
 
