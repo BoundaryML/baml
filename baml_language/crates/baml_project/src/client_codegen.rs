@@ -193,6 +193,13 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
                     continue;
                 }
 
+                if matches!(
+                    method.body.as_ref(),
+                    Some(ast::FunctionBodyDef::Builtin(ast::BuiltinKind::Intrinsic))
+                ) {
+                    continue;
+                }
+
                 let is_instance = method
                     .params
                     .first()
@@ -370,6 +377,13 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
             // primitive clients) are runtime plumbing, not user-callable —
             // skip them so they don't end up as Python factory bindings.
             if matches!(func.origin, FunctionOrigin::Internal) {
+                continue;
+            }
+
+            if matches!(
+                func.body.as_ref(),
+                Some(ast::FunctionBodyDef::Builtin(ast::BuiltinKind::Intrinsic))
+            ) {
                 continue;
             }
 
