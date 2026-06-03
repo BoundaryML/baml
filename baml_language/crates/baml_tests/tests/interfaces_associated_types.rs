@@ -176,6 +176,96 @@ fn associated_type_bindings_substitute_inside_implements_blocks() {
 }
 
 #[test]
+fn default_method_may_return_self_call_yielding_associated_type() {
+    // A default method whose body returns the result of a `self`-method that
+    // yields the associated type must type-check: the declared return
+    // (`Self.Item?`) and the body (`self.next()` → `Self.Item?`) must produce
+    // the same associated-type projection. Both go through the interface's own
+    // `Item` binding, which projects onto the rigid `Self` (not the interface
+    // existential) — matching how the `self.next()` call resolves it. This is
+    // the lazy-cursor / iterator delegating-default-method pattern.
+    assert_zero_compile_errors(
+        r#"
+        interface It {
+            type Item
+            function next(self) -> Self.Item?
+            function firstOrNull(self) -> Self.Item? {
+                return self.next()
+            }
+        }
+        class IntCursor {
+            value int
+            implements It {
+                type Item = int
+                function next(self) -> Self.Item? { return self.value }
+            }
+        }
+        "#,
+    );
+}
+
+#[test]
+fn inherited_scalar_default_method_delegating_to_self_compiles() {
+    // The inherited sibling of
+    // `default_method_may_return_self_call_yielding_associated_type`: a child
+    // interface (`Cursor requires It`) whose default method returns the inherited
+    // associated type in a scalar/optional position (`Self.Item?`) and delegates
+    // through `self.next()`. The inherited `Item` projects onto the rigid `Self`,
+    // matching how `self.next()` resolves it, so the declared return and the body
+    // agree. Distinct from `required_parent_associated_type_threads_into_child_interface`,
+    // which uses a required child method implemented with a concrete `int[]` and so
+    // never reconciles the projection symbolically inside a default body.
+    assert_zero_compile_errors(
+        r#"
+        interface It {
+            type Item
+            function next(self) -> Self.Item?
+        }
+        interface Cursor requires It {
+            function peek(self) -> Self.Item? {
+                return self.next()
+            }
+        }
+        class IntCursor {
+            value int
+            implements It {
+                type Item = int
+                function next(self) -> Self.Item? { return self.value }
+            }
+            implements Cursor {}
+        }
+        "#,
+    );
+}
+
+#[test]
+fn blanket_impl_binds_associated_type_in_default_body() {
+    // A blanket out-of-body impl (`implements<T> Items for Box<T>`, so `Self = Box<T>`
+    // and `Item = T`) whose interface has a default method returning `Self.Item[]` by
+    // delegating through `self.items()`. Exercises associated-type binding through a
+    // constructed (generic) `Self` in a default body — distinct from the existing
+    // blanket tests, which bind associated types but have no `self`-delegating default.
+    assert_zero_compile_errors(
+        r#"
+        interface Items {
+            type Item
+            function items(self) -> Self.Item[]
+            function firstItems(self) -> Self.Item[] {
+                return self.items()
+            }
+        }
+        class Box<T> {
+            values: T[]
+        }
+        implements<T> Items for Box<T> {
+            type Item = T
+            function items(self) -> Self.Item[] { return self.values }
+        }
+        "#,
+    );
+}
+
+#[test]
 fn fully_bound_associated_type_interface_values_expose_projected_methods() {
     assert_zero_compile_errors(
         r#"

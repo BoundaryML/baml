@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 24052
 ---
 === MIR2 ===
 fn user.DeepGenericDestructureNamespaceQualifiedLet() -> int {
@@ -457,7 +456,7 @@ fn user.llm.openai.Box.to_json(self: llm.openai.Box) -> baml.json.json {
     let _1: llm.openai.Box // self // param
     let _2: baml.json.json
     let _3: void
-    let _4: llm.openai.Box
+    let _4: llm.openai.Box<void>
 
     bb0: {
         _4 = copy _1;
@@ -514,7 +513,7 @@ fn user.llm.openai.Outer.to_json(self: llm.openai.Outer) -> baml.json.json {
     let _1: llm.openai.Outer // self // param
     let _2: baml.json.json
     let _3: llm.openai.Box<void>
-    let _4: llm.openai.Outer
+    let _4: llm.openai.Outer<void>
     let _5: type
 
     bb0: {
