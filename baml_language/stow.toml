@@ -73,6 +73,12 @@ allowed_crates = [
     # the same reason — top-level error surfacing.
     "baml_exec",
     "baml_pack_host",
+    # `baml` is the wrapper binary users install. `baml_release` is
+    # shared release-boundary fetch/install code used by the wrapper
+    # and pack; it exposes typed fetch errors but uses anyhow for
+    # validation helpers and caller-facing context.
+    "baml",
+    "baml_release",
 ]
 regular_deps_only = true
 reason = "Use thiserror for proper error types in library crates."
@@ -171,4 +177,4 @@ name = "surface"
 # `baml_pack_host` is the runtime binary embedded in packed
 # executables. Listed here so they're exempt from the baml-namespace
 # rules forbidding bex_* deps.
-name_exceptions = {"baml_cli" = "baml_cli", "baml_exec" = "baml_exec", "baml_pack_host" = "baml_pack_host" }
+name_exceptions = {"baml" = "baml", "baml_cli" = "baml_cli", "baml_exec" = "baml_exec", "baml_pack_host" = "baml_pack_host" }

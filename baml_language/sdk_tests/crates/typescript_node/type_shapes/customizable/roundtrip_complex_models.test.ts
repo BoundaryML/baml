@@ -247,4 +247,3 @@ describe("roundtrip complex_models", () => {
     expect(result).not.toStrictEqual(profile);
   });
 });
-

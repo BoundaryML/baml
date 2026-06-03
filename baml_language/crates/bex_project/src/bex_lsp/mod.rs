@@ -5,6 +5,7 @@ pub(crate) mod notification;
 mod request;
 
 mod multi_project;
+mod protocol;
 
 use async_trait::async_trait;
 

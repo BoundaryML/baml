@@ -143,6 +143,23 @@ async fn playground_ws_session(socket: WebSocket, state: WsState) {
     tracing::info!("Playground: WS session started");
     let (mut sink, mut stream) = socket.split();
 
+    if let Some(hello) = to_ws_text(&WsOutMessage::Hello {
+        toolchain_version: baml_version::CANONICAL_VERSION.to_string(),
+        playground_protocol: 1,
+        min_client_playground_protocol: 1,
+        capabilities: vec![
+            "playgroundWebSocket.v1".to_string(),
+            "callFunction.v1".to_string(),
+            "collectTests.v1".to_string(),
+        ],
+    }) {
+        if sink.send(hello).await.is_err() {
+            return;
+        }
+    } else {
+        return;
+    }
+
     if let Some(ready) = to_ws_text(&WsOutMessage::Ready) {
         if sink.send(ready).await.is_err() {
             return;

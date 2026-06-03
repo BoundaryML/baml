@@ -8,7 +8,7 @@ use lsp_types::{
 };
 
 use super::{BexMulitProject, LspError, WithDiagnostics, commands, wasm_helpers};
-use crate::bex_lsp::{multi_project::commands::BexLspCommand, request::BexLspRequest};
+use crate::bex_lsp::{multi_project::commands::BexLspCommand, protocol, request::BexLspRequest};
 
 /// Server capabilities advertised during the LSP `initialize` handshake.
 ///
@@ -77,7 +77,27 @@ pub(super) fn server_capabilities() -> ServerCapabilities {
                 resolve_provider: Some(false),
             }),
         )),
+        experimental: Some(serde_json::json!({
+            "baml": {
+                "toolchainVersion": baml_version::CANONICAL_VERSION,
+                "lspProtocol": protocol::BAML_LSP_PROTOCOL_VERSION,
+                "minSupportedClientLspProtocol": protocol::MIN_SUPPORTED_VSCODE_LSP_PROTOCOL,
+                "playgroundProtocol": protocol::BAML_PLAYGROUND_PROTOCOL_VERSION,
+                "minSupportedClientPlaygroundProtocol": protocol::MIN_SUPPORTED_PLAYGROUND_PROTOCOL,
+                "capabilities": protocol::CAPABILITIES,
+            }
+        })),
         ..Default::default()
+    }
+}
+
+fn initialize_result() -> lsp_types::InitializeResult {
+    lsp_types::InitializeResult {
+        capabilities: server_capabilities(),
+        server_info: Some(lsp_types::ServerInfo {
+            name: "baml-lsp".to_string(),
+            version: Some(baml_version::CANONICAL_VERSION.to_string()),
+        }),
     }
 }
 
@@ -135,13 +155,7 @@ impl BexLspRequest for BexMulitProject {
 
         *self.workspace_roots.lock().unwrap() = roots;
 
-        Ok(lsp_types::InitializeResult {
-            capabilities: server_capabilities(),
-            server_info: Some(lsp_types::ServerInfo {
-                name: "baml-lsp".to_string(),
-                version: Some(env!("CARGO_PKG_VERSION").to_string()),
-            }),
-        })
+        Ok(initialize_result())
     }
 
     fn on_request_text_document_code_lens(
@@ -882,5 +896,41 @@ impl BexMulitProject {
         );
 
         Ok(op(lsp_db, source_file, project, offset))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn initialize_metadata_matches_protocol_contract() {
+        let result = initialize_result();
+        let experimental = result
+            .capabilities
+            .experimental
+            .expect("initialize result should advertise experimental metadata");
+
+        assert_eq!(
+            experimental,
+            serde_json::json!({
+                "baml": {
+                    "toolchainVersion": baml_version::CANONICAL_VERSION,
+                    "lspProtocol": 1,
+                    "minSupportedClientLspProtocol": 1,
+                    "playgroundProtocol": 1,
+                    "minSupportedClientPlaygroundProtocol": 1,
+                    "capabilities": [
+                        "openPlayground.v1",
+                        "listProjects.v1",
+                        "playgroundWebSocket.v1",
+                    ],
+                }
+            })
+        );
+        assert_eq!(
+            result.server_info.and_then(|info| info.version),
+            Some(baml_version::CANONICAL_VERSION.to_string())
+        );
     }
 }

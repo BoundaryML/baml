@@ -199,11 +199,21 @@ pub fn run_test(parsed: &ParsedTestFile) -> TestResult {
     };
 
     // Compare against expectations
-    let diagnostics_passed = parsed.expected_diagnostics == actual_diagnostics;
-    let hovers_passed = parsed.expected_hovers == actual_hovers;
+    let diagnostics_passed = expectation_text_matches(
+        Some(&parsed.expected_diagnostics),
+        Some(&actual_diagnostics),
+    );
+    let hovers_passed =
+        expectation_text_matches(parsed.expected_hovers.as_deref(), actual_hovers.as_deref());
     let completions_passed = completion_result.as_ref().map(|r| r.passed).unwrap_or(true);
-    let inlay_hints_passed = parsed.expected_inlay_hints == actual_inlay_hints;
-    let semantic_tokens_passed = parsed.expected_semantic_tokens == actual_semantic_tokens;
+    let inlay_hints_passed = expectation_text_matches(
+        parsed.expected_inlay_hints.as_deref(),
+        actual_inlay_hints.as_deref(),
+    );
+    let semantic_tokens_passed = expectation_text_matches(
+        parsed.expected_semantic_tokens.as_deref(),
+        actual_semantic_tokens.as_deref(),
+    );
 
     let passed = diagnostics_passed
         && hovers_passed
@@ -274,12 +284,30 @@ fn format_cursor_hover_results(results: &[CursorHoverResult]) -> String {
 fn format_as_comment(text: &str) -> String {
     text.lines()
         .map(|line| {
+            let line = line.trim_end();
             if line.is_empty() {
                 "//".to_string()
             } else {
                 format!("// {line}")
             }
         })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+fn expectation_text_matches(expected: Option<&str>, actual: Option<&str>) -> bool {
+    match (expected, actual) {
+        (Some(expected), Some(actual)) => {
+            normalize_line_endings(expected) == normalize_line_endings(actual)
+        }
+        (None, None) => true,
+        _ => false,
+    }
+}
+
+fn normalize_line_endings(text: &str) -> String {
+    text.lines()
+        .map(str::trim_end)
         .collect::<Vec<_>>()
         .join("\n")
 }
