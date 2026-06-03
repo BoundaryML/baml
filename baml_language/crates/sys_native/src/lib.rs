@@ -19,7 +19,7 @@ pub mod registry;
 pub mod shell;
 
 pub use sys_ops::{SysOps, io};
-pub use sys_types::{CallId, CompletionHandle, OpError, SysOp, SysOpContext};
+pub use sys_types::{CallId, CompletionHandle, OpError, SysOp, SysOpContext, VmInternalError};
 
 #[cfg(all(feature = "bundle-http", feature = "ring-crypto"))]
 pub(crate) fn ensure_rustls_crypto_provider() {

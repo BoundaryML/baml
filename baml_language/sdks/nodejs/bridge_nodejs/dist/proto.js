@@ -14,6 +14,7 @@ import { baml_core } from './proto/baml_cffi.js';
 import { BamlHandle, BamlImage, BamlAudio, BamlVideo, BamlPdf, registerHostCallable, releaseHostCallable, completeHostCall, } from './native.js';
 import { BamlStream } from './stream.js';
 import { BamlError, BamlPanic } from './errors.js';
+import { registerHostError, tryRehydrateFromHandle, } from './host_error_registry.js';
 import { getTypeMap } from './typemap.js';
 const CallFunctionArgs = baml_core.cffi.v1.CallFunctionArgs;
 const BamlOutboundValue = baml_core.cffi.v1.BamlOutboundValue;
@@ -467,6 +468,20 @@ export function decodeCallResult(data) {
         case 'error': {
             const { value, className, message } = decodeThrown(result.error?.value);
             const trace = result.error?.trace ?? [];
+            // Same-host rehydration: a `baml.errors.HostCallable` carrying a
+            // `_handle` that still resolves in this process's host-error
+            // registry re-throws the *original* JS error object the bridge
+            // registered on the inbound throw — preserving `raised === caught`
+            // identity. Foreign runtimes (a different Node process, the
+            // Python bridge) and released keys fall through to the
+            // metadata-bearing `BamlError(HostCallable)` wrapper below.
+            if (className === 'baml.errors.HostCallable' && value !== null && typeof value === 'object') {
+                const handle = value._handle;
+                const original = tryRehydrateFromHandle(handle);
+                if (original !== undefined) {
+                    throw original;
+                }
+            }
             throw new BamlError(formatThrownMessage('error', className ?? '', message, trace), { value, bamlTrace: trace, className });
         }
         case 'panic': {
@@ -598,10 +613,19 @@ function sendHostCallableResult(callId, value) {
  * declared-throws contract check against this value and either re-injects it
  * as a catchable BAML throw or escalates to a `HostContractViolation` panic.
  */
-function buildHostCallableInbound(className, message, traceback) {
+function buildHostCallableInbound(className, message, traceback, handleKey) {
     const stringField = (key, value) => InboundMapEntry.create({
         stringKey: key,
         value: InboundValue.create({ stringValue: value }),
+    });
+    const handleField = InboundMapEntry.create({
+        stringKey: '_handle',
+        value: InboundValue.create({
+            handle: {
+                key: handleKey,
+                handleType: BamlHandleType.HOST_VALUE_ERROR,
+            },
+        }),
     });
     const fields = [
         stringField('message', message),
@@ -611,6 +635,7 @@ function buildHostCallableInbound(className, message, traceback) {
     if (traceback != null) {
         fields.push(stringField('traceback', traceback));
     }
+    fields.push(handleField);
     return InboundValue.create({
         classValue: InboundClassValue.create({
             name: 'baml.errors.HostCallable',
@@ -618,14 +643,94 @@ function buildHostCallableInbound(className, message, traceback) {
         }),
     });
 }
+// Sentinel `_handle` key used by paths that have *no* JS error object to
+// register (the `completeHostCallLastResort` fallback below). Real host
+// throws register the JS error via `registerHostError` and emit its
+// minted key; engine-internal synthetic faults use this sentinel. The
+// engine's structural check accepts either; same-host decoders that look
+// up `{low:0,high:0}` find nothing and fall through to the
+// metadata-bearing `BamlError(HostCallable)` wrapper. Mirrors the
+// reserved sentinel in `bridge_python::host_value::next_key` (which
+// skips `0`), so a real registered key can never collide.
+//
+// Cast through `as unknown as HandleKey` because `HandleKey` is a native
+// napi class with private fields; protobufjs only reads the public
+// `{low, high}` shape and the wire serializes them identically.
+const UNRESOLVED_HOST_ERROR_KEY = { low: 0, high: 0 };
 function sendHostCallableError(callId, err) {
     // Normal error path: never leaves the call uncompleted. If building or
     // encoding the Instance throws (e.g. `describeError`, proto `create` /
     // `encode`, or the native `completeHostCall` itself), fall back to the
     // last-resort completion below.
     try {
+        // Phase A — `BamlError(value=<codegenned BAML class>)` unwrap.
+        // The user wrapped a real BAML class (or primitive) in a BamlError;
+        // emit it as that real BAML class on the wire so the BAML caller's
+        // typed `catch (e: MyError)` matches structurally and reads typed
+        // fields. Mirrors `bridge_python`'s `try_encode_baml_error_throw`.
+        //
+        // `value == null` (a bare `new BamlError("msg")` with no wrapped
+        // value, or `new BamlError("", { value: null })`) falls through to
+        // the opaque Phase B path: an unset / null inner oneof encodes as
+        // BAML `null`, which fails the engine's contract check for any
+        // concrete `E` (and produces a bizarre `null` throw for `E=unknown`).
+        // The opaque path always produces a well-formed `HostCallable`
+        // instance the engine can route.
+        //
+        // `BamlPanic extends BamlError`, so a `BamlPanic(value=...)` also
+        // hits this branch. The engine routes by BAML class namespace
+        // (`baml.panics.*` → panic, `baml.errors.*` / user classes →
+        // error), so a properly-constructed `BamlPanic(value=<panic class>)`
+        // surfaces as a panic; a `BamlPanic(value=<error class>)` surfaces
+        // as an error. Treating both via the same wire path is consistent
+        // with how engine-internal throws are routed.
+        if (err instanceof BamlError && err.value != null) {
+            const ctx = { syncMode: false, registered: [] };
+            try {
+                const iv = InboundValue.create({});
+                setInboundValue(iv, err.value, ctx);
+                const bytes = Buffer.from(InboundValue.encode(iv).finish());
+                completeHostCall(callId, 1, bytes);
+                return;
+            }
+            catch {
+                // Encoding the inner value failed — roll back any callable
+                // registrations its nested fields triggered and fall through
+                // to the opaque Phase B path below. The fall-through is
+                // intentional: the throw must still reach the engine even if
+                // the typed-value encode broke, so we never leave the call
+                // hanging.
+                for (const key of ctx.registered)
+                    releaseHostCallable(key);
+            }
+        }
+        // Phase B — opaque `baml.errors.HostCallable` Instance carrying a
+        // handle to the originating JS error so the BAML→host decoder on
+        // the same Node process can rehydrate the *same* exception object
+        // on round-trip (`raised === caught` identity). Foreign runtimes /
+        // released keys fall back to metadata.
+        //
+        // Identity-loss edge case (acceptable): `describeError` can itself
+        // throw when given a hostile input (e.g. a Proxy whose `constructor`,
+        // `name`, or `message` getters throw — see the
+        // `host-callable always completes on abnormal paths` jest suite).
+        // In that case `registerHostError` is never reached, control jumps
+        // to the outer `catch (innerErr)` → `completeHostCallLastResort`,
+        // and the user sees a metadata-only `HostCallable` instead of the
+        // original Proxy. Identity loss here is the right trade — the
+        // alternative is hanging the call.
+        //
+        // Registration-leak edge case (rare, bounded): if encoding succeeds
+        // through `registerHostError` but `buildHostCallableInbound` or
+        // `InboundValue.encode` fails after, the TS map entry stays alive
+        // with no corresponding engine-side `HostValueArc` to release it,
+        // so it lives until process exit. Both downstream calls are deeply
+        // mechanical (build a proto message, serialize fixed-shape fields)
+        // and don't depend on `err`'s shape, so this is effectively
+        // unreachable outside protobufjs / native-binding corruption.
         const { className, message, stack } = describeError(err);
-        const inbound = buildHostCallableInbound(className, message, stack);
+        const handleKey = registerHostError(err);
+        const inbound = buildHostCallableInbound(className, message, stack, handleKey);
         const bytes = Buffer.from(InboundValue.encode(inbound).finish());
         completeHostCall(callId, 1, bytes);
     }
@@ -644,7 +749,7 @@ function sendHostCallableError(callId, err) {
  */
 function completeHostCallLastResort(callId, err) {
     try {
-        const inbound = buildHostCallableInbound('InternalError', `host callable dispatch failed and the error could not be reported: ${safeStringify(err)}`, undefined);
+        const inbound = buildHostCallableInbound('InternalError', `host callable dispatch failed and the error could not be reported: ${safeStringify(err)}`, undefined, UNRESOLVED_HOST_ERROR_KEY);
         const bytes = Buffer.from(InboundValue.encode(inbound).finish());
         completeHostCall(callId, 1, bytes);
     }

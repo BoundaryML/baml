@@ -231,6 +231,29 @@ export interface HandleKey {
 }
 
 /**
+ * Mint a fresh host-value key, drawing from the shared callable+error
+ * counter so the engine sees one globally-unique keyspace. Returned to TS
+ * by `registerHostError` in `host_error_registry.ts`.
+ *
+ * Exposed to JS as `mintHostErrorKey() -> HandleKey`. The TS-side error
+ * registry calls this once per `registerHostError(err)` before inserting
+ * the error into its `Map<bigint, unknown>`.
+ */
+export declare function mintHostErrorKey(): HandleKey
+
+/**
+ * Install the TS-side release callback. First-call-wins; subsequent
+ * calls are a no-op (matching the bridge_cffi dispatch-registration
+ * semantics). The callback fires for *every* `HostValueArc` release —
+ * for callable keys it's a TS-side no-op (`Map.delete(key)` on an absent
+ * key), so Rust doesn't need to distinguish kinds here.
+ *
+ * Exposed to JS as `registerErrorReleaseCallback(cb)`. Must be called
+ * exactly once at SDK module init, before any host call is dispatched.
+ */
+export declare function registerErrorReleaseCallback(callback: (key: HandleKey) => void): void
+
+/**
  * Register a JS dispatch wrapper in the host-value table and return its key.
  *
  * Exposed to JS as `registerHostCallable(fn) -> HandleKey`. Called from

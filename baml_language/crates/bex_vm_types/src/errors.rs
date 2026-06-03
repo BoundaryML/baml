@@ -147,7 +147,8 @@ pub enum VmBamlError {
     /// failures with no underlying host exception (bridge serialization
     /// faults, missing-bridge errors, etc.) MUST use a different
     /// variant — they are not host-language errors and have nothing to
-    /// rehydrate. SDK/bridge faults route through [`super::VmPanic::SdkPanic`].
+    /// rehydrate. Such SDK/bridge faults route through fatal
+    /// [`VmInternalError::BridgeFailure`].
     #[error("host callable error: {message} [class={class_name}, lang={language:?}]")]
     HostCallable {
         class_name: String,

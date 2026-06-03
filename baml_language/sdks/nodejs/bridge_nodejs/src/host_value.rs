@@ -44,22 +44,18 @@
 use std::{
     collections::HashMap,
     sync::{
-        Arc, LazyLock, Mutex,
+        Arc, LazyLock, Mutex, OnceLock,
         atomic::{AtomicU64, Ordering},
     },
 };
 
-use bridge_ctypes::baml_core::cffi::{
-    InboundClassValue, InboundMapEntry, InboundValue, inbound_map_entry::Key as InboundMapKey,
-    inbound_value::Value as InboundValueVariant,
-};
 use napi::{
     Status,
     bindgen_prelude::{Buffer, FnArgs, Function},
     threadsafe_function::{ThreadsafeFunction, ThreadsafeFunctionCallMode},
 };
 use napi_derive::napi;
-use prost::Message;
+use sys_native::{OpError, SysOp, VmInternalError};
 
 use crate::handle::HandleKey;
 
@@ -178,12 +174,105 @@ fn drop_registry_entry(host_value_key: u64) {
     drop(popped);
 }
 
-/// Drop the JS dispatch wrapper associated with `host_value_key`.
+/// Drop the JS dispatch wrapper / error-map entry associated with
+/// `host_value_key`.
 ///
 /// Fires when the last Rust clone of the corresponding `HostValueArc` is
 /// dropped — see `bex_external_types::host_value::host_release_dispatch`.
+/// We don't track *which* kind (callable vs error) the key referred to:
+/// every release attempts both the Rust-side callable drop and the
+/// TS-side error-map delete. Whichever one of the two registries actually
+/// held the entry cleans it up; the other is a benign no-op.
 pub extern "C" fn host_release_callback(host_value_key: u64) {
     drop_registry_entry(host_value_key);
+    if let Some(tsfn) = ERROR_RELEASE_CALLBACK.get() {
+        // Fire-and-forget: the TS callback removes the map entry on the
+        // libuv loop. `QueueFull` would mean an enormous backlog of
+        // releases — log it (so it's visible in stress tests) and move
+        // on. The dropped Arc has no further engine-side state and a
+        // missed map entry just delays JS-error GC by an extra cycle.
+        let status = tsfn.call(
+            HandleKey::from_u64(host_value_key),
+            ThreadsafeFunctionCallMode::NonBlocking,
+        );
+        if status != Status::Ok {
+            log::warn!(
+                "host_release_callback: error-release tsfn returned {status:?} \
+                 for key {host_value_key}; TS-side map entry will leak until next GC",
+            );
+        }
+    }
+}
+
+// ============================================================================
+// Host-error registry — JS-side storage with Rust-driven release
+// ============================================================================
+//
+// A native JS exception raised inside a user callback round-trips back to
+// the same Node process as the *same* `Error` object (mirrors the Python
+// bridge's `register_host_error` / `lookup_host_value` pair). The TS bridge
+// owns the storage (a `Map<bigint, unknown>` of JS error values) because
+// napi-rs has no zero-overhead persistent reference type for arbitrary JS
+// values; Rust owns the key minting (so callable + error keys share a
+// single globally-unique counter and never collide) and the release
+// signal (the engine's `host_release_dispatch::fire(key)` fires Rust's
+// `host_release_callback`, which notifies TS to remove its map entry).
+//
+// Release is a fire-and-forget tsfn call on the libuv loop — TS removes the
+// entry once napi schedules the callback. A lookup that races a release
+// returns the (about-to-be-released) reference, which only delays GC of
+// that exception by one tick; no correctness issue. The TS map never
+// silently leaks: every key minted via `mint_host_error_key` corresponds
+// to an `Arc<HostValueArc>` on the engine side whose `Drop` is guaranteed
+// to fire the release callback.
+
+/// Threadsafe handle to the TS-installed release callback. Set once at
+/// module load via [`register_error_release_callback`].
+type ErrorReleaseTsfn =
+    ThreadsafeFunction<HandleKey, (), HandleKey, Status, false, false, ERROR_RELEASE_QUEUE_SIZE>;
+
+/// Upper bound on queued, not-yet-delivered error-release notifications.
+/// Generous because each notification is tiny (one `HandleKey`) and bursts
+/// can happen during engine GC sweeps. `Status::QueueFull` from
+/// `tsfn.call` is logged but not otherwise surfaced — the TS map entry
+/// stays until the process exits, but the engine's `HostValueArc` has
+/// already dropped so there's no further engine state to clean up.
+const ERROR_RELEASE_QUEUE_SIZE: usize = 4096;
+
+static ERROR_RELEASE_CALLBACK: OnceLock<Arc<ErrorReleaseTsfn>> = OnceLock::new();
+
+/// Mint a fresh host-value key, drawing from the shared callable+error
+/// counter so the engine sees one globally-unique keyspace. Returned to TS
+/// by [`registerHostError`](crate ts function).
+///
+/// Exposed to JS as `mintHostErrorKey() -> HandleKey`. The TS-side error
+/// registry calls this once per `registerHostError(err)` before inserting
+/// the error into its `Map<bigint, unknown>`.
+#[napi(js_name = "mintHostErrorKey")]
+pub fn mint_host_error_key() -> HandleKey {
+    HandleKey::from_u64(next_key())
+}
+
+/// Install the TS-side release callback. First-call-wins; subsequent
+/// calls are a no-op (matching the bridge_cffi dispatch-registration
+/// semantics). The callback fires for *every* `HostValueArc` release —
+/// for callable keys it's a TS-side no-op (`Map.delete(key)` on an absent
+/// key), so Rust doesn't need to distinguish kinds here.
+///
+/// Exposed to JS as `registerErrorReleaseCallback(cb)`. Must be called
+/// exactly once at SDK module init, before any host call is dispatched.
+#[napi(ts_args_type = "callback: (key: HandleKey) => void")]
+pub fn register_error_release_callback(callback: Function<'_, HandleKey, ()>) -> napi::Result<()> {
+    let tsfn: ErrorReleaseTsfn = callback
+        .build_threadsafe_function()
+        .callee_handled::<false>()
+        .weak::<false>()
+        .max_queue_size::<ERROR_RELEASE_QUEUE_SIZE>()
+        .build()?;
+    // First-call-wins; ignore the `Err(_)` from `set` on later calls
+    // (caller is responsible for not re-registering).
+    let _ = ERROR_RELEASE_CALLBACK.set(Arc::new(tsfn));
+    Ok(())
 }
 
 /// Release a host callable the inbound encoder registered but never handed to
@@ -254,48 +343,38 @@ pub extern "C" fn host_dispatch_callback(
     }
 }
 
-/// Build an `InboundValue` carrying a `baml.errors.HostCallable` Instance.
-/// Mirrors `bridge_python::host_value::build_host_callable_inbound`.
-fn build_host_callable_inbound(class_name: &str, message: &str) -> InboundValue {
-    fn string_field(key: &str, value: &str) -> InboundMapEntry {
-        InboundMapEntry {
-            key: Some(InboundMapKey::StringKey(key.to_string())),
-            value: Some(InboundValue {
-                value: Some(InboundValueVariant::StringValue(value.to_string())),
-            }),
-        }
-    }
-    InboundValue {
-        value: Some(InboundValueVariant::ClassValue(InboundClassValue {
-            name: "baml.errors.HostCallable".to_string(),
-            fields: vec![
-                string_field("message", message),
-                string_field("class_name", class_name),
-                string_field("language", "nodejs"),
-            ],
-        })),
-    }
-}
-
-/// Synthesize a thrown `baml.errors.HostCallable` for "no registered JS
-/// callable for this host-value key" and forward it via `complete_host_call`.
+/// Surface a "no registered JS callable for this host-value key" as a
+/// fatal `BridgeFailure` — this isn't a host-language exception, it's a
+/// bridge-layer fault (the bridge couldn't find the callable to dispatch
+/// to, so the call never reached JS). Routes directly through
+/// `host_dispatch::complete_with_error` so the engine sees a
+/// `VmInternalError::BridgeFailure`, which surfaces host-side as the
+/// engine's existing internal-error path rather than masquerading as a
+/// catchable `baml.errors.HostCallable`.
 fn send_dispatch_error_no_callable(call_id: u32, host_value_key: u64) {
-    let bytes = build_host_callable_inbound(
-        "KeyError",
-        &format!("no host callable registered for key {host_value_key}"),
-    )
-    .encode_to_vec();
-    bridge_cffi::complete_host_call(call_id, 1, bytes.as_ptr() as *const i8, bytes.len());
+    sys_native::host_dispatch::complete_with_error(
+        call_id,
+        OpError::new(
+            SysOp::BamlHostCallHostValue,
+            VmInternalError::BridgeFailure {
+                message: format!("no host callable registered for key {host_value_key}"),
+            },
+        ),
+    );
 }
 
-/// Synthesize a thrown `baml.errors.HostCallable` for a tsfn-scheduling
-/// failure (queue full / aborted / library shutdown) and forward it via
-/// `complete_host_call`.
+/// Surface a tsfn-scheduling failure (queue full / aborted / library
+/// shutdown) as a fatal `BridgeFailure` — the bridge couldn't even
+/// schedule the dispatch onto the libuv loop, so the user callable never
+/// ran. Same routing rationale as [`send_dispatch_error_no_callable`].
 fn send_dispatch_error_tsfn_status(call_id: u32, status: Status) {
-    let bytes = build_host_callable_inbound(
-        "RuntimeError",
-        &format!("threadsafe_function call failed with status {status:?}"),
-    )
-    .encode_to_vec();
-    bridge_cffi::complete_host_call(call_id, 1, bytes.as_ptr() as *const i8, bytes.len());
+    sys_native::host_dispatch::complete_with_error(
+        call_id,
+        OpError::new(
+            SysOp::BamlHostCallHostValue,
+            VmInternalError::BridgeFailure {
+                message: format!("threadsafe_function call failed with status {status:?}"),
+            },
+        ),
+    );
 }
