@@ -6,10 +6,6 @@ inputs:
     description: 'Node.js version to install'
     required: false
     default: '20'
-    options:
-      - 20
-      - 24
-      - latest
   pnpm-version:
     description: 'pnpm version to install'
     required: false
@@ -35,10 +31,6 @@ inputs:
     required: false
     # Default to v4 for backwards compatibility.
     default: 'v4'
-    type: choice
-    options:
-      - v4
-      - v6
 
 runs:
   using: 'composite'

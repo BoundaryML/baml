@@ -44,8 +44,9 @@ jobs:
         _:
           - target: aarch64-unknown-linux-gnu
             host: ubuntu-24.04-arm
-            # Target glibc 2.17. This is the oldest glibc we can practically support.
-            # Note that ubuntu-22.04-arm has glibc 2.35, but our users need older glibc.
+            # Target glibc 2.28 for aarch64 using the available rust-cross image.
+            # This is newer than the ideal glibc floor; our users still need the oldest
+            # practical compatible baseline we can support for this target.
             # See https://github.com/BoundaryML/baml/issues/2736
             container: ghcr.io/rust-cross/manylinux_2_28-cross:aarch64
             before: |
@@ -91,12 +92,15 @@ jobs:
           persist-credentials: false
 
       - name: Stamp release plan
-        if: ${{ inputs.release_plan_json != '' }}
         env:
           RELEASE_PLAN_JSON: ${{ inputs.release_plan_json }}
         run: |
           set -euo pipefail
-          printf '%s\n' "$RELEASE_PLAN_JSON" > release-plan.json
+          if [[ -n "${RELEASE_PLAN_JSON:-}" ]]; then
+            printf '%s\n' "$RELEASE_PLAN_JSON" > release-plan.json
+          else
+            scripts/baml-language-version plan --channel canary --out release-plan.json
+          fi
           scripts/baml-language-version stamp --plan release-plan.json
 
       - name: Check GLIBC version

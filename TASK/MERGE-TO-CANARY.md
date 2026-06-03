@@ -2,9 +2,9 @@
 
 This file records how to merge `paulo/baml-language-release-pipeline` with the newer `canary` branch. It is intentionally written as merge guidance, not as a new product spec. `TASK/TASK.md` remains the source of truth for the target release architecture.
 
-## Current Branch Relationship
+## Pre-Merge Branch Snapshot
 
-At the time this was last audited:
+This snapshot captured the state before the canary merge was performed. Do not treat these SHAs as current branch metadata; keep them only as historical context for why the merge had the conflict shape described below.
 
 - branch: `paulo/baml-language-release-pipeline`
 - merge base: `1742580cac5049c3e6c6eca8ba48f601a0b9bda1`
