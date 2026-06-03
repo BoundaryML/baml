@@ -8,6 +8,11 @@ on:
         type: string
         default: ""
         required: false
+      source_sha:
+        description: "Exact repository commit to build"
+        type: string
+        default: ""
+        required: false
   push:
     branches:
       - sam/publish-python
@@ -74,6 +79,8 @@ jobs:
           }
 
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.source_sha || github.sha }}
 
       - name: Stamp release plan
         if: ${{ inputs.release_plan_json != '' }}

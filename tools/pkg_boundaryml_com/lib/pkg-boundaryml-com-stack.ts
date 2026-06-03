@@ -43,6 +43,7 @@ export class PkgBoundarymlComStack extends cdk.Stack {
       maxSessionDuration: cdk.Duration.hours(1),
     });
 
+    this.bucket.grantRead(this.githubReleaseRole);
     this.bucket.grantPut(this.githubReleaseRole);
     this.bucket.grantPutAcl(this.githubReleaseRole);
     this.githubReleaseRole.addToPolicy(

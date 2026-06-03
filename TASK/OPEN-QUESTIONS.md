@@ -1,6 +1,6 @@
 **Highest Priority**
-1. **VSIX multi-project/toolchain model is underspecified**  
-   [TASK.md](/Users/rossir/dev/baml-canary/TASK/TASK.md:603), [TASK.md](/Users/rossir/dev/baml-canary/TASK/TASK.md:1000)  
+1. **VSIX multi-project/toolchain model is underspecified**
+   [TASK.md](/Users/rossir/dev/baml-canary/TASK/TASK.md:603), [TASK.md](/Users/rossir/dev/baml-canary/TASK/TASK.md:1000)
    The doc says the VSIX launches `baml lsp` and should support projects/toolchains without reinstalling the VSIX, but it does not define whether the extension starts one LSP per workspace folder, one per `baml.toml` project root, or one global LSP. Since the wrapper resolves toolchain at process start from cwd, a single LSP launched from “first workspace folder” cannot safely support multiple open projects with different `[toolchain]` pins. This needs a concrete process model.
 
    **Answer:** Start one lazy VS Code `LanguageClient` / LSP process per BAML project root, not one global LSP and not one process per file. A BAML project root is the nearest ancestor of the active/open `.baml` file containing `baml.toml`; if none exists, fall back to the containing VS Code workspace folder; if the file is outside any workspace folder, use the file's directory as an ad-hoc root or run in limited-support mode.
@@ -11,8 +11,8 @@
 
    Playground ownership is per LSP process. Each project-root LSP owns its own playground server/port, and `baml.openPlayground` uses the client associated with the active editor's project root. Restart only the affected project-root client when that project's `[toolchain]` changes, the configured `baml` executable path changes, compatibility metadata changes after a wrapper/toolchain update, or that LSP crashes. Restart all clients only for truly global setting changes.
 
-2. **Package-manager bootstrap may be impossible or inconsistent as written**  
-   [TASK.md](/Users/rossir/dev/baml-canary/TASK/TASK.md:96), [TASK.md](/Users/rossir/dev/baml-canary/TASK/TASK.md:936)  
+2. **Package-manager bootstrap may be impossible or inconsistent as written**
+   [TASK.md](/Users/rossir/dev/baml-canary/TASK/TASK.md:96), [TASK.md](/Users/rossir/dev/baml-canary/TASK/TASK.md:936)
    It says package-manager artifacts install only the wrapper, but first-time `brew install baml` should leave a working canary toolchain. The doc does not say whether Homebrew post-install runs `baml toolchain install canary`, whether that is acceptable for Homebrew tap policy, and what AUR does since package scripts run as root and cannot safely write a user’s `~/.baml`. This needs per-package-manager mechanics.
 
    **Answer:** Package-manager installs must remain wrapper-only in v1. `brew install baml`, AUR `baml`, and AUR `baml-bin` install only the `baml` wrapper and must not download, install, select, or update a BAML language toolchain during package install, reinstall, or upgrade.
@@ -43,8 +43,8 @@
 
    This decision depends on point 3: `baml toolchain use <selector>` should be the one-command user setup path. If the selected concrete toolchain is missing, `use` should install it and then mark it active. `install` should download a toolchain without making it active.
 
-3. **`baml toolchain use` vs `install` semantics are still ambiguous**  
-   [TASK.md](/Users/rossir/dev/baml-canary/TASK/TASK.md:274), [TASK.md](/Users/rossir/dev/baml-canary/TASK/TASK.md:322)  
+3. **`baml toolchain use` vs `install` semantics are still ambiguous**
+   [TASK.md](/Users/rossir/dev/baml-canary/TASK/TASK.md:274), [TASK.md](/Users/rossir/dev/baml-canary/TASK/TASK.md:322)
    The first-run error suggests `baml toolchain use canary`, but package-manager bootstrap uses both `install` and `use`. Network policy says `use` may fetch channel metadata, but does not clearly say whether `use` also installs the selected toolchain if missing. This is a core UX behavior and should be exact.
 
    **Answer:** `baml toolchain use <selector>` is the one-command setup path. It resolves the selector, ensures the selected concrete toolchain is installed, and then records that selector as the user's default. If the concrete toolchain is missing, `use` downloads/verifies/installs it before marking it active.
@@ -71,8 +71,8 @@
 
    First-run no-toolchain error should also recommend `baml toolchain use canary` as the primary fix. This command both installs and selects the canary toolchain.
 
-4. **Wrapper state schema is not concrete enough**  
-   [TASK.md](/Users/rossir/dev/baml-canary/TASK/TASK.md:322), [TASK.md](/Users/rossir/dev/baml-canary/TASK/TASK.md:344)  
+4. **Wrapper state schema is not concrete enough**
+   [TASK.md](/Users/rossir/dev/baml-canary/TASK/TASK.md:322), [TASK.md](/Users/rossir/dev/baml-canary/TASK/TASK.md:344)
    The text refers to “locally recorded concrete version” for channels, but `config.toml` only shows `[default] channel = "canary"`. Where is `canary -> 0.11.0` stored? In manifest cache? In config? In a separate channel state file? This matters for offline behavior and atomic updates.
 
    **Answer:** Use separate files for user intent, wrapper-owned machine state, remote metadata cache, and installed toolchain inventory. Do not make the manifest cache authoritative for normal command resolution.
@@ -154,8 +154,8 @@
 
    Remote manifests are only inputs to explicit toolchain-management commands.
 
-5. **Dry-run release testing lacks a wrapper override mechanism**  
-   [TASK.md](/Users/rossir/dev/baml-canary/TASK/TASK.md:1156), [TASK.md](/Users/rossir/dev/baml-canary/TASK/TASK.md:1172)  
+5. **Dry-run release testing lacks a wrapper override mechanism**
+   [TASK.md](/Users/rossir/dev/baml-canary/TASK/TASK.md:1156), [TASK.md](/Users/rossir/dev/baml-canary/TASK/TASK.md:1172)
    The doc says dry-run may write to a `dryrun/` prefix and merge criteria include `baml toolchain install <v>` against a dry-run manifest. But the wrapper only knows `https://pkg.boundaryml.com/manifest/v1/...`. We need an explicit env var or flag like `BAML_MANIFEST_BASE_URL` for tests and mirrors.
 
    **Answer:** A dry run means running the release graph as realistically as possible without publishing to production release paths consumed by users. Production users read:
@@ -236,8 +236,8 @@
    - Cache entries are namespaced by manifest base URL so dry-run manifests cannot poison the production cache. Production may use `manifest-cache/prod/`; overrides use `manifest-cache/override/<hash-of-base-url>/`.
    - Channel state written under an override records the manifest base URL/hash in `state.toml`. A later command using a different manifest base must not silently treat that channel state as valid; it should either use a temporary `BAML_HOME` in CI or print a clear diagnostic telling the user to run `baml toolchain use <channel>` under the current source.
 
-6. **Release concurrency is not specified**  
-   [TASK.md](/Users/rossir/dev/baml-canary/TASK/TASK.md:178), [TASK.md](/Users/rossir/dev/baml-canary/TASK/TASK.md:529)  
+6. **Release concurrency is not specified**
+   [TASK.md](/Users/rossir/dev/baml-canary/TASK/TASK.md:178), [TASK.md](/Users/rossir/dev/baml-canary/TASK/TASK.md:529)
    Nightly suffix selection reads existing GitHub releases and picks the next letter. Without a workflow concurrency group or locking rule, two successful `canary` runs close together can compute the same letter. The PyPI collision check catches some fallout, but the release graph should prevent the race.
 
    **Answer:** GitHub merge queue is the first line of defense: all normal writes to `canary` should go through the queue, and the release workflow should publish only from actual `push` events / successful CI on `refs/heads/canary`, not from PR or `merge_group` branches. However, merge queue is not the release lock. Manual dispatches, retries, admin bypasses, and slow publish jobs can still overlap.
@@ -270,8 +270,8 @@
 
    With this rule, merge queue serializes branch state, and the release workflow serializes publishing state.
 
-7. **Rollback is too optimistic**  
-   [TASK.md](/Users/rossir/dev/baml-canary/TASK/TASK.md:1190)  
+7. **Rollback is too optimistic**
+   [TASK.md](/Users/rossir/dev/baml-canary/TASK/TASK.md:1190)
    “Rollback is a code rollback” restores workflow files, but it does not address already-published mutable pointers like `canary.json`, `nightly.json`, `wrapper.json`, install scripts, or a bad GitHub release. The rollback playbook needs explicit behavior for channel pointers and whether to advance to a fixed version, repoint, or leave immutable versions alone.
 
    **Answer:** Rollback is code revert plus mutable pointer repair. `git revert <merge-commit>` restores workflow files, but it does not undo external release state. The rollback playbook must distinguish immutable release artifacts from mutable pointers.
@@ -349,8 +349,8 @@
    - Short cache TTL on mutable pointers so pointer repair reaches wrappers quickly.
 
 **Medium Priority**
-8. **Wrapper release version source is vague**  
-   [TASK.md](/Users/rossir/dev/baml-canary/TASK/TASK.md:83), [TASK.md](/Users/rossir/dev/baml-canary/TASK/TASK.md:963)  
+8. **Wrapper release version source is vague**
+   [TASK.md](/Users/rossir/dev/baml-canary/TASK/TASK.md:83), [TASK.md](/Users/rossir/dev/baml-canary/TASK/TASK.md:963)
    It mentions wrapper crate version / `BAML_WRAPPER_VERSION` and a wrapper-version-changed check, but not the authoritative file or comparison rule. Is it `baml_language/crates/baml/Cargo.toml`, a constant, or workflow metadata?
 
    **Answer:** The authoritative wrapper version is the literal package version in `baml_language/crates/baml/Cargo.toml`, once the wrapper crate exists. Remove `BAML_WRAPPER_VERSION` from the plan; do not introduce an environment-variable version authority for the wrapper.
@@ -426,8 +426,8 @@
    Language/toolchain version source: baml_language/release.toml + release-plan.json stamping
    ```
 
-9. **Direct `baml-cli` warning detection needs a mechanism**  
-   [TASK.md](/Users/rossir/dev/baml-canary/TASK/TASK.md:228)  
+9. **Direct `baml-cli` warning detection needs a mechanism**
+   [TASK.md](/Users/rossir/dev/baml-canary/TASK/TASK.md:228)
    It says `baml-cli` should warn when invoked outside the wrapper. How does it know? The wrapper likely needs to set an env var such as `BAML_WRAPPER_EXEC=1`, and direct invocation warns when absent.
 
    **Answer:** The wrapper sets an advisory environment variable before execing the selected internal toolchain binary:
@@ -490,8 +490,8 @@
    - Machine-readable stdout tests assert the warning never appears on stdout.
    - Optional mismatch test: create a temporary project with `baml.toml [toolchain]` selecting a different version and invoke `baml-cli` directly; assert the mismatch warning appears without any network access.
 
-10. **Installer path/profile behavior is too light**  
-   [TASK.md](/Users/rossir/dev/baml-canary/TASK/TASK.md:491)  
+10. **Installer path/profile behavior is too light**
+   [TASK.md](/Users/rossir/dev/baml-canary/TASK/TASK.md:491)
    Flags are listed, but not which shell profiles are edited, how PATH modification is skipped/detected, whether writes are atomic, how Windows PATH mutation works, or what exit codes mean. This is less architectural, but installers are sharp edges.
 
    **Answer:** Curl/PowerShell installers are user-scoped BAML installers. They may install/update the wrapper under `BAML_HOME`, optionally bootstrap a requested toolchain, and optionally add `BAML_HOME/bin` to the user's PATH. They must not use `sudo`, write system directories, mutate Homebrew/AUR/package-manager paths, install IDE extensions automatically, or write outside `BAML_HOME` except for user profile/PATH configuration.
@@ -661,8 +661,8 @@
    - If checksum or archive validation fails, do not replace the existing wrapper.
    - Re-running the installer is idempotent: it refreshes the wrapper from `wrapper.json`, repairs PATH/env file entries if requested, and only bootstraps the requested toolchain when `--wrapper-only` is not passed.
 
-11. **`baml ide install` fallback is risky as stated**  
-   [TASK.md](/Users/rossir/dev/baml-canary/TASK/TASK.md:970)  
+11. **`baml ide install` fallback is risky as stated**
+   [TASK.md](/Users/rossir/dev/baml-canary/TASK/TASK.md:970)
    “Fall back to dropping into the editor’s extensions directory and unzipping” needs exact per-editor directories, extension IDs, version replacement behavior, and whether that is actually supported. I’d either specify it tightly or remove fallback in v1.
 
    **Answer:** Remove the manual extension-directory unzip fallback from v1. `baml ide install` installs only through supported editor CLIs. If no supported editor CLI is available, print the VSIX path and the exact manual command the user can run.
@@ -727,8 +727,8 @@
    - No supported CLI detected prints manual install commands and VSIX path.
    - No test or implementation path manually unzips into editor extension directories.
 
-12. **Homebrew/AUR publishing details are abstract**  
-   [TASK.md](/Users/rossir/dev/baml-canary/TASK/TASK.md:168), [TASK.md](/Users/rossir/dev/baml-canary/TASK/TASK.md:936)  
+12. **Homebrew/AUR publishing details are abstract**
+   [TASK.md](/Users/rossir/dev/baml-canary/TASK/TASK.md:168), [TASK.md](/Users/rossir/dev/baml-canary/TASK/TASK.md:936)
    The desired package shape is clear, but credentials, target repos, dispatch vs direct commit, AUR update mechanism, and source/archive URL conventions are not as concrete as the GitHub/S3/PyPI parts.
 
    **Answer:** Homebrew and AUR publishing are wrapper-release-only jobs. They never run for `baml-toolchain` nightly/canary releases, never track BAML language versions, never bootstrap toolchains during package install/upgrade, and never write user-scoped `~/.baml` state.
@@ -815,8 +815,8 @@
    - AUR install hooks do not run `baml toolchain use` or `baml toolchain install`.
    - Caveats/install messages include `baml toolchain use canary`.
 
-13. **Manifest target completeness has a subtle policy gap**  
-   [TASK.md](/Users/rossir/dev/baml-canary/TASK/TASK.md:358)  
+13. **Manifest target completeness has a subtle policy gap**
+   [TASK.md](/Users/rossir/dev/baml-canary/TASK/TASK.md:358)
    It defines required and best-effort targets, but not whether the publish workflow may publish a manifest missing a Tier 1 target due to a failed matrix job. I think Tier 1 failures should block publish, while best-effort failures can be omitted only with an explicit gate.
 
    **Answer:** Do not support optional/best-effort targets in v1. If a target is in the supported release matrix, it is required. Any target build, archive-layout, checksum, or smoke failure blocks the entire release. Maintainers can rerun the failed matrix job or rerun the workflow to recover.
@@ -848,8 +848,8 @@
    This keeps the release model simple: if a BAML version exists, all supported targets for that release exist.
 
 **Lower Priority**
-14. **Docs phase is intentionally broad**  
-   [TASK.md](/Users/rossir/dev/baml-canary/TASK/TASK.md:1106)  
+14. **Docs phase is intentionally broad**
+   [TASK.md](/Users/rossir/dev/baml-canary/TASK/TASK.md:1106)
    “New page: install matrix...” is fine for a milestone, but not enough if this is meant to hand directly to a docs implementer. It needs page paths, audience, and required examples.
 
    **Answer:** These docs refer to new docs that must be created as part of the feature branch. There is no established public `baml_language` documentation home yet, so v1 should create in-repo implementation/user-flow docs under `TASK/docs/`. Public product-docs migration is a later product/docs decision and should not block the release-infra implementation.
@@ -919,8 +919,8 @@
 
    These docs are part of the handoff and release-infra branch. They can be moved or rewritten for the public docs site later.
 
-15. **Marketplace/deprecation story is deferred but product-impacting**  
-   [TASK.md](/Users/rossir/dev/baml-canary/TASK/TASK.md:1136)  
+15. **Marketplace/deprecation story is deferred but product-impacting**
+   [TASK.md](/Users/rossir/dev/baml-canary/TASK/TASK.md:1136)
    It is correctly marked as product decision, but if implementation depends on extension ID, Marketplace publisher, or coexistence behavior, that decision may need to move earlier.
 
    **Answer:** Marketplace publishing and old-extension deprecation remain deferred to Phase 4, but the new VSIX identity is not deferred. V1 ships a stable, distinct, toolchain-bundled VSIX installed explicitly by `baml ide install`; it is not published to the VS Code Marketplace in v1.

@@ -58,6 +58,7 @@ jobs:
       pypi_version: ${{ steps.plan.outputs.pypi_version }}
       git_tag: ${{ steps.plan.outputs.git_tag }}
       release_plan_json: ${{ steps.plan.outputs.release_plan_json }}
+      source_sha: ${{ steps.plan.outputs.source_sha }}
       dry_run: ${{ steps.plan.outputs.dry_run }}
       wrapper_version: ${{ steps.wrapper.outputs.wrapper_version }}
       wrapper_changed: ${{ steps.wrapper.outputs.wrapper_changed }}
@@ -93,6 +94,7 @@ jobs:
             fi
           fi
           scripts/baml-language-version plan --channel "$channel" --out release-plan.json
+          source_sha="$(git rev-parse HEAD)"
           version="$(jq -r .canonical_version release-plan.json)"
           pypi_version="$(jq -r .pypi_version release-plan.json)"
           git_tag="$(jq -r .git_tag release-plan.json)"
@@ -104,6 +106,7 @@ jobs:
             echo "release_plan_json<<EOF"
             cat release-plan.json
             echo "EOF"
+            echo "source_sha=$source_sha"
             echo "dry_run=$dry_run"
             echo "dispatch_nightly_after_canary=$dispatch_nightly_after_canary"
           } >> "$GITHUB_OUTPUT"
@@ -160,6 +163,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: ${{ needs.plan.outputs.source_sha }}
           persist-credentials: false
       - uses: actions/download-artifact@v4
         with:
@@ -207,6 +211,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: ${{ needs.plan.outputs.source_sha }}
           persist-credentials: false
       - uses: actions/download-artifact@v4
         with:
@@ -259,6 +264,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: ${{ needs.plan.outputs.source_sha }}
           persist-credentials: false
       - name: Build wrapper
         run: cargo build --manifest-path baml_language/Cargo.toml --release --bin baml --target "${{ matrix.target }}"
@@ -299,6 +305,7 @@ jobs:
     with:
       publish: true
       release_plan_json: ${{ needs.plan.outputs.release_plan_json }}
+      source_sha: ${{ needs.plan.outputs.source_sha }}
     permissions:
       id-token: write
       contents: read
@@ -370,6 +377,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: ${{ needs.plan.outputs.source_sha }}
           persist-credentials: false
       - uses: actions/download-artifact@v4
         with:
@@ -417,20 +425,34 @@ jobs:
             local source="$1"
             local dest="$2"
             local tmp
+            local err
             tmp="$(mktemp)"
-            if aws s3 cp "s3://$PKG_BUCKET/$dest" "$tmp" >/dev/null 2>&1; then
+            err="$(mktemp)"
+            if aws s3api head-object --bucket "$PKG_BUCKET" --key "$dest" >/dev/null 2>"$err"; then
+              if ! aws s3 cp "s3://$PKG_BUCKET/$dest" "$tmp" >/dev/null 2>>"$err"; then
+                echo "::error::immutable object exists but could not be read: $dest"
+                cat "$err"
+                rm -f "$tmp" "$err"
+                exit 1
+              fi
               if cmp -s "$source" "$tmp"; then
                 echo "immutable object already exists and matches: $dest"
               else
                 echo "::error::immutable object exists with different content: $dest"
+                rm -f "$tmp" "$err"
                 exit 1
               fi
-            else
+            elif grep -Eq '(\(404\)|Not Found|NoSuchKey)' "$err"; then
               aws s3 cp "$source" "s3://$PKG_BUCKET/$dest" \
                 --content-type application/json \
                 --cache-control "public, max-age=86400, immutable"
+            else
+              echo "::error::failed to inspect immutable object before upload: $dest"
+              cat "$err"
+              rm -f "$tmp" "$err"
+              exit 1
             fi
-            rm -f "$tmp"
+            rm -f "$tmp" "$err"
           }
 
           version="${{ needs.plan.outputs.version }}"
@@ -475,6 +497,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: ${{ needs.plan.outputs.source_sha }}
           persist-credentials: false
       - uses: actions/download-artifact@v4
         with:
@@ -512,6 +535,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: ${{ needs.plan.outputs.source_sha }}
           persist-credentials: false
       - uses: actions/download-artifact@v4
         with:
@@ -564,6 +588,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: ${{ needs.plan.outputs.source_sha }}
           persist-credentials: false
       - uses: actions/download-artifact@v4
         with:

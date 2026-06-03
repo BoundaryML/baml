@@ -82,6 +82,12 @@ struct ResolvedSelector {
     source: SelectorSource,
 }
 
+#[derive(Clone, Copy)]
+enum FetchPolicy {
+    CacheAllowed,
+    ForceRemote,
+}
+
 fn main() {
     let exit = match run() {
         Ok(code) => code,
@@ -406,7 +412,11 @@ fn manifest_base_url(override_url: Option<&str>) -> String {
         .unwrap_or_else(baml_release::manifest_base_url)
 }
 
-fn fetch_manifest(selector: &str, override_url: Option<&str>) -> Result<ToolchainManifest> {
+fn fetch_manifest(
+    selector: &str,
+    override_url: Option<&str>,
+    policy: FetchPolicy,
+) -> Result<ToolchainManifest> {
     let base = manifest_base_url(override_url);
     let url = if is_channel(selector) {
         format!("{base}/{selector}.json")
@@ -420,13 +430,7 @@ fn fetch_manifest(selector: &str, override_url: Option<&str>) -> Result<Toolchai
             .join("version")
             .join(format!("{selector}.json"))
     };
-    let use_cache = !is_channel(selector)
-        || cache_path
-            .metadata()
-            .and_then(|metadata| metadata.modified())
-            .ok()
-            .and_then(|modified| SystemTime::now().duration_since(modified).ok())
-            .is_some_and(|age| age <= CHANNEL_CACHE_TTL);
+    let use_cache = should_use_manifest_cache(selector, &cache_path, policy);
     let mut fetched_remote = false;
     let text = if use_cache {
         fs::read_to_string(&cache_path).ok()
@@ -466,13 +470,44 @@ fn toml_or_json<T: for<'de> Deserialize<'de>>(text: &str) -> Result<T> {
     serde_json::from_str(text).context("invalid JSON manifest")
 }
 
+fn should_use_manifest_cache(selector: &str, cache_path: &Path, policy: FetchPolicy) -> bool {
+    match policy {
+        FetchPolicy::ForceRemote => false,
+        FetchPolicy::CacheAllowed => {
+            !is_channel(selector)
+                || cache_path
+                    .metadata()
+                    .and_then(|metadata| metadata.modified())
+                    .ok()
+                    .and_then(|modified| SystemTime::now().duration_since(modified).ok())
+                    .is_some_and(|age| age <= CHANNEL_CACHE_TTL)
+        }
+    }
+}
+
 fn install_toolchain(
     selector: &str,
     activate_channel: bool,
     override_url: Option<&str>,
     force: bool,
 ) -> Result<()> {
-    let manifest = fetch_manifest(selector, override_url)?;
+    install_toolchain_with_policy(
+        selector,
+        activate_channel,
+        override_url,
+        force,
+        FetchPolicy::CacheAllowed,
+    )
+}
+
+fn install_toolchain_with_policy(
+    selector: &str,
+    activate_channel: bool,
+    override_url: Option<&str>,
+    force: bool,
+    policy: FetchPolicy,
+) -> Result<()> {
+    let manifest = fetch_manifest(selector, override_url, policy)?;
     let target = baml_release::release_host_target_triple()?;
     let artifact = manifest.artifact_for_target(target)?.clone();
     install_manifest_artifact(&manifest.version, target, artifact, force)?;
@@ -530,7 +565,7 @@ fn use_toolchain(selector: &str, override_url: Option<&str>) -> Result<()> {
     } else {
         let target = baml_release::release_host_target_triple()?;
         if !toolchain_cli_path(selector).exists() {
-            let manifest = fetch_manifest(selector, override_url)?;
+            let manifest = fetch_manifest(selector, override_url, FetchPolicy::CacheAllowed)?;
             let artifact = manifest.artifact_for_target(target)?.clone();
             install_manifest_artifact(&manifest.version, target, artifact, false)?;
         }
@@ -552,7 +587,19 @@ fn update_toolchain(override_url: Option<&str>) -> Result<()> {
         );
         return Ok(());
     }
-    install_toolchain(&config.default.selector, true, override_url, false)
+    install_toolchain_with_policy(
+        &config.default.selector,
+        true,
+        override_url,
+        false,
+        FetchPolicy::ForceRemote,
+    )
+    .with_context(|| {
+        format!(
+            "failed to refresh {} from the remote manifest; the active installed toolchain was left unchanged",
+            config.default.selector
+        )
+    })
 }
 
 fn installed_toolchains() -> Vec<String> {
@@ -723,4 +770,39 @@ fn is_managed_install(path: &Path) -> bool {
         || text.contains("/usr/local/Cellar/")
         || text.starts_with("/usr/bin/")
         || text.starts_with("/opt/")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn cache_allowed_uses_fresh_channel_cache() {
+        let tmp = tempfile::NamedTempFile::new().unwrap();
+        assert!(should_use_manifest_cache(
+            "canary",
+            tmp.path(),
+            FetchPolicy::CacheAllowed
+        ));
+    }
+
+    #[test]
+    fn force_remote_ignores_fresh_channel_cache() {
+        let tmp = tempfile::NamedTempFile::new().unwrap();
+        assert!(!should_use_manifest_cache(
+            "nightly",
+            tmp.path(),
+            FetchPolicy::ForceRemote
+        ));
+    }
+
+    #[test]
+    fn exact_version_cache_is_immutable_and_allowed() {
+        let missing = Path::new("/tmp/definitely-missing-baml-manifest.json");
+        assert!(should_use_manifest_cache(
+            "0.11.0",
+            missing,
+            FetchPolicy::CacheAllowed
+        ));
+    }
 }

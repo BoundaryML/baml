@@ -17,6 +17,11 @@ on:
         type: string
         default: ""
         required: false
+      source_sha:
+        description: "Exact repository commit to build"
+        type: string
+        default: ""
+        required: false
   push:
     branches:
       # Mirror the Python reusable workflow's rehearsal-branch trigger so the
@@ -89,6 +94,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
+          ref: ${{ inputs.source_sha || github.sha }}
           persist-credentials: false
 
       - name: Stamp release plan
