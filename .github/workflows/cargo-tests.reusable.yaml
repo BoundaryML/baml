@@ -158,7 +158,7 @@ jobs:
     # Skip in the merge queue: macos already ran on the PR. The merge_group
     # event is inherited from ci.yaml through the workflow_call boundary.
     if: ${{ github.event_name != 'merge_group' }}
-    runs-on: macos-latest
+    runs-on: blacksmith-6vcpu-macos-latest
     timeout-minutes: 35
     steps:
       - uses: actions/checkout@v6
@@ -384,7 +384,7 @@ jobs:
                 "sdk-path": "python_pydantic2",
                 "install-args": "sccache direnv python uv",
                 "os-label": "macos",
-                "runs-on": "macos-latest",
+                "runs-on": "blacksmith-6vcpu-macos-latest",
                 "rust-cache-key": "macos-cargo",
                 "timeout": 40,
               },
@@ -394,7 +394,7 @@ jobs:
                 "sdk-path": "typescript_node",
                 "install-args": "sccache direnv node npm:pnpm",
                 "os-label": "macos",
-                "runs-on": "macos-latest",
+                "runs-on": "blacksmith-6vcpu-macos-latest",
                 "rust-cache-key": "macos-cargo",
                 "timeout": 40,
               },

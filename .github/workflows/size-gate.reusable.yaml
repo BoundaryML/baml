@@ -132,7 +132,7 @@ jobs:
 
   size-gate-macos:
     name: "size-gate (macos)"
-    runs-on: macos-latest
+    runs-on: blacksmith-6vcpu-macos-latest
     timeout-minutes: 20
     continue-on-error: true
     steps:
