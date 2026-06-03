@@ -1,14 +1,18 @@
 //! Tests for the `interface` declaration and `implements I { ... }` blocks
 //! introduced by BEP-044.
 //!
-//! These tests exercise the parser + AST lowering + per-file interface
-//! validation. They do **not** exercise method dispatch at runtime — that is
-//! tracked separately as TIR/MIR work (see BEP-044 §"Method Disambiguation").
+//! These tests exercise the full pipeline: parser + AST lowering + per-file
+//! interface validation, plus method dispatch, default-body resolution,
+//! `.as<I>` projections, generic monomorphisation, and reflection executed
+//! end-to-end through the BAML VM (see BEP-044 §"Method Disambiguation").
 //!
-//! The shape of each test:
-//!   1. Compile a self-contained BAML snippet through the project pipeline.
-//!   2. Collect compile errors that originate in the user file.
-//!   3. Assert presence (or absence) of specific diagnostic codes / messages.
+//! The shape of each test is one of:
+//!   1. Compile-time: compile a self-contained BAML snippet through the
+//!      project pipeline, collect compile errors that originate in the user
+//!      file, and assert presence (or absence) of specific diagnostic codes /
+//!      messages.
+//!   2. Runtime (`#[tokio::test]`): execute the program through the VM and
+//!      pin the returned value.
 //!
 //! Coverage groups roughly track BEP-044's "Corner Cases" matrix:
 //!   • happy-path parsing of `interface`, `requires`, `implements`
@@ -854,13 +858,10 @@ fn interface_default_method_body_gets_exhaustiveness_checking() {
 
 #[test]
 fn calling_method_through_interface_typed_param() {
-    // A function parameter typed as the interface should expose the
-    // interface's methods on the value, even though the value is a concrete
-    // class. Currently this only checks the interface's `required_methods`
-    // can be referenced; method-call resolution falls through to the
-    // class's flattened methods list when the call is unqualified.
+    // A function parameter typed as the interface exposes the interface's
+    // methods on the value, even though the value is a concrete class.
     //
-    // This test pins down that interface-typed parameters accept concrete
+    // This test pins that interface-typed parameters accept concrete
     // instances and that fields declared on the interface are visible
     // through the interface-typed variable.
     assert_no_interface_errors(
@@ -2137,6 +2138,468 @@ async fn match_destructures_interface_fields() {
     );
 }
 
+/// Destructuring an interface head (`Animal { name } => ...`) binds the
+/// interface's fields directly, dispatching through the implementor's field
+/// view. Because every implementor provides the interface's declared fields,
+/// the pattern matches all of them — a single `Animal { name }` arm is
+/// exhaustive over an `Animal` scrutinee (no `_` needed).
+#[tokio::test]
+async fn match_destructures_interface_fields_directly() {
+    let output = baml_test!(
+        r#"
+        interface Animal {
+            name: string
+            function speak(self) -> string
+        }
+        class Dog {
+            name: string
+            implements Animal {
+                function speak(self) -> string { return "Woof!" }
+            }
+        }
+        class Cat {
+            nickname: string
+            implements Animal {
+                name as nickname
+                function speak(self) -> string { return "Meow." }
+            }
+        }
+        function describe(a: Animal) -> string {
+            return match (a) {
+                Animal { name } => "animal: " + name
+            }
+        }
+        function main() -> string {
+            let dog: Animal = Dog { name: "Rex" }
+            let cat: Animal = Cat { nickname: "Luna" }
+            return describe(dog) + " / " + describe(cat)
+        }
+    "#
+    );
+    assert_eq!(
+        output.result.unwrap(),
+        BexExternalValue::String("animal: Rex / animal: Luna".into())
+    );
+}
+
+#[tokio::test]
+async fn match_interface_destructure_respects_field_subpatterns() {
+    let output = baml_test!(
+        r#"
+        interface Switch {
+            active: bool
+        }
+        class Lamp {
+            active: bool
+            implements Switch {}
+        }
+
+        function describe(s: Switch) -> string {
+            return match (s) {
+                Switch { active: true } => "on"
+                Switch { active: false } => "off"
+            }
+        }
+        function main() -> string {
+            let s: Switch = Lamp { active: false }
+            return describe(s)
+        }
+    "#
+    );
+    assert_eq!(
+        output.result.unwrap(),
+        BexExternalValue::String("off".into())
+    );
+}
+
+#[test]
+fn mixed_interface_and_concrete_destructures_do_not_require_wildcard() {
+    assert_zero_compile_errors(
+        r#"
+        interface Animal {
+            name: string
+        }
+        class Dog {
+            name: string
+            breed: string
+            implements Animal {}
+        }
+
+        function describe(a: Animal) -> string {
+            return match (a) {
+                Dog { breed: "Lab" } => "lab"
+                Animal { name: string } => "animal"
+            }
+        }
+        "#,
+    );
+}
+
+#[test]
+fn interface_destructure_before_concrete_destructure_is_unreachable_not_nonexhaustive() {
+    let errors = collect_compile_errors(
+        r#"
+        interface Animal {
+            name: string
+        }
+        class Dog {
+            name: string
+            breed: string
+            implements Animal {}
+        }
+
+        function describe(a: Animal) -> string {
+            return match (a) {
+                Animal { name: string } => "animal"
+                Dog { breed: "Lab" } => "lab"
+            }
+        }
+        "#,
+    );
+    assert!(
+        errors.iter().any(|e| e.starts_with("[E0063]")),
+        "expected unreachable-arm error, got:\n  {}",
+        errors.join("\n  ")
+    );
+    assert!(
+        !errors.iter().any(|e| e.starts_with("[E0062]")),
+        "expected no non-exhaustive error, got:\n  {}",
+        errors.join("\n  ")
+    );
+}
+
+#[test]
+fn concrete_then_interface_destructure_covers_remaining_implementor_values() {
+    assert_zero_compile_errors(
+        r#"
+        interface Animal {
+            friendly: bool
+        }
+        class Dog {
+            friendly: bool
+            breed: string
+            implements Animal {}
+        }
+
+        function describe(a: Animal) -> string {
+            return match (a) {
+                Dog { friendly: true } => "friendly dog"
+                Animal { friendly: true } => "other friendly animal"
+                Animal { friendly: false } => "other animal"
+            }
+        }
+        "#,
+    );
+}
+
+#[test]
+fn mixed_interface_and_concrete_destructures_project_aliased_fields() {
+    assert_zero_compile_errors(
+        r#"
+        interface Toggle {
+            on: bool
+        }
+        class Widget {
+            label: string
+            enabled: bool
+            implements Toggle {
+                on as enabled
+            }
+        }
+
+        function describe(t: Toggle) -> string {
+            return match (t) {
+                Widget { enabled: true } => "on"
+                Toggle { on: true } => "other on"
+                Toggle { on: false } => "off"
+            }
+        }
+        "#,
+    );
+}
+
+#[test]
+fn mixed_interface_and_generic_concrete_destructures_project_class_type_args() {
+    assert_zero_compile_errors(
+        r#"
+        interface Slot<T> {
+            value: T
+        }
+        class Pair<L, R> {
+            left: L
+            right: R
+            implements Slot<L> {
+                value as left
+            }
+        }
+
+        function describe(s: Slot<int>) -> string {
+            return match (s) {
+                Pair<int, string> { right: "seven" } => "pair"
+                Slot<int> { value: int } => "slot"
+            }
+        }
+        "#,
+    );
+}
+
+#[test]
+fn mixed_interface_and_generic_concrete_destructures_project_swapped_class_type_args() {
+    assert_zero_compile_errors(
+        r#"
+        interface Cell<T> {
+            item: T
+        }
+        class Pair<L, R> {
+            left: L
+            right: R
+            implements Cell<R> {
+                item as right
+            }
+        }
+
+        function describe(c: Cell<string>) -> string {
+            return match (c) {
+                Pair<int, string> { left: 7 } => "pair"
+                Cell<string> { item: string } => "cell"
+            }
+        }
+        "#,
+    );
+}
+
+#[test]
+fn mixed_interface_and_generic_concrete_destructures_project_second_implements_block() {
+    assert_zero_compile_errors(
+        r#"
+        interface Slot<T> {
+            value: T
+        }
+        class Pair<L, R> {
+            left: L
+            right: R
+            implements Slot<L> {
+                value as left
+            }
+            implements Slot<R> {
+                value as right
+            }
+        }
+
+        function describe(s: Slot<string>) -> string {
+            return match (s) {
+                Pair<int, string> { left: 7 } => "pair"
+                Slot<string> { value: string } => "slot"
+            }
+        }
+        "#,
+    );
+}
+
+#[test]
+fn generic_interface_and_concrete_destructures_still_report_partial_coverage() {
+    assert_compile_error_code(
+        r#"
+        interface Slot<T> {
+            value: T
+        }
+        class Pair<L, R> {
+            left: L
+            right: R
+            implements Slot<L> {
+                value as left
+            }
+        }
+
+        function describe(s: Slot<int>) -> string {
+            return match (s) {
+                Pair<int, string> { right: "seven" } => "pair"
+                Slot<int> { value: 1 } => "one"
+            }
+        }
+        "#,
+        "E0062",
+    );
+}
+
+#[test]
+fn union_of_generic_interfaces_allows_mixed_interface_and_concrete_destructures() {
+    assert_zero_compile_errors(
+        r#"
+        interface Slot<T> {
+            value: T
+        }
+        class Pair<L, R> {
+            left: L
+            right: R
+            implements Slot<L> {
+                value as left
+            }
+        }
+
+        interface Cargo<T> {
+            payload: T
+        }
+        class Box<T> {
+            inner: T
+            label: string
+            implements Cargo<T> {
+                payload as inner
+            }
+        }
+
+        function describe(x: Slot<int> | Cargo<string>) -> string {
+            return match (x) {
+                Pair<int, string> { right: "tag" } => "pair"
+                Slot<int> { value: int } => "slot"
+                Box<string> { label: "crate" } => "box"
+                Cargo<string> { payload: string } => "cargo"
+            }
+        }
+        "#,
+    );
+}
+
+#[test]
+fn union_of_generic_interfaces_reports_missing_interface_branch() {
+    assert_compile_error_code(
+        r#"
+        interface Slot<T> {
+            value: T
+        }
+        class Pair<L, R> {
+            left: L
+            right: R
+            implements Slot<L> {
+                value as left
+            }
+        }
+
+        interface Cargo<T> {
+            payload: T
+        }
+        class Box<T> {
+            inner: T
+            label: string
+            implements Cargo<T> {
+                payload as inner
+            }
+        }
+
+        function describe(x: Slot<int> | Cargo<string>) -> string {
+            return match (x) {
+                Pair<int, string> { right: "tag" } => "pair"
+                Slot<int> { value: int } => "slot"
+            }
+        }
+        "#,
+        "E0062",
+    );
+}
+
+#[test]
+fn union_of_interfaces_allows_mixed_interface_and_concrete_destructures() {
+    assert_zero_compile_errors(
+        r#"
+        interface Animal {
+            awake: bool
+        }
+        class Dog {
+            awake: bool
+            breed: string
+            implements Animal {}
+        }
+
+        interface Vehicle {
+            running: bool
+        }
+        class Car {
+            running: bool
+            make: string
+            implements Vehicle {}
+        }
+
+        function describe(x: Animal | Vehicle) -> string {
+            return match (x) {
+                Dog { awake: true } => "dog"
+                Animal { awake: true } => "animal"
+                Animal { awake: false } => "animal"
+                Car { running: true } => "car"
+                Vehicle { running: true } => "vehicle"
+                Vehicle { running: false } => "vehicle"
+            }
+        }
+        "#,
+    );
+}
+
+#[test]
+fn mixed_interface_and_concrete_destructures_still_report_partial_coverage() {
+    assert_compile_error_code(
+        r#"
+        interface Animal {
+            name: string
+            friendly: bool
+        }
+        class Dog {
+            name: string
+            friendly: bool
+            implements Animal {}
+        }
+
+        function describe(a: Animal) -> string {
+            return match (a) {
+                Dog { friendly: true } => "friendly"
+                Animal { name: "Rex" } => "rex"
+            }
+        }
+        "#,
+        "E0062",
+    );
+}
+
+/// Narrowing an interface-typed value with a concrete-implementor *destructure*
+/// pattern (`Dog { name } => ...`) also works — it binds the class's own fields.
+#[tokio::test]
+async fn match_destructures_concrete_implementor_fields() {
+    let output = baml_test!(
+        r#"
+        interface Animal {
+            name: string
+            function speak(self) -> string
+        }
+        class Dog {
+            name: string
+            breed: string
+            implements Animal {
+                function speak(self) -> string { return "Woof!" }
+            }
+        }
+        class Cat {
+            name: string
+            implements Animal {
+                function speak(self) -> string { return "Meow." }
+            }
+        }
+        function describe(a: Animal) -> string {
+            return match (a) {
+                Dog { name, breed } => name + " the " + breed
+                Cat { name } => name + " the cat"
+                _ => "other"
+            }
+        }
+        function main() -> string {
+            let a: Animal = Dog { name: "Rex", breed: "Lab" }
+            return describe(a)
+        }
+    "#
+    );
+    assert_eq!(
+        output.result.unwrap(),
+        BexExternalValue::String("Rex the Lab".into())
+    );
+}
+
 #[tokio::test]
 async fn match_open_interface_with_wildcard_works() {
     let output = baml_test!(
@@ -3117,9 +3580,8 @@ fn as_requires_interface_target() {
 
 #[tokio::test]
 async fn dispatch_through_function_call_result() {
-    // `f().speak()` where `f()` returns an interface-typed value should
-    // dispatch dynamically. Today the MIR intercepts only direct local
-    // receivers, so the type-tag switch isn't emitted here.
+    // `f().speak()` where `f()` returns an interface-typed value dispatches
+    // dynamically on the runtime class of the call result.
     let output = baml_test!(
         r#"
         interface Animal {
@@ -3173,7 +3635,7 @@ async fn dispatch_through_array_index_with_field_access() {
 #[tokio::test]
 async fn dispatch_through_field_access_chain() {
     // `wrapper.animal.speak()` — receiver is a field access, not a
-    // local. Path interception needs to recognize this longer chain.
+    // local. Dispatch fires on the runtime class reached through the chain.
     let output = baml_test!(
         r#"
         interface Animal {
@@ -3748,10 +4210,10 @@ async fn default_call_with_computed_argument_expression() {
 #[test]
 fn default_keyword_inside_lambda_inside_implements_block() {
     // `default.log(msg)` referenced from inside a lambda nested in the
-    // override. Lambdas inherit access to `self` but the BEP-044 keyword
-    // scoping rules don't reach this far yet, so this is a compile-time
-    // failure today. Pin it and flip to a runtime check when lambdas
-    // start tracking the enclosing implements-block context.
+    // override is a compile error: per BEP-044, the `default` magic
+    // identifier does not capture across closure boundaries — a lambda body
+    // sees it as an unresolved name. (Bind the default's result outside the
+    // lambda first if you need it.)
     assert_compile_error_contains(
         r#"
         interface Logger {
@@ -6367,12 +6829,17 @@ fn bounded_type_var_rule_conservatively_overlaps_in_body_generic_class_rule() {
 // ═══════════════════════════════════════════════════════════════════════════
 // BEP-044 regression suite — derived from a CLI fuzz/stress sweep (45 findings).
 //
-// Every test below pins behavior that is currently BROKEN. They are expected to
-// FAIL on `canary` and to start passing as each defect is fixed. Numbers map to
-// _plan/baml_interface_findings.md. Positive cases run the program end-to-end and
-// assert the concrete result; "must-reject" cases assert the diagnostic that
-// should fire. Finding #30 (a too-weak existing test) is covered by
-// `fuzz_bug29_*` below, which asserts the canonical `let d: Dog =>` form narrows.
+// Each test below is a regression guard pinning the corrected behavior for a
+// finding from that sweep; the doc comment on each names the original defect it
+// guards against. All of these PASS now — positive cases run the program
+// end-to-end and assert the concrete result; "must-reject" cases assert the
+// diagnostic that fires. Numbers map to _plan/baml_interface_findings.md.
+// Finding #30 (a too-weak existing test) is covered by `fuzz_bug29_*` below,
+// which asserts the canonical `let d: Dog =>` form narrows.
+//
+// EXCEPTION: findings #1 and #2 (`fuzz_bug01_*`, `fuzz_bug02_*`) remain
+// `#[ignore]`d — they need interface methods as first-class values
+// (`let f = Interface.method` with dynamic dispatch), which is not implemented.
 // ═══════════════════════════════════════════════════════════════════════════
 
 /// Finding #1 [crash]: Interface method reference on required (abstract) method crashes at runtime
@@ -6709,8 +7176,8 @@ function main() -> bool {
     let rr: Slot<string> = p
     let lv = rl.get()
     let rv = rr.get()
-    // Expected: lv == 42 && rv == "world"
-    // Actual:   lv == 42 && rv == 42  (second dispatch picks first impl block)
+    // Each interface view dispatches to its own impl block:
+    // lv == 42 (Slot<int>) && rv == "world" (Slot<string>).
     return lv == 42 && rv == "world"
 }
 "##
@@ -6741,8 +7208,8 @@ function main() -> bool {
     let p: GenPair<int, string> = GenPair { left: 7, right: "seven" }
     let i: Slot<int> = p
     let s: Slot<string> = p
-    // Expected: i.value == 7 && s.value == "seven"
-    // Actual: i.value == 7 && s.value == 7 (wrong impl selected)
+    // Each field-link view selects the impl block matching its type arg:
+    // i.value == 7 (Slot<int>) && s.value == "seven" (Slot<string>).
     return i.value == 7 && s.value == "seven"
 }
 "##
@@ -7095,7 +7562,7 @@ class Impl {
 
 function main() -> string {
     let x = Impl {}
-    return x.process()  // Expected: E0121; Actual: compiles and returns "REQUIRED"
+    return x.process()  // E0121: ambiguous between the default and required `process`
 }
 "##,
         "E0121",
@@ -7121,7 +7588,7 @@ class Multi {
 
 function main() -> int {
     let m = Multi {}
-    return m.convert()  // picks Converter<int> silently
+    return m.convert()  // E0121: ambiguous between Converter<int> and Converter<string>
 }
 "##,
         "E0121",
@@ -7212,7 +7679,8 @@ function main() -> string {
         true => Dog {}
         false => Cat {}
     }
-    // result is Dog | Cat union - calling any method crashes the VM
+    // result is a Dog | Cat union; `speak()` is present on every member, so
+    // the call dispatches on the runtime class (Dog here).
     return result.speak()
 }
 "##
@@ -7293,8 +7761,8 @@ class IntBox {
 }
 
 function main() -> bool {
-    // IntBox only implements Box<int>, NOT Box<string>
-    // Expected: false. Actual: true (wrong!)
+    // IntBox only implements Box<int>, NOT Box<string>, so this is false —
+    // `implements` respects the generic type argument.
     return reflect.type_of<IntBox>().implements(reflect.type_of<Box<string>>())
 }
 "##
@@ -7316,8 +7784,8 @@ class IntBox {
 }
 
 function main() -> bool {
-    // Box<string>.implemented_by(IntBox) should be false
-    // IntBox only implements Box<int>
+    // Box<string>.implemented_by(IntBox) is false — IntBox only implements
+    // Box<int>, and `implemented_by` respects the type argument.
     return reflect.type_of<Box<string>>().implemented_by(reflect.type_of<IntBox>())
 }
 "##
@@ -7344,8 +7812,8 @@ class StringBox {
 }
 
 function main() -> int {
-    // Box<int>.implementors() should return [IntBox] (length 1)
-    // But actually returns both IntBox and StringBox (length 2)
+    // Box<int>.implementors() returns just [IntBox] (length 1) — the type
+    // argument filters out StringBox (which implements Box<string>).
     return reflect.type_of<Box<int>>().implementors().length()
 }
 "##
@@ -7818,17 +8286,16 @@ fn ambiguous_method_namespace_qualified_fix_compiles() {
 // run through `baml-cli`; findings are recorded in `_plan/wf3/FINDINGS.md`, and
 // every test below names the originating `_plan/wf3/<area>/<file>` repro.
 //
-// Like the `fuzz_*` suite above, the bug / desired-direction tests pin the
-// CORRECT behavior and are expected to FAIL on current code (reproducing the
-// defect) and to start passing as each is fixed. Tests suffixed `_pins` pin
-// behavior that is correct today (sometimes subtle or surprising) so a
-// regression is caught.
+// Like the `fuzz_*` suite above, each test is a regression guard that PASSES
+// now; its doc comment names the original defect it guards against. Tests
+// suffixed `_pins` pin behavior that was already correct (sometimes subtle or
+// surprising) so a regression is caught.
 // ═══════════════════════════════════════════════════════════════════════════
 
-// ── Crashes (type-checker-accepted code that panics the VM) ──────────────────
+// ── Formerly crashes (type-checker-accepted code that panicked the VM) ───────
 
-/// wf3 #1 [crash]: generic `Sub<T> requires Base<T>` whose default method calls
-/// the parent's required method via `self` crashes the VM when dispatched
+/// wf3 #1 [was: crash]: generic `Sub<T> requires Base<T>` whose default method
+/// calls the parent's required method via `self` — now dispatches correctly
 /// through an interface-typed var. `_plan/wf3/generics-core/gen_requires_generic.baml`
 #[tokio::test]
 async fn wf3_generic_requires_chain_default_delegation_runtime() {
@@ -7859,8 +8326,8 @@ async fn wf3_generic_requires_chain_default_delegation_runtime() {
     assert_eq!(output.result.unwrap(), BexExternalValue::Int(77));
 }
 
-/// wf3 #2 [crash]: chained Form2 blanket impls (`Loud for T where T: Printable`,
-/// `Printable for T where T: Named`) crash the VM.
+/// wf3 #2 [was: crash]: chained Form2 blanket impls (`Loud for T where T:
+/// Printable`, `Printable for T where T: Named`) now dispatch correctly.
 /// `_plan/wf3/generics-bounds-blanket/p8b_blanket_on_blanket_min.baml`
 #[tokio::test]
 async fn wf3_blanket_on_blanket_chain_runtime() {
@@ -7888,10 +8355,10 @@ async fn wf3_blanket_on_blanket_chain_runtime() {
     );
 }
 
-/// wf3 #3 [crash/unsound]: a phantom impl type param
+/// wf3 #3 [was: crash/unsound]: a phantom impl type param
 /// (`implements<T> Tagged<T> for Holder` where `T` appears only in the interface
-/// args) must be rejected at compile time — today it compiles, is accepted as
-/// `Tagged<int|string|bool>`, and crashes the VM.
+/// args) is now rejected at compile time — previously it compiled, was accepted
+/// as `Tagged<int|string|bool>`, and crashed the VM.
 /// `_plan/wf3/generics-bounds-blanket/p13c_phantom_single.baml`
 #[test]
 fn wf3_phantom_impl_type_param_is_rejected() {
@@ -7915,12 +8382,12 @@ fn wf3_phantom_impl_type_param_is_rejected() {
     );
 }
 
-/// wf3 #4 [crash]: `default.<field>` type-checks as `string` but reads `null`,
-/// then `string + any` crashes the VM. Expected: `default.name` resolves to the
-/// field like `self.name`/`self.as<Named>.name` do (all read "Bob"). (If the
-/// language instead restricts `default` to call position — see
-/// `wf3_default_as_bare_value_is_rejected` — this should become a compile error,
-/// not a crash.) `_plan/wf3/default-methods/p6d_default_vs_self_field.baml`
+/// wf3 #4 [was: crash]: `default.<field>` now resolves to the field like
+/// `self.name`/`self.as<Named>.name` do (all read "Bob"); previously it
+/// type-checked as `string` but read `null`, then `string + any` crashed the
+/// VM. (`default` as a bare value is still rejected — see
+/// `wf3_default_as_bare_value_is_rejected`.)
+/// `_plan/wf3/default-methods/p6d_default_vs_self_field.baml`
 #[tokio::test]
 async fn wf3_default_field_access_does_not_crash() {
     let output = baml_test!(
@@ -8051,10 +8518,10 @@ async fn wf3_reflect_implemented_by_generic_arg_substitution_runtime() {
     assert_eq!(output.result.unwrap(), BexExternalValue::Bool(true));
 }
 
-/// wf3 #8 [high/soundness]: a `-> Self` method in `Box`'s implements block has
-/// `Self = Box`; returning a `Cup` must be a compile error. Today it compiles and
-/// a `Box`-typed value backed by a runtime `Cup` reads a non-existent field.
-/// `_plan/wf3/self-types/self_wrong_class_field_access.baml`
+/// wf3 #8 [was: high/soundness]: a `-> Self` method in `Box`'s implements block
+/// has `Self = Box`; returning a `Cup` is now a compile error. Previously it
+/// compiled and a `Box`-typed value backed by a runtime `Cup` read a
+/// non-existent field. `_plan/wf3/self-types/self_wrong_class_field_access.baml`
 #[test]
 fn wf3_self_return_wrong_concrete_class_is_rejected() {
     let errors = collect_compile_errors(
@@ -8657,8 +9124,8 @@ async fn wf3_self_interface_field_access_via_projection_runtime() {
 
 /// wf3 [low/design]: a `throws` narrower than the interface's declaration
 /// (`throws NetworkError` where `NetworkError implements IError` and the
-/// interface declares `throws IError`) should be allowed by covariance — today
-/// it is rejected E0120 even though throwing a subtype at a throw-site is fine.
+/// interface declares `throws IError`) is now allowed by covariance, matching
+/// the fact that throwing a subtype at a throw-site is fine (previously E0120).
 /// `_plan/wf3/out-of-body-throws/oob_throws_subset.baml`
 #[test]
 fn wf3_throws_covariant_narrower_is_allowed() {
@@ -8956,5 +9423,843 @@ async fn wf3_blanket_implementor_identity_is_bare_class_pins() {
     assert_eq!(
         output.result.unwrap(),
         BexExternalValue::String("Box".into())
+    );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Group: union-fuzz findings (workflow_scratch_files/FINDINGS.md, 2026-06-01)
+//
+// 17 union-focused interface bugs found by the `baml-interface-union-fuzz`
+// workflow. Each `union_fuzz_fNN_*` test asserts the DESIRED behavior, so it
+// FAILS today and turns GREEN once the bug is fixed (no edit required). The
+// runnable `.baml` repro for each finding lives under
+// `workflow_scratch_files/cat_<category>/`. Severities: crash > wrong-result >
+// spurious-compile-error > missing-error > bad-diagnostic.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Regression guard (user-reported): a method present on every member of a
+/// *class-only* union (`A | B`, both declaring `execute`) dispatches on the
+/// runtime class. This already worked, but is pinned alongside the interface
+/// union fixes so the shared union-dispatch path stays green.
+#[tokio::test]
+async fn union_fuzz_class_only_union_method_dispatch() {
+    let output = baml_test!(
+        r#"
+        class A {
+          name: string
+          function execute(self) -> string { return "A executes and gets " + self.name }
+        }
+        class B {
+          name: string
+          function execute(self) -> string { return "B executes and gets " + self.name }
+        }
+        function process(input: A | B) -> string { return input.execute() }
+        function main() -> string {
+          return process(A { name: "Alice" }) + " | " + process(B { name: "Bob" })
+        }
+        "#
+    );
+    assert_eq!(
+        output.result.unwrap(),
+        BexExternalValue::String("A executes and gets Alice | B executes and gets Bob".into())
+    );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PR #3638 review follow-ups: extra union cases surfaced by CodeRabbit/Cursor on
+// the F1–F17 fix branch. Each reproduced a real bug before the follow-up fix.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// A class-only union whose members satisfy a method only through an *inherited*
+/// interface default (`class Dog { implements Greeter {} }`) used to type-check
+/// and then crash the VM (`expected map, got instance`) because the union
+/// dispatch resolved only direct class methods. It must dispatch the inherited
+/// default on the runtime class.
+#[tokio::test]
+async fn union_fuzz_pr_class_union_inherited_default_method() {
+    let output = baml_test!(
+        r#"
+        interface Greeter {
+          function greet(self) -> string { return "hello" }
+        }
+        class Dog { implements Greeter {} }
+        class Cat { implements Greeter {} }
+        function describe(x: Dog | Cat) -> string { return x.greet() }
+        function main() -> string { return describe(Dog {}) + "/" + describe(Cat {}) }
+        "#
+    );
+    assert_eq!(
+        output.result.unwrap(),
+        BexExternalValue::String("hello/hello".into())
+    );
+}
+
+/// Reflection generic-arg equivalence must treat unions nested inside wrappers
+/// (`Box<(int | string)?>`) order-insensitively too — the `Optional`/`List`/`Map`
+/// layers used to fall back to structural equality and defeat the union-set
+/// comparison, so the reversed `Box<(string | int)?>` answered `false`.
+#[tokio::test]
+async fn union_fuzz_pr_reflection_nested_union_arg_order_insensitive() {
+    let output = baml_test!(
+        r#"
+        interface Box<T> { function get(self) -> T }
+        class UBox {
+          value: int
+          implements Box<(int | string)?> {
+            function get(self) -> (int | string)? { return self.value }
+          }
+        }
+        function main() -> int {
+          let ub = reflect.type_of<UBox>()
+          let fwd = reflect.type_of<Box<(int | string)?>>()
+          let rev = reflect.type_of<Box<(string | int)?>>()
+          let a = 0
+          if ub.implements(fwd) { a = a + 1 }
+          if ub.implements(rev) { a = a + 10 }
+          return a
+        }
+        "#
+    );
+    assert_eq!(output.result.unwrap(), BexExternalValue::Int(11));
+}
+
+/// Calling a method that two interfaces both declare, on a *union* of classes
+/// that inherit it, must report the same E0121 ambiguity (with the `.as<I>`
+/// hint) the single-class receiver does — not collapse to a misleading
+/// `unknown | unknown is not a function` (E0006) leaking the internal sentinel.
+#[test]
+fn union_fuzz_pr_ambiguous_inherited_method_in_class_union_is_e0121() {
+    let errors = collect_compile_errors(
+        r#"
+        interface A { function f(self) -> string { return "a" } }
+        interface B { function f(self) -> string { return "b" } }
+        class C { implements A {} implements B {} }
+        class D { implements A {} implements B {} }
+        function g(x: C | D) -> string { return x.f() }
+        function main() -> string { return g(C {}) }
+        "#,
+    );
+    assert!(
+        errors.iter().any(|e| e.starts_with("[E0121]")),
+        "ambiguous inherited method on a class union must be E0121; got:\n  {}",
+        errors.join("\n  ")
+    );
+    assert!(
+        !errors
+            .iter()
+            .any(|e| e.contains("unknown |") || e.contains("is not a function")),
+        "must not leak the internal `unknown | unknown` not-a-function form (E0006); got:\n  {}",
+        errors.join("\n  ")
+    );
+}
+
+/// A function-typed interface *field* in a union must keep its declared
+/// signature: the union-member resolver used to prepend a phantom `self` to any
+/// function-typed member, turning `(int) -> string` into
+/// `(self: I, int) -> string` and breaking the union callee shape.
+#[tokio::test]
+async fn union_fuzz_pr_function_typed_interface_field_in_union() {
+    let output = baml_test!(
+        r#"
+        interface HasHandler { handler: (int) -> string }
+        class A {
+          handler: (int) -> string
+          label: string
+          implements HasHandler {}
+        }
+        function getHandler(x: HasHandler | A) -> (int) -> string { return x.handler }
+        function main() -> string {
+          let a: HasHandler = A { handler: (n: int) -> string { return "handled" }, label: "a" }
+          let h = getHandler(a)
+          return h(5)
+        }
+        "#
+    );
+    assert_eq!(
+        output.result.unwrap(),
+        BexExternalValue::String("handled".into())
+    );
+}
+
+/// Reading an interface-member field through an *optional* union (`(Dog |
+/// Named)?` via `?.`) must dispatch on the runtime class like the non-optional
+/// union does — the field lowering used to match only a bare `Union`, so the
+/// `Optional`-wrapped union fell through and crashed the VM
+/// (`expected map, got instance`).
+#[tokio::test]
+async fn union_fuzz_pr_optional_union_interface_field() {
+    let output = baml_test!(
+        r#"
+        interface Named { name: string }
+        class Dog { name: string  implements Named {} }
+        function readName(x: (Dog | Named)?) -> string? { return x?.name }
+        function main() -> string? { return readName(Dog { name: "Rex" }) }
+        "#
+    );
+    assert_eq!(
+        output.result.unwrap(),
+        BexExternalValue::String("Rex".into())
+    );
+}
+
+/// A concrete non-function arm in a union callee must still be reported as
+/// not-callable even when another arm is in recovery (`int | <unresolved>`).
+/// The E0006-suppression added for ambiguous-method unions must only fire when
+/// *every* non-function arm is already in recovery, not on any recovery arm.
+#[test]
+fn union_fuzz_pr_concrete_arm_not_callable_despite_recovery_arm() {
+    let errors = collect_compile_errors(
+        r#"
+        function f(x: int | DoesNotExist) -> string { return x() }
+        function main() -> string { return "ok" }
+        "#,
+    );
+    assert!(
+        errors.iter().any(|e| e.starts_with("[E0006]")),
+        "the concrete `int` arm of an `int | <recovery>` callee must still be \
+         reported not-callable (E0006); got:\n  {}",
+        errors.join("\n  ")
+    );
+}
+
+/// Calling a method on a union of interfaces where some class implements two of
+/// them (the method declared by both) is ambiguous for that class — a value of
+/// the union could be that class — so reject with E0121 rather than silently
+/// dispatching to the first interface's default ("from-A").
+#[test]
+fn union_fuzz_pr_shared_implementor_method_in_iface_union_is_e0121() {
+    let errors = collect_compile_errors(
+        r#"
+        interface A { function m(self) -> string { return "from-A" } }
+        interface B { function m(self) -> string { return "from-B" } }
+        class C { implements A {} implements B {} }
+        function call(x: A | B) -> string { return x.m() }
+        function main() -> string { let c: A = C {}; return call(c) }
+        "#,
+    );
+    assert!(
+        errors.iter().any(|e| e.starts_with("[E0121]")),
+        "a union of interfaces with a shared ambiguous implementor must be E0121; got:\n  {}",
+        errors.join("\n  ")
+    );
+}
+
+/// A union with the *same* interface that is unambiguous (only one implementor
+/// per interface) must still compile and dispatch.
+#[tokio::test]
+async fn union_fuzz_pr_disjoint_implementors_iface_union_dispatches() {
+    let output = baml_test!(
+        r#"
+        interface A { function m(self) -> string { return "a" } }
+        interface B { function m(self) -> string { return "b" } }
+        class Dog { implements A {} }
+        class Cat { implements B {} }
+        function call(x: A | B) -> string { return x.m() }
+        function main() -> string {
+          let d: A = Dog {}
+          let c: B = Cat {}
+          return call(d) + call(c)
+        }
+        "#
+    );
+    assert_eq!(
+        output.result.unwrap(),
+        BexExternalValue::String("ab".into())
+    );
+}
+
+/// Reflection generic-arg equivalence must use a one-to-one matching of union
+/// members: `Box<int | int>` must NOT be treated as `Box<int | string>` just
+/// because both `int`s on the left match the single `int` on the right.
+#[tokio::test]
+async fn union_fuzz_pr_reflection_duplicate_union_members_not_equivalent() {
+    let output = baml_test!(
+        r#"
+        interface Box<T> { function get(self) -> T }
+        class UBox {
+          value: int
+          implements Box<int | int> { function get(self) -> int | int { return self.value } }
+        }
+        function main() -> int {
+          let ub = reflect.type_of<UBox>()
+          let a = 0
+          // UBox implements Box<int | int>, NOT Box<int | string>.
+          if ub.implements(reflect.type_of<Box<int | int>>()) { a = a + 1 }
+          if ub.implements(reflect.type_of<Box<int | string>>()) { a = a + 10 }
+          return a
+        }
+        "#
+    );
+    assert_eq!(output.result.unwrap(), BexExternalValue::Int(1));
+}
+
+/// F1 [crash]: reading a field declared by an interface member of a union
+/// (`x.name` on `Dog | Named`) type-checks, then the VM aborts with
+/// `expected map, got instance`. SHOULD dispatch on the runtime class -> "Rex".
+/// Repro: `cat_concrete_iface_union/concrete_iface_union_9_field_union_vm_crash.baml`
+#[tokio::test]
+async fn union_fuzz_f01_field_read_on_iface_union_member() {
+    let output = baml_test!(
+        r#"
+        interface Named {
+          name: string
+        }
+        class Dog {
+          name: string
+          implements Named {}
+        }
+        function readName(x: Dog | Named) -> string {
+          return x.name
+        }
+        function main() -> string {
+          return readName(Dog { name: "Rex" })
+        }
+        "#
+    );
+    assert_eq!(
+        output.result.unwrap(),
+        BexExternalValue::String("Rex".into())
+    );
+}
+
+/// F2 [crash]: generic-interface match narrowing ignores the type argument — a
+/// `StrSlot` (only `Slot<string>`) matches the `let a: Slot<int>` arm, so
+/// `a.value + 1` runs integer add on a string and panics (`tagged_int_add`).
+/// SHOULD NOT match the `Slot<int>` arm; falls through -> 0.
+/// Repro: `cat_generic_iface_union/generic_iface_union_2d_unsound.baml`
+#[tokio::test]
+async fn union_fuzz_f02_generic_match_narrowing_ignores_type_arg_crash() {
+    let output = baml_test!(
+        r#"
+        interface Slot<T> { value: T }
+
+        class IntSlot {
+          n: int
+          implements Slot<int> { value as n }
+        }
+        class StrSlot {
+          s: string
+          implements Slot<string> { value as s }
+        }
+
+        function addOne(x: Slot<int> | Slot<string>) -> int {
+          return match (x) {
+            let a: Slot<int> => a.value + 1,
+            let b: Slot<string> => 0,
+          }
+        }
+
+        function main() -> int {
+          let b: Slot<int> | Slot<string> = StrSlot { s: "not a number" }
+          return addOne(b)
+        }
+        "#
+    );
+    assert_eq!(output.result.unwrap(), BexExternalValue::Int(0));
+}
+
+/// F3 [crash]: a same-named field with CONFLICTING types across two union
+/// interfaces (`Animal.id: string`, `Vehicle.id: int`) used to type-check
+/// against any target and then abort the VM (`expected map, got instance`).
+/// The sound result is that `u.id` has type `string | int` (the value is an
+/// Animal OR a Vehicle, not genuinely ambiguous), so reading it into a `string`
+/// must be a clean compile-time type error (E0001) — never a VM crash.
+/// Repro: `cat_iface_iface_union/iface_iface_union_7_same_field_diff_type.baml`
+#[test]
+fn union_fuzz_f03_conflicting_union_field_is_ambiguous_error() {
+    assert_compile_error_code(
+        r#"
+        interface Animal { id: string }
+        interface Vehicle { id: int }
+        class Dog { id: string  implements Animal {} }
+        class Car { id: int  implements Vehicle {} }
+        function pick(b: bool) -> Animal | Vehicle {
+          if b { return Dog { id: "rex" } } else { return Car { id: 7 } }
+        }
+        function main() -> string {
+          let u: Animal | Vehicle = pick(false)
+          let v: string = u.id
+          return v
+        }
+        "#,
+        "E0001",
+    );
+}
+
+/// F4 [crash]: `string + int` type-checks (inferred as `string`) but the VM
+/// aborts with `cannot apply binary operation: string + int`. The two phases
+/// must agree — the type-checker SHOULD reject it. (Symmetric arithmetic hole;
+/// surfaced via interface projection in the sibling repro, not interface-only.)
+/// Repro: `cat_as_projection_union/as_projection_union_20_plain_int_concat.baml`
+#[test]
+fn union_fuzz_f04_string_plus_int_is_type_error_not_vm_crash() {
+    let errors = collect_compile_errors(
+        r#"
+        function plainPlus() -> string {
+          return "age=" + 4
+        }
+        function main() -> string {
+          return plainPlus()
+        }
+        "#,
+    );
+    assert!(
+        errors
+            .iter()
+            .any(|e| e.starts_with("[E0004]") && e.contains("Add")),
+        "`string + int` must be rejected with an InvalidBinaryOp (E0004) naming `Add` \
+         (it used to infer `string` and abort the VM); got:\n  {}",
+        errors.join("\n  ")
+    );
+}
+
+/// F5 [wrong-result]: matching a union of the SAME generic interface at two
+/// instantiations ignores the type argument — a `StrSlot` (only `Slot<string>`)
+/// is captured by the `let a: Slot<int>` arm instead of falling through.
+/// SHOULD return "other". (EXIT=0 wrong-result face of F2.)
+/// Repro: `cat_generic_iface_union/generic_iface_union_5c_nonunion.baml`
+#[tokio::test]
+async fn union_fuzz_f05_generic_match_narrowing_wrong_result() {
+    let output = baml_test!(
+        r#"
+        interface Slot<T> { value: T }
+        class IntSlot { n: int  implements Slot<int> { value as n } }
+        class StrSlot { s: string  implements Slot<string> { value as s } }
+        function go(x: Slot<int> | Slot<string>) -> string {
+          return match (x) {
+            let a: Slot<int> => "int",
+            _ => "other",
+          }
+        }
+        function main() -> string {
+          let b: Slot<int> | Slot<string> = StrSlot { s: "z" }
+          return go(b)
+        }
+        "#
+    );
+    assert_eq!(
+        output.result.unwrap(),
+        BexExternalValue::String("other".into())
+    );
+}
+
+/// F6 [wrong-result]: reflection generic-arg matching is union-ORDER-sensitive —
+/// `Box<int | string>` answers correctly but the reversed `Box<string | int>`
+/// answers wrong across all three reflection APIs. Union member order is
+/// semantically irrelevant, so all six probes SHOULD answer 1 -> 111111
+/// (currently 111000).
+/// Repro: `cat_reflection_union/reflection_union_10c_order_breadth.baml`
+#[tokio::test]
+async fn union_fuzz_f06_reflection_generic_union_arg_order_insensitive() {
+    let output = baml_test!(
+        r#"
+        interface Box<T> {
+          function get(self) -> T
+        }
+        class UBox {
+          value: int
+          implements Box<int | string> {
+            function get(self) -> int | string { return self.value }
+          }
+        }
+        function main() -> int {
+          let ub = reflect.type_of<UBox>()
+          let fwd = reflect.type_of<Box<int | string>>()
+          let rev = reflect.type_of<Box<string | int>>()
+          let d1 = 0
+          if ub.implements(fwd) { d1 = 1 }
+          let d2 = 0
+          if fwd.implemented_by(ub) { d2 = 1 }
+          let d3 = 0
+          if fwd.implementors().length() == 1 { d3 = 1 }
+          let d4 = 0
+          if ub.implements(rev) { d4 = 1 }
+          let d5 = 0
+          if rev.implemented_by(ub) { d5 = 1 }
+          let d6 = 0
+          if rev.implementors().length() == 1 { d6 = 1 }
+          return d1*100000 + d2*10000 + d3*1000 + d4*100 + d5*10 + d6
+        }
+        "#
+    );
+    assert_eq!(output.result.unwrap(), BexExternalValue::Int(111111));
+}
+
+/// F7 [spurious-compile-error]: a method present on EVERY member of a union that
+/// contains an interface is rejected as `` `unknown | unknown` is not a function ``
+/// (E0006) — the interface arm's method type resolves to the `Ty::Unknown`
+/// sentinel. SHOULD compile and dispatch on the runtime class -> "Woof".
+/// (Currently panics at compile until fixed.)
+/// Repro: `cat_collection_union/collection_union_9_union_direct_call.baml`
+#[tokio::test]
+async fn union_fuzz_f07_shared_method_on_iface_union_is_callable() {
+    let output = baml_test!(
+        r#"
+        interface Animal {
+          function speak(self) -> string
+        }
+        class Dog {
+          implements Animal {
+            function speak(self) -> string { return "Woof" }
+          }
+        }
+        interface Vehicle {
+          function speak(self) -> string
+        }
+        class Car {
+          implements Vehicle {
+            function speak(self) -> string { return "Vroom" }
+          }
+        }
+        function main() -> string {
+          let v: Animal | Vehicle = Dog {};
+          return v.speak();
+        }
+        "#
+    );
+    assert_eq!(
+        output.result.unwrap(),
+        BexExternalValue::String("Woof".into())
+    );
+}
+
+/// F8 [spurious-compile-error]: an interface-bounded generic identity
+/// `identity<T extends Animal>(a: T) -> T { return a }` is rejected with the
+/// self-contradictory `expected T, got T` (E0001). Reflexive `T <: T` always
+/// holds; a bound only constrains `T`, it doesn't change its identity.
+/// SHOULD compile and the caller gets the concrete class back -> "fetched/Woof!".
+/// Repro: `cat_bounds_basic/bounds_basic_8_return_bound_type.baml`
+#[tokio::test]
+async fn union_fuzz_f08_interface_bounded_generic_identity_compiles() {
+    let output = baml_test!(
+        r#"
+        interface Animal {
+          function speak(self) -> string
+        }
+        class Dog {
+          implements Animal {
+            function speak(self) -> string { return "Woof!" }
+          }
+          function fetch(self) -> string { return "fetched" }
+        }
+        function identity<T extends Animal>(a: T) -> T {
+          return a
+        }
+        function main() -> string {
+          let d = identity<Dog>(Dog {})
+          return d.fetch() + "/" + d.speak()
+        }
+        "#
+    );
+    assert_eq!(
+        output.result.unwrap(),
+        BexExternalValue::String("fetched/Woof!".into())
+    );
+}
+
+/// F9 [spurious-compile-error]: an interface match arm over an optional union of
+/// implementors `(Dog | Cat)?` is rejected (E0001 `expected Dog | Cat | null,
+/// got Animal`), though the same arm over the non-optional union is accepted.
+/// SHOULD compile: `let a: Animal` covers every non-null member -> "Meow".
+/// Repro: `cat_optional_union/optional_union_4_method_on_optional_union.baml`
+#[tokio::test]
+async fn union_fuzz_f09_interface_arm_over_optional_union_compiles() {
+    let output = baml_test!(
+        r#"
+        interface Animal {
+          function speak(self) -> string
+        }
+        class Dog {
+          name: string
+          implements Animal {
+            function speak(self) -> string { return "Woof" }
+          }
+        }
+        class Cat {
+          implements Animal {
+            function speak(self) -> string { return "Meow" }
+          }
+        }
+        function main() -> string {
+          let v: (Dog | Cat)? = Cat {}
+          match (v) {
+            let a: Animal => a.speak()
+            null => "none"
+          }
+        }
+        "#
+    );
+    assert_eq!(
+        output.result.unwrap(),
+        BexExternalValue::String("Meow".into())
+    );
+}
+
+/// F10 [spurious-compile-error]: a direct member call on an out-of-body
+/// primitive impl only resolves for `int`; `string`/`float`/`bool` are rejected
+/// (E0007 `type string has no member debug`) even though the impl exists and is
+/// visible via upcast/`.as<>`/reflection. SHOULD return "str".
+/// Repro: `cat_out_of_body_union/out_of_body_union_9_string_direct_baseline.baml`
+#[tokio::test]
+async fn union_fuzz_f10_out_of_body_primitive_string_direct_call() {
+    let output = baml_test!(
+        r#"
+        interface Debuggable { function debug(self) -> string }
+        implements Debuggable for string { function debug(self) -> string { return "str" } }
+        function main() -> string {
+          let s: string = "hi"
+          return s.debug()
+        }
+        "#
+    );
+    assert_eq!(
+        output.result.unwrap(),
+        BexExternalValue::String("str".into())
+    );
+}
+
+/// F11 [missing-error]: the soundness face of F3 — reading a conflicting
+/// union-interface field type-checks against ANY target, including `bool`
+/// (`Animal.id: string` / `Vehicle.id: int` read into `let v: bool`), so the
+/// field has no single well-defined type. SHOULD be rejected at compile time.
+/// Repro: `cat_iface_iface_union/iface_iface_union_7_same_field_diff_type.baml`
+#[test]
+fn union_fuzz_f11_conflicting_union_field_read_is_rejected() {
+    let errors = collect_compile_errors(
+        r#"
+        interface Animal { id: string }
+        interface Vehicle { id: int }
+        class Dog { id: string  implements Animal {} }
+        class Car { id: int  implements Vehicle {} }
+        function readBool(u: Animal | Vehicle) -> bool {
+          let v: bool = u.id
+          return v
+        }
+        function main() -> bool { return readBool(Dog { id: "x" }) }
+        "#,
+    );
+    assert!(
+        errors
+            .iter()
+            .any(|e| e.starts_with("[E0001]") && e.contains("bool")),
+        "reading a field with conflicting types across union-interface members must be \
+         rejected with a type mismatch (E0001) against the `bool` target — it used to \
+         type-check unsoundly against any target; got:\n  {}",
+        errors.join("\n  ")
+    );
+}
+
+/// F12 [bad-diagnostic]: the diagnostic face of F7 — the rejected interface-union
+/// method call leaks compiler internals: the `unknown` inference sentinel, the
+/// `throws never` bottom marker (BAML has no `never` keyword), and the
+/// method-as-value `(self: Cat) -> string` form. The message SHOULD name the real
+/// receiver/method (or, per F7, the call should compile) — never these internals.
+/// Repro: `cat_collection_union/collection_union_4_field_array.baml`
+#[test]
+fn union_fuzz_f12_iface_union_call_diagnostic_does_not_leak_internals() {
+    let errors = collect_compile_errors(
+        r#"
+        interface Animal {
+          function speak(self) -> string
+        }
+        class Dog {
+          implements Animal {
+            function speak(self) -> string { return "Woof" }
+          }
+        }
+        class Cat {
+          implements Animal {
+            function speak(self) -> string { return "Meow" }
+          }
+        }
+        function describe(x: Animal | Cat) -> string {
+          return x.speak()
+        }
+        function main() -> string {
+          let a: Animal = Dog {}
+          return describe(a)
+        }
+        "#,
+    );
+    assert!(
+        errors
+            .iter()
+            .all(|e| !e.contains("throws never") && !e.contains("(self:")),
+        "method-call diagnostic must not leak compiler internals \
+         (`throws never`, `(self: ...)`, the `unknown` inference sentinel); got:\n  {}",
+        errors.join("\n  ")
+    );
+}
+
+/// F13 [bad-diagnostic]: the reserved internal `user.` package prefix leaks into
+/// the E0062 non-exhaustive-match `missing:` class-pattern witnesses
+/// (`user.Dog { owner: user.Person { ... } }`). User-facing output must never
+/// contain `user.`.
+/// Repro: `cat_match_union_exhaustive/match_union_exhaustive_11_nested_user_leak.baml`
+#[test]
+fn union_fuzz_f13_exhaustiveness_witness_does_not_leak_user_prefix() {
+    let errors = collect_compile_errors(
+        r#"
+        class Person { name: string }
+        class Dog { owner: Person }
+        class Cat { lives: int }
+        function describe(x: Dog | Cat) -> string {
+          match (x) {
+            Dog { owner: Person { name: "Alice" } } => "alice's dog"
+          }
+        }
+        function main() -> string {
+          let p: Person = Person { name: "Bob" }
+          let d: Dog = Dog { owner: p }
+          return describe(d)
+        }
+        "#,
+    );
+    // First require the E0062 non-exhaustive-match diagnostic to actually fire,
+    // so the no-`user.` check below can't pass vacuously if exhaustiveness ever
+    // stops being reported.
+    assert!(
+        errors.iter().any(|e| e.starts_with("[E0062]")),
+        "expected an E0062 non-exhaustive-match error; got:\n  {}",
+        errors.join("\n  ")
+    );
+    assert!(
+        errors.iter().all(|e| !e.contains("user.")),
+        "diagnostics must not leak the internal `user.` package prefix; got:\n  {}",
+        errors.join("\n  ")
+    );
+}
+
+/// F14 [bad-diagnostic]: the E0062 `missing:` witness renders interface union
+/// members as a bare `_` (no `Ty::Interface` arm in the witness renderer), e.g.
+/// `Animal | Vehicle` covered only by `Dog`/`Car` reports `missing: _, _`. The
+/// non-exhaustiveness verdict is correct (interfaces are open-world), but the
+/// witness SHOULD name the uncovered interface(s).
+/// Repro: `cat_match_union_exhaustive/match_union_exhaustive_7_concrete_destructure_both_covers.baml`
+#[test]
+fn union_fuzz_f14_exhaustiveness_witness_names_interface_members() {
+    let errors = collect_compile_errors(
+        r#"
+        interface Animal { function speak(self) -> string }
+        interface Vehicle { function drive(self) -> string }
+        class Dog { name: string  implements Animal { function speak(self) -> string { return "Woof" } } }
+        class Car { model: string  implements Vehicle { function drive(self) -> string { return "Vroom" } } }
+        function describe(x: Animal | Vehicle) -> string {
+          match (x) {
+            Dog { name } => "dog " + name
+            Car { model } => "car " + model
+          }
+        }
+        function main() -> string {
+          let c: Car = Car { model: "T" }
+          return describe(c)
+        }
+        "#,
+    );
+    assert!(
+        errors.iter().any(|e| {
+            e.starts_with("[E0062]")
+                && e.split("missing:")
+                    .nth(1)
+                    .is_some_and(|w| w.contains("Animal") || w.contains("Vehicle"))
+        }),
+        "E0062 `missing:` witness should name the uncovered interface(s) (Animal/Vehicle), \
+         not render them as bare `_`; got:\n  {}",
+        errors.join("\n  ")
+    );
+}
+
+/// F15 [bad-diagnostic]: an interface-union method-not-found wrongly blames a
+/// member that DOES satisfy the interface — `x.debug()` on `int | Dog` emits an
+/// E0007 against `int` even though `implements Debuggable for int` exists. It
+/// should reject (Dog genuinely lacks `debug`) but blame ONLY `Dog`.
+/// Repro: `cat_out_of_body_union/out_of_body_union_10_wrong_blame_int_with_impl.baml`
+#[test]
+fn union_fuzz_f15_union_method_blame_skips_satisfying_member() {
+    let errors = collect_compile_errors(
+        r#"
+        interface Debuggable { function debug(self) -> string }
+        implements Debuggable for int { function debug(self) -> string { return "int" } }
+        class Dog { name: string }
+        function main() -> string {
+          let x: int | Dog = 7
+          return x.debug()
+        }
+        "#,
+    );
+    assert!(
+        errors
+            .iter()
+            .any(|e| e.contains("Dog") && e.contains("debug")),
+        "must still reject — `Dog` lacks `debug`; got:\n  {}",
+        errors.join("\n  ")
+    );
+    assert!(
+        !errors
+            .iter()
+            .any(|e| e.contains("`int`") && e.contains("debug")),
+        "must NOT blame `int` — it satisfies Debuggable via `implements Debuggable for int`; \
+         got:\n  {}",
+        errors.join("\n  ")
+    );
+}
+
+/// F16 [bad-diagnostic]: an unqualified ambiguous interface-field access on a
+/// UNION value gives a false E0007 `no member` instead of the E0131 ambiguity
+/// diagnostic (with the `.as<Named>`/`.as<Labeled>` hint) that the equivalent
+/// single-class case already emits.
+/// Repro: `cat_as_projection_union/as_projection_union_22_unqualified_ambiguous.baml`
+#[test]
+fn union_fuzz_f16_unqualified_ambiguous_union_field_is_e0131() {
+    assert_compile_error_code(
+        r#"
+        interface Named { name: string }
+        interface Labeled { name: string }
+        class Person {
+          full: string
+          handle: string
+          implements Named { name as full }
+          implements Labeled { name as handle }
+        }
+        class Company {
+          legal: string
+          brand: string
+          implements Named { name as legal }
+          implements Labeled { name as brand }
+        }
+        function rawName(x: Person | Company) -> string {
+          return x.name
+        }
+        function main() -> string {
+          return rawName(Person { full: "Ada", handle: "ada99" })
+        }
+        "#,
+        "E0131",
+    );
+}
+
+/// F17 [bad-diagnostic]: a failed `.as<Cargo<int>>` projection drops the `<int>`
+/// type argument from the message (`does not implement interface Cargo`), which
+/// is misleading because the type DOES implement `Cargo`, just at `<string>`.
+/// The diagnostic SHOULD name the full `Cargo<int>`.
+/// Repro: `cat_as_projection_union/as_projection_union_10_generic_mismatch.baml`
+#[test]
+fn union_fuzz_f17_projection_failure_names_full_generic_interface() {
+    assert_compile_error_contains(
+        r#"
+        interface Cargo<T> { payload: T }
+        class Box<T> {
+          inner: T
+          implements Cargo<T> { payload as inner }
+        }
+        function takeInt(x: Box<int> | Box<string>) -> int {
+          return x.as<Cargo<int>>.payload
+        }
+        function main() -> int {
+          let b: Box<int> | Box<string> = Box<string> { inner: "oops" }
+          return takeInt(b)
+        }
+        "#,
+        "Cargo<int>",
     );
 }

@@ -10,20 +10,55 @@ import {
     Timing,
     Usage,
     LLMCall,
-    flushEvents,
 } from './native';
 import { encodeCallArgs, decodeCallResult } from './proto';
+import { installFlushOnExit } from './exit_hook';
 
-export { BamlRuntime, AbortController, BamlHandle, HostSpanManager, getVersion, flushEvents } from './native';
+export { BamlRuntime, AbortController, BamlHandle, HostSpanManager, getRuntime, getVersion, flushEvents } from './native';
 export { Timing, Usage, LLMCall } from './native';
+// Handle-table helpers (decode validate-on-take / encode clone-on-put + test seeds).
+export {
+    takeHandleFromTable,
+    putHandleIntoTable,
+    _seedFunctionRefHandle,
+    _seedGenericMediaHandle,
+} from './native';
+// Runtime-owned stdlib value classes. Exported under their `Baml*` names only;
+// codegen aliases them as Image/Audio/Video/Pdf on re-export.
+export { BamlImage, BamlAudio, BamlVideo, BamlPdf } from './native';
+// Stream wrapper. Exported as `BamlStream`; codegen aliases it as `Stream`.
+export { BamlStream } from './stream';
 export { encodeCallArgs, decodeCallResult } from './proto';
 export { CtxManager } from './ctx_manager';
+// Codegen support: typemap + placeholder sentinel + free runtime initializer.
+export { BamlTypeMap, setTypeMap, getTypeMap } from './typemap';
+// Callable factories the generated SDK emits for every BAML function/method.
+export { defineFunction, defineInstanceFunction, UNSET } from './define_function';
+
+/**
+ * Free-function runtime initializer used by generated `baml_sdk/index.ts`:
+ * `initializeRuntime("baml_src", _inlinedbaml.FILES)`. Thin wrapper over the
+ * `BamlRuntime.initializeRuntime` factory (which sets the process-global
+ * singleton reachable via `getRuntime()`).
+ */
+export function initializeRuntime(srcDir: string, files: Record<string, string>): void {
+    BamlRuntime.initializeRuntime(srcDir, files);
+}
+
+/**
+ * Free-function runtime initializer used by generated `baml_sdk/index.ts` when
+ * codegen embeds precompiled BAML bytecode.
+ */
+export function initializeRuntimeFromBytecode(bytecode: Buffer | Uint8Array): void {
+    BamlRuntime.initializeRuntimeFromBytecode(Buffer.from(bytecode));
+}
 import { wrapNativeError } from './errors';
 export {
     BamlError,
     BamlInvalidArgumentError,
     BamlClientError,
     BamlCancelledError,
+    BamlPanic,
     wrapNativeError,
 } from './errors';
 
@@ -124,7 +159,5 @@ export async function callFunction(
     }
 }
 
-// Register flush on process exit (once to prevent duplicate handlers on module reload)
-process.once('exit', () => {
-    try { flushEvents(); } catch (_) { /* ignore */ }
-});
+// Register flush on process exit (single registration; see exit_hook.ts).
+installFlushOnExit();

@@ -1,4 +1,4 @@
-//! Build script that generates tests from projects/ directory and benchmarks from benches/.
+//! Build script that generates tests from the projects/ directory.
 //! Each folder becomes a test module with comprehensive compiler phase tests.
 
 use std::{
@@ -29,6 +29,205 @@ fn main() {
 
     // Generate tests
     generate_tests(&manifest_dir);
+
+    // Generate CodSpeed benches from the tools/speedtest workloads.
+    generate_speedtest_benches(&manifest_dir);
+}
+
+// ============================================================================
+// Speedtest workload benches
+// ============================================================================
+//
+// The `tools/speedtest` harness drives a corpus of cross-language micro-
+// benchmarks (BAML vs Python vs JS) defined as `.md` workloads. Rather than
+// hand-maintaining a parallel set of `#[divan::bench]` functions in
+// runtime_benchmark.rs, we lift every workload's *BAML* source straight out of
+// that corpus and emit one bench per workload.
+//
+// Expansion (some workloads use a Python `## eval-setup` block + `$$` templating)
+// is delegated to `tools/speedtest/export_baml.py`, which reuses the exact same
+// `speedtest.loader` logic the harness itself uses — so there is a single source
+// of truth for parsing. We shell out to `python3` once and read back JSON.
+//
+// The generated functions are named `vm_speedtest_<slug>` so they are picked up
+// by the same `vm_` CodSpeed filter as the hand-written VM benches, and are
+// `include!`d into runtime_benchmark.rs after `bench_vm_main` is in scope.
+//
+// This step degrades gracefully: if `python3` or the workloads are unavailable
+// (e.g. a minimal build environment), it emits an empty file and a warning
+// rather than failing the build of the whole crate.
+
+/// Fully-qualified name of the blocking sleep builtin. Workloads whose BAML
+/// calls this are excluded from the generated walltime benches.
+const SLEEP_FQN: &str = "baml.sys.sleep";
+
+struct Workload {
+    name: String,
+    baml: String,
+}
+
+fn generate_speedtest_benches(manifest_dir: &str) {
+    // crates/baml_tests -> repo root -> tools/speedtest
+    let speedtest_dir = Path::new(manifest_dir)
+        .join("..")
+        .join("..")
+        .join("tools")
+        .join("speedtest");
+    let workloads_dir = speedtest_dir.join("workloads");
+    let export_script = speedtest_dir.join("export_baml.py");
+
+    // Re-run whenever the corpus or the expansion logic changes.
+    println!("cargo:rerun-if-changed={}", workloads_dir.display());
+    println!("cargo:rerun-if-changed={}", export_script.display());
+    println!(
+        "cargo:rerun-if-changed={}",
+        speedtest_dir.join("src/speedtest/loader.py").display()
+    );
+
+    let out_dir = env::var("OUT_DIR").unwrap();
+    let dest_path = Path::new(&out_dir).join("speedtest_benches.rs");
+
+    let all_workloads = match load_speedtest_workloads(&export_script, &workloads_dir) {
+        Ok(w) => w,
+        Err(e) => {
+            println!("cargo:warning=speedtest benches disabled: {e}");
+            // Emit an empty (but valid) file so the include! in the bench compiles.
+            fs::write(
+                &dest_path,
+                "// speedtest workloads unavailable at build time; no benches generated.\n",
+            )
+            .unwrap();
+            return;
+        }
+    };
+
+    // Exclude workloads that call the blocking sleep builtin: as a walltime
+    // benchmark their sample time is dominated by sleeping rather than VM work,
+    // which only adds noise and CI time. Matched by fully-qualified name so a
+    // workload that merely mentions "sleep" elsewhere is unaffected.
+    let (workloads, skipped): (Vec<&Workload>, Vec<&Workload>) = all_workloads
+        .iter()
+        .partition(|w| !w.baml.contains(SLEEP_FQN));
+    if !skipped.is_empty() {
+        let names: Vec<&str> = skipped.iter().map(|w| w.name.as_str()).collect();
+        println!(
+            "cargo:warning=speedtest: skipping {} sleep-based workload(s) (calls `{SLEEP_FQN}`): {}",
+            skipped.len(),
+            names.join(", ")
+        );
+    }
+
+    let mut used = std::collections::BTreeSet::new();
+    let benches: TokenStream = workloads
+        .iter()
+        .map(|w| {
+            // `name` already carries the `category::` prefix (e.g.
+            // "classes::method call 100k"), so slugify it directly.
+            let mut slug = slugify(&w.name);
+            // Guard against the (unlikely) collision after slugification.
+            while !used.insert(slug.clone()) {
+                slug.push('_');
+            }
+            let fn_ident = format_ident!("vm_speedtest_{slug}");
+            let source = &w.baml;
+            let display = &w.name;
+            quote! {
+                #[doc = #display]
+                #[divan::bench]
+                fn #fn_ident(bencher: divan::Bencher) {
+                    bench_vm_main(bencher, #source);
+                }
+            }
+        })
+        .collect();
+
+    let header = "\
+// Auto-generated speedtest workload benches by build.rs.
+// Source of truth: tools/speedtest/workloads/*.md (expanded via export_baml.py).
+// Do not edit this file directly.
+";
+
+    write_formatted_code(&dest_path, benches, header);
+}
+
+/// Run `export_baml.py` and parse its JSON output into the workload list.
+fn load_speedtest_workloads(
+    export_script: &Path,
+    workloads_dir: &Path,
+) -> Result<Vec<Workload>, String> {
+    if !export_script.is_file() {
+        return Err(format!(
+            "export script not found at {}",
+            export_script.display()
+        ));
+    }
+    if !workloads_dir.is_dir() {
+        return Err(format!(
+            "workloads dir not found at {}",
+            workloads_dir.display()
+        ));
+    }
+
+    let python = env::var("PYTHON3").unwrap_or_else(|_| "python3".to_string());
+    let output = std::process::Command::new(&python)
+        .arg(export_script)
+        .arg(workloads_dir)
+        .output()
+        .map_err(|e| format!("failed to run `{python}`: {e}"))?;
+
+    if !output.status.success() {
+        return Err(format!(
+            "`{python} export_baml.py` exited with {}: {}",
+            output.status,
+            String::from_utf8_lossy(&output.stderr).trim()
+        ));
+    }
+
+    // The exporter (via speedtest.loader) warns to stderr when a workload `.md`
+    // fails to parse and is dropped. Surface those so a malformed workload can't
+    // silently disappear from the generated suite behind a still-green build.
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    for line in stderr.lines().map(str::trim).filter(|l| !l.is_empty()) {
+        println!("cargo:warning=speedtest export: {line}");
+    }
+
+    let value: serde_json::Value = serde_json::from_slice(&output.stdout)
+        .map_err(|e| format!("failed to parse export_baml.py JSON: {e}"))?;
+    let arr = value
+        .as_array()
+        .ok_or_else(|| "export_baml.py did not emit a JSON array".to_string())?;
+
+    let mut workloads = Vec::with_capacity(arr.len());
+    for item in arr {
+        let field = |key: &str| {
+            item.get(key)
+                .and_then(|v| v.as_str())
+                .map(str::to_owned)
+                .ok_or_else(|| format!("workload missing string field `{key}`"))
+        };
+        workloads.push(Workload {
+            name: field("name")?,
+            baml: field("baml")?,
+        });
+    }
+    Ok(workloads)
+}
+
+/// Turn an arbitrary workload name into a valid, lowercase Rust identifier
+/// fragment (e.g. "string::split long literal 1k" -> "string_split_long_literal_1k").
+fn slugify(name: &str) -> String {
+    let mut out = String::with_capacity(name.len());
+    let mut prev_underscore = false;
+    for ch in name.chars() {
+        if ch.is_ascii_alphanumeric() {
+            out.extend(ch.to_lowercase());
+            prev_underscore = false;
+        } else if !prev_underscore {
+            out.push('_');
+            prev_underscore = true;
+        }
+    }
+    out.trim_matches('_').to_string()
 }
 
 fn generate_tests(manifest_dir: &str) {

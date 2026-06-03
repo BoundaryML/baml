@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 42814
 ---
 === COMPILER2 DIAGNOSTICS ===
   [type] error: unreachable arm
@@ -250,14 +249,14 @@ assertion_line: 42814
      │     Note: Error code: E0062
 ─────╯
 
-  [type] error: non-exhaustive match on type DoubleMaybe; missing: user.Success { data: _ }, user.Failure { reason: _ }
+  [type] error: non-exhaustive match on type DoubleMaybe; missing: Success { data: _ }, Failure { reason: _ }
      ╭─[ match_exhaustiveness.baml:598:60 ]
      │
  598 │ ╭─▶ function ExhaustiveDoubleMaybe(dm: DoubleMaybe) -> string {
      ┆ ┆   
  603 │ ├─▶     }
      │ │           
-     │ ╰─────────── non-exhaustive match on type DoubleMaybe; missing: user.Success { data: _ }, user.Failure { reason: _ }
+     │ ╰─────────── non-exhaustive match on type DoubleMaybe; missing: Success { data: _ }, Failure { reason: _ }
      │     
      │     Note: Error code: E0062
 ─────╯
@@ -282,14 +281,14 @@ assertion_line: 42814
      │ Note: Error code: E0063
 ─────╯
 
-  [type] error: non-exhaustive match on type DoubleMaybe; missing: user.Success { data: _ }, user.Failure { reason: _ }, null, null
+  [type] error: non-exhaustive match on type DoubleMaybe; missing: Success { data: _ }, Failure { reason: _ }, null, null
      ╭─[ match_exhaustiveness.baml:607:74 ]
      │
  607 │ ╭─▶ function NonExhaustiveDoubleMaybeMissingNull(dm: DoubleMaybe) -> string {
      ┆ ┆   
  611 │ ├─▶     }
      │ │           
-     │ ╰─────────── non-exhaustive match on type DoubleMaybe; missing: user.Success { data: _ }, user.Failure { reason: _ }, null, null
+     │ ╰─────────── non-exhaustive match on type DoubleMaybe; missing: Success { data: _ }, Failure { reason: _ }, null, null
      │     
      │     Note: Error code: E0062
 ─────╯
@@ -314,26 +313,26 @@ assertion_line: 42814
      │ Note: Error code: E0063
 ─────╯
 
-  [type] error: non-exhaustive match on type Result; missing: user.Failure { reason: _ }
+  [type] error: non-exhaustive match on type Result; missing: Failure { reason: _ }
      ╭─[ match_exhaustiveness.baml:620:65 ]
      │
  620 │ ╭─▶ function NonExhaustiveTypeAliasMissingOne(r: Result) -> string {
      ┆ ┆   
  623 │ ├─▶     }
      │ │           
-     │ ╰─────────── non-exhaustive match on type Result; missing: user.Failure { reason: _ }
+     │ ╰─────────── non-exhaustive match on type Result; missing: Failure { reason: _ }
      │     
      │     Note: Error code: E0062
 ─────╯
 
-  [type] error: non-exhaustive match on type FullResult; missing: user.Pending { eta: _ }
+  [type] error: non-exhaustive match on type FullResult; missing: Pending { eta: _ }
      ╭─[ match_exhaustiveness.baml:627:70 ]
      │
  627 │ ╭─▶ function NonExhaustiveFullResultMissingOne(r: FullResult) -> string {
      ┆ ┆   
  631 │ ├─▶     }
      │ │           
-     │ ╰─────────── non-exhaustive match on type FullResult; missing: user.Pending { eta: _ }
+     │ ╰─────────── non-exhaustive match on type FullResult; missing: Pending { eta: _ }
      │     
      │     Note: Error code: E0062
 ─────╯
@@ -384,14 +383,14 @@ assertion_line: 42814
      │     Note: Error code: E0062
 ─────╯
 
-  [type] error: non-exhaustive match on type SuccessOr200; missing: user.Success { data: _ }
+  [type] error: non-exhaustive match on type SuccessOr200; missing: Success { data: _ }
      ╭─[ match_exhaustiveness.baml:711:80 ]
      │
  711 │ ╭─▶ function NonExhaustiveClassPlusLiteralMissingClass(x: SuccessOr200) -> string {
      ┆ ┆   
  714 │ ├─▶     }
      │ │           
-     │ ╰─────────── non-exhaustive match on type SuccessOr200; missing: user.Success { data: _ }
+     │ ╰─────────── non-exhaustive match on type SuccessOr200; missing: Success { data: _ }
      │     
      │     Note: Error code: E0062
 ─────╯
@@ -462,14 +461,14 @@ assertion_line: 42814
      │     Note: Error code: E0001
 ─────╯
 
-  [type] error: non-exhaustive match on type FullResult; missing: user.Pending { eta: _ }
+  [type] error: non-exhaustive match on type FullResult; missing: Pending { eta: _ }
      ╭─[ match_exhaustiveness.baml:763:64 ]
      │
  763 │ ╭─▶ function PartialUnionPatternCoverage(r: FullResult) -> string {
      ┆ ┆   
  766 │ ├─▶     }
      │ │           
-     │ ╰─────────── non-exhaustive match on type FullResult; missing: user.Pending { eta: _ }
+     │ ╰─────────── non-exhaustive match on type FullResult; missing: Pending { eta: _ }
      │     
      │     Note: Error code: E0062
 ─────╯

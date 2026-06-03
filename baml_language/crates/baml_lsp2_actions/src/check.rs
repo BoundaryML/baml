@@ -715,7 +715,7 @@ impl MethodSignature {
         )
     }
 
-    /// Like [`from_params_and_return`] but substitutes generic parameter
+    /// Like [`Self::from_params_and_return`] but substitutes generic parameter
     /// references in the param/return/throws types using `subst` before
     /// stringifying. Used when comparing an `implements Container<int>`
     /// block against `interface Container<T>`: the interface signature is

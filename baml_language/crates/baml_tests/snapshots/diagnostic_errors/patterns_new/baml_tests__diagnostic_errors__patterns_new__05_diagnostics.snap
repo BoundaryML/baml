@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 46698
 ---
 === COMPILER2 DIAGNOSTICS ===
   [hir] error: Or-pattern alternatives must bind the same names. Inconsistent across branches: x, y
@@ -124,26 +123,26 @@ assertion_line: 46698
      │ Note: Error code: E0063
 ─────╯
 
-  [type] error: non-exhaustive match on type Mixed; missing: user.Mixed { value: int }
+  [type] error: non-exhaustive match on type Mixed; missing: Mixed { value: int }
      ╭─[ patterns_new.baml:121:70 ]
      │
  121 │ ╭─▶ function class_destructure_field_union_missing_int(m: Mixed) -> int {
      ┆ ┆   
  125 │ ├─▶     }
      │ │           
-     │ ╰─────────── non-exhaustive match on type Mixed; missing: user.Mixed { value: int }
+     │ ╰─────────── non-exhaustive match on type Mixed; missing: Mixed { value: int }
      │     
      │     Note: Error code: E0062
 ─────╯
 
-  [type] error: non-exhaustive match on type Pair; missing: user.Pair { kind: true, payload: string }, user.Pair { kind: false, payload: string }
+  [type] error: non-exhaustive match on type Pair; missing: Pair { kind: true, payload: string }, Pair { kind: false, payload: string }
      ╭─[ patterns_new.baml:136:81 ]
      │
  136 │ ╭─▶ function class_destructure_two_field_union_missing_combination(p: Pair) -> int {
      ┆ ┆   
  141 │ ├─▶     }
      │ │           
-     │ ╰─────────── non-exhaustive match on type Pair; missing: user.Pair { kind: true, payload: string }, user.Pair { kind: false, payload: string }
+     │ ╰─────────── non-exhaustive match on type Pair; missing: Pair { kind: true, payload: string }, Pair { kind: false, payload: string }
      │     
      │     Note: Error code: E0062
 ─────╯
@@ -184,26 +183,26 @@ assertion_line: 46698
      │     Note: Error code: E0062
 ─────╯
 
-  [type] error: non-exhaustive match on type Flagged; missing: user.Flagged { flag: true, note: _ }
+  [type] error: non-exhaustive match on type Flagged; missing: Flagged { flag: true, note: _ }
      ╭─[ patterns_new.baml:209:70 ]
      │
  209 │ ╭─▶ function class_field_bool_narrowing_missing_true(f: Flagged) -> int {
      ┆ ┆   
  213 │ ├─▶     }
      │ │           
-     │ ╰─────────── non-exhaustive match on type Flagged; missing: user.Flagged { flag: true, note: _ }
+     │ ╰─────────── non-exhaustive match on type Flagged; missing: Flagged { flag: true, note: _ }
      │     
      │     Note: Error code: E0062
 ─────╯
 
-  [type] error: non-exhaustive match on type Box2; missing: user.Box2 { first: false, second: [..] }
+  [type] error: non-exhaustive match on type Box2; missing: Box2 { first: false, second: [..] }
      ╭─[ patterns_new.baml:224:69 ]
      │
  224 │ ╭─▶ function nested_class_optional_missing_combination(b: Box2) -> int {
      ┆ ┆   
  229 │ ├─▶     }
      │ │           
-     │ ╰─────────── non-exhaustive match on type Box2; missing: user.Box2 { first: false, second: [..] }
+     │ ╰─────────── non-exhaustive match on type Box2; missing: Box2 { first: false, second: [..] }
      │     
      │     Note: Error code: E0062
 ─────╯
@@ -220,14 +219,14 @@ assertion_line: 46698
      │     Note: Error code: E0062
 ─────╯
 
-  [type] error: non-exhaustive match on type IntPair; missing: user.IntPair { a: 0, b: _ }, user.IntPair { a: 1, b: _ }, user.IntPair { a: _, b: _ }
+  [type] error: non-exhaustive match on type IntPair; missing: IntPair { a: 0, b: _ }, IntPair { a: 1, b: _ }, IntPair { a: _, b: _ }
      ╭─[ patterns_new.baml:250:66 ]
      │
  250 │ ╭─▶ function or_pattern_two_field_non_exhaustive(p: IntPair) -> int {
      ┆ ┆   
  253 │ ├─▶     }
      │ │           
-     │ ╰─────────── non-exhaustive match on type IntPair; missing: user.IntPair { a: 0, b: _ }, user.IntPair { a: 1, b: _ }, user.IntPair { a: _, b: _ }
+     │ ╰─────────── non-exhaustive match on type IntPair; missing: IntPair { a: 0, b: _ }, IntPair { a: 1, b: _ }, IntPair { a: _, b: _ }
      │     
      │     Note: Error code: E0062
 ─────╯

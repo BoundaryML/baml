@@ -14,7 +14,7 @@
 //! `crates/python_pydantic2/setup.sh`, invoked by `cargo nextest run`
 //! via the setup-script binding in `.config/nextest.toml` (and run
 //! manually after `cargo test --no-run` for plain `cargo test`). This
-//! mirrors the nodejs_typescript target's `pnpm install` placement,
+//! mirrors the typescript_node target's `pnpm install` placement,
 //! keeps codegen deps the only thing build.rs pulls in, and — most
 //! importantly — lets setup.sh pass `--reinstall-package baml_core`
 //! so the maturin-built `.so` is rebuilt on incremental Rust edits
@@ -115,9 +115,13 @@ fn codegen_fixture(
     fs::create_dir_all(&baml_sdk).unwrap();
 
     let pool = loaded.pool;
-    let user_baml_files = loaded.user_baml_files;
+    let baml_bytecode = loaded.baml_bytecode;
     let codegen_result = panic::catch_unwind(panic::AssertUnwindSafe(|| {
-        codegen_python::to_source_code(&pool, &user_baml_files, NamingConvention::PreserveCase)
+        codegen_python::to_source_code_with_bytecode(
+            &pool,
+            &baml_bytecode,
+            NamingConvention::PreserveCase,
+        )
     }));
     match codegen_result {
         Ok(output) => {

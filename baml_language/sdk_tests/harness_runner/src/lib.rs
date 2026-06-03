@@ -45,7 +45,10 @@ use std::{
 /// `npm_config_store_dir`, …).
 ///
 /// If `uv` is managed by mise but its shim isn't on PATH, the
-/// helper falls back to `mise which uv` before giving up.
+/// helper falls back to `mise which uv` before giving up. On Windows,
+/// `pnpm` is commonly exposed as `pnpm.cmd`; Rust's process launcher
+/// does not consistently apply shell-style `PATHEXT` expansion when
+/// asked to spawn `pnpm`, so the helper retries the explicit shim.
 pub fn run_test_cmd(fixture: &str, cmd: &str, cache_subdir: &str, cache_env_var: &str) {
     run_test_cmd_with_env(fixture, cmd, cache_subdir, cache_env_var, &[]);
 }
@@ -114,6 +117,18 @@ fn run_test_process(
     let output = command.output();
 
     match output {
+        #[cfg(windows)]
+        Err(err) if err.kind() == ErrorKind::NotFound && prog == "pnpm" => {
+            let mut fallback = Command::new("pnpm.cmd");
+            fallback
+                .args(args)
+                .current_dir(dir)
+                .env(cache_env_var, cache_dir);
+            for (k, v) in extra_env {
+                fallback.env(k, v);
+            }
+            fallback.output()
+        }
         Err(err) if err.kind() == ErrorKind::NotFound && prog == "uv" => {
             let uv = resolve_mise_uv()?;
             let mut fallback = Command::new(uv);
@@ -213,10 +228,10 @@ pub fn __check_setup_ran(env_var: &str) {
 /// // Default — fail loudly if setup.sh didn't run.
 /// ::sdk_test_harness_runner::setup_guard!("SDK_TEST_PYTHON_PYDANTIC2_SETUP");
 ///
-/// // Ignored while the generator's other tests are (nodejs_typescript
+/// // Ignored while the generator's other tests are (typescript_node
 /// // is `#[ignore]`d wholesale until codegen_nodejs lands).
 /// ::sdk_test_harness_runner::setup_guard!(
-///     ignore = "codegen_nodejs is a stub", "SDK_TEST_NODEJS_TYPESCRIPT_SETUP");
+///     ignore = "codegen_nodejs is a stub", "SDK_TEST_TYPESCRIPT_NODE_SETUP");
 /// ```
 #[macro_export]
 macro_rules! setup_guard {
@@ -249,7 +264,7 @@ macro_rules! setup_guard {
 /// // Default — fail loudly on any recorded diagnostic.
 /// ::sdk_test_harness_runner::build_diagnostics!();
 ///
-/// // Skip — every fixture records a codegen failure (nodejs_typescript
+/// // Skip — every fixture records a codegen failure (typescript_node
 /// // while codegen_nodejs is a stub).
 /// ::sdk_test_harness_runner::build_diagnostics!(ignore = "codegen_nodejs is a stub");
 /// ```
@@ -296,18 +311,18 @@ pub mod python_pydantic2 {
 }
 
 /// Node.js + TypeScript generator's test-side glue. Invoked from
-/// `crates/nodejs_typescript/src/lib.rs` as
-/// `sdk_test_harness_runner::nodejs_typescript::test_suite!()`.
-pub mod nodejs_typescript {
-    /// `include!`s `OUT_DIR/nodejs_typescript_tests.rs` — the
+/// `crates/typescript_node/src/lib.rs` as
+/// `sdk_test_harness_runner::typescript_node::test_suite!()`.
+pub mod typescript_node {
+    /// `include!`s `OUT_DIR/typescript_node_tests.rs` — the
     /// per-fixture scaffold emitted by
-    /// `sdk_test_harness_setup::nodejs_typescript::run_all`.
+    /// `sdk_test_harness_setup::typescript_node::run_all`.
     #[macro_export]
-    macro_rules! nodejs_typescript_test_suite {
+    macro_rules! typescript_node_test_suite {
         () => {
-            include!(concat!(env!("OUT_DIR"), "/nodejs_typescript_tests.rs"));
+            include!(concat!(env!("OUT_DIR"), "/typescript_node_tests.rs"));
         };
     }
 
-    pub use crate::nodejs_typescript_test_suite as test_suite;
+    pub use crate::typescript_node_test_suite as test_suite;
 }
