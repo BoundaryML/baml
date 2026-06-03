@@ -102,10 +102,12 @@ function NavStars() {
 }
 
 export function Navbar() {
+  const [open, setOpen] = useState(false);
+
   return (
     <>
       <nav className="nav-responsive" style={navStyles.nav}>
-        <Link href="/" style={navStyles.logo}>
+        <Link href="/" onClick={() => setOpen(false)} style={navStyles.logo}>
           Boundary
         </Link>
         <div className="nav-links" style={navStyles.navDiv}>
@@ -125,9 +127,74 @@ export function Navbar() {
           <Link className="nav-link" href="/vs">
             BAML vs X
           </Link>
+          <Link
+            className="nav-link"
+            href="https://bench3-ui.fly.dev/"
+            rel="noopener noreferrer"
+            target="_blank"
+          >
+            agent-tries-baml
+          </Link>
         </div>
-        <NavStars />
-        <ForAgentsLink />
+        <div className="nav-desktop-actions">
+          <NavStars />
+          <ForAgentsLink />
+        </div>
+
+        <button
+          aria-expanded={open}
+          aria-label={open ? 'Close menu' : 'Open menu'}
+          className="nav-toggle"
+          onClick={() => setOpen((v) => !v)}
+          type="button"
+        >
+          <span className={`nav-toggle-bar${open ? ' is-open-1' : ''}`} />
+          <span className={`nav-toggle-bar${open ? ' is-open-2' : ''}`} />
+          <span className={`nav-toggle-bar${open ? ' is-open-3' : ''}`} />
+        </button>
+
+        <div className={`nav-mobile-panel${open ? ' is-open' : ''}`}>
+          {siteConfig.nav.links.map((link) => (
+            <Link
+              className="nav-mobile-link"
+              href={link.href}
+              key={link.id}
+              onClick={() => setOpen(false)}
+            >
+              {link.name}
+            </Link>
+          ))}
+          <Link
+            className="nav-mobile-link"
+            href="https://docs.boundaryml.com/?utm_source=marketing-site&utm_medium=navbar-docs"
+            onClick={() => setOpen(false)}
+            rel="noopener noreferrer"
+            target="_blank"
+          >
+            Docs
+          </Link>
+          <Link
+            className="nav-mobile-link"
+            href="/vs"
+            onClick={() => setOpen(false)}
+          >
+            BAML vs X
+          </Link>
+          <Link
+            className="nav-mobile-link"
+            href="https://bench3-ui.fly.dev/"
+            onClick={() => setOpen(false)}
+            rel="noopener noreferrer"
+            target="_blank"
+          >
+            agent-tries-baml
+          </Link>
+          <div className="nav-mobile-footer">
+            <NavStars />
+            <ForAgentsLink />
+          </div>
+        </div>
+
         <style>{`
           .nav-link {
             display: inline-flex;
@@ -146,9 +213,80 @@ export function Navbar() {
             background-color: #F0ECE0;
             color: #1A1612;
           }
+          .nav-desktop-actions {
+            display: contents;
+          }
+          .nav-toggle { display: none; }
+          .nav-mobile-panel { display: none; }
+
+          @media (max-width: 860px) {
+            .nav-responsive {
+              grid-template-columns: 1fr auto !important;
+            }
+            .nav-links { display: none !important; }
+            .nav-desktop-actions { display: none !important; }
+            .nav-toggle {
+              display: inline-flex;
+              flex-direction: column;
+              justify-content: center;
+              gap: 5px;
+              width: 40px;
+              height: 40px;
+              padding: 8px 9px;
+              border: 1px solid #D9D3C4;
+              border-radius: 8px;
+              background: transparent;
+              cursor: pointer;
+            }
+            .nav-toggle-bar {
+              display: block;
+              height: 1.5px;
+              width: 100%;
+              background: #1A1612;
+              border-radius: 2px;
+              transition: transform 180ms ease, opacity 140ms ease;
+            }
+            .nav-toggle-bar.is-open-1 { transform: translateY(6.5px) rotate(45deg); }
+            .nav-toggle-bar.is-open-2 { opacity: 0; }
+            .nav-toggle-bar.is-open-3 { transform: translateY(-6.5px) rotate(-45deg); }
+            .nav-mobile-panel {
+              display: flex;
+              grid-column: 1 / -1;
+              flex-direction: column;
+              max-height: 0;
+              overflow: hidden;
+              opacity: 0;
+              transition: max-height 240ms ease, opacity 200ms ease, margin-top 240ms ease;
+              margin-top: 0;
+            }
+            .nav-mobile-panel.is-open {
+              max-height: 70vh;
+              overflow-y: auto;
+              opacity: 1;
+              margin-top: 12px;
+            }
+            .nav-mobile-link {
+              padding: 14px 6px;
+              border-top: 1px solid #E7E1D3;
+              font-size: 14px;
+              letter-spacing: 0.12em;
+              text-transform: uppercase;
+              color: #1A1612;
+            }
+            .nav-mobile-footer {
+              display: flex;
+              align-items: center;
+              justify-content: space-between;
+              gap: 16px;
+              padding: 16px 6px 4px;
+              border-top: 1px solid #E7E1D3;
+              text-transform: none;
+              letter-spacing: normal;
+            }
+          }
         `}</style>
       </nav>
-      <div aria-hidden style={navStyles.navSpacer} />
+      <div aria-hidden className="nav-spacer" style={navStyles.navSpacer} />
     </>
   );
 }

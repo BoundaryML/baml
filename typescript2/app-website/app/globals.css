@@ -699,3 +699,18 @@ code[data-line-numbers] > [data-line]::before {
 .animate-blink {
   animation: blink 1s step-end infinite;
 }
+
+/* Hide the fundraising site banner on phones and pull the navbar up to the
+   top (the banner normally reserves 41px above the fixed nav). */
+@media (max-width: 640px) {
+  .site-banner,
+  .site-banner-reserved {
+    display: none !important;
+  }
+  .nav-responsive {
+    top: 0 !important;
+  }
+  .nav-spacer {
+    height: 65px !important;
+  }
+}

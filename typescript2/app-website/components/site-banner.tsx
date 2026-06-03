@@ -25,6 +25,7 @@ export function SiteBanner() {
     return (
       <div
         aria-hidden
+        className="site-banner-reserved"
         style={{
           background: CARD_BG,
           borderBottom: `1px solid ${BORDER}`,
