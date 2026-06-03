@@ -21,3 +21,23 @@ function scale(base: int, factor: int = 2) -> int {
 function classify(value: int? = 7) -> int {
   if (value == null) { -1 } else { value }
 }
+
+// Single required argument: the host passes one positional value and it
+// round-trips through the engine. Baseline for the one-arg call path
+// (hello_world is nullary; this is the next step up).
+function shout(text: string) -> string {
+  text + "!"
+}
+
+// One required positional arg plus one optional arg whose default is
+// `null`. Omitting `prefix` (engine fills `null`) and passing an explicit
+// `null` both take the null branch; a supplied string is prepended.
+function tag(name: string, prefix: string? = null) -> string {
+  if (prefix == null) { name } else { prefix + ":" + name }
+}
+
+// One required positional arg plus one optional arg defaulted to `5`.
+// Omitting `addend` lets the engine fill `5`; passing it overrides.
+function add_five(base: int, addend: int = 5) -> int {
+  base + addend
+}

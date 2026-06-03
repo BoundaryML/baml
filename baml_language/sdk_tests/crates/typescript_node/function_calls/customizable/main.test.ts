@@ -7,7 +7,7 @@
 // unchanged.
 import "./baml_sdk/index.js";
 import { describe, it, expect } from "vitest";
-import { hello_world, hello_world_async } from "./baml_sdk/index.js";
+import { hello_world, hello_world_async, shout } from "./baml_sdk/index.js";
 
 describe("function_calls — hello_world", () => {
   it("returns the literal (sync)", () => {
@@ -16,5 +16,12 @@ describe("function_calls — hello_world", () => {
 
   it("returns the literal (async)", async () => {
     expect(await hello_world_async()).toBe("hello world");
+  });
+});
+
+describe("function_calls — shout", () => {
+  it("round-trips a single positional argument", () => {
+    // The next step up from the nullary case: one required positional arg.
+    expect(shout("hi")).toBe("hi!");
   });
 });

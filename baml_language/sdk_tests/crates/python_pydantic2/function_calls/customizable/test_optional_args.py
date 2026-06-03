@@ -15,7 +15,7 @@ explicit `None`.
 """
 
 import baml_sdk  # noqa: F401  — initializes the BAML runtime
-from baml_sdk import classify, scale
+from baml_sdk import add_five, classify, scale, tag
 
 
 def test_scale_uses_engine_default_when_factor_omitted():
@@ -43,3 +43,28 @@ def test_classify_explicit_null_is_distinct_from_omitted():
 
 def test_classify_supplied_value_passes_through():
     assert classify(value=5) == 5
+
+
+def test_tag_omitted_optional_takes_null_branch():
+    # `prefix` omitted → engine fills the `null` default → bare name.
+    assert tag("widget") == "widget"
+
+
+def test_tag_explicit_null_matches_omitted():
+    # With a null default, an explicit None is indistinguishable from
+    # omission — both take the null branch.
+    assert tag("widget", prefix=None) == "widget"
+
+
+def test_tag_supplied_prefix_is_prepended():
+    assert tag("widget", prefix="ui") == "ui:widget"
+
+
+def test_add_five_uses_default_when_addend_omitted():
+    # `addend` omitted → engine substitutes the BAML default `5`.
+    assert add_five(10) == 15
+
+
+def test_add_five_override_default_by_keyword():
+    # `addend` is keyword-only (defaulted), so the override is passed by name.
+    assert add_five(10, addend=3) == 13

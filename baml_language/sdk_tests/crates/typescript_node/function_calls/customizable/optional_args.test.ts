@@ -17,18 +17,23 @@
 // omission directly.
 import "./baml_sdk/index.js";
 import { describe, it, expect } from "vitest";
-import { classify, scale } from "./baml_sdk/index.js";
+import { add_five, classify, scale, tag } from "./baml_sdk/index.js";
 
 describe("function_calls — optional args, explicit values", () => {
   it("passes a defaulted parameter explicitly", () => {
     expect(scale(5, 2)).toBe(10);
     expect(scale(5, 3)).toBe(15);
+    expect(add_five(10, 5)).toBe(15);
+    expect(add_five(10, 3)).toBe(13);
   });
 
   it("distinguishes an explicit null from a supplied value", () => {
     // classify's default `7` is never reached here — both args are explicit.
     expect(classify(null)).toBe(-1);
     expect(classify(5)).toBe(5);
+    // tag's null default is likewise bypassed when prefix is explicit.
+    expect(tag("widget", null)).toBe("widget");
+    expect(tag("widget", "ui")).toBe("ui:widget");
   });
 });
 
@@ -43,5 +48,11 @@ describe("function_calls — optional args, engine-filled defaults", () => {
 
     const classifyOmitted = classify as unknown as () => number;
     expect(classifyOmitted()).toBe(7); // value defaults to 7, not null
+
+    const addFiveBaseOnly = add_five as unknown as (base: number) => number;
+    expect(addFiveBaseOnly(10)).toBe(15); // addend defaults to 5
+
+    const tagNameOnly = tag as unknown as (name: string) => string;
+    expect(tagNameOnly("widget")).toBe("widget"); // prefix defaults to null
   });
 });
