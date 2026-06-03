@@ -1,0 +1,500 @@
+---
+source: crates/baml_tests/tests/baml_src.rs
+---
+function inferred_generic_type_args.$init_test_ns_inferred_generic_type_args_inferred_generic_type_args(registry: testing.TestCollector) -> null {
+    load_var registry
+    load_const "showcase_lazy_cursor_pipeline"
+    make_closure .<lambda($init_test_ns_inferred_generic_type_args_inferred_generic_type_args, 0)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "inferred_static_ctor_dispatches_to_correct_implementor"
+    make_closure .<lambda($init_test_ns_inferred_generic_type_args_inferred_generic_type_args, 1)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "inferred_static_ctor_dispatches_through_generic_interface"
+    make_closure .<lambda($init_test_ns_inferred_generic_type_args_inferred_generic_type_args, 2)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "interface_default_method_sees_interface_type_var"
+    make_closure .<lambda($init_test_ns_inferred_generic_type_args_inferred_generic_type_args, 3)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "class_method_builds_generic_via_class_type_var"
+    make_closure .<lambda($init_test_ns_inferred_generic_type_args_inferred_generic_type_args, 4)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "default_method_forward_reads_interface_type_var"
+    make_closure .<lambda($init_test_ns_inferred_generic_type_args_inferred_generic_type_args, 5)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "generic_class_behind_nongeneric_interface_reads_type_var"
+    make_closure .<lambda($init_test_ns_inferred_generic_type_args_inferred_generic_type_args, 6)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_const null
+    return
+}
+
+function inferred_generic_type_args.ArrBag$stream.Bag<T>.first(self: inferred_generic_type_args.ArrBag$stream) -> void {
+    load_var self
+    load_field .0
+    load_const 0
+    load_array_element
+    return
+}
+
+function inferred_generic_type_args.ArrBag.Bag<T>.first(self: inferred_generic_type_args.ArrBag) -> void {
+    load_var self
+    load_field .0
+    load_const 0
+    load_array_element
+    return
+}
+
+function inferred_generic_type_args.ArrBag.make(a: void[]) -> inferred_generic_type_args.ArrBag<void> {
+    load_var a
+    load_const 0
+    load_type #0
+    init_instance<1> user.inferred_generic_type_args.ArrBag .arr, .idx
+    return
+}
+
+function inferred_generic_type_args.ArrNamed$stream.Named<T>.first(self: inferred_generic_type_args.ArrNamed$stream) -> void {
+    load_var self
+    load_field .0
+    load_const 0
+    load_array_element
+    return
+}
+
+function inferred_generic_type_args.ArrNamed.Named<T>.first(self: inferred_generic_type_args.ArrNamed) -> void {
+    load_var self
+    load_field .0
+    load_const 0
+    load_array_element
+    return
+}
+
+function inferred_generic_type_args.ArrayCursor$stream.Cursor<T>.head(self: inferred_generic_type_args.ArrayCursor$stream) -> void {
+    load_var self
+    load_field .0
+    load_const 0
+    load_array_element
+    return
+}
+
+function inferred_generic_type_args.ArrayCursor.Cursor<T>.head(self: inferred_generic_type_args.ArrayCursor) -> void {
+    load_var self
+    load_field .0
+    load_const 0
+    load_array_element
+    return
+}
+
+function inferred_generic_type_args.ArrayCursor.of(items: void[]) -> inferred_generic_type_args.ArrayCursor<void> {
+    load_var items
+    load_const 0
+    load_type #0
+    init_instance<1> user.inferred_generic_type_args.ArrayCursor .arr, .idx
+    return
+}
+
+function inferred_generic_type_args.Boxed$stream.Wrap<T>.first(self: inferred_generic_type_args.Boxed$stream) -> void {
+    load_var self
+    load_field .0
+    return
+}
+
+function inferred_generic_type_args.Boxed.Wrap<T>.first(self: inferred_generic_type_args.Boxed) -> void {
+    load_var self
+    load_field .0
+    return
+}
+
+function inferred_generic_type_args.Cat$stream.Animal.speak(self: inferred_generic_type_args.Cat$stream) -> string {
+    load_const "meow"
+    return
+}
+
+function inferred_generic_type_args.Cat.Animal.speak(self: inferred_generic_type_args.Cat) -> string {
+    load_const "meow"
+    return
+}
+
+function inferred_generic_type_args.Counter.element_type(self: null) -> string {
+    load_type #0
+    call baml.TypeValue.to_string
+    return
+}
+
+function inferred_generic_type_args.Cursor.take_one(self: null) -> inferred_generic_type_args.Cursor<void> {
+    load_var self
+    is_type SingleCursor<...>
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_type #0
+    load_var self
+    call user.inferred_generic_type_args.ArrayCursor.Cursor<T>.head
+    jump L2
+
+  L1:
+    load_type #0
+    load_var self
+    call user.inferred_generic_type_args.SingleCursor.Cursor<T>.head
+
+  L2:
+    load_type #0
+    init_instance<1> user.inferred_generic_type_args.SingleCursor .value
+    return
+}
+
+function inferred_generic_type_args.Dog$stream.Animal.speak(self: inferred_generic_type_args.Dog$stream) -> string {
+    load_const "woof"
+    return
+}
+
+function inferred_generic_type_args.Dog.Animal.speak(self: inferred_generic_type_args.Dog) -> string {
+    load_const "woof"
+    return
+}
+
+function inferred_generic_type_args.Dog.make(v: void) -> inferred_generic_type_args.Dog<void> {
+    load_var v
+    load_type #0
+    init_instance<1> user.inferred_generic_type_args.Dog .value
+    return
+}
+
+function inferred_generic_type_args.IntCounter$stream.Counter<T>.describe(self: inferred_generic_type_args.IntCounter$stream) -> string {
+    load_type #0
+    load_var self
+    call user.inferred_generic_type_args.Counter.element_type
+    return
+}
+
+function inferred_generic_type_args.IntCounter.Counter<T>.describe(self: inferred_generic_type_args.IntCounter) -> string {
+    load_type #0
+    load_var self
+    call user.inferred_generic_type_args.Counter.element_type
+    return
+}
+
+function inferred_generic_type_args.Named.tname(self: null) -> string {
+    load_type #0
+    call baml.TypeValue.to_string
+    return
+}
+
+function inferred_generic_type_args.OneBag$stream.Bag<T>.first(self: inferred_generic_type_args.OneBag$stream) -> void {
+    load_var self
+    load_field .0
+    return
+}
+
+function inferred_generic_type_args.OneBag.Bag<T>.first(self: inferred_generic_type_args.OneBag) -> void {
+    load_var self
+    load_field .0
+    return
+}
+
+function inferred_generic_type_args.OneNamed$stream.Named<T>.first(self: inferred_generic_type_args.OneNamed$stream) -> void {
+    load_var self
+    load_field .0
+    return
+}
+
+function inferred_generic_type_args.OneNamed.Named<T>.first(self: inferred_generic_type_args.OneNamed) -> void {
+    load_var self
+    load_field .0
+    return
+}
+
+function inferred_generic_type_args.PlainThing$stream.Describable.describe(self: inferred_generic_type_args.PlainThing$stream) -> string {
+    load_const "plain"
+    return
+}
+
+function inferred_generic_type_args.PlainThing.Describable.describe(self: inferred_generic_type_args.PlainThing) -> string {
+    load_const "plain"
+    return
+}
+
+function inferred_generic_type_args.SingleCursor$stream.Cursor<T>.head(self: inferred_generic_type_args.SingleCursor$stream) -> void {
+    load_var self
+    load_field .0
+    return
+}
+
+function inferred_generic_type_args.SingleCursor.Cursor<T>.head(self: inferred_generic_type_args.SingleCursor) -> void {
+    load_var self
+    load_field .0
+    return
+}
+
+function inferred_generic_type_args.SrcWrap$stream.Wrap<T>.first(self: inferred_generic_type_args.SrcWrap$stream) -> void {
+    load_var self
+    load_field .0
+    load_const 0
+    load_array_element
+    return
+}
+
+function inferred_generic_type_args.SrcWrap.Wrap<T>.first(self: inferred_generic_type_args.SrcWrap) -> void {
+    load_var self
+    load_field .0
+    load_const 0
+    load_array_element
+    return
+}
+
+function inferred_generic_type_args.SrcWrap.boxed(self: inferred_generic_type_args.SrcWrap) -> inferred_generic_type_args.Wrap<void> {
+    load_var self
+    load_field .arr
+    load_const 0
+    load_array_element
+    load_type #0
+    init_instance<1> user.inferred_generic_type_args.Boxed .val
+    return
+}
+
+function inferred_generic_type_args.StrCounter$stream.Counter<T>.describe(self: inferred_generic_type_args.StrCounter$stream) -> string {
+    load_const "str"
+    return
+}
+
+function inferred_generic_type_args.StrCounter.Counter<T>.describe(self: inferred_generic_type_args.StrCounter) -> string {
+    load_const "str"
+    return
+}
+
+function inferred_generic_type_args.TypedBox$stream.Describable.describe(self: inferred_generic_type_args.TypedBox$stream) -> string {
+    load_type #0
+    call baml.TypeValue.to_string
+    return
+}
+
+function inferred_generic_type_args.TypedBox.Describable.describe(self: inferred_generic_type_args.TypedBox) -> string {
+    load_type #0
+    call baml.TypeValue.to_string
+    return
+}
+
+function inferred_generic_type_args.class_method_builds_generic() -> int {
+    load_type int
+    load_const 5
+    load_const 6
+    load_const 7
+    alloc_array 3
+    load_const 0
+    load_type int
+    init_instance<1> user.inferred_generic_type_args.SrcWrap .arr, .idx
+    call user.inferred_generic_type_args.SrcWrap.boxed
+    store_var w
+    load_var w
+    is_type Boxed<...>
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_type int
+    load_var w
+    call user.inferred_generic_type_args.SrcWrap.Wrap<T>.first
+    jump L2
+
+  L1:
+    load_type int
+    load_var w
+    call user.inferred_generic_type_args.Boxed.Wrap<T>.first
+
+  L2:
+    return
+}
+
+function inferred_generic_type_args.default_forward_reads_type_var() -> string {
+    load_const 7
+    load_type int
+    init_instance<1> user.inferred_generic_type_args.IntCounter .value
+    store_var_load_var c
+    is_type StrCounter<...>
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_type int
+    load_var c
+    call user.inferred_generic_type_args.IntCounter.Counter<T>.describe
+    jump L2
+
+  L1:
+    load_type int
+    load_var c
+    call user.inferred_generic_type_args.StrCounter.Counter<T>.describe
+
+  L2:
+    return
+}
+
+function inferred_generic_type_args.default_method_typevar_name() -> string {
+    load_const 5
+    load_const 6
+    load_const 7
+    alloc_array 3
+    load_const 0
+    load_type int
+    init_instance<1> user.inferred_generic_type_args.ArrNamed .arr, .idx
+    store_var_load_var s
+    is_type OneNamed<...>
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_type int
+    load_var s
+    call user.inferred_generic_type_args.Named.tname
+    jump L2
+
+  L1:
+    load_type int
+    load_var s
+    call user.inferred_generic_type_args.Named.tname
+
+  L2:
+    return
+}
+
+function inferred_generic_type_args.generic_behind_nongeneric_iface() -> string {
+    load_const 42
+    load_type int
+    init_instance<1> user.inferred_generic_type_args.TypedBox .value
+    store_var_load_var d
+    is_type PlainThing
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var d
+    make_bound_method user.inferred_generic_type_args.TypedBox.Describable.describe
+    call_indirect
+    jump L2
+
+  L1:
+    load_var d
+    call user.inferred_generic_type_args.PlainThing.Describable.describe
+
+  L2:
+    return
+}
+
+function inferred_generic_type_args.inferred_static_ctor_first() -> int {
+    load_const null
+    load_const 5
+    load_const 6
+    load_const 7
+    alloc_array 3
+    call user.inferred_generic_type_args.ArrBag.make
+    store_var s
+    load_var s
+    is_type OneBag<...>
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_type int
+    load_var s
+    call user.inferred_generic_type_args.ArrBag.Bag<T>.first
+    jump L2
+
+  L1:
+    load_type int
+    load_var s
+    call user.inferred_generic_type_args.OneBag.Bag<T>.first
+
+  L2:
+    return
+}
+
+function inferred_generic_type_args.inferred_static_ctor_speak() -> string {
+    load_const null
+    load_const 42
+    call user.inferred_generic_type_args.Dog.make
+    store_var d
+    load_var d
+    is_type Dog
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var d
+    call user.inferred_generic_type_args.Cat.Animal.speak
+    jump L2
+
+  L1:
+    load_var d
+    make_bound_method user.inferred_generic_type_args.Dog.Animal.speak
+    call_indirect
+
+  L2:
+    return
+}
+
+function inferred_generic_type_args.take_one_then_head() -> int {
+    load_const null
+    load_const 10
+    load_const 20
+    load_const 30
+    alloc_array 3
+    call user.inferred_generic_type_args.ArrayCursor.of
+    store_var cursor
+    load_var cursor
+    is_type SingleCursor<...>
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_type int
+    load_var cursor
+    call user.inferred_generic_type_args.Cursor.take_one
+    store_var single
+    jump L2
+
+  L1:
+    load_type int
+    load_var cursor
+    call user.inferred_generic_type_args.Cursor.take_one
+    store_var single
+
+  L2:
+    load_var single
+    is_type SingleCursor<...>
+    pop_jump_if_false L3
+    jump L4
+
+  L3:
+    load_type int
+    load_var single
+    call user.inferred_generic_type_args.ArrayCursor.Cursor<T>.head
+    jump L5
+
+  L4:
+    load_type int
+    load_var single
+    call user.inferred_generic_type_args.SingleCursor.Cursor<T>.head
+
+  L5:
+    return
+}

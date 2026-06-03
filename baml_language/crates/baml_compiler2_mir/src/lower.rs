@@ -320,6 +320,32 @@ fn interface_class_guard_for_args(
     Some(InterfaceClassGuard::Exact(class_args))
 }
 
+/// Choose how to seed the frame of a class-owned method dispatched through an
+/// interface, given the matched arm's class guard and whether the implementor
+/// is generic.
+///
+/// A fully-pinned guard names every class type arg statically (class-param
+/// order), so we seed those directly — keeping the common, hot path
+/// allocation-free and its bytecode unchanged. When the guard is `Any` or only
+/// partially pins the class params (e.g. a generic class behind a *non-generic*
+/// interface, or `Pair<L,R> implements Slot<L>`), the static guard can't name
+/// the args, but the matched runtime instance always carries concrete ones — so
+/// we bind the receiver and let the VM seed from `inst.class_type_args`. A
+/// non-generic implementor needs nothing.
+fn class_owned_frame_seed(guard: &InterfaceClassGuard, impl_is_generic: bool) -> CalleeFrameSeed {
+    match guard {
+        InterfaceClassGuard::Exact(args) if args.iter().all(Option::is_some) => {
+            CalleeFrameSeed::Static(
+                args.iter()
+                    .map(|a| a.clone().expect("all entries are Some"))
+                    .collect(),
+            )
+        }
+        _ if impl_is_generic => CalleeFrameSeed::FromReceiverInstance,
+        _ => CalleeFrameSeed::Static(Vec::new()),
+    }
+}
+
 pub fn convert_tir2_ty(ty: &Tir2Ty, resolved: &ResolvedAliases) -> Ty {
     let attr = ty.attr().clone();
     match ty {
@@ -1175,6 +1201,32 @@ enum InterfaceDispatchGuard {
 struct InterfaceMethodCandidate {
     guard: InterfaceDispatchGuard,
     item_ref: ItemRef,
+    /// How to seed the callee frame's `type_args` so a dispatched method that
+    /// reads its enclosing `T` at runtime resolves it correctly.
+    frame_seed: CalleeFrameSeed,
+}
+
+/// Strategy for seeding a dispatched method's `frame.type_args`.
+#[derive(Clone)]
+enum CalleeFrameSeed {
+    /// Bind the receiver into a `BoundMethod` so the VM seeds `frame.type_args`
+    /// from the runtime instance's `class_type_args` (class-param order), then
+    /// the explicit call-site args. Used for a class-owned method on a generic
+    /// class whose class params are *not* fully pinned by the interface request
+    /// (`Any`/partial guard) — the static guard can't name the args, but the
+    /// matched instance always carries them.
+    FromReceiverInstance,
+    /// Seed statically with these resolved type args, in the De Bruijn order
+    /// the callee body assumes (see `enclosing_generic_params`):
+    ///   • a class-owned method with a fully-pinned guard ⇒ the implementor's
+    ///     resolved class type args (class-param order);
+    ///   • an inherited interface default ⇒ the resolved *interface* args
+    ///     (which can differ from the implementor's class args when the
+    ///     `implements` block renames/reorders params).
+    /// Empty ⇒ no seeding (non-generic, or a path that does not thread args).
+    /// May contain `TypeVar`s referring to the *caller's* enclosing generics;
+    /// `emit_method_candidate_switch` lowers them via `ty_to_template`.
+    Static(Vec<Tir2Ty>),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -4758,11 +4810,45 @@ impl LoweringContext<'_> {
                 let Some(&self_local) = self.locals.get(&Name::new("self")) else {
                     return;
                 };
-                let mut all_args = vec![Operand::Copy(Place::Local(self_local))];
+                // Seed the default method's frame with the interface's type
+                // args, expressed over the enclosing class's generic params
+                // (e.g. `implements Cont<T>` → `[T]`). The default body lowers
+                // the interface's `T` to `TypeArgRef` (see
+                // `enclosing_generic_params`), so without this an explicit
+                // `default.<method>()` that reads `T` would resolve it to
+                // `unknown` at runtime. Mirrors the interface-dispatch switch.
+                let iface_type_arg_tys: Vec<Tir2Ty> = if let baml_compiler2_ast::TypeExpr::Path {
+                    generic_args,
+                    ..
+                } = &target_te.expr
+                {
+                    let generic_params = self.enclosing_generic_params();
+                    let mut diags = Vec::new();
+                    generic_args
+                        .iter()
+                        .map(|arg| {
+                            baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns(
+                                self.db,
+                                arg,
+                                pkg_items,
+                                &current_pkg.namespace_path,
+                                &generic_params,
+                                &mut diags,
+                            )
+                        })
+                        .collect()
+                } else {
+                    vec![]
+                };
+                let frame_type_arg_ops = self.emit_frame_type_arg_ops(&iface_type_arg_tys);
+                let ntypeargs = frame_type_arg_ops.len();
+                let mut all_args = frame_type_arg_ops;
+                all_args.push(Operand::Copy(Place::Local(self_local)));
                 all_args.extend(self.lower_call_arg_operands(expr_id, args));
                 let target = self.builder.create_block();
                 let unwind = self.catch_context.as_ref().map(|c| c.unwind_target);
-                self.builder.call(callee_op, all_args, dest, target, unwind);
+                self.builder
+                    .call_with_type_args(callee_op, all_args, ntypeargs, dest, target, unwind);
                 self.builder.set_current_block(target);
                 return;
             }
@@ -5681,6 +5767,21 @@ impl LoweringContext<'_> {
         {
             return imp.generic_params.clone();
         }
+        // BEP-044: interface default methods are lowered as standalone
+        // functions, but their bodies reference the *interface's* generic
+        // params (e.g. a default `map(self)` building `Map<T, U>`). Mirror the
+        // class-method convention — interface params first, then fn params — so
+        // `TypeVar(T)` lowers to `TypeArgRef(N)` against the frame type args the
+        // interface-dispatch switch seeds (see `emit_method_candidate_switch`).
+        if let Some(iface_data) = item_tree
+            .interfaces
+            .values()
+            .find(|iface_data| iface_data.default_methods.contains(&func_id))
+        {
+            let mut params = iface_data.generic_params.clone();
+            params.extend(item_tree[func_id].generic_params.iter().cloned());
+            return params;
+        }
         let mut params: Vec<baml_base::Name> = item_tree
             .classes
             .values()
@@ -5689,6 +5790,28 @@ impl LoweringContext<'_> {
             .unwrap_or_default();
         params.extend(item_tree[func_id].generic_params.iter().cloned());
         params
+    }
+
+    /// Emit `LoadType` temps for a list of type args resolved at an interface
+    /// dispatch site, returning one `Operand` per arg (in order). Used by
+    /// `emit_method_candidate_switch` to seed the callee frame's `type_args`.
+    /// `TypeVar`s are lowered against the *caller's* `enclosing_generic_params`
+    /// so they substitute against the caller's `frame.type_args` at runtime
+    /// (mirroring the receiver-class-type-args path for direct method calls).
+    fn emit_frame_type_arg_ops(&mut self, tys: &[Tir2Ty]) -> Vec<Operand> {
+        if tys.is_empty() {
+            return Vec::new();
+        }
+        let generic_params = self.enclosing_generic_params();
+        tys.iter()
+            .map(|ty| {
+                let template = self.ty_to_template(ty, &generic_params);
+                let temp = self.builder.temp(Ty::type_type());
+                self.builder
+                    .assign(Place::local(temp), Rvalue::LoadType(template));
+                Operand::Copy(Place::local(temp))
+            })
+            .collect()
     }
 
     /// Emit `LoadType` rvalue assignments for the explicit type arguments of a
@@ -6703,6 +6826,9 @@ impl<'db> LoweringContext<'db> {
                     TyAttr::default(),
                 )),
                 item_ref,
+                // Union-member direct dispatch: frame type args not threaded
+                // here. (Unchanged from prior behavior.)
+                frame_seed: CalleeFrameSeed::Static(Vec::new()),
             }];
         }
         let Some(class_loc) = self.resolve_class_loc_by_type_name(class_tn) else {
@@ -6900,6 +7026,9 @@ impl<'db> LoweringContext<'db> {
             resolved.push(InterfaceMethodCandidate {
                 guard: InterfaceDispatchGuard::Type(implementor.runtime_ty.clone()),
                 item_ref,
+                // Type-implementor (primitive / out-of-body) dispatch: frame
+                // type args not threaded here. (Unchanged from prior behavior.)
+                frame_seed: CalleeFrameSeed::Static(Vec::new()),
             });
         }
         resolved
@@ -6953,18 +7082,59 @@ impl<'db> LoweringContext<'db> {
                 bb_next,
             );
             self.builder.set_current_block(bb_body);
-            let callee_op = Operand::Constant(Constant::Function(candidate.item_ref.clone()));
-            let mut all_args = type_arg_ops.clone();
-            all_args.push(Operand::Copy(Place::Local(recv_local)));
-            all_args.extend(arg_ops.iter().cloned());
-            self.builder.call_with_type_args(
-                callee_op,
-                all_args,
-                ntypeargs,
-                dest.clone(),
-                bb_join,
-                unwind,
-            );
+            // Seed the callee frame's `type_args` so a dispatched method that
+            // reads its enclosing `T` at runtime — e.g. building `Other<T>{}` or
+            // `reflect.type_of<T>()` — resolves it correctly. Without this,
+            // inferred generic instances carry `unknown` class type args and
+            // downstream interface dispatch falls to the wrong implementor.
+            match &candidate.frame_seed {
+                CalleeFrameSeed::FromReceiverInstance => {
+                    // Bind the receiver so the VM seeds `frame.type_args` from
+                    // the instance's `class_type_args` (class-param order) and
+                    // then the explicit call-site args — handling `Any`/partial
+                    // guards that a static seed can't name.
+                    let bm = self.builder.temp(Ty::unknown());
+                    self.builder.assign(
+                        Place::local(bm),
+                        Rvalue::MakeBoundMethod {
+                            item_ref: candidate.item_ref.clone(),
+                            receiver: Operand::Copy(Place::Local(recv_local)),
+                        },
+                    );
+                    // A `BoundMethod` callee inserts the receiver itself, so the
+                    // explicit args carry only the call-site type args + values.
+                    let mut all_args = type_arg_ops.clone();
+                    all_args.extend(arg_ops.iter().cloned());
+                    self.builder.call_with_type_args(
+                        Operand::Copy(Place::local(bm)),
+                        all_args,
+                        ntypeargs,
+                        dest.clone(),
+                        bb_join,
+                        unwind,
+                    );
+                }
+                CalleeFrameSeed::Static(tys) => {
+                    let callee_op =
+                        Operand::Constant(Constant::Function(candidate.item_ref.clone()));
+                    // De Bruijn order: class/iface params first, then explicit
+                    // call-site `<...>` args. Lowered per-arm (args vary).
+                    let frame_type_arg_ops = self.emit_frame_type_arg_ops(tys);
+                    let arm_ntypeargs = frame_type_arg_ops.len() + ntypeargs;
+                    let mut all_args = frame_type_arg_ops;
+                    all_args.extend(type_arg_ops.iter().cloned());
+                    all_args.push(Operand::Copy(Place::Local(recv_local)));
+                    all_args.extend(arg_ops.iter().cloned());
+                    self.builder.call_with_type_args(
+                        callee_op,
+                        all_args,
+                        arm_ntypeargs,
+                        dest.clone(),
+                        bb_join,
+                        unwind,
+                    );
+                }
+            }
             next_check = bb_next;
         }
 
@@ -7193,6 +7363,11 @@ impl<'db> LoweringContext<'db> {
                     class_loc.file(self.db),
                     method_id,
                 );
+                // A class-owned override reads class-level `T` from its frame
+                // type args (class-param order): statically when the guard pins
+                // them, otherwise from the matched runtime instance.
+                let frame_seed =
+                    class_owned_frame_seed(&guard, !class_data.generic_params.is_empty());
                 out.push((
                     requested_idx,
                     InterfaceMethodCandidate {
@@ -7201,6 +7376,7 @@ impl<'db> LoweringContext<'db> {
                             guard,
                         },
                         item_ref: method_item_ref(self.db, class_loc, func_loc),
+                        frame_seed,
                     },
                 ));
             }
@@ -7232,6 +7408,15 @@ impl<'db> LoweringContext<'db> {
                 else {
                     continue;
                 };
+                // An inherited interface default reads the *interface's* type
+                // vars (interface-param order), which can differ from the
+                // implementor's class args when the `implements` block
+                // renames/reorders params. Seed from the matched interface
+                // view's args, not the class guard.
+                let frame_type_args = requested_views
+                    .get(requested_idx)
+                    .map(|(_, args, _)| args.clone())
+                    .unwrap_or_default();
                 out.push((
                     requested_idx,
                     InterfaceMethodCandidate {
@@ -7240,6 +7425,7 @@ impl<'db> LoweringContext<'db> {
                             guard,
                         },
                         item_ref,
+                        frame_seed: CalleeFrameSeed::Static(frame_type_args),
                     },
                 ));
             }
@@ -7476,6 +7662,12 @@ impl<'db> LoweringContext<'db> {
                                                 func_loc,
                                             ),
                                         ),
+                                        // Out-of-body override: its frame uses
+                                        // `imp.generic_params` order, which can
+                                        // differ from both the class- and
+                                        // interface-arg orders. Not threaded
+                                        // here. (Unchanged from prior behavior.)
+                                        frame_seed: CalleeFrameSeed::Static(Vec::new()),
                                     },
                                 ));
                                 break 'blanket_search;
@@ -7483,6 +7675,22 @@ impl<'db> LoweringContext<'db> {
                             // No override in blanket impl — check for interface default method
                             for &fn_id in &iface_data.default_methods {
                                 if iface_tree[fn_id].name == *method {
+                                    // Inherited default for an out-of-body
+                                    // implementor: its body reads the owning
+                                    // interface's type vars (interface-param
+                                    // order). Seed from the resolved closure
+                                    // view args, but only when fully concrete —
+                                    // any residual TypeVar there is `imp`-level,
+                                    // not a caller generic, so it must not be
+                                    // emitted as a caller `TypeArgRef`.
+                                    let frame_type_args = if current_iface_args
+                                        .iter()
+                                        .any(baml_compiler2_tir::generics::contains_typevar)
+                                    {
+                                        Vec::new()
+                                    } else {
+                                        current_iface_args
+                                    };
                                     out.push((
                                         requested_idx,
                                         InterfaceMethodCandidate {
@@ -7496,6 +7704,7 @@ impl<'db> LoweringContext<'db> {
                                                 class: iface_data.name.clone(),
                                                 name: method.clone(),
                                             },
+                                            frame_seed: CalleeFrameSeed::Static(frame_type_args),
                                         },
                                     ));
                                     break 'blanket_search;
