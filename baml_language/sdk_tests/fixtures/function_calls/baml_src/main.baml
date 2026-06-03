@@ -41,3 +41,36 @@ function tag(name: string, prefix: string? = null) -> string {
 function add_five(base: int, addend: int = 5) -> int {
   base + addend
 }
+
+// ── required + optional, one per default flavor ──────────────────────────────
+// Three functions with the same `(int base, <optional> delta)` shape that vary
+// ONLY in the optional parameter's type + default, so the host-call contracts
+// sit side by side:
+//
+//   delta type/default │ omitted        │ explicit null │ value 3
+//   ───────────────────┼────────────────┼───────────────┼─────────
+//   int  = 5           │ default 5       │ (not nullable)│ 3
+//   int? = 5           │ default 5       │ null          │ 3
+//   int? = null        │ default null    │ null          │ 3
+//
+// The `int? = 5` row is the only one where omitted (5) and explicit null
+// differ; the `int? = null` row collapses them.
+
+// `T = value`: non-nullable optional. `delta` is always an int, so the
+// engine fills `5` on omission and the host can never pass null.
+function with_opt_value(base: int, delta: int = 5) -> int {
+  base + delta
+}
+
+// `T? = value`: nullable optional with a non-null default. Omitting `delta`
+// yields the default `5`; an explicit `null` takes the null branch — the two
+// are observably distinct.
+function with_opt_nullable_value(base: int, delta: int? = 5) -> int {
+  if (delta == null) { base } else { base + delta }
+}
+
+// `T? = null`: nullable optional defaulted to null. Omitting `delta` and
+// passing an explicit `null` both take the null branch.
+function with_opt_nullable_null(base: int, delta: int? = null) -> int {
+  if (delta == null) { base } else { base + delta }
+}

@@ -15,7 +15,15 @@ explicit `None`.
 """
 
 import baml_sdk  # noqa: F401  — initializes the BAML runtime
-from baml_sdk import add_five, classify, scale, tag
+from baml_sdk import (
+    add_five,
+    classify,
+    scale,
+    tag,
+    with_opt_nullable_null,
+    with_opt_nullable_value,
+    with_opt_value,
+)
 
 
 def test_scale_uses_engine_default_when_factor_omitted():
@@ -68,3 +76,32 @@ def test_add_five_uses_default_when_addend_omitted():
 def test_add_five_override_default_by_keyword():
     # `addend` is keyword-only (defaulted), so the override is passed by name.
     assert add_five(10, addend=3) == 13
+
+
+# ── required + optional, one per default flavor ──────────────────────────────
+# Same `(base, delta)` shape; only the optional's type/default varies. The
+# three cases differ in what "omitted" means and whether an explicit null is
+# distinguishable from it.
+
+
+def test_with_opt_value_T_default():
+    # `delta: int = 5` — non-nullable. Omitted → engine default 5; an explicit
+    # value overrides. The host can't pass null (the type forbids it).
+    assert with_opt_value(10) == 15
+    assert with_opt_value(10, delta=3) == 13
+
+
+def test_with_opt_nullable_value_distinguishes_omitted_from_null():
+    # `delta: int? = 5` — omitted yields the default 5, but an explicit None is
+    # encoded as a real null and takes the null branch. The two are distinct.
+    assert with_opt_nullable_value(10) == 15
+    assert with_opt_nullable_value(10, delta=None) == 10
+    assert with_opt_nullable_value(10, delta=3) == 13
+
+
+def test_with_opt_nullable_null_collapses_omitted_and_null():
+    # `delta: int? = null` — omitted fills the null default, so omitted and an
+    # explicit None are indistinguishable; a value still overrides.
+    assert with_opt_nullable_null(10) == 10
+    assert with_opt_nullable_null(10, delta=None) == 10
+    assert with_opt_nullable_null(10, delta=3) == 13

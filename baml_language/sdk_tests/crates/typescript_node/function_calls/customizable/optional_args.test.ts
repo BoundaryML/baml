@@ -17,7 +17,15 @@
 // omission directly.
 import "./baml_sdk/index.js";
 import { describe, it, expect } from "vitest";
-import { add_five, classify, scale, tag } from "./baml_sdk/index.js";
+import {
+  add_five,
+  classify,
+  scale,
+  tag,
+  with_opt_nullable_null,
+  with_opt_nullable_value,
+  with_opt_value,
+} from "./baml_sdk/index.js";
 
 describe("function_calls — optional args, explicit values", () => {
   it("passes a defaulted parameter explicitly", () => {
@@ -54,5 +62,32 @@ describe("function_calls — optional args, engine-filled defaults", () => {
 
     const tagNameOnly = tag as unknown as (name: string) => string;
     expect(tagNameOnly("widget")).toBe("widget"); // prefix defaults to null
+  });
+});
+
+// ── required + optional, one per default flavor ──────────────────────────────
+// Same `(base, delta)` shape; only the optional's type/default varies.
+describe("function_calls — required+optional default flavors", () => {
+  it("T = value: explicit value, and engine-filled default on omission", () => {
+    // delta is non-nullable (`number`), so the only paths are explicit value
+    // and (via the cast) omission → default 5.
+    expect(with_opt_value(10, 3)).toBe(13);
+    const omit = with_opt_value as unknown as (base: number) => number;
+    expect(omit(10)).toBe(15);
+  });
+
+  it("T? = value: omitted (5) is distinct from explicit null", () => {
+    // Explicit paths are typed (delta: number | null); omission goes via cast.
+    expect(with_opt_nullable_value(10, null)).toBe(10);
+    expect(with_opt_nullable_value(10, 3)).toBe(13);
+    const omit = with_opt_nullable_value as unknown as (base: number) => number;
+    expect(omit(10)).toBe(15); // omitted → default 5, NOT null
+  });
+
+  it("T? = null: omitted and explicit null collapse to the null branch", () => {
+    expect(with_opt_nullable_null(10, null)).toBe(10);
+    expect(with_opt_nullable_null(10, 3)).toBe(13);
+    const omit = with_opt_nullable_null as unknown as (base: number) => number;
+    expect(omit(10)).toBe(10); // omitted → null default
   });
 });
