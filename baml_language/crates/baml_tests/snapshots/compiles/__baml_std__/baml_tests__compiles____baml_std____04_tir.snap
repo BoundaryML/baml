@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 4198
 ---
 === TIR2 ===
 
@@ -661,6 +660,38 @@ function baml.llm.PromptAst.to_json(self: baml.llm.PromptAst) -> baml.json.json 
 function baml.llm.PromptAst.from_json(j: baml.json.json) -> baml.llm.PromptAst throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   baml.json.from_string<T>(baml.json.stringify(j)) : baml.llm.PromptAst
 }
+class baml.llm.Role {
+  name: string
+  metadata: map<string, unknown>
+}
+function baml.llm.Role.to_json(self: baml.llm.Role) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  baml.json.parse(baml.json.to_string<Role>(self)) : baml.json.json
+}
+function baml.llm.Role.from_json(j: baml.json.json) -> baml.llm.Role throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  baml.json.from_string<T>(baml.json.stringify(j)) : baml.llm.Role
+}
+class baml.llm.ContextClient {
+  name: string
+  provider: string
+  default_role: string
+  allowed_roles: string[]
+}
+function baml.llm.ContextClient.to_json(self: baml.llm.ContextClient) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  map { "name": self.name.to_json(), "provider": self.provider.to_json(), "default_role": self.default_role.to_json(), "allowed_roles": self.allowed_roles.to_json() } : map<string, baml.json.json>
+}
+function baml.llm.ContextClient.from_json(j: baml.json.json) -> baml.llm.ContextClient throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  ContextClient { name: baml.json.from_json<string>(baml.json.field(j, "name")), provider: baml.json.from_json<string>(baml.json.field(j, "provider")), default_role: baml.json.from_json<string>(baml.json.field(j, "default_role")), allowed_roles: baml.json.from_json<string[]>(baml.json.field(j, "allowed_roles")) } : baml.llm.ContextClient
+}
+class baml.llm.Context {
+  client: baml.llm.ContextClient
+  tags: map<string, unknown>
+}
+function baml.llm.Context.to_json(self: baml.llm.Context) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  baml.json.parse(baml.json.to_string<Context>(self)) : baml.json.json
+}
+function baml.llm.Context.from_json(j: baml.json.json) -> baml.llm.Context throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  baml.json.from_string<T>(baml.json.stringify(j)) : baml.llm.Context
+}
 enum baml.llm.ClientType
 class baml.llm.RetryPolicy {
   max_retries: int
@@ -1192,6 +1223,20 @@ function baml.llm.PrimitiveClient.from_json(j: baml.json.json) -> baml.llm.Primi
 }
 class baml.llm.PromptAst$stream {
   _data: $rust_type
+}
+class baml.llm.Role$stream {
+  name: null | string
+  metadata: map<string, unknown>
+}
+class baml.llm.ContextClient$stream {
+  name: null | string
+  provider: null | string
+  default_role: null | string
+  allowed_roles: string[]
+}
+class baml.llm.Context$stream {
+  client: null | baml.llm.ContextClient$stream
+  tags: map<string, unknown>
 }
 class baml.llm.RetryPolicy$stream {
   max_retries: null | int

@@ -3099,6 +3099,78 @@ function baml.llm.Client.to_primitive_client(self: baml.llm.Client) -> baml.llm.
     return
 }
 
+function baml.llm.Context.from_json(j: baml.json.json) -> baml.llm.Context {
+    load_var j
+    call baml.json.stringify
+    store_var _2
+    load_type baml.llm.Context
+    load_var _2
+    call baml.json.from_string
+    return
+}
+
+function baml.llm.Context.to_json(self: baml.llm.Context) -> baml.json.json {
+    load_type baml.llm.Context
+    load_var self
+    call baml.json.to_string
+    call baml.json.parse
+    return
+}
+
+function baml.llm.ContextClient.from_json(j: baml.json.json) -> baml.llm.ContextClient {
+    load_var j
+    load_const "name"
+    call baml.json.field
+    store_var _3
+    load_type string
+    load_var _3
+    call baml.json.from_json
+    load_var j
+    load_const "provider"
+    call baml.json.field
+    store_var _6
+    load_type string
+    load_var _6
+    call baml.json.from_json
+    load_var j
+    load_const "default_role"
+    call baml.json.field
+    store_var _9
+    load_type string
+    load_var _9
+    call baml.json.from_json
+    load_var j
+    load_const "allowed_roles"
+    call baml.json.field
+    store_var _12
+    load_type string[]
+    load_var _12
+    call baml.json.from_json
+    init_instance baml.llm.ContextClient .name, .provider, .default_role, .allowed_roles
+    return
+}
+
+function baml.llm.ContextClient.to_json(self: baml.llm.ContextClient) -> baml.json.json {
+    load_var self
+    load_field .name
+    call baml.String.to_json
+    load_var self
+    load_field .provider
+    call baml.String.to_json
+    load_var self
+    load_field .default_role
+    call baml.String.to_json
+    load_var self
+    load_field .allowed_roles
+    call baml.Array.to_json
+    load_const "name"
+    load_const "provider"
+    load_const "default_role"
+    load_const "allowed_roles"
+    alloc_map 4
+    return
+}
+
 function baml.llm.ExecutionContext.from_json(j: baml.json.json) -> baml.llm.ExecutionContext {
     load_var j
     call baml.json.stringify
@@ -3500,6 +3572,24 @@ function baml.llm.RetryPolicy.to_json(self: baml.llm.RetryPolicy) -> baml.json.j
     load_const "multiplier"
     load_const "max_delay_ms"
     alloc_map 4
+    return
+}
+
+function baml.llm.Role.from_json(j: baml.json.json) -> baml.llm.Role {
+    load_var j
+    call baml.json.stringify
+    store_var _2
+    load_type baml.llm.Role
+    load_var _2
+    call baml.json.from_string
+    return
+}
+
+function baml.llm.Role.to_json(self: baml.llm.Role) -> baml.json.json {
+    load_type baml.llm.Role
+    load_var self
+    call baml.json.to_string
+    call baml.json.parse
     return
 }
 

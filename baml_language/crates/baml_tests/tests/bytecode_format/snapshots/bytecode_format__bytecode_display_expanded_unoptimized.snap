@@ -574,7 +574,7 @@ function testing.TestRegistry.expand_set(self: testing.TestRegistry, name: strin
         44   jump -27               (to 17)
 
   176   45   load_var2 13 2         
-        46   call 526 ntypeargs=0   (testing.TestRegistry.expand_set)
+        46   call 532 ntypeargs=0   (testing.TestRegistry.expand_set)
         47   jump +41               (to 88)
 
   156   48   load_var2 3 4          
@@ -627,7 +627,7 @@ function testing.TestRegistry.expand_set(self: testing.TestRegistry, name: strin
         85   pop 1                  
 
   169   86   load_var 1             (self)
-        87   call 521 ntypeargs=0   (testing.TestRegistry.serialize)
+        87   call 527 ntypeargs=0   (testing.TestRegistry.serialize)
         88   return                 
 }
 
@@ -727,7 +727,7 @@ function testing.TestRegistry.run_test(self: testing.TestRegistry, name: string)
         44   jump -27               (to 17)
 
   147   45   load_var2 9 2          
-        46   call 525 ntypeargs=0   (testing.TestRegistry.run_test)
+        46   call 531 ntypeargs=0   (testing.TestRegistry.run_test)
         47   jump +19               (to 66)
 
   136   48   load_var2 3 4          
@@ -750,7 +750,7 @@ function testing.TestRegistry.run_test(self: testing.TestRegistry, name: string)
         62   load_field 1           (body)
         63   load_var 5             (t)
         64   load_field 2           (runner)
-        65   call 532 ntypeargs=0   (testing.run_test)
+        65   call 538 ntypeargs=0   (testing.run_test)
         66   return                 
 }
 
@@ -820,7 +820,7 @@ function testing.TestRegistry.serialize(self: testing.TestRegistry) -> (testing.
         53   store_var 12           (_25)
 
   122   54   load_var 11            (sub)
-        55   call 521 ntypeargs=0   (testing.TestRegistry.serialize)
+        55   call 527 ntypeargs=0   (testing.TestRegistry.serialize)
         56   store_var 13           (_26)
 
   120   57   load_var2 3 12         
@@ -859,7 +859,7 @@ function testing.TestRegistry.serialize(self: testing.TestRegistry) -> (testing.
 function testing.TestRegistry.to_json(self: testing.TestRegistry) -> baml.json.json {
   93   0    load_var 1             (self)
        1    load_field 0           (collector)
-       2    call 533 ntypeargs=0   (testing.TestCollector.to_json)
+       2    call 539 ntypeargs=0   (testing.TestCollector.to_json)
        3    load_var 1             (self)
        4    load_field 1           (expansions)
        5    call 19 ntypeargs=0    (baml.Map.to_json)
@@ -1026,7 +1026,7 @@ function testing.run_test(body: () -> void throws unknown, runner: ((() -> testi
         2    store_var 1            
 
   185   3    load_var 1             (body)
-        4    make_closure 1032 1    
+        4    make_closure 1052 1    
         5    store_var 3            (base_run)
 
   200   6    load_var 2             (runner)

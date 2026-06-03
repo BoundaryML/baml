@@ -2,6 +2,44 @@ class PromptAst {
   _data $rust_type
 }
 
+/// BEP-049 §10. A typed chat-role marker produced by the in-template `role(...)`
+/// constructor (e.g. `${role("system")}`). When a `prompt` tag assembles a
+/// `PromptAst`, each `Role` value in the template's `values` array starts a new
+/// message — replacing the magic-delimiter role mechanism of the Jinja path.
+class Role {
+  /// The role name, e.g. "system", "user", "assistant".
+  name string
+  /// Provider-specific per-message metadata (e.g. cache_control). Opaque to the
+  /// type system; interpreted during `PromptAst` assembly / specialization.
+  metadata map<string, unknown>
+}
+
+/// BEP-049 §10. The resolved-client view exposed to a `prompt` tag body as
+/// `ctx.client`. Flattened to mirror the runtime `RenderContextClient` the
+/// orchestrator already assembles for the current attempt (sys_llm), so
+/// `${ctx.client.provider}` etc. read the chosen client's fields directly.
+class ContextClient {
+  name string
+  provider string
+  default_role string
+  allowed_roles string[]
+}
+
+/// BEP-049 §10. Per-render context passed to a `prompt` tag body as `ctx`.
+/// Carries the same per-attempt data BAML's Jinja runtime injects today
+/// (client info, runtime tags, output-format schema), resolved AFTER the
+/// orchestrator picks the client for this attempt — preserving lazy eval.
+///
+/// `output_format` / `output_format_with(...)` accessors are added in a later
+/// slice (they need a `$rust_function` backing); for now `Context` carries the
+/// data a `prompt` body references structurally.
+class Context {
+  /// The client chosen for this attempt.
+  client ContextClient
+  /// Runtime tags for this call.
+  tags map<string, unknown>
+}
+
 /// The routing strategy of an LLM client.
 enum ClientType {
   Primitive

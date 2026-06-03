@@ -449,6 +449,11 @@ impl<'a> Parser<'a> {
             || self.at(TokenKind::Extends)
             || self.at(TokenKind::Requires)
             || self.at(TokenKind::Interface)
+            // `client` is a keyword for LLM config/declarations, but stays valid
+            // as a class field name and member-access name so BEP-049 §10's
+            // `ctx.client` (on the `Context` type) parses. Unambiguous here:
+            // class bodies and `.member` access have no `client` construct.
+            || self.at(TokenKind::Client)
     }
 
     /// True for `field as class_field` inside an `implements` block.
@@ -1016,6 +1021,25 @@ impl<'a> Parser<'a> {
                     | TokenKind::TypeBuilder
             )
         )
+    }
+
+    /// Distinguishes a top-level `client<llm> Name { … }` declaration (which,
+    /// inside a class body, signals a missing `}` to recover from) from a class
+    /// field named `client` (BEP-049 §10 `ctx.client`). The declaration form is
+    /// `client<…>`; a field is `client Type` / `client:`.
+    fn looks_like_client_declaration_start(&self) -> bool {
+        let current = self.skip_trivia_and_comments_from(self.current);
+        if self
+            .tokens
+            .get(current)
+            .is_none_or(|t| t.kind != TokenKind::Client)
+        {
+            return false;
+        }
+        let next = self.skip_trivia_and_comments_from(current + 1);
+        self.tokens
+            .get(next)
+            .is_some_and(|t| t.kind == TokenKind::Less)
     }
 
     fn looks_like_interface_declaration_start(&self) -> bool {
@@ -3140,6 +3164,12 @@ impl<'a> Parser<'a> {
                 // assume we missed a closing brace
                 let recover_top_level_item = if p.at(TokenKind::Interface) {
                     p.looks_like_interface_declaration_start()
+                } else if p.at(TokenKind::Client) {
+                    // `client` is a top-level keyword (`client<llm> Name { … }`),
+                    // but also a valid class field name (BEP-049 §10 `ctx.client`
+                    // on `Context`). Only treat it as a missing-brace recovery
+                    // when it's the `client<…>` declaration form.
+                    p.looks_like_client_declaration_start()
                 } else {
                     p.at_top_level_keyword()
                 };
@@ -8147,6 +8177,73 @@ class InterfaceTwo {
                 .children()
                 .any(|n| n.kind() == SyntaxKind::INTERFACE_DEF),
             "field named `interface` must not create a top-level interface"
+        );
+    }
+
+    #[test]
+    fn client_keyword_can_be_class_field_name() {
+        // BEP-049 §10: `Context` has a `client` field (`ctx.client`), but
+        // `client` is also a top-level keyword (`client<llm> Name { … }`).
+        // A `client Type` field must NOT trigger missing-brace recovery.
+        let source = r#"
+class Ctx {
+  client string
+  tags string
+}
+"#;
+        let (root, errors) = parse_source(source);
+        assert!(
+            errors.is_empty(),
+            "`client` field should parse cleanly: {errors:?}"
+        );
+        let class = root
+            .descendants()
+            .find(|n| n.kind() == SyntaxKind::CLASS_DEF)
+            .expect("expected CLASS_DEF");
+        assert_eq!(
+            class
+                .children()
+                .filter(|n| n.kind() == SyntaxKind::FIELD)
+                .count(),
+            2,
+            "both `client` and `tags` should parse as fields"
+        );
+    }
+
+    #[test]
+    fn client_keyword_is_valid_member_access() {
+        // `ctx.client` must parse — `client` stays valid as a member name.
+        let source = r#"
+function f(ctx: Context) -> string {
+  ctx.client.provider
+}
+"#;
+        let (_root, errors) = parse_source(source);
+        assert!(
+            errors.is_empty(),
+            "`ctx.client.provider` member access should parse cleanly: {errors:?}"
+        );
+    }
+
+    #[test]
+    fn client_declaration_still_recovers_inside_class() {
+        // The `client<…>` declaration form must STILL trigger missing-brace
+        // recovery (it is not a field).
+        let source = r#"
+class Broken {
+  name string
+client<llm> Foo {
+  provider "openai"
+}
+"#;
+        let (root, errors) = parse_source(source);
+        assert!(
+            !errors.is_empty(),
+            "missing closing brace should produce a parse error"
+        );
+        assert!(
+            root.children().any(|n| n.kind() == SyntaxKind::CLIENT_DEF),
+            "client<llm> should recover as a top-level declaration"
         );
     }
 
