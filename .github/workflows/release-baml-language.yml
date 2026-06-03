@@ -255,9 +255,20 @@ jobs:
         run: |
           set -euo pipefail
           version="${{ needs.plan.outputs.version }}"
-          vsix="$(find typescript2/app-vscode-ext -maxdepth 1 -name '*.vsix' -print -quit)"
-          test -n "$vsix"
-          mv "$vsix" "typescript2/app-vscode-ext/baml-language-$version.vsix"
+          vsix_files=()
+          while IFS= read -r vsix; do
+            vsix_files+=("$vsix")
+          done < <(find typescript2/app-vscode-ext -maxdepth 1 -type f -name '*.vsix' -print)
+          if [[ "${#vsix_files[@]}" -ne 1 ]]; then
+            printf 'expected exactly one VSIX, found %s:\n' "${#vsix_files[@]}" >&2
+            printf '%s\n' "${vsix_files[@]}" >&2
+            exit 1
+          fi
+          vsix="${vsix_files[0]}"
+          dest="typescript2/app-vscode-ext/baml-language-$version.vsix"
+          if [[ "$vsix" != "$dest" ]]; then
+            mv "$vsix" "$dest"
+          fi
       - name: Reject bundled native binaries
         run: |
           set -euo pipefail
@@ -369,6 +380,8 @@ jobs:
     needs: [plan, all-builds]
     if: ${{ needs.plan.outputs.dry_run == 'false' && github.ref == 'refs/heads/canary' }}
     runs-on: ubuntu-latest
+    env:
+      GH_REPO: ${{ github.repository }}
     permissions:
       contents: write
     steps:
