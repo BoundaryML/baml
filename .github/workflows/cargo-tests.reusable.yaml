@@ -503,6 +503,10 @@ jobs:
         run: cargo test --no-run -p ${{ matrix.package-name }} --all-features --timings
         working-directory: baml_language
 
+      - name: "Show sccache stats"
+        if: always()
+        run: sccache --show-stats
+
       - name: "Run sdk test setup"
         run: cargo nextest run --all-features -E 'package(=${{ matrix.package-name }}) and test(setup_guard::ran)'
         working-directory: baml_language
