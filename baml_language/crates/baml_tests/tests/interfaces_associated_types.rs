@@ -31,7 +31,7 @@ fn collect_compile_errors_from_db(db: &ProjectDatabase) -> Vec<String> {
     let all_files = db.get_source_files();
     let user_file_ids: HashSet<_> = all_files.iter().map(|f| f.file_id(db)).collect();
 
-    collect_diagnostics(&db, project, &all_files)
+    collect_diagnostics(db, project, &all_files)
         .into_iter()
         .filter(|d| matches!(d.severity, Severity::Error))
         .filter(|d| {

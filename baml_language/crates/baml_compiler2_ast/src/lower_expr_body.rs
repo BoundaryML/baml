@@ -1658,7 +1658,7 @@ impl LoweringContext {
         let generic_args: Vec<TypeExpr> = args_node
             .as_ref()
             .into_iter()
-            .flat_map(|args_node| args_node.children())
+            .flat_map(rowan::SyntaxNode::children)
             .filter(|n| n.kind() == SyntaxKind::TYPE_EXPR)
             .filter_map(baml_compiler_syntax::ast::TypeExpr::cast)
             .map(|te| crate::lower_type_expr::lower_type_expr_node(&te))

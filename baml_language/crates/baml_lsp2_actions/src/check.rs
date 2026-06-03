@@ -721,6 +721,28 @@ struct MethodSignature {
     throws_te: Option<baml_compiler2_ast::TypeExpr>,
 }
 
+#[derive(Clone, Copy)]
+struct SignatureMatchContext<'a, 'db> {
+    db: &'a dyn Db,
+    expected_pkg_items: &'a baml_compiler2_hir::package::PackageItems<'db>,
+    expected_namespace_path: &'a [Name],
+    actual_pkg_items: &'a baml_compiler2_hir::package::PackageItems<'db>,
+    actual_namespace_path: &'a [Name],
+    aliases: &'a std::collections::HashMap<QualifiedTypeName, Ty>,
+}
+
+#[derive(Clone, Copy)]
+struct InterfaceRequiresQuery<'a> {
+    db: &'a dyn Db,
+    sub_qtn: &'a QualifiedTypeName,
+    sub_args: &'a [Ty],
+    sub_assoc: &'a [(Name, Ty)],
+    sup_qtn: &'a QualifiedTypeName,
+    sup_args: &'a [Ty],
+    sup_assoc: &'a [(Name, Ty)],
+    aliases: &'a std::collections::HashMap<QualifiedTypeName, Ty>,
+}
+
 impl MethodSignature {
     /// Build a signature after substituting generic and associated-type
     /// references in the param/return/throws types using `subst`.
@@ -831,16 +853,7 @@ impl MethodSignature {
     /// longer cause false mismatches. Falls back to string equality per
     /// component when a type can't be lowered (via `type_exprs_compatible`).
     /// Generic params/bounds and `throws` presence stay exact (invariant).
-    fn matches(
-        &self,
-        other: &Self,
-        db: &dyn Db,
-        expected_pkg_items: &baml_compiler2_hir::package::PackageItems<'_>,
-        expected_namespace_path: &[Name],
-        actual_pkg_items: &baml_compiler2_hir::package::PackageItems<'_>,
-        actual_namespace_path: &[Name],
-        aliases: &std::collections::HashMap<QualifiedTypeName, Ty>,
-    ) -> bool {
+    fn matches(&self, other: &Self, ctx: SignatureMatchContext<'_, '_>) -> bool {
         if self.generic_params != other.generic_params
             || self.generic_param_bounds != other.generic_param_bounds
             || self.params.len() != other.params.len()
@@ -850,16 +863,16 @@ impl MethodSignature {
         let gp = &self.generic_params;
         let cmp = |a: &baml_compiler2_ast::TypeExpr, b: &baml_compiler2_ast::TypeExpr| {
             type_exprs_compatible(
-                db,
-                expected_pkg_items,
-                expected_namespace_path,
+                ctx.db,
+                ctx.expected_pkg_items,
+                ctx.expected_namespace_path,
                 gp,
                 a,
-                actual_pkg_items,
-                actual_namespace_path,
+                ctx.actual_pkg_items,
+                ctx.actual_namespace_path,
                 gp,
                 b,
-                aliases,
+                ctx.aliases,
             )
         };
         for (i, ((an, at), (bn, bt))) in self.params.iter().zip(&other.params).enumerate() {
@@ -899,17 +912,9 @@ impl MethodSignature {
         // both declare it, `throws` is covariant — the impl (`other`) may
         // narrow the interface's (`self`) declared throws.
         match (&self.throws_te, &other.throws_te) {
-            (Some(iface_throws), Some(impl_throws)) => throws_covariant_compatible(
-                db,
-                expected_pkg_items,
-                expected_namespace_path,
-                actual_pkg_items,
-                actual_namespace_path,
-                gp,
-                iface_throws,
-                impl_throws,
-                aliases,
-            ),
+            (Some(iface_throws), Some(impl_throws)) => {
+                throws_covariant_compatible(ctx, gp, iface_throws, impl_throws)
+            }
             (None, None) => true,
             _ => false,
         }
@@ -2201,8 +2206,7 @@ fn validate_unqualified_associated_type_projection(
                     .collect::<Vec<_>>()
                     .join(", ");
                 format!(
-                    "ambiguous associated type projection `{}`; disambiguate with one of: {alternatives}",
-                    expr
+                    "ambiguous associated type projection `{expr}`; disambiguate with one of: {alternatives}"
                 )
             }
         }
@@ -2225,8 +2229,7 @@ fn validate_unqualified_associated_type_projection(
                     .collect::<Vec<_>>()
                     .join(", ");
                 format!(
-                    "ambiguous associated type projection `{}`; disambiguate with one of: {alternatives}",
-                    expr
+                    "ambiguous associated type projection `{expr}`; disambiguate with one of: {alternatives}"
                 )
             }
         }
@@ -4193,12 +4196,14 @@ fn validate_implements_for<'db>(
                 );
                 if !expected.matches(
                     &actual,
-                    db,
-                    iface_pkg_items,
-                    &iface_namespace_path,
-                    pkg_items,
-                    namespace_path,
-                    aliases,
+                    SignatureMatchContext {
+                        db,
+                        expected_pkg_items: iface_pkg_items,
+                        expected_namespace_path: &iface_namespace_path,
+                        actual_pkg_items: pkg_items,
+                        actual_namespace_path: namespace_path,
+                        aliases,
+                    },
                 ) {
                     diagnostics.push(
                         Hir2Diagnostic::InterfaceMethodSignatureMismatch {
@@ -4528,12 +4533,14 @@ fn validate_class_implements<'db>(
                     );
                     if !expected.matches(
                         &actual,
-                        db,
-                        iface_pkg_items,
-                        &iface_namespace_path,
-                        pkg_items,
-                        namespace_path,
-                        aliases,
+                        SignatureMatchContext {
+                            db,
+                            expected_pkg_items: iface_pkg_items,
+                            expected_namespace_path: &iface_namespace_path,
+                            actual_pkg_items: pkg_items,
+                            actual_namespace_path: namespace_path,
+                            aliases,
+                        },
                     ) {
                         diagnostics.push(
                             Hir2Diagnostic::InterfaceMethodSignatureMismatch {
@@ -4894,9 +4901,16 @@ fn ty_nominal_subtype(
         Ty::Interface(sub_qtn, sub_args, sub_assoc, _),
         Ty::Interface(sup_qtn, sup_args, sup_assoc, _),
     ) = (sub, sup)
-        && interface_ty_requires_nominal(
-            db, sub_qtn, sub_args, sub_assoc, sup_qtn, sup_args, sup_assoc, aliases,
-        )
+        && interface_ty_requires_nominal(InterfaceRequiresQuery {
+            db,
+            sub_qtn,
+            sub_args,
+            sub_assoc,
+            sup_qtn,
+            sup_args,
+            sup_assoc,
+            aliases,
+        })
     {
         return true;
     }
@@ -4912,56 +4926,49 @@ fn ty_nominal_subtype(
     false
 }
 
-fn interface_ty_requires_nominal(
-    db: &dyn Db,
-    sub_qtn: &QualifiedTypeName,
-    sub_args: &[Ty],
-    sub_assoc: &[(Name, Ty)],
-    sup_qtn: &QualifiedTypeName,
-    sup_args: &[Ty],
-    sup_assoc: &[(Name, Ty)],
-    aliases: &std::collections::HashMap<QualifiedTypeName, Ty>,
-) -> bool {
-    let pkg_id = baml_compiler2_hir::package::PackageId::new(db, sub_qtn.package().clone());
-    let pkg_items = baml_compiler2_hir::package::package_items(db, pkg_id);
+fn interface_ty_requires_nominal(query: InterfaceRequiresQuery<'_>) -> bool {
+    let pkg_id =
+        baml_compiler2_hir::package::PackageId::new(query.db, query.sub_qtn.package().clone());
+    let pkg_items = baml_compiler2_hir::package::package_items(query.db, pkg_id);
     let Some(baml_compiler2_hir::contributions::Definition::Interface(sub_loc)) =
-        pkg_items.lookup_type(sub_qtn.namespace(), sub_qtn.name())
+        pkg_items.lookup_type(query.sub_qtn.namespace(), query.sub_qtn.name())
     else {
         return false;
     };
-    let pkg = baml_compiler2_hir::file_package::file_package(db, sub_loc.file(db));
+    let pkg = baml_compiler2_hir::file_package::file_package(query.db, sub_loc.file(query.db));
     baml_compiler2_tir::interfaces::interface_closure_locs_with_args_and_assoc(
-        db,
+        query.db,
         sub_loc,
-        sub_args,
-        sub_assoc,
+        query.sub_args,
+        query.sub_assoc,
         pkg_items,
         &pkg.namespace_path,
     )
     .into_iter()
     .any(|(iface_loc, iface_args, iface_assoc)| {
-        let tree = baml_compiler2_hir::file_item_tree(db, iface_loc.file(db));
-        let Some(iface) = tree.interfaces.get(&iface_loc.id(db)) else {
+        let tree = baml_compiler2_hir::file_item_tree(query.db, iface_loc.file(query.db));
+        let Some(iface) = tree.interfaces.get(&iface_loc.id(query.db)) else {
             return false;
         };
         let iface_qtn = baml_compiler2_tir::lower_type_expr::qualify_def(
-            db,
+            query.db,
             baml_compiler2_hir::contributions::Definition::Interface(iface_loc),
             &iface.name,
         );
-        iface_qtn == *sup_qtn
-            && iface_args.len() == sup_args.len()
-            && iface_args
-                .iter()
-                .zip(sup_args)
-                .all(|(a, b)| baml_compiler2_tir::normalize::is_same_normalized_type(a, b, aliases))
-            && sup_assoc.iter().all(|(sup_name, sup_ty)| {
+        iface_qtn == *query.sup_qtn
+            && iface_args.len() == query.sup_args.len()
+            && iface_args.iter().zip(query.sup_args).all(|(a, b)| {
+                baml_compiler2_tir::normalize::is_same_normalized_type(a, b, query.aliases)
+            })
+            && query.sup_assoc.iter().all(|(sup_name, sup_ty)| {
                 iface_assoc
                     .iter()
                     .find(|(iface_name, _)| iface_name == sup_name)
                     .is_some_and(|(_, iface_ty)| {
                         baml_compiler2_tir::normalize::is_same_normalized_type(
-                            iface_ty, sup_ty, aliases,
+                            iface_ty,
+                            sup_ty,
+                            query.aliases,
                         )
                     })
             })
@@ -4974,39 +4981,34 @@ fn interface_ty_requires_nominal(
 /// impl's throws union must be a nominal subtype of some member of the
 /// interface's. Falls back to string equality when a type can't be lowered.
 fn throws_covariant_compatible(
-    db: &dyn Db,
-    iface_pkg_items: &baml_compiler2_hir::package::PackageItems<'_>,
-    iface_namespace_path: &[Name],
-    impl_pkg_items: &baml_compiler2_hir::package::PackageItems<'_>,
-    impl_namespace_path: &[Name],
+    ctx: SignatureMatchContext<'_, '_>,
     generic_params: &[Name],
     iface_throws: &baml_compiler2_ast::TypeExpr,
     impl_throws: &baml_compiler2_ast::TypeExpr,
-    aliases: &std::collections::HashMap<QualifiedTypeName, Ty>,
 ) -> bool {
     let mut diagnostics = Vec::new();
     let iface_ty = baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns(
-        db,
+        ctx.db,
         iface_throws,
-        iface_pkg_items,
-        iface_namespace_path,
+        ctx.expected_pkg_items,
+        ctx.expected_namespace_path,
         generic_params,
         &mut diagnostics,
     );
     let ok = diagnostics.is_empty();
     diagnostics.clear();
     let impl_ty = baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns(
-        db,
+        ctx.db,
         impl_throws,
-        impl_pkg_items,
-        impl_namespace_path,
+        ctx.actual_pkg_items,
+        ctx.actual_namespace_path,
         generic_params,
         &mut diagnostics,
     );
     if !ok || !diagnostics.is_empty() {
         return iface_throws.to_string() == impl_throws.to_string();
     }
-    if baml_compiler2_tir::normalize::is_same_normalized_type(&impl_ty, &iface_ty, aliases) {
+    if baml_compiler2_tir::normalize::is_same_normalized_type(&impl_ty, &iface_ty, ctx.aliases) {
         return true;
     }
     let members = |ty: &Ty| -> Vec<Ty> {
@@ -5019,7 +5021,7 @@ fn throws_covariant_compatible(
     members(&impl_ty).iter().all(|im| {
         iface_members
             .iter()
-            .any(|sup| ty_nominal_subtype(db, im, sup, aliases))
+            .any(|sup| ty_nominal_subtype(ctx.db, im, sup, ctx.aliases))
     })
 }
 

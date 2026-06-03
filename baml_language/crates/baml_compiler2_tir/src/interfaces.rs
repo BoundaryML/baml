@@ -22,6 +22,31 @@ use crate::{
 };
 
 pub type TypeBindings = FxHashMap<Name, Ty>;
+pub type AssociatedBindings = Vec<(Name, Ty)>;
+pub type InterfaceClosureEntry<'db> = (
+    baml_compiler2_hir::loc::InterfaceLoc<'db>,
+    Vec<Ty>,
+    AssociatedBindings,
+);
+type InterfaceClosureQueueEntry<'db> = (
+    baml_compiler2_hir::loc::InterfaceLoc<'db>,
+    Vec<Ty>,
+    AssociatedBindings,
+    FxHashSet<baml_compiler2_hir::loc::InterfaceLoc<'db>>,
+);
+
+#[derive(Clone, Copy)]
+struct InterfaceTypeAssocLowering<'a, 'db> {
+    db: &'db dyn crate::Db,
+    iface: &'a baml_compiler2_hir::item_tree::Interface,
+    interface_args: &'a [Ty],
+    explicit_associated_bindings: &'a [baml_compiler2_ast::AssociatedTypeBinding],
+    iface_pkg_items: &'a baml_compiler2_hir::package::PackageItems<'db>,
+    binding_pkg_items: &'a baml_compiler2_hir::package::PackageItems<'db>,
+    iface_namespace_path: &'a [Name],
+    binding_namespace_path: &'a [Name],
+    outer_bindings: &'a TypeBindings,
+}
 
 /// Where an interface implementation rule came from.
 ///
@@ -623,35 +648,28 @@ fn complete_interface_associated_bindings_from_tys(
 }
 
 fn lower_interface_type_associated_bindings(
-    db: &dyn crate::Db,
-    iface: &baml_compiler2_hir::item_tree::Interface,
-    interface_args: &[Ty],
-    explicit_associated_bindings: &[baml_compiler2_ast::AssociatedTypeBinding],
-    iface_pkg_items: &baml_compiler2_hir::package::PackageItems<'_>,
-    binding_pkg_items: &baml_compiler2_hir::package::PackageItems<'_>,
-    iface_namespace_path: &[Name],
-    binding_namespace_path: &[Name],
-    outer_bindings: &TypeBindings,
+    ctx: InterfaceTypeAssocLowering<'_, '_>,
     diagnostics: &mut Vec<crate::infer_context::TirTypeError>,
 ) -> Vec<(Name, Ty)> {
-    let mut bindings = generics::bind_type_vars(&iface.generic_params, interface_args);
-    for (name, ty) in outer_bindings {
+    let mut bindings = generics::bind_type_vars(&ctx.iface.generic_params, ctx.interface_args);
+    for (name, ty) in ctx.outer_bindings {
         bindings.entry(name.clone()).or_insert_with(|| ty.clone());
     }
 
-    iface
+    ctx.iface
         .associated_types
         .iter()
         .filter_map(|assoc| {
-            if let Some(binding) = explicit_associated_bindings
+            if let Some(binding) = ctx
+                .explicit_associated_bindings
                 .iter()
                 .find(|binding| binding.name == assoc.name)
             {
                 let ty = generics::lower_type_expr_with_generics(
-                    db,
+                    ctx.db,
                     &binding.ty,
-                    binding_pkg_items,
-                    binding_namespace_path,
+                    ctx.binding_pkg_items,
+                    ctx.binding_namespace_path,
                     &bindings,
                     diagnostics,
                 );
@@ -660,10 +678,10 @@ fn lower_interface_type_associated_bindings(
             }
             assoc.default.as_ref().map(|default| {
                 let ty = generics::lower_type_expr_with_generics(
-                    db,
+                    ctx.db,
                     &default.expr,
-                    iface_pkg_items,
-                    iface_namespace_path,
+                    ctx.iface_pkg_items,
+                    ctx.iface_namespace_path,
                     &bindings,
                     diagnostics,
                 );
@@ -1454,27 +1472,11 @@ pub fn interface_closure_locs_with_args_and_assoc<'db>(
     root_associated_bindings: &[(Name, Ty)],
     _pkg_items: &baml_compiler2_hir::package::PackageItems<'db>,
     _current_ns: &[Name],
-) -> Vec<(
-    baml_compiler2_hir::loc::InterfaceLoc<'db>,
-    Vec<Ty>,
-    Vec<(Name, Ty)>,
-)> {
-    let mut out: Vec<(
-        baml_compiler2_hir::loc::InterfaceLoc<'db>,
-        Vec<Ty>,
-        Vec<(Name, Ty)>,
-    )> = Vec::new();
-    let mut seen: FxHashSet<(
-        baml_compiler2_hir::loc::InterfaceLoc<'db>,
-        Vec<Ty>,
-        Vec<(Name, Ty)>,
-    )> = FxHashSet::default();
-    let mut queue: std::collections::VecDeque<(
-        baml_compiler2_hir::loc::InterfaceLoc<'db>,
-        Vec<Ty>,
-        Vec<(Name, Ty)>,
-        FxHashSet<baml_compiler2_hir::loc::InterfaceLoc<'db>>,
-    )> = std::collections::VecDeque::new();
+) -> Vec<InterfaceClosureEntry<'db>> {
+    let mut out: Vec<InterfaceClosureEntry<'db>> = Vec::new();
+    let mut seen: FxHashSet<InterfaceClosureEntry<'db>> = FxHashSet::default();
+    let mut queue: std::collections::VecDeque<InterfaceClosureQueueEntry<'db>> =
+        std::collections::VecDeque::new();
     queue.push_back((
         root_iface,
         root_args.to_vec(),
@@ -1566,15 +1568,17 @@ pub fn interface_closure_locs_with_args_and_assoc<'db>(
                 _ => (&[][..], &pkg_info.namespace_path),
             };
             let parent_assoc = lower_interface_type_associated_bindings(
-                db,
-                parent_iface,
-                &parent_args,
-                parent_explicit_assoc,
-                parent_iface_pkg_items,
-                parent_pkg_items,
-                &parent_pkg.namespace_path,
-                parent_binding_ns,
-                &bindings,
+                InterfaceTypeAssocLowering {
+                    db,
+                    iface: parent_iface,
+                    interface_args: &parent_args,
+                    explicit_associated_bindings: parent_explicit_assoc,
+                    iface_pkg_items: parent_iface_pkg_items,
+                    binding_pkg_items: parent_pkg_items,
+                    iface_namespace_path: &parent_pkg.namespace_path,
+                    binding_namespace_path: parent_binding_ns,
+                    outer_bindings: &bindings,
+                },
                 &mut diags,
             );
             queue.push_back((

@@ -56,6 +56,29 @@ fn format_interface_display(name: &Name, args: &[Ty]) -> String {
     }
 }
 
+#[derive(Clone, Copy)]
+struct InterfaceBindingInputs<'a, 'db> {
+    iface_name: &'a crate::ty::QualifiedTypeName,
+    iface_data: &'a baml_compiler2_hir::item_tree::Interface,
+    iface_type_args: &'a [Ty],
+    associated_bindings: &'a [(Name, Ty)],
+    pkg_items: &'a PackageItems<'db>,
+    iface_ns: &'a [Name],
+    receiver_projection_base: Option<&'a Ty>,
+    qualify_symbolic_projection: bool,
+}
+
+#[derive(Clone, Copy)]
+struct InterfaceMemberLookup<'a> {
+    iface_name: &'a crate::ty::QualifiedTypeName,
+    iface_type_args: &'a [Ty],
+    associated_bindings: &'a [(Name, Ty)],
+    member: &'a Name,
+    at: ExprId,
+    bound: bool,
+    receiver_projection_base: Option<&'a Ty>,
+}
+
 fn json_alias_ty() -> Ty {
     Ty::TypeAlias(
         crate::ty::QualifiedTypeName::new(
@@ -7414,15 +7437,15 @@ impl<'db> TypeInferenceBuilder<'db> {
                 {
                     let iface_qtn = iface_qtn.clone();
                     let iface_args = iface_args.clone();
-                    if let Some(ty) = self.resolve_interface_member(
-                        &iface_qtn,
-                        &iface_args,
-                        &[],
+                    if let Some(ty) = self.resolve_interface_member(InterfaceMemberLookup {
+                        iface_name: &iface_qtn,
+                        iface_type_args: &iface_args,
+                        associated_bindings: &[],
                         member,
                         at,
                         bound,
-                        Some(base_ty),
-                    ) {
+                        receiver_projection_base: Some(base_ty),
+                    }) {
                         return ty;
                     }
                 }
@@ -7479,15 +7502,15 @@ impl<'db> TypeInferenceBuilder<'db> {
                 }
             }
             Ty::Interface(iface_name, type_args, associated_bindings, _) => {
-                if let Some(ty) = self.resolve_interface_member(
+                if let Some(ty) = self.resolve_interface_member(InterfaceMemberLookup {
                     iface_name,
-                    type_args,
+                    iface_type_args: type_args,
                     associated_bindings,
                     member,
                     at,
                     bound,
-                    Some(base_ty),
-                ) {
+                    receiver_projection_base: Some(base_ty),
+                }) {
                     return ty;
                 }
                 // Known interface but member not found — error.
@@ -7799,15 +7822,15 @@ impl<'db> TypeInferenceBuilder<'db> {
                 let bound_ty = self.generic_param_bounds[name].clone();
                 if let Ty::Interface(iface_qtn, iface_args, associated_bindings, _) = &bound_ty {
                     let receiver_ty = Ty::TypeVar(name.clone(), TyAttr::default());
-                    if let Some(ty) = self.resolve_interface_member(
-                        iface_qtn,
-                        iface_args,
+                    if let Some(ty) = self.resolve_interface_member(InterfaceMemberLookup {
+                        iface_name: iface_qtn,
+                        iface_type_args: iface_args,
                         associated_bindings,
                         member,
                         at,
                         bound,
-                        Some(&receiver_ty),
-                    ) {
+                        receiver_projection_base: Some(&receiver_ty),
+                    }) {
                         return ty;
                     }
                 }
@@ -8146,15 +8169,15 @@ impl<'db> TypeInferenceBuilder<'db> {
                 }
             }
             Ty::Interface(iface_name, type_args, associated_bindings, _) => {
-                if let Some(ty) = self.resolve_interface_member(
+                if let Some(ty) = self.resolve_interface_member(InterfaceMemberLookup {
                     iface_name,
-                    type_args,
+                    iface_type_args: type_args,
                     associated_bindings,
                     member,
-                    path_id,
+                    at: path_id,
                     bound,
-                    Some(base_ty),
-                ) {
+                    receiver_projection_base: Some(base_ty),
+                }) {
                     return ty;
                 }
                 let iface_def = self
@@ -8386,15 +8409,15 @@ impl<'db> TypeInferenceBuilder<'db> {
                 TyAttr::default(),
             );
             let ty = self.resolve_member_suppressing_side_effects(at, |this| {
-                this.resolve_interface_member(
-                    &iface_name,
-                    &type_args,
-                    &associated_bindings,
+                this.resolve_interface_member(InterfaceMemberLookup {
+                    iface_name: &iface_name,
+                    iface_type_args: &type_args,
+                    associated_bindings: &associated_bindings,
                     member,
                     at,
                     bound,
-                    Some(&self_ty),
-                )
+                    receiver_projection_base: Some(&self_ty),
+                })
             });
             // A bound interface *method* comes back self-stripped, but class
             // method members of the same union keep `self` (the unbound form).
@@ -8782,19 +8805,13 @@ impl<'db> TypeInferenceBuilder<'db> {
 
     fn add_interface_associated_type_bindings(
         &self,
-        iface_name: &crate::ty::QualifiedTypeName,
-        iface_data: &baml_compiler2_hir::item_tree::Interface,
-        iface_type_args: &[Ty],
-        associated_bindings: &[(Name, Ty)],
-        pkg_items: &PackageItems<'_>,
-        iface_ns: &[Name],
-        receiver_projection_base: Option<&Ty>,
-        qualify_symbolic_projection: bool,
+        inputs: InterfaceBindingInputs<'_, '_>,
         bindings: &mut FxHashMap<Name, Ty>,
         diagnostics: &mut Vec<TirTypeError>,
     ) {
-        for assoc in &iface_data.associated_types {
-            if let Some((_, ty)) = associated_bindings
+        for assoc in &inputs.iface_data.associated_types {
+            if let Some((_, ty)) = inputs
+                .associated_bindings
                 .iter()
                 .find(|(name, _)| name == &assoc.name)
             {
@@ -8805,34 +8822,36 @@ impl<'db> TypeInferenceBuilder<'db> {
                 let ty = crate::generics::lower_type_expr_with_generics(
                     self.context.db(),
                     &default.expr,
-                    pkg_items,
-                    iface_ns,
+                    inputs.pkg_items,
+                    inputs.iface_ns,
                     bindings,
                     diagnostics,
                 );
                 bindings.insert(assoc.name.clone(), ty);
                 continue;
             }
-            if let Some(base) = receiver_projection_base {
+            if let Some(base) = inputs.receiver_projection_base {
                 let projection_interface = Ty::Interface(
-                    iface_name.clone(),
-                    if iface_type_args.is_empty() {
-                        iface_data
+                    inputs.iface_name.clone(),
+                    if inputs.iface_type_args.is_empty() {
+                        inputs
+                            .iface_data
                             .generic_params
                             .iter()
                             .map(|generic| Ty::TypeVar(generic.clone(), TyAttr::default()))
                             .collect()
                     } else {
-                        iface_type_args.to_vec()
+                        inputs.iface_type_args.to_vec()
                     },
-                    associated_bindings.to_vec(),
+                    inputs.associated_bindings.to_vec(),
                     TyAttr::default(),
                 );
                 bindings.insert(
                     assoc.name.clone(),
                     Ty::AssociatedTypeProjection {
                         base: Box::new(base.clone()),
-                        interface: qualify_symbolic_projection
+                        interface: inputs
+                            .qualify_symbolic_projection
                             .then(|| Box::new(projection_interface)),
                         member: assoc.name.clone(),
                         attr: TyAttr::default(),
@@ -8847,16 +8866,17 @@ impl<'db> TypeInferenceBuilder<'db> {
     /// lowered straight from the `InterfaceMethodSig` since they don't have
     /// function locs. Returns `None` when the member isn't found anywhere
     /// in the chain (the caller emits the `UnresolvedMember` diagnostic).
-    fn resolve_interface_member(
-        &mut self,
-        iface_name: &crate::ty::QualifiedTypeName,
-        iface_type_args: &[Ty],
-        associated_bindings: &[(Name, Ty)],
-        member: &Name,
-        at: ExprId,
-        bound: bool,
-        receiver_projection_base: Option<&Ty>,
-    ) -> Option<Ty> {
+    fn resolve_interface_member(&mut self, lookup: InterfaceMemberLookup<'_>) -> Option<Ty> {
+        let InterfaceMemberLookup {
+            iface_name,
+            iface_type_args,
+            associated_bindings,
+            member,
+            at,
+            bound,
+            receiver_projection_base,
+        } = lookup;
+
         let pkg_items = self.resolve_class_pkg_items(iface_name.package())?;
         let def = pkg_items.lookup_type(iface_name.namespace(), iface_name.name())?;
         let Definition::Interface(root_loc) = def else {
@@ -8923,14 +8943,16 @@ impl<'db> TypeInferenceBuilder<'db> {
                             });
                         }
                         self.add_interface_associated_type_bindings(
-                            &current_iface_qtn,
-                            iface_data,
-                            &iface_type_args,
-                            &iface_associated_bindings,
-                            pkg_items,
-                            &iface_ns,
-                            receiver_projection_base,
-                            qualify_symbolic_projection,
+                            InterfaceBindingInputs {
+                                iface_name: &current_iface_qtn,
+                                iface_data,
+                                iface_type_args: &iface_type_args,
+                                associated_bindings: &iface_associated_bindings,
+                                pkg_items,
+                                iface_ns: &iface_ns,
+                                receiver_projection_base,
+                                qualify_symbolic_projection,
+                            },
                             &mut bindings,
                             &mut diags,
                         );
@@ -8974,14 +8996,16 @@ impl<'db> TypeInferenceBuilder<'db> {
                         .or_insert_with(|| Ty::TypeVar(generic_param.clone(), TyAttr::default()));
                 }
                 self.add_interface_associated_type_bindings(
-                    &current_iface_qtn,
-                    iface_data,
-                    &iface_type_args,
-                    &iface_associated_bindings,
-                    pkg_items,
-                    &iface_ns,
-                    receiver_projection_base,
-                    qualify_symbolic_projection,
+                    InterfaceBindingInputs {
+                        iface_name: &current_iface_qtn,
+                        iface_data,
+                        iface_type_args: &iface_type_args,
+                        associated_bindings: &iface_associated_bindings,
+                        pkg_items,
+                        iface_ns: &iface_ns,
+                        receiver_projection_base,
+                        qualify_symbolic_projection,
+                    },
                     &mut bindings,
                     &mut diags,
                 );
@@ -9010,7 +9034,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                     } else {
                         iface_type_args
                     },
-                    iface_associated_bindings.to_vec(),
+                    iface_associated_bindings.clone(),
                     TyAttr::default(),
                 );
                 let callable_throws = crate::callable::callable_throws(db, func_loc).clone();
@@ -9204,14 +9228,16 @@ impl<'db> TypeInferenceBuilder<'db> {
                 }
                 let mut diags = Vec::new();
                 self.add_interface_associated_type_bindings(
-                    &current_iface_qtn,
-                    iface_data,
-                    &iface_type_args,
-                    &iface_associated_bindings,
-                    pkg_items,
-                    &iface_ns,
-                    receiver_projection_base,
-                    qualify_symbolic_projection,
+                    InterfaceBindingInputs {
+                        iface_name: &current_iface_qtn,
+                        iface_data,
+                        iface_type_args: &iface_type_args,
+                        associated_bindings: &iface_associated_bindings,
+                        pkg_items,
+                        iface_ns: &iface_ns,
+                        receiver_projection_base,
+                        qualify_symbolic_projection,
+                    },
                     &mut bindings,
                     &mut diags,
                 );
@@ -9240,7 +9266,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                     } else {
                         iface_type_args
                     },
-                    iface_associated_bindings.to_vec(),
+                    iface_associated_bindings.clone(),
                     TyAttr::default(),
                 );
                 let receiver_ty = receiver_generic
@@ -9640,14 +9666,16 @@ impl<'db> TypeInferenceBuilder<'db> {
             }
             let mut diags = Vec::new();
             self.add_interface_associated_type_bindings(
-                &current_iface_qtn,
-                iface_data,
-                &closure_args,
-                &closure_assoc,
-                pkg_items,
-                &iface_ns,
-                Some(iface_ty),
-                qualify_symbolic_projection,
+                InterfaceBindingInputs {
+                    iface_name: &current_iface_qtn,
+                    iface_data,
+                    iface_type_args: &closure_args,
+                    associated_bindings: &closure_assoc,
+                    pkg_items,
+                    iface_ns: &iface_ns,
+                    receiver_projection_base: Some(iface_ty),
+                    qualify_symbolic_projection,
+                },
                 &mut bindings,
                 &mut diags,
             );
@@ -10460,15 +10488,15 @@ impl<'db> TypeInferenceBuilder<'db> {
                     vec![],
                     TyAttr::default(),
                 );
-                self.resolve_interface_member(
-                    &iface_qtn,
-                    &iface_args,
-                    &[],
+                self.resolve_interface_member(InterfaceMemberLookup {
+                    iface_name: &iface_qtn,
+                    iface_type_args: &iface_args,
+                    associated_bindings: &[],
                     member,
                     at,
                     bound,
-                    Some(&receiver_ty),
-                )
+                    receiver_projection_base: Some(&receiver_ty),
+                })
             }
             _ => {
                 let sources = self.format_interface_method_sources(reg.iter().cloned());
@@ -11624,9 +11652,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         projected_interface: Option<&Ty>,
         member: &Name,
     ) -> Option<Ty> {
-        let Some(pkg_items) = self.resolve_class_pkg_items(iface_qtn.package()) else {
-            return None;
-        };
+        let pkg_items = self.resolve_class_pkg_items(iface_qtn.package())?;
         let Some(Definition::Interface(iface_loc)) =
             pkg_items.lookup_type(iface_qtn.namespace(), iface_qtn.name())
         else {

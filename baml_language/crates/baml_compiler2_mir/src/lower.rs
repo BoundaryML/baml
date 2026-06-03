@@ -7120,7 +7120,7 @@ impl<'db> LoweringContext<'db> {
             let method_assoc_bindings = class_tree
                 .method_to_iface_associated_type_bindings
                 .get(&method_id)
-                .map(|bindings| bindings.as_slice())
+                .map(Vec::as_slice)
                 .unwrap_or(&[]);
             // BEP-044: this override only satisfies requests resolving to the
             // interface that owns `method` within the block's closure — so a

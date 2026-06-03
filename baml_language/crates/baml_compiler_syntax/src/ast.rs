@@ -319,7 +319,7 @@ impl UnionMemberParts {
         if self
             .tokens
             .first()
-            .map_or(true, |t| t.kind() != SyntaxKind::L_PAREN)
+            .is_none_or(|t| t.kind() != SyntaxKind::L_PAREN)
         {
             return None;
         }
@@ -447,7 +447,7 @@ impl TypeExpr {
             .collect();
         if tokens
             .first()
-            .map_or(true, |t| t.kind() != SyntaxKind::L_PAREN)
+            .is_none_or(|t| t.kind() != SyntaxKind::L_PAREN)
         {
             return None;
         }

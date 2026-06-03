@@ -1476,8 +1476,8 @@ pub enum ImplementsItem {
 }
 
 impl ImplementsItem {
-    fn delimiter_rightmost<'a>(
-        delimiter: &'a Option<ClassFieldDelimiter>,
+    fn delimiter_rightmost(
+        delimiter: Option<&ClassFieldDelimiter>,
         fallback: impl FnOnce() -> TextRange,
     ) -> TextRange {
         match delimiter {
@@ -1517,13 +1517,13 @@ impl Printable for ImplementsItem {
     fn rightmost_token(&self) -> TextRange {
         match self {
             ImplementsItem::AssociatedType(decl, delimiter) => {
-                Self::delimiter_rightmost(delimiter, || decl.rightmost_token())
+                Self::delimiter_rightmost(delimiter.as_ref(), || decl.rightmost_token())
             }
             ImplementsItem::FieldLink(link, delimiter) => {
-                Self::delimiter_rightmost(delimiter, || link.rightmost_token())
+                Self::delimiter_rightmost(delimiter.as_ref(), || link.rightmost_token())
             }
             ImplementsItem::Field(field, delimiter) => {
-                Self::delimiter_rightmost(delimiter, || field.rightmost_token())
+                Self::delimiter_rightmost(delimiter.as_ref(), || field.rightmost_token())
             }
             ImplementsItem::Function(function) => function.rightmost_token(),
         }
