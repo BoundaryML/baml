@@ -10,30 +10,30 @@ import {
     Timing,
     Usage,
     LLMCall,
-} from './native';
-import { encodeCallArgs, decodeCallResult } from './proto';
-import { installFlushOnExit } from './exit_hook';
+} from './native.js';
+import { encodeCallArgs, decodeCallResult } from './proto.js';
+import { installFlushOnExit } from './exit_hook.js';
 
-export { BamlRuntime, AbortController, BamlHandle, HostSpanManager, getRuntime, getVersion, flushEvents } from './native';
-export { Timing, Usage, LLMCall } from './native';
+export { BamlRuntime, AbortController, BamlHandle, HostSpanManager, getRuntime, getVersion, flushEvents } from './native.js';
+export { Timing, Usage, LLMCall } from './native.js';
 // Handle-table helpers (decode validate-on-take / encode clone-on-put + test seeds).
 export {
     takeHandleFromTable,
     putHandleIntoTable,
     _seedFunctionRefHandle,
     _seedGenericMediaHandle,
-} from './native';
+} from './native.js';
 // Runtime-owned stdlib value classes. Exported under their `Baml*` names only;
 // codegen aliases them as Image/Audio/Video/Pdf on re-export.
-export { BamlImage, BamlAudio, BamlVideo, BamlPdf } from './native';
+export { BamlImage, BamlAudio, BamlVideo, BamlPdf } from './native.js';
 // Stream wrapper. Exported as `BamlStream`; codegen aliases it as `Stream`.
-export { BamlStream } from './stream';
-export { encodeCallArgs, decodeCallResult } from './proto';
-export { CtxManager } from './ctx_manager';
+export { BamlStream } from './stream.js';
+export { encodeCallArgs, decodeCallResult } from './proto.js';
+export { CtxManager } from './ctx_manager.js';
 // Codegen support: typemap + placeholder sentinel + free runtime initializer.
-export { BamlTypeMap, setTypeMap, getTypeMap } from './typemap';
+export { BamlTypeMap, setTypeMap, getTypeMap } from './typemap.js';
 // Callable factories the generated SDK emits for every BAML function/method.
-export { defineFunction, defineInstanceFunction, UNSET } from './define_function';
+export { defineFunction, defineInstanceFunction, UNSET } from './define_function.js';
 
 /**
  * Free-function runtime initializer used by generated `baml_sdk/index.ts`:
@@ -52,7 +52,7 @@ export function initializeRuntime(srcDir: string, files: Record<string, string>)
 export function initializeRuntimeFromBytecode(bytecode: Buffer | Uint8Array): void {
     BamlRuntime.initializeRuntimeFromBytecode(Buffer.from(bytecode));
 }
-import { wrapNativeError } from './errors';
+import { wrapNativeError } from './errors.js';
 export {
     BamlError,
     BamlInvalidArgumentError,
@@ -60,7 +60,7 @@ export {
     BamlCancelledError,
     BamlPanic,
     wrapNativeError,
-} from './errors';
+} from './errors.js';
 
 export class FunctionResult {
     private _value: unknown;

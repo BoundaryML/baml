@@ -4,7 +4,7 @@
 // Decodes the BamlOutboundResult envelope → TS objects (call results), and
 // bare BamlOutboundValue bytes → TS objects (host-callable args).
 
-import { baml_core } from './proto/baml_cffi';
+import { baml_core } from './proto/baml_cffi.js';
 import {
     BamlHandle,
     HandleKey,
@@ -16,10 +16,10 @@ import {
     registerHostCallable,
     releaseHostCallable,
     completeHostCall,
-} from './native';
-import { BamlStream } from './stream';
-import { BamlError, BamlPanic } from './errors';
-import { BamlTypeMap, getTypeMap } from './typemap';
+} from './native.js';
+import { BamlStream } from './stream.js';
+import { BamlError, BamlPanic } from './errors.js';
+import { BamlTypeMap, getTypeMap } from './typemap.js';
 
 const CallFunctionArgs = baml_core.cffi.v1.CallFunctionArgs;
 const BamlOutboundValue = baml_core.cffi.v1.BamlOutboundValue;

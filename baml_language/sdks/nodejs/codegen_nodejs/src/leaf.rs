@@ -354,7 +354,6 @@ pub(crate) fn render_index_ts(body: &LeafBody, kids: &BTreeSet<String>, is_root:
 /// classes/enums/aliases that get cross-referenced).
 fn cross_leaf_imports(state: &RenderState, leaf: &LeafPath) -> String {
     use crate::translate_ty::ROOT_ALIAS;
-    let depth = leaf.segments.len();
     let mut seg0s: BTreeSet<&str> = BTreeSet::new();
     let mut needs_root = false;
     for routed in &state.imports {
@@ -369,21 +368,37 @@ fn cross_leaf_imports(state: &RenderState, leaf: &LeafPath) -> String {
     }
     let mut out = String::new();
     if needs_root {
-        // Path back to the package root: `..`, `../..`, … by depth.
-        let rel = vec![".."; depth].join("/");
+        let rel = leaf_module_specifier(leaf, &LeafPath { segments: vec![] });
         let _ = writeln!(out, "import type * as {ROOT_ALIAS} from \"{rel}\";");
     }
     for seg0 in seg0s {
-        // Relative path from this leaf's directory up to the root, then
-        // into the top-level namespace `seg0`.
-        let rel = if depth == 0 {
-            format!("./{seg0}")
-        } else {
-            format!("{}{seg0}", "../".repeat(depth))
-        };
+        let rel = leaf_module_specifier(
+            leaf,
+            &LeafPath {
+                segments: vec![seg0.to_string()],
+            },
+        );
         let _ = writeln!(out, "import type * as {seg0} from \"{rel}\";");
     }
     out
+}
+
+fn leaf_module_specifier(from: &LeafPath, to: &LeafPath) -> String {
+    let up = "../".repeat(from.segments.len());
+    if to.segments.is_empty() {
+        if up.is_empty() {
+            "./index.js".to_string()
+        } else {
+            format!("{up}index.js")
+        }
+    } else {
+        let down = to.segments.join("/");
+        if up.is_empty() {
+            format!("./{down}/index.js")
+        } else {
+            format!("{up}{down}/index.js")
+        }
+    }
 }
 
 /// Child-namespace re-exports. `export * as <kid>` works for nearly every
@@ -392,12 +407,13 @@ fn cross_leaf_imports(state: &RenderState, leaf: &LeafPath) -> String {
 /// reserved name (legal as an export name).
 fn write_child_reexports(out: &mut String, kids: &BTreeSet<String>) {
     for kid in kids {
+        let child_path = format!("./{kid}/index.js");
         if is_js_reserved(kid) {
             let local = format!("__ns_{kid}");
-            let _ = writeln!(out, "import * as {local} from \"./{kid}\";");
+            let _ = writeln!(out, "import * as {local} from \"{child_path}\";");
             let _ = writeln!(out, "export {{ {local} as {kid} }};");
         } else {
-            let _ = writeln!(out, "export * as {kid} from \"./{kid}\";");
+            let _ = writeln!(out, "export * as {kid} from \"{child_path}\";");
         }
     }
 }
@@ -439,8 +455,8 @@ fn write_preamble_ts(
             state,
             &["initializeRuntimeFromBytecode", "setTypeMap"],
         ));
-        out.push_str("import * as _inlinedbaml from \"./_inlinedbaml\";\n");
-        out.push_str("import { _TYPE_MAP } from \"./_typemap\";\n");
+        out.push_str("import * as _inlinedbaml from \"./_inlinedbaml.js\";\n");
+        out.push_str("import { _TYPE_MAP } from \"./_typemap.js\";\n");
         out.push_str(&cross_leaf_imports(state, &body.leaf));
         out.push('\n');
         out.push_str("initializeRuntimeFromBytecode(_inlinedbaml.BYTECODE);\n");
@@ -832,7 +848,7 @@ mod tests {
             )],
         );
         let ts = render_index_ts(&b, &BTreeSet::new(), false);
-        assert!(ts.contains("import type * as lorem from \"../lorem\";"));
+        assert!(ts.contains("import type * as lorem from \"../lorem/index.js\";"));
         assert!(ts.contains("r!: lorem.Resume;"));
     }
 
@@ -859,7 +875,7 @@ mod tests {
         let mut kids = BTreeSet::new();
         kids.insert("aws".to_string());
         let ts = render_index_ts(&b, &kids, false);
-        assert!(ts.contains("export * as aws from \"./aws\";"));
+        assert!(ts.contains("export * as aws from \"./aws/index.js\";"));
         assert!(!ts.contains("export const"));
     }
 
@@ -880,7 +896,7 @@ mod tests {
         let ts = render_index_ts(&b, &kids, true);
         assert!(ts.contains("initializeRuntimeFromBytecode(_inlinedbaml.BYTECODE);"));
         assert!(ts.contains("setTypeMap(_TYPE_MAP);"));
-        assert!(ts.contains("export * as lorem from \"./lorem\";"));
+        assert!(ts.contains("export * as lorem from \"./lorem/index.js\";"));
         assert!(ts.contains("export const make_foo = defineFunction("));
         assert!(ts.contains("import { defineFunction, initializeRuntimeFromBytecode, setTypeMap } from \"@boundaryml/baml-core-node\";"));
     }

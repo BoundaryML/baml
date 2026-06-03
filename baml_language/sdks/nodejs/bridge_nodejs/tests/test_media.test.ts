@@ -1,7 +1,7 @@
 // test_media.test.ts — mirrors bridge_python/tests/test_media.py.
 // Constructors round-trip through the native accessors.
 
-import { BamlImage, BamlAudio, BamlVideo, BamlPdf } from '../index';
+import { BamlImage, BamlAudio, BamlVideo, BamlPdf } from '../dist/index.js';
 
 type MediaCtor = {
     fromUrl(url: string, mimeType?: string): { url(): string | null; file(): string | null; base64(): string; mimeType(): string | null };
