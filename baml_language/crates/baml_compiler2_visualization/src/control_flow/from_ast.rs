@@ -687,6 +687,7 @@ impl<'a> AstGraphBuilder<'a> {
                 class,
                 generic_args,
                 fields,
+                ..
             } => {
                 let class_path: Vec<_> = class.iter().map(baml_base::Name::as_str).collect();
                 let generic_args = if generic_args.is_empty() {
@@ -1171,6 +1172,7 @@ mod tests {
             let int_ty = ast::TypeExpr::Path {
                 segments: vec!["int".into()],
                 generic_args: vec![],
+                associated_type_bindings: vec![],
                 attrs: vec![],
             };
             let inner = patterns.alloc(ast::Pattern::Type(int_ty));

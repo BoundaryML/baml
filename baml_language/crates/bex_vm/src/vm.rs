@@ -60,13 +60,9 @@ macro_rules! verifier_unreachable {
 }
 
 use ::bex_heap::TlabHolder;
-
-pub type InterfaceImplementorEntry = (baml_type::TypeName, Vec<baml_type::Ty>);
-pub type InterfaceImplementors =
-    indexmap::IndexMap<baml_type::TypeName, Vec<InterfaceImplementorEntry>>;
 use ::bex_vm_types::{
     EarlyYieldCheck, RootHaver,
-    types::{ErrorClass, FutureId},
+    types::{ErrorClass, FutureId, InterfaceImplementors},
 };
 use ::core::any::TypeId;
 #[cfg(not(target_arch = "wasm32"))]

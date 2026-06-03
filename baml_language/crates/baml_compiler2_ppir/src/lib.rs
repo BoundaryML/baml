@@ -449,6 +449,7 @@ pub fn ppir_expansion_items(db: &dyn Db, file: SourceFile) -> PpirExpansionItems
                     expr: ast::TypeExpr::Path {
                         segments: vec![Name::new("baml"), Name::new("llm"), Name::new("Stream")],
                         generic_args: vec![stream_type_expr, original_return_type_expr],
+                        associated_type_bindings: vec![],
                         attrs: vec![],
                     },
                     span,
@@ -515,6 +516,7 @@ pub fn ppir_expansion_items(db: &dyn Db, file: SourceFile) -> PpirExpansionItems
                                     Name::new("SseStream"),
                                 ],
                                 generic_args: vec![],
+                                associated_type_bindings: vec![],
                                 attrs: vec![],
                             },
                             span,

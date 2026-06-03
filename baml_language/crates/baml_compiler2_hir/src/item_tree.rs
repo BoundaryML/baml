@@ -141,6 +141,7 @@ pub struct Class {
 pub struct ImplementsBlock {
     pub target: ast::SpannedTypeExpr,
     pub field_links: Vec<InterfaceFieldLink>,
+    pub associated_type_bindings: Vec<ast::AssociatedTypeBindingDef>,
     pub is_out_of_body: bool,
     pub span: TextRange,
 }
@@ -152,6 +153,7 @@ pub struct ImplementsFor {
     pub interface_target: ast::SpannedTypeExpr,
     pub for_target: ast::SpannedTypeExpr,
     pub field_links: Vec<InterfaceFieldLink>,
+    pub associated_type_bindings: Vec<ast::AssociatedTypeBindingDef>,
     pub methods: Vec<LocalItemId<FunctionMarker>>,
     pub span: TextRange,
 }
@@ -220,6 +222,8 @@ pub struct Interface {
     /// Field signatures declared on the interface. Interface fields cannot
     /// have default values.
     pub fields: Vec<ClassField>,
+    /// Associated type declarations on the interface (BEP-057).
+    pub associated_types: Vec<ast::AssociatedTypeDef>,
     /// Default methods (with bodies). Implementing classes inherit them.
     pub default_methods: Vec<LocalItemId<FunctionMarker>>,
     /// Required methods (no body). Implementing classes must provide a body.
@@ -387,6 +391,8 @@ pub struct ItemTree {
     /// resolve the path to an `InterfaceLoc` lazily so HIR construction
     /// stays independent of name resolution.
     pub method_to_iface_target: FxHashMap<LocalItemId<FunctionMarker>, ast::SpannedTypeExpr>,
+    pub method_to_iface_associated_type_bindings:
+        FxHashMap<LocalItemId<FunctionMarker>, Vec<ast::AssociatedTypeBindingDef>>,
 
     /// Collision tracker: `(ItemKind, hash)` → next available index.
     next_index: FxHashMap<(ItemKind, u16), u16>,
@@ -414,6 +420,7 @@ impl ItemTree {
             lets: FxHashMap::default(),
             implements_for: Vec::new(),
             method_to_iface_target: FxHashMap::default(),
+            method_to_iface_associated_type_bindings: FxHashMap::default(),
             next_index: FxHashMap::default(),
         }
     }
@@ -488,6 +495,7 @@ impl ItemTree {
                         class_field_span: link.class_field_span,
                     })
                     .collect(),
+                associated_type_bindings: b.associated_type_bindings.clone(),
                 is_out_of_body: b.is_out_of_body,
                 span: b.span,
             })
@@ -541,6 +549,7 @@ impl ItemTree {
             interface_target: imp.interface_target.clone(),
             for_target: imp.for_target.clone(),
             field_links,
+            associated_type_bindings: imp.associated_type_bindings.clone(),
             methods,
             span: imp.span,
         });
@@ -654,6 +663,7 @@ impl ItemTree {
                 generic_param_bounds: i.generic_param_bounds.clone(),
                 requires: i.requires.clone(),
                 fields,
+                associated_types: i.associated_types.clone(),
                 default_methods: default_method_ids,
                 required_methods,
                 attributes: i.attributes.iter().map(Attribute::from).collect(),

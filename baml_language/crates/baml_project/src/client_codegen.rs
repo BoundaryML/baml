@@ -571,7 +571,7 @@ fn convert_tir_leaf(
         // (BEP-044 §LLM Functions), which the codegen path handles via union
         // simplification once the implementor set is enumerated; treating them
         // as a regular nominal type here lets that machinery run unchanged.
-        TirTy::Class(qtn, type_args, _) | TirTy::Interface(qtn, type_args, _) => cg::Ty::Class(
+        TirTy::Class(qtn, type_args, _) | TirTy::Interface(qtn, type_args, _, _) => cg::Ty::Class(
             name_from_qtn(qtn),
             type_args
                 .iter()
@@ -621,6 +621,7 @@ fn convert_tir_leaf(
 
         // BEP-030: BAML's `unknown` top type → BuiltinUnknown.
         TirTy::BuiltinUnknown { .. } => cg::Ty::BuiltinUnknown,
+        TirTy::AssociatedTypeProjection { .. } => cg::Ty::BuiltinUnknown,
 
         // BEP-030: Function types → Callable.
         TirTy::Function { params, ret, .. } => cg::Ty::Callable {

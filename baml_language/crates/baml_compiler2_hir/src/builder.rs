@@ -1136,6 +1136,9 @@ impl<'db> SemanticIndexBuilder<'db> {
                 self.item_tree
                     .method_to_iface_target
                     .insert(fid, impl_block.target.clone());
+                self.item_tree
+                    .method_to_iface_associated_type_bindings
+                    .insert(fid, impl_block.associated_type_bindings.clone());
                 method_ids.push(fid);
             }
         }
@@ -1165,6 +1168,9 @@ impl<'db> SemanticIndexBuilder<'db> {
             self.item_tree
                 .method_to_iface_target
                 .insert(fid, imp.interface_target.clone());
+            self.item_tree
+                .method_to_iface_associated_type_bindings
+                .insert(fid, imp.associated_type_bindings.clone());
             method_ids.push(fid);
         }
         if has_generic_params {
@@ -1221,6 +1227,14 @@ impl<'db> SemanticIndexBuilder<'db> {
                 .push(MemberSite {
                     range: field.name_span,
                     kind: DefinitionKind::Field,
+                });
+        }
+        for assoc in &i.associated_types {
+            seen.entry(assoc.name.clone())
+                .or_default()
+                .push(MemberSite {
+                    range: assoc.name_span,
+                    kind: DefinitionKind::AssociatedType,
                 });
         }
         for sig in &i.required_methods {
@@ -1750,6 +1764,14 @@ impl<'db> SemanticIndexBuilder<'db> {
                         .as_ref()
                         .is_some_and(|throws| Self::type_expr_contains_rust(throws))
             }
+            ast::TypeExpr::AssociatedTypeProjection {
+                base, interface, ..
+            } => {
+                Self::type_expr_contains_rust(base)
+                    || interface
+                        .as_ref()
+                        .is_some_and(|interface| Self::type_expr_contains_rust(interface))
+            }
             _ => false,
         }
     }
@@ -1812,6 +1834,7 @@ impl<'db> SemanticIndexBuilder<'db> {
                 .map(Name::as_str)
                 .collect::<Vec<_>>()
                 .join("."),
+            ast::TypeExpr::AssociatedTypeProjection { .. } => type_expr.to_string(),
             ast::TypeExpr::Int { .. } => "int".to_string(),
             ast::TypeExpr::Bigint { .. } => "bigint".to_string(),
             ast::TypeExpr::Float { .. } => "float".to_string(),

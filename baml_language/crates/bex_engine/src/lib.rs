@@ -79,7 +79,10 @@ use std::{
 
 use ::bex_heap::{HeapPermit as _, Tlab};
 // Re-export event types for callers.
-use ::bex_vm_types::{RootHaver, types::FutureId};
+use ::bex_vm_types::{
+    RootHaver,
+    types::{FutureId, InterfaceImplementors},
+};
 use ::core::sync::atomic::AtomicBool;
 use async_trait::async_trait;
 use bex_events::{EventKind, FunctionEnd, FunctionEvent, FunctionStart, SpanContext};
@@ -89,7 +92,7 @@ pub use bex_external_types::{BexExternalValue, Ty, TypeName, UnionMetadata};
 pub use bex_heap::GcStats;
 pub use bex_heap::{ActiveHeapPermit, HeapGuard, HeapPermitManager, InactiveHeapPermit};
 use bex_heap::{BexHeap, TlabHolder};
-use bex_vm::{BexVm, SpanNotification, VmExecState, vm::InterfaceImplementors};
+use bex_vm::{BexVm, SpanNotification, VmExecState};
 use bex_vm_types::{
     FunctionMeta, FunctionOrigin, GlobalPool, HeapPtr, Object, SharedGlobals, SysOp, Value,
     ValueKind, VmGlobals,

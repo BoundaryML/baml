@@ -1630,7 +1630,7 @@ impl LoweringContext {
     /// Lower a `DESTRUCTURE_PATTERN` (`(let)? PATH ('<' types '>')? '{' field_list '}'`).
     fn lower_destructure_pattern(&mut self, node: &SyntaxNode) -> PatId {
         // Path tokens live between (the optional) `KW_LET` and either
-        // `GENERIC_ARGS` or `L_BRACE`.
+        // `GENERIC_ARGS`, `TYPE_ARGS`, or `L_BRACE`.
         // Collect WORD tokens in that range, ignoring DOTs.
         let mut class: Vec<Name> = Vec::new();
         for elem in node.children_with_tokens() {
@@ -1641,19 +1641,35 @@ impl LoweringContext {
                     SyntaxKind::L_BRACE => break,
                     _ => {}
                 },
-                rowan::NodeOrToken::Node(n) if n.kind() == SyntaxKind::GENERIC_ARGS => break,
+                rowan::NodeOrToken::Node(n)
+                    if n.kind() == SyntaxKind::GENERIC_ARGS
+                        || n.kind() == SyntaxKind::TYPE_ARGS =>
+                {
+                    break;
+                }
                 rowan::NodeOrToken::Node(_) => {}
             }
         }
 
-        let generic_args: Vec<TypeExpr> = node
+        let args_node = node
             .children()
-            .find(|n| n.kind() == SyntaxKind::GENERIC_ARGS)
+            .find(|n| n.kind() == SyntaxKind::GENERIC_ARGS || n.kind() == SyntaxKind::TYPE_ARGS);
+
+        let generic_args: Vec<TypeExpr> = args_node
+            .as_ref()
             .into_iter()
-            .flat_map(|args_node| args_node.children())
+            .flat_map(rowan::SyntaxNode::children)
             .filter(|n| n.kind() == SyntaxKind::TYPE_EXPR)
             .filter_map(baml_compiler_syntax::ast::TypeExpr::cast)
             .map(|te| crate::lower_type_expr::lower_type_expr_node(&te))
+            .collect();
+
+        let associated_type_bindings = args_node
+            .into_iter()
+            .filter(|args_node| args_node.kind() == SyntaxKind::TYPE_ARGS)
+            .flat_map(|args_node| args_node.children())
+            .filter_map(baml_compiler_syntax::ast::AssociatedTypeDecl::cast)
+            .filter_map(|binding| crate::lower_type_expr::lower_associated_type_binding(&binding))
             .collect();
 
         let fields: Vec<FieldPat> = node
@@ -1666,6 +1682,7 @@ impl LoweringContext {
             Pattern::Class {
                 class,
                 generic_args,
+                associated_type_bindings,
                 fields,
             },
             node.text_range(),
@@ -3404,6 +3421,7 @@ impl LoweringContext {
                 expr: TypeExpr::Path {
                     segments: vec![Name::new("testing"), Name::new("TestCollector")],
                     generic_args: vec![],
+                    associated_type_bindings: vec![],
                     attrs: vec![],
                 },
                 span,

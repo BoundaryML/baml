@@ -158,6 +158,7 @@ mod tests {
             TypeExpr::Path {
                 segments: vec![baml_base::Name::new($name)],
                 generic_args: vec![],
+                associated_type_bindings: vec![],
                 attrs: type_expr!(@attrs $(, Attr($a))*),
             }
         };
@@ -255,10 +256,31 @@ mod tests {
             TypeExpr::Path {
                 segments,
                 generic_args,
+                associated_type_bindings,
                 attrs,
             } => TypeExpr::Path {
                 segments: segments.clone(),
                 generic_args: generic_args.iter().map(strip_spans).collect(),
+                associated_type_bindings: associated_type_bindings
+                    .iter()
+                    .map(|binding| crate::ast::AssociatedTypeBinding {
+                        name: binding.name.clone(),
+                        ty: Box::new(strip_spans(&binding.ty)),
+                    })
+                    .collect(),
+                attrs: strip_attrs(attrs),
+            },
+            TypeExpr::AssociatedTypeProjection {
+                base,
+                interface,
+                member,
+                attrs,
+            } => TypeExpr::AssociatedTypeProjection {
+                base: Box::new(strip_spans(base)),
+                interface: interface
+                    .as_ref()
+                    .map(|interface| Box::new(strip_spans(interface))),
+                member: member.clone(),
                 attrs: strip_attrs(attrs),
             },
             TypeExpr::Optional { inner, attrs } => TypeExpr::Optional {
@@ -805,6 +827,7 @@ class Response {
                     baml_base::Name::new("Io"),
                 ],
                 generic_args: vec![],
+                associated_type_bindings: vec![],
                 attrs: vec![]
             }
         );
@@ -919,6 +942,7 @@ interface Response {
                     baml_base::Name::new("Io"),
                 ],
                 generic_args: vec![],
+                associated_type_bindings: vec![],
                 attrs: vec![]
             }
         );
