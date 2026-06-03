@@ -571,6 +571,9 @@ pub fn write_description(
     // ── Static methods ───────────────────────────────────────────────────────
     write_method_section(w, db, project_root, "static_methods", &desc.static_methods)?;
 
+    // ── Operators ────────────────────────────────────────────────────────────
+    write_operator_section(w, &desc.operators)?;
+
     // ── Container ────────────────────────────────────────────────────────────
     if let Some(ref c) = desc.container {
         writeln!(w)?;
@@ -620,6 +623,30 @@ pub fn write_description(
     }
 
     let _ = lines_used; // budget tracking removed with new format
+    Ok(())
+}
+
+/// Render a builtin numeric operator section.
+fn write_operator_section(
+    w: &mut impl std::io::Write,
+    operators: &[describe::OperatorRef],
+) -> std::io::Result<()> {
+    if operators.is_empty() {
+        return Ok(());
+    }
+    writeln!(w)?;
+    writeln!(w, "operators:")?;
+    for op in operators {
+        writeln!(
+            w,
+            "  {:<2}  {:<32} precedence: {}",
+            op.symbol, op.signature, op.precedence
+        )?;
+        writeln!(w, "      behavior: {}", op.behavior)?;
+        if let Some(status) = op.status {
+            writeln!(w, "      status: {status}")?;
+        }
+    }
     Ok(())
 }
 

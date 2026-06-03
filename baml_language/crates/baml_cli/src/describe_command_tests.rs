@@ -104,6 +104,20 @@ class Baz {
 ///
 /// Uses the new `dispatch()` function (based on `ResolvedTarget`) so tests
 /// exercise the same code path as `baml describe <name>`.
+fn described_item_via_dispatch(
+    db: &ProjectDatabase,
+    name: &str,
+) -> baml_lsp2_actions::SymbolDescription {
+    let files = baml_compiler2_hir::compiler2_all_files(db);
+    match dispatch(db, name) {
+        Some(ResolvedTarget::Item(def)) => {
+            baml_lsp2_actions::describe_by_definition(db, &files, def)
+                .unwrap_or_else(|| panic!("no description for {name}"))
+        }
+        other => panic!("expected item target for {name}, got {other:?}"),
+    }
+}
+
 fn describe_via_dispatch(db: &ProjectDatabase, name: &str) -> String {
     let files = baml_compiler2_hir::compiler2_all_files(db);
     match dispatch(db, name) {
@@ -659,6 +673,73 @@ fn dispatch_lowercase_aliases_resolve_to_items() {
             "alias `{alias}` should resolve to a builtin class item"
         );
     }
+}
+
+/// `baml describe int` lists infix/prefix operators outside the body budget.
+#[test]
+fn render_describe_int_lists_operators_even_with_tight_budget() {
+    let db = simple_project();
+    let desc = described_item_via_dispatch(&db, "int");
+    let output = capture_description(&db, &desc, 5);
+
+    assert!(
+        output.contains("operators:"),
+        "missing operators section:\n{output}"
+    );
+    for needle in [
+        "+   (int, int) -> int",
+        "-   (int, int) -> int",
+        "*   (int, int) -> int",
+        "/   (int, int) -> int",
+        "%   (int, int) -> int",
+        "&   (int, int) -> int",
+        "|   (int, int) -> int",
+        "^   (int, int) -> int",
+        "<<  (int, int) -> int",
+        ">>  (int, int) -> int",
+        "~   (int) -> int",
+    ] {
+        assert!(
+            output.contains(needle),
+            "operator `{needle}` missing from describe output:\n{output}"
+        );
+    }
+    assert!(
+        output.contains("63-bit signed integer range [-4611686018427387904, 4611686018427387903]"),
+        "int range note missing:\n{output}"
+    );
+    assert!(
+        output.contains("Known limitation")
+            && output.contains("`~0` currently evaluates as `0` instead of `-1`"),
+        "~ limitation note missing:\n{output}"
+    );
+}
+
+/// JSON describe output carries the same operator metadata for programmatic use.
+#[test]
+fn describe_int_json_includes_operator_metadata() {
+    let db = simple_project();
+    let desc = described_item_via_dispatch(&db, "int");
+    let json = crate::grep_command::description_to_json(&db, &desc, 5, Path::new("/test"));
+    let operators = json["operators"]
+        .as_array()
+        .expect("operators should be a JSON array");
+
+    assert!(
+        operators
+            .iter()
+            .any(|op| op["symbol"] == "%" && op["signature"] == "(int, int) -> int"),
+        "modulo operator missing from JSON: {json:#}"
+    );
+    assert!(
+        operators.iter().any(|op| {
+            op["symbol"] == "~"
+                && op["status"]
+                    .as_str()
+                    .is_some_and(|status| status.contains("Known limitation"))
+        }),
+        "~ limitation missing from JSON: {json:#}"
+    );
 }
 
 /// Comment stripping is CST-token based, so a line that *looks* like a comment

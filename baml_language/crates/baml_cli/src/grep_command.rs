@@ -505,6 +505,15 @@ pub fn description_to_json(
         }).collect::<Vec<_>>(),
         "instance_methods": method_json(db, project_root, &desc.instance_methods),
         "static_methods": method_json(db, project_root, &desc.static_methods),
+        "operators": desc.operators.iter().map(|op| {
+            serde_json::json!({
+                "symbol": op.symbol,
+                "signature": op.signature,
+                "precedence": op.precedence,
+                "behavior": op.behavior,
+                "status": op.status,
+            })
+        }).collect::<Vec<_>>(),
         "container": desc.container.as_ref().map(|c| {
             let c_path = relative_path(&c.file.path(db), project_root);
             serde_json::json!({

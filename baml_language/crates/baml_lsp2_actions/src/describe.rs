@@ -61,6 +61,8 @@ pub struct SymbolDescription {
     pub instance_methods: Vec<MethodRef>,
     /// Static methods (no `self` param) for classes.
     pub static_methods: Vec<MethodRef>,
+    /// Operator forms supported by builtin companion classes.
+    pub operators: Vec<OperatorRef>,
     /// The containing class/enum for members.
     pub container: Option<DepRef>,
     /// Canonical fully-qualified name to print in the header, shown only when
@@ -87,6 +89,16 @@ pub struct MethodRef {
     /// Byte range of the full method definition (1-based line range when rendered).
     #[serde(serialize_with = "serialize_range")]
     pub item_range: TextRange,
+}
+
+/// A builtin operator surfaced by `describe` alongside method-style APIs.
+#[derive(Clone, Serialize)]
+pub struct OperatorRef {
+    pub symbol: &'static str,
+    pub signature: &'static str,
+    pub precedence: &'static str,
+    pub behavior: &'static str,
+    pub status: Option<&'static str>,
 }
 
 /// A symbol referenced in the signature of another symbol.
@@ -284,9 +296,10 @@ fn describe_top_level(
     // ── Reference finding ────────────────────────────────────────────────────
     let references = find_references(db, files, file, sym.name_span, item_range);
 
-    // ── Methods + canonical FQN (classes) ────────────────────────────────────
+    // ── Methods + operators + canonical FQN (classes) ────────────────────────
     let (instance_methods, static_methods, canonical_fqn) =
         class_methods_and_fqn(db, sym, definition);
+    let operators = builtin_operator_docs(db, definition, canonical_fqn.as_deref(), &sym.name);
 
     // Body block, with non-doc comments removed (CST-token based, so `//`
     // inside string/prompt literals is never touched):
@@ -330,6 +343,7 @@ fn describe_top_level(
         references,
         instance_methods,
         static_methods,
+        operators,
         container: None,
         canonical_fqn,
     })
@@ -408,10 +422,255 @@ fn describe_member(
         references,
         instance_methods: Vec::new(),
         static_methods: Vec::new(),
+        operators: Vec::new(),
         container,
         canonical_fqn: None,
     })
 }
+
+fn builtin_operator_docs(
+    db: &dyn Db,
+    def: Option<Definition<'_>>,
+    canonical_fqn: Option<&str>,
+    name: &str,
+) -> Vec<OperatorRef> {
+    let Some(Definition::Class(class_loc)) = def else {
+        return Vec::new();
+    };
+
+    let file = class_loc.file(db);
+    if !file
+        .path(db)
+        .to_string_lossy()
+        .starts_with("<builtin>/baml/")
+    {
+        return Vec::new();
+    }
+
+    let type_name = canonical_fqn.unwrap_or(name);
+    match type_name {
+        "int" | "Int" => INT_OPERATORS.to_vec(),
+        "bigint" | "Bigint" => BIGINT_OPERATORS.to_vec(),
+        "float" | "Float" => FLOAT_OPERATORS.to_vec(),
+        _ => Vec::new(),
+    }
+}
+
+const INT_OPERATORS: &[OperatorRef] = &[
+    OperatorRef {
+        symbol: "+",
+        signature: "(int, int) -> int",
+        precedence: "22 (addition; left-associative)",
+        behavior: "63-bit signed integer range [-4611686018427387904, 4611686018427387903]; current VM fast path wraps the tagged representation on overflow.",
+        status: None,
+    },
+    OperatorRef {
+        symbol: "-",
+        signature: "(int, int) -> int",
+        precedence: "22 (addition; left-associative)",
+        behavior: "63-bit signed integer range [-4611686018427387904, 4611686018427387903]; current VM fast path wraps the tagged representation on overflow.",
+        status: None,
+    },
+    OperatorRef {
+        symbol: "*",
+        signature: "(int, int) -> int",
+        precedence: "24 (multiplication; left-associative)",
+        behavior: "63-bit signed integer range [-4611686018427387904, 4611686018427387903]; result is constructed with Value::int and is not overflow-checked in release builds.",
+        status: None,
+    },
+    OperatorRef {
+        symbol: "/",
+        signature: "(int, int) -> int",
+        precedence: "24 (multiplication; left-associative)",
+        behavior: "Truncating integer division; division by zero raises baml.panics.DivisionByZero.",
+        status: None,
+    },
+    OperatorRef {
+        symbol: "%",
+        signature: "(int, int) -> int",
+        precedence: "24 (multiplication; left-associative)",
+        behavior: "Remainder with Rust/i64 sign semantics; modulo by zero raises baml.panics.DivisionByZero.",
+        status: None,
+    },
+    OperatorRef {
+        symbol: "&",
+        signature: "(int, int) -> int",
+        precedence: "14 (bitwise AND; left-associative)",
+        behavior: "Bitwise AND on the 63-bit signed integer payload.",
+        status: None,
+    },
+    OperatorRef {
+        symbol: "|",
+        signature: "(int, int) -> int",
+        precedence: "10 (bitwise OR; left-associative)",
+        behavior: "Bitwise OR on the 63-bit signed integer payload.",
+        status: None,
+    },
+    OperatorRef {
+        symbol: "^",
+        signature: "(int, int) -> int",
+        precedence: "12 (bitwise XOR; left-associative)",
+        behavior: "Bitwise XOR on the 63-bit signed integer payload.",
+        status: None,
+    },
+    OperatorRef {
+        symbol: "<<",
+        signature: "(int, int) -> int",
+        precedence: "20 (bitwise shift; left-associative)",
+        behavior: "Left shift on int payload; current runtime does not add a BAML-level guard for negative or oversized counts.",
+        status: None,
+    },
+    OperatorRef {
+        symbol: ">>",
+        signature: "(int, int) -> int",
+        precedence: "20 (bitwise shift; left-associative)",
+        behavior: "Arithmetic right shift on int payload; current runtime does not add a BAML-level guard for negative or oversized counts.",
+        status: None,
+    },
+    OperatorRef {
+        symbol: "~",
+        signature: "(int) -> int",
+        precedence: "prefix",
+        behavior: "Intended bitwise NOT.",
+        status: Some(
+            "Known limitation: parsed today, but AST lowering does not map `~`; `~0` currently evaluates as `0` instead of `-1`.",
+        ),
+    },
+    OperatorRef {
+        symbol: "-",
+        signature: "(int) -> int",
+        precedence: "prefix",
+        behavior: "Unary negation on 63-bit signed integers.",
+        status: Some(
+            "Negating int.min_value() is not checked and cannot be represented as an int.",
+        ),
+    },
+];
+
+const BIGINT_OPERATORS: &[OperatorRef] = &[
+    OperatorRef {
+        symbol: "+",
+        signature: "(bigint, bigint | int) -> bigint",
+        precedence: "22 (addition; left-associative)",
+        behavior: "Arbitrary-precision signed addition; int operands are promoted to bigint.",
+        status: None,
+    },
+    OperatorRef {
+        symbol: "-",
+        signature: "(bigint, bigint | int) -> bigint",
+        precedence: "22 (addition; left-associative)",
+        behavior: "Arbitrary-precision signed subtraction; int operands are promoted to bigint.",
+        status: None,
+    },
+    OperatorRef {
+        symbol: "*",
+        signature: "(bigint, bigint | int) -> bigint",
+        precedence: "24 (multiplication; left-associative)",
+        behavior: "Arbitrary-precision multiplication; raises baml.panics.AllocFailure if the estimated result exceeds bigint's workspace cap.",
+        status: None,
+    },
+    OperatorRef {
+        symbol: "/",
+        signature: "(bigint, bigint | int) -> bigint",
+        precedence: "24 (multiplication; left-associative)",
+        behavior: "Truncating bigint division; division by zero raises baml.panics.DivisionByZero.",
+        status: None,
+    },
+    OperatorRef {
+        symbol: "%",
+        signature: "(bigint, bigint | int) -> bigint",
+        precedence: "24 (multiplication; left-associative)",
+        behavior: "Bigint remainder; modulo by zero raises baml.panics.DivisionByZero.",
+        status: None,
+    },
+    OperatorRef {
+        symbol: "&",
+        signature: "(bigint, bigint | int) -> bigint",
+        precedence: "14 (bitwise AND; left-associative)",
+        behavior: "Two's-complement bitwise AND with infinite sign extension.",
+        status: None,
+    },
+    OperatorRef {
+        symbol: "|",
+        signature: "(bigint, bigint | int) -> bigint",
+        precedence: "10 (bitwise OR; left-associative)",
+        behavior: "Two's-complement bitwise OR with infinite sign extension.",
+        status: None,
+    },
+    OperatorRef {
+        symbol: "^",
+        signature: "(bigint, bigint | int) -> bigint",
+        precedence: "12 (bitwise XOR; left-associative)",
+        behavior: "Two's-complement bitwise XOR with infinite sign extension.",
+        status: None,
+    },
+    OperatorRef {
+        symbol: "<<",
+        signature: "(bigint, bigint | int) -> bigint",
+        precedence: "20 (bitwise shift; left-associative)",
+        behavior: "Left shift; negative counts raise baml.panics.NegativeBitShift and oversized results raise baml.panics.AllocFailure.",
+        status: None,
+    },
+    OperatorRef {
+        symbol: ">>",
+        signature: "(bigint, bigint | int) -> bigint",
+        precedence: "20 (bitwise shift; left-associative)",
+        behavior: "Arithmetic right shift; negative counts raise baml.panics.NegativeBitShift.",
+        status: None,
+    },
+    OperatorRef {
+        symbol: "-",
+        signature: "(bigint) -> bigint",
+        precedence: "prefix",
+        behavior: "Unary negation.",
+        status: None,
+    },
+];
+
+const FLOAT_OPERATORS: &[OperatorRef] = &[
+    OperatorRef {
+        symbol: "+",
+        signature: "(float | int, float | int) -> float",
+        precedence: "22 (addition; left-associative)",
+        behavior: "IEEE 754 f64 addition; int operands are promoted when mixed with float.",
+        status: None,
+    },
+    OperatorRef {
+        symbol: "-",
+        signature: "(float | int, float | int) -> float",
+        precedence: "22 (addition; left-associative)",
+        behavior: "IEEE 754 f64 subtraction; int operands are promoted when mixed with float.",
+        status: None,
+    },
+    OperatorRef {
+        symbol: "*",
+        signature: "(float | int, float | int) -> float",
+        precedence: "24 (multiplication; left-associative)",
+        behavior: "IEEE 754 f64 multiplication; int operands are promoted when mixed with float.",
+        status: None,
+    },
+    OperatorRef {
+        symbol: "/",
+        signature: "(float | int, float | int) -> float",
+        precedence: "24 (multiplication; left-associative)",
+        behavior: "IEEE 754 f64 division; division by zero raises baml.panics.DivisionByZero.",
+        status: None,
+    },
+    OperatorRef {
+        symbol: "%",
+        signature: "(float | int, float | int) -> float",
+        precedence: "24 (multiplication; left-associative)",
+        behavior: "IEEE 754 f64 remainder; int operands are promoted when mixed with float.",
+        status: None,
+    },
+    OperatorRef {
+        symbol: "-",
+        signature: "(float) -> float",
+        precedence: "prefix",
+        behavior: "IEEE 754 f64 unary negation.",
+        status: None,
+    },
+];
 
 // ── Local variable lookup ────────────────────────────────────────────────────
 
@@ -485,6 +744,7 @@ fn describe_locals(db: &dyn Db, files: &[SourceFile], name: &str) -> Vec<SymbolD
                     references: param_refs,
                     instance_methods: Vec::new(),
                     static_methods: Vec::new(),
+                    operators: Vec::new(),
                     container: None,
                     canonical_fqn: None,
                 });
@@ -594,6 +854,7 @@ fn describe_locals(db: &dyn Db, files: &[SourceFile], name: &str) -> Vec<SymbolD
                         references: binding_refs,
                         instance_methods: Vec::new(),
                         static_methods: Vec::new(),
+                        operators: Vec::new(),
                         container: None,
                         canonical_fqn: None,
                     });
@@ -1108,6 +1369,7 @@ fn describe_class_method(
         references,
         instance_methods: Vec::new(),
         static_methods: Vec::new(),
+        operators: Vec::new(),
         container,
         canonical_fqn: None,
     })
