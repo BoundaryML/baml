@@ -274,13 +274,24 @@ pub fn check_file(db: &dyn Db, file: SourceFile) -> Vec<Diagnostic> {
                     pkg_items
                         .lookup_type(&pkg_info.namespace_path, &class_data.name)
                         .map(|def| {
+                            // Carry the class's generic params as TypeVars so `self`
+                            // is `Class<T..>`, not bare `Class` — mirrors the body
+                            // path in `tir::inference`. A bare `self` leaks an
+                            // unparameterized receiver into generic-class method
+                            // bodies (e.g. the auto-derived `to_json`'s
+                            // `to_string<Self>(self)`).
+                            let class_args: Vec<Ty> = class_data
+                                .generic_params
+                                .iter()
+                                .map(|p| Ty::TypeVar(p.clone(), TyAttr::default()))
+                                .collect();
                             Ty::Class(
                                 baml_compiler2_tir::lower_type_expr::qualify_def(
                                     db,
                                     def,
                                     &class_data.name,
                                 ),
-                                vec![],
+                                class_args,
                                 TyAttr::default(),
                             )
                         })

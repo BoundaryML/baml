@@ -918,7 +918,32 @@ pub fn infer_scope_types<'db>(
                                                             .unwrap_or_default();
                                                         Ty::Interface(qtn, iface_args, TyAttr::default())
                                                     }
-                                                    _ => Ty::Class(qtn, vec![], TyAttr::default()),
+                                                    _ => {
+                                                        // Mirror the interface arm: a generic class's
+                                                        // method must type `self` as `Class<T..>`
+                                                        // carrying the class's own params as TypeVars.
+                                                        // Empty args left `self` as a bare `Class`, so
+                                                        // the auto-derived `to_json`'s
+                                                        // `to_string<Self>(self)` saw `self: StreamCache`
+                                                        // against `Self = StreamCache<TStream, TFinal>`,
+                                                        // and more generally a bare-class `self` leaked
+                                                        // into every generic-class method body.
+                                                        let class_args: Vec<Ty> = item_tree
+                                                            .classes
+                                                            .values()
+                                                            .find(|c| &c.name == cn)
+                                                            .map(|c| {
+                                                                c.generic_params
+                                                                    .iter()
+                                                                    .map(|p| Ty::TypeVar(
+                                                                        p.clone(),
+                                                                        TyAttr::default(),
+                                                                    ))
+                                                                    .collect()
+                                                            })
+                                                            .unwrap_or_default();
+                                                        Ty::Class(qtn, class_args, TyAttr::default())
+                                                    }
                                                 }
                                             })
                                         })

@@ -2064,7 +2064,7 @@ fn self_param_method_rejects_heterogeneous_generic_args() {
             return x.eq(y)
         }
         "#,
-        "U",
+        "got U",
     );
 }
 
@@ -2082,7 +2082,26 @@ fn self_param_method_rejects_mismatched_literal_arg() {
             return x.eq(5)
         }
         "#,
-        "expected T",
+        "expected T, got 5",
+    );
+}
+
+#[test]
+fn generic_class_unannotated_self_is_parameterized() {
+    // An unannotated `self` in a generic class must be typed `Wrap<T>`, not bare
+    // `Wrap`, so it satisfies a parameterized expected type. Regression for the
+    // StreamCache builtin failure: the auto-derived `to_json` passed a bare
+    // `self` to `baml.json.to_string<StreamCache<TStream, TFinal>>`. Because the
+    // callee's generic is differently named, the class params stay rigid and the
+    // argument is *checked* (not deferred), which surfaced the bare `self`.
+    assert_zero_compile_errors(
+        r#"
+        function consume<X>(v: X) -> int { return 1 }
+        class Wrap<T> {
+            value: T
+            function use_self(self) -> int { return consume<Wrap<T>>(self) }
+        }
+        "#,
     );
 }
 
@@ -5859,7 +5878,9 @@ fn implements_for_optional_target_is_rejected() {
 fn implements_for_concrete_container_target_is_allowed() {
     // A concrete type constructor (`T[]`) is a valid `for` target — the gate only
     // rejects unions / optionals / interfaces / `unknown`, not list/map/class.
-    assert_no_interface_errors(
+    // Asserts *zero* compile errors (not just the E0112–E0132 interface range) so
+    // the concreteness gate's E0137 is covered too.
+    assert_zero_compile_errors(
         r#"
         interface Tag {
             function tag(self) -> int
