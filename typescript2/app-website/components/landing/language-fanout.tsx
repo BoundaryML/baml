@@ -3,13 +3,7 @@
 import { AnimatePresence, motion, useInView } from 'motion/react';
 import Image from 'next/image';
 import { useEffect, useRef, useState } from 'react';
-import {
-  SiGo,
-  SiRuby,
-  SiRust,
-  SiTypescript,
-  SiOpenjdk,
-} from 'react-icons/si';
+import { SiGo, SiRuby, SiRust, SiTypescript, SiOpenjdk } from 'react-icons/si';
 import type { IconType } from 'react-icons';
 
 const BG = '#ffffff';
@@ -227,7 +221,7 @@ export function LanguageFanout() {
       style={{
         background: BG,
         color: INK,
-        padding: '128px 0 160px',
+        padding: 'clamp(64px, 13vw, 128px) 0 clamp(80px, 16vw, 160px)',
         width: '100%',
         borderTop: `1px solid ${BORDER}`,
       }}
@@ -236,11 +230,16 @@ export function LanguageFanout() {
         style={{
           maxWidth: 1360,
           margin: '0 auto',
-          padding: '0 32px',
+          padding: '0 clamp(16px, 5vw, 32px)',
         }}
       >
         {/* Eyebrow + heading */}
-        <div style={{ textAlign: 'center', marginBottom: 80 }}>
+        <div
+          style={{
+            textAlign: 'center',
+            marginBottom: 'clamp(40px, 9vw, 80px)',
+          }}
+        >
           <p
             style={{
               fontSize: 13,
@@ -468,11 +467,11 @@ export function LanguageFanout() {
                     strokeLinecap="round"
                     pathLength={1}
                     strokeDasharray="0.10 2"
-                    initial={{ strokeDashoffset: 0.10, opacity: 0 }}
+                    initial={{ strokeDashoffset: 0.1, opacity: 0 }}
                     animate={
                       inView
                         ? {
-                            strokeDashoffset: [0.10, -1.0],
+                            strokeDashoffset: [0.1, -1.0],
                             opacity: [0, 1, 1, 0],
                           }
                         : {}
@@ -537,7 +536,7 @@ export function LanguageFanout() {
           <div
             style={{
               display: 'grid',
-              gridTemplateColumns: `repeat(${TILE_COUNT}, 1fr)`,
+              gridTemplateColumns: `repeat(${TILE_COUNT}, minmax(0, 1fr))`,
               gap: 0,
               marginTop: 12,
             }}
@@ -565,9 +564,9 @@ export function LanguageFanout() {
                 <div
                   className="lang-tile"
                   style={{
-                    width: 84,
-                    height: 84,
-                    borderRadius: 16,
+                    width: 'clamp(42px, 12vw, 84px)',
+                    height: 'clamp(42px, 12vw, 84px)',
+                    borderRadius: 'clamp(10px, 2.5vw, 16px)',
                     border: `1px solid ${BORDER}`,
                     background: BG,
                     display: 'flex',
@@ -584,17 +583,33 @@ export function LanguageFanout() {
                       alt={lang.name}
                       height={40}
                       src={lang.image}
-                      style={{ height: 40, objectFit: 'contain', width: 40 }}
+                      style={{
+                        height: '48%',
+                        maxHeight: 40,
+                        objectFit: 'contain',
+                        width: '48%',
+                        maxWidth: 40,
+                      }}
                       width={40}
                     />
                   ) : lang.Icon ? (
-                    <lang.Icon size={40} color={lang.color} />
+                    <span
+                      style={{
+                        alignItems: 'center',
+                        color: lang.color,
+                        display: 'flex',
+                        fontSize: 'clamp(22px, 6vw, 40px)',
+                        justifyContent: 'center',
+                      }}
+                    >
+                      <lang.Icon size="1em" color={lang.color} />
+                    </span>
                   ) : (
                     <span
                       style={{
                         color: ACCENT,
                         fontFamily: MONO,
-                        fontSize: 36,
+                        fontSize: 'clamp(20px, 5vw, 36px)',
                         fontWeight: 500,
                         lineHeight: 1,
                       }}
@@ -605,10 +620,14 @@ export function LanguageFanout() {
                 </div>
                 <span
                   style={{
-                    fontSize: 13,
+                    fontSize: 'clamp(8.5px, 2.4vw, 13px)',
                     fontWeight: 500,
-                    letterSpacing: '0.04em',
+                    letterSpacing: '0.01em',
                     color: INK,
+                    textAlign: 'center',
+                    lineHeight: 1.2,
+                    maxWidth: '100%',
+                    overflowWrap: 'break-word',
                   }}
                 >
                   {lang.name}
@@ -749,10 +768,7 @@ export function LanguageFanout() {
                   >
                     <code style={{ fontFamily: MONO }}>
                       {activeTokens.map((line, i) => (
-                        <div
-                          key={`l-${i}`}
-                          style={{ minHeight: '1.45em' }}
-                        >
+                        <div key={`l-${i}`} style={{ minHeight: '1.45em' }}>
                           {line.length === 0 ? (
                             <span>&#8203;</span>
                           ) : (

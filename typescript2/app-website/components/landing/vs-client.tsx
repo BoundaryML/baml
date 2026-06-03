@@ -838,11 +838,7 @@ function VsTabs({
   onChange: (id: string) => void;
 }) {
   return (
-    <div
-      aria-label="Comparison language"
-      className="vs-tabbar"
-      role="tablist"
-    >
+    <div aria-label="Comparison language" className="vs-tabbar" role="tablist">
       {COMPARISONS.flatMap((c, i) => {
         const isActive = c.id === activeId;
         const meta = TAB_META[c.id];
@@ -1125,7 +1121,13 @@ export function VsClient() {
             0 12px 28px -22px rgba(26, 22, 18, 0.18);
           display: inline-flex;
           margin-top: 28px;
-          overflow: hidden;
+          max-width: 100%;
+          overflow-x: auto;
+          overflow-y: hidden;
+          scrollbar-width: none;
+        }
+        .vs-tabbar::-webkit-scrollbar {
+          display: none;
         }
         .vs-tabbar-sep {
           align-self: center;
@@ -1145,8 +1147,10 @@ export function VsClient() {
           font-size: 13.5px;
           font-weight: 500;
           gap: 8px;
+          flex-shrink: 0;
           letter-spacing: 0.005em;
           padding: 12px 18px;
+          white-space: nowrap;
           transition:
             background-color 200ms ease,
             color 200ms ease,
@@ -1507,7 +1511,9 @@ function ClosingCta() {
               />
             </div>
             <div className="manual-install">
-              <span className="manual-install__label">Prefer manual setup?</span>
+              <span className="manual-install__label">
+                Prefer manual setup?
+              </span>
               <a
                 className="manual-install__link"
                 href="https://docs.boundaryml.com/guide/installation-language/python"
@@ -1553,10 +1559,7 @@ function ClosingCta() {
               >
                 Star on GitHub
               </a>
-              <a
-                className="editorial-btn editorial-btn--ghost"
-                href="/thesis"
-              >
+              <a className="editorial-btn editorial-btn--ghost" href="/thesis">
                 Read the thesis
                 <span aria-hidden>→</span>
               </a>
