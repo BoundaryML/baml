@@ -715,7 +715,7 @@ jobs:
     name: "Perf benchmarks (PR notice)"
     runs-on: blacksmith-4vcpu-ubuntu-2404
     needs: determine_changes
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork == false
     permissions:
       pull-requests: write
     steps:
