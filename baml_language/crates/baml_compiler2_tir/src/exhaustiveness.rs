@@ -261,15 +261,39 @@ fn write_ty_identity(out: &mut String, ty: &Ty) {
             }
             out.push('>');
         }
-        Ty::Interface(qtn, args, _) => {
+        Ty::Interface(qtn, args, associated_bindings, _) => {
             let _ = write!(out, "I:{qtn}<");
+            let mut wrote_any = false;
             for (i, a) in args.iter().enumerate() {
                 if i > 0 {
                     out.push(',');
                 }
                 write_ty_identity(out, a);
+                wrote_any = true;
+            }
+            for (name, ty) in associated_bindings {
+                if wrote_any {
+                    out.push(',');
+                }
+                let _ = write!(out, "{name}=");
+                write_ty_identity(out, ty);
+                wrote_any = true;
             }
             out.push('>');
+        }
+        Ty::AssociatedTypeProjection {
+            base,
+            interface,
+            member,
+            ..
+        } => {
+            out.push_str("Assoc<");
+            write_ty_identity(out, base);
+            if let Some(interface) = interface {
+                out.push_str(" as ");
+                write_ty_identity(out, interface);
+            }
+            let _ = write!(out, ".{member}>");
         }
         Ty::Primitive(p, _) => {
             let _ = write!(out, "P:{p:?}");
@@ -598,7 +622,7 @@ fn write_member_ty_witness(f: &mut fmt::Formatter<'_>, ty: &Ty) -> fmt::Result {
         // Interfaces are open-world, so a union-member witness names the
         // uncovered interface (`Animal`, `Slot<int>`) rather than collapsing to
         // a bare `_`. Rendered user-facing (no `user.` package prefix).
-        Ty::Interface(_, _, _) => write!(f, "{}", ty.render_user_facing()),
+        Ty::Interface(_, _, _, _) => write!(f, "{}", ty.render_user_facing()),
         Ty::Class(qtn, _, _) | Ty::Enum(qtn, _) => write!(f, "{}", qtn.render_user_facing()),
         Ty::EnumVariant(qtn, variant, _) => write!(f, "{}.{variant}", qtn.render_user_facing()),
         Ty::Literal(_, _, _) => write_single_witness(f, ty),
@@ -643,6 +667,14 @@ pub trait PatCtx {
         _class_type_args: &[Ty],
     ) -> Option<Vec<usize>> {
         None
+    }
+
+    /// Whether an interface-pattern ctor covers every value in an interface
+    /// column. A narrower associated-type binding (for example
+    /// `Iterator<Item = int>` against a plain `Iterator`) must not make an
+    /// open interface column exhaustive.
+    fn interface_ctor_covers_column(&self, iface_ty: &Ty, col_ty: &Ty) -> bool {
+        ty_ctor_identity(iface_ty) == ty_ctor_identity(col_ty)
     }
 
     /// For a slice ctor at column type `ty` (an array/list type), return the
@@ -1187,9 +1219,9 @@ fn split_ctors(cx: &dyn PatCtx, col_ty: &Ty, matrix: &Matrix<'_>) -> (Vec<Ctor>,
 
     if all.iter().any(|c| matches!(c, Ctor::NonExhaustive)) {
         if matches!(col_ty, Ty::Interface(..))
-            && present_no_wild
-                .iter()
-                .any(|c| matches!(c, Ctor::Interface(_)))
+            && present_no_wild.iter().any(|c| {
+                matches!(c, Ctor::Interface(iface_ty) if cx.interface_ctor_covers_column(iface_ty, col_ty))
+            })
         {
             return (present_no_wild, vec![]);
         }

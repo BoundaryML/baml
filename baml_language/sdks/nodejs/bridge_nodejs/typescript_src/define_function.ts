@@ -11,8 +11,8 @@
 // callable zips positional args against paramNames into a kwargs object,
 // encodes it, calls the runtime, and decodes the result.
 
-import { getRuntime } from './native';
-import { encodeCallArgs, decodeCallResult } from './proto';
+import { getRuntime } from './native.js';
+import { encodeCallArgs, decodeCallResult } from './proto.js';
 
 export type Mode = 'sync' | 'async';
 

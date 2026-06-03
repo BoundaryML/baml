@@ -23,6 +23,7 @@ ring-crypto = [ "bundle-http", "bex_project/ring-crypto", "bridge_cffi/ring-cryp
 extension-module = [ "pyo3/extension-module" ]
 
 [dependencies]
+baml_version = { workspace = true }
 bex_events = { workspace = true }
 bex_project = { workspace = true }
 bridge_cffi = { workspace = true }

@@ -4,13 +4,11 @@ use std::{collections::HashMap, ffi::CStr};
 
 use crate::{Buffer, initialize_runtime, panic::ffi_safe_ptr};
 
-const VERSION: &str = env!("CARGO_PKG_VERSION");
-
 /// Returns the BAML version as a Buffer containing raw UTF-8 bytes.
 /// Caller must free with free_buffer().
 #[unsafe(no_mangle)]
 pub extern "C" fn version() -> Buffer {
-    Buffer::from(VERSION.as_bytes().to_vec())
+    Buffer::from(baml_version::CANONICAL_VERSION.as_bytes().to_vec())
 }
 
 /// Create/initialize the BAML runtime (global BexEngine).

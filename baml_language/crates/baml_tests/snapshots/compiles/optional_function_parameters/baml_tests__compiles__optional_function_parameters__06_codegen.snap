@@ -8,7 +8,7 @@ function $init() -> null {
     return
 }
 
-function user.AskDocs(query: string, max_results: int, filter: string) -> string {
+function user.AskDocs(query: string, max_results: int, filter: string, client: baml.llm.Client) -> string {
     load_var max_results
     load_const <omitted>
     cmp_op ==
@@ -25,8 +25,16 @@ function user.AskDocs(query: string, max_results: int, filter: string) -> string
     store_var filter
 
   L1:
-    load_type string
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L2
     load_global user.TestClient
+    store_var client
+
+  L2:
+    load_type string
+    load_var client
     load_const "AskDocs"
     load_var2 1 2
     load_var filter
@@ -38,7 +46,7 @@ function user.AskDocs(query: string, max_results: int, filter: string) -> string
     return
 }
 
-function user.AskDocs$build_request(query: string, max_results: int, filter: string) -> baml.http.Request {
+function user.AskDocs$build_request(query: string, max_results: int, filter: string, client: baml.llm.Client) -> baml.http.Request {
     load_var max_results
     load_const <omitted>
     cmp_op ==
@@ -55,7 +63,15 @@ function user.AskDocs$build_request(query: string, max_results: int, filter: str
     store_var filter
 
   L1:
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L2
     load_global user.TestClient
+    store_var client
+
+  L2:
+    load_var client
     load_const "AskDocs"
     load_var2 1 2
     load_var filter
@@ -67,7 +83,7 @@ function user.AskDocs$build_request(query: string, max_results: int, filter: str
     return
 }
 
-function user.AskDocs$build_request_stream(query: string, max_results: int, filter: string) -> baml.http.Request {
+function user.AskDocs$build_request_stream(query: string, max_results: int, filter: string, client: baml.llm.Client) -> baml.http.Request {
     load_var max_results
     load_const <omitted>
     cmp_op ==
@@ -84,7 +100,15 @@ function user.AskDocs$build_request_stream(query: string, max_results: int, filt
     store_var filter
 
   L1:
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L2
     load_global user.TestClient
+    store_var client
+
+  L2:
+    load_var client
     load_const "AskDocs"
     load_var2 1 2
     load_var filter
@@ -96,22 +120,37 @@ function user.AskDocs$build_request_stream(query: string, max_results: int, filt
     return
 }
 
-function user.AskDocs$parse(json: string) -> string {
+function user.AskDocs$parse(json: string, client: baml.llm.Client) -> string {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_global user.TestClient
+    store_var client
+
+  L0:
     load_const "AskDocs"
     load_var json
     call baml.llm.parse
     return
 }
 
-function user.AskDocs$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream<null | string, string> {
-    load_var sse
+function user.AskDocs$parse_stream(sse: baml.http.SseStream, client: baml.llm.Client) -> baml.llm.Stream<null | string, string> {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_global user.TestClient
+    store_var client
+
+  L0:
+    load_var2 2 1
     load_const "AskDocs"
-    load_const null
-    call_indirect
+    call baml.llm.Client.__make_stream
     return
 }
 
-function user.AskDocs$render_prompt(query: string, max_results: int, filter: string) -> baml.llm.PromptAst {
+function user.AskDocs$render_prompt(query: string, max_results: int, filter: string, client: baml.llm.Client) -> baml.llm.PromptAst {
     load_var max_results
     load_const <omitted>
     cmp_op ==
@@ -128,7 +167,15 @@ function user.AskDocs$render_prompt(query: string, max_results: int, filter: str
     store_var filter
 
   L1:
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L2
     load_global user.TestClient
+    store_var client
+
+  L2:
+    load_var client
     load_const "AskDocs"
     load_var2 1 2
     load_var filter
@@ -140,7 +187,7 @@ function user.AskDocs$render_prompt(query: string, max_results: int, filter: str
     return
 }
 
-function user.AskDocs$stream(query: string, max_results: int, filter: string) -> baml.llm.Stream<null | string, string> {
+function user.AskDocs$stream(query: string, max_results: int, filter: string, client: baml.llm.Client) -> baml.llm.Stream<null | string, string> {
     load_var max_results
     load_const <omitted>
     cmp_op ==
@@ -157,7 +204,15 @@ function user.AskDocs$stream(query: string, max_results: int, filter: string) ->
     store_var filter
 
   L1:
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L2
     load_global user.TestClient
+    store_var client
+
+  L2:
+    load_var client
     load_const "AskDocs"
     load_var2 1 2
     load_var filter

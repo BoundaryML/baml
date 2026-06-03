@@ -5,6 +5,7 @@ use baml_compiler2_hir::{
     contributions::Definition,
     package::{PackageId, PackageItems},
 };
+use rustc_hash::FxHashSet;
 
 use crate::{
     infer_context::TirTypeError,
@@ -72,10 +73,12 @@ fn substitute_paths_walk(
         TypeExpr::Path {
             segments,
             generic_args,
+            associated_type_bindings,
             attrs,
         } => {
             if segments.len() == 1
                 && generic_args.is_empty()
+                && associated_type_bindings.is_empty()
                 && let Some(replacement) = subst.get(&segments[0])
             {
                 return replacement.clone();
@@ -86,9 +89,29 @@ fn substitute_paths_walk(
                     .iter()
                     .map(|a| substitute_paths_walk(a, subst))
                     .collect(),
+                associated_type_bindings: associated_type_bindings
+                    .iter()
+                    .map(|binding| baml_compiler2_ast::AssociatedTypeBinding {
+                        name: binding.name.clone(),
+                        ty: Box::new(substitute_paths_walk(&binding.ty, subst)),
+                    })
+                    .collect(),
                 attrs: attrs.clone(),
             }
         }
+        TypeExpr::AssociatedTypeProjection {
+            base,
+            interface,
+            member,
+            attrs,
+        } => TypeExpr::AssociatedTypeProjection {
+            base: Box::new(substitute_paths_walk(base, subst)),
+            interface: interface
+                .as_ref()
+                .map(|interface| Box::new(substitute_paths_walk(interface, subst))),
+            member: member.clone(),
+            attrs: attrs.clone(),
+        },
         TypeExpr::List { inner, attrs } => TypeExpr::List {
             inner: Box::new(substitute_paths_walk(inner, subst)),
             attrs: attrs.clone(),
@@ -153,9 +176,14 @@ fn substitute_self(type_expr: &TypeExpr, replacement: &TypeExpr) -> TypeExpr {
         TypeExpr::Path {
             segments,
             generic_args,
+            associated_type_bindings,
             attrs,
         } => {
-            if segments.len() == 1 && generic_args.is_empty() && segments[0].as_str() == "Self" {
+            if segments.len() == 1
+                && generic_args.is_empty()
+                && associated_type_bindings.is_empty()
+                && segments[0].as_str() == "Self"
+            {
                 return replacement.clone();
             }
             TypeExpr::Path {
@@ -164,9 +192,29 @@ fn substitute_self(type_expr: &TypeExpr, replacement: &TypeExpr) -> TypeExpr {
                     .iter()
                     .map(|a| substitute_self(a, replacement))
                     .collect(),
+                associated_type_bindings: associated_type_bindings
+                    .iter()
+                    .map(|binding| baml_compiler2_ast::AssociatedTypeBinding {
+                        name: binding.name.clone(),
+                        ty: Box::new(substitute_self(&binding.ty, replacement)),
+                    })
+                    .collect(),
                 attrs: attrs.clone(),
             }
         }
+        TypeExpr::AssociatedTypeProjection {
+            base,
+            interface,
+            member,
+            attrs,
+        } => TypeExpr::AssociatedTypeProjection {
+            base: Box::new(substitute_self(base, replacement)),
+            interface: interface
+                .as_ref()
+                .map(|interface| Box::new(substitute_self(interface, replacement))),
+            member: member.clone(),
+            attrs: attrs.clone(),
+        },
         TypeExpr::List { inner, attrs } => TypeExpr::List {
             inner: Box::new(substitute_self(inner, replacement)),
             attrs: attrs.clone(),
@@ -229,8 +277,20 @@ pub fn type_expr_for_name(name: baml_base::Name) -> TypeExpr {
     TypeExpr::Path {
         segments: vec![name],
         generic_args: Vec::new(),
+        associated_type_bindings: Vec::new(),
         attrs: Vec::new(),
     }
+}
+
+fn can_be_associated_type_projection_base(ty: &Ty) -> bool {
+    matches!(
+        ty,
+        Ty::Class(..)
+            | Ty::Interface(..)
+            | Ty::TypeAlias(..)
+            | Ty::TypeVar(..)
+            | Ty::AssociatedTypeProjection { .. }
+    )
 }
 
 pub fn lower_type_expr_in_ns(
@@ -245,6 +305,7 @@ pub fn lower_type_expr_in_ns(
         TypeExpr::Path {
             segments,
             generic_args,
+            associated_type_bindings,
             ..
         } => {
             let item = segments.last().expect("non-empty path");
@@ -324,7 +385,7 @@ pub fn lower_type_expr_in_ns(
                         // mismatch actually matters at the use site.
                         Ty::Class(qtn, lowered_args, TyAttr::default())
                     }
-                    Definition::Interface(_) => {
+                    Definition::Interface(iface_loc) => {
                         // Same generic-arg handling as `Class` — interface
                         // parameters are valid in the same positions.
                         let lowered_args: Vec<Ty> = generic_args
@@ -340,7 +401,61 @@ pub fn lower_type_expr_in_ns(
                                 )
                             })
                             .collect();
-                        Ty::Interface(qualify_def(db, def, short), lowered_args, TyAttr::default())
+                        let iface_tree = baml_compiler2_hir::file_item_tree(db, iface_loc.file(db));
+                        let known_associated_types: FxHashSet<baml_base::Name> = iface_tree
+                            .interfaces
+                            .get(&iface_loc.id(db))
+                            .map(|iface| {
+                                iface
+                                    .associated_types
+                                    .iter()
+                                    .map(|assoc| assoc.name.clone())
+                                    .collect()
+                            })
+                            .unwrap_or_default();
+                        let mut seen_associated_bindings = FxHashSet::default();
+                        let lowered_associated_bindings: Vec<(baml_base::Name, Ty)> =
+                            associated_type_bindings
+                                .iter()
+                                .map(|binding| {
+                                    if !known_associated_types.contains(&binding.name) {
+                                        diagnostics.push(TirTypeError::UnresolvedType {
+                                            name: binding.name.clone(),
+                                            suggestions: known_associated_types
+                                                .iter()
+                                                .map(ToString::to_string)
+                                                .collect(),
+                                        });
+                                    }
+                                    if !seen_associated_bindings.insert(binding.name.clone()) {
+                                        diagnostics.push(TirTypeError::TypeMismatch {
+                                            expected: Ty::Unknown {
+                                                attr: TyAttr::default(),
+                                            },
+                                            got: Ty::Unknown {
+                                                attr: TyAttr::default(),
+                                            },
+                                        });
+                                    }
+                                    (
+                                        binding.name.clone(),
+                                        lower_type_expr_in_ns(
+                                            db,
+                                            &binding.ty,
+                                            package_items,
+                                            ns_context,
+                                            generic_params,
+                                            diagnostics,
+                                        ),
+                                    )
+                                })
+                                .collect();
+                        Ty::Interface(
+                            qualify_def(db, def, short),
+                            lowered_args,
+                            lowered_associated_bindings,
+                            TyAttr::default(),
+                        )
                     }
                     Definition::Enum(_) => {
                         // Enums are not generic — validate args and emit a diagnostic if any were supplied.
@@ -440,6 +555,41 @@ pub fn lower_type_expr_in_ns(
                                 TyAttr::default(),
                             );
                         }
+                    }
+                }
+                // Associated type projection fallback: after ordinary type
+                // paths and enum variants have had first refusal, treat
+                // `Base.Member` as shorthand for an associated type projection.
+                // This preserves enum disambiguation (`Status.Active`) and
+                // still accepts aliases, type variables, concrete classes,
+                // interfaces, and nested projections as projection bases.
+                if segments.len() >= 2
+                    && generic_args.is_empty()
+                    && associated_type_bindings.is_empty()
+                {
+                    let member = segments.last().expect("non-empty path").clone();
+                    let base_expr = TypeExpr::Path {
+                        segments: segments[..segments.len() - 1].to_vec(),
+                        generic_args: Vec::new(),
+                        associated_type_bindings: Vec::new(),
+                        attrs: Vec::new(),
+                    };
+                    let mut base_diags = Vec::new();
+                    let base_ty = lower_type_expr_in_ns(
+                        db,
+                        &base_expr,
+                        package_items,
+                        ns_context,
+                        generic_params,
+                        &mut base_diags,
+                    );
+                    if base_diags.is_empty() && can_be_associated_type_projection_base(&base_ty) {
+                        return Ty::AssociatedTypeProjection {
+                            base: Box::new(base_ty),
+                            interface: None,
+                            member,
+                            attr: TyAttr::default(),
+                        };
                     }
                 }
                 let name_str = segments
@@ -638,6 +788,37 @@ pub fn lower_type_expr_in_ns(
                 attr: TyAttr::default(),
             }
         }
+        TypeExpr::AssociatedTypeProjection {
+            base,
+            interface,
+            member,
+            ..
+        } => {
+            let base_ty = lower_type_expr_in_ns(
+                db,
+                base,
+                package_items,
+                ns_context,
+                generic_params,
+                diagnostics,
+            );
+            let interface_ty = interface.as_ref().map(|interface| {
+                lower_type_expr_in_ns(
+                    db,
+                    interface,
+                    package_items,
+                    ns_context,
+                    generic_params,
+                    diagnostics,
+                )
+            });
+            Ty::AssociatedTypeProjection {
+                base: Box::new(base_ty),
+                interface: interface_ty.map(Box::new),
+                member: member.clone(),
+                attr: TyAttr::default(),
+            }
+        }
         TypeExpr::Literal { value: lit, .. } => {
             Ty::Literal(lit.clone(), Freshness::Regular, TyAttr::default())
         }
@@ -717,6 +898,7 @@ mod tests {
         TypeExpr::Path {
             segments: vec![Name::new(name)],
             generic_args: vec![],
+            associated_type_bindings: vec![],
             attrs: vec![],
         }
     }
@@ -771,6 +953,7 @@ mod tests {
         let replacement = TypeExpr::Path {
             segments: vec![Name::new("Named")],
             generic_args: vec![TypeExpr::Int { attrs: vec![] }],
+            associated_type_bindings: vec![],
             attrs: vec![],
         };
 

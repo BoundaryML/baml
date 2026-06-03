@@ -888,9 +888,12 @@ fn def_to_ty<'db>(db: &'db dyn crate::Db, def: Definition<'db>) -> Ty {
     };
     match def {
         Definition::Class(_) => Ty::Class(qualify_def(db, def, &name), vec![], TyAttr::default()),
-        Definition::Interface(_) => {
-            Ty::Interface(qualify_def(db, def, &name), vec![], TyAttr::default())
-        }
+        Definition::Interface(_) => Ty::Interface(
+            qualify_def(db, def, &name),
+            vec![],
+            vec![],
+            TyAttr::default(),
+        ),
         Definition::Enum(_) => Ty::Enum(qualify_def(db, def, &name), TyAttr::default()),
         Definition::TypeAlias(_) => Ty::TypeAlias(qualify_def(db, def, &name), TyAttr::default()),
         _ => Ty::Unknown {

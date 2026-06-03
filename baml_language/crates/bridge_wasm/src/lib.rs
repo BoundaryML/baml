@@ -91,7 +91,7 @@ pub fn start() {
 /// Get the version of the `bridge_wasm` crate.
 #[wasm_bindgen]
 pub fn version() -> String {
-    env!("CARGO_PKG_VERSION").to_string()
+    baml_version::CANONICAL_VERSION.to_string()
 }
 
 /// Returns the build timestamp (unix seconds) for hot-reload / build-identity checks.

@@ -1,6 +1,6 @@
 // Roundtrip coverage for baml_sdk/unions — ported from test_unions.py.
-import "./baml_sdk";
-import { describe, it, expect } from "@jest/globals";
+import "./baml_sdk/index.js";
+import { describe, it, expect } from "vitest";
 import {
   T,
   UnionContainer,
@@ -10,7 +10,7 @@ import {
   round_trip_optional_plus_null,
   round_trip_t,
   round_trip_union_container,
-} from "./baml_sdk/unions";
+} from "./baml_sdk/unions/index.js";
 
 describe("roundtrip unions", () => {
   it("round_trip_null_to_end", () => {

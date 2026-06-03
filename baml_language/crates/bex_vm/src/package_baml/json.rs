@@ -493,7 +493,9 @@ fn ty_value_to_serde(
             Ok(value_to_serde(vm, value))
         }
 
-        Ty::Class(qtn, _type_args, _) => serialize_class_instance(vm, value, qtn, path),
+        Ty::Class(qtn, _type_args, _) | Ty::Interface(qtn, _type_args, _, _) => {
+            serialize_class_instance(vm, value, qtn, path)
+        }
 
         Ty::Enum(_, _) => match value.as_object_ptr() {
             Some(ptr) => match vm.get_object(ptr) {
@@ -845,6 +847,10 @@ fn ty_serde_to_value(
             deserialize_class_instance(vm, json, qtn, type_args, path)
         }
 
+        Ty::Interface(qtn, type_args, _, _) => {
+            deserialize_class_instance(vm, json, qtn, type_args, path)
+        }
+
         Ty::Enum(qtn, _) => match json {
             serde_json::Value::String(s) => deserialize_enum_variant(vm, qtn, s, path),
             _ => Err(raise_decode(vm, "expected enum variant string", path)),
@@ -1152,7 +1158,7 @@ fn structural_decode_value(vm: &mut BexVm, j: Value, ty: &Ty) -> NativeCallResul
 /// `from_json`.
 fn try_yield_user_from_json(vm: &mut BexVm, j: Value, ty: &Ty) -> Option<NativeCallResult> {
     let (qtn, type_args) = match ty {
-        Ty::Class(qtn, type_args, _) => (qtn, type_args),
+        Ty::Class(qtn, type_args, _) | Ty::Interface(qtn, type_args, _, _) => (qtn, type_args),
         _ => return None,
     };
     if media_kind_from_fqn(qtn.display_name.as_str()).is_some() {

@@ -1,6 +1,6 @@
 [project]
 name = "baml_core"
-version = "0.1.3"
+version = "0.11.0"
 description = "BAML python bindings (new system, bex_engine)"
 authors = [{ "name" = "Boundary", "email" = "contact@boundaryml.com" }]
 license = "Apache-2.0"

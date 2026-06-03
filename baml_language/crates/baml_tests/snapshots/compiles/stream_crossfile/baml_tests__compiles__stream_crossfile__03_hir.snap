@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 17910
 ---
 === HIR2 ===
 class user.Education {
@@ -18,9 +17,9 @@ function user.to_json(self: ?) -> baml.json.json  [expr] {
 }
 class user.Resume {
   name: string
-  education: user.Education[]
-  highest_degree: user.Degree
-  aliases: user.EducationList
+  education: Education[]
+  highest_degree: Degree
+  aliases: EducationList
 }
 function user.from_json(j: baml.json.json) -> user.Resume  [expr] {
   user.Resume { name: baml.json.from_json(baml.json.field(j, "name")), education: baml.json.from_json(baml.json.field(j, "education")), highest_degree: baml.json.from_json(baml.json.field(j, "highest_degree")), aliases: baml.json.from_json(baml.json.field(j, "aliases")) }

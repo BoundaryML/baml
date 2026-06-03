@@ -18,7 +18,7 @@ _LazyEntry = Tuple[str, str]  # (module_path, attr_name)
 # Hardcoded reverse-map seeds for the five stdlib re-exports whose
 # Python class identity sits at baml_core.baml_py.BamlImage etc.
 # instead of at baml_sdk.baml.media.Image. The forward emit path
-# (codegen_python's `media_reexport_rust_name`) keeps its own
+# (sdkgen_python_pydantic2's `media_reexport_rust_name`) keeps its own
 # hardcoded match arms; the duplication is small enough that a
 # shared source of truth isn't worth a cross-crate constant.
 _STDLIB_REVERSE_OVERRIDES: Dict[Tuple[str, str], str] = {

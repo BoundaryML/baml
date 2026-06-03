@@ -73,6 +73,7 @@ pub(crate) mod support {
                 class,
                 generic_args,
                 fields,
+                ..
             } => {
                 let class_path = class
                     .iter()
@@ -704,6 +705,16 @@ pub(crate) mod support {
                 writeln!(output, "{pad}while ({cond})").ok();
                 render_expr_body_untyped(body, *while_body, indent + 2, output);
             }
+            Stmt::WhileLet {
+                pattern,
+                scrutinee,
+                body: while_body,
+            } => {
+                let pat = pat_desc(*pattern, body);
+                let scrut = expr_desc(*scrutinee, body);
+                writeln!(output, "{pad}while let {pat} = {scrut}").ok();
+                render_expr_body_untyped(body, *while_body, indent + 2, output);
+            }
             Stmt::Return(Some(expr_id)) => {
                 let desc = expr_desc(*expr_id, body);
                 writeln!(output, "{pad}return {desc}").ok();
@@ -844,6 +855,16 @@ pub(crate) mod support {
             } => {
                 let cond_desc = expr_desc(*condition, body);
                 writeln!(output, "{pad}while {cond_desc}").ok();
+                render_expr(*body_expr, body, inference, indent + 2, output);
+            }
+            Stmt::WhileLet {
+                pattern,
+                scrutinee,
+                body: body_expr,
+            } => {
+                let pat = pat_desc(*pattern, body);
+                let scrut_desc = expr_desc(*scrutinee, body);
+                writeln!(output, "{pad}while let {pat} = {scrut_desc}").ok();
                 render_expr(*body_expr, body, inference, indent + 2, output);
             }
             Stmt::For {
@@ -1250,19 +1271,51 @@ pub(crate) mod support {
             pkg_prefix: &str,
             local_type_names: &std::collections::HashSet<&str>,
         ) -> String {
+            fn is_local_type_path(
+                first: &str,
+                local_type_names: &std::collections::HashSet<&str>,
+            ) -> bool {
+                local_type_names.contains(first)
+                    || first
+                        .strip_suffix("$stream")
+                        .is_some_and(|base| local_type_names.contains(base))
+            }
+
             match ty {
-                baml_compiler2_ast::TypeExpr::Path { segments, .. } => {
+                baml_compiler2_ast::TypeExpr::Path {
+                    segments,
+                    generic_args,
+                    associated_type_bindings,
+                    ..
+                } => {
                     let path = segments
                         .iter()
                         .map(|n| n.as_str())
                         .collect::<Vec<_>>()
                         .join(".");
                     let first = segments.first().map(|n| n.as_str()).unwrap_or("");
-                    if segments.len() == 1 || local_type_names.contains(first) {
+                    let mut rendered = if is_local_type_path(first, local_type_names) {
                         format!("{pkg_prefix}{path}")
                     } else {
                         path
+                    };
+                    if !generic_args.is_empty() || !associated_type_bindings.is_empty() {
+                        let mut args = generic_args
+                            .iter()
+                            .map(|arg| type_expr_to_string_hir(arg, pkg_prefix, local_type_names))
+                            .collect::<Vec<_>>();
+                        args.extend(associated_type_bindings.iter().map(|binding| {
+                            format!(
+                                "{} = {}",
+                                binding.name,
+                                type_expr_to_string_hir(&binding.ty, pkg_prefix, local_type_names)
+                            )
+                        }));
+                        rendered.push('<');
+                        rendered.push_str(&args.join(", "));
+                        rendered.push('>');
                     }
+                    rendered
                 }
                 baml_compiler2_ast::TypeExpr::Int { .. } => "int".into(),
                 baml_compiler2_ast::TypeExpr::Bigint { .. } => "bigint".into(),
@@ -1343,6 +1396,21 @@ pub(crate) mod support {
                     )
                 }
                 baml_compiler2_ast::TypeExpr::BuiltinUnknown { .. } => "unknown".into(),
+                baml_compiler2_ast::TypeExpr::AssociatedTypeProjection {
+                    base,
+                    interface,
+                    member,
+                    ..
+                } => {
+                    let base = type_expr_to_string_hir(base, pkg_prefix, local_type_names);
+                    if let Some(interface) = interface {
+                        let interface =
+                            type_expr_to_string_hir(interface, pkg_prefix, local_type_names);
+                        format!("({base} as {interface}).{member}")
+                    } else {
+                        format!("{base}.{member}")
+                    }
+                }
                 baml_compiler2_ast::TypeExpr::Type { .. } => "type".into(),
                 baml_compiler2_ast::TypeExpr::Rust { .. } => "$rust_type".into(),
                 baml_compiler2_ast::TypeExpr::Error { .. } => "error".into(),
@@ -1377,6 +1445,7 @@ pub(crate) mod support {
                     class,
                     generic_args,
                     fields,
+                    ..
                 } => {
                     let class_path = class
                         .iter()
@@ -1764,6 +1833,16 @@ pub(crate) mod support {
                 } => format!(
                     "while {} {}",
                     expr_desc_hir(*condition, body, prefix, local_type_names),
+                    expr_desc_hir(*be, body, prefix, local_type_names)
+                ),
+                Stmt::WhileLet {
+                    pattern,
+                    scrutinee,
+                    body: be,
+                } => format!(
+                    "while let {} = {} {}",
+                    pat_desc_hir(*pattern, body, prefix, local_type_names),
+                    expr_desc_hir(*scrutinee, body, prefix, local_type_names),
                     expr_desc_hir(*be, body, prefix, local_type_names)
                 ),
                 Stmt::For {

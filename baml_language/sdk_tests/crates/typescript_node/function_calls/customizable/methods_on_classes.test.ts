@@ -6,9 +6,9 @@
 //   - static  → `Greeter.create(name)`        (no `self`, on the class)
 //   - instance → `g.who()` / `g.greet(arg)`   (`self` bound via `.bind(this)`)
 // each with its `_async` sibling.
-import "./baml_sdk";
-import { describe, it, expect } from "@jest/globals";
-import { Greeter } from "./baml_sdk/methods_on_classes";
+import "./baml_sdk/index.js";
+import { describe, it, expect } from "vitest";
+import { Greeter } from "./baml_sdk/methods_on_classes/index.js";
 
 describe("function_calls — static + instance method bindings", () => {
   it("exposes sync + async bindings for both flavors", () => {

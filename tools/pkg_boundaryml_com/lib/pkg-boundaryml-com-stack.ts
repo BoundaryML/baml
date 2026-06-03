@@ -31,18 +31,19 @@ export class PkgBoundarymlComStack extends cdk.Stack {
 
     this.githubReleaseRole = new iam.Role(this, 'GitHubReleaseRole', {
       roleName: 'pkg-boundaryml-com-github-release',
-      description: `Assumed by GitHub Actions in ${GITHUB_REPO} (tag pushes only) to publish to the pkg.boundaryml.com bucket`,
+      description: `Assumed by GitHub Actions in ${GITHUB_REPO} from refs/heads/canary to publish to the pkg.boundaryml.com bucket`,
       assumedBy: new iam.OpenIdConnectPrincipal(githubProvider, {
         StringEquals: {
           'token.actions.githubusercontent.com:aud': 'sts.amazonaws.com',
         },
         StringLike: {
-          'token.actions.githubusercontent.com:sub': `repo:${GITHUB_REPO}:ref:refs/tags/*`,
+          'token.actions.githubusercontent.com:sub': `repo:${GITHUB_REPO}:ref:refs/heads/canary`,
         },
       }),
       maxSessionDuration: cdk.Duration.hours(1),
     });
 
+    this.bucket.grantRead(this.githubReleaseRole);
     this.bucket.grantPut(this.githubReleaseRole);
     this.bucket.grantPutAcl(this.githubReleaseRole);
     this.githubReleaseRole.addToPolicy(

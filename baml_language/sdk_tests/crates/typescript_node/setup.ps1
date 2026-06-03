@@ -58,6 +58,9 @@ try {
 
 # 4. Per-fixture `pnpm install`. `--ignore-workspace` is required so pnpm
 #    doesn't walk up to the repo-root workspace and skip the install.
+#    `--force` is load-bearing: pnpm otherwise treats the fixture lockfile as
+#    current and may keep a stale packed copy of the local `file:` dependency
+#    when bridge_nodejs build output changes.
 Get-ChildItem -Directory | ForEach-Object {
     $generated = Join-Path $_.FullName 'generated'
     if (Test-Path $generated) {
@@ -67,7 +70,7 @@ Get-ChildItem -Directory | ForEach-Object {
             # --ignore-scripts: protobufjs is the only dep with a build
             # script and needs none for our pure-JS usage; without it pnpm 9+
             # exits non-zero (ERR_PNPM_IGNORED_BUILDS). See setup.sh.
-            pnpm install --ignore-workspace --ignore-scripts
+            pnpm install --force --ignore-workspace --ignore-scripts
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
         } finally {
             Pop-Location

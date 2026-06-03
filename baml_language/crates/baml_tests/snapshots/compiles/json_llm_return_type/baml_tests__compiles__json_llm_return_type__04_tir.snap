@@ -5,24 +5,24 @@ source: crates/baml_tests/src/generated_tests.rs
 function user.TestClient$new() -> ? throws never {
   baml.llm.PrimitiveClient { name: "TestClient", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "gpt-4o-mini", base_url: null, allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: "test-key", provider_options: null, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map {  } } } : baml.llm.PrimitiveClient
 }
-function user.ExtractAny() -> baml.json.json throws never {
-  baml.llm.call_llm_function<T>(TestClient, "ExtractAny", map {  }) : baml.json.json
+function user.ExtractAny(client: baml.llm.Client = TestClient) -> baml.json.json throws never {
+  baml.llm.call_llm_function<T>(client, "ExtractAny", map {  }) : baml.json.json
 }
-function user.ExtractAny$render_prompt() -> baml.llm.PromptAst throws never {
-  baml.llm.render_prompt(TestClient, "ExtractAny", map {  }) : baml.llm.PromptAst
+function user.ExtractAny$render_prompt(client: baml.llm.Client = TestClient) -> baml.llm.PromptAst throws never {
+  baml.llm.render_prompt(client, "ExtractAny", map {  }) : baml.llm.PromptAst
 }
-function user.ExtractAny$build_request() -> baml.http.Request throws never {
-  baml.llm.build_request(TestClient, "ExtractAny", map {  }) : baml.http.Request
+function user.ExtractAny$build_request(client: baml.llm.Client = TestClient) -> baml.http.Request throws never {
+  baml.llm.build_request(client, "ExtractAny", map {  }) : baml.http.Request
 }
-function user.ExtractAny$build_request_stream() -> baml.http.Request throws never {
-  baml.llm.build_request_stream(TestClient, "ExtractAny", map {  }) : baml.http.Request
+function user.ExtractAny$build_request_stream(client: baml.llm.Client = TestClient) -> baml.http.Request throws never {
+  baml.llm.build_request_stream(client, "ExtractAny", map {  }) : baml.http.Request
 }
-function user.ExtractAny$parse(json: string) -> baml.json.json throws never {
+function user.ExtractAny$parse(json: string, client: baml.llm.Client = TestClient) -> baml.json.json throws never {
   baml.llm.parse<TFinal>("ExtractAny", json) : baml.json.json
 }
-function user.ExtractAny$stream() -> baml.llm.Stream<null | baml.json.json$stream, baml.json.json> throws never {
-  baml.llm.stream_llm_function(TestClient, "ExtractAny", map {  }) : baml.llm.Stream<null | baml.json.json$stream, baml.json.json>
+function user.ExtractAny$stream(client: baml.llm.Client = TestClient) -> baml.llm.Stream<null | baml.json.json$stream, baml.json.json> throws never {
+  baml.llm.stream_llm_function(client, "ExtractAny", map {  }) : baml.llm.Stream<null | baml.json.json$stream, baml.json.json>
 }
-function user.ExtractAny$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream<null | baml.json.json$stream, baml.json.json> throws never {
-  TestClient.__make_stream(sse, "ExtractAny") : unknown
+function user.ExtractAny$parse_stream(sse: baml.http.SseStream, client: baml.llm.Client = TestClient) -> baml.llm.Stream<null | baml.json.json$stream, baml.json.json> throws never {
+  client.__make_stream(sse, "ExtractAny") : baml.llm.Stream<null | baml.json.json$stream, baml.json.json>
 }

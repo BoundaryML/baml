@@ -42,112 +42,222 @@ function type_reflection.$init_test_ns_type_reflection_type_reflection(registry:
     return
 }
 
-function type_reflection.GetBar() -> type_reflection.Bar {
-    load_type type_reflection.Bar
+function type_reflection.GetBar(client: baml.llm.Client) -> type_reflection.Bar {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
     load_global user.type_reflection.TestClient
+    store_var client
+
+  L0:
+    load_type type_reflection.Bar
+    load_var client
     load_const "GetBar"
     alloc_map 0
     call baml.llm.call_llm_function
     return
 }
 
-function type_reflection.GetBar$build_request() -> baml.http.Request {
+function type_reflection.GetBar$build_request(client: baml.llm.Client) -> baml.http.Request {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
     load_global user.type_reflection.TestClient
+    store_var client
+
+  L0:
+    load_var client
     load_const "GetBar"
     alloc_map 0
     call baml.llm.build_request
     return
 }
 
-function type_reflection.GetBar$build_request_stream() -> baml.http.Request {
+function type_reflection.GetBar$build_request_stream(client: baml.llm.Client) -> baml.http.Request {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
     load_global user.type_reflection.TestClient
+    store_var client
+
+  L0:
+    load_var client
     load_const "GetBar"
     alloc_map 0
     call baml.llm.build_request_stream
     return
 }
 
-function type_reflection.GetBar$parse(json: string) -> type_reflection.Bar {
+function type_reflection.GetBar$parse(json: string, client: baml.llm.Client) -> type_reflection.Bar {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_global user.type_reflection.TestClient
+    store_var client
+
+  L0:
     load_const "GetBar"
     load_var json
     call baml.llm.parse
     return
 }
 
-function type_reflection.GetBar$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream<null | type_reflection.Bar$stream, type_reflection.Bar> {
-    load_var sse
+function type_reflection.GetBar$parse_stream(sse: baml.http.SseStream, client: baml.llm.Client) -> baml.llm.Stream<null | type_reflection.Bar$stream, type_reflection.Bar> {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_global user.type_reflection.TestClient
+    store_var client
+
+  L0:
+    load_var2 2 1
     load_const "GetBar"
-    load_const null
-    call_indirect
+    call baml.llm.Client.__make_stream
     return
 }
 
-function type_reflection.GetBar$render_prompt() -> baml.llm.PromptAst {
+function type_reflection.GetBar$render_prompt(client: baml.llm.Client) -> baml.llm.PromptAst {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
     load_global user.type_reflection.TestClient
+    store_var client
+
+  L0:
+    load_var client
     load_const "GetBar"
     alloc_map 0
     call baml.llm.render_prompt
     return
 }
 
-function type_reflection.GetBar$stream() -> baml.llm.Stream<null | type_reflection.Bar$stream, type_reflection.Bar> {
+function type_reflection.GetBar$stream(client: baml.llm.Client) -> baml.llm.Stream<null | type_reflection.Bar$stream, type_reflection.Bar> {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
     load_global user.type_reflection.TestClient
+    store_var client
+
+  L0:
+    load_var client
     load_const "GetBar"
     alloc_map 0
     call baml.llm.stream_llm_function
     return
 }
 
-function type_reflection.GetFoo() -> type_reflection.Foo {
-    load_type type_reflection.Foo
+function type_reflection.GetFoo(client: baml.llm.Client) -> type_reflection.Foo {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
     load_global user.type_reflection.TestClient
+    store_var client
+
+  L0:
+    load_type type_reflection.Foo
+    load_var client
     load_const "GetFoo"
     alloc_map 0
     call baml.llm.call_llm_function
     return
 }
 
-function type_reflection.GetFoo$build_request() -> baml.http.Request {
+function type_reflection.GetFoo$build_request(client: baml.llm.Client) -> baml.http.Request {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
     load_global user.type_reflection.TestClient
+    store_var client
+
+  L0:
+    load_var client
     load_const "GetFoo"
     alloc_map 0
     call baml.llm.build_request
     return
 }
 
-function type_reflection.GetFoo$build_request_stream() -> baml.http.Request {
+function type_reflection.GetFoo$build_request_stream(client: baml.llm.Client) -> baml.http.Request {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
     load_global user.type_reflection.TestClient
+    store_var client
+
+  L0:
+    load_var client
     load_const "GetFoo"
     alloc_map 0
     call baml.llm.build_request_stream
     return
 }
 
-function type_reflection.GetFoo$parse(json: string) -> type_reflection.Foo {
+function type_reflection.GetFoo$parse(json: string, client: baml.llm.Client) -> type_reflection.Foo {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_global user.type_reflection.TestClient
+    store_var client
+
+  L0:
     load_const "GetFoo"
     load_var json
     call baml.llm.parse
     return
 }
 
-function type_reflection.GetFoo$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream<null | type_reflection.Foo$stream, type_reflection.Foo> {
-    load_var sse
+function type_reflection.GetFoo$parse_stream(sse: baml.http.SseStream, client: baml.llm.Client) -> baml.llm.Stream<null | type_reflection.Foo$stream, type_reflection.Foo> {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_global user.type_reflection.TestClient
+    store_var client
+
+  L0:
+    load_var2 2 1
     load_const "GetFoo"
-    load_const null
-    call_indirect
+    call baml.llm.Client.__make_stream
     return
 }
 
-function type_reflection.GetFoo$render_prompt() -> baml.llm.PromptAst {
+function type_reflection.GetFoo$render_prompt(client: baml.llm.Client) -> baml.llm.PromptAst {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
     load_global user.type_reflection.TestClient
+    store_var client
+
+  L0:
+    load_var client
     load_const "GetFoo"
     alloc_map 0
     call baml.llm.render_prompt
     return
 }
 
-function type_reflection.GetFoo$stream() -> baml.llm.Stream<null | type_reflection.Foo$stream, type_reflection.Foo> {
+function type_reflection.GetFoo$stream(client: baml.llm.Client) -> baml.llm.Stream<null | type_reflection.Foo$stream, type_reflection.Foo> {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
     load_global user.type_reflection.TestClient
+    store_var client
+
+  L0:
+    load_var client
     load_const "GetFoo"
     alloc_map 0
     call baml.llm.stream_llm_function

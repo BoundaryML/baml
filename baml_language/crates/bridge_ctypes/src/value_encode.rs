@@ -1,6 +1,6 @@
 //! `BexExternalValue` -> `BamlOutboundValue` conversion.
 
-use baml_type::Literal;
+use baml_type::{Literal, Name};
 use bex_project::{BexExternalAdt, BexExternalValue, Ty};
 
 use crate::{
@@ -196,27 +196,43 @@ fn empty_ty_name() -> BamlTyName {
 ///
 /// Canonically called with `Ty::Class(tn, args, _)` from `TaggedHeapHandle.ty`,
 /// where the class FQN becomes `BamlTyName.name` and each `arg` becomes a
-/// positional `BamlTyGenericArg`. The arg `name` field is left empty: the host
-/// only consults `name.name` to dispatch to the right wrapper and walks
-/// `generic_args[i].ty` positionally for parameterization. See plan 23a
-/// §"Outbound encode" + open question 2.
+/// positional `BamlTyGenericArg`. Interface associated type bindings are encoded
+/// as named generic args so the wire shape can preserve that metadata too.
 fn ty_to_baml_ty_name(ty: &Ty) -> BamlTyName {
     match ty {
         Ty::Class(tn, args, _) => BamlTyName {
             name: tn.display_name.to_string(),
-            generic_args: args
-                .iter()
-                .map(|arg| BamlTyGenericArg {
-                    name: String::new(),
-                    ty: Some(ty_to_field_type(arg)),
-                })
-                .collect(),
+            generic_args: ty_args_to_baml_generic_args(args, &[]),
+        },
+        Ty::Interface(tn, args, associated_bindings, _) => BamlTyName {
+            name: tn.display_name.to_string(),
+            generic_args: ty_args_to_baml_generic_args(args, associated_bindings),
         },
         _ => BamlTyName {
             name: format!("{ty}"),
             generic_args: vec![],
         },
     }
+}
+
+fn ty_args_to_baml_generic_args(
+    args: &[Ty],
+    associated_bindings: &[(Name, Ty)],
+) -> Vec<BamlTyGenericArg> {
+    args.iter()
+        .map(|arg| BamlTyGenericArg {
+            name: String::new(),
+            ty: Some(ty_to_field_type(arg)),
+        })
+        .chain(
+            associated_bindings
+                .iter()
+                .map(|(name, arg)| BamlTyGenericArg {
+                    name: name.as_str().to_string(),
+                    ty: Some(ty_to_field_type(arg)),
+                }),
+        )
+        .collect()
 }
 
 fn literal_to_field_type_literal(lit: &Literal) -> BamlTyLiteral {
@@ -353,12 +369,11 @@ fn ty_to_field_type(ty: &Ty) -> BamlTy {
             key_type: Some(Box::new(ty_to_field_type(key))),
             value_type: Some(Box::new(ty_to_field_type(value))),
         }))),
-        Ty::Class(tn, _, _) => Some(FieldType::ClassType(crate::baml_core::cffi::BamlTyClass {
-            name: Some(BamlTyName {
-                name: tn.display_name.to_string(),
-                generic_args: vec![],
-            }),
-        })),
+        Ty::Class(..) | Ty::Interface(..) => {
+            Some(FieldType::ClassType(crate::baml_core::cffi::BamlTyClass {
+                name: Some(ty_to_baml_ty_name(ty)),
+            }))
+        }
         Ty::EnumVariant(tn, ..) | Ty::Enum(tn, _) => {
             Some(FieldType::EnumType(crate::baml_core::cffi::BamlTyEnum {
                 name: tn.display_name.to_string(),

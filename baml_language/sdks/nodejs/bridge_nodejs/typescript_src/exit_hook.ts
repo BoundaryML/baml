@@ -3,7 +3,7 @@
 // process.once('exit', …) independently; consolidate to one registration so
 // `process.listenerCount('exit')` increases by exactly one per process.
 
-import { flushEvents } from './native';
+import { flushEvents } from './native.js';
 
 let installed = false;
 

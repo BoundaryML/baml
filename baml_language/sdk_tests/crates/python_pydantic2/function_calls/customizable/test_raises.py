@@ -1,6 +1,6 @@
 """32d — throws-contract `Raises:` docstring coverage.
 
-Pins how `codegen_python` renders the inferred throws contract
+Pins how `sdkgen_python_pydantic2` renders the inferred throws contract
 (`callable_throws`) into a Google-style `Raises:` block on generated
 functions' docstrings, using **unqualified** type names. The runtime
 `__doc__` (read by `inspect.getdoc`) is driven by the `.py` `__doc__ =`

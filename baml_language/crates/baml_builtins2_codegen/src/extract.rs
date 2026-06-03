@@ -620,9 +620,10 @@ fn type_expr_to_baml_type(ty: &TypeExpr, generics: &[String]) -> BamlType {
         }
         TypeExpr::Literal { .. } => BamlType::Named("literal".to_string()),
         TypeExpr::Function { .. } => BamlType::Named("function".to_string()),
-        TypeExpr::BuiltinUnknown { .. } | TypeExpr::Unknown { .. } | TypeExpr::Error { .. } => {
-            BamlType::Named("unknown".to_string())
-        }
+        TypeExpr::AssociatedTypeProjection { .. }
+        | TypeExpr::BuiltinUnknown { .. }
+        | TypeExpr::Unknown { .. }
+        | TypeExpr::Error { .. } => BamlType::Named("unknown".to_string()),
         TypeExpr::Type { .. } => BamlType::Named("type".to_string()),
         TypeExpr::Rust { .. } => BamlType::RustType,
     }

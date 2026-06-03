@@ -125,6 +125,14 @@ fn collect_from_stmt<C: ThrowsAnalysisContext>(
                 collect_from_stmt(context, *after_stmt, body, out);
             }
         }
+        Stmt::WhileLet {
+            scrutinee,
+            body: while_body,
+            ..
+        } => {
+            collect_from_expr(context, *scrutinee, body, out);
+            collect_from_expr(context, *while_body, body, out);
+        }
         Stmt::For {
             collection,
             body: for_body,

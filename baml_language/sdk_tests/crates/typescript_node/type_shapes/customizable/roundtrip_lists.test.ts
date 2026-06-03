@@ -1,13 +1,13 @@
 // Roundtrip coverage for baml_sdk/lists — ported from test_lists.py.
-import "./baml_sdk";
-import { describe, it, expect } from "@jest/globals";
+import "./baml_sdk/index.js";
+import { describe, it, expect } from "vitest";
 import {
   ListContainer,
   round_trip_ints,
   round_trip_optional_strings,
   round_trip_union_list,
   round_trip_list_container,
-} from "./baml_sdk/lists";
+} from "./baml_sdk/lists/index.js";
 
 describe("roundtrip lists", () => {
   it("round_trip_ints", () => expect(round_trip_ints([1, 2, 3])).toEqual([1, 2, 3]));

@@ -41,6 +41,14 @@ pub mod type_tags {
     pub use baml_type::typetag::*;
 }
 
+pub type InterfaceAssociatedBindings = Vec<(baml_type::Name, baml_type::Ty)>;
+pub type InterfaceImplementorEntry = (
+    baml_type::TypeName,
+    Vec<baml_type::Ty>,
+    InterfaceAssociatedBindings,
+);
+pub type InterfaceImplementors = IndexMap<baml_type::TypeName, Vec<InterfaceImplementorEntry>>;
+
 /// Compiled program ready for execution.
 ///
 /// This is what `baml_compiler_emit` produces. It contains all the objects and globals
@@ -103,8 +111,7 @@ pub struct Program {
     /// and `type.implemented_by()`.
     ///
     /// Empty for programs without interfaces.
-    pub interface_implementors:
-        IndexMap<baml_type::TypeName, Vec<(baml_type::TypeName, Vec<baml_type::Ty>)>>,
+    pub interface_implementors: InterfaceImplementors,
 }
 
 /// Metadata for building a client tree at runtime.

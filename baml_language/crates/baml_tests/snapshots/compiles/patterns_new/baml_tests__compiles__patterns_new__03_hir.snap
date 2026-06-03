@@ -111,6 +111,6 @@ function user.to_json(self: ?) -> baml.json.json  [expr] {
 function user.unwrap_curried(f: (int) -> (int) -> (int) -> int | (string) -> (string) -> string) -> int  [expr] {
   {  } match (f) { triple: (int) -> (int) -> (int) -> int => triple(1)(2)(3), pair: (string) -> (string) -> string => 0 }
 }
-function user.unwrap_typed(cb: (int) -> user.T | (string) -> user.T) -> user.T  [expr] {
-  {  } match (cb) { f: (int) -> user.T => f(0), f: (string) -> user.T => f("") }
+function user.unwrap_typed(cb: (int) -> T | (string) -> T) -> T  [expr] {
+  {  } match (cb) { f: (int) -> T => f(0), f: (string) -> T => f("") }
 }

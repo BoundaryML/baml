@@ -1,7 +1,7 @@
 // Roundtrip coverage for baml_sdk/class_refs — ported from test_class_refs.py.
-import "./baml_sdk";
-import { describe, it, expect } from "@jest/globals";
-import { Inner, Outer, make_outer, round_trip_inner, round_trip_outer } from "./baml_sdk/class_refs";
+import "./baml_sdk/index.js";
+import { describe, it, expect } from "vitest";
+import { Inner, Outer, make_outer, round_trip_inner, round_trip_outer } from "./baml_sdk/class_refs/index.js";
 
 describe("roundtrip class_refs", () => {
   it("make_outer", () => {

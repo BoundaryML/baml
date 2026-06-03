@@ -78,6 +78,19 @@ pub fn substitute_ty(ty: &Ty, bindings: &FxHashMap<Name, Ty>) -> Ty {
             Box::new(substitute_ty(error, bindings)),
             attr.clone(),
         ),
+        Ty::AssociatedTypeProjection {
+            base,
+            interface,
+            member,
+            attr,
+        } => Ty::AssociatedTypeProjection {
+            base: Box::new(substitute_ty(base, bindings)),
+            interface: interface
+                .as_ref()
+                .map(|interface| Box::new(substitute_ty(interface, bindings))),
+            member: member.clone(),
+            attr: attr.clone(),
+        },
         Ty::Union(members, attr) => Ty::Union(
             members.iter().map(|m| substitute_ty(m, bindings)).collect(),
             attr.clone(),
@@ -120,12 +133,21 @@ pub fn substitute_ty(ty: &Ty, bindings: &FxHashMap<Name, Ty>) -> Ty {
                 .collect();
             Ty::Class(name.clone(), substituted_args, attr.clone())
         }
-        Ty::Interface(name, type_args, attr) => {
+        Ty::Interface(name, type_args, associated_bindings, attr) => {
             let substituted_args: Vec<Ty> = type_args
                 .iter()
                 .map(|t| substitute_ty(t, bindings))
                 .collect();
-            Ty::Interface(name.clone(), substituted_args, attr.clone())
+            let substituted_bindings = associated_bindings
+                .iter()
+                .map(|(name, ty)| (name.clone(), substitute_ty(ty, bindings)))
+                .collect();
+            Ty::Interface(
+                name.clone(),
+                substituted_args,
+                substituted_bindings,
+                attr.clone(),
+            )
         }
         // All other types are leaves (primitives, enums, etc.) — pass through.
         _ => ty.clone(),
@@ -143,7 +165,27 @@ pub fn substitute_ty(ty: &Ty, bindings: &FxHashMap<Name, Ty>) -> Ty {
 /// intercept `T` references that would otherwise produce `Ty::Unknown`.
 fn substitute_type_expr(expr: &TypeExpr, bindings: &FxHashMap<Name, Ty>) -> Option<Ty> {
     match expr {
-        TypeExpr::Path { segments, .. } if segments.len() == 1 => {
+        TypeExpr::Path {
+            segments,
+            generic_args,
+            associated_type_bindings,
+            ..
+        } if segments.len() == 2
+            && segments[0].as_str() == "Self"
+            && generic_args.is_empty()
+            && associated_type_bindings.is_empty() =>
+        {
+            bindings.get(&segments[1]).cloned()
+        }
+        TypeExpr::Path {
+            segments,
+            generic_args,
+            associated_type_bindings,
+            ..
+        } if segments.len() == 1
+            && generic_args.is_empty()
+            && associated_type_bindings.is_empty() =>
+        {
             bindings.get(&segments[0]).cloned()
         }
         _ => None,
@@ -323,6 +365,33 @@ pub fn lower_type_expr_with_generics(
                 attr: TyAttr::default(),
             }
         }
+        TypeExpr::AssociatedTypeProjection {
+            base,
+            interface,
+            member,
+            ..
+        } => Ty::AssociatedTypeProjection {
+            base: Box::new(lower_type_expr_with_generics(
+                db,
+                base,
+                package_items,
+                ns_context,
+                bindings,
+                diagnostics,
+            )),
+            interface: interface.as_ref().map(|interface| {
+                Box::new(lower_type_expr_with_generics(
+                    db,
+                    interface,
+                    package_items,
+                    ns_context,
+                    bindings,
+                    diagnostics,
+                ))
+            }),
+            member: member.clone(),
+            attr: TyAttr::default(),
+        },
         // For all other type expressions (primitives, multi-segment paths, etc.),
         // lower normally and then substitute in the result.
         //
@@ -377,6 +446,14 @@ pub fn skip_self_param(params: &[FunctionParamTy]) -> &[FunctionParamTy] {
 pub fn contains_typevar(ty: &Ty) -> bool {
     match ty {
         Ty::TypeVar(_, _) => true,
+        Ty::AssociatedTypeProjection {
+            base, interface, ..
+        } => {
+            contains_typevar(base)
+                || interface
+                    .as_ref()
+                    .is_some_and(|interface| contains_typevar(interface))
+        }
         Ty::List(inner, _) | Ty::Optional(inner, _) | Ty::EvolvingList(inner, _) => {
             contains_typevar(inner)
         }
@@ -397,8 +474,12 @@ pub fn contains_typevar(ty: &Ty) -> bool {
                 || contains_typevar(ret)
                 || contains_typevar(throws)
         }
-        Ty::Class(_, type_args, _) | Ty::Interface(_, type_args, _) => {
+        Ty::Class(_, type_args, _) => type_args.iter().any(contains_typevar),
+        Ty::Interface(_, type_args, associated_bindings, _) => {
             type_args.iter().any(contains_typevar)
+                || associated_bindings
+                    .iter()
+                    .any(|(_, ty)| contains_typevar(ty))
         }
         _ => false,
     }
@@ -451,9 +532,17 @@ pub fn contains_inferable_typevar(ty: &Ty, generic_params: &[Name]) -> bool {
                 || contains_inferable_typevar(ret, generic_params)
                 || contains_inferable_typevar(throws, generic_params)
         }
-        Ty::Class(_, type_args, _) | Ty::Interface(_, type_args, _) => type_args
+        Ty::Class(_, type_args, _) => type_args
             .iter()
             .any(|t| contains_inferable_typevar(t, generic_params)),
+        Ty::Interface(_, type_args, associated_bindings, _) => {
+            type_args
+                .iter()
+                .any(|t| contains_inferable_typevar(t, generic_params))
+                || associated_bindings
+                    .iter()
+                    .any(|(_, ty)| contains_inferable_typevar(ty, generic_params))
+        }
         _ => false,
     }
 }
@@ -519,7 +608,7 @@ fn infer_bindings_inner(
             infer_bindings_inner(fth, ath, bindings, allow_typevar_actuals);
         }
         (Ty::Class(fn_name, f_args, _), Ty::Class(an_name, a_args, _))
-        | (Ty::Interface(fn_name, f_args, _), Ty::Interface(an_name, a_args, _))
+        | (Ty::Interface(fn_name, f_args, _, _), Ty::Interface(an_name, a_args, _, _))
             if fn_name == an_name =>
         {
             for (ft, at) in f_args.iter().zip(a_args.iter()) {
@@ -619,6 +708,19 @@ pub fn erase_unresolved_typevars(
             Box::new(erase_unresolved_typevars(inner, diagnostics)),
             attr.clone(),
         ),
+        Ty::AssociatedTypeProjection {
+            base,
+            interface,
+            member,
+            attr,
+        } => Ty::AssociatedTypeProjection {
+            base: Box::new(erase_unresolved_typevars(base, diagnostics)),
+            interface: interface
+                .as_ref()
+                .map(|interface| Box::new(erase_unresolved_typevars(interface, diagnostics))),
+            member: member.clone(),
+            attr: attr.clone(),
+        },
         Ty::Function {
             generic_params,
             generic_param_bounds,
@@ -685,10 +787,14 @@ pub fn erase_typevars_matching(ty: &Ty, should_erase: &impl Fn(&Name) -> bool) -
                 .collect(),
             attr.clone(),
         ),
-        Ty::Interface(qtn, args, attr) => Ty::Interface(
+        Ty::Interface(qtn, args, associated_bindings, attr) => Ty::Interface(
             qtn.clone(),
             args.iter()
                 .map(|arg| erase_typevars_matching(arg, should_erase))
+                .collect(),
+            associated_bindings
+                .iter()
+                .map(|(name, ty)| (name.clone(), erase_typevars_matching(ty, should_erase)))
                 .collect(),
             attr.clone(),
         ),
@@ -726,6 +832,19 @@ pub fn erase_typevars_matching(ty: &Ty, should_erase: &impl Fn(&Name) -> bool) -
             Box::new(erase_typevars_matching(error, should_erase)),
             attr.clone(),
         ),
+        Ty::AssociatedTypeProjection {
+            base,
+            interface,
+            member,
+            attr,
+        } => Ty::AssociatedTypeProjection {
+            base: Box::new(erase_typevars_matching(base, should_erase)),
+            interface: interface
+                .as_ref()
+                .map(|interface| Box::new(erase_typevars_matching(interface, should_erase))),
+            member: member.clone(),
+            attr: attr.clone(),
+        },
         Ty::Function {
             generic_params,
             generic_param_bounds,
