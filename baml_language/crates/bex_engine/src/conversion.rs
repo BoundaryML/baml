@@ -174,11 +174,14 @@ impl BexEngine {
                         .zip(instance.fields.iter())
                         .map(|(class_field, slot)| {
                             let value = slot.load();
+                            let field_type = class_field
+                                .field_template
+                                .substitute(&instance.class_type_args);
                             Ok((
                                 class_field.name.clone(),
                                 self.convert_vm_value_to_external_with_type(
                                     value,
-                                    &class_field.field_type,
+                                    &field_type,
                                     permit,
                                 )?,
                             ))
