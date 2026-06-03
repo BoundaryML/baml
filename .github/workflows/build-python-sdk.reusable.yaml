@@ -81,14 +81,18 @@ jobs:
       - uses: actions/checkout@v6
         with:
           ref: ${{ inputs.source_sha || github.sha }}
+          persist-credentials: false
 
       - name: Stamp release plan
-        if: ${{ inputs.release_plan_json != '' }}
         env:
           RELEASE_PLAN_JSON: ${{ inputs.release_plan_json }}
         run: |
           set -euo pipefail
-          printf '%s\n' "$RELEASE_PLAN_JSON" > release-plan.json
+          if [[ -n "${RELEASE_PLAN_JSON:-}" ]]; then
+            printf '%s\n' "$RELEASE_PLAN_JSON" > release-plan.json
+          else
+            scripts/baml-language-version plan --channel canary --out release-plan.json
+          fi
           scripts/baml-language-version stamp --plan release-plan.json
 
       # NOTE: we deliberately do NOT use ./.github/actions/setup-mise here.

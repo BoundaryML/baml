@@ -94,20 +94,36 @@ jobs:
           from pathlib import Path
 
           plan_json = os.environ.get("RELEASE_PLAN_JSON", "").strip()
+          wheels = sorted(Path("dist").glob("baml_core-*.whl"))
+          if not wheels:
+              print("::error::No baml_core wheels found in dist", file=sys.stderr)
+              raise SystemExit(1)
+
           if plan_json:
               version = json.loads(plan_json)["pypi_version"]
           else:
-              wheels = sorted(Path("dist").glob("baml_core-*.whl"))
-              if not wheels:
-                  print("::error::No baml_core wheels found in dist", file=sys.stderr)
-                  raise SystemExit(1)
               match = re.match(r"^baml_core-(.+?)-", wheels[0].name)
               if not match:
                   print(f"::error::Could not infer PyPI version from {wheels[0].name}", file=sys.stderr)
                   raise SystemExit(1)
               version = match.group(1)
 
-          local_files = sorted(path.name for path in Path("dist").glob("*.whl"))
+          local_versions = set()
+          for path in wheels:
+              match = re.match(r"^baml_core-(.+?)-", path.name)
+              if not match:
+                  print(f"::error::Could not infer PyPI version from {path.name}", file=sys.stderr)
+                  raise SystemExit(1)
+              local_versions.add(match.group(1))
+
+          if local_versions != {version}:
+              print(
+                  f"::error::Built wheels do not match PyPI version {version}: {sorted(local_versions)}",
+                  file=sys.stderr,
+              )
+              raise SystemExit(1)
+
+          local_files = sorted(path.name for path in wheels)
           url = f"https://pypi.org/pypi/baml-core/{version}/json"
           try:
               with urllib.request.urlopen(url, timeout=20) as response:
