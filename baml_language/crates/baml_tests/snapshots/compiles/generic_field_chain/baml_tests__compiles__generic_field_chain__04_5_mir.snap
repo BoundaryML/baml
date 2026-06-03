@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 10313
 ---
 === MIR2 ===
 fn user.Box.from_json(j: baml.json.json) -> Box<void> {
@@ -171,7 +170,7 @@ fn user.Box.to_json(self: Box) -> baml.json.json {
     let _1: Box // self // param
     let _2: baml.json.json
     let _3: void
-    let _4: Box
+    let _4: Box<void>
 
     bb0: {
         _4 = copy _1;

@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 4252
 ---
 === MIR2 ===
 
@@ -5144,16 +5143,16 @@ fn baml.llm.Stream.to_json(self: baml.llm.Stream) -> baml.json.json {
     let _1: baml.llm.Stream // self // param
     let _2: baml.json.json
     let _3: baml.llm.PrimitiveClient
-    let _4: baml.llm.Stream
+    let _4: baml.llm.Stream<unknown, unknown>
     let _5: baml.json.json
     let _6: baml.llm.StreamAccumulator
-    let _7: baml.llm.Stream
+    let _7: baml.llm.Stream<unknown, unknown>
     let _8: baml.json.json
     let _9: baml.http.SseStream
-    let _10: baml.llm.Stream
+    let _10: baml.llm.Stream<unknown, unknown>
     let _11: baml.json.json
     let _12: baml.llm.StreamCache<unknown, unknown>
-    let _13: baml.llm.Stream
+    let _13: baml.llm.Stream<unknown, unknown>
     let _14: type
     let _15: type
 

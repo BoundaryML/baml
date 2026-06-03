@@ -186,10 +186,11 @@ File:
 .github/workflows/release-sdk.yaml
 ```
 
-Git may not surface this as a direct conflict because our branch renames/reframes the Python publisher as:
+Git may not surface this as a direct conflict because our branch folds the Python publisher into the replacement release graph and keeps only the reusable Python wheel builder:
 
 ```text
-.github/workflows/publish-python-pypi.yml
+.github/workflows/release-baml-language.yml
+.github/workflows/build-python-sdk.reusable.yaml
 ```
 
 But this is a semantic conflict.
@@ -209,7 +210,7 @@ Our task says:
 
 Recommended resolution:
 
-- Keep our `publish-python-pypi.yml` as the Python publisher called by `release-baml-language.yml`.
+- Fold Python publishing into `release-baml-language.yml`: keep the reusable Python wheel builder, but put the final PyPI trusted-publishing upload in a top-level job.
 - Do not keep `release-sdk.yaml` as an independent release orchestrator in its canary form.
 - Preserve the useful Node build work by adapting it into the new graph or CI:
   - keep `build-nodejs-sdk.reusable.yaml` if it is usable as a build/test matrix;
@@ -239,7 +240,7 @@ Expected resolution:
 - If the new release graph depends on canary branch pushes being green before publishing nightly, confirm the `workflow_run` event still fires on pushes to `canary`.
 - Update CI change detection so new release-architecture files are not invisible:
   - `.github/workflows/release-baml-language.yml`
-  - `.github/workflows/publish-python-pypi.yml`
+  - `.github/workflows/build-python-sdk.reusable.yaml`
   - `scripts/baml-release-manifests`
   - `scripts/baml-package-manager-artifacts`
   - `scripts/baml-wrapper-version`
