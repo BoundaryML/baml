@@ -38,7 +38,7 @@ repos:
   - repo: local
     hooks:
       # Priority ordering:
-      # 1: Formatters and validators (fmt, stow, bep-readme) - format/validate generated code
+      # 1: Formatters and validators (fmt, stow) - format/validate generated code
       # 2: Linters (clippy) - final checks on formatted code
 
       - id: cargo-fmt
@@ -57,14 +57,6 @@ repos:
         pass_filenames: false
         files: ^baml_language/(Cargo\.toml|stow\.toml|crates/.*/Cargo\.toml|crates/tools_stow/)
         priority: 2
-
-      - id: bep-readme
-        name: bep readme
-        entry: bash -c 'mise run bep:readme'
-        language: system
-        pass_filenames: false
-        files: ^beps/
-        priority: 3
 
       - id: validate-markdown
         name: validate markdown files
