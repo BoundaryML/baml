@@ -49,7 +49,7 @@ codegen + project-loading deps only land where they're needed:
 
 - **`sdk_test_harness_setup`** (`[build-dependencies]`) holds the build.rs
   logic — fixture discovery, codegen, install, scaffold emission,
-  `BuildDiagnostics`. Depends on `codegen_python`, `codegen_nodejs`,
+  `BuildDiagnostics`. Depends on `sdkgen_python_pydantic2`, `sdkgen_typescript_node`,
   `baml_project`, `baml_db`, `baml_workspace`, `baml_codegen_types`.
 - **`sdk_test_harness_runner`** (`[dev-dependencies]`) holds every emitted
   test's runtime side — `run_test_cmd` / `run_test_cmd_with_env`,
@@ -106,7 +106,7 @@ cargo nextest run -p sdk_test_python_pydantic2 build_diagnostics
 # List discovered tests (without running)
 cargo nextest list -p sdk_test_python_pydantic2
 
-# Run ignored typescript_node tests too (local debugging of codegen_nodejs)
+# Run ignored typescript_node tests too (local debugging of sdkgen_typescript_node)
 cargo nextest run -p sdk_test_typescript_node --run-ignored all
 ```
 
@@ -171,7 +171,7 @@ sdk_tests/
         ├── docstrings_etc/
         │   ├── customizable/             # tracked: *.test.ts — copied into generated/
         │   └── generated/                # gitignored: build output
-        │       ├── baml_sdk/             # empty until codegen_nodejs lands
+        │       ├── baml_sdk/             # empty until sdkgen_typescript_node lands
         │       ├── package.json          # name = "sdk-tests-nodejs-typescript-docstrings-etc"
         │       ├── tsconfig.json
         │       ├── node_modules/         # pnpm install output
@@ -281,13 +281,13 @@ reads the file and fails with the records. `sdk_test_harness_setup`'s
 scaffold emitter stamps one invocation per generator scaffold —
 `::sdk_test_harness_runner::build_diagnostics!()` for python and
 `::sdk_test_harness_runner::build_diagnostics!(ignore = "…")` for
-typescript_node (while `codegen_nodejs` is a stub).
+typescript_node (while `sdkgen_typescript_node` is a stub).
 
 Outcome: `cargo doc` / `cargo check` succeed without `uv` / `pnpm`
 installed; `cargo nextest run` surfaces the same failures it would
 have hit before, just routed through a test rather than build.rs. The
 `typescript_node` crate `#[ignore]`s `build_diagnostics` plus
-every per-fixture test until `codegen_nodejs` is real — see
+every per-fixture test until `sdkgen_typescript_node` is real — see
 `IGNORE_REASON` in `sdk_tests/harness_setup/src/typescript_node.rs`.
 
 ### setup.sh guard (`setup_guard::ran`)
@@ -325,7 +325,7 @@ prove "under nextest", not "this script ran". Under plain
 `cargo test` there's no `$NEXTEST_ENV`, so the guard does not enforce
 the breadcrumb; the generated fixture tests are still free to fail if
 the local setup is missing or stale. typescript_node's guard is
-`#[ignore]`d alongside its other tests while `codegen_nodejs` is a
+`#[ignore]`d alongside its other tests while `sdkgen_typescript_node` is a
 stub.
 
 Hard panics are retained for repo/author bugs: missing `fixtures/`

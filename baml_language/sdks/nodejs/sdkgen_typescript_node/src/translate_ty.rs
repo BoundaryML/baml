@@ -4,7 +4,7 @@
 //!
 //! Rule sources:
 //! - `00a-spec-codegen-mappings.md` §"Exhaustive Ty conversions"
-//! - Python prior art: `codegen_python/src/translate_ty.rs`
+//! - Python prior art: `sdkgen_python_pydantic2/src/translate_ty.rs`
 //!
 //! Returns a `TranslatedType { expr, imports }`: `expr` is a TS type
 //! expression; `imports` is the set of cross-leaf `LeafPath`s the expr

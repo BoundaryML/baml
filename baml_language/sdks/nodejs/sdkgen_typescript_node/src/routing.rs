@@ -6,7 +6,7 @@
 //! references.
 //!
 //! The namespace logic is identical to the Python emitter
-//! (`codegen_python/src/routing.rs`); only the in-directory filename
+//! (`sdkgen_python_pydantic2/src/routing.rs`); only the in-directory filename
 //! differs (`__init__.py` → `index.ts`), and that mapping lives in
 //! `lib.rs`, not here.
 //!

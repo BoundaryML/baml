@@ -10,7 +10,7 @@
 //! stdlib types (media + `Stream`) re-export from `@boundaryml/baml-core-node`
 //! rather than getting a generated body.
 //!
-//! This is a close port of `codegen_python`, with two structural
+//! This is a close port of `sdkgen_python_pydantic2`, with two structural
 //! differences: the in-directory filename (`__init__.py` → `index.ts`), and
 //! that Node emits no declaration file — the Python `__init__.pyi` stub has
 //! no `.d.ts` counterpart, because the generated `.ts` is already fully
@@ -67,7 +67,7 @@ pub fn to_source_code(
     // Only `PreserveCase` is wired up so far.
     assert!(
         matches!(naming_convention, NamingConvention::PreserveCase),
-        "codegen_nodejs only supports naming_convention = PreserveCase \
+        "sdkgen_typescript_node only supports naming_convention = PreserveCase \
          (got {naming_convention})",
     );
     let mut out: HashMap<PathBuf, String> = HashMap::new();

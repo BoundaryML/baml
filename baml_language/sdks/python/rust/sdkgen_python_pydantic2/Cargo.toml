@@ -1,5 +1,5 @@
 [package]
-name = "codegen_python"
+name = "sdkgen_python_pydantic2"
 version = { workspace = true }
 publish = false
 authors = { workspace = true }

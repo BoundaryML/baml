@@ -9,6 +9,8 @@
 # Namespaces ([[namespaces]]):
 #   name                 - Crate prefix (e.g., "baml" for baml_* crates)
 #   approved_prefixes    - Valid sub-prefixes (e.g., "compiler" allows baml_compiler_*)
+#   approved_suffixes    - Full tails accepted verbatim (e.g., "python_pydantic2"
+#                          allows sdkgen_python_pydantic2; validated as a unit)
 #   test_crate_exceptions - Test crates exempt from "must have prefix crate" rule
 #   dependency_rules     - Rules that only apply to crates in this namespace
 #   link_crates          - Cross-namespace deps shown as proxy nodes in this cluster
@@ -84,7 +86,7 @@ reason = "Use thiserror for proper error types in library crates."
 # baml namespace configuration
 [[namespaces]]
 name = "baml"
-approved_prefixes = ["compiler", "builtins", "builtins2", "codegen", "compiler2", "lsp2"]
+approved_prefixes = ["compiler", "builtins", "builtins2", "compiler2", "lsp2"]
 test_crate_exceptions = ["baml_tests"]
 embed_crates = ["tools_onionskin", "bex_project"]
 
@@ -161,7 +163,10 @@ name = "sys"
 link_crates = ["baml_type",  "bex_heap", "bex_vm_types"]
 
 [[namespaces]]
-name = "codegen"
+name = "sdkgen"
+# Each SDK generator targets a specific language + runtime, so the whole tail
+# is meaningful and validated as a unit rather than by sub-prefix.
+approved_suffixes = ["python_pydantic2", "typescript_node"]
 
 [[namespaces]]
 name = "surface"
