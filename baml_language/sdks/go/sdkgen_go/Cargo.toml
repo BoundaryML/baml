@@ -1,5 +1,5 @@
 [package]
-name = "codegen_go"
+name = "sdkgen_go"
 version = { workspace = true }
 publish = false
 authors = { workspace = true }

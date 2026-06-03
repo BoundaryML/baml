@@ -20,6 +20,6 @@ pub fn to_source_code(
     _naming_convention: NamingConvention,
 ) -> HashMap<PathBuf, String> {
     unimplemented!(
-        "codegen_go::to_source_code is a stub — the Go emitter has not been implemented yet"
+        "sdkgen_go::to_source_code is a stub — the Go emitter has not been implemented yet"
     );
 }

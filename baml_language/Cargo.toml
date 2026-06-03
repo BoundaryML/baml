@@ -2,7 +2,7 @@
 members = [
   "crates/*",
   "forks/*",
-  "sdks/go/codegen_go",
+  "sdks/go/sdkgen_go",
   "sdks/nodejs/bridge_nodejs",
   "sdks/nodejs/sdkgen_typescript_node",
   "sdks/python/rust/*",
@@ -64,7 +64,7 @@ baml_builtins_codegen = { path = "crates/baml_builtins_codegen" }
 baml_builtins2 = { path = "crates/baml_builtins2" }
 baml_builtins2_codegen = { path = "crates/baml_builtins2_codegen" }
 baml_builtins_macros = { path = "crates/baml_builtins_macros" }
-codegen_go = { path = "sdks/go/codegen_go" }
+sdkgen_go = { path = "sdks/go/sdkgen_go" }
 sdkgen_typescript_node = { path = "sdks/nodejs/sdkgen_typescript_node" }
 sdkgen_python_pydantic2 = { path = "sdks/python/rust/sdkgen_python_pydantic2" }
 baml_codegen_types = { path = "crates/baml_codegen_types" }
