@@ -138,12 +138,15 @@ export default function WhoAreWePage() {
                 margin: 0,
               }}
             >
-              We built BAML to solve hard problems at the edge of production
-              AI. Our work spans distributed systems, compilers, developer
-              tools, and the constantly changing shape of modern AI.
+              We built BAML to solve hard problems at the edge of production AI.
+              Our work spans distributed systems, compilers, developer tools,
+              and the constantly changing shape of modern AI.
             </p>
             <div className="team-cta-row" style={{ marginTop: 28 }}>
-              <Link className="editorial-btn editorial-btn--primary" href="/jobs">
+              <Link
+                className="editorial-btn editorial-btn--primary"
+                href="/jobs"
+              >
                 See open roles
                 <ArrowRight size={16} />
               </Link>
@@ -170,9 +173,9 @@ export default function WhoAreWePage() {
             <Image
               alt="Our team"
               className="w-full"
-              height={1000}
+              height={1333}
               src="/team.jpg"
-              width={1000}
+              width={2000}
               style={{ width: '100%', height: 'auto', display: 'block' }}
             />
           </div>
@@ -445,10 +448,7 @@ export default function WhoAreWePage() {
             less fragile.
           </p>
           <div className="team-cta-row team-cta-row--center">
-            <Link
-              className="editorial-btn editorial-btn--primary"
-              href="/jobs"
-            >
+            <Link className="editorial-btn editorial-btn--primary" href="/jobs">
               Open roles
               <ArrowRight size={16} />
             </Link>
