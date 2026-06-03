@@ -508,11 +508,11 @@ jobs:
         run: sccache --show-stats
 
       - name: "Run sdk test setup"
-        run: cargo nextest run --all-features -E 'package(=${{ matrix.package-name }}) and test(setup_guard::ran)'
+        run: cargo nextest run -p ${{ matrix.package-name }} --all-features -E 'package(=${{ matrix.package-name }}) and test(setup_guard::ran)'
         working-directory: baml_language
 
       - name: "Run sdk tests"
-        run: cargo nextest run --all-features -E 'package(=${{ matrix.package-name }})'
+        run: cargo nextest run -p ${{ matrix.package-name }} --all-features -E 'package(=${{ matrix.package-name }})'
         working-directory: baml_language
 
       - name: "Upload test results on failure"
