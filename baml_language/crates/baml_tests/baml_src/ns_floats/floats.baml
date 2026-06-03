@@ -6,8 +6,7 @@
 // Assertion strategy:
 //   - Boolean predicates (is_nan, is_infinite, is_finite): deep_equals to true/false.
 //   - Exact float values (integer-valued results): deep_equals.
-//   - Approximate float values (transcendental results): inline epsilon check
-//     `assert.is_true(((result) - (expected)).abs() < eps)`.
+//   - Approximate float values: assert.approx_equal(result, expected, eps).
 //   - NaN results: assert.is_true(result.is_nan()).
 //   - Multi-case Rust tests are split into separate BAML tests.
 //
@@ -78,6 +77,16 @@ test "float_is_finite_false_for_infinity" {
 
 test "float_is_finite_false_for_negative_infinity" {
     assert.is_true(baml.deep_equals((-float.inf()).is_finite(), false))
+}
+
+// ─── Approximate assertions ───────────────────────────────────────────────────
+
+test "float_approx_equal_accepts_non_exact_result" {
+    assert.approx_equal(float.parse("0.1") + float.parse("0.2"), float.parse("0.3"), 0.000000000000001)
+}
+
+test "float_approx_equal_accepts_delta_equal_to_epsilon" {
+    assert.approx_equal(1.25, 1.0, 0.25)
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────

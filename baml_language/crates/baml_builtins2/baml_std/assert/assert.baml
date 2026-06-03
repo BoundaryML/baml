@@ -27,6 +27,27 @@ function equal(actual: unknown, expected: unknown) -> null {
   }
 }
 
+/// Asserts that `actual` and `expected` floats differ by no more than `epsilon`.
+/// Panics with the observed delta if `abs(actual - expected) > epsilon`.
+function approx_equal(actual: float, expected: float, epsilon: float) -> null {
+  let delta = (actual - expected).abs();
+  if (!(delta <= epsilon)) {
+    baml.sys.panic(
+      "assertion failed: expected approximately equal floats (actual: " +
+      baml.unstable.string(actual) +
+      ", expected: " +
+      baml.unstable.string(expected) +
+      ", epsilon: " +
+      baml.unstable.string(epsilon) +
+      ", delta: " +
+      baml.unstable.string(delta) +
+      ")"
+    )
+  } else {
+    null
+  }
+}
+
 /// Asserts that `haystack` contains `needle` as a substring. Panics if not.
 function contains(haystack: string, needle: string) -> null {
   if (!haystack.includes(needle)) {
