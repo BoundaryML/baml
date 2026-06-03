@@ -1,0 +1,28 @@
+[package]
+name = "cargo-xtask"
+version = "0.1.0"
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+publish = false
+description = "Workspace task automation: generates .github/workflows YAML from Rust"
+
+[[bin]]
+name = "cargo-xtask"
+path = "src/main.rs"
+
+[lints]
+workspace = true
+
+[dependencies]
+anyhow = { workspace = true }
+clap = { workspace = true, features = [ "derive" ] }
+gh-workflow = { workspace = true }
+indexmap = { workspace = true }
+indoc = "2"
+serde = { workspace = true, features = [ "derive" ] }
+serde_json = { workspace = true }
+serde_yaml = { workspace = true }
+
+[package.metadata.ci]
+wasm_support = false

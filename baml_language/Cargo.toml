@@ -108,6 +108,13 @@ minijinja = { git = "https://github.com/boundaryml/minijinja.git", branch = "val
 minijinja-contrib = { git = "https://github.com/boundaryml/minijinja.git", branch = "value-cmp", features = [ "pycompat" ] }
 baml_workspace = { path = "crates/baml_workspace" }
 
+# Workflow-as-code: zed-industries' fork of gh-workflow (v0.8.0). Pinned to
+# the SAME git rev zed pins. The crates.io release does NOT expose uses_local,
+# the 4-arg Job::uses, WorkflowCall/WorkflowCallSecret, or the typed
+# Step<Use>/Step<Run> typestate that crates/tools_xtask depends on, so the
+# fork is mandatory. deny.toml is permissive (unknown-git = "allow").
+gh-workflow = { git = "https://github.com/zed-industries/gh-workflow", rev = "37f3c0575d379c218a9c455ee67585184e40d43f" }
+
 #  External dependencies
 anyhow = { version = "1" }
 arboard = "3.4"
