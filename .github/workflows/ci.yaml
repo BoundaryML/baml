@@ -42,8 +42,6 @@ jobs:
       thir: ${{ steps.check_thir.outputs.changed }}
       # Flag for codegen changes
       codegen: ${{ steps.check_codegen.outputs.changed }}
-      # Flag for BEP changes
-      beps: ${{ steps.check_beps.outputs.changed }}
       # Flag for docs/frontend changes
       docs: ${{ steps.check_docs.outputs.changed }}
       # Flag for typescript2/webview changes
@@ -161,20 +159,6 @@ jobs:
             ':baml_language/crates/baml_compiler_emit/**' \
             ':baml_language/crates/baml_thir/**' \
             ':baml_language/crates/baml_base/**' \
-          ; then
-            echo "changed=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "changed=true" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Check if BEPs changed
-        id: check_beps
-        env:
-          MERGE_BASE: ${{ steps.merge_base.outputs.sha }}
-        run: |
-          if git diff --quiet "${MERGE_BASE}...HEAD" -- \
-            ':beps/**' \
-            ':.github/workflows/beps.reusable.yaml' \
           ; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
           else
@@ -335,7 +319,7 @@ jobs:
 
       # prek hooks invoke cargo (from rustup), mise tasks that shell out
       # to cargo, and python scripts that begin with `#!/usr/bin/env -S
-      # uv run --script` (e.g. bep:readme, validate-markdown). We don't
+      # uv run --script` (e.g. validate-markdown). We don't
       # need go/ruby/node/etc here, just the prek binary itself + a
       # python/uv pair for the hook scripts.
       - name: "Install mise"
@@ -408,21 +392,6 @@ jobs:
     if: needs.determine_changes.outputs.code == 'true' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/canary'
     uses: ./.github/workflows/wasm-pack-tests.reusable.yaml
     secrets: inherit
-
-  beps:
-    name: "BEPs"
-    needs: determine_changes
-    uses: ./.github/workflows/beps.reusable.yaml
-    with:
-      beps_changed: ${{ needs.determine_changes.outputs.beps }}
-      is_canary: ${{ github.ref == 'refs/heads/canary' }}
-      is_pr: ${{ github.event_name == 'pull_request' }}
-    secrets: inherit
-    permissions:
-      id-token: write
-      contents: read
-      pull-requests: write
-      deployments: write
 
   docs:
     name: "Docs"
@@ -825,7 +794,6 @@ jobs:
       - release-metadata
       - cargo-tests
       - wasm-pack-tests
-      - beps
       - docs
       - webview-tests
       # - miri-tests  # TEMPORARILY DISABLED: miri tests timing out
@@ -850,7 +818,6 @@ jobs:
           echo "| release-metadata | ${{ needs.release-metadata.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| cargo-tests | ${{ needs.cargo-tests.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| wasm-pack-tests | ${{ needs.wasm-pack-tests.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| beps | ${{ needs.beps.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| docs | ${{ needs.docs.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| webview-tests | ${{ needs.webview-tests.result }} |" >> $GITHUB_STEP_SUMMARY
           # echo "| miri-tests | ${{ needs.miri-tests.result }} |" >> $GITHUB_STEP_SUMMARY  # TEMPORARILY DISABLED
