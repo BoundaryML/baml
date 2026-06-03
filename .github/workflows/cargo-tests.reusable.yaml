@@ -506,6 +506,14 @@ jobs:
           cache-targets: ${{ env.WIN_SDK_EXP == 'true' }}
           save-if: ${{ env.WIN_SDK_EXP == 'true' }}
           shared-key: ${{ env.WIN_SDK_EXP == 'true' && format('windows-sdk-exp-{0}', matrix.sdk-label) || matrix.rust-cache-key }}
+          # EXPERIMENT (build-caching/04, approach D-fix): rust-cache's default
+          # cleanup deletes non-cargo dirs from target/ before saving, so the
+          # pnpm store (target/pnpm-store, set by setup.ps1/sh) and uv cache
+          # came back cold every run. cache-directories entries are cached
+          # as-is (no cleanup), so the pnpm store warms → `pnpm install` drops
+          # from ~79s (reused 0) to a few seconds. Only used on the experiment
+          # branch (whole step is normal otherwise).
+          cache-directories: ${{ env.WIN_SDK_EXP == 'true' && 'baml_language/target/pnpm-store' || '' }}
 
       - name: "Load .envrc with direnv"
         run: |
