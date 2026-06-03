@@ -427,8 +427,12 @@ impl Printable for WhileStmt {
 #[derive(Debug)]
 pub struct WhileLetStmt {
     pub keyword: t::While,
-    /// `let PATTERN` — the leading `let` is part of the pattern grammar
-    /// (`parse_let_pattern`), so it is stored inside `pattern`.
+    /// Standalone leading `let`, present only for top-level array-pattern heads
+    /// (`while let [x] = xs`), where the parser keeps `let` at the statement
+    /// level instead of inside the pattern. For binding / class / type heads the
+    /// `let` lives inside `pattern` and this is `None`. Mirrors
+    /// `LetStmt::let_keyword`.
+    pub let_keyword: Option<t::Let>,
     pub pattern: MatchPattern,
     pub equals: t::Equals,
     pub scrutinee: Box<Expression>,
@@ -445,7 +449,14 @@ impl FromCST for WhileLetStmt {
         // KW_WHILE
         let keyword = it.expect_parse()?;
 
-        // PATTERN (consumes its own leading `let` token)
+        // Optional standalone KW_LET for top-level array-pattern heads
+        // (`while let [x] = xs`); for other heads `let` is inside the pattern.
+        let let_keyword = it
+            .next_if_kind(SyntaxKind::KW_LET)
+            .map(t::Let::from_cst)
+            .transpose()?;
+
+        // PATTERN (carries its own leading `let` unless consumed above)
         let pattern = it.expect_parse()?;
 
         // `=` separator between pattern and scrutinee
@@ -462,6 +473,7 @@ impl FromCST for WhileLetStmt {
 
         Ok(WhileLetStmt {
             keyword,
+            let_keyword,
             pattern,
             equals,
             scrutinee,
@@ -480,9 +492,13 @@ impl Printable for WhileLetStmt {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
         printer.print_raw_token(&self.keyword);
         printer.print_str(" ");
-        // `while let PATTERN = SCRUTINEE { ... }` — the pattern carries its own
-        // leading `let`; no parens around the pattern or scrutinee (mirrors
-        // `if let`, unlike plain `while` which canonicalises parens).
+        // A standalone `let` is present only for array-pattern heads; for other
+        // heads the `let` lives inside the pattern. No parens around the pattern
+        // or scrutinee (mirrors `if let`, unlike plain `while`).
+        if let Some(let_keyword) = &self.let_keyword {
+            printer.print_raw_token(let_keyword);
+            printer.print_str(" ");
+        }
         printer.print(&self.pattern, shape.clone());
         printer.print_str(" ");
         printer.print_raw_token(&self.equals);

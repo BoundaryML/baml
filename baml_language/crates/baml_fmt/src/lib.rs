@@ -459,6 +459,24 @@ mod while_let_format_tests {
     }
 
     #[test]
+    fn test_while_let_array_pattern() {
+        // Array-pattern head: the parser keeps `let` as a statement-level token
+        // (outside the PATTERN node), so the formatter must round-trip it via
+        // the optional `let_keyword` field. Before the fix, `from_cst` errored
+        // here because it expected a PATTERN right after `while`.
+        let options = FormatOptions::default();
+        let source = "function f(xs: int[]) -> int {\n    while let [a, b] = xs {\n        break;\n    }\n    0\n}\n";
+        let formatted = format(source, &options)
+            .expect("formatter should succeed on a while-let array-pattern head");
+        assert!(
+            formatted.contains("while let [") && formatted.contains("= xs"),
+            "while-let array-pattern head should round-trip with its `let`; got:\n{formatted}"
+        );
+        let second = format(&formatted, &options).expect("formatter should be idempotent");
+        assert_eq!(formatted, second, "formatter should be idempotent");
+    }
+
+    #[test]
     fn test_plain_while_unchanged() {
         // Regression: plain `while (cond) { … }` keeps its parens and must
         // not pick up while-let formatting.
