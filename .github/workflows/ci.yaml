@@ -52,6 +52,10 @@ jobs:
       unsafe: ${{ steps.check_unsafe.outputs.changed }}
       # Flag for proto codegen changes - triggers generated file sync check
       proto: ${{ steps.check_proto.outputs.changed }}
+      # Flag that is raised when perf benchmarks (CodSpeed) should run: always
+      # after merge (push to main/canary) and on manual dispatch; on PRs only
+      # when the PR title/body or a commit message opts in.
+      run_perf: ${{ steps.check_perf.outputs.run }}
     steps:
       - uses: useblacksmith/checkout@v1
         with:
@@ -235,6 +239,50 @@ jobs:
           else
             echo "changed=true" >> "$GITHUB_OUTPUT"
           fi
+
+      # Decide whether perf benchmarks (CodSpeed) should run for this event.
+      # Policy: benchmarks run automatically AFTER MERGE (push to main/canary)
+      # and on manual dispatch. On PRs they are OPT-IN — they no longer run on
+      # every code change. A PR opts in by mentioning one of the perf markers in
+      # its title, body, OR any of its commit messages. merge_group is always
+      # skipped (the PR already had its chance to run).
+      - name: Check perf benchmark opt-in
+        id: check_perf
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+          MERGE_BASE: ${{ steps.merge_base.outputs.sha }}
+        run: |
+          # Any of these, case-insensitive, in the PR title/body or a commit
+          # message opts a PR into a perf run. Keep in sync with the instructions
+          # posted by the "Perf benchmarks (PR notice)" job below.
+          PATTERN='RUN_CODSPEED=1|run-perf|/perf'
+
+          # Always run after merge (push to canary/main) and on manual dispatch.
+          if [ "$EVENT_NAME" = "push" ] || [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # Never run in the merge queue — it already ran (or was opted out) on
+          # the PR.
+          if [ "$EVENT_NAME" = "merge_group" ]; then
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # On PRs: opt in via the PR title/body or any commit message in the PR.
+          if printf '%s\n%s' "$PR_TITLE" "$PR_BODY" | grep -qiE "$PATTERN"; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if [ -n "$MERGE_BASE" ] && git log --format='%B' "${MERGE_BASE}..HEAD" | grep -qiE "$PATTERN"; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "run=false" >> "$GITHUB_OUTPUT"
 
   # Lint checks
   prek:
@@ -495,19 +543,13 @@ jobs:
     name: "benchmarks build (baml)"
     runs-on: blacksmith-8vcpu-ubuntu-2204-arm
     needs: determine_changes
-    # Runs automatically on ANY change under baml_language/ (determine_changes'
-    # `code` flag = `git diff ... ':baml_language/**'`), so every PR that could
-    # affect perf is measured. Also runs on push to main/canary, and on manual
-    # opt-in (RUN_CODSPEED=1 in the PR body) for PRs that don't touch
-    # baml_language/. Skipped in merge_group (already ran on the PR).
-    if: |
-      github.event_name != 'merge_group' &&
-      (
-        needs.determine_changes.outputs.code == 'true' ||
-        github.ref == 'refs/heads/main' ||
-        github.ref == 'refs/heads/canary' ||
-        contains(github.event.pull_request.body, 'RUN_CODSPEED=1')
-      )
+    # Perf benchmarks run automatically AFTER MERGE (push to main/canary) and on
+    # manual dispatch. On PRs they are OPT-IN: a PR runs them only when its
+    # title/body or a commit message mentions a perf marker (RUN_CODSPEED=1,
+    # run-perf, /perf). See determine_changes' `check_perf` step for the policy
+    # and the "Perf benchmarks (PR notice)" job for the comment PRs get when
+    # benchmarks are skipped. Skipped in merge_group (already settled on the PR).
+    if: needs.determine_changes.outputs.run_perf == 'true'
     timeout-minutes: 30
     steps:
       - name: "Checkout Branch"
@@ -581,14 +623,8 @@ jobs:
     needs:
       - determine_changes
       - benchmarks-build
-    if: |
-      github.event_name != 'merge_group' &&
-      (
-        needs.determine_changes.outputs.code == 'true' ||
-        github.ref == 'refs/heads/main' ||
-        github.ref == 'refs/heads/canary' ||
-        contains(github.event.pull_request.body, 'RUN_CODSPEED=1')
-      )
+    # Same gate as benchmarks-build — see determine_changes' `check_perf` step.
+    if: needs.determine_changes.outputs.run_perf == 'true'
     timeout-minutes: 30
     steps:
       - name: "Checkout Branch"
@@ -641,6 +677,19 @@ jobs:
           # phase into seconds. Fails fast and loud if the cache ever misses,
           # instead of silently re-cloning for half an hour.
           CARGO_NET_OFFLINE: "true"
+          # Adaptive sampling: cap each bench at ~2s of wall time instead of
+          # CodSpeed walltime's fixed 100 samples/bench. divan then runs as many
+          # samples as fit the budget — ~100 for cheap benches (full statistical
+          # power kept), down to 1 for the heavy O(n²)/1M-iter workloads (whose
+          # run-to-run variance is already tiny, so a single sample suffices).
+          #
+          # WHY: at fixed 100 samples the suite blew past the 30-min timeout. The
+          # long pole was compute::bubble_sort_5k — ~14s/sample on the (≈5×
+          # slower than local) codspeed-macro runner × 100 = ~23min for ONE
+          # bench. With this cap the whole 36-bench suite finishes in ~2 min.
+          # Measured locally: fixed-100 bubble_sort alone >90s; with the budget
+          # the full suite ran in 80s. Tune the budget here, not in code.
+          DIVAN_MAX_TIME: "2"
         with:
           mode: walltime
           # Executes ONLY the prebuilt binaries downloaded above; no compiler runs.
@@ -652,11 +701,68 @@ jobs:
           # region (see bench_vm_main), so only `main()` is timed. Sleep-based
           # workloads are excluded at build time.
           #
-          # The `vm_speedtest` filter selects exactly that suite, which runs in
-          # ~2 min/pass on the macro runner at the default 100 samples — well
-          # within the timeout, no sample-count tuning needed.
+          # The `vm_speedtest` filter selects exactly that suite; DIVAN_MAX_TIME
+          # (above) bounds each bench so the pass stays well under the timeout.
           run: cd baml_language && cargo codspeed run -m walltime 'vm_speedtest'
           token: ${{ secrets.CODSPEED_TOKEN }}
+
+  # Leaves (and keeps up to date) a single sticky comment on each PR explaining
+  # the perf-benchmark policy: either confirming benchmarks were triggered, or —
+  # when they were skipped — telling the author exactly how to opt in. Runs on
+  # every PR event so the same comment is edited in place (no spam) and flips
+  # between the two states as the author edits the PR / pushes commits.
+  perf-pr-notice:
+    name: "Perf benchmarks (PR notice)"
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    needs: determine_changes
+    if: github.event_name == 'pull_request'
+    permissions:
+      pull-requests: write
+    steps:
+      - name: "Comment perf opt-in instructions"
+        uses: actions/github-script@v7
+        env:
+          RUN_PERF: ${{ needs.determine_changes.outputs.run_perf }}
+        with:
+          script: |
+            // Hidden marker so we find & update our own comment instead of
+            // posting a new one on every push.
+            const marker = '<!-- perf-benchmarks-pr-notice -->';
+            const triggered = process.env.RUN_PERF === 'true';
+            const body = triggered
+              ? [
+                  marker,
+                  '### 🏎️ Performance benchmarks are running for this PR',
+                  '',
+                  'CodSpeed perf benchmarks were triggered because this PR opted in. ' +
+                    'Results will appear in the CodSpeed check / dashboard once they finish.',
+                ].join('\n')
+              : [
+                  marker,
+                  '### ⏭️ Performance benchmarks were skipped',
+                  '',
+                  'Perf benchmarks (CodSpeed) are **opt-in** on pull requests — they no ' +
+                    'longer run on every push. They always run automatically after merge ' +
+                    'to `canary`/`main`.',
+                  '',
+                  'To run them on **this** PR, do any of the following, then push a commit ' +
+                    '(or re-run CI):',
+                  '',
+                  '- Add `RUN_CODSPEED=1` to the PR description, **or**',
+                  '- Include `run-perf` or `/perf` in the PR title or any commit message.',
+                ].join('\n');
+
+            const { owner, repo } = context.repo;
+            const issue_number = context.issue.number;
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              owner, repo, issue_number,
+            });
+            const existing = comments.find((c) => c.body && c.body.includes(marker));
+            if (existing) {
+              await github.rest.issues.updateComment({ owner, repo, comment_id: existing.id, body });
+            } else {
+              await github.rest.issues.createComment({ owner, repo, issue_number, body });
+            }
 
   # CI Failure Alert - Required status check using "skipped = success" pattern
   # See: https://devopsdirective.com/posts/2025/08/github-actions-required-checks-for-conditional-jobs/
