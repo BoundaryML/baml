@@ -5,19 +5,19 @@ source: crates/baml_tests/src/generated_tests.rs
 function user.TestClient$new() -> ? throws never {
   baml.llm.PrimitiveClient { name: "TestClient", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "gpt-4o-mini", base_url: "http://localhost:...", allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: "test-key", provider_options: null, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map {  } } } : baml.llm.PrimitiveClient
 }
-function user.TestFunc(input: string) -> string throws never {
-  baml.llm.call_llm_function<T>(TestClient, "TestFunc", map { "input": input }) : string
+function user.TestFunc(input: string, client: baml.llm.Client = TestClient) -> string throws never {
+  baml.llm.call_llm_function<T>(client, "TestFunc", map { "input": input }) : string
 }
-function user.TestFunc$render_prompt(input: string) -> baml.llm.PromptAst throws never {
-  baml.llm.render_prompt(TestClient, "TestFunc", map { "input": input }) : baml.llm.PromptAst
+function user.TestFunc$render_prompt(input: string, client: baml.llm.Client = TestClient) -> baml.llm.PromptAst throws never {
+  baml.llm.render_prompt(client, "TestFunc", map { "input": input }) : baml.llm.PromptAst
 }
-function user.TestFunc$build_request(input: string) -> baml.http.Request throws never {
-  baml.llm.build_request(TestClient, "TestFunc", map { "input": input }) : baml.http.Request
+function user.TestFunc$build_request(input: string, client: baml.llm.Client = TestClient) -> baml.http.Request throws never {
+  baml.llm.build_request(client, "TestFunc", map { "input": input }) : baml.http.Request
 }
-function user.TestFunc$build_request_stream(input: string) -> baml.http.Request throws never {
-  baml.llm.build_request_stream(TestClient, "TestFunc", map { "input": input }) : baml.http.Request
+function user.TestFunc$build_request_stream(input: string, client: baml.llm.Client = TestClient) -> baml.http.Request throws never {
+  baml.llm.build_request_stream(client, "TestFunc", map { "input": input }) : baml.http.Request
 }
-function user.TestFunc$parse(json: string) -> string throws never {
+function user.TestFunc$parse(json: string, client: baml.llm.Client = TestClient) -> string throws never {
   baml.llm.parse<TFinal>("TestFunc", json) : string
 }
 function user.call_stream_inferred() -> baml.llm.Stream<null | string, string> throws never {
@@ -25,9 +25,9 @@ function user.call_stream_inferred() -> baml.llm.Stream<null | string, string> t
     baml.llm.stream_llm_function(TestClient, "TestFunc", map { "input": "world" }) : baml.llm.Stream<null | string, string>
   }
 }
-function user.TestFunc$stream(input: string) -> baml.llm.Stream<null | string, string> throws never {
-  baml.llm.stream_llm_function(TestClient, "TestFunc", map { "input": input }) : baml.llm.Stream<null | string, string>
+function user.TestFunc$stream(input: string, client: baml.llm.Client = TestClient) -> baml.llm.Stream<null | string, string> throws never {
+  baml.llm.stream_llm_function(client, "TestFunc", map { "input": input }) : baml.llm.Stream<null | string, string>
 }
-function user.TestFunc$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream<null | string, string> throws never {
-  TestClient.__make_stream(sse, "TestFunc") : unknown
+function user.TestFunc$parse_stream(sse: baml.http.SseStream, client: baml.llm.Client = TestClient) -> baml.llm.Stream<null | string, string> throws never {
+  client.__make_stream(sse, "TestFunc") : baml.llm.Stream<null | string, string>
 }

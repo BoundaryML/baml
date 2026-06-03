@@ -242,11 +242,20 @@ mod tests {
             .find(|f| f.name == Name::new("greet"));
         let func = func.expect("function 'greet' should be in item tree");
 
-        assert_eq!(func.params.len(), 1, "greet should have 1 param");
+        assert_eq!(
+            func.params.len(),
+            2,
+            "LLM function should have user params plus default client param"
+        );
         assert_eq!(
             func.params[0].name,
             Name::new("name"),
             "param name should be 'name'"
+        );
+        assert_eq!(
+            func.params[1].name,
+            Name::new("client"),
+            "LLM function should append default client param"
         );
         assert!(
             func.return_type.is_some(),
@@ -280,10 +289,10 @@ mod tests {
             let bindings = &index.scope_bindings[i];
             assert_eq!(
                 bindings.params.len(),
-                2,
-                "function 'add' should have 2 params"
+                3,
+                "LLM function 'add' should have 2 user params plus default client param"
             );
-            // params are in order: a=0, b=1
+            // params are in order: a=0, b=1, client=2
             assert!(
                 bindings
                     .params
@@ -296,11 +305,17 @@ mod tests {
                     .iter()
                     .any(|(n, idx)| n == &Name::new("b") && *idx == 1)
             );
+            assert!(
+                bindings
+                    .params
+                    .iter()
+                    .any(|(n, idx)| n == &Name::new("client") && *idx == 2)
+            );
 
             // scope_bindings_query also works using the pre-interned ScopeId
             let scope_id = index.scope_ids[i];
             let bindings2 = baml_compiler2_hir::scope_bindings_query(&db, scope_id);
-            assert_eq!(bindings2.params.len(), 2);
+            assert_eq!(bindings2.params.len(), 3);
         } else {
             panic!("No Function scope found in index");
         }

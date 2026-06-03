@@ -345,6 +345,14 @@ mod tests {
         items
     }
 
+    fn parse_and_lower_with_diagnostics(
+        source: &str,
+    ) -> (Vec<Item>, Vec<crate::LoweringDiagnostic>) {
+        let root = parse(source);
+        let (items, diags, _env_var_refs) = lower_file(&root);
+        (items, diags)
+    }
+
     fn first_function(items: Vec<Item>) -> crate::ast::FunctionDef {
         items
             .into_iter()
@@ -356,6 +364,53 @@ mod tests {
                 }
             })
             .expect("expected a FunctionDef")
+    }
+
+    #[test]
+    fn llm_function_user_client_param_is_reserved() {
+        let source = r##"
+client<llm> GPT4 {
+  provider "openai"
+  options {
+    model "gpt-4o"
+    api_key "test"
+  }
+}
+
+function Extract(client: string, text: string) -> string {
+  client GPT4
+  prompt #"{{ text }}"#
+}
+"##;
+
+        let (items, diags) = parse_and_lower_with_diagnostics(source);
+        assert!(
+            diags.iter().any(|diag| matches!(
+                diag,
+                crate::LoweringDiagnostic::ReservedLlmClientParam {
+                    function_name,
+                    param_name,
+                    ..
+                } if function_name == "Extract" && param_name == "client"
+            )),
+            "expected reserved LLM client param diagnostic, got: {diags:#?}"
+        );
+
+        let function = items
+            .into_iter()
+            .find_map(|item| match item {
+                Item::Function(function) if function.name.as_str() == "Extract" => Some(function),
+                _ => None,
+            })
+            .expect("expected Extract function");
+        let param_names: Vec<&str> = function.params.iter().map(|p| p.name.as_str()).collect();
+        assert_eq!(param_names, vec!["text", "client"]);
+        let default_id = function.params[1].default.expect("expected client default");
+        let default_expr = &function.defaults.exprs.exprs[default_id.expr()];
+        assert!(
+            matches!(default_expr, Expr::Path(path) if path.len() == 1 && path[0].as_str() == "GPT4"),
+            "expected compiler-injected client default to reference GPT4, got {default_expr:#?}"
+        );
     }
 
     #[test]

@@ -140,6 +140,63 @@ function f() -> string {
 }
 
 #[test]
+fn llm_client_override_argument_is_callable_on_function_and_build_request() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r##"
+client<llm> DefaultClient {
+  provider "openai"
+  options {
+    model "gpt-4o-mini"
+    api_key "default-key"
+  }
+}
+
+client<llm> OverrideClient {
+  provider "openai"
+  options {
+    model "gpt-4o-mini"
+    api_key "override-key"
+  }
+}
+
+function Ask(input: string) -> string {
+  client DefaultClient
+  prompt #"{{ input }}"#
+}
+
+function call_overrides() -> string {
+  let answer = Ask("hello", client = OverrideClient)
+  let request_url = Ask$build_request("hello", client = OverrideClient).url
+  answer + request_url
+}
+"##,
+    );
+    let tir = render_tir(&db, file);
+
+    assert!(
+        tir.contains("function user.Ask(input: string, client: baml.llm.Client = DefaultClient)"),
+        "{tir}"
+    );
+    assert!(
+        tir.contains(
+            "function user.Ask$build_request(input: string, client: baml.llm.Client = DefaultClient) -> baml.http.Request"
+        ),
+        "{tir}"
+    );
+    assert!(
+        tir.contains(r#"Ask("hello", client = OverrideClient) : string"#),
+        "{tir}"
+    );
+    assert!(
+        tir.contains(r#"Ask$build_request("hello", client = OverrideClient).url : string"#),
+        "{tir}"
+    );
+    assert!(!tir.contains("!!"), "unexpected diagnostics:\n{tir}");
+}
+
+#[test]
 fn raw_generic_constructor_infers_typevar_from_field_value() {
     let mut db = make_db();
     let file = db.add_file(
