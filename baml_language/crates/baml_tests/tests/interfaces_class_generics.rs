@@ -530,6 +530,66 @@ fn class_generic_bound_is_enforced_in_type_aliases() {
 }
 
 #[test]
+fn class_generic_bound_is_enforced_in_optional_type_aliases() {
+    assert_compile_error_contains(
+        r#"
+        interface Named {
+            name: string
+        }
+
+        class Box<T extends Named> {
+            value: T
+        }
+
+        type Bad = Box<int>?
+        "#,
+        "Named",
+    );
+}
+
+#[test]
+fn class_generic_bound_is_enforced_when_alias_is_used() {
+    assert_compile_error_contains(
+        r#"
+        interface Named {
+            name: string
+        }
+
+        class Box<T extends Named> {
+            value: T
+        }
+
+        type Bad = Box<int>?
+
+        function takes_bad(value: Bad) -> int {
+            return 1
+        }
+        "#,
+        "Named",
+    );
+}
+
+#[test]
+fn class_generic_bound_is_enforced_in_optional_annotations() {
+    assert_compile_error_contains(
+        r#"
+        interface Named {
+            name: string
+        }
+
+        class Box<T extends Named> {
+            value: T
+        }
+
+        function takes_bad(value: Box<int>?) -> int {
+            return 1
+        }
+        "#,
+        "Named",
+    );
+}
+
+#[test]
 fn class_generic_bound_allows_bounded_type_var_as_type_arg_in_class_field() {
     assert_no_compile_errors(
         r#"

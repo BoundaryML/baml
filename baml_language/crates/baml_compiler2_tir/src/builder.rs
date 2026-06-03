@@ -11326,29 +11326,46 @@ impl<'db> TypeInferenceBuilder<'db> {
         target: GenericBoundValidationTarget,
         ty: &Ty,
     ) {
+        let mut seen_aliases = FxHashSet::default();
+        self.validate_type_generic_bounds_with_target_inner(target, ty, &mut seen_aliases);
+    }
+
+    fn validate_type_generic_bounds_with_target_inner(
+        &mut self,
+        target: GenericBoundValidationTarget,
+        ty: &Ty,
+        seen_aliases: &mut FxHashSet<crate::ty::QualifiedTypeName>,
+    ) {
         match ty {
             Ty::Class(qtn, type_args, _) => {
                 for arg in type_args {
-                    self.validate_type_generic_bounds_with_target(target, arg);
+                    self.validate_type_generic_bounds_with_target_inner(target, arg, seen_aliases);
                 }
                 self.validate_class_generic_bounds(target, qtn, type_args);
             }
             Ty::Interface(qtn, type_args, _) => {
                 for arg in type_args {
-                    self.validate_type_generic_bounds_with_target(target, arg);
+                    self.validate_type_generic_bounds_with_target_inner(target, arg, seen_aliases);
                 }
                 self.validate_interface_generic_bounds(target, qtn, type_args);
             }
             Ty::List(inner, _) | Ty::EvolvingList(inner, _) => {
-                self.validate_type_generic_bounds_with_target(target, inner);
+                self.validate_type_generic_bounds_with_target_inner(target, inner, seen_aliases);
+            }
+            Ty::Optional(inner, _) => {
+                self.validate_type_generic_bounds_with_target_inner(target, inner, seen_aliases);
             }
             Ty::Map(key, value, _) | Ty::EvolvingMap(key, value, _) => {
-                self.validate_type_generic_bounds_with_target(target, key);
-                self.validate_type_generic_bounds_with_target(target, value);
+                self.validate_type_generic_bounds_with_target_inner(target, key, seen_aliases);
+                self.validate_type_generic_bounds_with_target_inner(target, value, seen_aliases);
             }
             Ty::Union(members, _) => {
                 for member in members {
-                    self.validate_type_generic_bounds_with_target(target, member);
+                    self.validate_type_generic_bounds_with_target_inner(
+                        target,
+                        member,
+                        seen_aliases,
+                    );
                 }
             }
             Ty::Function {
@@ -11359,17 +11376,39 @@ impl<'db> TypeInferenceBuilder<'db> {
                 ..
             } => {
                 for bound in generic_param_bounds.iter().flatten() {
-                    self.validate_type_generic_bounds_with_target(target, bound);
+                    self.validate_type_generic_bounds_with_target_inner(
+                        target,
+                        bound,
+                        seen_aliases,
+                    );
                 }
                 for param in params {
-                    self.validate_type_generic_bounds_with_target(target, &param.ty);
+                    self.validate_type_generic_bounds_with_target_inner(
+                        target,
+                        &param.ty,
+                        seen_aliases,
+                    );
                 }
-                self.validate_type_generic_bounds_with_target(target, ret);
-                self.validate_type_generic_bounds_with_target(target, throws);
+                self.validate_type_generic_bounds_with_target_inner(target, ret, seen_aliases);
+                self.validate_type_generic_bounds_with_target_inner(target, throws, seen_aliases);
             }
             Ty::Future(value, error, _) => {
-                self.validate_type_generic_bounds_with_target(target, value);
-                self.validate_type_generic_bounds_with_target(target, error);
+                self.validate_type_generic_bounds_with_target_inner(target, value, seen_aliases);
+                self.validate_type_generic_bounds_with_target_inner(target, error, seen_aliases);
+            }
+            Ty::TypeAlias(qtn, _) => {
+                if !seen_aliases.insert(qtn.clone()) {
+                    return;
+                }
+                let expanded = self.expand_alias_chains(ty.clone());
+                if !matches!(expanded, Ty::TypeAlias(_, _)) {
+                    self.validate_type_generic_bounds_with_target_inner(
+                        target,
+                        &expanded,
+                        seen_aliases,
+                    );
+                }
+                seen_aliases.remove(qtn);
             }
             _ => {}
         }
