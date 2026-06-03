@@ -123,7 +123,7 @@ jobs:
 
       - name: Checkout
         if: steps.gate.outputs.should_run == 'true'
-        uses: actions/checkout@v6
+        uses: useblacksmith/checkout@v1
         with:
           ref: ${{ steps.gate.outputs.checkout_ref }}
           fetch-depth: 0
