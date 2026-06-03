@@ -1,13 +1,12 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 23980
 ---
 === HIR2 ===
 function user.DeepGenericDestructureNamespaceQualifiedLet() -> int  [expr] {
-  { let outer: llm.openai.Outer = llm.openai.Outer { inner: llm.openai.Box { value: "done" } }; let llm.openai.Outer<string> { inner: llm.openai.Box<string> { value: value } } = outer } value.length()
+  { let outer: llm.openai.Outer<string> = llm.openai.Outer { inner: llm.openai.Box { value: "done" } }; let llm.openai.Outer<string> { inner: llm.openai.Box<string> { value: value } } = outer } value.length()
 }
 function user.DeepGenericDestructureQualifiedLet() -> int  [expr] {
-  { let outer: root.llm.openai.Outer = root.llm.openai.Outer { inner: root.llm.openai.Box { value: 52 } }; let root.llm.openai.Outer<int> { inner: root.llm.openai.Box<int> { value: value } } = outer } value
+  { let outer: root.llm.openai.Outer<int> = root.llm.openai.Outer { inner: root.llm.openai.Box { value: 52 } }; let root.llm.openai.Outer<int> { inner: root.llm.openai.Box<int> { value: value } } = outer } value
 }
 function user.DestructureNamespaceQualifiedLet() -> int  [expr] {
   { let response = llm.openai.Response { text: "ok", score: 45 }; let llm.openai.Response { score: score } = response } score
@@ -22,16 +21,16 @@ function user.DestructureQualifiedMatch() -> int  [expr] {
   { let response = root.llm.openai.Response { text: "ok", score: 42 } } match (response) { root.llm.openai.Response { score: 0 } => 0, root.llm.openai.Response { score: matched } => matched }
 }
 function user.GenericDestructureNamespaceQualifiedLet() -> int  [expr] {
-  { let boxed: llm.openai.Box = llm.openai.Box { value: "ok" }; let llm.openai.Box<string> { value: value } = boxed } value.length()
+  { let boxed: llm.openai.Box<string> = llm.openai.Box { value: "ok" }; let llm.openai.Box<string> { value: value } = boxed } value.length()
 }
 function user.GenericDestructureQualifiedLet() -> int  [expr] {
-  { let boxed: root.llm.openai.Box = root.llm.openai.Box { value: 49 }; let root.llm.openai.Box<int> { value: value } = boxed } value
+  { let boxed: root.llm.openai.Box<int> = root.llm.openai.Box { value: 49 }; let root.llm.openai.Box<int> { value: value } = boxed } value
 }
 function user.GenericTypePatternNamespaceQualifiedMatch() -> int  [expr] {
-  { let boxed: llm.openai.Box | llm.openai.Box = llm.openai.Box { value: "ready" } } match (boxed) { llm.openai.Box => 0, llm.openai.Box => 51 }
+  { let boxed: llm.openai.Box<int> | llm.openai.Box<string> = llm.openai.Box { value: "ready" } } match (boxed) { llm.openai.Box<int> => 0, llm.openai.Box<string> => 51 }
 }
 function user.GenericTypePatternQualifiedMatch() -> int  [expr] {
-  { let boxed: root.llm.openai.Box | root.llm.openai.Box = root.llm.openai.Box { value: 50 } } match (boxed) { root.llm.openai.Box => 0, root.llm.openai.Box => 50 }
+  { let boxed: root.llm.openai.Box<int> | root.llm.openai.Box<string> = root.llm.openai.Box { value: 50 } } match (boxed) { root.llm.openai.Box<string> => 0, root.llm.openai.Box<int> => 50 }
 }
 function user.TypePatternNamespaceQualifiedLet() -> int  [expr] {
   { let response: llm.openai.Response = llm.openai.Response { text: "ok", score: 47 } } response.score
@@ -49,7 +48,7 @@ class user.llm.openai.Box {
   value: user.llm.openai.T
 }
 class user.llm.openai.Outer {
-  inner: user.llm.openai.Box
+  inner: user.llm.openai.Box<user.llm.openai.T>
 }
 class user.llm.openai.Response {
   text: string
@@ -61,10 +60,10 @@ function user.llm.openai.DestructureBareInNamespace(response: user.llm.openai.Re
 function user.llm.openai.from_json(j: baml.json.json) -> user.llm.openai.Response  [expr] {
   user.llm.openai.Response { text: baml.json.from_json(baml.json.field(j, "text")), score: baml.json.from_json(baml.json.field(j, "score")) }
 }
-function user.llm.openai.from_json(j: baml.json.json) -> user.llm.openai.Box  [expr] {
+function user.llm.openai.from_json(j: baml.json.json) -> user.llm.openai.Box<user.llm.openai.T>  [expr] {
   user.llm.openai.Box { value: baml.json.from_json(baml.json.field(j, "value")) }
 }
-function user.llm.openai.from_json(j: baml.json.json) -> user.llm.openai.Outer  [expr] {
+function user.llm.openai.from_json(j: baml.json.json) -> user.llm.openai.Outer<user.llm.openai.T>  [expr] {
   user.llm.openai.Outer { inner: baml.json.from_json(baml.json.field(j, "inner")) }
 }
 function user.llm.openai.to_json(self: ?) -> baml.json.json  [expr] {

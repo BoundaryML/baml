@@ -3056,6 +3056,13 @@ impl<'a> Parser<'a> {
             }
 
             if p.at(TokenKind::Extends) {
+                if require_binding && let Some(span) = p.current().map(|t| t.span) {
+                    p.error(
+                        "associated type bounds are only allowed on interface declarations"
+                            .to_string(),
+                        span,
+                    );
+                }
                 p.bump();
                 if p.is_at_type_start() {
                     p.parse_type();

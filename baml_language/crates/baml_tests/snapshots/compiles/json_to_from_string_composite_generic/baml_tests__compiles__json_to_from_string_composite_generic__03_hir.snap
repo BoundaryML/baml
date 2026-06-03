@@ -8,13 +8,13 @@ class user.Container {
 class user.User {
   name: string
 }
-function user.decode_container(s: string) -> user.Container  [expr] {
+function user.decode_container(s: string) -> user.Container<user.User>  [expr] {
   {  } baml.json.from_string(s)
 }
 function user.from_json(j: baml.json.json) -> user.User  [expr] {
   user.User { name: baml.json.from_json(baml.json.field(j, "name")) }
 }
-function user.from_json(j: baml.json.json) -> user.Container  [expr] {
+function user.from_json(j: baml.json.json) -> user.Container<user.T>  [expr] {
   user.Container { item: baml.json.from_json(baml.json.field(j, "item")) }
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {

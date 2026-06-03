@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 5992
 ---
 === HIR2 ===
 class user.Box {
@@ -59,7 +58,7 @@ function user.from_json(j: baml.json.json) -> user.Formatter  [expr] {
 function user.from_json(j: baml.json.json) -> user.Employee  [expr] {
   user.Employee { first: baml.json.from_json(baml.json.field(j, "first")), last: baml.json.from_json(baml.json.field(j, "last")) }
 }
-function user.from_json(j: baml.json.json) -> user.Box  [expr] {
+function user.from_json(j: baml.json.json) -> user.Box<user.T>  [expr] {
   user.Box { value: baml.json.from_json(baml.json.field(j, "value")) }
 }
 function user.from_json(j: baml.json.json) -> user.Counter  [expr] {

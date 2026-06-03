@@ -8,15 +8,28 @@ use std::collections::HashSet;
 
 use baml_compiler_diagnostics::Severity;
 use baml_fmt::FormatOptions;
-use baml_project::{collect_diagnostics, testing::setup_test_db};
+use baml_project::{ProjectDatabase, collect_diagnostics, testing::setup_test_db};
 use baml_tests::baml_test;
 use bex_engine::BexExternalValue;
 
 fn collect_compile_errors(source: &str) -> Vec<String> {
     let db = setup_test_db(source);
+    collect_compile_errors_from_db(&db)
+}
+
+fn collect_compile_errors_multi(files: &[(&str, &str)]) -> Vec<String> {
+    let mut db = ProjectDatabase::new();
+    db.set_project_root(std::path::Path::new("."));
+    for (path, source) in files {
+        db.add_file(*path, source);
+    }
+    collect_compile_errors_from_db(&db)
+}
+
+fn collect_compile_errors_from_db(db: &ProjectDatabase) -> Vec<String> {
     let project = db.get_project().expect("project must be set");
     let all_files = db.get_source_files();
-    let user_file_ids: HashSet<_> = all_files.iter().map(|f| f.file_id(&db)).collect();
+    let user_file_ids: HashSet<_> = all_files.iter().map(|f| f.file_id(db)).collect();
 
     collect_diagnostics(&db, project, &all_files)
         .into_iter()
@@ -33,6 +46,16 @@ fn collect_compile_errors(source: &str) -> Vec<String> {
 #[track_caller]
 fn assert_zero_compile_errors(source: &str) {
     let errors = collect_compile_errors(source);
+    assert!(
+        errors.is_empty(),
+        "expected zero compile errors, got:\n  {}",
+        errors.join("\n  ")
+    );
+}
+
+#[track_caller]
+fn assert_zero_compile_errors_multi(files: &[(&str, &str)]) {
+    let errors = collect_compile_errors_multi(files);
     assert!(
         errors.is_empty(),
         "expected zero compile errors, got:\n  {}",
@@ -412,7 +435,7 @@ fn selected_projection_rejects_mismatched_associated_type_binding() {
             raw: string
 
             implements Codec<TextFormat> {
-                type Output = string
+                type Output=string
 
                 function decode(self, input: string) -> string {
                     return self.raw
@@ -600,6 +623,161 @@ fn associated_type_default_can_reference_interface_generic() {
 
         function read_box(box: Boxed<string>) -> string {
             return box.get()
+        }
+        "#,
+    );
+}
+
+#[test]
+fn associated_type_default_can_reference_explicit_witness() {
+    assert_zero_compile_errors(
+        r#"
+        interface Batch {
+            type Item
+            type Items = Item[]
+
+            function all(self) -> Items
+        }
+
+        class IntBatch {
+            values: int[]
+
+            implements Batch {
+                type Item = int
+
+                function all(self) -> int[] {
+                    return self.values
+                }
+            }
+        }
+
+        function read(batch: Batch<Item = int>) -> int[] {
+            return batch.all()
+        }
+        "#,
+    );
+}
+
+#[test]
+fn associated_type_default_from_qualified_interface_resolves_declaring_namespace() {
+    assert_zero_compile_errors_multi(&[
+        (
+            "ns_contracts/contracts.baml",
+            r#"
+            class DefaultValue {
+                value: int
+            }
+
+            interface Cache {
+                type Value = DefaultValue
+
+                function get(self) -> Value
+            }
+            "#,
+        ),
+        (
+            "ns_models/models.baml",
+            r#"
+            class LocalCache {
+                implements root.contracts.Cache {
+                    function get(self) -> root.contracts.DefaultValue {
+                        return root.contracts.DefaultValue { value: 1 }
+                    }
+                }
+            }
+            "#,
+        ),
+    ]);
+}
+
+#[test]
+fn explicit_associated_type_witness_can_reference_earlier_witness() {
+    assert_zero_compile_errors(
+        r#"
+        interface Batch {
+            type Item
+            type Items
+
+            function all(self) -> Items
+        }
+
+        class IntBatch {
+            values: int[]
+
+            implements Batch {
+                type Item = int
+                type Items = Item[]
+
+                function all(self) -> int[] {
+                    return self.values
+                }
+            }
+        }
+
+        function read(batch: Batch<Item = int, Items = int[]>) -> int[] {
+            return batch.all()
+        }
+        "#,
+    );
+}
+
+#[test]
+fn dependent_associated_type_bound_uses_resolved_witness() {
+    assert_zero_compile_errors(
+        r#"
+        interface Parser {
+            type Item
+            type Output extends Item
+
+            function parse(self) -> Output
+        }
+
+        class IntParser {
+            implements Parser {
+                type Item = int
+                type Output = int
+
+                function parse(self) -> int {
+                    return 1
+                }
+            }
+        }
+
+        function parse(parser: Parser<Item = int, Output = int>) -> int {
+            return parser.parse()
+        }
+        "#,
+    );
+}
+
+#[test]
+fn dependent_associated_type_bound_rejects_mismatched_interface_binding() {
+    assert_compile_error_contains(
+        r#"
+        interface Parser {
+            type Item
+            type Output extends Item
+        }
+
+        function bad(parser: Parser<Item = int, Output = string>) -> null {
+            return null
+        }
+        "#,
+        "does not satisfy bound",
+    );
+}
+
+#[test]
+fn associated_type_binding_order_is_not_semantic() {
+    assert_zero_compile_errors(
+        r#"
+        interface Pair {
+            type Left
+            type Right
+        }
+
+        function reorder(pair: Pair<Left = int, Right = string>) -> Pair<Right = string, Left = int> {
+            return pair
         }
         "#,
     );
@@ -1285,7 +1463,7 @@ fn formatter_accepts_associated_type_syntax() {
 
     let formatted = baml_fmt::format(source, &FormatOptions::default())
         .expect("formatter should accept associated type syntax");
-    assert!(formatted.contains("type Output"));
+    assert!(formatted.contains("type Output = string"));
     assert!(formatted.contains("Codec<TextFormat, Output = string>"));
     assert!(formatted.contains("(Document as Codec<TextFormat>).Output"));
     assert!(formatted.contains("S extends Source<Item = int | string>"));
@@ -1760,6 +1938,54 @@ fn implements_target_associated_type_binding_errors() {
         }
         "#,
         "associated type bindings are not allowed in `implements` targets",
+    );
+}
+
+#[test]
+fn implements_target_associated_type_binding_errors_even_when_same_witness_is_in_body() {
+    assert_compile_error_contains(
+        r#"
+        interface Iterator {
+            type Item
+
+            function next(self) -> Item?
+        }
+
+        class IntIterator {
+            implements Iterator<Item = int> {
+                type Item = int
+
+                function next(self) -> int? {
+                    return null
+                }
+            }
+        }
+        "#,
+        "associated type bindings are not allowed in `implements` targets",
+    );
+}
+
+#[test]
+fn impl_associated_type_witness_rejects_extends_bound() {
+    assert_compile_error_contains(
+        r#"
+        interface Iterator {
+            type Item
+
+            function next(self) -> Item?
+        }
+
+        class IntIterator {
+            implements Iterator {
+                type Item extends int = int
+
+                function next(self) -> int? {
+                    return null
+                }
+            }
+        }
+        "#,
+        "associated type bounds are only allowed on interface declarations",
     );
 }
 
@@ -2593,6 +2819,35 @@ fn associated_union_pattern_does_not_exhaust_wider_associated_binding() {
         "#,
         "E0062",
     );
+}
+
+#[tokio::test]
+async fn runtime_guard_accepts_generic_requested_associated_type_var() {
+    let output = baml_test!(
+        r#"
+        interface Source {
+            type Item
+        }
+
+        class IntSource {
+            implements Source {
+                type Item = int
+            }
+        }
+
+        function score<T>(source: Source) -> int {
+            return match (source) {
+                let matching: Source<Item = T> => 1,
+                _ => 0,
+            }
+        }
+
+        function main() -> int {
+            return score<int>(IntSource {})
+        }
+        "#
+    );
+    assert_eq!(output.result.unwrap(), BexExternalValue::Int(1));
 }
 
 #[tokio::test]

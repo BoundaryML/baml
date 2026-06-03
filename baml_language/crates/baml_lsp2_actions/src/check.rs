@@ -835,8 +835,10 @@ impl MethodSignature {
         &self,
         other: &Self,
         db: &dyn Db,
-        pkg_items: &baml_compiler2_hir::package::PackageItems<'_>,
-        namespace_path: &[Name],
+        expected_pkg_items: &baml_compiler2_hir::package::PackageItems<'_>,
+        expected_namespace_path: &[Name],
+        actual_pkg_items: &baml_compiler2_hir::package::PackageItems<'_>,
+        actual_namespace_path: &[Name],
         aliases: &std::collections::HashMap<QualifiedTypeName, Ty>,
     ) -> bool {
         if self.generic_params != other.generic_params
@@ -849,11 +851,12 @@ impl MethodSignature {
         let cmp = |a: &baml_compiler2_ast::TypeExpr, b: &baml_compiler2_ast::TypeExpr| {
             type_exprs_compatible(
                 db,
-                pkg_items,
-                namespace_path,
+                expected_pkg_items,
+                expected_namespace_path,
                 gp,
                 a,
-                namespace_path,
+                actual_pkg_items,
+                actual_namespace_path,
                 gp,
                 b,
                 aliases,
@@ -898,8 +901,10 @@ impl MethodSignature {
         match (&self.throws_te, &other.throws_te) {
             (Some(iface_throws), Some(impl_throws)) => throws_covariant_compatible(
                 db,
-                pkg_items,
-                namespace_path,
+                expected_pkg_items,
+                expected_namespace_path,
+                actual_pkg_items,
+                actual_namespace_path,
                 gp,
                 iface_throws,
                 impl_throws,
@@ -1050,19 +1055,20 @@ fn associated_type_subst_from_bindings(
 ) -> std::collections::HashMap<Name, baml_compiler2_ast::TypeExpr> {
     let mut subst = base_subst.clone();
     for assoc in &iface.associated_types {
+        if let Some(binding) = bindings.iter().find(|binding| binding.name == assoc.name)
+            && let Some(type_expr) = &binding.type_expr
+        {
+            subst.insert(
+                assoc.name.clone(),
+                substitute_type_vars(&type_expr.expr, &subst),
+            );
+            continue;
+        }
         if !subst.contains_key(&assoc.name)
             && let Some(default) = &assoc.default
         {
             let default_expr = substitute_type_vars(&default.expr, &subst);
             subst.insert(assoc.name.clone(), default_expr);
-        }
-    }
-    for binding in bindings {
-        if let Some(type_expr) = &binding.type_expr {
-            subst.insert(
-                binding.name.clone(),
-                substitute_type_vars(&type_expr.expr, &subst),
-            );
         }
     }
     subst
@@ -1075,18 +1081,22 @@ fn associated_type_subst_from_type_args(
 ) -> std::collections::HashMap<Name, baml_compiler2_ast::TypeExpr> {
     let mut subst = base_subst.clone();
     for assoc in &iface.associated_types {
+        if let Some(binding) = associated_type_bindings
+            .iter()
+            .find(|binding| binding.name == assoc.name)
+        {
+            subst.insert(
+                assoc.name.clone(),
+                substitute_type_vars(&binding.ty, &subst),
+            );
+            continue;
+        }
         if !subst.contains_key(&assoc.name)
             && let Some(default) = &assoc.default
         {
             let default_expr = substitute_type_vars(&default.expr, &subst);
             subst.insert(assoc.name.clone(), default_expr);
         }
-    }
-    for binding in associated_type_bindings {
-        subst.insert(
-            binding.name.clone(),
-            substitute_type_vars(&binding.ty, &subst),
-        );
     }
     subst
 }
@@ -1153,9 +1163,12 @@ fn augment_subst_with_class_required_parent_associated_types(
 fn validate_associated_type_binding_defs(
     db: &dyn Db,
     file_id: FileId,
+    iface_file_id: FileId,
+    impl_span: TextRange,
     iface: &baml_compiler2_hir::item_tree::Interface,
     iface_display_name: &Name,
-    pkg_items: &baml_compiler2_hir::package::PackageItems<'_>,
+    iface_pkg_items: &baml_compiler2_hir::package::PackageItems<'_>,
+    binding_pkg_items: &baml_compiler2_hir::package::PackageItems<'_>,
     iface_namespace_path: &[Name],
     binding_namespace_path: &[Name],
     generic_params: &[Name],
@@ -1229,13 +1242,21 @@ fn validate_associated_type_binding_defs(
                 )
                 .with_primary_span(Span {
                     file_id,
-                    range: assoc.name_span,
+                    range: impl_span,
                 })
+                .with_related(
+                    Span {
+                        file_id: iface_file_id,
+                        range: assoc.name_span,
+                    },
+                    "associated type declared here",
+                )
                 .with_phase(DiagnosticPhase::Type),
             );
         }
     }
 
+    let associated_subst = associated_type_subst_from_bindings(iface, generic_subst, bindings);
     for binding in bindings {
         let Some(assoc) = associated.get(&binding.name).copied() else {
             continue;
@@ -1247,17 +1268,17 @@ fn validate_associated_type_binding_defs(
         let binding_ty = baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns(
             db,
             &binding_ty_expr.expr,
-            pkg_items,
+            binding_pkg_items,
             binding_namespace_path,
             generic_params,
             &mut binding_diags,
         );
         let mut bound_diags = Vec::new();
-        let bound_expr = substitute_type_vars(&bound.expr, generic_subst);
+        let bound_expr = substitute_type_vars(&bound.expr, &associated_subst);
         let bound_ty = baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns(
             db,
             &bound_expr,
-            pkg_items,
+            iface_pkg_items,
             iface_namespace_path,
             generic_params,
             &mut bound_diags,
@@ -1317,23 +1338,33 @@ fn validate_associated_type_default_bounds(
     aliases: &std::collections::HashMap<QualifiedTypeName, Ty>,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
+    let mut associated_subst: std::collections::HashMap<Name, baml_compiler2_ast::TypeExpr> =
+        std::collections::HashMap::new();
     for assoc in &iface.associated_types {
         let (Some(bound), Some(default)) = (&assoc.bound, &assoc.default) else {
+            if let Some(default) = &assoc.default {
+                associated_subst.insert(
+                    assoc.name.clone(),
+                    substitute_type_vars(&default.expr, &associated_subst),
+                );
+            }
             continue;
         };
         let mut bound_diags = Vec::new();
+        let bound_expr = substitute_type_vars(&bound.expr, &associated_subst);
         let bound_ty = baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns(
             db,
-            &bound.expr,
+            &bound_expr,
             pkg_items,
             namespace_path,
             &iface.generic_params,
             &mut bound_diags,
         );
         let mut default_diags = Vec::new();
+        let default_expr = substitute_type_vars(&default.expr, &associated_subst);
         let default_ty = baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns(
             db,
-            &default.expr,
+            &default_expr,
             pkg_items,
             namespace_path,
             &iface.generic_params,
@@ -1359,6 +1390,7 @@ fn validate_associated_type_default_bounds(
                 .with_phase(DiagnosticPhase::Type),
             );
         }
+        associated_subst.insert(assoc.name.clone(), default_expr);
     }
 }
 
@@ -2739,8 +2771,11 @@ fn validate_associated_type_bindings_on_interface_type(
     };
     let iface_display_name = resolved_iface.display_name();
     let iface_file = resolved_iface.loc.file(db);
-    let iface_namespace_path =
-        baml_compiler2_hir::file_package::file_package(db, iface_file).namespace_path;
+    let iface_pkg_info = baml_compiler2_hir::file_package::file_package(db, iface_file);
+    let iface_pkg_id =
+        baml_compiler2_hir::package::PackageId::new(db, iface_pkg_info.package.clone());
+    let iface_pkg_items = baml_compiler2_hir::package::package_items(db, iface_pkg_id);
+    let iface_namespace_path = iface_pkg_info.namespace_path;
     let associated: IndexMap<Name, &baml_compiler2_ast::AssociatedTypeDef> = resolved_iface
         .iface
         .associated_types
@@ -2794,6 +2829,11 @@ fn validate_associated_type_bindings_on_interface_type(
             .zip(generic_args.iter())
             .map(|(p, a)| (p.clone(), a.clone()))
             .collect();
+    let associated_subst = associated_type_subst_from_type_args(
+        &resolved_iface.iface,
+        &generic_subst,
+        associated_type_bindings,
+    );
 
     for binding in associated_type_bindings {
         let Some(assoc) = associated.get(&binding.name).copied() else {
@@ -2812,11 +2852,11 @@ fn validate_associated_type_bindings_on_interface_type(
             &mut binding_diags,
         );
         let mut bound_diags = Vec::new();
-        let bound_expr = substitute_type_vars(&bound.expr, &generic_subst);
+        let bound_expr = substitute_type_vars(&bound.expr, &associated_subst);
         let bound_ty = baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns(
             db,
             &bound_expr,
-            pkg_items,
+            iface_pkg_items,
             &iface_namespace_path,
             generic_params,
             &mut bound_diags,
@@ -3902,6 +3942,7 @@ fn validate_interface_extends_fields(
                     ctx.namespace_path,
                     &iface.generic_params,
                     existing_ty,
+                    ctx.pkg_items,
                     ctx.namespace_path,
                     &iface.generic_params,
                     &field_te.expr,
@@ -4041,8 +4082,11 @@ fn validate_implements_for<'db>(
     let iface_qtn = resolved_iface.qtn.clone();
     let iface_file = resolved_iface.loc.file(db);
     let iface = resolved_iface.iface;
-    let iface_namespace_path =
-        baml_compiler2_hir::file_package::file_package(db, iface_file).namespace_path;
+    let iface_pkg_info = baml_compiler2_hir::file_package::file_package(db, iface_file);
+    let iface_pkg_id =
+        baml_compiler2_hir::package::PackageId::new(db, iface_pkg_info.package.clone());
+    let iface_pkg_items = baml_compiler2_hir::package::package_items(db, iface_pkg_id);
+    let iface_namespace_path = iface_pkg_info.namespace_path;
     let generic_subst: std::collections::HashMap<Name, baml_compiler2_ast::TypeExpr> =
         match &imp.interface_target.expr {
             baml_compiler2_ast::TypeExpr::Path { generic_args, .. } => iface
@@ -4069,8 +4113,11 @@ fn validate_implements_for<'db>(
     validate_associated_type_binding_defs(
         db,
         file_id,
+        iface_file.file_id(db),
+        imp.interface_target.span,
         &iface,
         &iface_display_name,
+        iface_pkg_items,
         pkg_items,
         &iface_namespace_path,
         namespace_path,
@@ -4144,7 +4191,15 @@ fn validate_implements_for<'db>(
                     method.throws.as_ref(),
                     &actual_subst,
                 );
-                if !expected.matches(&actual, db, pkg_items, namespace_path, aliases) {
+                if !expected.matches(
+                    &actual,
+                    db,
+                    iface_pkg_items,
+                    &iface_namespace_path,
+                    pkg_items,
+                    namespace_path,
+                    aliases,
+                ) {
                     diagnostics.push(
                         Hir2Diagnostic::InterfaceMethodSignatureMismatch {
                             class_name: target_name.clone(),
@@ -4354,8 +4409,11 @@ fn validate_class_implements<'db>(
         let iface_qtn = resolved_iface.qtn.clone();
         let iface_file = resolved_iface.loc.file(db);
         let iface = resolved_iface.iface;
-        let iface_namespace_path =
-            baml_compiler2_hir::file_package::file_package(db, iface_file).namespace_path;
+        let iface_pkg_info = baml_compiler2_hir::file_package::file_package(db, iface_file);
+        let iface_pkg_id =
+            baml_compiler2_hir::package::PackageId::new(db, iface_pkg_info.package.clone());
+        let iface_pkg_items = baml_compiler2_hir::package::package_items(db, iface_pkg_id);
+        let iface_namespace_path = iface_pkg_info.namespace_path;
         let mut interface_generic_params = class.generic_params.clone();
         interface_generic_params.extend(iface.generic_params.clone());
         // Build a T → concrete-type substitution from the implements target's
@@ -4387,8 +4445,11 @@ fn validate_class_implements<'db>(
         validate_associated_type_binding_defs(
             db,
             file_id,
+            iface_file.file_id(db),
+            block.target.span,
             &iface,
             &iface_display_name,
+            iface_pkg_items,
             pkg_items,
             &iface_namespace_path,
             namespace_path,
@@ -4465,7 +4526,15 @@ fn validate_class_implements<'db>(
                         m.throws.as_ref(),
                         &actual_subst,
                     );
-                    if !expected.matches(&actual, db, pkg_items, namespace_path, aliases) {
+                    if !expected.matches(
+                        &actual,
+                        db,
+                        iface_pkg_items,
+                        &iface_namespace_path,
+                        pkg_items,
+                        namespace_path,
+                        aliases,
+                    ) {
                         diagnostics.push(
                             Hir2Diagnostic::InterfaceMethodSignatureMismatch {
                                 class_name: class.name.clone(),
@@ -4600,10 +4669,11 @@ fn validate_class_implements<'db>(
                 }
                 if !type_exprs_compatible(
                     db,
-                    pkg_items,
+                    iface_pkg_items,
                     &iface_namespace_path,
                     &interface_generic_params,
                     &iface_te.expr,
+                    pkg_items,
                     namespace_path,
                     &class.generic_params,
                     &class_te.expr,
@@ -4655,10 +4725,11 @@ fn validate_class_implements<'db>(
                 }
                 if !type_exprs_compatible(
                     db,
-                    pkg_items,
+                    iface_pkg_items,
                     &iface_namespace_path,
                     &interface_generic_params,
                     &iface_te.expr,
+                    pkg_items,
                     namespace_path,
                     &class.generic_params,
                     &class_te.expr,
@@ -4748,10 +4819,11 @@ fn validate_class_implements<'db>(
 #[allow(clippy::too_many_arguments)]
 fn type_exprs_compatible(
     db: &dyn Db,
-    pkg_items: &baml_compiler2_hir::package::PackageItems<'_>,
+    lhs_pkg_items: &baml_compiler2_hir::package::PackageItems<'_>,
     lhs_namespace_path: &[Name],
     lhs_generic_params: &[Name],
     lhs: &baml_compiler2_ast::TypeExpr,
+    rhs_pkg_items: &baml_compiler2_hir::package::PackageItems<'_>,
     rhs_namespace_path: &[Name],
     rhs_generic_params: &[Name],
     rhs: &baml_compiler2_ast::TypeExpr,
@@ -4761,7 +4833,7 @@ fn type_exprs_compatible(
     let lhs_ty = baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns(
         db,
         lhs,
-        pkg_items,
+        lhs_pkg_items,
         lhs_namespace_path,
         lhs_generic_params,
         &mut diagnostics,
@@ -4771,7 +4843,7 @@ fn type_exprs_compatible(
     let rhs_ty = baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns(
         db,
         rhs,
-        pkg_items,
+        rhs_pkg_items,
         rhs_namespace_path,
         rhs_generic_params,
         &mut diagnostics,
@@ -4903,8 +4975,10 @@ fn interface_ty_requires_nominal(
 /// interface's. Falls back to string equality when a type can't be lowered.
 fn throws_covariant_compatible(
     db: &dyn Db,
-    pkg_items: &baml_compiler2_hir::package::PackageItems<'_>,
-    namespace_path: &[Name],
+    iface_pkg_items: &baml_compiler2_hir::package::PackageItems<'_>,
+    iface_namespace_path: &[Name],
+    impl_pkg_items: &baml_compiler2_hir::package::PackageItems<'_>,
+    impl_namespace_path: &[Name],
     generic_params: &[Name],
     iface_throws: &baml_compiler2_ast::TypeExpr,
     impl_throws: &baml_compiler2_ast::TypeExpr,
@@ -4914,8 +4988,8 @@ fn throws_covariant_compatible(
     let iface_ty = baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns(
         db,
         iface_throws,
-        pkg_items,
-        namespace_path,
+        iface_pkg_items,
+        iface_namespace_path,
         generic_params,
         &mut diagnostics,
     );
@@ -4924,8 +4998,8 @@ fn throws_covariant_compatible(
     let impl_ty = baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns(
         db,
         impl_throws,
-        pkg_items,
-        namespace_path,
+        impl_pkg_items,
+        impl_namespace_path,
         generic_params,
         &mut diagnostics,
     );

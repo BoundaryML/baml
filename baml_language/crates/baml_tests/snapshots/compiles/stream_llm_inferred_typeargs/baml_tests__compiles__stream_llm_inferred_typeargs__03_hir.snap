@@ -20,6 +20,6 @@ function user.TestFunc$parse(json: string) -> string  [expr] {
 function user.TestFunc$render_prompt(input: string) -> baml.llm.PromptAst  [expr] {
   baml.llm.render_prompt(TestClient, "TestFunc", map { "input": input })
 }
-function user.call_stream_inferred() -> baml.llm.Stream  [expr] {
+function user.call_stream_inferred() -> baml.llm.Stream<null | string, string>  [expr] {
   {  } baml.llm.stream_llm_function(TestClient, "TestFunc", map { "input": "world" })
 }

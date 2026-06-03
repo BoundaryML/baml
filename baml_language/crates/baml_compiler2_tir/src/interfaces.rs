@@ -532,7 +532,8 @@ fn lower_interface_associated_bindings(
     iface: &baml_compiler2_hir::item_tree::Interface,
     interface_args: &[Ty],
     block_associated_bindings: &[baml_compiler2_ast::AssociatedTypeBindingDef],
-    pkg_items: &baml_compiler2_hir::package::PackageItems<'_>,
+    iface_pkg_items: &baml_compiler2_hir::package::PackageItems<'_>,
+    binding_pkg_items: &baml_compiler2_hir::package::PackageItems<'_>,
     iface_namespace_path: &[Name],
     binding_namespace_path: &[Name],
     generic_params: &[Name],
@@ -549,36 +550,32 @@ fn lower_interface_associated_bindings(
         .associated_types
         .iter()
         .filter_map(|assoc| {
-            if let Some(binding) = block_associated_bindings
+            let ty = if let Some(binding) = block_associated_bindings
                 .iter()
                 .find(|binding| binding.name == assoc.name)
                 && let Some(type_expr) = &binding.type_expr
             {
-                return Some((
-                    assoc.name.clone(),
-                    generics::lower_type_expr_with_generics(
-                        db,
-                        &type_expr.expr,
-                        pkg_items,
-                        binding_namespace_path,
-                        &bindings,
-                        diagnostics,
-                    ),
-                ));
-            }
-            assoc.default.as_ref().map(|default| {
-                (
-                    assoc.name.clone(),
-                    generics::lower_type_expr_with_generics(
-                        db,
-                        &default.expr,
-                        pkg_items,
-                        iface_namespace_path,
-                        &bindings,
-                        diagnostics,
-                    ),
+                generics::lower_type_expr_with_generics(
+                    db,
+                    &type_expr.expr,
+                    binding_pkg_items,
+                    binding_namespace_path,
+                    &bindings,
+                    diagnostics,
                 )
-            })
+            } else {
+                let default = assoc.default.as_ref()?;
+                generics::lower_type_expr_with_generics(
+                    db,
+                    &default.expr,
+                    iface_pkg_items,
+                    iface_namespace_path,
+                    &bindings,
+                    diagnostics,
+                )
+            };
+            bindings.insert(assoc.name.clone(), ty.clone());
+            Some((assoc.name.clone(), ty))
         })
         .collect()
 }
@@ -630,7 +627,8 @@ fn lower_interface_type_associated_bindings(
     iface: &baml_compiler2_hir::item_tree::Interface,
     interface_args: &[Ty],
     explicit_associated_bindings: &[baml_compiler2_ast::AssociatedTypeBinding],
-    pkg_items: &baml_compiler2_hir::package::PackageItems<'_>,
+    iface_pkg_items: &baml_compiler2_hir::package::PackageItems<'_>,
+    binding_pkg_items: &baml_compiler2_hir::package::PackageItems<'_>,
     iface_namespace_path: &[Name],
     binding_namespace_path: &[Name],
     outer_bindings: &TypeBindings,
@@ -652,7 +650,7 @@ fn lower_interface_type_associated_bindings(
                 let ty = generics::lower_type_expr_with_generics(
                     db,
                     &binding.ty,
-                    pkg_items,
+                    binding_pkg_items,
                     binding_namespace_path,
                     &bindings,
                     diagnostics,
@@ -664,7 +662,7 @@ fn lower_interface_type_associated_bindings(
                 let ty = generics::lower_type_expr_with_generics(
                     db,
                     &default.expr,
-                    pkg_items,
+                    iface_pkg_items,
                     iface_namespace_path,
                     &bindings,
                     diagnostics,
@@ -1153,14 +1151,17 @@ pub fn package_implements_registry<'db>(
                         } else {
                             Vec::new()
                         };
-                    let iface_namespace_path =
-                        baml_compiler2_hir::file_package::file_package(db, iface_loc.file(db))
-                            .namespace_path;
+                    let iface_pkg_info =
+                        baml_compiler2_hir::file_package::file_package(db, iface_loc.file(db));
+                    let iface_pkg_id = PackageId::new(db, iface_pkg_info.package.clone());
+                    let iface_pkg_items = baml_compiler2_ppir::package_items(db, iface_pkg_id);
+                    let iface_namespace_path = iface_pkg_info.namespace_path;
                     let associated_bindings = lower_interface_associated_bindings(
                         db,
                         iface_data,
                         &interface_args,
                         &target.associated_type_bindings,
+                        iface_pkg_items,
                         pkg_items,
                         &iface_namespace_path,
                         &class_ns,
@@ -1237,14 +1238,17 @@ pub fn package_implements_registry<'db>(
             } else {
                 Vec::new()
             };
-            let iface_namespace_path =
-                baml_compiler2_hir::file_package::file_package(db, iface_loc.file(db))
-                    .namespace_path;
+            let iface_pkg_info =
+                baml_compiler2_hir::file_package::file_package(db, iface_loc.file(db));
+            let iface_pkg_id = PackageId::new(db, iface_pkg_info.package.clone());
+            let iface_pkg_items = baml_compiler2_ppir::package_items(db, iface_pkg_id);
+            let iface_namespace_path = iface_pkg_info.namespace_path;
             let associated_bindings = lower_interface_associated_bindings(
                 db,
                 iface_data,
                 &interface_args,
                 &imp.associated_type_bindings,
+                iface_pkg_items,
                 pkg_items,
                 &iface_namespace_path,
                 &pkg_info.namespace_path,
@@ -1545,6 +1549,9 @@ pub fn interface_closure_locs_with_args_and_assoc<'db>(
             };
             let parent_pkg =
                 baml_compiler2_hir::file_package::file_package(db, parent_loc.file(db));
+            let parent_iface_pkg_id = PackageId::new(db, parent_pkg.package.clone());
+            let parent_iface_pkg_items =
+                baml_compiler2_ppir::package_items(db, parent_iface_pkg_id);
             let (parent_explicit_assoc, parent_binding_ns): (
                 &[baml_compiler2_ast::AssociatedTypeBinding],
                 &[Name],
@@ -1563,6 +1570,7 @@ pub fn interface_closure_locs_with_args_and_assoc<'db>(
                 parent_iface,
                 &parent_args,
                 parent_explicit_assoc,
+                parent_iface_pkg_items,
                 parent_pkg_items,
                 &parent_pkg.namespace_path,
                 parent_binding_ns,

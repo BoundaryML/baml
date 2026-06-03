@@ -600,7 +600,7 @@ fn normalize_impl(
                 .iter()
                 .map(|t| normalize_impl(t, aliases, recursive, expanding))
                 .collect();
-            let associated_bindings = associated_bindings
+            let mut associated_bindings: Vec<_> = associated_bindings
                 .iter()
                 .map(|(name, ty)| {
                     (
@@ -609,6 +609,7 @@ fn normalize_impl(
                     )
                 })
                 .collect();
+            associated_bindings.sort_by(|(lhs, _), (rhs, _)| lhs.cmp(rhs));
             StructuralTy::Interface(qn.clone(), args, associated_bindings)
         }
         Ty::Enum(qn, _) => StructuralTy::Enum(qn.clone()),

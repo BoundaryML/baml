@@ -803,7 +803,33 @@ pub fn infer_scope_types<'db>(
                                     .cloned()
                                     .unwrap_or_default();
                                 for assoc in &iface_data.associated_types {
-                                    if explicit_bindings.iter().any(|b| b.name == assoc.name) {
+                                    if let Some(binding) =
+                                        explicit_bindings.iter().find(|b| b.name == assoc.name)
+                                        && let Some(te) = &binding.type_expr
+                                    {
+                                        let resolved = if let Some(replacement) = &self_replacement
+                                        {
+                                            crate::lower_type_expr::substitute_self_in(
+                                                &te.expr,
+                                                replacement,
+                                            )
+                                        } else {
+                                            te.expr.clone()
+                                        };
+                                        let mut binding_diags = Vec::new();
+                                        let ty = crate::generics::lower_type_expr_with_generics(
+                                            db,
+                                            &resolved,
+                                            pkg_items,
+                                            &pkg_info.namespace_path,
+                                            &type_bindings,
+                                            &mut binding_diags,
+                                        );
+                                        for diag in binding_diags {
+                                            builder.report_at_span(diag, te.span);
+                                        }
+                                        type_bindings.insert(assoc.name.clone(), ty.clone());
+                                        iface_type_bindings.insert(assoc.name.clone(), ty);
                                         continue;
                                     }
                                     if let Some(default) = &assoc.default {
@@ -822,33 +848,6 @@ pub fn infer_scope_types<'db>(
                                         type_bindings.insert(assoc.name.clone(), ty.clone());
                                         iface_type_bindings.insert(assoc.name.clone(), ty);
                                     }
-                                }
-                                for binding in &explicit_bindings {
-                                    let Some(te) = &binding.type_expr else {
-                                        continue;
-                                    };
-                                    let resolved = if let Some(replacement) = &self_replacement {
-                                        crate::lower_type_expr::substitute_self_in(
-                                            &te.expr,
-                                            replacement,
-                                        )
-                                    } else {
-                                        te.expr.clone()
-                                    };
-                                    let mut binding_diags = Vec::new();
-                                    let ty = crate::generics::lower_type_expr_with_generics(
-                                        db,
-                                        &resolved,
-                                        pkg_items,
-                                        &pkg_info.namespace_path,
-                                        &type_bindings,
-                                        &mut binding_diags,
-                                    );
-                                    for diag in binding_diags {
-                                        builder.report_at_span(diag, te.span);
-                                    }
-                                    type_bindings.insert(binding.name.clone(), ty.clone());
-                                    iface_type_bindings.insert(binding.name.clone(), ty);
                                 }
                             }
                         } else if let Some(iface_name) = &enclosing_class_name

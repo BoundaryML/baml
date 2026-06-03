@@ -177,7 +177,15 @@ fn substitute_type_expr(expr: &TypeExpr, bindings: &FxHashMap<Name, Ty>) -> Opti
         {
             bindings.get(&segments[1]).cloned()
         }
-        TypeExpr::Path { segments, .. } if segments.len() == 1 => {
+        TypeExpr::Path {
+            segments,
+            generic_args,
+            associated_type_bindings,
+            ..
+        } if segments.len() == 1
+            && generic_args.is_empty()
+            && associated_type_bindings.is_empty() =>
+        {
             bindings.get(&segments[0]).cloned()
         }
         _ => None,

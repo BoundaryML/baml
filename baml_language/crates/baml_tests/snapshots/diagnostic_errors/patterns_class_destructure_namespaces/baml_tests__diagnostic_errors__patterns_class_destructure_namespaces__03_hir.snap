@@ -2,20 +2,20 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === HIR2 ===
-function user.namespace_relative_generic_class_type_pattern_requires_type_args(boxed: llm.openai.Box) -> int  [expr] {
+function user.namespace_relative_generic_class_type_pattern_requires_type_args(boxed: llm.openai.Box<int>) -> int  [expr] {
   {  } match (boxed) { llm.openai.Box => 1 }
 }
 function user.namespaced_class_destructure_unknown_field(response: root.llm.openai.Response) -> int  [expr] {
   {  } match (response) { root.llm.openai.Response { missing: missing } => 1, _ => 0 }
 }
-function user.namespaced_generic_class_type_pattern_rejects_extra_type_args(boxed: root.llm.openai.Box) -> int  [expr] {
-  {  } match (boxed) { root.llm.openai.Box => 1, _ => 0 }
+function user.namespaced_generic_class_type_pattern_rejects_extra_type_args(boxed: root.llm.openai.Box<int>) -> int  [expr] {
+  {  } match (boxed) { root.llm.openai.Box<int, string> => 1, _ => 0 }
 }
-function user.namespaced_generic_class_type_pattern_requires_type_args(boxed: root.llm.openai.Box) -> int  [expr] {
+function user.namespaced_generic_class_type_pattern_requires_type_args(boxed: root.llm.openai.Box<int>) -> int  [expr] {
   {  } match (boxed) { root.llm.openai.Box => 1 }
 }
 function user.namespaced_non_generic_class_type_pattern_rejects_type_args(response: root.llm.openai.Response) -> int  [expr] {
-  {  } match (response) { root.llm.openai.Response => 1 }
+  {  } match (response) { root.llm.openai.Response<int> => 1 }
 }
 class user.llm.openai.Box {
   value: user.llm.openai.T
@@ -23,7 +23,7 @@ class user.llm.openai.Box {
 class user.llm.openai.Response {
   score: int
 }
-function user.llm.openai.from_json(j: baml.json.json) -> user.llm.openai.Box  [expr] {
+function user.llm.openai.from_json(j: baml.json.json) -> user.llm.openai.Box<user.llm.openai.T>  [expr] {
   user.llm.openai.Box { value: baml.json.from_json(baml.json.field(j, "value")) }
 }
 function user.llm.openai.from_json(j: baml.json.json) -> user.llm.openai.Response  [expr] {

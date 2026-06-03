@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 3999
 ---
 === HIR2 ===
 
@@ -47,10 +46,10 @@ function baml.find_index(self: ?, predicate: (baml.T) -> bool throws baml.E) -> 
 function baml.find_last(self: ?, predicate: (baml.T) -> bool throws baml.E) -> baml.T?  [builtin]
 function baml.find_last_index(self: ?, predicate: (baml.T) -> bool throws baml.E) -> int?  [builtin]
 function baml.flat_map(self: ?, f: (baml.T) -> baml.U[] throws baml.E) -> baml.U[]  [builtin]
-function baml.from_json(j: baml.json.json) -> baml.Map  [expr] {
+function baml.from_json(j: baml.json.json) -> baml.Map<baml.K, baml.V>  [expr] {
   baml.Map {  }
 }
-function baml.from_json(j: baml.json.json) -> baml.Array  [expr] {
+function baml.from_json(j: baml.json.json) -> baml.Array<baml.T>  [expr] {
   baml.Array {  }
 }
 function baml.get(self: ?, key: baml.K) -> baml.V?  [builtin]
@@ -387,7 +386,7 @@ class baml.future.Future {
 }
 enum baml.future.FutureState {Pending, Ready, Error, Cancelled}
 function baml.future.cancel(self: ?) -> bool  [builtin]
-function baml.future.from_json(j: baml.json.json) -> baml.future.Future  [expr] {
+function baml.future.from_json(j: baml.json.json) -> baml.future.Future<baml.future.T, baml.future.E>  [expr] {
   baml.future.Future {  }
 }
 function baml.future.is_cancelled(self: ?) -> bool  [builtin]
@@ -581,8 +580,8 @@ function baml.llm.rr_local_offset(self: ?, client_name: string) -> int  [expr] {
 function baml.llm.rr_pick_index(self: ?, client_name: string, counter: int, sub_client_count: int) -> int  [expr] {
   { let local_offset = self.rr_local_offset(client_name); self.rr_client_names.push(client_name) } counter Add local_offset Mod sub_client_count
 }
-function baml.llm.stream_llm_function(client: baml.llm.Client, function_name: string, args: map<string, unknown>) -> baml.llm.Stream  [expr] {
-  { let jinja_string = get_jinja_template(function_name); let context = baml.llm.ExecutionContext { jinja_string: jinja_string, args: args, function_name: function_name }; let result: baml.llm.Stream = client.execute_stream(context, 0) } result
+function baml.llm.stream_llm_function(client: baml.llm.Client, function_name: string, args: map<string, unknown>) -> baml.llm.Stream<baml.llm.TStream, baml.llm.TFinal>  [expr] {
+  { let jinja_string = get_jinja_template(function_name); let context = baml.llm.ExecutionContext { jinja_string: jinja_string, args: args, function_name: function_name }; let result: baml.llm.Stream<baml.llm.TStream, baml.llm.TFinal> = client.execute_stream(context, 0) } result
 }
 function baml.llm.to_json(self: ?) -> baml.json.json  [expr] {
   baml.json.parse(baml.json.to_string(self))
@@ -664,7 +663,7 @@ class baml.llm.Stream {
   _client: baml.llm.PrimitiveClient
   _acc: baml.llm.StreamAccumulator
   _sse: root.http.SseStream
-  _cache: baml.llm.StreamCache
+  _cache: baml.llm.StreamCache<baml.llm.TStream, baml.llm.TFinal>
 }
 class baml.llm.StreamAccumulator {
   _handle: $rust_type
@@ -679,11 +678,11 @@ class baml.llm.VertexAiOptions {
   project_id: string | null
 }
 enum baml.llm.ClientType {Primitive, Fallback, RoundRobin}
-function baml.llm.__make_stream(self: ?, sse: root.http.SseStream, function_name: string) -> baml.llm.Stream  [expr] {
-  { let primitive = self.to_primitive_client(); let return_type = get_return_type(function_name); let stream_return_type = get_stream_return_type(function_name); let acc = primitive.new_stream_accumulator(); let cache: baml.llm.StreamCache = StreamCache.new(return_type, stream_return_type) } baml.llm.Stream { _client: primitive, _acc: acc, _sse: sse, _cache: cache }
+function baml.llm.__make_stream(self: ?, sse: root.http.SseStream, function_name: string) -> baml.llm.Stream<baml.llm.TStream, baml.llm.TFinal>  [expr] {
+  { let primitive = self.to_primitive_client(); let return_type = get_return_type(function_name); let stream_return_type = get_stream_return_type(function_name); let acc = primitive.new_stream_accumulator(); let cache: baml.llm.StreamCache<baml.llm.TStream, baml.llm.TFinal> = StreamCache.new(return_type, stream_return_type) } baml.llm.Stream { _client: primitive, _acc: acc, _sse: sse, _cache: cache }
 }
-function baml.llm.__sap_parse_final(json: string, cache: baml.llm.StreamCache) -> baml.llm.TFinal  [builtin]
-function baml.llm.__sap_parse_partial(json: string, cache: baml.llm.StreamCache) -> baml.llm.TStream | root.stream.StreamNoYield  [builtin]
+function baml.llm.__sap_parse_final(json: string, cache: baml.llm.StreamCache<baml.llm.TStream, baml.llm.TFinal>) -> baml.llm.TFinal  [builtin]
+function baml.llm.__sap_parse_partial(json: string, cache: baml.llm.StreamCache<baml.llm.TStream, baml.llm.TFinal>) -> baml.llm.TStream | root.stream.StreamNoYield  [builtin]
 function baml.llm.add_events(self: ?, events: string) -> null  [builtin]
 function baml.llm.build_attempt(self: ?) -> baml.llm.OrchestrationStep[]  [expr] {
   { let planner_state = PlannerState { rr_client_names: [] } } self.build_attempt_with_state(planner_state)
@@ -703,26 +702,26 @@ function baml.llm.content(self: ?) -> string  [builtin]
 function baml.llm.execute_once_oneshot(self: ?, context: baml.llm.ExecutionContext, active_delay_ms: int) -> baml.llm.T  [expr] {
   {  } match (self.client_type) { baml.llm.ClientType.Primitive => { let primitive = self.to_primitive_client(); let return_type = reflect.type_of(); let prompt = primitive.render_prompt(context.jinja_string, context.args, return_type); let specialized = primitive.specialize_prompt(prompt); let http_request = primitive.build_request(specialized, return_type); let http_response = root.http.send(http_request) } if (http_response.ok()) { let body = http_response.text(); let result: baml.llm.T = primitive.parse(body) catch (e) { _ => { if (active_delay_ms Gt 0) {  } root.sys.sleep(active_delay_ms); throw e } } } result else { let error_body = http_response.text() catch (e) { _ => {  } "" }; if (active_delay_ms Gt 0) {  } root.sys.sleep(active_delay_ms); throw root.errors.DevOther { message: "HTTP request fail..." Add error_body } }, baml.llm.ClientType.Fallback => { for sub in self.sub_clients { let result2: baml.llm.T = sub.execute_oneshot(context, active_delay_ms) catch (e) { _ => { continue } }; return result2 }; throw root.errors.DevOther { message: "All orchestration..." } }, baml.llm.ClientType.RoundRobin => { if (self.sub_clients.length() Eq 0) { throw root.errors.DevOther { message: "RoundRobin client..." } }; let idx = self.counter Mod self.sub_clients.length(); self.counter Add= 1; let result3: baml.llm.T = <missing>(context, active_delay_ms); return result3 } }
 }
-function baml.llm.execute_once_stream(self: ?, context: baml.llm.ExecutionContext, active_delay_ms: int) -> baml.llm.Stream  [expr] {
-  {  } match (self.client_type) { baml.llm.ClientType.Primitive => { let primitive = self.to_primitive_client(); let return_type = reflect.type_of(); let prompt = primitive.render_prompt(context.jinja_string, context.args, return_type); let specialized = primitive.specialize_prompt(prompt); let http_request = primitive.build_request_stream(specialized, return_type); let sse = root.http.fetch_sse(http_request); let stream: baml.llm.Stream = self.__make_stream(sse, context.function_name); return stream }, baml.llm.ClientType.Fallback => { for sub in self.sub_clients { let result2: baml.llm.Stream = sub.execute_stream(context, active_delay_ms) catch (e) { _ => { continue } }; return result2 }; throw root.errors.DevOther { message: "All orchestration..." } }, baml.llm.ClientType.RoundRobin => { if (self.sub_clients.length() Eq 0) { throw root.errors.DevOther { message: "RoundRobin client..." } }; let idx = self.counter Mod self.sub_clients.length(); self.counter Add= 1; let result3: baml.llm.Stream = <missing>(context, active_delay_ms); return result3 } }
+function baml.llm.execute_once_stream(self: ?, context: baml.llm.ExecutionContext, active_delay_ms: int) -> baml.llm.Stream<baml.llm.TStream, baml.llm.TFinal>  [expr] {
+  {  } match (self.client_type) { baml.llm.ClientType.Primitive => { let primitive = self.to_primitive_client(); let return_type = reflect.type_of(); let prompt = primitive.render_prompt(context.jinja_string, context.args, return_type); let specialized = primitive.specialize_prompt(prompt); let http_request = primitive.build_request_stream(specialized, return_type); let sse = root.http.fetch_sse(http_request); let stream: baml.llm.Stream<baml.llm.TStream, baml.llm.TFinal> = self.__make_stream(sse, context.function_name); return stream }, baml.llm.ClientType.Fallback => { for sub in self.sub_clients { let result2: baml.llm.Stream<baml.llm.TStream, baml.llm.TFinal> = sub.execute_stream(context, active_delay_ms) catch (e) { _ => { continue } }; return result2 }; throw root.errors.DevOther { message: "All orchestration..." } }, baml.llm.ClientType.RoundRobin => { if (self.sub_clients.length() Eq 0) { throw root.errors.DevOther { message: "RoundRobin client..." } }; let idx = self.counter Mod self.sub_clients.length(); self.counter Add= 1; let result3: baml.llm.Stream<baml.llm.TStream, baml.llm.TFinal> = <missing>(context, active_delay_ms); return result3 } }
 }
 function baml.llm.execute_oneshot(self: ?, context: baml.llm.ExecutionContext, inherited_delay_ms: int) -> baml.llm.T  [expr] {
   {  } match (self.retry) { r: baml.llm.RetryPolicy => { let current_delay = r.initial_delay_ms Add 0.0; { let attempt = 0; while attempt Le r.max_retries { let attempt_delay = inherited_delay_ms; if (attempt Gt 0) { attempt_delay = root.math.trunc(current_delay); let next = current_delay Mul r.multiplier } if (next Gt r.max_delay_ms Add 0.0) { current_delay = r.max_delay_ms Add 0.0 } else { current_delay = next }; if (attempt Eq r.max_retries) { attempt_delay = inherited_delay_ms }; let result2: baml.llm.T = self.execute_once_oneshot(context, attempt_delay) catch (e) { _ => { continue } }; return result2 } }; throw root.errors.DevOther { message: "All orchestration..." } }, null => { let result: baml.llm.T = self.execute_once_oneshot(context, inherited_delay_ms); return result } }
 }
-function baml.llm.execute_stream(self: ?, context: baml.llm.ExecutionContext, inherited_delay_ms: int) -> baml.llm.Stream  [expr] {
-  {  } match (self.retry) { r: baml.llm.RetryPolicy => { let current_delay = r.initial_delay_ms Add 0.0; { let attempt = 0; while attempt Le r.max_retries { let attempt_delay = inherited_delay_ms; if (attempt Gt 0) { attempt_delay = root.math.trunc(current_delay); let next = current_delay Mul r.multiplier } if (next Gt r.max_delay_ms Add 0.0) { current_delay = r.max_delay_ms Add 0.0 } else { current_delay = next }; if (attempt Eq r.max_retries) { attempt_delay = inherited_delay_ms }; let result2: baml.llm.Stream = self.execute_once_stream(context, attempt_delay) catch (e) { _ => { continue } }; return result2 } }; throw root.errors.DevOther { message: "All orchestration..." } }, null => { let result: baml.llm.Stream = self.execute_once_stream(context, inherited_delay_ms); return result } }
+function baml.llm.execute_stream(self: ?, context: baml.llm.ExecutionContext, inherited_delay_ms: int) -> baml.llm.Stream<baml.llm.TStream, baml.llm.TFinal>  [expr] {
+  {  } match (self.retry) { r: baml.llm.RetryPolicy => { let current_delay = r.initial_delay_ms Add 0.0; { let attempt = 0; while attempt Le r.max_retries { let attempt_delay = inherited_delay_ms; if (attempt Gt 0) { attempt_delay = root.math.trunc(current_delay); let next = current_delay Mul r.multiplier } if (next Gt r.max_delay_ms Add 0.0) { current_delay = r.max_delay_ms Add 0.0 } else { current_delay = next }; if (attempt Eq r.max_retries) { attempt_delay = inherited_delay_ms }; let result2: baml.llm.Stream<baml.llm.TStream, baml.llm.TFinal> = self.execute_once_stream(context, attempt_delay) catch (e) { _ => { continue } }; return result2 } }; throw root.errors.DevOther { message: "All orchestration..." } }, null => { let result: baml.llm.Stream<baml.llm.TStream, baml.llm.TFinal> = self.execute_once_stream(context, inherited_delay_ms); return result } }
 }
 function baml.llm.final(self: ?) -> baml.llm.TFinal  [expr] {
   { while Not self._acc.is_done() { let next = match (self._sse.next()) { null => { break }, next: string => next }; self._acc.add_events(next) } if (self._acc.is_done()) { self._sse.close(); break }; match (self._acc.finish_reason()) { null => { throw root.errors.LlmClientError { message: "Streaming finishe..." } }, reason: string => self._client.validate_finish_reason(reason) }; let content = self._acc.content() } __sap_parse_final(content, self._cache)
 }
 function baml.llm.finish_reason(self: ?) -> string?  [builtin]
-function baml.llm.from_json(j: baml.json.json) -> baml.llm.Stream  [expr] {
+function baml.llm.from_json(j: baml.json.json) -> baml.llm.Stream<baml.llm.TStream, baml.llm.TFinal>  [expr] {
   baml.llm.Stream { _client: baml.json.from_json(baml.json.field(j, "_client")), _acc: baml.json.from_json(baml.json.field(j, "_acc")), _sse: baml.json.from_json(baml.json.field(j, "_sse")), _cache: baml.json.from_json(baml.json.field(j, "_cache")) }
 }
 function baml.llm.from_json(j: baml.json.json) -> baml.llm.PrimitiveClientOptions  [expr] {
   baml.json.from_string(baml.json.stringify(j))
 }
-function baml.llm.from_json(j: baml.json.json) -> baml.llm.StreamCache  [expr] {
+function baml.llm.from_json(j: baml.json.json) -> baml.llm.StreamCache<baml.llm.TStream, baml.llm.TFinal>  [expr] {
   baml.json.from_string(baml.json.stringify(j))
 }
 function baml.llm.from_json(j: baml.json.json) -> baml.llm.MediaUrlHandler  [expr] {
@@ -763,7 +762,7 @@ function baml.llm.get_stream_return_type(function_name: string) -> type  [builti
 function baml.llm.input_tokens(self: ?) -> int?  [builtin]
 function baml.llm.is_done(self: ?) -> bool  [builtin]
 function baml.llm.model(self: ?) -> string?  [builtin]
-function baml.llm.new(target: type, streaming: type) -> baml.llm.StreamCache  [builtin]
+function baml.llm.new(target: type, streaming: type) -> baml.llm.StreamCache<baml.llm.TStream, baml.llm.TFinal>  [builtin]
 function baml.llm.new_stream_accumulator(self: ?) -> baml.llm.StreamAccumulator  [builtin]
 function baml.llm.next(self: ?) -> baml.llm.TStream | root.stream.StreamFinished  [expr] {
   { while true { let next = match (self._sse.next()) { null => { return root.stream.StreamFinished {  } }, next: string => next }; self._acc.add_events(next); if (self._acc.is_done()) { self._sse.close(); return root.stream.StreamFinished {  } }; let content = self._acc.content(); let parsed: baml.llm.TStream | root.stream.StreamNoYield = __sap_parse_partial(content, self._cache) } match (parsed) { root.stream.StreamNoYield => { continue }, parsed: baml.llm.TStream => { return parsed } } } root.sys.panic("Unreachable")

@@ -17,7 +17,7 @@ function user.binding_leak_scope() -> int  [expr] {
 function user.from_json(j: baml.json.json) -> user.WrapNonGeneric  [expr] {
   user.WrapNonGeneric { x: baml.json.from_json(baml.json.field(j, "x")) }
 }
-function user.from_json(j: baml.json.json) -> user.WrapGeneric  [expr] {
+function user.from_json(j: baml.json.json) -> user.WrapGeneric<user.T>  [expr] {
   user.WrapGeneric { val: baml.json.from_json(baml.json.field(j, "val")) }
 }
 function user.or_pattern_leak() -> int  [expr] {
@@ -32,8 +32,8 @@ function user.to_json(self: ?) -> baml.json.json  [expr] {
 function user.unresolved_class_head(v: user.WrapNonGeneric) -> bool  [expr] {
   {  } v is Frobnitz { x: x }
 }
-function user.unresolved_generic_arg(v: user.WrapGeneric) -> bool  [expr] {
-  {  } v is user.WrapGeneric
+function user.unresolved_generic_arg(v: user.WrapGeneric<int>) -> bool  [expr] {
+  {  } v is user.WrapGeneric<user.Missing>
 }
 function user.unresolved_type_pattern(v: int | string) -> bool  [expr] {
   {  } v is user.Frobnitz

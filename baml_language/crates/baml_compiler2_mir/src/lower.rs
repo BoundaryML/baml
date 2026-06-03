@@ -235,22 +235,25 @@ fn interface_class_guard_for_args(
     // instantiation — e.g. `self: Container` inside a generic interface's
     // default method dispatches to `IntBox` (which implements `Container<int>`).
     // The runtime IsType on the concrete class still discriminates.
-    if requested_iface_args.is_empty() && !impl_iface_args.is_empty() {
+    let request_omits_type_args = requested_iface_args.is_empty() && !impl_iface_args.is_empty();
+    if request_omits_type_args && requested_iface_assoc.is_empty() {
         return Some(InterfaceClassGuard::Any);
     }
-    if impl_iface_args.len() != requested_iface_args.len() {
-        return None;
-    }
     let mut bindings = FxHashMap::default();
-    for (impl_arg, requested_arg) in impl_iface_args.iter().zip(requested_iface_args.iter()) {
-        if !infer_interface_class_bindings(
-            impl_arg,
-            requested_arg,
-            class_params,
-            aliases,
-            &mut bindings,
-        ) {
+    if !request_omits_type_args {
+        if impl_iface_args.len() != requested_iface_args.len() {
             return None;
+        }
+        for (impl_arg, requested_arg) in impl_iface_args.iter().zip(requested_iface_args.iter()) {
+            if !infer_interface_class_bindings(
+                impl_arg,
+                requested_arg,
+                class_params,
+                aliases,
+                &mut bindings,
+            ) {
+                return None;
+            }
         }
     }
     for (requested_name, requested_ty) in requested_iface_assoc {
@@ -271,11 +274,13 @@ fn interface_class_guard_for_args(
         .iter()
         .map(|arg| baml_compiler2_tir::generics::substitute_ty(arg, &bindings))
         .collect();
-    if !interface_tir_type_args_match_preserving_typevars(
-        &substituted_args,
-        requested_iface_args,
-        aliases,
-    ) {
+    if !request_omits_type_args
+        && !interface_tir_type_args_match_preserving_typevars(
+            &substituted_args,
+            requested_iface_args,
+            aliases,
+        )
+    {
         return None;
     }
     let substituted_assoc: Vec<_> = impl_iface_assoc
@@ -291,6 +296,9 @@ fn interface_class_guard_for_args(
         let (_, impl_ty) = substituted_assoc
             .iter()
             .find(|(impl_name, _)| impl_name == requested_name)?;
+        if matches!(requested_ty, Tir2Ty::TypeVar(name, _) if !class_params.contains(name)) {
+            continue;
+        }
         if !baml_compiler2_tir::normalize::is_same_normalized_type(impl_ty, requested_ty, aliases) {
             return None;
         }
@@ -11433,6 +11441,10 @@ mod tests {
         Tir2Ty::TypeVar(Name::new(name), baml_compiler2_tir::ty::TyAttr::default())
     }
 
+    fn primitive(primitive: PrimitiveType) -> Tir2Ty {
+        Tir2Ty::Primitive(primitive, baml_compiler2_tir::ty::TyAttr::default())
+    }
+
     #[test]
     fn interface_tir_type_args_match_preserves_type_var_identity() {
         let aliases = HashMap::new();
@@ -11447,5 +11459,39 @@ mod tests {
             &[type_var("R"), type_var("L")],
             &aliases,
         ));
+    }
+
+    #[test]
+    fn interface_class_guard_checks_assoc_when_request_omits_generic_args() {
+        let aliases = HashMap::new();
+        let impl_args = vec![primitive(PrimitiveType::String)];
+        let requested_args = Vec::new();
+        let requested_assoc = vec![(Name::new("Value"), primitive(PrimitiveType::Int))];
+
+        let int_impl_assoc = vec![(Name::new("Value"), primitive(PrimitiveType::Int))];
+        assert!(matches!(
+            interface_class_guard_for_args(
+                &impl_args,
+                &int_impl_assoc,
+                &requested_args,
+                &requested_assoc,
+                &[],
+                &aliases,
+            ),
+            Some(InterfaceClassGuard::Any)
+        ));
+
+        let string_impl_assoc = vec![(Name::new("Value"), primitive(PrimitiveType::String))];
+        assert!(
+            interface_class_guard_for_args(
+                &impl_args,
+                &string_impl_assoc,
+                &requested_args,
+                &requested_assoc,
+                &[],
+                &aliases,
+            )
+            .is_none()
+        );
     }
 }

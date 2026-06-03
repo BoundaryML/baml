@@ -6,7 +6,7 @@ class user.Box {
   value: user.T
 }
 class user.Container {
-  inner: user.Box
+  inner: user.Box<user.T>
 }
 class user.Factory {
   data: user.T
@@ -42,52 +42,52 @@ class user.Wrapper {
 function user.bad(x: user.T) -> user.T  [expr] {
   {  } x
 }
-function user.bare_in_union_param(f: user.Foo | user.Foo) -> string  [expr] {
-  {  } match (f) { user.Foo => "specific", user.Foo => "bare" }
+function user.bare_in_union_param(f: user.Foo<int> | user.Foo) -> string  [expr] {
+  {  } match (f) { user.Foo<int> => "specific", user.Foo => "bare" }
 }
-function user.create(value: user.T) -> user.Factory  [expr] {
+function user.create(value: user.T) -> user.Factory<user.T>  [expr] {
   {  } user.Factory { data: value }
 }
-function user.from_json(j: baml.json.json) -> user.Foo  [expr] {
+function user.from_json(j: baml.json.json) -> user.Foo<user.T>  [expr] {
   user.Foo { value: baml.json.from_json(baml.json.field(j, "value")) }
 }
-function user.from_json(j: baml.json.json) -> user.Wrapper  [expr] {
+function user.from_json(j: baml.json.json) -> user.Wrapper<user.T>  [expr] {
   user.Wrapper { data: baml.json.from_json(baml.json.field(j, "data")) }
 }
-function user.from_json(j: baml.json.json) -> user.Holder  [expr] {
+function user.from_json(j: baml.json.json) -> user.Holder<user.T>  [expr] {
   user.Holder { data: baml.json.from_json(baml.json.field(j, "data")) }
 }
-function user.from_json(j: baml.json.json) -> user.Container  [expr] {
+function user.from_json(j: baml.json.json) -> user.Container<user.T>  [expr] {
   user.Container { inner: baml.json.from_json(baml.json.field(j, "inner")) }
 }
-function user.from_json(j: baml.json.json) -> user.Stack  [expr] {
+function user.from_json(j: baml.json.json) -> user.Stack<user.T>  [expr] {
   user.Stack { items: baml.json.from_json(baml.json.field(j, "items")) }
 }
-function user.from_json(j: baml.json.json) -> user.Box  [expr] {
+function user.from_json(j: baml.json.json) -> user.Box<user.T>  [expr] {
   user.Box { value: baml.json.from_json(baml.json.field(j, "value")) }
 }
-function user.from_json(j: baml.json.json) -> user.Maker  [expr] {
+function user.from_json(j: baml.json.json) -> user.Maker<user.T>  [expr] {
   user.Maker { data: baml.json.from_json(baml.json.field(j, "data")) }
 }
 function user.from_json(j: baml.json.json) -> user.Plain  [expr] {
   user.Plain { name: baml.json.from_json(baml.json.field(j, "name")) }
 }
-function user.from_json(j: baml.json.json) -> user.MaybeBox  [expr] {
+function user.from_json(j: baml.json.json) -> user.MaybeBox<user.T>  [expr] {
   user.MaybeBox { value: baml.json.from_json(baml.json.field(j, "value")) }
 }
-function user.from_json(j: baml.json.json) -> user.Pair  [expr] {
+function user.from_json(j: baml.json.json) -> user.Pair<user.A, user.B>  [expr] {
   user.Pair { first: baml.json.from_json(baml.json.field(j, "first")), second: baml.json.from_json(baml.json.field(j, "second")) }
 }
-function user.from_json(j: baml.json.json) -> user.Shadow  [expr] {
+function user.from_json(j: baml.json.json) -> user.Shadow<user.T>  [expr] {
   user.Shadow { value: baml.json.from_json(baml.json.field(j, "value")) }
 }
-function user.from_json(j: baml.json.json) -> user.Factory  [expr] {
+function user.from_json(j: baml.json.json) -> user.Factory<user.T>  [expr] {
   user.Factory { data: baml.json.from_json(baml.json.field(j, "data")) }
 }
-function user.from_string(params: string) -> user.Maker  [expr] {
+function user.from_string(params: string) -> user.Maker<user.T>  [expr] {
   {  } user.Maker { data: params }
 }
-function user.from_value(params: user.T) -> user.Maker  [expr] {
+function user.from_value(params: user.T) -> user.Maker<user.T>  [expr] {
   {  } user.Maker { data: params }
 }
 function user.get(self: ?) -> user.T  [expr] {
@@ -108,13 +108,13 @@ function user.get_or_default(self: ?, default: user.T) -> user.T  [expr] {
 function user.get_second(self: ?) -> user.B  [expr] {
   {  } self.second
 }
-function user.of(value: user.T) -> user.Wrapper  [expr] {
+function user.of(value: user.T) -> user.Wrapper<user.T>  [expr] {
   {  } user.Wrapper { data: value }
 }
 function user.peek(self: ?) -> user.T  [expr] {
   {  } self.items[0]
 }
-function user.swap(self: ?) -> user.Pair  [expr] {
+function user.swap(self: ?) -> user.Pair<user.B, user.A>  [expr] {
   {  } user.Pair { first: self.second, second: self.first }
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
@@ -165,7 +165,7 @@ function user.use_factory() -> int  [expr] {
 function user.use_holder() -> int  [expr] {
   { let h = user.Holder { data: "hello" } } h.get_data()
 }
-function user.use_maker_static() -> user.Maker  [expr] {
+function user.use_maker_static() -> user.Maker<int>  [expr] {
   {  } Maker.from_value(42)
 }
 function user.use_maybe_box() -> int  [expr] {
@@ -177,25 +177,25 @@ function user.use_nested() -> int  [expr] {
 function user.use_pair() -> string  [expr] {
   { let p = user.Pair { first: 1, second: "two" } } p.get_second()
 }
-function user.use_pair_swap() -> user.Pair  [expr] {
+function user.use_pair_swap() -> user.Pair<string, int>  [expr] {
   { let p = user.Pair { first: 1, second: "two" } } p.swap()
 }
 function user.use_stack() -> string  [expr] {
   { let s = user.Stack { items: ["a", "b", "c"] } } s.peek()
 }
-function user.use_wrapper() -> user.Wrapper  [expr] {
+function user.use_wrapper() -> user.Wrapper<string>  [expr] {
   {  } Wrapper.of("hello")
 }
-function user.wrong_arity_extra() -> user.Box  [expr] {
+function user.wrong_arity_extra() -> user.Box<int, string>  [expr] {
   {  } user.Box { value: 42 }
 }
 function user.wrong_arity_missing() -> user.Box  [expr] {
   {  } user.Box { value: 42 }
 }
-function user.wrong_arity_on_non_generic() -> user.Plain  [expr] {
+function user.wrong_arity_on_non_generic() -> user.Plain<int>  [expr] {
   {  } user.Plain { name: "hello" }
 }
-function user.wrong_arity_partial() -> user.Pair  [expr] {
+function user.wrong_arity_partial() -> user.Pair<int>  [expr] {
   {  } user.Pair { first: 1, second: "two" }
 }
 class user.Todo {

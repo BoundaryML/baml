@@ -1251,18 +1251,40 @@ pub(crate) mod support {
             local_type_names: &std::collections::HashSet<&str>,
         ) -> String {
             match ty {
-                baml_compiler2_ast::TypeExpr::Path { segments, .. } => {
+                baml_compiler2_ast::TypeExpr::Path {
+                    segments,
+                    generic_args,
+                    associated_type_bindings,
+                    ..
+                } => {
                     let path = segments
                         .iter()
                         .map(|n| n.as_str())
                         .collect::<Vec<_>>()
                         .join(".");
                     let first = segments.first().map(|n| n.as_str()).unwrap_or("");
-                    if segments.len() == 1 || local_type_names.contains(first) {
+                    let mut rendered = if segments.len() == 1 || local_type_names.contains(first) {
                         format!("{pkg_prefix}{path}")
                     } else {
                         path
+                    };
+                    if !generic_args.is_empty() || !associated_type_bindings.is_empty() {
+                        let mut args = generic_args
+                            .iter()
+                            .map(|arg| type_expr_to_string_hir(arg, pkg_prefix, local_type_names))
+                            .collect::<Vec<_>>();
+                        args.extend(associated_type_bindings.iter().map(|binding| {
+                            format!(
+                                "{} = {}",
+                                binding.name,
+                                type_expr_to_string_hir(&binding.ty, pkg_prefix, local_type_names)
+                            )
+                        }));
+                        rendered.push('<');
+                        rendered.push_str(&args.join(", "));
+                        rendered.push('>');
                     }
+                    rendered
                 }
                 baml_compiler2_ast::TypeExpr::Int { .. } => "int".into(),
                 baml_compiler2_ast::TypeExpr::Bigint { .. } => "bigint".into(),
