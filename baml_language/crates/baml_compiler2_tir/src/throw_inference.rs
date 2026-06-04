@@ -15,7 +15,7 @@ use baml_compiler2_hir::{
 };
 
 use crate::{
-    lower_type_expr::{lower_type_expr_in_ns, qualify_def},
+    lower_type_expr::{lower_type_expr_in_ns_into, qualify_def},
     ty::{PrimitiveType, Ty},
 };
 
@@ -189,8 +189,10 @@ impl ThrowGraphBuilder {
             baml_compiler2_hir::file_package::file_package(db, func_loc.file(db)).namespace_path;
 
         let declared_throws = sig.throws.as_ref().map(|te| {
-            let mut diags = Vec::new();
-            let lowered = lower_type_expr_in_ns(db, te, pkg_items, &ns, generic_params, &mut diags);
+            // Throws recovery ignores lowering diagnostics here; they surface
+            // elsewhere during inference.
+            let lowered =
+                lower_type_expr_in_ns_into(db, te, pkg_items, &ns, generic_params, &mut |_diag| {});
             flatten_ty_to_facts(&lowered)
         });
 

@@ -18,8 +18,7 @@ use baml_compiler2_hir::{
 use rustc_hash::FxHashMap;
 
 use crate::{
-    infer_context::TirTypeError,
-    lower_type_expr::{lower_type_expr_in_ns, qualify_def},
+    lower_type_expr::{lower_type_expr_in_ns_into, qualify_def},
     throw_inference::{FunctionThrowSets, function_throw_sets},
     ty::{FunctionParamMode, FunctionParamTy, QualifiedTypeName, Ty},
 };
@@ -143,7 +142,7 @@ fn lower_class_method_signature<'db>(
     method_loc: baml_compiler2_hir::loc::FunctionLoc<'db>,
     ns_path: &[Name],
     name: Name,
-    diags: &mut Vec<TirTypeError>,
+    sink: crate::lower_type_expr::DiagSink<'_>,
 ) -> ExportedFunction {
     let sig = baml_compiler2_ppir::elaborated_function_signature(db, method_loc);
     let body = baml_compiler2_ppir::function_body(db, method_loc);
@@ -155,16 +154,10 @@ fn lower_class_method_signature<'db>(
     // BEP-044: pre-resolve `Self` to the enclosing class name so it
     // surfaces as `Ty::Class(<enclosing>)` after regular lowering.
     let self_replacement = crate::lower_type_expr::type_expr_for_name(class_data.name.clone());
-    let lower_with_self = |te: &baml_compiler2_ast::TypeExpr, diags: &mut Vec<TirTypeError>| {
+    let lower_with_self = |te: &baml_compiler2_ast::TypeExpr,
+                           sink: crate::lower_type_expr::DiagSink<'_>| {
         let resolved = crate::lower_type_expr::substitute_self_in(te, &self_replacement);
-        lower_type_expr_in_ns(
-            db,
-            &resolved,
-            pkg_items,
-            ns_path,
-            &all_generic_params,
-            diags,
-        )
+        lower_type_expr_in_ns_into(db, &resolved, pkg_items, ns_path, &all_generic_params, sink)
     };
 
     let mut params = Vec::new();
@@ -174,7 +167,7 @@ fn lower_class_method_signature<'db>(
         {
             build_self_type_for_class(class_data, ns_path)
         } else {
-            lower_with_self(&param.ty, diags)
+            lower_with_self(&param.ty, &mut *sink)
         };
         params.push(exported_function_param(
             param.name.clone(),
@@ -186,9 +179,12 @@ fn lower_class_method_signature<'db>(
     let return_type = sig
         .return_type
         .as_ref()
-        .map_or(Ty::Unknown, |te| lower_with_self(te, diags));
+        .map_or(Ty::Unknown, |te| lower_with_self(te, &mut *sink));
 
-    let declared_throws = sig.throws.as_ref().map(|te| lower_with_self(te, diags));
+    let declared_throws = sig
+        .throws
+        .as_ref()
+        .map(|te| lower_with_self(te, &mut *sink));
     let callable_throws = crate::callable::callable_throws(db, method_loc).clone();
 
     let builtin_kind = match body.as_ref() {
@@ -232,18 +228,19 @@ pub fn package_interface<'db>(db: &'db dyn crate::Db, pkg_id: PackageId<'db>) ->
                     let class_ns =
                         file_package::file_package(db, class_loc.file(db)).namespace_path;
 
-                    // Lower fields
+                    // Lower fields. Package-interface build is diagnostic-free
+                    // (F64): lowering diagnostics are discarded here and emitted
+                    // elsewhere during inference.
                     let mut fields = Vec::new();
-                    let mut diags = Vec::new();
                     for field in &class_data.fields {
                         if let Some(te) = &field.type_expr {
-                            let field_ty = lower_type_expr_in_ns(
+                            let field_ty = lower_type_expr_in_ns_into(
                                 db,
                                 &te.expr,
                                 pkg_items,
                                 &class_ns,
                                 &class_data.generic_params,
-                                &mut diags,
+                                &mut |_diag| {},
                             );
                             fields.push((field.name.clone(), field_ty));
                         } else {
@@ -267,7 +264,7 @@ pub fn package_interface<'db>(db: &'db dyn crate::Db, pkg_id: PackageId<'db>) ->
                             method_loc,
                             &class_ns,
                             method_data.name.clone(),
-                            &mut diags,
+                            &mut |_diag| {},
                         ));
                     }
 
@@ -292,12 +289,18 @@ pub fn package_interface<'db>(db: &'db dyn crate::Db, pkg_id: PackageId<'db>) ->
                     let item_tree = baml_compiler2_ppir::file_item_tree(db, ta_loc.file(db));
                     let ta_data = &item_tree[ta_loc.id(db)];
                     let ta_ns = file_package::file_package(db, ta_loc.file(db)).namespace_path;
-                    let mut diags = Vec::new();
                     let resolved = ta_data
                         .type_expr
                         .as_ref()
                         .map(|te| {
-                            lower_type_expr_in_ns(db, &te.expr, pkg_items, &ta_ns, &[], &mut diags)
+                            lower_type_expr_in_ns_into(
+                                db,
+                                &te.expr,
+                                pkg_items,
+                                &ta_ns,
+                                &[],
+                                &mut |_diag| {},
+                            )
                         })
                         .unwrap_or(Ty::Unknown);
                     let qtn = qualify_def(db, *def, name);
@@ -319,7 +322,9 @@ pub fn package_interface<'db>(db: &'db dyn crate::Db, pkg_id: PackageId<'db>) ->
             let func_ns = file_package::file_package(db, func_loc.file(db)).namespace_path;
             let sig = baml_compiler2_ppir::elaborated_function_signature(db, *func_loc);
             let body = baml_compiler2_ppir::function_body(db, *func_loc);
-            let mut diags = Vec::new();
+            // Package-interface build is diagnostic-free (F64): lowering
+            // diagnostics are discarded here and emitted elsewhere during
+            // inference.
             let function_generic_params: Vec<Name> = sig
                 .user_generic_params
                 .iter()
@@ -329,13 +334,13 @@ pub fn package_interface<'db>(db: &'db dyn crate::Db, pkg_id: PackageId<'db>) ->
 
             let mut params = Vec::new();
             for param in &sig.params {
-                let param_ty = lower_type_expr_in_ns(
+                let param_ty = lower_type_expr_in_ns_into(
                     db,
                     &param.ty,
                     pkg_items,
                     &func_ns,
                     &function_generic_params,
-                    &mut diags,
+                    &mut |_diag| {},
                 );
                 params.push(exported_function_param(
                     param.name.clone(),
@@ -345,24 +350,24 @@ pub fn package_interface<'db>(db: &'db dyn crate::Db, pkg_id: PackageId<'db>) ->
             }
 
             let return_type = sig.return_type.as_ref().map_or(Ty::Unknown, |te| {
-                lower_type_expr_in_ns(
+                lower_type_expr_in_ns_into(
                     db,
                     te,
                     pkg_items,
                     &func_ns,
                     &function_generic_params,
-                    &mut diags,
+                    &mut |_diag| {},
                 )
             });
 
             let declared_throws = sig.throws.as_ref().map(|te| {
-                lower_type_expr_in_ns(
+                lower_type_expr_in_ns_into(
                     db,
                     te,
                     pkg_items,
                     &func_ns,
                     &function_generic_params,
-                    &mut diags,
+                    &mut |_diag| {},
                 )
             });
             let callable_throws = crate::callable::callable_throws(db, *func_loc).clone();
@@ -623,7 +628,6 @@ impl<'db> PackageResolutionContext<'db> {
         let item_tree = baml_compiler2_ppir::file_item_tree(db, class_loc.file(db));
         let class_data = &item_tree[class_loc.id(db)];
         let ns = file_package::file_package(db, class_loc.file(db)).namespace_path;
-        let mut diags = Vec::new();
 
         for method_id in &class_data.methods {
             let method_data = &item_tree[*method_id];
@@ -639,7 +643,7 @@ impl<'db> PackageResolutionContext<'db> {
                 method_loc,
                 &ns,
                 method_data.name.clone(),
-                &mut diags,
+                &mut |_diag| {},
             );
 
             return Some(ResolvedMethod { function });

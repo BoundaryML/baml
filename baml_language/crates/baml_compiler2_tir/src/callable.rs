@@ -9,7 +9,7 @@ use rustc_hash::FxHashMap;
 
 use crate::{
     inference::{CallPlan, MemberResolution, ScopeInference, infer_scope_types},
-    lower_type_expr::lower_type_expr_in_ns,
+    lower_type_expr::lower_type_expr_in_ns_into,
     package_interface::package_resolution_context,
     throw_inference::{function_throw_sets, throw_set_key},
     throws_analysis::ThrowsAnalysisContext,
@@ -59,14 +59,15 @@ impl<'db> SignatureLoweringCtx<'db> {
     }
 
     fn lower(&self, type_expr: &baml_compiler2_ast::TypeExpr) -> Ty {
-        let mut diags = Vec::new();
-        lower_type_expr_in_ns(
+        // Throws lowering for the callable summary is diagnostic-free; any
+        // lowering diagnostics are reported elsewhere during inference.
+        lower_type_expr_in_ns_into(
             self.db,
             type_expr,
             self.pkg_items,
             &self.pkg_info.namespace_path,
             &self.generic_params,
-            &mut diags,
+            &mut |_diag| {},
         )
     }
 }

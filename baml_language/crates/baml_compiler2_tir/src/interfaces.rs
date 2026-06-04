@@ -261,7 +261,7 @@ fn lower_path_generic_args(
     pkg_items: &baml_compiler2_hir::package::PackageItems<'_>,
     namespace_path: &[Name],
     generic_params: &[Name],
-    diagnostics: &mut Vec<crate::infer_context::TirTypeError>,
+    sink: crate::lower_type_expr::DiagSink<'_>,
 ) -> Vec<Ty> {
     let baml_compiler2_ast::TypeExpr::Path { generic_args, .. } = expr else {
         return Vec::new();
@@ -269,13 +269,13 @@ fn lower_path_generic_args(
     generic_args
         .iter()
         .map(|arg| {
-            crate::lower_type_expr::lower_type_expr_in_ns(
+            crate::lower_type_expr::lower_type_expr_in_ns_into(
                 db,
                 arg,
                 pkg_items,
                 namespace_path,
                 generic_params,
-                diagnostics,
+                sink,
             )
         })
         .collect()
@@ -722,14 +722,13 @@ pub fn package_implements_registry<'db>(
                 if let Some(iface_data) = iface_tree.interfaces.get(&iface_loc.id(db)) {
                     let iface_qtn =
                         qualify_def(db, Definition::Interface(iface_loc), &iface_data.name);
-                    let mut diags = Vec::new();
                     let interface_args = lower_path_generic_args(
                         db,
                         &target.target.expr,
                         pkg_items,
                         &class_ns,
                         &class_data.generic_params,
-                        &mut diags,
+                        &mut |_diag| {},
                     );
                     let for_ty_pattern = Ty::Class(
                         class_qtn.clone(),
@@ -771,14 +770,13 @@ pub fn package_implements_registry<'db>(
                 continue;
             };
             let iface_qtn = qualify_def(db, Definition::Interface(iface_loc), &iface_data.name);
-            let mut diags = Vec::new();
-            let target_ty = crate::lower_type_expr::lower_type_expr_in_ns(
+            let target_ty = crate::lower_type_expr::lower_type_expr_in_ns_into(
                 db,
                 &imp.for_target.expr,
                 pkg_items,
                 &pkg_info.namespace_path,
                 &imp.generic_params,
-                &mut diags,
+                &mut |_diag| {},
             );
             let interface_args = lower_path_generic_args(
                 db,
@@ -786,7 +784,7 @@ pub fn package_implements_registry<'db>(
                 pkg_items,
                 &pkg_info.namespace_path,
                 &imp.generic_params,
-                &mut diags,
+                &mut |_diag| {},
             );
             let interface_ty = Ty::Interface(iface_qtn.clone(), interface_args.clone());
             let bounds: Vec<Option<Ty>> = imp
@@ -794,13 +792,13 @@ pub fn package_implements_registry<'db>(
                 .iter()
                 .map(|b| {
                     b.as_ref().map(|te| {
-                        crate::lower_type_expr::lower_type_expr_in_ns(
+                        crate::lower_type_expr::lower_type_expr_in_ns_into(
                             db,
                             te,
                             pkg_items,
                             &pkg_info.namespace_path,
                             &imp.generic_params,
-                            &mut diags,
+                            &mut |_diag| {},
                         )
                     })
                 })
@@ -851,14 +849,13 @@ pub fn resolve_path_to_interface_identity<'db>(
     pkg_items: &baml_compiler2_hir::package::PackageItems<'db>,
     current_ns: &[Name],
 ) -> Option<ResolvedInterface<'db>> {
-    let mut diagnostics = Vec::new();
-    let Ty::Interface(qtn, _) = crate::lower_type_expr::lower_type_expr_in_ns(
+    let Ty::Interface(qtn, _) = crate::lower_type_expr::lower_type_expr_in_ns_into(
         db,
         target,
         pkg_items,
         current_ns,
         &[],
-        &mut diagnostics,
+        &mut |_diag| {},
     ) else {
         return None;
     };
@@ -1008,22 +1005,19 @@ pub fn interface_closure_locs_with_args<'db>(
                 continue;
             };
             let parent_args = match &parent.expr {
-                baml_compiler2_ast::TypeExpr::Path { generic_args, .. } => {
-                    let mut diags = Vec::new();
-                    generic_args
-                        .iter()
-                        .map(|arg| {
-                            generics::lower_type_expr_with_generics(
-                                db,
-                                arg,
-                                parent_pkg_items,
-                                &pkg_info.namespace_path,
-                                &bindings,
-                                &mut diags,
-                            )
-                        })
-                        .collect()
-                }
+                baml_compiler2_ast::TypeExpr::Path { generic_args, .. } => generic_args
+                    .iter()
+                    .map(|arg| {
+                        generics::lower_type_expr_with_generics_into(
+                            db,
+                            arg,
+                            parent_pkg_items,
+                            &pkg_info.namespace_path,
+                            &bindings,
+                            &mut |_diag| {},
+                        )
+                    })
+                    .collect(),
                 _ => Vec::new(),
             };
             queue.push_back((parent_loc, parent_args, child_ancestors.clone()));

@@ -635,13 +635,13 @@ fn seed_lambda_and_infer<'db>(
             .type_expr
             .as_ref()
             .map(|ste| {
-                crate::lower_type_expr::lower_type_expr_in_ns(
+                crate::lower_type_expr::lower_type_expr_in_ns_into(
                     db,
                     &ste.expr,
                     pkg_items,
                     &pkg_info.namespace_path,
                     &generic_params,
-                    &mut Vec::new(),
+                    &mut |_diag| {},
                 )
             })
             .or_else(|| {
@@ -796,18 +796,14 @@ pub fn infer_scope_types<'db>(
                     bound_exprs.extend(func_data.generic_param_bounds.iter().cloned());
                     for (i, name) in bound_param_names.iter().enumerate() {
                         if let Some(Some(bound_te)) = bound_exprs.get(i) {
-                            let mut bd = Vec::new();
-                            let bound_ty = crate::lower_type_expr::lower_type_expr_in_ns(
+                            let bound_ty = crate::lower_type_expr::lower_type_expr_in_ns_into(
                                 db,
                                 bound_te,
                                 pkg_items,
                                 &pkg_info.namespace_path,
                                 &generic_params,
-                                &mut bd,
+                                &mut |d| builder.report_at_span(d, func_data.span),
                             );
-                            for d in bd {
-                                builder.report_at_span(d, func_data.span);
-                            }
                             bounds.insert(name.clone(), bound_ty);
                         }
                     }
@@ -869,44 +865,41 @@ pub fn infer_scope_types<'db>(
                                 })
                             });
                         let lower_with_self = |te: &baml_compiler2_ast::TypeExpr,
-                                               diags: &mut Vec<
-                            crate::infer_context::TirTypeError,
-                        >| {
+                                               sink: crate::lower_type_expr::DiagSink<'_>| {
                             let resolved = if let Some(replacement) = &self_replacement {
                                 crate::lower_type_expr::substitute_self_in(te, replacement)
                             } else {
                                 te.clone()
                             };
-                            crate::lower_type_expr::lower_type_expr_in_ns(
+                            crate::lower_type_expr::lower_type_expr_in_ns_into(
                                 db,
                                 &resolved,
                                 pkg_items,
                                 &pkg_info.namespace_path,
                                 &generic_params,
-                                diags,
+                                sink,
                             )
                         };
 
-                        // Get declared return type
-                        let mut diags = Vec::new();
+                        // Get declared return type. Return-type lowering
+                        // diagnostics are reported at the return-type span when
+                        // one exists; otherwise they are dropped.
+                        let ret_span =
+                            baml_compiler2_ppir::elaborated_function_signature_source_map(
+                                db, func_loc,
+                            )
+                            .return_type_span;
                         let return_ty = sig
                             .return_type
                             .as_ref()
-                            .map(|te| lower_with_self(te, &mut diags))
+                            .map(|te| {
+                                lower_with_self(te, &mut |diag| {
+                                    if let Some(ret_span) = ret_span {
+                                        builder.report_at_span(diag, ret_span);
+                                    }
+                                })
+                            })
                             .unwrap_or(Ty::Unknown);
-
-                        // Report unresolved type diagnostics for return type
-                        if !diags.is_empty() {
-                            let sig_sm =
-                                baml_compiler2_ppir::elaborated_function_signature_source_map(
-                                    db, func_loc,
-                                );
-                            if let Some(ret_span) = sig_sm.return_type_span {
-                                for diag in diags.drain(..) {
-                                    builder.report_at_span(diag, ret_span);
-                                }
-                            }
-                        }
 
                         // Set declared return type for return statement checking
                         builder.set_return_type(return_ty.clone());
@@ -920,23 +913,16 @@ pub fn infer_scope_types<'db>(
                                 && matches!(param.ty, baml_compiler2_ast::TypeExpr::Unknown { .. })
                             {
                                 if let Some(imp) = enclosing_impl {
-                                    let mut self_diags = Vec::new();
-                                    let ty = crate::lower_type_expr::lower_type_expr_in_ns(
+                                    let span =
+                                        sig_sm.param_spans.get(i).copied().unwrap_or_default();
+                                    crate::lower_type_expr::lower_type_expr_in_ns_into(
                                         db,
                                         &imp.for_target.expr,
                                         pkg_items,
                                         &pkg_info.namespace_path,
                                         &generic_params,
-                                        &mut self_diags,
-                                    );
-                                    if !self_diags.is_empty() {
-                                        let span =
-                                            sig_sm.param_spans.get(i).copied().unwrap_or_default();
-                                        for diag in self_diags {
-                                            builder.report_at_span(diag, span);
-                                        }
-                                    }
-                                    ty
+                                        &mut |diag| builder.report_at_span(diag, span),
+                                    )
                                 } else {
                                     // `self` parameter with no type annotation — infer from
                                     // enclosing class. For BEP-044 interface default methods
@@ -980,7 +966,6 @@ pub fn infer_scope_types<'db>(
                                         .unwrap_or(Ty::Unknown)
                                 }
                             } else {
-                                let mut param_diags = Vec::new();
                                 let resolved_te = if let Some(replacement) = &self_replacement {
                                     crate::lower_type_expr::substitute_self_in(
                                         &param.ty,
@@ -989,27 +974,21 @@ pub fn infer_scope_types<'db>(
                                 } else {
                                     param.ty.clone()
                                 };
-                                let ty = crate::lower_type_expr::lower_type_expr_in_ns(
+                                let span = sig_sm
+                                    .param_type_spans
+                                    .get(i)
+                                    .copied()
+                                    .flatten()
+                                    .or_else(|| sig_sm.param_spans.get(i).copied())
+                                    .unwrap_or_default();
+                                crate::lower_type_expr::lower_type_expr_in_ns_into(
                                     db,
                                     &resolved_te,
                                     pkg_items,
                                     &pkg_info.namespace_path,
                                     &generic_params,
-                                    &mut param_diags,
-                                );
-                                if !param_diags.is_empty() {
-                                    let span = sig_sm
-                                        .param_type_spans
-                                        .get(i)
-                                        .copied()
-                                        .flatten()
-                                        .or_else(|| sig_sm.param_spans.get(i).copied())
-                                        .unwrap_or_default();
-                                    for diag in param_diags {
-                                        builder.report_at_span(diag, span);
-                                    }
-                                }
-                                ty
+                                    &mut |diag| builder.report_at_span(diag, span),
+                                )
                             };
                             builder.add_local(param.name.clone(), param_ty.clone());
                             builder.param_types.push((param.name.clone(), param_ty));
@@ -1466,19 +1445,14 @@ pub fn resolve_class_fields<'db>(
                 .type_expr
                 .as_ref()
                 .map(|te| {
-                    let mut diags = Vec::new();
-                    let ty = crate::lower_type_expr::lower_type_expr_in_ns(
+                    crate::lower_type_expr::lower_type_expr_in_ns_into(
                         db,
                         &te.expr,
                         pkg_items,
                         &pkg_info.namespace_path,
                         &class_data.generic_params,
-                        &mut diags,
-                    );
-                    for d in diags {
-                        all_diags.push((d, te.span));
-                    }
-                    ty
+                        &mut |d| all_diags.push((d, te.span)),
+                    )
                 })
                 .unwrap_or(Ty::Unknown);
             (f.name.clone(), ty, f.attributes.clone())
@@ -1511,19 +1485,14 @@ pub fn resolve_type_alias<'db>(
         .type_expr
         .as_ref()
         .map(|te| {
-            let mut diags = Vec::new();
-            let ty = crate::lower_type_expr::lower_type_expr_in_ns(
+            crate::lower_type_expr::lower_type_expr_in_ns_into(
                 db,
                 &te.expr,
                 pkg_items,
                 &pkg_info.namespace_path,
                 &[],
-                &mut diags,
-            );
-            for d in diags {
-                all_diags.push((d, te.span));
-            }
-            ty
+                &mut |d| all_diags.push((d, te.span)),
+            )
         })
         .unwrap_or(Ty::Unknown);
 

@@ -22,7 +22,7 @@ use rustc_hash::FxHashMap;
 
 use crate::{
     infer_context::TirTypeError,
-    lower_type_expr::lower_type_expr_in_ns,
+    lower_type_expr::{DiagSink, lower_type_expr_in_ns_into},
     ty::{FunctionParamMode, FunctionParamTy, Ty},
 };
 
@@ -145,9 +145,34 @@ pub fn lower_type_expr_with_generics(
     bindings: &FxHashMap<Name, Ty>,
     diagnostics: &mut Vec<TirTypeError>,
 ) -> Ty {
+    let mut push = |e| diagnostics.push(e);
+    lower_with_generics(db, expr, package_items, ns_context, bindings, &mut push)
+}
+
+/// Sink-based variant of [`lower_type_expr_with_generics`]: forwards each
+/// diagnostic to `sink` in source-walk order instead of collecting into a `Vec`.
+pub fn lower_type_expr_with_generics_into(
+    db: &dyn crate::Db,
+    expr: &TypeExpr,
+    package_items: &baml_compiler2_hir::package::PackageItems<'_>,
+    ns_context: &[Name],
+    bindings: &FxHashMap<Name, Ty>,
+    sink: DiagSink<'_>,
+) -> Ty {
+    lower_with_generics(db, expr, package_items, ns_context, bindings, sink)
+}
+
+fn lower_with_generics(
+    db: &dyn crate::Db,
+    expr: &TypeExpr,
+    package_items: &baml_compiler2_hir::package::PackageItems<'_>,
+    ns_context: &[Name],
+    bindings: &FxHashMap<Name, Ty>,
+    sink: DiagSink<'_>,
+) -> Ty {
     // Fast path: empty bindings — no substitution needed.
     if bindings.is_empty() {
-        return lower_type_expr_in_ns(db, expr, package_items, ns_context, &[], diagnostics);
+        return lower_type_expr_in_ns_into(db, expr, package_items, ns_context, &[], sink);
     }
 
     // Intercept single-segment paths that are type variables.
@@ -163,38 +188,38 @@ pub fn lower_type_expr_with_generics(
     // rather than lowering first then substituting, so that type-variable references
     // in nested positions are also intercepted before triggering "unresolved type".
     match expr {
-        TypeExpr::Optional { inner, .. } => Ty::Optional(Box::new(lower_type_expr_with_generics(
+        TypeExpr::Optional { inner, .. } => Ty::Optional(Box::new(lower_with_generics(
             db,
             inner,
             package_items,
             ns_context,
             bindings,
-            diagnostics,
+            sink,
         ))),
-        TypeExpr::List { inner, .. } => Ty::List(Box::new(lower_type_expr_with_generics(
+        TypeExpr::List { inner, .. } => Ty::List(Box::new(lower_with_generics(
             db,
             inner,
             package_items,
             ns_context,
             bindings,
-            diagnostics,
+            sink,
         ))),
         TypeExpr::Map { key, value, .. } => Ty::Map(
-            Box::new(lower_type_expr_with_generics(
+            Box::new(lower_with_generics(
                 db,
                 key,
                 package_items,
                 ns_context,
                 bindings,
-                diagnostics,
+                sink,
             )),
-            Box::new(lower_type_expr_with_generics(
+            Box::new(lower_with_generics(
                 db,
                 value,
                 package_items,
                 ns_context,
                 bindings,
-                diagnostics,
+                sink,
             )),
         ),
         TypeExpr::Union {
@@ -202,16 +227,7 @@ pub fn lower_type_expr_with_generics(
         } => Ty::Union(
             members
                 .iter()
-                .map(|m| {
-                    lower_type_expr_with_generics(
-                        db,
-                        m,
-                        package_items,
-                        ns_context,
-                        bindings,
-                        diagnostics,
-                    )
-                })
+                .map(|m| lower_with_generics(db, m, package_items, ns_context, bindings, sink))
                 .collect(),
         ),
         TypeExpr::Function {
@@ -232,13 +248,13 @@ pub fn lower_type_expr_with_generics(
                     .iter()
                     .map(|bound| {
                         bound.as_ref().map(|bound| {
-                            lower_type_expr_with_generics(
+                            lower_with_generics(
                                 db,
                                 bound,
                                 package_items,
                                 ns_context,
                                 &nested_bindings,
-                                diagnostics,
+                                sink,
                             )
                         })
                     })
@@ -247,13 +263,13 @@ pub fn lower_type_expr_with_generics(
                     .iter()
                     .map(|p| FunctionParamTy {
                         name: p.name.clone(),
-                        ty: lower_type_expr_with_generics(
+                        ty: lower_with_generics(
                             db,
                             &p.ty,
                             package_items,
                             ns_context,
                             &nested_bindings,
-                            diagnostics,
+                            sink,
                         ),
                         mode: if p.optional {
                             FunctionParamMode::Optional
@@ -262,25 +278,25 @@ pub fn lower_type_expr_with_generics(
                         },
                     })
                     .collect(),
-                ret: Box::new(lower_type_expr_with_generics(
+                ret: Box::new(lower_with_generics(
                     db,
                     ret,
                     package_items,
                     ns_context,
                     &nested_bindings,
-                    diagnostics,
+                    sink,
                 )),
                 throws: Box::new(
                     throws
                         .as_deref()
                         .map(|throws| {
-                            lower_type_expr_with_generics(
+                            lower_with_generics(
                                 db,
                                 throws,
                                 package_items,
                                 ns_context,
                                 &nested_bindings,
-                                diagnostics,
+                                sink,
                             )
                         })
                         .unwrap_or(Ty::Never),
@@ -297,13 +313,13 @@ pub fn lower_type_expr_with_generics(
         // concrete bound types.
         other => {
             let binding_keys: Vec<Name> = bindings.keys().cloned().collect();
-            let ty = lower_type_expr_in_ns(
+            let ty = lower_type_expr_in_ns_into(
                 db,
                 other,
                 package_items,
                 ns_context,
                 &binding_keys,
-                diagnostics,
+                sink,
             );
             substitute_ty(&ty, bindings)
         }

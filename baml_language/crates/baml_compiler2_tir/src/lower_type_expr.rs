@@ -11,6 +11,14 @@ use crate::{
     ty::{Freshness, FunctionParamMode, FunctionParamTy, PrimitiveType, QualifiedTypeName, Ty},
 };
 
+/// A diagnostic sink: each lowering diagnostic is forwarded to this callback
+/// in source-walk order. Internal lowering threads a `DiagSink` instead of
+/// collecting into a throwaway `Vec`, so callers can route each diagnostic
+/// directly to its final report target (or discard it) without an
+/// intermediate drain. The public `Vec`-taking entry points are thin shims
+/// over the sink-based cores.
+pub type DiagSink<'a> = &'a mut dyn FnMut(TirTypeError);
+
 /// Resolve an AST `TypeExpr` to a `Ty` using package-level name resolution.
 ///
 /// Names are resolved against `package_items`: classes, enums, and type aliases
@@ -32,6 +40,26 @@ pub fn lower_type_expr(
         &[],
         generic_params,
         diagnostics,
+    )
+}
+
+/// Sink-based variant of [`lower_type_expr_in_ns`]: forwards each diagnostic
+/// to `sink` in source-walk order instead of collecting into a `Vec`.
+pub fn lower_type_expr_in_ns_into(
+    db: &dyn crate::Db,
+    type_expr: &TypeExpr,
+    package_items: &PackageItems<'_>,
+    ns_context: &[baml_base::Name],
+    generic_params: &[baml_base::Name],
+    sink: DiagSink<'_>,
+) -> Ty {
+    lower_in_ns(
+        db,
+        type_expr,
+        package_items,
+        ns_context,
+        generic_params,
+        sink,
     )
 }
 
@@ -197,20 +225,11 @@ fn lower_args(
     package_items: &PackageItems<'_>,
     ns_context: &[baml_base::Name],
     generic_params: &[baml_base::Name],
-    diagnostics: &mut Vec<TirTypeError>,
+    sink: DiagSink<'_>,
 ) -> Vec<Ty> {
     generic_args
         .iter()
-        .map(|ga| {
-            lower_type_expr_in_ns(
-                db,
-                ga,
-                package_items,
-                ns_context,
-                generic_params,
-                diagnostics,
-            )
-        })
+        .map(|ga| lower_in_ns(db, ga, package_items, ns_context, generic_params, sink))
         .collect()
 }
 
@@ -226,7 +245,7 @@ fn lower_non_generic(
     package_items: &PackageItems<'_>,
     ns_context: &[baml_base::Name],
     generic_params: &[baml_base::Name],
-    diagnostics: &mut Vec<TirTypeError>,
+    sink: DiagSink<'_>,
     kind: &'static str,
     make_ty: impl FnOnce(QualifiedTypeName) -> Ty,
 ) -> Ty {
@@ -236,12 +255,12 @@ fn lower_non_generic(
         package_items,
         ns_context,
         generic_params,
-        diagnostics,
+        sink,
     );
     // Flag generic args supplied for a non-generic type (enum / type alias).
     // The args were lowered just above so their own diagnostics still surface.
     if !generic_args.is_empty() {
-        diagnostics.push(TirTypeError::TypeIsNotGeneric {
+        sink(TirTypeError::TypeIsNotGeneric {
             type_name: item.clone(),
             kind,
         });
@@ -263,6 +282,27 @@ pub fn lower_type_expr_in_ns(
     generic_params: &[baml_base::Name],
     diagnostics: &mut Vec<TirTypeError>,
 ) -> Ty {
+    let mut push = |e| diagnostics.push(e);
+    lower_in_ns(
+        db,
+        type_expr,
+        package_items,
+        ns_context,
+        generic_params,
+        &mut push,
+    )
+}
+
+/// Sink-based core of [`lower_type_expr_in_ns`]. The public `Vec`-taking entry
+/// points are thin shims over this function.
+fn lower_in_ns(
+    db: &dyn crate::Db,
+    type_expr: &TypeExpr,
+    package_items: &PackageItems<'_>,
+    ns_context: &[baml_base::Name],
+    generic_params: &[baml_base::Name],
+    sink: DiagSink<'_>,
+) -> Ty {
     match type_expr {
         TypeExpr::Path {
             segments,
@@ -281,7 +321,7 @@ pub fn lower_type_expr_in_ns(
                             package_items,
                             ns_context,
                             generic_params,
-                            diagnostics,
+                            sink,
                         );
 
                         // BEP-034: `baml.future.Future<T, E>` resolves to the
@@ -314,7 +354,7 @@ pub fn lower_type_expr_in_ns(
                             package_items,
                             ns_context,
                             generic_params,
-                            diagnostics,
+                            sink,
                         );
                         Ty::Interface(qualify_def(db, def, item), lowered_args)
                     }
@@ -326,7 +366,7 @@ pub fn lower_type_expr_in_ns(
                         package_items,
                         ns_context,
                         generic_params,
-                        diagnostics,
+                        sink,
                         "enum",
                         Ty::Enum,
                     ),
@@ -338,7 +378,7 @@ pub fn lower_type_expr_in_ns(
                         package_items,
                         ns_context,
                         generic_params,
-                        diagnostics,
+                        sink,
                         "type alias",
                         Ty::TypeAlias,
                     ),
@@ -392,7 +432,7 @@ pub fn lower_type_expr_in_ns(
                     }
                     suggestions.sort();
                 }
-                diagnostics.push(TirTypeError::UnresolvedType {
+                sink(TirTypeError::UnresolvedType {
                     name: baml_base::Name::new(&name_str),
                     suggestions,
                 });
@@ -418,38 +458,38 @@ pub fn lower_type_expr_in_ns(
                 return Ty::Unknown;
             }
         }),
-        TypeExpr::Optional { inner, .. } => Ty::Optional(Box::new(lower_type_expr_in_ns(
+        TypeExpr::Optional { inner, .. } => Ty::Optional(Box::new(lower_in_ns(
             db,
             inner,
             package_items,
             ns_context,
             generic_params,
-            diagnostics,
+            sink,
         ))),
-        TypeExpr::List { inner, .. } => Ty::List(Box::new(lower_type_expr_in_ns(
+        TypeExpr::List { inner, .. } => Ty::List(Box::new(lower_in_ns(
             db,
             inner,
             package_items,
             ns_context,
             generic_params,
-            diagnostics,
+            sink,
         ))),
         TypeExpr::Map { key, value, .. } => Ty::Map(
-            Box::new(lower_type_expr_in_ns(
+            Box::new(lower_in_ns(
                 db,
                 key,
                 package_items,
                 ns_context,
                 generic_params,
-                diagnostics,
+                sink,
             )),
-            Box::new(lower_type_expr_in_ns(
+            Box::new(lower_in_ns(
                 db,
                 value,
                 package_items,
                 ns_context,
                 generic_params,
-                diagnostics,
+                sink,
             )),
         ),
         TypeExpr::Union {
@@ -457,16 +497,7 @@ pub fn lower_type_expr_in_ns(
         } => Ty::Union(
             members
                 .iter()
-                .map(|m| {
-                    lower_type_expr_in_ns(
-                        db,
-                        m,
-                        package_items,
-                        ns_context,
-                        generic_params,
-                        diagnostics,
-                    )
-                })
+                .map(|m| lower_in_ns(db, m, package_items, ns_context, generic_params, sink))
                 .collect(),
         ),
         TypeExpr::Function {
@@ -485,13 +516,13 @@ pub fn lower_type_expr_in_ns(
                     .iter()
                     .map(|bound| {
                         bound.as_ref().map(|bound| {
-                            lower_type_expr_in_ns(
+                            lower_in_ns(
                                 db,
                                 bound,
                                 package_items,
                                 ns_context,
                                 &all_generic_params,
-                                diagnostics,
+                                sink,
                             )
                         })
                     })
@@ -500,13 +531,13 @@ pub fn lower_type_expr_in_ns(
                     .iter()
                     .map(|p| FunctionParamTy {
                         name: p.name.clone(),
-                        ty: lower_type_expr_in_ns(
+                        ty: lower_in_ns(
                             db,
                             &p.ty,
                             package_items,
                             ns_context,
                             &all_generic_params,
-                            diagnostics,
+                            sink,
                         ),
                         mode: if p.optional {
                             FunctionParamMode::Optional
@@ -515,25 +546,25 @@ pub fn lower_type_expr_in_ns(
                         },
                     })
                     .collect(),
-                ret: Box::new(lower_type_expr_in_ns(
+                ret: Box::new(lower_in_ns(
                     db,
                     ret,
                     package_items,
                     ns_context,
                     &all_generic_params,
-                    diagnostics,
+                    sink,
                 )),
                 throws: Box::new(
                     throws
                         .as_deref()
                         .map(|throws| {
-                            lower_type_expr_in_ns(
+                            lower_in_ns(
                                 db,
                                 throws,
                                 package_items,
                                 ns_context,
                                 &all_generic_params,
-                                diagnostics,
+                                sink,
                             )
                         })
                         .unwrap_or(Ty::Never),
