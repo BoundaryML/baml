@@ -8289,6 +8289,2005 @@ fn baml.time.Instant.to_timestamp_seconds(self: baml.time.Instant) -> bigint {
     }
 }
 
+fn baml.time.PlainDate.day = builtin(vm)
+
+fn baml.time.PlainDate.from_components = builtin(vm)
+
+fn baml.time.PlainDate.from_json(j: baml.json.json) -> baml.time.PlainDate {
+    // Locals:
+    let _0: baml.time.PlainDate // _0 // return
+    let _1: baml.json.json // j // param
+    let _2: bool
+    let _3: unknown // _
+    let _4: bool
+    let _5: string
+    let _6: bool
+    let _7: string
+    let _8: string // message
+    let _9: baml.json.JsonDecodeError
+    let _10: string
+    let _11: baml.json.JsonDecodeError
+
+    bb0: {
+        _2 = is_type(copy _1, string);
+        branch copy _2 -> [bb2, bb1];
+    }
+
+    bb1: {
+        _11 = baml.json.JsonDecodeError { const "Expected ISO 8601 date string", const null };
+        throw copy _11;
+    }
+
+    bb2: {
+        _0 = call const fn baml.time.PlainDate.parse(const null, copy _1) -> [bb3, unwind: bb4];
+    }
+
+    bb3: {
+        return;
+    }
+
+    bb4: {
+        _4 = is_type(copy _3, baml.errors.ParseError);
+        branch copy _4 -> [bb5, bb6];
+    }
+
+    bb5: {
+        _5 = copy _3.0;
+        _6 = is_type(copy _5, string);
+        branch copy _6 -> [bb7, bb6];
+    }
+
+    bb6: {
+        throw copy _3;
+    }
+
+    bb7: {
+        _7 = copy _3.0;
+        _8 = copy _7;
+        _10 = copy _8;
+        _9 = baml.json.JsonDecodeError { copy _10, const "" };
+        throw copy _9;
+    }
+}
+
+fn baml.time.PlainDate.month = builtin(vm)
+
+fn baml.time.PlainDate.parse = builtin(vm)
+
+fn baml.time.PlainDate.to_json(self: baml.time.PlainDate) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: baml.time.PlainDate // self // param
+    let _2: unknown // _
+    let _3: bool
+    let _4: string
+    let _5: bool
+    let _6: string
+    let _7: string // message
+    let _8: baml.json.JsonSerializationError
+    let _9: string
+
+    bb0: {
+        _0 = call const fn baml.time.PlainDate.to_string(copy _1) -> [bb1, unwind: bb2];
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        _3 = is_type(copy _2, baml.errors.InvalidArgument);
+        branch copy _3 -> [bb3, bb4];
+    }
+
+    bb3: {
+        _4 = copy _2.0;
+        _5 = is_type(copy _4, string);
+        branch copy _5 -> [bb5, bb4];
+    }
+
+    bb4: {
+        throw copy _2;
+    }
+
+    bb5: {
+        _6 = copy _2.0;
+        _7 = copy _6;
+        _9 = copy _7;
+        _8 = baml.json.JsonSerializationError { copy _9, const "", const null };
+        throw copy _8;
+    }
+}
+
+fn baml.time.PlainDate.to_plain_datetime = builtin(vm)
+
+fn baml.time.PlainDate.to_string = builtin(vm)
+
+fn baml.time.PlainDate.year = builtin(vm)
+
+fn baml.time.PlainDateTime.day = builtin(vm)
+
+fn baml.time.PlainDateTime.from_components = builtin(vm)
+
+fn baml.time.PlainDateTime.from_json(j: baml.json.json) -> baml.time.PlainDateTime {
+    // Locals:
+    let _0: baml.time.PlainDateTime // _0 // return
+    let _1: baml.json.json // j // param
+    let _2: bool
+    let _3: unknown // _
+    let _4: bool
+    let _5: string
+    let _6: bool
+    let _7: string
+    let _8: string // message
+    let _9: baml.json.JsonDecodeError
+    let _10: string
+    let _11: baml.json.JsonDecodeError
+
+    bb0: {
+        _2 = is_type(copy _1, string);
+        branch copy _2 -> [bb2, bb1];
+    }
+
+    bb1: {
+        _11 = baml.json.JsonDecodeError { const "Expected zoneless ISO 8601 string", const null };
+        throw copy _11;
+    }
+
+    bb2: {
+        _0 = call const fn baml.time.PlainDateTime.parse(const null, copy _1) -> [bb3, unwind: bb4];
+    }
+
+    bb3: {
+        return;
+    }
+
+    bb4: {
+        _4 = is_type(copy _3, baml.errors.ParseError);
+        branch copy _4 -> [bb5, bb6];
+    }
+
+    bb5: {
+        _5 = copy _3.0;
+        _6 = is_type(copy _5, string);
+        branch copy _6 -> [bb7, bb6];
+    }
+
+    bb6: {
+        throw copy _3;
+    }
+
+    bb7: {
+        _7 = copy _3.0;
+        _8 = copy _7;
+        _10 = copy _8;
+        _9 = baml.json.JsonDecodeError { copy _10, const "" };
+        throw copy _9;
+    }
+}
+
+fn baml.time.PlainDateTime.hour = builtin(vm)
+
+fn baml.time.PlainDateTime.max(self: baml.time.PlainDateTime, other: baml.time.PlainDateTime) -> baml.time.PlainDateTime {
+    // Locals:
+    let _0: baml.time.PlainDateTime // _0 // return
+    let _1: baml.time.PlainDateTime // self // param
+    let _2: baml.time.PlainDateTime // other // param
+    let _3: bool
+    let _4: bigint
+    let _5: bigint
+
+    bb0: {
+        _4 = copy _2.0;
+        _5 = copy _1.0;
+        _3 = copy _4 > copy _5;
+        branch copy _3 -> [bb2, bb1];
+    }
+
+    bb1: {
+        _0 = copy _1;
+        goto -> bb3;
+    }
+
+    bb2: {
+        _0 = copy _2;
+        goto -> bb3;
+    }
+
+    bb3: {
+        return;
+    }
+}
+
+fn baml.time.PlainDateTime.millisecond = builtin(vm)
+
+fn baml.time.PlainDateTime.min(self: baml.time.PlainDateTime, other: baml.time.PlainDateTime) -> baml.time.PlainDateTime {
+    // Locals:
+    let _0: baml.time.PlainDateTime // _0 // return
+    let _1: baml.time.PlainDateTime // self // param
+    let _2: baml.time.PlainDateTime // other // param
+    let _3: bool
+    let _4: bigint
+    let _5: bigint
+
+    bb0: {
+        _4 = copy _2.0;
+        _5 = copy _1.0;
+        _3 = copy _4 < copy _5;
+        branch copy _3 -> [bb2, bb1];
+    }
+
+    bb1: {
+        _0 = copy _1;
+        goto -> bb3;
+    }
+
+    bb2: {
+        _0 = copy _2;
+        goto -> bb3;
+    }
+
+    bb3: {
+        return;
+    }
+}
+
+fn baml.time.PlainDateTime.minute = builtin(vm)
+
+fn baml.time.PlainDateTime.month = builtin(vm)
+
+fn baml.time.PlainDateTime.parse = builtin(vm)
+
+fn baml.time.PlainDateTime.second = builtin(vm)
+
+fn baml.time.PlainDateTime.to_json(self: baml.time.PlainDateTime) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: baml.time.PlainDateTime // self // param
+    let _2: unknown // _
+    let _3: bool
+    let _4: string
+    let _5: bool
+    let _6: string
+    let _7: string // message
+    let _8: baml.json.JsonSerializationError
+    let _9: string
+
+    bb0: {
+        _0 = call const fn baml.time.PlainDateTime.to_string(copy _1) -> [bb1, unwind: bb2];
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        _3 = is_type(copy _2, baml.errors.InvalidArgument);
+        branch copy _3 -> [bb3, bb4];
+    }
+
+    bb3: {
+        _4 = copy _2.0;
+        _5 = is_type(copy _4, string);
+        branch copy _5 -> [bb5, bb4];
+    }
+
+    bb4: {
+        throw copy _2;
+    }
+
+    bb5: {
+        _6 = copy _2.0;
+        _7 = copy _6;
+        _9 = copy _7;
+        _8 = baml.json.JsonSerializationError { copy _9, const "", const null };
+        throw copy _8;
+    }
+}
+
+fn baml.time.PlainDateTime.to_plain_date = builtin(vm)
+
+fn baml.time.PlainDateTime.to_plain_time = builtin(vm)
+
+fn baml.time.PlainDateTime.to_string = builtin(vm)
+
+fn baml.time.PlainDateTime.to_zoned(self: baml.time.PlainDateTime, timezone: baml.time.TimeZoneOffset | string, disambiguation: ("compatible" | "earlier" | "later" | "reject")?) -> baml.time.ZonedDateTime {
+    // Locals:
+    let _0: baml.time.ZonedDateTime // _0 // return
+    let _1: baml.time.PlainDateTime // self // param
+    let _2: baml.time.TimeZoneOffset | string // timezone // param
+    let _3: ("compatible" | "earlier" | "later" | "reject")? // disambiguation // param
+    let _4: bool
+    let _5: bigint
+    let _6: bigint
+    let _7: int
+    let _8: int
+    let _9: bool
+    let _10: "compatible" | "earlier" | "later" | "reject"
+    let _11: bool
+    let _12: bigint?
+    let _13: bigint
+    let _14: bool
+    let _15: baml.time.UnknownTimezoneError
+    let _16: bigint? // earlier
+    let _17: bigint?
+    let _18: bigint
+    let _19: bool
+    let _20: baml.time.UnknownTimezoneError
+    let _21: bigint? // later
+    let _22: bool
+    let _23: bigint?
+    let _24: bigint?
+    let _25: bigint
+    let _26: bigint?
+    let _27: bool
+    let _28: baml.time.AmbiguousTimeError
+    let _29: string
+    let _30: bigint?
+    let _31: bigint
+    let _32: "compatible" | "earlier" | "later" | "reject"
+    let _33: bool
+    let _34: bool
+    let _35: baml.time.UnknownTimezoneError
+    let _36: bigint? // resolved
+    let _37: bigint
+    let _38: bigint?
+    let _39: bool
+
+    bb0: {
+        _4 = is_type(copy _2, baml.time.TimeZoneOffset);
+        branch copy _4 -> [bb23, bb1];
+    }
+
+    bb1: {
+        _10 = copy _3;
+        _11 = copy _3 == const null;
+        branch copy _11 -> [bb2, bb3];
+    }
+
+    bb2: {
+        _10 = const "compatible";
+        goto -> bb3;
+    }
+
+    bb3: {
+        _9 = copy _10 == const "reject";
+        branch copy _9 -> [bb12, bb4];
+    }
+
+    bb4: {
+        _31 = copy _1.0;
+        _32 = copy _3;
+        _33 = copy _3 == const null;
+        branch copy _33 -> [bb5, bb6];
+    }
+
+    bb5: {
+        _32 = const "compatible";
+        goto -> bb6;
+    }
+
+    bb6: {
+        _30 = sys_op const fn baml.time._tz_to_instant(copy _2, copy _31, copy _32) -> bb7;
+    }
+
+    bb7: {
+        _34 = copy _30 == const null;
+        branch copy _34 -> [bb11, bb8];
+    }
+
+    bb8: {
+        _36 = copy _30;
+        _38 = copy _36;
+        _37 = copy _38;
+        _39 = copy _38 == const null;
+        branch copy _39 -> [bb9, bb10];
+    }
+
+    bb9: {
+        _37 = const 0n;
+        goto -> bb10;
+    }
+
+    bb10: {
+        _0 = baml.time.ZonedDateTime { copy _37, const null, copy _2 };
+        goto -> bb24;
+    }
+
+    bb11: {
+        _35 = baml.time.UnknownTimezoneError { copy _2 };
+        throw copy _35;
+    }
+
+    bb12: {
+        _13 = copy _1.0;
+        _12 = sys_op const fn baml.time._tz_to_instant(copy _2, copy _13, const "earlier") -> bb13;
+    }
+
+    bb13: {
+        _14 = copy _12 == const null;
+        branch copy _14 -> [bb22, bb14];
+    }
+
+    bb14: {
+        _16 = copy _12;
+        _18 = copy _1.0;
+        _17 = sys_op const fn baml.time._tz_to_instant(copy _2, copy _18, const "later") -> bb15;
+    }
+
+    bb15: {
+        _19 = copy _17 == const null;
+        branch copy _19 -> [bb21, bb16];
+    }
+
+    bb16: {
+        _21 = copy _17;
+        _23 = copy _16;
+        _24 = copy _21;
+        _22 = copy _23 == copy _24;
+        branch copy _22 -> [bb18, bb17];
+    }
+
+    bb17: {
+        _29 = const "wall-clock time is ambiguous or skipped in timezone " + copy _2;
+        _28 = baml.time.AmbiguousTimeError { copy _29 };
+        throw copy _28;
+    }
+
+    bb18: {
+        _26 = copy _16;
+        _25 = copy _26;
+        _27 = copy _26 == const null;
+        branch copy _27 -> [bb19, bb20];
+    }
+
+    bb19: {
+        _25 = const 0n;
+        goto -> bb20;
+    }
+
+    bb20: {
+        _0 = baml.time.ZonedDateTime { copy _25, const null, copy _2 };
+        goto -> bb24;
+    }
+
+    bb21: {
+        _20 = baml.time.UnknownTimezoneError { copy _2 };
+        throw copy _20;
+    }
+
+    bb22: {
+        _15 = baml.time.UnknownTimezoneError { copy _2 };
+        throw copy _15;
+    }
+
+    bb23: {
+        _6 = copy _1.0;
+        _7 = copy _2.0;
+        _5 = copy _6 - copy _7;
+        _8 = copy _2.0;
+        _0 = baml.time.ZonedDateTime { copy _5, copy _8, const null };
+        goto -> bb24;
+    }
+
+    bb24: {
+        return;
+    }
+}
+
+fn baml.time.PlainDateTime.year = builtin(vm)
+
+fn baml.time.PlainTime.from_components = builtin(vm)
+
+fn baml.time.PlainTime.from_json(j: baml.json.json) -> baml.time.PlainTime {
+    // Locals:
+    let _0: baml.time.PlainTime // _0 // return
+    let _1: baml.json.json // j // param
+    let _2: bool
+    let _3: unknown // _
+    let _4: bool
+    let _5: string
+    let _6: bool
+    let _7: string
+    let _8: string // message
+    let _9: baml.json.JsonDecodeError
+    let _10: string
+    let _11: baml.json.JsonDecodeError
+
+    bb0: {
+        _2 = is_type(copy _1, string);
+        branch copy _2 -> [bb2, bb1];
+    }
+
+    bb1: {
+        _11 = baml.json.JsonDecodeError { const "Expected ISO 8601 time string", const null };
+        throw copy _11;
+    }
+
+    bb2: {
+        _0 = call const fn baml.time.PlainTime.parse(const null, copy _1) -> [bb3, unwind: bb4];
+    }
+
+    bb3: {
+        return;
+    }
+
+    bb4: {
+        _4 = is_type(copy _3, baml.errors.ParseError);
+        branch copy _4 -> [bb5, bb6];
+    }
+
+    bb5: {
+        _5 = copy _3.0;
+        _6 = is_type(copy _5, string);
+        branch copy _6 -> [bb7, bb6];
+    }
+
+    bb6: {
+        throw copy _3;
+    }
+
+    bb7: {
+        _7 = copy _3.0;
+        _8 = copy _7;
+        _10 = copy _8;
+        _9 = baml.json.JsonDecodeError { copy _10, const "" };
+        throw copy _9;
+    }
+}
+
+fn baml.time.PlainTime.hour(self: baml.time.PlainTime) -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: baml.time.PlainTime // self // param
+    let _2: int
+
+    bb0: {
+        _2 = copy _1.0;
+        _0 = copy _2 / const 3600000000000_i64;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn baml.time.PlainTime.millisecond(self: baml.time.PlainTime) -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: baml.time.PlainTime // self // param
+    let _2: int
+    let _3: int
+
+    bb0: {
+        _3 = copy _1.0;
+        _2 = copy _3 / const 1000000_i64;
+        _0 = copy _2 % const 1000_i64;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn baml.time.PlainTime.minute(self: baml.time.PlainTime) -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: baml.time.PlainTime // self // param
+    let _2: int
+    let _3: int
+
+    bb0: {
+        _3 = copy _1.0;
+        _2 = copy _3 / const 60000000000_i64;
+        _0 = copy _2 % const 60_i64;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn baml.time.PlainTime.parse = builtin(vm)
+
+fn baml.time.PlainTime.second(self: baml.time.PlainTime) -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: baml.time.PlainTime // self // param
+    let _2: int
+    let _3: int
+
+    bb0: {
+        _3 = copy _1.0;
+        _2 = copy _3 / const 1000000000_i64;
+        _0 = copy _2 % const 60_i64;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn baml.time.PlainTime.to_json(self: baml.time.PlainTime) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: baml.time.PlainTime // self // param
+
+    bb0: {
+        _0 = call const fn baml.time.PlainTime.to_string(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn baml.time.PlainTime.to_plain_datetime(self: baml.time.PlainTime, date: baml.time.PlainDate) -> baml.time.PlainDateTime {
+    // Locals:
+    let _0: baml.time.PlainDateTime // _0 // return
+    let _1: baml.time.PlainTime // self // param
+    let _2: baml.time.PlainDate // date // param
+
+    bb0: {
+        _0 = call const fn baml.time.PlainDate.to_plain_datetime(copy _2, copy _1) -> [bb1];
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn baml.time.PlainTime.to_string = builtin(vm)
+
+fn baml.time._tz_offset_at = builtin(io)
+
+fn baml.time._tz_to_instant = builtin(io)
+
+fn baml.time.TimeZoneOffset.from_duration = builtin(vm)
+
+fn baml.time.UnknownTimezoneError.from_json(j: baml.json.json) -> baml.time.UnknownTimezoneError {
+    // Locals:
+    let _0: baml.time.UnknownTimezoneError // _0 // return
+    let _1: baml.json.json // j // param
+    let _2: string
+    let _3: baml.json.json
+    let _4: type
+
+    bb0: {
+        _3 = call const fn baml.json.field(copy _1, const "timezone") -> [bb1];
+    }
+
+    bb1: {
+        _4 = load_type(string);
+        _2 = call const fn baml.json.from_json<copy _4>(copy _3) -> [bb2];
+    }
+
+    bb2: {
+        _0 = baml.time.UnknownTimezoneError { copy _2 };
+        goto -> bb3;
+    }
+
+    bb3: {
+        return;
+    }
+}
+
+fn baml.time.AmbiguousTimeError.from_json(j: baml.json.json) -> baml.time.AmbiguousTimeError {
+    // Locals:
+    let _0: baml.time.AmbiguousTimeError // _0 // return
+    let _1: baml.json.json // j // param
+    let _2: string
+    let _3: baml.json.json
+    let _4: type
+
+    bb0: {
+        _3 = call const fn baml.json.field(copy _1, const "message") -> [bb1];
+    }
+
+    bb1: {
+        _4 = load_type(string);
+        _2 = call const fn baml.json.from_json<copy _4>(copy _3) -> [bb2];
+    }
+
+    bb2: {
+        _0 = baml.time.AmbiguousTimeError { copy _2 };
+        goto -> bb3;
+    }
+
+    bb3: {
+        return;
+    }
+}
+
+fn baml.time.TimeZoneOffset.from_json(j: baml.json.json) -> baml.time.TimeZoneOffset {
+    // Locals:
+    let _0: baml.time.TimeZoneOffset // _0 // return
+    let _1: baml.json.json // j // param
+    let _2: int
+    let _3: baml.json.json
+    let _4: type
+
+    bb0: {
+        _3 = call const fn baml.json.field(copy _1, const "_nanoseconds") -> [bb1];
+    }
+
+    bb1: {
+        _4 = load_type(int);
+        _2 = call const fn baml.json.from_json<copy _4>(copy _3) -> [bb2];
+    }
+
+    bb2: {
+        _0 = baml.time.TimeZoneOffset { copy _2 };
+        goto -> bb3;
+    }
+
+    bb3: {
+        return;
+    }
+}
+
+fn baml.time.TimeZoneOffset.from_timezone(timezone: string, at: baml.time.Instant) -> baml.time.TimeZoneOffset {
+    // Locals:
+    let _0: baml.time.TimeZoneOffset // _0 // return
+    let _1: string // timezone // param
+    let _2: baml.time.Instant // at // param
+    let _3: int?
+    let _4: bigint
+    let _5: bool
+    let _6: baml.time.UnknownTimezoneError
+    let _7: int? // offset
+    let _8: int
+    let _9: int?
+    let _10: bool
+
+    bb0: {
+        _4 = copy _2.0;
+        _3 = sys_op const fn baml.time._tz_offset_at(copy _1, copy _4) -> bb1;
+    }
+
+    bb1: {
+        _5 = copy _3 == const null;
+        branch copy _5 -> [bb6, bb2];
+    }
+
+    bb2: {
+        _7 = copy _3;
+        _9 = copy _7;
+        _8 = copy _9;
+        _10 = copy _9 == const null;
+        branch copy _10 -> [bb3, bb4];
+    }
+
+    bb3: {
+        _8 = const 0_i64;
+        goto -> bb4;
+    }
+
+    bb4: {
+        _0 = baml.time.TimeZoneOffset { copy _8 };
+        goto -> bb5;
+    }
+
+    bb5: {
+        return;
+    }
+
+    bb6: {
+        _6 = baml.time.UnknownTimezoneError { copy _1 };
+        throw copy _6;
+    }
+}
+
+fn baml.time.TimeZoneOffset.hours(self: baml.time.TimeZoneOffset) -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: baml.time.TimeZoneOffset // self // param
+    let _2: int
+
+    bb0: {
+        _2 = copy _1.0;
+        _0 = copy _2 / const 3600000000000_i64;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn baml.time.TimeZoneOffset.local() -> baml.time.TimeZoneOffset {
+    // Locals:
+    let _0: baml.time.TimeZoneOffset // _0 // return
+    let _1: string
+    let _2: baml.time.Instant
+
+    bb0: {
+        _1 = sys_op const fn baml.time.system_timezone() -> bb1;
+    }
+
+    bb1: {
+        _2 = sys_op const fn baml.time.Instant.now(const null) -> bb2;
+    }
+
+    bb2: {
+        _0 = call const fn baml.time.TimeZoneOffset.from_timezone(const null, copy _1, copy _2) -> [bb3];
+    }
+
+    bb3: {
+        return;
+    }
+}
+
+fn baml.time.TimeZoneOffset.minutes(self: baml.time.TimeZoneOffset) -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: baml.time.TimeZoneOffset // self // param
+    let _2: int
+    let _3: int
+
+    bb0: {
+        _3 = copy _1.0;
+        _2 = copy _3 / const 60000000000_i64;
+        _0 = copy _2 % const 60_i64;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn baml.time.TimeZoneOffset.new(hours: int, minutes: int) -> baml.time.TimeZoneOffset {
+    // Locals:
+    let _0: baml.time.TimeZoneOffset // _0 // return
+    let _1: int // hours // param
+    let _2: int // minutes // param
+    let _3: int // nanoseconds
+    let _4: int
+    let _5: int
+    let _6: int
+    let _7: bool
+    let _8: bool
+    let _9: int
+    let _10: int
+    let _11: baml.errors.InvalidArgument
+    let _12: int
+
+    bb0: {
+        _6 = copy _1 * const 60_i64;
+        _5 = copy _6 + copy _2;
+        _4 = copy _5 * const 60_i64;
+        _3 = copy _4 * const 1000000000_i64;
+        _9 = copy _3;
+        _8 = copy _9 > const 86400000000000_i64;
+        _7 = short_circuit(||) copy _8 -> [eval: bb1, join: bb2];
+    }
+
+    bb1: {
+        _10 = copy _3;
+        _7 = copy _10 < const -86400000000000_i64;
+        goto -> bb2;
+    }
+
+    bb2: {
+        branch copy _7 -> [bb5, bb3];
+    }
+
+    bb3: {
+        _12 = copy _3;
+        _0 = baml.time.TimeZoneOffset { copy _12 };
+        goto -> bb4;
+    }
+
+    bb4: {
+        return;
+    }
+
+    bb5: {
+        _11 = baml.errors.InvalidArgument { const "TimeZoneOffset out of range: must be within ±24 hours" };
+        throw copy _11;
+    }
+}
+
+fn baml.time.system_timezone = builtin(io)
+
+fn baml.time.TimeZoneOffset.to_duration(self: baml.time.TimeZoneOffset) -> baml.time.Duration {
+    // Locals:
+    let _0: baml.time.Duration // _0 // return
+    let _1: baml.time.TimeZoneOffset // self // param
+    let _2: bigint
+    let _3: int
+
+    bb0: {
+        _3 = copy _1.0;
+        _2 = const 0n + copy _3;
+        _0 = baml.time.Duration { copy _2 };
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn baml.time.UnknownTimezoneError.to_json(self: baml.time.UnknownTimezoneError) -> baml.json.json {
+    // Locals:
+    let _0: baml.json.json // _0 // return
+    let _1: baml.time.UnknownTimezoneError // self // param
+    let _2: baml.json.json
+    let _3: string
+    let _4: baml.time.UnknownTimezoneError
+
+    bb0: {
+        _4 = copy _1;
+        _3 = copy _4.0;
+        _2 = call const fn baml.String.to_json(copy _3) -> [bb1];
+    }
+
+    bb1: {
+        _0 = { const "timezone": copy _2 };
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn baml.time.AmbiguousTimeError.to_json(self: baml.time.AmbiguousTimeError) -> baml.json.json {
+    // Locals:
+    let _0: baml.json.json // _0 // return
+    let _1: baml.time.AmbiguousTimeError // self // param
+    let _2: baml.json.json
+    let _3: string
+    let _4: baml.time.AmbiguousTimeError
+
+    bb0: {
+        _4 = copy _1;
+        _3 = copy _4.0;
+        _2 = call const fn baml.String.to_json(copy _3) -> [bb1];
+    }
+
+    bb1: {
+        _0 = { const "message": copy _2 };
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn baml.time.TimeZoneOffset.to_json(self: baml.time.TimeZoneOffset) -> baml.json.json {
+    // Locals:
+    let _0: baml.json.json // _0 // return
+    let _1: baml.time.TimeZoneOffset // self // param
+    let _2: baml.json.json
+    let _3: int
+    let _4: baml.time.TimeZoneOffset
+
+    bb0: {
+        _4 = copy _1;
+        _3 = copy _4.0;
+        _2 = call const fn baml.Int.to_json(copy _3) -> [bb1];
+    }
+
+    bb1: {
+        _0 = { const "_nanoseconds": copy _2 };
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn baml.time.TimeZoneOffset.utc() -> baml.time.TimeZoneOffset {
+    // Locals:
+    let _0: baml.time.TimeZoneOffset // _0 // return
+
+    bb0: {
+        _0 = baml.time.TimeZoneOffset { const 0_i64 };
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn baml.time._format_zoned = builtin(vm)
+
+fn baml.time.ZonedDateTime.day(self: baml.time.ZonedDateTime) -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: baml.time.ZonedDateTime // self // param
+    let _2: baml.time.PlainDateTime
+
+    bb0: {
+        _2 = call const fn baml.time.ZonedDateTime.to_plain(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _0 = call const fn baml.time.PlainDateTime.day(copy _2) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn baml.time.ZonedDateTime.from_components(timezone: baml.time.TimeZoneOffset | string, year: int, month: int, day: int, hour: int?, minute: int?, second: int?, millisecond: int?, microsecond: int?, nanosecond: int?, disambiguation: ("compatible" | "earlier" | "later" | "reject")?) -> baml.time.ZonedDateTime {
+    // Locals:
+    let _0: baml.time.ZonedDateTime // _0 // return
+    let _1: baml.time.TimeZoneOffset | string // timezone // param
+    let _2: int // year // param
+    let _3: int // month // param
+    let _4: int // day // param
+    let _5: int? // hour // param
+    let _6: int? // minute // param
+    let _7: int? // second // param
+    let _8: int? // millisecond // param
+    let _9: int? // microsecond // param
+    let _10: int? // nanosecond // param
+    let _11: ("compatible" | "earlier" | "later" | "reject")? // disambiguation // param
+    let _12: baml.time.PlainDateTime
+
+    bb0: {
+        _12 = call const fn baml.time.PlainDateTime.from_components(const null, copy _2, copy _3, copy _4, copy _5, copy _6, copy _7, copy _8, copy _9, copy _10) -> [bb1];
+    }
+
+    bb1: {
+        _0 = call const fn baml.time.PlainDateTime.to_zoned(copy _12, copy _1, copy _11) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn baml.time.ZonedDateTime.from_instant(instant: baml.time.Instant, timezone: baml.time.TimeZoneOffset | string) -> baml.time.ZonedDateTime {
+    // Locals:
+    let _0: baml.time.ZonedDateTime // _0 // return
+    let _1: baml.time.Instant // instant // param
+    let _2: baml.time.TimeZoneOffset | string // timezone // param
+    let _3: bool
+    let _4: bigint
+    let _5: int
+    let _6: bigint
+
+    bb0: {
+        _3 = is_type(copy _2, baml.time.TimeZoneOffset);
+        branch copy _3 -> [bb2, bb1];
+    }
+
+    bb1: {
+        _6 = copy _1.0;
+        _0 = baml.time.ZonedDateTime { copy _6, const null, copy _2 };
+        goto -> bb3;
+    }
+
+    bb2: {
+        _4 = copy _1.0;
+        _5 = copy _2.0;
+        _0 = baml.time.ZonedDateTime { copy _4, copy _5, const null };
+        goto -> bb3;
+    }
+
+    bb3: {
+        return;
+    }
+}
+
+fn baml.time.ZonedDateTime.from_json(j: baml.json.json) -> baml.time.ZonedDateTime {
+    // Locals:
+    let _0: baml.time.ZonedDateTime // _0 // return
+    let _1: baml.json.json // j // param
+    let _2: bool
+    let _3: unknown // _
+    let _4: bool
+    let _5: string
+    let _6: bool
+    let _7: string
+    let _8: string // message
+    let _9: baml.json.JsonDecodeError
+    let _10: string
+    let _11: baml.json.JsonDecodeError
+
+    bb0: {
+        _2 = is_type(copy _1, string);
+        branch copy _2 -> [bb2, bb1];
+    }
+
+    bb1: {
+        _11 = baml.json.JsonDecodeError { const "Expected RFC 3339 / RFC 9557 timestamp string", const null };
+        throw copy _11;
+    }
+
+    bb2: {
+        _0 = call const fn baml.time.ZonedDateTime.parse(const null, copy _1) -> [bb3, unwind: bb4];
+    }
+
+    bb3: {
+        return;
+    }
+
+    bb4: {
+        _4 = is_type(copy _3, baml.errors.ParseError);
+        branch copy _4 -> [bb5, bb6];
+    }
+
+    bb5: {
+        _5 = copy _3.0;
+        _6 = is_type(copy _5, string);
+        branch copy _6 -> [bb7, bb6];
+    }
+
+    bb6: {
+        throw copy _3;
+    }
+
+    bb7: {
+        _7 = copy _3.0;
+        _8 = copy _7;
+        _10 = copy _8;
+        _9 = baml.json.JsonDecodeError { copy _10, const "" };
+        throw copy _9;
+    }
+}
+
+fn baml.time.ZonedDateTime.hour(self: baml.time.ZonedDateTime) -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: baml.time.ZonedDateTime // self // param
+    let _2: baml.time.PlainDateTime
+
+    bb0: {
+        _2 = call const fn baml.time.ZonedDateTime.to_plain(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _0 = call const fn baml.time.PlainDateTime.hour(copy _2) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn baml.time.ZonedDateTime.max(self: baml.time.ZonedDateTime, other: baml.time.ZonedDateTime) -> baml.time.ZonedDateTime {
+    // Locals:
+    let _0: baml.time.ZonedDateTime // _0 // return
+    let _1: baml.time.ZonedDateTime // self // param
+    let _2: baml.time.ZonedDateTime // other // param
+    let _3: bool
+    let _4: bigint
+    let _5: bigint
+
+    bb0: {
+        _4 = copy _2.0;
+        _5 = copy _1.0;
+        _3 = copy _4 > copy _5;
+        branch copy _3 -> [bb2, bb1];
+    }
+
+    bb1: {
+        _0 = copy _1;
+        goto -> bb3;
+    }
+
+    bb2: {
+        _0 = copy _2;
+        goto -> bb3;
+    }
+
+    bb3: {
+        return;
+    }
+}
+
+fn baml.time.ZonedDateTime.millisecond(self: baml.time.ZonedDateTime) -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: baml.time.ZonedDateTime // self // param
+    let _2: baml.time.PlainDateTime
+
+    bb0: {
+        _2 = call const fn baml.time.ZonedDateTime.to_plain(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _0 = call const fn baml.time.PlainDateTime.millisecond(copy _2) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn baml.time.ZonedDateTime.min(self: baml.time.ZonedDateTime, other: baml.time.ZonedDateTime) -> baml.time.ZonedDateTime {
+    // Locals:
+    let _0: baml.time.ZonedDateTime // _0 // return
+    let _1: baml.time.ZonedDateTime // self // param
+    let _2: baml.time.ZonedDateTime // other // param
+    let _3: bool
+    let _4: bigint
+    let _5: bigint
+
+    bb0: {
+        _4 = copy _2.0;
+        _5 = copy _1.0;
+        _3 = copy _4 < copy _5;
+        branch copy _3 -> [bb2, bb1];
+    }
+
+    bb1: {
+        _0 = copy _1;
+        goto -> bb3;
+    }
+
+    bb2: {
+        _0 = copy _2;
+        goto -> bb3;
+    }
+
+    bb3: {
+        return;
+    }
+}
+
+fn baml.time.ZonedDateTime.minute(self: baml.time.ZonedDateTime) -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: baml.time.ZonedDateTime // self // param
+    let _2: baml.time.PlainDateTime
+
+    bb0: {
+        _2 = call const fn baml.time.ZonedDateTime.to_plain(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _0 = call const fn baml.time.PlainDateTime.minute(copy _2) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn baml.time.ZonedDateTime.month(self: baml.time.ZonedDateTime) -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: baml.time.ZonedDateTime // self // param
+    let _2: baml.time.PlainDateTime
+
+    bb0: {
+        _2 = call const fn baml.time.ZonedDateTime.to_plain(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _0 = call const fn baml.time.PlainDateTime.month(copy _2) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn baml.time.ZonedDateTime.now() -> baml.time.ZonedDateTime {
+    // Locals:
+    let _0: baml.time.ZonedDateTime // _0 // return
+    let _1: baml.time.Instant
+    let _2: string
+
+    bb0: {
+        _1 = sys_op const fn baml.time.Instant.now(const null) -> bb1;
+    }
+
+    bb1: {
+        _2 = sys_op const fn baml.time.system_timezone() -> bb2;
+    }
+
+    bb2: {
+        _0 = call const fn baml.time.ZonedDateTime.from_instant(const null, copy _1, copy _2) -> [bb3];
+    }
+
+    bb3: {
+        return;
+    }
+}
+
+fn baml.time.ZonedDateTime.now_in(timezone: baml.time.TimeZoneOffset | string) -> baml.time.ZonedDateTime {
+    // Locals:
+    let _0: baml.time.ZonedDateTime // _0 // return
+    let _1: baml.time.TimeZoneOffset | string // timezone // param
+    let _2: baml.time.Instant
+
+    bb0: {
+        _2 = sys_op const fn baml.time.Instant.now(const null) -> bb1;
+    }
+
+    bb1: {
+        _0 = call const fn baml.time.ZonedDateTime.from_instant(const null, copy _2, copy _1) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn baml.time.ZonedDateTime.parse = builtin(vm)
+
+fn baml.time.ZonedDateTime.second(self: baml.time.ZonedDateTime) -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: baml.time.ZonedDateTime // self // param
+    let _2: baml.time.PlainDateTime
+
+    bb0: {
+        _2 = call const fn baml.time.ZonedDateTime.to_plain(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _0 = call const fn baml.time.PlainDateTime.second(copy _2) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn baml.time.ZonedDateTime.timezone(self: baml.time.ZonedDateTime) -> baml.time.TimeZoneOffset | string {
+    // Locals:
+    let _0: baml.time.TimeZoneOffset | string // _0 // return
+    let _1: baml.time.ZonedDateTime // self // param
+    let _2: string?
+    let _3: bool
+    let _4: int
+    let _5: int?
+    let _6: bool
+    let _7: string? // iana
+    let _8: string?
+    let _9: bool
+
+    bb0: {
+        _2 = copy _1.2;
+        _3 = copy _2 == const null;
+        branch copy _3 -> [bb3, bb1];
+    }
+
+    bb1: {
+        _7 = copy _2;
+        _8 = copy _7;
+        _0 = copy _8;
+        _9 = copy _8 == const null;
+        branch copy _9 -> [bb2, bb6];
+    }
+
+    bb2: {
+        _0 = const "";
+        goto -> bb6;
+    }
+
+    bb3: {
+        _5 = copy _1.1;
+        _4 = copy _5;
+        _6 = copy _5 == const null;
+        branch copy _6 -> [bb4, bb5];
+    }
+
+    bb4: {
+        _4 = const 0_i64;
+        goto -> bb5;
+    }
+
+    bb5: {
+        _0 = baml.time.TimeZoneOffset { copy _4 };
+        goto -> bb6;
+    }
+
+    bb6: {
+        return;
+    }
+}
+
+fn baml.time.ZonedDateTime.timezone_offset(self: baml.time.ZonedDateTime) -> baml.time.TimeZoneOffset {
+    // Locals:
+    let _0: baml.time.TimeZoneOffset // _0 // return
+    let _1: baml.time.ZonedDateTime // self // param
+    let _2: string?
+    let _3: bool
+    let _4: int
+    let _5: int?
+    let _6: bool
+    let _7: string? // iana
+    let _8: int?
+    let _9: string
+    let _10: string?
+    let _11: bool
+    let _12: bigint
+    let _13: bool
+    let _14: baml.time.UnknownTimezoneError
+    let _15: string
+    let _16: string?
+    let _17: bool
+    let _18: int? // offset
+    let _19: int
+    let _20: int?
+    let _21: bool
+
+    bb0: {
+        _2 = copy _1.2;
+        _3 = copy _2 == const null;
+        branch copy _3 -> [bb11, bb1];
+    }
+
+    bb1: {
+        _7 = copy _2;
+        _10 = copy _7;
+        _9 = copy _10;
+        _11 = copy _10 == const null;
+        branch copy _11 -> [bb2, bb3];
+    }
+
+    bb2: {
+        _9 = const "";
+        goto -> bb3;
+    }
+
+    bb3: {
+        _12 = copy _1.0;
+        _8 = sys_op const fn baml.time._tz_offset_at(copy _9, copy _12) -> bb4;
+    }
+
+    bb4: {
+        _13 = copy _8 == const null;
+        branch copy _13 -> [bb8, bb5];
+    }
+
+    bb5: {
+        _18 = copy _8;
+        _20 = copy _18;
+        _19 = copy _20;
+        _21 = copy _20 == const null;
+        branch copy _21 -> [bb6, bb7];
+    }
+
+    bb6: {
+        _19 = const 0_i64;
+        goto -> bb7;
+    }
+
+    bb7: {
+        _0 = baml.time.TimeZoneOffset { copy _19 };
+        goto -> bb14;
+    }
+
+    bb8: {
+        _16 = copy _7;
+        _15 = copy _16;
+        _17 = copy _16 == const null;
+        branch copy _17 -> [bb9, bb10];
+    }
+
+    bb9: {
+        _15 = const "";
+        goto -> bb10;
+    }
+
+    bb10: {
+        _14 = baml.time.UnknownTimezoneError { copy _15 };
+        throw copy _14;
+    }
+
+    bb11: {
+        _5 = copy _1.1;
+        _4 = copy _5;
+        _6 = copy _5 == const null;
+        branch copy _6 -> [bb12, bb13];
+    }
+
+    bb12: {
+        _4 = const 0_i64;
+        goto -> bb13;
+    }
+
+    bb13: {
+        _0 = baml.time.TimeZoneOffset { copy _4 };
+        goto -> bb14;
+    }
+
+    bb14: {
+        return;
+    }
+}
+
+fn baml.time.ZonedDateTime.to_instant(self: baml.time.ZonedDateTime) -> baml.time.Instant {
+    // Locals:
+    let _0: baml.time.Instant // _0 // return
+    let _1: baml.time.ZonedDateTime // self // param
+    let _2: bigint
+
+    bb0: {
+        _2 = copy _1.0;
+        _0 = baml.time.Instant { copy _2 };
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn baml.time.ZonedDateTime.to_json(self: baml.time.ZonedDateTime) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: baml.time.ZonedDateTime // self // param
+    let _2: unknown // _
+    let _3: bool
+    let _4: string
+    let _5: bool
+    let _6: bool
+    let _7: string
+    let _8: bool
+    let _9: bool
+    let _10: string
+    let _11: bool
+    let _12: string
+    let _13: string // message
+    let _14: baml.json.JsonSerializationError
+    let _15: string
+    let _16: string
+    let _17: string // timezone
+    let _18: baml.json.JsonSerializationError
+    let _19: string
+    let _20: string
+    let _21: string
+    let _22: string // message
+    let _23: baml.json.JsonSerializationError
+    let _24: string
+
+    bb0: {
+        _0 = call const fn baml.time.ZonedDateTime.to_string(copy _1) -> [bb1, unwind: bb2];
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        _3 = is_type(copy _2, baml.errors.InvalidArgument);
+        branch copy _3 -> [bb3, bb4];
+    }
+
+    bb3: {
+        _4 = copy _2.0;
+        _5 = is_type(copy _4, string);
+        branch copy _5 -> [bb11, bb4];
+    }
+
+    bb4: {
+        _6 = is_type(copy _2, baml.time.UnknownTimezoneError);
+        branch copy _6 -> [bb5, bb6];
+    }
+
+    bb5: {
+        _7 = copy _2.0;
+        _8 = is_type(copy _7, string);
+        branch copy _8 -> [bb10, bb6];
+    }
+
+    bb6: {
+        _9 = is_type(copy _2, baml.errors.Io);
+        branch copy _9 -> [bb7, bb8];
+    }
+
+    bb7: {
+        _10 = copy _2.0;
+        _11 = is_type(copy _10, string);
+        branch copy _11 -> [bb9, bb8];
+    }
+
+    bb8: {
+        throw copy _2;
+    }
+
+    bb9: {
+        _21 = copy _2.0;
+        _22 = copy _21;
+        _24 = copy _22;
+        _23 = baml.json.JsonSerializationError { copy _24, const "", const null };
+        throw copy _23;
+    }
+
+    bb10: {
+        _16 = copy _2.0;
+        _17 = copy _16;
+        _20 = copy _17;
+        _19 = const "unknown timezone: " + copy _20;
+        _18 = baml.json.JsonSerializationError { copy _19, const "", const null };
+        throw copy _18;
+    }
+
+    bb11: {
+        _12 = copy _2.0;
+        _13 = copy _12;
+        _15 = copy _13;
+        _14 = baml.json.JsonSerializationError { copy _15, const "", const null };
+        throw copy _14;
+    }
+}
+
+fn baml.time.ZonedDateTime.to_plain(self: baml.time.ZonedDateTime) -> baml.time.PlainDateTime {
+    // Locals:
+    let _0: baml.time.PlainDateTime // _0 // return
+    let _1: baml.time.ZonedDateTime // self // param
+    let _2: bigint
+    let _3: bigint
+    let _4: int
+    let _5: baml.time.TimeZoneOffset
+
+    bb0: {
+        _3 = copy _1.0;
+        _5 = call const fn baml.time.ZonedDateTime.timezone_offset(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _4 = copy _5.0;
+        _2 = copy _3 + copy _4;
+        _0 = baml.time.PlainDateTime { copy _2 };
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn baml.time.ZonedDateTime.to_string(self: baml.time.ZonedDateTime) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: baml.time.ZonedDateTime // self // param
+    let _2: bigint
+    let _3: int
+    let _4: baml.time.TimeZoneOffset
+    let _5: string?
+
+    bb0: {
+        _2 = copy _1.0;
+        _4 = call const fn baml.time.ZonedDateTime.timezone_offset(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _3 = copy _4.0;
+        _5 = copy _1.2;
+        _0 = call const fn baml.time._format_zoned(copy _2, copy _3, copy _5) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn baml.time.ZonedDateTime.with_timezone(self: baml.time.ZonedDateTime, timezone: baml.time.TimeZoneOffset | string) -> baml.time.ZonedDateTime {
+    // Locals:
+    let _0: baml.time.ZonedDateTime // _0 // return
+    let _1: baml.time.ZonedDateTime // self // param
+    let _2: baml.time.TimeZoneOffset | string // timezone // param
+    let _3: baml.time.Instant
+
+    bb0: {
+        _3 = call const fn baml.time.ZonedDateTime.to_instant(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _0 = call const fn baml.time.ZonedDateTime.from_instant(const null, copy _3, copy _2) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn baml.time.ZonedDateTime.year(self: baml.time.ZonedDateTime) -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: baml.time.ZonedDateTime // self // param
+    let _2: baml.time.PlainDateTime
+
+    bb0: {
+        _2 = call const fn baml.time.ZonedDateTime.to_plain(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _0 = call const fn baml.time.PlainDateTime.year(copy _2) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn baml.toml.Table.from_json(json: baml.json.json) -> baml.toml.Table {
+    // Locals:
+    let _0: baml.toml.Table // _0 // return
+    let _1: baml.json.json // json // param
+    let _2: bool
+    let _3: map<string, baml.toml.Item> // items
+    let _4: string[]
+    let _5: int // __for_idx
+    let _6: int
+    let _7: bool
+    let _8: string
+    let _9: string // key
+    let _10: string
+    let _11: baml.json.json
+    let _12: map<string, baml.json.json>
+    let _13: string
+    let _14: bool
+    let _15: baml.json.json // item
+    let _16: baml.json.json
+    let _17: baml.toml.Item
+    let _18: map<string, baml.toml.Item>
+    let _19: baml.json.JsonDecodeError
+
+    bb0: {
+        _2 = is_type(copy _1, map<string, baml.json.json>);
+        branch copy _2 -> [bb2, bb1];
+    }
+
+    bb1: {
+        _19 = baml.json.JsonDecodeError { const "expected map", const "" };
+        throw copy _19;
+    }
+
+    bb2: {
+        _3 = map {  };
+        _4 = call const fn baml.Map.keys(copy _1) -> [bb3];
+    }
+
+    bb3: {
+        _5 = const 0_i64;
+        goto -> bb4;
+    }
+
+    bb4: {
+        _6 = len(_4);
+        _7 = copy _5 < copy _6;
+        branch copy _7 -> [bb7, bb5];
+    }
+
+    bb5: {
+        _18 = copy _3;
+        _0 = baml.toml.Table { copy _18 };
+        goto -> bb6;
+    }
+
+    bb6: {
+        return;
+    }
+
+    bb7: {
+        _8 = copy _4[_5];
+        fresh_cell(_9);
+        _9 = copy _8;
+        _10 = copy _9;
+        _12 = copy _1;
+        _13 = copy _9;
+        _11 = copy _12[_13];
+        _14 = copy _11 == const null;
+        branch copy _14 -> [bb10, bb8];
+    }
+
+    bb8: {
+        _15 = copy _11;
+        _16 = copy _15;
+        _17 = call const fn baml.toml.item_from_json(copy _16) -> [bb9];
+    }
+
+    bb9: {
+        _3[_10] = copy _17;
+        goto -> bb10;
+    }
+
+    bb10: {
+        _5 = copy _5 + const 1_i64;
+        goto -> bb4;
+    }
+}
+
+fn baml.toml.TomlParseError.from_json(j: baml.json.json) -> baml.toml.TomlParseError {
+    // Locals:
+    let _0: baml.toml.TomlParseError // _0 // return
+    let _1: baml.json.json // j // param
+    let _2: string
+    let _3: baml.json.json
+    let _4: type
+
+    bb0: {
+        _3 = call const fn baml.json.field(copy _1, const "message") -> [bb1];
+    }
+
+    bb1: {
+        _4 = load_type(string);
+        _2 = call const fn baml.json.from_json<copy _4>(copy _3) -> [bb2];
+    }
+
+    bb2: {
+        _0 = baml.toml.TomlParseError { copy _2 };
+        goto -> bb3;
+    }
+
+    bb3: {
+        return;
+    }
+}
+
+fn baml.toml.item_from_json(json: baml.json.json) -> baml.toml.Item {
+    // Locals:
+    let _0: baml.toml.Item // _0 // return
+    let _1: baml.json.json // json // param
+    let _2: int
+    let _3: baml.json.JsonDecodeError
+
+    bb0: {
+        _2 = type_tag(_1);
+        switch copy _2 [bool: bb5, int: bb5, float: bb5, string: bb5, null: bb4, map: bb3, list: bb2, otherwise: bb1] (exhaustive);
+    }
+
+    bb1: {
+        unreachable;
+    }
+
+    bb2: {
+        _0 = call const fn baml.Array.map(copy _1, const fn baml.toml.item_from_json) -> [bb6];
+    }
+
+    bb3: {
+        _0 = call const fn baml.toml.Table.from_json(const null, copy _1) -> [bb6];
+    }
+
+    bb4: {
+        _3 = baml.json.JsonDecodeError { const "TOML does not support null", const "" };
+        throw copy _3;
+    }
+
+    bb5: {
+        _0 = copy _1;
+        goto -> bb6;
+    }
+
+    bb6: {
+        return;
+    }
+}
+
+fn baml.toml.item_to_json(item: baml.toml.Item) -> baml.json.json {
+    // Locals:
+    let _0: baml.json.json // _0 // return
+    let _1: baml.toml.Item // item // param
+    let _2: int
+
+    bb0: {
+        _2 = type_tag(_1);
+        switch copy _2 [bool: bb8, int: bb8, float: bb8, string: bb8, Table: bb7, list: bb6, ZonedDateTime: bb5, PlainDateTime: bb4, PlainDate: bb3, PlainTime: bb2, otherwise: bb1] (exhaustive);
+    }
+
+    bb1: {
+        unreachable;
+    }
+
+    bb2: {
+        _0 = call const fn baml.time.PlainTime.to_json(copy _1) -> [bb9];
+    }
+
+    bb3: {
+        _0 = call const fn baml.time.PlainDate.to_json(copy _1) -> [bb9];
+    }
+
+    bb4: {
+        _0 = call const fn baml.time.PlainDateTime.to_json(copy _1) -> [bb9];
+    }
+
+    bb5: {
+        _0 = call const fn baml.time.ZonedDateTime.to_json(copy _1) -> [bb9];
+    }
+
+    bb6: {
+        _0 = call const fn baml.Array.map(copy _1, const fn baml.toml.item_to_json) -> [bb9];
+    }
+
+    bb7: {
+        _0 = call const fn baml.toml.Table.to_json(copy _1) -> [bb9];
+    }
+
+    bb8: {
+        _0 = copy _1;
+        goto -> bb9;
+    }
+
+    bb9: {
+        return;
+    }
+}
+
+fn baml.toml.Table.parse = builtin(vm)
+
+fn baml.toml.TomlParseError.to_json(self: baml.toml.TomlParseError) -> baml.json.json {
+    // Locals:
+    let _0: baml.json.json // _0 // return
+    let _1: baml.toml.TomlParseError // self // param
+    let _2: baml.json.json
+    let _3: string
+    let _4: baml.toml.TomlParseError
+
+    bb0: {
+        _4 = copy _1;
+        _3 = copy _4.0;
+        _2 = call const fn baml.String.to_json(copy _3) -> [bb1];
+    }
+
+    bb1: {
+        _0 = { const "message": copy _2 };
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn baml.toml.Table.to_json(self: baml.toml.Table) -> baml.json.json {
+    // Locals:
+    let _0: baml.json.json // _0 // return
+    let _1: baml.toml.Table // self // param
+    let _2: unknown // _
+    let _3: (map<string, baml.toml.Item>) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError
+    let _4: bool
+    let _5: string
+    let _6: bool
+    let _7: string
+    let _8: string // message
+    let _9: baml.json.JsonSerializationError
+    let _10: string
+
+    bb0: {
+        _3 = copy _1.0;
+        _0 = call const fn baml.Map.to_json(copy _3) -> [bb1, unwind: bb2];
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        _4 = is_type(copy _2, baml.json.JsonParseError);
+        branch copy _4 -> [bb3, bb4];
+    }
+
+    bb3: {
+        _5 = copy _2.0;
+        _6 = is_type(copy _5, string);
+        branch copy _6 -> [bb5, bb4];
+    }
+
+    bb4: {
+        throw copy _2;
+    }
+
+    bb5: {
+        _7 = copy _2.0;
+        _8 = copy _7;
+        _10 = copy _8;
+        _9 = baml.json.JsonSerializationError { copy _10, const "", const null };
+        throw copy _9;
+    }
+}
+
 fn baml.unstable.string = builtin(vm)
 
 fn baml.Null.from_json(j: baml.json.json) -> baml.Null {

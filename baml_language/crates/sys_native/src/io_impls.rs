@@ -66,7 +66,99 @@ impl io::IoClassTimeInstant for NativeSysOps {
     }
 }
 
-impl io::IoNamespaceTime for NativeSysOps {}
+/// Converts an absolute time (nanoseconds since the Unix epoch, as an
+/// arbitrary-precision integer) into a `jiff::Timestamp`, saturating at
+/// jiff's representable range. Saturation is fine for offset queries: a
+/// timezone's offset is constant beyond the last tzdb transition, so the
+/// boundary instant resolves to the same offset as any farther one.
+fn saturating_timestamp(ns: &num_bigint::BigInt) -> jiff::Timestamp {
+    use num_bigint::Sign;
+    match i128::try_from(ns) {
+        Ok(ns) => jiff::Timestamp::from_nanosecond(ns).unwrap_or(if ns < 0 {
+            jiff::Timestamp::MIN
+        } else {
+            jiff::Timestamp::MAX
+        }),
+        Err(_) if ns.sign() == Sign::Minus => jiff::Timestamp::MIN,
+        Err(_) => jiff::Timestamp::MAX,
+    }
+}
+
+impl io::IoNamespaceTime for NativeSysOps {
+    fn system_timezone(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<String> {
+        // The host's timezone database / system configuration, per BEP-021
+        // (Deno-style: no tzdata is bundled on platforms that provide one).
+        match jiff::tz::TimeZone::system().iana_name() {
+            Some(name) => SysOpOutput::ok(name.to_string()),
+            None => SysOpOutput::err(OpErrorKind::Io {
+                message: "could not determine the system's IANA timezone".to_string(),
+            }),
+        }
+    }
+
+    fn _tz_offset_at(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        timezone: String,
+        at_ns: Arc<num_bigint::BigInt>,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<Option<i64>> {
+        // Unknown identifier → None (the BAML layer turns this into
+        // `UnknownTimezoneError`).
+        let Ok(tz) = jiff::tz::TimeZone::get(&timezone) else {
+            return SysOpOutput::ok(None);
+        };
+        let offset = tz.to_offset(saturating_timestamp(&at_ns));
+        SysOpOutput::ok(Some(i64::from(offset.seconds()) * 1_000_000_000))
+    }
+
+    fn _tz_to_instant(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        timezone: String,
+        civil_ns: Arc<num_bigint::BigInt>,
+        disambiguation: String,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<Option<Arc<num_bigint::BigInt>>> {
+        let Ok(tz) = jiff::tz::TimeZone::get(&timezone) else {
+            return SysOpOutput::ok(None);
+        };
+        // The civil reading is encoded as nanoseconds since
+        // 1970-01-01T00:00:00 as if it were UTC; decode it through UTC.
+        let civil = match i128::try_from(&*civil_ns)
+            .ok()
+            .and_then(|ns| jiff::Timestamp::from_nanosecond(ns).ok())
+        {
+            Some(ts) => ts.to_zoned(jiff::tz::TimeZone::UTC).datetime(),
+            None => {
+                return SysOpOutput::err(OpErrorKind::Io {
+                    message: "civil time is outside the supported year range".to_string(),
+                });
+            }
+        };
+        let ambiguous = tz.to_ambiguous_timestamp(civil);
+        // TC39 disambiguation semantics, via jiff. "reject" is implemented in
+        // the BAML layer (earlier+later agreement), so it never reaches here.
+        let resolved = match disambiguation.as_str() {
+            "earlier" => ambiguous.earlier(),
+            "later" => ambiguous.later(),
+            _ => ambiguous.compatible(),
+        };
+        match resolved {
+            Ok(ts) => SysOpOutput::ok(Some(Arc::new(num_bigint::BigInt::from(ts.as_nanosecond())))),
+            Err(e) => SysOpOutput::err(OpErrorKind::Io {
+                message: format!("cannot resolve civil time in timezone '{timezone}': {e}"),
+            }),
+        }
+    }
+}
 
 // ============================================================================
 // IO (stdin input)

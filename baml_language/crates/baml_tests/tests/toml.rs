@@ -3,10 +3,10 @@
 //! Two layers are exercised:
 //! - The native `baml.toml.Table.parse` (`crates/bex_vm/src/package_baml/toml.rs`),
 //!   whose `convert_toml_value` maps every `toml::Value` arm (string / integer /
-//!   float / boolean / datetime / array / table) onto a VM value.
+//!   float / boolean / datetime / array / table) onto a VM value, with the four
+//!   TOML datetime kinds mapped onto the `baml.time` types per BEP-021.
 //! - The BAML stdlib functions in `ns_toml/toml.baml`: `Table.to_json` /
-//!   `Table.from_json`, the `item_to_json` / `item_from_json` helpers, and the
-//!   `Datetime` wrapper.
+//!   `Table.from_json` and the `item_to_json` / `item_from_json` helpers.
 //!
 //! Parse results are inspected by stringifying their JSON projection
 //! (`baml.json.stringify(table.to_json())`). This is deterministic: `toml = "0.8"`
@@ -89,7 +89,9 @@ async fn parse_array() {
     );
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String(r#"{"nums":[1,2,3]}"#.to_string().into()))
+        Ok(BexExternalValue::String(
+            r#"{"nums":[1,2,3]}"#.to_string().into()
+        ))
     );
 }
 
@@ -171,13 +173,14 @@ async fn item_from_json_rejects_null() {
 
 /// `item_to_json` is a public helper that `Table.to_json` does not reach (the
 /// latter uses the auto-derived map projection), so it is otherwise untested.
-/// One call hits its array-recursion, `Datetime`, and scalar arms together.
+/// One call hits its array-recursion, `ZonedDateTime`, and scalar arms
+/// together.
 #[tokio::test]
 async fn item_to_json_array_with_datetime() {
     let output = baml_test!(
         r#"
         function main() -> string {
-            let item: baml.toml.Item = [baml.toml.Datetime { value: "2020-01-01T00:00:00Z" }, 7];
+            let item: baml.toml.Item = [baml.time.ZonedDateTime.parse("2020-01-01T00:00:00Z"), 7];
             baml.json.stringify(baml.toml.item_to_json(item))
         }
     "#

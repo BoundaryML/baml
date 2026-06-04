@@ -1124,7 +1124,7 @@ pub fn generate_project_bytecode_with_opt(
             )
         };
         for impls in inverted.values_mut() {
-            impls.sort_by(|(a, _, _), (b, _, _)| impl_sort_key(a).cmp(&impl_sort_key(b)));
+            impls.sort_by_key(|(a, _, _)| impl_sort_key(a));
         }
         program.interface_implementors = inverted;
     }

@@ -4769,6 +4769,27 @@ function baml.sys.shell(command: string, options: baml.sys.ProcessOptions | null
 function baml.sys.sleep(ms: int) -> null {
 }
 
+function baml.time.AmbiguousTimeError.from_json(j: baml.json.json) -> baml.time.AmbiguousTimeError {
+    load_var j
+    load_const "message"
+    call baml.json.field
+    store_var _3
+    load_type string
+    load_var _3
+    call baml.json.from_json
+    init_instance baml.time.AmbiguousTimeError .message
+    return
+}
+
+function baml.time.AmbiguousTimeError.to_json(self: baml.time.AmbiguousTimeError) -> baml.json.json {
+    load_var self
+    load_field .message
+    call baml.String.to_json
+    load_const "message"
+    alloc_map 1
+    return
+}
+
 function baml.time.Duration.abs(self: baml.time.Duration) -> baml.time.Duration {
     load_var self
     load_field ._nanoseconds
@@ -5097,6 +5118,1308 @@ function baml.time.Instant.to_timestamp_seconds(self: baml.time.Instant) -> bigi
     load_const 1000000000
     div_bigint
     return
+}
+
+function baml.time.PlainDate.day(self: baml.time.PlainDate) -> int {
+}
+
+function baml.time.PlainDate.from_components(year: int, month: int, day: int) -> baml.time.PlainDate {
+}
+
+function baml.time.PlainDate.from_json(j: baml.json.json) -> baml.time.PlainDate {
+    load_var j
+    is_type string
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const "Expected ISO 8601 date string"
+    load_const null
+    init_instance baml.json.JsonDecodeError .message, .path
+    throw
+
+  L1:
+    load_const null
+    load_var j
+    call baml.time.PlainDate.parse
+    jump L4
+    load_var _
+    is_type baml.errors.ParseError
+    pop_jump_if_false L2
+    load_var _
+    load_field .0
+    is_type string
+    pop_jump_if_false L2
+    jump L3
+
+  L2:
+    load_var _
+    throw
+
+  L3:
+    load_var _
+    load_field .0
+    load_const ""
+    init_instance baml.json.JsonDecodeError .message, .path
+    throw
+
+  L4:
+    return
+}
+
+function baml.time.PlainDate.month(self: baml.time.PlainDate) -> int {
+}
+
+function baml.time.PlainDate.parse(s: string) -> baml.time.PlainDate {
+}
+
+function baml.time.PlainDate.to_json(self: baml.time.PlainDate) -> string {
+    load_var self
+    call baml.time.PlainDate.to_string
+    jump L2
+    load_var _
+    is_type baml.errors.InvalidArgument
+    pop_jump_if_false L0
+    load_var _
+    load_field .0
+    is_type string
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var _
+    throw
+
+  L1:
+    load_var _
+    load_field .0
+    load_const ""
+    load_const null
+    init_instance baml.json.JsonSerializationError .message, .path, .reason
+    throw
+
+  L2:
+    return
+}
+
+function baml.time.PlainDate.to_plain_datetime(self: baml.time.PlainDate, time: baml.time.PlainTime?) -> baml.time.PlainDateTime {
+}
+
+function baml.time.PlainDate.to_string(self: baml.time.PlainDate) -> string {
+}
+
+function baml.time.PlainDate.year(self: baml.time.PlainDate) -> int {
+}
+
+function baml.time.PlainDateTime.day(self: baml.time.PlainDateTime) -> int {
+}
+
+function baml.time.PlainDateTime.from_components(year: int, month: int, day: int, hour: int?, minute: int?, second: int?, millisecond: int?, microsecond: int?, nanosecond: int?) -> baml.time.PlainDateTime {
+}
+
+function baml.time.PlainDateTime.from_json(j: baml.json.json) -> baml.time.PlainDateTime {
+    load_var j
+    is_type string
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const "Expected zoneless ISO 8601 string"
+    load_const null
+    init_instance baml.json.JsonDecodeError .message, .path
+    throw
+
+  L1:
+    load_const null
+    load_var j
+    call baml.time.PlainDateTime.parse
+    jump L4
+    load_var _
+    is_type baml.errors.ParseError
+    pop_jump_if_false L2
+    load_var _
+    load_field .0
+    is_type string
+    pop_jump_if_false L2
+    jump L3
+
+  L2:
+    load_var _
+    throw
+
+  L3:
+    load_var _
+    load_field .0
+    load_const ""
+    init_instance baml.json.JsonDecodeError .message, .path
+    throw
+
+  L4:
+    return
+}
+
+function baml.time.PlainDateTime.hour(self: baml.time.PlainDateTime) -> int {
+}
+
+function baml.time.PlainDateTime.max(self: baml.time.PlainDateTime, other: baml.time.PlainDateTime) -> baml.time.PlainDateTime {
+    load_var other
+    load_field ._nanoseconds
+    load_var self
+    load_field ._nanoseconds
+    cmp_bigint_op >
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var self
+    jump L2
+
+  L1:
+    load_var other
+
+  L2:
+    return
+}
+
+function baml.time.PlainDateTime.millisecond(self: baml.time.PlainDateTime) -> int {
+}
+
+function baml.time.PlainDateTime.min(self: baml.time.PlainDateTime, other: baml.time.PlainDateTime) -> baml.time.PlainDateTime {
+    load_var other
+    load_field ._nanoseconds
+    load_var self
+    load_field ._nanoseconds
+    cmp_bigint_op <
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var self
+    jump L2
+
+  L1:
+    load_var other
+
+  L2:
+    return
+}
+
+function baml.time.PlainDateTime.minute(self: baml.time.PlainDateTime) -> int {
+}
+
+function baml.time.PlainDateTime.month(self: baml.time.PlainDateTime) -> int {
+}
+
+function baml.time.PlainDateTime.parse(s: string) -> baml.time.PlainDateTime {
+}
+
+function baml.time.PlainDateTime.second(self: baml.time.PlainDateTime) -> int {
+}
+
+function baml.time.PlainDateTime.to_json(self: baml.time.PlainDateTime) -> string {
+    load_var self
+    call baml.time.PlainDateTime.to_string
+    jump L2
+    load_var _
+    is_type baml.errors.InvalidArgument
+    pop_jump_if_false L0
+    load_var _
+    load_field .0
+    is_type string
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var _
+    throw
+
+  L1:
+    load_var _
+    load_field .0
+    load_const ""
+    load_const null
+    init_instance baml.json.JsonSerializationError .message, .path, .reason
+    throw
+
+  L2:
+    return
+}
+
+function baml.time.PlainDateTime.to_plain_date(self: baml.time.PlainDateTime) -> baml.time.PlainDate {
+}
+
+function baml.time.PlainDateTime.to_plain_time(self: baml.time.PlainDateTime) -> baml.time.PlainTime {
+}
+
+function baml.time.PlainDateTime.to_string(self: baml.time.PlainDateTime) -> string {
+}
+
+function baml.time.PlainDateTime.to_zoned(self: baml.time.PlainDateTime, timezone: baml.time.TimeZoneOffset | string, disambiguation: ("compatible" | "earlier" | "later" | "reject")?) -> baml.time.ZonedDateTime {
+    load_var timezone
+    is_type baml.time.TimeZoneOffset
+    pop_jump_if_false L0
+    jump L15
+
+  L0:
+    load_var disambiguation
+    store_var _10
+    load_var disambiguation
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L1
+    load_const "compatible"
+    store_var _10
+
+  L1:
+    load_var _10
+    load_const "reject"
+    cmp_op ==
+    pop_jump_if_false L2
+    jump L7
+
+  L2:
+    load_var self
+    load_field ._nanoseconds
+    store_var _31
+    load_var disambiguation
+    store_var _32
+    load_var disambiguation
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L3
+    load_const "compatible"
+    store_var _32
+
+  L3:
+    load_var2 2 11
+    load_var _32
+    sys_op baml.time._tz_to_instant
+    store_var _30
+    load_var _30
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L4
+    jump L6
+
+  L4:
+    load_var _30
+    store_var _38
+    load_var _38
+    store_var _37
+    load_var _38
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L5
+    load_const 0n
+    store_var _37
+
+  L5:
+    load_var _37
+    load_const null
+    load_var timezone
+    init_instance baml.time.ZonedDateTime ._nanoseconds, ._offset_ns, ._iana
+    jump L16
+
+  L6:
+    load_var timezone
+    init_instance baml.time.UnknownTimezoneError .timezone
+    throw
+
+  L7:
+    load_var2 2 1
+    load_field ._nanoseconds
+    load_const "earlier"
+    sys_op baml.time._tz_to_instant
+    store_var _12
+    load_var _12
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L8
+    jump L14
+
+  L8:
+    load_var _12
+    store_var earlier
+    load_var2 2 1
+    load_field ._nanoseconds
+    load_const "later"
+    sys_op baml.time._tz_to_instant
+    store_var _17
+    load_var _17
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L9
+    jump L13
+
+  L9:
+    load_var2 6 7
+    cmp_op ==
+    pop_jump_if_false L10
+    jump L11
+
+  L10:
+    load_const "wall-clock time is ambiguous or skipped in timezone "
+    load_var timezone
+    bin_op +
+    init_instance baml.time.AmbiguousTimeError .message
+    throw
+
+  L11:
+    load_var earlier
+    store_var _26
+    load_var _26
+    store_var _25
+    load_var _26
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L12
+    load_const 0n
+    store_var _25
+
+  L12:
+    load_var _25
+    load_const null
+    load_var timezone
+    init_instance baml.time.ZonedDateTime ._nanoseconds, ._offset_ns, ._iana
+    jump L16
+
+  L13:
+    load_var timezone
+    init_instance baml.time.UnknownTimezoneError .timezone
+    throw
+
+  L14:
+    load_var timezone
+    init_instance baml.time.UnknownTimezoneError .timezone
+    throw
+
+  L15:
+    load_var self
+    load_field ._nanoseconds
+    load_var timezone
+    load_field .0
+    sub_bigint
+    load_var timezone
+    load_field .0
+    load_const null
+    init_instance baml.time.ZonedDateTime ._nanoseconds, ._offset_ns, ._iana
+
+  L16:
+    return
+}
+
+function baml.time.PlainDateTime.year(self: baml.time.PlainDateTime) -> int {
+}
+
+function baml.time.PlainTime.from_components(hour: int, minute: int?, second: int?, millisecond: int?, microsecond: int?, nanosecond: int?) -> baml.time.PlainTime {
+}
+
+function baml.time.PlainTime.from_json(j: baml.json.json) -> baml.time.PlainTime {
+    load_var j
+    is_type string
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const "Expected ISO 8601 time string"
+    load_const null
+    init_instance baml.json.JsonDecodeError .message, .path
+    throw
+
+  L1:
+    load_const null
+    load_var j
+    call baml.time.PlainTime.parse
+    jump L4
+    load_var _
+    is_type baml.errors.ParseError
+    pop_jump_if_false L2
+    load_var _
+    load_field .0
+    is_type string
+    pop_jump_if_false L2
+    jump L3
+
+  L2:
+    load_var _
+    throw
+
+  L3:
+    load_var _
+    load_field .0
+    load_const ""
+    init_instance baml.json.JsonDecodeError .message, .path
+    throw
+
+  L4:
+    return
+}
+
+function baml.time.PlainTime.hour(self: baml.time.PlainTime) -> int {
+    load_var self
+    load_field ._nanoseconds
+    load_const 3600000000000
+    div_int
+    return
+}
+
+function baml.time.PlainTime.millisecond(self: baml.time.PlainTime) -> int {
+    load_var self
+    load_field ._nanoseconds
+    load_const 1000000
+    div_int
+    load_const 1000
+    mod_int
+    return
+}
+
+function baml.time.PlainTime.minute(self: baml.time.PlainTime) -> int {
+    load_var self
+    load_field ._nanoseconds
+    load_const 60000000000
+    div_int
+    load_const 60
+    mod_int
+    return
+}
+
+function baml.time.PlainTime.parse(s: string) -> baml.time.PlainTime {
+}
+
+function baml.time.PlainTime.second(self: baml.time.PlainTime) -> int {
+    load_var self
+    load_field ._nanoseconds
+    load_const 1000000000
+    div_int
+    load_const 60
+    mod_int
+    return
+}
+
+function baml.time.PlainTime.to_json(self: baml.time.PlainTime) -> string {
+    load_var self
+    call baml.time.PlainTime.to_string
+    return
+}
+
+function baml.time.PlainTime.to_plain_datetime(self: baml.time.PlainTime, date: baml.time.PlainDate) -> baml.time.PlainDateTime {
+    load_var2 2 1
+    call baml.time.PlainDate.to_plain_datetime
+    return
+}
+
+function baml.time.PlainTime.to_string(self: baml.time.PlainTime) -> string {
+}
+
+function baml.time.TimeZoneOffset.from_duration(duration: baml.time.Duration) -> baml.time.TimeZoneOffset {
+}
+
+function baml.time.TimeZoneOffset.from_json(j: baml.json.json) -> baml.time.TimeZoneOffset {
+    load_var j
+    load_const "_nanoseconds"
+    call baml.json.field
+    store_var _3
+    load_type int
+    load_var _3
+    call baml.json.from_json
+    init_instance baml.time.TimeZoneOffset ._nanoseconds
+    return
+}
+
+function baml.time.TimeZoneOffset.from_timezone(timezone: string, at: baml.time.Instant) -> baml.time.TimeZoneOffset {
+    load_var2 1 2
+    load_field ._nanoseconds
+    sys_op baml.time._tz_offset_at
+    store_var _3
+    load_var _3
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L0
+    jump L2
+
+  L0:
+    load_var _3
+    store_var _9
+    load_var _9
+    store_var _8
+    load_var _9
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L1
+    load_const 0
+    store_var _8
+
+  L1:
+    load_var _8
+    init_instance baml.time.TimeZoneOffset ._nanoseconds
+    return
+
+  L2:
+    load_var timezone
+    init_instance baml.time.UnknownTimezoneError .timezone
+    throw
+}
+
+function baml.time.TimeZoneOffset.hours(self: baml.time.TimeZoneOffset) -> int {
+    load_var self
+    load_field ._nanoseconds
+    load_const 3600000000000
+    div_int
+    return
+}
+
+function baml.time.TimeZoneOffset.local() -> baml.time.TimeZoneOffset {
+    sys_op baml.time.system_timezone
+    store_var _1
+    load_const null
+    sys_op baml.time.Instant.now
+    store_var _2
+    load_const null
+    load_var2 1 2
+    call baml.time.TimeZoneOffset.from_timezone
+    return
+}
+
+function baml.time.TimeZoneOffset.minutes(self: baml.time.TimeZoneOffset) -> int {
+    load_var self
+    load_field ._nanoseconds
+    load_const 60000000000
+    div_int
+    load_const 60
+    mod_int
+    return
+}
+
+function baml.time.TimeZoneOffset.new(hours: int, minutes: int) -> baml.time.TimeZoneOffset {
+    load_var hours
+    load_const 60
+    mul_int
+    load_var minutes
+    add_int
+    load_const 60
+    mul_int
+    load_const 1000000000
+    mul_int
+    store_var_load_var nanoseconds
+    load_const 86400000000000
+    cmp_int_op >
+    jump_if_false L0
+    jump L1
+
+  L0:
+    pop 1
+    load_var nanoseconds
+    load_const -86400000000000
+    cmp_int_op <
+
+  L1:
+    pop_jump_if_false L2
+    jump L3
+
+  L2:
+    load_var nanoseconds
+    init_instance baml.time.TimeZoneOffset ._nanoseconds
+    return
+
+  L3:
+    load_const "TimeZoneOffset out of range: must be within ±24 hours"
+    init_instance baml.errors.InvalidArgument .message
+    throw
+}
+
+function baml.time.TimeZoneOffset.to_duration(self: baml.time.TimeZoneOffset) -> baml.time.Duration {
+    load_const 0n
+    load_var self
+    load_field ._nanoseconds
+    add_bigint
+    init_instance baml.time.Duration ._nanoseconds
+    return
+}
+
+function baml.time.TimeZoneOffset.to_json(self: baml.time.TimeZoneOffset) -> baml.json.json {
+    load_var self
+    load_field ._nanoseconds
+    call baml.Int.to_json
+    load_const "_nanoseconds"
+    alloc_map 1
+    return
+}
+
+function baml.time.TimeZoneOffset.utc() -> baml.time.TimeZoneOffset {
+    load_const 0
+    init_instance baml.time.TimeZoneOffset ._nanoseconds
+    return
+}
+
+function baml.time.UnknownTimezoneError.from_json(j: baml.json.json) -> baml.time.UnknownTimezoneError {
+    load_var j
+    load_const "timezone"
+    call baml.json.field
+    store_var _3
+    load_type string
+    load_var _3
+    call baml.json.from_json
+    init_instance baml.time.UnknownTimezoneError .timezone
+    return
+}
+
+function baml.time.UnknownTimezoneError.to_json(self: baml.time.UnknownTimezoneError) -> baml.json.json {
+    load_var self
+    load_field .timezone
+    call baml.String.to_json
+    load_const "timezone"
+    alloc_map 1
+    return
+}
+
+function baml.time.ZonedDateTime.day(self: baml.time.ZonedDateTime) -> int {
+    load_var self
+    call baml.time.ZonedDateTime.to_plain
+    call baml.time.PlainDateTime.day
+    return
+}
+
+function baml.time.ZonedDateTime.from_components(timezone: baml.time.TimeZoneOffset | string, year: int, month: int, day: int, hour: int?, minute: int?, second: int?, millisecond: int?, microsecond: int?, nanosecond: int?, disambiguation: ("compatible" | "earlier" | "later" | "reject")?) -> baml.time.ZonedDateTime {
+    load_const null
+    load_var2 2 3
+    load_var2 4 5
+    load_var2 6 7
+    load_var2 8 9
+    load_var nanosecond
+    call baml.time.PlainDateTime.from_components
+    load_var2 1 11
+    call baml.time.PlainDateTime.to_zoned
+    return
+}
+
+function baml.time.ZonedDateTime.from_instant(instant: baml.time.Instant, timezone: baml.time.TimeZoneOffset | string) -> baml.time.ZonedDateTime {
+    load_var timezone
+    is_type baml.time.TimeZoneOffset
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var instant
+    load_field ._nanoseconds
+    load_const null
+    load_var timezone
+    init_instance baml.time.ZonedDateTime ._nanoseconds, ._offset_ns, ._iana
+    jump L2
+
+  L1:
+    load_var instant
+    load_field ._nanoseconds
+    load_var timezone
+    load_field .0
+    load_const null
+    init_instance baml.time.ZonedDateTime ._nanoseconds, ._offset_ns, ._iana
+
+  L2:
+    return
+}
+
+function baml.time.ZonedDateTime.from_json(j: baml.json.json) -> baml.time.ZonedDateTime {
+    load_var j
+    is_type string
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const "Expected RFC 3339 / RFC 9557 timestamp string"
+    load_const null
+    init_instance baml.json.JsonDecodeError .message, .path
+    throw
+
+  L1:
+    load_const null
+    load_var j
+    call baml.time.ZonedDateTime.parse
+    jump L4
+    load_var _
+    is_type baml.errors.ParseError
+    pop_jump_if_false L2
+    load_var _
+    load_field .0
+    is_type string
+    pop_jump_if_false L2
+    jump L3
+
+  L2:
+    load_var _
+    throw
+
+  L3:
+    load_var _
+    load_field .0
+    load_const ""
+    init_instance baml.json.JsonDecodeError .message, .path
+    throw
+
+  L4:
+    return
+}
+
+function baml.time.ZonedDateTime.hour(self: baml.time.ZonedDateTime) -> int {
+    load_var self
+    call baml.time.ZonedDateTime.to_plain
+    call baml.time.PlainDateTime.hour
+    return
+}
+
+function baml.time.ZonedDateTime.max(self: baml.time.ZonedDateTime, other: baml.time.ZonedDateTime) -> baml.time.ZonedDateTime {
+    load_var other
+    load_field ._nanoseconds
+    load_var self
+    load_field ._nanoseconds
+    cmp_bigint_op >
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var self
+    jump L2
+
+  L1:
+    load_var other
+
+  L2:
+    return
+}
+
+function baml.time.ZonedDateTime.millisecond(self: baml.time.ZonedDateTime) -> int {
+    load_var self
+    call baml.time.ZonedDateTime.to_plain
+    call baml.time.PlainDateTime.millisecond
+    return
+}
+
+function baml.time.ZonedDateTime.min(self: baml.time.ZonedDateTime, other: baml.time.ZonedDateTime) -> baml.time.ZonedDateTime {
+    load_var other
+    load_field ._nanoseconds
+    load_var self
+    load_field ._nanoseconds
+    cmp_bigint_op <
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var self
+    jump L2
+
+  L1:
+    load_var other
+
+  L2:
+    return
+}
+
+function baml.time.ZonedDateTime.minute(self: baml.time.ZonedDateTime) -> int {
+    load_var self
+    call baml.time.ZonedDateTime.to_plain
+    call baml.time.PlainDateTime.minute
+    return
+}
+
+function baml.time.ZonedDateTime.month(self: baml.time.ZonedDateTime) -> int {
+    load_var self
+    call baml.time.ZonedDateTime.to_plain
+    call baml.time.PlainDateTime.month
+    return
+}
+
+function baml.time.ZonedDateTime.now() -> baml.time.ZonedDateTime {
+    load_const null
+    sys_op baml.time.Instant.now
+    store_var _1
+    sys_op baml.time.system_timezone
+    store_var _2
+    load_const null
+    load_var2 1 2
+    call baml.time.ZonedDateTime.from_instant
+    return
+}
+
+function baml.time.ZonedDateTime.now_in(timezone: baml.time.TimeZoneOffset | string) -> baml.time.ZonedDateTime {
+    load_const null
+    sys_op baml.time.Instant.now
+    store_var _2
+    load_const null
+    load_var2 2 1
+    call baml.time.ZonedDateTime.from_instant
+    return
+}
+
+function baml.time.ZonedDateTime.parse(s: string) -> baml.time.ZonedDateTime {
+}
+
+function baml.time.ZonedDateTime.second(self: baml.time.ZonedDateTime) -> int {
+    load_var self
+    call baml.time.ZonedDateTime.to_plain
+    call baml.time.PlainDateTime.second
+    return
+}
+
+function baml.time.ZonedDateTime.timezone(self: baml.time.ZonedDateTime) -> baml.time.TimeZoneOffset | string {
+    load_var self
+    load_field ._iana
+    store_var_load_var _2
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var _2
+    store_var _8
+    load_var _8
+    store_var _0
+    load_var _8
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L3
+    load_const ""
+    store_var _0
+    jump L3
+
+  L1:
+    load_var self
+    load_field ._offset_ns
+    store_var _5
+    load_var _5
+    store_var _4
+    load_var _5
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L2
+    load_const 0
+    store_var _4
+
+  L2:
+    load_var _4
+    init_instance baml.time.TimeZoneOffset ._nanoseconds
+    store_var _0
+
+  L3:
+    load_var _0
+    return
+}
+
+function baml.time.ZonedDateTime.timezone_offset(self: baml.time.ZonedDateTime) -> baml.time.TimeZoneOffset {
+    load_var self
+    load_field ._iana
+    store_var_load_var _2
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L0
+    jump L6
+
+  L0:
+    load_var _2
+    store_var iana
+    load_var iana
+    store_var _10
+    load_var _10
+    store_var _9
+    load_var _10
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L1
+    load_const ""
+    store_var _9
+
+  L1:
+    load_var2 7 1
+    load_field ._nanoseconds
+    sys_op baml.time._tz_offset_at
+    store_var _8
+    load_var _8
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L2
+    jump L4
+
+  L2:
+    load_var _8
+    store_var _20
+    load_var _20
+    store_var _19
+    load_var _20
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L3
+    load_const 0
+    store_var _19
+
+  L3:
+    load_var _19
+    init_instance baml.time.TimeZoneOffset ._nanoseconds
+    jump L8
+
+  L4:
+    load_var iana
+    store_var _16
+    load_var _16
+    store_var _15
+    load_var _16
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L5
+    load_const ""
+    store_var _15
+
+  L5:
+    load_var _15
+    init_instance baml.time.UnknownTimezoneError .timezone
+    throw
+
+  L6:
+    load_var self
+    load_field ._offset_ns
+    store_var _5
+    load_var _5
+    store_var _4
+    load_var _5
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L7
+    load_const 0
+    store_var _4
+
+  L7:
+    load_var _4
+    init_instance baml.time.TimeZoneOffset ._nanoseconds
+
+  L8:
+    return
+}
+
+function baml.time.ZonedDateTime.to_instant(self: baml.time.ZonedDateTime) -> baml.time.Instant {
+    load_var self
+    load_field ._nanoseconds
+    init_instance baml.time.Instant ._nanoseconds
+    return
+}
+
+function baml.time.ZonedDateTime.to_json(self: baml.time.ZonedDateTime) -> string {
+    load_var self
+    call baml.time.ZonedDateTime.to_string
+    jump L6
+    load_var _
+    is_type baml.errors.InvalidArgument
+    pop_jump_if_false L0
+    load_var _
+    load_field .0
+    is_type string
+    pop_jump_if_false L0
+    jump L5
+
+  L0:
+    load_var _
+    is_type baml.time.UnknownTimezoneError
+    pop_jump_if_false L1
+    load_var _
+    load_field .0
+    is_type string
+    pop_jump_if_false L1
+    jump L4
+
+  L1:
+    load_var _
+    is_type baml.errors.Io
+    pop_jump_if_false L2
+    load_var _
+    load_field .0
+    is_type string
+    pop_jump_if_false L2
+    jump L3
+
+  L2:
+    load_var _
+    throw
+
+  L3:
+    load_var _
+    load_field .0
+    load_const ""
+    load_const null
+    init_instance baml.json.JsonSerializationError .message, .path, .reason
+    throw
+
+  L4:
+    load_const "unknown timezone: "
+    load_var _
+    load_field .0
+    bin_op +
+    load_const ""
+    load_const null
+    init_instance baml.json.JsonSerializationError .message, .path, .reason
+    throw
+
+  L5:
+    load_var _
+    load_field .0
+    load_const ""
+    load_const null
+    init_instance baml.json.JsonSerializationError .message, .path, .reason
+    throw
+
+  L6:
+    return
+}
+
+function baml.time.ZonedDateTime.to_plain(self: baml.time.ZonedDateTime) -> baml.time.PlainDateTime {
+    load_var self
+    load_field ._nanoseconds
+    store_var _3
+    load_var self
+    call baml.time.ZonedDateTime.timezone_offset
+    store_var _5
+    load_var2 2 3
+    load_field ._nanoseconds
+    add_bigint
+    init_instance baml.time.PlainDateTime ._nanoseconds
+    return
+}
+
+function baml.time.ZonedDateTime.to_string(self: baml.time.ZonedDateTime) -> string {
+    load_var self
+    load_field ._nanoseconds
+    store_var _2
+    load_var self
+    call baml.time.ZonedDateTime.timezone_offset
+    store_var _4
+    load_var2 2 3
+    load_field ._nanoseconds
+    load_var self
+    load_field ._iana
+    call baml.time._format_zoned
+    return
+}
+
+function baml.time.ZonedDateTime.with_timezone(self: baml.time.ZonedDateTime, timezone: baml.time.TimeZoneOffset | string) -> baml.time.ZonedDateTime {
+    load_var self
+    call baml.time.ZonedDateTime.to_instant
+    store_var _3
+    load_const null
+    load_var2 3 2
+    call baml.time.ZonedDateTime.from_instant
+    return
+}
+
+function baml.time.ZonedDateTime.year(self: baml.time.ZonedDateTime) -> int {
+    load_var self
+    call baml.time.ZonedDateTime.to_plain
+    call baml.time.PlainDateTime.year
+    return
+}
+
+function baml.time._format_zoned(epoch_ns: bigint, offset_ns: int, iana: string?) -> string {
+}
+
+function baml.time._tz_offset_at(timezone: string, at_ns: bigint) -> int? {
+}
+
+function baml.time._tz_to_instant(timezone: string, civil_ns: bigint, disambiguation: string) -> bigint? {
+}
+
+function baml.time.system_timezone() -> string {
+}
+
+function baml.toml.Table.from_json(json: baml.json.json) -> baml.toml.Table {
+    load_var json
+    is_type map<string, baml.json.json>
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const "expected map"
+    load_const ""
+    init_instance baml.json.JsonDecodeError .message, .path
+    throw
+
+  L1:
+    load_const null /* unknown class: map */
+    store_var items
+    load_var json
+    call baml.Map.keys
+    store_var _4
+    load_const 0
+    store_var __for_idx
+
+  L2:
+    load_var2 4 3
+    container_len
+    cmp_int_op <
+    pop_jump_if_false L3
+    jump L4
+
+  L3:
+    load_var items
+    init_instance baml.toml.Table .items
+    return
+
+  L4:
+    load_var2 3 4
+    load_array_element
+    store_var key
+    load_var key
+    store_var _10
+    load_var2 1 5
+    load_map_element
+    store_var_load_var _11
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L5
+    jump L6
+
+  L5:
+    load_var _11
+    call baml.toml.item_from_json
+    store_var _17
+    load_var2 2 6
+    load_var _17
+    store_map_element
+
+  L6:
+    load_var __for_idx
+    load_const 1
+    add_int
+    store_var __for_idx
+    jump L2
+}
+
+function baml.toml.Table.parse(s: string) -> baml.toml.Table {
+}
+
+function baml.toml.Table.to_json(self: baml.toml.Table) -> baml.json.json {
+    load_var self
+    load_field .items
+    call baml.Map.to_json
+    jump L2
+    load_var _
+    is_type baml.json.JsonParseError
+    pop_jump_if_false L0
+    load_var _
+    load_field .0
+    is_type string
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var _
+    throw
+
+  L1:
+    load_var _
+    load_field .0
+    load_const ""
+    load_const null
+    init_instance baml.json.JsonSerializationError .message, .path, .reason
+    throw
+
+  L2:
+    return
+}
+
+function baml.toml.TomlParseError.from_json(j: baml.json.json) -> baml.toml.TomlParseError {
+    load_var j
+    load_const "message"
+    call baml.json.field
+    store_var _3
+    load_type string
+    load_var _3
+    call baml.json.from_json
+    init_instance baml.toml.TomlParseError .message
+    return
+}
+
+function baml.toml.TomlParseError.to_json(self: baml.toml.TomlParseError) -> baml.json.json {
+    load_var self
+    load_field .message
+    call baml.String.to_json
+    load_const "message"
+    alloc_map 1
+    return
+}
+
+function baml.toml.item_from_json(json: baml.json.json) -> baml.toml.Item {
+    load_var json
+    type_tag
+    jump_table [L3, L3, L3, L2, L3, _, L0, L1], default L5
+
+  L0: list
+    load_var json
+    load_global baml.toml.item_from_json
+    call baml.Array.map
+    jump L4
+
+  L1: map
+    load_const null
+    load_var json
+    call baml.toml.Table.from_json
+    jump L4
+
+  L2: null
+    load_const "TOML does not support null"
+    load_const ""
+    init_instance baml.json.JsonDecodeError .message, .path
+    throw
+
+  L3: float
+    load_var json
+
+  L4:
+    return
+
+  L5:
+    unreachable
+}
+
+function baml.toml.item_to_json(item: baml.toml.Item) -> baml.json.json {
+    load_var item
+    type_tag
+    dense_tag [bool, int, float, string, Table, list, ZonedDateTime, PlainDateTime, PlainDate, PlainTime]
+    jump_table [L6, L6, L6, L6, L5, L4, L3, L2, L1, L0], default L8
+
+  L0: PlainTime
+    load_var item
+    call baml.time.PlainTime.to_json
+    jump L7
+
+  L1: PlainDate
+    load_var item
+    call baml.time.PlainDate.to_json
+    jump L7
+
+  L2: PlainDateTime
+    load_var item
+    call baml.time.PlainDateTime.to_json
+    jump L7
+
+  L3: ZonedDateTime
+    load_var item
+    call baml.time.ZonedDateTime.to_json
+    jump L7
+
+  L4: list
+    load_var item
+    load_global baml.toml.item_to_json
+    call baml.Array.map
+    jump L7
+
+  L5: Table
+    load_var item
+    call baml.toml.Table.to_json
+    jump L7
+
+  L6: string
+    load_var item
+
+  L7:
+    return
+
+  L8:
+    unreachable
 }
 
 function baml.unstable.string(value: void) -> string {

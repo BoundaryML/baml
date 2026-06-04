@@ -1,14 +1,21 @@
-type Item = Table | Item[] | bool | int | float | string | Datetime
+/// TOML's four datetime kinds map losslessly onto the `baml.time` types
+/// (see BEP-021): offset datetime → `ZonedDateTime` (fixed offset), local
+/// datetime → `PlainDateTime`, local date → `PlainDate`, local time →
+/// `PlainTime`.
+type Item = Table | Item[] | bool | int | float | string | baml.time.ZonedDateTime | baml.time.PlainDateTime | baml.time.PlainDate | baml.time.PlainTime
 
 class Table {
     items: map<string, Item>
 
-    function to_json(self) -> baml.json.json {
-        self.items.to_json()
+    function to_json(self) -> baml.json.json throws baml.json.JsonSerializationError {
+        self.items.to_json() catch (_) {
+            root.json.JsonParseError { message } => throw root.json.JsonSerializationError { message: message, path: "" },
+        }
     }
     /// Converts a JSON object to a TOML table.
     ///
-    /// This is lossy: JSON `null` values are skipped.
+    /// This is lossy: JSON `null` values are skipped, and datetime strings
+    /// stay strings (JSON has no datetime type to distinguish them by).
     function from_json(json: baml.json.json) -> Table throws baml.json.JsonDecodeError {
         match (json) {
             map<string, baml.json.json> => {
@@ -32,30 +39,19 @@ class Table {
     }
 }
 
-/// TODO: use proper datetime stuff when it is added.
-class Datetime {
-    value: string
-
-    function to_json(self) -> baml.json.json {
-        self.value
-    }
-    function from_json(json: baml.json.json) -> Datetime throws baml.json.JsonDecodeError {
-        match (json) {
-            string => Datetime { value: json },
-            _ => throw baml.json.JsonDecodeError { message: "expected string", path: "" }
-        }
-    }
-}
-
 /// Converts a TOML item to a JSON value.
 ///
-/// This is lossy: TOML `Datetime` values are converted to JSON strings.
-function item_to_json(item: Item) -> baml.json.json {
+/// This is lossy: TOML datetime values are converted to JSON strings
+/// (`ZonedDateTime` as RFC 3339, the `Plain*` types as zoneless ISO 8601).
+function item_to_json(item: Item) -> baml.json.json throws baml.json.JsonSerializationError {
     match (item) {
         bool | int | float | string => item,
         Table => item.to_json(),
         Item[] => item.map(item_to_json),
-        Datetime => item.value,
+        baml.time.ZonedDateTime => item.to_json(),
+        baml.time.PlainDateTime => item.to_json(),
+        baml.time.PlainDate => item.to_json(),
+        baml.time.PlainTime => item.to_json(),
     }
 }
 /// Errors if the JSON value is `null`.

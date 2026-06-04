@@ -29,9 +29,10 @@ impl super::BamlClassTomlTable for PackageBamlImpl {
 /// Convert a parsed `toml::Value` into a VM `Value`.
 ///
 /// Scalars map onto VM primitives; arrays and tables recurse, with tables
-/// wrapped in a `baml.toml.Table` instance and datetimes in a
-/// `baml.toml.Datetime` instance (string-backed; see the BEP-021 `Plain*` /
-/// `ZonedDateTime` types for where this is headed).
+/// wrapped in a `baml.toml.Table` instance. TOML's four datetime kinds map
+/// losslessly onto the `baml.time` types per BEP-021: offset datetime →
+/// `ZonedDateTime` (fixed offset), local datetime → `PlainDateTime`, local
+/// date → `PlainDate`, local time → `PlainTime`.
 fn convert_toml_value(vm: &mut BexVm, value: ::toml::Value) -> Result<Value, VmRustFnError> {
     match value {
         toml::Value::String(s) => Ok(Value::object(vm.alloc_string(s))),
@@ -43,11 +44,7 @@ fn convert_toml_value(vm: &mut BexVm, value: ::toml::Value) -> Result<Value, VmR
         }),
         toml::Value::Float(f) => Ok(Value::object(vm.alloc_float(f))),
         toml::Value::Boolean(b) => Ok(Value::bool(b)),
-        toml::Value::Datetime(datetime) => {
-            let datetime = Value::object(vm.alloc_string(datetime.to_string()));
-            let class = vm.resolve_class("baml.toml.Datetime");
-            Ok(Value::object(vm.alloc_instance(class, vec![datetime])))
-        }
+        toml::Value::Datetime(datetime) => convert_toml_datetime(vm, datetime),
         toml::Value::Array(values) => {
             let array = values
                 .into_iter()
@@ -67,6 +64,86 @@ fn convert_toml_value(vm: &mut BexVm, value: ::toml::Value) -> Result<Value, VmR
             let class = vm.resolve_class("baml.toml.Table");
             Ok(Value::object(vm.alloc_instance(class, vec![map])))
         }
+    }
+}
+
+/// Map a TOML datetime onto the `baml.time` types (BEP-021's interop table):
+///
+/// | TOML kind                                    | BAML type                      |
+/// | -------------------------------------------- | ------------------------------ |
+/// | Offset Date-Time `1979-05-27T07:32:00-07:00` | `ZonedDateTime` (fixed offset) |
+/// | Local Date-Time `1979-05-27T07:32:00`        | `PlainDateTime`                |
+/// | Local Date `1979-05-27`                      | `PlainDate`                    |
+/// | Local Time `07:32:00`                        | `PlainTime`                    |
+fn convert_toml_datetime(
+    vm: &mut BexVm,
+    datetime: ::toml::value::Datetime,
+) -> Result<Value, VmRustFnError> {
+    use std::sync::Arc;
+
+    use super::time::{NANOS_PER_DAY, NANOS_PER_HOUR, NANOS_PER_MINUTE, NANOS_PER_SECOND};
+
+    let days = datetime
+        .date
+        .map(|d| {
+            super::time::date_from_components(
+                i64::from(d.year),
+                i64::from(d.month),
+                i64::from(d.day),
+            )
+            .map(super::time::days_since_epoch)
+            .map_err(|_| {
+                VmRustFnError::Thrown(make_toml_parse_error(
+                    vm,
+                    format!("invalid TOML date: {datetime}"),
+                ))
+            })
+        })
+        .transpose()?;
+    let time_ns = datetime.time.map(|t| {
+        i64::from(t.hour) * NANOS_PER_HOUR
+            + i64::from(t.minute) * NANOS_PER_MINUTE
+            + i64::from(t.second) * NANOS_PER_SECOND
+            + i64::from(t.nanosecond)
+    });
+
+    match (days, time_ns, datetime.offset) {
+        // Offset Date-Time → ZonedDateTime with a fixed offset.
+        (Some(days), Some(time_ns), Some(offset)) => {
+            let offset_ns = match offset {
+                ::toml::value::Offset::Z => 0,
+                ::toml::value::Offset::Custom { minutes } => i64::from(minutes) * NANOS_PER_MINUTE,
+            };
+            let civil = i128::from(days) * NANOS_PER_DAY + i128::from(time_ns);
+            let epoch = civil - i128::from(offset_ns);
+            let zoned = super::copy::time::ZonedDateTime {
+                _nanoseconds: Arc::new(num_bigint::BigInt::from(epoch)),
+                _offset_ns: Value::try_int(offset_ns).expect("offset fits in BAML int"),
+                _iana: Value::NULL,
+            };
+            Ok(zoned.to_value(vm))
+        }
+        // Local Date-Time → PlainDateTime.
+        (Some(days), Some(time_ns), None) => {
+            let civil = i128::from(days) * NANOS_PER_DAY + i128::from(time_ns);
+            let plain = super::copy::time::PlainDateTime {
+                _nanoseconds: Arc::new(num_bigint::BigInt::from(civil)),
+            };
+            Ok(plain.to_value(vm))
+        }
+        // Local Date → PlainDate.
+        (Some(days), None, None) => Ok(super::copy::time::PlainDate { _days: days }.to_value(vm)),
+        // Local Time → PlainTime.
+        (None, Some(time_ns), None) => Ok(super::copy::time::PlainTime {
+            _nanoseconds: time_ns,
+        }
+        .to_value(vm)),
+        // The `toml` crate never produces other combinations (an offset
+        // requires both a date and a time).
+        _ => Err(VmRustFnError::Thrown(make_toml_parse_error(
+            vm,
+            format!("invalid TOML datetime: {datetime}"),
+        ))),
     }
 }
 

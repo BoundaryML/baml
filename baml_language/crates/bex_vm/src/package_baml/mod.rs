@@ -119,7 +119,9 @@ pub trait Continuation: Send {
     clippy::used_underscore_binding,
     clippy::elidable_lifetime_names,
     clippy::needless_lifetimes,
-    clippy::redundant_closure_call
+    clippy::redundant_closure_call,
+    clippy::too_many_arguments,
+    non_snake_case
 )]
 mod generated {
     use super::*;

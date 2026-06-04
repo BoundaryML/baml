@@ -37,6 +37,7 @@ sys_ops = { workspace = true }
 sys_types = { workspace = true }
 futures = { workspace = true }
 indexmap = { workspace = true }
+jiff = { workspace = true }
 num-bigint = { workspace = true }
 once_cell = { workspace = true }
 prost = { workspace = true }
