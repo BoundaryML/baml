@@ -928,6 +928,7 @@ fn value_type_tag(value: Value) -> i64 {
                 Object::Function(_) => type_tags::FUNCTION,
                 Object::Closure(_) => type_tags::FUNCTION,
                 Object::BoundMethod(_) => type_tags::FUNCTION,
+                Object::GenericFunction(_) => type_tags::FUNCTION,
                 Object::HostClosure(_) => type_tags::FUNCTION,
                 Object::Cell(_) => type_tags::UNKNOWN,
                 Object::Future(_) => type_tags::FUTURE,
@@ -1427,6 +1428,7 @@ impl BexVm {
         let type_args = match self.get_object(function) {
             Object::Function(_) => vec![],
             Object::Closure(closure) => closure.captured_type_args.to_vec(),
+            Object::GenericFunction(gf) => gf.type_args.to_vec(),
             other => panic!("expect function or closure as entry point, got {other:?}"),
         };
         self.set_entry_point_with_type_args(function, args, type_args);
@@ -1449,12 +1451,19 @@ impl BexVm {
         debug_assert!(
             matches!(
                 self.get_object(function),
-                Object::Function(_) | Object::Closure(_)
+                Object::Function(_) | Object::Closure(_) | Object::GenericFunction(_)
             ),
             "expect function or closure as entry point, got {:?}",
             self.get_object(function)
         );
 
+        // Normalize a `GenericFunction` entry point to its concrete inner
+        // function (`dispatch_ptr`) and the stored specialization
+        // (`effective_type_args`), so the bytecode frame and the native/sysop
+        // trampoline both see a real `Object::Function`, never a
+        // `GenericFunction` pointer.
+        let mut dispatch_ptr = function;
+        let mut effective_type_args = type_args;
         let callable_kind = match self.get_object(function) {
             Object::Function(f) => f.kind,
             Object::Closure(closure) => {
@@ -1464,28 +1473,39 @@ impl BexVm {
                     other => unreachable!("expect closure function, got {other:?}"),
                 }
             }
+            Object::GenericFunction(gf) => {
+                effective_type_args = gf.type_args.to_vec();
+                let inner = self.globals.get(self.proof(), gf.function);
+                dispatch_ptr = self
+                    .as_object_ptr(inner, FunctionType::Callable.into())
+                    .expect("generic function global resolves to a function");
+                match unsafe { dispatch_ptr.get() } {
+                    Object::Function(f) => f.kind,
+                    other => unreachable!("expect generic function inner, got {other:?}"),
+                }
+            }
             other => unreachable!("expect function or closure as entry point, got {other:?}"),
         };
 
         match callable_kind {
             FunctionKind::Bytecode => {
-                self.pending_call_type_args.clone_from(&type_args);
+                self.pending_call_type_args.clone_from(&effective_type_args);
                 self.stack.extend(args.iter().copied());
                 self.frames.push(Frame::Bytecode(BytecodeFrame {
-                    function,
+                    function: dispatch_ptr,
                     instruction_ptr: 0,
                     locals_offset: StackIndex::from_raw(0),
-                    type_args,
+                    type_args: effective_type_args,
                     faulting_pc: 0,
                 }));
 
                 // Entry functions need the same frame-local pre-allocation as normal
                 // bytecode calls now that INIT_LOCALS is gone from bytecode.
-                self.allocate_real_locals_for_frame(function)
+                self.allocate_real_locals_for_frame(dispatch_ptr)
                     .expect("entry point must be a valid function frame");
             }
             FunctionKind::Native(_) | FunctionKind::SysOp(_) => {
-                self.push_trampoline_frame(function, args, type_args, callable_kind);
+                self.push_trampoline_frame(dispatch_ptr, args, effective_type_args, callable_kind);
             }
             FunctionKind::NativeUnresolved => {
                 unreachable!("entry point kind is not directly invokable: {callable_kind:?}");
@@ -2117,6 +2137,22 @@ impl BexVm {
                     }
                 }
             }
+            Object::GenericFunction(gf) => {
+                // Resolve the inner function via its global slot.
+                let inner_value = self.globals.get(self.proof(), gf.function);
+                let func_ptr = self.as_object_ptr(inner_value, FunctionType::Callable.into())?;
+                // SAFETY: function globals hold compile-time Function objects.
+                let func_obj = unsafe { func_ptr.get() };
+                match func_obj {
+                    Object::Function(f) => f.real_local_count,
+                    _ => {
+                        return Err(VmInternalError::TypeError {
+                            expected: Type::Object(ObjectType::Function(FunctionType::Any)),
+                            got: Type::Object(ObjectType::of(func_obj)),
+                        });
+                    }
+                }
+            }
             _ => {
                 return Err(VmInternalError::TypeError {
                     expected: Type::Object(ObjectType::Any),
@@ -2625,6 +2661,21 @@ impl BexVm {
                     }),
                 }
             }
+            Object::GenericFunction(gf) => {
+                // Keep the GenericFunction ptr as callee identity (so
+                // execute_call_from_locals_offset can extract type_args); resolve
+                // the inner function via its global slot for arity.
+                let inner_value = self.globals.get(self.proof(), gf.function);
+                let func_ptr = self.as_object_ptr(inner_value, expected_type.into())?;
+                let func_obj = unsafe { func_ptr.get() };
+                match func_obj {
+                    Object::Function(callee_fn) => Ok((callee_ptr, callee_fn.arity)),
+                    _ => Err(VmInternalError::TypeError {
+                        expected: expected_type.into(),
+                        got: ObjectType::of(func_obj).into(),
+                    }),
+                }
+            }
             _ => Err(VmInternalError::TypeError {
                 expected: expected_type.into(),
                 got: ObjectType::of(obj).into(),
@@ -2761,6 +2812,16 @@ impl BexVm {
             return Ok(Some(self.host_closure_call_sysop(callee_ptr, user_args)));
         }
 
+        // For GenericFunction callees (`let f = foo<int>; f(x)`), the bound
+        // concrete type args seed frame.type_args so type-reifying bodies
+        // (reflect.type_of<T>, json natives) resolve T at runtime. (The
+        // Closure/BoundMethod type args are classified in the consolidated match
+        // above; GenericFunction is specific to generic instantiation values.)
+        let gf_type_args: Box<[baml_type::Ty]> = match self.get_object(callee_ptr) {
+            Object::GenericFunction(gf) => gf.type_args.clone(),
+            _ => Box::new([]),
+        };
+
         // Resolve the callee: either a plain Function, a Closure, or a BoundMethod wrapping one.
         let callee = match self.get_object(callee_ptr) {
             Object::Function(f) => f,
@@ -2784,6 +2845,27 @@ impl BexVm {
                 // compile-time object pool or TLAB, with lifetime at least as long
                 // as the BoundMethod.
                 let func_obj: &'static Object = unsafe { bm.function.get() };
+                match func_obj {
+                    Object::Function(f) => f,
+                    _ => {
+                        return Err(VmInternalError::TypeError {
+                            expected: FunctionType::Callable.into(),
+                            got: ObjectType::of(func_obj).into(),
+                        }
+                        .into());
+                    }
+                }
+            }
+            Object::GenericFunction(gf) => {
+                // Resolve the base function via its global slot, mirroring the
+                // MakeBoundMethod opcode (the pooled GenericFunction stores a
+                // GlobalIndex, not a HeapPtr).
+                let gidx = gf.function;
+                let callee_value = self.globals.get(self.proof(), gidx);
+                let func_ptr = self.as_object_ptr(callee_value, FunctionType::Callable.into())?;
+                // SAFETY: the function global slot holds a compile-time Function
+                // object whose lifetime spans the whole program.
+                let func_obj: &'static Object = unsafe { func_ptr.get() };
                 match func_obj {
                     Object::Function(f) => f,
                     _ => {
@@ -2838,8 +2920,35 @@ impl BexVm {
                 // SmallVec avoids heap allocation for calls with ≤4 args (the common case).
                 let args: SmallVec<[Value; 4]> = self.stack.drain(locals_offset..).collect();
 
+                // For a generic-instantiation-valued native callee, seed the
+                // native's type args so it reads them via
+                // `current_call_type_args()` — the direct-call path sets these
+                // from LoadType operands, but an indirect call through the value
+                // carries them on the wrapper. A pooled `GenericFunction`
+                // (`let f = baml.json.from_string<User>`) carries them on
+                // `gf_type_args`; a closure-wrapped value
+                // (`let g = baml.json.from_string; let f = g<User>`) carries them
+                // on the closure's `captured_type_args`. Use whichever is set.
+                let native_type_args: &[baml_type::Ty] = if !gf_type_args.is_empty() {
+                    &gf_type_args
+                } else {
+                    &closure_type_args
+                };
+                let restore_pending = if !native_type_args.is_empty() {
+                    Some(std::mem::replace(
+                        &mut self.pending_call_type_args,
+                        native_type_args.to_vec(),
+                    ))
+                } else {
+                    None
+                };
+                let native_result = func(self, &args);
+                if let Some(prev) = restore_pending {
+                    self.pending_call_type_args = prev;
+                }
+
                 // Run Rust native function, converting NativeCallResult → VmError.
-                match func(self, &args) {
+                match native_result {
                     NativeCallResult::Done(v) => {
                         self.stack.push(v);
                     }
@@ -2947,6 +3056,9 @@ impl BexVm {
                 // never be both simultaneously.
                 let initial_type_args = if !bound_method_class_type_args.is_empty() {
                     bound_method_class_type_args
+                } else if !gf_type_args.is_empty() {
+                    // GenericFunction value (`foo<int>`): seed its concrete args.
+                    gf_type_args
                 } else {
                     closure_type_args
                 };
@@ -3333,6 +3445,14 @@ impl BexVm {
                 // SAFETY: See doc comment — same lifetime guarantee applies to the
                 // inner function referenced by the bound method.
                 let func_obj: &'static Object = unsafe { bm.function.get() };
+                func_obj.as_function()
+            }
+            Object::GenericFunction(gf) => {
+                // Resolve the inner function via its global slot.
+                let inner_value = self.globals.get(self.proof(), gf.function);
+                let func_ptr = self.as_object_ptr(inner_value, FunctionType::Callable.into())?;
+                // SAFETY: function globals hold compile-time Function objects.
+                let func_obj: &'static Object = unsafe { func_ptr.get() };
                 func_obj.as_function()
             }
             _ => Err(VmInternalError::TypeError {
@@ -5099,6 +5219,95 @@ impl BexVm {
                     });
                     let ptr = self.tlab.alloc(bound);
                     self.stack.push(Value::object(ptr));
+                }
+
+                // ── MakeGenericFunction ───────────────────────────────────────
+                OpCode::MakeGenericFunction => {
+                    let raw = { read_u32_unchecked(code, pc) };
+                    let function = bex_vm_types::GlobalIndex::from_raw(raw as usize);
+                    let ntypeargs = { read_u16_unchecked(code, pc) as usize };
+                    // Pop the `ntypeargs` `Object::Type` values (resolved against
+                    // the current frame by the preceding LoadType instructions).
+                    let mut type_args: Vec<baml_type::Ty> = Vec::with_capacity(ntypeargs);
+                    for _ in 0..ntypeargs {
+                        let v = self.stack.ensure_pop();
+                        let ptr = self.as_object_ptr(v, ObjectType::Type)?;
+                        let Object::Type(ty) = self.get_object(ptr) else {
+                            unreachable!("as_object_ptr guarantees Type variant");
+                        };
+                        type_args.push(*ty.clone());
+                    }
+                    type_args.reverse();
+                    let gf = Object::GenericFunction(bex_vm_types::GenericFunction {
+                        function,
+                        type_args: type_args.into_boxed_slice(),
+                    });
+                    let ptr = self.tlab.alloc(gf);
+                    self.stack.push(Value::object(ptr));
+                }
+
+                // ── MakeGenericFunctionFromValue ──────────────────────────────
+                // Specialize a runtime callable value with explicit type args
+                // (`g<int>` where `g` is a local function value). Wrap it in a
+                // Closure whose `captured_type_args` are seeded into the frame on
+                // call — reusing the closure call path so the specialization is
+                // honoured at runtime instead of being erased.
+                OpCode::MakeGenericFunctionFromValue => {
+                    let ntypeargs = { read_u16_unchecked(code, pc) as usize };
+                    // The callable value was pushed last (top of stack); the
+                    // resolved `Object::Type` args sit beneath it.
+                    let callable = self.stack.ensure_pop();
+                    let mut type_args: Vec<baml_type::Ty> = Vec::with_capacity(ntypeargs);
+                    for _ in 0..ntypeargs {
+                        let v = self.stack.ensure_pop();
+                        let ptr = self.as_object_ptr(v, ObjectType::Type)?;
+                        let Object::Type(ty) = self.get_object(ptr) else {
+                            unreachable!("as_object_ptr guarantees Type variant");
+                        };
+                        type_args.push(*ty.clone());
+                    }
+                    type_args.reverse();
+                    // Resolve the callable to its inner Function pointer (and any
+                    // captures, if it is already a closure).
+                    let callable_ptr =
+                        self.as_object_ptr(callable, FunctionType::Callable.into())?;
+                    // A plain function or closure is wrapped in a closure
+                    // carrying the type args (closures carry over their existing
+                    // `captured_type_args` — the outer/class generic environment
+                    // — then append the new instantiation args in call order, so
+                    // a later indirect call seeds a complete `frame.type_args`).
+                    //
+                    // A `BoundMethod` (`let f = p.method<int>`) cannot be wrapped
+                    // in a closure without losing its receiver, so it is passed
+                    // through unchanged: the explicit type args are dropped, but
+                    // the call still dispatches with the correct `self`. This is
+                    // correct for the common case of a method that does not reify
+                    // `T` at runtime, and — unlike closure-wrapping it — never
+                    // crashes. (`GenericFunction` does not reach here: TIR rejects
+                    // type args on an already-specialized value.)
+                    let wrap: Option<(HeapPtr, Vec<Value>, Vec<baml_type::Ty>)> =
+                        match self.get_object(callable_ptr) {
+                            Object::Function(_) => Some((callable_ptr, Vec::new(), Vec::new())),
+                            Object::Closure(c) => Some((
+                                c.function,
+                                c.captures.to_vec(),
+                                c.captured_type_args.to_vec(),
+                            )),
+                            _ => None,
+                        };
+                    match wrap {
+                        Some((function_ptr, captures, mut captured_type_args)) => {
+                            captured_type_args.extend(type_args);
+                            let closure = Object::Closure(Closure {
+                                function: function_ptr,
+                                captures: captures.into_boxed_slice(),
+                                captured_type_args: captured_type_args.into_boxed_slice(),
+                            });
+                            let ptr = self.tlab.alloc(closure);
+                            self.stack.push(Value::object(ptr));
+                        }
+                        None => self.stack.push(callable),
+                    }
                 }
 
                 // ── LoadDeref / StoreDeref ────────────────────────────────────

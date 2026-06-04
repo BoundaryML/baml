@@ -393,12 +393,15 @@ impl BexHeap {
             // `HostClosure` carries only an `Arc<HostValueArc>` (Rust-side
             // stub, not a heap object) and a `Box<Ty>` (no `HeapPtr`s).
             Object::HostClosure(_) => {}
+            // `GenericFunction` references its base function by `GlobalIndex`
+            // (not a `HeapPtr`) and holds only inline `Ty`s — nothing to trace.
             Object::String(_)
             | Object::Bigint(_)
             | Object::Uint8Array(_)
             | Object::Class(_)
             | Object::Enum(_)
             | Object::Function(_)
+            | Object::GenericFunction(_)
             | Object::RustData(_)
             | Object::Collector(_)
             | Object::Float(_)
@@ -539,6 +542,7 @@ impl BexHeap {
             | Object::Class(_)
             | Object::Enum(_)
             | Object::Function(_)
+            | Object::GenericFunction(_)
             | Object::RustData(_)
             | Object::Collector(_)
             | Object::Float(_)
@@ -799,6 +803,7 @@ impl BexHeap {
             | Object::Class(_)
             | Object::Enum(_)
             | Object::Function(_)
+            | Object::GenericFunction(_)
             | Object::RustData(_)
             | Object::Collector(_)
             | Object::Float(_)

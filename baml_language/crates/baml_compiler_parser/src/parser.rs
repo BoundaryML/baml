@@ -4312,7 +4312,8 @@ impl<'a> Parser<'a> {
             return false;
         };
         let follow = self.skip_trivia_and_comments_from(close + 1);
-        Self::is_generic_args_follow(self.tokens.get(follow).map(|t| t.kind))
+        let preceded_by_newline = self.newline_before_next_non_trivia(close + 1);
+        Self::is_generic_args_follow(self.tokens.get(follow).map(|t| t.kind), preceded_by_newline)
     }
 
     fn find_matching_generic_args_close_from(&self, start: usize) -> Option<usize> {
@@ -5544,7 +5545,7 @@ impl<'a> Parser<'a> {
                 TokenKind::Greater => {
                     depth -= 1;
                     if depth == 0 {
-                        return Self::is_generic_args_follow(self.peek(i + 1).map(|t| t.kind));
+                        return self.generic_args_follow_at_peek(i);
                     }
                 }
                 // `>>` closes two levels at once. Only treat it as a dual
@@ -5556,7 +5557,7 @@ impl<'a> Parser<'a> {
                     }
                     depth -= 2;
                     if depth == 0 {
-                        return Self::is_generic_args_follow(self.peek(i + 1).map(|t| t.kind));
+                        return self.generic_args_follow_at_peek(i);
                     }
                 }
                 // Tokens that can legally appear inside a type-argument
@@ -5599,11 +5600,134 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn is_generic_args_follow(kind: Option<TokenKind>) -> bool {
+    /// Decide whether a balanced `<...>` is a generic-argument list (vs. a `<`
+    /// comparison) based on the token that follows the closing `>`.
+    ///
+    /// This ports TypeScript's `canFollowTypeArgumentsInExpression`
+    /// (typescript-go internal/parser/parser.go) so that generic callables can
+    /// be referenced as values (`let f = foo<int>;`), not only called
+    /// (`foo<int>(x)`). `preceded_by_newline` is whether a line break sits
+    /// between the closing `>` and `follow`.
+    fn is_generic_args_follow(follow: Option<TokenKind>, preceded_by_newline: bool) -> bool {
+        use TokenKind::{
+            Dot, Greater, GreaterGreater, LBrace, LParen, Less, LessLess, Minus, Plus,
+        };
+        match follow {
+            // Definitely type args: a call `(`, a generic constructor
+            // `Box<int> { ... }`, or a qualified path `Wrapper<T>.of(x)`.
+            Some(LParen | LBrace | Dot) => true,
+            // Ambiguous with comparison/shift — favor the comparison reading.
+            // Mirrors TS's false-set (`<`, `>`, `+`, `-`); `+`/`-` here are
+            // unary, and `<<`/`>>` are BAML's compound shift tokens.
+            Some(Less | LessLess | Greater | GreaterGreater | Plus | Minus) => false,
+            // End of input cannot start an expression → favor type args.
+            None => true,
+            // TS fallback: favor the type-argument interpretation when the
+            // closing `>` is followed by a line break, a binary operator, or
+            // anything that cannot start an expression.
+            Some(kind) => {
+                preceded_by_newline
+                    || Self::is_binary_operator(kind)
+                    || !Self::is_start_of_expression(kind)
+            }
+        }
+    }
+
+    /// Follow-check for the peek-based scan: `gt_peek` is the peek index of the
+    /// closing `>`/`>>` token; the follow token is `peek(gt_peek + 1)`.
+    fn generic_args_follow_at_peek(&self, gt_peek: usize) -> bool {
+        let follow = self.peek(gt_peek + 1).map(|t| t.kind);
+        let preceded_by_newline = self
+            .raw_index_of_peek(gt_peek)
+            .is_some_and(|gt_raw| self.newline_before_next_non_trivia(gt_raw + 1));
+        Self::is_generic_args_follow(follow, preceded_by_newline)
+    }
+
+    /// Whether `kind` is an infix/binary operator (mirrors TS `isBinaryOperator`).
+    fn is_binary_operator(kind: TokenKind) -> bool {
+        Self::infix_binding_power(kind).is_some()
+    }
+
+    /// Whether `kind` can begin an expression (mirrors TS `isStartOfExpression`).
+    /// Covers the primary-expression starts of `parse_primary_expr` and the
+    /// unary/prefix starts of `parse_prefix`.
+    fn is_start_of_expression(kind: TokenKind) -> bool {
+        use TokenKind::{
+            Await, BigintLiteral, Client, FloatLiteral, Hash, If, IntegerLiteral, LBrace, LBracket,
+            LParen, Less, Match, Minus, MinusMinus, Not, PlusPlus, Quote, Spawn, Throw, Tilde,
+            Word,
+        };
         matches!(
             kind,
-            Some(TokenKind::LParen | TokenKind::LBrace | TokenKind::Dot)
+            // primary expression starts
+            BigintLiteral
+                | IntegerLiteral
+                | FloatLiteral
+                | Quote   // string literal
+                | Hash    // raw string literal `#"..."#`
+                | Word
+                | Client
+                | LParen
+                | LBracket
+                | LBrace
+                | If
+                | Match
+                | Throw
+                | Less    // generic lambda `<T>(...)`
+                // unary / prefix expression starts
+                | Minus
+                | Not
+                | Tilde
+                | PlusPlus
+                | MinusMinus
+                | Await
+                | Spawn
         )
+    }
+
+    /// Raw token index of the `n`-th non-trivia token at/after the cursor,
+    /// mirroring `peek`'s comment/whitespace skipping. Used to recover line-break
+    /// information that `peek` discards.
+    fn raw_index_of_peek(&self, n: usize) -> Option<usize> {
+        let mut count = 0;
+        let mut i = self.current;
+        while i < self.tokens.len() {
+            let new_i = self.skip_comment_at(i);
+            if new_i != i {
+                i = new_i;
+                continue;
+            }
+            if !self.is_basic_trivia(self.tokens[i].kind) {
+                if count == n {
+                    return Some(i);
+                }
+                count += 1;
+            }
+            i += 1;
+        }
+        None
+    }
+
+    /// Whether a `Newline` token sits between raw index `after` and the next
+    /// non-trivia token (comments count as trivia).
+    fn newline_before_next_non_trivia(&self, after: usize) -> bool {
+        let mut i = after;
+        while i < self.tokens.len() {
+            let new_i = self.skip_comment_at(i);
+            if new_i != i {
+                i = new_i;
+                continue;
+            }
+            let kind = self.tokens[i].kind;
+            if kind == TokenKind::Newline {
+                return true;
+            }
+            if !self.is_basic_trivia(kind) {
+                return false;
+            }
+            i += 1;
+        }
+        false
     }
 
     /// Parse type arguments in a type context: `<Type, Assoc = Type, ...>`.
@@ -8737,6 +8861,103 @@ function Demo() -> int {
         assert!(
             text.contains("-1"),
             "expected `-1` inside GENERIC_ARGS, got `{text}`"
+        );
+    }
+
+    /// Helper: does the parse tree contain a `GENERIC_ARGS` node?
+    fn has_generic_args(root: &SyntaxNode) -> bool {
+        root.descendants()
+            .any(|n| n.kind() == SyntaxKind::GENERIC_ARGS)
+    }
+
+    #[test]
+    fn bare_generic_instantiation_in_value_position() {
+        // `let f = foo<int>;` — a generic function referenced with explicit type
+        // args but NOT called. Ported from TS instantiation expressions: the
+        // closing `>` followed by `;` (which cannot start an expression) must
+        // disambiguate as GENERIC_ARGS, not `foo < int` comparison.
+        let source = r#"
+function Demo() -> int {
+  let f = foo<int>;
+  1
+}
+"#;
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+        assert!(
+            has_generic_args(&root),
+            "expected GENERIC_ARGS for bare `foo<int>` in value position"
+        );
+    }
+
+    #[test]
+    fn bare_generic_instantiation_followed_by_terminators() {
+        // Closing `>` followed by `,`, `)`, `]`, `}` (none can start an
+        // expression) → all GENERIC_ARGS.
+        for source in [
+            "function Demo() -> int { let xs = [foo<int>, bar<string>]; 1 }",
+            "function Demo() -> int { g(foo<int>); 1 }",
+            "function Demo() -> int { foo<int> }",
+        ] {
+            let (root, errors) = parse_source(source);
+            assert_no_errors(&errors);
+            assert!(
+                has_generic_args(&root),
+                "expected GENERIC_ARGS for terminator-followed instantiation in: {source}"
+            );
+        }
+    }
+
+    #[test]
+    fn bare_generic_instantiation_followed_by_member_access() {
+        // `foo<int>.bar` — `.` is in the true follow-set.
+        let source = r#"
+function Demo() -> int {
+  let x = foo<int>.bar;
+  1
+}
+"#;
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+        assert!(
+            has_generic_args(&root),
+            "expected GENERIC_ARGS for `foo<int>.bar`"
+        );
+    }
+
+    #[test]
+    fn comparison_chain_is_not_generic_args() {
+        // `a < b > c` — the token after `>` is `c`, which CAN start an
+        // expression and is not a binary operator, so this stays a comparison
+        // (TS canFollowTypeArgumentsInExpression fallback → false).
+        let source = r#"
+function Demo() -> bool {
+  let r = a < b > c;
+  r
+}
+"#;
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+        assert!(
+            !has_generic_args(&root),
+            "expected NO GENERIC_ARGS for comparison chain `a < b > c`"
+        );
+    }
+
+    #[test]
+    fn simple_comparison_is_not_generic_args() {
+        // `a < b` with no closing `>` fails the type-token scan → comparison.
+        let source = r#"
+function Demo() -> bool {
+  let r = a < b;
+  r
+}
+"#;
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+        assert!(
+            !has_generic_args(&root),
+            "expected NO GENERIC_ARGS for simple comparison `a < b`"
         );
     }
 

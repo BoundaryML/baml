@@ -436,6 +436,11 @@ impl ExprBody {
                 .map(smol_str::SmolStr::as_str)
                 .collect::<Vec<_>>()
                 .join("."),
+            Expr::GenericApply { base, type_args } => {
+                let base = self.display_expr_inner(*base, depth + 1);
+                let tys: Vec<String> = type_args.iter().map(ToString::to_string).collect();
+                format!("{base}<{}>", tys.join(", "))
+            }
             Expr::MemberAccess { base, member } => {
                 format!("{}.{member}", self.display_expr_inner(*base, depth + 1))
             }
@@ -662,6 +667,16 @@ pub enum Expr {
     Null,
     /// Path expression: `x`, `user.name`, `Status.Active`
     Path(Vec<Name>),
+    /// Generic instantiation as a value: `foo<int>` — a generic callable
+    /// referenced with explicit type arguments but NOT called. The result is
+    /// the specialized function value (`(int) -> int`). Distinct from
+    /// `Call { type_args, .. }`, which applies type args *and* invokes.
+    GenericApply {
+        base: ExprId,
+        /// Explicit type arguments, e.g. the `<int>` in `foo<int>`. Never empty
+        /// (a bare path lowers to `Path`, not `GenericApply`).
+        type_args: Vec<TypeExpr>,
+    },
     If {
         condition: ExprId,
         then_branch: ExprId,

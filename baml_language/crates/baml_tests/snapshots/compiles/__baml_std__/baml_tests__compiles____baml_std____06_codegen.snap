@@ -2508,15 +2508,25 @@ function baml.llm.Client.execute_once_oneshot(self: baml.llm.Client, context: ba
 
   L2:
     load_var self
+    load_field .counter
+    store_var _50
+    load_var self
     copy 0
     load_field .counter
     load_const 1
     bin_op +
     store_field .counter
-    load_const "parse error"
-    call baml.sys.panic
-    pop 1
-    jump L16
+    load_type #0
+    load_var self
+    load_field .sub_clients
+    load_var2 16 1
+    load_field .sub_clients
+    container_len
+    mod_int
+    load_array_element
+    load_var2 2 3
+    call baml.llm.Client.execute_oneshot
+    jump L15
 
   L3:
     load_const "RoundRobin client has no sub-clients"
@@ -2636,9 +2646,6 @@ function baml.llm.Client.execute_once_oneshot(self: baml.llm.Client, context: ba
 
   L15:
     return
-
-  L16:
-    unreachable
 }
 
 function baml.llm.Client.execute_once_stream(self: baml.llm.Client, context: baml.llm.ExecutionContext, active_delay_ms: int) -> baml.llm.Stream<unknown, unknown> {
@@ -2670,15 +2677,26 @@ function baml.llm.Client.execute_once_stream(self: baml.llm.Client, context: bam
 
   L2:
     load_var self
+    load_field .counter
+    store_var _38
+    load_var self
     copy 0
     load_field .counter
     load_const 1
     bin_op +
     store_field .counter
-    load_const "parse error"
-    call baml.sys.panic
-    pop 1
-    jump L11
+    load_type #0
+    load_type #1
+    load_var self
+    load_field .sub_clients
+    load_var2 12 1
+    load_field .sub_clients
+    container_len
+    mod_int
+    load_array_element
+    load_var2 2 3
+    call baml.llm.Client.execute_stream
+    jump L10
 
   L3:
     load_const "RoundRobin client has no sub-clients"
@@ -2751,9 +2769,6 @@ function baml.llm.Client.execute_once_stream(self: baml.llm.Client, context: bam
 
   L10:
     return
-
-  L11:
-    unreachable
 }
 
 function baml.llm.Client.execute_oneshot(self: baml.llm.Client, context: baml.llm.ExecutionContext, inherited_delay_ms: int) -> void {

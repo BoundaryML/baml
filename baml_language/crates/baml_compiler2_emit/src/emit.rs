@@ -702,7 +702,12 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             } => elements
                 .iter()
                 .any(|operand| self.operand_reads_spawn_captured_local(operand, seen)),
-            Rvalue::Uint8Array(_) | Rvalue::LoadType(_) => false,
+            Rvalue::Uint8Array(_) | Rvalue::LoadType(_) | Rvalue::MakeGenericFunction { .. } => {
+                false
+            }
+            Rvalue::MakeGenericFunctionFromValue { value, .. } => {
+                self.operand_reads_spawn_captured_local(value, seen)
+            }
             Rvalue::Map(entries) => entries.iter().any(|(key, value)| {
                 self.operand_reads_spawn_captured_local(key, seen)
                     || self.operand_reads_spawn_captured_local(value, seen)
@@ -1819,6 +1824,9 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             self.set_operand(inst, OperandMeta::Global(func_name));
             return;
         }
+        // `MakeGenericFunction` needs no special handling here (it has no value
+        // captures) — `walk_rvalue_pull` emits it uniformly for both the direct
+        // and inlined paths.
         unwrap_infallible(pull_semantics::walk_rvalue_pull(self, rvalue));
     }
 
@@ -1880,6 +1888,39 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                     .unwrap_or_else(|| panic!("undefined function: {name_str}"));
                 let inst = self.emit(Instruction::LoadGlobal(GlobalIndex::from_raw(*global_idx)));
                 self.set_operand(inst, OperandMeta::Global(name_str));
+            }
+            Constant::GenericFunction { item, type_args } => {
+                // `foo<int>` as a value. Resolve the base function's global slot
+                // (like `Constant::Function`), then pool an interned
+                // `Object::GenericFunction`. Interning by (function, type_args)
+                // over the shared object pool makes identical instantiations
+                // share ONE pooled object → pointer-stable `foo<int> === foo<int>`.
+                let name_str = item.to_string();
+                let global_idx = *self
+                    .globals
+                    .get(&name_str)
+                    .unwrap_or_else(|| panic!("undefined function: {name_str}"));
+                let gidx = GlobalIndex::from_raw(global_idx);
+                let existing = self.objects.iter().position(|o| {
+                    matches!(o, Object::GenericFunction(gf)
+                        if gf.function == gidx && gf.type_args.as_ref() == type_args.as_slice())
+                });
+                let pool_idx = match existing {
+                    Some(idx) => idx,
+                    None => {
+                        let idx = self.objects.len();
+                        self.objects
+                            .push(Object::GenericFunction(bex_vm_types::GenericFunction {
+                                function: gidx,
+                                type_args: type_args.clone().into_boxed_slice(),
+                            }));
+                        idx
+                    }
+                };
+                let const_idx =
+                    self.add_constant(ConstValue::Object(ObjectIndex::from_raw(pool_idx)));
+                let inst = self.emit(Instruction::LoadConst(const_idx));
+                self.set_operand(inst, OperandMeta::Const(format!("{name_str}<...>")));
             }
             Constant::EnumVariant { enum_ref, variant } => {
                 let enum_name_str = enum_ref.to_string();
@@ -3156,6 +3197,33 @@ impl PullSink for StackifyCodegen<'_, '_> {
         ntypeargs: usize,
     ) -> Result<(), Self::Error> {
         self.emit_make_closure_bytecode(lambda_idx, capture_count, ntypeargs);
+        Ok(())
+    }
+
+    fn make_generic_function(
+        &mut self,
+        item: &baml_compiler2_mir::ItemRef,
+        ntypeargs: usize,
+    ) -> Result<(), Self::Error> {
+        let func_name = item.to_string();
+        let global_idx = *self
+            .globals
+            .get(&func_name)
+            .unwrap_or_else(|| panic!("MakeGenericFunction: global not found for {func_name}"));
+        let ntypeargs = u16::try_from(ntypeargs).expect("ntypeargs fits u16");
+        let inst = self.emit(Instruction::MakeGenericFunction {
+            function: GlobalIndex::from_raw(global_idx),
+            ntypeargs,
+        });
+        self.set_operand(inst, OperandMeta::Global(func_name));
+        Ok(())
+    }
+
+    fn make_generic_function_from_value(&mut self, ntypeargs: usize) -> Result<(), Self::Error> {
+        // The callable value and `ntypeargs` `Object::Type` values are already
+        // on the stack (pushed by `walk_rvalue_pull`); just emit the opcode.
+        let ntypeargs = u16::try_from(ntypeargs).expect("ntypeargs fits u16");
+        self.emit(Instruction::MakeGenericFunctionFromValue { ntypeargs });
         Ok(())
     }
 

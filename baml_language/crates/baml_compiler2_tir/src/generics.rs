@@ -459,6 +459,7 @@ pub fn contains_typevar(ty: &Ty) -> bool {
         }
         Ty::Map(k, v, _) | Ty::EvolvingMap(k, v, _) => contains_typevar(k) || contains_typevar(v),
         Ty::Union(tys, _) => tys.iter().any(contains_typevar),
+        Ty::Future(value, error, _) => contains_typevar(value) || contains_typevar(error),
         Ty::Function {
             generic_param_bounds,
             params,
@@ -482,6 +483,15 @@ pub fn contains_typevar(ty: &Ty) -> bool {
         }
         _ => false,
     }
+}
+
+/// Whether `name` is an *inferable* type var for a value call: either one of the
+/// callee's declared `generic_params`, or a synthetic effect-polymorphism param
+/// (`__effect_param_N`). Anything else is a *rigid ambient* var (the caller's
+/// `T` in an instantiation value `foo<T>`), which must be matched structurally
+/// rather than inferred. Used by call-site inference's binding-retention filter.
+pub fn is_value_call_inferable(name: &Name, generic_params: &[Name]) -> bool {
+    generic_params.contains(name) || crate::ty::is_synthetic_effect_param(name)
 }
 
 /// Returns `true` if `ty` contains any type variable for which `pred` returns

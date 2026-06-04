@@ -1620,6 +1620,15 @@ pub enum Object {
     /// at call time by `CallIndirect`.
     BoundMethod(BoundMethod),
 
+    /// A generic function instantiation carrying concrete type arguments
+    /// (`foo<int>` referenced as a value, not called). Pooled and interned at
+    /// compile time so identical instantiations share one object
+    /// (pointer-stable `foo<int> === foo<int>`). When called, the VM resolves
+    /// `function` via the global table and seeds `frame.type_args` from
+    /// `type_args`, so type-reifying bodies (`reflect.type_of<T>`, json natives)
+    /// work through the value.
+    GenericFunction(GenericFunction),
+
     /// A host-language callable bound to a BAML function type.
     ///
     /// Created at the FFI boundary when a `HostValue` is passed for a
@@ -1699,6 +1708,7 @@ enum ObjectWire {
     Variant(Variant),
     Closure(Closure),
     BoundMethod(BoundMethod),
+    GenericFunction(GenericFunction),
     Cell(Cell),
     String(String),
     // `Arc<BigInt>` isn't directly Borsh-derivable (and we want the same
@@ -1731,6 +1741,7 @@ impl BorshSerialize for Object {
             Self::Variant(v) => ObjectWire::Variant(v.clone()),
             Self::Closure(v) => ObjectWire::Closure(v.clone()),
             Self::BoundMethod(v) => ObjectWire::BoundMethod(v.clone()),
+            Self::GenericFunction(v) => ObjectWire::GenericFunction(v.clone()),
             Self::Cell(v) => ObjectWire::Cell(v.clone()),
             Self::String(v) => ObjectWire::String(v.to_string()),
             Self::Bigint(v) => ObjectWire::Bigint((**v).clone()),
@@ -1787,6 +1798,7 @@ impl BorshDeserialize for Object {
             ObjectWire::Variant(v) => Self::Variant(v),
             ObjectWire::Closure(v) => Self::Closure(v),
             ObjectWire::BoundMethod(v) => Self::BoundMethod(v),
+            ObjectWire::GenericFunction(v) => Self::GenericFunction(v),
             ObjectWire::Cell(v) => Self::Cell(v),
             ObjectWire::String(v) => Self::String(bex_str::BexStr::from(v)),
             ObjectWire::Bigint(v) => Self::Bigint(std::sync::Arc::new(v)),
@@ -1834,6 +1846,22 @@ pub struct BoundMethod {
     pub function: HeapPtr,
     /// The receiver value (inserted as `self` at call time).
     pub receiver: Value,
+}
+
+/// A generic function instantiation carrying concrete type arguments.
+///
+/// Unlike `Closure`/`BoundMethod`, the base function is referenced by its
+/// **global slot** (`GlobalIndex`), not a `HeapPtr` — so a `GenericFunction`
+/// can live in the immutable compile-time object pool and be interned by
+/// `(function, type_args)`, giving pointer-stable identity. Both fields are
+/// non-pointer data, so GC treats this as a leaf (nothing to trace or fix up).
+#[derive(Clone, Debug, BorshSerialize, BorshDeserialize)]
+pub struct GenericFunction {
+    /// Global slot of the underlying `Object::Function` (resolved at call time
+    /// via the global table, mirroring `MakeBoundMethod`).
+    pub function: crate::GlobalIndex,
+    /// Concrete type arguments to seed into `frame.type_args` when called.
+    pub type_args: Box<[baml_type::Ty]>,
 }
 
 /// A host-language callable bound to a BAML function type.
@@ -1903,6 +1931,9 @@ impl std::fmt::Display for Object {
                 write!(f, "<closure captures={captures_len}>")
             }
             Object::BoundMethod(_) => write!(f, "<bound_method>"),
+            Object::GenericFunction(gf) => {
+                write!(f, "<generic_function type_args={}>", gf.type_args.len())
+            }
             Object::HostClosure(_) => write!(f, "<host_closure>"),
             Object::Cell(cell) => write!(f, "<cell {}>", cell.load()),
             Object::String(string) => string.fmt(f),
@@ -2527,6 +2558,7 @@ impl ObjectType {
             Object::Function(func) => Self::Function(FunctionType::from(&func.kind)),
             Object::Closure(_) => Self::Closure,
             Object::BoundMethod(_) => Self::Closure, // Treat as callable like closures
+            Object::GenericFunction(_) => Self::Closure, // Callable like closures
             Object::HostClosure(_) => Self::Closure, // Callable like closures
 
             Object::Cell(_) => Self::Cell,

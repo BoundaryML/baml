@@ -1358,6 +1358,15 @@ struct LoweringContext<'db> {
     // Each entry is a fully-lowered MirFunction for one lambda expression.
     pending_lambdas: Vec<MirFunction>,
 
+    // Generic params of the enclosing lambda(s), accumulated outermost-first.
+    // Empty at top-level; `lower_lambda` extends it with the lambda's own
+    // `generic_params` while lowering its body and restores it afterward.
+    // `enclosing_generic_params()` appends this so that `reflect.type_of<T>`
+    // (and other type-arg resolution) inside a generic lambda body resolves the
+    // lambda's `T` to the correct `TypeArgRef` slot — `func_loc` only knows the
+    // enclosing top-level function's (and class's) params, never a lambda's.
+    lambda_generic_params: Vec<baml_base::Name>,
+
     // Capture map for the current lambda body.
     // `Some(map)` when lowering inside a lambda body; `None` for top-level functions.
     // Maps captured binding identity -> index into the closure's captures array.
@@ -2081,6 +2090,7 @@ impl<'db> LoweringContext<'db> {
             interface_implementors: &pkg_data.interface_implementors,
             interface_type_implementors: &pkg_data.interface_type_implementors,
             pending_lambdas: Vec::new(),
+            lambda_generic_params: Vec::new(),
             capture_indices: None,
             transitive_captures_needed: Vec::new(),
             resolved_aliases: &pkg_data.resolved_aliases,
@@ -2302,6 +2312,7 @@ impl<'db> LoweringContext<'db> {
             watched_locals_stack: Vec::new(),
             synthetic_name_counts: HashMap::new(),
             pending_lambdas: Vec::new(),
+            lambda_generic_params: Vec::new(),
             capture_indices: None,
             transitive_captures_needed: Vec::new(),
             chain_null_exits: Vec::new(),
@@ -3193,6 +3204,14 @@ impl<'db> LoweringContext<'db> {
         let saved_watched_locals = std::mem::take(&mut self.watched_locals_stack);
         let saved_current_scope = self.current_scope;
         let saved_metadata_scope = self.current_metadata_scope;
+        // Extend the enclosing-lambda generic params with this lambda's own
+        // params for the duration of its body, so `reflect.type_of<T>` (and any
+        // type-arg resolution) inside resolves `T` to the right frame slot.
+        // Appended after the enclosing params, matching the runtime layout:
+        // frame.type_args = [captured enclosing params..., this lambda's args...].
+        let saved_lambda_generic_params = self.lambda_generic_params.clone();
+        self.lambda_generic_params
+            .extend(func_def.generic_params.iter().cloned());
         // NOTE: synthetic_name_counts is intentionally NOT saved — its counter
         // keeps incrementing across the whole function for uniqueness.
         //
@@ -3321,6 +3340,7 @@ impl<'db> LoweringContext<'db> {
         self.watched_locals_stack = saved_watched_locals;
         self.current_scope = saved_current_scope;
         self.current_metadata_scope = saved_metadata_scope;
+        self.lambda_generic_params = saved_lambda_generic_params;
         self.capture_indices = saved_capture_indices;
         // Restore parent's pending_lambdas (siblings of this lambda).
         self.pending_lambdas = saved_pending_lambdas;
@@ -3545,6 +3565,10 @@ impl LoweringContext<'_> {
                 // `.as<I>` is a static type projection. Runtime representation
                 // is the original value.
                 self.lower_expr(base, dest);
+            }
+
+            AstExpr::GenericApply { base, type_args } => {
+                self.lower_generic_apply(base, &type_args, dest);
             }
 
             AstExpr::OptionalMemberAccess { base, member } => {
@@ -5883,6 +5907,10 @@ impl LoweringContext<'_> {
             .map(|class_data| class_data.generic_params.clone())
             .unwrap_or_default();
         params.extend(item_tree[func_id].generic_params.iter().cloned());
+        // Inside a (possibly nested) generic lambda body, the lambda's own
+        // type params follow the enclosing function's, matching the runtime
+        // frame.type_args layout. Empty outside any lambda.
+        params.extend(self.lambda_generic_params.iter().cloned());
         params
     }
 
@@ -5963,6 +5991,140 @@ impl LoweringContext<'_> {
             operands.push(Operand::Copy(Place::local(temp)));
         }
         operands
+    }
+
+    /// Lower `foo<int>` (a `GenericApply` value). If the base resolves to a
+    /// function `ItemRef` and all type args are fully concrete, emit a pooled,
+    /// interned `Constant::GenericFunction` (pointer-stable; seeds
+    /// `frame.type_args` when called). Otherwise fall back to lowering the base
+    /// value with type args erased — for exotic bases (bound methods, lambdas)
+    /// or param-dependent args (`foo<T>` inside a generic function).
+    fn lower_generic_apply(&mut self, base: AstExprId, type_args: &[AstTypeExpr], dest: Place) {
+        let Some(item) = self.try_resolve_generic_apply_base(base) else {
+            // Non-`ItemRef` base (a local/captured generic function value):
+            // there is no function global to pool, so specialize the *runtime
+            // value* — evaluate it and wrap it in a closure carrying the
+            // (frame-resolved) type args — instead of silently erasing them.
+            let value = self.lower_to_operand(base);
+            let type_arg_templates = self.generic_apply_type_arg_templates(type_args);
+            self.builder.assign(
+                dest,
+                Rvalue::MakeGenericFunctionFromValue {
+                    value,
+                    type_arg_templates,
+                },
+            );
+            return;
+        };
+        let templates = self.generic_apply_type_arg_templates(type_args);
+        if templates.iter().all(TyTemplate::is_fully_concrete) {
+            // Concrete args → pooled, interned compile-time constant
+            // (pointer-stable identity).
+            let concrete: Vec<Ty> = templates.iter().map(|t| t.substitute(&[])).collect();
+            self.builder.assign(
+                dest,
+                Rvalue::Use(Operand::Constant(Constant::GenericFunction {
+                    item,
+                    type_args: concrete,
+                })),
+            );
+        } else {
+            // A type arg depends on an enclosing generic param (`foo<T>` inside
+            // a generic fn) → build the value at runtime, resolving the
+            // templates against the current frame's type_args.
+            self.builder.assign(
+                dest,
+                Rvalue::MakeGenericFunction {
+                    item,
+                    type_arg_templates: templates,
+                },
+            );
+        }
+    }
+
+    /// Resolve a `GenericApply` base to the underlying function `ItemRef` (free
+    /// function or static/interface method). `None` for bound methods, lambdas,
+    /// or anything that is not a function path.
+    fn try_resolve_generic_apply_base(&self, base: AstExprId) -> Option<ItemRef> {
+        use baml_compiler2_tir::inference::MemberResolution;
+        let is_fn = |r: &MemberResolution<'_>| {
+            matches!(
+                r,
+                MemberResolution::Free { .. }
+                    | MemberResolution::UnboundMethod { .. }
+                    | MemberResolution::InterfaceDefaultMethod { .. }
+            )
+        };
+        let key = self.expr_metadata_key(base);
+        // Multi-segment paths: static methods, qualified free fns (e.g. baml.json.from_string).
+        if let Some(item) = self
+            .path_member_resolutions
+            .get(&key)
+            .and_then(|rs| rs.last())
+            .filter(|r| is_fn(r))
+            .and_then(|r| resolution_to_item_ref(self.db, r))
+        {
+            return Some(item);
+        }
+        // Flat / package resolutions.
+        if let Some(item) = self
+            .resolutions
+            .get(&key)
+            .filter(|r| is_fn(r))
+            .and_then(|r| resolution_to_item_ref(self.db, r))
+        {
+            return Some(item);
+        }
+        // Single-name free function / builtin.
+        if let AstExpr::Path(segments) = &self.body.exprs[base]
+            && segments.len() == 1
+        {
+            let span_start = self
+                .source_map
+                .as_ref()
+                .map(|sm| sm.expr_span(base).start())
+                .unwrap_or_default();
+            match resolve_name_at_in_scope(
+                self.db,
+                self.file,
+                span_start,
+                &segments[0],
+                self.scope_func_name.as_ref(),
+            ) {
+                ResolvedName::Item(def @ Definition::Function(_))
+                | ResolvedName::Builtin(def @ Definition::Function(_)) => {
+                    return Some(def_to_item_ref(self.db, def));
+                }
+                _ => {}
+            }
+        }
+        None
+    }
+
+    /// Resolve `GenericApply` AST type args to `TyTemplate`s. A template is
+    /// `is_fully_concrete()` unless the arg references an enclosing generic
+    /// param (then it carries a `TypeArgRef`, resolved at runtime).
+    fn generic_apply_type_arg_templates(&self, type_args: &[AstTypeExpr]) -> Vec<TyTemplate> {
+        use baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns;
+        let generic_params = self.enclosing_generic_params();
+        let pkg_info = file_package(self.db, self.file);
+        let pkg_id = PackageId::new(self.db, pkg_info.package);
+        let pkg_items = package_items(self.db, pkg_id);
+        type_args
+            .iter()
+            .map(|type_arg| {
+                let mut diags = Vec::new();
+                let tir_ty = lower_type_expr_in_ns(
+                    self.db,
+                    type_arg,
+                    pkg_items,
+                    &pkg_info.namespace_path,
+                    &generic_params,
+                    &mut diags,
+                );
+                self.ty_to_template(&tir_ty, &generic_params)
+            })
+            .collect()
     }
 }
 

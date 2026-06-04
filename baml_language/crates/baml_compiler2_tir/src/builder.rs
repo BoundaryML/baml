@@ -445,6 +445,15 @@ struct CallCheckRequest<'a> {
     context: CallContext<'a>,
     callee_ty: Ty,
     is_method_call: bool,
+    /// `true` when the callee is a function *value* (a local/param holding a
+    /// function), as opposed to a direct reference to a function/method
+    /// declaration. For value callees the callee type's `generic_params`
+    /// accurately lists the still-inferable params, so call-site inference is
+    /// restricted to them — keeping rigid ambient type vars (e.g. from an
+    /// instantiation value `let f = foo<T>`) from being re-inferred. Declaration
+    /// callees keep the existing behavior (their `generic_params` is cleared by
+    /// receiver/class substitution, so the restriction would be wrong there).
+    is_value_call: bool,
     is_optional_call: bool,
     /// Pre-computed type-arg bindings when explicit `<T1, T2, ...>` were written at the call
     /// site. `Some(map)` means the caller already validated arity and resolved each `TypeExpr`;
@@ -1545,6 +1554,135 @@ impl<'db> TypeInferenceBuilder<'db> {
     ///
     /// Emits `WrongTypeArgArity` when the count of provided type args does not match the
     /// count of declared user generic params for the callee.
+    /// Infer `foo<int>` — a generic callable referenced with explicit type args
+    /// but NOT called (`Expr::GenericApply`). Produces the specialized function
+    /// type with the type params bound and **cleared** to `[]`, so the value is
+    /// a concrete function: a later call checks args against the substituted
+    /// param types (e.g. `let f = foo<int>; f("s")` is a type error).
+    fn infer_generic_apply(
+        &mut self,
+        base: ExprId,
+        type_args: &[TypeExpr],
+        body: &ExprBody,
+        expr_id: ExprId,
+    ) -> Ty {
+        let base_ty = self.infer_expr(base, body);
+        // If the base already failed to type-check, propagate its
+        // `Unknown`/`Error` instead of cascading a second `TypeIsNotGeneric`
+        // diagnostic (mirrors the normal call path).
+        if matches!(base_ty, Ty::Unknown { .. } | Ty::Error { .. }) {
+            return base_ty;
+        }
+        let Ty::Function {
+            generic_params,
+            generic_param_bounds,
+            params,
+            ret,
+            throws,
+            ..
+        } = base_ty
+        else {
+            // Type args applied to something that is not a generic callable.
+            self.context.report_simple(
+                TirTypeError::TypeIsNotGeneric {
+                    type_name: Self::generic_apply_base_name(base, body),
+                    kind: "value",
+                },
+                expr_id,
+            );
+            return Ty::Unknown {
+                attr: TyAttr::default(),
+            };
+        };
+
+        if type_args.len() != generic_params.len() {
+            self.context.report_simple(
+                TirTypeError::WrongTypeArgArity {
+                    callee_name: Self::generic_apply_base_name(base, body),
+                    expected: generic_params.len(),
+                    got: type_args.len(),
+                },
+                expr_id,
+            );
+            return Ty::Unknown {
+                attr: TyAttr::default(),
+            };
+        }
+
+        // Resolve each explicit type argument in the current namespace.
+        let db = self.context.db();
+        let ns = self.ns_context.clone();
+        let caller_generic_params = self.generic_params.clone();
+        let mut resolved: Vec<Ty> = Vec::with_capacity(type_args.len());
+        for type_arg_expr in type_args {
+            let mut diags = Vec::new();
+            let ty = crate::lower_type_expr::lower_type_expr_in_ns(
+                db,
+                type_arg_expr,
+                self.package_items,
+                &ns,
+                &caller_generic_params,
+                &mut diags,
+            );
+            for d in diags {
+                self.context.report_simple(d, expr_id);
+            }
+            resolved.push(ty);
+        }
+
+        let bindings = crate::generics::bind_type_vars(&generic_params, &resolved);
+
+        // BEP-044 generic-bound enforcement: each supplied type arg must satisfy
+        // its param's bound (mirrors the call-site check in
+        // `resolve_explicit_type_args`). The bounds are already lowered on
+        // `base_ty`; substitute the bindings so self-referential bounds
+        // (`<T: Container<T>>`) resolve before the subtype check.
+        for (idx, resolved_arg) in resolved.iter().enumerate() {
+            if let Some(Some(bound)) = generic_param_bounds.get(idx) {
+                let bound_ty = crate::generics::substitute_ty(bound, &bindings);
+                if !self.is_subtype(resolved_arg, &bound_ty) {
+                    self.context.report_simple(
+                        TirTypeError::TypeMismatch {
+                            expected: bound_ty,
+                            got: resolved_arg.clone(),
+                        },
+                        expr_id,
+                    );
+                }
+            }
+        }
+
+        // Build the specialized signature. Substitute the bound params into
+        // each param/ret/throws and clear `generic_params` so the result is a
+        // concrete (non-generic) function value.
+        Ty::Function {
+            generic_params: Vec::new(),
+            generic_param_bounds: Vec::new(),
+            params: params
+                .iter()
+                .map(|param| FunctionParamTy {
+                    name: param.name.clone(),
+                    ty: crate::generics::substitute_ty(&param.ty, &bindings),
+                    mode: param.mode,
+                })
+                .collect(),
+            ret: Box::new(crate::generics::substitute_ty(&ret, &bindings)),
+            throws: Box::new(crate::generics::substitute_ty(&throws, &bindings)),
+            attr: TyAttr::default(),
+        }
+    }
+
+    /// Best-effort display name for a `GenericApply` base, for diagnostics.
+    fn generic_apply_base_name(base: ExprId, body: &ExprBody) -> Name {
+        match &body.exprs[base] {
+            Expr::Path(segments) => segments
+                .last()
+                .cloned()
+                .unwrap_or_else(|| Name::new("<value>")),
+            _ => Name::new("<value>"),
+        }
+    }
+
     fn resolve_explicit_type_args(
         &mut self,
         callee_id: ExprId,
@@ -2312,6 +2450,15 @@ impl<'db> TypeInferenceBuilder<'db> {
                     refs,
                 );
             }
+            Expr::GenericApply { base, .. } => {
+                Self::collect_default_expr_forward_references(
+                    *base,
+                    body,
+                    later_params,
+                    shadowed,
+                    refs,
+                );
+            }
             Expr::Literal(_) | Expr::ByteStringLiteral(_) | Expr::Null | Expr::Missing => {}
         }
     }
@@ -2492,6 +2639,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 },
             callee_ty,
             is_method_call,
+            is_value_call,
             is_optional_call,
             explicit_type_arg_bindings,
             rigid_self_var,
@@ -2621,6 +2769,26 @@ impl<'db> TypeInferenceBuilder<'db> {
                     }
                 }
 
+                // Soundness for *value* callees: a function value's type may
+                // mention rigid type vars from the enclosing scope that are NOT
+                // among its still-inferable params — e.g. an instantiation value
+                // `let f = foo<T>; f(1)` (type `(T) -> T`, `generic_params`
+                // cleared) or a higher-order param `g: (T) -> T`. Inference above
+                // may have bound such a `T` from an argument; drop anything not
+                // in the value's own `generic_params` so it stays rigid and the
+                // call is checked structurally (`int` is not a subtype of a rigid
+                // `T` → mismatch) instead of silently collapsing `foo<T>` to
+                // `foo<int>`. This is gated on value calls because a *declaration*
+                // callee (free/method/static) reaches here with `generic_params`
+                // cleared by receiver/class substitution yet its own params still
+                // inferable — restricting there would wrongly freeze `arr.map`'s
+                // `U` or `StreamCache.new`'s class params.
+                if is_value_call {
+                    bindings.retain(|name, _| {
+                        crate::generics::is_value_call_inferable(name, generic_params)
+                    });
+                }
+
                 // Capture caller type-variable correspondences so generic
                 // *bounds* are checked even when a callee parameter is matched
                 // against another type variable. Ordinary inference (`bindings`)
@@ -2683,7 +2851,9 @@ impl<'db> TypeInferenceBuilder<'db> {
                     //     not shadowed by a callee generic, so a bound-method value
                     //     `let f = x.eq` keeps `Self` pinned to the caller's `T`,
                     //     and a function value `g: (T) -> _` applied to a `U` is
-                    //     still rejected rather than silently accepted.
+                    //     still rejected rather than silently accepted. (The
+                    //     *concrete*-arg case `f(1)` is handled by the value-call
+                    //     binding-retention above, which keeps `T` rigid here.)
                     // A callee generic of the same name (a shadow) stays deferred,
                     // which avoids confusing it with an identically-named caller
                     // param. The bounds map (`self.generic_param_bounds`) only holds
@@ -2859,6 +3029,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                         },
                         callee_ty: folded_fn,
                         is_method_call,
+                        is_value_call,
                         is_optional_call,
                         explicit_type_arg_bindings,
                         rigid_self_var,
@@ -2976,6 +3147,9 @@ impl<'db> TypeInferenceBuilder<'db> {
             context: call,
             callee_ty: callee_info.inner,
             is_method_call,
+            // Optional calls are always member accesses (`x?.foo(...)`), never a
+            // bare-local value callee.
+            is_value_call: false,
             is_optional_call: true,
             explicit_type_arg_bindings: None,
             rigid_self_var: self.self_pinned_rigid_var.get(&callee_id).cloned(),
@@ -2998,6 +3172,9 @@ impl<'db> TypeInferenceBuilder<'db> {
             }
             Expr::Null => Ty::Primitive(PrimitiveType::Null, TyAttr::default()),
             Expr::Path(segments) => self.infer_path(segments.as_slice(), body, expr_id),
+            Expr::GenericApply { base, type_args } => {
+                self.infer_generic_apply(*base, type_args, body, expr_id)
+            }
             Expr::If {
                 condition,
                 then_branch,
@@ -4035,6 +4212,18 @@ impl<'db> TypeInferenceBuilder<'db> {
             }
             _ => false,
         };
+        // A "value call" is one whose callee is a function *value* held in a
+        // local/param (e.g. `let f = foo<int>; f(x)` or a higher-order param
+        // `g`), as opposed to a direct reference to a function/method
+        // declaration. Only a bare single-segment path bound in the local scope
+        // qualifies — member accesses, qualified paths, and references to
+        // top-level functions are declaration calls. For value callees the
+        // callee type's `generic_params` is an accurate list of the still-
+        // inferable params, so inference can be restricted to them.
+        let is_value_call = matches!(
+            &body.exprs[callee],
+            Expr::Path(segs) if segs.len() == 1 && self.locals.contains_key(&segs[0])
+        );
         let callee_ty = self.infer_expr(callee, body);
 
         // When explicit type args are written at the call site (e.g. `foo<int, T>(x)`),
@@ -4055,6 +4244,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             },
             callee_ty,
             is_method_call,
+            is_value_call,
             is_optional_call: false,
             explicit_type_arg_bindings,
             rigid_self_var: self.self_pinned_rigid_var.get(&callee).cloned(),
@@ -6497,6 +6687,11 @@ impl<'db> TypeInferenceBuilder<'db> {
                 if let Some(Ty::Future(_value, error, _)) = self.expressions.get(future) {
                     out.extend(crate::throw_inference::flatten_ty_to_facts(error));
                 }
+            }
+            Expr::GenericApply { base, .. } => {
+                // Referencing a generic callable as a value cannot throw; walk
+                // the base for completeness (it is a path, a no-op).
+                self.collect_throw_facts_from_expr(*base, body, out);
             }
             Expr::Lambda(_)
             | Expr::Literal(_)

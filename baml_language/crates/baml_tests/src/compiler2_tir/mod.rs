@@ -321,6 +321,7 @@ pub(crate) mod support {
                 format!("spawn {{ {} }}", expr_desc(*spawn_body, body))
             }
             Expr::Await { future } => format!("await {}", expr_desc(*future, body)),
+            Expr::GenericApply { base, .. } => format!("{}<...>", expr_desc(*base, body)),
             Expr::Missing => "<missing>".into(),
         }
     }
@@ -1779,6 +1780,12 @@ pub(crate) mod support {
                     "await {}",
                     expr_desc_hir(*future, body, prefix, local_type_names)
                 ),
+                Expr::GenericApply { base, .. } => {
+                    format!(
+                        "{}<...>",
+                        expr_desc_hir(*base, body, prefix, local_type_names)
+                    )
+                }
                 Expr::Missing => "<missing>".into(),
             }
         }
