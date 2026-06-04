@@ -83,10 +83,16 @@ async function fetchReadmeFromGitHub(codeUrl: string, episodeTitle: string): Pro
   }
 }
 
-// Generate metadata for SEO
-export async function generateMetadata({ params }: { params: { slug: string } }): Promise<Metadata> {
+// Generate metadata for SEO.
+// Next 15: `params` is a Promise — must be awaited before access.
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ slug: string }>;
+}): Promise<Metadata> {
+  const { slug } = await params;
   const episodes = await fetchPodcastEpisodes();
-  const episode = episodes.find(ep => ep.slug === params.slug);
+  const episode = episodes.find((ep) => ep.slug === slug);
 
   if (!episode) {
     return {
@@ -149,9 +155,14 @@ export async function generateMetadata({ params }: { params: { slug: string } })
   };
 }
 
-export default async function EpisodePage({ params }: { params: { slug: string } }) {
+export default async function EpisodePage({
+  params,
+}: {
+  params: Promise<{ slug: string }>;
+}) {
+  const { slug } = await params;
   const episodes = await fetchPodcastEpisodes();
-  const episode = episodes.find(ep => ep.slug === params.slug);
+  const episode = episodes.find((ep) => ep.slug === slug);
 
   if (!episode) {
     notFound();
