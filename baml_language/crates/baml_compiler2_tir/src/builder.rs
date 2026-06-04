@@ -13,7 +13,10 @@
 //! NOT recurse into it — lambda bodies are separate scopes with their own
 //! `infer_scope_types` Salsa query.
 
-use std::collections::{BTreeSet, HashMap};
+use std::{
+    collections::{BTreeSet, HashMap},
+    sync::Arc,
+};
 
 use baml_base::Name;
 use baml_compiler2_ast::{
@@ -457,9 +460,9 @@ impl ThrowsAnalysisContext for BuilderThrowsAnalysis<'_, '_> {
     fn named_callee_summary(
         &self,
         callee_expr_id: ExprId,
-        body: &ExprBody,
+        _body: &ExprBody,
     ) -> Option<BTreeSet<Ty>> {
-        let target = self.builder.call_target_name(callee_expr_id, body)?;
+        let target = self.builder.call_target_name(callee_expr_id)?;
         self.builder.lookup_named_throw_summary(&target)
     }
 
@@ -642,6 +645,13 @@ pub struct TypeInferenceBuilder<'db> {
     /// before checking. Used to resolve `PatId` → `TextRange` when emitting
     /// pattern-position diagnostics.
     body_source_map: Option<AstSourceMap>,
+    /// The expression body currently being walked. Owned (an `Arc` clone) so
+    /// the accessor `Self::body` can hand out a body disjoint from `&self`,
+    /// letting the inference walk borrow `body.exprs[id]` while calling
+    /// `&mut self` methods. Swapped in lockstep with `body_source_map` at the
+    /// two sub-body boundaries (parameter defaults, lambda bodies) so the
+    /// active body always matches the AST arena being indexed.
+    current_body: Option<Arc<ExprBody>>,
     /// Depth counter for `OptionalChain` scopes. When > 0, `FieldAccess` and
     /// `Index` auto-unwrap nullable bases (null is caught by the chain wrapper).
     /// When 0, accessing a member on a nullable type is a type error.
@@ -953,6 +963,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             scoped_local_declarations: Vec::new(),
             scoped_local_assignments: Vec::new(),
             body_source_map: None,
+            current_body: None,
             resolutions: FxHashMap::default(),
             res_ctx,
             package_items,
@@ -985,6 +996,23 @@ impl<'db> TypeInferenceBuilder<'db> {
     /// `PatId` → `TextRange` for pattern-position diagnostic spans.
     pub fn set_body_source_map(&mut self, sm: AstSourceMap) {
         self.body_source_map = Some(sm);
+    }
+
+    /// Install the expression body currently being walked. Called by
+    /// `infer_scope_types` alongside `set_body_source_map`.
+    pub fn set_current_body(&mut self, body: Arc<ExprBody>) {
+        self.current_body = Some(body);
+    }
+
+    /// The expression body currently being walked. Returns an owned `Arc`
+    /// clone so the result is disjoint from `&self`: the inference walk can
+    /// hold `let body = self.body(); let expr = &body.exprs[id];` while
+    /// invoking `&mut self` methods. Panics if no body has been installed —
+    /// every code path that walks expressions sets one first.
+    fn body(&self) -> Arc<ExprBody> {
+        self.current_body
+            .clone()
+            .expect("current_body must be set before walking the body")
     }
 
     /// Set the generic type parameters for this function scope.
@@ -1358,9 +1386,9 @@ impl<'db> TypeInferenceBuilder<'db> {
 
     fn find_callback_throw_provenance(
         &self,
-        body: &ExprBody,
         missing_effect_fact: &Ty,
     ) -> Option<CallbackThrowProvenance> {
+        let body = self.body();
         let mut matches = Vec::new();
 
         for (expr_id, expr) in body.exprs.iter() {
@@ -1436,7 +1464,8 @@ impl<'db> TypeInferenceBuilder<'db> {
             let callee_fn_throws_missing =
                 self.function_throws_exactly_missing_effect(&callee_ty, missing_effect_fact);
             if callee_fn_throws_missing
-                && let Some(callback_name) = Self::direct_callback_name(callee_expr_id, body)
+                && let Some(callback_name) =
+                    Self::direct_callback_name(callee_expr_id, body.as_ref())
             {
                 matches.push(CallbackThrowProvenance {
                     callback_name,
@@ -1454,15 +1483,9 @@ impl<'db> TypeInferenceBuilder<'db> {
         }
     }
 
-    fn check_throws_surface(
-        &mut self,
-        body: &ExprBody,
-        throws_ty: &Ty,
-        span: TextRange,
-        warn_extraneous: bool,
-    ) {
+    fn check_throws_surface(&mut self, throws_ty: &Ty, span: TextRange, warn_extraneous: bool) {
         let declared = crate::throw_inference::flatten_ty_to_facts(throws_ty);
-        let effective = self.collect_effective_throws(body);
+        let effective = self.collect_effective_throws();
         let has_open_slot = Self::throws_surface_has_open_slot(&declared);
 
         // Throws tracking is otherwise *exact* (so e.g. enum-variant throws stay
@@ -1515,8 +1538,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             if extra_facts.len() == 1
                 && let Some(missing_effect_fact) = missing_effect_fact
                 && Self::synthetic_effect_param_name(missing_effect_fact).is_some()
-                && let Some(provenance) =
-                    self.find_callback_throw_provenance(body, missing_effect_fact)
+                && let Some(provenance) = self.find_callback_throw_provenance(missing_effect_fact)
             {
                 let mut related = vec![RelatedNote::new(
                     RelatedLocation::Expr(provenance.forwarding_call_expr),
@@ -1672,9 +1694,9 @@ impl<'db> TypeInferenceBuilder<'db> {
         OptionalBaseInfo { expanded, inner }
     }
 
-    fn infer_args_for_recovery(&mut self, args: &[ExprId], body: &ExprBody) {
+    fn infer_args_for_recovery(&mut self, args: &[ExprId]) {
         for arg in args {
-            self.infer_expr(*arg, body);
+            self.infer_expr(*arg);
         }
     }
 
@@ -1833,7 +1855,6 @@ impl<'db> TypeInferenceBuilder<'db> {
         effective_params: &'a [FunctionParamTy],
         args: &[ExprId],
         call_args: Option<&[ast::CallArg]>,
-        body: &ExprBody,
     ) -> Vec<(&'a FunctionParamTy, ExprId)> {
         let mut bindings: Vec<Option<ExprId>> = vec![None; effective_params.len()];
         let mut provided_args = FxHashSet::default();
@@ -1957,7 +1978,7 @@ impl<'db> TypeInferenceBuilder<'db> {
 
         for arg in args {
             if !provided_args.contains(arg) {
-                self.infer_expr(*arg, body);
+                self.infer_expr(*arg);
             }
         }
 
@@ -2004,6 +2025,10 @@ impl<'db> TypeInferenceBuilder<'db> {
         let saved_state = self.take_inference_state();
         let defaults = &parameter_defaults.defaults;
         let saved_body_source_map = self.body_source_map.replace(defaults.source_map.clone());
+        // The parameter-default exprs live in a DIFFERENT arena from the main
+        // function body; swap `current_body` in lockstep with `body_source_map`
+        // so `self.body()` indexes the default-expr arena while we walk it.
+        let saved_current_body = self.current_body.replace(Arc::new(defaults.exprs.clone()));
         let saved_locals = self.locals.clone();
         let saved_scoped_local_declarations_len = self.scoped_local_declarations.len();
         let saved_scoped_local_assignments_len = self.scoped_local_assignments.len();
@@ -2035,7 +2060,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 .get(index)
                 .map(|(_, ty)| ty.clone())
                 .unwrap_or(Ty::unknown());
-            let got_ty = self.infer_expr(default_expr, &defaults.exprs);
+            let got_ty = self.infer_expr(default_expr);
             if !matches!(expected_ty, Ty::Unknown | Ty::Error)
                 && !self.argument_matches_expected(&got_ty, &expected_ty)
             {
@@ -2087,6 +2112,7 @@ impl<'db> TypeInferenceBuilder<'db> {
 
         self.restore_inference_state(saved_state);
         self.body_source_map = saved_body_source_map;
+        self.current_body = saved_current_body;
         self.locals = saved_locals;
         self.scoped_local_declarations
             .truncate(saved_scoped_local_declarations_len);
@@ -2595,7 +2621,6 @@ impl<'db> TypeInferenceBuilder<'db> {
         callee_ty: &Ty,
         expr_id: ExprId,
         args: &[ExprId],
-        body: &ExprBody,
     ) -> CheckedCallInner {
         self.context.report_simple(
             TirTypeError::NotCallable {
@@ -2603,7 +2628,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             },
             expr_id,
         );
-        self.infer_args_for_recovery(args, body);
+        self.infer_args_for_recovery(args);
         CheckedCallInner {
             result: Ty::unknown(),
             bindings_from_inference: false,
@@ -2684,7 +2709,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 // Two-pass: first process non-lambda args to bind type vars,
                 // then process lambda args with resolved bindings.
                 let param_arg_pairs =
-                    self.bind_call_args(expr_id, effective_params, args, call_args, body);
+                    self.bind_call_args(expr_id, effective_params, args, call_args);
 
                 if run_inference_phases {
                     for (param, arg) in &param_arg_pairs {
@@ -2694,9 +2719,9 @@ impl<'db> TypeInferenceBuilder<'db> {
                         let param_ty = &param.ty;
                         let substituted = crate::generics::substitute_ty(param_ty, &bindings);
                         let arg_ty = if !crate::generics::contains_typevar(&substituted) {
-                            self.check_expr(*arg, body, &substituted)
+                            self.check_expr(*arg, &substituted)
                         } else {
-                            self.infer_expr(*arg, body)
+                            self.infer_expr(*arg)
                         };
                         crate::generics::infer_bindings(param_ty, &arg_ty, &mut bindings);
                     }
@@ -2708,7 +2733,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                         let param_ty = &param.ty;
                         let substituted = crate::generics::substitute_ty(param_ty, &bindings);
                         let arg_ty = if !crate::generics::contains_typevar(&substituted) {
-                            self.check_expr(*arg, body, &substituted)
+                            self.check_expr(*arg, &substituted)
                         } else if let Some(Ty::Function {
                             params: fn_params, ..
                         }) = self.expected_lambda_function_ty(&substituted)
@@ -2717,12 +2742,12 @@ impl<'db> TypeInferenceBuilder<'db> {
                                 .iter()
                                 .all(|param| !crate::generics::contains_typevar(&param.ty));
                             if all_params_concrete {
-                                self.check_expr(*arg, body, &substituted)
+                                self.check_expr(*arg, &substituted)
                             } else {
-                                self.infer_expr(*arg, body)
+                                self.infer_expr(*arg)
                             }
                         } else {
-                            self.infer_expr(*arg, body)
+                            self.infer_expr(*arg)
                         };
                         crate::generics::infer_bindings(param_ty, &arg_ty, &mut bindings);
                     }
@@ -2733,9 +2758,9 @@ impl<'db> TypeInferenceBuilder<'db> {
                         let param_ty = &param.ty;
                         let substituted = crate::generics::substitute_ty(param_ty, &bindings);
                         if !crate::generics::contains_typevar(&substituted) {
-                            self.check_expr(*arg, body, &substituted);
+                            self.check_expr(*arg, &substituted);
                         } else {
-                            self.infer_expr(*arg, body);
+                            self.infer_expr(*arg);
                         }
                     }
                 }
@@ -2771,7 +2796,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                         .expressions
                         .get(arg)
                         .cloned()
-                        .unwrap_or_else(|| self.infer_expr(*arg, body));
+                        .unwrap_or_else(|| self.infer_expr(*arg));
 
                     if !self.argument_matches_expected(&arg_ty, &expected_arg_ty) {
                         self.context.report(
@@ -2795,7 +2820,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 }
             }
             Ty::Unknown | Ty::Error => {
-                self.infer_args_for_recovery(args, body);
+                self.infer_args_for_recovery(args);
                 CheckedCallInner {
                     result: Ty::unknown(),
                     bindings_from_inference: false,
@@ -2857,8 +2882,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                                 .all(|(param, expected)| &param.ty == *expected)
                     });
                     if !arms_compatible {
-                        return self
-                            .report_not_callable_and_recover(&callee_ty, expr_id, args, body);
+                        return self.report_not_callable_and_recover(&callee_ty, expr_id, args);
                     }
 
                     // Use first arm's params as representative.
@@ -2907,9 +2931,9 @@ impl<'db> TypeInferenceBuilder<'db> {
                 }
 
                 // Not all arms are functions — report not callable.
-                self.report_not_callable_and_recover(&callee_ty, expr_id, args, body)
+                self.report_not_callable_and_recover(&callee_ty, expr_id, args)
             }
-            _ => self.report_not_callable_and_recover(&callee_ty, expr_id, args, body),
+            _ => self.report_not_callable_and_recover(&callee_ty, expr_id, args),
         }
     }
 
@@ -2940,12 +2964,12 @@ impl<'db> TypeInferenceBuilder<'db> {
             expr_id,
             args,
             call_args: _,
-            body,
+            body: _,
             expected,
         } = call;
         let callee_info = self.analyze_optional_base(callee_ty);
 
-        if let Some(result_ty) = self.try_container_method_call(callee_id, args, body) {
+        if let Some(result_ty) = self.try_container_method_call(callee_id, args) {
             let final_ty = Self::make_optional(result_ty);
             self.report_result_type_mismatch(expr_id, &final_ty, expected);
             self.record_expr_type(expr_id, final_ty.clone());
@@ -2953,7 +2977,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         }
 
         if callee_info.is_null_only() {
-            self.infer_args_for_recovery(args, body);
+            self.infer_args_for_recovery(args);
             let ty = Ty::Primitive(PrimitiveType::Null);
             self.report_result_type_mismatch(expr_id, &ty, expected);
             self.record_expr_type(expr_id, ty.clone());
@@ -2976,25 +3000,26 @@ impl<'db> TypeInferenceBuilder<'db> {
     // ── Bidirectional Type Checking ─────────────────────────────────────────
 
     /// Synthesis mode: compute the type of an expression bottom-up.
-    pub fn infer_expr(&mut self, expr_id: ExprId, body: &ExprBody) -> Ty {
+    pub fn infer_expr(&mut self, expr_id: ExprId) -> Ty {
+        let body = self.body();
         let expr = &body.exprs[expr_id];
         let ty = match expr {
             Expr::Literal(lit) => Ty::Literal(lit.clone(), Freshness::Fresh),
             Expr::ByteStringLiteral(_) => Ty::Primitive(PrimitiveType::Uint8Array),
             Expr::Null => Ty::Primitive(PrimitiveType::Null),
-            Expr::Path(segments) => self.infer_path(segments.as_slice(), body, expr_id),
+            Expr::Path(segments) => self.infer_path(segments.as_slice(), expr_id),
             Expr::If {
                 condition,
                 then_branch,
                 else_branch,
             } => {
                 // Infer the condition first so its type is in `self.expressions`.
-                self.infer_expr(*condition, body);
+                self.infer_expr(*condition);
 
                 // Extract narrowings from the condition expression.
                 let narrowings = crate::narrowing::extract_narrowings(
                     *condition,
-                    body,
+                    body.as_ref(),
                     &self.expressions,
                     &self.pattern_types,
                 );
@@ -3002,13 +3027,13 @@ impl<'db> TypeInferenceBuilder<'db> {
                 // Apply then-branch narrowings, saving originals.
                 let saved = crate::narrowing::apply_then_narrowings(&narrowings, &mut self.locals);
 
-                let then_ty = self.infer_expr(*then_branch, body);
+                let then_ty = self.infer_expr(*then_branch);
 
                 // Restore originals and apply else-branch narrowings.
                 crate::narrowing::restore_and_apply_else(&narrowings, &saved, &mut self.locals);
 
                 let result_ty = if let Some(else_id) = else_branch {
-                    let else_ty = self.infer_expr(*else_id, body);
+                    let else_ty = self.infer_expr(*else_id);
                     Self::join_types(&then_ty, &else_ty)
                 } else {
                     Ty::void()
@@ -3030,38 +3055,33 @@ impl<'db> TypeInferenceBuilder<'db> {
                 *scrutinee,
                 *then_branch,
                 *else_branch,
-                body,
                 None,
             ),
             Expr::Call { .. } => {
                 // Delegate to check_expr with Ty::Unknown so the generic
                 // inference logic in check_expr handles all call expressions.
-                self.check_expr(expr_id, body, &Ty::unknown())
+                self.check_expr(expr_id, &Ty::unknown())
             }
             Expr::Block { stmts, tail_expr } => {
                 let snapshot = self.snapshot_scoped_locals();
-                let ty = if let Some(never) =
-                    self.run_block_divergence(stmts, tail_expr.is_some(), body)
+                let ty = if let Some(never) = self.run_block_divergence(stmts, tail_expr.is_some())
                 {
                     never
                 } else {
-                    tail_expr
-                        .map(|e| self.infer_expr(e, body))
-                        .unwrap_or(Ty::void())
+                    tail_expr.map(|e| self.infer_expr(e)).unwrap_or(Ty::void())
                 };
                 self.restore_scoped_locals(&snapshot);
                 ty
             }
             Expr::MemberAccess { base, member } => {
-                self.infer_member_access_expr(expr_id, body, *base, member)
+                self.infer_member_access_expr(expr_id, *base, member)
             }
-            Expr::Upcast { base, target } => self.infer_upcast_expr(expr_id, body, *base, target),
+            Expr::Upcast { base, target } => self.infer_upcast_expr(expr_id, *base, target),
             Expr::OptionalMemberAccess { base, member } => {
-                self.infer_optional_member_access_expr(expr_id, body, *base, member)
+                self.infer_optional_member_access_expr(expr_id, *base, member)
             }
             Expr::Array { elements } => {
-                let elem_types: Vec<Ty> =
-                    elements.iter().map(|e| self.infer_expr(*e, body)).collect();
+                let elem_types: Vec<Ty> = elements.iter().map(|e| self.infer_expr(*e)).collect();
                 let elem_ty = Self::join_all(&elem_types).widen_fresh();
                 Ty::List(Box::new(elem_ty))
             }
@@ -3069,16 +3089,16 @@ impl<'db> TypeInferenceBuilder<'db> {
                 let mut key_types = Vec::new();
                 let mut val_types = Vec::new();
                 for (k, v) in entries {
-                    key_types.push(self.infer_expr(*k, body));
-                    val_types.push(self.infer_expr(*v, body));
+                    key_types.push(self.infer_expr(*k));
+                    val_types.push(self.infer_expr(*v));
                 }
                 let key_ty = Self::join_all(&key_types).widen_fresh();
                 let val_ty = Self::join_all(&val_types).widen_fresh();
                 Ty::Map(Box::new(key_ty), Box::new(val_ty))
             }
             Expr::Binary { op, lhs, rhs } => {
-                let lhs_ty = self.infer_expr(*lhs, body);
-                let rhs_ty = self.infer_expr(*rhs, body);
+                let lhs_ty = self.infer_expr(*lhs);
+                let rhs_ty = self.infer_expr(*rhs);
 
                 // Optional chaining diagnostics for ?? and ||
                 match op {
@@ -3126,18 +3146,16 @@ impl<'db> TypeInferenceBuilder<'db> {
                 self.infer_binary_op(*op, &lhs_ty, &rhs_ty, expr_id)
             }
             Expr::Unary { op, expr } => {
-                let operand_ty = self.infer_expr(*expr, body);
+                let operand_ty = self.infer_expr(*expr);
                 self.infer_unary_op(*op, &operand_ty, expr_id)
             }
             Expr::Match {
                 scrutinee, arms, ..
-            } => self.infer_match_expr(expr_id, *scrutinee, arms, body),
-            Expr::Is { scrutinee, pattern } => self.infer_is_expr(*scrutinee, *pattern, body),
-            Expr::Catch { base, clauses } => {
-                self.infer_catch_expr(expr_id, *base, clauses, body, None)
-            }
+            } => self.infer_match_expr(expr_id, *scrutinee, arms),
+            Expr::Is { scrutinee, pattern } => self.infer_is_expr(*scrutinee, *pattern),
+            Expr::Catch { base, clauses } => self.infer_catch_expr(expr_id, *base, clauses, None),
             Expr::Throw { value } => {
-                self.infer_expr(*value, body);
+                self.infer_expr(*value);
                 Ty::never()
             }
             Expr::Object {
@@ -3145,21 +3163,21 @@ impl<'db> TypeInferenceBuilder<'db> {
                 type_args: obj_type_args,
                 fields,
                 ..
-            } => self.infer_object_expr(expr_id, body, type_name.as_ref(), obj_type_args, fields),
-            Expr::Index { base, index } => self.infer_index_expr(expr_id, body, *base, *index),
+            } => self.infer_object_expr(expr_id, type_name.as_ref(), obj_type_args, fields),
+            Expr::Index { base, index } => self.infer_index_expr(expr_id, *base, *index),
             Expr::OptionalIndex { base, index } => {
-                self.infer_optional_index_expr(expr_id, body, *base, *index)
+                self.infer_optional_index_expr(expr_id, *base, *index)
             }
             Expr::OptionalCall { .. } => {
                 // Run the shared call checker even without an expected type.
-                self.check_expr(expr_id, body, &Ty::unknown())
+                self.check_expr(expr_id, &Ty::unknown())
             }
             Expr::OptionalChain { expr } => {
                 // Transparent wrapper — type is the same as the inner expression's type.
                 // While inside the chain, FieldAccess/Index auto-unwrap nullable bases
                 // (null is caught by the chain's short-circuit scope).
                 self.in_optional_chain += 1;
-                let ty = self.infer_expr(*expr, body);
+                let ty = self.infer_expr(*expr);
                 self.in_optional_chain -= 1;
                 ty
             }
@@ -3167,8 +3185,8 @@ impl<'db> TypeInferenceBuilder<'db> {
             Expr::Spawn {
                 name,
                 body: spawn_body,
-            } => self.infer_spawn_expr(body, *name, *spawn_body),
-            Expr::Await { future } => self.infer_await_expr(body, *future),
+            } => self.infer_spawn_expr(*name, *spawn_body),
+            Expr::Await { future } => self.infer_await_expr(*future),
             Expr::Missing => Ty::unknown(),
         };
         self.record_expr_type(expr_id, ty.clone());
@@ -3178,15 +3196,10 @@ impl<'db> TypeInferenceBuilder<'db> {
     /// Run a block's statements, emitting the `DeadCode` warning when one of
     /// them diverges. Returns `Some(Ty::Never)` if the block diverged (so the
     /// caller can skip its tail handling), or `None` if it ran to completion.
-    fn run_block_divergence(
-        &mut self,
-        stmts: &[StmtId],
-        tail_present: bool,
-        body: &ExprBody,
-    ) -> Option<Ty> {
+    fn run_block_divergence(&mut self, stmts: &[StmtId], tail_present: bool) -> Option<Ty> {
         let mut diverged_at: Option<(usize, StmtId)> = None;
         for (i, stmt_id) in stmts.iter().enumerate() {
-            if self.check_stmt_with_early_return_narrowing(*stmt_id, body) {
+            if self.check_stmt_with_early_return_narrowing(*stmt_id) {
                 diverged_at = Some((i, *stmt_id));
                 break;
             }
@@ -3206,13 +3219,8 @@ impl<'db> TypeInferenceBuilder<'db> {
     }
 
     #[inline(never)]
-    fn infer_member_access_expr(
-        &mut self,
-        expr_id: ExprId,
-        body: &ExprBody,
-        base: ExprId,
-        member: &Name,
-    ) -> Ty {
+    fn infer_member_access_expr(&mut self, expr_id: ExprId, base: ExprId, member: &Name) -> Ty {
+        let body = self.body();
         // `MemberAccess` now only comes from `FIELD_ACCESS_EXPR` (complex base
         // expressions like `f().a`, `arr[0].x`). Package-qualified paths are
         // always `Expr::Path` nodes (never `MemberAccess`) after Phase 1.
@@ -3220,11 +3228,11 @@ impl<'db> TypeInferenceBuilder<'db> {
         // Still handle primitive-type static method access (e.g. an expression
         // evaluating to an image type followed by `.from_url`) via the existing
         // try_primitive_static_access helper.
-        if let Some(ty) = self.try_primitive_static_access(expr_id, base, member, body) {
+        if let Some(ty) = self.try_primitive_static_access(expr_id, base, member) {
             return ty;
         }
 
-        let base_ty = self.infer_expr(base, body);
+        let base_ty = self.infer_expr(base);
 
         // Determine if the base is a runtime value (local variable, function
         // result, etc.) or a bare type name used as a namespace (e.g.
@@ -3269,14 +3277,8 @@ impl<'db> TypeInferenceBuilder<'db> {
     }
 
     #[inline(never)]
-    fn infer_upcast_expr(
-        &mut self,
-        expr_id: ExprId,
-        body: &ExprBody,
-        base: ExprId,
-        target: &TypeExpr,
-    ) -> Ty {
-        let base_ty = self.infer_expr(base, body);
+    fn infer_upcast_expr(&mut self, expr_id: ExprId, base: ExprId, target: &TypeExpr) -> Ty {
+        let base_ty = self.infer_expr(base);
         let mut diags = Vec::new();
         let target_ty = crate::lower_type_expr::lower_type_expr_in_ns(
             self.context.db(),
@@ -3333,13 +3335,13 @@ impl<'db> TypeInferenceBuilder<'db> {
     fn infer_optional_member_access_expr(
         &mut self,
         expr_id: ExprId,
-        body: &ExprBody,
         base: ExprId,
         member: &Name,
     ) -> Ty {
+        let body = self.body();
         // Optional chaining: a?.b — if a is null, short-circuits to null.
         // Type: if a: T?, resolve member on T, wrap result in Optional.
-        let base_ty = self.infer_expr(base, body);
+        let base_ty = self.infer_expr(base);
         let base_info = self.analyze_optional_base(&base_ty);
         // E2: warn if base is not nullable (?.  is unnecessary)
         if !base_info.is_nullable() && !matches!(base_ty, Ty::Unknown | Ty::Error) {
@@ -3363,15 +3365,10 @@ impl<'db> TypeInferenceBuilder<'db> {
     }
 
     #[inline(never)]
-    fn infer_index_expr(
-        &mut self,
-        expr_id: ExprId,
-        body: &ExprBody,
-        base: ExprId,
-        index: ExprId,
-    ) -> Ty {
-        let base_ty = self.infer_expr(base, body);
-        self.infer_expr(index, body);
+    fn infer_index_expr(&mut self, expr_id: ExprId, base: ExprId, index: ExprId) -> Ty {
+        let body = self.body();
+        let base_ty = self.infer_expr(base);
+        self.infer_expr(index);
         let inner = crate::narrowing::remove_null(&base_ty);
         let (resolve_ty, rewrap) =
             if inner != base_ty && !matches!(base_ty, Ty::Unknown | Ty::Error) {
@@ -3404,16 +3401,11 @@ impl<'db> TypeInferenceBuilder<'db> {
     }
 
     #[inline(never)]
-    fn infer_optional_index_expr(
-        &mut self,
-        expr_id: ExprId,
-        body: &ExprBody,
-        base: ExprId,
-        index: ExprId,
-    ) -> Ty {
+    fn infer_optional_index_expr(&mut self, expr_id: ExprId, base: ExprId, index: ExprId) -> Ty {
+        let body = self.body();
         // Optional chaining: a?.[expr] — short-circuits to null if a is null.
-        let base_ty = self.infer_expr(base, body);
-        self.infer_expr(index, body);
+        let base_ty = self.infer_expr(base);
+        self.infer_expr(index);
         let base_info = self.analyze_optional_base(&base_ty);
         // E2: warn if base is not nullable
         if !base_info.is_nullable() && !matches!(base_ty, Ty::Unknown | Ty::Error) {
@@ -3456,12 +3448,7 @@ impl<'db> TypeInferenceBuilder<'db> {
     }
 
     #[inline(never)]
-    fn infer_spawn_expr(
-        &mut self,
-        body: &ExprBody,
-        name: Option<ExprId>,
-        spawn_body: ExprId,
-    ) -> Ty {
+    fn infer_spawn_expr(&mut self, name: Option<ExprId>, spawn_body: ExprId) -> Ty {
         // BEP-034: `spawn name? { body } : Future<T, E>` where
         // `body` has type `T throws E`. After AST lowering the
         // body is wrapped in a synthetic 0-arg lambda; we infer
@@ -3469,9 +3456,9 @@ impl<'db> TypeInferenceBuilder<'db> {
         // pull its effective throws (computed and stored by
         // `infer_lambda_body`) as `E`.
         if let Some(name_id) = name {
-            let _ = self.infer_expr(name_id, body);
+            let _ = self.infer_expr(name_id);
         }
-        let lambda_ty = self.infer_expr(spawn_body, body);
+        let lambda_ty = self.infer_expr(spawn_body);
         let value_ty = match &lambda_ty {
             Ty::Function { ret, .. } => ret.as_ref().clone(),
             _ => lambda_ty.clone(),
@@ -3499,9 +3486,9 @@ impl<'db> TypeInferenceBuilder<'db> {
     }
 
     #[inline(never)]
-    fn infer_await_expr(&mut self, body: &ExprBody, future: ExprId) -> Ty {
+    fn infer_await_expr(&mut self, future: ExprId) -> Ty {
         // BEP-034: `await e : T` where `e : Future<T, E>`.
-        let fut_ty = self.infer_expr(future, body);
+        let fut_ty = self.infer_expr(future);
         match fut_ty {
             Ty::Future(value, _error) => *value,
             Ty::Unknown | Ty::Error => fut_ty,
@@ -3596,7 +3583,6 @@ impl<'db> TypeInferenceBuilder<'db> {
     fn check_object_fields(
         &mut self,
         expr_id: ExprId,
-        body: &ExprBody,
         class_name: &crate::ty::QualifiedTypeName,
         type_args: &[Ty],
         fields: &[(Name, ExprId)],
@@ -3619,13 +3605,13 @@ impl<'db> TypeInferenceBuilder<'db> {
                     },
                     expr_id,
                 );
-                self.infer_expr(*field_expr, body);
+                self.infer_expr(*field_expr);
             } else if let Some(declared_ty) = field_types.get(field_name) {
                 if type_args.is_empty() && crate::generics::contains_typevar(declared_ty) {
-                    self.infer_expr(*field_expr, body);
+                    self.infer_expr(*field_expr);
                     continue;
                 }
-                self.check_expr(*field_expr, body, declared_ty);
+                self.check_expr(*field_expr, declared_ty);
             } else if !field_name.as_str().contains('.')
                 && let Some((qualified_name, declared_ty)) = self
                     .qualified_interface_field_for_construction(class_name, type_args, field_name)
@@ -3637,9 +3623,9 @@ impl<'db> TypeInferenceBuilder<'db> {
                     },
                     expr_id,
                 );
-                self.check_expr(*field_expr, body, &declared_ty);
+                self.check_expr(*field_expr, &declared_ty);
             } else {
-                self.infer_expr(*field_expr, body);
+                self.infer_expr(*field_expr);
             }
         }
     }
@@ -3648,7 +3634,6 @@ impl<'db> TypeInferenceBuilder<'db> {
     fn infer_object_expr(
         &mut self,
         expr_id: ExprId,
-        body: &ExprBody,
         type_name: Option<&baml_base::core_types::TypePath>,
         obj_type_args: &[TypeExpr],
         fields: &[(Name, ExprId)],
@@ -3695,7 +3680,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                             if !crate::generics::contains_typevar(declared_ty) {
                                 continue;
                             }
-                            let field_ty = self.infer_expr(*field_expr, body).widen_fresh();
+                            let field_ty = self.infer_expr(*field_expr).widen_fresh();
                             crate::generics::infer_bindings(declared_ty, &field_ty, &mut bindings);
                         }
                         let inferred_type_args: Vec<Ty> = class_data
@@ -3721,10 +3706,10 @@ impl<'db> TypeInferenceBuilder<'db> {
             ty => ty,
         };
         if let Ty::Class(class_name, type_args) = &ty {
-            self.check_object_fields(expr_id, body, class_name, type_args, fields);
+            self.check_object_fields(expr_id, class_name, type_args, fields);
         } else {
             for (_, expr_id) in fields {
-                self.infer_expr(*expr_id, body);
+                self.infer_expr(*expr_id);
             }
         }
         ty
@@ -3734,7 +3719,6 @@ impl<'db> TypeInferenceBuilder<'db> {
     fn check_object_literal_declared_class_mismatch(
         &mut self,
         expr_id: ExprId,
-        body: &ExprBody,
         expected: &Ty,
         type_name: Option<&baml_base::core_types::TypePath>,
     ) -> Option<Ty> {
@@ -3762,7 +3746,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         if let Ty::Class(lit_qtn, _) = &lit_ty
             && lit_qtn != expected_qtn
         {
-            let inferred = self.infer_expr(expr_id, body);
+            let inferred = self.infer_expr(expr_id);
             if !matches!(inferred, Ty::Unknown | Ty::Error) && !self.is_subtype(&inferred, expected)
             {
                 self.context.report(
@@ -3784,23 +3768,22 @@ impl<'db> TypeInferenceBuilder<'db> {
     fn check_object_expr(
         &mut self,
         expr_id: ExprId,
-        body: &ExprBody,
         expected: &Ty,
         fields: &[(Name, ExprId)],
         type_name: Option<&baml_base::core_types::TypePath>,
     ) -> Ty {
         if let Some(inferred) =
-            self.check_object_literal_declared_class_mismatch(expr_id, body, expected, type_name)
+            self.check_object_literal_declared_class_mismatch(expr_id, expected, type_name)
         {
             return inferred;
         }
         if let Ty::Class(class_name, type_args) = expected {
-            self.check_object_fields(expr_id, body, class_name, type_args, fields);
+            self.check_object_fields(expr_id, class_name, type_args, fields);
             let ty = expected.clone();
             self.record_expr_type(expr_id, ty.clone());
             ty
         } else {
-            let inferred = self.infer_expr(expr_id, body);
+            let inferred = self.infer_expr(expr_id);
             if !matches!(expected, Ty::Unknown | Ty::Error) && !self.is_subtype(&inferred, expected)
             {
                 // BEP-044 wf3 #G18: if the value almost implements the
@@ -3845,24 +3828,24 @@ impl<'db> TypeInferenceBuilder<'db> {
     fn check_call_expr(
         &mut self,
         expr_id: ExprId,
-        body: &ExprBody,
         expected: &Ty,
         callee: ExprId,
         type_args: &[TypeExpr],
         args: &[ast::CallArg],
     ) -> Ty {
+        let body = self.body();
         let arg_exprs: Vec<_> = args.iter().map(|arg| arg.expr).collect();
         if matches!(&body.exprs[callee], Expr::OptionalMemberAccess { .. })
             && self.in_optional_chain > 0
         {
-            let callee_ty = self.infer_expr(callee, body);
+            let callee_ty = self.infer_expr(callee);
             return self.finalize_optional_callee_call(
                 OptionalCallContext {
                     call: CallContext {
                         expr_id,
                         args: &arg_exprs,
                         call_args: Some(args),
-                        body,
+                        body: body.as_ref(),
                         expected,
                     },
                     callee_id: callee,
@@ -3875,7 +3858,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         // Container mutation fast path (e.g. x.push(val) on EvolvingList).
         // Matches MemberAccess and 2-segment Path (multi-segment paths).
         if Self::is_method_like_callee(&body.exprs[callee])
-            && let Some(result_ty) = self.try_container_method_call(callee, &arg_exprs, body)
+            && let Some(result_ty) = self.try_container_method_call(callee, &arg_exprs)
         {
             self.report_result_type_mismatch(expr_id, &result_ty, expected);
             self.record_expr_type(expr_id, result_ty.clone());
@@ -3901,7 +3884,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             }
             _ => false,
         };
-        let callee_ty = self.infer_expr(callee, body);
+        let callee_ty = self.infer_expr(callee);
 
         // When explicit type args are written at the call site (e.g. `foo<int, T>(x)`),
         // validate arity and resolve them to a pre-computed bindings map.
@@ -3916,7 +3899,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 expr_id,
                 args: &arg_exprs,
                 call_args: Some(args),
-                body,
+                body: body.as_ref(),
                 expected,
             },
             callee_ty,
@@ -3938,17 +3921,17 @@ impl<'db> TypeInferenceBuilder<'db> {
     fn check_optional_call_expr(
         &mut self,
         expr_id: ExprId,
-        body: &ExprBody,
         expected: &Ty,
         callee: ExprId,
         args: &[ast::CallArg],
     ) -> Ty {
+        let body = self.body();
         let arg_exprs: Vec<_> = args.iter().map(|arg| arg.expr).collect();
         let is_method_call = matches!(
             &body.exprs[callee],
             Expr::MemberAccess { .. } | Expr::OptionalMemberAccess { .. }
         );
-        let callee_ty = self.infer_expr(callee, body);
+        let callee_ty = self.infer_expr(callee);
 
         if !self.analyze_optional_base(&callee_ty).is_nullable()
             && !matches!(&callee_ty, Ty::Unknown | Ty::Error)
@@ -3970,7 +3953,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                     expr_id,
                     args: &arg_exprs,
                     call_args: Some(args),
-                    body,
+                    body: body.as_ref(),
                     expected,
                 },
                 callee_id: callee,
@@ -3984,7 +3967,6 @@ impl<'db> TypeInferenceBuilder<'db> {
     fn check_lambda_expr(
         &mut self,
         expr_id: ExprId,
-        body: &ExprBody,
         expected: &Ty,
         func_def: &ast::FunctionDef,
     ) -> Ty {
@@ -4110,7 +4092,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             }
             _ => {
                 // Non-function expected type: fall through to infer-then-check
-                let inferred = self.infer_expr(expr_id, body);
+                let inferred = self.infer_expr(expr_id);
                 if !self.is_subtype(&inferred, expected) {
                     self.context.report(
                         TirTypeError::TypeMismatch {
@@ -4126,30 +4108,30 @@ impl<'db> TypeInferenceBuilder<'db> {
         }
     }
 
-    pub fn check_expr(&mut self, expr_id: ExprId, body: &ExprBody, expected: &Ty) -> Ty {
+    pub fn check_expr(&mut self, expr_id: ExprId, expected: &Ty) -> Ty {
+        let body = self.body();
         // This function is deeply recursive during builtin throws inference.
         // Keep bulky match-arm temporaries in helpers so debug builds don't
         // reserve them in every `check_expr` frame (Windows build.rs stacks are
         // tight enough for a few extra KiB per frame to matter).
         // Fix the element type of an empty evolving container the first time
         // it is used in a typed context (see `retype_evolving_empty`).
-        self.retype_evolving_empty(expr_id, body, expected);
+        self.retype_evolving_empty(expr_id, expected);
         let expr = &body.exprs[expr_id];
         match expr {
             // Block: check the tail expression against expected type
             Expr::Block { stmts, tail_expr } => {
                 let snapshot = self.snapshot_scoped_locals();
-                let ty = if let Some(never) =
-                    self.run_block_divergence(stmts, tail_expr.is_some(), body)
+                let ty = if let Some(never) = self.run_block_divergence(stmts, tail_expr.is_some())
                 {
                     never
                 } else if let Some(tail) = tail_expr {
                     if matches!(expected, Ty::Void) {
                         // Void context: infer the tail for diagnostics but discard its value.
-                        let _ = self.infer_expr(*tail, body);
+                        let _ = self.infer_expr(*tail);
                         Ty::void()
                     } else {
-                        self.check_expr(*tail, body, expected)
+                        self.check_expr(*tail, expected)
                     }
                 } else if !matches!(expected, Ty::Unknown | Ty::Void) {
                     // No tail expression, no divergence — block falls through
@@ -4183,7 +4165,6 @@ impl<'db> TypeInferenceBuilder<'db> {
                 *scrutinee,
                 *then_branch,
                 *else_branch,
-                body,
                 expected,
             ),
             // If: check both branches against expected type
@@ -4193,12 +4174,12 @@ impl<'db> TypeInferenceBuilder<'db> {
                 else_branch,
             } => {
                 // Infer the condition first so its type is in `self.expressions`.
-                self.infer_expr(*condition, body);
+                self.infer_expr(*condition);
 
                 // Extract narrowings from the condition expression.
                 let narrowings = crate::narrowing::extract_narrowings(
                     *condition,
-                    body,
+                    body.as_ref(),
                     &self.expressions,
                     &self.pattern_types,
                 );
@@ -4206,13 +4187,13 @@ impl<'db> TypeInferenceBuilder<'db> {
                 // Apply then-branch narrowings, saving originals.
                 let saved = crate::narrowing::apply_then_narrowings(&narrowings, &mut self.locals);
 
-                let then_ty = self.check_expr(*then_branch, body, expected);
+                let then_ty = self.check_expr(*then_branch, expected);
 
                 // Restore originals and apply else-branch narrowings.
                 crate::narrowing::restore_and_apply_else(&narrowings, &saved, &mut self.locals);
 
                 let ty = if let Some(else_id) = else_branch {
-                    let else_ty = self.check_expr(*else_id, body, expected);
+                    let else_ty = self.check_expr(*else_id, expected);
                     Self::join_types(&then_ty, &else_ty)
                 } else {
                     if !matches!(expected, Ty::Void | Ty::Unknown) {
@@ -4235,13 +4216,13 @@ impl<'db> TypeInferenceBuilder<'db> {
                 };
                 if let Some(elem_ty) = elem_ty {
                     for e in elements {
-                        self.check_expr(*e, body, elem_ty);
+                        self.check_expr(*e, elem_ty);
                     }
                     let ty = expected.clone();
                     self.record_expr_type(expr_id, ty.clone());
                     ty
                 } else {
-                    let inferred = self.infer_expr(expr_id, body);
+                    let inferred = self.infer_expr(expr_id);
                     if !matches!(expected, Ty::Unknown | Ty::Error)
                         && !self.is_subtype(&inferred, expected)
                     {
@@ -4266,7 +4247,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             // widening, so it must be written `1n`).
             Expr::Object {
                 fields, type_name, ..
-            } => self.check_object_expr(expr_id, body, expected, fields, type_name.as_ref()),
+            } => self.check_object_expr(expr_id, expected, fields, type_name.as_ref()),
             Expr::Map { entries } => {
                 let kv = match expected {
                     Ty::Map(k, v) | Ty::EvolvingMap(k, v) => Some((k, v)),
@@ -4274,14 +4255,14 @@ impl<'db> TypeInferenceBuilder<'db> {
                 };
                 if let Some((key_ty, val_ty)) = kv {
                     for (k, v) in entries {
-                        self.check_expr(*k, body, key_ty);
-                        self.check_expr(*v, body, val_ty);
+                        self.check_expr(*k, key_ty);
+                        self.check_expr(*v, val_ty);
                     }
                     let ty = expected.clone();
                     self.record_expr_type(expr_id, ty.clone());
                     ty
                 } else {
-                    self.infer_expr(expr_id, body)
+                    self.infer_expr(expr_id)
                 }
             }
             // Literal checked against a literal type: compare values directly.
@@ -4299,7 +4280,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 } else {
                     // Value doesn't match — infer (produces fresh literal) and
                     // let the subtype check report the error.
-                    let inferred = self.infer_expr(expr_id, body);
+                    let inferred = self.infer_expr(expr_id);
                     if !self.is_subtype(&inferred, expected) {
                         self.context.report(
                             TirTypeError::TypeMismatch {
@@ -4318,19 +4299,19 @@ impl<'db> TypeInferenceBuilder<'db> {
                 callee,
                 type_args,
                 args,
-            } => self.check_call_expr(expr_id, body, expected, *callee, type_args, args),
+            } => self.check_call_expr(expr_id, expected, *callee, type_args, args),
             Expr::OptionalCall { callee, args } => {
-                self.check_optional_call_expr(expr_id, body, expected, *callee, args)
+                self.check_optional_call_expr(expr_id, expected, *callee, args)
             }
             // Catch: propagate expected type to the base expression
             Expr::Catch { base, clauses } => {
-                self.infer_catch_expr(expr_id, *base, clauses, body, Some(expected))
+                self.infer_catch_expr(expr_id, *base, clauses, Some(expected))
             }
             // Lambda: bidirectional checking against expected function type
-            Expr::Lambda(func_def) => self.check_lambda_expr(expr_id, body, expected, func_def),
+            Expr::Lambda(func_def) => self.check_lambda_expr(expr_id, expected, func_def),
             // All other expressions: infer then subtype-check
             _ => {
-                let inferred = self.infer_expr(expr_id, body);
+                let inferred = self.infer_expr(expr_id);
                 if matches!(inferred, Ty::Void) && !matches!(expected, Ty::Void | Ty::Unknown) {
                     let err = if matches!(
                         body.exprs[expr_id],
@@ -4376,11 +4357,12 @@ impl<'db> TypeInferenceBuilder<'db> {
 
     /// Type-check a statement. Returns `true` if the statement diverges
     /// (i.e. control flow never reaches the next statement).
-    pub fn check_stmt(&mut self, stmt_id: StmtId, body: &ExprBody) -> bool {
+    pub fn check_stmt(&mut self, stmt_id: StmtId) -> bool {
+        let body = self.body();
         let stmt = &body.stmts[stmt_id];
         match stmt {
             Stmt::Expr(expr_id) => {
-                let ty = self.infer_expr(*expr_id, body);
+                let ty = self.infer_expr(*expr_id);
                 matches!(ty, Ty::Never)
             }
             Stmt::Let {
@@ -4392,9 +4374,9 @@ impl<'db> TypeInferenceBuilder<'db> {
                 let (init_result_ty, pattern_subject_ty, declared_for_scope) = if let Some(init) =
                     *initializer
                 {
-                    let expected = self.pattern_expected_ty(*pattern, body);
+                    let expected = self.pattern_expected_ty(*pattern);
                     let is_structural_pattern =
-                        Self::pattern_contains_structural_syntax(*pattern, body);
+                        Self::pattern_contains_structural_syntax(*pattern, body.as_ref());
                     // For `let … else`, the pattern is refutable: the
                     // declared type narrows the binding ON A MATCH, but
                     // the initializer is allowed to be wider (the else
@@ -4408,7 +4390,10 @@ impl<'db> TypeInferenceBuilder<'db> {
                         match expected {
                             Some(PatternExpectedTy::Full(ty)) if !is_structural_pattern => Some(ty),
                             Some(PatternExpectedTy::Partial(ty))
-                                if Self::expr_accepts_partial_pattern_expected(init, body) =>
+                                if Self::expr_accepts_partial_pattern_expected(
+                                    init,
+                                    body.as_ref(),
+                                ) =>
                             {
                                 Some(ty)
                             }
@@ -4419,9 +4404,9 @@ impl<'db> TypeInferenceBuilder<'db> {
                     let ty = if let Some(expected) = expected_for_check.as_ref()
                         && !matches!(expected, Ty::Void)
                     {
-                        self.check_expr(init, body, expected)
+                        self.check_expr(init, expected)
                     } else {
-                        self.infer_expr(init, body)
+                        self.infer_expr(init)
                     };
                     if matches!(ty, Ty::Void) {
                         let err = if matches!(
@@ -4454,7 +4439,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                     // the else block don't leak into the enclosing scope.
                     if let Some(else_expr) = else_branch {
                         let snapshot = self.snapshot_scoped_locals();
-                        let else_ty = self.infer_expr(*else_expr, body);
+                        let else_ty = self.infer_expr(*else_expr);
                         // The else branch diverges by construction, so its
                         // writes — including assignments to outer bindings —
                         // are not observable in the success continuation.
@@ -4468,8 +4453,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                         }
                     }
 
-                    let result =
-                        self.analyze_and_lower(*pattern, &flow_ty, body, initializer.unwrap());
+                    let result = self.analyze_and_lower(*pattern, &flow_ty, initializer.unwrap());
                     // Irrefutable-pattern check differs by binding form:
                     //   - plain `let`: refutable patterns are an error
                     //     (RefutablePatternInLet) — they'd fail at runtime
@@ -4520,15 +4504,15 @@ impl<'db> TypeInferenceBuilder<'db> {
                 if let Some(e) = expr {
                     if let Some(ret_ty) = &self.declared_return_ty {
                         let ret_ty = ret_ty.clone();
-                        self.check_expr(*e, body, &ret_ty);
+                        self.check_expr(*e, &ret_ty);
                     } else {
-                        self.infer_expr(*e, body);
+                        self.infer_expr(*e);
                     }
                 }
                 true // return always diverges
             }
             Stmt::Throw { value } => {
-                self.infer_expr(*value, body);
+                self.infer_expr(*value);
                 true
             }
             Stmt::While {
@@ -4537,7 +4521,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 after,
                 ..
             } => {
-                self.infer_expr(*condition, body);
+                self.infer_expr(*condition);
                 // Snapshot scoped locals before the body and restore after,
                 // mirroring `Stmt::For`. Without this, a `let x = ...`
                 // inside the while body (or any narrowing of an outer name)
@@ -4546,7 +4530,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 // the body — Slack rule 2 — by filtering assignments
                 // through binding identity.
                 let snapshot = self.snapshot_scoped_locals();
-                self.infer_expr(*while_body, body);
+                self.infer_expr(*while_body);
                 self.restore_scoped_locals(&snapshot);
                 // Type-check the C-style for `after` step, if present. It
                 // runs at the same lexical level as the body but in the
@@ -4555,7 +4539,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 // check it AFTER restoring the snapshot — body-declared lets
                 // are not in scope here.
                 if let Some(after_stmt) = after {
-                    self.check_stmt(*after_stmt, body);
+                    self.check_stmt(*after_stmt);
                 }
                 false
             }
@@ -4569,7 +4553,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 body: for_body,
             } => {
                 // 1. Infer the collection type
-                let coll_ty = self.infer_expr(*collection, body);
+                let coll_ty = self.infer_expr(*collection);
 
                 // 2. Derive the element type from the collection
                 let elem_ty = match &coll_ty {
@@ -4583,9 +4567,9 @@ impl<'db> TypeInferenceBuilder<'db> {
                 };
 
                 // 3. Validate the binding pattern against the element type.
-                let expected = self.pattern_expected_ty(*binding, body);
+                let expected = self.pattern_expected_ty(*binding);
                 let is_structural_pattern =
-                    Self::pattern_contains_structural_syntax(*binding, body);
+                    Self::pattern_contains_structural_syntax(*binding, body.as_ref());
                 let (flow_ty, declared_for_scope) = if let Some(PatternExpectedTy::Full(expected)) =
                     expected
                     && !is_structural_pattern
@@ -4607,7 +4591,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 // 4. Bind every Pattern::Bind reachable in the loop binding
                 // pattern to the validated flow type.
                 let snapshot = self.snapshot_scoped_locals();
-                let result = self.analyze_and_lower(*binding, &flow_ty, body, *for_body);
+                let result = self.analyze_and_lower(*binding, &flow_ty, *for_body);
                 self.finalize_pattern_lowering(
                     *binding,
                     &result,
@@ -4620,19 +4604,19 @@ impl<'db> TypeInferenceBuilder<'db> {
                 );
 
                 // 5. Check the body
-                self.infer_expr(*for_body, body);
+                self.infer_expr(*for_body);
                 self.restore_scoped_locals(&snapshot);
                 false
             }
             Stmt::Assign { target, value } => {
                 // Check for container index mutation: x[i] = val
-                if self.try_index_assign_mutation(*target, *value, body) {
+                if self.try_index_assign_mutation(*target, *value) {
                     return false;
                 }
                 // Assignment targets with Optional* nodes (e.g. `user?.profile.name = val`)
                 // are guarded by MIR's lower_safe_chain_guard — treat them as if inside
                 // an OptionalChain for type inference to avoid false NullableMemberAccess errors.
-                let target_has_optional = Self::expr_contains_optional(*target, body);
+                let target_has_optional = Self::expr_contains_optional(*target, body.as_ref());
                 if target_has_optional {
                     self.in_optional_chain += 1;
                 }
@@ -4640,8 +4624,8 @@ impl<'db> TypeInferenceBuilder<'db> {
                 // variable's *declared* type, not its potentially-narrowed type.
                 // Narrowing may have refined x: int? → null inside an if-branch,
                 // but assignment should still accept any value assignable to int?.
-                let declared_ty = self.get_declared_type(*target, body);
-                let value_ty = self.infer_expr(*value, body);
+                let declared_ty = self.get_declared_type(*target);
+                let value_ty = self.infer_expr(*value);
                 if let Some(ref decl_ty) = declared_ty {
                     if !matches!(decl_ty, Ty::Unknown | Ty::Error)
                         && !matches!(value_ty, Ty::Unknown | Ty::Error)
@@ -4665,8 +4649,8 @@ impl<'db> TypeInferenceBuilder<'db> {
                         }
                     }
                 } else {
-                    self.infer_expr(*target, body);
-                    self.infer_expr(*value, body);
+                    self.infer_expr(*target);
+                    self.infer_expr(*value);
                 }
                 if target_has_optional {
                     self.in_optional_chain -= 1;
@@ -4674,12 +4658,12 @@ impl<'db> TypeInferenceBuilder<'db> {
                 false
             }
             Stmt::AssignOp { target, op, value } => {
-                let target_has_optional = Self::expr_contains_optional(*target, body);
+                let target_has_optional = Self::expr_contains_optional(*target, body.as_ref());
                 if target_has_optional {
                     self.in_optional_chain += 1;
                 }
-                let target_ty = self.infer_expr(*target, body);
-                let value_ty = self.infer_expr(*value, body);
+                let target_ty = self.infer_expr(*target);
+                let value_ty = self.infer_expr(*value);
                 let binary_op = Self::assign_op_to_binary_op(*op);
                 // When the target is behind `?.`, the type is T? but the compound
                 // op only executes when the chain is non-null, so arithmetic should
@@ -4745,7 +4729,8 @@ impl<'db> TypeInferenceBuilder<'db> {
         }
     }
 
-    fn check_stmt_with_early_return_narrowing(&mut self, stmt_id: StmtId, body: &ExprBody) -> bool {
+    fn check_stmt_with_early_return_narrowing(&mut self, stmt_id: StmtId) -> bool {
+        let body = self.body();
         let stmt = &body.stmts[stmt_id];
 
         // `Stmt::Expr(Expr::IfLet { ... })` — same shape as the `Expr::If`
@@ -4770,10 +4755,10 @@ impl<'db> TypeInferenceBuilder<'db> {
                 // Resolve the scrutinee name + matched type *before*
                 // running check_stmt so we can apply the residual
                 // narrowing afterward without re-walking the if-let.
-                let scrutinee_ty = self.infer_expr(scrutinee, body);
-                let scrutinee_name = Self::single_path_local(scrutinee, body);
+                let scrutinee_ty = self.infer_expr(scrutinee);
+                let scrutinee_name = Self::single_path_local(scrutinee, body.as_ref());
 
-                let stmt_diverges = self.check_stmt(stmt_id, body);
+                let stmt_diverges = self.check_stmt(stmt_id);
 
                 if let Some(name) = scrutinee_name {
                     let then_ty = self.expressions.get(&then_branch);
@@ -4821,17 +4806,17 @@ impl<'db> TypeInferenceBuilder<'db> {
                 // type to be recorded first, so we infer it here. Note that
                 // infer_expr for the Expr::If will re-infer it (idempotent: the
                 // type is recorded and cached in self.expressions).
-                self.infer_expr(condition, body);
+                self.infer_expr(condition);
                 let narrowings = crate::narrowing::extract_narrowings(
                     condition,
-                    body,
+                    body.as_ref(),
                     &self.expressions,
                     &self.pattern_types,
                 );
 
                 // Run the normal check_stmt (which handles the full Expr::If
                 // including inner narrowing for the branches).
-                let stmt_diverges = self.check_stmt(stmt_id, body);
+                let stmt_diverges = self.check_stmt(stmt_id);
 
                 // After check_stmt, inspect whether the then-branch diverged.
                 // If it did diverge AND the overall if didn't (either no else
@@ -4857,7 +4842,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         }
 
         // Default: delegate to check_stmt
-        self.check_stmt(stmt_id, body)
+        self.check_stmt(stmt_id)
     }
 
     // ── Helper methods ────────────────────────────────────────────────────────
@@ -4867,7 +4852,8 @@ impl<'db> TypeInferenceBuilder<'db> {
     /// Returns the original type from the parameter annotation or `let` type
     /// annotation — unaffected by narrowing. Returns `None` for unannotated
     /// let-bindings (including evolving containers) or non-simple targets.
-    fn get_declared_type(&self, target: ExprId, body: &ExprBody) -> Option<Ty> {
+    fn get_declared_type(&self, target: ExprId) -> Option<Ty> {
+        let body = self.body();
         if let Expr::Path(segments) = &body.exprs[target] {
             if segments.len() == 1 {
                 return self
@@ -4909,10 +4895,10 @@ impl<'db> TypeInferenceBuilder<'db> {
         match_expr_id: ExprId,
         scrutinee_expr_id: ExprId,
         arms: &[baml_compiler2_ast::MatchArmId],
-        body: &ExprBody,
     ) -> Ty {
-        let scrutinee_ty = self.infer_expr(scrutinee_expr_id, body);
-        let scrutinee_name = Self::single_path_local(scrutinee_expr_id, body);
+        let body = self.body();
+        let scrutinee_ty = self.infer_expr(scrutinee_expr_id);
+        let scrutinee_name = Self::single_path_local(scrutinee_expr_id, body.as_ref());
 
         // Pass 1: lower each arm's pattern to a DPat, register bindings,
         // narrow the scrutinee for the body, and infer the body's type.
@@ -4931,7 +4917,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             let arm = &body.match_arms[*arm_id];
             let pattern_id = arm.pattern;
 
-            let result = self.analyze_and_lower(pattern_id, &scrutinee_ty, body, arm.body);
+            let result = self.analyze_and_lower(pattern_id, &scrutinee_ty, arm.body);
             let narrowed = result.matched_ty.clone();
 
             // Snapshot/restore the scope for this arm's bindings.
@@ -4945,10 +4931,10 @@ impl<'db> TypeInferenceBuilder<'db> {
             self.finalize_pattern_lowering(pattern_id, &result, None, None, &scrutinee_ty);
 
             if let Some(guard_expr) = arm.guard {
-                self.infer_expr(guard_expr, body);
+                self.infer_expr(guard_expr);
             }
 
-            let arm_ty = self.infer_expr(arm.body, body);
+            let arm_ty = self.infer_expr(arm.body);
             arm_types.push(arm_ty);
 
             self.restore_scoped_locals(&snapshot);
@@ -5022,7 +5008,6 @@ impl<'db> TypeInferenceBuilder<'db> {
     ///   pattern span suggesting `let` instead.
     /// - Joined branch types returned as the if-let's value; if there is no
     ///   else, the type is `Void`.
-    #[allow(clippy::too_many_arguments)]
     fn check_if_let_expr(
         &mut self,
         if_let_expr_id: ExprId,
@@ -5030,7 +5015,6 @@ impl<'db> TypeInferenceBuilder<'db> {
         scrutinee_expr_id: ExprId,
         then_branch: ExprId,
         else_branch: Option<ExprId>,
-        body: &ExprBody,
         expected: &Ty,
     ) -> Ty {
         let ty = self.if_let_expr_common(
@@ -5039,7 +5023,6 @@ impl<'db> TypeInferenceBuilder<'db> {
             scrutinee_expr_id,
             then_branch,
             else_branch,
-            body,
             Some(expected),
         );
         // Without an else, the if-let evaluates to `Void`. Using it in
@@ -5058,7 +5041,6 @@ impl<'db> TypeInferenceBuilder<'db> {
     /// `Some`, branches are propagated through `check_expr` (giving the
     /// function-body tail-expression path the same expected-type flow as
     /// `if`/`match`); when `None`, they're inferred bottom-up.
-    #[allow(clippy::too_many_arguments)]
     fn if_let_expr_common(
         &mut self,
         if_let_expr_id: ExprId,
@@ -5066,15 +5048,15 @@ impl<'db> TypeInferenceBuilder<'db> {
         scrutinee_expr_id: ExprId,
         then_branch: ExprId,
         else_branch: Option<ExprId>,
-        body: &ExprBody,
         expected: Option<&Ty>,
     ) -> Ty {
-        let scrutinee_ty = self.infer_expr(scrutinee_expr_id, body);
-        let scrutinee_name = Self::single_path_local(scrutinee_expr_id, body);
+        let body = self.body();
+        let scrutinee_ty = self.infer_expr(scrutinee_expr_id);
+        let scrutinee_name = Self::single_path_local(scrutinee_expr_id, body.as_ref());
 
         // Lower the pattern against the scrutinee type. Same machinery as
         // `match` arms — does subtype check, populates `pattern_types`.
-        let result = self.analyze_and_lower(pattern_id, &scrutinee_ty, body, then_branch);
+        let result = self.analyze_and_lower(pattern_id, &scrutinee_ty, then_branch);
         let matched_ty = result.matched_ty.clone();
 
         // Then-branch: push a fresh scope, narrow scrutinee, register
@@ -5085,8 +5067,8 @@ impl<'db> TypeInferenceBuilder<'db> {
         }
         self.finalize_pattern_lowering(pattern_id, &result, None, None, &scrutinee_ty);
         let then_ty = match expected {
-            Some(exp) => self.check_expr(then_branch, body, exp),
-            None => self.infer_expr(then_branch, body),
+            Some(exp) => self.check_expr(then_branch, exp),
+            None => self.infer_expr(then_branch),
         };
         self.restore_scoped_locals(&snapshot);
 
@@ -5100,8 +5082,8 @@ impl<'db> TypeInferenceBuilder<'db> {
                 self.narrow_local(name.clone(), complement);
             }
             let ty = match expected {
-                Some(exp) => self.check_expr(else_expr, body, exp),
-                None => self.infer_expr(else_expr, body),
+                Some(exp) => self.check_expr(else_expr, exp),
+                None => self.infer_expr(else_expr),
             };
             self.restore_scoped_locals(&else_snapshot);
             Some(ty)
@@ -5148,23 +5130,14 @@ impl<'db> TypeInferenceBuilder<'db> {
     /// We still lower the pattern (records `pattern_types` so LSP/MIR/codegen
     /// can read the per-PatId type) and infer the scrutinee — that's how we
     /// keep "unresolved type" diagnostics inside the pattern working.
-    fn infer_is_expr(
-        &mut self,
-        scrutinee_expr_id: ExprId,
-        pattern_id: PatId,
-        body: &ExprBody,
-    ) -> Ty {
-        let scrutinee_ty = self.infer_expr(scrutinee_expr_id, body);
+    fn infer_is_expr(&mut self, scrutinee_expr_id: ExprId, pattern_id: PatId) -> Ty {
+        let scrutinee_ty = self.infer_expr(scrutinee_expr_id);
 
         // Snapshot the scope so pattern bindings don't leak out — `is` is a
         // test, not a binder.
         let snapshot = self.snapshot_scoped_locals();
-        let result = self.analyze_and_lower_no_subtype_check(
-            pattern_id,
-            &scrutinee_ty,
-            body,
-            scrutinee_expr_id,
-        );
+        let result =
+            self.analyze_and_lower_no_subtype_check(pattern_id, &scrutinee_ty, scrutinee_expr_id);
         self.finalize_pattern_lowering(pattern_id, &result, None, None, &scrutinee_ty);
         self.restore_scoped_locals(&snapshot);
 
@@ -5176,16 +5149,16 @@ impl<'db> TypeInferenceBuilder<'db> {
         catch_expr_id: ExprId,
         base_expr_id: ExprId,
         clauses: &[baml_compiler2_ast::CatchClause],
-        body: &ExprBody,
         expected: Option<&Ty>,
     ) -> Ty {
+        let body = self.body();
         let base_ty = if let Some(expected) = expected {
-            self.check_expr(base_expr_id, body, expected)
+            self.check_expr(base_expr_id, expected)
         } else {
-            self.infer_expr(base_expr_id, body)
+            self.infer_expr(base_expr_id)
         };
         let mut result_members = vec![base_ty];
-        let mut residual = self.catch_base_throw_types(base_expr_id, body);
+        let mut residual = self.catch_base_throw_types(base_expr_id);
 
         for clause in clauses {
             // Compute the clause-level binding type from the current residual throw set.
@@ -5233,14 +5206,14 @@ impl<'db> TypeInferenceBuilder<'db> {
                 // clause. A prior raw `self.locals.insert` had no paired
                 // snapshot/restore at all and leaked the binding into the
                 // rest of the function.
-                let st_result = self.analyze_and_lower(st_binding, &st_ty, body, base_expr_id);
+                let st_result = self.analyze_and_lower(st_binding, &st_ty, base_expr_id);
                 self.finalize_pattern_lowering(st_binding, &st_result, None, None, &st_ty);
             }
 
             // The clause may carry an annotation: `catch (e: SomeError)`.
             // Reject catch-anything bindings (`unknown`, `any`) before per-arm
             // flow analysis records the actual narrowed binding type.
-            if let Some(clause_constraint) = self.pattern_expected_ty(clause.binding, body)
+            if let Some(clause_constraint) = self.pattern_expected_ty(clause.binding)
                 && let Some(banned) =
                     crate::throw_inference::is_banned_catch_binding_type(clause_constraint.ty())
             {
@@ -5255,7 +5228,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             for &arm_id in &clause.arms {
                 let arm = &body.catch_arms[arm_id];
                 let arm_expected_ty = self
-                    .pattern_expected_ty(arm.pattern, body)
+                    .pattern_expected_ty(arm.pattern)
                     .map(PatternExpectedTy::into_ty);
                 // Probe the arm pattern's matched type for narrowing.
                 // Bindings/refutability are handled by the per-arm walk
@@ -5263,7 +5236,6 @@ impl<'db> TypeInferenceBuilder<'db> {
                 let arm_probe = self.analyze_and_lower_no_subtype_check(
                     arm.pattern,
                     &clause_binding_ty,
-                    body,
                     arm.body,
                 );
                 let mut narrowed_ty = arm_probe.matched_ty.clone();
@@ -5311,8 +5283,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 // Register clause-level binding with the runtime-narrowed
                 // type for this arm, then arm-level bindings (if any).
                 let clause_flow = catch_binding_ty(written_arm_ty.clone());
-                let clause_result =
-                    self.analyze_and_lower(clause.binding, &clause_flow, body, arm.body);
+                let clause_result = self.analyze_and_lower(clause.binding, &clause_flow, arm.body);
                 self.finalize_pattern_lowering(
                     clause.binding,
                     &clause_result,
@@ -5323,10 +5294,10 @@ impl<'db> TypeInferenceBuilder<'db> {
 
                 let arm_flow = catch_binding_ty(written_arm_ty);
                 let arm_result =
-                    self.analyze_and_lower_no_subtype_check(arm.pattern, &arm_flow, body, arm.body);
+                    self.analyze_and_lower_no_subtype_check(arm.pattern, &arm_flow, arm.body);
                 self.finalize_pattern_lowering(arm.pattern, &arm_result, None, None, &arm_flow);
 
-                let arm_ty = self.infer_expr(arm.body, body);
+                let arm_ty = self.infer_expr(arm.body);
                 result_members.push(arm_ty);
 
                 self.restore_scoped_locals(&arm_snapshot);
@@ -5373,7 +5344,6 @@ impl<'db> TypeInferenceBuilder<'db> {
     /// conservatively rather than in response to what the body actually throws.
     pub fn check_throws_contract(
         &mut self,
-        body: &ExprBody,
         declared_throws: Option<&TypeExpr>,
         throws_span: Option<TextRange>,
         fallback_span: TextRange,
@@ -5396,7 +5366,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         for diag in diags {
             self.context.report_at_span(diag, span);
         }
-        self.check_throws_surface(body, &declared_ty, span, warn_extraneous);
+        self.check_throws_surface(&declared_ty, span, warn_extraneous);
     }
 
     // ====================================================================
@@ -5609,13 +5579,14 @@ impl<'db> TypeInferenceBuilder<'db> {
     /// project to a raw `Ty` via [`PatternExpectedTy::into_ty`]) so the
     /// recovery-malformedness filter applies uniformly per element / per
     /// branch.
-    fn pattern_expected_ty(&mut self, pat_id: PatId, body: &ExprBody) -> Option<PatternExpectedTy> {
+    fn pattern_expected_ty(&mut self, pat_id: PatId) -> Option<PatternExpectedTy> {
+        let body = self.body();
         let ty = match &body.patterns[pat_id].clone() {
             // No constraint contributed.
             ast::Pattern::Wildcard => return None,
             // `let x` → no constraint; `let x: <subpat>` → defer.
             ast::Pattern::Bind { subpat, .. } => {
-                return subpat.and_then(|sp| self.pattern_expected_ty(sp, body));
+                return subpat.and_then(|sp| self.pattern_expected_ty(sp));
             }
             ast::Pattern::Type(t) => self.resolve_type_expr_silent(t),
             ast::Pattern::Class {
@@ -5642,9 +5613,8 @@ impl<'db> TypeInferenceBuilder<'db> {
                 } else {
                     let mut elem_tys = Vec::new();
                     for p in prefix.iter().chain(suffix.iter()) {
-                        if let Some(ty) = self
-                            .pattern_expected_ty(*p, body)
-                            .map(PatternExpectedTy::into_ty)
+                        if let Some(ty) =
+                            self.pattern_expected_ty(*p).map(PatternExpectedTy::into_ty)
                         {
                             elem_tys.push(ty);
                         }
@@ -5652,7 +5622,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                     if let Some(rp) = rest
                         && let Some(rest_pat) = rp.pat
                         && let Some(ty) = self
-                            .pattern_expected_ty(rest_pat, body)
+                            .pattern_expected_ty(rest_pat)
                             .map(PatternExpectedTy::into_ty)
                         && let Ty::List(elem) | Ty::EvolvingList(elem) = ty
                     {
@@ -5670,7 +5640,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 let mut tys = Vec::new();
                 let mut is_full = true;
                 for part in parts {
-                    match self.pattern_expected_ty(*part, body) {
+                    match self.pattern_expected_ty(*part) {
                         Some(PatternExpectedTy::Full(ty)) => tys.push(ty),
                         Some(PatternExpectedTy::Partial(ty)) => {
                             is_full = false;
@@ -5816,7 +5786,8 @@ impl<'db> TypeInferenceBuilder<'db> {
         }
     }
 
-    fn catch_base_throw_types(&self, base_expr_id: ExprId, body: &ExprBody) -> BTreeSet<Ty> {
+    fn catch_base_throw_types(&self, base_expr_id: ExprId) -> BTreeSet<Ty> {
+        let body = self.body();
         let mut out = BTreeSet::new();
         crate::throws_analysis::collect_from_expr(
             &BuilderThrowsAnalysis {
@@ -5824,7 +5795,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 mode: ThrowsMode::CatchBase,
             },
             base_expr_id,
-            body,
+            body.as_ref(),
             &mut out,
         );
         out
@@ -5916,13 +5887,14 @@ impl<'db> TypeInferenceBuilder<'db> {
         out
     }
 
-    fn collect_effective_throws(&self, body: &ExprBody) -> BTreeSet<Ty> {
+    fn collect_effective_throws(&self) -> BTreeSet<Ty> {
+        let body = self.body();
         crate::throws_analysis::collect_escaping_throws(
             &BuilderThrowsAnalysis {
                 builder: self,
                 mode: ThrowsMode::Normal,
             },
-            body,
+            body.as_ref(),
         )
     }
 
@@ -6005,8 +5977,10 @@ impl<'db> TypeInferenceBuilder<'db> {
         ))
     }
 
-    fn call_target_name(&self, callee_expr_id: ExprId, body: &ExprBody) -> Option<Name> {
-        let segments = crate::throws_analysis::expr_to_path_segments(callee_expr_id, body)?;
+    fn call_target_name(&self, callee_expr_id: ExprId) -> Option<Name> {
+        let body = self.body();
+        let segments =
+            crate::throws_analysis::expr_to_path_segments(callee_expr_id, body.as_ref())?;
         if segments.len() < 2 {
             // Single-segment path (free function) — return as-is.
             return if segments.is_empty() {
@@ -6063,7 +6037,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             && !self.locals.contains_key(&segments[0])
     }
 
-    fn infer_path(&mut self, segments: &[Name], _body: &ExprBody, expr_id: ExprId) -> Ty {
+    fn infer_path(&mut self, segments: &[Name], expr_id: ExprId) -> Ty {
         // BEP-044: `default.<method>(...)` inside an `implements I { ... }`
         // block resolves to `I`'s default body. Treat `default` as a
         // syntactic alias for an `I`-typed receiver and chain the rest of
@@ -8996,8 +8970,8 @@ impl<'db> TypeInferenceBuilder<'db> {
         at: ExprId,
         base_id: ExprId,
         field: &Name,
-        body: &ExprBody,
     ) -> Option<Ty> {
+        let body = self.body();
         let base_expr = &body.exprs[base_id];
         let Expr::Path(segments) = base_expr else {
             return None;
@@ -9263,7 +9237,8 @@ impl<'db> TypeInferenceBuilder<'db> {
 
     /// Extract the local variable name from an expression, if it's a simple
     /// single-segment path that refers to a known local.
-    fn expr_local_name(&self, expr_id: ExprId, body: &ExprBody) -> Option<Name> {
+    fn expr_local_name(&self, expr_id: ExprId) -> Option<Name> {
+        let body = self.body();
         match &body.exprs[expr_id] {
             Expr::Path(segments) if segments.len() == 1 => {
                 let name = &segments[0];
@@ -9285,8 +9260,8 @@ impl<'db> TypeInferenceBuilder<'db> {
     ///
     /// A later, conflicting typed use no longer matches the `Never` guard, so
     /// it falls through to a normal invariance mismatch.
-    fn retype_evolving_empty(&mut self, expr_id: ExprId, body: &ExprBody, expected: &Ty) {
-        let Some(name) = self.expr_local_name(expr_id, body) else {
+    fn retype_evolving_empty(&mut self, expr_id: ExprId, expected: &Ty) {
+        let Some(name) = self.expr_local_name(expr_id) else {
             return;
         };
         let Some(binding) = self.locals.get(&name) else {
@@ -9325,22 +9300,18 @@ impl<'db> TypeInferenceBuilder<'db> {
     /// Returns the inner method result type (e.g. `int` for `Array.push`) if
     /// handled. Callers own the enclosing expression semantics such as optional
     /// wrapping, final subtype checks, and recording the call expression type.
-    fn try_container_method_call(
-        &mut self,
-        callee_id: ExprId,
-        args: &[ExprId],
-        body: &ExprBody,
-    ) -> Option<Ty> {
+    fn try_container_method_call(&mut self, callee_id: ExprId, args: &[ExprId]) -> Option<Ty> {
+        let body = self.body();
         // After AST lowering, mutating container calls arrive through either a
         // MemberAccess (`x.push(...)`), an OptionalMemberAccess (`x?.push(...)`),
         // or a 2-segment Path (`["x", "push"]`) when multi-segment paths are preserved.
         let (base_id, local_name, method_name) = match &body.exprs[callee_id] {
             Expr::MemberAccess { base, member } => {
-                let name = self.expr_local_name(*base, body)?;
+                let name = self.expr_local_name(*base)?;
                 (*base, name, member.clone())
             }
             Expr::OptionalMemberAccess { base, member } => {
-                let name = self.expr_local_name(*base, body)?;
+                let name = self.expr_local_name(*base)?;
                 (*base, name, member.clone())
             }
             Expr::Path(segments) if segments.len() == 2 => {
@@ -9363,7 +9334,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                     _ => return None,
                 };
 
-                let arg_ty = self.infer_expr(args[0], body);
+                let arg_ty = self.infer_expr(args[0]);
                 let widened_arg = arg_ty.widen_fresh();
 
                 let effective_local_ty = if matches!(**elem_ty, Ty::Never) {
@@ -9421,18 +9392,14 @@ impl<'db> TypeInferenceBuilder<'db> {
     /// For `Map(Never, Never)`: first entry establishes key and value types.
     ///
     /// Returns `true` if handled, `false` to fall through to general case.
-    fn try_index_assign_mutation(
-        &mut self,
-        target_id: ExprId,
-        value_id: ExprId,
-        body: &ExprBody,
-    ) -> bool {
+    fn try_index_assign_mutation(&mut self, target_id: ExprId, value_id: ExprId) -> bool {
+        let body = self.body();
         let (base_id, index_id) = match &body.exprs[target_id] {
             Expr::Index { base, index } => (*base, *index),
             _ => return false,
         };
 
-        let Some(local_name) = self.expr_local_name(base_id, body) else {
+        let Some(local_name) = self.expr_local_name(base_id) else {
             return false;
         };
         let local_ty = match self.locals.get(&local_name) {
@@ -9443,8 +9410,8 @@ impl<'db> TypeInferenceBuilder<'db> {
         match &local_ty {
             Ty::List(elem_ty) | Ty::EvolvingList(elem_ty) => {
                 let is_evolving = matches!(local_ty, Ty::EvolvingList(_));
-                let index_ty = self.infer_expr(index_id, body);
-                let val_ty = self.infer_expr(value_id, body);
+                let index_ty = self.infer_expr(index_id);
+                let val_ty = self.infer_expr(value_id);
                 let widened_val = val_ty.clone().widen_fresh();
 
                 if matches!(**elem_ty, Ty::Never) {
@@ -9474,8 +9441,8 @@ impl<'db> TypeInferenceBuilder<'db> {
             }
             Ty::Map(key_ty, val_ty) | Ty::EvolvingMap(key_ty, val_ty) => {
                 let is_evolving = matches!(local_ty, Ty::EvolvingMap(_, _));
-                let index_ty = self.infer_expr(index_id, body);
-                let value_ty = self.infer_expr(value_id, body);
+                let index_ty = self.infer_expr(index_id);
+                let value_ty = self.infer_expr(value_id);
                 let widened_key = index_ty.clone().widen_fresh();
                 let widened_val = value_ty.clone().widen_fresh();
 
@@ -10523,6 +10490,11 @@ impl<'db> TypeInferenceBuilder<'db> {
         let saved_state = self.take_inference_state();
         let saved_body_source_map = self.body_source_map.clone();
         self.body_source_map = Some(lambda_source_map.clone());
+        // The lambda body lives in its own AST arena; swap `current_body` in
+        // lockstep with `body_source_map` so `self.body()` indexes the lambda
+        // arena throughout the sub-body walk, and restore it afterwards.
+        let saved_current_body = self.current_body.take();
+        self.current_body = Some(Arc::new(lambda_body.clone()));
 
         // Extend generic params with the lambda's own generic params
         let mut new_generic_params = self.generic_params.clone();
@@ -10589,23 +10561,17 @@ impl<'db> TypeInferenceBuilder<'db> {
         let ret_ty = if let Some(expected) = expected_ret {
             if matches!(expected, Ty::Unknown | Ty::TypeVar(_)) {
                 // Expected return is unknown or a type var — just infer
-                self.infer_expr(root_expr, lambda_body)
+                self.infer_expr(root_expr)
             } else {
-                self.check_expr(root_expr, lambda_body, expected)
+                self.check_expr(root_expr, expected)
             }
         } else {
-            self.infer_expr(root_expr, lambda_body)
+            self.infer_expr(root_expr)
         };
 
-        self.check_throws_surface(
-            lambda_body,
-            chosen_throws,
-            throws_report_span,
-            warn_extraneous_throws,
-        );
+        self.check_throws_surface(chosen_throws, throws_report_span, warn_extraneous_throws);
         let lambda_effective_throws =
-            Self::ty_from_concrete_facts(&self.collect_effective_throws(lambda_body))
-                .unwrap_or(Ty::never());
+            Self::ty_from_concrete_facts(&self.collect_effective_throws()).unwrap_or(Ty::never());
 
         // Collect the lambda's expression types, then restore parent state.
         // Take the lambda's expressions before `restore_inference_state`
@@ -10619,6 +10585,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         self.declared_return_ty = saved_return_ty;
         self.generic_params = saved_generic_params;
         self.body_source_map = saved_body_source_map;
+        self.current_body = saved_current_body;
 
         (
             ret_ty,
@@ -10869,11 +10836,10 @@ impl TypeInferenceBuilder<'_> {
         &mut self,
         pat_id: PatId,
         scrut_ty: &Ty,
-        body: &ExprBody,
         at_expr: ExprId,
     ) -> crate::pattern_lowering::PatternResult {
-        self.check_pattern_vs_scrut_subtype(pat_id, scrut_ty, body, at_expr);
-        self.analyze_and_lower_no_subtype_check(pat_id, scrut_ty, body, at_expr)
+        self.check_pattern_vs_scrut_subtype(pat_id, scrut_ty, at_expr);
+        self.analyze_and_lower_no_subtype_check(pat_id, scrut_ty, at_expr)
     }
 
     /// Strict pattern-vs-scrut type check (rustc-style). A pattern's
@@ -10895,13 +10861,8 @@ impl TypeInferenceBuilder<'_> {
     /// and that case is already reported as an unreachable-arm warning by
     /// `infer_catch_expr`'s per-arm `throw_matches.may_match.is_empty()`
     /// check.
-    fn check_pattern_vs_scrut_subtype(
-        &mut self,
-        pat_id: PatId,
-        scrut_ty: &Ty,
-        body: &ExprBody,
-        at_expr: ExprId,
-    ) {
+    fn check_pattern_vs_scrut_subtype(&mut self, pat_id: PatId, scrut_ty: &Ty, at_expr: ExprId) {
+        let body = self.body();
         // Hot-path short-circuit: bare wildcard / bare bind have `Never`
         // natural type by construction, and `Never <: anything` makes the
         // subtype check trivially pass. Skip the natural-type walk and the
@@ -10916,7 +10877,7 @@ impl TypeInferenceBuilder<'_> {
         // `Never` for unconstrained leaves (Wildcard / bare Bind / empty
         // Array): plain strict subtype works without carve-outs because
         // `Never <: anything`.
-        let pat_natural = self.pattern_natural_type(pat_id, body, &Ty::never());
+        let pat_natural = self.pattern_natural_type(pat_id, &Ty::never());
         let scrut_for_check = self.expand_alias_chains(scrut_ty.clone());
         if !Self::ty_contains_recovery_unknown(&pat_natural)
             && !Self::ty_contains_recovery_unknown(&scrut_for_check)
@@ -10937,10 +10898,9 @@ impl TypeInferenceBuilder<'_> {
         &mut self,
         pat_id: PatId,
         scrut_ty: &Ty,
-        body: &ExprBody,
         at_expr: ExprId,
     ) -> crate::pattern_lowering::PatternResult {
-        let result = self.lower_pat_dispatch(pat_id, scrut_ty, body, at_expr);
+        let result = self.lower_pat_dispatch(pat_id, scrut_ty, at_expr);
         // Single point of truth for `pattern_types[pat_id]`. All dispatch
         // branches above (union-member wrap, opaque-scrut wrap, fallthrough
         // to `analyze_and_lower_inner`) flow through here, so MIR/LSP see
@@ -10975,15 +10935,14 @@ impl TypeInferenceBuilder<'_> {
         &mut self,
         pat_id: PatId,
         scrut_ty: &Ty,
-        body: &ExprBody,
         at_expr: ExprId,
     ) -> crate::pattern_lowering::PatternResult {
         let normalized_scrut = self.matrix_normalize_scrut(scrut_ty);
         if let Ty::Union(members) = &normalized_scrut {
-            let targets = self.union_targets_for_pattern(pat_id, body, members);
+            let targets = self.union_targets_for_pattern(pat_id, members);
             if targets.len() == 1 {
                 let member_ty = targets.into_iter().next().unwrap();
-                let inner = self.analyze_and_lower_inner(pat_id, &member_ty, body, at_expr);
+                let inner = self.analyze_and_lower_inner(pat_id, &member_ty, at_expr);
                 let wrapped = crate::exhaustiveness::DPat::union_member(
                     member_ty,
                     inner.dpat,
@@ -11017,7 +10976,7 @@ impl TypeInferenceBuilder<'_> {
                 let mut bindings_by_name: indexmap::IndexMap<Name, (PatId, Vec<Ty>)> =
                     indexmap::IndexMap::new();
                 for member_ty in &targets {
-                    let inner = self.analyze_and_lower_inner(pat_id, member_ty, body, at_expr);
+                    let inner = self.analyze_and_lower_inner(pat_id, member_ty, at_expr);
                     let wrapped = crate::exhaustiveness::DPat::union_member(
                         member_ty.clone(),
                         inner.dpat,
@@ -11068,12 +11027,12 @@ impl TypeInferenceBuilder<'_> {
         // sibling wildcard via the same `NonExhaustive`-vs-concrete-ctor
         // mechanism it uses for `int` literals.
         if matches!(scrut_ty, Ty::Unknown | Ty::BuiltinUnknown) {
-            let natural = self.pattern_natural_type(pat_id, body, &Ty::unknown());
+            let natural = self.pattern_natural_type(pat_id, &Ty::unknown());
             if !matches!(
                 natural,
                 Ty::Unknown | Ty::BuiltinUnknown | Ty::Error | Ty::TypeVar(..)
             ) {
-                let inner = self.analyze_and_lower_inner(pat_id, &natural, body, at_expr);
+                let inner = self.analyze_and_lower_inner(pat_id, &natural, at_expr);
                 let wrapped = crate::exhaustiveness::DPat::union_member(
                     natural,
                     inner.dpat,
@@ -11087,7 +11046,7 @@ impl TypeInferenceBuilder<'_> {
                 };
             }
         }
-        self.analyze_and_lower_inner(pat_id, scrut_ty, body, at_expr)
+        self.analyze_and_lower_inner(pat_id, scrut_ty, at_expr)
     }
 
     /// Compute every union member that a pattern can possibly match.
@@ -11100,18 +11059,14 @@ impl TypeInferenceBuilder<'_> {
     ///
     /// The result drives the dispatcher: 0 → no wrap (fall through),
     /// 1 → single `UnionMember` wrap, >1 → Or-of-UnionMember.
-    fn union_targets_for_pattern(
-        &mut self,
-        pat_id: PatId,
-        body: &ExprBody,
-        union_members: &[Ty],
-    ) -> Vec<Ty> {
+    fn union_targets_for_pattern(&mut self, pat_id: PatId, union_members: &[Ty]) -> Vec<Ty> {
+        let body = self.body();
         // Or-patterns are handled per-branch by the recursive walk, so
         // the outer Or itself never wraps.
         if matches!(&body.patterns[pat_id], ast::Pattern::Or(_)) {
             return Vec::new();
         }
-        let natural = self.pattern_natural_type(pat_id, body, &Ty::unknown());
+        let natural = self.pattern_natural_type(pat_id, &Ty::unknown());
         // Pure `Unknown` natural type means a wildcard/bind: targets
         // every member, but the dispatcher prefers no-wrap in that case.
         if matches!(natural, Ty::Unknown) {
@@ -11282,7 +11237,8 @@ impl TypeInferenceBuilder<'_> {
     ///   the join of each sub-position's natural type (`unconstrained`
     ///   if all unconstrained); `: T` ascription wins
     /// - `Or(parts)` ⇒ join of each part's natural type
-    fn pattern_natural_type(&mut self, pat_id: PatId, body: &ExprBody, unconstrained: &Ty) -> Ty {
+    fn pattern_natural_type(&mut self, pat_id: PatId, unconstrained: &Ty) -> Ty {
+        let body = self.body();
         let kind = match unconstrained {
             Ty::Never => NaturalKind::Never,
             _ => NaturalKind::Unknown,
@@ -11294,7 +11250,7 @@ impl TypeInferenceBuilder<'_> {
             ast::Pattern::Wildcard => unconstrained.clone(),
             // `let x` → unconstrained; `let x: <pattern>` → recurse.
             ast::Pattern::Bind { subpat, .. } => match subpat {
-                Some(sp) => self.pattern_natural_type(*sp, body, unconstrained),
+                Some(sp) => self.pattern_natural_type(*sp, unconstrained),
                 None => unconstrained.clone(),
             },
             ast::Pattern::Type(t) => self.resolve_type_expr_silent(t),
@@ -11315,13 +11271,13 @@ impl TypeInferenceBuilder<'_> {
                     let mut elem_tys: Vec<Ty> = prefix
                         .iter()
                         .chain(suffix.iter())
-                        .map(|&p| self.pattern_natural_type(p, body, unconstrained))
+                        .map(|&p| self.pattern_natural_type(p, unconstrained))
                         .collect();
                     if let Some(rp) = rest
                         && let Some(rest_pat) = rp.pat
                         && let ast::Pattern::Array { .. } = &body.patterns[rest_pat]
                     {
-                        let rest_natural = self.pattern_natural_type(rest_pat, body, unconstrained);
+                        let rest_natural = self.pattern_natural_type(rest_pat, unconstrained);
                         if let Ty::List(inner) | Ty::EvolvingList(inner) = rest_natural {
                             elem_tys.push(*inner);
                         }
@@ -11352,7 +11308,7 @@ impl TypeInferenceBuilder<'_> {
             ast::Pattern::Or(parts) => {
                 let part_tys: Vec<Ty> = parts
                     .iter()
-                    .map(|&p| self.pattern_natural_type(p, body, unconstrained))
+                    .map(|&p| self.pattern_natural_type(p, unconstrained))
                     .collect();
                 Self::join_all(&part_tys)
             }
@@ -11369,20 +11325,20 @@ impl TypeInferenceBuilder<'_> {
         &mut self,
         pat_id: PatId,
         scrut_ty: &Ty,
-        body: &ExprBody,
         at_expr: ExprId,
     ) -> crate::pattern_lowering::PatternResult {
+        let body = self.body();
         match &body.patterns[pat_id].clone() {
             ast::Pattern::Wildcard => Self::lower_wildcard_pat(scrut_ty),
             ast::Pattern::Bind { name, subpat } => {
-                self.lower_bind_pat(pat_id, name.clone(), *subpat, scrut_ty, body, at_expr)
+                self.lower_bind_pat(pat_id, name.clone(), *subpat, scrut_ty, at_expr)
             }
             ast::Pattern::Type(t) => self.lower_type_pat(t, pat_id, scrut_ty, at_expr),
             ast::Pattern::Class {
                 class,
                 generic_args,
                 fields,
-            } => self.lower_class_pat(class, generic_args, fields, pat_id, scrut_ty, body, at_expr),
+            } => self.lower_class_pat(class, generic_args, fields, pat_id, scrut_ty, at_expr),
             ast::Pattern::Array {
                 prefix,
                 rest,
@@ -11394,10 +11350,9 @@ impl TypeInferenceBuilder<'_> {
                 suffix,
                 ascription.as_ref(),
                 scrut_ty,
-                body,
                 at_expr,
             ),
-            ast::Pattern::Or(parts) => self.lower_or_pat(parts, scrut_ty, body, at_expr),
+            ast::Pattern::Or(parts) => self.lower_or_pat(parts, scrut_ty, at_expr),
         }
     }
 
@@ -11416,7 +11371,6 @@ impl TypeInferenceBuilder<'_> {
         name: Name,
         subpat: Option<PatId>,
         scrut_ty: &Ty,
-        body: &ExprBody,
         at_expr: ExprId,
     ) -> crate::pattern_lowering::PatternResult {
         // Bare bind without sub-pattern: matches anything, binds at scrut.
@@ -11441,7 +11395,7 @@ impl TypeInferenceBuilder<'_> {
         // against `scrut_ty`, so re-running it would double-diagnose
         // match arms and would also break catch arms that bypass the
         // outer check intentionally.
-        let inner = self.analyze_and_lower_no_subtype_check(sp, scrut_ty, body, at_expr);
+        let inner = self.analyze_and_lower_no_subtype_check(sp, scrut_ty, at_expr);
         let mut bindings = vec![crate::pattern_lowering::PatternBinding {
             name,
             pat_id,
@@ -11575,7 +11529,6 @@ impl TypeInferenceBuilder<'_> {
         }
     }
 
-    #[allow(clippy::too_many_arguments)]
     fn lower_class_pat(
         &mut self,
         class: &[Name],
@@ -11583,7 +11536,6 @@ impl TypeInferenceBuilder<'_> {
         fields: &[ast::FieldPat],
         pat_id: PatId,
         scrut_ty: &Ty,
-        body: &ExprBody,
         at_expr: ExprId,
     ) -> crate::pattern_lowering::PatternResult {
         use crate::{
@@ -11623,7 +11575,7 @@ impl TypeInferenceBuilder<'_> {
                 declared_fields.insert(field_name.clone());
                 match by_name.get(&field_name) {
                     Some(fp) => {
-                        let r = self.analyze_and_lower(fp.pat, &field_ty, body, at_expr);
+                        let r = self.analyze_and_lower(fp.pat, &field_ty, at_expr);
                         sub_dpats.push(r.dpat);
                         bindings.extend(r.bindings);
                     }
@@ -11644,7 +11596,7 @@ impl TypeInferenceBuilder<'_> {
                     at_expr,
                 );
                 let unknown = Ty::unknown();
-                let r = self.analyze_and_lower(fp.pat, &unknown, body, at_expr);
+                let r = self.analyze_and_lower(fp.pat, &unknown, at_expr);
                 bindings.extend(r.bindings);
             }
             let dpat = DPat::interface(class_ty.clone(), sub_dpats, scrut_ty.clone());
@@ -11704,7 +11656,7 @@ impl TypeInferenceBuilder<'_> {
         for (field_name, field_ty) in field_infos {
             match by_name.get(&field_name) {
                 Some(fp) => {
-                    let r = self.analyze_and_lower(fp.pat, &field_ty, body, at_expr);
+                    let r = self.analyze_and_lower(fp.pat, &field_ty, at_expr);
                     sub_dpats.push(r.dpat);
                     bindings.extend(r.bindings);
                 }
@@ -11783,7 +11735,6 @@ impl TypeInferenceBuilder<'_> {
             .collect()
     }
 
-    #[allow(clippy::too_many_arguments)]
     fn lower_array_pat(
         &mut self,
         prefix: &[PatId],
@@ -11791,13 +11742,13 @@ impl TypeInferenceBuilder<'_> {
         suffix: &[PatId],
         ascription: Option<&TypeExpr>,
         scrut_ty: &Ty,
-        body: &ExprBody,
         at_expr: ExprId,
     ) -> crate::pattern_lowering::PatternResult {
         use crate::{
             exhaustiveness::{DPat, SliceShape},
             pattern_lowering::{PatternBinding, PatternResult},
         };
+        let body = self.body();
 
         // If the array carries a `: T` ascription, narrow the scrutinee
         // through the ascribed type before walking elements. Mirrors the
@@ -11840,14 +11791,14 @@ impl TypeInferenceBuilder<'_> {
         //   - has_rest=true, rest_binding_pat=Some(p) → `..p` where p is a
         //     non-flattenable sub-pattern (binding/wildcard/etc.)
         let (flat_prefix, has_rest, rest_binding_pat, flat_suffix) =
-            Self::flatten_array_rest(body, prefix.to_vec(), rest, suffix.to_vec());
+            Self::flatten_array_rest(body.as_ref(), prefix.to_vec(), rest, suffix.to_vec());
 
         let mut sub_dpats: Vec<DPat> = Vec::with_capacity(flat_prefix.len() + flat_suffix.len());
         let mut bindings: Vec<PatternBinding> = Vec::new();
         let mut element_required_tys: Vec<Ty> = Vec::new();
 
         for &p in &flat_prefix {
-            let r = self.analyze_and_lower(p, &elem_ty, body, at_expr);
+            let r = self.analyze_and_lower(p, &elem_ty, at_expr);
             sub_dpats.push(r.dpat);
             bindings.extend(r.bindings);
             if let Some(req) = r.required_ty {
@@ -11855,7 +11806,7 @@ impl TypeInferenceBuilder<'_> {
             }
         }
         for &p in &flat_suffix {
-            let r = self.analyze_and_lower(p, &elem_ty, body, at_expr);
+            let r = self.analyze_and_lower(p, &elem_ty, at_expr);
             sub_dpats.push(r.dpat);
             bindings.extend(r.bindings);
             if let Some(req) = r.required_ty {
@@ -11871,7 +11822,7 @@ impl TypeInferenceBuilder<'_> {
             // non-list type (e.g. `..let r: int`, or `..Box { .. }`, or
             // `..[x]: int`), that's a type mismatch — the annotation
             // claims something incompatible with `List<elem>`.
-            if let Some(expected) = self.pattern_expected_ty(rest_pat, body)
+            if let Some(expected) = self.pattern_expected_ty(rest_pat)
                 && !Self::ty_contains_recovery_unknown(&rest_ty)
                 && !crate::generics::contains_typevar(&rest_ty)
                 && !self.is_subtype(expected.ty(), &rest_ty)
@@ -11883,7 +11834,7 @@ impl TypeInferenceBuilder<'_> {
                 };
                 self.report_at_pat_or_expr(err, rest_pat, at_expr);
             }
-            let r = self.analyze_and_lower(rest_pat, &rest_ty, body, at_expr);
+            let r = self.analyze_and_lower(rest_pat, &rest_ty, at_expr);
             bindings.extend(r.bindings);
         }
 
@@ -11965,7 +11916,6 @@ impl TypeInferenceBuilder<'_> {
         &mut self,
         parts: &[PatId],
         scrut_ty: &Ty,
-        body: &ExprBody,
         at_expr: ExprId,
     ) -> crate::pattern_lowering::PatternResult {
         use crate::{
@@ -11992,7 +11942,7 @@ impl TypeInferenceBuilder<'_> {
             // type (`foo | bar`) against `scrut_ty`, and re-running it
             // per-branch would double-diagnose match arms and would also
             // break catch arms that bypass the outer check intentionally.
-            let r = self.analyze_and_lower_no_subtype_check(p, scrut_ty, body, at_expr);
+            let r = self.analyze_and_lower_no_subtype_check(p, scrut_ty, at_expr);
             alts.push(r.dpat);
             for b in r.bindings {
                 bindings_by_name

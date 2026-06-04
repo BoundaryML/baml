@@ -656,8 +656,9 @@ fn seed_lambda_and_infer<'db>(
         builder.add_local(param.name.clone(), param_ty.clone());
         builder.param_types.push((param.name.clone(), param_ty));
     }
+    builder.set_current_body(std::sync::Arc::new(lambda_body.clone()));
     if let Some(root_expr) = lambda_body.root_expr {
-        builder.infer_expr(root_expr, lambda_body);
+        builder.infer_expr(root_expr);
     }
 }
 
@@ -843,6 +844,9 @@ pub fn infer_scope_types<'db>(
                     }
 
                     if let FunctionBody::Expr(expr_body) = body.as_ref() {
+                        // Install the body being walked so builder methods can
+                        // read it via `self.body()` instead of threading it.
+                        builder.set_current_body(std::sync::Arc::new(expr_body.clone()));
                         // Determine enclosing class name for `self` parameter
                         // resolution and BEP-044 `Self`-type substitution.
                         let enclosing_class_name: Option<Name> =
@@ -1023,7 +1027,7 @@ pub fn infer_scope_types<'db>(
 
                         // Check root expression against declared return type
                         if let Some(root_expr) = expr_body.root_expr {
-                            builder.check_expr(root_expr, expr_body, &return_ty);
+                            builder.check_expr(root_expr, &return_ty);
                         }
 
                         // Validate declared `throws` against effective escaping throws.
@@ -1037,7 +1041,6 @@ pub fn infer_scope_types<'db>(
                             matches!(func_data.origin, ast::FunctionOrigin::AutoDerive);
                         if !is_auto_derive {
                             builder.check_throws_contract(
-                                expr_body,
                                 sig.throws.as_ref(),
                                 sig_sm.throws_type_span,
                                 func_data.span,
@@ -1303,9 +1306,10 @@ pub fn infer_scope_types<'db>(
                     let body = baml_compiler2_hir::body::let_body(db, let_loc);
 
                     if let LetBody::Expr(expr_body) = body.as_ref() {
+                        builder.set_current_body(std::sync::Arc::new(expr_body.clone()));
                         // Infer the root expression type bottom-up.
                         if let Some(root_expr) = expr_body.root_expr {
-                            builder.infer_expr(root_expr, expr_body);
+                            builder.infer_expr(root_expr);
                         }
                     }
                     break;
