@@ -17,23 +17,16 @@ pub(crate) struct PyMethodBinding {
     /// FQN passed as the first arg to the factory call.
     pub(crate) baml_fqn: String,
     pub(crate) mode: SyncAsync,
-    /// Inline parameter-name list. For instance methods, `"self"` is
-    /// already prepended at expand time so the renderer is a straight
-    /// walk.
-    pub(crate) param_names: Vec<String>,
-    /// Default metadata matching `arg_tys` (receiver `self` is not included
-    /// for instance methods).
-    pub(crate) arg_defaults: Vec<Option<FunctionArgumentDefault>>,
+    /// Source arguments before the first defaulted parameter. Instance-method
+    /// receiver `self` is not included here.
+    pub(crate) required_args: Vec<RequiredArg>,
+    /// Source arguments starting at the first defaulted parameter.
+    pub(crate) optional_args: Vec<OptionalArg>,
     /// Drives the `staticmethod(...)` wrap on static methods. Both
     /// kinds route through the same `_define_function` factory; the
     /// wrap is what blocks Python's descriptor protocol from injecting
     /// the class as positional arg 0 on statics.
     pub(crate) kind: MethodKind,
-    /// Parameter types matching the IR's `arguments` (no `self`). Used
-    /// only by `.pyi` rendering. For instance methods the `.pyi`
-    /// renderer prepends `self` (no annotation) before zipping the
-    /// remaining `param_names` with `arg_tys`.
-    pub(crate) arg_tys: Vec<Ty>,
     /// Return type, used only by `.pyi` rendering.
     pub(crate) return_ty: Ty,
     /// `TypeVar` names declared on this method. Empty for non-generic
@@ -51,8 +44,46 @@ pub(crate) struct PyMethodBinding {
     pub(crate) raises_names: Vec<String>,
 }
 
+#[derive(Clone)]
+pub(crate) struct RequiredArg {
+    pub(crate) name: String,
+    pub(crate) ty: Ty,
+}
+
+#[derive(Clone)]
+pub(crate) struct OptionalArg {
+    pub(crate) name: String,
+    pub(crate) ty: Ty,
+    pub(crate) default: FunctionArgumentDefault,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum MethodKind {
     Static,
     Instance,
+}
+
+impl PyMethodBinding {
+    pub(crate) fn required_names(&self) -> Vec<String> {
+        self.required_args
+            .iter()
+            .map(|arg| arg.name.clone())
+            .collect()
+    }
+
+    pub(crate) fn optional_names(&self) -> Vec<String> {
+        self.optional_args
+            .iter()
+            .map(|arg| arg.name.clone())
+            .collect()
+    }
+
+    pub(crate) fn runtime_required_names(&self) -> Vec<String> {
+        let mut names = Vec::new();
+        if matches!(self.kind, MethodKind::Instance) {
+            names.push("self".to_string());
+        }
+        names.extend(self.required_names());
+        names
+    }
 }

@@ -40,3 +40,8 @@ extend-exclude = ["*.pyi"]
 
 [tool.ruff.lint]
 ignore = ["F401", "F821", "E402"]
+
+[tool.pyright]
+include = ["baml_sdk", "*_static.py"]
+exclude = [".venv", "test_*.py"]
+reportUnnecessaryTypeIgnoreComment = true

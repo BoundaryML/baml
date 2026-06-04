@@ -20,6 +20,8 @@ use std::{
     fmt::Write as _,
 };
 
+use baml_codegen_types::FunctionArgumentDefault;
+
 use crate::{
     emit::{
         EmittedSymbol, SortKey,
@@ -290,6 +292,23 @@ fn safe_param_name(name: &str) -> String {
     }
 }
 
+fn option_field_name(name: &str) -> String {
+    if is_ts_property_identifier(name) {
+        name.to_string()
+    } else {
+        crate::ts_string(name)
+    }
+}
+
+fn is_ts_property_identifier(name: &str) -> bool {
+    let mut chars = name.chars();
+    match chars.next() {
+        Some(c) if c == '_' || c == '$' || c.is_ascii_alphabetic() => {}
+        _ => return false,
+    }
+    chars.all(|c| c == '_' || c == '$' || c.is_ascii_alphanumeric())
+}
+
 /// Build the surface function-type `<G>(a: A, b: B) => R` (or `Promise<R>`
 /// for async), given the function's own generic params, parallel
 /// `names`/`tys`, and a return type. `generics` are the callable's OWN type
@@ -298,14 +317,28 @@ fn fn_type_sig(
     generics: &[String],
     names: &[&str],
     tys: &[TranslatedType],
+    defaults: &[Option<FunctionArgumentDefault>],
     ret_expr: &str,
     is_async: bool,
 ) -> String {
-    let params: Vec<String> = names
+    let required = required_positional_count(defaults);
+    let mut params: Vec<String> = names
         .iter()
         .zip(tys.iter())
+        .take(required)
         .map(|(n, t)| format!("{}: {}", safe_param_name(n), t.expr))
         .collect();
+    if required < names.len() {
+        let mut fields = Vec::new();
+        for (name, ty) in names.iter().zip(tys.iter()).skip(required) {
+            fields.push(format!(
+                "{}?: {} | undefined",
+                option_field_name(name),
+                ty.expr
+            ));
+        }
+        params.push(format!("$opts?: {{ {} }} | undefined", fields.join("; ")));
+    }
     let ret = if is_async {
         format!("Promise<{ret_expr}>")
     } else {
@@ -594,24 +627,43 @@ fn binding_surface<'a>(
     m: &'a NodeMethodBinding,
     ctx: &TranslateCtx,
     state: &mut RenderState,
-) -> (Vec<&'a str>, Vec<TranslatedType>, TranslatedType) {
-    let surface_names: Vec<&str> = match m.kind {
-        MethodKind::Static => m.param_names.iter().map(String::as_str).collect(),
-        // `param_names[0]` is the synthetic `self`; drop it from the surface.
-        MethodKind::Instance => m.param_names.iter().skip(1).map(String::as_str).collect(),
-    };
-    let tys: Vec<TranslatedType> = m
-        .arg_tys
+) -> (
+    Vec<&'a str>,
+    Vec<TranslatedType>,
+    Vec<Option<FunctionArgumentDefault>>,
+    TranslatedType,
+) {
+    let surface_names: Vec<&str> = m
+        .required_args
         .iter()
-        .map(|t| {
-            let tt = translate_ty(t, ctx);
+        .map(|arg| arg.name.as_str())
+        .chain(m.optional_args.iter().map(|arg| arg.name.as_str()))
+        .collect();
+
+    let mut tys: Vec<TranslatedType> = m
+        .required_args
+        .iter()
+        .map(|arg| {
+            let tt = translate_ty(&arg.ty, ctx);
             state.merge(&tt);
             tt
         })
         .collect();
+    tys.extend(m.optional_args.iter().map(|arg| {
+        let tt = translate_ty(&arg.ty, ctx);
+        state.merge(&tt);
+        tt
+    }));
+
     let ret = translate_ty(&m.return_ty, ctx);
     state.merge(&ret);
-    (surface_names, tys, ret)
+
+    let defaults = vec![None; m.required_args.len()]
+        .into_iter()
+        .chain(m.optional_args.iter().map(|arg| Some(arg.default.clone())))
+        .collect();
+
+    (surface_names, tys, defaults, ret)
 }
 
 fn render_method_binding_ts(
@@ -622,17 +674,20 @@ fn render_method_binding_ts(
     state: &mut RenderState,
 ) {
     write_doc_with_raises(out, m.docstring.as_deref(), &m.raises_names);
-    let (names, tys, ret) = binding_surface(m, ctx, state);
+    let (names, tys, defaults, ret) = binding_surface(m, ctx, state);
     let is_async = m.mode == SyncAsync::Async;
     let sig_generics = method_sig_generics(m, class_generics);
-    let sig = fn_type_sig(&sig_generics, &names, &tys, &ret.expr, is_async);
-    let params_lit = param_names_literal(&m.param_names);
+    let sig = fn_type_sig(&sig_generics, &names, &tys, &defaults, &ret.expr, is_async);
+    let required_params = m.runtime_required_names();
+    let optional_params = m.optional_names();
+    let required_params_lit = param_names_literal(&required_params);
+    let optional_params_arg = optional_param_names_arg(&optional_params);
     match m.kind {
         MethodKind::Static => {
             state.uses_define_function = true;
             let _ = writeln!(
                 out,
-                "  static {} = defineFunction(\"{}\", \"{}\", {params_lit}) as {sig};",
+                "  static {} = defineFunction(\"{}\", \"{}\", {required_params_lit}{optional_params_arg}) as {sig};",
                 m.name,
                 m.baml_fqn,
                 mode_str(m.mode),
@@ -642,7 +697,7 @@ fn render_method_binding_ts(
             state.uses_define_instance = true;
             let _ = writeln!(
                 out,
-                "  {} = defineInstanceFunction(\"{}\", \"{}\", {params_lit}).bind(this) as {sig};",
+                "  {} = defineInstanceFunction(\"{}\", \"{}\", {required_params_lit}{optional_params_arg}).bind(this) as {sig};",
                 m.name,
                 m.baml_fqn,
                 mode_str(m.mode),
@@ -672,10 +727,19 @@ fn render_function_ts(
     state.merge(&ret);
     let names: Vec<&str> = f.param_names.iter().map(String::as_str).collect();
     let is_async = f.mode == SyncAsync::Async;
-    let sig = fn_type_sig(&f.generic_params, &names, &tys, &ret.expr, is_async);
-    let params_lit = param_names_literal(&f.param_names);
+    let sig = fn_type_sig(
+        &f.generic_params,
+        &names,
+        &tys,
+        &f.arg_defaults,
+        &ret.expr,
+        is_async,
+    );
+    let (required_params, optional_params) = split_param_names(&f.param_names, &f.arg_defaults, 0);
+    let required_params_lit = param_names_literal(&required_params);
+    let optional_params_arg = optional_param_names_arg(&optional_params);
     let factory = format!(
-        "defineFunction(\"{}\", \"{}\", {params_lit}) as {sig}",
+        "defineFunction(\"{}\", \"{}\", {required_params_lit}{optional_params_arg}) as {sig}",
         f.baml_fqn,
         mode_str(f.mode),
     );
@@ -695,10 +759,34 @@ fn param_names_literal(names: &[String]) -> String {
     format!("[{}]", parts.join(", "))
 }
 
+fn optional_param_names_arg(names: &[String]) -> String {
+    if names.is_empty() {
+        String::new()
+    } else {
+        format!(", {}", param_names_literal(names))
+    }
+}
+
+fn required_positional_count(defaults: &[Option<FunctionArgumentDefault>]) -> usize {
+    defaults
+        .iter()
+        .take_while(|default| default.is_none())
+        .count()
+}
+
+fn split_param_names(
+    names: &[String],
+    arg_defaults: &[Option<FunctionArgumentDefault>],
+    receiver_count: usize,
+) -> (Vec<String>, Vec<String>) {
+    let required = receiver_count + required_positional_count(arg_defaults);
+    (names[..required].to_vec(), names[required..].to_vec())
+}
+
 #[cfg(test)]
 mod tests {
-    use baml_base::Name as BaseName;
-    use baml_codegen_types::{Name, Ty};
+    use baml_base::{Literal, Name as BaseName};
+    use baml_codegen_types::{DefaultLiteral, FunctionArgumentDefault, Name, Ty};
 
     use super::*;
 
@@ -765,12 +853,36 @@ mod tests {
         params: Vec<(&str, Ty)>,
         ret: Ty,
     ) -> EmittedSymbol {
+        let param_names: Vec<String> = params.iter().map(|(n, _)| n.to_string()).collect();
+        let arg_tys: Vec<Ty> = params.into_iter().map(|(_, t)| t).collect();
         EmittedSymbol::Function(NodeFunction {
             name: n.to_string(),
             baml_fqn: fqn.to_string(),
             mode,
-            param_names: params.iter().map(|(n, _)| n.to_string()).collect(),
-            arg_tys: params.into_iter().map(|(_, t)| t).collect(),
+            param_names,
+            arg_defaults: vec![None; arg_tys.len()],
+            arg_tys,
+            return_ty: ret,
+            generic_params: Vec::new(),
+            docstring: None,
+            raises_names: Vec::new(),
+        })
+    }
+
+    fn func_sym_with_defaults(
+        n: &str,
+        fqn: &str,
+        mode: SyncAsync,
+        params: Vec<(&str, Ty, Option<FunctionArgumentDefault>)>,
+        ret: Ty,
+    ) -> EmittedSymbol {
+        EmittedSymbol::Function(NodeFunction {
+            name: n.to_string(),
+            baml_fqn: fqn.to_string(),
+            mode,
+            param_names: params.iter().map(|(n, _, _)| n.to_string()).collect(),
+            arg_tys: params.iter().map(|(_, t, _)| t.clone()).collect(),
+            arg_defaults: params.into_iter().map(|(_, _, d)| d).collect(),
             return_ty: ret,
             generic_params: Vec::new(),
             docstring: None,
@@ -835,6 +947,41 @@ mod tests {
         assert!(ts.contains("import { defineFunction } from \"@boundaryml/baml-core-node\";"));
         assert!(ts.contains("export const extract = defineFunction(\"user.lorem.extract\", \"sync\", [\"text\"]) as (text: string) => number;"));
         assert!(ts.contains("export const extract_async = defineFunction(\"user.lorem.extract\", \"async\", [\"text\"]) as (text: string) => Promise<number>;"));
+    }
+
+    #[test]
+    fn optional_opts_fields_preserve_reserved_baml_names() {
+        let b = body(
+            &["lorem"],
+            vec![func_sym_with_defaults(
+                "extract",
+                "user.lorem.extract",
+                SyncAsync::Sync,
+                vec![
+                    ("arg0", Ty::Int, None),
+                    (
+                        "default",
+                        Ty::Int,
+                        Some(FunctionArgumentDefault::Literal(DefaultLiteral::Scalar(
+                            Literal::Int(1),
+                        ))),
+                    ),
+                    (
+                        "not-valid",
+                        Ty::String,
+                        Some(FunctionArgumentDefault::Literal(DefaultLiteral::Scalar(
+                            Literal::String("x".to_string()),
+                        ))),
+                    ),
+                ],
+                Ty::Int,
+            )],
+        );
+        let ts = render_index_ts(&b, &BTreeSet::new(), false);
+        assert!(ts.contains(
+            "as (arg0: number, $opts?: { default?: number | undefined; \"not-valid\"?: string | undefined } | undefined) => number;"
+        ));
+        assert!(!ts.contains("default_?:"));
     }
 
     #[test]
