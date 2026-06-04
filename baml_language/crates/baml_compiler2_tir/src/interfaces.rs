@@ -129,25 +129,13 @@ impl ImplementsRegistry {
     ) -> Option<(Name, Ty, Ty)> {
         for rule in &self.interface_impl_rules {
             let mut bindings = TypeBindings::default();
-            if match_ty_pattern_into(
-                &rule.for_ty_pattern,
-                actual_ty,
-                &rule.generic_params,
-                aliases,
-                &mut bindings,
-            )
-            .is_none()
+            let ctx = MatchCtx::new(&rule.generic_params, aliases);
+            if match_ty_pattern_into(&rule.for_ty_pattern, actual_ty, ctx, &mut bindings).is_none()
             {
                 continue;
             }
-            if match_ty_pattern_into(
-                &rule.interface_ty,
-                requested_iface_ty,
-                &rule.generic_params,
-                aliases,
-                &mut bindings,
-            )
-            .is_none()
+            if match_ty_pattern_into(&rule.interface_ty, requested_iface_ty, ctx, &mut bindings)
+                .is_none()
             {
                 continue;
             }
@@ -219,22 +207,11 @@ fn instantiate_rule_inner(
     require_all_bindings: bool,
 ) -> Option<InterfaceImplInstantiation> {
     let mut bindings = TypeBindings::default();
+    let ctx = MatchCtx::new(&rule.generic_params, aliases);
     if let Some(candidate_ty) = candidate_ty {
-        match_ty_pattern_into(
-            &rule.for_ty_pattern,
-            candidate_ty,
-            &rule.generic_params,
-            aliases,
-            &mut bindings,
-        )?;
+        match_ty_pattern_into(&rule.for_ty_pattern, candidate_ty, ctx, &mut bindings)?;
     }
-    match_ty_pattern_into(
-        &rule.interface_ty,
-        requested_iface_ty,
-        &rule.generic_params,
-        aliases,
-        &mut bindings,
-    )?;
+    match_ty_pattern_into(&rule.interface_ty, requested_iface_ty, ctx, &mut bindings)?;
     validate_rule_bounds(rule, &bindings, &mut is_subtype, require_all_bindings)?;
     let for_ty = generics::substitute_ty(&rule.for_ty_pattern, &bindings);
     let interface_ty = generics::substitute_ty(&rule.interface_ty, &bindings);
@@ -330,6 +307,27 @@ fn validate_rule_bounds(
     Some(())
 }
 
+/// Read-only context threaded through the pattern-match cluster: the rule's
+/// bound generic params and the package's type aliases. Bundled so the four
+/// mutually-recursive matchers pass one `Copy` value instead of two refs.
+#[derive(Clone, Copy)]
+struct MatchCtx<'a> {
+    generic_params: &'a [Name],
+    aliases: &'a std::collections::HashMap<QualifiedTypeName, Ty>,
+}
+
+impl<'a> MatchCtx<'a> {
+    fn new(
+        generic_params: &'a [Name],
+        aliases: &'a std::collections::HashMap<QualifiedTypeName, Ty>,
+    ) -> Self {
+        Self {
+            generic_params,
+            aliases,
+        }
+    }
+}
+
 pub fn match_ty_pattern(
     pattern: &Ty,
     concrete: &Ty,
@@ -337,21 +335,25 @@ pub fn match_ty_pattern(
     aliases: &std::collections::HashMap<QualifiedTypeName, Ty>,
 ) -> Option<TypeBindings> {
     let mut bindings = TypeBindings::default();
-    match_ty_pattern_into(pattern, concrete, generic_params, aliases, &mut bindings)?;
+    match_ty_pattern_into(
+        pattern,
+        concrete,
+        MatchCtx::new(generic_params, aliases),
+        &mut bindings,
+    )?;
     Some(bindings)
 }
 
 fn match_ty_pattern_into(
     pattern: &Ty,
     concrete: &Ty,
-    generic_params: &[Name],
-    aliases: &std::collections::HashMap<QualifiedTypeName, Ty>,
+    ctx: MatchCtx,
     bindings: &mut TypeBindings,
 ) -> Option<()> {
     if let Ty::TypeVar(name) = pattern
-        && generic_params.contains(name)
+        && ctx.generic_params.contains(name)
     {
-        return bind_type_var(name, concrete, bindings, aliases);
+        return bind_type_var(name, concrete, bindings, ctx.aliases);
     }
 
     // When the pattern has no bound type vars and neither side carries generic
@@ -359,10 +361,10 @@ fn match_ty_pattern_into(
     // try that fast path first. If it's eligible but fails here, the structural
     // arms can't change the answer, so the fallback arm below must not re-run
     // the (expensive, alias-normalizing) check.
-    let normalized_eligible = !contains_bound_typevar(pattern, generic_params)
+    let normalized_eligible = !contains_bound_typevar(pattern, ctx.generic_params)
         && !contains_generic_function_binders(pattern)
         && !contains_generic_function_binders(concrete);
-    if normalized_eligible && normalize::is_same_normalized_type(pattern, concrete, aliases) {
+    if normalized_eligible && normalize::is_same_normalized_type(pattern, concrete, ctx.aliases) {
         return Some(());
     }
 
@@ -372,29 +374,27 @@ fn match_ty_pattern_into(
             if p_qtn == c_qtn && p_args.len() == c_args.len() =>
         {
             for (p, c) in p_args.iter().zip(c_args.iter()) {
-                match_ty_pattern_into(p, c, generic_params, aliases, bindings)?;
+                match_ty_pattern_into(p, c, ctx, bindings)?;
             }
             Some(())
         }
         (Ty::List(p), Ty::List(c))
         | (Ty::EvolvingList(p), Ty::EvolvingList(c))
-        | (Ty::Optional(p), Ty::Optional(c)) => {
-            match_ty_pattern_into(p, c, generic_params, aliases, bindings)
-        }
+        | (Ty::Optional(p), Ty::Optional(c)) => match_ty_pattern_into(p, c, ctx, bindings),
         (Ty::Optional(p), Ty::Union(c_members)) => {
             let inner = union_members_without_null(c_members)?;
-            match_ty_pattern_into(p, &inner, generic_params, aliases, bindings)
+            match_ty_pattern_into(p, &inner, ctx, bindings)
         }
         (Ty::Map(pk, pv), Ty::Map(ck, cv)) | (Ty::EvolvingMap(pk, pv), Ty::EvolvingMap(ck, cv)) => {
-            match_ty_pattern_into(pk, ck, generic_params, aliases, bindings)?;
-            match_ty_pattern_into(pv, cv, generic_params, aliases, bindings)
+            match_ty_pattern_into(pk, ck, ctx, bindings)?;
+            match_ty_pattern_into(pv, cv, ctx, bindings)
         }
         (Ty::Future(pv, pe), Ty::Future(cv, ce)) => {
-            match_ty_pattern_into(pv, cv, generic_params, aliases, bindings)?;
-            match_ty_pattern_into(pe, ce, generic_params, aliases, bindings)
+            match_ty_pattern_into(pv, cv, ctx, bindings)?;
+            match_ty_pattern_into(pe, ce, ctx, bindings)
         }
         (Ty::Union(p_members), Ty::Union(c_members)) if p_members.len() == c_members.len() => {
-            match_union_members(p_members, c_members, generic_params, aliases, bindings)
+            match_union_members(p_members, c_members, ctx, bindings)
         }
         (Ty::Primitive(primitive), Ty::Literal(literal, _))
             if PrimitiveType::from_literal(literal) == *primitive =>
@@ -429,8 +429,7 @@ fn match_ty_pattern_into(
                 p_generic_param_bounds,
                 c_generic_params,
                 c_generic_param_bounds,
-                generic_params,
-                aliases,
+                ctx,
                 bindings,
             )?;
             let p_function_bindings =
@@ -441,19 +440,19 @@ fn match_ty_pattern_into(
             for (p, c) in p_params.iter().zip(c_params.iter()) {
                 let p_ty = generics::substitute_ty(&p.ty, &p_function_bindings);
                 let c_ty = generics::substitute_ty(&c.ty, &c_function_bindings);
-                match_ty_pattern_into(&p_ty, &c_ty, generic_params, aliases, bindings)?;
+                match_ty_pattern_into(&p_ty, &c_ty, ctx, bindings)?;
             }
             let p_ret = generics::substitute_ty(p_ret, &p_function_bindings);
             let c_ret = generics::substitute_ty(c_ret, &c_function_bindings);
-            match_ty_pattern_into(&p_ret, &c_ret, generic_params, aliases, bindings)?;
+            match_ty_pattern_into(&p_ret, &c_ret, ctx, bindings)?;
             let p_throws = generics::substitute_ty(p_throws, &p_function_bindings);
             let c_throws = generics::substitute_ty(c_throws, &c_function_bindings);
-            match_ty_pattern_into(&p_throws, &c_throws, generic_params, aliases, bindings)
+            match_ty_pattern_into(&p_throws, &c_throws, ctx, bindings)
         }
         // Only re-check normalized equality when the fast path above was skipped
         // (a guard failed); if it was eligible it already returned false.
         _ if !normalized_eligible
-            && normalize::is_same_normalized_type(pattern, concrete, aliases) =>
+            && normalize::is_same_normalized_type(pattern, concrete, ctx.aliases) =>
         {
             Some(())
         }
@@ -466,8 +465,7 @@ fn match_function_generic_bounds(
     pattern_bounds: &[Option<Ty>],
     concrete_params: &[Name],
     concrete_bounds: &[Option<Ty>],
-    generic_params: &[Name],
-    aliases: &std::collections::HashMap<QualifiedTypeName, Ty>,
+    ctx: MatchCtx,
     bindings: &mut TypeBindings,
 ) -> Option<Vec<Name>> {
     if pattern_params.len() != concrete_params.len() {
@@ -488,13 +486,7 @@ fn match_function_generic_bounds(
             (Some(pattern_bound), Some(concrete_bound)) => {
                 let pattern_bound = generics::substitute_ty(pattern_bound, &pattern_bindings);
                 let concrete_bound = generics::substitute_ty(concrete_bound, &concrete_bindings);
-                match_ty_pattern_into(
-                    &pattern_bound,
-                    &concrete_bound,
-                    generic_params,
-                    aliases,
-                    bindings,
-                )?;
+                match_ty_pattern_into(&pattern_bound, &concrete_bound, ctx, bindings)?;
             }
         }
     }
@@ -519,8 +511,7 @@ fn function_generic_bindings(params: &[Name], canonical_params: &[Name]) -> Type
 fn match_union_members(
     pattern_members: &[Ty],
     concrete_members: &[Ty],
-    generic_params: &[Name],
-    aliases: &std::collections::HashMap<QualifiedTypeName, Ty>,
+    ctx: MatchCtx,
     bindings: &mut TypeBindings,
 ) -> Option<()> {
     let Some((pattern_head, pattern_tail)) = pattern_members.split_first() else {
@@ -532,8 +523,7 @@ fn match_union_members(
         if match_ty_pattern_into(
             pattern_head,
             &concrete_members[idx],
-            generic_params,
-            aliases,
+            ctx,
             &mut trial_bindings,
         )
         .is_none()
@@ -547,15 +537,7 @@ fn match_union_members(
             .filter(|(member_idx, _)| *member_idx != idx)
             .map(|(_, member)| member.clone())
             .collect::<Vec<_>>();
-        if match_union_members(
-            pattern_tail,
-            &remaining,
-            generic_params,
-            aliases,
-            &mut trial_bindings,
-        )
-        .is_some()
-        {
+        if match_union_members(pattern_tail, &remaining, ctx, &mut trial_bindings).is_some() {
             *bindings = trial_bindings;
             return Some(());
         }
