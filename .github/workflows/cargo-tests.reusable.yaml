@@ -60,11 +60,27 @@ env:
 jobs:
 
   cargo-test-linux:
-    name: "cargo test (linux)"
-    runs-on: blacksmith-16vcpu-ubuntu-2404
-    timeout-minutes: 25
+    # EXPERIMENT (build-caching/04 Exp 19): value question — does blacksmith-8vcpu
+    # OVERSUBSCRIBED (CARGO_BUILD_JOBS=16, 2x cores) match blacksmith-16vcpu (at
+    # half the runner cost)? Mirrors the Windows Exp 9 finding. All x64, warm
+    # sccache. (Exp 17 runner-comparison results already recorded in the doc.)
+    #   bs-8vcpu-j8  — 8-vCPU, default -j8 (reference)
+    #   bs-8vcpu-j16 — 8-vCPU, -j16 (oversubscribe; sccache hits are I/O-bound)
+    #   bs-16vcpu    — 16-vCPU, default -j16
+    name: "cargo test (linux, ${{ matrix.id }})"
+    runs-on: ${{ matrix.runs-on }}
+    timeout-minutes: 40
+    env:
+      CARGO_BUILD_JOBS: ${{ matrix.jobs }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { id: bs-8vcpu-j8,  runs-on: blacksmith-8vcpu-ubuntu-2404,  jobs: "8" }
+          - { id: bs-8vcpu-j16, runs-on: blacksmith-8vcpu-ubuntu-2404,  jobs: "16" }
+          - { id: bs-16vcpu,    runs-on: blacksmith-16vcpu-ubuntu-2404, jobs: "16" }
     steps:
-      - uses: useblacksmith/checkout@v1
+      - uses: actions/checkout@v6
         with:
           persist-credentials: false
 
@@ -120,7 +136,7 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v7
         with:
-          name: test-failures-linux
+          name: test-failures-linux-${{ matrix.id }}
           path: |
             baml_language/**/*.snap.new
             baml_language/**/target/nextest/
@@ -131,26 +147,26 @@ jobs:
 
       - name: "Dump sccache stats (json)"
         if: always()
-        run: sccache --show-stats --stats-format json > sccache-stats-test-linux.json
+        run: sccache --show-stats --stats-format json > sccache-stats-test-linux-${{ matrix.id }}.json
 
       - name: "Upload sccache stats"
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: sccache-stats-test-linux
-          path: sccache-stats-test-linux.json
+          name: sccache-stats-test-linux-${{ matrix.id }}
+          path: sccache-stats-test-linux-${{ matrix.id }}.json
           if-no-files-found: ignore
 
       - name: "Rename cargo timings"
         if: always()
-        run: mv target/cargo-timings/cargo-timing.html target/cargo-timings/cargo-timing-test-linux.html
+        run: mv target/cargo-timings/cargo-timing.html target/cargo-timings/cargo-timing-test-linux-${{ matrix.id }}.html
         working-directory: baml_language
       - name: "Upload cargo timings"
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: cargo-timings-test-linux
-          path: baml_language/target/cargo-timings/cargo-timing-test-linux.html
+          name: cargo-timings-test-linux-${{ matrix.id }}
+          path: baml_language/target/cargo-timings/cargo-timing-test-linux-${{ matrix.id }}.html
           if-no-files-found: ignore
 
   cargo-test-macos:
@@ -803,11 +819,22 @@ jobs:
           if-no-files-found: ignore
 
   snapshot-tests:
-    name: "snapshot tests"
-    runs-on: blacksmith-4vcpu-ubuntu-2404
-    timeout-minutes: 30
+    # EXPERIMENT (build-caching/04 Exp 19): same -j16-on-8vcpu vs 16vcpu value
+    # question as cargo-test-linux. All x64, warm sccache.
+    name: "snapshot tests (${{ matrix.id }})"
+    runs-on: ${{ matrix.runs-on }}
+    timeout-minutes: 40
+    env:
+      CARGO_BUILD_JOBS: ${{ matrix.jobs }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { id: bs-8vcpu-j8,  runs-on: blacksmith-8vcpu-ubuntu-2404,  jobs: "8" }
+          - { id: bs-8vcpu-j16, runs-on: blacksmith-8vcpu-ubuntu-2404,  jobs: "16" }
+          - { id: bs-16vcpu,    runs-on: blacksmith-16vcpu-ubuntu-2404, jobs: "16" }
     steps:
-      - uses: useblacksmith/checkout@v1
+      - uses: actions/checkout@v6
         with:
           persist-credentials: false
 
@@ -872,7 +899,7 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v7
         with:
-          name: snapshot-failures
+          name: snapshot-failures-${{ matrix.id }}
           path: |
             baml_language/**/*.snap
             baml_language/**/*.snap.new
@@ -883,26 +910,26 @@ jobs:
 
       - name: "Dump sccache stats (json)"
         if: always()
-        run: sccache --show-stats --stats-format json > sccache-stats-snapshot.json
+        run: sccache --show-stats --stats-format json > sccache-stats-snapshot-${{ matrix.id }}.json
 
       - name: "Upload sccache stats"
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: sccache-stats-snapshot
-          path: sccache-stats-snapshot.json
+          name: sccache-stats-snapshot-${{ matrix.id }}
+          path: sccache-stats-snapshot-${{ matrix.id }}.json
           if-no-files-found: ignore
 
       - name: "Rename cargo timings"
         if: always()
-        run: mv target/cargo-timings/cargo-timing.html target/cargo-timings/cargo-timing-snapshot.html
+        run: mv target/cargo-timings/cargo-timing.html target/cargo-timings/cargo-timing-snapshot-${{ matrix.id }}.html
         working-directory: baml_language
       - name: "Upload cargo timings"
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: cargo-timings-snapshot
-          path: baml_language/target/cargo-timings/cargo-timing-snapshot.html
+          name: cargo-timings-snapshot-${{ matrix.id }}
+          path: baml_language/target/cargo-timings/cargo-timing-snapshot-${{ matrix.id }}.html
           if-no-files-found: ignore
 
   cargo-timings:
