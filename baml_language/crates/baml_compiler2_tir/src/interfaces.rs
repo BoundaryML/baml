@@ -1358,6 +1358,30 @@ pub fn implementation_key_for_ty(ty: &Ty) -> Option<Ty> {
     }
 }
 
+/// Returns `true` if `ty` implements interface `iface_qtn`, searching
+/// `package_id`'s implements registry **and** those of its direct dependencies.
+///
+/// [`package_implements_registry`] only records `implement` blocks written in
+/// that one package. But coherence (the orphan rule, BEP-044) lets an impl live
+/// in either the interface's package or the implementing type's package, so the
+/// impls for a single interface are spread across packages. In particular the
+/// builtin `Equals`/`Compare` impls for primitives and containers live in the
+/// `baml` package — so a query from user code (or any dependent) must also
+/// consult the dependency registries, `baml` above all.
+pub fn type_implements_with_deps<'db>(
+    db: &'db dyn crate::Db,
+    package_id: PackageId<'db>,
+    ty: &Ty,
+    iface_qtn: &QualifiedTypeName,
+) -> bool {
+    if package_implements_registry(db, package_id).type_implements(ty, iface_qtn) {
+        return true;
+    }
+    baml_compiler2_hir::package::package_dependencies(db, package_id)
+        .iter()
+        .any(|dep| package_implements_registry(db, *dep).type_implements(ty, iface_qtn))
+}
+
 /// Build the per-package implements registry.
 ///
 /// Returns `(class_qtn → {iface_qtn})` covering every class in the package.
