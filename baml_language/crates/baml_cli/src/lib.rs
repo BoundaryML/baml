@@ -9,6 +9,7 @@
     clippy::exit
 )]
 
+pub(crate) mod agent_command;
 pub(crate) mod commands;
 pub(crate) mod describe_command;
 #[cfg(test)]

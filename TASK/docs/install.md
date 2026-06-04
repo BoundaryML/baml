@@ -73,6 +73,18 @@ Update advances a channel selector only:
 baml toolchain update
 ```
 
+Check remote freshness without installing or changing selection:
+
+```sh
+baml toolchain status
+```
+
+List installed toolchains without checking remote metadata:
+
+```sh
+baml toolchain list
+```
+
 ## IDE
 
 IDE installation is explicit and owned by the selected toolchain:
@@ -81,5 +93,16 @@ IDE installation is explicit and owned by the selected toolchain:
 baml ide install --cursor
 baml ide install --code
 ```
+
+## Agent Skills
+
+Agent skill installation is project-local and owned by the selected toolchain:
+
+```sh
+baml agent install
+baml agent install --dir ./packages/my-baml-project
+```
+
+The command fetches the latest official BAML skill content from `BoundaryML/baml-skill` and refreshes only the managed BAML skill folders under `.agents/skills/` and `.claude/skills/`. Without `--dir`, it installs at the nearest ancestor with `baml.toml`, then the git root, then the current directory. With `--dir`, the explicit directory is used. Restart any already-running Claude Code, Codex, or OpenCode session after running it.
 
 `baml self-update` updates curl-installed wrappers only. Package-manager wrappers refuse self-update and point back to the package manager.

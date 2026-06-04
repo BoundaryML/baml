@@ -15,7 +15,8 @@ The important split:
 | `baml toolchain install <canary\|nightly\|version>` | Download and verify a toolchain without necessarily making it active. Channel inputs resolve to a concrete version at install time. |
 | `baml toolchain use <canary\|nightly\|version>` | Select the active default toolchain. Installs the resolved toolchain if missing. |
 | `baml toolchain update` | Refresh the active channel and advance to the latest canary/nightly toolchain. Concrete pinned versions do not move. |
-| `baml toolchain list` | Show installed toolchains and the active selector/version. May have a remote/list mode later. |
+| `baml toolchain status` | Check the active selector against the latest remote channel metadata without installing, updating, or changing selection. |
+| `baml toolchain list` | Show installed toolchains and the active selector/version. Local-only; never checks remote versions. |
 | `baml toolchain uninstall <version>` | Remove an installed concrete toolchain. |
 | `baml self-update` | Update only the wrapper for curl-installed wrappers. Refuse for package-manager-managed wrappers with the right package-manager command. |
 
@@ -24,6 +25,7 @@ The important split:
 | Command | Purpose |
 |---|---|
 | `baml-cli ide install` | Install or update the IDE extension/assets for the selected toolchain. The wrapper exposes this as `baml ide install` by resolving the toolchain and forwarding the command. Common editors should have non-interactive flags such as `--cursor`, and `--code`. |
+| `baml-cli agent install [--dir <path>]` | Install or refresh the latest official BAML agent skills in the current project, or in an explicit directory when `--dir` is supplied. The wrapper exposes this as `baml agent install`; the selected toolchain fetches the latest `BoundaryML/baml-skill` content and writes project-local `.agents/skills/baml-*` and `.claude/skills/baml-*` files. |
 
 ## Possible `baml-cli` Work Because Of The Wrapper
 
