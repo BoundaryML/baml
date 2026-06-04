@@ -704,7 +704,7 @@ pub fn find_invalid_alias_cycles(
     } = build_alias_graph(aliases);
 
     // 2. Find SCCs via Tarjan's (deterministic, only real cycles)
-    let sccs = Tarjan::components(&graph);
+    let sccs = tarjan_real_cycles(&graph);
 
     // 3. For each SCC, check if it has at least one structural edge
     let mut invalid = HashSet::new();
@@ -832,137 +832,76 @@ fn extract_type_alias_deps(
     (non_structural, structural)
 }
 
-// ── Tarjan's SCC ─────────────────────────────────────────────────────────────
+// ── Tarjan's SCC (real-cycle detection) ──────────────────────────────────────
 //
-// Deterministic ordering via sorted traversal, component reversal, and
-// rotation to minimum element.
+// Uses the shared generic Tarjan core (`crate::throw_inference::Tarjan`) and
+// layers a deterministic post-pass on top:
+//   * traversal order: nodes and successors keyed by canonical `to_string()`
+//     (NOT `QualifiedTypeName`'s derived `Ord`, which differs for namespaced /
+//     generic-param-bearing names);
+//   * filter: keep only real cycles (multi-node SCCs, or singletons with a
+//     self-loop);
+//   * rotate each cycle to start at its lexicographically-smallest element;
+//   * sort the kept cycles by their first element.
+//
+// This ordering is snapshot-observable: it drives the `cycle_path` strings in
+// alias-cycle and class-cycle diagnostics (F16), so it must be reproduced
+// exactly.
 
-/// State of each node for Tarjan's algorithm.
-#[derive(Clone, Copy)]
-struct NodeState {
-    index: usize,
-    low_link: usize,
-    on_stack: bool,
-}
-
-/// Tarjan's strongly connected components algorithm.
+/// Find real cycles (SCCs) in a dependency graph, deterministically ordered.
 ///
-/// Only returns real cycles (multi-node SCCs or single nodes with self-loops).
-/// Components are sorted deterministically.
-struct Tarjan<'g> {
-    graph: &'g HashMap<QualifiedTypeName, HashSet<QualifiedTypeName>>,
-    index: usize,
-    stack: Vec<QualifiedTypeName>,
-    state: HashMap<QualifiedTypeName, NodeState>,
-    components: Vec<Vec<QualifiedTypeName>>,
-}
+/// Returns only real cycles: multi-node SCCs, or singletons that have a
+/// self-loop in `graph`. Each cycle is rotated to start at its lexicographically
+/// smallest element (by `to_string()`), and the cycles are sorted by their first
+/// element.
+fn tarjan_real_cycles(
+    graph: &HashMap<QualifiedTypeName, HashSet<QualifiedTypeName>>,
+) -> Vec<Vec<QualifiedTypeName>> {
+    // The shared core operates over a `BTreeMap`/`BTreeSet`; the explicit
+    // `to_string()` key below — not the map's `Ord` iteration — supplies the
+    // determinism, so the underlying map representation is immaterial.
+    let edges: std::collections::BTreeMap<
+        QualifiedTypeName,
+        std::collections::BTreeSet<QualifiedTypeName>,
+    > = graph
+        .iter()
+        .map(|(node, succs)| (node.clone(), succs.iter().cloned().collect()))
+        .collect();
 
-impl<'g> Tarjan<'g> {
-    const UNVISITED: usize = usize::MAX;
+    let components = crate::throw_inference::Tarjan::components_ordered(
+        &edges,
+        std::string::ToString::to_string,
+    );
 
-    fn components(
-        graph: &'g HashMap<QualifiedTypeName, HashSet<QualifiedTypeName>>,
-    ) -> Vec<Vec<QualifiedTypeName>> {
-        let mut tarjan = Self {
-            graph,
-            index: 0,
-            stack: Vec::new(),
-            state: graph
-                .keys()
-                .map(|node| {
-                    (
-                        node.clone(),
-                        NodeState {
-                            index: Self::UNVISITED,
-                            low_link: Self::UNVISITED,
-                            on_stack: false,
-                        },
-                    )
-                })
-                .collect(),
-            components: Vec::new(),
-        };
-
-        // Sort nodes for deterministic traversal order.
-        let mut nodes: Vec<_> = graph.keys().cloned().collect();
-        nodes.sort_by_key(std::string::ToString::to_string);
-
-        for node in &nodes {
-            if tarjan.state[node].index == Self::UNVISITED {
-                tarjan.strong_connect(node);
-            }
-        }
-
-        // Sort components by first element for deterministic output.
-        tarjan
-            .components
-            .sort_by(|a, b| a[0].to_string().cmp(&b[0].to_string()));
-
-        tarjan.components
-    }
-
-    fn strong_connect(&mut self, node_id: &QualifiedTypeName) {
-        let mut node = NodeState {
-            index: self.index,
-            low_link: self.index,
-            on_stack: true,
-        };
-        self.index += 1;
-        self.state.insert(node_id.clone(), node);
-        self.stack.push(node_id.clone());
-
-        // Sort successors for deterministic DFS order.
-        let mut successors: Vec<_> = self.graph[node_id].iter().collect();
-        successors.sort_by_key(std::string::ToString::to_string);
-
-        for successor_id in successors {
-            let mut successor = self.state[successor_id];
-            if successor.index == Self::UNVISITED {
-                self.strong_connect(successor_id);
-                successor = self.state[successor_id];
-                node.low_link = std::cmp::min(node.low_link, successor.low_link);
-            } else if successor.on_stack {
-                node.low_link = std::cmp::min(node.low_link, successor.index);
-            }
-        }
-
-        self.state.insert(node_id.clone(), node);
-
-        if node.low_link == node.index {
-            let mut component = Vec::new();
-            while let Some(top) = self.stack.pop() {
-                if let Some(st) = self.state.get_mut(&top) {
-                    st.on_stack = false;
-                }
-                let is_root = &top == node_id;
-                component.push(top);
-                if is_root {
-                    break;
-                }
-            }
-
-            // Reverse: stack pop order → DFS visitation order
-            component.reverse();
-
+    let mut cycles: Vec<Vec<QualifiedTypeName>> = components
+        .into_iter()
+        .filter_map(|component| {
             // Only keep real cycles: multi-node or single node with self-loop.
             let is_cycle = component.len() > 1
-                || (component.len() == 1 && self.graph[node_id].contains(node_id));
-
-            if is_cycle {
-                // Rotate to start at the lexicographically smallest element
-                // for deterministic cycle paths.
-                if let Some(min_idx) = component
-                    .iter()
-                    .enumerate()
-                    .min_by(|(_, a), (_, b)| a.to_string().cmp(&b.to_string()))
-                    .map(|(i, _)| i)
-                {
-                    component.rotate_left(min_idx);
-                }
-                self.components.push(component);
+                || (component.len() == 1 && graph[&component[0]].contains(&component[0]));
+            if !is_cycle {
+                return None;
             }
-        }
-    }
+
+            // Rotate to start at the lexicographically smallest element for
+            // deterministic cycle paths.
+            let mut component = component;
+            if let Some(min_idx) = component
+                .iter()
+                .enumerate()
+                .min_by(|(_, a), (_, b)| a.to_string().cmp(&b.to_string()))
+                .map(|(i, _)| i)
+            {
+                component.rotate_left(min_idx);
+            }
+            Some(component)
+        })
+        .collect();
+
+    // Sort components by first element for deterministic output.
+    cycles.sort_by(|a, b| a[0].to_string().cmp(&b[0].to_string()));
+
+    cycles
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -995,7 +934,7 @@ pub fn find_invalid_class_cycles(
     type_aliases: &HashMap<QualifiedTypeName, Ty>,
 ) -> Vec<ClassCycleInfo> {
     let graph = build_class_graph(class_fields, type_aliases);
-    let sccs = Tarjan::components(&graph);
+    let sccs = tarjan_real_cycles(&graph);
 
     sccs.into_iter()
         .map(|scc| {

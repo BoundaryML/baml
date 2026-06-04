@@ -520,8 +520,10 @@ pub fn is_banned_catch_binding_type(ty: &Ty) -> Option<&'static str> {
 // graph. Throw-set inference is its only consumer, so it lives here rather than
 // in a standalone module.
 //
-// Note: `Tarjan`/`NodeState` are module-private and intentionally share names
-// with the (unrelated) private types in `normalize.rs`; the two do not collide.
+// The `Tarjan` SCC core is `pub(crate)` and shared with `normalize.rs`'s
+// cycle-detection passes. Each caller supplies its own determinism via the
+// node/successor ordering key passed to `components_ordered` (the throws path
+// uses Ord order; the cycle-detection paths key by canonical `to_string()`).
 
 /// A dependency graph annotated with per-node direct facts.
 ///
@@ -626,8 +628,16 @@ fn propagate<N: Ord + Clone, F: Ord + Clone>(
     result
 }
 
-struct Tarjan<'g, N: Ord> {
-    edges: &'g BTreeMap<N, BTreeSet<N>>,
+/// Generic Tarjan's strongly-connected-components core.
+///
+/// Returns ALL components (including trivial singletons), each ordered to match
+/// DFS visitation order (`component.reverse()` after stack-pop). Determinism is
+/// the CALLER's responsibility: traversal visits nodes and successors in the
+/// order given by `components_ordered`'s `key`. Any cycle filtering / rotation /
+/// component sorting is left to the caller as a post-pass.
+pub(crate) struct Tarjan<'g, N: Ord> {
+    /// Successors of each node, pre-sorted by the caller-supplied key.
+    sorted_succ: BTreeMap<N, Vec<&'g N>>,
     index: usize,
     stack: Vec<N>,
     state: BTreeMap<N, NodeState>,
@@ -644,9 +654,41 @@ struct NodeState {
 impl<'g, N: Ord + Clone> Tarjan<'g, N> {
     const UNVISITED: usize = usize::MAX;
 
-    fn components(edges: &'g BTreeMap<N, BTreeSet<N>>) -> Vec<Vec<N>> {
+    /// Compute SCCs visiting nodes and successors in Ord order.
+    ///
+    /// Equivalent to `components_ordered(edges, |n| n.clone())`, but avoids the
+    /// clone since `BTreeMap`/`BTreeSet` iteration is already Ord-ordered.
+    pub(crate) fn components(edges: &'g BTreeMap<N, BTreeSet<N>>) -> Vec<Vec<N>> {
+        Self::components_ordered(edges, |n| n)
+    }
+
+    /// Compute SCCs visiting nodes and successors in the order induced by `key`.
+    ///
+    /// `key(&node)` defines the visitation order of both the outer node loop and
+    /// each node's successors. Returns ALL components (no filtering, no
+    /// rotation) so callers can apply their own deterministic post-pass.
+    pub(crate) fn components_ordered<'k, K, FK>(
+        edges: &'g BTreeMap<N, BTreeSet<N>>,
+        key: FK,
+    ) -> Vec<Vec<N>>
+    where
+        K: Ord,
+        FK: Fn(&'k N) -> K,
+        N: 'k,
+        'g: 'k,
+    {
+        let mut sorted_succ: BTreeMap<N, Vec<&'g N>> = BTreeMap::new();
+        for (node, succs) in edges {
+            let mut succs: Vec<&'g N> = succs.iter().collect();
+            succs.sort_by_key(|n| key(n));
+            sorted_succ.insert(node.clone(), succs);
+        }
+
+        let mut nodes: Vec<&'g N> = edges.keys().collect();
+        nodes.sort_by_key(|n| key(n));
+
         let mut tarjan = Self {
-            edges,
+            sorted_succ,
             index: 0,
             stack: Vec::new(),
             state: edges
@@ -665,10 +707,9 @@ impl<'g, N: Ord + Clone> Tarjan<'g, N> {
             components: Vec::new(),
         };
 
-        let nodes: Vec<N> = edges.keys().cloned().collect();
         for node in nodes {
-            if tarjan.state[&node].index == Self::UNVISITED {
-                tarjan.strong_connect(&node);
+            if tarjan.state[node].index == Self::UNVISITED {
+                tarjan.strong_connect(node);
             }
         }
 
@@ -685,8 +726,8 @@ impl<'g, N: Ord + Clone> Tarjan<'g, N> {
         self.state.insert(node_id.clone(), node);
         self.stack.push(node_id.clone());
 
-        if let Some(successors) = self.edges.get(node_id) {
-            for succ_id in successors {
+        if let Some(successors) = self.sorted_succ.get(node_id) {
+            for succ_id in successors.clone() {
                 let succ = self.state[succ_id];
                 if succ.index == Self::UNVISITED {
                     self.strong_connect(succ_id);
