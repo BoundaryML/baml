@@ -56,12 +56,6 @@ env:
   CARGO_NET_RETRY: 10
   CARGO_TERM_COLOR: always
   RUSTUP_MAX_RETRIES: 10
-  # With sccache, most compile units are R2 cache lookups/fetches (I/O-bound,
-  # ~0.2s each) rather than CPU codegen, so cargo's default parallelism (=
-  # core count, just 4 on the Windows runner) leaves cores idle waiting on the
-  # network. Oversubscribe so cache-hit fetches overlap. Applies to every cargo
-  # invocation in this workflow.
-  CARGO_BUILD_JOBS: "32"
 
 jobs:
 
@@ -248,11 +242,31 @@ jobs:
           if-no-files-found: ignore
 
   cargo-test-windows:
-    name: "cargo test (windows)"
+    # EXPERIMENT (build-caching/04 Exp 16 — Approach M): can sccache cache
+    # aws-lc-sys's C compiles? Our RUSTC_WRAPPER wraps rustc only, so the
+    # build-script cc compiles bypass sccache today. cc-rs natively supports an
+    # sccache shim via CC. 2 arms on --all-features:
+    #   cc-default — unchanged (aws-lc-sys C compiled fresh each run)
+    #   cc-sccache — CC routed through the baml-sccache shim -> R2 sccache
+    # Run TWICE: run 1 populates the C cache (cold), run 2 measures the warm
+    # aws-lc-sys run-custom-build drop vs cc-default. (M is inferior to ring,
+    # which deletes aws-lc-sys; this just confirms the mechanism + warm win.)
+    name: "cargo test (windows, cc-${{ matrix.cc }})"
     # Skip in the merge queue: windows already ran on the PR. The merge_group
     # event is inherited from ci.yaml through the workflow_call boundary.
     if: ${{ github.event_name != 'merge_group' }}
-    runs-on: blacksmith-4vcpu-windows-2025
+    runs-on: blacksmith-8vcpu-windows-2025
+    strategy:
+      fail-fast: false
+      matrix:
+        cc: ["default", "sccache"]
+    # 8-vCPU + CARGO_BUILD_JOBS=16 (2x cores) was the value sweet spot for this
+    # full-workspace build: ~127s build vs ~188s at 4-vCPU/-j8 and ~= a 16-vCPU
+    # default build at half the runner cost (sccache cache hits are I/O-bound,
+    # so oversubscribing overlaps the fetches). See build-caching/04.
+    env:
+      CARGO_BUILD_JOBS: "16"
+      FEATURES: "--all-features"
     # TODO: Reduce this once our changes to aws-sdk-rust are upstreamed
     # Right now it needs to download our repo every time which is very slow
     timeout-minutes: 50
@@ -308,20 +322,33 @@ jobs:
           echo "RUSTC_WRAPPER=$(pwd -W)/target/debug/baml-sccache.exe" >> "$GITHUB_ENV"
         working-directory: baml_language
 
+      # Exp 16 cc-sccache arm: route aws-lc-sys's build-script C compiles through
+      # the same baml-sccache shim (maps R2 creds) so cc-rs sends cl.exe compiles
+      # to the shared R2 sccache. Must be the shim, not bare sccache, or the C
+      # compiles fail to auth and fall back to local. Set AFTER RUSTC_WRAPPER is
+      # exported (this reads it). Keep the default cc builder (no CMAKE_BUILDER).
+      - name: "Route C compiles through sccache (arm)"
+        if: matrix.cc == 'sccache'
+        run: |
+          set -euo pipefail
+          echo "CC_X86_64_PC_WINDOWS_MSVC=$RUSTC_WRAPPER cl" >> "$GITHUB_ENV"
+          echo "CXX_X86_64_PC_WINDOWS_MSVC=$RUSTC_WRAPPER cl" >> "$GITHUB_ENV"
+          echo "CC_KNOWN_WRAPPER_CUSTOM=$RUSTC_WRAPPER" >> "$GITHUB_ENV"
+
       - name: "Install cargo nextest"
         uses: taiki-e/install-action@v2
         with:
           tool: cargo-nextest
 
       - name: "Build tests with --timings"
-        run: cargo test --no-run --all-features --timings
+        run: cargo test --no-run ${{ env.FEATURES }} --timings
         working-directory: baml_language
 
       # Snapshot tests live in `baml_tests` and are covered by the dedicated
       # `snapshot-tests` job. The `sdk_test_*` crates need uv and run in the
       # dedicated `sdk-tests` matrix below. Skip both here.
       - name: "Run tests"
-        run: cargo nextest run --all-features -E 'not package(baml_tests) and not package(/^sdk_test_/)'
+        run: cargo nextest run ${{ env.FEATURES }} -E 'not package(baml_tests) and not package(/^sdk_test_/)'
         working-directory: baml_language
 
       - name: "Show sccache stats"
@@ -330,26 +357,26 @@ jobs:
 
       - name: "Dump sccache stats (json)"
         if: always()
-        run: sccache --show-stats --stats-format json > sccache-stats-test-windows.json
+        run: sccache --show-stats --stats-format json > sccache-stats-test-windows-cc-${{ matrix.cc }}.json
 
       - name: "Upload sccache stats"
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: sccache-stats-test-windows
-          path: sccache-stats-test-windows.json
+          name: sccache-stats-test-windows-cc-${{ matrix.cc }}
+          path: sccache-stats-test-windows-cc-${{ matrix.cc }}.json
           if-no-files-found: ignore
 
       - name: "Rename cargo timings"
         if: always()
-        run: mv target/cargo-timings/cargo-timing.html target/cargo-timings/cargo-timing-test-windows.html
+        run: mv target/cargo-timings/cargo-timing.html target/cargo-timings/cargo-timing-test-windows-cc-${{ matrix.cc }}.html
         working-directory: baml_language
       - name: "Upload cargo timings"
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: cargo-timings-test-windows
-          path: baml_language/target/cargo-timings/cargo-timing-test-windows.html
+          name: cargo-timings-test-windows-cc-${{ matrix.cc }}
+          path: baml_language/target/cargo-timings/cargo-timing-test-windows-cc-${{ matrix.cc }}.html
           if-no-files-found: ignore
 
   sdk-test-matrix:
@@ -410,7 +437,7 @@ jobs:
                 "sdk-path": "python_pydantic2",
                 "install-args": "sccache direnv python uv",
                 "os-label": "windows",
-                "runs-on": "blacksmith-4vcpu-windows-2025",
+                "runs-on": "blacksmith-8vcpu-windows-2025",
                 "rust-cache-key": "windows-cargo",
                 "timeout": 60,
               },
@@ -420,7 +447,7 @@ jobs:
                 "sdk-path": "typescript_node",
                 "install-args": "sccache direnv node npm:pnpm",
                 "os-label": "windows",
-                "runs-on": "blacksmith-4vcpu-windows-2025",
+                "runs-on": "blacksmith-8vcpu-windows-2025",
                 "rust-cache-key": "windows-cargo",
                 "timeout": 60,
               },
