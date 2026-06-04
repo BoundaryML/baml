@@ -436,6 +436,39 @@ fn dedup_and_collapse(types: Vec<Ty>) -> Ty {
 }
 
 impl Ty {
+    /// Construct an `int` literal type. Dumb wrapper over
+    /// `Ty::Literal(LiteralValue::Int(v), f)` — no canonicalization or widening.
+    #[must_use]
+    pub fn int_lit(v: i64, f: Freshness) -> Ty {
+        Ty::Literal(LiteralValue::Int(v), f)
+    }
+
+    /// Construct a `bigint` literal type. Dumb wrapper — no canonicalization.
+    #[must_use]
+    pub fn bigint_lit(v: num_bigint::BigInt, f: Freshness) -> Ty {
+        Ty::Literal(LiteralValue::Bigint(v), f)
+    }
+
+    /// Construct a `float` literal type. Dumb wrapper — the caller is
+    /// responsible for passing an already-canonicalized string (e.g. via
+    /// `format_float`); this constructor does NOT re-format.
+    #[must_use]
+    pub fn float_lit(s: String, f: Freshness) -> Ty {
+        Ty::Literal(LiteralValue::Float(s), f)
+    }
+
+    /// Construct a `string` literal type. Dumb wrapper — no canonicalization.
+    #[must_use]
+    pub fn string_lit(s: String, f: Freshness) -> Ty {
+        Ty::Literal(LiteralValue::String(s), f)
+    }
+
+    /// Construct a `bool` literal type. Dumb wrapper — no canonicalization.
+    #[must_use]
+    pub fn bool_lit(v: bool, f: Freshness) -> Ty {
+        Ty::Literal(LiteralValue::Bool(v), f)
+    }
+
     /// Widen fresh literal types to their base primitive.
     ///
     /// Called at mutable binding sites (`let` without annotation).

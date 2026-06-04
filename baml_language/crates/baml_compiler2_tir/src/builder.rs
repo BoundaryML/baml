@@ -10211,16 +10211,16 @@ impl<'db> TypeInferenceBuilder<'db> {
         };
         match op {
             baml_compiler2_ast::UnaryOp::Neg => match lit {
-                LiteralValue::Int(n) => Some(Ty::Literal(LiteralValue::Int(n.checked_neg()?), f)),
+                LiteralValue::Int(n) => Some(Ty::int_lit(n.checked_neg()?, f)),
                 LiteralValue::Float(s) => {
                     let v: f64 = s.parse().ok()?;
-                    Some(Ty::Literal(LiteralValue::Float(format_float(-v)?), f))
+                    Some(Ty::float_lit(format_float(-v)?, f))
                 }
-                LiteralValue::Bigint(n) => Some(Ty::Literal(LiteralValue::Bigint(-n.clone()), f)),
+                LiteralValue::Bigint(n) => Some(Ty::bigint_lit(-n.clone(), f)),
                 _ => None,
             },
             baml_compiler2_ast::UnaryOp::Not => match lit {
-                LiteralValue::Bool(b) => Some(Ty::Literal(LiteralValue::Bool(!b), f)),
+                LiteralValue::Bool(b) => Some(Ty::bool_lit(!b, f)),
                 _ => None,
             },
         }
@@ -10246,28 +10246,28 @@ impl<'db> TypeInferenceBuilder<'db> {
         if let (LiteralValue::Int(a), LiteralValue::Int(b)) = (lhs_lit, rhs_lit) {
             let (a, b) = (*a, *b);
             return match op {
-                BinaryOp::Add => Some(Ty::Literal(LiteralValue::Int(a.checked_add(b)?), f)),
-                BinaryOp::Sub => Some(Ty::Literal(LiteralValue::Int(a.checked_sub(b)?), f)),
-                BinaryOp::Mul => Some(Ty::Literal(LiteralValue::Int(a.checked_mul(b)?), f)),
-                BinaryOp::Div => Some(Ty::Literal(LiteralValue::Int(a.checked_div(b)?), f)),
-                BinaryOp::Mod => Some(Ty::Literal(LiteralValue::Int(a.checked_rem(b)?), f)),
-                BinaryOp::BitAnd => Some(Ty::Literal(LiteralValue::Int(a & b), f)),
-                BinaryOp::BitOr => Some(Ty::Literal(LiteralValue::Int(a | b), f)),
-                BinaryOp::BitXor => Some(Ty::Literal(LiteralValue::Int(a ^ b), f)),
+                BinaryOp::Add => Some(Ty::int_lit(a.checked_add(b)?, f)),
+                BinaryOp::Sub => Some(Ty::int_lit(a.checked_sub(b)?, f)),
+                BinaryOp::Mul => Some(Ty::int_lit(a.checked_mul(b)?, f)),
+                BinaryOp::Div => Some(Ty::int_lit(a.checked_div(b)?, f)),
+                BinaryOp::Mod => Some(Ty::int_lit(a.checked_rem(b)?, f)),
+                BinaryOp::BitAnd => Some(Ty::int_lit(a & b, f)),
+                BinaryOp::BitOr => Some(Ty::int_lit(a | b, f)),
+                BinaryOp::BitXor => Some(Ty::int_lit(a ^ b, f)),
                 BinaryOp::Shl => {
                     let shift = u32::try_from(b).ok()?;
-                    Some(Ty::Literal(LiteralValue::Int(a.checked_shl(shift)?), f))
+                    Some(Ty::int_lit(a.checked_shl(shift)?, f))
                 }
                 BinaryOp::Shr => {
                     let shift = u32::try_from(b).ok()?;
-                    Some(Ty::Literal(LiteralValue::Int(a.checked_shr(shift)?), f))
+                    Some(Ty::int_lit(a.checked_shr(shift)?, f))
                 }
-                BinaryOp::Eq => Some(Ty::Literal(LiteralValue::Bool(a == b), f)),
-                BinaryOp::Ne => Some(Ty::Literal(LiteralValue::Bool(a != b), f)),
-                BinaryOp::Lt => Some(Ty::Literal(LiteralValue::Bool(a < b), f)),
-                BinaryOp::Le => Some(Ty::Literal(LiteralValue::Bool(a <= b), f)),
-                BinaryOp::Gt => Some(Ty::Literal(LiteralValue::Bool(a > b), f)),
-                BinaryOp::Ge => Some(Ty::Literal(LiteralValue::Bool(a >= b), f)),
+                BinaryOp::Eq => Some(Ty::bool_lit(a == b, f)),
+                BinaryOp::Ne => Some(Ty::bool_lit(a != b, f)),
+                BinaryOp::Lt => Some(Ty::bool_lit(a < b, f)),
+                BinaryOp::Le => Some(Ty::bool_lit(a <= b, f)),
+                BinaryOp::Gt => Some(Ty::bool_lit(a > b, f)),
+                BinaryOp::Ge => Some(Ty::bool_lit(a >= b, f)),
                 _ => None,
             };
         }
@@ -10282,23 +10282,19 @@ impl<'db> TypeInferenceBuilder<'db> {
             let a: f64 = a_s.parse().ok()?;
             let b: f64 = b_s.parse().ok()?;
             return match op {
-                BinaryOp::Add => Some(Ty::Literal(LiteralValue::Float(format_float(a + b)?), f)),
-                BinaryOp::Sub => Some(Ty::Literal(LiteralValue::Float(format_float(a - b)?), f)),
-                BinaryOp::Mul => Some(Ty::Literal(LiteralValue::Float(format_float(a * b)?), f)),
-                BinaryOp::Div if b != 0.0 => {
-                    Some(Ty::Literal(LiteralValue::Float(format_float(a / b)?), f))
-                }
-                BinaryOp::Mod if b != 0.0 => {
-                    Some(Ty::Literal(LiteralValue::Float(format_float(a % b)?), f))
-                }
+                BinaryOp::Add => Some(Ty::float_lit(format_float(a + b)?, f)),
+                BinaryOp::Sub => Some(Ty::float_lit(format_float(a - b)?, f)),
+                BinaryOp::Mul => Some(Ty::float_lit(format_float(a * b)?, f)),
+                BinaryOp::Div if b != 0.0 => Some(Ty::float_lit(format_float(a / b)?, f)),
+                BinaryOp::Mod if b != 0.0 => Some(Ty::float_lit(format_float(a % b)?, f)),
                 #[allow(clippy::float_cmp)] // Intentional: folding literal float equality
-                BinaryOp::Eq => Some(Ty::Literal(LiteralValue::Bool(a == b), f)),
+                BinaryOp::Eq => Some(Ty::bool_lit(a == b, f)),
                 #[allow(clippy::float_cmp)] // Intentional: folding literal float inequality
-                BinaryOp::Ne => Some(Ty::Literal(LiteralValue::Bool(a != b), f)),
-                BinaryOp::Lt => Some(Ty::Literal(LiteralValue::Bool(a < b), f)),
-                BinaryOp::Le => Some(Ty::Literal(LiteralValue::Bool(a <= b), f)),
-                BinaryOp::Gt => Some(Ty::Literal(LiteralValue::Bool(a > b), f)),
-                BinaryOp::Ge => Some(Ty::Literal(LiteralValue::Bool(a >= b), f)),
+                BinaryOp::Ne => Some(Ty::bool_lit(a != b, f)),
+                BinaryOp::Lt => Some(Ty::bool_lit(a < b, f)),
+                BinaryOp::Le => Some(Ty::bool_lit(a <= b, f)),
+                BinaryOp::Gt => Some(Ty::bool_lit(a > b, f)),
+                BinaryOp::Ge => Some(Ty::bool_lit(a >= b, f)),
                 _ => None,
             };
         }
@@ -10307,10 +10303,10 @@ impl<'db> TypeInferenceBuilder<'db> {
         if let (LiteralValue::Bool(a), LiteralValue::Bool(b)) = (lhs_lit, rhs_lit) {
             let (a, b) = (*a, *b);
             return match op {
-                BinaryOp::And => Some(Ty::Literal(LiteralValue::Bool(a && b), f)),
-                BinaryOp::Or => Some(Ty::Literal(LiteralValue::Bool(a || b), f)),
-                BinaryOp::Eq => Some(Ty::Literal(LiteralValue::Bool(a == b), f)),
-                BinaryOp::Ne => Some(Ty::Literal(LiteralValue::Bool(a != b), f)),
+                BinaryOp::And => Some(Ty::bool_lit(a && b, f)),
+                BinaryOp::Or => Some(Ty::bool_lit(a || b, f)),
+                BinaryOp::Eq => Some(Ty::bool_lit(a == b, f)),
+                BinaryOp::Ne => Some(Ty::bool_lit(a != b, f)),
                 _ => None,
             };
         }
@@ -10318,13 +10314,13 @@ impl<'db> TypeInferenceBuilder<'db> {
         // String × String
         if let (LiteralValue::String(a), LiteralValue::String(b)) = (lhs_lit, rhs_lit) {
             return match op {
-                BinaryOp::Add => Some(Ty::Literal(LiteralValue::String(format!("{a}{b}")), f)),
-                BinaryOp::Eq => Some(Ty::Literal(LiteralValue::Bool(a == b), f)),
-                BinaryOp::Ne => Some(Ty::Literal(LiteralValue::Bool(a != b), f)),
-                BinaryOp::Lt => Some(Ty::Literal(LiteralValue::Bool(a < b), f)),
-                BinaryOp::Le => Some(Ty::Literal(LiteralValue::Bool(a <= b), f)),
-                BinaryOp::Gt => Some(Ty::Literal(LiteralValue::Bool(a > b), f)),
-                BinaryOp::Ge => Some(Ty::Literal(LiteralValue::Bool(a >= b), f)),
+                BinaryOp::Add => Some(Ty::string_lit(format!("{a}{b}"), f)),
+                BinaryOp::Eq => Some(Ty::bool_lit(a == b, f)),
+                BinaryOp::Ne => Some(Ty::bool_lit(a != b, f)),
+                BinaryOp::Lt => Some(Ty::bool_lit(a < b, f)),
+                BinaryOp::Le => Some(Ty::bool_lit(a <= b, f)),
+                BinaryOp::Gt => Some(Ty::bool_lit(a > b, f)),
+                BinaryOp::Ge => Some(Ty::bool_lit(a >= b, f)),
                 _ => None,
             };
         }
@@ -10350,8 +10346,6 @@ impl<'db> TypeInferenceBuilder<'db> {
         use baml_compiler2_ast::BinaryOp;
         use num_bigint::Sign;
 
-        use crate::ty::LiteralValue;
-
         // Reject if the bit-length of `n` would trip the VM's allocation cap.
         let within_cap =
             |n: &num_bigint::BigInt| -> bool { n.bits() <= baml_type::MAX_BIGINT_BITS };
@@ -10360,9 +10354,9 @@ impl<'db> TypeInferenceBuilder<'db> {
             if !within_cap(&n) {
                 return None;
             }
-            Some(Ty::Literal(LiteralValue::Bigint(n), f))
+            Some(Ty::bigint_lit(n, f))
         };
-        let lit_bool = |v: bool| -> Option<Ty> { Some(Ty::Literal(LiteralValue::Bool(v), f)) };
+        let lit_bool = |v: bool| -> Option<Ty> { Some(Ty::bool_lit(v, f)) };
 
         match op {
             BinaryOp::Add => lit_bigint(a + b),
@@ -10615,14 +10609,8 @@ impl crate::exhaustiveness::PatCtx for TypeInferenceBuilder<'_> {
         let ty = self.expand_alias_chains(ty.clone());
         match &ty {
             Ty::Primitive(PrimitiveType::Bool) => vec![
-                Ctor::Single(Ty::Literal(
-                    baml_base::Literal::Bool(true),
-                    Freshness::Regular,
-                )),
-                Ctor::Single(Ty::Literal(
-                    baml_base::Literal::Bool(false),
-                    Freshness::Regular,
-                )),
+                Ctor::Single(Ty::bool_lit(true, Freshness::Regular)),
+                Ctor::Single(Ty::bool_lit(false, Freshness::Regular)),
             ],
             Ty::Primitive(PrimitiveType::Null) => vec![Ctor::Single(ty.clone())],
             // Infinite-alphabet / opaque primitives and types — all
@@ -11460,8 +11448,8 @@ impl TypeInferenceBuilder<'_> {
             // Finite enumerations: build an Or of singletons.
             Ty::Primitive(PrimitiveType::Bool) => Self::or_of_singletons(
                 vec![
-                    Ty::Literal(baml_base::Literal::Bool(true), Freshness::Regular),
-                    Ty::Literal(baml_base::Literal::Bool(false), Freshness::Regular),
+                    Ty::bool_lit(true, Freshness::Regular),
+                    Ty::bool_lit(false, Freshness::Regular),
                 ],
                 scrut_ty,
             ),
