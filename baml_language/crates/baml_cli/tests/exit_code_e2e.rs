@@ -8,6 +8,7 @@
 mod common;
 
 use std::{
+    fs,
     path::Path,
     process::{Command, Output},
 };
@@ -51,6 +52,44 @@ generator py {
 "#;
     let full_source = format!("{source}\n{generator_block}");
     create_project(dir, &full_source);
+}
+
+/// Install the built `baml-cli` binary into a temp `BAML_HOME` so the
+/// public `baml` wrapper can resolve and exec it.
+fn install_temp_toolchain(home: &Path, baml_cli: &Path) {
+    let version = "test-version";
+    let toolchain_bin = home.join("toolchains").join(version).join("bin");
+    fs::create_dir_all(&toolchain_bin).unwrap();
+    fs::write(
+        home.join("state.toml"),
+        format!(
+            "[channels.canary]\nactive_version = \"{version}\"\nresolved_at = \"test\"\nmanifest_path = \"test\"\n"
+        ),
+    )
+    .unwrap();
+    fs::write(
+        home.join("toolchains").join(version).join("VERSION"),
+        version,
+    )
+    .unwrap();
+
+    let dest = toolchain_bin.join(bin_name("baml-cli"));
+    fs::copy(baml_cli, &dest).unwrap();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mut perms = fs::metadata(&dest).unwrap().permissions();
+        perms.set_mode(0o755);
+        fs::set_permissions(&dest, perms).unwrap();
+    }
+}
+
+fn bin_name(name: &str) -> String {
+    if cfg!(windows) {
+        format!("{name}.exe")
+    } else {
+        name.to_string()
+    }
 }
 
 // ============================================================================
@@ -128,6 +167,34 @@ fn check_compilation_error_returns_nonzero_exit_code() {
     assert!(
         stderr.contains("MissingType") || stderr.contains("unresolved"),
         "Expected error message to mention the unresolved type, got: {stderr}",
+    );
+}
+
+/// The public `baml` wrapper is a passthrough to `baml-cli`, so agents should
+/// discover `check` from `baml --help`, not only from `baml-cli --help`.
+#[test]
+fn public_baml_help_lists_check_command() {
+    let built = common::ensure_built();
+    let home = tempfile::tempdir().unwrap();
+    install_temp_toolchain(home.path(), &built.baml_cli);
+
+    let output = Command::new(&built.baml)
+        .arg("--help")
+        .env("BAML_HOME", home.path())
+        .output()
+        .expect("spawn baml --help");
+
+    assert!(
+        output.status.success(),
+        "Expected exit code 0 for `baml --help`, got: {:?}\nstdout: {}\nstderr: {}",
+        output.status.code(),
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr),
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("check") && stdout.contains("Check BAML source files for compiler errors"),
+        "Expected `baml --help` to list `check`, got:\n{stdout}",
     );
 }
 

@@ -4,15 +4,17 @@
 // HACK — replace this with artifact deps once stable.
 // ============================================================================
 //
-// These tests need both `baml-cli` (the CLI that does the packing) and
-// `baml-pack-host` (the host binary whose bytes get embedded into packaged
-// executables). They live in different crates. Cargo's
+// These tests need `baml-cli` (the CLI that does the packing), `baml` (the
+// public wrapper that execs a selected toolchain), and `baml-pack-host` (the
+// host binary whose bytes get embedded into packaged executables). They live
+// in different crates. Cargo's
 // `CARGO_BIN_EXE_<name>` env var only exposes binaries from the test's
 // *own* crate, so we can't get `baml-pack-host`'s path for free.
 //
 // The *right* fix is cargo's artifact dependencies (RFC 3028):
 //
 //     [dev-dependencies]
+//     baml = { workspace = true, artifact = "bin" }
 //     baml_pack_host = { workspace = true, artifact = "bin" }
 //
 // With that, `env!("CARGO_BIN_FILE_baml_pack_host_baml-pack-host")` would
@@ -41,12 +43,13 @@
 
 use std::{path::PathBuf, process::Command, sync::OnceLock};
 
-/// Memoized build: `cargo build -p baml_cli -p baml_pack_host` runs at
+/// Memoized build: `cargo build -p baml -p baml_cli -p baml_pack_host` runs at
 /// most once per test binary regardless of how many tests call in.
 static BUILT: OnceLock<BuiltPaths> = OnceLock::new();
 
 #[derive(Clone, Debug)]
 pub struct BuiltPaths {
+    pub baml: PathBuf,
     pub baml_cli: PathBuf,
     pub baml_pack_host: PathBuf,
 }
@@ -62,20 +65,34 @@ pub fn ensure_built() -> &'static BuiltPaths {
         let profile = profile();
         let cargo = std::env::var("CARGO").unwrap_or_else(|_| "cargo".to_string());
         let mut build = Command::new(&cargo);
-        build.args(["build", "-p", "baml_cli", "-p", "baml_pack_host"]);
+        build.args([
+            "build",
+            "-p",
+            "baml",
+            "-p",
+            "baml_cli",
+            "-p",
+            "baml_pack_host",
+        ]);
         if profile == "release" {
             build.arg("--release");
         }
         let status = build.status().expect("spawn cargo build");
         assert!(
             status.success(),
-            "cargo build for baml_cli + baml_pack_host failed — see output above",
+            "cargo build for baml + baml_cli + baml_pack_host failed — see output above",
         );
 
         let target = target_dir();
         let bin_dir = target.join(&profile);
+        let baml = bin_dir.join(bin_name("baml"));
         let baml_cli = bin_dir.join(bin_name("baml-cli"));
         let baml_pack_host = bin_dir.join(bin_name("baml-pack-host"));
+        assert!(
+            baml.exists(),
+            "baml not found at {} after build",
+            baml.display()
+        );
         assert!(
             baml_cli.exists(),
             "baml-cli not found at {} after build",
@@ -87,6 +104,7 @@ pub fn ensure_built() -> &'static BuiltPaths {
             baml_pack_host.display()
         );
         BuiltPaths {
+            baml,
             baml_cli,
             baml_pack_host,
         }
