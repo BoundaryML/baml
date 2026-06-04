@@ -12,14 +12,14 @@ pub(crate) mod method;
 pub(crate) mod type_alias;
 pub(crate) mod typemap_file;
 
-use baml_codegen_types::{FunctionArgumentDefault, Name, Symbol, SymbolPool, Ty};
+use baml_codegen_types::{FunctionArgument, FunctionArgumentDefault, Name, Symbol, SymbolPool, Ty};
 
 use crate::{
     emit::{
         class::{PyClass, PyClassProperty},
         enum_::{PyEnum, PyEnumVariant},
         function::{PyFunction, SyncAsync},
-        method::{MethodKind, PyMethodBinding},
+        method::{MethodKind, OptionalArg, PyMethodBinding, RequiredArg},
         type_alias::PyTypeAlias,
     },
     routing::{LeafPath, route},
@@ -258,38 +258,53 @@ fn expand_methods(
             .collect();
         let method_docstring = m.docstring.clone();
         let raises_names = collect_raises_names(m.throws.as_ref());
-        expand_callable(
-            &bare,
-            &fqn_root,
-            &m.arguments,
-            &m.return_type,
-            |py_name, fqn, mode, params, arg_tys, arg_defaults, return_ty| {
-                let param_names = match kind {
-                    MethodKind::Static => params,
-                    MethodKind::Instance => {
-                        let mut with_self = Vec::with_capacity(params.len() + 1);
-                        with_self.push("self".to_string());
-                        with_self.extend(params);
-                        with_self
-                    }
-                };
-                out.push(PyMethodBinding {
-                    py_name,
-                    baml_fqn: fqn,
-                    mode,
-                    param_names,
-                    arg_defaults,
-                    kind,
-                    arg_tys,
-                    return_ty,
-                    generic_params: method_generic_params.clone(),
-                    docstring: method_docstring.clone(),
-                    raises_names: raises_names.clone(),
-                });
-            },
-        );
+        let (required_args, optional_args) = split_arguments(&m.arguments);
+        for (py_name, mode) in [
+            (bare.clone(), SyncAsync::Sync),
+            (format!("{bare}_async"), SyncAsync::Async),
+        ] {
+            out.push(PyMethodBinding {
+                py_name,
+                baml_fqn: fqn_root.clone(),
+                mode,
+                required_args: required_args.clone(),
+                optional_args: optional_args.clone(),
+                kind,
+                return_ty: m.return_type.clone(),
+                generic_params: method_generic_params.clone(),
+                docstring: method_docstring.clone(),
+                raises_names: raises_names.clone(),
+            });
+        }
     }
     out
+}
+
+fn split_arguments(arguments: &[FunctionArgument]) -> (Vec<RequiredArg>, Vec<OptionalArg>) {
+    let first_optional = arguments
+        .iter()
+        .position(|arg| arg.default.is_some())
+        .unwrap_or(arguments.len());
+    (
+        arguments[..first_optional]
+            .iter()
+            .map(|arg| RequiredArg {
+                name: arg.name.as_str().to_string(),
+                ty: arg.ty.clone(),
+            })
+            .collect(),
+        arguments[first_optional..]
+            .iter()
+            .map(|arg| OptionalArg {
+                name: arg.name.as_str().to_string(),
+                ty: arg.ty.clone(),
+                default: arg
+                    .default
+                    .clone()
+                    .expect("arguments after the first defaulted method arg must have defaults"),
+            })
+            .collect(),
+    )
 }
 
 /// Translate a callable's BAML name (which may carry a `$<suffix>` for

@@ -216,7 +216,7 @@ mod {fixture} {{
 
     #[test]
     fn pyright() {{
-        cmd("uv run pyright baml_sdk");
+        cmd("uv run pyright");
     }}
 
     #[test]

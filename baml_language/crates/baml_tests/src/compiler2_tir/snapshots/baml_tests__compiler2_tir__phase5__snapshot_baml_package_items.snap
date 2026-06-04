@@ -126,10 +126,10 @@ namespace baml.media:
   class Pdf { methods: [to_json, url, file, base64, mime_type, from_url, from_file, from_base64, from_json] }
   class Video { methods: [to_json, url, file, base64, mime_type, from_url, from_file, from_base64, from_json] }
 namespace baml.net:
-  class Socket { methods: [read, write, close, to_json, from_json] }
-  class TcpListener { methods: [accept, close, to_json, from_json] }
-  function connect
-  function listen
+  class Datagram { methods: [to_json, from_json] }
+  class TcpListener { methods: [bind, accept, close, to_json, from_json] }
+  class TcpStream { methods: [connect, read, write, close, to_json, from_json] }
+  class UdpSocket { methods: [bind, send_to, recv_from, close, to_json, from_json] }
 namespace baml.panics:
   class AllocFailure { methods: [to_json, from_json] }
   class AssertionFailed { methods: [to_json, from_json] }

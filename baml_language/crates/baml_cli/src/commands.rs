@@ -46,6 +46,8 @@ pub(crate) enum Commands {
 
     // #[command(about = "Checks for errors and warnings in the baml_src directory")]
     // Check(baml_runtime::cli::check::CheckArgs),
+    #[command(about = "Check BAML source files for compiler errors")]
+    Check(crate::check_command::CheckArgs),
 
     // #[command(about = "Starts a server that translates LLM responses to BAML responses")]
     // Serve(baml_runtime::cli::serve::ServeArgs),
@@ -158,6 +160,7 @@ impl RuntimeCli {
         match &self.command {
             Commands::Init(args) => args.run(),
             Commands::New(args) => args.run(),
+            Commands::Check(args) => args.run(),
             Commands::Run(args) => args.run(),
             Commands::Pack(args) => args.run(),
             Commands::Ide(args) => args.run(),
@@ -226,5 +229,25 @@ mod tests {
             "{help}"
         );
         assert!(!help.contains("Usage: baml-cli ide"), "{help}");
+    }
+
+    #[test]
+    fn root_help_lists_check_command() {
+        let help = help_for(&["baml-cli", "--help"]);
+        assert!(help.contains("check"), "{help}");
+        assert!(
+            help.contains("Check BAML source files for compiler errors"),
+            "{help}"
+        );
+    }
+
+    #[test]
+    fn check_help_mentions_default_from_directory() {
+        let help = help_for(&["baml-cli", "check", "--help"]);
+        assert!(help.contains("Usage: baml check [OPTIONS]"), "{help}");
+        assert!(
+            help.contains("Project root to check. Defaults to the current directory"),
+            "{help}"
+        );
     }
 }

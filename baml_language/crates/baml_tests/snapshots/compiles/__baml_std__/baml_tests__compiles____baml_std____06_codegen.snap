@@ -4119,34 +4119,42 @@ function baml.media.Video.to_json(self: baml.media.Video) -> baml.json.json {
 function baml.media.Video.url(self: baml.media.Video) -> string? {
 }
 
-function baml.net.Socket.close(self: baml.net.Socket) -> null {
-}
-
-function baml.net.Socket.from_json(j: baml.json.json) -> baml.net.Socket {
+function baml.net.Datagram.from_json(j: baml.json.json) -> baml.net.Datagram {
     load_var j
-    call baml.json.stringify
-    store_var _2
-    load_type baml.net.Socket
-    load_var _2
-    call baml.json.from_string
+    load_const "data"
+    call baml.json.field
+    store_var _3
+    load_type uint8array
+    load_var _3
+    call baml.json.from_json
+    load_var j
+    load_const "addr"
+    call baml.json.field
+    store_var _6
+    load_type string
+    load_var _6
+    call baml.json.from_json
+    init_instance baml.net.Datagram .data, .addr
     return
 }
 
-function baml.net.Socket.read(self: baml.net.Socket) -> string {
-}
-
-function baml.net.Socket.to_json(self: baml.net.Socket) -> baml.json.json {
-    load_type baml.net.Socket
+function baml.net.Datagram.to_json(self: baml.net.Datagram) -> baml.json.json {
     load_var self
-    call baml.json.to_string
-    call baml.json.parse
+    load_field .data
+    call baml.Uint8Array.to_json
+    load_var self
+    load_field .addr
+    call baml.String.to_json
+    load_const "data"
+    load_const "addr"
+    alloc_map 2
     return
 }
 
-function baml.net.Socket.write(self: baml.net.Socket, data: string) -> null {
+function baml.net.TcpListener.accept(self: baml.net.TcpListener) -> baml.net.TcpStream {
 }
 
-function baml.net.TcpListener.accept(self: baml.net.TcpListener) -> baml.net.Socket {
+function baml.net.TcpListener.bind(addr: string) -> baml.net.TcpListener {
 }
 
 function baml.net.TcpListener.close(self: baml.net.TcpListener) -> null {
@@ -4170,10 +4178,64 @@ function baml.net.TcpListener.to_json(self: baml.net.TcpListener) -> baml.json.j
     return
 }
 
-function baml.net.connect(addr: string) -> baml.net.Socket {
+function baml.net.TcpStream.close(self: baml.net.TcpStream) -> null {
 }
 
-function baml.net.listen(addr: string) -> baml.net.TcpListener {
+function baml.net.TcpStream.connect(addr: string) -> baml.net.TcpStream {
+}
+
+function baml.net.TcpStream.from_json(j: baml.json.json) -> baml.net.TcpStream {
+    load_var j
+    call baml.json.stringify
+    store_var _2
+    load_type baml.net.TcpStream
+    load_var _2
+    call baml.json.from_string
+    return
+}
+
+function baml.net.TcpStream.read(self: baml.net.TcpStream) -> uint8array {
+}
+
+function baml.net.TcpStream.to_json(self: baml.net.TcpStream) -> baml.json.json {
+    load_type baml.net.TcpStream
+    load_var self
+    call baml.json.to_string
+    call baml.json.parse
+    return
+}
+
+function baml.net.TcpStream.write(self: baml.net.TcpStream, data: uint8array) -> null {
+}
+
+function baml.net.UdpSocket.bind(addr: string) -> baml.net.UdpSocket {
+}
+
+function baml.net.UdpSocket.close(self: baml.net.UdpSocket) -> null {
+}
+
+function baml.net.UdpSocket.from_json(j: baml.json.json) -> baml.net.UdpSocket {
+    load_var j
+    call baml.json.stringify
+    store_var _2
+    load_type baml.net.UdpSocket
+    load_var _2
+    call baml.json.from_string
+    return
+}
+
+function baml.net.UdpSocket.recv_from(self: baml.net.UdpSocket) -> baml.net.Datagram {
+}
+
+function baml.net.UdpSocket.send_to(self: baml.net.UdpSocket, data: uint8array, addr: string) -> int {
+}
+
+function baml.net.UdpSocket.to_json(self: baml.net.UdpSocket) -> baml.json.json {
+    load_type baml.net.UdpSocket
+    load_var self
+    call baml.json.to_string
+    call baml.json.parse
+    return
 }
 
 function baml.panics.AllocFailure.from_json(j: baml.json.json) -> baml.panics.AllocFailure {

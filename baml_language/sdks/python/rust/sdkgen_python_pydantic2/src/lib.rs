@@ -1901,20 +1901,18 @@ mod tests {
         let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
         let py = &out[&PathBuf::from("lorem/__init__.py")];
         assert!(py.contains(
-            "search       = _define_function(\"user.lorem.search\", \"sync\",  [\"query\", \"max_results\", \"filter\", \"tags\", \"metadata\", \"fallback\"], 1)\n"
+            "search       = _define_function(\"user.lorem.search\", \"sync\",  [\"query\"], [\"max_results\", \"filter\", \"tags\", \"metadata\", \"fallback\"])\n"
         ));
         assert!(py.contains(
-            "search_async = _define_function(\"user.lorem.search\", \"async\", [\"query\", \"max_results\", \"filter\", \"tags\", \"metadata\", \"fallback\"], 1)\n"
+            "search_async = _define_function(\"user.lorem.search\", \"async\", [\"query\"], [\"max_results\", \"filter\", \"tags\", \"metadata\", \"fallback\"])\n"
         ));
 
         let pyi = &out[&PathBuf::from("lorem/__init__.pyi")];
-        assert!(!pyi.contains("UNSET"));
-        assert!(!pyi.contains("_UNSET"));
         assert!(pyi.contains(
-            "def search(query: str, *, max_results: int = 10, filter: str = ..., tags: typing.List[str] = [], metadata: typing.Dict[str, str] = {}, fallback: typing.Optional[str] = None) -> str: ...\n"
+            "def search(query: str, *, max_results: typing.Union[int, baml.Unset] = 10, filter: typing.Union[str, baml.Unset] = baml.UNSET, tags: typing.Union[typing.List[str], baml.Unset] = [], metadata: typing.Union[typing.Dict[str, str], baml.Unset] = {}, fallback: typing.Union[str, None, baml.Unset] = None) -> str: ...\n"
         ));
         assert!(pyi.contains(
-            "async def search_async(query: str, *, max_results: int = 10, filter: str = ..., tags: typing.List[str] = [], metadata: typing.Dict[str, str] = {}, fallback: typing.Optional[str] = None) -> str: ...\n"
+            "async def search_async(query: str, *, max_results: typing.Union[int, baml.Unset] = 10, filter: typing.Union[str, baml.Unset] = baml.UNSET, tags: typing.Union[typing.List[str], baml.Unset] = [], metadata: typing.Union[typing.Dict[str, str], baml.Unset] = {}, fallback: typing.Union[str, None, baml.Unset] = None) -> str: ...\n"
         ));
     }
 
@@ -1972,18 +1970,18 @@ mod tests {
         let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
         let py = &out[&PathBuf::from("lorem/__init__.py")];
         assert!(py.contains(
-            "extract_resume       = _define_function(\"user.lorem.extract_resume\", \"sync\",  [\"resume\", \"client\"], 1)\n"
+            "extract_resume       = _define_function(\"user.lorem.extract_resume\", \"sync\",  [\"resume\"], [\"client\"])\n"
         ));
         assert!(py.contains(
-            "extract_resume__build_request       = _define_function(\"user.lorem.extract_resume$build_request\", \"sync\",  [\"resume\", \"client\"], 1)\n"
+            "extract_resume__build_request       = _define_function(\"user.lorem.extract_resume$build_request\", \"sync\",  [\"resume\"], [\"client\"])\n"
         ));
 
         let pyi = &out[&PathBuf::from("lorem/__init__.pyi")];
         assert!(pyi.contains(
-            "def extract_resume(resume: str, *, client: baml.llm.Client = ...) -> str: ...\n"
+            "def extract_resume(resume: str, *, client: typing.Union[baml.llm.Client, baml.Unset] = baml.UNSET) -> str: ...\n"
         ));
         assert!(pyi.contains(
-            "def extract_resume__build_request(resume: str, *, client: baml.llm.Client = ...) -> baml.http.Request: ...\n"
+            "def extract_resume__build_request(resume: str, *, client: typing.Union[baml.llm.Client, baml.Unset] = baml.UNSET) -> baml.http.Request: ...\n"
         ));
     }
 
@@ -2030,13 +2028,11 @@ mod tests {
         let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
         let pyi = &out[&PathBuf::from("lorem/__init__.pyi")];
 
-        assert!(!pyi.contains("from baml_core import UNSET as _UNSET\n"));
-        assert!(!pyi.contains("_UNSET"));
         assert!(pyi.contains(
-            "def defaults(*, tags: typing.List[str] = [], metadata: typing.Dict[str, int] = {}, fallback: typing.Optional[str] = None) -> str: ...\n"
+            "def defaults(*, tags: typing.Union[typing.List[str], baml.Unset] = [], metadata: typing.Union[typing.Dict[str, int], baml.Unset] = {}, fallback: typing.Union[str, None, baml.Unset] = None) -> str: ...\n"
         ));
         assert!(pyi.contains(
-            "async def defaults_async(*, tags: typing.List[str] = [], metadata: typing.Dict[str, int] = {}, fallback: typing.Optional[str] = None) -> str: ...\n"
+            "async def defaults_async(*, tags: typing.Union[typing.List[str], baml.Unset] = [], metadata: typing.Union[typing.Dict[str, int], baml.Unset] = {}, fallback: typing.Union[str, None, baml.Unset] = None) -> str: ...\n"
         ));
     }
 

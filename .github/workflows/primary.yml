@@ -39,7 +39,7 @@ jobs:
   # This job enables auto-pass when only baml_language/ or typescript/apps/beps/ files are modified
   determine_changes:
     name: "Determine changes"
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-latest
     outputs:
       # Flag that is raised when runtime-related code is changed
       # If false, we can skip all runtime tests since only baml_language/ or beps/ changed
@@ -141,7 +141,7 @@ jobs:
   # Auto-pass summary when skipping runtime tests
   skip-summary:
     name: "Skip Summary"
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-latest
     needs: determine_changes
     if: needs.determine_changes.outputs.runtime == 'false'
     steps:
@@ -160,7 +160,7 @@ jobs:
 
   # Run all quality checks in parallel (lightweight setup)
   lint:
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-latest
     needs: determine_changes
     if: needs.determine_changes.outputs.runtime == 'true'
     strategy:
@@ -227,7 +227,7 @@ jobs:
           cd integ-tests/python && uv run ruff check .
 
   typecheck:
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-latest
     needs: determine_changes
     if: needs.determine_changes.outputs.runtime == 'true'
     steps:
@@ -257,7 +257,7 @@ jobs:
         run: pnpm typecheck --force
 
   build-wasm:
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-latest
     needs: determine_changes
     if: needs.determine_changes.outputs.runtime == 'true'
     steps:
@@ -279,7 +279,7 @@ jobs:
 
   # Test node generator (only needs CLI)
   test-generators:
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-latest
     needs: determine_changes
     if: needs.determine_changes.outputs.runtime == 'true'
     steps:
@@ -336,7 +336,7 @@ jobs:
 
   # Run tests in parallel (rebuild what's needed)
   tests:
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-latest
     needs: determine_changes
     if: needs.determine_changes.outputs.runtime == 'true'
     strategy:
@@ -459,7 +459,7 @@ jobs:
   # Configure "BAML Runtime / CI Failure Alert" as a required status check.
   ci-failure-alert:
     name: "CI Failure Alert"
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-latest
     needs:
       - determine_changes
       - lint
@@ -489,7 +489,7 @@ jobs:
 
   # Sync Zed extension to separate repository
   sync-zed-repository:
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-latest
     needs: determine_changes
     # Only run on pushes to canary branch or manual dispatch, and only if runtime changed
     if: github.ref == 'refs/heads/canary' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && needs.determine_changes.outputs.runtime == 'true'
