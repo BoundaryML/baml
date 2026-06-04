@@ -346,6 +346,142 @@ jobs:
           path: baml_language/target/cargo-timings/cargo-timing-test-windows.html
           if-no-files-found: ignore
 
+  # EXPERIMENT (build-caching/04 Exp 15 — macOS cross-compile from Linux ARM64).
+  # Cross-compile the macOS (aarch64-apple-darwin) build on blacksmith-8vcpu-
+  # ubuntu-2404-arm via cargo-zigbuild (zig = cross linker/CC). Blockers resolved:
+  #  - aws-lc-sys hard-fails arm64-darwin cross -> ring-crypto (4 Cargo.toml edits
+  #    on this branch) drops it;
+  #  - ring's arm64-darwin asm cross (historically flaky) -> tested by PRIMARY;
+  #  - Apple SDK (needed to LINK against frameworks) -> packaged from our Mac's
+  #    Xcode 26.1 and stored in R2 at baml/sdk/MacOSX26.1.sdk.tar.zst; downloaded
+  #    here and pointed at via SDKROOT. So this now does the FULL cross-build+link.
+  # Gated to the experiment branch. See build-caching/04 §5.2/§5.3.
+  macos-cross-probe:
+    name: "cross-compile macos (${{ matrix.host }})"
+    if: ${{ github.event_name != 'merge_group' && github.head_ref == 'sam/macos-cross-probe' }}
+    # Exp 18: compare cross-compile host arch — linux-arm64 vs linux-x64 -> macOS
+    # (aarch64-apple-darwin). Both via cargo-zigbuild; only the Linux host differs.
+    # rustc cross-compiles regardless of host; this measures the real wall delta
+    # (host proc-macro/build-script speed + zig codegen). Same-arch host (arm->arm)
+    # was hypothesized easier/faster.
+    runs-on: ${{ matrix.runs-on }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { host: linux-arm64, runs-on: blacksmith-8vcpu-ubuntu-2404-arm }
+          - { host: linux-x64,   runs-on: blacksmith-8vcpu-ubuntu-2404 }
+    timeout-minutes: 40
+    env:
+      FEATURES: "--no-default-features --features baml_cli/ring-crypto,baml_cli/internal,baml_cli/skip-integ-tests,baml_project/testing,bex_sap/manual_db,bex_vm/kperf,bex_engine/heap_debug,baml_tests/heap_debug,tools_onionskin/heap_debug,bridge_python/extension-module,bridge_cffi/ring-crypto,bridge_nodejs/ring-crypto,bridge_python/ring-crypto,bridge_wasm/ring-crypto,baml_pack_host/native-tls"
+    steps:
+      - uses: useblacksmith/checkout@v1
+        with:
+          persist-credentials: false
+
+      - name: "Install Rust toolchain + darwin target"
+        run: |
+          set -euo pipefail
+          rustup show
+          rustup target add aarch64-apple-darwin
+        working-directory: baml_language
+
+      - name: "Install zig + zstd"
+        run: |
+          set -euo pipefail
+          sudo apt-get update && sudo apt-get install -y zstd
+          python3 -m pip install --user --break-system-packages ziglang || python3 -m pip install --user ziglang
+          python3 -m ziglang version
+
+      - name: "Install cargo-zigbuild + nextest"
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-zigbuild,cargo-nextest
+
+      - name: "Download macOS SDK from R2 + set SDKROOT"
+        run: |
+          set -euo pipefail
+          # Same R2 creds CI already uses for sccache (top-level env <- secrets).
+          export AWS_ACCESS_KEY_ID="$BAML_SCCACHE_R2_ACCESS_KEY_ID"
+          export AWS_SECRET_ACCESS_KEY="$BAML_SCCACHE_R2_SECRET_ACCESS_KEY"
+          export AWS_REGION=auto
+          aws --version >/dev/null 2>&1 || { sudo apt-get install -y awscli; }
+          mkdir -p "$RUNNER_TEMP/macsdk"
+          aws s3 cp s3://baml-build1/baml/sdk/MacOSX26.1.sdk.tar.zst "$RUNNER_TEMP/sdk.tar.zst" \
+            --endpoint-url https://321ca319116f1e5eefa9135d9d019a5a.r2.cloudflarestorage.com
+          tar -C "$RUNNER_TEMP/macsdk" --use-compress-program=unzstd -xf "$RUNNER_TEMP/sdk.tar.zst"
+          test -d "$RUNNER_TEMP/macsdk/MacOSX.sdk/System/Library/Frameworks/Security.framework"
+          echo "SDKROOT=$RUNNER_TEMP/macsdk/MacOSX.sdk" >> "$GITHUB_ENV"
+          echo "MACOSX_DEPLOYMENT_TARGET=12.0" >> "$GITHUB_ENV"
+
+      # Phase 2: route nextest's build/link through cargo-zigbuild's `zig cc`
+      # entrypoint (NOT a raw zig wrapper) so it gets cargo-zigbuild's flag
+      # rewriting (arm64->aarch64, macosx->macos, drops cc-rs's --target=/-arch,
+      # rewrites macOS `-undefined dynamic_lookup` for the pyo3/napi cdylibs, tbd
+      # stubs, SDKROOT). This is the seam cargo-zigbuild itself uses for its
+      # build/test subcommands, so plain `cargo nextest archive` gets identical
+      # treatment to the proven `cargo zigbuild --tests`.
+      - name: "Set up cargo-zigbuild zig cc shims"
+        run: |
+          set -euo pipefail
+          bin="$RUNNER_TEMP/zigbin"; mkdir -p "$bin"
+          printf '%s\n' '#!/bin/sh' 'exec cargo-zigbuild zig cc -- -target aarch64-macos-none "$@"'  > "$bin/zcc"
+          printf '%s\n' '#!/bin/sh' 'exec cargo-zigbuild zig c++ -- -target aarch64-macos-none "$@"' > "$bin/zcxx"
+          chmod +x "$bin/zcc" "$bin/zcxx"
+          {
+            echo "CARGO_TARGET_AARCH64_APPLE_DARWIN_LINKER=$bin/zcc"
+            echo "CC_aarch64_apple_darwin=$bin/zcc"
+            echo "CXX_aarch64_apple_darwin=$bin/zcxx"
+          } >> "$GITHUB_ENV"
+
+      # Builds + links + packages all test binaries for arm64-darwin. The step
+      # duration is the Exp 18 cross-build metric (per host arch). Produces the
+      # archive the Mac job runs (phase 2). aws-lc-sys gone via ring-crypto.
+      - name: "ARCHIVE: nextest archive (cross to arm64-darwin)"
+        run: |
+          set -euo pipefail
+          cargo nextest archive --target aarch64-apple-darwin ${{ env.FEATURES }} \
+            -E 'not package(baml_tests) and not package(/^sdk_test_/) and platform(target) and not package(tools_sap_visualizer)' \
+            --archive-file "$RUNNER_TEMP/mac-tests-${{ matrix.host }}.tar.zst"
+        working-directory: baml_language
+
+      - name: "Upload mac test archive"
+        uses: actions/upload-artifact@v7
+        with:
+          name: macos-xtests-archive-${{ matrix.host }}
+          path: ${{ runner.temp }}/mac-tests-${{ matrix.host }}.tar.zst
+          if-no-files-found: error
+          retention-days: 1
+
+  # Phase 2: RUN the (linux-arm64-)cross-built binaries on a real Mac, no build —
+  # rules out false greens (cross-built != native; the BAML_LIBRARY_PATH cdylib
+  # must dlopen on the Mac).
+  macos-xtests-run:
+    name: "macos xtests (run on mac)"
+    if: ${{ github.event_name != 'merge_group' && github.head_ref == 'sam/macos-cross-probe' }}
+    needs: macos-cross-probe
+    runs-on: blacksmith-6vcpu-macos-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v7
+        with:
+          name: macos-xtests-archive-linux-arm64
+          path: ${{ runner.temp }}
+      - name: "Install cargo nextest"
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-nextest
+      - name: "Run prebuilt cross-built tests (no build)"
+        run: |
+          set -euo pipefail
+          cargo nextest run --archive-file "$RUNNER_TEMP/mac-tests-linux-arm64.tar.zst" \
+            --workspace-remap . \
+            -E 'not package(baml_tests) and not package(/^sdk_test_/) and platform(target) and not package(tools_sap_visualizer)'
+        working-directory: baml_language
+
   sdk-test-matrix:
     name: "sdk test matrix"
     runs-on: ubuntu-latest
