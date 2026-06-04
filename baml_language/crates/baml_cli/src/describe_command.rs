@@ -205,7 +205,58 @@ pub fn dispatch<'db>(db: &'db ProjectDatabase, name: &str) -> Option<ResolvedTar
 
     // User package.
     let user_pkg = baml_compiler2_hir::package::PackageId::new(db, baml_db::Name::new("user"));
-    baml_lsp2_actions::resolve_target(db, user_pkg, name)
+    if let Some(target) = baml_lsp2_actions::resolve_target(db, user_pkg, name) {
+        return Some(target);
+    }
+
+    resolve_builtin_bare_class_member(db, name)
+}
+
+/// Resolve `Class.method` when `Class` is an unqualified builtin class.
+///
+/// Top-level builtin lookups such as `baml describe Array` can fall back to the
+/// substring-based describe path, but `Array.reduce` needs a structural member
+/// target so the class-method renderer can show the method signature directly.
+fn resolve_builtin_bare_class_member<'db>(
+    db: &'db ProjectDatabase,
+    name: &str,
+) -> Option<ResolvedTarget<'db>> {
+    use baml_compiler2_hir::{
+        contributions::{Definition, DefinitionKind},
+        package::{PackageId, package_items},
+    };
+
+    let (class_name, method_name) = name.split_once('.')?;
+    if class_name.is_empty() || method_name.is_empty() || method_name.contains('.') {
+        return None;
+    }
+
+    let class_name = baml_db::Name::new(class_name);
+    let member_name = baml_db::Name::new(method_name);
+    let mut found: Option<Definition<'db>> = None;
+
+    for pkg_name in baml_lsp2_actions::non_user_package_names(db) {
+        let pkg = PackageId::new(db, baml_db::Name::new(&pkg_name));
+        let pkg_items = package_items(db, pkg);
+        for ns_items in pkg_items.namespaces.values() {
+            let Some(def) = ns_items.types.get(&class_name).copied() else {
+                continue;
+            };
+            if def.kind() != DefinitionKind::Class {
+                continue;
+            }
+            if found.replace(def).is_some() {
+                // Keep unqualified lookup deterministic if two builtin
+                // namespaces ever export classes with the same short name.
+                return None;
+            }
+        }
+    }
+
+    found.map(|parent| ResolvedTarget::Member {
+        parent,
+        member_name,
+    })
 }
 
 /// Map a lowercase primitive/keyword alias to the path of its builtin `baml`

@@ -769,6 +769,48 @@ fn describe_builtin_method_drill_in_via_alias() {
     );
 }
 
+/// Drilling into a builtin method via the natural `Class.method` spelling
+/// resolves the builtin class and shows the method's resolved signature.
+#[test]
+fn describe_builtin_method_drill_in_without_package_prefix() {
+    let db = simple_project();
+    let output = describe_via_dispatch(&db, "Array.reduce");
+    assert!(
+        output.contains(
+            "function reduce<A, E>(self, reducer: (A, T) -> A throws E, initial: A) -> A throws E"
+        ),
+        "expected resolved builtin method signature:\n{output}"
+    );
+    assert!(
+        output.contains("container:") && output.contains("Array"),
+        "owning builtin class should be the container:\n{output}"
+    );
+    assert!(
+        !output.contains("$rust_function"),
+        "native body marker must not appear:\n{output}"
+    );
+    assert!(
+        !output.starts_with("NOT FOUND") && !output.starts_with("NO DESCRIPTION"),
+        "`Array.reduce` should resolve as a builtin class method:\n{output}"
+    );
+}
+
+/// The same unqualified builtin class-member routing works for non-generic
+/// builtin methods too.
+#[test]
+fn describe_string_method_drill_in_without_package_prefix() {
+    let db = simple_project();
+    let output = describe_via_dispatch(&db, "String.split");
+    assert!(
+        output.contains("function split(self, delimiter: string) -> string[]"),
+        "expected resolved builtin method signature:\n{output}"
+    );
+    assert!(
+        !output.starts_with("NOT FOUND") && !output.starts_with("NO DESCRIPTION"),
+        "`String.split` should resolve as a builtin class method:\n{output}"
+    );
+}
+
 // ── definition_line_range tests ──────────────────────────────────────────────
 
 #[test]
