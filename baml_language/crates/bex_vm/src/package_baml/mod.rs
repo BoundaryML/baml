@@ -17,6 +17,11 @@
 //! 1. Add the definition in the `.baml` stdlib under `crates/baml_builtins2/baml_std/`
 //! 2. Implement the method in the appropriate sub-module's `impl` block
 
+// The `baml.iter` protocol's `iter()` method generates native glue named
+// `iter` that returns `Value` (not a Rust `Iterator`); allow the resulting
+// clippy lint on the generated code `include!`d below.
+#![allow(clippy::iter_not_returning_iterator)]
+
 mod array;
 pub(crate) mod bigint;
 mod float;

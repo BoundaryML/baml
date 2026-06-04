@@ -1,0 +1,465 @@
+---
+source: crates/baml_tests/tests/baml_src.rs
+---
+function iter.$init_test_ns_iter_iter(registry: testing.TestCollector) -> null {
+    load_var registry
+    load_const "collect"
+    make_closure .<lambda($init_test_ns_iter_iter, 0)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "reduce"
+    make_closure .<lambda($init_test_ns_iter_iter, 1)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "count"
+    make_closure .<lambda($init_test_ns_iter_iter, 2)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "range"
+    make_closure .<lambda($init_test_ns_iter_iter, 3)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "chain"
+    make_closure .<lambda($init_test_ns_iter_iter, 4)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_const null
+    return
+}
+
+function iter.iter_chain() -> int[] {
+    load_type int
+    load_const 1
+    load_const 2
+    alloc_array 2
+    call baml.iter.ArrayIterator.new
+    store_var a
+    load_type int
+    load_const 3
+    load_const 4
+    alloc_array 2
+    call baml.iter.ArrayIterator.new
+    store_var _8
+    load_var a
+    is_type Range
+    pop_jump_if_false L0
+    jump L9
+
+  L0:
+    load_var a
+    is_type StepBy<...>
+    pop_jump_if_false L1
+    jump L8
+
+  L1:
+    load_var a
+    is_type ArrayIterator<...>
+    pop_jump_if_false L2
+    jump L7
+
+  L2:
+    load_var a
+    is_type Chain<...>
+    pop_jump_if_false L3
+    jump L6
+
+  L3:
+    load_var a
+    is_type Peekable<...>
+    pop_jump_if_false L4
+    jump L5
+
+  L4:
+    load_type int
+    load_type void
+    load_var2 1 3
+    call baml.iter.Iterator.chain
+    store_var _7
+    jump L10
+
+  L5:
+    load_type int
+    load_type void
+    load_var2 1 3
+    call baml.iter.Iterator.chain
+    store_var _7
+    jump L10
+
+  L6:
+    load_type int
+    load_type void
+    load_var2 1 3
+    call baml.iter.Iterator.chain
+    store_var _7
+    jump L10
+
+  L7:
+    load_type int
+    load_type void
+    load_var2 1 3
+    call baml.iter.Iterator.chain
+    store_var _7
+    jump L10
+
+  L8:
+    load_type int
+    load_type void
+    load_var2 1 3
+    call baml.iter.Iterator.chain
+    store_var _7
+    jump L10
+
+  L9:
+    load_type int
+    load_type void
+    load_var2 1 3
+    call baml.iter.Iterator.chain
+    store_var _7
+
+  L10:
+    load_var _7
+    is_type Range
+    pop_jump_if_false L11
+    jump L20
+
+  L11:
+    load_var _7
+    is_type StepBy<...>
+    pop_jump_if_false L12
+    jump L19
+
+  L12:
+    load_var _7
+    is_type ArrayIterator<...>
+    pop_jump_if_false L13
+    jump L18
+
+  L13:
+    load_var _7
+    is_type Chain<...>
+    pop_jump_if_false L14
+    jump L17
+
+  L14:
+    load_var _7
+    is_type Peekable<...>
+    pop_jump_if_false L15
+    jump L16
+
+  L15:
+    load_type int
+    load_type void
+    load_var _7
+    call baml.iter.Iterator.collect
+    jump L21
+
+  L16:
+    load_type int
+    load_type void
+    load_var _7
+    call baml.iter.Iterator.collect
+    jump L21
+
+  L17:
+    load_type int
+    load_type void
+    load_var _7
+    call baml.iter.Iterator.collect
+    jump L21
+
+  L18:
+    load_type int
+    load_type void
+    load_var _7
+    call baml.iter.Iterator.collect
+    jump L21
+
+  L19:
+    load_type int
+    load_type void
+    load_var _7
+    call baml.iter.Iterator.collect
+    jump L21
+
+  L20:
+    load_type int
+    load_type void
+    load_var _7
+    call baml.iter.Iterator.collect
+
+  L21:
+    return
+}
+
+function iter.iter_collect() -> int[] {
+    load_type int
+    load_const 5
+    load_const 6
+    load_const 7
+    alloc_array 3
+    call baml.iter.ArrayIterator.new
+    store_var it
+    load_var it
+    is_type Range
+    pop_jump_if_false L0
+    jump L9
+
+  L0:
+    load_var it
+    is_type StepBy<...>
+    pop_jump_if_false L1
+    jump L8
+
+  L1:
+    load_var it
+    is_type ArrayIterator<...>
+    pop_jump_if_false L2
+    jump L7
+
+  L2:
+    load_var it
+    is_type Chain<...>
+    pop_jump_if_false L3
+    jump L6
+
+  L3:
+    load_var it
+    is_type Peekable<...>
+    pop_jump_if_false L4
+    jump L5
+
+  L4:
+    load_type int
+    load_type void
+    load_var it
+    call baml.iter.Iterator.collect
+    jump L10
+
+  L5:
+    load_type int
+    load_type void
+    load_var it
+    call baml.iter.Iterator.collect
+    jump L10
+
+  L6:
+    load_type int
+    load_type void
+    load_var it
+    call baml.iter.Iterator.collect
+    jump L10
+
+  L7:
+    load_type int
+    load_type void
+    load_var it
+    call baml.iter.Iterator.collect
+    jump L10
+
+  L8:
+    load_type int
+    load_type void
+    load_var it
+    call baml.iter.Iterator.collect
+    jump L10
+
+  L9:
+    load_type int
+    load_type void
+    load_var it
+    call baml.iter.Iterator.collect
+
+  L10:
+    return
+}
+
+function iter.iter_count() -> int {
+    load_type int
+    load_const 9
+    load_const 9
+    load_const 9
+    alloc_array 3
+    call baml.iter.ArrayIterator.new
+    store_var it
+    load_var it
+    is_type Range
+    pop_jump_if_false L0
+    jump L9
+
+  L0:
+    load_var it
+    is_type StepBy<...>
+    pop_jump_if_false L1
+    jump L8
+
+  L1:
+    load_var it
+    is_type ArrayIterator<...>
+    pop_jump_if_false L2
+    jump L7
+
+  L2:
+    load_var it
+    is_type Chain<...>
+    pop_jump_if_false L3
+    jump L6
+
+  L3:
+    load_var it
+    is_type Peekable<...>
+    pop_jump_if_false L4
+    jump L5
+
+  L4:
+    load_type int
+    load_type void
+    load_var it
+    call baml.iter.Iterator.count
+    jump L10
+
+  L5:
+    load_type int
+    load_type void
+    load_var it
+    call baml.iter.Iterator.count
+    jump L10
+
+  L6:
+    load_type int
+    load_type void
+    load_var it
+    call baml.iter.Iterator.count
+    jump L10
+
+  L7:
+    load_type int
+    load_type void
+    load_var it
+    call baml.iter.Iterator.count
+    jump L10
+
+  L8:
+    load_type int
+    load_type void
+    load_var it
+    call baml.iter.Iterator.count
+    jump L10
+
+  L9:
+    load_type int
+    load_type void
+    load_var it
+    call baml.iter.Iterator.count
+
+  L10:
+    return
+}
+
+function iter.iter_range() -> int[] {
+    load_const 0
+    load_const 5
+    load_const <omitted>
+    call baml.iter.Range.new
+    call baml.iter.Iterator.collect
+    return
+}
+
+function iter.iter_reduce() -> int {
+    load_type int
+    load_const 1
+    load_const 2
+    load_const 3
+    load_const 4
+    alloc_array 4
+    call baml.iter.ArrayIterator.new
+    store_var it
+    make_closure .<lambda(iter_reduce, 0)>, 0
+    store_var _4
+    load_var it
+    is_type Range
+    pop_jump_if_false L0
+    jump L9
+
+  L0:
+    load_var it
+    is_type StepBy<...>
+    pop_jump_if_false L1
+    jump L8
+
+  L1:
+    load_var it
+    is_type ArrayIterator<...>
+    pop_jump_if_false L2
+    jump L7
+
+  L2:
+    load_var it
+    is_type Chain<...>
+    pop_jump_if_false L3
+    jump L6
+
+  L3:
+    load_var it
+    is_type Peekable<...>
+    pop_jump_if_false L4
+    jump L5
+
+  L4:
+    load_type int
+    load_type void
+    load_var2 1 2
+    load_const 0
+    call baml.iter.Iterator.reduce
+    jump L10
+
+  L5:
+    load_type int
+    load_type void
+    load_var2 1 2
+    load_const 0
+    call baml.iter.Iterator.reduce
+    jump L10
+
+  L6:
+    load_type int
+    load_type void
+    load_var2 1 2
+    load_const 0
+    call baml.iter.Iterator.reduce
+    jump L10
+
+  L7:
+    load_type int
+    load_type void
+    load_var2 1 2
+    load_const 0
+    call baml.iter.Iterator.reduce
+    jump L10
+
+  L8:
+    load_type int
+    load_type void
+    load_var2 1 2
+    load_const 0
+    call baml.iter.Iterator.reduce
+    jump L10
+
+  L9:
+    load_type int
+    load_type void
+    load_var2 1 2
+    load_const 0
+    call baml.iter.Iterator.reduce
+
+  L10:
+    return
+}
