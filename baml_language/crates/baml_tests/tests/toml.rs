@@ -51,7 +51,7 @@ async fn parse_scalars() {
     assert_eq!(
         output.result,
         Ok(BexExternalValue::String(
-            r#"{"count":3,"name":"hi","ok":true,"ratio":1.5}"#.to_string()
+            r#"{"count":3,"name":"hi","ok":true,"ratio":1.5}"#.to_string().into()
         ))
     );
 }
@@ -71,7 +71,7 @@ async fn parse_datetime() {
     assert_eq!(
         output.result,
         Ok(BexExternalValue::String(
-            r#"{"dt":"1979-05-27T07:32:00Z"}"#.to_string()
+            r#"{"dt":"1979-05-27T07:32:00Z"}"#.to_string().into()
         ))
     );
 }
@@ -89,7 +89,7 @@ async fn parse_array() {
     );
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String(r#"{"nums":[1,2,3]}"#.to_string()))
+        Ok(BexExternalValue::String(r#"{"nums":[1,2,3]}"#.to_string().into()))
     );
 }
 
@@ -107,7 +107,7 @@ async fn parse_nested_table() {
     assert_eq!(
         output.result,
         Ok(BexExternalValue::String(
-            r#"{"server":{"host":"localhost"}}"#.to_string()
+            r#"{"server":{"host":"localhost"}}"#.to_string().into()
         ))
     );
 }
@@ -150,7 +150,7 @@ async fn from_json_skips_null() {
     assert_eq!(
         output.result,
         Ok(BexExternalValue::String(
-            r#"{"a":1,"c":{"d":"x"}}"#.to_string()
+            r#"{"a":1,"c":{"d":"x"}}"#.to_string().into()
         ))
     );
 }
@@ -185,7 +185,7 @@ async fn item_to_json_array_with_datetime() {
     assert_eq!(
         output.result,
         Ok(BexExternalValue::String(
-            r#"["2020-01-01T00:00:00Z",7]"#.to_string()
+            r#"["2020-01-01T00:00:00Z",7]"#.to_string().into()
         ))
     );
 }
