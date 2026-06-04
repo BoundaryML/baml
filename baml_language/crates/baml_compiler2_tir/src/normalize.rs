@@ -1162,31 +1162,18 @@ fn format_cycle_path(cycle: &[QualifiedTypeName]) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ty::{Freshness, FunctionParamTy, TyAttr};
-
-    fn qn(name: &str) -> QualifiedTypeName {
-        QualifiedTypeName::new(Name::new("test"), vec![], Name::new(name))
-    }
-
-    fn type_alias(name: &str) -> Ty {
-        Ty::TypeAlias(qn(name), TyAttr::default())
-    }
-
-    fn required_param(ty: Ty) -> FunctionParamTy {
-        FunctionParamTy::required(None, ty)
-    }
-
-    fn optional_param(name: &str, ty: Ty) -> FunctionParamTy {
-        FunctionParamTy::optional(Some(Name::new(name)), ty)
-    }
+    use crate::{
+        test_support::*,
+        ty::{Freshness, FunctionParamTy, TyAttr},
+    };
 
     #[test]
     fn same_normalized_type_accepts_union_reordering() {
         let aliases = HashMap::new();
-        let int = Ty::Primitive(PrimitiveType::Int, TyAttr::default());
-        let string = Ty::Primitive(PrimitiveType::String, TyAttr::default());
-        let lhs = Ty::Union(vec![int.clone(), string.clone()], TyAttr::default());
-        let rhs = Ty::Union(vec![string, int], TyAttr::default());
+        let int = int_ty();
+        let string = string_ty();
+        let lhs = union_of(vec![int.clone(), string.clone()]);
+        let rhs = union_of(vec![string, int]);
 
         assert!(is_same_normalized_type(&lhs, &rhs, &aliases));
     }
@@ -1194,9 +1181,9 @@ mod tests {
     #[test]
     fn same_normalized_type_rejects_narrower_union_member() {
         let aliases = HashMap::new();
-        let int = Ty::Primitive(PrimitiveType::Int, TyAttr::default());
-        let string = Ty::Primitive(PrimitiveType::String, TyAttr::default());
-        let union = Ty::Union(vec![int.clone(), string], TyAttr::default());
+        let int = int_ty();
+        let string = string_ty();
+        let union = union_of(vec![int.clone(), string]);
 
         assert!(!is_same_normalized_type(&int, &union, &aliases));
     }
@@ -1204,23 +1191,8 @@ mod tests {
     #[test]
     fn same_normalized_type_expands_aliases() {
         let mut aliases = HashMap::new();
-        aliases.insert(
-            qn("IntOrString"),
-            Ty::Union(
-                vec![
-                    Ty::Primitive(PrimitiveType::Int, TyAttr::default()),
-                    Ty::Primitive(PrimitiveType::String, TyAttr::default()),
-                ],
-                TyAttr::default(),
-            ),
-        );
-        let direct = Ty::Union(
-            vec![
-                Ty::Primitive(PrimitiveType::String, TyAttr::default()),
-                Ty::Primitive(PrimitiveType::Int, TyAttr::default()),
-            ],
-            TyAttr::default(),
-        );
+        aliases.insert(qn("IntOrString"), union_of(vec![int_ty(), string_ty()]));
+        let direct = union_of(vec![string_ty(), int_ty()]);
 
         assert!(is_same_normalized_type(
             &type_alias("IntOrString"),
@@ -1232,16 +1204,14 @@ mod tests {
     #[test]
     fn same_normalized_type_ignores_required_function_param_names() {
         let aliases = HashMap::new();
-        let int = Ty::Primitive(PrimitiveType::Int, TyAttr::default());
-        let string = Ty::Primitive(PrimitiveType::String, TyAttr::default());
+        let int = int_ty();
+        let string = string_ty();
         let lhs = Ty::Function {
             generic_params: Vec::new(),
             generic_param_bounds: Vec::new(),
             params: vec![FunctionParamTy::required(Some(Name::new("x")), int.clone())],
             ret: Box::new(string.clone()),
-            throws: Box::new(Ty::Never {
-                attr: TyAttr::default(),
-            }),
+            throws: Box::new(never_ty()),
             attr: TyAttr::default(),
         };
         let rhs = Ty::Function {
@@ -1249,9 +1219,7 @@ mod tests {
             generic_param_bounds: Vec::new(),
             params: vec![FunctionParamTy::required(Some(Name::new("y")), int)],
             ret: Box::new(string),
-            throws: Box::new(Ty::Never {
-                attr: TyAttr::default(),
-            }),
+            throws: Box::new(never_ty()),
             attr: TyAttr::default(),
         };
 
@@ -1261,9 +1229,9 @@ mod tests {
     #[test]
     fn same_normalized_type_sorts_optional_function_params() {
         let aliases = HashMap::new();
-        let int = Ty::Primitive(PrimitiveType::Int, TyAttr::default());
-        let string = Ty::Primitive(PrimitiveType::String, TyAttr::default());
-        let bool_ty = Ty::Primitive(PrimitiveType::Bool, TyAttr::default());
+        let int = int_ty();
+        let string = string_ty();
+        let bool_ty = bool_ty();
         let lhs = Ty::Function {
             generic_params: Vec::new(),
             generic_param_bounds: Vec::new(),
@@ -1272,9 +1240,7 @@ mod tests {
                 FunctionParamTy::optional(Some(Name::new("b")), string.clone()),
             ],
             ret: Box::new(bool_ty.clone()),
-            throws: Box::new(Ty::Never {
-                attr: TyAttr::default(),
-            }),
+            throws: Box::new(never_ty()),
             attr: TyAttr::default(),
         };
         let rhs = Ty::Function {
@@ -1285,9 +1251,7 @@ mod tests {
                 FunctionParamTy::optional(Some(Name::new("a")), int),
             ],
             ret: Box::new(bool_ty),
-            throws: Box::new(Ty::Never {
-                attr: TyAttr::default(),
-            }),
+            throws: Box::new(never_ty()),
             attr: TyAttr::default(),
         };
 
@@ -1297,35 +1261,21 @@ mod tests {
     #[test]
     fn test_simple_alias() {
         let mut aliases = HashMap::new();
-        aliases.insert(
-            qn("MyInt"),
-            Ty::Primitive(PrimitiveType::Int, TyAttr::default()),
-        );
+        aliases.insert(qn("MyInt"), int_ty());
 
-        assert!(is_subtype_of(
-            &type_alias("MyInt"),
-            &Ty::Primitive(PrimitiveType::Int, TyAttr::default()),
-            &aliases
-        ));
-        assert!(is_subtype_of(
-            &Ty::Primitive(PrimitiveType::Int, TyAttr::default()),
-            &type_alias("MyInt"),
-            &aliases
-        ));
+        assert!(is_subtype_of(&type_alias("MyInt"), &int_ty(), &aliases));
+        assert!(is_subtype_of(&int_ty(), &type_alias("MyInt"), &aliases));
     }
 
     #[test]
     fn test_transitive_alias() {
         let mut aliases = HashMap::new();
-        aliases.insert(
-            qn("MyInt"),
-            Ty::Primitive(PrimitiveType::Int, TyAttr::default()),
-        );
+        aliases.insert(qn("MyInt"), int_ty());
         aliases.insert(qn("AnotherInt"), type_alias("MyInt"));
 
         assert!(is_subtype_of(
             &type_alias("AnotherInt"),
-            &Ty::Primitive(PrimitiveType::Int, TyAttr::default()),
+            &int_ty(),
             &aliases
         ));
         assert!(is_subtype_of(
@@ -1338,29 +1288,20 @@ mod tests {
     #[test]
     fn test_union_alias() {
         let mut aliases = HashMap::new();
-        aliases.insert(
-            qn("IntOrString"),
-            Ty::Union(
-                vec![
-                    Ty::Primitive(PrimitiveType::Int, TyAttr::default()),
-                    Ty::Primitive(PrimitiveType::String, TyAttr::default()),
-                ],
-                TyAttr::default(),
-            ),
-        );
+        aliases.insert(qn("IntOrString"), union_of(vec![int_ty(), string_ty()]));
 
         assert!(is_subtype_of(
-            &Ty::Primitive(PrimitiveType::Int, TyAttr::default()),
+            &int_ty(),
             &type_alias("IntOrString"),
             &aliases
         ));
         assert!(is_subtype_of(
-            &Ty::Primitive(PrimitiveType::String, TyAttr::default()),
+            &string_ty(),
             &type_alias("IntOrString"),
             &aliases
         ));
         assert!(!is_subtype_of(
-            &Ty::Primitive(PrimitiveType::Bool, TyAttr::default()),
+            &bool_ty(),
             &type_alias("IntOrString"),
             &aliases
         ));
@@ -1369,16 +1310,7 @@ mod tests {
     #[test]
     fn test_recursive_alias_detection() {
         let mut aliases = HashMap::new();
-        aliases.insert(
-            qn("List"),
-            Ty::Union(
-                vec![
-                    Ty::Primitive(PrimitiveType::Null, TyAttr::default()),
-                    type_alias("List"),
-                ],
-                TyAttr::default(),
-            ),
-        );
+        aliases.insert(qn("List"), union_of(vec![null_ty(), type_alias("List")]));
 
         let recursive = find_recursive_aliases(&aliases);
         assert!(recursive.contains(&qn("List")));
@@ -1387,10 +1319,7 @@ mod tests {
     #[test]
     fn test_non_recursive_not_marked() {
         let mut aliases = HashMap::new();
-        aliases.insert(
-            qn("MyInt"),
-            Ty::Primitive(PrimitiveType::Int, TyAttr::default()),
-        );
+        aliases.insert(qn("MyInt"), int_ty());
 
         let recursive = find_recursive_aliases(&aliases);
         assert!(!recursive.contains(&qn("MyInt")));
@@ -1400,37 +1329,14 @@ mod tests {
     fn test_never_is_bottom() {
         let aliases = HashMap::new();
 
+        assert!(is_subtype_of(&never_ty(), &int_ty(), &aliases));
+        assert!(is_subtype_of(&never_ty(), &string_ty(), &aliases));
         assert!(is_subtype_of(
-            &Ty::Never {
-                attr: TyAttr::default()
-            },
-            &Ty::Primitive(PrimitiveType::Int, TyAttr::default()),
-            &aliases
-        ));
-        assert!(is_subtype_of(
-            &Ty::Never {
-                attr: TyAttr::default()
-            },
-            &Ty::Primitive(PrimitiveType::String, TyAttr::default()),
-            &aliases
-        ));
-        assert!(is_subtype_of(
-            &Ty::Never {
-                attr: TyAttr::default()
-            },
+            &never_ty(),
             &Ty::Class(qn("Foo"), vec![], TyAttr::default()),
             &aliases
         ));
-        assert!(is_subtype_of(
-            &Ty::Never {
-                attr: TyAttr::default()
-            },
-            &Ty::Optional(
-                Box::new(Ty::Primitive(PrimitiveType::Int, TyAttr::default())),
-                TyAttr::default()
-            ),
-            &aliases
-        ));
+        assert!(is_subtype_of(&never_ty(), &opt_of(int_ty()), &aliases));
     }
 
     #[test]
@@ -1439,16 +1345,8 @@ mod tests {
         // are not exactly representable as f64). The widening, if needed,
         // must be explicit.
         let aliases = HashMap::new();
-        assert!(!is_subtype_of(
-            &Ty::Primitive(PrimitiveType::Int, TyAttr::default()),
-            &Ty::Primitive(PrimitiveType::Float, TyAttr::default()),
-            &aliases
-        ));
-        assert!(!is_subtype_of(
-            &Ty::Primitive(PrimitiveType::Float, TyAttr::default()),
-            &Ty::Primitive(PrimitiveType::Int, TyAttr::default()),
-            &aliases
-        ));
+        assert!(!is_subtype_of(&int_ty(), &float_ty(), &aliases));
+        assert!(!is_subtype_of(&float_ty(), &int_ty(), &aliases));
     }
 
     #[test]
@@ -1458,11 +1356,7 @@ mod tests {
         // Widening happens only at the `bigint × int` operators and the FFI
         // boundary, never as an implicit move/subtype coercion.
         let aliases = HashMap::new();
-        assert!(!is_subtype_of(
-            &Ty::Primitive(PrimitiveType::Int, TyAttr::default()),
-            &Ty::Primitive(PrimitiveType::Bigint, TyAttr::default()),
-            &aliases
-        ));
+        assert!(!is_subtype_of(&int_ty(), &bigint_ty(), &aliases));
     }
 
     #[test]
@@ -1471,24 +1365,24 @@ mod tests {
         // Fresh and Regular should both be subtypes of their base primitive
         assert!(is_subtype_of(
             &Ty::Literal(LiteralValue::Int(42), Freshness::Fresh, TyAttr::default()),
-            &Ty::Primitive(PrimitiveType::Int, TyAttr::default()),
+            &int_ty(),
             &aliases
         ));
         // `Literal(Int) <: Float` was removed (lossy past 2^53). The
         // widening, if needed, must be explicit.
         assert!(is_subtype_of(
             &Ty::Literal(LiteralValue::Int(42), Freshness::Regular, TyAttr::default()),
-            &Ty::Primitive(PrimitiveType::Int, TyAttr::default()),
+            &int_ty(),
             &aliases
         ));
         assert!(!is_subtype_of(
             &Ty::Literal(LiteralValue::Int(42), Freshness::Regular, TyAttr::default()),
-            &Ty::Primitive(PrimitiveType::Bigint, TyAttr::default()),
+            &bigint_ty(),
             &aliases
         ));
         assert!(!is_subtype_of(
             &Ty::Literal(LiteralValue::Int(42), Freshness::Regular, TyAttr::default()),
-            &Ty::Primitive(PrimitiveType::Float, TyAttr::default()),
+            &float_ty(),
             &aliases
         ));
         assert!(is_subtype_of(
@@ -1497,12 +1391,12 @@ mod tests {
                 Freshness::Fresh,
                 TyAttr::default()
             ),
-            &Ty::Primitive(PrimitiveType::String, TyAttr::default()),
+            &string_ty(),
             &aliases
         ));
         assert!(!is_subtype_of(
             &Ty::Literal(LiteralValue::Int(42), Freshness::Fresh, TyAttr::default()),
-            &Ty::Primitive(PrimitiveType::String, TyAttr::default()),
+            &string_ty(),
             &aliases
         ));
         // Freshness is ignored for subtyping: Fresh(1) <: Regular(1)
@@ -1539,31 +1433,21 @@ mod tests {
         let returns_literal_string = Ty::Function {
             generic_params: Vec::new(),
             generic_param_bounds: Vec::new(),
-            params: vec![required_param(Ty::Primitive(
-                PrimitiveType::Int,
-                TyAttr::default(),
-            ))],
+            params: vec![required_param(int_ty())],
             ret: Box::new(Ty::Literal(
                 LiteralValue::String("ok".into()),
                 Freshness::Fresh,
                 TyAttr::default(),
             )),
-            throws: Box::new(Ty::Never {
-                attr: TyAttr::default(),
-            }),
+            throws: Box::new(never_ty()),
             attr: TyAttr::default(),
         };
         let returns_string = Ty::Function {
             generic_params: Vec::new(),
             generic_param_bounds: Vec::new(),
-            params: vec![required_param(Ty::Primitive(
-                PrimitiveType::Int,
-                TyAttr::default(),
-            ))],
-            ret: Box::new(Ty::Primitive(PrimitiveType::String, TyAttr::default())),
-            throws: Box::new(Ty::Never {
-                attr: TyAttr::default(),
-            }),
+            params: vec![required_param(int_ty())],
+            ret: Box::new(string_ty()),
+            throws: Box::new(never_ty()),
             attr: TyAttr::default(),
         };
         assert!(is_subtype_of(
@@ -1586,9 +1470,7 @@ mod tests {
                 Name::new("Red"),
                 TyAttr::default(),
             )),
-            throws: Box::new(Ty::Never {
-                attr: TyAttr::default(),
-            }),
+            throws: Box::new(never_ty()),
             attr: TyAttr::default(),
         };
         let returns_enum = Ty::Function {
@@ -1596,9 +1478,7 @@ mod tests {
             generic_param_bounds: Vec::new(),
             params: vec![],
             ret: Box::new(Ty::Enum(qn("Color"), TyAttr::default())),
-            throws: Box::new(Ty::Never {
-                attr: TyAttr::default(),
-            }),
+            throws: Box::new(never_ty()),
             attr: TyAttr::default(),
         };
         assert!(is_subtype_of(&returns_variant, &returns_enum, &aliases));
@@ -1610,20 +1490,16 @@ mod tests {
             generic_params: Vec::new(),
             generic_param_bounds: Vec::new(),
             params: vec![],
-            ret: Box::new(Ty::Primitive(PrimitiveType::Int, TyAttr::default())),
-            throws: Box::new(Ty::Never {
-                attr: TyAttr::default(),
-            }),
+            ret: Box::new(int_ty()),
+            throws: Box::new(never_ty()),
             attr: TyAttr::default(),
         };
         let returns_bigint = Ty::Function {
             generic_params: Vec::new(),
             generic_param_bounds: Vec::new(),
             params: vec![],
-            ret: Box::new(Ty::Primitive(PrimitiveType::Bigint, TyAttr::default())),
-            throws: Box::new(Ty::Never {
-                attr: TyAttr::default(),
-            }),
+            ret: Box::new(bigint_ty()),
+            throws: Box::new(never_ty()),
             attr: TyAttr::default(),
         };
         assert!(!is_subtype_of(&returns_int, &returns_bigint, &aliases));
@@ -1641,14 +1517,9 @@ mod tests {
         let accepts_string = Ty::Function {
             generic_params: Vec::new(),
             generic_param_bounds: Vec::new(),
-            params: vec![required_param(Ty::Primitive(
-                PrimitiveType::String,
-                TyAttr::default(),
-            ))],
-            ret: Box::new(Ty::Primitive(PrimitiveType::String, TyAttr::default())),
-            throws: Box::new(Ty::Never {
-                attr: TyAttr::default(),
-            }),
+            params: vec![required_param(string_ty())],
+            ret: Box::new(string_ty()),
+            throws: Box::new(never_ty()),
             attr: TyAttr::default(),
         };
         let accepts_literal_string = Ty::Function {
@@ -1659,10 +1530,8 @@ mod tests {
                 Freshness::Fresh,
                 TyAttr::default(),
             ))],
-            ret: Box::new(Ty::Primitive(PrimitiveType::String, TyAttr::default())),
-            throws: Box::new(Ty::Never {
-                attr: TyAttr::default(),
-            }),
+            ret: Box::new(string_ty()),
+            throws: Box::new(never_ty()),
             attr: TyAttr::default(),
         };
         assert!(is_subtype_of(
@@ -1680,10 +1549,8 @@ mod tests {
             generic_params: Vec::new(),
             generic_param_bounds: Vec::new(),
             params: vec![required_param(Ty::Enum(qn("Color"), TyAttr::default()))],
-            ret: Box::new(Ty::Primitive(PrimitiveType::String, TyAttr::default())),
-            throws: Box::new(Ty::Never {
-                attr: TyAttr::default(),
-            }),
+            ret: Box::new(string_ty()),
+            throws: Box::new(never_ty()),
             attr: TyAttr::default(),
         };
         let accepts_variant = Ty::Function {
@@ -1694,10 +1561,8 @@ mod tests {
                 Name::new("Red"),
                 TyAttr::default(),
             ))],
-            ret: Box::new(Ty::Primitive(PrimitiveType::String, TyAttr::default())),
-            throws: Box::new(Ty::Never {
-                attr: TyAttr::default(),
-            }),
+            ret: Box::new(string_ty()),
+            throws: Box::new(never_ty()),
             attr: TyAttr::default(),
         };
         assert!(is_subtype_of(&accepts_enum, &accepts_variant, &aliases));
@@ -1708,27 +1573,17 @@ mod tests {
         let accepts_bigint = Ty::Function {
             generic_params: Vec::new(),
             generic_param_bounds: Vec::new(),
-            params: vec![required_param(Ty::Primitive(
-                PrimitiveType::Bigint,
-                TyAttr::default(),
-            ))],
-            ret: Box::new(Ty::Primitive(PrimitiveType::String, TyAttr::default())),
-            throws: Box::new(Ty::Never {
-                attr: TyAttr::default(),
-            }),
+            params: vec![required_param(bigint_ty())],
+            ret: Box::new(string_ty()),
+            throws: Box::new(never_ty()),
             attr: TyAttr::default(),
         };
         let accepts_int = Ty::Function {
             generic_params: Vec::new(),
             generic_param_bounds: Vec::new(),
-            params: vec![required_param(Ty::Primitive(
-                PrimitiveType::Int,
-                TyAttr::default(),
-            ))],
-            ret: Box::new(Ty::Primitive(PrimitiveType::String, TyAttr::default())),
-            throws: Box::new(Ty::Never {
-                attr: TyAttr::default(),
-            }),
+            params: vec![required_param(int_ty())],
+            ret: Box::new(string_ty()),
+            throws: Box::new(never_ty()),
             attr: TyAttr::default(),
         };
         assert!(!is_subtype_of(&accepts_bigint, &accepts_int, &aliases));
@@ -1741,31 +1596,20 @@ mod tests {
         let f1 = Ty::Function {
             generic_params: Vec::new(),
             generic_param_bounds: Vec::new(),
-            params: vec![required_param(Ty::Primitive(
-                PrimitiveType::Int,
-                TyAttr::default(),
-            ))],
-            ret: Box::new(Ty::Primitive(PrimitiveType::String, TyAttr::default())),
-            throws: Box::new(Ty::Never {
-                attr: TyAttr::default(),
-            }),
+            params: vec![required_param(int_ty())],
+            ret: Box::new(string_ty()),
+            throws: Box::new(never_ty()),
             attr: TyAttr::default(),
         };
         let f2 = Ty::Function {
             generic_params: Vec::new(),
             generic_param_bounds: Vec::new(),
-            params: vec![required_param(Ty::Primitive(
-                PrimitiveType::Int,
-                TyAttr::default(),
-            ))],
-            ret: Box::new(Ty::Primitive(PrimitiveType::String, TyAttr::default())),
-            throws: Box::new(Ty::Union(
-                vec![
-                    Ty::Enum(qn("IoError"), TyAttr::default()),
-                    Ty::Enum(qn("Timeout"), TyAttr::default()),
-                ],
-                TyAttr::default(),
-            )),
+            params: vec![required_param(int_ty())],
+            ret: Box::new(string_ty()),
+            throws: Box::new(union_of(vec![
+                Ty::Enum(qn("IoError"), TyAttr::default()),
+                Ty::Enum(qn("Timeout"), TyAttr::default()),
+            ])),
             attr: TyAttr::default(),
         };
         assert!(is_subtype_of(&f1, &f2, &aliases));
@@ -1779,33 +1623,23 @@ mod tests {
             generic_params: Vec::new(),
             generic_param_bounds: Vec::new(),
             params: vec![
-                required_param(Ty::Primitive(PrimitiveType::String, TyAttr::default())),
-                optional_param("max", Ty::Primitive(PrimitiveType::Int, TyAttr::default())),
-                optional_param(
-                    "filter",
-                    Ty::Primitive(PrimitiveType::String, TyAttr::default()),
-                ),
+                required_param(string_ty()),
+                optional_param("max", int_ty()),
+                optional_param("filter", string_ty()),
             ],
-            ret: Box::new(Ty::Primitive(PrimitiveType::String, TyAttr::default())),
-            throws: Box::new(Ty::Never {
-                attr: TyAttr::default(),
-            }),
+            ret: Box::new(string_ty()),
+            throws: Box::new(never_ty()),
             attr: TyAttr::default(),
         };
         let with_one_optional = Ty::Function {
             generic_params: Vec::new(),
             generic_param_bounds: Vec::new(),
             params: vec![
-                required_param(Ty::Primitive(PrimitiveType::String, TyAttr::default())),
-                optional_param(
-                    "filter",
-                    Ty::Primitive(PrimitiveType::String, TyAttr::default()),
-                ),
+                required_param(string_ty()),
+                optional_param("filter", string_ty()),
             ],
-            ret: Box::new(Ty::Primitive(PrimitiveType::String, TyAttr::default())),
-            throws: Box::new(Ty::Never {
-                attr: TyAttr::default(),
-            }),
+            ret: Box::new(string_ty()),
+            throws: Box::new(never_ty()),
             attr: TyAttr::default(),
         };
 
@@ -1828,34 +1662,24 @@ mod tests {
             generic_params: Vec::new(),
             generic_param_bounds: Vec::new(),
             params: vec![
-                required_param(Ty::Primitive(PrimitiveType::String, TyAttr::default())),
-                optional_param("max", Ty::Primitive(PrimitiveType::Int, TyAttr::default())),
-                optional_param(
-                    "filter",
-                    Ty::Primitive(PrimitiveType::String, TyAttr::default()),
-                ),
+                required_param(string_ty()),
+                optional_param("max", int_ty()),
+                optional_param("filter", string_ty()),
             ],
-            ret: Box::new(Ty::Primitive(PrimitiveType::String, TyAttr::default())),
-            throws: Box::new(Ty::Never {
-                attr: TyAttr::default(),
-            }),
+            ret: Box::new(string_ty()),
+            throws: Box::new(never_ty()),
             attr: TyAttr::default(),
         };
         let f2 = Ty::Function {
             generic_params: Vec::new(),
             generic_param_bounds: Vec::new(),
             params: vec![
-                required_param(Ty::Primitive(PrimitiveType::String, TyAttr::default())),
-                optional_param(
-                    "filter",
-                    Ty::Primitive(PrimitiveType::String, TyAttr::default()),
-                ),
-                optional_param("max", Ty::Primitive(PrimitiveType::Int, TyAttr::default())),
+                required_param(string_ty()),
+                optional_param("filter", string_ty()),
+                optional_param("max", int_ty()),
             ],
-            ret: Box::new(Ty::Primitive(PrimitiveType::String, TyAttr::default())),
-            throws: Box::new(Ty::Never {
-                attr: TyAttr::default(),
-            }),
+            ret: Box::new(string_ty()),
+            throws: Box::new(never_ty()),
             attr: TyAttr::default(),
         };
 
@@ -1869,14 +1693,9 @@ mod tests {
         let optional = Ty::Function {
             generic_params: Vec::new(),
             generic_param_bounds: Vec::new(),
-            params: vec![optional_param(
-                "value",
-                Ty::Primitive(PrimitiveType::Int, TyAttr::default()),
-            )],
-            ret: Box::new(Ty::Primitive(PrimitiveType::String, TyAttr::default())),
-            throws: Box::new(Ty::Never {
-                attr: TyAttr::default(),
-            }),
+            params: vec![optional_param("value", int_ty())],
+            ret: Box::new(string_ty()),
+            throws: Box::new(never_ty()),
             attr: TyAttr::default(),
         };
         let required = Ty::Function {
@@ -1884,12 +1703,10 @@ mod tests {
             generic_param_bounds: Vec::new(),
             params: vec![FunctionParamTy::required(
                 Some(Name::new("value")),
-                Ty::Primitive(PrimitiveType::Int, TyAttr::default()),
+                int_ty(),
             )],
-            ret: Box::new(Ty::Primitive(PrimitiveType::String, TyAttr::default())),
-            throws: Box::new(Ty::Never {
-                attr: TyAttr::default(),
-            }),
+            ret: Box::new(string_ty()),
+            throws: Box::new(never_ty()),
             attr: TyAttr::default(),
         };
 
@@ -1901,32 +1718,11 @@ mod tests {
     fn test_optional_subtyping() {
         let aliases = HashMap::new();
         // int <: int?
-        assert!(is_subtype_of(
-            &Ty::Primitive(PrimitiveType::Int, TyAttr::default()),
-            &Ty::Optional(
-                Box::new(Ty::Primitive(PrimitiveType::Int, TyAttr::default())),
-                TyAttr::default()
-            ),
-            &aliases
-        ));
+        assert!(is_subtype_of(&int_ty(), &opt_of(int_ty()), &aliases));
         // null <: int?
-        assert!(is_subtype_of(
-            &Ty::Primitive(PrimitiveType::Null, TyAttr::default()),
-            &Ty::Optional(
-                Box::new(Ty::Primitive(PrimitiveType::Int, TyAttr::default())),
-                TyAttr::default()
-            ),
-            &aliases
-        ));
+        assert!(is_subtype_of(&null_ty(), &opt_of(int_ty()), &aliases));
         // string NOT <: int?
-        assert!(!is_subtype_of(
-            &Ty::Primitive(PrimitiveType::String, TyAttr::default()),
-            &Ty::Optional(
-                Box::new(Ty::Primitive(PrimitiveType::Int, TyAttr::default())),
-                TyAttr::default()
-            ),
-            &aliases
-        ));
+        assert!(!is_subtype_of(&string_ty(), &opt_of(int_ty()), &aliases));
     }
 
     // ── Evolving container tests ────────────────────────────────────────────
@@ -1936,26 +1732,14 @@ mod tests {
         let aliases = HashMap::new();
         // EvolvingList(int) <: List(int)
         assert!(is_subtype_of(
-            &Ty::EvolvingList(
-                Box::new(Ty::Primitive(PrimitiveType::Int, TyAttr::default())),
-                TyAttr::default()
-            ),
-            &Ty::List(
-                Box::new(Ty::Primitive(PrimitiveType::Int, TyAttr::default())),
-                TyAttr::default()
-            ),
+            &Ty::EvolvingList(Box::new(int_ty()), TyAttr::default()),
+            &list_of(int_ty()),
             &aliases
         ));
         // List(int) <: EvolvingList(int)
         assert!(is_subtype_of(
-            &Ty::List(
-                Box::new(Ty::Primitive(PrimitiveType::Int, TyAttr::default())),
-                TyAttr::default()
-            ),
-            &Ty::EvolvingList(
-                Box::new(Ty::Primitive(PrimitiveType::Int, TyAttr::default())),
-                TyAttr::default()
-            ),
+            &list_of(int_ty()),
+            &Ty::EvolvingList(Box::new(int_ty()), TyAttr::default()),
             &aliases
         ));
     }
@@ -1967,26 +1751,14 @@ mod tests {
         // subtype of `List(bigint)` — `int` is not a subtype of `bigint`
         // anywhere, including inside containers.
         assert!(!is_subtype_of(
-            &Ty::EvolvingList(
-                Box::new(Ty::Primitive(PrimitiveType::Int, TyAttr::default())),
-                TyAttr::default()
-            ),
-            &Ty::List(
-                Box::new(Ty::Primitive(PrimitiveType::Bigint, TyAttr::default())),
-                TyAttr::default()
-            ),
+            &Ty::EvolvingList(Box::new(int_ty()), TyAttr::default()),
+            &list_of(bigint_ty()),
             &aliases
         ));
         // EvolvingList(string) NOT <: List(int) — unrelated primitives.
         assert!(!is_subtype_of(
-            &Ty::EvolvingList(
-                Box::new(Ty::Primitive(PrimitiveType::String, TyAttr::default())),
-                TyAttr::default()
-            ),
-            &Ty::List(
-                Box::new(Ty::Primitive(PrimitiveType::Int, TyAttr::default())),
-                TyAttr::default()
-            ),
+            &Ty::EvolvingList(Box::new(string_ty()), TyAttr::default()),
+            &list_of(int_ty()),
             &aliases
         ));
         // Free widenings inside the container survive coercion-free
@@ -2000,10 +1772,7 @@ mod tests {
                 )),
                 TyAttr::default()
             ),
-            &Ty::List(
-                Box::new(Ty::Primitive(PrimitiveType::Int, TyAttr::default())),
-                TyAttr::default()
-            ),
+            &list_of(int_ty()),
             &aliases
         ));
     }
@@ -2013,16 +1782,8 @@ mod tests {
         let aliases = HashMap::new();
         // EvolvingList(Never) <: List(int) — empty evolving is assignable anywhere
         assert!(is_subtype_of(
-            &Ty::EvolvingList(
-                Box::new(Ty::Never {
-                    attr: TyAttr::default()
-                }),
-                TyAttr::default()
-            ),
-            &Ty::List(
-                Box::new(Ty::Primitive(PrimitiveType::Int, TyAttr::default())),
-                TyAttr::default()
-            ),
+            &Ty::EvolvingList(Box::new(never_ty()), TyAttr::default()),
+            &list_of(int_ty()),
             &aliases
         ));
     }
@@ -2032,16 +1793,8 @@ mod tests {
         let aliases = HashMap::new();
         // EvolvingMap(string, int) <: Map(string, int)
         assert!(is_subtype_of(
-            &Ty::EvolvingMap(
-                Box::new(Ty::Primitive(PrimitiveType::String, TyAttr::default())),
-                Box::new(Ty::Primitive(PrimitiveType::Int, TyAttr::default())),
-                TyAttr::default(),
-            ),
-            &Ty::Map(
-                Box::new(Ty::Primitive(PrimitiveType::String, TyAttr::default())),
-                Box::new(Ty::Primitive(PrimitiveType::Int, TyAttr::default())),
-                TyAttr::default(),
-            ),
+            &Ty::EvolvingMap(Box::new(string_ty()), Box::new(int_ty()), TyAttr::default(),),
+            &Ty::Map(Box::new(string_ty()), Box::new(int_ty()), TyAttr::default(),),
             &aliases
         ));
     }
@@ -2052,16 +1805,12 @@ mod tests {
         // map<never, never> <: map<string, unknown> — empty map assignable anywhere
         assert!(is_subtype_of(
             &Ty::Map(
-                Box::new(Ty::Never {
-                    attr: TyAttr::default()
-                }),
-                Box::new(Ty::Never {
-                    attr: TyAttr::default()
-                }),
+                Box::new(never_ty()),
+                Box::new(never_ty()),
                 TyAttr::default()
             ),
             &Ty::Map(
-                Box::new(Ty::Primitive(PrimitiveType::String, TyAttr::default())),
+                Box::new(string_ty()),
                 Box::new(Ty::BuiltinUnknown {
                     attr: TyAttr::default()
                 }),
@@ -2072,19 +1821,11 @@ mod tests {
         // map<never, never> <: map<string, int>
         assert!(is_subtype_of(
             &Ty::Map(
-                Box::new(Ty::Never {
-                    attr: TyAttr::default()
-                }),
-                Box::new(Ty::Never {
-                    attr: TyAttr::default()
-                }),
+                Box::new(never_ty()),
+                Box::new(never_ty()),
                 TyAttr::default()
             ),
-            &Ty::Map(
-                Box::new(Ty::Primitive(PrimitiveType::String, TyAttr::default())),
-                Box::new(Ty::Primitive(PrimitiveType::Int, TyAttr::default())),
-                TyAttr::default(),
-            ),
+            &Ty::Map(Box::new(string_ty()), Box::new(int_ty()), TyAttr::default(),),
             &aliases
         ));
     }
@@ -2108,7 +1849,7 @@ mod tests {
                 TyAttr::default(),
             ),
             &Ty::Map(
-                Box::new(Ty::Primitive(PrimitiveType::String, TyAttr::default())),
+                Box::new(string_ty()),
                 Box::new(Ty::BuiltinUnknown {
                     attr: TyAttr::default()
                 }),
@@ -2132,8 +1873,8 @@ mod tests {
                 TyAttr::default(),
             ),
             &Ty::Map(
-                Box::new(Ty::Primitive(PrimitiveType::String, TyAttr::default())),
-                Box::new(Ty::Primitive(PrimitiveType::String, TyAttr::default())),
+                Box::new(string_ty()),
+                Box::new(string_ty()),
                 TyAttr::default(),
             ),
             &aliases
@@ -2147,14 +1888,10 @@ mod tests {
         // `int <: float` was removed entirely (as a lossy/unsound rule),
         // so `map<string, int>` is **not** a subtype of `map<string, float>`.
         assert!(!is_subtype_of(
+            &Ty::Map(Box::new(string_ty()), Box::new(int_ty()), TyAttr::default(),),
             &Ty::Map(
-                Box::new(Ty::Primitive(PrimitiveType::String, TyAttr::default())),
-                Box::new(Ty::Primitive(PrimitiveType::Int, TyAttr::default())),
-                TyAttr::default(),
-            ),
-            &Ty::Map(
-                Box::new(Ty::Primitive(PrimitiveType::String, TyAttr::default())),
-                Box::new(Ty::Primitive(PrimitiveType::Float, TyAttr::default())),
+                Box::new(string_ty()),
+                Box::new(float_ty()),
                 TyAttr::default(),
             ),
             &aliases
@@ -2168,14 +1905,10 @@ mod tests {
         // (no implicit numeric widening), so `map<string, int>` is not a
         // subtype of `map<string, bigint>`.
         assert!(!is_subtype_of(
+            &Ty::Map(Box::new(string_ty()), Box::new(int_ty()), TyAttr::default(),),
             &Ty::Map(
-                Box::new(Ty::Primitive(PrimitiveType::String, TyAttr::default())),
-                Box::new(Ty::Primitive(PrimitiveType::Int, TyAttr::default())),
-                TyAttr::default(),
-            ),
-            &Ty::Map(
-                Box::new(Ty::Primitive(PrimitiveType::String, TyAttr::default())),
-                Box::new(Ty::Primitive(PrimitiveType::Bigint, TyAttr::default())),
+                Box::new(string_ty()),
+                Box::new(bigint_ty()),
                 TyAttr::default(),
             ),
             &aliases
@@ -2187,18 +1920,14 @@ mod tests {
         let aliases = HashMap::new();
         // map<string, int> NOT <: map<"name", int> — widening key is not subtyping
         assert!(!is_subtype_of(
-            &Ty::Map(
-                Box::new(Ty::Primitive(PrimitiveType::String, TyAttr::default())),
-                Box::new(Ty::Primitive(PrimitiveType::Int, TyAttr::default())),
-                TyAttr::default(),
-            ),
+            &Ty::Map(Box::new(string_ty()), Box::new(int_ty()), TyAttr::default(),),
             &Ty::Map(
                 Box::new(Ty::Literal(
                     LiteralValue::String("name".into()),
                     Freshness::Fresh,
                     TyAttr::default()
                 )),
-                Box::new(Ty::Primitive(PrimitiveType::Int, TyAttr::default())),
+                Box::new(int_ty()),
                 TyAttr::default(),
             ),
             &aliases
@@ -2206,15 +1935,11 @@ mod tests {
         // map<string, string> NOT <: map<int, string> — incompatible key types
         assert!(!is_subtype_of(
             &Ty::Map(
-                Box::new(Ty::Primitive(PrimitiveType::String, TyAttr::default())),
-                Box::new(Ty::Primitive(PrimitiveType::String, TyAttr::default())),
+                Box::new(string_ty()),
+                Box::new(string_ty()),
                 TyAttr::default(),
             ),
-            &Ty::Map(
-                Box::new(Ty::Primitive(PrimitiveType::Int, TyAttr::default())),
-                Box::new(Ty::Primitive(PrimitiveType::String, TyAttr::default())),
-                TyAttr::default(),
-            ),
+            &Ty::Map(Box::new(int_ty()), Box::new(string_ty()), TyAttr::default(),),
             &aliases
         ));
     }
@@ -2223,101 +1948,51 @@ mod tests {
     fn test_make_evolving() {
         // List(Never) → EvolvingList(Never)
         assert_eq!(
-            Ty::List(
-                Box::new(Ty::Never {
-                    attr: TyAttr::default()
-                }),
-                TyAttr::default()
-            )
-            .make_evolving(),
-            Ty::EvolvingList(
-                Box::new(Ty::Never {
-                    attr: TyAttr::default()
-                }),
-                TyAttr::default()
-            )
+            list_of(never_ty()).make_evolving(),
+            Ty::EvolvingList(Box::new(never_ty()), TyAttr::default())
         );
         // Map(Never, Never) → EvolvingMap(Never, Never)
         assert_eq!(
             Ty::Map(
-                Box::new(Ty::Never {
-                    attr: TyAttr::default()
-                }),
-                Box::new(Ty::Never {
-                    attr: TyAttr::default()
-                }),
+                Box::new(never_ty()),
+                Box::new(never_ty()),
                 TyAttr::default()
             )
             .make_evolving(),
             Ty::EvolvingMap(
-                Box::new(Ty::Never {
-                    attr: TyAttr::default()
-                }),
-                Box::new(Ty::Never {
-                    attr: TyAttr::default()
-                }),
+                Box::new(never_ty()),
+                Box::new(never_ty()),
                 TyAttr::default()
             )
         );
         // Non-empty List passes through
-        assert_eq!(
-            Ty::List(
-                Box::new(Ty::Primitive(PrimitiveType::Int, TyAttr::default())),
-                TyAttr::default()
-            )
-            .make_evolving(),
-            Ty::List(
-                Box::new(Ty::Primitive(PrimitiveType::Int, TyAttr::default())),
-                TyAttr::default()
-            )
-        );
+        assert_eq!(list_of(int_ty()).make_evolving(), list_of(int_ty()));
         // Non-container passes through
-        assert_eq!(
-            Ty::Primitive(PrimitiveType::Int, TyAttr::default()).make_evolving(),
-            Ty::Primitive(PrimitiveType::Int, TyAttr::default())
-        );
+        assert_eq!(int_ty().make_evolving(), int_ty());
     }
 
     #[test]
     fn test_evolving_display() {
         assert_eq!(
-            Ty::EvolvingList(
-                Box::new(Ty::Never {
-                    attr: TyAttr::default()
-                }),
-                TyAttr::default()
-            )
-            .to_string(),
+            Ty::EvolvingList(Box::new(never_ty()), TyAttr::default()).to_string(),
             "_[]"
         );
         assert_eq!(
-            Ty::EvolvingList(
-                Box::new(Ty::Primitive(PrimitiveType::Int, TyAttr::default())),
-                TyAttr::default()
-            )
-            .to_string(),
+            Ty::EvolvingList(Box::new(int_ty()), TyAttr::default()).to_string(),
             "int[] (evolving)"
         );
         assert_eq!(
             Ty::EvolvingMap(
-                Box::new(Ty::Never {
-                    attr: TyAttr::default()
-                }),
-                Box::new(Ty::Never {
-                    attr: TyAttr::default()
-                }),
+                Box::new(never_ty()),
+                Box::new(never_ty()),
                 TyAttr::default()
             )
             .to_string(),
             "map<_, _>"
         );
         assert_eq!(
-            Ty::EvolvingMap(
-                Box::new(Ty::Primitive(PrimitiveType::String, TyAttr::default())),
-                Box::new(Ty::Primitive(PrimitiveType::Int, TyAttr::default())),
-                TyAttr::default()
-            )
-            .to_string(),
+            Ty::EvolvingMap(Box::new(string_ty()), Box::new(int_ty()), TyAttr::default())
+                .to_string(),
             "map<string, int> (evolving)"
         );
     }
@@ -2327,35 +2002,23 @@ mod tests {
     #[test]
     fn test_union_of_int_literals_subtype_of_int() {
         let aliases = HashMap::new();
-        let sub = Ty::Union(
-            vec![
-                Ty::Literal(LiteralValue::Int(1), Freshness::Fresh, TyAttr::default()),
-                Ty::Literal(LiteralValue::Int(2), Freshness::Fresh, TyAttr::default()),
-                Ty::Literal(LiteralValue::Int(3), Freshness::Fresh, TyAttr::default()),
-            ],
-            TyAttr::default(),
-        );
-        let sup = Ty::Primitive(PrimitiveType::Int, TyAttr::default());
+        let sub = union_of(vec![
+            Ty::Literal(LiteralValue::Int(1), Freshness::Fresh, TyAttr::default()),
+            Ty::Literal(LiteralValue::Int(2), Freshness::Fresh, TyAttr::default()),
+            Ty::Literal(LiteralValue::Int(3), Freshness::Fresh, TyAttr::default()),
+        ]);
+        let sup = int_ty();
         assert!(is_subtype_of(&sub, &sup, &aliases));
     }
 
     #[test]
     fn test_list_of_literal_union_subtype_of_list_int() {
         let aliases = HashMap::new();
-        let sub = Ty::List(
-            Box::new(Ty::Union(
-                vec![
-                    Ty::Literal(LiteralValue::Int(1), Freshness::Fresh, TyAttr::default()),
-                    Ty::Literal(LiteralValue::Int(2), Freshness::Fresh, TyAttr::default()),
-                ],
-                TyAttr::default(),
-            )),
-            TyAttr::default(),
-        );
-        let sup = Ty::List(
-            Box::new(Ty::Primitive(PrimitiveType::Int, TyAttr::default())),
-            TyAttr::default(),
-        );
+        let sub = list_of(union_of(vec![
+            Ty::Literal(LiteralValue::Int(1), Freshness::Fresh, TyAttr::default()),
+            Ty::Literal(LiteralValue::Int(2), Freshness::Fresh, TyAttr::default()),
+        ]));
+        let sup = list_of(int_ty());
         assert!(is_subtype_of(&sub, &sup, &aliases));
     }
 
@@ -2366,18 +2029,15 @@ mod tests {
         // `Float` even via the structural Union-vs-T rule (which requires
         // every member to be a subtype).
         let aliases = HashMap::new();
-        let sub = Ty::Union(
-            vec![
-                Ty::Literal(LiteralValue::Int(1), Freshness::Fresh, TyAttr::default()),
-                Ty::Literal(
-                    LiteralValue::Float("2.0".to_string()),
-                    Freshness::Fresh,
-                    TyAttr::default(),
-                ),
-            ],
-            TyAttr::default(),
-        );
-        let sup = Ty::Primitive(PrimitiveType::Float, TyAttr::default());
+        let sub = union_of(vec![
+            Ty::Literal(LiteralValue::Int(1), Freshness::Fresh, TyAttr::default()),
+            Ty::Literal(
+                LiteralValue::Float("2.0".to_string()),
+                Freshness::Fresh,
+                TyAttr::default(),
+            ),
+        ]);
+        let sup = float_ty();
         assert!(!is_subtype_of(&sub, &sup, &aliases));
     }
 
@@ -2385,13 +2045,7 @@ mod tests {
     fn test_typevar_subtype_of_union_containing_same_typevar() {
         let aliases = HashMap::new();
         let t = Ty::TypeVar(Name::new("T"), TyAttr::default());
-        let union = Ty::Union(
-            vec![
-                t.clone(),
-                Ty::Primitive(PrimitiveType::String, TyAttr::default()),
-            ],
-            TyAttr::default(),
-        );
+        let union = union_of(vec![t.clone(), string_ty()]);
         // T <: T | String should hold
         assert!(is_subtype_of(&t, &union, &aliases));
     }
@@ -2400,13 +2054,7 @@ mod tests {
     fn test_typevar_not_subtype_of_union_without_same_typevar() {
         let aliases = HashMap::new();
         let t = Ty::TypeVar(Name::new("T"), TyAttr::default());
-        let union = Ty::Union(
-            vec![
-                Ty::Primitive(PrimitiveType::Int, TyAttr::default()),
-                Ty::Primitive(PrimitiveType::String, TyAttr::default()),
-            ],
-            TyAttr::default(),
-        );
+        let union = union_of(vec![int_ty(), string_ty()]);
         // T <: Int | String should NOT hold (T is opaque)
         assert!(!is_subtype_of(&t, &union, &aliases));
     }
@@ -2415,7 +2063,7 @@ mod tests {
     fn test_typevar_subtype_of_optional_same_typevar() {
         let aliases = HashMap::new();
         let t = Ty::TypeVar(Name::new("T"), TyAttr::default());
-        let opt_t = Ty::Optional(Box::new(t.clone()), TyAttr::default());
+        let opt_t = opt_of(t.clone());
         // T <: T? should hold
         assert!(is_subtype_of(&t, &opt_t, &aliases));
     }
@@ -2425,17 +2073,9 @@ mod tests {
         let aliases = HashMap::new();
         let t = Ty::TypeVar(Name::new("T"), TyAttr::default());
         // T <: Int should NOT hold
-        assert!(!is_subtype_of(
-            &t,
-            &Ty::Primitive(PrimitiveType::Int, TyAttr::default()),
-            &aliases
-        ));
+        assert!(!is_subtype_of(&t, &int_ty(), &aliases));
         // Int <: T should NOT hold
-        assert!(!is_subtype_of(
-            &Ty::Primitive(PrimitiveType::Int, TyAttr::default()),
-            &t,
-            &aliases
-        ));
+        assert!(!is_subtype_of(&int_ty(), &t, &aliases));
     }
 
     #[test]
