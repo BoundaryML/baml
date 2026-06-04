@@ -1301,12 +1301,6 @@ impl<'g> HirCompiler<'g> {
 
                     Some(TypeIR::Map(_, _, _)) => format!("baml.Map.{method}"),
 
-                    Some(TypeIR::Primitive(TypeValue::String, _))
-                        if method == "split" && args.is_empty() =>
-                    {
-                        baml_vm::native::STRING_SPLIT_WHITESPACE.to_string()
-                    }
-
                     Some(TypeIR::Primitive(TypeValue::String, _)) => {
                         format!("baml.String.{method}")
                     }

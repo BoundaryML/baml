@@ -1649,7 +1649,9 @@ impl Vm {
 
                     // Compiler should have already checked this so we could
                     // skip it but it's an easy and fast check.
-                    if arg_count != callee.arity {
+                    let allow_no_arg_string_split =
+                        callee.name == "baml.String.split" && arg_count == 1;
+                    if arg_count != callee.arity && !allow_no_arg_string_split {
                         return Err(VmError::from(InternalError::InvalidArgumentCount {
                             expected: callee.arity,
                             got: arg_count,
