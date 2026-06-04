@@ -59,6 +59,10 @@ The VSIX launches `baml lsp` through the wrapper. It starts one lazy LSP client 
 
 LSP compatibility metadata is returned on `initialize` under `capabilities.experimental.baml`. Playground compatibility is checked when the WebSocket receives `hello`; the server sends `hello` and then the legacy `ready`.
 
+## Agent Skills
+
+`baml agent install` is selected-toolchain pass-through like `baml ide install`, but the skill content is not coupled to a BAML language release. The command fetches the latest `BoundaryML/baml-skill` default-branch content each time and refreshes project-local `.agents/skills/baml-*` and `.claude/skills/baml-*` directories for Codex, OpenCode, and Claude Code.
+
 ## Direct Internal CLI
 
 Direct `baml-cli` invocation prints a stderr warning unless `BAML_WRAPPER_EXEC=1` or `BAML_CLI_ALLOW_DIRECT=1` is set. The warning never goes to stdout.
