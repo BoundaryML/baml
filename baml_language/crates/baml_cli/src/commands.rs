@@ -98,6 +98,9 @@ pub(crate) enum Commands {
     #[command(about = "Install or manage IDE integration assets")]
     Ide(crate::ide_command::IdeArgs),
 
+    #[command(about = "Install BAML agent skills for this project")]
+    Agent(crate::agent_command::AgentArgs),
+
     #[command(about = "Starts a language server", name = "lsp")]
     LanguageServer(crate::lsp::LanguageServerArgs),
     // #[command(about = "Start an interactive REPL for BAML expressions", hide = true)]
@@ -161,6 +164,7 @@ impl RuntimeCli {
             Commands::Run(args) => args.run(),
             Commands::Pack(args) => args.run(),
             Commands::Ide(args) => args.run(),
+            Commands::Agent(args) => args.run(),
             Commands::Describe(args) => args.run(),
             Commands::Generate(args) => args.run(),
             Commands::Grep(args) => args.run(),

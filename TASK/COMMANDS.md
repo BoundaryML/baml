@@ -25,6 +25,7 @@ The important split:
 | Command | Purpose |
 |---|---|
 | `baml-cli ide install` | Install or update the IDE extension/assets for the selected toolchain. The wrapper exposes this as `baml ide install` by resolving the toolchain and forwarding the command. Common editors should have non-interactive flags such as `--cursor`, and `--code`. |
+| `baml-cli agent install [--dir <path>]` | Install or refresh the latest official BAML agent skills in the current project, or in an explicit directory when `--dir` is supplied. The wrapper exposes this as `baml agent install`; the selected toolchain fetches the latest `BoundaryML/baml-skill` content and writes project-local `.agents/skills/baml-*` and `.claude/skills/baml-*` files. |
 
 ## Possible `baml-cli` Work Because Of The Wrapper
 
