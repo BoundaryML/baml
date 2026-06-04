@@ -6,6 +6,31 @@
 
 use super::support::{make_db, render_tir};
 
+#[test]
+fn nested_lambda_diagnostic_has_real_span() {
+    // Regression: a type error inside a nested lambda body must point at the
+    // offending expression, not collapse to a `0..0` span. The lambda body is
+    // inferred *inline* in the enclosing scope, so its diagnostics carry the
+    // lambda's arena IDs; their spans are frozen against the lambda's source
+    // map (see `InferContext::freeze_diagnostic_spans_from`). Before the fix
+    // this rendered as `!! 0..0: operator `Add` ...`.
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        "function f() -> () -> int throws never {\n  let g = () -> { let x: int = 5; let y: string = \"a\"; x + y }\n  g\n}\n",
+    );
+    let tir = render_tir(&db, file);
+    let diag = tir
+        .lines()
+        .map(str::trim_start)
+        .find(|l| l.starts_with("!!") && l.contains("Add"))
+        .unwrap_or_else(|| panic!("expected an `Add` type error, got:\n{tir}"));
+    assert!(
+        !diag.starts_with("!! 0..0:"),
+        "nested-lambda binary-op error must have a real span, got: {diag}"
+    );
+}
+
 // ── 3A-1. Union normalization ────────────────────────────────────────────
 
 #[test]

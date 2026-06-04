@@ -14465,6 +14465,11 @@ impl<'db> TypeInferenceBuilder<'db> {
         let saved_function_coercions = std::mem::take(&mut self.function_coercions);
         let saved_body_source_map = self.body_source_map.clone();
         self.body_source_map = Some(lambda_source_map.clone());
+        // Diagnostics emitted below carry THIS lambda's arena IDs but are
+        // recorded in the enclosing scope's set; freeze their spans against the
+        // lambda's source map at the end so they don't collapse to `0..0` when
+        // rendered with the enclosing scope's map (see `freeze_diagnostic_spans_from`).
+        let lambda_diag_start = self.context.diagnostic_count();
 
         // Extend generic params with the lambda's own generic params
         let mut new_generic_params = self.generic_params.clone();
@@ -14572,6 +14577,10 @@ impl<'db> TypeInferenceBuilder<'db> {
         self.scoped_local_assignments = saved_scoped_local_assignments;
         self.declared_return_ty = saved_return_ty;
         self.generic_params = saved_generic_params;
+        // Freeze this lambda's diagnostic spans against its own source map
+        // before restoring the enclosing map (otherwise they render at `0..0`).
+        self.context
+            .freeze_diagnostic_spans_from(lambda_diag_start, lambda_source_map);
         self.body_source_map = saved_body_source_map;
 
         (

@@ -1105,6 +1105,41 @@ impl<'db> InferContext<'db> {
         self.diagnostics.borrow_mut().diagnostics.truncate(n);
     }
 
+    /// Freeze the source spans of diagnostics recorded at index `[start..]`,
+    /// resolving their arena-relative locations against `source_map` and
+    /// replacing them with absolute [`DiagnosticLocation::Span`]s.
+    ///
+    /// Used when a nested lambda body is inferred *inline* in an enclosing
+    /// scope (`infer_lambda_body`): those diagnostics carry the lambda's own
+    /// arena IDs but are recorded in the enclosing scope's diagnostic set, so
+    /// at render time they'd be resolved against the *enclosing* scope's source
+    /// map — which can't resolve a nested-arena ID, collapsing the span to
+    /// `0..0`. Resolving them here, while the lambda's source map is in hand,
+    /// makes them render correctly regardless of which scope renders them.
+    /// Already-frozen (`Span`) locations and deeper-lambda diagnostics (frozen
+    /// by their own `infer_lambda_body`) are left unchanged.
+    pub fn freeze_diagnostic_spans_from(&self, start: usize, source_map: &AstSourceMap) {
+        let mut diags = self.diagnostics.borrow_mut();
+        let len = diags.diagnostics.len();
+        for d in &mut diags.diagnostics[start.min(len)..] {
+            d.primary = Self::freeze_location(&d.primary, source_map);
+        }
+    }
+
+    fn freeze_location(loc: &DiagnosticLocation, sm: &AstSourceMap) -> DiagnosticLocation {
+        let span = match loc {
+            DiagnosticLocation::Expr(id) => sm.expr_span(*id),
+            DiagnosticLocation::ExprMember(id) => sm.member_access_member_span(*id),
+            DiagnosticLocation::ExprSegment(id, seg) => sm.path_segment_span(*id, *seg),
+            DiagnosticLocation::Stmt(id) => sm.stmt_span(*id),
+            DiagnosticLocation::TypeAnnot(id) => sm.type_annotation_span(*id),
+            // Already absolute (e.g. a deeper lambda's frozen diagnostic, or a
+            // class-field span) — leave it.
+            DiagnosticLocation::Span(r) => *r,
+        };
+        DiagnosticLocation::Span(span)
+    }
+
     pub fn scope(&self) -> ScopeId<'db> {
         self.scope
     }
