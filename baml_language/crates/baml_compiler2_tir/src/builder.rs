@@ -5788,17 +5788,14 @@ impl<'db> TypeInferenceBuilder<'db> {
 
     fn catch_base_throw_types(&self, base_expr_id: ExprId) -> BTreeSet<Ty> {
         let body = self.body();
-        let mut out = BTreeSet::new();
-        crate::throws_analysis::collect_from_expr(
+        crate::throws_analysis::collect_escaping_throws_from(
             &BuilderThrowsAnalysis {
                 builder: self,
                 mode: ThrowsMode::CatchBase,
             },
-            base_expr_id,
             body.as_ref(),
-            &mut out,
-        );
-        out
+            base_expr_id,
+        )
     }
 
     /// Join a set of throw fact types into a single type.

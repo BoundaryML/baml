@@ -57,10 +57,7 @@ pub fn function_throw_sets<'db>(
     let mut graph: crate::analysis::AnalysisGraph<Name, ThrowFact> =
         crate::analysis::AnalysisGraph::new();
 
-    let mut call_edges: BTreeMap<Name, BTreeSet<Name>> = BTreeMap::new();
-    let mut has_declared_contract: BTreeSet<Name> = BTreeSet::new();
-    // Track direct facts separately so we can merge cross-package facts before adding to graph
-    let mut direct_facts: BTreeMap<Name, BTreeSet<ThrowFact>> = BTreeMap::new();
+    let mut builder = ThrowGraphBuilder::default();
 
     for ns in pkg_items.namespaces.values() {
         for (short_name, def) in &ns.values {
@@ -71,16 +68,13 @@ pub fn function_throw_sets<'db>(
             let key = function_key(db, *func_loc, short_name);
             let item_tree = baml_compiler2_ppir::file_item_tree(db, func_loc.file(db));
             let func_data = &item_tree[func_loc.id(db)];
-            process_callable(
+            builder.process(
                 db,
                 pkg_items,
                 *func_loc,
                 key,
                 &func_data.generic_params,
                 None,
-                &mut direct_facts,
-                &mut has_declared_contract,
-                &mut call_edges,
             );
         }
 
@@ -101,20 +95,26 @@ pub fn function_throw_sets<'db>(
                 let method_short = Name::new(format!("{class_name}.{method_name}"));
                 let key = function_key(db, func_loc, &method_short);
 
-                process_callable(
+                builder.process(
                     db,
                     pkg_items,
                     func_loc,
                     key,
                     &method_data.generic_params,
                     Some(class_name),
-                    &mut direct_facts,
-                    &mut has_declared_contract,
-                    &mut call_edges,
                 );
             }
         }
     }
+
+    // Destructure the accumulators back into locals so the downstream merge /
+    // add-node / add-edge block stays byte-for-byte identical (and the
+    // nodes-then-edges ordering and BTreeMap/BTreeSet iteration are preserved).
+    let ThrowGraphBuilder {
+        mut direct_facts,
+        has_declared_contract,
+        call_edges,
+    } = builder;
 
     // Process call edges: for cross-package targets, merge their throw facts
     // into the caller's direct facts; same-package targets become graph edges
@@ -157,63 +157,74 @@ pub fn function_throw_sets<'db>(
     FunctionThrowSets { transitive }
 }
 
-/// Compute the direct throw facts, declared-contract flag, and call edges for a
-/// single callable (free function or class method) and record them in the
-/// per-package maps.
-///
-/// `class_name` is `Some` for class methods, in which case `self.X` call targets
-/// are rewritten to `ClassName.X` so edges connect to the correct graph nodes.
-#[allow(clippy::too_many_arguments)]
-fn process_callable<'db>(
-    db: &'db dyn crate::Db,
-    pkg_items: &PackageItems<'db>,
-    func_loc: baml_compiler2_hir::loc::FunctionLoc<'db>,
-    key: Name,
-    generic_params: &[Name],
-    class_name: Option<&Name>,
-    direct_facts: &mut BTreeMap<Name, BTreeSet<ThrowFact>>,
-    has_declared_contract: &mut BTreeSet<Name>,
-    call_edges: &mut BTreeMap<Name, BTreeSet<Name>>,
-) {
-    let sig = baml_compiler2_ppir::function_signature(db, func_loc);
-    let body = baml_compiler2_ppir::function_body(db, func_loc);
-    let ns = baml_compiler2_hir::file_package::file_package(db, func_loc.file(db)).namespace_path;
+/// Accumulates the direct throw facts, declared-contract flags, and call edges
+/// for every callable in a package, keyed by throw-set key.
+#[derive(Default)]
+struct ThrowGraphBuilder {
+    /// Direct facts per callable. Tracked separately so cross-package facts can
+    /// be merged in before the nodes are added to the graph.
+    direct_facts: BTreeMap<Name, BTreeSet<ThrowFact>>,
+    has_declared_contract: BTreeSet<Name>,
+    call_edges: BTreeMap<Name, BTreeSet<Name>>,
+}
 
-    let declared_throws = sig.throws.as_ref().map(|te| {
-        let mut diags = Vec::new();
-        let lowered = lower_type_expr_in_ns(db, te, pkg_items, &ns, generic_params, &mut diags);
-        flatten_ty_to_facts(&lowered)
-    });
+impl ThrowGraphBuilder {
+    /// Compute the direct throw facts, declared-contract flag, and call edges
+    /// for a single callable (free function or class method) and record them.
+    ///
+    /// `class_name` is `Some` for class methods, in which case `self.X` call
+    /// targets are rewritten to `ClassName.X` so edges connect to the correct
+    /// graph nodes.
+    fn process<'db>(
+        &mut self,
+        db: &'db dyn crate::Db,
+        pkg_items: &PackageItems<'db>,
+        func_loc: baml_compiler2_hir::loc::FunctionLoc<'db>,
+        key: Name,
+        generic_params: &[Name],
+        class_name: Option<&Name>,
+    ) {
+        let sig = baml_compiler2_ppir::function_signature(db, func_loc);
+        let body = baml_compiler2_ppir::function_body(db, func_loc);
+        let ns =
+            baml_compiler2_hir::file_package::file_package(db, func_loc.file(db)).namespace_path;
 
-    let has_contract = declared_throws.is_some();
-    let expr_body = if let baml_compiler2_hir::body::FunctionBody::Expr(b) = body.as_ref() {
-        Some(b)
-    } else {
-        None
-    };
-    let direct = if let Some(declared) = declared_throws {
-        declared
-    } else if let Some(expr_body) = expr_body {
-        collect_direct_throws(db, pkg_items, &ns, expr_body)
-    } else {
-        BTreeSet::new()
-    };
+        let declared_throws = sig.throws.as_ref().map(|te| {
+            let mut diags = Vec::new();
+            let lowered = lower_type_expr_in_ns(db, te, pkg_items, &ns, generic_params, &mut diags);
+            flatten_ty_to_facts(&lowered)
+        });
 
-    direct_facts.insert(key.clone(), direct);
-    if has_contract {
-        has_declared_contract.insert(key.clone());
-    }
-
-    if let Some(expr_body) = expr_body {
-        let targets = collect_call_targets(expr_body);
-        let targets = match class_name {
-            Some(class_name) => targets
-                .into_iter()
-                .map(|t| rewrite_self_target(&t, class_name))
-                .collect(),
-            None => targets,
+        let has_contract = declared_throws.is_some();
+        let expr_body = if let baml_compiler2_hir::body::FunctionBody::Expr(b) = body.as_ref() {
+            Some(b)
+        } else {
+            None
         };
-        call_edges.insert(key, targets);
+        let direct = if let Some(declared) = declared_throws {
+            declared
+        } else if let Some(expr_body) = expr_body {
+            collect_direct_throws(db, pkg_items, &ns, expr_body)
+        } else {
+            BTreeSet::new()
+        };
+
+        self.direct_facts.insert(key.clone(), direct);
+        if has_contract {
+            self.has_declared_contract.insert(key.clone());
+        }
+
+        if let Some(expr_body) = expr_body {
+            let targets = collect_call_targets(expr_body);
+            let targets = match class_name {
+                Some(class_name) => targets
+                    .into_iter()
+                    .map(|t| rewrite_self_target(&t, class_name))
+                    .collect(),
+                None => targets,
+            };
+            self.call_edges.insert(key, targets);
+        }
     }
 }
 
