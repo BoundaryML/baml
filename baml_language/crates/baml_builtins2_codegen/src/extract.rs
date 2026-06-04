@@ -1035,7 +1035,7 @@ mod tests {
 
         let net_connect = io_builtins
             .iter()
-            .find(|b| b.path == "baml.net.connect")
+            .find(|b| b.path == "baml.net.TcpStream.connect")
             .unwrap();
         assert_eq!(net_connect.throws, throws(&["Io", "Timeout"]));
 

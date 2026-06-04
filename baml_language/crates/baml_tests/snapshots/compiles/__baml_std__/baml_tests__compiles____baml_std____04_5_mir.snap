@@ -6320,15 +6320,21 @@ fn baml.media.Audio.url = builtin(vm)
 
 fn baml.net.TcpListener.accept = builtin(io)
 
-fn baml.net.Socket.close = builtin(io)
+fn baml.net.TcpListener.bind = builtin(io)
+
+fn baml.net.UdpSocket.bind = builtin(io)
+
+fn baml.net.TcpStream.close = builtin(io)
 
 fn baml.net.TcpListener.close = builtin(io)
 
-fn baml.net.connect = builtin(io)
+fn baml.net.UdpSocket.close = builtin(io)
 
-fn baml.net.Socket.from_json(j: baml.json.json) -> baml.net.Socket {
+fn baml.net.TcpStream.connect = builtin(io)
+
+fn baml.net.TcpStream.from_json(j: baml.json.json) -> baml.net.TcpStream {
     // Locals:
-    let _0: baml.net.Socket // _0 // return
+    let _0: baml.net.TcpStream // _0 // return
     let _1: baml.json.json // j // param
     let _2: string
     let _3: type
@@ -6338,11 +6344,50 @@ fn baml.net.Socket.from_json(j: baml.json.json) -> baml.net.Socket {
     }
 
     bb1: {
-        _3 = load_type(baml.net.Socket);
+        _3 = load_type(baml.net.TcpStream);
         _0 = call const fn baml.json.from_string<copy _3>(copy _2) -> [bb2];
     }
 
     bb2: {
+        return;
+    }
+}
+
+fn baml.net.Datagram.from_json(j: baml.json.json) -> baml.net.Datagram {
+    // Locals:
+    let _0: baml.net.Datagram // _0 // return
+    let _1: baml.json.json // j // param
+    let _2: uint8array
+    let _3: baml.json.json
+    let _4: type
+    let _5: string
+    let _6: baml.json.json
+    let _7: type
+
+    bb0: {
+        _3 = call const fn baml.json.field(copy _1, const "data") -> [bb1];
+    }
+
+    bb1: {
+        _4 = load_type(uint8array);
+        _2 = call const fn baml.json.from_json<copy _4>(copy _3) -> [bb2];
+    }
+
+    bb2: {
+        _6 = call const fn baml.json.field(copy _1, const "addr") -> [bb3];
+    }
+
+    bb3: {
+        _7 = load_type(string);
+        _5 = call const fn baml.json.from_json<copy _7>(copy _6) -> [bb4];
+    }
+
+    bb4: {
+        _0 = baml.net.Datagram { copy _2, copy _5 };
+        goto -> bb5;
+    }
+
+    bb5: {
         return;
     }
 }
@@ -6368,9 +6413,86 @@ fn baml.net.TcpListener.from_json(j: baml.json.json) -> baml.net.TcpListener {
     }
 }
 
-fn baml.net.listen = builtin(io)
+fn baml.net.UdpSocket.from_json(j: baml.json.json) -> baml.net.UdpSocket {
+    // Locals:
+    let _0: baml.net.UdpSocket // _0 // return
+    let _1: baml.json.json // j // param
+    let _2: string
+    let _3: type
 
-fn baml.net.Socket.read = builtin(io)
+    bb0: {
+        _2 = call const fn baml.json.stringify(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _3 = load_type(baml.net.UdpSocket);
+        _0 = call const fn baml.json.from_string<copy _3>(copy _2) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn baml.net.TcpStream.read = builtin(io)
+
+fn baml.net.UdpSocket.recv_from = builtin(io)
+
+fn baml.net.UdpSocket.send_to = builtin(io)
+
+fn baml.net.TcpStream.to_json(self: baml.net.TcpStream) -> baml.json.json {
+    // Locals:
+    let _0: baml.json.json // _0 // return
+    let _1: baml.net.TcpStream // self // param
+    let _2: string
+    let _3: type
+
+    bb0: {
+        _3 = load_type(baml.net.TcpStream);
+        _2 = call const fn baml.json.to_string<copy _3>(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _0 = call const fn baml.json.parse(copy _2) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn baml.net.Datagram.to_json(self: baml.net.Datagram) -> baml.json.json {
+    // Locals:
+    let _0: baml.json.json // _0 // return
+    let _1: baml.net.Datagram // self // param
+    let _2: baml.json.json
+    let _3: uint8array
+    let _4: baml.net.Datagram
+    let _5: baml.json.json
+    let _6: string
+    let _7: baml.net.Datagram
+
+    bb0: {
+        _4 = copy _1;
+        _3 = copy _4.0;
+        _2 = call const fn baml.Uint8Array.to_json(copy _3) -> [bb1];
+    }
+
+    bb1: {
+        _7 = copy _1;
+        _6 = copy _7.1;
+        _5 = call const fn baml.String.to_json(copy _6) -> [bb2];
+    }
+
+    bb2: {
+        _0 = { const "data": copy _2, const "addr": copy _5 };
+        goto -> bb3;
+    }
+
+    bb3: {
+        return;
+    }
+}
 
 fn baml.net.TcpListener.to_json(self: baml.net.TcpListener) -> baml.json.json {
     // Locals:
@@ -6393,15 +6515,15 @@ fn baml.net.TcpListener.to_json(self: baml.net.TcpListener) -> baml.json.json {
     }
 }
 
-fn baml.net.Socket.to_json(self: baml.net.Socket) -> baml.json.json {
+fn baml.net.UdpSocket.to_json(self: baml.net.UdpSocket) -> baml.json.json {
     // Locals:
     let _0: baml.json.json // _0 // return
-    let _1: baml.net.Socket // self // param
+    let _1: baml.net.UdpSocket // self // param
     let _2: string
     let _3: type
 
     bb0: {
-        _3 = load_type(baml.net.Socket);
+        _3 = load_type(baml.net.UdpSocket);
         _2 = call const fn baml.json.to_string<copy _3>(copy _1) -> [bb1];
     }
 
@@ -6414,7 +6536,7 @@ fn baml.net.Socket.to_json(self: baml.net.Socket) -> baml.json.json {
     }
 }
 
-fn baml.net.Socket.write = builtin(io)
+fn baml.net.TcpStream.write = builtin(io)
 
 fn baml.panics.DivisionByZero.from_json(j: baml.json.json) -> baml.panics.DivisionByZero {
     // Locals:

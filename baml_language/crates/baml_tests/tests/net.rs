@@ -22,8 +22,8 @@ async fn net_connect_and_read() {
 
     let output = baml_test!(&format!(
         r#"
-            function main() -> string {{
-                let sock = baml.net.connect("{addr}");
+            function main() -> uint8array {{
+                let sock = baml.net.TcpStream.connect("{addr}");
                 sock.read()
             }}
         "#
@@ -31,18 +31,16 @@ async fn net_connect_and_read() {
     server.await.unwrap();
 
     insta::assert_snapshot!(stabilize_bytecode(&output.bytecode, &addr), @r#"
-    function main() -> string {
+    function main() -> uint8array {
         load_const "{ADDR}"
-        sys_op baml.net.connect
-        sys_op baml.net.Socket.read
+        sys_op baml.net.TcpStream.connect
+        sys_op baml.net.TcpStream.read
         return
     }
     "#);
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String(
-            "Hello from server!".to_string().into()
-        ))
+        Ok(BexExternalValue::Uint8Array(b"Hello from server!".to_vec()))
     );
 }
 
@@ -50,18 +48,18 @@ async fn net_connect_and_read() {
 async fn net_connect_failure() {
     let output = baml_test!(
         r#"
-            function main() -> string {
-                let sock = baml.net.connect("127.0.0.1:1");
+            function main() -> uint8array {
+                let sock = baml.net.TcpStream.connect("127.0.0.1:1");
                 sock.read()
             }
         "#
     );
 
     insta::assert_snapshot!(output.bytecode, @r#"
-    function main() -> string {
+    function main() -> uint8array {
         load_const "127.0.0.1:1"
-        sys_op baml.net.connect
-        sys_op baml.net.Socket.read
+        sys_op baml.net.TcpStream.connect
+        sys_op baml.net.TcpStream.read
         return
     }
     "#);
@@ -85,8 +83,8 @@ async fn net_multiple_reads() {
 
     let output = baml_test!(&format!(
         r#"
-            function main() -> string {{
-                let sock = baml.net.connect("{addr}");
+            function main() -> uint8array {{
+                let sock = baml.net.TcpStream.connect("{addr}");
                 let first = sock.read();
                 let second = sock.read();
                 first
@@ -96,15 +94,15 @@ async fn net_multiple_reads() {
     server.await.unwrap();
 
     insta::assert_snapshot!(stabilize_bytecode(&output.bytecode, &addr), @r#"
-    function main() -> string {
+    function main() -> uint8array {
         load_const "{ADDR}"
-        sys_op baml.net.connect
+        sys_op baml.net.TcpStream.connect
         store_var sock
         load_var sock
-        sys_op baml.net.Socket.read
+        sys_op baml.net.TcpStream.read
         store_var first
         load_var sock
-        sys_op baml.net.Socket.read
+        sys_op baml.net.TcpStream.read
         store_var second
         load_var first
         return
@@ -112,6 +110,37 @@ async fn net_multiple_reads() {
     "#);
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("chunk1".to_string().into()))
+        Ok(BexExternalValue::Uint8Array(b"chunk1".to_vec()))
+    );
+}
+
+#[tokio::test]
+async fn net_udp_send_recv() {
+    // A peer that echoes back whatever datagram it receives, to the sender.
+    let peer = tokio::net::UdpSocket::bind("127.0.0.1:0").await.unwrap();
+    let peer_addr = peer.local_addr().unwrap().to_string();
+
+    let server = tokio::spawn(async move {
+        let mut buf = vec![0u8; 1024];
+        let (n, from) = peer.recv_from(&mut buf).await.unwrap();
+        assert_eq!(&buf[..n], b"ping");
+        peer.send_to(b"pong", from).await.unwrap();
+    });
+
+    let output = baml_test!(&format!(
+        r#"
+            function main() -> uint8array {{
+                let sock = baml.net.UdpSocket.bind("127.0.0.1:0");
+                sock.send_to("ping".to_utf8(), "{peer_addr}");
+                let dgram = sock.recv_from();
+                dgram.data
+            }}
+        "#
+    ));
+    server.await.unwrap();
+
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::Uint8Array(b"pong".to_vec()))
     );
 }
