@@ -65,6 +65,12 @@ env:
   CARGO_NET_RETRY: 10
   CARGO_TERM_COLOR: always
   RUSTUP_MAX_RETRIES: 10
+  # With sccache, most compile units are R2 cache lookups/fetches (I/O-bound,
+  # ~0.2s each) rather than CPU codegen, so cargo's default parallelism (=
+  # core count, just 4 on the Windows runner) leaves cores idle waiting on the
+  # network. Oversubscribe so cache-hit fetches overlap. Applies to every cargo
+  # invocation in this workflow.
+  CARGO_BUILD_JOBS: "16"
 
 jobs:
 
