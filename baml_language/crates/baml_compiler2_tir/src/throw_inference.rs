@@ -54,8 +54,7 @@ pub fn function_throw_sets<'db>(
             .map(|dep_id| crate::package_interface::package_interface(db, *dep_id))
             .collect();
 
-    let mut graph: crate::analysis::AnalysisGraph<Name, ThrowFact> =
-        crate::analysis::AnalysisGraph::new();
+    let mut graph: AnalysisGraph<Name, ThrowFact> = AnalysisGraph::new();
 
     let mut builder = ThrowGraphBuilder::default();
 
@@ -511,5 +510,210 @@ pub fn is_banned_catch_binding_type(ty: &Ty) -> Option<&'static str> {
         Some("unknown")
     } else {
         None
+    }
+}
+
+// ── Direct+transitive analysis framework ────────────────────────────────────
+//
+// Generic two-pass direct+transitive analysis. Provides a reusable cache for
+// computing per-node "facts" that propagate transitively through a dependency
+// graph. Throw-set inference is its only consumer, so it lives here rather than
+// in a standalone module.
+//
+// Note: `Tarjan`/`NodeState` are module-private and intentionally share names
+// with the (unrelated) private types in `normalize.rs`; the two do not collide.
+
+/// A dependency graph annotated with per-node direct facts.
+///
+/// `N` is the node identifier type (must be `Ord` for deterministic ordering).
+/// `F` is the fact type (must be `Ord` for set operations).
+struct AnalysisGraph<N: Ord + Clone, F: Ord + Clone> {
+    /// Per-node direct facts (pass 1 output, provided by the caller).
+    direct: BTreeMap<N, BTreeSet<F>>,
+    /// Adjacency list: `node → {dependency₁, dependency₂, …}`.
+    /// An edge from A to B means "A depends on B" (i.e., A calls B).
+    edges: BTreeMap<N, BTreeSet<N>>,
+}
+
+impl<N: Ord + Clone, F: Ord + Clone> AnalysisGraph<N, F> {
+    /// Create an empty graph.
+    fn new() -> Self {
+        Self {
+            direct: BTreeMap::new(),
+            edges: BTreeMap::new(),
+        }
+    }
+
+    /// Register a node with its direct facts.
+    fn add_node(&mut self, node: N, facts: BTreeSet<F>) {
+        self.direct.insert(node.clone(), facts);
+        self.edges.entry(node).or_default();
+    }
+
+    /// Add a directed dependency edge: `from` depends on `to`.
+    fn add_edge(&mut self, from: N, to: N) {
+        self.direct.entry(to.clone()).or_default();
+        self.edges.entry(to.clone()).or_default();
+        self.edges.entry(from).or_default().insert(to);
+    }
+
+    /// Consume the graph and compute the transitive closure of facts.
+    fn analyze(self) -> AnalysisResult<N, F> {
+        let sccs = Tarjan::components(&self.edges);
+        let transitive = propagate(&self.direct, &self.edges, &sccs);
+        AnalysisResult { transitive }
+    }
+}
+
+/// The output of a two-pass analysis.
+struct AnalysisResult<N: Ord, F: Ord> {
+    /// Per-node transitive facts (direct ∪ propagated from dependencies).
+    transitive: BTreeMap<N, BTreeSet<F>>,
+}
+
+impl<N: Ord, F: Ord> AnalysisResult<N, F> {
+    /// Iterate over all nodes and their transitive facts in deterministic order.
+    fn iter_transitive(&self) -> impl Iterator<Item = (&N, &BTreeSet<F>)> {
+        self.transitive.iter()
+    }
+}
+
+fn propagate<N: Ord + Clone, F: Ord + Clone>(
+    direct: &BTreeMap<N, BTreeSet<F>>,
+    edges: &BTreeMap<N, BTreeSet<N>>,
+    sccs: &[Vec<N>],
+) -> BTreeMap<N, BTreeSet<F>> {
+    let mut node_to_scc: BTreeMap<&N, usize> = BTreeMap::new();
+    for (scc_idx, component) in sccs.iter().enumerate() {
+        for node in component {
+            node_to_scc.insert(node, scc_idx);
+        }
+    }
+
+    let mut scc_facts: Vec<BTreeSet<F>> = Vec::with_capacity(sccs.len());
+
+    for (scc_idx, component) in sccs.iter().enumerate() {
+        let mut facts = BTreeSet::new();
+        for node in component {
+            if let Some(df) = direct.get(node) {
+                facts.extend(df.iter().cloned());
+            }
+        }
+
+        let mut visited_succs: BTreeSet<usize> = BTreeSet::new();
+        for node in component {
+            if let Some(deps) = edges.get(node) {
+                for dep in deps {
+                    if let Some(&dep_scc) = node_to_scc.get(dep) {
+                        if dep_scc != scc_idx && visited_succs.insert(dep_scc) {
+                            facts.extend(scc_facts[dep_scc].iter().cloned());
+                        }
+                    }
+                }
+            }
+        }
+
+        scc_facts.push(facts);
+    }
+
+    let mut result = BTreeMap::new();
+    for (scc_idx, component) in sccs.iter().enumerate() {
+        for node in component {
+            result.insert(node.clone(), scc_facts[scc_idx].clone());
+        }
+    }
+
+    result
+}
+
+struct Tarjan<'g, N: Ord> {
+    edges: &'g BTreeMap<N, BTreeSet<N>>,
+    index: usize,
+    stack: Vec<N>,
+    state: BTreeMap<N, NodeState>,
+    components: Vec<Vec<N>>,
+}
+
+#[derive(Clone, Copy)]
+struct NodeState {
+    index: usize,
+    low_link: usize,
+    on_stack: bool,
+}
+
+impl<'g, N: Ord + Clone> Tarjan<'g, N> {
+    const UNVISITED: usize = usize::MAX;
+
+    fn components(edges: &'g BTreeMap<N, BTreeSet<N>>) -> Vec<Vec<N>> {
+        let mut tarjan = Self {
+            edges,
+            index: 0,
+            stack: Vec::new(),
+            state: edges
+                .keys()
+                .map(|n| {
+                    (
+                        n.clone(),
+                        NodeState {
+                            index: Self::UNVISITED,
+                            low_link: Self::UNVISITED,
+                            on_stack: false,
+                        },
+                    )
+                })
+                .collect(),
+            components: Vec::new(),
+        };
+
+        let nodes: Vec<N> = edges.keys().cloned().collect();
+        for node in nodes {
+            if tarjan.state[&node].index == Self::UNVISITED {
+                tarjan.strong_connect(&node);
+            }
+        }
+
+        tarjan.components
+    }
+
+    fn strong_connect(&mut self, node_id: &N) {
+        let mut node = NodeState {
+            index: self.index,
+            low_link: self.index,
+            on_stack: true,
+        };
+        self.index += 1;
+        self.state.insert(node_id.clone(), node);
+        self.stack.push(node_id.clone());
+
+        if let Some(successors) = self.edges.get(node_id) {
+            for succ_id in successors {
+                let succ = self.state[succ_id];
+                if succ.index == Self::UNVISITED {
+                    self.strong_connect(succ_id);
+                    let succ = self.state[succ_id];
+                    node.low_link = node.low_link.min(succ.low_link);
+                } else if succ.on_stack {
+                    node.low_link = node.low_link.min(succ.index);
+                }
+            }
+        }
+
+        self.state.insert(node_id.clone(), node);
+
+        if node.low_link == node.index {
+            let mut component = Vec::new();
+            while let Some(top) = self.stack.pop() {
+                if let Some(st) = self.state.get_mut(&top) {
+                    st.on_stack = false;
+                }
+                let is_root = &top == node_id;
+                component.push(top);
+                if is_root {
+                    break;
+                }
+            }
+            component.reverse();
+            self.components.push(component);
+        }
     }
 }

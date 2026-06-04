@@ -15,7 +15,6 @@
 //! result. This gives fine-grained incrementality: editing a lambda body only
 //! recomputes that lambda's `ScopeInference`, not the enclosing function's.
 
-pub mod analysis;
 pub mod builder;
 pub mod callable;
 pub mod exhaustiveness;
