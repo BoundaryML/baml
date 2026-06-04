@@ -45,13 +45,13 @@ Precedence:
 
 Normal commands never hit the network and never auto-install. Toolchain commands are the allowlisted network surface.
 
-`toolchain use` installs if missing and selects the default. `toolchain install` downloads without selecting. `toolchain update` advances channel selectors only and is the explicit freshness check. `toolchain list` is local-only.
+`toolchain use` installs if missing and selects the default. `toolchain install` downloads without selecting. `toolchain update` advances channel selectors only. `toolchain status` is the explicit read-only remote freshness check. `toolchain list` is local-only and points users to `toolchain status` when they want remote freshness.
 
 ## Manifests
 
 Toolchain and wrapper manifests use schema `1`, HTTPS artifact URLs, lowercase SHA-256 checksums, and exact target sets. `BAML_MANIFEST_BASE_URL` can point wrapper validation at dry-run or mirror manifests and is not persisted.
 
-Manifest cache entries are namespaced by manifest base URL: production uses `manifest-cache/prod`, while overrides use `manifest-cache/override/<hash>`. Channel `toolchain use` has a 24-hour cache TTL so selecting an already-known channel does not block on the network unnecessarily. `toolchain update` bypasses that TTL and checks the remote channel pointer before mutating state. Normal pass-through commands never read remote metadata; they use `config.toml`, `state.toml`, and installed `VERSION` files only. Channel state records the manifest base URL that produced it, so dry-run or mirror state is not silently reused under production.
+Manifest cache entries are namespaced by manifest base URL: production uses `manifest-cache/prod`, while overrides use `manifest-cache/override/<hash>`. Channel `toolchain use` has a 24-hour cache TTL so selecting an already-known channel does not block on the network unnecessarily. `toolchain update` bypasses that TTL and checks the remote channel pointer before mutating state. `toolchain status` also checks the remote channel pointer, but it is read-only: it may refresh manifest cache, but it never installs a toolchain or mutates active selector/channel state. Normal pass-through commands never read remote metadata; they use `config.toml`, `state.toml`, and installed `VERSION` files only. Channel state records the manifest base URL that produced it, so dry-run or mirror state is not silently reused under production.
 
 ## IDE And Compatibility
 

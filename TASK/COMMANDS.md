@@ -15,7 +15,8 @@ The important split:
 | `baml toolchain install <canary\|nightly\|version>` | Download and verify a toolchain without necessarily making it active. Channel inputs resolve to a concrete version at install time. |
 | `baml toolchain use <canary\|nightly\|version>` | Select the active default toolchain. Installs the resolved toolchain if missing. |
 | `baml toolchain update` | Refresh the active channel and advance to the latest canary/nightly toolchain. Concrete pinned versions do not move. |
-| `baml toolchain list` | Show installed toolchains and the active selector/version. May have a remote/list mode later. |
+| `baml toolchain status` | Check the active selector against the latest remote channel metadata without installing, updating, or changing selection. |
+| `baml toolchain list` | Show installed toolchains and the active selector/version. Local-only; never checks remote versions. |
 | `baml toolchain uninstall <version>` | Remove an installed concrete toolchain. |
 | `baml self-update` | Update only the wrapper for curl-installed wrappers. Refuse for package-manager-managed wrappers with the right package-manager command. |
 

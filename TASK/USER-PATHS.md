@@ -4,7 +4,7 @@ We are replacing the current alpha-era release flow with a clean, unified releas
 
 The new system keeps Engine releases working as they do today, while giving BAML language users a modern install and update experience:
 
-- `brew install baml` installs the lightweight `baml` wrapper and bootstraps the latest canary BAML toolchain.
+- `brew install baml` installs the lightweight `baml` wrapper; `baml toolchain use canary` explicitly selects and installs the latest canary BAML toolchain.
 - `baml toolchain use nightly` lets users follow every successful `canary` branch release.
 - `baml toolchain update` updates the active language toolchain.
 - `baml self-update` updates only the wrapper.
@@ -32,7 +32,7 @@ Engine remains separate. Existing Engine users keep their current release pipeli
 
 For users:
 
-- New users can install BAML with one package-manager command and get a working canary CLI plus an explicit IDE setup follow-up when relevant.
+- New users can install the BAML wrapper with one package-manager command, then explicitly select a working canary CLI with `baml toolchain use canary`.
 - Nightly users can stay on the latest successful `canary` branch commit.
 - Canary users are not exposed to nightly releases unless they opt in.
 - Project teams can pin a toolchain in `baml.toml`.
@@ -77,16 +77,17 @@ As a new user, I want to run:
 
 ```bash
 brew install baml
+baml toolchain use canary
 ```
 
 and end up with:
 
 - `baml` on my path.
-- the current canary toolchain installed under the wrapper-managed toolchain directory.
+- the current canary toolchain installed under the wrapper-managed toolchain directory after I explicitly select it.
 - no automatic editor extension install as a side effect.
 - a clear follow-up command such as `baml ide install --cursor` when BAML can detect a supported IDE terminal.
 
-The package artifact itself still contains only the wrapper. The canary toolchain is installed through the normal wrapper-owned manifest flow.
+The package artifact itself contains only the wrapper. The canary toolchain is installed only when the user runs the normal wrapper-owned manifest flow.
 
 ### Existing Canary User
 
@@ -242,17 +243,19 @@ Instead, the version script stamps explicit version surfaces from `release-plan.
 
 | Action | Result |
 |---|---|
-| `brew install baml` | Installs wrapper, bootstraps canary toolchain, and may print an explicit `baml ide install` follow-up |
+| `brew install baml` | Installs wrapper only and may print explicit follow-up commands such as `baml toolchain use canary` and `baml ide install` |
 | `curl .../install.sh` | Installs wrapper, bootstraps requested canary/nightly/version |
 | `baml toolchain install canary` | Installs current canary toolchain without necessarily making it active |
 | `baml toolchain install nightly` | Installs current nightly toolchain without necessarily making it active |
 | `baml toolchain use canary` | Selects canary as the active default and installs the resolved toolchain if missing |
 | `baml toolchain use nightly` | Selects nightly as the active default and installs the resolved toolchain if missing |
+| `baml toolchain status` | Checks remote channel freshness without installing or changing selection |
+| `baml toolchain list` | Lists installed toolchains without checking remote metadata |
 | `baml toolchain update` | Updates active language toolchain |
 | `baml self-update` | Updates wrapper only, refused for Homebrew/AUR installs |
 | `baml ide install` | Installs IDE extension from active toolchain |
 
-Wrapper upgrades are idempotent. If a user is already on nightly or has an explicit toolchain, a package-manager wrapper upgrade must not reset them back to canary.
+Package-manager wrapper installs and upgrades must not bootstrap, switch, or reset toolchains. If a user is already on nightly or has an explicit toolchain, a package-manager wrapper upgrade must leave that selection alone; toolchain installs and switches happen through explicit `baml toolchain use` or `baml toolchain update` commands.
 
 ## CI/CD Shape
 
