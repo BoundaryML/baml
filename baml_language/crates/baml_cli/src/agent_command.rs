@@ -335,19 +335,7 @@ fn install_skills_to(root: &Path, relative_skills_dir: PathBuf, skills: &[Skill]
         }
 
         for skill in skills {
-            let final_dir = skills_dir.join(skill.name);
-            let next_dir = tmp_dir.join(skill.name);
-            if final_dir.exists() {
-                fs::remove_dir_all(&final_dir)
-                    .with_context(|| format!("failed to refresh {}", final_dir.display()))?;
-            }
-            fs::rename(&next_dir, &final_dir).with_context(|| {
-                format!(
-                    "failed to install {} into {}",
-                    skill.name,
-                    final_dir.display()
-                )
-            })?;
+            replace_skill_dir(&skills_dir, &tmp_dir, skill)?;
         }
         Ok(())
     })();
@@ -360,6 +348,64 @@ fn install_skills_to(root: &Path, relative_skills_dir: PathBuf, skills: &[Skill]
         }
         (Ok(()), _) => Ok(()),
     }
+}
+
+fn replace_skill_dir(skills_dir: &Path, tmp_dir: &Path, skill: &Skill) -> Result<()> {
+    let final_dir = skills_dir.join(skill.name);
+    let next_dir = tmp_dir.join(skill.name);
+    let backup_dir = unique_backup_dir(skills_dir, skill.name)?;
+    let mut has_backup = false;
+
+    if final_dir.exists() {
+        fs::rename(&final_dir, &backup_dir)
+            .with_context(|| format!("failed to stage existing {}", final_dir.display()))?;
+        has_backup = true;
+    }
+
+    if let Err(err) = fs::rename(&next_dir, &final_dir) {
+        let mut error = anyhow!(err).context(format!(
+            "failed to install {} into {}",
+            skill.name,
+            final_dir.display()
+        ));
+        if has_backup {
+            if final_dir.exists() {
+                error = error.context(format!(
+                    "previous {} skill remains at {}",
+                    skill.name,
+                    backup_dir.display()
+                ));
+            } else if let Err(restore_err) = fs::rename(&backup_dir, &final_dir) {
+                error = error.context(format!(
+                    "failed to restore previous {} skill from {} to {}: {restore_err}",
+                    skill.name,
+                    backup_dir.display(),
+                    final_dir.display()
+                ));
+            }
+        }
+        return Err(error);
+    }
+
+    if has_backup {
+        fs::remove_dir_all(&backup_dir)
+            .with_context(|| format!("failed to remove backup {}", backup_dir.display()))?;
+    }
+
+    Ok(())
+}
+
+fn unique_backup_dir(skills_dir: &Path, skill_name: &str) -> Result<PathBuf> {
+    for attempt in 0..1000 {
+        let backup_dir = skills_dir.join(format!(
+            ".baml-agent-install-backup-{}-{skill_name}-{attempt}",
+            std::process::id()
+        ));
+        if !backup_dir.exists() {
+            return Ok(backup_dir);
+        }
+    }
+    anyhow::bail!("failed to find available backup directory for {skill_name}");
 }
 
 fn write_atomic(path: &Path, content: &str) -> Result<()> {
@@ -477,6 +523,15 @@ mod tests {
         );
         assert_eq!(fs::read_to_string(unrelated).unwrap(), "keep");
         assert!(root.join(".claude/skills/baml-bridges/SKILL.md").is_file());
+        assert!(
+            fs::read_dir(root.join(".agents/skills"))
+                .unwrap()
+                .all(|entry| !entry
+                    .unwrap()
+                    .file_name()
+                    .to_string_lossy()
+                    .starts_with(".baml-agent-install-backup-"))
+        );
     }
 
     #[test]
