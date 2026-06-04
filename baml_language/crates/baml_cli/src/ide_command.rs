@@ -25,8 +25,10 @@ pub(crate) enum IdeCommand {
 
 #[derive(Args, Clone, Debug)]
 pub(crate) struct IdeInstallArgs {
+    /// Install the active toolchain's BAML VSIX into Cursor.
     #[arg(long)]
     pub cursor: bool,
+    /// Install the active toolchain's BAML VSIX into VS Code.
     #[arg(long, conflicts_with = "cursor")]
     pub code: bool,
 }
