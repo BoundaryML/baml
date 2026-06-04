@@ -22,6 +22,8 @@ fn type_name(ht: BamlHandleType) -> &'static str {
         // Host-owned callables are tracked per-bridge, not in HANDLE_TABLE.
         // The key here is the bridge-side identity passed in from the host.
         BamlHandleType::HostValueCallable => "host_value_callable",
+        // Host-owned opaque error values: same per-bridge tracking as callables.
+        BamlHandleType::HostValueError => "host_value_error",
     }
 }
 

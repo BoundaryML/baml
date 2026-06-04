@@ -47,6 +47,11 @@ enum BamlHandleType {
   // Lifetime: Rust drop notifies host via HostReleaseFn (not via
   // HANDLE_TABLE). See bex_external_types::host_value.
   HOST_VALUE_CALLABLE = 15;
+  // Host-owned opaque error value (a native exception with no BAML
+  // representation), referenced via the same per-bridge registry and
+  // HostReleaseFn lifetime as HOST_VALUE_CALLABLE. Surfaced in BAML as
+  // baml.errors.HostCallable. See bex_external_types::host_value.
+  HOST_VALUE_ERROR = 16;
 }
 
 message BamlHandle {

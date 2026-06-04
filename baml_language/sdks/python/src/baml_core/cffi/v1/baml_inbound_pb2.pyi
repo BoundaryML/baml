@@ -23,6 +23,7 @@ class BamlHandleType(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     ADT_TYPE: _ClassVar[BamlHandleType]
     ADT_TAGGED_HEAP_HANDLE: _ClassVar[BamlHandleType]
     HOST_VALUE_CALLABLE: _ClassVar[BamlHandleType]
+    HOST_VALUE_ERROR: _ClassVar[BamlHandleType]
 
 class HostCallableErrorCategory(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     __slots__ = ()
@@ -44,6 +45,7 @@ ADT_COLLECTOR: BamlHandleType
 ADT_TYPE: BamlHandleType
 ADT_TAGGED_HEAP_HANDLE: BamlHandleType
 HOST_VALUE_CALLABLE: BamlHandleType
+HOST_VALUE_ERROR: BamlHandleType
 HOST_CALLABLE_ERROR_UNSPECIFIED: HostCallableErrorCategory
 HOST_CALLABLE_HOST_ERROR: HostCallableErrorCategory
 HOST_CALLABLE_INVALID_ARGUMENT: HostCallableErrorCategory

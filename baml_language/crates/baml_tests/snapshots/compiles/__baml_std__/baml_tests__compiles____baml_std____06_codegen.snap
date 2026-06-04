@@ -4343,6 +4343,86 @@ function baml.panics.Exit.to_json(self: baml.panics.Exit) -> baml.json.json {
     return
 }
 
+function baml.panics.HostContractViolation.from_json(j: baml.json.json) -> baml.panics.HostContractViolation {
+    load_var j
+    load_const "message"
+    call baml.json.field
+    store_var _3
+    load_type string
+    load_var _3
+    call baml.json.from_json
+    load_var j
+    load_const "class_name"
+    call baml.json.field
+    store_var _6
+    load_type string?
+    load_var _6
+    call baml.json.from_json
+    load_var j
+    load_const "language"
+    call baml.json.field
+    store_var _9
+    load_type string?
+    load_var _9
+    call baml.json.from_json
+    init_instance baml.panics.HostContractViolation .message, .class_name, .language
+    return
+}
+
+function baml.panics.HostContractViolation.to_json(self: baml.panics.HostContractViolation) -> baml.json.json {
+    load_var self
+    load_field .message
+    call baml.String.to_json
+    store_var _2
+    load_var self
+    load_field .class_name
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var self
+    load_field .class_name
+    make_bound_method baml.String.to_json
+    call_indirect
+    store_var _5
+    jump L2
+
+  L1:
+    load_const null
+    store_var _5
+
+  L2:
+    load_var self
+    load_field .language
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L3
+    jump L4
+
+  L3:
+    load_var self
+    load_field .language
+    make_bound_method baml.String.to_json
+    call_indirect
+    store_var _12
+    jump L5
+
+  L4:
+    load_const null
+    store_var _12
+
+  L5:
+    load_var2 2 3
+    load_var _12
+    load_const "message"
+    load_const "class_name"
+    load_const "language"
+    alloc_map 3
+    return
+}
+
 function baml.panics.HostUnavailable.from_json(j: baml.json.json) -> baml.panics.HostUnavailable {
     load_var j
     load_const "resource"

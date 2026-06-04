@@ -136,6 +136,7 @@ namespace baml.panics:
   class Cancelled { methods: [to_json, from_json] }
   class DivisionByZero { methods: [to_json, from_json] }
   class Exit { methods: [to_json, from_json] }
+  class HostContractViolation { methods: [to_json, from_json] }
   class HostUnavailable { methods: [to_json, from_json] }
   class IndexOutOfBounds { methods: [to_json, from_json] }
   class InvalidFieldAccess { methods: [to_json, from_json] }

@@ -15,13 +15,19 @@ use once_cell::sync::Lazy;
 
 /// Discriminator for what kind of host value a key refers to.
 ///
-/// Reserved for forward-compatibility: opaque non-callable host values
-/// can be added by introducing a new variant without changing the wire
-/// shape.
+/// Opaque non-callable host values are distinguished from callables by
+/// their variant; the wire shape (`BamlHandle { key, handle_type }`) is
+/// shared, with `handle_type` carrying the discriminant.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum HostValueKind {
     /// A host-language callable (function/closure/method).
     Callable,
+    /// An opaque host-language error value (a native exception that has no
+    /// BAML representation). Holds a reference back to the host error object
+    /// so the originating host can recover the exact native exception on
+    /// round-trip. Surfaced in BAML as `baml.errors.HostCallable`. See
+    /// `docs/design/host-callable-errors.md`.
+    Error,
 }
 
 /// Drop-on-last-clone notification fired to the host language.
