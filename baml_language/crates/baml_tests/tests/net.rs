@@ -144,3 +144,70 @@ async fn net_udp_send_recv() {
         Ok(BexExternalValue::Uint8Array(b"pong".to_vec()))
     );
 }
+
+#[tokio::test]
+async fn net_tcp_read_after_close_errors() {
+    // Connect succeeds, then close() invalidates the shared handle so a
+    // subsequent read() on the same socket fails deterministically.
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap().to_string();
+    let server = tokio::spawn(async move {
+        // Accept and hold the connection open so connect() succeeds.
+        let _conn = listener.accept().await.unwrap();
+        tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
+    });
+
+    let output = baml_test!(&format!(
+        r#"
+            function main() -> uint8array {{
+                let sock = baml.net.TcpStream.connect("{addr}");
+                sock.close();
+                sock.read()
+            }}
+        "#
+    ));
+    server.await.unwrap();
+
+    assert!(
+        output.result.is_err(),
+        "read after close should fail, got {:?}",
+        output.result
+    );
+}
+
+#[tokio::test]
+async fn net_tcp_listener_accept_after_close_errors() {
+    let output = baml_test!(
+        r#"
+            function main() -> uint8array {
+                let listener = baml.net.TcpListener.bind("127.0.0.1:0");
+                listener.close();
+                let sock = listener.accept();
+                sock.read()
+            }
+        "#
+    );
+    assert!(
+        output.result.is_err(),
+        "accept after close should fail, got {:?}",
+        output.result
+    );
+}
+
+#[tokio::test]
+async fn net_udp_send_after_close_errors() {
+    let output = baml_test!(
+        r#"
+            function main() -> int {
+                let sock = baml.net.UdpSocket.bind("127.0.0.1:0");
+                sock.close();
+                sock.send_to("x".to_utf8(), "127.0.0.1:9")
+            }
+        "#
+    );
+    assert!(
+        output.result.is_err(),
+        "send_to after close should fail, got {:?}",
+        output.result
+    );
+}
