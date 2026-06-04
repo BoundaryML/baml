@@ -61,6 +61,34 @@ function main() -> string {
 }
 
 #[tokio::test]
+async fn tagged_template_outer_local_captured_through_user_lambda() {
+    // `outer` is defined in `main`, referenced ONLY inside a tagged template
+    // that is itself inside a user lambda `f`. The template's interp must
+    // capture `outer` *through* `f` — i.e. `f` must learn it captures `outer`.
+    // Before late-lowering, the synthesized template body lambda was a separate
+    // HIR capture boundary that stole the reference, so `f` never recorded the
+    // capture and this failed to compile with `[E0003] unresolved name: outer`.
+    let output = baml_test!(
+        r#"
+//baml:tagged_string
+function cap(body: () -> baml.TaggedString) -> string {
+  let t = body()
+  match (t.values[0]) {
+    let s: string => t.parts[0] + s + t.parts[1],
+    _ => "?"
+  }
+}
+function main() -> string {
+  let outer = "OUT"
+  let f = () -> { cap`a${outer}b` }
+  f()
+}
+"#
+    );
+    assert_eq!(output.result, ok_string("aOUTb"));
+}
+
+#[tokio::test]
 async fn tagged_template_body_param_injection() {
     // The tag supplies the body-lambda param `name`; `${name}` resolves to it
     // (arity-N body). values[0] is the injected value.

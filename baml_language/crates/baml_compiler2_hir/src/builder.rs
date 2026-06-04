@@ -663,6 +663,11 @@ impl<'db> SemanticIndexBuilder<'db> {
         body: &ast::ExprBody,
         source_map: &ast::AstSourceMap,
     ) {
+        // The enclosing real lambda (if any) — captured BEFORE we push the
+        // template's synthetic lambda. See the transitive-capture propagation
+        // at the end of this function.
+        let enclosing_lambda = self.lambda_stack.last().copied();
+
         self.push_scope(ScopeKind::Lambda, None, source_map.expr_span(expr_id));
         let scope_id = self.current_scope_id();
         self.lambda_stack.push(scope_id);
@@ -678,6 +683,32 @@ impl<'db> SemanticIndexBuilder<'db> {
             self.walk_expr(flatten_body, body, source_map, true);
         }
         self.analyze_lambda_captures(scope_id, body, source_map);
+
+        // BEP-049 §10 — transitive capture through a *synthetic* lambda. When a
+        // tagged template sits inside a user lambda `f`, every var the template
+        // body captures from *beyond* `f` must also be captured BY `f`: TIR types
+        // the template body inline in `f`'s scope, and MIR forwards the template
+        // closure's captures up through `f`. A real nested lambda gets this for
+        // free (its references attribute to it AND its captures thread up); the
+        // template's references attribute only to *this* synthetic lambda, so we
+        // re-record each capture as a reference owned by `f`. Without this, `f`
+        // never learns it must capture the var → TIR reports it unresolved
+        // (`[E0003]`) and MIR cannot forward it.
+        if let Some(enclosing) = enclosing_lambda {
+            let at = source_map.expr_span(expr_id).start();
+            let captures = self.scope_bindings[scope_id.index() as usize]
+                .captures
+                .clone();
+            for (name, _binding) in captures {
+                self.path_root_references.push(PathRootReference {
+                    name,
+                    use_scope: enclosing,
+                    use_offset: at,
+                    owner_lambda: Some(enclosing),
+                });
+            }
+        }
+
         self.lambda_stack.pop();
         self.pop_scope();
     }
