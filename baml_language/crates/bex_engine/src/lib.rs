@@ -1860,10 +1860,17 @@ impl BexEngine {
     ) -> Result<(), EngineError> {
         let child_cancel = thread.vm_thread_cancel().clone();
         let mut guard = self.futures.acquire(thread.proof()).await;
-        // Snapshot the heap ptr while we still hold the guard — once
-        // the terminal transition runs, the entry is gone.
         let settled_ptr = guard.future_heap_ptr(future_id);
-        guard.err_future(future_id, value)?;
+        // BEP-034 fire-and-forget: DEFER the error instead of settling the
+        // heap `Future` to `Error` here. The future stays `Pending` (wake
+        // signal fired), so any awaiter — including a sibling task — observes
+        // it through `future_ready`, which settles it from the stash and
+        // marks it consumed. Only errors still unconsumed at the spawner's
+        // next await are surfaced by `drain_one_pending_child_error`. Settling
+        // eagerly instead would let a sibling's `await`+`catch` run entirely
+        // inside the VM (invisible to the engine), leaving the queue entry to
+        // re-surface an already-handled error at the spawner.
+        guard.defer_error(future_id, value)?;
         drop(guard);
         child_cancel.cancel();
         if let Some(ptr) = settled_ptr {
@@ -2134,39 +2141,28 @@ impl BexEngine {
         Ok(future_ptr)
     }
 
-    /// Pop one `pending_child_errors` entry off `thread`'s queue and
-    /// extract its error `Value` from the heap. Returns `None` when
-    /// the queue is empty or the entry is malformed (a bug-tolerant
-    /// path that logs and skips). Used by the parent's await drain
-    /// (pre- and post-) for BEP-034 fire-and-forget propagation.
-    ///
-    /// Synchronous so it can run inline at the call site without
-    /// crossing an `.await` boundary (the helper itself doesn't need
-    /// async, and inlining sidesteps the `&mut ActiveHeapPermit<…>`
-    /// auto-Send inference quirks that hit other engine helpers).
-    fn read_pending_child_error_value(
+    /// Drain `thread`'s `pending_child_errors` queue until an UNOBSERVED
+    /// fire-and-forget error is found, and return its value (settling the
+    /// child's heap `Future` to `Error` in the process). Entries whose
+    /// deferred error was already consumed by an awaiter (any task that
+    /// awaited the future routed through `future_ready`, which takes the
+    /// stash entry) are skipped — that error was delivered at the await,
+    /// where a `catch` could handle it, and must not re-surface here.
+    /// Returns `None` once the queue is empty. Used by the parent's await
+    /// drain (pre- and post-) for BEP-034 fire-and-forget propagation.
+    async fn drain_one_pending_child_error(
+        &self,
         thread: &mut bex_heap::ActiveHeapPermit<BexThread>,
-    ) -> Option<Value> {
-        let (_id, errored_future_ptr) = thread.vm_thread_pop_pending_child_error()?;
-        // SAFETY: the ptr was rooted via the BexThread's
-        // `pending_child_errors` queue, so GC has kept the heap object
-        // alive and forward-updated the ptr if it moved. We hold the
-        // active permit.
-        match unsafe { errored_future_ptr.get() } {
-            Object::Future(f) => match f.read() {
-                bex_vm_types::FutureRead::Error(v) => Some(v),
-                other => {
-                    tracing::warn!(
-                        ?other,
-                        "pending_child_errors entry not in Error state; skipping"
-                    );
-                    None
-                }
-            },
-            _ => {
-                tracing::warn!("pending_child_errors entry not an Object::Future; skipping");
-                None
+    ) -> Result<Option<Value>, EngineError> {
+        loop {
+            let Some((id, _ptr)) = thread.vm_thread_pop_pending_child_error() else {
+                return Ok(None);
+            };
+            let mut guard = self.futures.acquire(thread.proof()).await;
+            if let Some(value) = guard.take_deferred_error(id)? {
+                return Ok(Some(value));
             }
+            // Already observed by an awaiter — skip and keep draining.
         }
     }
 
@@ -2632,41 +2628,15 @@ impl BexEngine {
                 }
 
                 VmExecState::Await(future_id) => {
-                    // BEP-034: surface any fire-and-forget child error
-                    // at this checkpoint, EXCEPT the one belonging to
-                    // the future we're about to await — that error
-                    // will surface via the normal `FutureRead::Error
-                    // → VmError::Thrown` path, which is catchable by
-                    // user `catch` clauses. Without this carve-out, an
-                    // explicit `(await f) catch (e) { … }` where `f`
-                    // errored fire-and-forget would have its error
-                    // pre-empted here as `EngineError::UnhandledThrow`
-                    // and bypass the catch.
+                    // BEP-034 fire-and-forget: NO pre-drain here. Child errors
+                    // are deferred (`defer_error`) and consumed by whichever
+                    // task awaits the future (`future_ready`); surfacing
+                    // happens only in the POST-drain below, after the awaited
+                    // future settles. Draining before the wait would race the
+                    // legitimate consumer — e.g. `await baml.future.any(fs)`
+                    // would pre-empt `any` consuming a failed input and
+                    // surface an error the combinator was about to handle.
                     //
-                    // We key the carve-out on the `FutureId` (not the
-                    // heap ptr) so the match works even if the
-                    // producer already removed the `active_futures`
-                    // entry: the queue still has our entry tagged with
-                    // the same id.
-                    thread.vm_thread_consume_pending_child_error_for(future_id);
-                    if let Some(value) = Self::read_pending_child_error_value(&mut thread) {
-                        // Same propagation pattern as
-                        // `VmError::ThrownUnhandled` for a non-cancel
-                        // throw: settle our own future as Error if we
-                        // are a spawned child (so OUR awaiter sees the
-                        // error, and our parent's queue gets us too);
-                        // otherwise surface as unhandled to the host.
-                        if let Some(our_future_id) = thread.vm_thread_settles_future() {
-                            self.settle_child_errored(&mut thread, our_future_id, value)
-                                .await?;
-                            return Ok(ThreadOutcome::SettledChild);
-                        }
-                        let external = self.vm_value_to_owned(thread.proof(), value);
-                        return Err(EngineError::UnhandledThrow {
-                            value: Box::new(external),
-                            trace: Vec::new(),
-                        });
-                    }
                     // Fail-fast if the thread's own cancel token is
                     // already fired (e.g. parent cascaded into us
                     // between the previous yield and this await). The
@@ -2699,7 +2669,7 @@ impl BexEngine {
                     // Tightly-scoped guard so the proof's borrow on `vm`
                     // ends before we release the VM permit below.
                     let future = {
-                        let g = self.futures.acquire(thread.proof()).await;
+                        let mut g = self.futures.acquire(thread.proof()).await;
                         g.future_ready(future_id)?
                     };
                     // Release the VM permit before the SetOnce wait — the
@@ -2732,19 +2702,23 @@ impl BexEngine {
                         }
                         AwaitOutcome::Done(r) => r?,
                     }
-                    // Post-await drain: a fire-and-forget child may
-                    // have errored *during* our wait on the SetOnce.
-                    // Per BEP-034, the error must surface at this
-                    // await checkpoint (not slip past it). The pre-
-                    // drain caught errors that were ready going in;
-                    // this catches errors that arrived during the wait.
+                    // Post-await drain: surface fire-and-forget child errors
+                    // that nobody observed. This is the ONLY drain point — it
+                    // runs after the awaited future settled, by which time a
+                    // legitimate consumer (a sibling `await`, a combinator's
+                    // internal awaits) has consumed any deferred error it was
+                    // going to handle, leaving the stash entry absent and the
+                    // drain skipping it.
                     //
-                    // Same catch-natural carve-out as pre-drain. Key
-                    // by `future_id` for the same reason: stable
-                    // across GC moves and across producer settles
-                    // that remove the `active_futures` bookkeeping.
+                    // Carve-out: the entry for the future we are awaiting must
+                    // not be drained here — its deferred error flows through
+                    // `future_ready` → `FutureRead::Error` → `VmError::Thrown`,
+                    // which user `catch` clauses can handle. Without this, an
+                    // `(await f) catch (e) { … }` where `f` errored would have
+                    // its error pre-empted as an `UnhandledThrow`. Keyed by
+                    // `future_id`: stable across GC moves and producer settles.
                     thread.vm_thread_consume_pending_child_error_for(future_id);
-                    if let Some(value) = Self::read_pending_child_error_value(&mut thread) {
+                    if let Some(value) = self.drain_one_pending_child_error(&mut thread).await? {
                         if let Some(our_future_id) = thread.vm_thread_settles_future() {
                             self.settle_child_errored(&mut thread, our_future_id, value)
                                 .await?;
@@ -2787,7 +2761,7 @@ impl BexEngine {
                     // so we can drop the guard and release the permit before
                     // parking — same safepoint discipline as `Await`.
                     let waiters = {
-                        let g = self.futures.acquire(thread.proof()).await;
+                        let mut g = self.futures.acquire(thread.proof()).await;
                         let mut ws = Vec::with_capacity(future_ids.len());
                         for future_id in &future_ids {
                             ws.push(g.future_ready(*future_id)?);

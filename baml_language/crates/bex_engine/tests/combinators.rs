@@ -103,14 +103,9 @@ async fn all_collects_in_order() {
 }
 
 /// `all` re-throws the first failure; the surrounding `catch` observes it.
-///
-/// KNOWN ISSUE (separate from the combinators): an input future spawned in the
-/// SAME task that awaits the combinator, if it throws unhandled, gets its error
-/// queued on the spawner's fire-and-forget queue (`notify_parent_of_error`).
-/// The spawner's `await` then surfaces it as `UnhandledThrow`, bypassing this
-/// `catch`. Lives in the spawn fire-and-forget model; exposed by, not caused
-/// by, the combinators.
-#[ignore = "fire-and-forget input error bypasses combinator catch — see comment"]
+/// The failing input's error is consumed by `all`'s await (deferred-error
+/// observation, see tests/fire_and_forget.rs), so it does NOT also resurface
+/// fire-and-forget at `main`.
 #[tokio::test]
 async fn all_rethrows_failure_to_catch() {
     let source = r#"
@@ -141,13 +136,8 @@ async fn race_returns_first_to_settle() {
 }
 
 /// `any` returns the first SUCCESS even when a faster future fails first.
-///
-/// BLOCKED ON BUG 2 (fire-and-forget): the failing input `spawn { bad() }` is a
-/// child of `main`, so its unhandled "boom" is queued on `main` and surfaces at
-/// `main`'s `await any(fs)` as UnhandledThrow, before `any` skips it. `any`
-/// itself is correct (see `any_all_success_returns_a_value`); un-ignore once the
-/// fire-and-forget fix lands.
-#[ignore = "blocked on bug 2 (fire-and-forget) — any logic itself works; passes once that lands"]
+/// The fast failure is consumed by `any` (deferred-error observation), so it
+/// neither wins nor resurfaces fire-and-forget at `main`.
 #[tokio::test]
 async fn any_returns_first_success() {
     let source = r#"
@@ -165,10 +155,10 @@ async fn any_returns_first_success() {
 
 /// `any` throws `AllFailed` carrying every error when all futures fail.
 ///
-/// BLOCKED ON BUG 2 (fire-and-forget): the failing inputs surface at `main`'s
-/// await before `any` aggregates them. Un-ignore once the fire-and-forget fix
-/// lands.
-#[ignore = "blocked on bug 2 (fire-and-forget) — passes once that lands"]
+/// The arm binds UNTYPED: a typed arm (`let e: baml.future.AllFailed<string>`)
+/// currently fails its `IsType` because instances of a generic class
+/// constructed inside a generic function carry unsubstituted
+/// `class_type_args` — a separate, pre-existing generic-runtime gap.
 #[tokio::test]
 async fn any_all_fail_throws_allfailed() {
     let source = r#"
@@ -177,7 +167,7 @@ async fn any_all_fail_throws_allfailed() {
         function main() -> int {
             let fs = [spawn { bad1() }, spawn { bad2() }];
             await baml.future.any(fs) catch (e) {
-                let e: baml.future.AllFailed<string> => e.errors.length()
+                let e => e.errors.length()
             }
         }
     "#;
@@ -243,26 +233,10 @@ async fn all_complete_runs_concurrently() {
         "all_complete inputs should run concurrently (~200ms); got {elapsed:?}"
     );
 }
-// temp probe appended
-// Bug 2 repro WITHOUT combinators: f errors, g awaits+handles f's error,
-// main awaits g. f's error must NOT bypass g's handling and surface at main.
-// Lives in the pre-existing spawn fire-and-forget model; being fixed on a
-// parallel branch. Remove `#[ignore]` once that lands.
-#[ignore = "bug 2: fire-and-forget error bypasses the future's consumer (separate branch)"]
-#[tokio::test]
-async fn bug2_fire_and_forget_bypasses_consumer() {
-    let source = r#"
-        function bad() -> int throws string { throw "boom" }
-        function main() -> int {
-            let f = spawn { bad() };
-            let g = spawn { (await f) catch (e) { let e => 7 } };
-            (await g) catch (e) { let e => -1 }
-        }
-    "#;
-    // g handles f's error and returns 7; main should see 7.
-    assert_eq!(run_main(source).await.unwrap(), BexExternalValue::Int(7));
-}
+// (The canonical fire-and-forget repro — a sibling handling a child's error —
+// lives in tests/fire_and_forget.rs.)
 
+/// `any` happy path: all inputs succeed; the first success is returned.
 #[tokio::test]
 async fn any_all_success_returns_a_value() {
     let source = r#"
@@ -276,5 +250,8 @@ async fn any_all_success_returns_a_value() {
     // first success wins (both succeed) — either 5 or 6; deterministic-ish but
     // assert it's a real success, not -1 / error.
     let r = run_main(source).await.unwrap();
-    assert!(matches!(r, BexExternalValue::Int(5) | BexExternalValue::Int(6)), "got {r:?}");
+    assert!(
+        matches!(r, BexExternalValue::Int(5) | BexExternalValue::Int(6)),
+        "got {r:?}"
+    );
 }

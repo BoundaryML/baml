@@ -175,6 +175,53 @@ impl FutureManagerGuard<'_> {
         Ok(())
     }
 
+    /// BEP-034 fire-and-forget: park `err` as `id`'s *deferred* error instead
+    /// of settling the heap `Future`.
+    ///
+    /// The future stays `Pending` but its wake signal fires, so parked
+    /// awaiters resume, re-yield their `Await`/`AwaitAny`, and route through
+    /// [`Self::future_ready`] — the single observation point that settles the
+    /// future from the stash and consumes the entry. An error consumed there
+    /// was (potentially) handled by the awaiter's `catch` and must not
+    /// re-surface at the spawner; the spawner's drain only surfaces errors
+    /// still in the stash. See `FutureManagerInner::deferred_errors`.
+    ///
+    /// A future already settled out-of-band (e.g. a concurrent `f.cancel()`)
+    /// wins the race: the error is dropped, mirroring `err_future`'s no-op.
+    pub fn defer_error(&mut self, id: FutureId, err: Value) -> Result<(), EngineError> {
+        let still_pending = {
+            let Some(entry) = self.holder().active_futures.get(&id) else {
+                // Settled and cleaned up out-of-band — nothing to defer.
+                return Ok(());
+            };
+            // SAFETY: caller holds the heap permit via `self.proof`.
+            let fut = unsafe { entry.future_ref() }?;
+            if matches!(fut.read(), FutureRead::Pending(_)) {
+                // Wake parked awaiters WITHOUT settling; they re-yield and
+                // observe via `future_ready`.
+                let _ = fut.ready.set(Ok(()));
+                true
+            } else {
+                false // lost to a concurrent terminal transition
+            }
+        };
+        if still_pending {
+            self.holder_mut().deferred_errors.insert(id, err);
+        }
+        Ok(())
+    }
+
+    /// Take `id`'s deferred error, if any, settling the heap `Future` to
+    /// `Error` so subsequent reads observe the terminal state. Returns the
+    /// error value when `id` had an unobserved deferred error.
+    pub fn take_deferred_error(&mut self, id: FutureId) -> Result<Option<Value>, EngineError> {
+        let Some(err) = self.holder_mut().deferred_errors.remove(&id) else {
+            return Ok(None);
+        };
+        self.err_future(id, err)?;
+        Ok(Some(err))
+    }
+
     pub fn cancel_future(&mut self, id: FutureId) -> Result<(), EngineError> {
         if let Some((fut, _self_ptr)) = self.take_pending(id)? {
             // `settle_cancelled` fires the cancel token and the wake signal
@@ -311,9 +358,16 @@ impl FutureManagerGuard<'_> {
     /// - The returned future yields `EngineError` if the future produced an
     ///   `InternalError`.
     pub fn future_ready(
-        &self,
+        &mut self,
         id: FutureId,
     ) -> Result<impl Future<Output = Result<(), EngineError>> + use<>, EngineError> {
+        // BEP-034 fire-and-forget: observing a deferred-errored future settles
+        // it. This is the single observation point for both `Await` and
+        // `AwaitAny`; consuming the stash entry here marks the error as
+        // awaited (and possibly `catch`-handled), so the spawner's drain no
+        // longer surfaces it. After the settle the `active_futures` entry is
+        // gone and the lookup below takes the already-resolved path.
+        let _ = self.take_deferred_error(id)?;
         let inner = self.holder();
         let waiter = match inner.active_futures.get(&id) {
             Some(entry) => {
@@ -386,6 +440,22 @@ pub struct FutureManagerInner {
     tlab: Tlab,
     next_future_id: AtomicUsize,
     active_futures: HashMap<FutureId, FutureState>,
+    /// BEP-034 deferred fire-and-forget errors (see [`FutureManagerGuard::defer_error`]).
+    ///
+    /// A spawned child's unhandled throw is parked here (keyed by its
+    /// `FutureId`) instead of settling the heap `Future` to `Error`
+    /// immediately. The future stays `Pending` (its wake signal fired), so
+    /// *every* observation — `await` or `__await_any`, from any task — routes
+    /// back through the engine via [`FutureManagerGuard::future_ready`], which
+    /// settles the future from this stash and removes the entry. The
+    /// spawner's fire-and-forget drain only surfaces errors still present
+    /// here, i.e. genuinely unobserved ones; an error consumed by an awaiter
+    /// (and possibly `catch`-handled) never re-surfaces at the spawner.
+    ///
+    /// GC: the parked error `Value`s are rooted/forwarded via this struct's
+    /// `RootHaver` impl. The corresponding heap `Future` stays rooted through
+    /// its still-live `active_futures` entry.
+    deferred_errors: HashMap<FutureId, Value>,
 }
 impl FutureManagerInner {
     pub fn new(tlab: Tlab) -> Self {
@@ -393,6 +463,7 @@ impl FutureManagerInner {
             tlab,
             next_future_id: AtomicUsize::new(0),
             active_futures: HashMap::new(),
+            deferred_errors: HashMap::new(),
         }
     }
 
@@ -409,6 +480,13 @@ impl RootHaver for FutureManagerInner {
         for future in self.active_futures.values() {
             future.collect_roots(roots);
         }
+        // Deferred fire-and-forget error payloads stay alive until an awaiter
+        // (or the spawner's drain) consumes them.
+        for value in self.deferred_errors.values() {
+            if let Some(ptr) = value.as_object_ptr() {
+                roots.push(ptr);
+            }
+        }
     }
     fn forward_roots(&mut self, roots: &HashMap<HeapPtr, HeapPtr>) {
         // Drop the cached TLAB cursor — GC has swapped semispaces and our
@@ -418,6 +496,13 @@ impl RootHaver for FutureManagerInner {
         self.tlab.invalidate();
         for future in self.active_futures.values_mut() {
             future.forward_roots(roots);
+        }
+        for value in self.deferred_errors.values_mut() {
+            if let Some(ptr) = value.as_object_ptr()
+                && let Some(new_ptr) = roots.get(&ptr)
+            {
+                *value = Value::object(*new_ptr);
+            }
         }
     }
 }
@@ -653,7 +738,7 @@ mod tests {
     async fn future_ready_for_never_issued_id_errors() {
         let (mgr, pm) = make_manager().await;
         let temp = temp_permit(&pm).await;
-        let guard = mgr.acquire(temp.proof()).await;
+        let mut guard = mgr.acquire(temp.proof()).await;
         // No futures have been issued; any id beyond `next_future_id` is
         // bogus. `usize::MAX` is unambiguously out of range regardless of
         // how many futures the test setup happens to issue, so the assertion

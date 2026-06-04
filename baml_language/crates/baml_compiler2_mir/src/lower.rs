@@ -7077,12 +7077,18 @@ impl LoweringContext<'_> {
                 self.builder.goto(success);
             }
             AstPattern::Bind { .. } => {
-                if let Some(tir_ty) = self.pat_types.get(&self.pat_metadata_key(pat_id)).cloned() {
-                    let resolved = self.resolved_aliases.convert(&tir_ty);
-                    self.emit_is_type_branch(scrutinee, resolved, success, failure);
-                } else {
-                    self.builder.goto(success);
-                }
+                // A bare `let e` (no annotation — annotated binds carry the
+                // annotation as a subpattern and recursed above) is
+                // IRREFUTABLE: arm dispatch is sequential, so the bind takes
+                // whatever reaches it; its `pat_types` entry is exhaustiveness
+                // bookkeeping, not a runtime dispatch condition. Emitting a
+                // type test here is at best a tautology and at worst a
+                // miscompile: a rigid generic (e.g. the `E` of a combinator's
+                // `catch (e) { let e => … }`) erases to `Ty::Void` in
+                // `convert_tir2_ty`, making the test constant-false and the
+                // catch arm silently rethrow. (Panic fall-through for catch
+                // arms is handled separately by `ThrowIfPanic`.)
+                self.builder.goto(success);
             }
             // OLD's Pattern::Type covered structural shape tests; OLD's
             // Pattern::Literal / Pattern::Null / Pattern::EnumVariant were
