@@ -596,6 +596,16 @@ pub struct TypeInferenceBuilder<'db> {
     pub param_types: Vec<(Name, Ty)>,
     /// Full parameter binding plans for checked call expressions.
     pub call_plans: FxHashMap<ExprId, crate::inference::CallPlan>,
+    /// Inferred generic type-arg bindings for checked call expressions whose
+    /// type args were NOT written explicitly (e.g. `ArrA.of([1,2,3])` infers
+    /// `T := int`). Sorted by param name; keyed by the call's `ExprId`. MIR
+    /// uses this to seed the callee frame's runtime `type_args` — explicit
+    /// `<...>` args are lowered straight from the AST, but inferred ones exist
+    /// only here. Values may contain the caller's own `TypeVar`s (resolved to
+    /// frame indices during MIR lowering); values containing any OTHER
+    /// `TypeVar` (e.g. a nested rigid `Self`) are demoted to `unknown` by the
+    /// MIR seeding.
+    pub call_inferred_type_args: FxHashMap<ExprId, Vec<(Name, Ty)>>,
     /// Function adapters required by checked optional-parameter coercions.
     pub function_coercions: FxHashMap<ExprId, crate::inference::FunctionCoercion>,
     /// Metadata produced while checking parameter defaults. Kept separate from
@@ -812,6 +822,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             self_pinned_rigid_var: FxHashMap::default(),
             param_types: Vec::new(),
             call_plans: FxHashMap::default(),
+            call_inferred_type_args: FxHashMap::default(),
             function_coercions: FxHashMap::default(),
             default_parameter_inference: crate::inference::DefaultParameterInference::empty(),
             nested_lambda_types: FxHashMap::default(),
@@ -879,6 +890,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         FxHashMap<ExprId, Vec<crate::inference::MemberResolution<'db>>>,
         Vec<(Name, Ty)>,
         FxHashMap<ExprId, crate::inference::CallPlan>,
+        FxHashMap<ExprId, Vec<(Name, Ty)>>,
         FxHashMap<ExprId, crate::inference::FunctionCoercion>,
         FxHashMap<FileScopeId, Ty>,
         crate::inference::DefaultParameterInference<'db>,
@@ -896,6 +908,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             self.path_member_resolutions,
             self.param_types,
             self.call_plans,
+            self.call_inferred_type_args,
             self.function_coercions,
             self.nested_lambda_types,
             self.default_parameter_inference,
@@ -1974,6 +1987,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             std::mem::take(&mut self.interface_method_generic_params);
         let saved_self_pinned_rigid_var = std::mem::take(&mut self.self_pinned_rigid_var);
         let saved_call_plans = std::mem::take(&mut self.call_plans);
+        let saved_call_inferred_type_args = std::mem::take(&mut self.call_inferred_type_args);
         let saved_function_coercions = std::mem::take(&mut self.function_coercions);
         let saved_lambda_effective_throws = std::mem::take(&mut self.lambda_effective_throws);
         let defaults = &parameter_defaults.defaults;
@@ -2053,6 +2067,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             path_segment_types: std::mem::take(&mut self.path_segment_types),
             path_member_resolutions: std::mem::take(&mut self.path_member_resolutions),
             call_plans: std::mem::take(&mut self.call_plans),
+            call_inferred_type_args: std::mem::take(&mut self.call_inferred_type_args),
             function_coercions: std::mem::take(&mut self.function_coercions),
         };
 
@@ -2067,6 +2082,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         self.interface_method_generic_params = saved_interface_method_generic_params;
         self.self_pinned_rigid_var = saved_self_pinned_rigid_var;
         self.call_plans = saved_call_plans;
+        self.call_inferred_type_args = saved_call_inferred_type_args;
         self.function_coercions = saved_function_coercions;
         self.lambda_effective_throws = saved_lambda_effective_throws;
         self.body_source_map = saved_body_source_map;
@@ -2898,6 +2914,22 @@ impl<'db> TypeInferenceBuilder<'db> {
                     crate::generics::erase_unresolved_typevars(&substituted_ret, &mut erase_diags);
                 for d in erase_diags {
                     self.context.report_simple(d, expr_id);
+                }
+
+                // Persist the inferred instantiation so MIR can seed the callee
+                // frame's runtime `type_args`. Explicit `<...>` args are lowered
+                // straight from the AST at the call site, but INFERRED bindings
+                // exist only here — without recording them the callee runs with
+                // `T = unknown` (instances built inside get `class_type_args =
+                // [unknown]`, runtime `IsType` tests fail, interface dispatch
+                // falls to the wrong implementor).
+                if !explicit_args_used && !bindings.is_empty() {
+                    let mut inferred: Vec<(Name, Ty)> = bindings
+                        .iter()
+                        .map(|(name, ty)| (name.clone(), ty.clone()))
+                        .collect();
+                    inferred.sort_by(|(a, _), (b, _)| a.cmp(b));
+                    self.call_inferred_type_args.insert(expr_id, inferred);
                 }
 
                 CheckedCallInner {
@@ -14019,6 +14051,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         let saved_self_pinned_rigid_var = std::mem::take(&mut self.self_pinned_rigid_var);
         let saved_lambda_effective_throws = std::mem::take(&mut self.lambda_effective_throws);
         let saved_call_plans = std::mem::take(&mut self.call_plans);
+        let saved_call_inferred_type_args = std::mem::take(&mut self.call_inferred_type_args);
         let saved_function_coercions = std::mem::take(&mut self.function_coercions);
         let saved_body_source_map = self.body_source_map.clone();
         self.body_source_map = Some(lambda_source_map.clone());
@@ -14123,6 +14156,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         self.self_pinned_rigid_var = saved_self_pinned_rigid_var;
         self.lambda_effective_throws = saved_lambda_effective_throws;
         self.call_plans = saved_call_plans;
+        self.call_inferred_type_args = saved_call_inferred_type_args;
         self.function_coercions = saved_function_coercions;
         self.locals = saved_locals;
         self.scoped_local_declarations = saved_scoped_local_declarations;

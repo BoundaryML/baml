@@ -379,6 +379,7 @@ pub fn check_file(db: &dyn Db, file: SourceFile) -> Vec<Diagnostic> {
                 _path_member_resolutions,
                 _param_types,
                 _call_plans,
+                _call_inferred_type_args,
                 _function_coercions,
                 _call_throws,
                 _default_parameter_inference,

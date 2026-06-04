@@ -101,6 +101,8 @@ fn user.TypeBuilderFn$parse(json: string, client: baml.llm.Client) -> Resume {
     let _2: baml.llm.Client // client // param
     let _3: bool
     let _4: baml.llm.Client[]
+    let _5: type
+    let _6: type
 
     bb0: {
         _3 = copy _2 == const <omitted>;
@@ -114,7 +116,9 @@ fn user.TypeBuilderFn$parse(json: string, client: baml.llm.Client) -> Resume {
     }
 
     bb2: {
-        _0 = call const fn baml.llm.parse(const "TypeBuilderFn", copy _1) -> [bb3];
+        _5 = load_type(void);
+        _6 = load_type(Resume);
+        _0 = call const fn baml.llm.parse<copy _5, copy _6>(const "TypeBuilderFn", copy _1) -> [bb3];
     }
 
     bb3: {

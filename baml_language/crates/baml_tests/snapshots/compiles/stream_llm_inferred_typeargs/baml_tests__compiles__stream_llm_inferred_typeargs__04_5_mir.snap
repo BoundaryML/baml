@@ -116,6 +116,8 @@ fn user.TestFunc$parse(json: string, client: baml.llm.Client) -> string {
     let _1: string // json // param
     let _2: baml.llm.Client // client // param
     let _3: bool
+    let _4: type
+    let _5: type
 
     bb0: {
         _3 = copy _2 == const <omitted>;
@@ -128,7 +130,9 @@ fn user.TestFunc$parse(json: string, client: baml.llm.Client) -> string {
     }
 
     bb2: {
-        _0 = call const fn baml.llm.parse(const "TestFunc", copy _1) -> [bb3];
+        _4 = load_type(void);
+        _5 = load_type(string);
+        _0 = call const fn baml.llm.parse<copy _4, copy _5>(const "TestFunc", copy _1) -> [bb3];
     }
 
     bb3: {
@@ -168,10 +172,14 @@ fn user.call_stream_inferred() -> baml.llm.Stream<null | string, string> {
     // Locals:
     let _0: baml.llm.Stream<null | string, string> // _0 // return
     let _1: map<string, unknown>
+    let _2: type
+    let _3: type
 
     bb0: {
         _1 = { const "input": const "world" };
-        _0 = call const fn baml.llm.stream_llm_function(const fn user.TestClient, const "TestFunc", copy _1) -> [bb1];
+        _2 = load_type(null | string);
+        _3 = load_type(string);
+        _0 = call const fn baml.llm.stream_llm_function<copy _2, copy _3>(const fn user.TestClient, const "TestFunc", copy _1) -> [bb1];
     }
 
     bb1: {

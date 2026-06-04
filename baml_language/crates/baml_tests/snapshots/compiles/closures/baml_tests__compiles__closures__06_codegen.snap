@@ -294,6 +294,9 @@ function user.apply(f: (int, int) -> int throws never, a: int, b: int) -> int {
 }
 
 function user.apply_to_each(items: Employee[], f: (Employee) -> string throws never) -> string[] {
+    load_type void
+    load_type string
+    load_type void
     load_var2 1 2
     call baml.Array.map
     return
@@ -318,6 +321,9 @@ function user.test_bound_in_lambda() -> string {
 }
 
 function user.test_bound_mapper() -> string[] {
+    load_type void
+    load_type string
+    load_type void
     load_const "hello"
     load_const "world"
     alloc_array 2
@@ -329,6 +335,9 @@ function user.test_bound_mapper() -> string[] {
 }
 
 function user.test_bound_validator() -> bool[] {
+    load_type void
+    load_type bool
+    load_type void
     load_const 5
     load_const 15
     load_const 25
@@ -421,6 +430,9 @@ function user.test_unbound_higher_order() -> string[] {
 }
 
 function user.test_unbound_in_map() -> string[] {
+    load_type void
+    load_type string
+    load_type void
     load_const "Alice"
     load_const "Smith"
     init_instance user.Employee .first, .last

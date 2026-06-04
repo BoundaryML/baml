@@ -2797,7 +2797,7 @@ fn baml.llm.parse(function_name: string, json: string) -> void {
     bb2: {
         _6 = copy _3;
         _7 = copy _4;
-        _5 = sys_op const fn baml.llm.StreamCache.new(const null, copy _6, copy _7) -> bb3;
+        _5 = sys_op const fn baml.llm.StreamCache.new(copy _6, copy _7) -> bb3;
     }
 
     bb3: {
@@ -3096,7 +3096,7 @@ fn baml.llm.Client.__make_stream(self: baml.llm.Client, sse: baml.http.SseStream
     bb4: {
         _9 = copy _5;
         _10 = copy _6;
-        _8 = sys_op const fn baml.llm.StreamCache.new(const null, copy _9, copy _10) -> bb5;
+        _8 = sys_op const fn baml.llm.StreamCache.new(copy _9, copy _10) -> bb5;
     }
 
     bb5: {
@@ -7869,7 +7869,7 @@ fn baml.time.Instant.elapsed(self: baml.time.Instant) -> baml.time.Duration {
     let _5: bigint
 
     bb0: {
-        _4 = sys_op const fn baml.time.Instant.now(const null) -> bb1;
+        _4 = sys_op const fn baml.time.Instant.now() -> bb1;
     }
 
     bb1: {
@@ -7925,7 +7925,7 @@ fn baml.time.Instant.from_json(j: baml.json.json) -> baml.time.Instant {
     }
 
     bb2: {
-        _0 = call const fn baml.time.Instant.parse(const null, copy _1) -> [bb3, unwind: bb4];
+        _0 = call const fn baml.time.Instant.parse(copy _1) -> [bb3, unwind: bb4];
     }
 
     bb3: {

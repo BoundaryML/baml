@@ -110,6 +110,8 @@ function user.TypeBuilderFn$parse(json: string, client: baml.llm.Client) -> Resu
     store_var client
 
   L0:
+    load_type void
+    load_type Resume
     load_const "TypeBuilderFn"
     load_var json
     call baml.llm.parse
@@ -131,6 +133,8 @@ function user.TypeBuilderFn$parse_stream(sse: baml.http.SseStream, client: baml.
     store_var client
 
   L0:
+    load_type null | Resume$stream
+    load_type Resume
     load_var2 2 1
     load_const "TypeBuilderFn"
     call baml.llm.Client.__make_stream
@@ -176,6 +180,8 @@ function user.TypeBuilderFn$stream(from_text: string, client: baml.llm.Client) -
     store_var client
 
   L0:
+    load_type null | Resume$stream
+    load_type Resume
     load_var client
     load_const "TypeBuilderFn"
     load_var from_text

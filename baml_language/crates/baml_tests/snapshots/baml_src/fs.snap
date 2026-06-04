@@ -285,6 +285,7 @@ function fs.fs_file_read_bytes_n_fn() -> bool {
     load_const "/tmp/baml_fs_read_bytes_n.bin"
     sys_op baml.fs.remove
     pop 1
+    load_type int | 3
     load_var data
     container_len
     load_const 3
@@ -417,6 +418,7 @@ function fs.fs_file_rw_write_bytes_fn() -> bool {
     load_const "/tmp/baml_fs_file_write_bytes_dst.bin"
     sys_op baml.fs.remove
     pop 1
+    load_type int | 2
     load_var n
     load_const 2
     call baml.deep_equals
@@ -474,6 +476,7 @@ function fs.fs_open_and_read_bytes_fn() -> bool {
     load_const "/tmp/baml_fs_open_and_read_bytes.txt"
     sys_op baml.fs.remove
     pop 1
+    load_type int | 16
     load_var data
     container_len
     load_const 16
@@ -515,11 +518,13 @@ function fs.fs_open_append_creates_and_appends_fn() -> bool {
     load_const "/tmp/baml_fs_append.txt"
     sys_op baml.fs.remove
     pop 1
+    load_type int | 5
     load_var n
     load_const 5
     call baml.deep_equals
     jump_if_false L0
     pop 1
+    load_type string | "start!more!"
     load_var readback
     load_const "start!more!"
     call baml.deep_equals
@@ -547,11 +552,13 @@ function fs.fs_open_append_creates_missing_file_fn() -> bool {
     load_const "/tmp/baml_fs_append_new.txt"
     sys_op baml.fs.remove
     pop 1
+    load_type int | 2
     load_var n
     load_const 2
     call baml.deep_equals
     jump_if_false L0
     pop 1
+    load_type string | "hi"
     load_var readback
     load_const "hi"
     call baml.deep_equals
@@ -601,11 +608,13 @@ function fs.fs_open_w_creates_missing_file_fn() -> bool {
     load_const "/tmp/baml_fs_open_w_new.txt"
     sys_op baml.fs.remove
     pop 1
+    load_type int | 2
     load_var n
     load_const 2
     call baml.deep_equals
     jump_if_false L0
     pop 1
+    load_type string | "hi"
     load_var readback
     load_const "hi"
     call baml.deep_equals
@@ -627,11 +636,13 @@ function fs.fs_open_w_creates_parent_dirs_fn() -> bool {
     load_const "/tmp/baml_fs_open_w_parent/nested/dir/new.txt"
     sys_op baml.fs.remove
     pop 1
+    load_type int | 6
     load_var n
     load_const 6
     call baml.deep_equals
     jump_if_false L0
     pop 1
+    load_type string | "nested"
     load_var readback
     load_const "nested"
     call baml.deep_equals
@@ -685,11 +696,13 @@ function fs.fs_open_w_truncates_existing_fn() -> bool {
     load_const "/tmp/baml_fs_open_w_truncate.txt"
     sys_op baml.fs.remove
     pop 1
+    load_type int | 3
     load_var n
     load_const 3
     call baml.deep_equals
     jump_if_false L0
     pop 1
+    load_type string | "new"
     load_var readback
     load_const "new"
     call baml.deep_equals
@@ -706,6 +719,9 @@ function fs.fs_read_dir_empty_dir_fn() -> bool {
     pop 1
     load_const "/tmp/baml_fs_read_dir_empty_abc"
     sys_op baml.fs.read_dir
+    store_var entries
+    load_type int | 0
+    load_var entries
     container_len
     load_const 0
     call baml.deep_equals
@@ -750,6 +766,7 @@ function fs.fs_read_dir_returns_entries_fn() -> bool {
     bin_op +
     sys_op baml.fs.remove
     pop 1
+    load_type int | 3
     load_var entries
     container_len
     load_const 3
@@ -855,6 +872,9 @@ function fs.fs_remove_deletes_file_fn() -> bool {
     pop 1
     load_const "/tmp/baml_fs_remove_deletes.txt"
     sys_op baml.fs.exists
+    store_var _6
+    load_type bool | false
+    load_var _6
     load_const false
     call baml.deep_equals
     return
@@ -917,11 +937,13 @@ function fs.fs_write_bytes_fn() -> bool {
     load_const "/tmp/baml_fs_write_bytes_dst.bin"
     sys_op baml.fs.remove
     pop 1
+    load_type int | 11
     load_var n
     load_const 11
     call baml.deep_equals
     jump_if_false L0
     pop 1
+    load_type int | 11
     load_var readback
     container_len
     load_const 11
@@ -942,11 +964,13 @@ function fs.fs_write_creates_parent_dirs_fn() -> bool {
     load_const "/tmp/baml_fs_write_parent/nested/dir/file.txt"
     sys_op baml.fs.remove
     pop 1
+    load_type int | 14
     load_var n
     load_const 14
     call baml.deep_equals
     jump_if_false L0
     pop 1
+    load_type string | "nested content"
     load_var readback
     load_const "nested content"
     call baml.deep_equals
@@ -970,11 +994,13 @@ function fs.fs_write_overwrites_existing_fn() -> bool {
     load_const "/tmp/baml_fs_write_overwrite.txt"
     sys_op baml.fs.remove
     pop 1
+    load_type int | 11
     load_var n
     load_const 11
     call baml.deep_equals
     jump_if_false L0
     pop 1
+    load_type string | "new content"
     load_var readback
     load_const "new content"
     call baml.deep_equals
@@ -994,11 +1020,13 @@ function fs.fs_write_string_fn() -> bool {
     load_const "/tmp/baml_fs_write_string.txt"
     sys_op baml.fs.remove
     pop 1
+    load_type int | 13
     load_var n
     load_const 13
     call baml.deep_equals
     jump_if_false L0
     pop 1
+    load_type string | "Hello, world!"
     load_var readback
     load_const "Hello, world!"
     call baml.deep_equals

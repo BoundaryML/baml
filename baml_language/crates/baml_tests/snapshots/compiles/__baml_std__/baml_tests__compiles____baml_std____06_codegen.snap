@@ -2221,7 +2221,6 @@ function baml.llm.Client.__make_stream(self: baml.llm.Client, sse: baml.http.Sse
     load_var primitive
     sys_op baml.llm.PrimitiveClient.new_stream_accumulator
     store_var acc
-    load_const null
     load_var2 5 6
     sys_op baml.llm.StreamCache.new
     store_var cache
@@ -3936,7 +3935,6 @@ function baml.llm.parse(function_name: string, json: string) -> unknown {
     load_var function_name
     sys_op baml.llm.get_stream_return_type
     store_var stream_return_type
-    load_const null
     load_var2 3 4
     sys_op baml.llm.StreamCache.new
     store_var cache
@@ -4852,7 +4850,6 @@ function baml.time.Instant.abs_diff(self: baml.time.Instant, other: baml.time.In
 }
 
 function baml.time.Instant.elapsed(self: baml.time.Instant) -> baml.time.Duration {
-    load_const null
     sys_op baml.time.Instant.now
     store_var _4
     load_var _4
@@ -4883,7 +4880,6 @@ function baml.time.Instant.from_json(j: baml.json.json) -> baml.time.Instant {
     throw
 
   L1:
-    load_const null
     load_var j
     call baml.time.Instant.parse
     jump L4

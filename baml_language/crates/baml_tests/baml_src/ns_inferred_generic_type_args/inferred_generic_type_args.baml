@@ -311,3 +311,150 @@ function generic_behind_nongeneric_iface() -> string {
 test "generic_class_behind_nongeneric_interface_reads_type_var" {
   assert.equal(generic_behind_nongeneric_iface(), "int")
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Inferred call-site type args reach the callee frame at runtime.
+//
+// The cases above dispatch correctly, but dispatch alone can pass "by luck"
+// of arm order even when the instantiation is lost (the unguarded last arm of
+// the candidate switch happens to be the right implementor). The cases below
+// pin the instantiation itself, so they cannot pass by dispatch luck:
+//   • a free generic function must see its inferred `T` via reflect;
+//   • an instance built by an inferred static ctor must carry
+//     `class_type_args = [int]` — observable through a user-level
+//     `match`/IsType test, which consults the args directly.
+// Both were broken before TIR began persisting inferred call bindings
+// (`call_inferred_type_args`) for MIR to seed the callee frame.
+// ═══════════════════════════════════════════════════════════════════════════
+
+function free_fn_tname<T>(a: T[]) -> string {
+  return reflect.type_of<T>().to_string()
+}
+
+function free_fn_inferred_t() -> string {
+  return free_fn_tname([1, 2, 3])
+}
+
+test "free_function_sees_inferred_type_arg" {
+  assert.equal(free_fn_inferred_t(), "int")
+}
+
+// The inferred-ctor instance must pass a runtime `IsType ArrBag<int>` test —
+// NOT fall through to the wildcard arm.
+function inferred_ctor_instance_is_typed() -> int throws unknown {
+  let s: Bag<int> = ArrBag.make([5, 6, 7]);
+  match (s) {
+    let a: ArrBag<int> => 1,
+    let o: OneBag<int> => 2,
+    _ => 9,
+  }
+}
+
+test "inferred_static_ctor_instance_carries_class_type_args" {
+  assert.equal(inferred_ctor_instance_is_typed(), 1)
+}
+
+// Lazy-iterator shape end-to-end: inferred static ctor, consumption through
+// an inherited default method that drives `self.next()` in a loop, with a
+// second implementor present. Returns the COLLECTED COUNT, so a mis-dispatch
+// (e.g. `next` resolving to `Lone.next` against an `ArrIter` receiver)
+// yields 0 or 1 instead of 3.
+interface NextIter<T, E> {
+  function next2(self) -> T | IterDone throws E
+
+  function collect2(self) -> T[] throws E {
+    let out: T[] = [];
+    while (true) {
+      match (self.next2()) {
+        IterDone => { break; },
+        let x: T => { out.push(x); }
+      }
+    }
+    out
+  }
+}
+
+class IterDone {}
+
+class ArrIter<T> {
+  arr T[]
+  idx int
+
+  function of(a: T[]) -> ArrIter<T> throws never {
+    return ArrIter<T> { arr: a, idx: 0 }
+  }
+
+  implements NextIter<T, never> {
+    function next2(self) -> T | IterDone throws never {
+      match (self.arr.at(self.idx)) {
+        null => IterDone {},
+        let x: T => { self.idx += 1; x }
+      }
+    }
+  }
+}
+
+class LoneIter<T> {
+  v T
+  used bool
+
+  implements NextIter<T, never> {
+    function next2(self) -> T | IterDone throws never {
+      if (self.used) { IterDone {} } else { self.used = true; self.v }
+    }
+  }
+}
+
+function inferred_ctor_collect_count() -> int throws unknown {
+  let it: NextIter<int, never> = ArrIter.of([1, 2, 3]);
+  it.collect2().length()
+}
+
+test "inferred_ctor_default_method_collects_all" {
+  assert.equal(inferred_ctor_collect_count(), 3)
+}
+
+// ─── Inferred binding nesting a rigid `Self` must NOT seed `void` ───
+//
+// Inside an interface default method, `self` has the rigid pinned type `Self`,
+// which is never among the caller frame's generic params. An inferred generic
+// call whose binding NESTS it (here `T := Self[]` via `echo_type([self])`)
+// cannot be resolved to a frame index — the seeding must demote that binding
+// to `unknown` (the unseeded status quo), not lower `Self` to `void`.
+
+function echo_type<T>(a: T) -> string {
+  return reflect.type_of<T>().to_string()
+}
+
+interface SelfEcho {
+  function tag(self) -> string
+  function nested_self_type(self) -> string {
+    return echo_type([self])
+  }
+}
+
+class EchoA {
+  n int
+  implements SelfEcho {
+    function tag(self) -> string { return "a" }
+  }
+}
+
+class EchoB {
+  s string
+  implements SelfEcho {
+    function tag(self) -> string { return "b" }
+  }
+}
+
+function nested_self_inferred_binding() -> string throws unknown {
+  let e: SelfEcho = EchoA { n: 1 };
+  e.nested_self_type()
+}
+
+// `unknown` (the whole binding demoted) is the pre-existing status quo for an
+// unresolvable binding — the regression this guards against is `void[]`, which
+// a naive lowering of the nested rigid `Self` produces.
+test "nested_self_inferred_binding_not_voided" {
+  assert.equal(nested_self_inferred_binding(), "unknown")
+}
