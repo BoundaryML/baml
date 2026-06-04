@@ -16,7 +16,8 @@ pub(crate) const fn release_version() -> &'static str {
     author,
     version = release_version(),
     about = "A CLI tool for working with BAML. Learn more at https://docs.boundaryml.com.",
-    long_about = None
+    long_about = None,
+    after_help = "Manage installed BAML toolchains:\n  baml toolchain --help"
 )]
 #[command(styles = crate::reporter::CLAP_STYLING)]
 #[command(propagate_version = true)]

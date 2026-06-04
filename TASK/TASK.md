@@ -56,7 +56,7 @@ Note on the two-tier distribution: `pkg.boundaryml.com` is the **directory** (ch
 - Two channels: `canary` + `nightly`. Nightly publishes automatically from every successful `canary` branch CI run. Canary publishes when the human-edited `baml_language/release.toml` `canary_version` advances. There is no `stable` channel in v1. GitHub tags/releases are outputs created by the workflow, not inputs that trigger BAML language releases.
 - The thing distros install is the wrapper, not the CLI. `baml-cli`, `baml-pack-host`, and the VSIX live inside per-toolchain directories under `~/.baml/`.
 - There are two release products: `baml-wrapper` and `baml-toolchain`. Package managers publish only `baml-wrapper`; language releases publish `baml-toolchain` archives and manifests. A toolchain nightly/canary release must never require a Homebrew/AUR package update.
-- The wrapper is a thin pure pass-through. Only toolchain-management commands (`toolchain install`, `toolchain use`, `toolchain uninstall`, `toolchain list`, `toolchain update`, `self-update`) live in the wrapper itself. Everything else (including `ide install`) is owned by the selected toolchain payload and forwarded by the wrapper.
+- The wrapper is a thin pure pass-through. Only toolchain-management commands (`toolchain install`, `toolchain use`, `toolchain uninstall`, `toolchain list`, `toolchain status`, `toolchain update`, `self-update`) live in the wrapper itself. Everything else (including `ide install`) is owned by the selected toolchain payload and forwarded by the wrapper.
 - VSIX is platform-neutral, built once, and bundled into every per-target toolchain archive. Users should not need to install a new VSIX for every toolchain release; compatibility is by explicit LSP/playground protocol ranges and capability flags.
 - Tap rename: `homebrew-baml` -> `homebrew-tap`, one-shot with GitHub redirect + deprecation banner.
 - Hosting: reuse the **existing** `pkg.boundaryml.com` CDK stack (S3 + OIDC release-publish IAM role, already deployed via [tools/pkg_boundaryml_com/lib/pkg-boundaryml-com-stack.ts](tools/pkg_boundaryml_com/lib/pkg-boundaryml-com-stack.ts)). Cloudflare, configured outside this CDK stack, is the HTTPS front door for the domain. Install script and channel manifests live there. No new DNS, no new buckets, no new hosting stack.
@@ -230,7 +230,8 @@ The wrapper crate must not use `version.workspace = true`. V1 may document a man
   - `baml toolchain install <canary|nightly|<version>>` (download/verify/install a concrete toolchain, but do not change the active default selector)
   - `baml toolchain use <canary|nightly|<version>>` (resolve, install if missing, and select as the user default)
   - `baml toolchain uninstall <version>`
-  - `baml toolchain list` (local-only by default; no network)
+  - `baml toolchain list` (local-only; no network)
+  - `baml toolchain status` (remote freshness check; read-only, no install, no active-state mutation)
   - `baml toolchain update` (refresh the active default channel to head; exact-version defaults do not advance; does not update the wrapper)
   - `baml self-update` (replace the wrapper itself; refused for managed installs; does not install toolchains)
 - Self-detect install path. If the wrapper lives under a path owned by Homebrew (`brew --prefix` / `/opt/homebrew/...` / formula marker file), `baml self-update` refuses with a pointer to `brew upgrade baml`.
@@ -366,7 +367,8 @@ Only allowlisted commands make network requests:
 - `baml toolchain install <channel>` always resolves the latest channel pointer and installs that concrete version, but does not change `[default].selector` and does not update that channel's `active_version` in `state.toml`.
 - `baml toolchain install <exact-version>` fetches that immutable version manifest only when needed and does not mutate `config.toml` or `state.toml`.
 - `baml toolchain update` only advances `state.toml` when the active default selector is a channel. It installs the latest concrete version for that channel, then atomically swaps the channel's `active_version`. If the active selector is an exact version, it reports that exact versions do not advance automatically and suggests `baml toolchain use canary` or `baml toolchain use nightly`.
-- `baml toolchain list` is local-only by default. A separate explicit remote mode may be added later, but plain `list` must not hit the network.
+- `baml toolchain list` is local-only and points users to `baml toolchain status` when they want to check remote freshness. Do not add a remote/list mode in v1.
+- `baml toolchain status` always checks remote metadata, may refresh manifest cache, and reports whether the active channel is at the latest remote channel head. It never installs a toolchain, changes `[default].selector`, or mutates active channel state in `state.toml`.
 
 All other commands, including `baml generate`, `baml run`, `baml describe`, `baml pack`, and `baml lsp`, use local state only and never hit the network.
 
@@ -411,7 +413,7 @@ resolved_at = "2026-06-02T12:30:00Z"
 manifest_path = "manifest-cache/prod/version/0.11.1-nightly.20260602.a.json"
 ```
 
-`manifest-cache/` stores remote JSON plus fetch metadata where useful (`fetched_at`, `etag`, etc.). It is not the active-version authority. A remote/list operation may refresh `manifest-cache/canary.json` and discover a newer version, but normal commands continue using `state.toml` until a toolchain-management command successfully installs and activates the newer concrete version.
+`manifest-cache/` stores remote JSON plus fetch metadata where useful (`fetched_at`, `etag`, etc.). It is not the active-version authority. `baml toolchain status` may refresh `manifest-cache/canary.json` or `manifest-cache/nightly.json` and discover a newer version, but normal commands continue using `state.toml` until a mutating toolchain-management command successfully installs and activates the newer concrete version.
 
 `toolchains/<version>/VERSION` contains the exact canonical version and is read as a tamper/sanity check on every wrapper invocation. `toolchains/<version>/install.json` records install metadata such as source manifest URL, archive URL, archive sha256, installed_at, and target triple.
 
@@ -1439,7 +1441,7 @@ Tests/merge criteria for this subsection:
 - Create in-repo implementation/user-flow docs under `TASK/docs/`. There is no established public `baml_language` documentation home yet; public product-docs migration is a later product/docs decision and should not block this release-infra implementation.
 - `TASK/docs/install.md`
   - Audience: users, support, and people testing the new installer.
-  - Required contents: `brew install boundaryml/tap/baml` installs the wrapper only; package-manager installs do not bootstrap toolchains; `curl ... | sh -s` installs the wrapper and default canary toolchain; Docker/CI install example using `--no-modify-path`; PATH behavior and `~/.baml/env`; `baml toolchain use canary`; `baml toolchain use nightly`; `baml toolchain install <version>`; `baml toolchain update`; `baml self-update`; package-manager wrapper upgrade behavior (`brew upgrade baml`, AUR upgrade); IDE setup with `baml ide install --cursor` and `baml ide install --code`.
+  - Required contents: `brew install boundaryml/tap/baml` installs the wrapper only; package-manager installs do not bootstrap toolchains; `curl ... | sh -s` installs the wrapper and default canary toolchain; Docker/CI install example using `--no-modify-path`; PATH behavior and `~/.baml/env`; `baml toolchain use canary`; `baml toolchain use nightly`; `baml toolchain install <version>`; `baml toolchain status`; `baml toolchain list`; `baml toolchain update`; `baml self-update`; package-manager wrapper upgrade behavior (`brew upgrade baml`, AUR upgrade); IDE setup with `baml ide install --cursor` and `baml ide install --code`.
 - `TASK/docs/release-maintainer.md`
   - Audience: maintainers and implementation agents.
   - Required contents: release graph overview; canary vs nightly model; how to bump canary; how nightly suffixes are chosen; release workflow concurrency rule; dry-run release workflow and `BAML_MANIFEST_BASE_URL`; production publish guards; registry publisher identity rule; PyPI trusted-publisher portal pause; Homebrew/AUR wrapper release flow; rerun/idempotency behavior; rollback / mutable pointer repair flow.
