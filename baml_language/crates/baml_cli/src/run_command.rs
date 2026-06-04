@@ -876,10 +876,13 @@ impl RunArgs {
 
         let mut db = ProjectDatabase::new();
         // Project marker: matches `project_load::load_project_from_inner`.
-        // `baml.toml` is the marker; `baml_src/` alone no longer qualifies
-        // (would let `baml run -e` pick up project context that every
-        // other verb refuses).
-        let has_explicit_project = from.as_ref().is_some_and(|f| f.join("baml.toml").exists());
+        // A directory is a project if it has *either* a `baml.toml` or a
+        // `baml_src/` — `baml.toml` is opt-in — so `baml run -e` picks up
+        // the surrounding project's definitions in the same cases every
+        // other verb now does.
+        let has_explicit_project = from
+            .as_ref()
+            .is_some_and(|f| f.join("baml.toml").exists() || f.join("baml_src").is_dir());
 
         let project_root = if has_explicit_project {
             let root = from.as_ref().unwrap();

@@ -148,6 +148,41 @@ fn describe_via_dispatch(db: &ProjectDatabase, name: &str) -> String {
     }
 }
 
+// ── Default state (no user files) ─────────────────────────────────────────
+//
+// `set_project_root` loads the `baml.*` stdlib regardless of user files, so
+// `baml describe` resolves builtins even with an empty project — the
+// stdlib-only "default state" the CLI falls back to when there's no
+// `baml.toml`. See `project_load::load_project_or_default`.
+
+/// `baml describe baml.String` resolves against the stdlib with zero user
+/// files loaded.
+#[test]
+fn dispatch_resolves_stdlib_class_with_no_user_files() {
+    let db = make_db(&[]);
+    let output = describe_via_dispatch(&db, "baml.String");
+    assert!(
+        output.contains("String"),
+        "expected stdlib `String` description with no user files, got:\n{output}",
+    );
+    assert!(
+        !output.starts_with("NOT FOUND"),
+        "stdlib `String` should resolve in the default state, got:\n{output}",
+    );
+}
+
+/// The lowercase primitive alias `string` also resolves against the stdlib
+/// in the default state (no user files).
+#[test]
+fn dispatch_resolves_primitive_alias_with_no_user_files() {
+    let db = make_db(&[]);
+    let output = describe_via_dispatch(&db, "string");
+    assert!(
+        !output.starts_with("NOT FOUND") && !output.starts_with("NO DESCRIPTION"),
+        "primitive alias `string` should resolve in the default state, got:\n{output}",
+    );
+}
+
 fn multi_ns_project() -> ProjectDatabase {
     make_db(&[
         (

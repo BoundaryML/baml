@@ -10,7 +10,7 @@ use baml_lsp2_actions::{
 use baml_project::ProjectDatabase;
 use clap::Args;
 
-use crate::project_load::load_project_from;
+use crate::project_load::load_project_or_default;
 
 #[derive(Args, Clone, Debug)]
 pub struct GrepArgs {
@@ -66,11 +66,11 @@ pub struct GrepArgs {
 
 impl GrepArgs {
     pub fn run(&self) -> Result<crate::ExitCode> {
-        let (db, from, baml_files) = load_project_from(&self.from)?;
-        if baml_files.is_empty() {
-            eprintln!("No .baml files found in {}", from.display());
-            return Ok(crate::ExitCode::Other);
-        }
+        // Introspection never requires a `baml.toml`. With no project we
+        // get a stdlib-only default state and an empty user-file set;
+        // each grep mode already surfaces "no matches" / "no symbol found"
+        // gracefully below, so there's no need to bail up front.
+        let (db, from, _baml_files) = load_project_or_default(&self.from)?;
 
         let source_files = db.get_source_files();
         let kind_filter = parse_kind_filter(&self.kind)?;

@@ -63,8 +63,9 @@ pub struct PackArgs {
     pub file: Option<PathBuf>,
 
     /// Output path for the packaged executable. Defaults to the
-    /// `[package].name` from `baml.toml`; for a single target with no
-    /// `[package].name`, falls back to the function name.
+    /// `[package].name` from `baml.toml`; for a manifest-less `baml_src/`
+    /// project, falls back to the project directory name; in `--file` mode,
+    /// to the file stem.
     #[arg(short, long)]
     pub output: Option<PathBuf>,
 
@@ -337,25 +338,34 @@ impl PackArgs {
         Ok((baml_exec::PackMode::Subcommand, resolved))
     }
 
-    /// Pick the default output basename. With `[package].name` mandatory
-    /// in `baml.toml` (validated up front by `project_load`), project-mode
-    /// output naming has exactly one source of truth.
+    /// Pick the default output basename.
     ///
     /// - `--file <PATH>` single-file mode: file stem (e.g. `foo.baml` →
     ///   `foo`). `baml.toml` isn't consulted — single-file packs are
     ///   intentionally hermetic.
-    /// - Project mode: `[package].name` from `<from>/baml.toml`. Guaranteed
-    ///   present (manifest validation happened at load time).
+    /// - Project mode: `[package].name` from `<from>/baml.toml` when a
+    ///   manifest is present, else the project directory name for a
+    ///   manifest-less `baml_src/` project (see
+    ///   [`crate::project_load::resolve_project_name`]).
     fn resolve_output_basename(&self) -> Result<String> {
         if let Some(file) = self.file.as_deref() {
-            if let Some(stem) = file.file_stem().and_then(|s| s.to_str()) {
-                return Ok(stem.to_string());
-            }
-            // Pathologically nameless file (e.g. `.baml`); fall through to
-            // the manifest lookup. In `--file` mode that may still fail
-            // (no project to consult); the user can always pass `-o`.
+            // Keep `--file` hermetic: derive the name from the file path
+            // alone, never from `--from`/project markers. A path with no
+            // usable file-name component (no stem, e.g. `..`, or a non-UTF-8
+            // name) can't be named automatically — bail rather than leak the
+            // cwd's project context into a single-file pack.
+            return file
+                .file_stem()
+                .and_then(|s| s.to_str())
+                .map(str::to_string)
+                .ok_or_else(|| {
+                    anyhow::anyhow!(
+                        "cannot derive an output name from `{}`; pass `-o <PATH>` to name the output.",
+                        file.display()
+                    )
+                });
         }
-        crate::project_load::read_package_name(&self.from)
+        crate::project_load::resolve_project_name(&self.from)
     }
 }
 
@@ -1023,6 +1033,32 @@ mod tests {
         // `--from` defaults to `.`, but file mode short-circuits before
         // touching it. Stem wins.
         assert_eq!(args.resolve_output_basename().unwrap(), "hello");
+    }
+
+    /// A `--file` path with no usable file-name component (here `..`, which
+    /// has no `file_stem`) must error rather than fall back to the project
+    /// name — `--file` stays hermetic. Even with a valid `baml.toml` in
+    /// `--from`, the result is an error, not the package name.
+    #[test]
+    fn test_pack_file_mode_nameless_errors_instead_of_consulting_project() {
+        let tmp = tempfile::tempdir().unwrap();
+        std::fs::write(
+            tmp.path().join("baml.toml"),
+            "[package]\nname = \"should-not-be-used\"\n",
+        )
+        .unwrap();
+
+        let mut args = pack_args();
+        args.from = tmp.path().to_path_buf();
+        args.file = Some(PathBuf::from("..")); // no file_stem
+
+        let err = args.resolve_output_basename().unwrap_err();
+        let msg = format!("{err}");
+        assert!(msg.contains("-o"), "expected a `-o` hint, got: {msg}");
+        assert!(
+            !msg.contains("should-not-be-used"),
+            "must not consult the project manifest in --file mode, got: {msg}"
+        );
     }
 
     #[test]
