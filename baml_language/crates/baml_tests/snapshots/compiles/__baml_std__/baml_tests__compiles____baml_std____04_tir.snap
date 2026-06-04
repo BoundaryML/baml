@@ -685,6 +685,7 @@ function baml.llm.ContextClient.from_json(j: baml.json.json) -> baml.llm.Context
 class baml.llm.Context {
   client: baml.llm.ContextClient
   tags: map<string, unknown>
+  output_format: string
 }
 function baml.llm.Context.to_json(self: baml.llm.Context) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
   baml.json.parse(baml.json.to_string<Context>(self)) : baml.json.json
@@ -1255,6 +1256,7 @@ class baml.llm.ContextClient$stream {
 class baml.llm.Context$stream {
   client: null | baml.llm.ContextClient$stream
   tags: map<string, unknown>
+  output_format: null | string
 }
 class baml.llm.RetryPolicy$stream {
   max_retries: null | int

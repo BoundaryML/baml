@@ -109,6 +109,22 @@ pub fn execute_render_prompt_from_owned(
     Ok(std::sync::Arc::new(prompt_ast))
 }
 
+/// BEP-049 §10 (M5b). Render `return_type`'s schema with default options — the
+/// string a `prompt` body reads as `ctx.output_format`. Equivalent to the Jinja
+/// path's `{{ ctx.output_format }}` (`OutputFormatObject`'s `Display`): build the
+/// `OutputFormatContent`, render with `RenderOptions::default()`. An empty/`None`
+/// render (e.g. a primitive return type with no schema) becomes the empty string.
+pub fn render_output_format(
+    return_type: &baml_type::Ty,
+    ctx: &::sys_types::SysOpContext,
+) -> String {
+    build_output_format_content(return_type, ctx)
+        .render(&types::RenderOptions::default())
+        .ok()
+        .flatten()
+        .unwrap_or_default()
+}
+
 /// Build an `OutputFormatContent` by walking a `Ty` and collecting all
 /// referenced class/enum/type-alias definitions from `SysOpContext`.
 fn build_output_format_content(
@@ -994,7 +1010,7 @@ mod tests {
 
     use super::{
         build_output_format_content, execute_build_request_from_owned,
-        execute_parse_response_from_owned,
+        execute_parse_response_from_owned, render_output_format,
     };
     use crate::baml_std;
 
@@ -1667,6 +1683,58 @@ mod tests {
             Some("Full name")
         );
         assert!(content.recursive_classes.is_empty());
+    }
+
+    #[test]
+    fn render_output_format_renders_class_schema() {
+        // BEP-049 M5b: `render_output_format` is the `ctx.output_format` backing.
+        // For a class return type it must emit the schema (field names), matching
+        // what `OutputFormatObject`'s `Display` (the Jinja `{{ ctx.output_format }}`)
+        // produces from the same `OutputFormatContent`.
+        let ctx = ctx_with(
+            vec![(
+                tn("User"),
+                ClassDefinition {
+                    name: "User".into(),
+                    description: None,
+                    alias: None,
+                    fields: vec![
+                        ClassFieldDefinition {
+                            name: "name".into(),
+                            field_type: ty_string(),
+                            description: None,
+                            alias: None,
+                            skip: false,
+                        },
+                        ClassFieldDefinition {
+                            name: "age".into(),
+                            field_type: baml_type::Ty::Int {
+                                attr: TyAttr::default(),
+                            },
+                            description: None,
+                            alias: None,
+                            skip: false,
+                        },
+                    ],
+                },
+            )],
+            vec![],
+        );
+        let rendered = render_output_format(&ty_class("User"), &ctx);
+        assert!(
+            rendered.contains("name"),
+            "schema must list fields: {rendered}"
+        );
+        assert!(
+            rendered.contains("age"),
+            "schema must list fields: {rendered}"
+        );
+        // Parity check: identical to a default-options render of the same content.
+        let direct = build_output_format_content(&ty_class("User"), &ctx)
+            .render(&crate::types::RenderOptions::default())
+            .unwrap()
+            .unwrap_or_default();
+        assert_eq!(rendered, direct);
     }
 
     #[test]

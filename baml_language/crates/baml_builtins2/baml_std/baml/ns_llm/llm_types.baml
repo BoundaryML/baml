@@ -30,14 +30,19 @@ class ContextClient {
 /// (client info, runtime tags, output-format schema), resolved AFTER the
 /// orchestrator picks the client for this attempt — preserving lazy eval.
 ///
-/// `output_format` / `output_format_with(...)` accessors are added in a later
-/// slice (they need a `$rust_function` backing); for now `Context` carries the
-/// data a `prompt` body references structurally.
+/// `output_format` is the default-rendered schema string for the call's return
+/// type — the dominant `${ctx.output_format}` usage, byte-equivalent to Jinja's
+/// `{{ ctx.output_format }}`. The orchestrator populates it (via
+/// `render_output_format`) once the client is chosen. The parameterized
+/// `output_format_with(...)` accessor (the rare `{{ ctx.output_format(...) }}`
+/// case) lands in a later slice.
 class Context {
   /// The client chosen for this attempt.
   client ContextClient
   /// Runtime tags for this call.
   tags map<string, unknown>
+  /// The return type's schema, rendered with default options.
+  output_format string
 }
 
 /// The routing strategy of an LLM client.
@@ -657,6 +662,14 @@ function get_jinja_template(function_name: string) -> string throws root.errors.
 /// becomes a single `PromptAst::Simple`. This replaces the magic-delimiter role
 /// mechanism of the Jinja path with direct structural assembly.
 function assemble_prompt_ast(parts: string[], values: unknown[]) -> PromptAst throws never {
+  $rust_io_function
+}
+
+/// BEP-049 §10 (M5b). Render `return_type`'s schema with default options — the
+/// string `ctx.output_format` exposes to a `prompt` body. The orchestrator
+/// calls this with the call's return type to populate `Context.output_format`,
+/// producing output byte-equivalent to the legacy Jinja `{{ ctx.output_format }}`.
+function render_output_format(return_type: type) -> string throws never {
   $rust_io_function
 }
 

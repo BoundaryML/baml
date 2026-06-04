@@ -123,6 +123,7 @@ namespace baml.llm:
   function make_role
   function parse<TStream, TFinal>
   function prompt
+  function render_output_format
   function render_prompt
   function stream_llm_function<TStream, TFinal>
 namespace baml.math:

@@ -561,6 +561,17 @@ impl<T> io::IoNamespaceLlm for T {
         SysOpOutput::ok(wrap_prompt_ast(ast))
     }
 
+    fn render_output_format(
+        &self,
+        _heap: &std::sync::Arc<BexHeap>,
+        _call_id: CallId,
+        return_type: baml_type::Ty,
+        ctx: &SysOpContext,
+    ) -> SysOpOutput<String> {
+        // BEP-049 §10 (M5b): the `ctx.output_format` schema string.
+        SysOpOutput::ok(sys_llm::render_output_format(&return_type, ctx))
+    }
+
     fn get_return_type(
         &self,
         _heap: &std::sync::Arc<BexHeap>,

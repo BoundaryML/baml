@@ -5372,6 +5372,8 @@ fn .<lambda(prompt, 0)>(ctx: baml.llm.Context) -> null {
     }
 }
 
+fn baml.llm.render_output_format = builtin(io)
+
 fn baml.llm.PrimitiveClient.render_prompt = builtin(io)
 
 fn baml.llm.PrimitiveClient.specialize_prompt = builtin(io)

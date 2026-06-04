@@ -4086,6 +4086,9 @@ function baml.llm.prompt(body: ((string) -> baml.llm.Role throws never, baml.llm
     return
 }
 
+function baml.llm.render_output_format(return_type: type) -> string {
+}
+
 function baml.llm.render_prompt(client: baml.llm.Client, function_name: string, args: map<string, unknown>) -> baml.llm.PromptAst {
     load_var function_name
     sys_op baml.llm.get_jinja_template

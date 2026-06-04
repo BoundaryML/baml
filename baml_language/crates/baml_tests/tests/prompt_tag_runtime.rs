@@ -3,8 +3,9 @@
 //! `` prompt`...` `` evaluates to a `(Context) -> baml.llm.PromptAst` closure;
 //! invoking it folds the template into a `PromptAst`, where `${role("...")}`
 //! markers split the content into chat messages (M5d structural assembly —
-//! no magic delimiters). Output-format injection / orchestrator wiring are
-//! later slices; here we build a `Context` by hand and inspect the result.
+//! no magic delimiters). `${ctx.output_format}` injects the return type's
+//! schema (M5b). Orchestrator wiring (auto-building `Context` per attempt) is
+//! a later slice; here we build a `Context` by hand and inspect the result.
 
 use baml_tests::baml_test;
 use bex_engine::BexExternalValue;
@@ -63,4 +64,49 @@ function main() -> baml.llm.PromptAst {
     assert!(dbg.contains("You are helpful."), "{dbg}");
     assert!(dbg.contains("\"user\""), "expected a user message: {dbg}");
     assert!(dbg.contains("Hi World!"), "{dbg}");
+}
+
+#[tokio::test]
+async fn prompt_interpolates_ctx_output_format() {
+    // BEP-049 M5b: `${ctx.output_format}` renders the return type's schema.
+    // `render_output_format(reflect.type_of<Person>())` produces the schema
+    // string the orchestrator will later populate `Context.output_format` with;
+    // here we wire it by hand and assert the assembled prompt embeds the schema.
+    let output = baml_test!(
+        r#"
+class Person {
+  name string
+  age int
+}
+
+function main() -> baml.llm.PromptAst {
+  let cc = baml.llm.ContextClient { name: "c", provider: "openai", default_role: "user", allowed_roles: ["user"] }
+  let of = baml.llm.render_output_format(reflect.type_of<Person>())
+  let ctx = baml.llm.Context { client: cc, tags: {}, output_format: of }
+  let render = baml.llm.prompt`Answer using this schema:
+${ctx.output_format}`
+  render(ctx)
+}
+"#
+    );
+    let ast = match &output.result {
+        Ok(BexExternalValue::Instance { class_name, fields })
+            if class_name == "baml.llm.PromptAst" =>
+        {
+            match fields.get("_data") {
+                Some(BexExternalValue::Adt(BexExternalAdt::PromptAst(ast))) => ast.clone(),
+                other => panic!("expected `_data` to hold a PromptAst ADT, got {other:?}"),
+            }
+        }
+        other => panic!("expected a baml.llm.PromptAst instance, got {other:?}"),
+    };
+    let dbg = format!("{ast:?}");
+    assert!(
+        dbg.contains("Answer using this schema:"),
+        "prompt text should be present: {dbg}"
+    );
+    assert!(
+        dbg.contains("name") && dbg.contains("age"),
+        "rendered output_format should list the Person fields: {dbg}"
+    );
 }
