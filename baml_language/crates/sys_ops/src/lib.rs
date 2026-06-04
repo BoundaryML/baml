@@ -967,22 +967,31 @@ impl io::IoNamespaceHttp for DefaultIoOps {
     }
 }
 
-impl io::IoClassNetSocket for DefaultIoOps {
+impl io::IoClassNetTcpStream for DefaultIoOps {
+    fn connect(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _addr: String,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<io::owned::net::TcpStream> {
+        SysOpOutput::err(OpErrorKind::Unsupported)
+    }
     fn read(
         &self,
         _h: &Arc<BexHeap>,
         _c: CallId,
-        _s: io::owned::net::Socket,
+        _s: io::owned::net::TcpStream,
         _ctx: &SysOpContext,
-    ) -> SysOpOutput<String> {
+    ) -> SysOpOutput<Vec<u8>> {
         SysOpOutput::err(OpErrorKind::Unsupported)
     }
     fn write(
         &self,
         _h: &Arc<BexHeap>,
         _c: CallId,
-        _s: io::owned::net::Socket,
-        _data: String,
+        _s: io::owned::net::TcpStream,
+        _data: Vec<u8>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
         SysOpOutput::err(OpErrorKind::Unsupported)
@@ -991,7 +1000,7 @@ impl io::IoClassNetSocket for DefaultIoOps {
         &self,
         _h: &Arc<BexHeap>,
         _c: CallId,
-        _s: io::owned::net::Socket,
+        _s: io::owned::net::TcpStream,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
         SysOpOutput::err(OpErrorKind::Unsupported)
@@ -999,37 +1008,7 @@ impl io::IoClassNetSocket for DefaultIoOps {
 }
 
 impl io::IoClassNetTcpListener for DefaultIoOps {
-    fn accept(
-        &self,
-        _h: &Arc<BexHeap>,
-        _c: CallId,
-        _l: io::owned::net::TcpListener,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<io::owned::net::Socket> {
-        SysOpOutput::err(OpErrorKind::Unsupported)
-    }
-    fn close(
-        &self,
-        _h: &Arc<BexHeap>,
-        _c: CallId,
-        _l: io::owned::net::TcpListener,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<()> {
-        SysOpOutput::err(OpErrorKind::Unsupported)
-    }
-}
-
-impl io::IoNamespaceNet for DefaultIoOps {
-    fn connect(
-        &self,
-        _h: &Arc<BexHeap>,
-        _c: CallId,
-        _addr: String,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<io::owned::net::Socket> {
-        SysOpOutput::err(OpErrorKind::Unsupported)
-    }
-    fn listen(
+    fn bind(
         &self,
         _h: &Arc<BexHeap>,
         _c: CallId,
@@ -1038,7 +1017,68 @@ impl io::IoNamespaceNet for DefaultIoOps {
     ) -> SysOpOutput<io::owned::net::TcpListener> {
         SysOpOutput::err(OpErrorKind::Unsupported)
     }
+    fn accept(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _l: io::owned::net::TcpListener,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<io::owned::net::TcpStream> {
+        SysOpOutput::err(OpErrorKind::Unsupported)
+    }
+    fn close(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _l: io::owned::net::TcpListener,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        SysOpOutput::err(OpErrorKind::Unsupported)
+    }
 }
+
+impl io::IoClassNetUdpSocket for DefaultIoOps {
+    fn bind(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _addr: String,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<io::owned::net::UdpSocket> {
+        SysOpOutput::err(OpErrorKind::Unsupported)
+    }
+    fn send_to(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _s: io::owned::net::UdpSocket,
+        _data: Vec<u8>,
+        _addr: String,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<i64> {
+        SysOpOutput::err(OpErrorKind::Unsupported)
+    }
+    fn recv_from(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _s: io::owned::net::UdpSocket,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<io::owned::net::Datagram> {
+        SysOpOutput::err(OpErrorKind::Unsupported)
+    }
+    fn close(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _s: io::owned::net::UdpSocket,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        SysOpOutput::err(OpErrorKind::Unsupported)
+    }
+}
+
+impl io::IoNamespaceNet for DefaultIoOps {}
 
 impl io::IoNamespaceEnv for DefaultIoOps {
     fn get(
@@ -1502,40 +1542,41 @@ impl IoSysOpsBuilder {
         self.with_http_instance(Arc::new(T::default()))
     }
 
-    /// Override the `net` namespace (including `net.Socket` methods) with a pre-built instance.
+    /// Override the `net` namespace (`TcpStream` / `TcpListener` / `UdpSocket`
+    /// methods) with a pre-built instance.
     #[must_use]
     pub fn with_net_instance(
         mut self,
         instance: Arc<dyn io::IoNamespaceNet + Send + Sync + 'static>,
     ) -> Self {
-        self.inner.baml_net_connect = {
+        self.inner.baml_net_tcpstream_connect = {
             let t = instance.clone();
             Arc::new(move |heap, permit, args, ctx, call_id| {
-                t.__glue_baml_net_connect(heap, permit, args, ctx, call_id)
+                t.__glue_baml_net_tcpstream_connect(heap, permit, args, ctx, call_id)
             })
         };
-        self.inner.baml_net_listen = {
+        self.inner.baml_net_tcpstream_read = {
             let t = instance.clone();
             Arc::new(move |heap, permit, args, ctx, call_id| {
-                t.__glue_baml_net_listen(heap, permit, args, ctx, call_id)
+                t.__glue_baml_net_tcpstream_read(heap, permit, args, ctx, call_id)
             })
         };
-        self.inner.baml_net_socket_read = {
+        self.inner.baml_net_tcpstream_write = {
             let t = instance.clone();
             Arc::new(move |heap, permit, args, ctx, call_id| {
-                t.__glue_baml_net_socket_read(heap, permit, args, ctx, call_id)
+                t.__glue_baml_net_tcpstream_write(heap, permit, args, ctx, call_id)
             })
         };
-        self.inner.baml_net_socket_write = {
+        self.inner.baml_net_tcpstream_close = {
             let t = instance.clone();
             Arc::new(move |heap, permit, args, ctx, call_id| {
-                t.__glue_baml_net_socket_write(heap, permit, args, ctx, call_id)
+                t.__glue_baml_net_tcpstream_close(heap, permit, args, ctx, call_id)
             })
         };
-        self.inner.baml_net_socket_close = {
+        self.inner.baml_net_tcplistener_bind = {
             let t = instance.clone();
             Arc::new(move |heap, permit, args, ctx, call_id| {
-                t.__glue_baml_net_socket_close(heap, permit, args, ctx, call_id)
+                t.__glue_baml_net_tcplistener_bind(heap, permit, args, ctx, call_id)
             })
         };
         self.inner.baml_net_tcplistener_accept = {
@@ -1545,9 +1586,33 @@ impl IoSysOpsBuilder {
             })
         };
         self.inner.baml_net_tcplistener_close = {
-            let t = instance;
+            let t = instance.clone();
             Arc::new(move |heap, permit, args, ctx, call_id| {
                 t.__glue_baml_net_tcplistener_close(heap, permit, args, ctx, call_id)
+            })
+        };
+        self.inner.baml_net_udpsocket_bind = {
+            let t = instance.clone();
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_net_udpsocket_bind(heap, permit, args, ctx, call_id)
+            })
+        };
+        self.inner.baml_net_udpsocket_send_to = {
+            let t = instance.clone();
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_net_udpsocket_send_to(heap, permit, args, ctx, call_id)
+            })
+        };
+        self.inner.baml_net_udpsocket_recv_from = {
+            let t = instance.clone();
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_net_udpsocket_recv_from(heap, permit, args, ctx, call_id)
+            })
+        };
+        self.inner.baml_net_udpsocket_close = {
+            let t = instance;
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_net_udpsocket_close(heap, permit, args, ctx, call_id)
             })
         };
         self

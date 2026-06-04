@@ -1300,14 +1300,14 @@ class baml.media.Image$stream {
 }
 
 --- <builtin>/baml/ns_net/net.baml ---
-class baml.net.Socket {
+class baml.net.TcpStream {
   _handle: $rust_type
 }
-function baml.net.Socket.to_json(self: baml.net.Socket) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  baml.json.parse(baml.json.to_string<Socket>(self)) : baml.json.json
+function baml.net.TcpStream.to_json(self: baml.net.TcpStream) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  baml.json.parse(baml.json.to_string<TcpStream>(self)) : baml.json.json
 }
-function baml.net.Socket.from_json(j: baml.json.json) -> baml.net.Socket throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  baml.json.from_string<T>(baml.json.stringify(j)) : baml.net.Socket
+function baml.net.TcpStream.from_json(j: baml.json.json) -> baml.net.TcpStream throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  baml.json.from_string<T>(baml.json.stringify(j)) : baml.net.TcpStream
 }
 class baml.net.TcpListener {
   _handle: $rust_type
@@ -1318,11 +1318,37 @@ function baml.net.TcpListener.to_json(self: baml.net.TcpListener) -> baml.json.j
 function baml.net.TcpListener.from_json(j: baml.json.json) -> baml.net.TcpListener throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   baml.json.from_string<T>(baml.json.stringify(j)) : baml.net.TcpListener
 }
-class baml.net.Socket$stream {
+class baml.net.UdpSocket {
+  _handle: $rust_type
+}
+function baml.net.UdpSocket.to_json(self: baml.net.UdpSocket) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  baml.json.parse(baml.json.to_string<UdpSocket>(self)) : baml.json.json
+}
+function baml.net.UdpSocket.from_json(j: baml.json.json) -> baml.net.UdpSocket throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  baml.json.from_string<T>(baml.json.stringify(j)) : baml.net.UdpSocket
+}
+class baml.net.Datagram {
+  data: uint8array
+  addr: string
+}
+function baml.net.Datagram.to_json(self: baml.net.Datagram) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  map { "data": self.data.to_json(), "addr": self.addr.to_json() } : map<string, baml.json.json>
+}
+function baml.net.Datagram.from_json(j: baml.json.json) -> baml.net.Datagram throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  Datagram { data: baml.json.from_json<uint8array>(baml.json.field(j, "data")), addr: baml.json.from_json<string>(baml.json.field(j, "addr")) } : baml.net.Datagram
+}
+class baml.net.TcpStream$stream {
   _handle: $rust_type
 }
 class baml.net.TcpListener$stream {
   _handle: $rust_type
+}
+class baml.net.UdpSocket$stream {
+  _handle: $rust_type
+}
+class baml.net.Datagram$stream {
+  data: uint8array
+  addr: null | string
 }
 
 --- <builtin>/baml/ns_panics/panics.baml ---

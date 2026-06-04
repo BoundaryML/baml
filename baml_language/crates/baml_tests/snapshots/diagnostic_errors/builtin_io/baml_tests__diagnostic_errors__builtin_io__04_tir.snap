@@ -137,32 +137,47 @@ function user.AskNoPrompt() -> string throws never {
     baml.io.input(null) : string
   }
 }
-function user.ConnectAndRead() -> string throws never {
-  { : string
-    let sock = baml.net.connect("127.0.0.1:8080") : baml.net.Socket
-    sock.read() : string
+function user.ConnectAndRead() -> uint8array throws never {
+  { : uint8array
+    let sock = baml.net.TcpStream.connect("127.0.0.1:8080") : baml.net.TcpStream
+    sock.read() : uint8array
   }
 }
-function user.ConnectAndReadInline() -> string throws never {
-  { : string
-    baml.net.connect("localhost:3000").read() : string
+function user.ConnectAndReadInline() -> uint8array throws never {
+  { : uint8array
+    baml.net.TcpStream.connect("localhost:3000").read() : uint8array
   }
 }
-function user.MultipleConnections() -> string throws never {
-  { : string
-    let s1 = baml.net.connect("server1:80") : baml.net.Socket
-    let s2 = baml.net.connect("server2:80") : baml.net.Socket
-    let data1 = s1.read() : string
-    let data2 = s2.read() : string
-    data1 + data2 : string
+function user.MultipleConnections() -> uint8array throws never {
+  { : uint8array
+    let s1 = baml.net.TcpStream.connect("server1:80") : baml.net.TcpStream
+    let s2 = baml.net.TcpStream.connect("server2:80") : baml.net.TcpStream
+    let data1 = s1.read() : uint8array
+    let data2 = s2.read() : uint8array
+    data1.concat(data2) : uint8array
   }
 }
-function user.ConnectReadAndClose() -> string throws never {
-  { : string
-    let sock = baml.net.connect("127.0.0.1:8080") : baml.net.Socket
-    let data = sock.read() : string
+function user.ConnectReadAndClose() -> uint8array throws never {
+  { : uint8array
+    let sock = baml.net.TcpStream.connect("127.0.0.1:8080") : baml.net.TcpStream
+    let data = sock.read() : uint8array
     sock.close() : null
-    data : string
+    data : uint8array
+  }
+}
+function user.ListenAndAccept() -> uint8array throws never {
+  { : uint8array
+    let listener = baml.net.TcpListener.bind("127.0.0.1:0") : baml.net.TcpListener
+    let sock = listener.accept() : baml.net.TcpStream
+    sock.read() : uint8array
+  }
+}
+function user.UdpRoundtrip() -> uint8array throws never {
+  { : uint8array
+    let sock = baml.net.UdpSocket.bind("0.0.0.0:0") : baml.net.UdpSocket
+    sock.send_to("ping".to_utf8(), "127.0.0.1:9") : int
+    let dgram = sock.recv_from() : baml.net.Datagram
+    dgram.data : uint8array
   }
 }
 function user.RunCommand() -> string throws never {

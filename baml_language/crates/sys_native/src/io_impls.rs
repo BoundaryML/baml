@@ -961,31 +961,114 @@ impl io::IoNamespaceSys for NativeSysOps {
 // Network
 // ============================================================================
 
-type NetSocketHandle = tokio::sync::Mutex<tokio::net::TcpStream>;
-type NetTcpListenerHandle = tokio::net::TcpListener;
+// Network handles mirror `FsFileHandle`: the socket lives inside a
+// `Mutex<Option<_>>` so `close()` can `take()` it, after which every other
+// reference to the same handle deterministically observes a closed socket.
+//
+// `TcpStream` ops need `&mut` access, so (like `fs::File`) we hold the guard
+// across the await. `TcpListener`/`UdpSocket` ops only need `&self`, so we keep
+// each socket behind an inner `Arc` and clone it out under a brief lock — that
+// way `close()` stays deterministic without serializing concurrent
+// `accept`/`recv_from`/`send_to` on the same socket.
+type NetTcpStreamHandle = tokio::sync::Mutex<Option<tokio::net::TcpStream>>;
+type NetTcpListenerHandle = tokio::sync::Mutex<Option<Arc<tokio::net::TcpListener>>>;
+type NetUdpSocketHandle = tokio::sync::Mutex<Option<Arc<tokio::net::UdpSocket>>>;
 
-impl io::IoClassNetSocket for NativeSysOps {
+// Default connect deadline. Without it, connecting to an unresponsive host
+// (e.g. one behind silent DDoS filtering) blocks forever; this makes the
+// `throws root.errors.Timeout` clause on `connect` actually fire.
+//
+// TODO(net-timeout): make this configurable per call — `connect(addr, timeout)`
+// and `read(timeout)` / `write(..., timeout)` — once we have a datetime/Duration
+// type to pass a timeout through the BAML API. For now it's a fixed default.
+const DEFAULT_CONNECT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
+
+fn downcast_tcpstream(
+    stream: &owned::net::TcpStream,
+) -> Result<Arc<NetTcpStreamHandle>, OpErrorKind> {
+    stream
+        ._handle
+        .clone()
+        .downcast::<NetTcpStreamHandle>()
+        .map_err(|_| OpErrorKind::Other("Invalid TcpStream handle type".into()))
+}
+
+fn downcast_tcplistener(
+    listener: &owned::net::TcpListener,
+) -> Result<Arc<NetTcpListenerHandle>, OpErrorKind> {
+    listener
+        ._handle
+        .clone()
+        .downcast::<NetTcpListenerHandle>()
+        .map_err(|_| OpErrorKind::Other("Invalid TcpListener handle type".into()))
+}
+
+fn downcast_udpsocket(
+    socket: &owned::net::UdpSocket,
+) -> Result<Arc<NetUdpSocketHandle>, OpErrorKind> {
+    socket
+        ._handle
+        .clone()
+        .downcast::<NetUdpSocketHandle>()
+        .map_err(|_| OpErrorKind::Other("Invalid UdpSocket handle type".into()))
+}
+
+impl io::IoClassNetTcpStream for NativeSysOps {
+    fn connect(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        addr: String,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<owned::net::TcpStream> {
+        SysOpOutput::async_op(async move {
+            let stream = match tokio::time::timeout(
+                DEFAULT_CONNECT_TIMEOUT,
+                tokio::net::TcpStream::connect(&addr),
+            )
+            .await
+            {
+                Ok(Ok(stream)) => stream,
+                Ok(Err(e)) => {
+                    return Err(OpErrorKind::Io {
+                        message: format!("Failed to connect to '{addr}': {e}"),
+                    });
+                }
+                Err(_elapsed) => {
+                    return Err(OpErrorKind::Timeout {
+                        message: format!("Connecting to '{addr}' timed out"),
+                        duration: DEFAULT_CONNECT_TIMEOUT,
+                    });
+                }
+            };
+            let handle: Arc<dyn std::any::Any + Send + Sync> =
+                Arc::new(tokio::sync::Mutex::new(Some(stream)));
+            Ok(owned::net::TcpStream { _handle: handle })
+        })
+    }
+
     fn read(
         &self,
         _heap: &Arc<BexHeap>,
         _call_id: CallId,
-        socket: owned::net::Socket,
+        stream: owned::net::TcpStream,
         _ctx: &SysOpContext,
-    ) -> SysOpOutput<String> {
+    ) -> SysOpOutput<Vec<u8>> {
         use tokio::io::AsyncReadExt;
 
         SysOpOutput::async_op(async move {
-            let handle: Arc<NetSocketHandle> = socket
-                ._handle
-                .downcast::<NetSocketHandle>()
-                .map_err(|_| OpErrorKind::Other("Invalid socket handle type".into()))?;
-            let mut stream = handle.lock().await;
+            let handle = downcast_tcpstream(&stream)?;
+            let mut guard = handle.lock().await;
+            let stream = guard
+                .as_mut()
+                .ok_or_else(|| OpErrorKind::Other("TcpStream is closed".into()))?;
             let mut buffer = vec![0u8; 4096];
             let n = stream
                 .read(&mut buffer)
                 .await
                 .map_err(|e| OpErrorKind::Other(format!("Failed to read from socket: {e}")))?;
-            Ok(String::from_utf8_lossy(&buffer[..n]).into_owned())
+            buffer.truncate(n);
+            Ok(buffer)
         })
     }
 
@@ -993,20 +1076,20 @@ impl io::IoClassNetSocket for NativeSysOps {
         &self,
         _heap: &Arc<BexHeap>,
         _call_id: CallId,
-        socket: owned::net::Socket,
-        data: String,
+        stream: owned::net::TcpStream,
+        data: Vec<u8>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
         use tokio::io::AsyncWriteExt;
 
         SysOpOutput::async_op(async move {
-            let handle: Arc<NetSocketHandle> = socket
-                ._handle
-                .downcast::<NetSocketHandle>()
-                .map_err(|_| OpErrorKind::Other("Invalid socket handle type".into()))?;
-            let mut stream = handle.lock().await;
+            let handle = downcast_tcpstream(&stream)?;
+            let mut guard = handle.lock().await;
+            let stream = guard
+                .as_mut()
+                .ok_or_else(|| OpErrorKind::Other("TcpStream is closed".into()))?;
             stream
-                .write_all(data.as_bytes())
+                .write_all(&data)
                 .await
                 .map_err(|e| OpErrorKind::Other(format!("Failed to write to socket: {e}")))?;
             stream
@@ -1021,21 +1104,22 @@ impl io::IoClassNetSocket for NativeSysOps {
         &self,
         _heap: &Arc<BexHeap>,
         _call_id: CallId,
-        socket: owned::net::Socket,
+        stream: owned::net::TcpStream,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
         use tokio::io::AsyncWriteExt;
 
         SysOpOutput::async_op(async move {
-            let handle: Arc<NetSocketHandle> = socket
-                ._handle
-                .downcast::<NetSocketHandle>()
-                .map_err(|_| OpErrorKind::Other("Invalid socket handle type".into()))?;
+            let handle = downcast_tcpstream(&stream)?;
+            // Take the stream out of the shared handle so any other reference
+            // observes a closed socket on its next op. Already-closed is a no-op.
+            let Some(mut stream) = handle.lock().await.take() else {
+                return Ok(());
+            };
             // shutdown() flushes pending writes and closes the write half, so
             // peers waiting on EOF (e.g. curl with "Connection: close") stop
             // blocking. We swallow ENOTCONN / NotConnected since the peer may
-            // already have closed.
-            let mut stream = handle.lock().await;
+            // already have closed. Dropping `stream` afterwards fully closes it.
             match stream.shutdown().await {
                 Ok(()) => Ok(()),
                 Err(e) if e.kind() == std::io::ErrorKind::NotConnected => Ok(()),
@@ -1046,63 +1130,7 @@ impl io::IoClassNetSocket for NativeSysOps {
 }
 
 impl io::IoClassNetTcpListener for NativeSysOps {
-    fn accept(
-        &self,
-        _heap: &Arc<BexHeap>,
-        _call_id: CallId,
-        listener: owned::net::TcpListener,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<owned::net::Socket> {
-        SysOpOutput::async_op(async move {
-            let handle: Arc<NetTcpListenerHandle> = listener
-                ._handle
-                .downcast::<NetTcpListenerHandle>()
-                .map_err(|_| OpErrorKind::Other("Invalid TcpListener handle type".into()))?;
-            let (stream, _peer) = handle
-                .accept()
-                .await
-                .map_err(|e| OpErrorKind::Other(format!("Failed to accept connection: {e}")))?;
-            let sock_handle: Arc<dyn std::any::Any + Send + Sync> =
-                Arc::new(tokio::sync::Mutex::new(stream));
-            Ok(owned::net::Socket {
-                _handle: sock_handle,
-            })
-        })
-    }
-
-    fn close(
-        &self,
-        _heap: &Arc<BexHeap>,
-        _call_id: CallId,
-        _listener: owned::net::TcpListener,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<()> {
-        // Dropping the Arc<TcpListener> closes the underlying socket once the
-        // last reference goes away. There's no explicit "stop accepting" call
-        // for tokio's listener — moving on is enough.
-        SysOpOutput::ok(())
-    }
-}
-
-impl io::IoNamespaceNet for NativeSysOps {
-    fn connect(
-        &self,
-        _heap: &Arc<BexHeap>,
-        _call_id: CallId,
-        addr: String,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<owned::net::Socket> {
-        SysOpOutput::async_op(async move {
-            let stream = tokio::net::TcpStream::connect(&addr)
-                .await
-                .map_err(|e| OpErrorKind::Other(format!("Failed to connect to '{addr}': {e}")))?;
-            let handle: Arc<dyn std::any::Any + Send + Sync> =
-                Arc::new(tokio::sync::Mutex::new(stream));
-            Ok(owned::net::Socket { _handle: handle })
-        })
-    }
-
-    fn listen(
+    fn bind(
         &self,
         _heap: &Arc<BexHeap>,
         _call_id: CallId,
@@ -1113,11 +1141,150 @@ impl io::IoNamespaceNet for NativeSysOps {
             let listener = tokio::net::TcpListener::bind(&addr)
                 .await
                 .map_err(|e| OpErrorKind::Other(format!("Failed to bind '{addr}': {e}")))?;
-            let handle: Arc<dyn std::any::Any + Send + Sync> = Arc::new(listener);
+            let handle: Arc<dyn std::any::Any + Send + Sync> =
+                Arc::new(tokio::sync::Mutex::new(Some(Arc::new(listener))));
             Ok(owned::net::TcpListener { _handle: handle })
         })
     }
+
+    fn accept(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        listener: owned::net::TcpListener,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<owned::net::TcpStream> {
+        SysOpOutput::async_op(async move {
+            let handle = downcast_tcplistener(&listener)?;
+            // Clone the inner socket out under a brief lock so concurrent
+            // accepts aren't serialized and close() stays deterministic.
+            let inner = handle
+                .lock()
+                .await
+                .as_ref()
+                .cloned()
+                .ok_or_else(|| OpErrorKind::Other("TcpListener is closed".into()))?;
+            let (stream, _peer) = inner
+                .accept()
+                .await
+                .map_err(|e| OpErrorKind::Other(format!("Failed to accept connection: {e}")))?;
+            let sock_handle: Arc<dyn std::any::Any + Send + Sync> =
+                Arc::new(tokio::sync::Mutex::new(Some(stream)));
+            Ok(owned::net::TcpStream {
+                _handle: sock_handle,
+            })
+        })
+    }
+
+    fn close(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        listener: owned::net::TcpListener,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        SysOpOutput::async_op(async move {
+            // Drop the listener out of the shared handle; subsequent accepts on
+            // any reference return a closed error. Dropping the last Arc closes
+            // the OS socket.
+            let handle = downcast_tcplistener(&listener)?;
+            handle.lock().await.take();
+            Ok(())
+        })
+    }
 }
+
+impl io::IoClassNetUdpSocket for NativeSysOps {
+    fn bind(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        addr: String,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<owned::net::UdpSocket> {
+        SysOpOutput::async_op(async move {
+            let socket = tokio::net::UdpSocket::bind(&addr)
+                .await
+                .map_err(|e| OpErrorKind::Other(format!("Failed to bind UDP '{addr}': {e}")))?;
+            let handle: Arc<dyn std::any::Any + Send + Sync> =
+                Arc::new(tokio::sync::Mutex::new(Some(Arc::new(socket))));
+            Ok(owned::net::UdpSocket { _handle: handle })
+        })
+    }
+
+    fn send_to(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        socket: owned::net::UdpSocket,
+        data: Vec<u8>,
+        addr: String,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<i64> {
+        SysOpOutput::async_op(async move {
+            let handle = downcast_udpsocket(&socket)?;
+            let inner = handle
+                .lock()
+                .await
+                .as_ref()
+                .cloned()
+                .ok_or_else(|| OpErrorKind::Other("UdpSocket is closed".into()))?;
+            let n = inner
+                .send_to(&data, &addr)
+                .await
+                .map_err(|e| OpErrorKind::Other(format!("Failed to send to '{addr}': {e}")))?;
+            Ok(i64::try_from(n).unwrap_or(i64::MAX))
+        })
+    }
+
+    fn recv_from(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        socket: owned::net::UdpSocket,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<owned::net::Datagram> {
+        SysOpOutput::async_op(async move {
+            let handle = downcast_udpsocket(&socket)?;
+            let inner = handle
+                .lock()
+                .await
+                .as_ref()
+                .cloned()
+                .ok_or_else(|| OpErrorKind::Other("UdpSocket is closed".into()))?;
+            // A single datagram can be up to 65507 bytes for IPv4; size the
+            // buffer to the max so we never silently truncate a packet.
+            let mut buffer = vec![0u8; 65_536];
+            let (n, peer) = inner
+                .recv_from(&mut buffer)
+                .await
+                .map_err(|e| OpErrorKind::Other(format!("Failed to receive datagram: {e}")))?;
+            buffer.truncate(n);
+            Ok(owned::net::Datagram {
+                data: buffer,
+                addr: peer.to_string(),
+            })
+        })
+    }
+
+    fn close(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        socket: owned::net::UdpSocket,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        SysOpOutput::async_op(async move {
+            // Drop the socket out of the shared handle; subsequent send_to /
+            // recv_from on any reference return a closed error.
+            let handle = downcast_udpsocket(&socket)?;
+            handle.lock().await.take();
+            Ok(())
+        })
+    }
+}
+
+impl io::IoNamespaceNet for NativeSysOps {}
 
 // ============================================================================
 // HTTP
