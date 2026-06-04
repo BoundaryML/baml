@@ -1,10 +1,10 @@
-//! Source-pattern → `DPat` lowering.
+//! Source-pattern → `Pat` lowering.
 //!
 //! Bridges the AST `Pattern` HIR to the deconstructed-pattern algorithm in
 //! [`crate::exhaustiveness`]. This module owns the public per-pattern result
 //! types:
 //!
-//! - [`PatternResult`] — the per-pattern output: a `DPat` for the matrix,
+//! - [`PatternResult`] — the per-pattern output: a `Pat` for the matrix,
 //!   the narrowed `matched_ty` for arm bodies, the upward-flowing
 //!   `required_ty`, and any bindings introduced (typed at their final
 //!   widened type for chains).
@@ -21,7 +21,7 @@ use baml_compiler2_ast::PatId;
 
 // Ergonomic re-exports so callers don't need two `use` lines.
 pub use crate::exhaustiveness::{check_irrefutable, compute_match_usefulness};
-use crate::{exhaustiveness::DPat, ty::Ty};
+use crate::{exhaustiveness::Pat, ty::Ty};
 
 /// Result of lowering one source pattern.
 ///
@@ -33,7 +33,7 @@ use crate::{exhaustiveness::DPat, ty::Ty};
 #[derive(Debug, Clone)]
 pub struct PatternResult {
     /// Deconstructed form for the matrix algorithm.
-    pub dpat: DPat,
+    pub dpat: Pat,
     /// Type the pattern *requires* of its scrutinee (upward flow). `None`
     /// for wildcards/bindings, which place no requirement. For chains, the
     /// widest type ascription. For class/array patterns, the synthesized

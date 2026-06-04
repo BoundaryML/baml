@@ -4797,15 +4797,15 @@ impl<'db> TypeInferenceBuilder<'db> {
         let scrutinee_ty = self.infer_expr(scrutinee_expr_id);
         let scrutinee_name = Self::single_path_local(scrutinee_expr_id, body.as_ref());
 
-        // Pass 1: lower each arm's pattern to a DPat, register bindings,
+        // Pass 1: lower each arm's pattern to a Pat, register bindings,
         // narrow the scrutinee for the body, and infer the body's type.
-        // Collect DPats for the matrix run in pass 2.
+        // Collect Pats for the matrix run in pass 2.
         //
         // We track non-guarded arms separately for usefulness: guarded
         // arms can never cover values themselves (the guard might fail),
         // so they're irrelevant to exhaustiveness coverage.
         let mut arm_types = Vec::with_capacity(arms.len());
-        let mut matrix_arms: Vec<crate::exhaustiveness::DPat> = Vec::new();
+        let mut matrix_arms: Vec<crate::exhaustiveness::Pat> = Vec::new();
         // Map matrix index → source arm body ExprId for unreachable-arm
         // diagnostics. We only push non-guarded arms into the matrix.
         let mut matrix_arm_ids: Vec<ExprId> = Vec::new();
@@ -10708,7 +10708,7 @@ impl TypeInferenceBuilder<'_> {
 // ── Pattern lowering walk ────────────────────────────────────────────────────
 //
 // `analyze_and_lower` is the per-pattern recursion that produces a
-// `PatternResult` (DPat for the matrix + matched_ty + required_ty +
+// `PatternResult` (Pat for the matrix + matched_ty + required_ty +
 // bindings).
 
 impl TypeInferenceBuilder<'_> {
@@ -10818,7 +10818,7 @@ impl TypeInferenceBuilder<'_> {
     /// list-typed member (consider `[..]` against `List(int) | List(Never)`
     /// — the pattern matches every value of either member). In that case
     /// we wrap as an Or across one `UnionMember` per matching member, with
-    /// the same inner `DPat` lowered for each member's element type.
+    /// the same inner `Pat` lowered for each member's element type.
     ///
     /// `Optional<T>` is normalized to `Union<T, null>` for matrix purposes
     /// only (`matrix_normalize_scrut`). The dpat scrut tags attached here
@@ -10837,7 +10837,7 @@ impl TypeInferenceBuilder<'_> {
             if targets.len() == 1 {
                 let member_ty = targets.into_iter().next().unwrap();
                 let inner = self.analyze_and_lower_inner(pat_id, &member_ty, at_expr);
-                let wrapped = crate::exhaustiveness::DPat::union_member(
+                let wrapped = crate::exhaustiveness::Pat::union_member(
                     member_ty,
                     inner.dpat,
                     normalized_scrut,
@@ -10858,7 +10858,7 @@ impl TypeInferenceBuilder<'_> {
                 };
             }
             if targets.len() > 1 {
-                let mut alts: Vec<crate::exhaustiveness::DPat> = Vec::with_capacity(targets.len());
+                let mut alts: Vec<crate::exhaustiveness::Pat> = Vec::with_capacity(targets.len());
                 let mut required_tys: Vec<Ty> = Vec::new();
                 let mut matched_tys: Vec<Ty> = Vec::new();
                 // Per-branch bindings: same name appears once per branch
@@ -10871,7 +10871,7 @@ impl TypeInferenceBuilder<'_> {
                     indexmap::IndexMap::new();
                 for member_ty in &targets {
                     let inner = self.analyze_and_lower_inner(pat_id, member_ty, at_expr);
-                    let wrapped = crate::exhaustiveness::DPat::union_member(
+                    let wrapped = crate::exhaustiveness::Pat::union_member(
                         member_ty.clone(),
                         inner.dpat,
                         normalized_scrut.clone(),
@@ -10900,7 +10900,7 @@ impl TypeInferenceBuilder<'_> {
                         )
                         .collect();
                 return crate::pattern_lowering::PatternResult {
-                    dpat: crate::exhaustiveness::DPat::or(alts, normalized_scrut),
+                    dpat: crate::exhaustiveness::Pat::or(alts, normalized_scrut),
                     required_ty: if required_tys.is_empty() {
                         None
                     } else {
@@ -10927,11 +10927,8 @@ impl TypeInferenceBuilder<'_> {
                 Ty::Unknown | Ty::BuiltinUnknown | Ty::Error | Ty::TypeVar(..)
             ) {
                 let inner = self.analyze_and_lower_inner(pat_id, &natural, at_expr);
-                let wrapped = crate::exhaustiveness::DPat::union_member(
-                    natural,
-                    inner.dpat,
-                    scrut_ty.clone(),
-                );
+                let wrapped =
+                    crate::exhaustiveness::Pat::union_member(natural, inner.dpat, scrut_ty.clone());
                 return crate::pattern_lowering::PatternResult {
                     dpat: wrapped,
                     required_ty: inner.required_ty,
@@ -11252,7 +11249,7 @@ impl TypeInferenceBuilder<'_> {
 
     fn lower_wildcard_pat(scrut_ty: &Ty) -> crate::pattern_lowering::PatternResult {
         crate::pattern_lowering::PatternResult {
-            dpat: crate::exhaustiveness::DPat::wildcard(scrut_ty.clone()),
+            dpat: crate::exhaustiveness::Pat::wildcard(scrut_ty.clone()),
             required_ty: None,
             matched_ty: scrut_ty.clone(),
             bindings: Vec::new(),
@@ -11270,7 +11267,7 @@ impl TypeInferenceBuilder<'_> {
         // Bare bind without sub-pattern: matches anything, binds at scrut.
         let Some(sp) = subpat else {
             return crate::pattern_lowering::PatternResult {
-                dpat: crate::exhaustiveness::DPat::wildcard(scrut_ty.clone()),
+                dpat: crate::exhaustiveness::Pat::wildcard(scrut_ty.clone()),
                 required_ty: None,
                 matched_ty: scrut_ty.clone(),
                 bindings: vec![crate::pattern_lowering::PatternBinding {
@@ -11326,31 +11323,31 @@ impl TypeInferenceBuilder<'_> {
         }
     }
 
-    /// Build a `DPat` that matches every value of `t`. Used by `Type(t)`
+    /// Build a `Pat` that matches every value of `t`. Used by `Type(t)`
     /// patterns. Four regimes:
     ///
     /// - Singleton types (`Literal`, `EnumVariant`, `null`) →
-    ///   `DPat::single(t, scrut_ty)`.
+    ///   `Pat::single(t, scrut_ty)`.
     /// - Finite-alphabet types (`bool`, `Enum`, finite literal unions,
-    ///   `Optional<T>`, unions of finites) → `DPat::or` of the
+    ///   `Optional<T>`, unions of finites) → `Pat::or` of the
     ///   singletons; the algorithm explodes Or rows during specialization.
-    /// - Class types → `DPat::class(qtn, [Wildcard for each field])`.
+    /// - Class types → `Pat::class(qtn, [Wildcard for each field])`.
     /// - Opaque alphabets (raw int/string/float, generics, lists, maps,
-    ///   functions) → `DPat::wildcard`.
+    ///   functions) → `Pat::wildcard`.
     ///
     /// Callers are expected to project union scrutinees onto a single
     /// member before calling this (`analyze_and_lower` does that via
     /// `Ctor::UnionMember`), so `scrut_ty` here is the column type at the
     /// matched branch.
-    fn dpat_for_type(&self, t: &Ty, scrut_ty: &Ty) -> crate::exhaustiveness::DPat {
-        use crate::exhaustiveness::DPat;
+    fn dpat_for_type(&self, t: &Ty, scrut_ty: &Ty) -> crate::exhaustiveness::Pat {
+        use crate::exhaustiveness::Pat;
         let expanded = self.expand_alias_chains(t.clone());
         match &expanded {
             // Singletons.
             Ty::Literal(_, _) | Ty::EnumVariant(_, _) => {
-                DPat::single(expanded.clone(), scrut_ty.clone())
+                Pat::single(expanded.clone(), scrut_ty.clone())
             }
-            Ty::Primitive(PrimitiveType::Null) => DPat::single(expanded.clone(), scrut_ty.clone()),
+            Ty::Primitive(PrimitiveType::Null) => Pat::single(expanded.clone(), scrut_ty.clone()),
             // Finite enumerations: build an Or of singletons.
             Ty::Primitive(PrimitiveType::Bool) => Self::or_of_singletons(
                 vec![
@@ -11369,11 +11366,11 @@ impl TypeInferenceBuilder<'_> {
             }
             Ty::Optional(inner) => {
                 let inner_dpat = self.dpat_for_type(inner, scrut_ty);
-                let null_dpat = DPat::single(Ty::Primitive(PrimitiveType::Null), scrut_ty.clone());
+                let null_dpat = Pat::single(Ty::Primitive(PrimitiveType::Null), scrut_ty.clone());
                 Self::or_combine(vec![inner_dpat, null_dpat], scrut_ty)
             }
             Ty::Union(members) => {
-                let alts: Vec<DPat> = members
+                let alts: Vec<Pat> = members
                     .iter()
                     .map(|m| self.dpat_for_type(m, scrut_ty))
                     .collect();
@@ -11382,44 +11379,44 @@ impl TypeInferenceBuilder<'_> {
             // Classes: structural ctor with all fields wildcarded.
             Ty::Class(qtn, args) => {
                 let field_tys = self.class_field_types_ordered(qtn, args);
-                let fields = field_tys.into_iter().map(DPat::wildcard).collect();
-                DPat::class_inst(qtn.clone(), args.clone(), fields, scrut_ty.clone())
+                let fields = field_tys.into_iter().map(Pat::wildcard).collect();
+                Pat::class_inst(qtn.clone(), args.clone(), fields, scrut_ty.clone())
             }
             // Opaque alphabets — best-effort: wildcard. Imprecise when
             // the scrutinee is a union containing this type plus other
             // members; documented above.
-            _ => DPat::wildcard(scrut_ty.clone()),
+            _ => Pat::wildcard(scrut_ty.clone()),
         }
     }
 
-    /// Build a `DPat::or(...)` of `Single(ty)` ctors over a list of
-    /// types. Single-element lists collapse to a plain `DPat::single`.
-    fn or_of_singletons(tys: Vec<Ty>, scrut_ty: &Ty) -> crate::exhaustiveness::DPat {
-        use crate::exhaustiveness::DPat;
+    /// Build a `Pat::or(...)` of `Single(ty)` ctors over a list of
+    /// types. Single-element lists collapse to a plain `Pat::single`.
+    fn or_of_singletons(tys: Vec<Ty>, scrut_ty: &Ty) -> crate::exhaustiveness::Pat {
+        use crate::exhaustiveness::Pat;
         match tys.len() {
-            0 => DPat::wildcard(scrut_ty.clone()),
-            1 => DPat::single(tys.into_iter().next().unwrap(), scrut_ty.clone()),
+            0 => Pat::wildcard(scrut_ty.clone()),
+            1 => Pat::single(tys.into_iter().next().unwrap(), scrut_ty.clone()),
             _ => {
-                let alts: Vec<DPat> = tys
+                let alts: Vec<Pat> = tys
                     .into_iter()
-                    .map(|t| DPat::single(t, scrut_ty.clone()))
+                    .map(|t| Pat::single(t, scrut_ty.clone()))
                     .collect();
-                DPat::or(alts, scrut_ty.clone())
+                Pat::or(alts, scrut_ty.clone())
             }
         }
     }
 
-    /// Combine a set of `DPats` into one. Single → as-is; multiple → Or;
+    /// Combine a set of `Pats` into one. Single → as-is; multiple → Or;
     /// empty → wildcard.
     fn or_combine(
-        alts: Vec<crate::exhaustiveness::DPat>,
+        alts: Vec<crate::exhaustiveness::Pat>,
         scrut_ty: &Ty,
-    ) -> crate::exhaustiveness::DPat {
-        use crate::exhaustiveness::DPat;
+    ) -> crate::exhaustiveness::Pat {
+        use crate::exhaustiveness::Pat;
         match alts.len() {
-            0 => DPat::wildcard(scrut_ty.clone()),
+            0 => Pat::wildcard(scrut_ty.clone()),
             1 => alts.into_iter().next().unwrap(),
-            _ => DPat::or(alts, scrut_ty.clone()),
+            _ => Pat::or(alts, scrut_ty.clone()),
         }
     }
 
@@ -11433,7 +11430,7 @@ impl TypeInferenceBuilder<'_> {
         at_expr: ExprId,
     ) -> crate::pattern_lowering::PatternResult {
         use crate::{
-            exhaustiveness::DPat,
+            exhaustiveness::Pat,
             pattern_lowering::{PatternBinding, PatternResult},
         };
 
@@ -11463,7 +11460,7 @@ impl TypeInferenceBuilder<'_> {
 
             let field_infos = self.interface_field_infos_ordered(&iface_name, &type_args);
             let mut declared_fields: FxHashSet<Name> = FxHashSet::default();
-            let mut sub_dpats: Vec<DPat> = Vec::with_capacity(field_infos.len());
+            let mut sub_dpats: Vec<Pat> = Vec::with_capacity(field_infos.len());
             let mut bindings: Vec<PatternBinding> = Vec::new();
             for (field_name, field_ty) in field_infos {
                 declared_fields.insert(field_name.clone());
@@ -11473,7 +11470,7 @@ impl TypeInferenceBuilder<'_> {
                         sub_dpats.push(r.dpat);
                         bindings.extend(r.bindings);
                     }
-                    None => sub_dpats.push(DPat::wildcard(field_ty)),
+                    None => sub_dpats.push(Pat::wildcard(field_ty)),
                 }
             }
 
@@ -11493,7 +11490,7 @@ impl TypeInferenceBuilder<'_> {
                 let r = self.analyze_and_lower(fp.pat, &unknown, at_expr);
                 bindings.extend(r.bindings);
             }
-            let dpat = DPat::interface(class_ty.clone(), sub_dpats, scrut_ty.clone());
+            let dpat = Pat::interface(class_ty.clone(), sub_dpats, scrut_ty.clone());
             let matched_ty = self.intersect_pattern_flow_types(scrut_ty, &class_ty);
             return PatternResult {
                 dpat,
@@ -11507,7 +11504,7 @@ impl TypeInferenceBuilder<'_> {
             // Resolution failed; bail out with a wildcard so downstream
             // can keep going. Diagnostics already emitted by resolver.
             return PatternResult {
-                dpat: DPat::wildcard(scrut_ty.clone()),
+                dpat: Pat::wildcard(scrut_ty.clone()),
                 required_ty: Some(class_ty.clone()),
                 matched_ty: class_ty,
                 bindings: Vec::new(),
@@ -11545,7 +11542,7 @@ impl TypeInferenceBuilder<'_> {
         // `class_actual_fields_ordered`.
         let field_infos = self.class_actual_fields_ordered(&qtn, &args);
 
-        let mut sub_dpats: Vec<DPat> = Vec::with_capacity(field_infos.len());
+        let mut sub_dpats: Vec<Pat> = Vec::with_capacity(field_infos.len());
         let mut bindings: Vec<PatternBinding> = Vec::new();
         for (field_name, field_ty) in field_infos {
             match by_name.get(&field_name) {
@@ -11556,25 +11553,25 @@ impl TypeInferenceBuilder<'_> {
                 }
                 None => {
                     // Elided field: implicitly wildcard.
-                    sub_dpats.push(DPat::wildcard(field_ty));
+                    sub_dpats.push(Pat::wildcard(field_ty));
                 }
             }
         }
 
         PatternResult {
-            dpat: DPat::class_inst(qtn, args, sub_dpats, scrut_ty.clone()),
+            dpat: Pat::class_inst(qtn, args, sub_dpats, scrut_ty.clone()),
             required_ty: Some(class_ty.clone()),
             matched_ty: class_ty,
             bindings,
         }
     }
 
-    /// Render a [`crate::exhaustiveness::WitnessPat`] for the
-    /// `non-exhaustive match` diagnostic. Mirrors `WitnessPat`'s `Display`
+    /// Render a [`crate::exhaustiveness::Pat`] witness for the
+    /// `non-exhaustive match` diagnostic. Mirrors `Pat`'s `Display`
     /// impl but looks up class field names so witnesses like
     /// `Mixed { value: int }` say which field is which instead of just
     /// `Mixed { int }`.
-    fn render_witness_pat(&self, w: &crate::exhaustiveness::WitnessPat) -> String {
+    fn render_witness_pat(&self, w: &crate::exhaustiveness::Pat) -> String {
         use std::fmt::Write as _;
 
         use crate::exhaustiveness::Ctor;
@@ -11639,7 +11636,7 @@ impl TypeInferenceBuilder<'_> {
         at_expr: ExprId,
     ) -> crate::pattern_lowering::PatternResult {
         use crate::{
-            exhaustiveness::{DPat, SliceShape},
+            exhaustiveness::{Pat, SliceShape},
             pattern_lowering::{PatternBinding, PatternResult},
         };
         let body = self.body();
@@ -11687,7 +11684,7 @@ impl TypeInferenceBuilder<'_> {
         let (flat_prefix, has_rest, rest_binding_pat, flat_suffix) =
             Self::flatten_array_rest(body.as_ref(), prefix.to_vec(), rest, suffix.to_vec());
 
-        let mut sub_dpats: Vec<DPat> = Vec::with_capacity(flat_prefix.len() + flat_suffix.len());
+        let mut sub_dpats: Vec<Pat> = Vec::with_capacity(flat_prefix.len() + flat_suffix.len());
         let mut bindings: Vec<PatternBinding> = Vec::new();
         let mut element_required_tys: Vec<Ty> = Vec::new();
 
@@ -11754,7 +11751,7 @@ impl TypeInferenceBuilder<'_> {
         };
 
         PatternResult {
-            dpat: DPat::slice(shape, sub_dpats, effective_scrut.clone()),
+            dpat: Pat::slice(shape, sub_dpats, effective_scrut.clone()),
             required_ty: required,
             matched_ty: effective_scrut,
             bindings,
@@ -11813,11 +11810,11 @@ impl TypeInferenceBuilder<'_> {
         at_expr: ExprId,
     ) -> crate::pattern_lowering::PatternResult {
         use crate::{
-            exhaustiveness::DPat,
+            exhaustiveness::Pat,
             pattern_lowering::{PatternBinding, PatternResult},
         };
 
-        let mut alts: Vec<DPat> = Vec::with_capacity(parts.len());
+        let mut alts: Vec<Pat> = Vec::with_capacity(parts.len());
         let mut required_tys: Vec<Ty> = Vec::new();
         let mut matched_tys: Vec<Ty> = Vec::new();
         // Keep ALL per-branch bindings — each PatId is a distinct source
@@ -11865,7 +11862,7 @@ impl TypeInferenceBuilder<'_> {
         let dpat = if alts.len() == 1 {
             alts.into_iter().next().unwrap()
         } else {
-            DPat::or(alts, scrut_ty.clone())
+            Pat::or(alts, scrut_ty.clone())
         };
 
         PatternResult {

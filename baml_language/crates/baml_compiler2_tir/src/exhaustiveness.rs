@@ -6,12 +6,12 @@
 //!
 //! Architecture is a reduced port of rustc's `rustc_pattern_analysis`:
 //! - [`Ctor`] is the head of a deconstructed pattern (a value's "shape").
-//! - [`DPat`] is a pattern in deconstructed form: ctor + sub-patterns + type.
-//! - `Matrix` (private) is a 2-D grid of `DPat`s; rows are arms, columns are positions.
+//! - [`Pat`] is a pattern in deconstructed form: ctor + sub-patterns + type.
+//! - `Matrix` (private) is a 2-D grid of `Pat`s; rows are arms, columns are positions.
 //! - The recursive *usefulness* algorithm specializes the matrix on each ctor of
 //!   the leading column, recursing into sub-pattern columns. A column is
 //!   exhaustive iff its ctor enumeration is fully covered by the matrix.
-//! - Missing cases produce [`WitnessPat`]s — concrete values that no row matches.
+//! - Missing cases produce [`Pat`]s — concrete values that no row matches.
 //!
 //! The interface to the type system is the [`PatCtx`] trait. It abstracts:
 //! - enumerating ctors of a type (incl. `NonExhaustive` for infinite alphabets
@@ -68,8 +68,8 @@ pub enum Ctor {
     /// recognised as exhaustive on the list branch.
     UnionMember(Ty),
 
-    /// Or-pattern: alternatives stored in `DPat::fields`. The arity (=
-    /// number of alternatives) lives on the `DPat`, not on the ctor.
+    /// Or-pattern: alternatives stored in `Pat::fields`. The arity (=
+    /// number of alternatives) lives on the `Pat`, not on the ctor.
     /// Specialization on `Or` explodes the row into one row per alternative,
     /// keeping all alternatives' source `ArmId` so or-pattern usefulness
     /// aggregates per source arm. `Or` never appears in witnesses.
@@ -342,24 +342,31 @@ fn write_literal_identity(out: &mut String, lit: &Literal) {
     }
 }
 
-// ── Deconstructed pattern ────────────────────────────────────────────────────
+// ── Pattern ──────────────────────────────────────────────────────────────────
 
 /// A pattern in the form the usefulness algorithm consumes. The ctor arity is
 /// `fields.len()`. Wildcards are filled in for elided positions during lowering.
+///
+/// The same type doubles as a "missing-case" witness: a concrete pattern shape
+/// produced by the algorithm (rather than user input) that proves a match is
+/// non-exhaustive (or an irrefutable context is refutable).
 #[derive(Debug, Clone)]
-pub struct DPat {
+pub struct Pat {
     pub ctor: Ctor,
-    pub fields: Vec<DPat>,
+    pub fields: Vec<Pat>,
     pub ty: Ty,
 }
 
-impl DPat {
+impl Pat {
     pub fn wildcard(ty: Ty) -> Self {
         Self {
             ctor: Ctor::Wildcard,
             fields: vec![],
             ty,
         }
+    }
+    pub fn new(ctor: Ctor, fields: Vec<Pat>, ty: Ty) -> Self {
+        Self { ctor, fields, ty }
     }
     pub fn single(ty: Ty, scrutinee_ty: Ty) -> Self {
         Self {
@@ -368,24 +375,24 @@ impl DPat {
             ty: scrutinee_ty,
         }
     }
-    pub fn class(qtn: QualifiedTypeName, fields: Vec<DPat>, ty: Ty) -> Self {
+    pub fn class(qtn: QualifiedTypeName, fields: Vec<Pat>, ty: Ty) -> Self {
         Self::class_inst(qtn, Vec::new(), fields, ty)
     }
-    pub fn class_inst(qtn: QualifiedTypeName, args: Vec<Ty>, fields: Vec<DPat>, ty: Ty) -> Self {
+    pub fn class_inst(qtn: QualifiedTypeName, args: Vec<Ty>, fields: Vec<Pat>, ty: Ty) -> Self {
         Self {
             ctor: Ctor::Class(qtn, args),
             fields,
             ty,
         }
     }
-    pub fn interface(iface_ty: Ty, fields: Vec<DPat>, ty: Ty) -> Self {
+    pub fn interface(iface_ty: Ty, fields: Vec<Pat>, ty: Ty) -> Self {
         Self {
             ctor: Ctor::Interface(iface_ty),
             fields,
             ty,
         }
     }
-    pub fn slice(shape: SliceShape, fields: Vec<DPat>, ty: Ty) -> Self {
+    pub fn slice(shape: SliceShape, fields: Vec<Pat>, ty: Ty) -> Self {
         debug_assert_eq!(shape.arity(), fields.len());
         Self {
             ctor: Ctor::Slice(shape),
@@ -396,7 +403,7 @@ impl DPat {
     /// Or-pattern: `pat1 | pat2 | ...`. Alternatives are stored in `fields`
     /// and must each have type `ty`. At least 2 alternatives required by
     /// convention (one alt is just that alt directly).
-    pub fn or(alts: Vec<DPat>, ty: Ty) -> Self {
+    pub fn or(alts: Vec<Pat>, ty: Ty) -> Self {
         debug_assert!(alts.len() >= 2, "Or pattern needs ≥2 alternatives");
         Self {
             ctor: Ctor::Or,
@@ -407,7 +414,7 @@ impl DPat {
     /// Union-member tag: marks the pattern as targeting one specific
     /// member of a union scrutinee. The single sub-pat is the
     /// pattern as it would have been against the member type directly.
-    pub fn union_member(member_ty: Ty, inner: DPat, scrut_ty: Ty) -> Self {
+    pub fn union_member(member_ty: Ty, inner: Pat, scrut_ty: Ty) -> Self {
         Self {
             ctor: Ctor::UnionMember(member_ty),
             fields: vec![inner],
@@ -416,32 +423,7 @@ impl DPat {
     }
 }
 
-// ── Witness pattern ──────────────────────────────────────────────────────────
-
-/// A "missing-case" witness: a concrete pattern shape that proves a match is
-/// non-exhaustive (or an irrefutable context is refutable). Same shape as
-/// [`DPat`] but produced by the algorithm rather than user input.
-#[derive(Debug, Clone)]
-pub struct WitnessPat {
-    pub ctor: Ctor,
-    pub fields: Vec<WitnessPat>,
-    pub ty: Ty,
-}
-
-impl WitnessPat {
-    pub fn wildcard(ty: Ty) -> Self {
-        Self {
-            ctor: Ctor::Wildcard,
-            fields: vec![],
-            ty,
-        }
-    }
-    pub fn new(ctor: Ctor, fields: Vec<WitnessPat>, ty: Ty) -> Self {
-        Self { ctor, fields, ty }
-    }
-}
-
-impl fmt::Display for WitnessPat {
+impl fmt::Display for Pat {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match &self.ctor {
             Ctor::Wildcard | Ctor::NonExhaustive | Ctor::Missing => write!(f, "_"),
@@ -515,7 +497,7 @@ impl fmt::Display for WitnessPat {
 fn write_braced(
     f: &mut fmt::Formatter<'_>,
     head: &dyn fmt::Display,
-    fields: &[WitnessPat],
+    fields: &[Pat],
 ) -> fmt::Result {
     if fields.is_empty() {
         return write!(f, "{head} {{}}");
@@ -648,7 +630,7 @@ fn is_inhabited_default<C: PatCtx + ?Sized>(
 
 #[derive(Debug, Clone)]
 struct Row<'p> {
-    pats: Vec<&'p DPat>,
+    pats: Vec<&'p Pat>,
     /// Source-arm index (for unreachable-arm reporting). Multiple rows can
     /// share an arm idx if the arm contains an or-pattern that was expanded.
     arm: ArmId,
@@ -669,7 +651,7 @@ struct Matrix<'p> {
 }
 
 impl<'p> Matrix<'p> {
-    fn new(arms: &'p [DPat], scrut_ty: Ty) -> Self {
+    fn new(arms: &'p [Pat], scrut_ty: Ty) -> Self {
         let rows = arms
             .iter()
             .enumerate()
@@ -707,7 +689,7 @@ impl<'p> Matrix<'p> {
         cx: &dyn PatCtx,
         ctor: &Ctor,
         sub_tys: &[Ty],
-        wild_pad: &'a [DPat],
+        wild_pad: &'a [Pat],
     ) -> Matrix<'a>
     where
         'p: 'a,
@@ -720,7 +702,7 @@ impl<'p> Matrix<'p> {
                 match &head.ctor {
                     Ctor::Or => {
                         for alt in &head.fields {
-                            let mut pats: Vec<&DPat> = vec![alt];
+                            let mut pats: Vec<&Pat> = vec![alt];
                             pats.extend_from_slice(tail);
                             new_rows.push(Row {
                                 pats,
@@ -751,7 +733,7 @@ impl<'p> Matrix<'p> {
             let tail = &row.pats[1..];
             match &head.ctor {
                 Ctor::Wildcard => {
-                    let mut pats: Vec<&DPat> = (0..arity).map(|i| &wild_pad[i]).collect();
+                    let mut pats: Vec<&Pat> = (0..arity).map(|i| &wild_pad[i]).collect();
                     pats.extend_from_slice(tail);
                     new_rows.push(Row {
                         pats,
@@ -785,7 +767,7 @@ impl<'p> Matrix<'p> {
                     // wildcards. Without this shift, suffix patterns would
                     // misalign — e.g., `[..rest, true]` would (wrongly)
                     // cover `[true, false]`.
-                    let mut pats: Vec<&DPat> = (0..arity).map(|i| &wild_pad[i]).collect();
+                    let mut pats: Vec<&Pat> = (0..arity).map(|i| &wild_pad[i]).collect();
                     let head_arity = head.fields.len();
                     match interface_projection {
                         Some(projection) => {
@@ -848,7 +830,7 @@ impl<'p> Matrix<'p> {
 #[derive(Debug, Clone)]
 pub struct UsefulnessReport {
     /// One witness per missing case at the top level. Empty = exhaustive.
-    pub missing: Vec<WitnessPat>,
+    pub missing: Vec<Pat>,
     /// Indices of arms that are unreachable (no value matches them that wasn't
     /// already matched by an earlier arm).
     pub unreachable_arms: Vec<ArmId>,
@@ -856,11 +838,11 @@ pub struct UsefulnessReport {
 
 /// Compute exhaustiveness and per-arm reachability.
 ///
-/// `arms` is one `DPat` per source arm. Or-patterns are represented as
+/// `arms` is one `Pat` per source arm. Or-patterns are represented as
 /// `Ctor::Or` nodes and expanded by the algorithm during specialization;
 /// usefulness aggregates back to the original source arm via shared
 /// `ArmId`, so an or-pattern arm is "useful" if any of its alternatives is.
-pub fn compute_match_usefulness(cx: &dyn PatCtx, arms: &[DPat], scrut_ty: Ty) -> UsefulnessReport {
+pub fn compute_match_usefulness(cx: &dyn PatCtx, arms: &[Pat], scrut_ty: Ty) -> UsefulnessReport {
     // Uninhabited scrutinee: no values to match. The match is vacuously
     // exhaustive and every arm is unreachable. Mirrors rustc's notion of
     // "the place being matched is irrelevant" when no inhabitant exists.
@@ -897,7 +879,7 @@ pub fn compute_match_usefulness(cx: &dyn PatCtx, arms: &[DPat], scrut_ty: Ty) ->
 /// Single-pattern irrefutability check. Returns `Ok(())` if the pattern covers
 /// every value of `ty`; otherwise returns a witness value the pattern doesn't
 /// match.
-pub fn check_irrefutable(cx: &dyn PatCtx, pat: &DPat, ty: Ty) -> Result<(), Box<WitnessPat>> {
+pub fn check_irrefutable(cx: &dyn PatCtx, pat: &Pat, ty: Ty) -> Result<(), Box<Pat>> {
     let report = compute_match_usefulness(cx, std::slice::from_ref(pat), ty);
     match report.missing.into_iter().next() {
         None => Ok(()),
@@ -908,7 +890,7 @@ pub fn check_irrefutable(cx: &dyn PatCtx, pat: &DPat, ty: Ty) -> Result<(), Box<
 /// A column-stack of witness patterns, one entry per remaining matrix column.
 /// Built up during recursion as ctors are unspecialized back onto the witness.
 #[derive(Debug, Clone)]
-struct WitnessStack(Vec<WitnessPat>);
+struct WitnessStack(Vec<Pat>);
 
 impl WitnessStack {
     /// Wrap the top `arity` patterns under `ctor`, replacing them with the
@@ -921,14 +903,13 @@ impl WitnessStack {
     /// declaration order in the wrapped pat.
     fn apply_ctor(mut self, ctor: &Ctor, arity: usize, ty: &Ty) -> Self {
         let len = self.0.len();
-        let fields: Vec<WitnessPat> = self.0.drain((len - arity)..).rev().collect();
-        self.0
-            .push(WitnessPat::new(ctor.clone(), fields, ty.clone()));
+        let fields: Vec<Pat> = self.0.drain((len - arity)..).rev().collect();
+        self.0.push(Pat::new(ctor.clone(), fields, ty.clone()));
         self
     }
     /// Push a fresh pattern on top (used to introduce wildcards when applying
     /// the synthetic `Missing` ctor).
-    fn push(&mut self, pat: WitnessPat) {
+    fn push(&mut self, pat: Pat) {
         self.0.push(pat);
     }
 }
@@ -975,8 +956,8 @@ impl WitnessMatrix {
             if field_tys.iter().any(|t| !cx.is_inhabited(t)) {
                 continue;
             }
-            let fields: Vec<WitnessPat> = field_tys.into_iter().map(WitnessPat::wildcard).collect();
-            let pat = WitnessPat::new(ctor.clone(), fields, ty.clone());
+            let fields: Vec<Pat> = field_tys.into_iter().map(Pat::wildcard).collect();
+            let pat = Pat::new(ctor.clone(), fields, ty.clone());
             for stack in &original {
                 let mut new_stack = stack.clone();
                 new_stack.push(pat.clone());
@@ -984,7 +965,7 @@ impl WitnessMatrix {
             }
         }
     }
-    fn into_single_column(self) -> Vec<WitnessPat> {
+    fn into_single_column(self) -> Vec<Pat> {
         self.0
             .into_iter()
             .map(|mut s| {
@@ -1018,7 +999,7 @@ fn compute_exhaustiveness(cx: &dyn PatCtx, matrix: &mut Matrix<'_>, witnesses: &
 
     for ctor in &split {
         let sub_tys = ctor_sub_tys(cx, ctor, &col_ty);
-        let wild_pad: Vec<DPat> = sub_tys.iter().cloned().map(DPat::wildcard).collect();
+        let wild_pad: Vec<Pat> = sub_tys.iter().cloned().map(Pat::wildcard).collect();
 
         let mut sub_matrix = matrix.specialize(cx, ctor, &sub_tys, &wild_pad);
         let mut sub_witnesses = WitnessMatrix::empty();
@@ -1338,8 +1319,8 @@ mod tests {
     #[test]
     fn bool_exhaustive_with_both_arms() {
         let arms = vec![
-            DPat::single(bool_lit(true), bool_ty()),
-            DPat::single(bool_lit(false), bool_ty()),
+            Pat::single(bool_lit(true), bool_ty()),
+            Pat::single(bool_lit(false), bool_ty()),
         ];
         let report = compute_match_usefulness(&TestingCtx::new(), &arms, bool_ty());
         assert!(
@@ -1352,7 +1333,7 @@ mod tests {
 
     #[test]
     fn bool_non_exhaustive_missing_false() {
-        let arms = vec![DPat::single(bool_lit(true), bool_ty())];
+        let arms = vec![Pat::single(bool_lit(true), bool_ty())];
         let report = compute_match_usefulness(&TestingCtx::new(), &arms, bool_ty());
         assert_eq!(report.missing.len(), 1);
         assert!(matches!(report.missing[0].ctor, Ctor::Single(_)));
@@ -1361,8 +1342,8 @@ mod tests {
     #[test]
     fn bool_wildcard_makes_exhaustive() {
         let arms = vec![
-            DPat::single(bool_lit(true), bool_ty()),
-            DPat::wildcard(bool_ty()),
+            Pat::single(bool_lit(true), bool_ty()),
+            Pat::wildcard(bool_ty()),
         ];
         let report = compute_match_usefulness(&TestingCtx::new(), &arms, bool_ty());
         assert!(report.missing.is_empty());
@@ -1370,14 +1351,14 @@ mod tests {
 
     #[test]
     fn int_requires_wildcard() {
-        let arms = vec![DPat::single(int_lit(1), int_ty())];
+        let arms = vec![Pat::single(int_lit(1), int_ty())];
         let report = compute_match_usefulness(&TestingCtx::new(), &arms, int_ty());
         assert_eq!(report.missing.len(), 1);
     }
 
     #[test]
     fn int_with_wildcard_is_exhaustive() {
-        let arms = vec![DPat::single(int_lit(1), int_ty()), DPat::wildcard(int_ty())];
+        let arms = vec![Pat::single(int_lit(1), int_ty()), Pat::wildcard(int_ty())];
         let report = compute_match_usefulness(&TestingCtx::new(), &arms, int_ty());
         assert!(report.missing.is_empty());
     }
@@ -1385,8 +1366,8 @@ mod tests {
     #[test]
     fn unreachable_after_wildcard() {
         let arms = vec![
-            DPat::wildcard(bool_ty()),
-            DPat::single(bool_lit(true), bool_ty()),
+            Pat::wildcard(bool_ty()),
+            Pat::single(bool_lit(true), bool_ty()),
         ];
         let report = compute_match_usefulness(&TestingCtx::new(), &arms, bool_ty());
         assert!(report.missing.is_empty());
@@ -1400,7 +1381,7 @@ mod tests {
     #[test]
     fn typevar_requires_wildcard() {
         let tv = Ty::TypeVar(Name::new("T"));
-        let arms = vec![DPat::wildcard(tv.clone())];
+        let arms = vec![Pat::wildcard(tv.clone())];
         let report = compute_match_usefulness(&TestingCtx::new(), &arms, tv);
         assert!(report.missing.is_empty());
     }
@@ -1408,7 +1389,7 @@ mod tests {
     #[test]
     fn never_is_vacuously_exhaustive() {
         let never = Ty::Never;
-        let arms: Vec<DPat> = vec![];
+        let arms: Vec<Pat> = vec![];
         let report = compute_match_usefulness(&TestingCtx::new(), &arms, never);
         assert!(report.missing.is_empty());
     }
@@ -1428,19 +1409,19 @@ mod tests {
     fn array_pair_missing_diagonal() {
         let array_bool = Ty::List(Box::new(bool_ty()));
 
-        let arm1 = DPat::slice(
+        let arm1 = Pat::slice(
             SliceShape::Fixed(2),
             vec![
-                DPat::single(bool_lit(true), bool_ty()),
-                DPat::wildcard(bool_ty()),
+                Pat::single(bool_lit(true), bool_ty()),
+                Pat::wildcard(bool_ty()),
             ],
             array_bool.clone(),
         );
-        let arm2 = DPat::slice(
+        let arm2 = Pat::slice(
             SliceShape::Fixed(2),
             vec![
-                DPat::single(bool_lit(false), bool_ty()),
-                DPat::single(bool_lit(true), bool_ty()),
+                Pat::single(bool_lit(false), bool_ty()),
+                Pat::single(bool_lit(true), bool_ty()),
             ],
             array_bool.clone(),
         );
@@ -1463,18 +1444,18 @@ mod tests {
         let array_bool = Ty::List(Box::new(bool_ty()));
 
         let arms = vec![
-            DPat::slice(SliceShape::Fixed(0), vec![], array_bool.clone()),
-            DPat::slice(
+            Pat::slice(SliceShape::Fixed(0), vec![], array_bool.clone()),
+            Pat::slice(
                 SliceShape::Fixed(1),
-                vec![DPat::wildcard(bool_ty())],
+                vec![Pat::wildcard(bool_ty())],
                 array_bool.clone(),
             ),
-            DPat::slice(
+            Pat::slice(
                 SliceShape::Variable {
                     prefix: 2,
                     suffix: 0,
                 },
-                vec![DPat::wildcard(bool_ty()), DPat::wildcard(bool_ty())],
+                vec![Pat::wildcard(bool_ty()), Pat::wildcard(bool_ty())],
                 array_bool.clone(),
             ),
         ];
@@ -1509,14 +1490,14 @@ mod tests {
         cx.register(pair.clone(), vec![e_ty.clone(), e_ty.clone()]);
 
         let variant = |q: &QualifiedTypeName| {
-            DPat::class(q.clone(), vec![DPat::wildcard(bool_ty())], class_ty(q))
+            Pat::class(q.clone(), vec![Pat::wildcard(bool_ty())], class_ty(q))
         };
         let mk_pair =
-            |left: DPat, right: DPat| DPat::class(pair.clone(), vec![left, right], pair_ty.clone());
+            |left: Pat, right: Pat| Pat::class(pair.clone(), vec![left, right], pair_ty.clone());
 
         let report = compute_match_usefulness(
             &cx,
-            &[mk_pair(variant(&a), DPat::wildcard(e_ty.clone()))],
+            &[mk_pair(variant(&a), Pat::wildcard(e_ty.clone()))],
             pair_ty.clone(),
         );
         assert!(
@@ -1527,8 +1508,8 @@ mod tests {
         let report = compute_match_usefulness(
             &cx,
             &[
-                mk_pair(variant(&a), DPat::wildcard(e_ty.clone())),
-                mk_pair(variant(&b), DPat::wildcard(e_ty.clone())),
+                mk_pair(variant(&a), Pat::wildcard(e_ty.clone())),
+                mk_pair(variant(&b), Pat::wildcard(e_ty.clone())),
             ],
             pair_ty.clone(),
         );
@@ -1540,8 +1521,8 @@ mod tests {
         let report = compute_match_usefulness(
             &cx,
             &[
-                mk_pair(variant(&a), DPat::wildcard(e_ty.clone())),
-                mk_pair(DPat::wildcard(e_ty.clone()), variant(&a)),
+                mk_pair(variant(&a), Pat::wildcard(e_ty.clone())),
+                mk_pair(Pat::wildcard(e_ty.clone()), variant(&a)),
             ],
             pair_ty.clone(),
         );
@@ -1553,8 +1534,8 @@ mod tests {
         let report = compute_match_usefulness(
             &cx,
             &[
-                mk_pair(variant(&a), DPat::wildcard(e_ty.clone())),
-                mk_pair(DPat::wildcard(e_ty.clone()), variant(&a)),
+                mk_pair(variant(&a), Pat::wildcard(e_ty.clone())),
+                mk_pair(Pat::wildcard(e_ty.clone()), variant(&a)),
                 mk_pair(variant(&b), variant(&b)),
             ],
             pair_ty,
@@ -1579,7 +1560,7 @@ mod tests {
         cx.register(pair.clone(), vec![opt_bool.clone(), opt_bool.clone()]);
 
         let mk_pair =
-            |left: DPat, right: DPat| DPat::class(pair.clone(), vec![left, right], pair_ty.clone());
+            |left: Pat, right: Pat| Pat::class(pair.clone(), vec![left, right], pair_ty.clone());
 
         let report = compute_match_usefulness(&cx, &[], pair_ty.clone());
         let witnesses = missing_strings(&report);
@@ -1595,8 +1576,8 @@ mod tests {
         );
 
         let false_false = mk_pair(
-            DPat::single(bool_lit(false), opt_bool.clone()),
-            DPat::single(bool_lit(false), opt_bool.clone()),
+            Pat::single(bool_lit(false), opt_bool.clone()),
+            Pat::single(bool_lit(false), opt_bool.clone()),
         );
         let report = compute_match_usefulness(&cx, &[false_false], pair_ty.clone());
         let witnesses = missing_strings(&report);
@@ -1623,8 +1604,8 @@ mod tests {
         }
 
         let any_false = mk_pair(
-            DPat::wildcard(opt_bool.clone()),
-            DPat::single(bool_lit(false), opt_bool.clone()),
+            Pat::wildcard(opt_bool.clone()),
+            Pat::single(bool_lit(false), opt_bool.clone()),
         );
         let report = compute_match_usefulness(&cx, &[any_false], pair_ty);
         let witnesses = missing_strings(&report);
@@ -1663,7 +1644,7 @@ mod tests {
         cx.register(err.clone(), vec![never_ty()]);
         cx.register(pair.clone(), vec![bool_ty(), result_ty.clone()]);
 
-        let ok_any = || DPat::class(ok.clone(), vec![DPat::wildcard(bool_ty())], ok_ty.clone());
+        let ok_any = || Pat::class(ok.clone(), vec![Pat::wildcard(bool_ty())], ok_ty.clone());
 
         let report = compute_match_usefulness(&cx, &[ok_any()], result_ty.clone());
         assert!(
@@ -1673,9 +1654,9 @@ mod tests {
         );
 
         let mk_pair = |b: bool| {
-            DPat::class(
+            Pat::class(
                 pair.clone(),
-                vec![DPat::single(bool_lit(b), bool_ty()), ok_any()],
+                vec![Pat::single(bool_lit(b), bool_ty()), ok_any()],
                 pair_ty.clone(),
             )
         };
@@ -1714,14 +1695,14 @@ mod tests {
         let mut arms: Vec<_> = variants
             .iter()
             .map(|variant| {
-                DPat::class(
+                Pat::class(
                     variant.clone(),
-                    vec![DPat::wildcard(bool_ty())],
+                    vec![Pat::wildcard(bool_ty())],
                     class_ty(variant),
                 )
             })
             .collect();
-        arms.push(DPat::wildcard(scrut.clone()));
+        arms.push(Pat::wildcard(scrut.clone()));
 
         let report = compute_match_usefulness(&cx, &arms, scrut);
         assert!(report.missing.is_empty());
@@ -1734,15 +1715,15 @@ mod tests {
     fn rustc_port_slice_prefix_then_wildcard_keeps_short_length_reachable() {
         let cx = TestingCtx::new();
         let scrut = list_of(bool_ty());
-        let non_empty = DPat::slice(
+        let non_empty = Pat::slice(
             SliceShape::Variable {
                 prefix: 1,
                 suffix: 0,
             },
-            vec![DPat::wildcard(bool_ty())],
+            vec![Pat::wildcard(bool_ty())],
             scrut.clone(),
         );
-        let wildcard = DPat::wildcard(scrut.clone());
+        let wildcard = Pat::wildcard(scrut.clone());
 
         let report = compute_match_usefulness(&cx, &[non_empty, wildcard], scrut);
         assert!(report.missing.is_empty());
@@ -1764,13 +1745,13 @@ mod tests {
         let qty = class_ty(&q);
 
         let combo = |a, b, c, d| {
-            DPat::class(
+            Pat::class(
                 q.clone(),
                 vec![
-                    DPat::single(bool_lit(a), bool_ty()),
-                    DPat::single(bool_lit(b), bool_ty()),
-                    DPat::single(bool_lit(c), bool_ty()),
-                    DPat::single(bool_lit(d), bool_ty()),
+                    Pat::single(bool_lit(a), bool_ty()),
+                    Pat::single(bool_lit(b), bool_ty()),
+                    Pat::single(bool_lit(c), bool_ty()),
+                    Pat::single(bool_lit(d), bool_ty()),
                 ],
                 qty.clone(),
             )
@@ -1816,20 +1797,20 @@ mod tests {
         let qty = class_ty(&q);
 
         // arm covers (true, true) and (true, false).
-        let arm1 = DPat::class(
+        let arm1 = Pat::class(
             q.clone(),
             vec![
-                DPat::single(bool_lit(true), bool_ty()),
-                DPat::wildcard(bool_ty()),
+                Pat::single(bool_lit(true), bool_ty()),
+                Pat::wildcard(bool_ty()),
             ],
             qty.clone(),
         );
         // arm covers (false, true) and (false, false).
-        let arm2 = DPat::class(
+        let arm2 = Pat::class(
             q.clone(),
             vec![
-                DPat::single(bool_lit(false), bool_ty()),
-                DPat::wildcard(bool_ty()),
+                Pat::single(bool_lit(false), bool_ty()),
+                Pat::wildcard(bool_ty()),
             ],
             qty.clone(),
         );
@@ -1850,18 +1831,18 @@ mod tests {
         let cx = TestingCtx::new();
         let arr = list_of(bool_ty());
 
-        let arm1 = DPat::slice(
+        let arm1 = Pat::slice(
             SliceShape::Variable {
                 prefix: 1,
                 suffix: 1,
             },
             vec![
-                DPat::single(bool_lit(true), bool_ty()),
-                DPat::single(bool_lit(false), bool_ty()),
+                Pat::single(bool_lit(true), bool_ty()),
+                Pat::single(bool_lit(false), bool_ty()),
             ],
             arr.clone(),
         );
-        let arm2 = DPat::slice(
+        let arm2 = Pat::slice(
             SliceShape::Variable {
                 prefix: 0,
                 suffix: 0,
@@ -1892,26 +1873,26 @@ mod tests {
         let cx = TestingCtx::new();
         let arr = list_of(int_ty());
 
-        let arm0 = DPat::slice(SliceShape::Fixed(0), vec![], arr.clone());
-        let arm1 = DPat::slice(
+        let arm0 = Pat::slice(SliceShape::Fixed(0), vec![], arr.clone());
+        let arm1 = Pat::slice(
             SliceShape::Fixed(1),
-            vec![DPat::wildcard(int_ty())],
+            vec![Pat::wildcard(int_ty())],
             arr.clone(),
         );
-        let arm2 = DPat::slice(
+        let arm2 = Pat::slice(
             SliceShape::Fixed(2),
-            vec![DPat::wildcard(int_ty()), DPat::wildcard(int_ty())],
+            vec![Pat::wildcard(int_ty()), Pat::wildcard(int_ty())],
             arr.clone(),
         );
-        let arm3plus = DPat::slice(
+        let arm3plus = Pat::slice(
             SliceShape::Variable {
                 prefix: 3,
                 suffix: 0,
             },
             vec![
-                DPat::wildcard(int_ty()),
-                DPat::wildcard(int_ty()),
-                DPat::wildcard(int_ty()),
+                Pat::wildcard(int_ty()),
+                Pat::wildcard(int_ty()),
+                Pat::wildcard(int_ty()),
             ],
             arr.clone(),
         );
@@ -1940,11 +1921,11 @@ mod tests {
         );
 
         // (c) Add `[1, 2]` after arm2 — unreachable.
-        let arm_lit = DPat::slice(
+        let arm_lit = Pat::slice(
             SliceShape::Fixed(2),
             vec![
-                DPat::single(int_lit(1), int_ty()),
-                DPat::single(int_lit(2), int_ty()),
+                Pat::single(int_lit(1), int_ty()),
+                Pat::single(int_lit(2), int_ty()),
             ],
             arr.clone(),
         );
@@ -1970,38 +1951,38 @@ mod tests {
         let arr = list_of(result_ty.clone());
 
         let make_class = |ok: bool, val: Option<bool>| {
-            DPat::class(
+            Pat::class(
                 r.clone(),
                 vec![
-                    DPat::single(bool_lit(ok), bool_ty()),
+                    Pat::single(bool_lit(ok), bool_ty()),
                     match val {
-                        Some(v) => DPat::single(bool_lit(v), bool_ty()),
-                        None => DPat::wildcard(bool_ty()),
+                        Some(v) => Pat::single(bool_lit(v), bool_ty()),
+                        None => Pat::wildcard(bool_ty()),
                     },
                 ],
                 result_ty.clone(),
             )
         };
 
-        let len0 = DPat::slice(SliceShape::Fixed(0), vec![], arr.clone());
-        let len1_ok = DPat::slice(
+        let len0 = Pat::slice(SliceShape::Fixed(0), vec![], arr.clone());
+        let len1_ok = Pat::slice(
             SliceShape::Fixed(1),
             vec![make_class(true, None)],
             arr.clone(),
         );
-        let len1_err = DPat::slice(
+        let len1_err = Pat::slice(
             SliceShape::Fixed(1),
             vec![make_class(false, None)],
             arr.clone(),
         );
-        let len2plus = DPat::slice(
+        let len2plus = Pat::slice(
             SliceShape::Variable {
                 prefix: 2,
                 suffix: 0,
             },
             vec![
-                DPat::wildcard(result_ty.clone()),
-                DPat::wildcard(result_ty.clone()),
+                Pat::wildcard(result_ty.clone()),
+                Pat::wildcard(result_ty.clone()),
             ],
             arr.clone(),
         );
@@ -2050,26 +2031,26 @@ mod tests {
         cx.register(c.clone(), vec![bool_ty(), arr.clone()]);
         let cty = class_ty(&c);
 
-        let cont = |tag: bool, items: DPat| {
-            DPat::class(
+        let cont = |tag: bool, items: Pat| {
+            Pat::class(
                 c.clone(),
-                vec![DPat::single(bool_lit(tag), bool_ty()), items],
+                vec![Pat::single(bool_lit(tag), bool_ty()), items],
                 cty.clone(),
             )
         };
-        let true_empty = cont(true, DPat::slice(SliceShape::Fixed(0), vec![], arr.clone()));
+        let true_empty = cont(true, Pat::slice(SliceShape::Fixed(0), vec![], arr.clone()));
         let true_nonempty = cont(
             true,
-            DPat::slice(
+            Pat::slice(
                 SliceShape::Variable {
                     prefix: 1,
                     suffix: 0,
                 },
-                vec![DPat::wildcard(bool_ty())],
+                vec![Pat::wildcard(bool_ty())],
                 arr.clone(),
             ),
         );
-        let false_any = cont(false, DPat::wildcard(arr.clone()));
+        let false_any = cont(false, Pat::wildcard(arr.clone()));
 
         // (a) All three — exhaustive.
         let report = compute_match_usefulness(
@@ -2102,9 +2083,9 @@ mod tests {
         let inner = opt_of(bool_ty());
         let outer = opt_of(inner.clone());
 
-        let null = DPat::single(null_ty(), outer.clone());
-        let bool_true = DPat::single(bool_lit(true), outer.clone());
-        let bool_false = DPat::single(bool_lit(false), outer.clone());
+        let null = Pat::single(null_ty(), outer.clone());
+        let bool_true = Pat::single(bool_lit(true), outer.clone());
+        let bool_false = Pat::single(bool_lit(false), outer.clone());
 
         // Optional<Optional<bool>> enumerates to three required cases
         // {true, false, null} (the inner and outer nulls collapse).
@@ -2138,10 +2119,10 @@ mod tests {
         let cx = TestingCtx::new();
         let scrut = union_of(vec![int_lit(1), int_lit(2), int_lit(3)]);
 
-        let arm0_a = DPat::single(int_lit(1), scrut.clone());
-        let arm0_b = DPat::single(int_lit(2), scrut.clone());
-        let arm1 = DPat::single(int_lit(2), scrut.clone()); // unreachable
-        let arm2 = DPat::single(int_lit(3), scrut.clone());
+        let arm0_a = Pat::single(int_lit(1), scrut.clone());
+        let arm0_b = Pat::single(int_lit(2), scrut.clone());
+        let arm1 = Pat::single(int_lit(2), scrut.clone()); // unreachable
+        let arm2 = Pat::single(int_lit(3), scrut.clone());
 
         // To use ArmId for arms_for_user, we need a way to share arm-id
         // across or-pattern rows. compute_match_usefulness assigns one ArmId
@@ -2177,13 +2158,13 @@ mod tests {
         let scrut = union_of(vec![ok_ty.clone(), err_ty.clone()]);
 
         let mk_ok = |v: bool| {
-            DPat::class(
+            Pat::class(
                 ok.clone(),
-                vec![DPat::single(bool_lit(v), bool_ty())],
+                vec![Pat::single(bool_lit(v), bool_ty())],
                 ok_ty.clone(),
             )
         };
-        let any_err = DPat::class(err.clone(), vec![DPat::wildcard(int_ty())], err_ty.clone());
+        let any_err = Pat::class(err.clone(), vec![Pat::wildcard(int_ty())], err_ty.clone());
 
         // (a) Full coverage exhaustive.
         let report = compute_match_usefulness(
@@ -2223,9 +2204,9 @@ mod tests {
 
         // Int variant — wildcard required.
         let scrut = class_ty(&w_int);
-        let arms = vec![DPat::class(
+        let arms = vec![Pat::class(
             w_int.clone(),
-            vec![DPat::wildcard(int_ty())],
+            vec![Pat::wildcard(int_ty())],
             scrut.clone(),
         )];
         let report = compute_match_usefulness(&cx, &arms, scrut);
@@ -2238,14 +2219,14 @@ mod tests {
         // Bool variant — both literals exhausts without wildcard.
         let scrut = class_ty(&w_bool);
         let arms = vec![
-            DPat::class(
+            Pat::class(
                 w_bool.clone(),
-                vec![DPat::single(bool_lit(true), bool_ty())],
+                vec![Pat::single(bool_lit(true), bool_ty())],
                 scrut.clone(),
             ),
-            DPat::class(
+            Pat::class(
                 w_bool.clone(),
-                vec![DPat::single(bool_lit(false), bool_ty())],
+                vec![Pat::single(bool_lit(false), bool_ty())],
                 scrut.clone(),
             ),
         ];
@@ -2267,11 +2248,11 @@ mod tests {
         cx.register(p.clone(), vec![bool_ty(), bool_ty()]);
         let pty = class_ty(&p);
 
-        let arm = DPat::class(
+        let arm = Pat::class(
             p.clone(),
             vec![
-                DPat::single(bool_lit(true), bool_ty()),
-                DPat::single(bool_lit(true), bool_ty()),
+                Pat::single(bool_lit(true), bool_ty()),
+                Pat::single(bool_lit(true), bool_ty()),
             ],
             pty.clone(),
         );
@@ -2307,11 +2288,11 @@ mod tests {
         let a_ty = class_ty(&a);
 
         // arm: A { b: B { c: [] } }
-        let arm = DPat::class(
+        let arm = Pat::class(
             a.clone(),
-            vec![DPat::class(
+            vec![Pat::class(
                 b.clone(),
-                vec![DPat::slice(
+                vec![Pat::slice(
                     SliceShape::Fixed(0),
                     vec![],
                     list_of(c_ty.clone()),
@@ -2335,7 +2316,7 @@ mod tests {
     fn testing_12a_empty_only_arm_for_list() {
         let cx = TestingCtx::new();
         let arr = list_of(int_ty());
-        let arm = DPat::slice(SliceShape::Fixed(0), vec![], arr.clone());
+        let arm = Pat::slice(SliceShape::Fixed(0), vec![], arr.clone());
         let report = compute_match_usefulness(&cx, &[arm], arr);
         assert!(
             !report.missing.is_empty(),
@@ -2360,7 +2341,7 @@ mod tests {
     fn testing_13_var_covers_fixed_unreachable() {
         let cx = TestingCtx::new();
         let arr = list_of(bool_ty());
-        let any = DPat::slice(
+        let any = Pat::slice(
             SliceShape::Variable {
                 prefix: 0,
                 suffix: 0,
@@ -2368,9 +2349,9 @@ mod tests {
             vec![],
             arr.clone(),
         );
-        let one_true = DPat::slice(
+        let one_true = Pat::slice(
             SliceShape::Fixed(1),
-            vec![DPat::single(bool_lit(true), bool_ty())],
+            vec![Pat::single(bool_lit(true), bool_ty())],
             arr.clone(),
         );
 
@@ -2393,20 +2374,20 @@ mod tests {
     fn testing_14_two_vars_redundant_coverage() {
         let cx = TestingCtx::new();
         let arr = list_of(bool_ty());
-        let pre = DPat::slice(
+        let pre = Pat::slice(
             SliceShape::Variable {
                 prefix: 1,
                 suffix: 0,
             },
-            vec![DPat::wildcard(bool_ty())],
+            vec![Pat::wildcard(bool_ty())],
             arr.clone(),
         );
-        let suf = DPat::slice(
+        let suf = Pat::slice(
             SliceShape::Variable {
                 prefix: 0,
                 suffix: 1,
             },
-            vec![DPat::wildcard(bool_ty())],
+            vec![Pat::wildcard(bool_ty())],
             arr.clone(),
         );
 
@@ -2432,12 +2413,12 @@ mod tests {
     fn testing_15_prefix_only_var_misses_zero() {
         let cx = TestingCtx::new();
         let arr = list_of(bool_ty());
-        let arm = DPat::slice(
+        let arm = Pat::slice(
             SliceShape::Variable {
                 prefix: 1,
                 suffix: 0,
             },
-            vec![DPat::wildcard(bool_ty())],
+            vec![Pat::wildcard(bool_ty())],
             arr.clone(),
         );
         let report = compute_match_usefulness(&cx, &[arm], arr);
@@ -2456,12 +2437,12 @@ mod tests {
     fn testing_16_arity2_var_misses_short_lengths() {
         let cx = TestingCtx::new();
         let arr = list_of(bool_ty());
-        let arm = DPat::slice(
+        let arm = Pat::slice(
             SliceShape::Variable {
                 prefix: 2,
                 suffix: 0,
             },
-            vec![DPat::wildcard(bool_ty()), DPat::wildcard(bool_ty())],
+            vec![Pat::wildcard(bool_ty()), Pat::wildcard(bool_ty())],
             arr.clone(),
         );
         let report = compute_match_usefulness(&cx, &[arm], arr);
@@ -2495,7 +2476,7 @@ mod tests {
     fn testing_17_var_covers_long_fixed() {
         let cx = TestingCtx::new();
         let arr = list_of(int_ty());
-        let any = DPat::slice(
+        let any = Pat::slice(
             SliceShape::Variable {
                 prefix: 0,
                 suffix: 0,
@@ -2503,9 +2484,9 @@ mod tests {
             vec![],
             arr.clone(),
         );
-        let pair = DPat::slice(
+        let pair = Pat::slice(
             SliceShape::Fixed(2),
-            vec![DPat::wildcard(int_ty()), DPat::wildcard(int_ty())],
+            vec![Pat::wildcard(int_ty()), Pat::wildcard(int_ty())],
             arr.clone(),
         );
         let report = compute_match_usefulness(&cx, &[any, pair], arr);
@@ -2525,16 +2506,16 @@ mod tests {
     fn testing_18_asymmetric_var() {
         let cx = TestingCtx::new();
         let arr = list_of(bool_ty());
-        let var31 = DPat::slice(
+        let var31 = Pat::slice(
             SliceShape::Variable {
                 prefix: 3,
                 suffix: 1,
             },
             vec![
-                DPat::wildcard(bool_ty()),
-                DPat::wildcard(bool_ty()),
-                DPat::wildcard(bool_ty()),
-                DPat::wildcard(bool_ty()),
+                Pat::wildcard(bool_ty()),
+                Pat::wildcard(bool_ty()),
+                Pat::wildcard(bool_ty()),
+                Pat::wildcard(bool_ty()),
             ],
             arr.clone(),
         );
@@ -2545,7 +2526,7 @@ mod tests {
         );
 
         // Add a catch-all `[..r]` — exhaustive.
-        let any = DPat::slice(
+        let any = Pat::slice(
             SliceShape::Variable {
                 prefix: 0,
                 suffix: 0,
@@ -2577,15 +2558,15 @@ mod tests {
         let outer_ty = list_of(inner_ty.clone());
 
         let outer_one_inner =
-            |inner_pat: DPat| DPat::slice(SliceShape::Fixed(1), vec![inner_pat], outer_ty.clone());
+            |inner_pat: Pat| Pat::slice(SliceShape::Fixed(1), vec![inner_pat], outer_ty.clone());
         let inner_pat = |a: bool, b: Option<bool>| {
-            DPat::slice(
+            Pat::slice(
                 SliceShape::Fixed(2),
                 vec![
-                    DPat::single(bool_lit(a), bool_ty()),
+                    Pat::single(bool_lit(a), bool_ty()),
                     match b {
-                        Some(v) => DPat::single(bool_lit(v), bool_ty()),
-                        None => DPat::wildcard(bool_ty()),
+                        Some(v) => Pat::single(bool_lit(v), bool_ty()),
+                        None => Pat::wildcard(bool_ty()),
                     },
                 ],
                 inner_ty.clone(),
@@ -2593,7 +2574,7 @@ mod tests {
         };
         let arm1 = outer_one_inner(inner_pat(true, None));
         let arm2 = outer_one_inner(inner_pat(false, Some(true)));
-        let arm3 = DPat::slice(
+        let arm3 = Pat::slice(
             SliceShape::Variable {
                 prefix: 0,
                 suffix: 0,
@@ -2639,24 +2620,24 @@ mod tests {
         let arr = list_of(pty.clone());
 
         let pair = |a: bool| {
-            DPat::class(
+            Pat::class(
                 p.clone(),
                 vec![
-                    DPat::single(bool_lit(a), bool_ty()),
-                    DPat::wildcard(bool_ty()),
+                    Pat::single(bool_lit(a), bool_ty()),
+                    Pat::wildcard(bool_ty()),
                 ],
                 pty.clone(),
             )
         };
-        let len0 = DPat::slice(SliceShape::Fixed(0), vec![], arr.clone());
-        let len1_true = DPat::slice(SliceShape::Fixed(1), vec![pair(true)], arr.clone());
-        let len1_false = DPat::slice(SliceShape::Fixed(1), vec![pair(false)], arr.clone());
-        let len2plus = DPat::slice(
+        let len0 = Pat::slice(SliceShape::Fixed(0), vec![], arr.clone());
+        let len1_true = Pat::slice(SliceShape::Fixed(1), vec![pair(true)], arr.clone());
+        let len1_false = Pat::slice(SliceShape::Fixed(1), vec![pair(false)], arr.clone());
+        let len2plus = Pat::slice(
             SliceShape::Variable {
                 prefix: 2,
                 suffix: 0,
             },
-            vec![DPat::wildcard(pty.clone()), DPat::wildcard(pty.clone())],
+            vec![Pat::wildcard(pty.clone()), Pat::wildcard(pty.clone())],
             arr.clone(),
         );
 
@@ -2703,9 +2684,9 @@ mod tests {
         cx.register(h.clone(), vec![arr.clone()]);
         let hty = class_ty(&h);
 
-        let arm = DPat::class(
+        let arm = Pat::class(
             h.clone(),
-            vec![DPat::slice(
+            vec![Pat::slice(
                 SliceShape::Variable {
                     prefix: 0,
                     suffix: 0,
@@ -2737,7 +2718,7 @@ mod tests {
         cx.register(e.clone(), vec![]);
         let ety = class_ty(&e);
 
-        let arm = DPat::class(e.clone(), vec![], ety.clone());
+        let arm = Pat::class(e.clone(), vec![], ety.clone());
         let report = compute_match_usefulness(&cx, &[arm], ety);
         assert!(report.missing.is_empty());
     }
@@ -2758,15 +2739,15 @@ mod tests {
         let outer_ty = class_ty(&outer);
 
         let mk_inner = |v: bool| {
-            DPat::class(
+            Pat::class(
                 inner.clone(),
-                vec![DPat::single(bool_lit(v), bool_ty())],
+                vec![Pat::single(bool_lit(v), bool_ty())],
                 inner_ty.clone(),
             )
         };
-        let arm = DPat::class(
+        let arm = Pat::class(
             outer.clone(),
-            vec![DPat::slice(
+            vec![Pat::slice(
                 SliceShape::Fixed(1),
                 vec![mk_inner(true)],
                 inner_arr.clone(),
@@ -2792,12 +2773,12 @@ mod tests {
         cx.register(p.clone(), vec![bool_ty(), bool_ty()]);
         let pty = class_ty(&p);
 
-        let any = DPat::wildcard(pty.clone());
-        let specific = DPat::class(
+        let any = Pat::wildcard(pty.clone());
+        let specific = Pat::class(
             p.clone(),
             vec![
-                DPat::single(bool_lit(true), bool_ty()),
-                DPat::single(bool_lit(false), bool_ty()),
+                Pat::single(bool_lit(true), bool_ty()),
+                Pat::single(bool_lit(false), bool_ty()),
             ],
             pty.clone(),
         );
@@ -2822,11 +2803,11 @@ mod tests {
         let pty = class_ty(&p);
 
         let mk = |a: bool| {
-            DPat::class(
+            Pat::class(
                 p.clone(),
                 vec![
-                    DPat::single(bool_lit(a), bool_ty()),
-                    DPat::wildcard(bool_ty()),
+                    Pat::single(bool_lit(a), bool_ty()),
+                    Pat::wildcard(bool_ty()),
                 ],
                 pty.clone(),
             )
@@ -2856,17 +2837,17 @@ mod tests {
         let qty = class_ty(&q);
 
         let combo = |bits: u8| {
-            DPat::class(
+            Pat::class(
                 q.clone(),
                 (0..8)
-                    .map(|i| DPat::single(bool_lit((bits >> i) & 1 != 0), bool_ty()))
+                    .map(|i| Pat::single(bool_lit((bits >> i) & 1 != 0), bool_ty()))
                     .collect(),
                 qty.clone(),
             )
         };
 
         // All 256 → exhaustive.
-        let arms: Vec<DPat> = (0u8..=255).map(combo).collect();
+        let arms: Vec<Pat> = (0u8..=255).map(combo).collect();
         let report = compute_match_usefulness(&cx, &arms, qty.clone());
         assert!(
             report.missing.is_empty(),
@@ -2876,7 +2857,7 @@ mod tests {
         assert!(report.unreachable_arms.is_empty());
 
         // Drop combo 0b10110100 (180) → exactly one missing.
-        let arms: Vec<DPat> = (0u8..=255).filter(|b| *b != 180).map(combo).collect();
+        let arms: Vec<Pat> = (0u8..=255).filter(|b| *b != 180).map(combo).collect();
         let report = compute_match_usefulness(&cx, &arms, qty);
         assert_eq!(
             report.missing.len(),
@@ -2902,11 +2883,11 @@ mod tests {
         // Scrutinee: Optional<Node>.
         let scrut = opt_n.clone();
 
-        let null_top = DPat::single(null_ty(), scrut.clone());
+        let null_top = Pat::single(null_ty(), scrut.clone());
         // Some(node) with any val and any next.
-        let some_any = DPat::class(
+        let some_any = Pat::class(
             n.clone(),
-            vec![DPat::wildcard(bool_ty()), DPat::wildcard(opt_n.clone())],
+            vec![Pat::wildcard(bool_ty()), Pat::wildcard(opt_n.clone())],
             n_ty.clone(),
         );
         let arms = vec![null_top.clone(), some_any.clone()];
@@ -2956,17 +2937,17 @@ mod tests {
         let a_ty = class_ty(&a);
 
         let mk = |v: bool| {
-            DPat::class(
+            Pat::class(
                 a.clone(),
-                vec![DPat::class(
+                vec![Pat::class(
                     b.clone(),
-                    vec![DPat::class(
+                    vec![Pat::class(
                         c.clone(),
-                        vec![DPat::class(
+                        vec![Pat::class(
                             d.clone(),
-                            vec![DPat::class(
+                            vec![Pat::class(
                                 e.clone(),
-                                vec![DPat::single(bool_lit(v), bool_ty())],
+                                vec![Pat::single(bool_lit(v), bool_ty())],
                                 e_ty.clone(),
                             )],
                             d_ty.clone(),
@@ -3027,16 +3008,16 @@ mod tests {
         let lvl3 = list_of(lvl2.clone());
 
         // Specific deep arm: [[[true]]] (length 1 / 1 / 1).
-        let inner_true = DPat::slice(
+        let inner_true = Pat::slice(
             SliceShape::Fixed(1),
-            vec![DPat::single(bool_lit(true), bool_ty())],
+            vec![Pat::single(bool_lit(true), bool_ty())],
             lvl1.clone(),
         );
-        let mid = DPat::slice(SliceShape::Fixed(1), vec![inner_true], lvl2.clone());
-        let outer = DPat::slice(SliceShape::Fixed(1), vec![mid], lvl3.clone());
+        let mid = Pat::slice(SliceShape::Fixed(1), vec![inner_true], lvl2.clone());
+        let outer = Pat::slice(SliceShape::Fixed(1), vec![mid], lvl3.clone());
 
         // Catch-all.
-        let any = DPat::slice(
+        let any = Pat::slice(
             SliceShape::Variable {
                 prefix: 0,
                 suffix: 0,
@@ -3058,13 +3039,13 @@ mod tests {
         assert!(report.unreachable_arms.is_empty());
 
         // Without the catch-all, MANY missing cases.
-        let inner_true2 = DPat::slice(
+        let inner_true2 = Pat::slice(
             SliceShape::Fixed(1),
-            vec![DPat::single(bool_lit(true), bool_ty())],
+            vec![Pat::single(bool_lit(true), bool_ty())],
             lvl1.clone(),
         );
-        let mid2 = DPat::slice(SliceShape::Fixed(1), vec![inner_true2], lvl2.clone());
-        let outer2 = DPat::slice(SliceShape::Fixed(1), vec![mid2], lvl3.clone());
+        let mid2 = Pat::slice(SliceShape::Fixed(1), vec![inner_true2], lvl2.clone());
+        let outer2 = Pat::slice(SliceShape::Fixed(1), vec![mid2], lvl3.clone());
         let report = compute_match_usefulness(&cx, &[outer2], lvl3);
         assert!(!report.missing.is_empty());
     }
@@ -3084,14 +3065,14 @@ mod tests {
         let pty = class_ty(&p);
 
         let mk = |a: Option<bool>, b: Option<bool>| {
-            DPat::class(
+            Pat::class(
                 p.clone(),
                 vec![
-                    a.map_or(DPat::wildcard(bool_ty()), |v| {
-                        DPat::single(bool_lit(v), bool_ty())
+                    a.map_or(Pat::wildcard(bool_ty()), |v| {
+                        Pat::single(bool_lit(v), bool_ty())
                     }),
-                    b.map_or(DPat::wildcard(bool_ty()), |v| {
-                        DPat::single(bool_lit(v), bool_ty())
+                    b.map_or(Pat::wildcard(bool_ty()), |v| {
+                        Pat::single(bool_lit(v), bool_ty())
                     }),
                 ],
                 pty.clone(),
@@ -3144,7 +3125,7 @@ mod tests {
 
         let arms_all: Vec<_> = qtns
             .iter()
-            .map(|q| DPat::class(q.clone(), vec![], class_ty(q)))
+            .map(|q| Pat::class(q.clone(), vec![], class_ty(q)))
             .collect();
         let report = compute_match_usefulness(&cx, &arms_all, scrut.clone());
         assert!(report.missing.is_empty());
@@ -3153,7 +3134,7 @@ mod tests {
         let arms: Vec<_> = qtns
             .iter()
             .filter(|q| q.name().as_str() != "G")
-            .map(|q| DPat::class(q.clone(), vec![], class_ty(q)))
+            .map(|q| Pat::class(q.clone(), vec![], class_ty(q)))
             .collect();
         let report = compute_match_usefulness(&cx, &arms, scrut);
         assert_eq!(report.missing.len(), 1);
@@ -3181,15 +3162,15 @@ mod tests {
         let o_ty = class_ty(&o);
 
         // Single arm at the deepest specific case: O { rows: [M { items: [I{v:true}] }] }
-        let inner = DPat::class(
+        let inner = Pat::class(
             i.clone(),
-            vec![DPat::single(bool_lit(true), bool_ty())],
+            vec![Pat::single(bool_lit(true), bool_ty())],
             i_ty.clone(),
         );
-        let inner_arr_one = DPat::slice(SliceShape::Fixed(1), vec![inner], i_arr.clone());
-        let mid = DPat::class(m.clone(), vec![inner_arr_one], m_ty.clone());
-        let mid_arr_one = DPat::slice(SliceShape::Fixed(1), vec![mid], m_arr.clone());
-        let outer = DPat::class(o.clone(), vec![mid_arr_one], o_ty.clone());
+        let inner_arr_one = Pat::slice(SliceShape::Fixed(1), vec![inner], i_arr.clone());
+        let mid = Pat::class(m.clone(), vec![inner_arr_one], m_ty.clone());
+        let mid_arr_one = Pat::slice(SliceShape::Fixed(1), vec![mid], m_arr.clone());
+        let outer = Pat::class(o.clone(), vec![mid_arr_one], o_ty.clone());
 
         let report = compute_match_usefulness(&cx, &[outer], o_ty);
         assert!(
@@ -3206,15 +3187,15 @@ mod tests {
     fn testing_34_wide_variable_slice() {
         let cx = TestingCtx::new();
         let arr = list_of(bool_ty());
-        let var53 = DPat::slice(
+        let var53 = Pat::slice(
             SliceShape::Variable {
                 prefix: 5,
                 suffix: 3,
             },
-            (0..8).map(|_| DPat::wildcard(bool_ty())).collect(),
+            (0..8).map(|_| Pat::wildcard(bool_ty())).collect(),
             arr.clone(),
         );
-        let any = DPat::slice(
+        let any = Pat::slice(
             SliceShape::Variable {
                 prefix: 0,
                 suffix: 0,
@@ -3247,12 +3228,12 @@ mod tests {
         let tty = class_ty(&t);
 
         let mk = |a: bool, b: bool| {
-            DPat::class(
+            Pat::class(
                 t.clone(),
                 vec![
-                    DPat::single(bool_lit(a), bool_ty()),
-                    DPat::single(bool_lit(b), bool_ty()),
-                    DPat::wildcard(bool_ty()),
+                    Pat::single(bool_lit(a), bool_ty()),
+                    Pat::single(bool_lit(b), bool_ty()),
+                    Pat::wildcard(bool_ty()),
                 ],
                 tty.clone(),
             )
@@ -3287,15 +3268,15 @@ mod tests {
         let qty = class_ty(&q);
 
         let combo = |bits: u8| {
-            DPat::class(
+            Pat::class(
                 q.clone(),
                 (0..6)
-                    .map(|i| DPat::single(bool_lit((bits >> i) & 1 != 0), bool_ty()))
+                    .map(|i| Pat::single(bool_lit((bits >> i) & 1 != 0), bool_ty()))
                     .collect(),
                 qty.clone(),
             )
         };
-        let arms: Vec<DPat> = (0u8..64).map(combo).collect();
+        let arms: Vec<Pat> = (0u8..64).map(combo).collect();
         let report = compute_match_usefulness(&cx, &arms, qty);
         assert!(report.missing.is_empty());
         assert!(report.unreachable_arms.is_empty());
@@ -3312,11 +3293,11 @@ mod tests {
         cx.register(p.clone(), vec![bool_ty(), bool_ty()]);
         let pty = class_ty(&p);
         let mk = |a: bool, b: bool| {
-            DPat::class(
+            Pat::class(
                 p.clone(),
                 vec![
-                    DPat::single(bool_lit(a), bool_ty()),
-                    DPat::single(bool_lit(b), bool_ty()),
+                    Pat::single(bool_lit(a), bool_ty()),
+                    Pat::single(bool_lit(b), bool_ty()),
                 ],
                 pty.clone(),
             )
@@ -3352,11 +3333,11 @@ mod tests {
         let a_ty = class_ty(&a);
 
         let mk_b = |p: bool, q: bool| {
-            DPat::class(
+            Pat::class(
                 b.clone(),
                 vec![
-                    DPat::single(bool_lit(p), bool_ty()),
-                    DPat::single(bool_lit(q), bool_ty()),
+                    Pat::single(bool_lit(p), bool_ty()),
+                    Pat::single(bool_lit(q), bool_ty()),
                 ],
                 b_ty.clone(),
             )
@@ -3367,7 +3348,7 @@ mod tests {
         for px in 0..4 {
             for py in 0..4 {
                 for pz in 0..4 {
-                    arms.push(DPat::class(
+                    arms.push(Pat::class(
                         a.clone(),
                         vec![mk_b_n(px), mk_b_n(py), mk_b_n(pz)],
                         a_ty.clone(),
@@ -3396,19 +3377,19 @@ mod tests {
     fn testing_39_suffix_slice_does_not_cover_wrong_fixed_tail() {
         let cx = TestingCtx::new();
         let arr = list_of(bool_ty());
-        let ends_true = DPat::slice(
+        let ends_true = Pat::slice(
             SliceShape::Variable {
                 prefix: 0,
                 suffix: 1,
             },
-            vec![DPat::single(bool_lit(true), bool_ty())],
+            vec![Pat::single(bool_lit(true), bool_ty())],
             arr.clone(),
         );
-        let true_false = DPat::slice(
+        let true_false = Pat::slice(
             SliceShape::Fixed(2),
             vec![
-                DPat::single(bool_lit(true), bool_ty()),
-                DPat::single(bool_lit(false), bool_ty()),
+                Pat::single(bool_lit(true), bool_ty()),
+                Pat::single(bool_lit(false), bool_ty()),
             ],
             arr.clone(),
         );
@@ -3426,20 +3407,20 @@ mod tests {
     /// `match x: 1 | 2 { 1 | 2 => a; 2 => b }`: source arm 0's or-pattern
     /// covers both values; arm 1 is then dead. Reported unreachable arm
     /// must be `ArmId(1)` (the *source* arm). Or-pattern is encoded as
-    /// `DPat::or`; expansion happens inside the algorithm.
+    /// `Pat::or`; expansion happens inside the algorithm.
     #[test]
     fn testing_40_or_pattern_source_arm_ids() {
         let cx = TestingCtx::new();
         let scrut = union_of(vec![int_lit(1), int_lit(2)]);
 
-        let arm0 = DPat::or(
+        let arm0 = Pat::or(
             vec![
-                DPat::single(int_lit(1), scrut.clone()),
-                DPat::single(int_lit(2), scrut.clone()),
+                Pat::single(int_lit(1), scrut.clone()),
+                Pat::single(int_lit(2), scrut.clone()),
             ],
             scrut.clone(),
         );
-        let arm1 = DPat::single(int_lit(2), scrut.clone());
+        let arm1 = Pat::single(int_lit(2), scrut.clone());
 
         let report = compute_match_usefulness(&cx, &[arm0, arm1], scrut);
         assert_eq!(
@@ -3470,9 +3451,9 @@ mod tests {
             cx.register(qs[i].clone(), vec![field]);
         }
 
-        let mut pat = DPat::single(bool_lit(true), bool_ty());
+        let mut pat = Pat::single(bool_lit(true), bool_ty());
         for q in qs.iter().rev() {
-            pat = DPat::class(q.clone(), vec![pat], class_ty(q));
+            pat = Pat::class(q.clone(), vec![pat], class_ty(q));
         }
 
         let report = compute_match_usefulness(&cx, &[pat], class_ty(&qs[0]));
@@ -3495,7 +3476,7 @@ mod tests {
         let cx = TestingCtx::new();
         let never = never_ty();
         let arr = list_of(never);
-        let empty = DPat::slice(SliceShape::Fixed(0), vec![], arr.clone());
+        let empty = Pat::slice(SliceShape::Fixed(0), vec![], arr.clone());
 
         let report = compute_match_usefulness(&cx, &[empty], arr);
         assert!(
@@ -3521,8 +3502,8 @@ mod tests {
         let outer = opt_of(opt_of(bool_ty()));
 
         let arms = vec![
-            DPat::single(bool_lit(true), outer.clone()),
-            DPat::single(bool_lit(false), outer.clone()),
+            Pat::single(bool_lit(true), outer.clone()),
+            Pat::single(bool_lit(false), outer.clone()),
         ];
 
         let report = compute_match_usefulness(&cx, &arms, outer);
@@ -3574,7 +3555,7 @@ mod tests {
         let empty = qtn("Empty");
         cx.register(empty.clone(), vec![never_ty()]);
         let ty = class_ty(&empty);
-        let report = compute_match_usefulness(&cx, &[DPat::wildcard(ty.clone())], ty);
+        let report = compute_match_usefulness(&cx, &[Pat::wildcard(ty.clone())], ty);
         assert!(
             report.missing.is_empty(),
             "got missing {:?}",
@@ -3603,14 +3584,14 @@ mod tests {
         let arr = list_of(int_ty());
         let scrut = union_of(vec![cls_ty.clone(), arr.clone()]);
 
-        let class_arm = DPat::union_member(
+        let class_arm = Pat::union_member(
             cls_ty.clone(),
-            DPat::class(cls.clone(), vec![], cls_ty.clone()),
+            Pat::class(cls.clone(), vec![], cls_ty.clone()),
             scrut.clone(),
         );
-        let slice_arm = DPat::union_member(
+        let slice_arm = Pat::union_member(
             arr.clone(),
-            DPat::slice(
+            Pat::slice(
                 SliceShape::Variable {
                     prefix: 0,
                     suffix: 0,
@@ -3647,16 +3628,16 @@ mod tests {
         let arr = list_of(int_ty());
         let scrut = union_of(vec![cls_ty.clone(), arr.clone()]);
 
-        let class_arm = DPat::union_member(
+        let class_arm = Pat::union_member(
             cls_ty.clone(),
-            DPat::class(cls.clone(), vec![], cls_ty.clone()),
+            Pat::class(cls.clone(), vec![], cls_ty.clone()),
             scrut.clone(),
         );
-        let slice_arm = DPat::union_member(
+        let slice_arm = Pat::union_member(
             arr.clone(),
-            DPat::slice(
+            Pat::slice(
                 SliceShape::Fixed(1),
-                vec![DPat::wildcard(int_ty())],
+                vec![Pat::wildcard(int_ty())],
                 arr.clone(),
             ),
             scrut.clone(),
@@ -3683,24 +3664,24 @@ mod tests {
         let arr = list_of(int_ty());
         let scrut = union_of(vec![cls_ty.clone(), arr.clone()]);
 
-        let class_arm = DPat::union_member(
+        let class_arm = Pat::union_member(
             cls_ty.clone(),
-            DPat::class(cls.clone(), vec![], cls_ty.clone()),
+            Pat::class(cls.clone(), vec![], cls_ty.clone()),
             scrut.clone(),
         );
-        let empty_arm = DPat::union_member(
+        let empty_arm = Pat::union_member(
             arr.clone(),
-            DPat::slice(SliceShape::Fixed(0), vec![], arr.clone()),
+            Pat::slice(SliceShape::Fixed(0), vec![], arr.clone()),
             scrut.clone(),
         );
-        let nonempty_arm = DPat::union_member(
+        let nonempty_arm = Pat::union_member(
             arr.clone(),
-            DPat::slice(
+            Pat::slice(
                 SliceShape::Variable {
                     prefix: 1,
                     suffix: 0,
                 },
-                vec![DPat::wildcard(int_ty())],
+                vec![Pat::wildcard(int_ty())],
                 arr.clone(),
             ),
             scrut.clone(),
@@ -3730,9 +3711,9 @@ mod tests {
         let arr = list_of(int_ty());
         let scrut = union_of(vec![cls_ty.clone(), arr.clone()]);
 
-        let class_arm = DPat::union_member(
+        let class_arm = Pat::union_member(
             cls_ty.clone(),
-            DPat::class(cls.clone(), vec![], cls_ty.clone()),
+            Pat::class(cls.clone(), vec![], cls_ty.clone()),
             scrut.clone(),
         );
 
@@ -3750,7 +3731,7 @@ mod tests {
         let arr = list_of(int_ty());
         let scrut = union_of(vec![cls_ty, arr]);
 
-        let report = compute_match_usefulness(&cx, &[DPat::wildcard(scrut.clone())], scrut);
+        let report = compute_match_usefulness(&cx, &[Pat::wildcard(scrut.clone())], scrut);
         assert!(report.missing.is_empty());
     }
 
@@ -3796,8 +3777,8 @@ mod tests {
 
         // Both branches → exhaustive.
         let arms = vec![
-            DPat::single(bool_lit(true), alias_ty.clone()),
-            DPat::single(bool_lit(false), alias_ty.clone()),
+            Pat::single(bool_lit(true), alias_ty.clone()),
+            Pat::single(bool_lit(false), alias_ty.clone()),
         ];
         let report = compute_match_usefulness(&cx, &arms, alias_ty.clone());
         assert!(
@@ -3811,7 +3792,7 @@ mod tests {
         );
 
         // Only `true` → `false` missing.
-        let arms = vec![DPat::single(bool_lit(true), alias_ty.clone())];
+        let arms = vec![Pat::single(bool_lit(true), alias_ty.clone())];
         let report = compute_match_usefulness(&cx, &arms, alias_ty);
         assert_eq!(report.missing.len(), 1);
         assert!(
@@ -3834,9 +3815,9 @@ mod tests {
         let tri_ty = Ty::TypeAlias(tri);
 
         let arms = vec![
-            DPat::single(int_lit(1), tri_ty.clone()),
-            DPat::single(int_lit(2), tri_ty.clone()),
-            DPat::single(int_lit(3), tri_ty.clone()),
+            Pat::single(int_lit(1), tri_ty.clone()),
+            Pat::single(int_lit(2), tri_ty.clone()),
+            Pat::single(int_lit(3), tri_ty.clone()),
         ];
         let report = compute_match_usefulness(&cx, &arms, tri_ty);
         assert!(
@@ -3863,10 +3844,10 @@ mod tests {
         cx.register_alias(alias.clone(), opt_n.clone());
         let alias_ty = Ty::TypeAlias(alias);
 
-        let null_top = DPat::single(null_ty(), alias_ty.clone());
-        let some_any = DPat::class(
+        let null_top = Pat::single(null_ty(), alias_ty.clone());
+        let some_any = Pat::class(
             n.clone(),
-            vec![DPat::wildcard(bool_ty()), DPat::wildcard(opt_n.clone())],
+            vec![Pat::wildcard(bool_ty()), Pat::wildcard(opt_n.clone())],
             n_ty.clone(),
         );
         let arms = vec![null_top, some_any];
@@ -3891,15 +3872,12 @@ mod tests {
     #[test]
     fn testing_44_prefix_only_var_witness_comma_before_rest() {
         let arr = list_of(bool_ty());
-        let witness = WitnessPat::new(
+        let witness = Pat::new(
             Ctor::Slice(SliceShape::Variable {
                 prefix: 2,
                 suffix: 0,
             }),
-            vec![
-                WitnessPat::wildcard(bool_ty()),
-                WitnessPat::wildcard(bool_ty()),
-            ],
+            vec![Pat::wildcard(bool_ty()), Pat::wildcard(bool_ty())],
             arr,
         );
 
@@ -3916,14 +3894,14 @@ mod tests {
         let cx = TestingCtx::new();
         let arr = list_of(int_ty());
         let arm = |v: i64| {
-            DPat::slice(
+            Pat::slice(
                 SliceShape::Fixed(2),
-                vec![DPat::single(int_lit(v), int_ty()), DPat::wildcard(int_ty())],
+                vec![Pat::single(int_lit(v), int_ty()), Pat::wildcard(int_ty())],
                 arr.clone(),
             )
         };
         // Two rows simulating `[1 | 2, _]`.
-        let arms = vec![arm(1), arm(2), arm(3), DPat::wildcard(arr.clone())];
+        let arms = vec![arm(1), arm(2), arm(3), Pat::wildcard(arr.clone())];
         let report = compute_match_usefulness(&cx, &arms, arr);
         assert!(report.missing.is_empty());
         // None unreachable.
@@ -3941,19 +3919,19 @@ mod tests {
         let q = qtn("Pair");
         let pair_ty = class_ty(&q);
 
-        let arm1 = DPat::class(
+        let arm1 = Pat::class(
             q.clone(),
             vec![
-                DPat::single(bool_lit(true), bool_ty()),
-                DPat::wildcard(bool_ty()),
+                Pat::single(bool_lit(true), bool_ty()),
+                Pat::wildcard(bool_ty()),
             ],
             pair_ty.clone(),
         );
-        let arm2 = DPat::class(
+        let arm2 = Pat::class(
             q.clone(),
             vec![
-                DPat::single(bool_lit(false), bool_ty()),
-                DPat::single(bool_lit(true), bool_ty()),
+                Pat::single(bool_lit(false), bool_ty()),
+                Pat::single(bool_lit(true), bool_ty()),
             ],
             pair_ty.clone(),
         );
