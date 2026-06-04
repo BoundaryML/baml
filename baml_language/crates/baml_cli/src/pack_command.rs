@@ -63,8 +63,9 @@ pub struct PackArgs {
     pub file: Option<PathBuf>,
 
     /// Output path for the packaged executable. Defaults to the
-    /// `[package].name` from `baml.toml`; for a single target with no
-    /// `[package].name`, falls back to the function name.
+    /// `[package].name` from `baml.toml`; for a manifest-less `baml_src/`
+    /// project, falls back to the project directory name; in `--file` mode,
+    /// to the file stem.
     #[arg(short, long)]
     pub output: Option<PathBuf>,
 
@@ -337,25 +338,24 @@ impl PackArgs {
         Ok((baml_exec::PackMode::Subcommand, resolved))
     }
 
-    /// Pick the default output basename. With `[package].name` mandatory
-    /// in `baml.toml` (validated up front by `project_load`), project-mode
-    /// output naming has exactly one source of truth.
+    /// Pick the default output basename.
     ///
     /// - `--file <PATH>` single-file mode: file stem (e.g. `foo.baml` →
     ///   `foo`). `baml.toml` isn't consulted — single-file packs are
     ///   intentionally hermetic.
-    /// - Project mode: `[package].name` from `<from>/baml.toml`. Guaranteed
-    ///   present (manifest validation happened at load time).
+    /// - Project mode: `[package].name` from `<from>/baml.toml` when a
+    ///   manifest is present, else the project directory name for a
+    ///   manifest-less `baml_src/` project (see
+    ///   [`crate::project_load::resolve_project_name`]).
     fn resolve_output_basename(&self) -> Result<String> {
         if let Some(file) = self.file.as_deref() {
             if let Some(stem) = file.file_stem().and_then(|s| s.to_str()) {
                 return Ok(stem.to_string());
             }
             // Pathologically nameless file (e.g. `.baml`); fall through to
-            // the manifest lookup. In `--file` mode that may still fail
-            // (no project to consult); the user can always pass `-o`.
+            // the project-name lookup. The user can always pass `-o`.
         }
-        crate::project_load::read_package_name(&self.from)
+        crate::project_load::resolve_project_name(&self.from)
     }
 }
 
