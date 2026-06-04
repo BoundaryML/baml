@@ -19,13 +19,20 @@ function make_opt2() -> int {
   99
 }
 
-// One required arg followed by two optionals that exercise the two default
-// kinds the host call path must handle:
-//   - `opt1: int? = 5`            — a literal default
-//   - `opt2: int? = make_opt2()`  — an expression (function-call) default
-// Return is `void` (→ None/null on the host): this fixture is about modelling
-// the *call forms*, not an observable result. Every call form the language
-// allows is enumerated in the host tests (test_main.py / main.test.ts), with
-// TODOs where the generated SDK can't yet express a given form.
-function required_with_optional_args(arg0: int, opt1: int? = 5, opt2: int? = make_opt2()) -> void {
+// arg0 echoes back to confirm the required positional reached the engine;
+// opt1 has a literal default; opt2 has an expression default.
+function optional_args_probe(arg0: int, opt1: int? = 5, opt2: int? = make_opt2()) -> int?[] {
+  [arg0, opt1, opt2]
+}
+
+class OptBox {
+  base int
+
+  function probe(self, arg0: int, opt1: int? = 5) -> int?[] {
+    [self.base, arg0, opt1]
+  }
+
+  function make(base: int, opt1: int? = 7) -> OptBox {
+    OptBox { base: base + (opt1 ?? 0) }
+  }
 }

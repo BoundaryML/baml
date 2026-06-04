@@ -50,6 +50,7 @@ pub struct Function {
     pub origin: Origin,
 }
 
+#[derive(Clone)]
 pub struct FunctionArgument {
     pub name: baml_base::Name,
     pub docstring: Option<String>,
