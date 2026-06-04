@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 6176
 ---
 === TIR2 ===
 class user.Formatter {
@@ -185,9 +186,9 @@ function user.test_mutation_after_bind() -> int throws never {
 }
 function user.test_generic_bind() -> int throws never {
   { : int
-    let b = Box { value: 42 } : user.Box
-    let get = b.unwrap : () -> T throws never
-    get<T>() : int
+    let b = Box { value: 42 } : user.Box<int>
+    let get = b.unwrap : () -> int throws never
+    get() : int
   }
 }
 function user.test_bound_in_lambda() -> string throws never {

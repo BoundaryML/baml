@@ -711,6 +711,34 @@ pub enum Rvalue {
         receiver: Operand,
     },
 
+    /// Create a generic-function value (`foo<T>`) whose type arguments depend on
+    /// the enclosing frame's type params, so they cannot be a compile-time
+    /// constant. The emitter pushes a `LoadType` for each template (resolved
+    /// against `frame.type_args` at runtime) before the `MakeGenericFunction`
+    /// instruction, which builds an `Object::GenericFunction`. The
+    /// fully-concrete case uses the pooled, interned `Constant::GenericFunction`
+    /// instead.
+    MakeGenericFunction {
+        item: ItemRef,
+        /// One template per type argument; may contain `TypeArgRef(N)`.
+        type_arg_templates: Vec<TyTemplate>,
+    },
+
+    /// Specialize a runtime callable *value* with explicit type arguments
+    /// (`g<int>` where `g` is a local/captured function value, not a
+    /// compile-time-resolvable function reference). The emitter pushes a
+    /// `LoadType` for each template then a `MakeGenericFunctionFromValue`
+    /// instruction, which wraps the evaluated `value` in a `Closure` carrying
+    /// the types as `captured_type_args`. Used when `lower_generic_apply`'s base
+    /// is not an `ItemRef`; the `ItemRef` cases use `Constant::GenericFunction`
+    /// (concrete) or `MakeGenericFunction` (param-dependent) instead.
+    MakeGenericFunctionFromValue {
+        /// The callable value to specialize.
+        value: Operand,
+        /// One template per type argument; may contain `TypeArgRef(N)`.
+        type_arg_templates: Vec<TyTemplate>,
+    },
+
     /// Materialize a `Ty` from a `TyTemplate`.
     ///
     /// For concrete templates (`TyTemplate::Concrete`), the `Ty` is baked in
@@ -799,6 +827,16 @@ pub enum Constant {
     /// Carried from TIR resolution through lowering. Converted to a
     /// runtime string only in the emit phase.
     Function(ItemRef),
+    /// A generic function instantiated with concrete type arguments
+    /// (`foo<int>` referenced as a value). Emitted as a pooled, interned
+    /// `Object::GenericFunction` so identical instantiations share one object
+    /// (pointer-stable identity) and calling it seeds `frame.type_args`.
+    GenericFunction {
+        /// The base generic function.
+        item: ItemRef,
+        /// The concrete type arguments (fully resolved, no type parameters).
+        type_args: Vec<Ty>,
+    },
     /// An enum variant value.
     EnumVariant {
         /// Structured reference to the enum type.

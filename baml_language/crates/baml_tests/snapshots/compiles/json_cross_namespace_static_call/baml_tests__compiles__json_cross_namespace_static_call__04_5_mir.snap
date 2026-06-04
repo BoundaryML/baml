@@ -52,7 +52,7 @@ fn user.pkg.inner.Box.from_json(j: baml.json.json) -> pkg.inner.Box<void> {
     }
 
     bb2: {
-        _0 = user.pkg.inner.Box<TypeArgRef(0)> { copy _2 };
+        _0 = user.pkg.inner.Box<#0> { copy _2 };
         goto -> bb3;
     }
 
@@ -79,7 +79,7 @@ fn user.pkg.inner.AutoBox.from_json(j: baml.json.json) -> pkg.inner.AutoBox<void
     }
 
     bb2: {
-        _0 = user.pkg.inner.AutoBox<TypeArgRef(0)> { copy _2 };
+        _0 = user.pkg.inner.AutoBox<#0> { copy _2 };
         goto -> bb3;
     }
 
@@ -94,7 +94,7 @@ fn user.pkg.inner.AutoBox.to_json(self: pkg.inner.AutoBox) -> baml.json.json {
     let _1: pkg.inner.AutoBox // self // param
     let _2: baml.json.json
     let _3: void
-    let _4: pkg.inner.AutoBox
+    let _4: pkg.inner.AutoBox<void>
     let _5: type
 
     bb0: {
@@ -120,7 +120,7 @@ fn user.pkg.inner.Box.to_json(self: pkg.inner.Box) -> baml.json.json {
     let _1: pkg.inner.Box // self // param
     let _2: baml.json.json
     let _3: void
-    let _4: pkg.inner.Box
+    let _4: pkg.inner.Box<void>
     let _5: type
 
     bb0: {

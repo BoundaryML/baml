@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 14317
 ---
 function user.Inner.from_json(j: baml.json.json) -> Inner {
     load_var j
@@ -13,7 +14,7 @@ function user.Inner.from_json(j: baml.json.json) -> Inner {
     return
 }
 
-function user.Inner.to_json(self: null) -> baml.json.json {
+function user.Inner.to_json(self: Inner) -> baml.json.json {
     load_var self
     load_field .value
     call baml.Int.to_json
@@ -41,7 +42,7 @@ function user.Outer.from_json(j: baml.json.json) -> Outer {
     return
 }
 
-function user.Outer.to_json(self: null) -> baml.json.json {
+function user.Outer.to_json(self: Outer) -> baml.json.json {
     load_var self
     load_field .inner
     call user.Inner.to_json

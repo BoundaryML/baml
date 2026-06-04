@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 16641
 ---
 function user.AppConfig.from_json(j: baml.json.json) -> AppConfig {
     load_var j
@@ -13,7 +14,7 @@ function user.AppConfig.from_json(j: baml.json.json) -> AppConfig {
     return
 }
 
-function user.AppConfig.to_json(self: null) -> baml.json.json {
+function user.AppConfig.to_json(self: AppConfig) -> baml.json.json {
     load_var self
     load_field .api_key
     call baml.String.to_json
@@ -48,7 +49,7 @@ function user.llm.openai.OpenAIResponse.from_json(j: baml.json.json) -> llm.open
     return
 }
 
-function user.llm.openai.OpenAIResponse.to_json(self: null) -> baml.json.json {
+function user.llm.openai.OpenAIResponse.to_json(self: llm.openai.OpenAIResponse) -> baml.json.json {
     load_var self
     load_field .text
     call baml.String.to_json

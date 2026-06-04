@@ -1303,6 +1303,29 @@ impl PullSink for StackCarryPullSink<'_> {
         Ok(())
     }
 
+    fn make_generic_function(
+        &mut self,
+        _item: &baml_compiler2_mir::ItemRef,
+        ntypeargs: usize,
+    ) -> Result<(), Self::Error> {
+        // Pops `ntypeargs` type-arg values, pushes one generic-function object.
+        if !self.sim.pop_n(ntypeargs) {
+            return Err(());
+        }
+        self.sim.push();
+        Ok(())
+    }
+
+    fn make_generic_function_from_value(&mut self, ntypeargs: usize) -> Result<(), Self::Error> {
+        // Pops the callable value plus `ntypeargs` type-arg values, pushes one
+        // specialized closure object.
+        if !self.sim.pop_n(ntypeargs + 1) {
+            return Err(());
+        }
+        self.sim.push();
+        Ok(())
+    }
+
     fn load_capture(&mut self, _idx: usize) -> Result<(), Self::Error> {
         // LoadCapture pushes one value onto the stack.
         self.sim.push();

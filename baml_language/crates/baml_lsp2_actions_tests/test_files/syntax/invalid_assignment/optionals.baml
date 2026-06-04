@@ -61,12 +61,12 @@ function OptionalAssignments() -> int {
 //     │ 
 //     │ Note: Error code: E0001
 // ────╯
-// error: type mismatch: expected user.Person?, got user.Animal
+// error: type mismatch: expected Person?, got Animal
 //     ╭─[ invalid_assignment_optionals.baml:39:6 ]
 //     │
 //  39 │     e = Animal { species: "Cat", legs: 4 };
 //     │         ─────────────────┬────────────────  
-//     │                          ╰────────────────── type mismatch: expected user.Person?, got user.Animal
+//     │                          ╰────────────────── type mismatch: expected Person?, got Animal
 //     │ 
 //     │ Note: Error code: E0001
 // ────╯

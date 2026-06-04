@@ -192,19 +192,18 @@ function type_error_repro.BoardMinimal.new() -> type_error_repro.BoardMinimal {
     return
 }
 
-function type_error_repro.BoardMinimal.play(self: null, player: string, row: int, col: int) -> null {
+function type_error_repro.BoardMinimal.play(self: type_error_repro.BoardMinimal, player: string, row: int, col: int) -> null {
     load_var self
     load_field .cells
     load_var row
     load_array_element
-    load_var col
-    load_var player
+    load_var2 4 2
     store_array_element
     load_const null
     return
 }
 
-function type_error_repro.BoardRead.get(self: null, row: int, col: int) -> string {
+function type_error_repro.BoardRead.get(self: type_error_repro.BoardRead, row: int, col: int) -> string {
     load_var self
     load_field .cells
     load_var row
@@ -232,7 +231,7 @@ function type_error_repro.BoardRead.new() -> type_error_repro.BoardRead {
     return
 }
 
-function type_error_repro.BoardWrite.get(self: null, row: int, col: int) -> string {
+function type_error_repro.BoardWrite.get(self: type_error_repro.BoardWrite, row: int, col: int) -> string {
     load_var self
     load_field .cells
     load_var row
@@ -260,29 +259,27 @@ function type_error_repro.BoardWrite.new() -> type_error_repro.BoardWrite {
     return
 }
 
-function type_error_repro.BoardWrite.play(self: null, player: string, row: int, col: int) -> null {
+function type_error_repro.BoardWrite.play(self: type_error_repro.BoardWrite, player: string, row: int, col: int) -> null {
     load_var self
     load_field .cells
     load_var row
     load_array_element
-    load_var col
-    load_var player
+    load_var2 4 2
     store_array_element
     load_const null
     return
 }
 
-function type_error_repro.BytecodeContainer.set(self: null, idx: int, val: string) -> null {
+function type_error_repro.BytecodeContainer.set(self: type_error_repro.BytecodeContainer, idx: int, val: string) -> null {
     load_var self
     load_field .items
-    load_var idx
-    load_var val
+    load_var2 2 3
     store_array_element
     load_const null
     return
 }
 
-function type_error_repro.BytecodeContainerRead.get(self: null, idx: int) -> string {
+function type_error_repro.BytecodeContainerRead.get(self: type_error_repro.BytecodeContainerRead, idx: int) -> string {
     load_var self
     load_field .items
     load_var idx
@@ -290,29 +287,27 @@ function type_error_repro.BytecodeContainerRead.get(self: null, idx: int) -> str
     return
 }
 
-function type_error_repro.BytecodeGrid.set(self: null, row: int, col: int, val: string) -> null {
+function type_error_repro.BytecodeGrid.set(self: type_error_repro.BytecodeGrid, row: int, col: int, val: string) -> null {
     load_var self
     load_field .cells
     load_var row
     load_array_element
-    load_var col
-    load_var val
+    load_var2 3 4
     store_array_element
     load_const null
     return
 }
 
-function type_error_repro.BytecodeScores.set(self: null, key: string, val: int) -> null {
+function type_error_repro.BytecodeScores.set(self: type_error_repro.BytecodeScores, key: string, val: int) -> null {
     load_var self
     load_field .data
-    load_var key
-    load_var val
+    load_var2 2 3
     store_map_element
     load_const null
     return
 }
 
-function type_error_repro.ContainerSelf.get(self: null, idx: int) -> string {
+function type_error_repro.ContainerSelf.get(self: type_error_repro.ContainerSelf, idx: int) -> string {
     load_var self
     load_field .items
     load_var idx
@@ -329,17 +324,16 @@ function type_error_repro.ContainerSelf.new() -> type_error_repro.ContainerSelf 
     return
 }
 
-function type_error_repro.ContainerSelf.set(self: null, idx: int, val: string) -> null {
+function type_error_repro.ContainerSelf.set(self: type_error_repro.ContainerSelf, idx: int, val: string) -> null {
     load_var self
     load_field .items
-    load_var idx
-    load_var val
+    load_var2 2 3
     store_array_element
     load_const null
     return
 }
 
-function type_error_repro.Cube.get(self: null, x: int, y: int, z: int) -> int {
+function type_error_repro.Cube.get(self: type_error_repro.Cube, x: int, y: int, z: int) -> int {
     load_var self
     load_field .data
     load_var x
@@ -371,21 +365,20 @@ function type_error_repro.Cube.new() -> type_error_repro.Cube {
     return
 }
 
-function type_error_repro.Cube.set(self: null, x: int, y: int, z: int, val: int) -> null {
+function type_error_repro.Cube.set(self: type_error_repro.Cube, x: int, y: int, z: int, val: int) -> null {
     load_var self
     load_field .data
     load_var x
     load_array_element
     load_var y
     load_array_element
-    load_var z
-    load_var val
+    load_var2 4 5
     store_array_element
     load_const null
     return
 }
 
-function type_error_repro.GridSelf.get(self: null, row: int, col: int) -> string {
+function type_error_repro.GridSelf.get(self: type_error_repro.GridSelf, row: int, col: int) -> string {
     load_var self
     load_field .cells
     load_var row
@@ -413,19 +406,18 @@ function type_error_repro.GridSelf.new() -> type_error_repro.GridSelf {
     return
 }
 
-function type_error_repro.GridSelf.set(self: null, row: int, col: int, val: string) -> null {
+function type_error_repro.GridSelf.set(self: type_error_repro.GridSelf, row: int, col: int, val: string) -> null {
     load_var self
     load_field .cells
     load_var row
     load_array_element
-    load_var col
-    load_var val
+    load_var2 3 4
     store_array_element
     load_const null
     return
 }
 
-function type_error_repro.OuterItems.get(self: null, idx: int) -> string {
+function type_error_repro.OuterItems.get(self: type_error_repro.OuterItems, idx: int) -> string {
     load_var self
     load_field .inner
     load_field .items
@@ -444,18 +436,17 @@ function type_error_repro.OuterItems.new() -> type_error_repro.OuterItems {
     return
 }
 
-function type_error_repro.OuterItems.set(self: null, idx: int, val: string) -> null {
+function type_error_repro.OuterItems.set(self: type_error_repro.OuterItems, idx: int, val: string) -> null {
     load_var self
     load_field .inner
     load_field .items
-    load_var idx
-    load_var val
+    load_var2 2 3
     store_array_element
     load_const null
     return
 }
 
-function type_error_repro.Registry.get(self: null, key: string, idx: int) -> int {
+function type_error_repro.Registry.get(self: type_error_repro.Registry, key: string, idx: int) -> int {
     load_var self
     load_field .data
     load_var key
@@ -476,19 +467,18 @@ function type_error_repro.Registry.new() -> type_error_repro.Registry {
     return
 }
 
-function type_error_repro.Registry.set(self: null, key: string, idx: int, val: int) -> null {
+function type_error_repro.Registry.set(self: type_error_repro.Registry, key: string, idx: int, val: int) -> null {
     load_var self
     load_field .data
     load_var key
     load_map_element
-    load_var idx
-    load_var val
+    load_var2 3 4
     store_array_element
     load_const null
     return
 }
 
-function type_error_repro.ScoresSelf.get(self: null, key: string) -> int {
+function type_error_repro.ScoresSelf.get(self: type_error_repro.ScoresSelf, key: string) -> int {
     load_var self
     load_field .data
     load_var key
@@ -502,11 +492,10 @@ function type_error_repro.ScoresSelf.new() -> type_error_repro.ScoresSelf {
     return
 }
 
-function type_error_repro.ScoresSelf.set(self: null, key: string, val: int) -> null {
+function type_error_repro.ScoresSelf.set(self: type_error_repro.ScoresSelf, key: string, val: int) -> null {
     load_var self
     load_field .data
-    load_var key
-    load_var val
+    load_var2 2 3
     store_map_element
     load_const null
     return
@@ -518,7 +507,7 @@ function type_error_repro.Stack.new() -> type_error_repro.Stack {
     return
 }
 
-function type_error_repro.Stack.peek(self: null) -> int {
+function type_error_repro.Stack.peek(self: type_error_repro.Stack) -> int {
     load_var self
     load_field .items
     load_const 0
@@ -526,7 +515,7 @@ function type_error_repro.Stack.peek(self: null) -> int {
     return
 }
 
-function type_error_repro.Stack.push(self: null, val: int) -> null {
+function type_error_repro.Stack.push(self: type_error_repro.Stack, val: int) -> null {
     load_var self
     load_field .items
     load_var val
@@ -541,7 +530,8 @@ function type_error_repro.array_element_assignment_1d_body() -> string {
     load_const "b"
     load_const "c"
     alloc_array 3
-    store_var_load_var arr
+    store_var arr
+    load_var arr
     load_const 1
     load_const "z"
     store_array_element
@@ -565,7 +555,8 @@ function type_error_repro.array_element_assignment_2d_type_error_body() -> strin
     load_const ""
     alloc_array 3
     alloc_array 3
-    store_var_load_var cells
+    store_var cells
+    load_var cells
     load_const 1
     load_array_element
     load_const 2
@@ -594,7 +585,8 @@ function type_error_repro.array_write_with_variable_index_body() -> string {
     load_const "b"
     load_const "c"
     alloc_array 3
-    store_var_load_var arr
+    store_var arr
+    load_var arr
     load_const 1
     load_const "z"
     store_array_element
@@ -620,7 +612,8 @@ function type_error_repro.bytecode_1d_array_write_local_body() -> string {
     load_const "b"
     load_const "c"
     alloc_array 3
-    store_var_load_var arr
+    store_var arr
+    load_var arr
     load_const 1
     load_const "z"
     store_array_element
@@ -652,7 +645,8 @@ function type_error_repro.bytecode_2d_array_write_local_body() -> string {
     load_const "d"
     alloc_array 2
     alloc_array 2
-    store_var_load_var cells
+    store_var cells
+    load_var cells
     load_const 1
     load_array_element
     load_const 0
@@ -686,7 +680,8 @@ function type_error_repro.bytecode_2d_array_write_through_field_body() -> null {
 
 function type_error_repro.bytecode_map_write_local_body() -> int {
     alloc_map 0
-    store_var_load_var scores
+    store_var scores
+    load_var scores
     load_const "alice"
     load_const 100
     store_map_element
@@ -724,8 +719,7 @@ function type_error_repro.bytecode_non_self_param_array_write_body() -> null {
 function type_error_repro.bytecode_set_item(c: type_error_repro.BytecodeContainerNonSelf, idx: int, val: string) -> null {
     load_var c
     load_field .items
-    load_var idx
-    load_var val
+    load_var2 2 3
     store_array_element
     load_const null
     return
@@ -881,8 +875,7 @@ function type_error_repro.class_method_nested_field_array_write_body() -> string
 }
 
 function type_error_repro.get_cell_for_nested_test(cells: string[][], row: int, col: int) -> string {
-    load_var cells
-    load_var row
+    load_var2 1 2
     load_array_element
     load_var col
     load_array_element
@@ -890,8 +883,7 @@ function type_error_repro.get_cell_for_nested_test(cells: string[][], row: int, 
 }
 
 function type_error_repro.get_element_for_int_through_call(arr: string[], idx: int) -> string {
-    load_var arr
-    load_var idx
+    load_var2 1 2
     load_array_element
     return
 }
@@ -908,7 +900,8 @@ function type_error_repro.int_through_function_call_as_index_works_body() -> str
 
 function type_error_repro.map_write_local_variable_body() -> int {
     alloc_map 0
-    store_var_load_var scores
+    store_var scores
+    load_var scores
     load_const "alice"
     load_const 100
     store_map_element
@@ -973,7 +966,8 @@ function type_error_repro.nested_array_write_with_variables_body() -> string {
     load_const "i"
     alloc_array 3
     alloc_array 3
-    store_var_load_var cells
+    store_var cells
+    load_var cells
     load_const 1
     load_array_element
     load_const 2
@@ -1008,8 +1002,7 @@ function type_error_repro.non_self_param_array_write_body() -> string {
 function type_error_repro.set_item_non_self(c: type_error_repro.ContainerNonSelf, idx: int, val: string) -> null {
     load_var c
     load_field .items
-    load_var idx
-    load_var val
+    load_var2 2 3
     store_array_element
     load_const null
     return

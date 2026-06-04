@@ -8,7 +8,7 @@ use baml_lsp2_actions::{ResolvedTarget, SymbolDescription, describe};
 use baml_project::ProjectDatabase;
 use clap::Args;
 
-use crate::project_load::load_project_from;
+use crate::project_load::load_project_or_default;
 
 #[derive(serde::Deserialize)]
 struct BamlKeywordDoc {
@@ -162,6 +162,23 @@ pub fn dispatch<'db>(db: &'db ProjectDatabase, name: &str) -> Option<ResolvedTar
         return Some(ResolvedTarget::Package(user_pkg));
     }
 
+    // Lowercase primitive/keyword aliases resolve to their builtin `baml`
+    // companion class — `string` → `baml.String`, `image` → `baml.media.Image`,
+    // `json` → `baml.json.json`. Also handles drilling into a member,
+    // `string.length` → `baml.String.length`. Checked before the keyword
+    // crosswalk so `baml describe string` shows the class (with its methods),
+    // not keyword docs.
+    let (alias_head, alias_rest) = name.split_once('.').unwrap_or((name, ""));
+    if let Some(class_path) = builtin_alias_class_path(alias_head) {
+        let baml_pkg = baml_compiler2_hir::package::PackageId::new(db, baml_db::Name::new("baml"));
+        let target = if alias_rest.is_empty() {
+            class_path.to_string()
+        } else {
+            format!("{class_path}.{alias_rest}")
+        };
+        return baml_lsp2_actions::resolve_target(db, baml_pkg, &target);
+    }
+
     // Check for keyword (BAML or TS/JS crosswalk) before package routing.
     if BAML_KEYWORDS.contains_key(name) || TS_KEYWORDS.contains_key(name) {
         return Some(ResolvedTarget::Keyword(name.to_string()));
@@ -191,13 +208,35 @@ pub fn dispatch<'db>(db: &'db ProjectDatabase, name: &str) -> Option<ResolvedTar
     baml_lsp2_actions::resolve_target(db, user_pkg, name)
 }
 
+/// Map a lowercase primitive/keyword alias to the path of its builtin `baml`
+/// companion class, relative to the `baml` package. Mirrors the alias set in
+/// `baml_compiler2_tir::ty::PrimitiveType::alias` plus the `json` type alias.
+fn builtin_alias_class_path(name: &str) -> Option<&'static str> {
+    Some(match name {
+        "string" => "String",
+        "int" => "Int",
+        "bigint" => "Bigint",
+        "float" => "Float",
+        "bool" => "Bool",
+        "null" => "Null",
+        "uint8array" => "Uint8Array",
+        "image" => "media.Image",
+        "audio" => "media.Audio",
+        "video" => "media.Video",
+        "pdf" => "media.Pdf",
+        "json" => "json.json",
+        _ => return None,
+    })
+}
+
 impl DescribeArgs {
     pub fn run(&self) -> Result<crate::ExitCode> {
-        let (db, from, baml_files) = load_project_from(&self.from)?;
-        if baml_files.is_empty() {
-            eprintln!("No .baml files found in {}", from.display());
-            return Ok(crate::ExitCode::Other);
-        }
+        // Introspection never requires a `baml.toml`: with no project, we
+        // fall back to a stdlib-only "default state" so `baml describe
+        // baml.String` works anywhere. An empty user-file set is therefore
+        // expected, not an error — unresolved names still surface through
+        // the per-target "No symbol found" + did-you-mean paths below.
+        let (db, from, _baml_files) = load_project_or_default(&self.from)?;
 
         // ── --symbols deprecation ───────────────────────────────────────────
         if self.symbols {
@@ -447,16 +486,28 @@ pub fn write_description(
 ) -> std::io::Result<()> {
     let file_path = desc.file.path(db);
     let file_text = desc.file.text(db);
-    let line_num = line_number_at_offset(file_text, desc.name_span.start().into());
+    let (start_line, end_line) = definition_line_range(
+        file_text,
+        desc.item_range.start().into(),
+        desc.item_range.end().into(),
+    );
 
-    // ── Header: kind name  file:line ────────────────────────────────────────
+    // ── Header: kind name  (canonical-fqn)  file:start-end ──────────────────
+    // The canonical FQN appears in parentheses only when it differs from the
+    // bare name (a builtin alias like `string`, or a namespaced/dependency type
+    // like `root.ns.Foo`).
     let kind_str = desc.kind.as_str();
     let rel_path = relative_path(&file_path, project_root);
     let path_display = rel_path.display();
+    let fqn_part = desc
+        .canonical_fqn
+        .as_deref()
+        .map(|f| format!("  ({f})"))
+        .unwrap_or_default();
 
     writeln!(
         w,
-        "{kind_str} {name}  {path_display}:{line_num}",
+        "{kind_str} {name}{fqn_part}  {path_display}:{start_line}-{end_line}",
         name = desc.name
     )?;
 
@@ -514,41 +565,12 @@ pub fn write_description(
         }
     }
 
-    // ── Instance methods ─────────────────────────────────────────────────────
-    if !desc.instance_methods.is_empty() {
-        writeln!(w)?;
-        writeln!(w, "instance_methods:")?;
-        for m in &desc.instance_methods {
-            let m_path = relative_path(&m.file.path(db), project_root);
-            let m_line = line_number_at_offset(m.file.text(db), m.name_span.start().into());
-            writeln!(
-                w,
-                "  {:<16} {:<32} {}:{}",
-                m.kind.as_str(),
-                m.name,
-                m_path.display(),
-                m_line
-            )?;
-        }
-    }
+    // ── Methods (instance) ───────────────────────────────────────────────────
+    // Methods are always shown in full — they bypass the body budget entirely.
+    write_method_section(w, db, project_root, "methods", &desc.instance_methods)?;
 
     // ── Static methods ───────────────────────────────────────────────────────
-    if !desc.static_methods.is_empty() {
-        writeln!(w)?;
-        writeln!(w, "static_methods:")?;
-        for m in &desc.static_methods {
-            let m_path = relative_path(&m.file.path(db), project_root);
-            let m_line = line_number_at_offset(m.file.text(db), m.name_span.start().into());
-            writeln!(
-                w,
-                "  {:<16} {:<32} {}:{}",
-                m.kind.as_str(),
-                m.name,
-                m_path.display(),
-                m_line
-            )?;
-        }
-    }
+    write_method_section(w, db, project_root, "static_methods", &desc.static_methods)?;
 
     // ── Container ────────────────────────────────────────────────────────────
     if let Some(ref c) = desc.container {
@@ -599,6 +621,89 @@ pub fn write_description(
     }
 
     let _ = lines_used; // budget tracking removed with new format
+    Ok(())
+}
+
+/// The 1-based inclusive line range of a definition, given the trivia-inclusive
+/// byte range of its CST/HIR node.
+///
+/// Node ranges swallow leading blank lines, `///` doc-comments and `//` line
+/// comments, plus trailing whitespace up to the next sibling. This trims both
+/// ends so the range covers the real declaration: the start is the first line
+/// that is neither blank nor a comment (the `class`/`function`/… line), and the
+/// end is the last line carrying non-whitespace (the closing brace).
+pub(crate) fn definition_line_range(
+    text: &str,
+    start_off: usize,
+    end_off: usize,
+) -> (usize, usize) {
+    let end_off = end_off.min(text.len());
+    let span = text.get(start_off..end_off).unwrap_or("");
+
+    // Forward to the first non-blank, non-comment line.
+    let mut real_start = start_off;
+    let mut cursor = start_off;
+    for chunk in span.split_inclusive('\n') {
+        let trimmed = chunk.trim_start();
+        if trimmed.is_empty() || trimmed.starts_with("//") {
+            cursor += chunk.len();
+            real_start = cursor;
+        } else {
+            real_start = cursor;
+            break;
+        }
+    }
+
+    // Backward over trailing whitespace to the last content byte.
+    let bytes = text.as_bytes();
+    let mut real_end = end_off.saturating_sub(1);
+    while real_end > real_start && bytes[real_end].is_ascii_whitespace() {
+        real_end -= 1;
+    }
+    // A span with no content (empty or comment-only) would leave
+    // `real_end < real_start`; clamp so the range never reverses.
+    real_end = real_end.max(real_start);
+
+    (
+        line_number_at_offset(text, real_start),
+        line_number_at_offset(text, real_end),
+    )
+}
+
+/// Render a `methods:` / `static_methods:` section.
+///
+/// Each method shows its first-line docstring (when present) followed by its
+/// canonical signature and full definition line range. Methods are always
+/// rendered in full — they never pass through the body budget/truncation.
+fn write_method_section(
+    w: &mut impl std::io::Write,
+    db: &ProjectDatabase,
+    project_root: &std::path::Path,
+    label: &str,
+    methods: &[describe::MethodRef],
+) -> std::io::Result<()> {
+    if methods.is_empty() {
+        return Ok(());
+    }
+    writeln!(w)?;
+    writeln!(w, "{label}:")?;
+    for m in methods {
+        if let Some(doc) = &m.docstring {
+            writeln!(w, "  /// {doc}")?;
+        }
+        let text = m.file.text(db);
+        let (start, end) =
+            definition_line_range(text, m.item_range.start().into(), m.item_range.end().into());
+        let m_path = relative_path(&m.file.path(db), project_root);
+        writeln!(
+            w,
+            "  {}  {}:{}-{}",
+            m.signature,
+            m_path.display(),
+            start,
+            end
+        )?;
+    }
     Ok(())
 }
 

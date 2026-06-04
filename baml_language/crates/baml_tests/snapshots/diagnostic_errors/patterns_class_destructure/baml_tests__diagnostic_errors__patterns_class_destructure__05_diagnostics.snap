@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 45993
 ---
 === COMPILER2 DIAGNOSTICS ===
   [hir] error: Duplicate field `age` in class destructure pattern
@@ -117,35 +118,35 @@ source: crates/baml_tests/src/generated_tests.rs
      │ Note: Error code: E0063
 ─────╯
 
-  [type] error: type mismatch: expected user.Box<int>, got user.Box
+  [type] error: type mismatch: expected Box<int>, got Box
      ╭─[ patterns_class_destructure.baml:134:20 ]
      │
  134 │ ╭─▶     match (boxed) {
  135 │ ├─▶         Box => 1
      │ │                      
-     │ ╰────────────────────── type mismatch: expected user.Box<int>, got user.Box
+     │ ╰────────────────────── type mismatch: expected Box<int>, got Box
      │     
      │     Note: Error code: E0001
 ─────╯
 
-  [type] error: type mismatch: expected user.Box<int>, got user.Box
+  [type] error: type mismatch: expected Box<int>, got Box
      ╭─[ patterns_class_destructure.baml:140:20 ]
      │
  140 │ ╭─▶     match (boxed) {
  141 │ ├─▶         let value: Box => 1
      │ │                                 
-     │ ╰───────────────────────────────── type mismatch: expected user.Box<int>, got user.Box
+     │ ╰───────────────────────────────── type mismatch: expected Box<int>, got Box
      │     
      │     Note: Error code: E0001
 ─────╯
 
-  [type] error: type mismatch: expected user.Box<int>, got user.Box
+  [type] error: type mismatch: expected Box<int>, got Box
      ╭─[ patterns_class_destructure.baml:145:80 ]
      │
  145 │ ╭─▶ function generic_class_destructure_requires_type_args(boxed: Box<int>) -> int {
  146 │ ├─▶     let Box { value } = boxed;
      │ │                                    
-     │ ╰──────────────────────────────────── type mismatch: expected user.Box<int>, got user.Box
+     │ ╰──────────────────────────────────── type mismatch: expected Box<int>, got Box
      │     
      │     Note: Error code: E0001
 ─────╯
@@ -267,22 +268,22 @@ source: crates/baml_tests/src/generated_tests.rs
      │     Note: Error code: E0094
 ─────╯
 
-  [type] error: Or-pattern alternatives bind `age` with conflicting types: `int` vs `string`
+  [type] error: or-pattern binding `age` has conflicting types: int and string
      ╭─[ patterns_class_destructure.baml:243:33 ]
      │
  243 │         Person { age } | Admin { age } => 1
      │                                 ──┬─  
-     │                                   ╰─── Or-pattern alternatives bind `age` with conflicting types: `int` vs `string`
+     │                                   ╰─── or-pattern binding `age` has conflicting types: int and string
      │ 
      │ Note: Error code: E0001
 ─────╯
 
-  [type] error: Or-pattern alternatives bind `value` with conflicting types: `int` vs `string`
+  [type] error: or-pattern binding `value` has conflicting types: int and string
      ╭─[ patterns_class_destructure.baml:249:61 ]
      │
  249 │         Box<int> { value: let value } | Box<string> { value: let value } => 1
      │                                                             ─────┬────  
-     │                                                                  ╰────── Or-pattern alternatives bind `value` with conflicting types: `int` vs `string`
+     │                                                                  ╰────── or-pattern binding `value` has conflicting types: int and string
      │ 
      │ Note: Error code: E0001
 ─────╯

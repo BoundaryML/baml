@@ -11,6 +11,7 @@
 
 use std::sync::Arc;
 
+use bex_heap::TlabHolder;
 use bex_vm_types::{
     TaskGroupInner,
     types::{CancellationToken, Object, SpawnConfigData, Value},
@@ -34,8 +35,8 @@ fn as_cancellation_token(vm: &BexVm, value: Value) -> Option<CancellationToken> 
 /// Allocate a fresh `baml.spawn.CancelToken` instance wrapping `token`.
 fn alloc_cancel_token(vm: &mut BexVm, token: CancellationToken) -> Value {
     let class = vm.resolve_class("baml.spawn.CancelToken");
-    let handle = vm.alloc_rust_data(Arc::new(token));
-    vm.alloc_instance(class, vec![handle])
+    let handle = Value::object(vm.alloc_rust_data(Arc::new(token)));
+    Value::object(vm.alloc_instance(class, vec![handle]))
 }
 
 /// Clone the `Arc<TaskGroupInner>` behind a `baml.spawn.TaskGroup` value, so it
@@ -54,8 +55,8 @@ fn as_task_group_arc(vm: &BexVm, value: Value) -> Option<Arc<TaskGroupInner>> {
 /// Allocate a fresh `baml.spawn.TaskGroup` instance wrapping `inner`.
 fn alloc_task_group(vm: &mut BexVm, inner: Arc<TaskGroupInner>) -> Value {
     let class = vm.resolve_class("baml.spawn.TaskGroup");
-    let handle = vm.alloc_rust_data(inner);
-    vm.alloc_instance(class, vec![handle])
+    let handle = Value::object(vm.alloc_rust_data(inner));
+    Value::object(vm.alloc_instance(class, vec![handle]))
 }
 
 /// Convert a `usize` count/limit to `i64`, saturating at `i64::MAX`. Group
@@ -178,11 +179,11 @@ impl BamlNamespaceSpawn for PackageBamlImpl {
         let group = group.and_then(|value| as_task_group_arc(vm, *value));
         let detach = detach.unwrap_or(false);
         let class = vm.resolve_class("baml.spawn.SpawnConfig");
-        let handle = vm.alloc_rust_data(Arc::new(SpawnConfigData {
+        let handle = Value::object(vm.alloc_rust_data(Arc::new(SpawnConfigData {
             cancel,
             detach,
             group,
-        }));
-        vm.alloc_instance(class, vec![handle])
+        })));
+        Value::object(vm.alloc_instance(class, vec![handle]))
     }
 }

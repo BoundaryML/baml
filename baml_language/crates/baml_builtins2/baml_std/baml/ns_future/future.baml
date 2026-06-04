@@ -143,13 +143,13 @@ function race<T, E>(futures: baml.future.Future<T, E>[]) -> baml.future.Future<T
 /// cancelled (JS `Promise.any`). If every future fails, throws `AllFailed<E>`
 /// carrying all the errors in input order. Cancelled inputs are skipped (they
 /// neither win nor contribute an error).
-function any<T, E>(futures: baml.future.Future<T, E>[]) -> baml.future.Future<T, baml.future.AllFailed<E>> {
+function any<T, Err>(futures: baml.future.Future<T, Err>[]) -> baml.future.Future<T, baml.future.AllFailed<Err>> {
   spawn {
     // `errors` accumulates failures in input order; `winners` holds the first
     // success (0 or 1 element — an array stands in for an optional so we avoid
     // a nullable local). `remaining` shrinks as settled losers are dropped so
     // the next `__await_any` doesn't keep re-reporting the same one.
-    let errors: E[] = [];
+    let errors: Err[] = [];
     let winners: T[] = [];
     let remaining = futures;
     while (remaining.length() > 0) {
@@ -157,10 +157,10 @@ function any<T, E>(futures: baml.future.Future<T, E>[]) -> baml.future.Future<T,
       let f = remaining[i];
       if (f.is_result()) {
         // `f` succeeded; record its value and stop. The catch is unreachable
-        // and only there to keep the throws type `AllFailed<E>` (not `E`).
+        // and only there to keep the throws type `AllFailed<Err>` (not `Err`).
         winners.push((await f) catch (e) {
           let e => {
-            let failure: baml.future.AllFailed<E> = baml.future.AllFailed { errors: errors.concat([e]) };
+            let failure: baml.future.AllFailed<Err> = baml.future.AllFailed { errors: errors.concat([e]) };
             throw failure
           }
         });
@@ -179,9 +179,9 @@ function any<T, E>(futures: baml.future.Future<T, E>[]) -> baml.future.Future<T,
       // The typed let drives bidirectional checking: a BARE generic literal
       // records no class type args (TIR does not infer literal type args from
       // fields), but checking it against the annotation records
-      // `AllFailed<E>`, which MIR threads to the runtime instance — typed
+      // `AllFailed<Err>`, which MIR threads to the runtime instance — typed
       // arms like `let e: AllFailed<string>` compare them.
-      let failure: baml.future.AllFailed<E> = baml.future.AllFailed { errors: errors };
+      let failure: baml.future.AllFailed<Err> = baml.future.AllFailed { errors: errors };
       throw failure;
     }
     // A success was recorded; cancel the losers and return it.

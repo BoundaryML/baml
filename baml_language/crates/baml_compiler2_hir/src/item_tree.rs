@@ -12,8 +12,9 @@ use rustc_hash::FxHashMap;
 use text_size::TextRange;
 
 use crate::ids::{
-    ClassMarker, ClientMarker, EnumMarker, FunctionMarker, GeneratorMarker, ItemKind, LetMarker,
-    LocalItemId, RetryPolicyMarker, TemplateStringMarker, TestMarker, TypeAliasMarker, hash_name,
+    ClassMarker, ClientMarker, EnumMarker, FunctionMarker, GeneratorMarker, InterfaceMarker,
+    ItemKind, LetMarker, LocalItemId, RetryPolicyMarker, TemplateStringMarker, TestMarker,
+    TypeAliasMarker, hash_name,
 };
 
 // ── Span-free attribute representation ───────────────────────────────────────
@@ -62,6 +63,10 @@ pub struct Function {
     /// Generic type parameters (e.g., `["T", "U"]`).
     /// Empty for non-generic functions.
     pub generic_params: Vec<Name>,
+    /// BEP-044 generic bounds parallel to `generic_params`. `Some(te)`
+    /// means the parameter at the matching index was declared with
+    /// `T extends <te>`; `None` means unbounded.
+    pub generic_param_bounds: Vec<Option<ast::TypeExpr>>,
     /// Function parameters with optional type annotations and spans.
     pub params: Vec<FunctionParam>,
     /// Function parameter default expression arena.
@@ -112,17 +117,57 @@ pub struct Class {
     /// Generic type parameters (e.g., `["T"]` for `Array<T>`).
     /// Empty for non-generic classes.
     pub generic_params: Vec<Name>,
+    /// Generic bounds parallel to `generic_params`. `Some(te)` means
+    /// `T extends <te>`; `None` means unbounded.
+    pub generic_param_bounds: Vec<Option<ast::TypeExpr>>,
     /// Fields of the class, in declaration order.
     pub fields: Vec<ClassField>,
     /// Methods defined inside this class, referencing their `Function` entries
-    /// in the same `ItemTree`.
+    /// in the same `ItemTree`. Includes both class-level methods and methods
+    /// declared inside `implements I { ... }` blocks (BEP-044) — flattened so
+    /// downstream code (e.g. signature queries, method dispatch) can iterate
+    /// uniformly.
     pub methods: Vec<LocalItemId<FunctionMarker>>,
+    /// `implements I { ... }` blocks, in declaration order. Each block keeps
+    /// the raw target `TypeExpr` so generic parameters like `Container<int>`
+    /// survive name resolution, plus field redeclarations from the block.
+    pub implements: Vec<ImplementsBlock>,
     /// Block-level attributes (@@description, @@alias, etc.).
     pub attributes: Vec<Attribute>,
     /// Joined `///` doc-comment lines preceding this declaration.
     pub docstring: Option<String>,
     /// Full source span of the class declaration.
     pub span: TextRange,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ImplementsBlock {
+    pub target: ast::SpannedTypeExpr,
+    pub field_links: Vec<InterfaceFieldLink>,
+    pub associated_type_bindings: Vec<ast::AssociatedTypeBindingDef>,
+    pub is_out_of_body: bool,
+    pub span: TextRange,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ImplementsFor {
+    pub generic_params: Vec<Name>,
+    pub generic_param_bounds: Vec<Option<ast::TypeExpr>>,
+    pub interface_target: ast::SpannedTypeExpr,
+    pub for_target: ast::SpannedTypeExpr,
+    pub field_links: Vec<InterfaceFieldLink>,
+    pub associated_type_bindings: Vec<ast::AssociatedTypeBindingDef>,
+    pub methods: Vec<LocalItemId<FunctionMarker>>,
+    pub span: TextRange,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct InterfaceFieldLink {
+    pub interface_field: Name,
+    pub class_field: Name,
+    pub span: TextRange,
+    pub interface_field_span: TextRange,
+    pub class_field_span: TextRange,
 }
 
 /// An enum variant stored in the `ItemTree`.
@@ -145,6 +190,49 @@ pub struct Enum {
     /// Joined `///` doc-comment lines preceding this declaration.
     pub docstring: Option<String>,
     /// Full source span of the enum declaration.
+    pub span: TextRange,
+}
+
+/// A required (no-body) method signature on an interface (BEP-044).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct InterfaceMethodSig {
+    pub name: Name,
+    /// Generic type parameters local to this method.
+    pub generic_params: Vec<Name>,
+    /// BEP-044 generic bounds parallel to `generic_params`.
+    pub generic_param_bounds: Vec<Option<ast::TypeExpr>>,
+    pub params: Vec<FunctionParam>,
+    pub return_type: Option<ast::SpannedTypeExpr>,
+    pub throws: Option<ast::SpannedTypeExpr>,
+    pub attributes: Vec<Attribute>,
+    pub docstring: Option<String>,
+    pub span: TextRange,
+}
+
+/// An interface (BEP-044) stored in the `ItemTree`.
+///
+/// Default methods are stored as full `FunctionMarker` entries in `methods`
+/// (same as `Class::methods`). Required signatures live in `required_methods`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Interface {
+    pub name: Name,
+    /// Generic type parameters declared on the interface.
+    pub generic_params: Vec<Name>,
+    /// BEP-044 generic bounds parallel to `generic_params`.
+    pub generic_param_bounds: Vec<Option<ast::TypeExpr>>,
+    /// Required interfaces from `requires I1, I2, …`.
+    pub requires: Vec<ast::SpannedTypeExpr>,
+    /// Field signatures declared on the interface. Interface fields cannot
+    /// have default values.
+    pub fields: Vec<ClassField>,
+    /// Associated type declarations on the interface (BEP-057).
+    pub associated_types: Vec<ast::AssociatedTypeDef>,
+    /// Default methods (with bodies). Implementing classes inherit them.
+    pub default_methods: Vec<LocalItemId<FunctionMarker>>,
+    /// Required methods (no body). Implementing classes must provide a body.
+    pub required_methods: Vec<InterfaceMethodSig>,
+    pub attributes: Vec<Attribute>,
+    pub docstring: Option<String>,
     pub span: TextRange,
 }
 
@@ -289,6 +377,7 @@ pub struct ItemTree {
     pub functions: FxHashMap<LocalItemId<FunctionMarker>, Function>,
     pub classes: FxHashMap<LocalItemId<ClassMarker>, Class>,
     pub enums: FxHashMap<LocalItemId<EnumMarker>, Enum>,
+    pub interfaces: FxHashMap<LocalItemId<InterfaceMarker>, Interface>,
     pub type_aliases: FxHashMap<LocalItemId<TypeAliasMarker>, TypeAlias>,
     pub clients: FxHashMap<LocalItemId<ClientMarker>, Client>,
     pub tests: FxHashMap<LocalItemId<TestMarker>, Test>,
@@ -296,6 +385,17 @@ pub struct ItemTree {
     pub template_strings: FxHashMap<LocalItemId<TemplateStringMarker>, TemplateString>,
     pub retry_policies: FxHashMap<LocalItemId<RetryPolicyMarker>, RetryPolicy>,
     pub lets: FxHashMap<LocalItemId<LetMarker>, Let>,
+    pub implements_for: Vec<ImplementsFor>,
+
+    /// BEP-044: for a class method declared inside an `implements I {}`
+    /// block, record the unresolved interface target path. Empty for
+    /// methods declared at the class level (not inside any `implements`
+    /// block) and for interface default-methods themselves. Consumers
+    /// resolve the path to an `InterfaceLoc` lazily so HIR construction
+    /// stays independent of name resolution.
+    pub method_to_iface_target: FxHashMap<LocalItemId<FunctionMarker>, ast::SpannedTypeExpr>,
+    pub method_to_iface_associated_type_bindings:
+        FxHashMap<LocalItemId<FunctionMarker>, Vec<ast::AssociatedTypeBindingDef>>,
 
     /// Collision tracker: `(ItemKind, hash)` → next available index.
     next_index: FxHashMap<(ItemKind, u16), u16>,
@@ -313,6 +413,7 @@ impl ItemTree {
             functions: FxHashMap::default(),
             classes: FxHashMap::default(),
             enums: FxHashMap::default(),
+            interfaces: FxHashMap::default(),
             type_aliases: FxHashMap::default(),
             clients: FxHashMap::default(),
             tests: FxHashMap::default(),
@@ -320,6 +421,9 @@ impl ItemTree {
             template_strings: FxHashMap::default(),
             retry_policies: FxHashMap::default(),
             lets: FxHashMap::default(),
+            implements_for: Vec::new(),
+            method_to_iface_target: FxHashMap::default(),
+            method_to_iface_associated_type_bindings: FxHashMap::default(),
             next_index: FxHashMap::default(),
         }
     }
@@ -351,6 +455,7 @@ impl ItemTree {
             Function {
                 name: f.name.clone(),
                 generic_params: f.generic_params.clone(),
+                generic_param_bounds: f.generic_param_bounds.clone(),
                 params,
                 defaults: f.defaults.clone(),
                 return_type: f.return_type.clone(),
@@ -377,13 +482,36 @@ impl ItemTree {
                 docstring: f.docstring.clone(),
             })
             .collect();
+        let implements = c
+            .implements
+            .iter()
+            .map(|b| ImplementsBlock {
+                target: b.target.clone(),
+                field_links: b
+                    .field_links
+                    .iter()
+                    .map(|link| InterfaceFieldLink {
+                        interface_field: link.interface_field.clone(),
+                        class_field: link.class_field.clone(),
+                        span: link.span,
+                        interface_field_span: link.interface_field_span,
+                        class_field_span: link.class_field_span,
+                    })
+                    .collect(),
+                associated_type_bindings: b.associated_type_bindings.clone(),
+                is_out_of_body: b.is_out_of_body,
+                span: b.span,
+            })
+            .collect();
         self.classes.insert(
             id,
             Class {
                 name: c.name.clone(),
                 generic_params: c.generic_params.clone(),
+                generic_param_bounds: c.generic_param_bounds.clone(),
                 fields,
                 methods: Vec::new(),
+                implements,
                 attributes: c.attributes.iter().map(Attribute::from).collect(),
                 docstring: c.docstring.clone(),
                 span: c.span,
@@ -401,6 +529,34 @@ impl ItemTree {
         if let Some(class) = self.classes.get_mut(&class_id) {
             class.methods = methods;
         }
+    }
+
+    pub fn add_implements_for(
+        &mut self,
+        imp: &ast::ImplementsForDef,
+        methods: Vec<LocalItemId<FunctionMarker>>,
+    ) {
+        let field_links = imp
+            .field_links
+            .iter()
+            .map(|link| InterfaceFieldLink {
+                interface_field: link.interface_field.clone(),
+                class_field: link.class_field.clone(),
+                span: link.span,
+                interface_field_span: link.interface_field_span,
+                class_field_span: link.class_field_span,
+            })
+            .collect();
+        self.implements_for.push(ImplementsFor {
+            generic_params: imp.generic_params.iter().map(|(n, _)| n.clone()).collect(),
+            generic_param_bounds: imp.generic_params.iter().map(|(_, b)| b.clone()).collect(),
+            interface_target: imp.interface_target.clone(),
+            for_target: imp.for_target.clone(),
+            field_links,
+            associated_type_bindings: imp.associated_type_bindings.clone(),
+            methods,
+            span: imp.span,
+        });
     }
 
     pub fn alloc_enum(&mut self, e: &ast::EnumDef) -> LocalItemId<EnumMarker> {
@@ -456,6 +612,70 @@ impl ItemTree {
     ) {
         let spans: Vec<TextRange> = enum_def.variants.iter().map(|v| v.name_span).collect();
         source_map.enum_variant_spans.insert(id, spans);
+    }
+
+    /// Allocate an interface (BEP-044) in the `ItemTree`.
+    ///
+    /// `default_method_ids` are the `FunctionMarker` ids for any default
+    /// methods in the interface — those should be allocated separately via
+    /// `alloc_function` before this is called.
+    pub fn alloc_interface(
+        &mut self,
+        i: &ast::InterfaceDef,
+        default_method_ids: Vec<LocalItemId<FunctionMarker>>,
+    ) -> LocalItemId<InterfaceMarker> {
+        let id = self.alloc_id(ItemKind::Interface, &i.name);
+        let fields = i
+            .fields
+            .iter()
+            .map(|f| ClassField {
+                name: f.name.clone(),
+                type_expr: f.type_expr.clone(),
+                attributes: f.attributes.iter().map(Attribute::from).collect(),
+                docstring: f.docstring.clone(),
+            })
+            .collect();
+        let required_methods = i
+            .required_methods
+            .iter()
+            .map(|m| InterfaceMethodSig {
+                name: m.name.clone(),
+                generic_params: m.generic_params.clone(),
+                generic_param_bounds: m.generic_param_bounds.clone(),
+                params: m
+                    .params
+                    .iter()
+                    .map(|p| FunctionParam {
+                        name: p.name.clone(),
+                        type_expr: p.type_expr.clone(),
+                        default: None,
+                        span: p.span,
+                    })
+                    .collect(),
+                return_type: m.return_type.clone(),
+                throws: m.throws.clone(),
+                attributes: m.attributes.iter().map(Attribute::from).collect(),
+                docstring: m.docstring.clone(),
+                span: m.span,
+            })
+            .collect();
+        self.interfaces.insert(
+            id,
+            Interface {
+                name: i.name.clone(),
+                generic_params: i.generic_params.clone(),
+                generic_param_bounds: i.generic_param_bounds.clone(),
+                requires: i.requires.clone(),
+                fields,
+                associated_types: i.associated_types.clone(),
+                default_methods: default_method_ids,
+                required_methods,
+                attributes: i.attributes.iter().map(Attribute::from).collect(),
+                docstring: i.docstring.clone(),
+                span: i.span,
+            },
+        );
+        id
     }
 
     pub fn alloc_type_alias(&mut self, ta: &ast::TypeAliasDef) -> LocalItemId<TypeAliasMarker> {
@@ -653,6 +873,13 @@ impl Index<LocalItemId<EnumMarker>> for ItemTree {
     type Output = Enum;
     fn index(&self, id: LocalItemId<EnumMarker>) -> &Enum {
         &self.enums[&id]
+    }
+}
+
+impl Index<LocalItemId<InterfaceMarker>> for ItemTree {
+    type Output = Interface;
+    fn index(&self, id: LocalItemId<InterfaceMarker>) -> &Interface {
+        &self.interfaces[&id]
     }
 }
 

@@ -1,0 +1,1405 @@
+---
+source: crates/baml_tests/tests/bytecode_format/main.rs
+assertion_line: 41
+---
+function assert.contains(haystack: string, needle: string) -> null {
+    load_var2 1 2
+    call baml.String.includes
+    unary_op !
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const null
+    jump L2
+
+  L1:
+    load_const "assertion failed: string does not contain expected substring"
+    call baml.sys.panic
+
+  L2:
+    return
+}
+
+function assert.equal(actual: unknown, expected: unknown) -> null {
+    load_var2 1 2
+    cmp_op !=
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const null
+    jump L2
+
+  L1:
+    load_const "assertion failed: expected equal values"
+    call baml.sys.panic
+
+  L2:
+    return
+}
+
+function assert.is_true(condition: bool) -> null {
+    load_var condition
+    unary_op !
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const null
+    jump L2
+
+  L1:
+    load_const "assertion failed: expected true"
+    call baml.sys.panic
+
+  L2:
+    return
+}
+
+function assert.not_null(value: unknown?) -> null {
+    load_var value
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const null
+    jump L2
+
+  L1:
+    load_const "assertion failed: expected non-null value"
+    call baml.sys.panic
+
+  L2:
+    return
+}
+
+function testing.$invoke_collector(collector: (testing.TestCollector) -> void throws unknown, c: testing.TestCollector) -> void {
+    load_var2 2 1
+    call_indirect
+    return
+}
+
+function testing.RunReport.from_json(j: baml.json.json) -> testing.RunReport {
+    load_var j
+    load_const "outcome"
+    call baml.json.field
+    store_var _3
+    load_type "pass" | "fail" | "error"
+    load_var _3
+    call baml.json.from_json
+    load_var j
+    load_const "duration_ms"
+    call baml.json.field
+    store_var _6
+    load_type int
+    load_var _6
+    call baml.json.from_json
+    init_instance testing.RunReport .outcome, .duration_ms
+    return
+}
+
+function testing.RunReport.to_json(self: testing.RunReport) -> baml.json.json {
+    load_var self
+    load_field .outcome
+    load_const "to_json"
+    load_map_element
+    call_indirect
+    load_var self
+    load_field .duration_ms
+    call baml.Int.to_json
+    load_const "outcome"
+    load_const "duration_ms"
+    alloc_map 2
+    return
+}
+
+function testing.SerializedTest.from_json(j: baml.json.json) -> testing.SerializedTest {
+    load_var j
+    load_const "type"
+    call baml.json.field
+    store_var _3
+    load_type string
+    load_var _3
+    call baml.json.from_json
+    load_var j
+    load_const "name"
+    call baml.json.field
+    store_var _6
+    load_type string
+    load_var _6
+    call baml.json.from_json
+    init_instance testing.SerializedTest .type, .name
+    return
+}
+
+function testing.SerializedTest.to_json(self: testing.SerializedTest) -> baml.json.json {
+    load_var self
+    load_field .type
+    call baml.String.to_json
+    load_var self
+    load_field .name
+    call baml.String.to_json
+    load_const "type"
+    load_const "name"
+    alloc_map 2
+    return
+}
+
+function testing.SerializedTestSet.from_json(j: baml.json.json) -> testing.SerializedTestSet {
+    load_var j
+    load_const "name"
+    call baml.json.field
+    store_var _3
+    load_type string
+    load_var _3
+    call baml.json.from_json
+    load_var j
+    load_const "items"
+    call baml.json.field
+    store_var _6
+    load_type testing.SerializedTest | testing.SerializedTestSet[]
+    load_var _6
+    call baml.json.from_json
+    load_var j
+    load_const "loadingTimeMs"
+    call baml.json.field
+    store_var _9
+    load_type int
+    load_var _9
+    call baml.json.from_json
+    init_instance testing.SerializedTestSet .name, .items, .loadingTimeMs
+    return
+}
+
+function testing.SerializedTestSet.to_json(self: testing.SerializedTestSet) -> baml.json.json {
+    load_var self
+    load_field .name
+    call baml.String.to_json
+    load_var self
+    load_field .items
+    call baml.Array.to_json
+    load_var self
+    load_field .loadingTimeMs
+    call baml.Int.to_json
+    load_const "name"
+    load_const "items"
+    load_const "loadingTimeMs"
+    alloc_map 3
+    return
+}
+
+function testing.TestCollector.find_testset(self: testing.TestCollector, name: string) -> testing.TestSetRegistration {
+    load_var self
+    load_field .testsets
+    store_var _3
+    load_const 0
+    store_var __for_idx
+
+  L0:
+    load_var2 4 3
+    container_len
+    cmp_int_op <
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_const "TestSet not found: "
+    load_var name
+    bin_op +
+    throw
+
+  L2:
+    load_var2 3 4
+    load_array_element
+    store_var_load_var ts
+    load_field .name
+    load_var name
+    cmp_op ==
+    pop_jump_if_false L3
+    jump L4
+
+  L3:
+    load_var __for_idx
+    load_const 1
+    add_int
+    store_var __for_idx
+    jump L0
+
+  L4:
+    load_var ts
+    return
+}
+
+function testing.TestCollector.from_json(j: baml.json.json) -> testing.TestCollector {
+    load_var j
+    load_const "prefix"
+    call baml.json.field
+    store_var _3
+    load_type string
+    load_var _3
+    call baml.json.from_json
+    load_var j
+    load_const "tests"
+    call baml.json.field
+    store_var _6
+    load_type testing.TestRegistration[]
+    load_var _6
+    call baml.json.from_json
+    load_var j
+    load_const "testsets"
+    call baml.json.field
+    store_var _9
+    load_type testing.TestSetRegistration[]
+    load_var _9
+    call baml.json.from_json
+    init_instance testing.TestCollector .prefix, .tests, .testsets
+    return
+}
+
+function testing.TestCollector.new(prefix: string) -> testing.TestCollector {
+    load_var prefix
+    alloc_array 0
+    alloc_array 0
+    init_instance testing.TestCollector .prefix, .tests, .testsets
+    return
+}
+
+function testing.TestCollector.register_test(self: testing.TestCollector, name: string, body: () -> void throws unknown, runner: ((() -> testing.TestReport throws never) -> (() -> testing.TestReport throws never) throws never)?) -> void {
+    load_var self
+    load_field .prefix
+    load_const ""
+    cmp_op ==
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var self
+    load_field .prefix
+    load_const "/"
+    bin_op +
+    load_var name
+    bin_op +
+    store_var full_name
+    jump L2
+
+  L1:
+    load_var name
+    store_var full_name
+
+  L2:
+    load_const 0
+    store_var count
+    load_var full_name
+    load_const "#"
+    bin_op +
+    store_var hash_prefix
+    load_var self
+    load_field .tests
+    store_var _13
+    load_const 0
+    store_var __for_idx
+
+  L3:
+    load_var2 9 8
+    container_len
+    cmp_int_op <
+    pop_jump_if_false L4
+    jump L8
+
+  L4:
+    load_var count
+    load_const 0
+    cmp_int_op >
+    pop_jump_if_false L5
+    jump L6
+
+  L5:
+    load_var full_name
+    store_var final_name
+    jump L7
+
+  L6:
+    load_var full_name
+    load_const "#"
+    bin_op +
+    store_var _28
+    load_type int
+    load_var count
+    load_const 1
+    add_int
+    call baml.unstable.string
+    store_var _30
+    load_var2 12 13
+    bin_op +
+    store_var final_name
+
+  L7:
+    load_var self
+    load_field .tests
+    load_var2 11 3
+    load_var runner
+    init_instance testing.TestRegistration .name, .body, .runner
+    call baml.Array.push
+    pop 1
+    load_const null
+    return
+
+  L8:
+    load_var2 8 9
+    load_array_element
+    store_var_load_var t
+    load_field .name
+    load_var full_name
+    cmp_op ==
+    jump_if_false L9
+    jump L10
+
+  L9:
+    pop 1
+    load_var t
+    load_field .name
+    load_var hash_prefix
+    call baml.String.starts_with
+
+  L10:
+    pop_jump_if_false L11
+    load_var count
+    load_const 1
+    add_int
+    store_var count
+
+  L11:
+    load_var __for_idx
+    load_const 1
+    add_int
+    store_var __for_idx
+    jump L3
+}
+
+function testing.TestCollector.register_test_set(self: testing.TestCollector, name: string, collector: (testing.TestCollector) -> void throws unknown, runner: ((() -> testing.TestSetReport throws never) -> (() -> testing.TestSetReport throws never) throws never)?) -> void {
+    load_var self
+    load_field .prefix
+    load_const ""
+    cmp_op ==
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var self
+    load_field .prefix
+    load_const "/"
+    bin_op +
+    load_var name
+    bin_op +
+    store_var full_name
+    jump L2
+
+  L1:
+    load_var name
+    store_var full_name
+
+  L2:
+    load_const 0
+    store_var count
+    load_var full_name
+    load_const "#"
+    bin_op +
+    store_var hash_prefix
+    load_var self
+    load_field .testsets
+    store_var _13
+    load_const 0
+    store_var __for_idx
+
+  L3:
+    load_var2 9 8
+    container_len
+    cmp_int_op <
+    pop_jump_if_false L4
+    jump L8
+
+  L4:
+    load_var count
+    load_const 0
+    cmp_int_op >
+    pop_jump_if_false L5
+    jump L6
+
+  L5:
+    load_var full_name
+    store_var final_name
+    jump L7
+
+  L6:
+    load_var full_name
+    load_const "#"
+    bin_op +
+    store_var _28
+    load_type int
+    load_var count
+    load_const 1
+    add_int
+    call baml.unstable.string
+    store_var _30
+    load_var2 12 13
+    bin_op +
+    store_var final_name
+
+  L7:
+    load_var self
+    load_field .testsets
+    load_var2 11 3
+    load_var runner
+    init_instance testing.TestSetRegistration .name, .collector, .runner
+    call baml.Array.push
+    pop 1
+    load_const null
+    return
+
+  L8:
+    load_var2 8 9
+    load_array_element
+    store_var_load_var ts
+    load_field .name
+    load_var full_name
+    cmp_op ==
+    jump_if_false L9
+    jump L10
+
+  L9:
+    pop 1
+    load_var ts
+    load_field .name
+    load_var hash_prefix
+    call baml.String.starts_with
+
+  L10:
+    pop_jump_if_false L11
+    load_var count
+    load_const 1
+    add_int
+    store_var count
+
+  L11:
+    load_var __for_idx
+    load_const 1
+    add_int
+    store_var __for_idx
+    jump L3
+}
+
+function testing.TestCollector.to_json(self: testing.TestCollector) -> baml.json.json {
+    load_var self
+    load_field .prefix
+    call baml.String.to_json
+    load_var self
+    load_field .tests
+    call baml.Array.to_json
+    load_var self
+    load_field .testsets
+    call baml.Array.to_json
+    load_const "prefix"
+    load_const "tests"
+    load_const "testsets"
+    alloc_map 3
+    return
+}
+
+function testing.TestRegistration.from_json(j: baml.json.json) -> testing.TestRegistration {
+    load_var j
+    load_const "name"
+    call baml.json.field
+    store_var _3
+    load_type string
+    load_var _3
+    call baml.json.from_json
+    load_var j
+    load_const "body"
+    call baml.json.field
+    store_var _6
+    load_type () -> void throws unknown
+    load_var _6
+    call baml.json.from_json
+    load_var j
+    load_const "runner"
+    call baml.json.field
+    store_var _9
+    load_type (() -> testing.TestReport throws never) -> (() -> testing.TestReport throws never) throws never?
+    load_var _9
+    call baml.json.from_json
+    init_instance testing.TestRegistration .name, .body, .runner
+    return
+}
+
+function testing.TestRegistration.to_json(self: testing.TestRegistration) -> baml.json.json {
+    load_type testing.TestRegistration
+    load_var self
+    call baml.json.to_string
+    call baml.json.parse
+    return
+}
+
+function testing.TestRegistry.expand_set(self: testing.TestRegistry, name: string) -> (testing.SerializedTest | testing.SerializedTestSet)[] {
+    load_var self
+    load_field .collector
+    load_field .testsets
+    store_var _3
+    load_const 0
+    store_var __for_idx
+
+  L0:
+    load_var2 4 3
+    container_len
+    cmp_int_op <
+    pop_jump_if_false L1
+    jump L7
+
+  L1:
+    load_var self
+    load_field .expansions
+    call baml.Map.keys
+    store_var _28
+    load_const 0
+    store_var __for_idx_1
+
+  L2:
+    load_var2 10 9
+    container_len
+    cmp_int_op <
+    pop_jump_if_false L3
+    jump L4
+
+  L3:
+    load_const "TestSet not found for expansion: "
+    load_var name
+    bin_op +
+    throw
+
+  L4:
+    load_var2 9 10
+    load_array_element
+    store_var k
+    load_var self
+    load_field .expansions
+    load_var k
+    load_map_element
+    store_var sub
+    load_var2 2 11
+    load_const "/"
+    bin_op +
+    call baml.String.starts_with
+    pop_jump_if_false L5
+    jump L6
+
+  L5:
+    load_var __for_idx_1
+    load_const 1
+    add_int
+    store_var __for_idx_1
+    jump L2
+
+  L6:
+    load_var2 12 2
+    call testing.TestRegistry.expand_set
+    jump L10
+
+  L7:
+    load_var2 3 4
+    load_array_element
+    store_var_load_var ts
+    load_field .name
+    load_var name
+    cmp_op ==
+    pop_jump_if_false L8
+    jump L9
+
+  L8:
+    load_var __for_idx
+    load_const 1
+    add_int
+    store_var __for_idx
+    jump L0
+
+  L9:
+    call baml.sys.now_ms
+    store_var start
+    load_var name
+    alloc_array 0
+    alloc_array 0
+    init_instance testing.TestCollector .prefix, .tests, .testsets
+    store_var_load_var sub_collector
+    load_var ts
+    load_field .collector
+    call_indirect
+    pop 1
+    call baml.sys.now_ms
+    store_var _19
+    load_var self
+    load_field .expansions
+    load_var2 2 7
+    alloc_map 0
+    load_var2 8 6
+    sub_int
+    init_instance testing.TestRegistry .collector, .expansions, .loading_time_ms
+    call baml.Map.set
+    pop 1
+    load_var self
+    call testing.TestRegistry.serialize
+
+  L10:
+    return
+}
+
+function testing.TestRegistry.from_json(j: baml.json.json) -> testing.TestRegistry {
+    load_var j
+    load_const "collector"
+    call baml.json.field
+    store_var _3
+    load_type testing.TestCollector
+    load_var _3
+    call baml.json.from_json
+    load_var j
+    load_const "expansions"
+    call baml.json.field
+    store_var _6
+    load_type map<string, testing.TestRegistry>
+    load_var _6
+    call baml.json.from_json
+    load_var j
+    load_const "loading_time_ms"
+    call baml.json.field
+    store_var _9
+    load_type int
+    load_var _9
+    call baml.json.from_json
+    init_instance testing.TestRegistry .collector, .expansions, .loading_time_ms
+    return
+}
+
+function testing.TestRegistry.new(collector: testing.TestCollector) -> testing.TestRegistry {
+    load_var collector
+    alloc_map 0
+    load_const 0
+    init_instance testing.TestRegistry .collector, .expansions, .loading_time_ms
+    return
+}
+
+function testing.TestRegistry.run_test(self: testing.TestRegistry, name: string) -> testing.TestReport {
+    load_var self
+    load_field .collector
+    load_field .tests
+    store_var _3
+    load_const 0
+    store_var __for_idx
+
+  L0:
+    load_var2 4 3
+    container_len
+    cmp_int_op <
+    pop_jump_if_false L1
+    jump L7
+
+  L1:
+    load_var self
+    load_field .expansions
+    call baml.Map.keys
+    store_var _13
+    load_const 0
+    store_var __for_idx_1
+
+  L2:
+    load_var2 7 6
+    container_len
+    cmp_int_op <
+    pop_jump_if_false L3
+    jump L4
+
+  L3:
+    load_const "Test not found: "
+    load_var name
+    bin_op +
+    throw
+
+  L4:
+    load_var2 6 7
+    load_array_element
+    store_var k
+    load_var self
+    load_field .expansions
+    load_var k
+    load_map_element
+    store_var sub
+    load_var2 2 8
+    load_const "/"
+    bin_op +
+    call baml.String.starts_with
+    pop_jump_if_false L5
+    jump L6
+
+  L5:
+    load_var __for_idx_1
+    load_const 1
+    add_int
+    store_var __for_idx_1
+    jump L2
+
+  L6:
+    load_var2 9 2
+    call testing.TestRegistry.run_test
+    jump L10
+
+  L7:
+    load_var2 3 4
+    load_array_element
+    store_var_load_var t
+    load_field .name
+    load_var name
+    cmp_op ==
+    pop_jump_if_false L8
+    jump L9
+
+  L8:
+    load_var __for_idx
+    load_const 1
+    add_int
+    store_var __for_idx
+    jump L0
+
+  L9:
+    load_var t
+    load_field .body
+    load_var t
+    load_field .runner
+    call testing.run_test
+
+  L10:
+    return
+}
+
+function testing.TestRegistry.serialize(self: testing.TestRegistry) -> (testing.SerializedTest | testing.SerializedTestSet)[] {
+    alloc_array 0
+    store_var items
+    load_var self
+    load_field .collector
+    load_field .tests
+    store_var _3
+    load_const 0
+    store_var __for_idx
+
+  L0:
+    load_var2 4 3
+    container_len
+    cmp_int_op <
+    pop_jump_if_false L1
+    jump L8
+
+  L1:
+    load_var self
+    load_field .collector
+    load_field .testsets
+    store_var _12
+    load_const 0
+    store_var __for_idx_1
+
+  L2:
+    load_var2 6 5
+    container_len
+    cmp_int_op <
+    pop_jump_if_false L3
+    jump L4
+
+  L3:
+    load_var items
+    return
+
+  L4:
+    load_var2 5 6
+    load_array_element
+    store_var ts
+    load_var self
+    load_field .expansions
+    load_var ts
+    load_field .name
+    call baml.Map.get
+    store_var expanded
+    load_var expanded
+    is_type testing.TestRegistry
+    pop_jump_if_false L5
+    jump L6
+
+  L5:
+    load_var items
+    load_const "lazyTestSet"
+    load_var ts
+    load_field .name
+    init_instance testing.SerializedTest .type, .name
+    call baml.Array.push
+    pop 1
+    jump L7
+
+  L6:
+    load_var expanded
+    store_var sub
+    load_var ts
+    load_field .name
+    store_var _25
+    load_var sub
+    call testing.TestRegistry.serialize
+    store_var _26
+    load_var2 2 10
+    load_var2 11 9
+    load_field .loading_time_ms
+    init_instance testing.SerializedTestSet .name, .items, .loadingTimeMs
+    call baml.Array.push
+    pop 1
+
+  L7:
+    load_var __for_idx_1
+    load_const 1
+    add_int
+    store_var __for_idx_1
+    jump L2
+
+  L8:
+    load_var items
+    load_const "test"
+    load_var2 3 4
+    load_array_element
+    load_field .name
+    init_instance testing.SerializedTest .type, .name
+    call baml.Array.push
+    pop 1
+    load_var __for_idx
+    load_const 1
+    add_int
+    store_var __for_idx
+    jump L0
+}
+
+function testing.TestRegistry.to_json(self: testing.TestRegistry) -> baml.json.json {
+    load_var self
+    load_field .collector
+    call testing.TestCollector.to_json
+    load_var self
+    load_field .expansions
+    call baml.Map.to_json
+    load_var self
+    load_field .loading_time_ms
+    call baml.Int.to_json
+    load_const "collector"
+    load_const "expansions"
+    load_const "loading_time_ms"
+    alloc_map 3
+    return
+}
+
+function testing.TestReport.from_json(j: baml.json.json) -> testing.TestReport {
+    load_var j
+    load_const "outcome"
+    call baml.json.field
+    store_var _3
+    load_type "pass" | "fail" | "error"
+    load_var _3
+    call baml.json.from_json
+    load_var j
+    load_const "runs"
+    call baml.json.field
+    store_var _6
+    load_type testing.RunReport[]
+    load_var _6
+    call baml.json.from_json
+    init_instance testing.TestReport .outcome, .runs
+    return
+}
+
+function testing.TestReport.to_json(self: testing.TestReport) -> baml.json.json {
+    load_var self
+    load_field .outcome
+    load_const "to_json"
+    load_map_element
+    call_indirect
+    load_var self
+    load_field .runs
+    call baml.Array.to_json
+    load_const "outcome"
+    load_const "runs"
+    alloc_map 2
+    return
+}
+
+function testing.TestSetRegistration.from_json(j: baml.json.json) -> testing.TestSetRegistration {
+    load_var j
+    load_const "name"
+    call baml.json.field
+    store_var _3
+    load_type string
+    load_var _3
+    call baml.json.from_json
+    load_var j
+    load_const "collector"
+    call baml.json.field
+    store_var _6
+    load_type (testing.TestCollector) -> void throws unknown
+    load_var _6
+    call baml.json.from_json
+    load_var j
+    load_const "runner"
+    call baml.json.field
+    store_var _9
+    load_type (() -> testing.TestSetReport throws never) -> (() -> testing.TestSetReport throws never) throws never?
+    load_var _9
+    call baml.json.from_json
+    init_instance testing.TestSetRegistration .name, .collector, .runner
+    return
+}
+
+function testing.TestSetRegistration.to_json(self: testing.TestSetRegistration) -> baml.json.json {
+    load_type testing.TestSetRegistration
+    load_var self
+    call baml.json.to_string
+    call baml.json.parse
+    return
+}
+
+function testing.TestSetReport.from_json(j: baml.json.json) -> testing.TestSetReport {
+    load_var j
+    load_const "outcome"
+    call baml.json.field
+    store_var _3
+    load_type "pass" | "fail" | "error"
+    load_var _3
+    call baml.json.from_json
+    load_var j
+    load_const "passed"
+    call baml.json.field
+    store_var _6
+    load_type int
+    load_var _6
+    call baml.json.from_json
+    load_var j
+    load_const "failed"
+    call baml.json.field
+    store_var _9
+    load_type int
+    load_var _9
+    call baml.json.from_json
+    load_var j
+    load_const "total"
+    call baml.json.field
+    store_var _12
+    load_type int
+    load_var _12
+    call baml.json.from_json
+    load_var j
+    load_const "results"
+    call baml.json.field
+    store_var _15
+    load_type testing.TestReport | testing.TestSetReport[]
+    load_var _15
+    call baml.json.from_json
+    init_instance testing.TestSetReport .outcome, .passed, .failed, .total, .results
+    return
+}
+
+function testing.TestSetReport.to_json(self: testing.TestSetReport) -> baml.json.json {
+    load_var self
+    load_field .outcome
+    load_const "to_json"
+    load_map_element
+    call_indirect
+    load_var self
+    load_field .passed
+    call baml.Int.to_json
+    load_var self
+    load_field .failed
+    call baml.Int.to_json
+    load_var self
+    load_field .total
+    call baml.Int.to_json
+    load_var self
+    load_field .results
+    call baml.Array.to_json
+    load_const "outcome"
+    load_const "passed"
+    load_const "failed"
+    load_const "total"
+    load_const "results"
+    alloc_map 5
+    return
+}
+
+function testing.run_test(body: () -> void throws unknown, runner: ((() -> testing.TestReport throws never) -> (() -> testing.TestReport throws never) throws never)?) -> testing.TestReport {
+    load_var ?1
+    make_cell
+    store_var ?1
+    load_var body
+    make_closure .<lambda(run_test, 0)>, 1
+    store_var base_run
+    load_var runner
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var2 3 2
+    call_indirect
+    call_indirect
+    jump L2
+
+  L1:
+    load_var base_run
+    call_indirect
+
+  L2:
+    return
+}
+
+function testing.run_testset(run_children: () -> testing.TestSetReport throws never, runner: ((() -> testing.TestSetReport throws never) -> (() -> testing.TestSetReport throws never) throws never)?) -> testing.TestSetReport {
+    load_var runner
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var2 1 2
+    call_indirect
+    call_indirect
+    jump L2
+
+  L1:
+    load_var run_children
+    call_indirect
+
+  L2:
+    return
+}
+
+function user.ErrorInfo.from_json(j: baml.json.json) -> ErrorInfo {
+    load_var j
+    load_const "code"
+    call baml.json.field
+    store_var _3
+    load_type int
+    load_var _3
+    call baml.json.from_json
+    load_var j
+    load_const "message"
+    call baml.json.field
+    store_var _6
+    load_type string
+    load_var _6
+    call baml.json.from_json
+    init_instance user.ErrorInfo .code, .message
+    return
+}
+
+function user.ErrorInfo.to_json(self: ErrorInfo) -> baml.json.json {
+    load_var self
+    load_field .code
+    call baml.Int.to_json
+    load_var self
+    load_field .message
+    call baml.String.to_json
+    load_const "code"
+    load_const "message"
+    alloc_map 2
+    return
+}
+
+function user.Report.from_json(j: baml.json.json) -> Report {
+    load_var j
+    load_const "score"
+    call baml.json.field
+    store_var _3
+    load_type int
+    load_var _3
+    call baml.json.from_json
+    load_var j
+    load_const "label"
+    call baml.json.field
+    store_var _6
+    load_type string
+    load_var _6
+    call baml.json.from_json
+    load_var j
+    load_const "breakdown"
+    call baml.json.field
+    store_var _9
+    load_type map<string, int>
+    load_var _9
+    call baml.json.from_json
+    init_instance user.Report .score, .label, .breakdown
+    return
+}
+
+function user.Report.to_json(self: Report) -> baml.json.json {
+    load_var self
+    load_field .score
+    call baml.Int.to_json
+    load_var self
+    load_field .label
+    call baml.String.to_json
+    load_var self
+    load_field .breakdown
+    call baml.Map.to_json
+    load_const "score"
+    load_const "label"
+    load_const "breakdown"
+    alloc_map 3
+    return
+}
+
+function user.User.from_json(j: baml.json.json) -> User {
+    load_var j
+    load_const "name"
+    call baml.json.field
+    store_var _3
+    load_type string
+    load_var _3
+    call baml.json.from_json
+    load_var j
+    load_const "age"
+    call baml.json.field
+    store_var _6
+    load_type int
+    load_var _6
+    call baml.json.from_json
+    load_var j
+    load_const "role"
+    call baml.json.field
+    store_var _9
+    load_type Role
+    load_var _9
+    call baml.json.from_json
+    init_instance user.User .name, .age, .role
+    return
+}
+
+function user.User.promote(self: User, bonus: int) -> Report {
+    load_var self
+    copy 0
+    load_field .age
+    load_const 1
+    bin_op +
+    store_field .age
+    load_var2 1 2
+    call user.score
+    store_var base
+    load_var base
+    load_field .score
+    load_var bonus
+    add_int
+    load_var base
+    load_field .label
+    load_var base
+    load_field .breakdown
+    init_instance user.Report .score, .label, .breakdown
+    return
+}
+
+function user.User.to_json(self: User) -> baml.json.json {
+    load_var self
+    load_field .name
+    call baml.String.to_json
+    load_var self
+    load_field .age
+    call baml.Int.to_json
+    load_var self
+    load_field .role
+    load_const "to_json"
+    load_map_element
+    call_indirect
+    load_const "name"
+    load_const "age"
+    load_const "role"
+    alloc_map 3
+    return
+}
+
+function user.http_status(code: int) -> string {
+    load_var code
+    dense_tag [200, 201, 204, 400, 404, 500]
+    jump_table [L6, L5, L4, L3, L2, L1], default L0
+
+  L0:
+    load_const "Unknown"
+    store_var label
+    jump L7
+
+  L1: 500
+    load_const "Internal Server Error"
+    store_var label
+    jump L7
+
+  L2: 404
+    load_const "Not Found"
+    store_var label
+    jump L7
+
+  L3: 400
+    load_const "Bad Request"
+    store_var label
+    jump L7
+
+  L4: 204
+    load_const "No Content"
+    store_var label
+    jump L7
+
+  L5: 201
+    load_const "Created"
+    store_var label
+    jump L7
+
+  L6: 200
+    load_const "OK"
+    store_var label
+
+  L7:
+    load_const "HTTP "
+    load_var label
+    bin_op +
+    return
+}
+
+function user.score(input: User | ErrorInfo, threshold: int) -> Report {
+    load_var input
+    is_type User
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var input
+    load_field .message
+    store_var name
+    jump L2
+
+  L1:
+    load_var input
+    load_field .name
+    store_var name
+
+  L2:
+    load_var input
+    is_type User
+    pop_jump_if_false L3
+    jump L4
+
+  L3:
+    load_var input
+    load_field .code
+    unary_op -
+    store_var age
+    jump L5
+
+  L4:
+    load_var input
+    load_field .age
+    store_var age
+
+  L5:
+    load_var input
+    is_type User
+    pop_jump_if_false L6
+    jump L7
+
+  L6:
+    load_var threshold
+    store_var role_mult
+    jump L12
+
+  L7:
+    load_var input
+    load_field .role
+    discriminant
+    jump_table [L11, L10, L9, L8], default L19
+
+  L8: Role.Guest
+    load_var threshold
+    store_var role_mult
+    jump L12
+
+  L9: Role.Viewer
+    load_var threshold
+    store_var role_mult
+    jump L12
+
+  L10: Role.Editor
+    load_var threshold
+    store_var role_mult
+    jump L12
+
+  L11: Role.Admin
+    load_var threshold
+    store_var role_mult
+
+  L12:
+    load_var age
+    load_const 2
+    mul_int
+    load_var role_mult
+    add_int
+    store_var_load_var base
+    load_var role_mult
+    cmp_int_op >
+    pop_jump_if_false L13
+    jump L14
+
+  L13:
+    load_var base
+    store_var capped
+    jump L15
+
+  L14:
+    load_var role_mult
+    store_var capped
+
+  L15:
+    load_var2 7 5
+    add_int
+    store_var_load_var total
+    load_var threshold
+    cmp_int_op >
+    load_const true
+    cmp_op ==
+    pop_jump_if_false L16
+    jump L17
+
+  L16:
+    load_const " [LOW]"
+    store_var suffix
+    jump L18
+
+  L17:
+    load_const " [HIGH]"
+    store_var suffix
+
+  L18:
+    load_var2 6 7
+    load_var total
+    alloc_array 3
+    store_var scores
+    load_var scores
+    load_const 0
+    load_var total
+    store_array_element
+    load_var scores
+    load_const 0
+    load_array_element
+    load_var2 3 9
+    bin_op +
+    load_var2 6 5
+    load_const "base"
+    load_const "role"
+    alloc_map 2
+    init_instance user.Report .score, .label, .breakdown
+    return
+
+  L19:
+    unreachable
+}

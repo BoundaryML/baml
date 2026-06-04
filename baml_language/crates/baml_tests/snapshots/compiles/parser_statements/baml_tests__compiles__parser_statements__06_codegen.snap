@@ -42,7 +42,7 @@ function user.EdgeFoo.from_json(j: baml.json.json) -> EdgeFoo {
     return
 }
 
-function user.EdgeFoo.to_json(self: null) -> baml.json.json {
+function user.EdgeFoo.to_json(self: EdgeFoo) -> baml.json.json {
     load_var self
     load_field .x
     call baml.Int.to_json
@@ -70,7 +70,7 @@ function user.Point.from_json(j: baml.json.json) -> Point {
     return
 }
 
-function user.Point.to_json(self: null) -> baml.json.json {
+function user.Point.to_json(self: Point) -> baml.json.json {
     load_var self
     load_field .x
     call baml.Int.to_json
@@ -85,10 +85,12 @@ function user.Point.to_json(self: null) -> baml.json.json {
 
 function user.add_assign() -> int {
     load_const 10
-    store_var_load_var x
+    store_var x
+    load_var x
     load_const 5
     add_int
-    store_var_load_var x
+    store_var x
+    load_var x
     return
 }
 
@@ -110,8 +112,7 @@ function user.assign_in_loop() -> int {
     return
 
   L2:
-    load_var sum
-    load_var i
+    load_var2 1 2
     add_int
     store_var sum
     load_var i
@@ -169,8 +170,7 @@ function user.c_style_for_loop() -> int {
     return
 
   L2:
-    load_var result
-    load_var i
+    load_var2 1 2
     add_int
     store_var result
     load_var i
@@ -274,8 +274,7 @@ function user.iterator_style_for_loop() -> int {
     store_var __for_idx
 
   L0:
-    load_var __for_idx
-    load_var _2
+    load_var2 3 2
     container_len
     cmp_int_op <
     pop_jump_if_false L1
@@ -286,8 +285,7 @@ function user.iterator_style_for_loop() -> int {
     return
 
   L2:
-    load_var result
-    load_var _2
+    load_var2 1 2
     load_var __for_idx
     load_array_element
     add_int
@@ -332,10 +330,12 @@ function user.let_statements() -> int {
 
 function user.mul_assign() -> int {
     load_const 3
-    store_var_load_var x
+    store_var x
+    load_var x
     load_const 4
     mul_int
-    store_var_load_var x
+    store_var x
+    load_var x
     return
 }
 
@@ -348,8 +348,7 @@ function user.multi_assign() -> int {
     store_var a
     load_const 20
     store_var b
-    load_var a
-    load_var b
+    load_var2 1 2
     add_int
     return
 }
@@ -377,8 +376,7 @@ function user.nested_for_loop() -> int {
     store_var __for_idx
 
   L0:
-    load_var __for_idx
-    load_var _2
+    load_var2 3 2
     container_len
     cmp_int_op <
     pop_jump_if_false L1
@@ -389,8 +387,7 @@ function user.nested_for_loop() -> int {
     return
 
   L2:
-    load_var _2
-    load_var __for_idx
+    load_var2 2 3
     load_array_element
     store_var i
     load_const 4
@@ -402,8 +399,7 @@ function user.nested_for_loop() -> int {
     store_var __for_idx_1
 
   L3:
-    load_var __for_idx_1
-    load_var _8
+    load_var2 6 5
     container_len
     cmp_int_op <
     pop_jump_if_false L4
@@ -417,10 +413,8 @@ function user.nested_for_loop() -> int {
     jump L0
 
   L5:
-    load_var result
-    load_var i
-    load_var _8
-    load_var __for_idx_1
+    load_var2 1 4
+    load_var2 5 6
     load_array_element
     mul_int
     add_int
@@ -464,7 +458,8 @@ function user.simple_assign() -> int {
     load_const 1
     store_var x
     load_const 5
-    store_var_load_var x
+    store_var x
+    load_var x
     return
 }
 
@@ -513,9 +508,11 @@ function user.simple_while_loop() -> int {
 
 function user.sub_assign() -> int {
     load_const 10
-    store_var_load_var x
+    store_var x
+    load_var x
     load_const 3
     sub_int
-    store_var_load_var x
+    store_var x
+    load_var x
     return
 }

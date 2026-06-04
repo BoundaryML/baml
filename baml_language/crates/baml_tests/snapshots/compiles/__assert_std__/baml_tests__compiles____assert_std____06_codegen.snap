@@ -2,8 +2,7 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 function assert.contains(haystack: string, needle: string) -> null {
-    load_var haystack
-    load_var needle
+    load_var2 1 2
     call baml.String.includes
     unary_op !
     pop_jump_if_false L0
@@ -22,8 +21,7 @@ function assert.contains(haystack: string, needle: string) -> null {
 }
 
 function assert.equal(actual: unknown, expected: unknown) -> null {
-    load_var actual
-    load_var expected
+    load_var2 1 2
     cmp_op !=
     pop_jump_if_false L0
     jump L1

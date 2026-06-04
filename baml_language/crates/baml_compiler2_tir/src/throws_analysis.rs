@@ -5,7 +5,7 @@ use baml_compiler2_ast::{Expr, ExprBody, ExprId, Stmt, StmtId};
 
 use crate::{
     throw_inference::flatten_ty_to_facts,
-    ty::{Ty, TyAttr},
+    ty::{PrimitiveType, Ty, TyAttr},
 };
 
 pub(crate) trait ThrowsAnalysisContext {
@@ -124,6 +124,14 @@ fn collect_from_stmt<C: ThrowsAnalysisContext>(
             if let Some(after_stmt) = after {
                 collect_from_stmt(context, *after_stmt, body, out);
             }
+        }
+        Stmt::WhileLet {
+            scrutinee,
+            body: while_body,
+            ..
+        } => {
+            collect_from_expr(context, *scrutinee, body, out);
+            collect_from_expr(context, *while_body, body, out);
         }
         Stmt::For {
             collection,
@@ -279,7 +287,9 @@ fn collect_from_expr<C: ThrowsAnalysisContext>(
                 collect_from_expr(context, *tail, body, out);
             }
         }
-        Expr::MemberAccess { base, .. } | Expr::OptionalMemberAccess { base, .. } => {
+        Expr::MemberAccess { base, .. }
+        | Expr::Upcast { base, .. }
+        | Expr::OptionalMemberAccess { base, .. } => {
             collect_from_expr(context, *base, body, out);
         }
         Expr::Index { base, index } | Expr::OptionalIndex { base, index } => {
@@ -307,6 +317,20 @@ fn collect_from_expr<C: ThrowsAnalysisContext>(
         }
         Expr::Await { future } => {
             collect_from_expr(context, *future, body, out);
+            // `await f` re-throws the awaited future's error: `f: Future<T, E>`
+            // contributes `E` to the body's escaping throws. `null`/`never`
+            // mark a future that cannot fail (BEP-034 v1 spells `never` as
+            // `null`); `Unknown`/`Error` add no information — skip those.
+            if let Some(Ty::Future(_, error, _)) = context.expression_type(*future) {
+                match error.as_ref() {
+                    Ty::Never { .. } | Ty::Unknown { .. } | Ty::Error { .. } => {}
+                    Ty::Primitive(PrimitiveType::Null, _) => {}
+                    e => out.extend(flatten_ty_to_facts(e)),
+                }
+            }
+        }
+        Expr::GenericApply { base, .. } => {
+            collect_from_expr(context, *base, body, out);
         }
         Expr::Lambda(_)
         | Expr::Literal(_)

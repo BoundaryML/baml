@@ -41,6 +41,14 @@ pub mod type_tags {
     pub use baml_type::typetag::*;
 }
 
+pub type InterfaceAssociatedBindings = Vec<(baml_type::Name, baml_type::Ty)>;
+pub type InterfaceImplementorEntry = (
+    baml_type::TypeName,
+    Vec<baml_type::Ty>,
+    InterfaceAssociatedBindings,
+);
+pub type InterfaceImplementors = IndexMap<baml_type::TypeName, Vec<InterfaceImplementorEntry>>;
+
 /// Compiled program ready for execution.
 ///
 /// This is what `baml_compiler_emit` produces. It contains all the objects and globals
@@ -94,6 +102,16 @@ pub struct Program {
     /// Only recursive aliases are stored (non-recursive ones are expanded inline).
     /// Keyed by [`baml_type::TypeName`] for consistent identity with `Ty::TypeAlias`.
     pub recursive_type_alias_defs: IndexMap<baml_type::TypeName, Ty>,
+
+    /// Per-program interface implementation registry (BEP-044).
+    ///
+    /// Maps each interface's `TypeName` to the list of class `TypeName`s that
+    /// nominally implement it (transitively through `extends`). Used by the
+    /// runtime reflection methods `type.implementors()`, `type.implements()`,
+    /// and `type.implemented_by()`.
+    ///
+    /// Empty for programs without interfaces.
+    pub interface_implementors: InterfaceImplementors,
 }
 
 /// Metadata for building a client tree at runtime.
@@ -1610,6 +1628,15 @@ pub enum Object {
     /// at call time by `CallIndirect`.
     BoundMethod(BoundMethod),
 
+    /// A generic function instantiation carrying concrete type arguments
+    /// (`foo<int>` referenced as a value, not called). Pooled and interned at
+    /// compile time so identical instantiations share one object
+    /// (pointer-stable `foo<int> === foo<int>`). When called, the VM resolves
+    /// `function` via the global table and seeds `frame.type_args` from
+    /// `type_args`, so type-reifying bodies (`reflect.type_of<T>`, json natives)
+    /// work through the value.
+    GenericFunction(GenericFunction),
+
     /// A host-language callable bound to a BAML function type.
     ///
     /// Created at the FFI boundary when a `HostValue` is passed for a
@@ -1673,17 +1700,9 @@ pub enum Object {
     Sentinel(SentinelKind),
 }
 
-// BexStr is larger than String on wasm32 (20 vs 12 bytes) due to u64 fields,
-// so allow 88 bytes on 32-bit targets.
-#[cfg(target_pointer_width = "64")]
 const _: () = assert!(
-    std::mem::size_of::<Object>() <= 80,
-    "Object enum size regression — expected <= 80 bytes (64-bit)"
-);
-#[cfg(target_pointer_width = "32")]
-const _: () = assert!(
-    std::mem::size_of::<Object>() <= 88,
-    "Object enum size regression — expected <= 88 bytes (32-bit)"
+    std::mem::size_of::<Object>() <= 64,
+    "Object enum size regression — expected <= 64 bytes"
 );
 
 // Custom borsh for Object: RustData and Collector contain non-serializable
@@ -1697,6 +1716,7 @@ enum ObjectWire {
     Variant(Variant),
     Closure(Closure),
     BoundMethod(BoundMethod),
+    GenericFunction(GenericFunction),
     Cell(Cell),
     String(String),
     // `Arc<BigInt>` isn't directly Borsh-derivable (and we want the same
@@ -1729,6 +1749,7 @@ impl BorshSerialize for Object {
             Self::Variant(v) => ObjectWire::Variant(v.clone()),
             Self::Closure(v) => ObjectWire::Closure(v.clone()),
             Self::BoundMethod(v) => ObjectWire::BoundMethod(v.clone()),
+            Self::GenericFunction(v) => ObjectWire::GenericFunction(v.clone()),
             Self::Cell(v) => ObjectWire::Cell(v.clone()),
             Self::String(v) => ObjectWire::String(v.to_string()),
             Self::Bigint(v) => ObjectWire::Bigint((**v).clone()),
@@ -1785,6 +1806,7 @@ impl BorshDeserialize for Object {
             ObjectWire::Variant(v) => Self::Variant(v),
             ObjectWire::Closure(v) => Self::Closure(v),
             ObjectWire::BoundMethod(v) => Self::BoundMethod(v),
+            ObjectWire::GenericFunction(v) => Self::GenericFunction(v),
             ObjectWire::Cell(v) => Self::Cell(v),
             ObjectWire::String(v) => Self::String(bex_str::BexStr::from(v)),
             ObjectWire::Bigint(v) => Self::Bigint(std::sync::Arc::new(v)),
@@ -1810,7 +1832,7 @@ pub struct Closure {
     /// Pointer to the underlying `Object::Function`.
     pub function: HeapPtr,
     /// Captured cells, one per closed-over variable (each is `Object::Cell`).
-    pub captures: Vec<Value>,
+    pub captures: Box<[Value]>,
     /// Type arguments captured from the enclosing generic context at the time
     /// the closure is created by `MakeClosure`.
     ///
@@ -1819,7 +1841,7 @@ pub struct Closure {
     /// before the cell captures.  These become `frame.type_args` when the
     /// closure is invoked, so that `LoadType(TypeArgRef(N))` inside the
     /// closure body resolves correctly.
-    pub captured_type_args: Vec<baml_type::Ty>,
+    pub captured_type_args: Box<[baml_type::Ty]>,
 }
 
 /// A method bound to a specific receiver instance.
@@ -1832,6 +1854,22 @@ pub struct BoundMethod {
     pub function: HeapPtr,
     /// The receiver value (inserted as `self` at call time).
     pub receiver: Value,
+}
+
+/// A generic function instantiation carrying concrete type arguments.
+///
+/// Unlike `Closure`/`BoundMethod`, the base function is referenced by its
+/// **global slot** (`GlobalIndex`), not a `HeapPtr` — so a `GenericFunction`
+/// can live in the immutable compile-time object pool and be interned by
+/// `(function, type_args)`, giving pointer-stable identity. Both fields are
+/// non-pointer data, so GC treats this as a leaf (nothing to trace or fix up).
+#[derive(Clone, Debug, BorshSerialize, BorshDeserialize)]
+pub struct GenericFunction {
+    /// Global slot of the underlying `Object::Function` (resolved at call time
+    /// via the global table, mirroring `MakeBoundMethod`).
+    pub function: crate::GlobalIndex,
+    /// Concrete type arguments to seed into `frame.type_args` when called.
+    pub type_args: Box<[baml_type::Ty]>,
 }
 
 /// A host-language callable bound to a BAML function type.
@@ -1901,6 +1939,9 @@ impl std::fmt::Display for Object {
                 write!(f, "<closure captures={captures_len}>")
             }
             Object::BoundMethod(_) => write!(f, "<bound_method>"),
+            Object::GenericFunction(gf) => {
+                write!(f, "<generic_function type_args={}>", gf.type_args.len())
+            }
             Object::HostClosure(_) => write!(f, "<host_closure>"),
             Object::Cell(cell) => write!(f, "<cell {}>", cell.load()),
             Object::String(string) => string.fmt(f),
@@ -2555,6 +2596,7 @@ impl ObjectType {
             Object::Function(func) => Self::Function(FunctionType::from(&func.kind)),
             Object::Closure(_) => Self::Closure,
             Object::BoundMethod(_) => Self::Closure, // Treat as callable like closures
+            Object::GenericFunction(_) => Self::Closure, // Callable like closures
             Object::HostClosure(_) => Self::Closure, // Callable like closures
 
             Object::Cell(_) => Self::Cell,

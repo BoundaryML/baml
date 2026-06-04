@@ -428,7 +428,7 @@ fn write_rvalue(f: &mut impl Write, rvalue: &Rvalue) -> fmt::Result {
                             if i > 0 {
                                 write!(f, ", ")?;
                             }
-                            write!(f, "{t:?}")?;
+                            write!(f, "{t}")?;
                         }
                         write!(f, ">")?;
                     }
@@ -489,6 +489,22 @@ fn write_rvalue(f: &mut impl Write, rvalue: &Rvalue) -> fmt::Result {
         Rvalue::LoadType(template) => {
             write!(f, "load_type({template})")
         }
+        Rvalue::MakeGenericFunction {
+            item,
+            type_arg_templates,
+        } => {
+            let args: Vec<String> = type_arg_templates.iter().map(ToString::to_string).collect();
+            write!(f, "make_generic_function {item}<{}>", args.join(", "))
+        }
+        Rvalue::MakeGenericFunctionFromValue {
+            value,
+            type_arg_templates,
+        } => {
+            write!(f, "make_generic_function_from_value(")?;
+            write_operand(f, value)?;
+            let args: Vec<String> = type_arg_templates.iter().map(ToString::to_string).collect();
+            write!(f, ")<{}>", args.join(", "))
+        }
     }
 }
 
@@ -510,6 +526,10 @@ fn write_constant(f: &mut impl Write, constant: &Constant) -> fmt::Result {
         Constant::Null => write!(f, "const null"),
         Constant::OmittedArg => write!(f, "const <omitted>"),
         Constant::Function(qn) => write!(f, "const fn {qn}"),
+        Constant::GenericFunction { item, type_args } => {
+            let args: Vec<String> = type_args.iter().map(ToString::to_string).collect();
+            write!(f, "const fn {item}<{}>", args.join(", "))
+        }
         Constant::EnumVariant { enum_ref, variant } => write!(f, "const {enum_ref}.{variant}"),
     }
 }

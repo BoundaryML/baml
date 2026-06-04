@@ -13,7 +13,9 @@ use text_size::TextRange;
 
 use crate::{
     LoweringDiagnostic,
-    ast::{FunctionTypeParam as AstFunctionTypeParam, RawAttribute, TypeExpr},
+    ast::{
+        AssociatedTypeBinding, FunctionTypeParam as AstFunctionTypeParam, RawAttribute, TypeExpr,
+    },
     lower_cst::lower_attribute,
 };
 
@@ -25,6 +27,38 @@ fn collect_type_attrs(type_expr: &CstTypeExpr) -> Vec<RawAttribute> {
         .filter_map(baml_compiler_syntax::ast::Attribute::cast)
         .filter_map(|attr| lower_attribute(&attr))
         .collect()
+}
+
+fn collect_function_type_generic_params(type_expr: &CstTypeExpr) -> Vec<(Name, Option<TypeExpr>)> {
+    let mut out = Vec::new();
+    for param_list in type_expr
+        .syntax()
+        .children()
+        .filter(|node| node.kind() == SyntaxKind::GENERIC_PARAM_LIST)
+    {
+        for param_node in param_list
+            .children()
+            .filter(|node| node.kind() == SyntaxKind::GENERIC_PARAM)
+        {
+            let name = param_node.children_with_tokens().find_map(|elem| {
+                let token = elem.as_token()?;
+                (token.kind() == SyntaxKind::WORD).then(|| Name::new(token.text()))
+            });
+            let bound = param_node
+                .children()
+                .find(|node| node.kind() == SyntaxKind::GENERIC_PARAM_BOUNDS)
+                .and_then(|bounds| {
+                    bounds
+                        .children()
+                        .find_map(baml_compiler_syntax::ast::TypeExpr::cast)
+                })
+                .map(|bound| lower_type_expr_inner(&bound, true));
+            if let Some(name) = name {
+                out.push((name, bound));
+            }
+        }
+    }
+    out
 }
 
 /// Convert a CST `TypeExpr` node to our `ast::TypeExpr` recursive enum.
@@ -148,8 +182,26 @@ fn lower_base(type_expr: &CstTypeExpr) -> TypeExpr {
 
 /// Parse the base type (no modifiers, not a union).
 fn lower_base_terminal(type_expr: &CstTypeExpr) -> TypeExpr {
+    if let Some((base, interface, member)) = type_expr.associated_type_projection() {
+        return TypeExpr::AssociatedTypeProjection {
+            base: Box::new(lower_type_expr_inner(&base, false)),
+            interface: Some(Box::new(lower_type_expr_inner(&interface, false))),
+            member: Name::new(member.text()),
+            attrs: vec![],
+        };
+    }
+
     // Handle function types like `(x: int, y: int) -> bool`
     if type_expr.is_function_type() {
+        let generic_params_with_bounds = collect_function_type_generic_params(type_expr);
+        let generic_params = generic_params_with_bounds
+            .iter()
+            .map(|(name, _)| name.clone())
+            .collect();
+        let generic_param_bounds = generic_params_with_bounds
+            .into_iter()
+            .map(|(_, bound)| bound)
+            .collect();
         let params = type_expr
             .function_type_params()
             .iter()
@@ -171,6 +223,8 @@ fn lower_base_terminal(type_expr: &CstTypeExpr) -> TypeExpr {
             .function_throws_type()
             .map(|t| Box::new(lower_type_expr_inner(&t, false)));
         return TypeExpr::Function {
+            generic_params,
+            generic_param_bounds,
             params,
             ret: Box::new(ret),
             throws,
@@ -247,6 +301,11 @@ fn lower_base_type(type_expr: &CstTypeExpr) -> TypeExpr {
     // Check for map type with type args
     if let Some(name) = type_expr.dotted_name() {
         let args = type_expr.type_arg_exprs();
+        let associated_type_bindings = type_expr
+            .type_arg_associated_bindings()
+            .iter()
+            .filter_map(lower_associated_type_binding)
+            .collect();
         if name == "map" && args.len() == 2 {
             let key = lower_type_expr_inner(&args[0], false);
             let value = lower_type_expr_inner(&args[1], false);
@@ -262,7 +321,11 @@ fn lower_base_type(type_expr: &CstTypeExpr) -> TypeExpr {
             .iter()
             .map(|arg| lower_type_expr_inner(arg, false))
             .collect();
-        return lower_from_type_name_with_generic_args(&name, generic_args);
+        return lower_from_type_name_with_generic_args(
+            &name,
+            generic_args,
+            associated_type_bindings,
+        );
     }
 
     TypeExpr::Unknown { attrs: vec![] }
@@ -284,6 +347,15 @@ fn lower_union_member(parts: &baml_compiler_syntax::ast::UnionMemberParts) -> Ty
 
 /// Extract the base type from union member parts (no modifiers or attrs).
 fn lower_union_member_base(parts: &baml_compiler_syntax::ast::UnionMemberParts) -> TypeExpr {
+    if let Some((base, interface, member)) = parts.associated_type_projection() {
+        return TypeExpr::AssociatedTypeProjection {
+            base: Box::new(lower_type_expr_inner(&base, false)),
+            interface: Some(Box::new(lower_type_expr_inner(&interface, false))),
+            member: Name::new(member.text()),
+            attrs: vec![],
+        };
+    }
+
     // Check for parenthesized type first (e.g., `(int | string)` in `A | (int | string)`)
     if let Some(type_expr) = parts.type_expr() {
         return lower_type_expr_inner(&type_expr, false);
@@ -332,14 +404,20 @@ fn lower_union_member_base(parts: &baml_compiler_syntax::ast::UnionMemberParts) 
 
     // Check for named/primitive type or map type
     if let Some(name) = parts.dotted_name() {
-        let type_arg_exprs: Vec<_> = parts
+        let (type_arg_exprs, associated_type_bindings): (Vec<_>, Vec<_>) = parts
             .type_args()
             .map(|type_args_node| {
-                type_args_node
+                let type_args = type_args_node
                     .children()
                     .filter(|n| n.kind() == baml_compiler_syntax::SyntaxKind::TYPE_EXPR)
                     .map(|n| baml_compiler_syntax::ast::TypeExpr::cast(n).unwrap())
-                    .collect()
+                    .collect();
+                let associated_bindings = type_args_node
+                    .children()
+                    .filter_map(baml_compiler_syntax::ast::AssociatedTypeDecl::cast)
+                    .filter_map(|binding| lower_associated_type_binding(&binding))
+                    .collect();
+                (type_args, associated_bindings)
             })
             .unwrap_or_default();
 
@@ -369,7 +447,11 @@ fn lower_union_member_base(parts: &baml_compiler_syntax::ast::UnionMemberParts) 
                 value: baml_base::Literal::Bool(false),
                 attrs: vec![],
             },
-            _ => lower_from_type_name_with_generic_args(&name, generic_args),
+            _ => lower_from_type_name_with_generic_args(
+                &name,
+                generic_args,
+                associated_type_bindings,
+            ),
         };
     }
 
@@ -380,7 +462,25 @@ fn lower_union_member_base(parts: &baml_compiler_syntax::ast::UnionMemberParts) 
 ///
 /// Generic args are preserved on `Path` types (e.g., `Stream<T>`). For primitive
 /// types, generic args are silently dropped (primitives can't be generic).
-fn lower_from_type_name_with_generic_args(name: &str, generic_args: Vec<TypeExpr>) -> TypeExpr {
+pub(crate) fn lower_associated_type_binding(
+    binding: &baml_compiler_syntax::ast::AssociatedTypeDecl,
+) -> Option<AssociatedTypeBinding> {
+    let name = binding.name()?;
+    let ty = binding
+        .default_or_binding()
+        .map(|ty| lower_type_expr_inner(&ty, false))
+        .unwrap_or(TypeExpr::Unknown { attrs: vec![] });
+    Some(AssociatedTypeBinding {
+        name: Name::new(name.text()),
+        ty: Box::new(ty),
+    })
+}
+
+fn lower_from_type_name_with_generic_args(
+    name: &str,
+    generic_args: Vec<TypeExpr>,
+    associated_type_bindings: Vec<AssociatedTypeBinding>,
+) -> TypeExpr {
     match name {
         "int" => TypeExpr::Int { attrs: vec![] },
         "bigint" => TypeExpr::Bigint { attrs: vec![] },
@@ -413,6 +513,7 @@ fn lower_from_type_name_with_generic_args(name: &str, generic_args: Vec<TypeExpr
         "json" => TypeExpr::Path {
             segments: vec![Name::new("baml"), Name::new("json"), Name::new("json")],
             generic_args: vec![],
+            associated_type_bindings: vec![],
             attrs: vec![],
         },
         _ => {
@@ -421,12 +522,14 @@ fn lower_from_type_name_with_generic_args(name: &str, generic_args: Vec<TypeExpr
                 TypeExpr::Path {
                     segments,
                     generic_args,
+                    associated_type_bindings,
                     attrs: vec![],
                 }
             } else {
                 TypeExpr::Path {
                     segments: vec![Name::new(name)],
                     generic_args,
+                    associated_type_bindings,
                     attrs: vec![],
                 }
             }

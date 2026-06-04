@@ -21,6 +21,7 @@ rustls = [ "sys_native/rustls" ]
 bundle-http = [ "sys_native/bundle-http" ]
 
 [dependencies]
+baml_version = { workspace = true }
 bex_events = { workspace = true }
 bex_events_native = { workspace = true }
 bex_project = { workspace = true }

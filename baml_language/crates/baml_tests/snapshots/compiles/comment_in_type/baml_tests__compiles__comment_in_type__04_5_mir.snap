@@ -2,170 +2,290 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === MIR2 ===
-fn user.CommentAfterArrow() -> string {
+fn user.CommentAfterArrow(client: baml.llm.Client) -> string {
     // Locals:
     let _0: string // _0 // return
-    let _1: map<string, unknown>
-    let _2: type
-
-    bb0: {
-        _1 = {  };
-        _2 = load_type(string);
-        _0 = call const fn baml.llm.call_llm_function<copy _2>(const fn user.TestClient, const "CommentAfterArrow", copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn user.CommentAfterArrow$build_request() -> baml.http.Request {
-    // Locals:
-    let _0: baml.http.Request // _0 // return
-    let _1: map<string, unknown>
-
-    bb0: {
-        _1 = {  };
-        _0 = call const fn baml.llm.build_request(const fn user.TestClient, const "CommentAfterArrow", copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn user.CommentAfterArrow$build_request_stream() -> baml.http.Request {
-    // Locals:
-    let _0: baml.http.Request // _0 // return
-    let _1: map<string, unknown>
-
-    bb0: {
-        _1 = {  };
-        _0 = call const fn baml.llm.build_request_stream(const fn user.TestClient, const "CommentAfterArrow", copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn user.CommentAfterArrow$parse(json: string) -> string {
-    // Locals:
-    let _0: string // _0 // return
-    let _1: string // json // param
-    let _2: type
-    let _3: type
-
-    bb0: {
-        _2 = load_type(void);
-        _3 = load_type(string);
-        _0 = call const fn baml.llm.parse<copy _2, copy _3>(const "CommentAfterArrow", copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn user.CommentAfterArrow$render_prompt() -> baml.llm.PromptAst {
-    // Locals:
-    let _0: baml.llm.PromptAst // _0 // return
-    let _1: map<string, unknown>
-
-    bb0: {
-        _1 = {  };
-        _0 = call const fn baml.llm.render_prompt(const fn user.TestClient, const "CommentAfterArrow", copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn user.FunctionWithComments(a: string, b: int) -> string {
-    // Locals:
-    let _0: string // _0 // return
-    let _1: string // a // param
-    let _2: int // b // param
+    let _1: baml.llm.Client // client // param
+    let _2: bool
     let _3: map<string, unknown>
     let _4: type
 
     bb0: {
-        _3 = { const "a": copy _1, const "b": copy _2 };
+        _2 = copy _1 == const <omitted>;
+        branch copy _2 -> [bb1, bb2];
+    }
+
+    bb1: {
+        _1 = const fn user.TestClient;
+        goto -> bb2;
+    }
+
+    bb2: {
+        _3 = {  };
         _4 = load_type(string);
-        _0 = call const fn baml.llm.call_llm_function<copy _4>(const fn user.TestClient, const "FunctionWithComments", copy _3) -> [bb1];
+        _0 = call const fn baml.llm.call_llm_function<copy _4>(copy _1, const "CommentAfterArrow", copy _3) -> [bb3];
     }
 
-    bb1: {
+    bb3: {
         return;
     }
 }
 
-fn user.FunctionWithComments$build_request(a: string, b: int) -> baml.http.Request {
+fn user.CommentAfterArrow$build_request(client: baml.llm.Client) -> baml.http.Request {
     // Locals:
     let _0: baml.http.Request // _0 // return
-    let _1: string // a // param
-    let _2: int // b // param
+    let _1: baml.llm.Client // client // param
+    let _2: bool
     let _3: map<string, unknown>
 
     bb0: {
-        _3 = { const "a": copy _1, const "b": copy _2 };
-        _0 = call const fn baml.llm.build_request(const fn user.TestClient, const "FunctionWithComments", copy _3) -> [bb1];
+        _2 = copy _1 == const <omitted>;
+        branch copy _2 -> [bb1, bb2];
     }
 
     bb1: {
+        _1 = const fn user.TestClient;
+        goto -> bb2;
+    }
+
+    bb2: {
+        _3 = {  };
+        _0 = call const fn baml.llm.build_request(copy _1, const "CommentAfterArrow", copy _3) -> [bb3];
+    }
+
+    bb3: {
         return;
     }
 }
 
-fn user.FunctionWithComments$build_request_stream(a: string, b: int) -> baml.http.Request {
+fn user.CommentAfterArrow$build_request_stream(client: baml.llm.Client) -> baml.http.Request {
     // Locals:
     let _0: baml.http.Request // _0 // return
-    let _1: string // a // param
-    let _2: int // b // param
+    let _1: baml.llm.Client // client // param
+    let _2: bool
     let _3: map<string, unknown>
 
     bb0: {
-        _3 = { const "a": copy _1, const "b": copy _2 };
-        _0 = call const fn baml.llm.build_request_stream(const fn user.TestClient, const "FunctionWithComments", copy _3) -> [bb1];
+        _2 = copy _1 == const <omitted>;
+        branch copy _2 -> [bb1, bb2];
     }
 
     bb1: {
+        _1 = const fn user.TestClient;
+        goto -> bb2;
+    }
+
+    bb2: {
+        _3 = {  };
+        _0 = call const fn baml.llm.build_request_stream(copy _1, const "CommentAfterArrow", copy _3) -> [bb3];
+    }
+
+    bb3: {
         return;
     }
 }
 
-fn user.FunctionWithComments$parse(json: string) -> string {
+fn user.CommentAfterArrow$parse(json: string, client: baml.llm.Client) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // json // param
-    let _2: type
-    let _3: type
+    let _2: baml.llm.Client // client // param
+    let _3: bool
+    let _4: type
+    let _5: type
 
     bb0: {
-        _2 = load_type(void);
-        _3 = load_type(string);
-        _0 = call const fn baml.llm.parse<copy _2, copy _3>(const "FunctionWithComments", copy _1) -> [bb1];
+        _3 = copy _2 == const <omitted>;
+        branch copy _3 -> [bb1, bb2];
     }
 
     bb1: {
+        _2 = const fn user.TestClient;
+        goto -> bb2;
+    }
+
+    bb2: {
+        _4 = load_type(void);
+        _5 = load_type(string);
+        _0 = call const fn baml.llm.parse<copy _4, copy _5>(const "CommentAfterArrow", copy _1) -> [bb3];
+    }
+
+    bb3: {
         return;
     }
 }
 
-fn user.FunctionWithComments$render_prompt(a: string, b: int) -> baml.llm.PromptAst {
+fn user.CommentAfterArrow$render_prompt(client: baml.llm.Client) -> baml.llm.PromptAst {
+    // Locals:
+    let _0: baml.llm.PromptAst // _0 // return
+    let _1: baml.llm.Client // client // param
+    let _2: bool
+    let _3: map<string, unknown>
+
+    bb0: {
+        _2 = copy _1 == const <omitted>;
+        branch copy _2 -> [bb1, bb2];
+    }
+
+    bb1: {
+        _1 = const fn user.TestClient;
+        goto -> bb2;
+    }
+
+    bb2: {
+        _3 = {  };
+        _0 = call const fn baml.llm.render_prompt(copy _1, const "CommentAfterArrow", copy _3) -> [bb3];
+    }
+
+    bb3: {
+        return;
+    }
+}
+
+fn user.FunctionWithComments(a: string, b: int, client: baml.llm.Client) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // a // param
+    let _2: int // b // param
+    let _3: baml.llm.Client // client // param
+    let _4: bool
+    let _5: map<string, unknown>
+    let _6: type
+
+    bb0: {
+        _4 = copy _3 == const <omitted>;
+        branch copy _4 -> [bb1, bb2];
+    }
+
+    bb1: {
+        _3 = const fn user.TestClient;
+        goto -> bb2;
+    }
+
+    bb2: {
+        _5 = { const "a": copy _1, const "b": copy _2 };
+        _6 = load_type(string);
+        _0 = call const fn baml.llm.call_llm_function<copy _6>(copy _3, const "FunctionWithComments", copy _5) -> [bb3];
+    }
+
+    bb3: {
+        return;
+    }
+}
+
+fn user.FunctionWithComments$build_request(a: string, b: int, client: baml.llm.Client) -> baml.http.Request {
+    // Locals:
+    let _0: baml.http.Request // _0 // return
+    let _1: string // a // param
+    let _2: int // b // param
+    let _3: baml.llm.Client // client // param
+    let _4: bool
+    let _5: map<string, unknown>
+
+    bb0: {
+        _4 = copy _3 == const <omitted>;
+        branch copy _4 -> [bb1, bb2];
+    }
+
+    bb1: {
+        _3 = const fn user.TestClient;
+        goto -> bb2;
+    }
+
+    bb2: {
+        _5 = { const "a": copy _1, const "b": copy _2 };
+        _0 = call const fn baml.llm.build_request(copy _3, const "FunctionWithComments", copy _5) -> [bb3];
+    }
+
+    bb3: {
+        return;
+    }
+}
+
+fn user.FunctionWithComments$build_request_stream(a: string, b: int, client: baml.llm.Client) -> baml.http.Request {
+    // Locals:
+    let _0: baml.http.Request // _0 // return
+    let _1: string // a // param
+    let _2: int // b // param
+    let _3: baml.llm.Client // client // param
+    let _4: bool
+    let _5: map<string, unknown>
+
+    bb0: {
+        _4 = copy _3 == const <omitted>;
+        branch copy _4 -> [bb1, bb2];
+    }
+
+    bb1: {
+        _3 = const fn user.TestClient;
+        goto -> bb2;
+    }
+
+    bb2: {
+        _5 = { const "a": copy _1, const "b": copy _2 };
+        _0 = call const fn baml.llm.build_request_stream(copy _3, const "FunctionWithComments", copy _5) -> [bb3];
+    }
+
+    bb3: {
+        return;
+    }
+}
+
+fn user.FunctionWithComments$parse(json: string, client: baml.llm.Client) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // json // param
+    let _2: baml.llm.Client // client // param
+    let _3: bool
+    let _4: type
+    let _5: type
+
+    bb0: {
+        _3 = copy _2 == const <omitted>;
+        branch copy _3 -> [bb1, bb2];
+    }
+
+    bb1: {
+        _2 = const fn user.TestClient;
+        goto -> bb2;
+    }
+
+    bb2: {
+        _4 = load_type(void);
+        _5 = load_type(string);
+        _0 = call const fn baml.llm.parse<copy _4, copy _5>(const "FunctionWithComments", copy _1) -> [bb3];
+    }
+
+    bb3: {
+        return;
+    }
+}
+
+fn user.FunctionWithComments$render_prompt(a: string, b: int, client: baml.llm.Client) -> baml.llm.PromptAst {
     // Locals:
     let _0: baml.llm.PromptAst // _0 // return
     let _1: string // a // param
     let _2: int // b // param
-    let _3: map<string, unknown>
+    let _3: baml.llm.Client // client // param
+    let _4: bool
+    let _5: map<string, unknown>
 
     bb0: {
-        _3 = { const "a": copy _1, const "b": copy _2 };
-        _0 = call const fn baml.llm.render_prompt(const fn user.TestClient, const "FunctionWithComments", copy _3) -> [bb1];
+        _4 = copy _3 == const <omitted>;
+        branch copy _4 -> [bb1, bb2];
     }
 
     bb1: {
+        _3 = const fn user.TestClient;
+        goto -> bb2;
+    }
+
+    bb2: {
+        _5 = { const "a": copy _1, const "b": copy _2 };
+        _0 = call const fn baml.llm.render_prompt(copy _3, const "FunctionWithComments", copy _5) -> [bb3];
+    }
+
+    bb3: {
         return;
     }
 }
@@ -174,9 +294,9 @@ fn user.TestClient$new() -> null {
     // Locals:
     let _0: null // _0 // return
     let _1: baml.llm.PrimitiveClientOptions
-    let _2: map<void, void>
-    let _3: map<void, void>
-    let _4: map<void, void>
+    let _2: map<string, string>
+    let _3: map<string, string>
+    let _4: map<string, unknown>
 
     bb0: {
         _2 = {  };

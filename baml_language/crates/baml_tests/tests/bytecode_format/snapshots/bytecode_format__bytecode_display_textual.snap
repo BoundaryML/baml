@@ -2,8 +2,7 @@
 source: crates/baml_tests/tests/bytecode_format/main.rs
 ---
 function assert.contains(haystack: string, needle: string) -> null {
-    load_var haystack
-    load_var needle
+    load_var2 1 2
     call baml.String.includes
     unary_op !
     pop_jump_if_false L0
@@ -22,8 +21,7 @@ function assert.contains(haystack: string, needle: string) -> null {
 }
 
 function assert.equal(actual: unknown, expected: unknown) -> null {
-    load_var actual
-    load_var expected
+    load_var2 1 2
     cmp_op !=
     pop_jump_if_false L0
     jump L1
@@ -78,8 +76,7 @@ function assert.not_null(value: unknown?) -> null {
 }
 
 function testing.$invoke_collector(collector: (testing.TestCollector) -> void throws unknown, c: testing.TestCollector) -> void {
-    load_var c
-    load_var collector
+    load_var2 2 1
     call_indirect
     return
 }
@@ -103,7 +100,7 @@ function testing.RunReport.from_json(j: baml.json.json) -> testing.RunReport {
     return
 }
 
-function testing.RunReport.to_json(self: null) -> baml.json.json {
+function testing.RunReport.to_json(self: testing.RunReport) -> baml.json.json {
     load_var self
     load_field .outcome
     load_const "to_json"
@@ -137,7 +134,7 @@ function testing.SerializedTest.from_json(j: baml.json.json) -> testing.Serializ
     return
 }
 
-function testing.SerializedTest.to_json(self: null) -> baml.json.json {
+function testing.SerializedTest.to_json(self: testing.SerializedTest) -> baml.json.json {
     load_var self
     load_field .type
     call baml.String.to_json
@@ -176,7 +173,7 @@ function testing.SerializedTestSet.from_json(j: baml.json.json) -> testing.Seria
     return
 }
 
-function testing.SerializedTestSet.to_json(self: null) -> baml.json.json {
+function testing.SerializedTestSet.to_json(self: testing.SerializedTestSet) -> baml.json.json {
     load_var self
     load_field .name
     call baml.String.to_json
@@ -193,7 +190,7 @@ function testing.SerializedTestSet.to_json(self: null) -> baml.json.json {
     return
 }
 
-function testing.TestCollector.find_testset(self: null, name: string) -> testing.TestSetRegistration {
+function testing.TestCollector.find_testset(self: testing.TestCollector, name: string) -> testing.TestSetRegistration {
     load_var self
     load_field .testsets
     store_var _3
@@ -201,8 +198,7 @@ function testing.TestCollector.find_testset(self: null, name: string) -> testing
     store_var __for_idx
 
   L0:
-    load_var __for_idx
-    load_var _3
+    load_var2 4 3
     container_len
     cmp_int_op <
     pop_jump_if_false L1
@@ -215,8 +211,7 @@ function testing.TestCollector.find_testset(self: null, name: string) -> testing
     throw
 
   L2:
-    load_var _3
-    load_var __for_idx
+    load_var2 3 4
     load_array_element
     store_var_load_var ts
     load_field .name
@@ -271,7 +266,7 @@ function testing.TestCollector.new(prefix: string) -> testing.TestCollector {
     return
 }
 
-function testing.TestCollector.register_test(self: null, name: string, body: () -> void throws unknown, runner: ((() -> testing.TestReport throws never) -> (() -> testing.TestReport throws never) throws never)?) -> void {
+function testing.TestCollector.register_test(self: testing.TestCollector, name: string, body: () -> void throws unknown, runner: ((() -> testing.TestReport throws never) -> (() -> testing.TestReport throws never) throws never)?) -> void {
     load_var self
     load_field .prefix
     load_const ""
@@ -307,8 +302,7 @@ function testing.TestCollector.register_test(self: null, name: string, body: () 
     store_var __for_idx
 
   L3:
-    load_var __for_idx
-    load_var _13
+    load_var2 9 8
     container_len
     cmp_int_op <
     pop_jump_if_false L4
@@ -336,16 +330,14 @@ function testing.TestCollector.register_test(self: null, name: string, body: () 
     add_int
     call baml.unstable.string
     store_var _30
-    load_var _28
-    load_var _30
+    load_var2 12 13
     bin_op +
     store_var final_name
 
   L7:
     load_var self
     load_field .tests
-    load_var final_name
-    load_var body
+    load_var2 11 3
     load_var runner
     init_instance testing.TestRegistration .name, .body, .runner
     call baml.Array.push
@@ -354,8 +346,7 @@ function testing.TestCollector.register_test(self: null, name: string, body: () 
     return
 
   L8:
-    load_var _13
-    load_var __for_idx
+    load_var2 8 9
     load_array_element
     store_var_load_var t
     load_field .name
@@ -386,7 +377,7 @@ function testing.TestCollector.register_test(self: null, name: string, body: () 
     jump L3
 }
 
-function testing.TestCollector.register_test_set(self: null, name: string, collector: (testing.TestCollector) -> void throws unknown, runner: ((() -> testing.TestSetReport throws never) -> (() -> testing.TestSetReport throws never) throws never)?) -> void {
+function testing.TestCollector.register_test_set(self: testing.TestCollector, name: string, collector: (testing.TestCollector) -> void throws unknown, runner: ((() -> testing.TestSetReport throws never) -> (() -> testing.TestSetReport throws never) throws never)?) -> void {
     load_var self
     load_field .prefix
     load_const ""
@@ -422,8 +413,7 @@ function testing.TestCollector.register_test_set(self: null, name: string, colle
     store_var __for_idx
 
   L3:
-    load_var __for_idx
-    load_var _13
+    load_var2 9 8
     container_len
     cmp_int_op <
     pop_jump_if_false L4
@@ -451,16 +441,14 @@ function testing.TestCollector.register_test_set(self: null, name: string, colle
     add_int
     call baml.unstable.string
     store_var _30
-    load_var _28
-    load_var _30
+    load_var2 12 13
     bin_op +
     store_var final_name
 
   L7:
     load_var self
     load_field .testsets
-    load_var final_name
-    load_var collector
+    load_var2 11 3
     load_var runner
     init_instance testing.TestSetRegistration .name, .collector, .runner
     call baml.Array.push
@@ -469,8 +457,7 @@ function testing.TestCollector.register_test_set(self: null, name: string, colle
     return
 
   L8:
-    load_var _13
-    load_var __for_idx
+    load_var2 8 9
     load_array_element
     store_var_load_var ts
     load_field .name
@@ -501,7 +488,7 @@ function testing.TestCollector.register_test_set(self: null, name: string, colle
     jump L3
 }
 
-function testing.TestCollector.to_json(self: null) -> baml.json.json {
+function testing.TestCollector.to_json(self: testing.TestCollector) -> baml.json.json {
     load_var self
     load_field .prefix
     call baml.String.to_json
@@ -544,7 +531,7 @@ function testing.TestRegistration.from_json(j: baml.json.json) -> testing.TestRe
     return
 }
 
-function testing.TestRegistration.to_json(self: null) -> baml.json.json {
+function testing.TestRegistration.to_json(self: testing.TestRegistration) -> baml.json.json {
     load_type testing.TestRegistration
     load_var self
     call baml.json.to_string
@@ -552,7 +539,7 @@ function testing.TestRegistration.to_json(self: null) -> baml.json.json {
     return
 }
 
-function testing.TestRegistry.expand_set(self: null, name: string) -> (testing.SerializedTest | testing.SerializedTestSet)[] {
+function testing.TestRegistry.expand_set(self: testing.TestRegistry, name: string) -> (testing.SerializedTest | testing.SerializedTestSet)[] {
     load_var self
     load_field .collector
     load_field .testsets
@@ -561,8 +548,7 @@ function testing.TestRegistry.expand_set(self: null, name: string) -> (testing.S
     store_var __for_idx
 
   L0:
-    load_var __for_idx
-    load_var _3
+    load_var2 4 3
     container_len
     cmp_int_op <
     pop_jump_if_false L1
@@ -577,8 +563,7 @@ function testing.TestRegistry.expand_set(self: null, name: string) -> (testing.S
     store_var __for_idx_1
 
   L2:
-    load_var __for_idx_1
-    load_var _28
+    load_var2 10 9
     container_len
     cmp_int_op <
     pop_jump_if_false L3
@@ -591,8 +576,7 @@ function testing.TestRegistry.expand_set(self: null, name: string) -> (testing.S
     throw
 
   L4:
-    load_var _28
-    load_var __for_idx_1
+    load_var2 9 10
     load_array_element
     store_var k
     load_var self
@@ -600,8 +584,7 @@ function testing.TestRegistry.expand_set(self: null, name: string) -> (testing.S
     load_var k
     load_map_element
     store_var sub
-    load_var name
-    load_var k
+    load_var2 2 11
     load_const "/"
     bin_op +
     call baml.String.starts_with
@@ -616,14 +599,12 @@ function testing.TestRegistry.expand_set(self: null, name: string) -> (testing.S
     jump L2
 
   L6:
-    load_var sub
-    load_var name
+    load_var2 12 2
     call testing.TestRegistry.expand_set
     jump L10
 
   L7:
-    load_var _3
-    load_var __for_idx
+    load_var2 3 4
     load_array_element
     store_var_load_var ts
     load_field .name
@@ -655,11 +636,9 @@ function testing.TestRegistry.expand_set(self: null, name: string) -> (testing.S
     store_var _19
     load_var self
     load_field .expansions
-    load_var name
-    load_var sub_collector
+    load_var2 2 7
     alloc_map 0
-    load_var _19
-    load_var start
+    load_var2 8 6
     sub_int
     init_instance testing.TestRegistry .collector, .expansions, .loading_time_ms
     call baml.Map.set
@@ -705,7 +684,7 @@ function testing.TestRegistry.new(collector: testing.TestCollector) -> testing.T
     return
 }
 
-function testing.TestRegistry.run_test(self: null, name: string) -> testing.TestReport {
+function testing.TestRegistry.run_test(self: testing.TestRegistry, name: string) -> testing.TestReport {
     load_var self
     load_field .collector
     load_field .tests
@@ -714,8 +693,7 @@ function testing.TestRegistry.run_test(self: null, name: string) -> testing.Test
     store_var __for_idx
 
   L0:
-    load_var __for_idx
-    load_var _3
+    load_var2 4 3
     container_len
     cmp_int_op <
     pop_jump_if_false L1
@@ -730,8 +708,7 @@ function testing.TestRegistry.run_test(self: null, name: string) -> testing.Test
     store_var __for_idx_1
 
   L2:
-    load_var __for_idx_1
-    load_var _13
+    load_var2 7 6
     container_len
     cmp_int_op <
     pop_jump_if_false L3
@@ -744,8 +721,7 @@ function testing.TestRegistry.run_test(self: null, name: string) -> testing.Test
     throw
 
   L4:
-    load_var _13
-    load_var __for_idx_1
+    load_var2 6 7
     load_array_element
     store_var k
     load_var self
@@ -753,8 +729,7 @@ function testing.TestRegistry.run_test(self: null, name: string) -> testing.Test
     load_var k
     load_map_element
     store_var sub
-    load_var name
-    load_var k
+    load_var2 2 8
     load_const "/"
     bin_op +
     call baml.String.starts_with
@@ -769,14 +744,12 @@ function testing.TestRegistry.run_test(self: null, name: string) -> testing.Test
     jump L2
 
   L6:
-    load_var sub
-    load_var name
+    load_var2 9 2
     call testing.TestRegistry.run_test
     jump L10
 
   L7:
-    load_var _3
-    load_var __for_idx
+    load_var2 3 4
     load_array_element
     store_var_load_var t
     load_field .name
@@ -803,7 +776,7 @@ function testing.TestRegistry.run_test(self: null, name: string) -> testing.Test
     return
 }
 
-function testing.TestRegistry.serialize(self: null) -> (testing.SerializedTest | testing.SerializedTestSet)[] {
+function testing.TestRegistry.serialize(self: testing.TestRegistry) -> (testing.SerializedTest | testing.SerializedTestSet)[] {
     alloc_array 0
     store_var items
     load_var self
@@ -814,8 +787,7 @@ function testing.TestRegistry.serialize(self: null) -> (testing.SerializedTest |
     store_var __for_idx
 
   L0:
-    load_var __for_idx
-    load_var _3
+    load_var2 4 3
     container_len
     cmp_int_op <
     pop_jump_if_false L1
@@ -830,8 +802,7 @@ function testing.TestRegistry.serialize(self: null) -> (testing.SerializedTest |
     store_var __for_idx_1
 
   L2:
-    load_var __for_idx_1
-    load_var _12
+    load_var2 6 5
     container_len
     cmp_int_op <
     pop_jump_if_false L3
@@ -842,8 +813,7 @@ function testing.TestRegistry.serialize(self: null) -> (testing.SerializedTest |
     return
 
   L4:
-    load_var _12
-    load_var __for_idx_1
+    load_var2 5 6
     load_array_element
     store_var ts
     load_var self
@@ -876,10 +846,8 @@ function testing.TestRegistry.serialize(self: null) -> (testing.SerializedTest |
     load_var sub
     call testing.TestRegistry.serialize
     store_var _26
-    load_var items
-    load_var _25
-    load_var _26
-    load_var sub
+    load_var2 2 10
+    load_var2 11 9
     load_field .loading_time_ms
     init_instance testing.SerializedTestSet .name, .items, .loadingTimeMs
     call baml.Array.push
@@ -895,8 +863,7 @@ function testing.TestRegistry.serialize(self: null) -> (testing.SerializedTest |
   L8:
     load_var items
     load_const "test"
-    load_var _3
-    load_var __for_idx
+    load_var2 3 4
     load_array_element
     load_field .name
     init_instance testing.SerializedTest .type, .name
@@ -909,7 +876,7 @@ function testing.TestRegistry.serialize(self: null) -> (testing.SerializedTest |
     jump L0
 }
 
-function testing.TestRegistry.to_json(self: null) -> baml.json.json {
+function testing.TestRegistry.to_json(self: testing.TestRegistry) -> baml.json.json {
     load_var self
     load_field .collector
     call testing.TestCollector.to_json
@@ -945,7 +912,7 @@ function testing.TestReport.from_json(j: baml.json.json) -> testing.TestReport {
     return
 }
 
-function testing.TestReport.to_json(self: null) -> baml.json.json {
+function testing.TestReport.to_json(self: testing.TestReport) -> baml.json.json {
     load_var self
     load_field .outcome
     load_const "to_json"
@@ -986,7 +953,7 @@ function testing.TestSetRegistration.from_json(j: baml.json.json) -> testing.Tes
     return
 }
 
-function testing.TestSetRegistration.to_json(self: null) -> baml.json.json {
+function testing.TestSetRegistration.to_json(self: testing.TestSetRegistration) -> baml.json.json {
     load_type testing.TestSetRegistration
     load_var self
     call baml.json.to_string
@@ -1034,7 +1001,7 @@ function testing.TestSetReport.from_json(j: baml.json.json) -> testing.TestSetRe
     return
 }
 
-function testing.TestSetReport.to_json(self: null) -> baml.json.json {
+function testing.TestSetReport.to_json(self: testing.TestSetReport) -> baml.json.json {
     load_var self
     load_field .outcome
     load_const "to_json"
@@ -1075,8 +1042,7 @@ function testing.run_test(body: () -> void throws unknown, runner: ((() -> testi
     jump L1
 
   L0:
-    load_var base_run
-    load_var runner
+    load_var2 3 2
     call_indirect
     call_indirect
     jump L2
@@ -1097,8 +1063,7 @@ function testing.run_testset(run_children: () -> testing.TestSetReport throws ne
     jump L1
 
   L0:
-    load_var run_children
-    load_var runner
+    load_var2 1 2
     call_indirect
     call_indirect
     jump L2
@@ -1130,7 +1095,7 @@ function user.ErrorInfo.from_json(j: baml.json.json) -> ErrorInfo {
     return
 }
 
-function user.ErrorInfo.to_json(self: null) -> baml.json.json {
+function user.ErrorInfo.to_json(self: ErrorInfo) -> baml.json.json {
     load_var self
     load_field .code
     call baml.Int.to_json
@@ -1169,7 +1134,7 @@ function user.Report.from_json(j: baml.json.json) -> Report {
     return
 }
 
-function user.Report.to_json(self: null) -> baml.json.json {
+function user.Report.to_json(self: Report) -> baml.json.json {
     load_var self
     load_field .score
     call baml.Int.to_json
@@ -1212,15 +1177,14 @@ function user.User.from_json(j: baml.json.json) -> User {
     return
 }
 
-function user.User.promote(self: null, bonus: int) -> Report {
+function user.User.promote(self: User, bonus: int) -> Report {
     load_var self
     copy 0
     load_field .age
     load_const 1
     bin_op +
     store_field .age
-    load_var self
-    load_var bonus
+    load_var2 1 2
     call user.score
     store_var base
     load_var base
@@ -1235,7 +1199,7 @@ function user.User.promote(self: null, bonus: int) -> Report {
     return
 }
 
-function user.User.to_json(self: null) -> baml.json.json {
+function user.User.to_json(self: User) -> baml.json.json {
     load_var self
     load_field .name
     call baml.String.to_json
@@ -1393,8 +1357,7 @@ function user.score(input: User | ErrorInfo, threshold: int) -> Report {
     store_var capped
 
   L15:
-    load_var capped
-    load_var role_mult
+    load_var2 7 5
     add_int
     store_var_load_var total
     load_var threshold
@@ -1414,22 +1377,20 @@ function user.score(input: User | ErrorInfo, threshold: int) -> Report {
     store_var suffix
 
   L18:
-    load_var base
-    load_var capped
+    load_var2 6 7
     load_var total
     alloc_array 3
-    store_var_load_var scores
+    store_var scores
+    load_var scores
     load_const 0
     load_var total
     store_array_element
     load_var scores
     load_const 0
     load_array_element
-    load_var name
-    load_var suffix
+    load_var2 3 9
     bin_op +
-    load_var base
-    load_var role_mult
+    load_var2 6 5
     load_const "base"
     load_const "role"
     alloc_map 2

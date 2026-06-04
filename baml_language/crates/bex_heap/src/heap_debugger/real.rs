@@ -362,6 +362,7 @@ impl BexHeap {
                 self.debug_assert_valid_value(&cell.load());
             }
             Object::Function(_)
+            | Object::GenericFunction(_)
             | Object::Class(_)
             | Object::Enum(_)
             | Object::String(_)

@@ -355,11 +355,11 @@ function baml.future.Future.to_json(self: baml.future.Future) -> baml.json.json 
   map {  } : map<never, never>
 }
 function baml.future.Future.from_json(j: baml.json.json) -> Future<unknown, unknown> throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  Future {  } : baml.future.Future<T, E>
+  Future {  } : Future<T, E>
 }
 function baml.future.all_complete<T, E>(futures: Future<T, E>[]) -> Future<T[], E> throws never {
-  { : Future<U[], null>
-    spawn { () -> { ... } } : Future<U[], null>
+  { : Future<T[], E>
+    spawn { () -> { ... } } : Future<T[], E>
   }
 }
 lambda baml.future.all_complete {
@@ -367,8 +367,8 @@ lambda baml.future.all_complete {
 lambda baml.future.all_complete {
 }
 function baml.future.all<T, E>(futures: Future<T, E>[]) -> Future<T[], E> throws never {
-  { : Future<U[], null>
-    spawn { () -> { ... } } : Future<U[], null>
+  { : Future<T[], E>
+    spawn { () -> { ... } } : Future<T[], E>
   }
 }
 lambda baml.future.all {
@@ -387,17 +387,17 @@ function baml.future.AllFailed.from_json(j: baml.json.json) -> baml.future.AllFa
   AllFailed { errors: baml.json.from_json<E[]>(baml.json.field(j, "errors")) } : baml.future.AllFailed<E>
 }
 function baml.future.race<T, E>(futures: Future<T, E>[]) -> Future<T, E> throws never {
-  { : Future<T, null>
-    spawn { () -> { ... } } : Future<T, null>
+  { : Future<T, E>
+    spawn { () -> { ... } } : Future<T, E>
   }
 }
 lambda baml.future.race {
 }
 lambda baml.future.race {
 }
-function baml.future.any<T, E>(futures: Future<T, E>[]) -> Future<T, baml.future.AllFailed<E>> throws never {
-  { : Future<T, null>
-    spawn { () -> { ... } } : Future<T, null>
+function baml.future.any<T, Err>(futures: Future<T, Err>[]) -> Future<T, baml.future.AllFailed<Err>> throws never {
+  { : Future<T, baml.future.AllFailed<Err>>
+    spawn { () -> { ... } } : Future<T, baml.future.AllFailed<Err>>
   }
 }
 lambda baml.future.any {
@@ -896,7 +896,7 @@ function baml.llm.Client.execute_once_stream<TStream, TFinal>(self: baml.llm.Cli
             }
           let idx = self.counter % self.sub_clients.length() : int
           self.counter Add= 1 : int
-          let result3: Stream<TStream, TFinal> = <missing>(context, active_delay_ms) : unknown -> baml.llm.Stream<TStream, TFinal>
+          let result3: Stream<TStream, TFinal> = self.sub_clients[idx].execute_stream(context, active_delay_ms) : baml.llm.Stream<TStream, TFinal>
           return result3 : baml.llm.Stream<TStream, TFinal>
         }
   }
@@ -1024,7 +1024,7 @@ function baml.llm.Client.execute_once_oneshot<T>(self: baml.llm.Client, context:
             }
           let idx = self.counter % self.sub_clients.length() : int
           self.counter Add= 1 : int
-          let result3: T = <missing>(context, active_delay_ms) : unknown -> T
+          let result3: T = self.sub_clients[idx].execute_oneshot<T>(context, active_delay_ms) : T
           return result3 : T
         }
   }

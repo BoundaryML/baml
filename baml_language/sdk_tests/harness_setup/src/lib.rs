@@ -14,7 +14,7 @@
 //! lives in the sibling `sdk_test_harness_runner` crate.
 //!
 //! Generator-specific entry points (`run_all`) live in submodules
-//! like [`python_pydantic2`] and [`nodejs_typescript`].
+//! like [`python_pydantic2`] and [`typescript_node`].
 //!
 //! Layout the helpers assume:
 //!
@@ -36,8 +36,8 @@ use baml_codegen_types::SymbolPool;
 use baml_db::baml_compiler_diagnostics::Severity;
 use baml_project::ProjectDatabase;
 
-pub mod nodejs_typescript;
 pub mod python_pydantic2;
+pub mod typescript_node;
 
 /// Build-script-side soft-failure recorder. The two generator
 /// `run_all` entry points use this to capture env-dependent failures
@@ -108,6 +108,7 @@ pub struct LoadedFixture {
     pub baml_src: PathBuf,
     pub pool: SymbolPool,
     pub user_baml_files: Vec<UserBamlFile>,
+    pub baml_bytecode: Vec<u8>,
 }
 
 /// Resolve the workspace-root-relative path to `sdk_tests/fixtures/`
@@ -199,6 +200,11 @@ pub fn load_fixture(fixtures_root: &Path, fixture: &str) -> LoadedFixture {
     }
 
     let pool = baml_project::build_symbol_pool(&db);
+    let program = db
+        .get_bytecode()
+        .unwrap_or_else(|e| panic!("fixture `{fixture}`: bytecode compilation failed: {e:?}"));
+    let baml_bytecode = borsh::to_vec(&program)
+        .unwrap_or_else(|e| panic!("fixture `{fixture}`: bytecode serialization failed: {e}"));
     let user_baml_files: Vec<UserBamlFile> = source_files
         .iter()
         .map(|sf| {
@@ -212,11 +218,12 @@ pub fn load_fixture(fixtures_root: &Path, fixture: &str) -> LoadedFixture {
         baml_src: canonical,
         pool,
         user_baml_files,
+        baml_bytecode,
     }
 }
 
 /// Copy every file in `customizable_dir` into `dst_dir`. Used by
-/// the nodejs_typescript target: symlinks would force every parallel
+/// the typescript_node target: symlinks would force every parallel
 /// test process to either set `NODE_OPTIONS=--preserve-symlinks`
 /// (which breaks the pnpm CLI, itself a symlinked node script) or
 /// let node follow the symlink and resolve `node_modules` from

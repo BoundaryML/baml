@@ -2,6 +2,12 @@
 
 use super::support::{make_db, render_tir};
 
+fn assert_declared_throws_violation(output: &str, declared: &str, thrown: &str, message: &str) {
+    let expected =
+        format!("declared throws is `{declared}`, but this function may also throw `{thrown}`");
+    assert!(output.contains(&expected), "{message}, got:\n{output}");
+}
+
 #[test]
 fn throw_expr_is_never_and_marks_following_code_dead() {
     let mut db = make_db();
@@ -70,13 +76,11 @@ function f() -> int throws never {
     );
 
     let output = render_tir(&db, file);
-    assert!(
-        output.contains("throws contract violation"),
-        "expected throws-contract violation, got:\n{output}"
-    );
-    assert!(
-        output.contains("string"),
-        "expected escaping throw type to include string, got:\n{output}"
+    assert_declared_throws_violation(
+        &output,
+        "never",
+        "string",
+        "expected escaping throw type to include string",
     );
 }
 
@@ -482,21 +486,24 @@ function f() -> int throws never {
     );
 
     let output = render_tir(&db, file);
-    assert!(
-        output
-            .contains("this body may throw through callback `cb`, but declared throws is `never`."),
-        "expected omitted inline lambda to inherit callback throws context, got:\n{output}"
-    );
-    assert!(
-        output.contains(
-            "Add `throws string` to the callback, catch the call, or make the callback non-throwing."
-        ),
-        "expected actionable callback-specific fix text, got:\n{output}"
+    // The inline lambda's effective throws (`string`) binds the callee's
+    // effect param, so the checker reports the precise violation — not the
+    // older "may throw through callback" fallback that couldn't name the type.
+    assert_declared_throws_violation(
+        &output,
+        "never",
+        "string",
+        "expected omitted inline lambda throws to propagate through the callback param",
     );
 }
 
 #[test]
-fn omitted_inline_lambda_current_limitation_gets_callback_aware_primary_message() {
+fn omitted_inline_lambda_covered_by_declared_throws_is_clean() {
+    // Historically a "current limitation": the checker could not see that the
+    // callback's throw was covered by `demo`'s declared `throws string` and
+    // reported a callback-aware violation anyway. The lambda's effective
+    // throws now binds the callee's effect param, so a covered throw is
+    // accepted silently.
     let mut db = make_db();
     let file = db.add_file(
         "test.baml",
@@ -513,14 +520,8 @@ function demo() -> int throws string {
 
     let output = render_tir(&db, file);
     assert!(
-        output.contains(
-            "this body may throw through callback `cb`, but declared throws is `string`."
-        ),
-        "expected callback-aware primary message for current limitation, got:\n{output}"
-    );
-    assert!(
-        output.contains("Add `throws string` to the callback, catch the call, or make the callback non-throwing."),
-        "expected callback-specific fix text for current limitation, got:\n{output}"
+        !output.contains("declared throws"),
+        "expected no throws violation when the callback throw is covered by the declared throws, got:\n{output}"
     );
 }
 
@@ -538,13 +539,11 @@ fn explicit_lambda_throws_annotation_is_checked_against_body() {
     );
 
     let output = render_tir(&db, file);
-    assert!(
-        output.contains("throws contract violation"),
-        "expected explicit lambda throws annotation to be validated, got:\n{output}"
-    );
-    assert!(
-        output.contains("missing string"),
-        "expected lambda throws validation to report the concrete escaping throw, got:\n{output}"
+    assert_declared_throws_violation(
+        &output,
+        "never",
+        "string",
+        "expected explicit lambda throws annotation to report the concrete escaping throw",
     );
 }
 
@@ -592,9 +591,11 @@ function f() -> int throws never {
     );
 
     let output = render_tir(&db, file);
-    assert!(
-        output.contains("throws contract violation: `never` is missing string"),
-        "expected omitted inline lambda to inherit optional function throws context, got:\n{output}"
+    assert_declared_throws_violation(
+        &output,
+        "never",
+        "string",
+        "expected omitted inline lambda to inherit optional function throws context",
     );
 }
 
@@ -609,9 +610,11 @@ fn function_type_throws_optional_call_propagates_callback_surface() {
     );
 
     let output = render_tir(&db, file);
-    assert!(
-        output.contains("throws contract violation: `never` is missing string"),
-        "expected optional call to propagate the callee throws surface into the contract check, got:\n{output}"
+    assert_declared_throws_violation(
+        &output,
+        "never",
+        "string",
+        "expected optional call to propagate the callee throws surface into the contract check",
     );
 }
 
@@ -634,9 +637,11 @@ function f() -> int throws never {
     );
 
     let output = render_tir(&db, file);
-    assert!(
-        output.contains("throws contract violation: `never` is missing string"),
-        "expected reordered named callback arg to instantiate concrete throws, got:\n{output}"
+    assert_declared_throws_violation(
+        &output,
+        "never",
+        "string",
+        "expected reordered named callback arg to instantiate concrete throws",
     );
 }
 
@@ -663,9 +668,11 @@ function f() -> int throws never {
     );
 
     let output = render_tir(&db, file);
-    assert!(
-        output.contains("throws contract violation: `never` is missing string"),
-        "expected callable throws summary to use reordered named call binding, got:\n{output}"
+    assert_declared_throws_violation(
+        &output,
+        "never",
+        "string",
+        "expected callable throws summary to use reordered named call binding",
     );
 }
 
@@ -690,13 +697,11 @@ function f(box: Box) -> int throws never {
     );
 
     let output = render_tir(&db, file);
-    assert!(
-        output.contains("throws contract violation"),
-        "expected unbound method call to propagate callback throws into the contract check, got:\n{output}"
-    );
-    assert!(
-        output.contains("missing string"),
-        "expected unbound method call to report the concrete escaping throw, got:\n{output}"
+    assert_declared_throws_violation(
+        &output,
+        "never",
+        "string",
+        "expected unbound method call to report the concrete escaping throw",
     );
     assert!(
         !output.contains("missing unknown"),
@@ -717,13 +722,18 @@ fn omitted_lambda_throws_inherits_builtin_map_callback_context() {
     );
 
     let output = render_tir(&db, file);
-    assert!(
-        output.contains("throws contract violation"),
-        "expected builtin map to propagate omitted inline lambda throws, got:\n{output}"
+    // The lambda's EFFECTIVE throws (`string`, from its body) feeds `map`'s
+    // throws generic, so the violation names the concrete type rather than a
+    // symbolic `E` or a collapsed `unknown`.
+    assert_declared_throws_violation(
+        &output,
+        "never",
+        "string",
+        "expected builtin map to propagate omitted inline lambda throws",
     );
     assert!(
         !output.contains("missing unknown"),
-        "expected builtin map omitted lambda path to stay symbolic/concrete rather than collapsing to unknown, got:\n{output}"
+        "expected builtin map omitted lambda path to stay concrete rather than collapsing to unknown, got:\n{output}"
     );
 }
 
@@ -740,9 +750,11 @@ fn function_type_throws_builtin_map_propagates_callback_surface() {
     );
 
     let output = render_tir(&db, file);
-    assert!(
-        output.contains("throws contract violation: `never` is missing string"),
-        "expected builtin map to propagate callback throws into the enclosing contract check, got:\n{output}"
+    assert_declared_throws_violation(
+        &output,
+        "never",
+        "string",
+        "expected builtin map to propagate callback throws into the enclosing contract check",
     );
 }
 
@@ -761,13 +773,11 @@ fn stored_lambda_with_omitted_throws_reports_local_violation() {
     );
 
     let output = render_tir(&db, file);
-    assert!(
-        output.contains("throws contract violation"),
-        "expected stored lambda with omitted throws to fail locally, got:\n{output}"
-    );
-    assert!(
-        output.contains("missing string"),
-        "expected local closed-lambda violation to report the concrete escaping throw, got:\n{output}"
+    assert_declared_throws_violation(
+        &output,
+        "never",
+        "string",
+        "expected local closed-lambda violation to report the concrete escaping throw",
     );
 }
 
@@ -790,13 +800,11 @@ function f() -> int {
     );
 
     let output = render_tir(&db, file);
-    assert!(
-        output.contains("throws contract violation"),
-        "expected alias-hidden omitted lambda to fail locally, got:\n{output}"
-    );
-    assert!(
-        output.contains("missing string"),
-        "expected alias-hidden local violation to report the escaping throw, got:\n{output}"
+    assert_declared_throws_violation(
+        &output,
+        "never",
+        "string",
+        "expected alias-hidden local violation to report the escaping throw",
     );
 }
 
@@ -813,13 +821,11 @@ fn returned_omitted_lambda_reports_local_violation() {
     );
 
     let output = render_tir(&db, file);
-    assert!(
-        output.contains("throws contract violation"),
-        "expected returned omitted lambda to fail locally, got:\n{output}"
-    );
-    assert!(
-        output.contains("missing string"),
-        "expected returned omitted lambda violation to report the escaping throw, got:\n{output}"
+    assert_declared_throws_violation(
+        &output,
+        "never",
+        "string",
+        "expected returned omitted lambda violation to report the escaping throw",
     );
 }
 

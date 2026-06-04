@@ -59,6 +59,18 @@ impl FunctionParamInfo {
     }
 }
 
+/// A class method, captured for the hover "has methods?" check and the
+/// describe/test renderers. The full describe listing (with docstring and line
+/// range) is carried separately by `describe::MethodRef`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MethodSig {
+    pub name: String,
+    /// Canonical one-line signature, e.g. `function Greet(self) -> string`.
+    pub signature: String,
+    /// `true` when the first parameter is named `self`.
+    pub is_instance: bool,
+}
+
 /// Structured type/signature info at a cursor position.
 ///
 /// Returned by `type_at`. The LSP layer (`request.rs`) formats this into hover
@@ -74,10 +86,22 @@ pub enum TypeInfo {
         throws: Option<String>,
         note: Option<String>,
     },
-    /// A class definition: name, fields (name + type string).
+    /// A class definition: name, fields (name + type string), implemented interfaces.
     Class {
         name: String,
+        /// Generic type parameter names (e.g. `["T"]`). Rendered as `<T>` after
+        /// the class name in the body block; empty for non-generic classes.
+        generic_params: Vec<String>,
         fields: Vec<(String, String)>,
+        implements: Vec<String>,
+        /// Instance + static methods (signatures only). Drives the hover hint
+        /// and feeds the test/describe renderers; not shown inline in hover.
+        methods: Vec<MethodSig>,
+        /// The class's full `///` docstring (all lines), if any.
+        docstring: Option<String>,
+        /// Canonical FQN for the hover "Run `baml describe …`" hint (`string`,
+        /// `Foo`, `root.ns.Foo`, `baml.json.JsonObject`).
+        canonical_fqn: String,
     },
     /// An enum definition: name, variants.
     Enum { name: String, variants: Vec<String> },
@@ -92,17 +116,19 @@ pub enum TypeInfo {
 }
 
 impl TypeInfo {
-    /// Format this `TypeInfo` as hover markdown.
-    ///
-    /// The caller (request.rs) wraps the result in an LSP `MarkupContent`.
-    pub fn to_hover_markdown(&self) -> String {
+    /// The canonical BAML block for this item, without code fences, docstring,
+    /// or any trailing hint/note. For a class this is the **fields-only** body
+    /// (`class Foo {\n    bar: int,\n}`): methods are surfaced separately by
+    /// `describe`, never inside the body block. Shared by
+    /// [`Self::to_hover_markdown`] (which wraps it) and `describe::build_shape`.
+    pub fn to_describe_block(&self) -> String {
         match self {
             TypeInfo::Function {
                 name,
                 params,
                 return_type,
                 throws,
-                note,
+                ..
             } => {
                 let param_strs: Vec<String> =
                     params.iter().map(FunctionParamInfo::render).collect();
@@ -114,56 +140,98 @@ impl TypeInfo {
                     .as_deref()
                     .map(|t| format!(" throws {t}"))
                     .unwrap_or_default();
-                let mut out = format!(
-                    "```baml\nfunction {}({}){}{throws}\n```",
+                format!(
+                    "function {}({}){}{throws}",
                     name,
                     param_strs.join(", "),
-                    ret,
-                );
-                if let Some(note) = note {
-                    out.push_str("\n\n");
-                    out.push_str(note);
-                }
-                out
+                    ret
+                )
             }
-            TypeInfo::Class { name, fields } => {
-                let field_strs: Vec<String> = fields
-                    .iter()
-                    .map(|(n, t)| format!("    {n}: {t}"))
-                    .collect();
-                if field_strs.is_empty() {
-                    format!("```baml\nclass {name} {{}}\n```")
+            TypeInfo::Class {
+                name,
+                generic_params,
+                fields,
+                implements,
+                ..
+            } => {
+                // Fields-only canonical body: `name: type,` with trailing comma,
+                // 4-space indent. Methods are never rendered here.
+                let generics = if generic_params.is_empty() {
+                    String::new()
                 } else {
-                    format!(
-                        "```baml\nclass {name} {{\n{}\n}}\n```",
-                        field_strs.join("\n")
-                    )
+                    format!("<{}>", generic_params.join(", "))
+                };
+                let mut member_strs: Vec<String> = fields
+                    .iter()
+                    .map(|(n, t)| format!("    {n}: {t},"))
+                    .collect();
+                member_strs.extend(
+                    implements
+                        .iter()
+                        .map(|target| format!("    implements {target} {{}}")),
+                );
+
+                if member_strs.is_empty() {
+                    format!("class {name}{generics} {{}}")
+                } else {
+                    format!("class {name}{generics} {{\n{}\n}}", member_strs.join("\n"))
                 }
             }
             TypeInfo::Enum { name, variants } => {
                 let variant_strs: Vec<String> =
                     variants.iter().map(|v| format!("    {v}")).collect();
                 if variant_strs.is_empty() {
-                    format!("```baml\nenum {name} {{}}\n```")
+                    format!("enum {name} {{}}")
                 } else {
-                    format!(
-                        "```baml\nenum {name} {{\n{}\n}}\n```",
-                        variant_strs.join("\n")
-                    )
+                    format!("enum {name} {{\n{}\n}}", variant_strs.join("\n"))
                 }
             }
-            TypeInfo::TypeAlias { name, expansion } => {
-                format!("```baml\ntype {name} = {expansion}\n```")
+            TypeInfo::TypeAlias { name, expansion } => format!("type {name} = {expansion}"),
+            TypeInfo::TemplateString { name } => format!("template_string {name}"),
+            TypeInfo::LocalVar { name, ty } => format!("{name}: {ty}"),
+            TypeInfo::OtherItem { name, kind } => format!("{kind} {name}"),
+        }
+    }
+
+    /// Format this `TypeInfo` as hover markdown.
+    ///
+    /// The caller (request.rs) wraps the result in an LSP `MarkupContent`.
+    pub fn to_hover_markdown(&self) -> String {
+        match self {
+            TypeInfo::Class {
+                docstring,
+                methods,
+                canonical_fqn,
+                ..
+            } => {
+                // Docstring lines live inside the fenced block, above the class.
+                let mut inner = String::new();
+                if let Some(doc) = docstring {
+                    for line in doc.lines() {
+                        inner.push_str("/// ");
+                        inner.push_str(line);
+                        inner.push('\n');
+                    }
+                }
+                inner.push_str(&self.to_describe_block());
+                let mut out = format!("```baml\n{inner}\n```");
+                // Only a class with methods points the user at `baml describe`.
+                if !methods.is_empty() {
+                    out.push_str("\n\nRun `baml describe ");
+                    out.push_str(canonical_fqn);
+                    out.push_str("` for methods and details.");
+                }
+                out
             }
-            TypeInfo::TemplateString { name } => {
-                format!("```baml\ntemplate_string {name}\n```")
+            TypeInfo::Function { note, .. } => {
+                let mut out = format!("```baml\n{}\n```", self.to_describe_block());
+                if let Some(note) = note {
+                    out.push_str("\n\n");
+                    out.push_str(note);
+                }
+                out
             }
-            TypeInfo::LocalVar { name, ty } => {
-                format!("```baml\n{name}: {ty}\n```")
-            }
-            TypeInfo::OtherItem { name, kind } => {
-                format!("```baml\n{kind} {name}\n```")
-            }
+            _ => format!("```baml\n{}\n```", self.to_describe_block()),
         }
     }
 }
@@ -290,17 +358,17 @@ pub fn type_info_for_definition(db: &dyn Db, def: Definition<'_>) -> TypeInfo {
                         .as_ref()
                         .map(|name| name.as_str().to_string())
                         .unwrap_or_else(|| "_".to_string()),
-                    ty: display_surface_ty(&param.ty),
+                    ty: display_surface_ty(db, file, &param.ty),
                     optional: param.is_optional(),
                 })
                 .collect();
-            let return_type = Some(display_surface_ty(&exported.return_type));
+            let return_type = Some(display_surface_ty(db, file, &exported.return_type));
             let throws = if exported.declared_throws.is_some()
                 || !matches!(
                     exported.callable_throws,
                     baml_compiler2_tir::ty::Ty::Never { .. }
                 ) {
-                Some(display_surface_ty(&exported.callable_throws))
+                Some(display_surface_ty(db, file, &exported.callable_throws))
             } else {
                 None
             };
@@ -318,19 +386,43 @@ pub fn type_info_for_definition(db: &dyn Db, def: Definition<'_>) -> TypeInfo {
             let class_data = &item_tree[class_loc.id(db)];
             let class_name = class_data.name.as_str().to_string();
 
-            // Use resolved field types (Salsa-cached).
+            // Use resolved field types (Salsa-cached), rendered canonically so
+            // builtin companion classes collapse to their alias (`string`).
             let resolved = baml_compiler2_tir::inference::resolve_class_fields(db, class_loc);
             let fields = resolved
                 .fields
                 .iter()
                 .map(|(field_name, ty, _attrs)| {
-                    (field_name.as_str().to_string(), utils::display_ty(ty))
+                    (
+                        field_name.as_str().to_string(),
+                        utils::display_ty_canonical_for_file(db, class_loc.file(db), ty),
+                    )
                 })
+                .collect();
+            let implements = class_data
+                .implements
+                .iter()
+                .map(|block| format!("{}", block.target.expr))
+                .collect();
+
+            let qtn = baml_compiler2_tir::lower_type_expr::qualify_def(db, def, &class_data.name);
+            let canonical_fqn = utils::canonical_fqn_string(&qtn);
+            let methods = crate::describe::class_method_sigs(db, class_loc);
+
+            let generic_params = class_data
+                .generic_params
+                .iter()
+                .map(|n| n.as_str().to_string())
                 .collect();
 
             TypeInfo::Class {
                 name: class_name,
+                generic_params,
                 fields,
+                implements,
+                methods,
+                docstring: class_data.docstring.clone(),
+                canonical_fqn,
             }
         }
 
@@ -348,6 +440,15 @@ pub fn type_info_for_definition(db: &dyn Db, def: Definition<'_>) -> TypeInfo {
             }
         }
 
+        Definition::Interface(iface_loc) => {
+            let item_tree = baml_compiler2_hir::file_item_tree(db, iface_loc.file(db));
+            let iface = &item_tree[iface_loc.id(db)];
+            TypeInfo::OtherItem {
+                name: iface.name.as_str().to_string(),
+                kind: "interface",
+            }
+        }
+
         Definition::TypeAlias(alias_loc) => {
             let item_tree = baml_compiler2_hir::file_item_tree(db, alias_loc.file(db));
             let alias_data = &item_tree[alias_loc.id(db)];
@@ -355,7 +456,7 @@ pub fn type_info_for_definition(db: &dyn Db, def: Definition<'_>) -> TypeInfo {
 
             // Use the resolved (lowered) type for display.
             let resolved = baml_compiler2_tir::inference::resolve_type_alias(db, alias_loc);
-            let expansion = utils::display_ty(&resolved.ty);
+            let expansion = utils::display_ty_for_file(db, alias_loc.file(db), &resolved.ty);
 
             TypeInfo::TypeAlias {
                 name: alias_name,
@@ -423,15 +524,16 @@ pub fn type_info_for_definition(db: &dyn Db, def: Definition<'_>) -> TypeInfo {
     }
 }
 
-fn display_surface_ty(ty: &baml_compiler2_tir::ty::Ty) -> String {
-    let rendered = utils::display_ty(ty);
-    rendered.replace("user.", "").replace("baml.", "")
+fn display_surface_ty(db: &dyn Db, file: SourceFile, ty: &baml_compiler2_tir::ty::Ty) -> String {
+    utils::display_ty_for_file(db, file, ty)
 }
 
-fn is_synthetic_effect_param_name(name: &Name) -> bool {
-    name.as_str()
-        .strip_prefix("__effect_param_")
-        .is_some_and(|suffix| !suffix.is_empty() && suffix.bytes().all(|b| b.is_ascii_digit()))
+fn display_local_binding_ty(
+    db: &dyn Db,
+    file: SourceFile,
+    ty: &baml_compiler2_tir::ty::Ty,
+) -> String {
+    utils::display_ty_for_file(db, file, ty)
 }
 
 fn function_param_matches_effect_slot(ty: &baml_compiler2_tir::ty::Ty, effect_name: &Name) -> bool {
@@ -477,7 +579,7 @@ fn callback_forwarding_note(
     let Ty::TypeVar(effect_name, _) = only_fact else {
         return None;
     };
-    if !is_synthetic_effect_param_name(effect_name) {
+    if !baml_compiler2_tir::ty::is_synthetic_effect_param(effect_name) {
         return None;
     }
 
@@ -564,7 +666,7 @@ fn local_type_info(
             let inference = baml_compiler2_tir::inference::infer_scope_types(db, func_scope_id);
             let ty_str = inference
                 .binding_type(pat_id)
-                .map(utils::display_ty)
+                .map(|ty| display_local_binding_ty(db, file, ty))
                 .unwrap_or_else(|| {
                     // Try the use-site's ancestor scope chain — restricts the
                     // lookup to inferences for bodies that share the
@@ -573,6 +675,7 @@ fn local_type_info(
                     // ExprBodies (e.g. two lambdas with the same arena
                     // index), surface the wrong type for hover/inlay hints.
                     find_binding_ty_in_scopes(db, index, scope_id, pat_id)
+                        .map(|ty| display_local_binding_ty(db, file, &ty))
                         .unwrap_or_else(|| "unknown".to_string())
                 });
 
@@ -630,12 +733,12 @@ fn find_binding_ty_in_scopes(
     index: &baml_compiler2_hir::semantic_index::FileSemanticIndex<'_>,
     from_scope: baml_compiler2_hir::scope::FileScopeId,
     pat_id: baml_compiler2_ast::PatId,
-) -> Option<String> {
+) -> Option<baml_compiler2_tir::ty::Ty> {
     for ancestor_id in index.ancestor_scopes(from_scope) {
         let scope_id = index.scope_ids[ancestor_id.index() as usize];
         let inference = baml_compiler2_tir::inference::infer_scope_types(db, scope_id);
         if let Some(ty) = inference.binding_type(pat_id) {
-            return Some(utils::display_ty(ty));
+            return Some(ty.clone());
         }
     }
     None

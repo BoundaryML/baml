@@ -93,8 +93,7 @@ function cancel_token.token_is_cancelled_reflects_cancel() -> bool[] {
     load_var tok
     call baml.spawn.CancelToken.is_cancelled
     store_var after
-    load_var before
-    load_var after
+    load_var2 2 3
     alloc_array 2
     return
 }

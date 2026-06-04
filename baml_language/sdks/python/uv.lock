@@ -22,7 +22,7 @@ wheels = [
 
 [[package]]
 name = "baml-core"
-version = "0.1.3"
+version = "0.11.0"
 source = { editable = "." }
 dependencies = [
     { name = "protobuf" },

@@ -1,14 +1,15 @@
 [workspace]
 members = [
   "crates/*",
-  "sdks/go/codegen_go",
+  "forks/*",
+  "sdks/go/sdkgen_go",
   "sdks/nodejs/bridge_nodejs",
-  "sdks/nodejs/codegen_nodejs",
+  "sdks/nodejs/sdkgen_typescript_node",
   "sdks/python/rust/*",
   "sdk_tests/harness_setup",
   "sdk_tests/harness_runner",
   "sdk_tests/crates/python_pydantic2",
-  # `sdk_tests/crates/nodejs_typescript`'s build.rs runs codegen +
+  # `sdk_tests/crates/typescript_node`'s build.rs runs codegen +
   # `pnpm install` but soft-fails into `$OUT_DIR/build_diagnostics.txt`
   # if pnpm is missing or install fails (see
   # `sdk_tests/harness_setup/src/lib.rs::BuildDiagnostics` —
@@ -16,9 +17,18 @@ members = [
   # `cargo build` / `cargo doc` succeeds without pnpm installed.
   # The failures surface via `cargo test`'s
   # `build_diagnostics::no_build_failures` test.
-  "sdk_tests/crates/nodejs_typescript",
+  "sdk_tests/crates/typescript_node",
+  # Native RUSTC_WRAPPER shim (see tools_sccache/src/main.rs); the Windows
+  # counterpart to the tools/baml-sccache POSIX script, built explicitly in CI.
+  "tools_sccache",
 ]
 exclude = [
+  # Live system-test harnesses are intentionally outside the workspace. They
+  # enable native-only tokio/reqwest features such as `fs` and `rt-multi-thread`;
+  # keeping them out prevents workspace wasm builds from inheriting those
+  # unsupported features through resolver feature unification.
+  "forks/aws-config-systest",
+  "forks/google-cloud-auth-systest",
   # Generated Python rig-test outputs do not contain Cargo manifests, but the
   # workspace member glob above would otherwise make cargo metadata fail.
   "rig_tests/crates/python_empty",
@@ -54,9 +64,9 @@ baml_builtins_codegen = { path = "crates/baml_builtins_codegen" }
 baml_builtins2 = { path = "crates/baml_builtins2" }
 baml_builtins2_codegen = { path = "crates/baml_builtins2_codegen" }
 baml_builtins_macros = { path = "crates/baml_builtins_macros" }
-codegen_go = { path = "sdks/go/codegen_go" }
-codegen_nodejs = { path = "sdks/nodejs/codegen_nodejs" }
-codegen_python = { path = "sdks/python/rust/codegen_python" }
+sdkgen_go = { path = "sdks/go/sdkgen_go" }
+sdkgen_typescript_node = { path = "sdks/nodejs/sdkgen_typescript_node" }
+sdkgen_python_pydantic2 = { path = "sdks/python/rust/sdkgen_python_pydantic2" }
 baml_codegen_types = { path = "crates/baml_codegen_types" }
 baml_compiler2_ast = { path = "crates/baml_compiler2_ast" }
 baml_compiler2_hir = { path = "crates/baml_compiler2_hir" }
@@ -84,7 +94,9 @@ baml_lsp2_actions = { path = "crates/baml_lsp2_actions" }
 baml_lsp_server = { path = "crates/baml_lsp_server", default-features = false }
 baml_lsp_types = { path = "crates/baml_lsp_types" }
 baml_project = { path = "crates/baml_project" }
+baml_release = { path = "crates/baml_release" }
 baml_tests = { path = "crates/baml_tests" }
+baml_version = { path = "crates/baml_version" }
 tools_onionskin = { path = "crates/tools_onionskin" }
 bex_vm = { path = "crates/bex_vm" }
 bex_vm_types = { path = "crates/bex_vm_types" }
@@ -121,15 +133,16 @@ arboard = "3.4"
 ariadne = { version = "0.6" }
 async-trait = "0.1"
 askama = { version = "0.14.0" }
-aws-config = { git = "https://github.com/boundaryml/aws-sdk-rust.git", rev = "28d4f67bac1214320320905c1f6908ea32b6b0ac", default-features = false, features = [ "behavior-version-latest" ] }
-google-cloud-auth = { git = "https://github.com/BoundaryML/google-cloud-rust.git", rev = "a18d3e42bd304de897990c3d0f3e90ffd4e428fd", package = "google-cloud-auth", default-features = false }
-aws-credential-types = { git = "https://github.com/boundaryml/aws-sdk-rust.git", rev = "28d4f67bac1214320320905c1f6908ea32b6b0ac" }
-aws-sdk-bedrockruntime = { git = "https://github.com/boundaryml/aws-sdk-rust.git", rev = "28d4f67bac1214320320905c1f6908ea32b6b0ac", default-features = false, features = [ "behavior-version-latest" ] }
-aws-sigv4 = { git = "https://github.com/boundaryml/aws-sdk-rust.git", rev = "28d4f67bac1214320320905c1f6908ea32b6b0ac", features = [ "sign-http" ] }
-aws-smithy-async = { git = "https://github.com/boundaryml/aws-sdk-rust.git", rev = "28d4f67bac1214320320905c1f6908ea32b6b0ac" }
-aws-smithy-runtime-api = { git = "https://github.com/boundaryml/aws-sdk-rust.git", rev = "28d4f67bac1214320320905c1f6908ea32b6b0ac", features = [ "client" ] }
-aws-smithy-types = { git = "https://github.com/boundaryml/aws-sdk-rust.git", rev = "28d4f67bac1214320320905c1f6908ea32b6b0ac" }
-aws-types = { git = "https://github.com/boundaryml/aws-sdk-rust.git", rev = "28d4f67bac1214320320905c1f6908ea32b6b0ac" }
+# Slim, reqwest/serde-based replacements for the AWS SDK + Google Cloud auth
+# crates, living in `forks/`. They cover only what BAML needs (Bedrock Converse,
+# AWS credential sources, and Google Cloud OAuth2 tokens for Vertex AI) without
+# the Smithy runtime or the google-cloud-rust client stack. See
+# `forks/*/Cargo.toml`. The dependency keys keep the upstream crate names so
+# call sites import them unchanged; the `package` is the `forked_*` crate.
+aws-config = { path = "forks/aws-config", package = "forked_aws_config" }
+aws-sigv4 = { path = "forks/aws-sigv4", package = "forked_aws_sigv4" }
+aws-bedrock = { path = "forks/aws-bedrock", package = "forked_aws_bedrock" }
+google-cloud-auth = { path = "forks/google-cloud-auth", package = "forked_google_cloud_auth" }
 axum = { version = "0.8.4", default-features = false, features = [ "http1", "matched-path", "original-uri", "query", "tokio", "ws" ] }
 # Native `borsh` derives on the entire Program type graph (bex_vm_types +
 # baml_type + baml_exec envelope). The pack envelope was previously
@@ -156,6 +169,8 @@ flate2 = { version = "1" }
 futures = { version = "0.3.30", features = [ "executor" ] }
 futures-timer = { version = "3.0.3", features = [ "wasm-bindgen" ] }
 graphviz-rust = { version = "0.9" }
+hex = "0.4"
+hmac = "0.12"
 indexmap = { version = "2.13", features = [ "serde" ] }
 indicatif = "0.18"
 infer = "0.16.0"
@@ -200,6 +215,7 @@ serde = { version = "1.0.197", features = [ "derive" ] }
 serde-wasm-bindgen = "0.6"
 serde_json = { version = "1.0.113", features = [ "arbitrary_precision", "preserve_order" ] }
 serde_yaml = "0.9"
+sha1 = "0.10"
 similar = { version = "2.4.0", features = [ "inline" ] }
 smallvec = { version = "1.15", features = [ "const_generics" ] }
 smol_str = { version = "0.3", features = [ "serde", "borsh" ] }
@@ -239,9 +255,9 @@ pyo3 = { version = "0.28", default-features = false }
 pyo3-async-runtimes = { version = "0.28" }
 pyo3-build-config = "0.28"
 pyo3-stub-gen = { version = "0.22", default-features = false }
-napi = { version = "3.8.4", default-features = false }
-napi-derive = "3.5.3"
-napi-build = "2.3.1"
+napi = { version = "3.9.0", default-features = false }
+napi-derive = "3.5.6"
+napi-build = "2.3.2"
 wiremock = "0.6"
 vfs = "0.12"
 wasm-logger = "0.2.0"

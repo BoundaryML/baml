@@ -22,7 +22,8 @@ use rowan::TextRange;
 
 use crate::{
     ast::{
-        FromCST, GenericArgs, KnownKind, StrongAstError, SyntaxNodeIter, Token, Type, tokens as t,
+        FromCST, GenericArgs, KnownKind, StrongAstError, SyntaxNodeIter, Token, Type, TypeArgs,
+        tokens as t,
     },
     printer::{PrintInfo, PrintMultiLine, Printable, Printer, Shape},
     trivia_classifier::{EmittableTrivia, TriviaSliceExt},
@@ -302,10 +303,53 @@ pub struct DestructurePattern {
     pub let_keyword: Option<t::Let>,
     pub first: t::Word,
     pub rest: Vec<(t::Dot, t::Word)>,
-    pub generic_args: Option<GenericArgs>,
+    pub generic_args: Option<DestructureTypeArgs>,
     pub open_brace: t::LBrace,
     pub fields: Vec<(FieldPattern, Option<t::Comma>)>,
     pub close_brace: t::RBrace,
+}
+
+#[derive(Debug)]
+pub enum DestructureTypeArgs {
+    Generic(GenericArgs),
+    Type(TypeArgs),
+}
+
+impl FromCST for DestructureTypeArgs {
+    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
+        match elem.kind() {
+            SyntaxKind::GENERIC_ARGS => GenericArgs::from_cst(elem).map(Self::Generic),
+            SyntaxKind::TYPE_ARGS => TypeArgs::from_cst(elem).map(Self::Type),
+            found => Err(StrongAstError::UnexpectedKindDesc {
+                expected_desc: "GENERIC_ARGS or TYPE_ARGS".into(),
+                found,
+                at: elem.text_range(),
+            }),
+        }
+    }
+}
+
+impl Printable for DestructureTypeArgs {
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        match self {
+            DestructureTypeArgs::Generic(args) => args.print(shape, printer),
+            DestructureTypeArgs::Type(args) => args.print(shape, printer),
+        }
+    }
+
+    fn leftmost_token(&self) -> TextRange {
+        match self {
+            DestructureTypeArgs::Generic(args) => args.leftmost_token(),
+            DestructureTypeArgs::Type(args) => args.leftmost_token(),
+        }
+    }
+
+    fn rightmost_token(&self) -> TextRange {
+        match self {
+            DestructureTypeArgs::Generic(args) => args.rightmost_token(),
+            DestructureTypeArgs::Type(args) => args.rightmost_token(),
+        }
+    }
 }
 
 impl DestructurePattern {
@@ -323,8 +367,13 @@ impl DestructurePattern {
             rest.push((dot, word));
         }
         let generic_args = it
-            .next_if_kind(SyntaxKind::GENERIC_ARGS)
-            .map(GenericArgs::from_cst)
+            .next_if(|elem| {
+                matches!(
+                    elem.kind(),
+                    SyntaxKind::GENERIC_ARGS | SyntaxKind::TYPE_ARGS
+                )
+            })
+            .map(DestructureTypeArgs::from_cst)
             .transpose()?;
         let open_brace = it.expect_parse()?;
         let mut fields = Vec::new();

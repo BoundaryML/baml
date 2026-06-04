@@ -9,6 +9,8 @@
 # Namespaces ([[namespaces]]):
 #   name                 - Crate prefix (e.g., "baml" for baml_* crates)
 #   approved_prefixes    - Valid sub-prefixes (e.g., "compiler" allows baml_compiler_*)
+#   approved_suffixes    - Full tails accepted verbatim (e.g., "python_pydantic2"
+#                          allows sdkgen_python_pydantic2; validated as a unit)
 #   test_crate_exceptions - Test crates exempt from "must have prefix crate" rule
 #   dependency_rules     - Rules that only apply to crates in this namespace
 #   link_crates          - Cross-namespace deps shown as proxy nodes in this cluster
@@ -71,6 +73,12 @@ allowed_crates = [
     # the same reason — top-level error surfacing.
     "baml_exec",
     "baml_pack_host",
+    # `baml` is the wrapper binary users install. `baml_release` is
+    # shared release-boundary fetch/install code used by the wrapper
+    # and pack; it exposes typed fetch errors but uses anyhow for
+    # validation helpers and caller-facing context.
+    "baml",
+    "baml_release",
 ]
 regular_deps_only = true
 reason = "Use thiserror for proper error types in library crates."
@@ -78,7 +86,7 @@ reason = "Use thiserror for proper error types in library crates."
 # baml namespace configuration
 [[namespaces]]
 name = "baml"
-approved_prefixes = ["compiler", "builtins", "builtins2", "codegen", "compiler2", "lsp2"]
+approved_prefixes = ["compiler", "builtins", "builtins2", "compiler2", "lsp2"]
 test_crate_exceptions = ["baml_tests"]
 embed_crates = ["tools_onionskin", "bex_project"]
 
@@ -112,6 +120,18 @@ approved_prefixes = ["sap"]
 # Allow tools_stow folder to have package name "cargo-stow" for cargo subcommand convention
 name_exceptions = { "tools_stow" = "cargo-stow", "tools_size_gate" = "cargo-size-gate" }
 
+# forked AWS crates retain the upstream folder names while publishing
+# package names that cannot collide with the real crates.
+[[namespaces]]
+name = "forked_aws"
+name_exceptions = { "aws-bedrock" = "forked_aws_bedrock", "aws-config" = "forked_aws_config", "aws-sigv4" = "forked_aws_sigv4" }
+
+# forked Google crates follow the same package-name convention.
+[[namespaces]]
+name = "forked_google"
+approved_prefixes = ["cloud"]
+name_exceptions = { "google-cloud-auth" = "forked_google_cloud_auth" }
+
 # bex namespace configuration
 [[namespaces]]
 name = "bex"
@@ -143,7 +163,10 @@ name = "sys"
 link_crates = ["baml_type",  "bex_heap", "bex_vm_types"]
 
 [[namespaces]]
-name = "codegen"
+name = "sdkgen"
+# Each SDK generator targets a specific language + runtime, so the whole tail
+# is meaningful and validated as a unit rather than by sub-prefix.
+approved_suffixes = ["python_pydantic2", "typescript_node"]
 
 [[namespaces]]
 name = "surface"
@@ -154,4 +177,4 @@ name = "surface"
 # `baml_pack_host` is the runtime binary embedded in packed
 # executables. Listed here so they're exempt from the baml-namespace
 # rules forbidding bex_* deps.
-name_exceptions = {"baml_cli" = "baml_cli", "baml_exec" = "baml_exec", "baml_pack_host" = "baml_pack_host" }
+name_exceptions = {"baml" = "baml", "baml_cli" = "baml_cli", "baml_exec" = "baml_exec", "baml_pack_host" = "baml_pack_host" }

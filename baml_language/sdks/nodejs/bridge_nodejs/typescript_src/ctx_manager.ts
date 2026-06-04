@@ -2,9 +2,8 @@
 // Uses AsyncLocalStorage for async context isolation (Node.js built-in).
 
 import { AsyncLocalStorage } from 'node:async_hooks';
-import { HostSpanManager, flushEvents } from './native';
-
-let exitHookInstalled = false;
+import { HostSpanManager, flushEvents } from './native.js';
+import { installFlushOnExit } from './exit_hook.js';
 
 export class CtxManager {
     private rt: unknown;
@@ -20,12 +19,7 @@ export class CtxManager {
         // engine/ had the same eager pattern without reported issues.
         this.ctx.enterWith(new HostSpanManager());
 
-        if (!exitHookInstalled) {
-            exitHookInstalled = true;
-            process.once('exit', () => {
-                try { flushEvents(); } catch {}
-            });
-        }
+        installFlushOnExit();
     }
 
     get(): HostSpanManager {

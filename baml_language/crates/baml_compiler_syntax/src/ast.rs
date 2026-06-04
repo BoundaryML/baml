@@ -160,6 +160,15 @@ ast_node!(SourceFile, SOURCE_FILE);
 ast_node!(FunctionDef, FUNCTION_DEF);
 ast_node!(ClassDef, CLASS_DEF);
 ast_node!(EnumDef, ENUM_DEF);
+ast_node!(InterfaceDef, INTERFACE_DEF);
+ast_node!(ImplementsBlock, IMPLEMENTS_BLOCK);
+ast_node!(ImplementsTarget, IMPLEMENTS_TARGET);
+ast_node!(InterfaceFieldLink, INTERFACE_FIELD_LINK);
+ast_node!(ImplementsFor, IMPLEMENTS_FOR);
+ast_node!(ImplementsForTarget, IMPLEMENTS_FOR_TARGET);
+ast_node!(RequiresClause, REQUIRES_CLAUSE);
+ast_node!(MethodSig, METHOD_SIG);
+ast_node!(AssociatedTypeDecl, ASSOCIATED_TYPE_DECL);
 ast_node!(ClientDef, CLIENT_DEF);
 ast_node!(TestDef, TEST_DEF);
 ast_node!(GeneratorDef, GENERATOR_DEF);
@@ -296,6 +305,39 @@ impl UnionMemberParts {
             .map(|syntax| TypeExpr { syntax })
     }
 
+    /// Return `(base, interface, member)` for `(Base as Interface).Member`.
+    pub fn associated_type_projection(&self) -> Option<(TypeExpr, TypeExpr, SyntaxToken)> {
+        let mut child_types = self
+            .child_nodes
+            .iter()
+            .filter(|n| n.kind() == SyntaxKind::TYPE_EXPR)
+            .cloned()
+            .map(|syntax| TypeExpr { syntax });
+        let base = child_types.next()?;
+        let interface = child_types.next()?;
+
+        if self
+            .tokens
+            .first()
+            .is_none_or(|t| t.kind() != SyntaxKind::L_PAREN)
+        {
+            return None;
+        }
+        if !self
+            .tokens
+            .iter()
+            .any(|t| t.kind() == SyntaxKind::WORD && t.text() == "as")
+        {
+            return None;
+        }
+        let dot_idx = self
+            .tokens
+            .iter()
+            .rposition(|t| t.kind() == SyntaxKind::DOT)?;
+        let member = self.tokens.get(dot_idx + 1)?;
+        (member.kind() == SyntaxKind::WORD).then(|| (base, interface, member.clone()))
+    }
+
     /// Get the `TYPE_ARGS` child node if present (for generic types like map<K,V>).
     pub fn type_args(&self) -> Option<SyntaxNode> {
         self.child_nodes
@@ -391,6 +433,35 @@ fn collect_postfix_modifiers(kinds: impl Iterator<Item = SyntaxKind>) -> Vec<Typ
 }
 
 impl TypeExpr {
+    /// Return `(base, interface, member)` for `(Base as Interface).Member`.
+    pub fn associated_type_projection(&self) -> Option<(TypeExpr, TypeExpr, SyntaxToken)> {
+        let mut child_types = self.syntax.children().filter_map(TypeExpr::cast);
+        let base = child_types.next()?;
+        let interface = child_types.next()?;
+
+        let tokens: Vec<_> = self
+            .syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .filter(|t| !t.kind().is_trivia())
+            .collect();
+        if tokens
+            .first()
+            .is_none_or(|t| t.kind() != SyntaxKind::L_PAREN)
+        {
+            return None;
+        }
+        if !tokens
+            .iter()
+            .any(|t| t.kind() == SyntaxKind::WORD && t.text() == "as")
+        {
+            return None;
+        }
+        let dot_idx = tokens.iter().rposition(|t| t.kind() == SyntaxKind::DOT)?;
+        let member = tokens.get(dot_idx + 1)?;
+        (member.kind() == SyntaxKind::WORD).then(|| (base, interface, member.clone()))
+    }
+
     /// Check if this is a union type (contains top-level PIPE separators).
     ///
     /// Returns `true` for types like `Success | Failure` or `int[] | string[]`.
@@ -559,6 +630,17 @@ impl TypeExpr {
                 args.children()
                     .filter(|n| n.kind() == SyntaxKind::TYPE_EXPR)
                     .map(|n| TypeExpr { syntax: n })
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
+    /// Get named associated type bindings from `TYPE_ARGS`, e.g. `Item = int`.
+    pub fn type_arg_associated_bindings(&self) -> Vec<AssociatedTypeDecl> {
+        self.type_args()
+            .map(|args| {
+                args.children()
+                    .filter_map(AssociatedTypeDecl::cast)
                     .collect()
             })
             .unwrap_or_default()
@@ -896,6 +978,7 @@ impl AstNode for LetStmt {
 
 ast_node!(IfExpr, IF_EXPR);
 ast_node!(WhileStmt, WHILE_STMT);
+ast_node!(WhileLetStmt, WHILE_LET_STMT);
 ast_node!(ForExpr, FOR_EXPR);
 ast_node!(BlockExpr, BLOCK_EXPR);
 ast_node!(ReturnStmt, RETURN_STMT);
@@ -904,6 +987,7 @@ ast_node!(BreakStmt, BREAK_STMT);
 ast_node!(ContinueStmt, CONTINUE_STMT);
 ast_node!(PathExpr, PATH_EXPR);
 ast_node!(FieldAccessExpr, FIELD_ACCESS_EXPR);
+ast_node!(UpcastExpr, UPCAST_EXPR);
 ast_node!(EnvAccessExpr, ENV_ACCESS_EXPR);
 ast_node!(MatchExpr, MATCH_EXPR);
 ast_node!(MatchArm, MATCH_ARM);
@@ -926,14 +1010,26 @@ impl SourceFile {
 
 impl FunctionDef {
     /// Get the function name.
+    ///
+    /// Accepts BEP-044 keyword tokens (`implements`, `extends`, `interface`)
+    /// in addition to plain WORD tokens — the parser admits them as method
+    /// names so reflection helpers like `TypeValue.implements(...)` parse
+    /// without renaming.
     pub fn name(&self) -> Option<SyntaxToken> {
         self.syntax
             .children_with_tokens()
             .filter_map(rowan::NodeOrToken::into_token)
             .filter(|token| {
-                token.kind() == SyntaxKind::WORD && token.parent() == Some(self.syntax.clone())
+                let kind = token.kind();
+                let is_name = kind == SyntaxKind::WORD
+                    || kind == SyntaxKind::KW_IMPLEMENTS
+                    || kind == SyntaxKind::KW_IMPLEMENT
+                    || kind == SyntaxKind::KW_EXTENDS
+                    || kind == SyntaxKind::KW_REQUIRES
+                    || kind == SyntaxKind::KW_INTERFACE;
+                is_name && token.parent() == Some(self.syntax.clone())
             })
-            .nth(0) // Get the first WORD (function keyword is KW_FUNCTION, not WORD)
+            .nth(0)
     }
 
     /// Get the parameter list.
@@ -1259,13 +1355,278 @@ impl ClassDef {
     }
 
     /// Get all methods (function definitions inside the class).
+    ///
+    /// This intentionally excludes methods nested inside `implements` blocks —
+    /// those are recovered via [`implements_blocks`](Self::implements_blocks).
     pub fn methods(&self) -> impl Iterator<Item = FunctionDef> {
         self.syntax.children().filter_map(FunctionDef::cast)
+    }
+
+    /// Get all `implements I { ... }` blocks declared inside the class body.
+    pub fn implements_blocks(&self) -> impl Iterator<Item = ImplementsBlock> {
+        self.syntax.children().filter_map(ImplementsBlock::cast)
     }
 
     /// Get block attributes (@@dynamic).
     pub fn block_attributes(&self) -> impl Iterator<Item = BlockAttribute> {
         self.syntax.children().filter_map(BlockAttribute::cast)
+    }
+}
+
+impl InterfaceDef {
+    /// Get the interface name.
+    pub fn name(&self) -> Option<SyntaxToken> {
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .filter(|token| {
+                token.kind() == SyntaxKind::WORD && token.parent() == Some(self.syntax.clone())
+            })
+            .nth(0)
+    }
+
+    /// Field signatures declared directly in the interface body.
+    pub fn fields(&self) -> impl Iterator<Item = Field> {
+        self.syntax.children().filter_map(Field::cast)
+    }
+
+    /// Associated type declarations declared directly in the interface body.
+    pub fn associated_types(&self) -> impl Iterator<Item = AssociatedTypeDecl> {
+        self.syntax.children().filter_map(AssociatedTypeDecl::cast)
+    }
+
+    /// Default methods declared with a body in the interface.
+    pub fn default_methods(&self) -> impl Iterator<Item = FunctionDef> {
+        self.syntax.children().filter_map(FunctionDef::cast)
+    }
+
+    /// Required method signatures (no body).
+    pub fn required_methods(&self) -> impl Iterator<Item = MethodSig> {
+        self.syntax.children().filter_map(MethodSig::cast)
+    }
+
+    /// Optional `requires I1, I2` clause (BEP-044 canonical form).
+    pub fn requires_clause(&self) -> Option<RequiresClause> {
+        self.syntax.children().find_map(RequiresClause::cast)
+    }
+}
+
+impl RequiresClause {
+    /// Each `TypeExpr` in the requires clause — one per required interface.
+    pub fn parents(&self) -> impl Iterator<Item = TypeExpr> {
+        self.syntax.children().filter_map(TypeExpr::cast)
+    }
+}
+
+impl ImplementsBlock {
+    /// The interface this block implements (e.g., `Animal` in `implements Animal { ... }`).
+    pub fn target(&self) -> Option<ImplementsTarget> {
+        self.syntax.children().find_map(ImplementsTarget::cast)
+    }
+
+    /// Field declarations redeclared inside the `implements` block.
+    pub fn fields(&self) -> impl Iterator<Item = Field> {
+        self.syntax.children().filter_map(Field::cast)
+    }
+
+    /// Explicit interface-field links, e.g. `name as display_name`.
+    pub fn field_links(&self) -> impl Iterator<Item = InterfaceFieldLink> {
+        self.syntax.children().filter_map(InterfaceFieldLink::cast)
+    }
+
+    /// Associated type bindings, e.g. `type Item = int`.
+    pub fn associated_type_bindings(&self) -> impl Iterator<Item = AssociatedTypeDecl> {
+        self.syntax.children().filter_map(AssociatedTypeDecl::cast)
+    }
+
+    /// Method definitions (overrides) provided in this block.
+    pub fn methods(&self) -> impl Iterator<Item = FunctionDef> {
+        self.syntax.children().filter_map(FunctionDef::cast)
+    }
+}
+
+fn is_member_name_token(kind: SyntaxKind) -> bool {
+    matches!(
+        kind,
+        SyntaxKind::WORD
+            | SyntaxKind::KW_IMPLEMENTS
+            | SyntaxKind::KW_IMPLEMENT
+            | SyntaxKind::KW_EXTENDS
+            | SyntaxKind::KW_REQUIRES
+            | SyntaxKind::KW_INTERFACE
+    )
+}
+
+impl InterfaceFieldLink {
+    /// The interface field on the left side of `field as class_field`.
+    pub fn interface_field(&self) -> Option<SyntaxToken> {
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| {
+                !token.kind().is_trivia()
+                    && is_member_name_token(token.kind())
+                    && !(token.kind() == SyntaxKind::WORD && token.text() == "as")
+            })
+    }
+
+    /// The class field on the right side of `field as class_field`.
+    pub fn class_field(&self) -> Option<SyntaxToken> {
+        let mut after_as = false;
+        for token in self
+            .syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .filter(|token| !token.kind().is_trivia())
+        {
+            if token.kind() == SyntaxKind::WORD && token.text() == "as" {
+                after_as = true;
+                continue;
+            }
+            if after_as && is_member_name_token(token.kind()) {
+                return Some(token);
+            }
+        }
+        None
+    }
+
+    /// Span of the contextual `as` keyword when present.
+    pub fn as_token(&self) -> Option<SyntaxToken> {
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| token.kind() == SyntaxKind::WORD && token.text() == "as")
+    }
+}
+
+impl ImplementsTarget {
+    /// The interface name expression — typically a path optionally with generics.
+    pub fn type_expr(&self) -> Option<TypeExpr> {
+        self.syntax.children().find_map(TypeExpr::cast)
+    }
+}
+
+impl ImplementsFor {
+    /// The interface being implemented.
+    pub fn target(&self) -> Option<ImplementsTarget> {
+        self.syntax.children().find_map(ImplementsTarget::cast)
+    }
+
+    /// The `for T` target type.
+    pub fn for_target(&self) -> Option<ImplementsForTarget> {
+        self.syntax.children().find_map(ImplementsForTarget::cast)
+    }
+
+    /// Field declarations inside the block.
+    pub fn fields(&self) -> impl Iterator<Item = Field> {
+        self.syntax.children().filter_map(Field::cast)
+    }
+
+    /// Explicit interface-field links, e.g. `name as display_name`.
+    pub fn field_links(&self) -> impl Iterator<Item = InterfaceFieldLink> {
+        self.syntax.children().filter_map(InterfaceFieldLink::cast)
+    }
+
+    /// Associated type bindings, e.g. `type Item = int`.
+    pub fn associated_type_bindings(&self) -> impl Iterator<Item = AssociatedTypeDecl> {
+        self.syntax.children().filter_map(AssociatedTypeDecl::cast)
+    }
+
+    /// Method definitions inside the block.
+    pub fn methods(&self) -> impl Iterator<Item = FunctionDef> {
+        self.syntax.children().filter_map(FunctionDef::cast)
+    }
+}
+
+impl ImplementsForTarget {
+    pub fn type_expr(&self) -> Option<TypeExpr> {
+        self.syntax.children().find_map(TypeExpr::cast)
+    }
+}
+
+impl AssociatedTypeDecl {
+    /// The associated type name after contextual `type`.
+    pub fn name(&self) -> Option<SyntaxToken> {
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .filter(|token| !token.kind().is_trivia() && token.kind() == SyntaxKind::WORD)
+            .find(|token| token.text() != "type")
+    }
+
+    /// Optional bound after `extends`.
+    pub fn bound(&self) -> Option<TypeExpr> {
+        let mut after_extends = false;
+        for element in self.syntax.children_with_tokens() {
+            match element {
+                rowan::NodeOrToken::Token(token) => {
+                    if token.kind() == SyntaxKind::KW_EXTENDS {
+                        after_extends = true;
+                    } else if token.kind() == SyntaxKind::EQUALS {
+                        return None;
+                    }
+                }
+                rowan::NodeOrToken::Node(node) if after_extends => {
+                    return TypeExpr::cast(node);
+                }
+                rowan::NodeOrToken::Node(_) => {}
+            }
+        }
+        None
+    }
+
+    /// Optional default/binding after `=`.
+    pub fn default_or_binding(&self) -> Option<TypeExpr> {
+        let mut after_equals = false;
+        for element in self.syntax.children_with_tokens() {
+            match element {
+                rowan::NodeOrToken::Token(token) => {
+                    if token.kind() == SyntaxKind::EQUALS {
+                        after_equals = true;
+                    }
+                }
+                rowan::NodeOrToken::Node(node) if after_equals => {
+                    return TypeExpr::cast(node);
+                }
+                rowan::NodeOrToken::Node(_) => {}
+            }
+        }
+        None
+    }
+}
+
+impl MethodSig {
+    /// Get the method name.
+    ///
+    /// Accepts the same keyword tokens as [`FunctionDef::name`] so interface
+    /// signatures can use reflection-style names.
+    pub fn name(&self) -> Option<SyntaxToken> {
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| {
+                let kind = token.kind();
+                kind == SyntaxKind::WORD
+                    || kind == SyntaxKind::KW_IMPLEMENTS
+                    || kind == SyntaxKind::KW_IMPLEMENT
+                    || kind == SyntaxKind::KW_EXTENDS
+                    || kind == SyntaxKind::KW_REQUIRES
+                    || kind == SyntaxKind::KW_INTERFACE
+            })
+    }
+
+    pub fn param_list(&self) -> Option<ParameterList> {
+        self.syntax.children().find_map(ParameterList::cast)
+    }
+
+    /// Return type — the first `TypeExpr` child that's not inside a parameter.
+    pub fn return_type(&self) -> Option<TypeExpr> {
+        self.syntax.children().find_map(TypeExpr::cast)
+    }
+
+    /// Get the throws clause if present.
+    pub fn throws_clause(&self) -> Option<ThrowsClause> {
+        self.syntax.children().find_map(ThrowsClause::cast)
     }
 }
 
@@ -1275,7 +1636,17 @@ impl Field {
         self.syntax
             .children_with_tokens()
             .filter_map(rowan::NodeOrToken::into_token)
-            .find(|token| token.kind() == SyntaxKind::WORD)
+            .find(|token| {
+                matches!(
+                    token.kind(),
+                    SyntaxKind::WORD
+                        | SyntaxKind::KW_IMPLEMENTS
+                        | SyntaxKind::KW_IMPLEMENT
+                        | SyntaxKind::KW_EXTENDS
+                        | SyntaxKind::KW_REQUIRES
+                        | SyntaxKind::KW_INTERFACE
+                )
+            })
     }
 
     /// Get the field type.
@@ -2187,6 +2558,29 @@ impl WhileStmt {
     }
 }
 
+impl WhileLetStmt {
+    /// Get the refutable pattern (the first `PATTERN` child). Mirrors the
+    /// `IF_LET_EXPR` layout: `PATTERN`, scrutinee expr, then `BLOCK_EXPR`.
+    pub fn pattern(&self) -> Option<SyntaxNode> {
+        self.syntax
+            .children()
+            .find(|n| n.kind() == SyntaxKind::PATTERN)
+    }
+
+    /// Get the scrutinee expression (the expression after `=`). It is the
+    /// first child that is neither the `PATTERN` nor the body `BLOCK_EXPR`.
+    pub fn scrutinee(&self) -> Option<SyntaxNode> {
+        self.syntax
+            .children()
+            .find(|n| !matches!(n.kind(), SyntaxKind::PATTERN | SyntaxKind::BLOCK_EXPR))
+    }
+
+    /// Get the body block expression (the `BLOCK_EXPR` child).
+    pub fn body(&self) -> Option<BlockExpr> {
+        self.syntax.children().find_map(BlockExpr::cast)
+    }
+}
+
 impl IfExpr {
     /// Get the condition expression.
     /// The condition is the first child expression of the if expression.
@@ -2424,6 +2818,7 @@ impl LetStmt {
                     | SyntaxKind::CALL_EXPR
                     | SyntaxKind::PATH_EXPR
                     | SyntaxKind::FIELD_ACCESS_EXPR
+                    | SyntaxKind::UPCAST_EXPR
                     | SyntaxKind::OPTIONAL_FIELD_ACCESS_EXPR
                     | SyntaxKind::INDEX_EXPR
                     | SyntaxKind::OPTIONAL_INDEX_EXPR
@@ -2545,7 +2940,10 @@ impl BlockElement {
             BlockElement::Stmt(node) => {
                 // WHILE_STMT and FOR_EXPR don't consume semicolons in the parser,
                 // so check siblings like expressions
-                if matches!(node.kind(), SyntaxKind::WHILE_STMT | SyntaxKind::FOR_EXPR) {
+                if matches!(
+                    node.kind(),
+                    SyntaxKind::WHILE_STMT | SyntaxKind::WHILE_LET_STMT | SyntaxKind::FOR_EXPR
+                ) {
                     return node
                         .siblings_with_tokens(Direction::Next)
                         .skip(1)
@@ -2592,6 +2990,7 @@ impl BlockExpr {
                         | SyntaxKind::WATCH_LET
                         | SyntaxKind::RETURN_STMT
                         | SyntaxKind::WHILE_STMT
+                        | SyntaxKind::WHILE_LET_STMT
                         | SyntaxKind::FOR_EXPR
                         | SyntaxKind::BREAK_STMT
                         | SyntaxKind::CONTINUE_STMT
@@ -2617,6 +3016,7 @@ impl BlockExpr {
                         | SyntaxKind::BLOCK_EXPR
                         | SyntaxKind::PATH_EXPR
                         | SyntaxKind::FIELD_ACCESS_EXPR
+                        | SyntaxKind::UPCAST_EXPR
                         | SyntaxKind::OPTIONAL_FIELD_ACCESS_EXPR
                         | SyntaxKind::ENV_ACCESS_EXPR
                         | SyntaxKind::INDEX_EXPR
@@ -2675,12 +3075,26 @@ impl FieldAccessExpr {
     }
 
     /// Get the field name being accessed.
+    ///
+    /// The interface-related keywords (`implements`, `interface`, `extends`)
+    /// also count: they remain callable as member names on the reflection
+    /// `type` value (e.g. `dog_t.implements(animal_t)`).
     pub fn field(&self) -> Option<SyntaxToken> {
         self.syntax
             .children_with_tokens()
             .filter_map(rowan::NodeOrToken::into_token)
-            .filter(|token| token.kind() == SyntaxKind::WORD)
-            .last() // The field name is the last WORD token
+            .filter(|token| {
+                matches!(
+                    token.kind(),
+                    SyntaxKind::WORD
+                        | SyntaxKind::KW_IMPLEMENTS
+                        | SyntaxKind::KW_IMPLEMENT
+                        | SyntaxKind::KW_INTERFACE
+                        | SyntaxKind::KW_EXTENDS
+                        | SyntaxKind::KW_REQUIRES
+                )
+            })
+            .last() // The field name is the last member-name token
     }
 }
 
@@ -3035,6 +3449,8 @@ pub enum Item {
     Function(FunctionDef),
     Class(ClassDef),
     Enum(EnumDef),
+    Interface(InterfaceDef),
+    ImplementsFor(ImplementsFor),
     Client(ClientDef),
     Test(TestDef),
     RetryPolicy(RetryPolicyDef),
@@ -3051,6 +3467,8 @@ impl AstNode for Item {
             SyntaxKind::FUNCTION_DEF
                 | SyntaxKind::CLASS_DEF
                 | SyntaxKind::ENUM_DEF
+                | SyntaxKind::INTERFACE_DEF
+                | SyntaxKind::IMPLEMENTS_FOR
                 | SyntaxKind::CLIENT_DEF
                 | SyntaxKind::TEST_DEF
                 | SyntaxKind::RETRY_POLICY_DEF
@@ -3064,6 +3482,8 @@ impl AstNode for Item {
             SyntaxKind::FUNCTION_DEF => Some(Item::Function(FunctionDef { syntax })),
             SyntaxKind::CLASS_DEF => Some(Item::Class(ClassDef { syntax })),
             SyntaxKind::ENUM_DEF => Some(Item::Enum(EnumDef { syntax })),
+            SyntaxKind::INTERFACE_DEF => Some(Item::Interface(InterfaceDef { syntax })),
+            SyntaxKind::IMPLEMENTS_FOR => Some(Item::ImplementsFor(ImplementsFor { syntax })),
             SyntaxKind::CLIENT_DEF => Some(Item::Client(ClientDef { syntax })),
             SyntaxKind::TEST_DEF => Some(Item::Test(TestDef { syntax })),
             SyntaxKind::RETRY_POLICY_DEF => Some(Item::RetryPolicy(RetryPolicyDef { syntax })),
@@ -3080,6 +3500,8 @@ impl AstNode for Item {
             Item::Function(it) => it.syntax(),
             Item::Class(it) => it.syntax(),
             Item::Enum(it) => it.syntax(),
+            Item::Interface(it) => it.syntax(),
+            Item::ImplementsFor(it) => it.syntax(),
             Item::Client(it) => it.syntax(),
             Item::Test(it) => it.syntax(),
             Item::RetryPolicy(it) => it.syntax(),

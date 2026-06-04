@@ -27,7 +27,7 @@ function user.CatchAlwaysThrows(n: int) -> string throws never {
         int =>
           "index!" : "index!"
   }
-  !! 622..644: type mismatch: expected string, got user.Status
+  !! 622..644: type mismatch: expected string, got Status
 }
 function user.ThrowsAllStatusVariants(n: int) -> user.Status throws never {
   { : never
@@ -58,7 +58,7 @@ function user.CatchAllStatusVariants(n: int) -> string throws never {
         Status.SomeOtherError =>
           "other!" : "other!"
   }
-  !! 1109..1135: type mismatch: expected string, got user.Status
+  !! 1109..1135: type mismatch: expected string, got Status
 }
 function user.RecA(n: int) -> string throws never {
   { : string

@@ -2,7 +2,7 @@
 
 The generic *instance method* path (`WrapperMethods.get_value` /
 `get_value_or_marker`) is covered separately in
-`customizable/test_generic_method.py`; here we cover the
+`customizable/test_generic.py`; here we cover the
 concretely-instantiated generic class round trips.
 """
 

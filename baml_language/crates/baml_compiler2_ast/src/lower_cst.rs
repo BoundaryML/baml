@@ -15,10 +15,12 @@ use rowan::ast::AstNode;
 use crate::{
     DeclarativeMeta, LoweringDiagnostic,
     ast::{
-        AstSourceMap, BuiltinKind, CallArg, ConfigItemDef, EnumDef, Expr, ExprBody, ExprId,
-        FieldDef, FunctionBodyDef, FunctionDef, FunctionDefaults, GeneratorDef, Interpolation,
-        Item, LetDef, LetOrigin, LlmBodyDef, Param, RawAttribute, RawAttributeArg, RawPrompt,
-        SpannedTypeExpr, TemplateStringDef, TestDef, TypeAliasDef, VariantDef,
+        AssociatedTypeBindingDef, AssociatedTypeDef, AstSourceMap, BuiltinKind, CallArg,
+        ConfigItemDef, EnumDef, Expr, ExprBody, ExprId, FieldDef, FunctionBodyDef, FunctionDef,
+        FunctionDefaults, GeneratorDef, ImplementsBlockDef, ImplementsForDef, InterfaceDef,
+        InterfaceFieldLinkDef, Interpolation, Item, LetDef, LetOrigin, LlmBodyDef, MethodSigDef,
+        Param, RawAttribute, RawAttributeArg, RawPrompt, SpannedTypeExpr, TemplateStringDef,
+        TestDef, TypeAliasDef, TypeExpr, VariantDef,
     },
     companions::expand_companions,
     lower_expr_body, lower_type_expr,
@@ -95,6 +97,11 @@ pub fn lower_file_with_path(
                     items.push(Item::Enum(e));
                 }
             }
+            baml_compiler_syntax::SyntaxKind::INTERFACE_DEF => {
+                if let Some(i) = lower_interface(&child, &mut diags, &mut env_var_refs) {
+                    items.push(Item::Interface(i));
+                }
+            }
             baml_compiler_syntax::SyntaxKind::TYPE_ALIAS_DEF => {
                 if let Some(ta) = lower_type_alias(&child, &mut diags) {
                     items.push(Item::TypeAlias(ta));
@@ -142,7 +149,64 @@ pub fn lower_file_with_path(
                     items.push(let_item);
                 }
             }
+            baml_compiler_syntax::SyntaxKind::IMPLEMENTS_FOR => {
+                if let Some(imp) = lower_implements_for(&child, &mut diags, &mut env_var_refs) {
+                    items.push(Item::ImplementsFor(imp));
+                }
+            }
             _ => {} // skip comments, whitespace, errors
+        }
+    }
+
+    // BEP-044: merge top-level `implements I for T` items into the target
+    // class when `T` names a local class. Targets declared in another file,
+    // primitives, and fixed-shape types must remain as first-class
+    // implementation records for later package-level resolution.
+    let impl_fors: Vec<ImplementsForDef> = items
+        .iter()
+        .filter_map(|item| match item {
+            Item::ImplementsFor(imp) => Some(imp.clone()),
+            _ => None,
+        })
+        .collect();
+    items.retain(|item| !matches!(item, Item::ImplementsFor(_)));
+    for imp in impl_fors {
+        if !imp.generic_params.is_empty() {
+            items.push(Item::ImplementsFor(imp));
+            continue;
+        }
+        let target_name = match &imp.for_target.expr {
+            crate::ast::TypeExpr::Path {
+                segments,
+                generic_args,
+                ..
+            } if segments.len() == 1 && generic_args.is_empty() => segments.first().cloned(),
+            _ => None,
+        };
+        if let Some(target_name) = target_name {
+            let target_class = items.iter_mut().find_map(|item| {
+                if let Item::Class(class) = item
+                    && class.name == target_name
+                {
+                    Some(class)
+                } else {
+                    None
+                }
+            });
+            if let Some(class) = target_class {
+                class.implements.push(ImplementsBlockDef {
+                    target: imp.interface_target,
+                    field_links: imp.field_links,
+                    associated_type_bindings: imp.associated_type_bindings,
+                    methods: imp.methods,
+                    is_out_of_body: true,
+                    span: imp.span,
+                });
+            } else {
+                items.push(Item::ImplementsFor(imp));
+            }
+        } else {
+            items.push(Item::ImplementsFor(imp));
         }
     }
 
@@ -199,10 +263,18 @@ fn lower_function(
     let name = Name::new(name_token.text());
     let name_span = name_token.text_range();
 
-    let generic_params = extract_generic_params(node);
+    let generic_params_with_bounds = extract_generic_params_with_bounds(node);
+    let generic_params: Vec<Name> = generic_params_with_bounds
+        .iter()
+        .map(|(n, _)| n.clone())
+        .collect();
+    let generic_param_bounds: Vec<Option<crate::ast::TypeExpr>> = generic_params_with_bounds
+        .into_iter()
+        .map(|(_, b)| b)
+        .collect();
     let parameter_context = format!("function `{}`", name.as_str());
 
-    let (params, defaults) = func
+    let (mut params, mut defaults) = func
         .param_list()
         .map(|pl| {
             lower_params_with_defaults(
@@ -244,8 +316,17 @@ fn lower_function(
 
     let (body, declarative_meta) = if let Some(llm) = func.llm_body() {
         let llm_body_def = lower_llm_body(&llm);
-        let param_names: Vec<Name> = params.iter().map(|p| p.name.clone()).collect();
+        reject_reserved_llm_client_params(&mut params, name.as_str(), diags);
         let client_name = llm_body_def.client.as_ref().map(|n| n.as_str().to_string());
+        if let Some(client_name) = client_name.as_deref() {
+            append_default_client_param(&mut params, &mut defaults, client_name, llm_body_def.span);
+        }
+        let param_names: Vec<Name> = params
+            .iter()
+            .filter(|p| p.name.as_str() != "client")
+            .map(|p| p.name.clone())
+            .collect();
+        let client_arg_name = client_name.as_ref().map(|_| "client");
         // Pass the LLM function's declared return type as the explicit `<T>`
         // type argument to `baml.llm.call_llm_function<T>`. This is required
         // for the runtime type-arg threading: without it, `T` falls back to
@@ -260,7 +341,7 @@ fn lower_function(
             "call_llm_function",
             name.as_str(),
             &param_names,
-            client_name.as_deref(),
+            client_arg_name,
             call_type_args,
             llm_body_def.span,
         );
@@ -288,6 +369,7 @@ fn lower_function(
     Some(FunctionDef {
         name,
         generic_params,
+        generic_param_bounds,
         params,
         defaults,
         return_type,
@@ -451,6 +533,108 @@ pub(crate) fn lower_param(
     })
 }
 
+pub(crate) fn append_default_client_param(
+    params: &mut Vec<Param>,
+    defaults: &mut FunctionDefaults,
+    client_name: &str,
+    span: text_size::TextRange,
+) {
+    let default_expr = alloc_client_override_default_expr(defaults, client_name, span);
+    params.push(Param {
+        name: Name::new("client"),
+        type_expr: Some(SpannedTypeExpr {
+            expr: TypeExpr::Path {
+                segments: vec![Name::new("baml"), Name::new("llm"), Name::new("Client")],
+                generic_args: vec![],
+                associated_type_bindings: vec![],
+                attrs: vec![],
+            },
+            span,
+        }),
+        default: Some(crate::ast::DefaultExprId::new(default_expr)),
+        span,
+        name_span: span,
+    });
+}
+
+fn reject_reserved_llm_client_params(
+    params: &mut Vec<Param>,
+    function_name: &str,
+    diags: &mut Vec<LoweringDiagnostic>,
+) {
+    let mut reserved_spans = Vec::new();
+    params.retain(|param| {
+        if param.name.as_str() == "client" {
+            reserved_spans.push(param.name_span);
+            false
+        } else {
+            true
+        }
+    });
+
+    for span in reserved_spans {
+        diags.push(LoweringDiagnostic::ReservedLlmClientParam {
+            function_name: function_name.to_string(),
+            param_name: "client".to_string(),
+            span,
+        });
+    }
+}
+
+fn alloc_client_override_default_expr(
+    defaults: &mut FunctionDefaults,
+    client_name: &str,
+    span: text_size::TextRange,
+) -> ExprId {
+    fn alloc(defaults: &mut FunctionDefaults, expr: Expr, span: text_size::TextRange) -> ExprId {
+        let id = defaults.exprs.exprs.alloc(expr);
+        defaults.source_map.expr_spans.alloc(span);
+        id
+    }
+
+    if client_name.contains('/') {
+        // Shorthand clients are not backed by a synthesized top-level let binding,
+        // so defaults have to carry the inline Client value.
+        let name_lit = alloc(
+            defaults,
+            Expr::Literal(crate::ast::Literal::String(client_name.to_string())),
+            span,
+        );
+        let client_type = alloc(
+            defaults,
+            Expr::Path(vec![
+                Name::new("baml"),
+                Name::new("llm"),
+                Name::new("ClientType"),
+                Name::new("Primitive"),
+            ]),
+            span,
+        );
+        let sub_clients = alloc(defaults, Expr::Array { elements: vec![] }, span);
+        let retry = alloc(defaults, Expr::Null, span);
+        let counter = alloc(defaults, Expr::Literal(crate::ast::Literal::Int(0)), span);
+        alloc(
+            defaults,
+            Expr::Object {
+                type_name: Some(TypePath::from_dotted("baml.llm.Client")),
+                type_args: vec![],
+                fields: vec![
+                    (Name::new("name"), name_lit),
+                    (Name::new("client_type"), client_type),
+                    (Name::new("sub_clients"), sub_clients),
+                    (Name::new("retry"), retry),
+                    (Name::new("counter"), counter),
+                ],
+                spreads: vec![],
+            },
+            span,
+        )
+    } else {
+        // Named client declarations already lower to a top-level client let binding.
+        alloc(defaults, Expr::Path(vec![Name::new(client_name)]), span)
+    }
+}
+
 fn lower_llm_body(llm_body: &ast::LlmFunctionBody) -> LlmBodyDef {
     let span = llm_body.syntax().text_range();
 
@@ -479,8 +663,9 @@ fn lower_llm_body(llm_body: &ast::LlmFunctionBody) -> LlmBodyDef {
 /// an inline `Client { name, client_type: ClientType.Primitive, sub_clients: [], retry: null, counter: 0 }`.
 /// When `client_name` is `None`, `Expr::Null` is used as a fallback.
 ///
-/// Only `call_llm_function` passes a client; companion builtins (`render_prompt`, `build_request`)
-/// use `client_name = None` and keep their existing 2-argument signature.
+/// LLM functions and request/render/stream companions pass a client as the first argument.
+/// After default-client parameter synthesis, call sites pass `client_name = Some("client")`
+/// so explicit `client=` overrides flow through the generated body.
 ///
 /// All synthetic spans point to `span`.
 pub fn synthesize_llm_builtin_call(
@@ -825,7 +1010,15 @@ fn lower_class(
         return None;
     };
 
-    let generic_params = extract_generic_params(node);
+    let generic_params_with_bounds = extract_generic_params_with_bounds(node);
+    let generic_params: Vec<Name> = generic_params_with_bounds
+        .iter()
+        .map(|(n, _)| n.clone())
+        .collect();
+    let generic_param_bounds: Vec<Option<crate::ast::TypeExpr>> = generic_params_with_bounds
+        .into_iter()
+        .map(|(_, b)| b)
+        .collect();
     let class_name = name_token.text().to_string();
 
     let fields = class
@@ -902,11 +1095,18 @@ fn lower_class(
         })
         .collect();
 
+    let implements = class
+        .implements_blocks()
+        .filter_map(|block| lower_implements_block(&block, diags, env_var_refs))
+        .collect();
+
     let mut class_def = crate::ast::ClassDef {
         name: Name::new(name_token.text()),
         generic_params,
+        generic_param_bounds,
         fields,
         methods,
+        implements,
         attributes: lower_attributes_from_node(node),
         docstring: crate::docstring::extract_docstring(node),
         span: node.text_range(),
@@ -925,28 +1125,62 @@ fn lower_class(
 /// Walks the direct children of `node` to find a `GENERIC_PARAM_LIST`, then
 /// extracts each `GENERIC_PARAM` child's `WORD` token as a `Name`.
 pub(crate) fn extract_generic_params(node: &SyntaxNode) -> Vec<Name> {
+    extract_generic_params_with_bounds(node)
+        .into_iter()
+        .map(|(n, _)| n)
+        .collect()
+}
+
+/// BEP-044 generic bounds: walk `GENERIC_PARAM_LIST` and return each
+/// parameter's `Name` paired with its optional `extends Iface` bound.
+/// The bound is captured as a `TypeExpr` so generic parents like
+/// `Container<int>` round-trip.
+pub(crate) fn extract_generic_params_with_bounds(
+    node: &SyntaxNode,
+) -> Vec<(Name, Option<crate::ast::TypeExpr>)> {
     use baml_compiler_syntax::SyntaxKind;
 
-    let mut params = Vec::new();
+    let mut out: Vec<(Name, Option<crate::ast::TypeExpr>)> = Vec::new();
     for child in node.children() {
         let child_kind: SyntaxKind = child.kind();
-        if child_kind == SyntaxKind::GENERIC_PARAM_LIST {
-            for param_node in child.children() {
-                let param_kind: SyntaxKind = param_node.kind();
-                if param_kind == SyntaxKind::GENERIC_PARAM {
-                    for elem in param_node.children_with_tokens() {
-                        if let Some(token) = elem.as_token() {
-                            let token_kind: SyntaxKind = token.kind();
-                            if token_kind == SyntaxKind::WORD {
-                                params.push(Name::new(token.text()));
-                            }
-                        }
+        if child_kind != SyntaxKind::GENERIC_PARAM_LIST {
+            continue;
+        }
+        for param_node in child.children() {
+            if param_node.kind() != SyntaxKind::GENERIC_PARAM {
+                continue;
+            }
+            let mut name: Option<Name> = None;
+            for elem in param_node.children_with_tokens() {
+                if let Some(token) = elem.as_token() {
+                    if token.kind() == SyntaxKind::WORD && name.is_none() {
+                        name = Some(Name::new(token.text()));
                     }
                 }
             }
+            let bound: Option<crate::ast::TypeExpr> = param_node
+                .children()
+                .find(|n| n.kind() == SyntaxKind::GENERIC_PARAM_BOUNDS)
+                .and_then(|bounds_node| {
+                    // BEP-044 only requires single-bound support; the
+                    // intersection form lexes as multiple `TypeExpr`
+                    // children separated by `&`. We surface the first
+                    // bound and let downstream check intersection in a
+                    // future pass.
+                    bounds_node
+                        .children()
+                        .find(|n| baml_compiler_syntax::ast::TypeExpr::cast(n.clone()).is_some())
+                })
+                .and_then(|n| {
+                    let te = baml_compiler_syntax::ast::TypeExpr::cast(n)?;
+                    Some(lower_type_expr::lower_type_expr_node(&te))
+                });
+            if let Some(n) = name {
+                out.push((n, bound));
+            }
         }
     }
-    params
+    out
 }
 
 fn lower_enum(node: &SyntaxNode, diags: &mut Vec<LoweringDiagnostic>) -> Option<EnumDef> {
@@ -988,6 +1222,452 @@ fn lower_enum(node: &SyntaxNode, diags: &mut Vec<LoweringDiagnostic>) -> Option<
         docstring: crate::docstring::extract_docstring(node),
         span: node.text_range(),
         name_span: name_token.text_range(),
+    })
+}
+
+fn lower_interface(
+    node: &SyntaxNode,
+    diags: &mut Vec<LoweringDiagnostic>,
+    env_var_refs: &mut Vec<crate::EnvVarRef>,
+) -> Option<InterfaceDef> {
+    let iface = ast::InterfaceDef::cast(node.clone())?;
+    let Some(name_token) = iface.name() else {
+        diags.push(LoweringDiagnostic::MissingItemName {
+            item_kind: "interface",
+            span: node.text_range(),
+        });
+        return None;
+    };
+    let iface_name = name_token.text().to_string();
+    let generic_params_with_bounds = extract_generic_params_with_bounds(node);
+    let generic_params: Vec<Name> = generic_params_with_bounds
+        .iter()
+        .map(|(n, _)| n.clone())
+        .collect();
+    let generic_param_bounds: Vec<Option<crate::ast::TypeExpr>> = generic_params_with_bounds
+        .into_iter()
+        .map(|(_, b)| b)
+        .collect();
+
+    let parent_type_nodes: Vec<baml_compiler_syntax::ast::TypeExpr> =
+        if let Some(c) = iface.requires_clause() {
+            c.parents().collect()
+        } else {
+            Vec::new()
+        };
+    let requires: Vec<SpannedTypeExpr> = parent_type_nodes
+        .into_iter()
+        .map(|te| {
+            let expr = lower_type_expr::lower_type_expr_node(&te);
+            let te_span = te.syntax().text_range();
+            check_unknown_type(
+                &expr,
+                format!("requires clause of interface `{iface_name}`"),
+                te_span,
+                diags,
+            );
+            SpannedTypeExpr {
+                expr,
+                span: te_span,
+            }
+        })
+        .collect();
+
+    let fields = iface
+        .fields()
+        .filter_map(|f| {
+            let Some(fname) = f.name() else {
+                diags.push(LoweringDiagnostic::MissingFieldName {
+                    class_name: iface_name.clone(),
+                    span: f.syntax().text_range(),
+                });
+                return None;
+            };
+            let field_name_str = fname.text().to_string();
+            let type_expr = f.ty().map(|te| {
+                let expr = lower_type_expr::lower_type_expr_node(&te);
+                let te_span = te.syntax().text_range();
+                check_unknown_type(
+                    &expr,
+                    format!("interface field `{iface_name}.{field_name_str}`"),
+                    te_span,
+                    diags,
+                );
+                lower_type_expr::check_void_type(
+                    &expr,
+                    "an interface field type".to_string(),
+                    te_span,
+                    false,
+                    diags,
+                );
+                SpannedTypeExpr {
+                    expr,
+                    span: te_span,
+                }
+            });
+            Some(FieldDef {
+                name: Name::new(&field_name_str),
+                type_expr,
+                attributes: lower_attributes_from_node(f.syntax()),
+                docstring: crate::docstring::extract_docstring(f.syntax()),
+                span: f.syntax().text_range(),
+                name_span: fname.text_range(),
+            })
+        })
+        .collect();
+
+    let required_methods = iface
+        .required_methods()
+        .filter_map(|sig| lower_method_sig(&sig, diags))
+        .collect();
+
+    let associated_types = iface
+        .associated_types()
+        .filter_map(|decl| lower_associated_type_def(&decl, diags))
+        .collect();
+
+    let default_methods = iface
+        .default_methods()
+        .filter_map(|f| lower_function(f.syntax(), diags, env_var_refs))
+        .collect();
+
+    Some(InterfaceDef {
+        name: Name::new(&iface_name),
+        generic_params,
+        generic_param_bounds,
+        requires,
+        fields,
+        associated_types,
+        required_methods,
+        default_methods,
+        attributes: lower_attributes_from_node(node),
+        docstring: crate::docstring::extract_docstring(node),
+        span: node.text_range(),
+        name_span: name_token.text_range(),
+    })
+}
+
+fn lower_associated_type_def(
+    decl: &ast::AssociatedTypeDecl,
+    diags: &mut Vec<LoweringDiagnostic>,
+) -> Option<AssociatedTypeDef> {
+    let Some(name_token) = decl.name() else {
+        diags.push(LoweringDiagnostic::MissingItemName {
+            item_kind: "associated type",
+            span: decl.syntax().text_range(),
+        });
+        return None;
+    };
+    let name = Name::new(name_token.text());
+    let bound = decl.bound().map(|te| {
+        let expr = lower_type_expr::lower_type_expr_node(&te);
+        let span = te.syntax().text_range();
+        check_unknown_type(
+            &expr,
+            format!("bound of associated type `{name}`"),
+            span,
+            diags,
+        );
+        SpannedTypeExpr { expr, span }
+    });
+    let default = decl.default_or_binding().map(|te| {
+        let expr = lower_type_expr::lower_type_expr_node(&te);
+        let span = te.syntax().text_range();
+        check_unknown_type(
+            &expr,
+            format!("default of associated type `{name}`"),
+            span,
+            diags,
+        );
+        SpannedTypeExpr { expr, span }
+    });
+    Some(AssociatedTypeDef {
+        name,
+        bound,
+        default,
+        span: decl.syntax().text_range(),
+        name_span: name_token.text_range(),
+    })
+}
+
+fn lower_associated_type_binding_def(
+    decl: &ast::AssociatedTypeDecl,
+    diags: &mut Vec<LoweringDiagnostic>,
+) -> Option<AssociatedTypeBindingDef> {
+    let Some(name_token) = decl.name() else {
+        diags.push(LoweringDiagnostic::MissingItemName {
+            item_kind: "associated type binding",
+            span: decl.syntax().text_range(),
+        });
+        return None;
+    };
+    let name = Name::new(name_token.text());
+    let type_expr = decl.default_or_binding().map(|te| {
+        let expr = lower_type_expr::lower_type_expr_node(&te);
+        let span = te.syntax().text_range();
+        check_unknown_type(
+            &expr,
+            format!("binding of associated type `{name}`"),
+            span,
+            diags,
+        );
+        SpannedTypeExpr { expr, span }
+    });
+    Some(AssociatedTypeBindingDef {
+        name,
+        type_expr,
+        span: decl.syntax().text_range(),
+        name_span: name_token.text_range(),
+    })
+}
+
+fn lower_method_sig(
+    sig: &ast::MethodSig,
+    diags: &mut Vec<LoweringDiagnostic>,
+) -> Option<MethodSigDef> {
+    let Some(name_token) = sig.name() else {
+        diags.push(LoweringDiagnostic::MissingItemName {
+            item_kind: "method signature",
+            span: sig.syntax().text_range(),
+        });
+        return None;
+    };
+    let name = Name::new(name_token.text());
+    let name_span = name_token.text_range();
+    let generic_params_with_bounds = extract_generic_params_with_bounds(sig.syntax());
+    let generic_params: Vec<Name> = generic_params_with_bounds
+        .iter()
+        .map(|(n, _)| n.clone())
+        .collect();
+    let generic_param_bounds: Vec<Option<crate::ast::TypeExpr>> = generic_params_with_bounds
+        .into_iter()
+        .map(|(_, b)| b)
+        .collect();
+    let parameter_context = format!("method signature `{}`", name.as_str());
+
+    let (params, defaults) = sig
+        .param_list()
+        .map(|pl| lower_params(&pl, name.as_str(), &parameter_context, diags))
+        .map(|params| (params, FunctionDefaults::empty()))
+        .unwrap_or_else(|| (Vec::new(), FunctionDefaults::empty()));
+
+    let return_type = sig.return_type().map(|te| {
+        let expr = lower_type_expr::lower_type_expr_node(&te);
+        let te_span = te.syntax().text_range();
+        check_unknown_type(&expr, format!("return type of `{name}`"), te_span, diags);
+        lower_type_expr::check_void_type(
+            &expr,
+            format!("return type of `{name}`"),
+            te_span,
+            true,
+            diags,
+        );
+        SpannedTypeExpr {
+            expr,
+            span: te_span,
+        }
+    });
+
+    let throws = sig
+        .throws_clause()
+        .and_then(|tc| tc.type_expr())
+        .map(|te| SpannedTypeExpr {
+            expr: lower_type_expr::lower_type_expr_node(&te),
+            span: te.syntax().text_range(),
+        });
+
+    Some(MethodSigDef {
+        name,
+        generic_params,
+        generic_param_bounds,
+        params,
+        defaults,
+        return_type,
+        throws,
+        attributes: lower_attributes_from_node(sig.syntax()),
+        docstring: crate::docstring::extract_docstring(sig.syntax()),
+        span: sig.syntax().text_range(),
+        name_span,
+    })
+}
+
+fn lower_implements_block(
+    block: &ast::ImplementsBlock,
+    diags: &mut Vec<LoweringDiagnostic>,
+    env_var_refs: &mut Vec<crate::EnvVarRef>,
+) -> Option<ImplementsBlockDef> {
+    let target_node = block.target()?;
+    let target_te = target_node.type_expr()?;
+    let target_span = target_te.syntax().text_range();
+    let target = SpannedTypeExpr {
+        expr: lower_type_expr::lower_type_expr_node(&target_te),
+        span: target_span,
+    };
+    check_unknown_type(
+        &target.expr,
+        "interface name in `implements`".to_string(),
+        target_span,
+        diags,
+    );
+
+    let target_label = match &target.expr {
+        crate::ast::TypeExpr::Path { segments, .. } => segments
+            .last()
+            .map(|n: &Name| n.to_string())
+            .unwrap_or_else(|| "?".to_string()),
+        _ => "?".to_string(),
+    };
+
+    for f in block.fields() {
+        let field_name = f
+            .name()
+            .map(|name| name.text().to_string())
+            .unwrap_or_else(|| "?".to_string());
+        diags.push(
+            LoweringDiagnostic::InterfaceFieldDeclaredInImplementsBlock {
+                interface_name: target_label.clone(),
+                field_name,
+                span: f.syntax().text_range(),
+            },
+        );
+    }
+
+    let field_links = block
+        .field_links()
+        .filter_map(|link| lower_interface_field_link(&link, diags))
+        .collect();
+
+    let associated_type_bindings = block
+        .associated_type_bindings()
+        .filter_map(|decl| lower_associated_type_binding_def(&decl, diags))
+        .collect();
+
+    let methods = block
+        .methods()
+        .filter_map(|f| lower_function(f.syntax(), diags, env_var_refs))
+        .collect();
+
+    Some(ImplementsBlockDef {
+        target,
+        field_links,
+        associated_type_bindings,
+        methods,
+        is_out_of_body: false,
+        span: block.syntax().text_range(),
+    })
+}
+
+fn lower_implements_for(
+    node: &SyntaxNode,
+    diags: &mut Vec<LoweringDiagnostic>,
+    env_var_refs: &mut Vec<crate::EnvVarRef>,
+) -> Option<ImplementsForDef> {
+    let imp = ast::ImplementsFor::cast(node.clone())?;
+
+    let generic_params = extract_generic_params_with_bounds(node);
+
+    // Interface target (the `I` in `implements I for T`)
+    let target_node = imp.target()?;
+    let target_te = target_node.type_expr()?;
+    let target_span = target_te.syntax().text_range();
+    let interface_target = SpannedTypeExpr {
+        expr: lower_type_expr::lower_type_expr_node(&target_te),
+        span: target_span,
+    };
+    check_unknown_type(
+        &interface_target.expr,
+        "interface name in `implements ... for`".to_string(),
+        target_span,
+        diags,
+    );
+
+    // For target (the `T` in `implements I for T`)
+    let for_node = imp.for_target()?;
+    let for_te = for_node.type_expr()?;
+    let for_span = for_te.syntax().text_range();
+    let for_target = SpannedTypeExpr {
+        expr: lower_type_expr::lower_type_expr_node(&for_te),
+        span: for_span,
+    };
+    check_unknown_type(
+        &for_target.expr,
+        "target type in `implements ... for`".to_string(),
+        for_span,
+        diags,
+    );
+
+    let iface_label = match &interface_target.expr {
+        crate::ast::TypeExpr::Path { segments, .. } => segments
+            .last()
+            .map(|n: &Name| n.to_string())
+            .unwrap_or_else(|| "?".to_string()),
+        _ => "?".to_string(),
+    };
+
+    for f in imp.fields() {
+        let field_name = f
+            .name()
+            .map(|name| name.text().to_string())
+            .unwrap_or_else(|| "?".to_string());
+        diags.push(
+            LoweringDiagnostic::InterfaceFieldDeclaredInImplementsBlock {
+                interface_name: iface_label.clone(),
+                field_name,
+                span: f.syntax().text_range(),
+            },
+        );
+    }
+
+    let field_links = imp
+        .field_links()
+        .filter_map(|link| lower_interface_field_link(&link, diags))
+        .collect();
+
+    let associated_type_bindings = imp
+        .associated_type_bindings()
+        .filter_map(|decl| lower_associated_type_binding_def(&decl, diags))
+        .collect();
+
+    let methods = imp
+        .methods()
+        .filter_map(|f| lower_function(f.syntax(), diags, env_var_refs))
+        .collect();
+
+    Some(ImplementsForDef {
+        generic_params,
+        interface_target,
+        for_target,
+        field_links,
+        associated_type_bindings,
+        methods,
+        span: node.text_range(),
+    })
+}
+
+fn lower_interface_field_link(
+    link: &ast::InterfaceFieldLink,
+    diags: &mut Vec<LoweringDiagnostic>,
+) -> Option<InterfaceFieldLinkDef> {
+    let Some(interface_field) = link.interface_field() else {
+        diags.push(LoweringDiagnostic::MissingFieldName {
+            class_name: "interface field link".to_string(),
+            span: link.syntax().text_range(),
+        });
+        return None;
+    };
+    let Some(class_field) = link.class_field() else {
+        diags.push(LoweringDiagnostic::MissingFieldName {
+            class_name: "interface field link".to_string(),
+            span: link.syntax().text_range(),
+        });
+        return None;
+    };
+    Some(InterfaceFieldLinkDef {
+        interface_field: Name::new(interface_field.text()),
+        class_field: Name::new(class_field.text()),
+        span: link.syntax().text_range(),
+        interface_field_span: interface_field.text_range(),
+        class_field_span: class_field.text_range(),
     })
 }
 
@@ -1244,6 +1924,7 @@ fn synthesize_init_test_function(
             expr: crate::ast::TypeExpr::Path {
                 segments: vec![Name::new("testing"), Name::new("TestCollector")],
                 generic_args: vec![],
+                associated_type_bindings: vec![],
                 attrs: vec![],
             },
             span,
@@ -1256,6 +1937,7 @@ fn synthesize_init_test_function(
     FunctionDef {
         name: Name::new(&fn_name),
         generic_params: vec![],
+        generic_param_bounds: vec![],
         params: vec![registry_param],
         defaults: FunctionDefaults::empty(),
         return_type: None,
@@ -1294,6 +1976,7 @@ fn synthesize_register_call(
             let lambda_def = FunctionDef {
                 name: Name::new("<test body>"),
                 generic_params: vec![],
+                generic_param_bounds: vec![],
                 params: vec![],
                 defaults: FunctionDefaults::empty(),
                 return_type: Some(SpannedTypeExpr {
@@ -1359,6 +2042,7 @@ fn synthesize_register_call(
                     expr: crate::ast::TypeExpr::Path {
                         segments: vec![Name::new("testing"), Name::new("TestCollector")],
                         generic_args: vec![],
+                        associated_type_bindings: vec![],
                         attrs: vec![],
                     },
                     span,
@@ -1371,6 +2055,7 @@ fn synthesize_register_call(
             let collector_def = FunctionDef {
                 name: Name::new("<testset collector>"),
                 generic_params: vec![],
+                generic_param_bounds: vec![],
                 params: vec![testset_param],
                 defaults: FunctionDefaults::empty(),
                 return_type: Some(SpannedTypeExpr {
@@ -2086,6 +2771,7 @@ fn synthesize_client_new_companion(
     FunctionDef {
         name: Name::new(&func_name),
         generic_params: vec![],
+        generic_param_bounds: vec![],
         params: vec![],
         defaults: FunctionDefaults::empty(),
         return_type: None,

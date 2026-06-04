@@ -39,12 +39,12 @@ function getProfile(req: Request) -> bool throws Errors {
 //     │ 
 //     │ Note: Error code: E0063
 // ────╯
-// warning: extraneous throws declaration: user.Errors
+// warning: extraneous throws declaration: Errors
 //     ╭─[ throw_throws_type_alias_repro.baml:27:49 ]
 //     │
 //  27 │ function getProfile(req: Request) -> bool throws Errors {
 //     │                                                 ───┬───  
-//     │                                                    ╰───── extraneous throws declaration: user.Errors
+//     │                                                    ╰───── extraneous throws declaration: Errors
 //     │ 
 //     │ Note: Error code: E0097
 // ────╯

@@ -27,6 +27,15 @@ pub use lower_cst::{
 pub use lower_expr_body::EnvVarRef;
 pub use lowering_diagnostic::LoweringDiagnostic;
 
+/// The BEP-044 `default` receiver keyword. Inside an `implements` block,
+/// `default.method(...)` invokes the interface's *default* method body,
+/// deliberately bypassing the class's override. It is a **contextual** keyword:
+/// the lexer produces an ordinary identifier, and TIR/MIR recognize it by name
+/// at the root of a path — so a local named `default` shadows it. This constant
+/// is the single source of truth for that spelling; prefer the
+/// `is_default_receiver_root` helpers over comparing the literal string.
+pub const DEFAULT_RECEIVER_KEYWORD: &str = "default";
+
 /// Parse the digit body of a `bigint` literal into a [`num_bigint::BigInt`].
 ///
 /// The lexer (`baml_compiler_lexer`) guarantees one-or-more ASCII decimal
@@ -149,6 +158,7 @@ mod tests {
             TypeExpr::Path {
                 segments: vec![baml_base::Name::new($name)],
                 generic_args: vec![],
+                associated_type_bindings: vec![],
                 attrs: type_expr!(@attrs $(, Attr($a))*),
             }
         };
@@ -246,10 +256,31 @@ mod tests {
             TypeExpr::Path {
                 segments,
                 generic_args,
+                associated_type_bindings,
                 attrs,
             } => TypeExpr::Path {
                 segments: segments.clone(),
                 generic_args: generic_args.iter().map(strip_spans).collect(),
+                associated_type_bindings: associated_type_bindings
+                    .iter()
+                    .map(|binding| crate::ast::AssociatedTypeBinding {
+                        name: binding.name.clone(),
+                        ty: Box::new(strip_spans(&binding.ty)),
+                    })
+                    .collect(),
+                attrs: strip_attrs(attrs),
+            },
+            TypeExpr::AssociatedTypeProjection {
+                base,
+                interface,
+                member,
+                attrs,
+            } => TypeExpr::AssociatedTypeProjection {
+                base: Box::new(strip_spans(base)),
+                interface: interface
+                    .as_ref()
+                    .map(|interface| Box::new(strip_spans(interface))),
+                member: member.clone(),
                 attrs: strip_attrs(attrs),
             },
             TypeExpr::Optional { inner, attrs } => TypeExpr::Optional {
@@ -274,11 +305,18 @@ mod tests {
                 attrs: strip_attrs(attrs),
             },
             TypeExpr::Function {
+                generic_params,
+                generic_param_bounds,
                 params,
                 ret,
                 throws,
                 attrs,
             } => TypeExpr::Function {
+                generic_params: generic_params.clone(),
+                generic_param_bounds: generic_param_bounds
+                    .iter()
+                    .map(|bound| bound.as_ref().map(strip_spans))
+                    .collect(),
                 params: params
                     .iter()
                     .map(|p| crate::ast::FunctionTypeParam {
@@ -329,6 +367,14 @@ mod tests {
         items
     }
 
+    fn parse_and_lower_with_diagnostics(
+        source: &str,
+    ) -> (Vec<Item>, Vec<crate::LoweringDiagnostic>) {
+        let root = parse(source);
+        let (items, diags, _env_var_refs) = lower_file(&root);
+        (items, diags)
+    }
+
     fn first_function(items: Vec<Item>) -> crate::ast::FunctionDef {
         items
             .into_iter()
@@ -340,6 +386,53 @@ mod tests {
                 }
             })
             .expect("expected a FunctionDef")
+    }
+
+    #[test]
+    fn llm_function_user_client_param_is_reserved() {
+        let source = r##"
+client<llm> GPT4 {
+  provider "openai"
+  options {
+    model "gpt-4o"
+    api_key "test"
+  }
+}
+
+function Extract(client: string, text: string) -> string {
+  client GPT4
+  prompt #"{{ text }}"#
+}
+"##;
+
+        let (items, diags) = parse_and_lower_with_diagnostics(source);
+        assert!(
+            diags.iter().any(|diag| matches!(
+                diag,
+                crate::LoweringDiagnostic::ReservedLlmClientParam {
+                    function_name,
+                    param_name,
+                    ..
+                } if function_name == "Extract" && param_name == "client"
+            )),
+            "expected reserved LLM client param diagnostic, got: {diags:#?}"
+        );
+
+        let function = items
+            .into_iter()
+            .find_map(|item| match item {
+                Item::Function(function) if function.name.as_str() == "Extract" => Some(function),
+                _ => None,
+            })
+            .expect("expected Extract function");
+        let param_names: Vec<&str> = function.params.iter().map(|p| p.name.as_str()).collect();
+        assert_eq!(param_names, vec!["text", "client"]);
+        let default_id = function.params[1].default.expect("expected client default");
+        let default_expr = &function.defaults.exprs.exprs[default_id.expr()];
+        assert!(
+            matches!(default_expr, Expr::Path(path) if path.len() == 1 && path[0].as_str() == "GPT4"),
+            "expected compiler-injected client default to reference GPT4, got {default_expr:#?}"
+        );
     }
 
     #[test]
@@ -396,6 +489,240 @@ function Search(query: string, max_results: int = 10) -> int {
             args[1].label.as_ref().map(smol_str::SmolStr::as_str),
             Some("max_results")
         );
+    }
+
+    #[test]
+    fn ast_does_not_treat_upcast_target_as_method_type_args() {
+        let source = r#"
+function main(m: MultiFormat) -> string {
+  return m.as<Converter<int>>.convert()
+}
+"#;
+        let function = first_function(parse_and_lower(source));
+        let Some(FunctionBodyDef::Expr(body, _source_map)) = &function.body else {
+            panic!("expected expression body");
+        };
+        let root = body.root_expr.expect("expected body root expression");
+        let Expr::Block { stmts, .. } = &body.exprs[root] else {
+            panic!("expected block root expression");
+        };
+        let return_expr = match &body.stmts[stmts[0]] {
+            Stmt::Return(Some(expr_id)) => *expr_id,
+            other => panic!("expected return statement, got {other:?}"),
+        };
+        let Expr::Call {
+            callee, type_args, ..
+        } = &body.exprs[return_expr]
+        else {
+            panic!("expected return expression to be a call");
+        };
+        assert!(
+            type_args.is_empty(),
+            ".as<Interface> target must not be lowered as method type args"
+        );
+
+        let Expr::MemberAccess { base, member } = &body.exprs[*callee] else {
+            panic!("expected call callee to be member access");
+        };
+        assert_eq!(member.as_str(), "convert");
+        let Expr::Upcast { target, .. } = &body.exprs[*base] else {
+            panic!("expected member receiver to be an upcast expression");
+        };
+        assert_eq!(
+            target.to_string(),
+            "Converter<int>",
+            "upcast target itself should still be preserved"
+        );
+    }
+
+    #[test]
+    fn ast_preserves_out_of_body_implements_for_external_class_target() {
+        let source = r#"
+interface ToJson {
+  function to_json(self) -> string
+}
+
+implements ToJson for Dog {
+  function to_json(self) -> string {
+    return "dog"
+  }
+}
+"#;
+        let items = parse_and_lower(source);
+        let imp = items
+            .iter()
+            .find_map(|item| match item {
+                Item::ImplementsFor(imp) => Some(imp),
+                _ => None,
+            })
+            .expect("external class target should remain an ImplementsFor item");
+
+        assert_eq!(imp.interface_target.expr.to_string(), "ToJson");
+        assert_eq!(imp.for_target.expr.to_string(), "Dog");
+    }
+
+    #[test]
+    fn ast_does_not_merge_qualified_out_of_body_implements_into_local_class() {
+        let source = r#"
+interface ToJson {
+  function to_json(self) -> string
+}
+
+class Dog {
+  name string
+}
+
+implements ToJson for other.Dog {
+  function to_json(self) -> string {
+    return "dog"
+  }
+}
+"#;
+        let items = parse_and_lower(source);
+        let class = items
+            .iter()
+            .find_map(|item| match item {
+                Item::Class(class) if class.name.as_str() == "Dog" => Some(class),
+                _ => None,
+            })
+            .expect("expected local Dog class");
+        assert!(
+            class.implements.is_empty(),
+            "qualified target other.Dog must not merge into local Dog"
+        );
+
+        let imp = items
+            .iter()
+            .find_map(|item| match item {
+                Item::ImplementsFor(imp) => Some(imp),
+                _ => None,
+            })
+            .expect("qualified target should remain an ImplementsFor item");
+        assert_eq!(imp.for_target.expr.to_string(), "other.Dog");
+    }
+
+    #[test]
+    fn ast_does_not_merge_generic_out_of_body_implements_into_local_class() {
+        let source = r#"
+interface ToJson {
+  function to_json(self) -> string
+}
+
+class Dog<T> {
+  value T
+}
+
+implements ToJson for Dog<int> {
+  function to_json(self) -> string {
+    return "dog"
+  }
+}
+"#;
+        let items = parse_and_lower(source);
+        let class = items
+            .iter()
+            .find_map(|item| match item {
+                Item::Class(class) if class.name.as_str() == "Dog" => Some(class),
+                _ => None,
+            })
+            .expect("expected local Dog class");
+        assert!(
+            class.implements.is_empty(),
+            "generic target Dog<int> must not merge into generic class Dog<T>"
+        );
+
+        let imp = items
+            .iter()
+            .find_map(|item| match item {
+                Item::ImplementsFor(imp) => Some(imp),
+                _ => None,
+            })
+            .expect("generic target should remain an ImplementsFor item");
+        assert_eq!(imp.for_target.expr.to_string(), "Dog<int>");
+    }
+
+    #[test]
+    fn ast_preserves_interface_generic_param_bounds() {
+        let source = r#"
+interface Named {
+  name string
+}
+
+interface Box<T extends Named, E> {
+  value T
+}
+"#;
+        let items = parse_and_lower(source);
+        let interface = items
+            .iter()
+            .find_map(|item| match item {
+                Item::Interface(interface) if interface.name.as_str() == "Box" => Some(interface),
+                _ => None,
+            })
+            .expect("expected Box interface");
+
+        assert_eq!(
+            interface
+                .generic_params
+                .iter()
+                .map(smol_str::SmolStr::as_str)
+                .collect::<Vec<_>>(),
+            vec!["T", "E"]
+        );
+        assert_eq!(interface.generic_param_bounds.len(), 2);
+        assert_eq!(
+            interface.generic_param_bounds[0]
+                .as_ref()
+                .map(ToString::to_string)
+                .as_deref(),
+            Some("Named")
+        );
+        assert!(interface.generic_param_bounds[1].is_none());
+    }
+
+    #[test]
+    fn ast_preserves_required_interface_method_generic_param_bounds() {
+        let source = r#"
+interface Named {
+  name string
+}
+
+interface Mapper {
+  function map<T extends Named, E>(self, value: T, extra: E) -> T
+}
+"#;
+        let items = parse_and_lower(source);
+        let interface = items
+            .iter()
+            .find_map(|item| match item {
+                Item::Interface(interface) if interface.name.as_str() == "Mapper" => {
+                    Some(interface)
+                }
+                _ => None,
+            })
+            .expect("expected Mapper interface");
+        let method = interface
+            .required_methods
+            .first()
+            .expect("expected required method");
+
+        assert_eq!(
+            method
+                .generic_params
+                .iter()
+                .map(smol_str::SmolStr::as_str)
+                .collect::<Vec<_>>(),
+            vec!["T", "E"]
+        );
+        assert_eq!(method.generic_param_bounds.len(), 2);
+        assert_eq!(
+            method.generic_param_bounds[0]
+                .as_ref()
+                .map(ToString::to_string)
+                .as_deref(),
+            Some("Named")
+        );
+        assert!(method.generic_param_bounds[1].is_none());
     }
 
     #[test]
@@ -500,6 +827,122 @@ class Response {
                     baml_base::Name::new("Io"),
                 ],
                 generic_args: vec![],
+                associated_type_bindings: vec![],
+                attrs: vec![]
+            }
+        );
+    }
+
+    #[test]
+    fn ast_lowers_keyword_named_class_field() {
+        let source = r#"
+class InterfaceTwo {
+  interface string
+}
+"#;
+        let items = parse_and_lower(source);
+        let class = items
+            .into_iter()
+            .find_map(|item| match item {
+                Item::Class(class) => Some(class),
+                _ => None,
+            })
+            .expect("expected ClassDef");
+
+        let field = class.fields.first().expect("expected field");
+        assert_eq!(field.name.as_str(), "interface");
+        assert_eq!(
+            field
+                .type_expr
+                .as_ref()
+                .map(|te| te.expr.to_string())
+                .as_deref(),
+            Some("string")
+        );
+    }
+
+    #[test]
+    fn ast_lowers_keyword_named_class_method_and_member_call() {
+        let source = r#"
+class TypeValue {
+  function implements(self) -> string {
+    "ok"
+  }
+}
+
+function Foo(t: TypeValue) -> string {
+  t.implements()
+}
+"#;
+        let items = parse_and_lower(source);
+        let class = items
+            .iter()
+            .find_map(|item| match item {
+                Item::Class(class) => Some(class),
+                _ => None,
+            })
+            .expect("expected ClassDef");
+        assert!(
+            !class.methods.is_empty(),
+            "expected keyword-named method, got class {class:#?}"
+        );
+        assert_eq!(class.methods[0].name.as_str(), "implements");
+
+        let function = items
+            .into_iter()
+            .find_map(|item| match item {
+                Item::Function(function) => Some(function),
+                _ => None,
+            })
+            .expect("expected FunctionDef");
+        let Some(FunctionBodyDef::Expr(body, _source_map)) = &function.body else {
+            panic!("expected expression body");
+        };
+        let root = body.root_expr.expect("expected body root expression");
+        let Expr::Block { tail_expr, .. } = &body.exprs[root] else {
+            panic!("expected block root expression");
+        };
+        let tail_expr = tail_expr.expect("expected tail expression");
+        let Expr::Call { callee, .. } = &body.exprs[tail_expr] else {
+            panic!("expected call expression");
+        };
+        let Expr::MemberAccess { member, .. } = &body.exprs[*callee] else {
+            panic!("expected member access callee");
+        };
+        assert_eq!(member.as_str(), "implements");
+    }
+
+    #[test]
+    fn ast_lowers_required_interface_method_throws() {
+        let source = r#"
+interface Response {
+  function text(self) -> string throws baml.errors.Io
+}
+"#;
+        let items = parse_and_lower(source);
+        let interface = items
+            .into_iter()
+            .find_map(|item| match item {
+                Item::Interface(interface) => Some(interface),
+                _ => None,
+            })
+            .expect("expected InterfaceDef");
+        let method = interface
+            .required_methods
+            .first()
+            .expect("expected required method");
+
+        let throws = method.throws.as_ref().expect("expected throws contract");
+        assert_eq!(
+            throws.expr,
+            TypeExpr::Path {
+                segments: vec![
+                    baml_base::Name::new("baml"),
+                    baml_base::Name::new("errors"),
+                    baml_base::Name::new("Io"),
+                ],
+                generic_args: vec![],
+                associated_type_bindings: vec![],
                 attrs: vec![]
             }
         );

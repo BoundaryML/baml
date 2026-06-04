@@ -702,7 +702,12 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             } => elements
                 .iter()
                 .any(|operand| self.operand_reads_spawn_captured_local(operand, seen)),
-            Rvalue::Uint8Array(_) | Rvalue::LoadType(_) => false,
+            Rvalue::Uint8Array(_) | Rvalue::LoadType(_) | Rvalue::MakeGenericFunction { .. } => {
+                false
+            }
+            Rvalue::MakeGenericFunctionFromValue { value, .. } => {
+                self.operand_reads_spawn_captured_local(value, seen)
+            }
             Rvalue::Map(entries) => entries.iter().any(|(key, value)| {
                 self.operand_reads_spawn_captured_local(key, seen)
                     || self.operand_reads_spawn_captured_local(value, seen)
@@ -1148,19 +1153,51 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
     }
 
     fn emit_load_var(&mut self, slot: usize) {
-        if matches!(
-            self.bytecode.instructions.last(),
-            Some(Instruction::StoreVar(prev_slot)) if *prev_slot == slot
-        ) {
-            let last_idx = self.bytecode.instructions.len() - 1;
-            if last_idx >= self.current_block_start {
-                self.bytecode.instructions[last_idx] = Instruction::StoreVarLoadVar(slot);
-                self.set_var_operand(last_idx, slot);
-                return;
+        // Superinstruction peepholes (CPython-style, operand-movement only),
+        // confined to the current basic block so jump targets / block addresses
+        // are never affected:
+        //  - StoreVar(slot); LoadVar(slot)  -> StoreVarLoadVar(slot)   (store-keep)
+        //  - LoadVar(a);     LoadVar(slot)  -> LoadVar2(a, slot)       (load pair)
+        //
+        // Skip fusion when a sequence point is pending: the rewrite happens in
+        // place on the previous instruction, so it would swallow the new op's
+        // sequence point / line entry (the standalone `emit` path below records
+        // it). Cheap correctness guard for debugger stepping & line attribution.
+        let n = self.bytecode.instructions.len();
+        if n > self.current_block_start && !self.pending_sequence_point {
+            match self.bytecode.instructions[n - 1] {
+                Instruction::StoreVar(prev) if prev == slot => {
+                    self.bytecode.instructions[n - 1] = Instruction::StoreVarLoadVar(slot);
+                    self.set_var_operand(n - 1, slot);
+                    return;
+                }
+                Instruction::LoadVar(a) => {
+                    self.bytecode.instructions[n - 1] = Instruction::LoadVar2(a, slot);
+                    return;
+                }
+                _ => {}
             }
         }
 
         let inst = self.emit(Instruction::LoadVar(slot));
+        self.set_var_operand(inst, slot);
+    }
+
+    /// Emit a store to a (non-captured) local slot, folding `StoreVar(a);
+    /// StoreVar(slot)` into `StoreVar2(a, slot)` (`STORE_FAST_STORE_FAST`).
+    /// In-place rewrite confined to the current basic block, like
+    /// [`Self::emit_load_var`].
+    fn emit_store_var(&mut self, slot: usize) {
+        // See `emit_load_var`: don't fuse across a pending sequence point.
+        let n = self.bytecode.instructions.len();
+        if n > self.current_block_start && !self.pending_sequence_point {
+            if let Instruction::StoreVar(a) = self.bytecode.instructions[n - 1] {
+                self.bytecode.instructions[n - 1] = Instruction::StoreVar2(a, slot);
+                self.set_var_operand(n - 1, slot);
+                return;
+            }
+        }
+        let inst = self.emit(Instruction::StoreVar(slot));
         self.set_var_operand(inst, slot);
     }
 
@@ -1787,6 +1824,9 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             self.set_operand(inst, OperandMeta::Global(func_name));
             return;
         }
+        // `MakeGenericFunction` needs no special handling here (it has no value
+        // captures) — `walk_rvalue_pull` emits it uniformly for both the direct
+        // and inlined paths.
         unwrap_infallible(pull_semantics::walk_rvalue_pull(self, rvalue));
     }
 
@@ -1849,6 +1889,39 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 let inst = self.emit(Instruction::LoadGlobal(GlobalIndex::from_raw(*global_idx)));
                 self.set_operand(inst, OperandMeta::Global(name_str));
             }
+            Constant::GenericFunction { item, type_args } => {
+                // `foo<int>` as a value. Resolve the base function's global slot
+                // (like `Constant::Function`), then pool an interned
+                // `Object::GenericFunction`. Interning by (function, type_args)
+                // over the shared object pool makes identical instantiations
+                // share ONE pooled object → pointer-stable `foo<int> === foo<int>`.
+                let name_str = item.to_string();
+                let global_idx = *self
+                    .globals
+                    .get(&name_str)
+                    .unwrap_or_else(|| panic!("undefined function: {name_str}"));
+                let gidx = GlobalIndex::from_raw(global_idx);
+                let existing = self.objects.iter().position(|o| {
+                    matches!(o, Object::GenericFunction(gf)
+                        if gf.function == gidx && gf.type_args.as_ref() == type_args.as_slice())
+                });
+                let pool_idx = match existing {
+                    Some(idx) => idx,
+                    None => {
+                        let idx = self.objects.len();
+                        self.objects
+                            .push(Object::GenericFunction(bex_vm_types::GenericFunction {
+                                function: gidx,
+                                type_args: type_args.clone().into_boxed_slice(),
+                            }));
+                        idx
+                    }
+                };
+                let const_idx =
+                    self.add_constant(ConstValue::Object(ObjectIndex::from_raw(pool_idx)));
+                let inst = self.emit(Instruction::LoadConst(const_idx));
+                self.set_operand(inst, OperandMeta::Const(format!("{name_str}<...>")));
+            }
             Constant::EnumVariant { enum_ref, variant } => {
                 let enum_name_str = enum_ref.to_string();
                 // Gracefully handle undefined enum references (e.g. cross-package
@@ -1908,9 +1981,9 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                             // Captured local: store through the cell.
                             self.emit(Instruction::StoreDeref(slot));
                         } else {
-                            // Normal local: direct slot store.
-                            let inst = self.emit(Instruction::StoreVar(slot));
-                            self.set_var_operand(inst, slot);
+                            // Normal local: direct slot store (folds a preceding
+                            // StoreVar into StoreVar2).
+                            self.emit_store_var(slot);
                         }
                     }
                     LocalStoreBehavior::KeepOnStack => {
@@ -2170,27 +2243,66 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             Terminator::ShortCircuit {
                 operand,
                 is_and,
-                destination: _,
+                destination,
                 eval_rhs,
                 join,
             } => {
                 // Legacy-style short-circuit using JumpIfFalse (peek, no pop).
-                // The destination local is PhiLike — value stays on TOS, no store/load.
+                //
+                // When the destination local is stack-carried (PhiLike), the
+                // value stays on TOS on both edges and the join's use consumes
+                // it — no store/load. The stack-simulation pass can REJECT the
+                // carry (e.g. the join's use is not at TOS because an
+                // inferred-generic call pushes `LoadType` before its args);
+                // the destination is then a Real slot which the rhs block
+                // stores normally — and the short-circuit edge must store too,
+                // or the join reads an uninitialized slot while the LHS value
+                // leaks on the stack. `emit_store_place` makes the edge agree
+                // with the classification either way (no-op for PhiLike).
                 self.emit_operand_pull(operand);
 
+                let dest_on_stack = match destination {
+                    Place::Local(local) => matches!(
+                        pull_semantics::local_store_behavior(
+                            self.analysis.classifications[local]
+                        ),
+                        LocalStoreBehavior::KeepOnStack
+                    ),
+                    _ => unreachable!(
+                        "ShortCircuit destination is normalized to Place::Local in MIR lowering"
+                    ),
+                };
+
                 if *is_and {
-                    // &&: false → short-circuit (value stays on TOS), jump to join.
+                    // &&: false → short-circuit edge (materialize dest), jump to join.
                     //     true → pop, evaluate rhs.
                     let sc_jump = self.emit(Instruction::JumpIfFalse(0));
                     let resolved_join = self.resolve_pending_target(*join);
-                    self.pending_jumps.push((sc_jump, resolved_join));
-                    self.emit(Instruction::Pop(1));
-                    self.emit_jump_unless_fallthrough(*eval_rhs);
+                    if dest_on_stack {
+                        self.pending_jumps.push((sc_jump, resolved_join));
+                        self.emit(Instruction::Pop(1));
+                        self.emit_jump_unless_fallthrough(*eval_rhs);
+                    } else {
+                        // Route the true edge around the short-circuit landing pad.
+                        let true_jump = self.emit(Instruction::Jump(0));
+                        let sc_pc = self.bytecode.instructions.len();
+                        self.patch_jump_to(sc_jump, sc_pc);
+                        self.emit_store_place(destination);
+                        let join_jump = self.emit(Instruction::Jump(0));
+                        self.pending_jumps.push((join_jump, resolved_join));
+                        let true_pc = self.bytecode.instructions.len();
+                        self.patch_jump_to(true_jump, true_pc);
+                        self.emit(Instruction::Pop(1));
+                        self.emit_jump_unless_fallthrough(*eval_rhs);
+                    }
                 } else {
                     // ||: false → pop, evaluate rhs.
-                    //     true → value stays on TOS, jump to join.
+                    //     true → short-circuit edge (materialize dest), jump to join.
                     let false_jump = self.emit(Instruction::JumpIfFalse(0));
                     let resolved_join = self.resolve_pending_target(*join);
+                    if !dest_on_stack {
+                        self.emit_store_place(destination);
+                    }
                     let true_jump = self.emit(Instruction::Jump(0));
                     self.pending_jumps.push((true_jump, resolved_join));
                     // False landing: patch JumpIfFalse to here, pop, fall to eval_rhs.
@@ -3144,6 +3256,33 @@ impl PullSink for StackifyCodegen<'_, '_> {
         ntypeargs: usize,
     ) -> Result<(), Self::Error> {
         self.emit_make_closure_bytecode(lambda_idx, capture_count, ntypeargs);
+        Ok(())
+    }
+
+    fn make_generic_function(
+        &mut self,
+        item: &baml_compiler2_mir::ItemRef,
+        ntypeargs: usize,
+    ) -> Result<(), Self::Error> {
+        let func_name = item.to_string();
+        let global_idx = *self
+            .globals
+            .get(&func_name)
+            .unwrap_or_else(|| panic!("MakeGenericFunction: global not found for {func_name}"));
+        let ntypeargs = u16::try_from(ntypeargs).expect("ntypeargs fits u16");
+        let inst = self.emit(Instruction::MakeGenericFunction {
+            function: GlobalIndex::from_raw(global_idx),
+            ntypeargs,
+        });
+        self.set_operand(inst, OperandMeta::Global(func_name));
+        Ok(())
+    }
+
+    fn make_generic_function_from_value(&mut self, ntypeargs: usize) -> Result<(), Self::Error> {
+        // The callable value and `ntypeargs` `Object::Type` values are already
+        // on the stack (pushed by `walk_rvalue_pull`); just emit the opcode.
+        let ntypeargs = u16::try_from(ntypeargs).expect("ntypeargs fits u16");
+        self.emit(Instruction::MakeGenericFunctionFromValue { ntypeargs });
         Ok(())
     }
 

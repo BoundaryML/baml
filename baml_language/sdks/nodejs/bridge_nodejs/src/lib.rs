@@ -7,7 +7,8 @@ mod abort_controller;
 mod errors;
 pub mod handle;
 pub mod host_value;
-mod runtime;
+pub mod media;
+pub mod runtime;
 mod types;
 
 use napi_derive::napi;
@@ -28,7 +29,7 @@ fn init() {
 
 #[napi]
 pub fn get_version() -> &'static str {
-    env!("CARGO_PKG_VERSION")
+    baml_version::CANONICAL_VERSION
 }
 
 /// Flush all buffered trace events to the JSONL file (if BAML_TRACE_FILE is set).

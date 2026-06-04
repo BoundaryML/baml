@@ -63,7 +63,7 @@ fn user.Container.from_json(j: baml.json.json) -> Container<void> {
     }
 
     bb2: {
-        _0 = user.Container<TypeArgRef(0)> { copy _2 };
+        _0 = user.Container<#0> { copy _2 };
         goto -> bb3;
     }
 
@@ -78,7 +78,7 @@ fn user.Container.to_json(self: Container) -> baml.json.json {
     let _1: Container // self // param
     let _2: baml.json.json
     let _3: void
-    let _4: Container
+    let _4: Container<void>
     let _5: type
 
     bb0: {

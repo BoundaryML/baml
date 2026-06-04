@@ -203,8 +203,7 @@ function task_group.queues_excess_and_all_complete() -> int {
     load_var _26
     await
     store_var _38
-    load_var _30
-    load_var _32
+    load_var2 12 13
     add_int
     load_var _34
     add_int
@@ -230,8 +229,7 @@ function task_group.set_limit_updates_limit() -> int {
     load_var g
     call baml.spawn.TaskGroup.limit
     store_var _5
-    load_var before
-    load_var _5
+    load_var2 2 3
     add_int
     return
 }

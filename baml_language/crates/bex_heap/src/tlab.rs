@@ -159,6 +159,12 @@ impl Tlab {
         unsafe { self.heap.make_heap_ptr(ptr) }
     }
 
+    /// Allocate a float object.
+    #[inline]
+    pub fn alloc_float(&mut self, f: f64) -> HeapPtr {
+        self.alloc(Object::Float(f))
+    }
+
     /// Allocate a string object.
     #[inline]
     pub fn alloc_string(&mut self, s: impl Into<bex_str::BexStr>) -> HeapPtr {
@@ -224,6 +230,12 @@ impl Tlab {
     #[inline]
     pub fn alloc_future(&mut self, future: bex_vm_types::Future) -> HeapPtr {
         self.alloc(Object::Future(future))
+    }
+
+    /// Allocate a bound method on the heap.
+    #[inline]
+    pub fn alloc_bound_method(&mut self, method: bex_vm_types::BoundMethod) -> HeapPtr {
+        self.alloc(Object::BoundMethod(method))
     }
 
     /// Get a new chunk from the heap (cold path).
@@ -306,6 +318,62 @@ impl std::fmt::Debug for Tlab {
 pub trait TlabHolder {
     fn tlab(&self) -> &Tlab;
     fn tlab_mut(&mut self) -> &mut Tlab;
+
+    fn alloc(&mut self, obj: Object) -> HeapPtr {
+        self.tlab_mut().alloc(obj)
+    }
+
+    fn alloc_float(&mut self, f: f64) -> HeapPtr {
+        self.tlab_mut().alloc_float(f)
+    }
+
+    fn alloc_string(&mut self, s: impl Into<bex_str::BexStr>) -> HeapPtr {
+        self.tlab_mut().alloc_string(s)
+    }
+
+    fn alloc_array(&mut self, values: Vec<Value>) -> HeapPtr {
+        self.tlab_mut().alloc_array(values)
+    }
+
+    fn alloc_map(&mut self, values: IndexMap<bex_str::BexStr, Value>) -> HeapPtr {
+        self.tlab_mut().alloc_map(values)
+    }
+
+    fn alloc_instance(&mut self, class: HeapPtr, fields: Vec<Value>) -> HeapPtr {
+        self.tlab_mut().alloc_instance(class, fields)
+    }
+
+    fn alloc_variant(&mut self, enm: HeapPtr, index: usize) -> HeapPtr {
+        self.tlab_mut().alloc_variant(enm, index)
+    }
+
+    fn alloc_uint8array(&mut self, data: Vec<u8>) -> HeapPtr {
+        self.tlab_mut().alloc_uint8array(data)
+    }
+
+    fn alloc_bigint(&mut self, value: num_bigint::BigInt) -> HeapPtr {
+        self.tlab_mut().alloc_bigint(value)
+    }
+
+    fn alloc_rust_data(&mut self, data: Arc<dyn std::any::Any + Send + Sync>) -> HeapPtr {
+        self.tlab_mut().alloc_rust_data(data)
+    }
+
+    fn alloc_collector(&mut self, collector: bex_vm_types::CollectorRef) -> HeapPtr {
+        self.tlab_mut().alloc_collector(collector)
+    }
+
+    fn alloc_type(&mut self, ty: baml_type::Ty) -> HeapPtr {
+        self.tlab_mut().alloc_type(ty)
+    }
+
+    fn alloc_future(&mut self, future: bex_vm_types::Future) -> HeapPtr {
+        self.tlab_mut().alloc_future(future)
+    }
+
+    fn alloc_bound_method(&mut self, method: bex_vm_types::BoundMethod) -> HeapPtr {
+        self.tlab_mut().alloc_bound_method(method)
+    }
 }
 
 #[cfg(test)]

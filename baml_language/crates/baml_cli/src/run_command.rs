@@ -876,10 +876,13 @@ impl RunArgs {
 
         let mut db = ProjectDatabase::new();
         // Project marker: matches `project_load::load_project_from_inner`.
-        // `baml.toml` is the marker; `baml_src/` alone no longer qualifies
-        // (would let `baml run -e` pick up project context that every
-        // other verb refuses).
-        let has_explicit_project = from.as_ref().is_some_and(|f| f.join("baml.toml").exists());
+        // A directory is a project if it has *either* a `baml.toml` or a
+        // `baml_src/` — `baml.toml` is opt-in — so `baml run -e` picks up
+        // the surrounding project's definitions in the same cases every
+        // other verb now does.
+        let has_explicit_project = from
+            .as_ref()
+            .is_some_and(|f| f.join("baml.toml").exists() || f.join("baml_src").is_dir());
 
         let project_root = if has_explicit_project {
             let root = from.as_ref().unwrap();
@@ -1508,19 +1511,25 @@ impl RunArgs {
     }
 
     fn print_run_help() {
+        let _ = Self::run_help_command().print_help();
+    }
+
+    fn run_help_command() -> clap::Command {
         use clap::CommandFactory;
         let cmd = crate::commands::RuntimeCli::command();
-        if let Some(sub) = cmd.find_subcommand("run") {
-            // Clap propagates `styles = …` from the root command to
-            // subcommands at parse time, not when a subcommand
-            // reference is grabbed directly via `find_subcommand`.
-            // Re-apply `CLAP_STYLING` explicitly so `run --help` keeps
-            // the same green/cyan ariadne-adjacent palette as
-            // `baml-cli --help`, instead of falling back to clap's
-            // default bold+underline-no-color treatment.
-            let mut sub = sub.clone().styles(crate::reporter::CLAP_STYLING);
-            let _ = sub.print_help();
-        }
+        let sub = cmd
+            .find_subcommand("run")
+            .expect("RuntimeCli should register a run subcommand");
+        // Clap propagates `styles = …` from the root command to
+        // subcommands at parse time, not when a subcommand reference is
+        // grabbed directly via `find_subcommand`. Re-apply
+        // `CLAP_STYLING` explicitly so `run --help` keeps the same
+        // green/cyan ariadne-adjacent palette as top-level help,
+        // instead of falling back to clap's default
+        // bold+underline-no-color treatment.
+        sub.clone()
+            .bin_name("baml run")
+            .styles(crate::reporter::CLAP_STYLING)
     }
 }
 
@@ -1803,6 +1812,17 @@ mod tests {
     #[test]
     fn test_reserved_verbs_includes_pack() {
         assert!(RESERVED_VERBS.contains(&"pack"));
+    }
+
+    #[test]
+    fn test_run_help_presents_public_baml_command() {
+        let help = RunArgs::run_help_command().render_help().to_string();
+        assert!(
+            help.contains("Usage: baml run [OPTIONS] [TARGET] [-- <TARGET_ARGS>...]"),
+            "{help}"
+        );
+        assert!(!help.contains("Usage: run "), "{help}");
+        assert!(!help.contains("Usage: baml-cli run"), "{help}");
     }
 
     /// BEP-027 Appendix A: the flag is `--output-format`, not `--output`.

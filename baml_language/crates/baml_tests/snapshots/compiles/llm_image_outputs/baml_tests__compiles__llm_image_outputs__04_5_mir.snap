@@ -2,254 +2,434 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === MIR2 ===
-fn user.GenerateImage(prompt: string) -> image {
+fn user.GenerateImage(prompt: string, client: baml.llm.Client) -> image {
     // Locals:
     let _0: image // _0 // return
     let _1: string // prompt // param
-    let _2: map<string, unknown>
-    let _3: type
+    let _2: baml.llm.Client // client // param
+    let _3: bool
+    let _4: map<string, unknown>
+    let _5: type
 
     bb0: {
-        _2 = { const "prompt": copy _1 };
-        _3 = load_type(image);
-        _0 = call const fn baml.llm.call_llm_function<copy _3>(const fn user.OpenAIImageResponses, const "GenerateImage", copy _2) -> [bb1];
+        _3 = copy _2 == const <omitted>;
+        branch copy _3 -> [bb1, bb2];
     }
 
     bb1: {
+        _2 = const fn user.OpenAIImageResponses;
+        goto -> bb2;
+    }
+
+    bb2: {
+        _4 = { const "prompt": copy _1 };
+        _5 = load_type(image);
+        _0 = call const fn baml.llm.call_llm_function<copy _5>(copy _2, const "GenerateImage", copy _4) -> [bb3];
+    }
+
+    bb3: {
         return;
     }
 }
 
-fn user.GenerateImage$build_request(prompt: string) -> baml.http.Request {
+fn user.GenerateImage$build_request(prompt: string, client: baml.llm.Client) -> baml.http.Request {
     // Locals:
     let _0: baml.http.Request // _0 // return
     let _1: string // prompt // param
-    let _2: map<string, unknown>
+    let _2: baml.llm.Client // client // param
+    let _3: bool
+    let _4: map<string, unknown>
 
     bb0: {
-        _2 = { const "prompt": copy _1 };
-        _0 = call const fn baml.llm.build_request(const fn user.OpenAIImageResponses, const "GenerateImage", copy _2) -> [bb1];
+        _3 = copy _2 == const <omitted>;
+        branch copy _3 -> [bb1, bb2];
     }
 
     bb1: {
+        _2 = const fn user.OpenAIImageResponses;
+        goto -> bb2;
+    }
+
+    bb2: {
+        _4 = { const "prompt": copy _1 };
+        _0 = call const fn baml.llm.build_request(copy _2, const "GenerateImage", copy _4) -> [bb3];
+    }
+
+    bb3: {
         return;
     }
 }
 
-fn user.GenerateImage$build_request_stream(prompt: string) -> baml.http.Request {
+fn user.GenerateImage$build_request_stream(prompt: string, client: baml.llm.Client) -> baml.http.Request {
     // Locals:
     let _0: baml.http.Request // _0 // return
     let _1: string // prompt // param
-    let _2: map<string, unknown>
+    let _2: baml.llm.Client // client // param
+    let _3: bool
+    let _4: map<string, unknown>
 
     bb0: {
-        _2 = { const "prompt": copy _1 };
-        _0 = call const fn baml.llm.build_request_stream(const fn user.OpenAIImageResponses, const "GenerateImage", copy _2) -> [bb1];
+        _3 = copy _2 == const <omitted>;
+        branch copy _3 -> [bb1, bb2];
     }
 
     bb1: {
+        _2 = const fn user.OpenAIImageResponses;
+        goto -> bb2;
+    }
+
+    bb2: {
+        _4 = { const "prompt": copy _1 };
+        _0 = call const fn baml.llm.build_request_stream(copy _2, const "GenerateImage", copy _4) -> [bb3];
+    }
+
+    bb3: {
         return;
     }
 }
 
-fn user.GenerateImage$parse(json: string) -> image {
+fn user.GenerateImage$parse(json: string, client: baml.llm.Client) -> image {
     // Locals:
     let _0: image // _0 // return
     let _1: string // json // param
-    let _2: type
-    let _3: type
+    let _2: baml.llm.Client // client // param
+    let _3: bool
+    let _4: type
+    let _5: type
 
     bb0: {
-        _2 = load_type(void);
-        _3 = load_type(image);
-        _0 = call const fn baml.llm.parse<copy _2, copy _3>(const "GenerateImage", copy _1) -> [bb1];
+        _3 = copy _2 == const <omitted>;
+        branch copy _3 -> [bb1, bb2];
     }
 
     bb1: {
+        _2 = const fn user.OpenAIImageResponses;
+        goto -> bb2;
+    }
+
+    bb2: {
+        _4 = load_type(void);
+        _5 = load_type(image);
+        _0 = call const fn baml.llm.parse<copy _4, copy _5>(const "GenerateImage", copy _1) -> [bb3];
+    }
+
+    bb3: {
         return;
     }
 }
 
-fn user.GenerateImage$render_prompt(prompt: string) -> baml.llm.PromptAst {
+fn user.GenerateImage$render_prompt(prompt: string, client: baml.llm.Client) -> baml.llm.PromptAst {
     // Locals:
     let _0: baml.llm.PromptAst // _0 // return
     let _1: string // prompt // param
-    let _2: map<string, unknown>
+    let _2: baml.llm.Client // client // param
+    let _3: bool
+    let _4: map<string, unknown>
 
     bb0: {
-        _2 = { const "prompt": copy _1 };
-        _0 = call const fn baml.llm.render_prompt(const fn user.OpenAIImageResponses, const "GenerateImage", copy _2) -> [bb1];
+        _3 = copy _2 == const <omitted>;
+        branch copy _3 -> [bb1, bb2];
     }
 
     bb1: {
+        _2 = const fn user.OpenAIImageResponses;
+        goto -> bb2;
+    }
+
+    bb2: {
+        _4 = { const "prompt": copy _1 };
+        _0 = call const fn baml.llm.render_prompt(copy _2, const "GenerateImage", copy _4) -> [bb3];
+    }
+
+    bb3: {
         return;
     }
 }
 
-fn user.GenerateImageSet(prompt: string) -> image[] {
+fn user.GenerateImageSet(prompt: string, client: baml.llm.Client) -> image[] {
     // Locals:
     let _0: image[] // _0 // return
     let _1: string // prompt // param
-    let _2: map<string, unknown>
-    let _3: type
+    let _2: baml.llm.Client // client // param
+    let _3: bool
+    let _4: map<string, unknown>
+    let _5: type
 
     bb0: {
-        _2 = { const "prompt": copy _1 };
-        _3 = load_type(image[]);
-        _0 = call const fn baml.llm.call_llm_function<copy _3>(const fn user.OpenAIImageResponses, const "GenerateImageSet", copy _2) -> [bb1];
+        _3 = copy _2 == const <omitted>;
+        branch copy _3 -> [bb1, bb2];
     }
 
     bb1: {
+        _2 = const fn user.OpenAIImageResponses;
+        goto -> bb2;
+    }
+
+    bb2: {
+        _4 = { const "prompt": copy _1 };
+        _5 = load_type(image[]);
+        _0 = call const fn baml.llm.call_llm_function<copy _5>(copy _2, const "GenerateImageSet", copy _4) -> [bb3];
+    }
+
+    bb3: {
         return;
     }
 }
 
-fn user.GenerateImageSet$build_request(prompt: string) -> baml.http.Request {
+fn user.GenerateImageSet$build_request(prompt: string, client: baml.llm.Client) -> baml.http.Request {
     // Locals:
     let _0: baml.http.Request // _0 // return
     let _1: string // prompt // param
-    let _2: map<string, unknown>
+    let _2: baml.llm.Client // client // param
+    let _3: bool
+    let _4: map<string, unknown>
 
     bb0: {
-        _2 = { const "prompt": copy _1 };
-        _0 = call const fn baml.llm.build_request(const fn user.OpenAIImageResponses, const "GenerateImageSet", copy _2) -> [bb1];
+        _3 = copy _2 == const <omitted>;
+        branch copy _3 -> [bb1, bb2];
     }
 
     bb1: {
+        _2 = const fn user.OpenAIImageResponses;
+        goto -> bb2;
+    }
+
+    bb2: {
+        _4 = { const "prompt": copy _1 };
+        _0 = call const fn baml.llm.build_request(copy _2, const "GenerateImageSet", copy _4) -> [bb3];
+    }
+
+    bb3: {
         return;
     }
 }
 
-fn user.GenerateImageSet$build_request_stream(prompt: string) -> baml.http.Request {
+fn user.GenerateImageSet$build_request_stream(prompt: string, client: baml.llm.Client) -> baml.http.Request {
     // Locals:
     let _0: baml.http.Request // _0 // return
     let _1: string // prompt // param
-    let _2: map<string, unknown>
+    let _2: baml.llm.Client // client // param
+    let _3: bool
+    let _4: map<string, unknown>
 
     bb0: {
-        _2 = { const "prompt": copy _1 };
-        _0 = call const fn baml.llm.build_request_stream(const fn user.OpenAIImageResponses, const "GenerateImageSet", copy _2) -> [bb1];
+        _3 = copy _2 == const <omitted>;
+        branch copy _3 -> [bb1, bb2];
     }
 
     bb1: {
+        _2 = const fn user.OpenAIImageResponses;
+        goto -> bb2;
+    }
+
+    bb2: {
+        _4 = { const "prompt": copy _1 };
+        _0 = call const fn baml.llm.build_request_stream(copy _2, const "GenerateImageSet", copy _4) -> [bb3];
+    }
+
+    bb3: {
         return;
     }
 }
 
-fn user.GenerateImageSet$parse(json: string) -> image[] {
+fn user.GenerateImageSet$parse(json: string, client: baml.llm.Client) -> image[] {
     // Locals:
     let _0: image[] // _0 // return
     let _1: string // json // param
-    let _2: type
-    let _3: type
+    let _2: baml.llm.Client // client // param
+    let _3: bool
+    let _4: type
+    let _5: type
 
     bb0: {
-        _2 = load_type(void);
-        _3 = load_type(image[]);
-        _0 = call const fn baml.llm.parse<copy _2, copy _3>(const "GenerateImageSet", copy _1) -> [bb1];
+        _3 = copy _2 == const <omitted>;
+        branch copy _3 -> [bb1, bb2];
     }
 
     bb1: {
+        _2 = const fn user.OpenAIImageResponses;
+        goto -> bb2;
+    }
+
+    bb2: {
+        _4 = load_type(void);
+        _5 = load_type(image[]);
+        _0 = call const fn baml.llm.parse<copy _4, copy _5>(const "GenerateImageSet", copy _1) -> [bb3];
+    }
+
+    bb3: {
         return;
     }
 }
 
-fn user.GenerateImageSet$render_prompt(prompt: string) -> baml.llm.PromptAst {
+fn user.GenerateImageSet$render_prompt(prompt: string, client: baml.llm.Client) -> baml.llm.PromptAst {
     // Locals:
     let _0: baml.llm.PromptAst // _0 // return
     let _1: string // prompt // param
-    let _2: map<string, unknown>
+    let _2: baml.llm.Client // client // param
+    let _3: bool
+    let _4: map<string, unknown>
 
     bb0: {
-        _2 = { const "prompt": copy _1 };
-        _0 = call const fn baml.llm.render_prompt(const fn user.OpenAIImageResponses, const "GenerateImageSet", copy _2) -> [bb1];
+        _3 = copy _2 == const <omitted>;
+        branch copy _3 -> [bb1, bb2];
     }
 
     bb1: {
+        _2 = const fn user.OpenAIImageResponses;
+        goto -> bb2;
+    }
+
+    bb2: {
+        _4 = { const "prompt": copy _1 };
+        _0 = call const fn baml.llm.render_prompt(copy _2, const "GenerateImageSet", copy _4) -> [bb3];
+    }
+
+    bb3: {
         return;
     }
 }
 
-fn user.GenerateMixedImageNarrative(prompt: string) -> (image | string)[] {
+fn user.GenerateMixedImageNarrative(prompt: string, client: baml.llm.Client) -> (image | string)[] {
     // Locals:
     let _0: (image | string)[] // _0 // return
     let _1: string // prompt // param
-    let _2: map<string, unknown>
-    let _3: type
+    let _2: baml.llm.Client // client // param
+    let _3: bool
+    let _4: map<string, unknown>
+    let _5: type
 
     bb0: {
-        _2 = { const "prompt": copy _1 };
-        _3 = load_type(image | string[]);
-        _0 = call const fn baml.llm.call_llm_function<copy _3>(const fn user.OpenAIImageResponses, const "GenerateMixedImageNarrative", copy _2) -> [bb1];
+        _3 = copy _2 == const <omitted>;
+        branch copy _3 -> [bb1, bb2];
     }
 
     bb1: {
+        _2 = const fn user.OpenAIImageResponses;
+        goto -> bb2;
+    }
+
+    bb2: {
+        _4 = { const "prompt": copy _1 };
+        _5 = load_type(image | string[]);
+        _0 = call const fn baml.llm.call_llm_function<copy _5>(copy _2, const "GenerateMixedImageNarrative", copy _4) -> [bb3];
+    }
+
+    bb3: {
         return;
     }
 }
 
-fn user.GenerateMixedImageNarrative$build_request(prompt: string) -> baml.http.Request {
+fn user.GenerateMixedImageNarrative$build_request(prompt: string, client: baml.llm.Client) -> baml.http.Request {
     // Locals:
     let _0: baml.http.Request // _0 // return
     let _1: string // prompt // param
-    let _2: map<string, unknown>
+    let _2: baml.llm.Client // client // param
+    let _3: bool
+    let _4: map<string, unknown>
 
     bb0: {
-        _2 = { const "prompt": copy _1 };
-        _0 = call const fn baml.llm.build_request(const fn user.OpenAIImageResponses, const "GenerateMixedImageNarrative", copy _2) -> [bb1];
+        _3 = copy _2 == const <omitted>;
+        branch copy _3 -> [bb1, bb2];
     }
 
     bb1: {
+        _2 = const fn user.OpenAIImageResponses;
+        goto -> bb2;
+    }
+
+    bb2: {
+        _4 = { const "prompt": copy _1 };
+        _0 = call const fn baml.llm.build_request(copy _2, const "GenerateMixedImageNarrative", copy _4) -> [bb3];
+    }
+
+    bb3: {
         return;
     }
 }
 
-fn user.GenerateMixedImageNarrative$build_request_stream(prompt: string) -> baml.http.Request {
+fn user.GenerateMixedImageNarrative$build_request_stream(prompt: string, client: baml.llm.Client) -> baml.http.Request {
     // Locals:
     let _0: baml.http.Request // _0 // return
     let _1: string // prompt // param
-    let _2: map<string, unknown>
+    let _2: baml.llm.Client // client // param
+    let _3: bool
+    let _4: map<string, unknown>
 
     bb0: {
-        _2 = { const "prompt": copy _1 };
-        _0 = call const fn baml.llm.build_request_stream(const fn user.OpenAIImageResponses, const "GenerateMixedImageNarrative", copy _2) -> [bb1];
+        _3 = copy _2 == const <omitted>;
+        branch copy _3 -> [bb1, bb2];
     }
 
     bb1: {
+        _2 = const fn user.OpenAIImageResponses;
+        goto -> bb2;
+    }
+
+    bb2: {
+        _4 = { const "prompt": copy _1 };
+        _0 = call const fn baml.llm.build_request_stream(copy _2, const "GenerateMixedImageNarrative", copy _4) -> [bb3];
+    }
+
+    bb3: {
         return;
     }
 }
 
-fn user.GenerateMixedImageNarrative$parse(json: string) -> (image | string)[] {
+fn user.GenerateMixedImageNarrative$parse(json: string, client: baml.llm.Client) -> (image | string)[] {
     // Locals:
     let _0: (image | string)[] // _0 // return
     let _1: string // json // param
-    let _2: type
-    let _3: type
+    let _2: baml.llm.Client // client // param
+    let _3: bool
+    let _4: type
+    let _5: type
 
     bb0: {
-        _2 = load_type(void);
-        _3 = load_type(image | string[]);
-        _0 = call const fn baml.llm.parse<copy _2, copy _3>(const "GenerateMixedImageNarrative", copy _1) -> [bb1];
+        _3 = copy _2 == const <omitted>;
+        branch copy _3 -> [bb1, bb2];
     }
 
     bb1: {
+        _2 = const fn user.OpenAIImageResponses;
+        goto -> bb2;
+    }
+
+    bb2: {
+        _4 = load_type(void);
+        _5 = load_type(image | string[]);
+        _0 = call const fn baml.llm.parse<copy _4, copy _5>(const "GenerateMixedImageNarrative", copy _1) -> [bb3];
+    }
+
+    bb3: {
         return;
     }
 }
 
-fn user.GenerateMixedImageNarrative$render_prompt(prompt: string) -> baml.llm.PromptAst {
+fn user.GenerateMixedImageNarrative$render_prompt(prompt: string, client: baml.llm.Client) -> baml.llm.PromptAst {
     // Locals:
     let _0: baml.llm.PromptAst // _0 // return
     let _1: string // prompt // param
-    let _2: map<string, unknown>
+    let _2: baml.llm.Client // client // param
+    let _3: bool
+    let _4: map<string, unknown>
 
     bb0: {
-        _2 = { const "prompt": copy _1 };
-        _0 = call const fn baml.llm.render_prompt(const fn user.OpenAIImageResponses, const "GenerateMixedImageNarrative", copy _2) -> [bb1];
+        _3 = copy _2 == const <omitted>;
+        branch copy _3 -> [bb1, bb2];
     }
 
     bb1: {
+        _2 = const fn user.OpenAIImageResponses;
+        goto -> bb2;
+    }
+
+    bb2: {
+        _4 = { const "prompt": copy _1 };
+        _0 = call const fn baml.llm.render_prompt(copy _2, const "GenerateMixedImageNarrative", copy _4) -> [bb3];
+    }
+
+    bb3: {
         return;
     }
 }
@@ -259,9 +439,9 @@ fn user.OpenAIImageResponses$new() -> null {
     let _0: null // _0 // return
     let _1: baml.llm.PrimitiveClientOptions
     let _2: string
-    let _3: map<void, void>
-    let _4: map<void, void>
-    let _5: map<string, void[]>
+    let _3: map<string, string>
+    let _4: map<string, string>
+    let _5: map<string, unknown>
     let _6: void[]
 
     bb0: {

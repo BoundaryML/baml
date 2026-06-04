@@ -2,25 +2,16 @@
   "name": "__PACKAGE_NAME__",
   "version": "0.1.0",
   "private": true,
-  "type": "commonjs",
+  "type": "module",
   "scripts": {
-    "test": "jest"
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@boundaryml/baml-core-node": "file:../../../../../sdks/nodejs/bridge_nodejs"
   },
   "devDependencies": {
-    "@jest/globals": "^29.7.0",
-    "@types/jest": "^29.5.0",
     "@types/node": "^20.0.0",
-    "jest": "^29.7.0",
-    "ts-jest": "^29.1.0",
-    "typescript": "^5.4.5"
-  },
-  "jest": {
-    "preset": "ts-jest",
-    "testEnvironment": "node",
-    "testMatch": ["<rootDir>/**/*.test.ts"],
-    "haste": {
-      "enableSymlinks": true
-    },
-    "watchman": false
+    "typescript": "^5.4.5",
+    "vitest": "^3.2.3"
   }
 }

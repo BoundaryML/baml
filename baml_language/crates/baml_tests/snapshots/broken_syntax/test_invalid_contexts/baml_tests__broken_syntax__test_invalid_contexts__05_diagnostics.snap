@@ -1,15 +1,16 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 3458
 ---
 === COMPILER2 DIAGNOSTICS ===
-  [type] error: missing return: expected `null`
+  [type] error: missing return value of type null
    ╭─[ main.baml:3:26 ]
    │
  3 │ ╭─▶ function helper() -> null {
    ┆ ┆   
  7 │ ├─▶ }
    │ │       
-   │ ╰─────── missing return: expected `null`
+   │ ╰─────── missing return value of type null
    │     
    │     Note: Error code: E0029
 ───╯
@@ -24,14 +25,14 @@ source: crates/baml_tests/src/generated_tests.rs
    │ Note: Error code: E0010
 ───╯
 
-  [type] error: missing return: expected `null`
+  [type] error: missing return value of type null
     ╭─[ main.baml:9:27 ]
     │
   9 │ ╭─▶ function another() -> null {
     ┆ ┆   
  15 │ ├─▶ }
     │ │       
-    │ ╰─────── missing return: expected `null`
+    │ ╰─────── missing return value of type null
     │     
     │     Note: Error code: E0029
 ────╯

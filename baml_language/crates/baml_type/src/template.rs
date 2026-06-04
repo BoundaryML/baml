@@ -42,6 +42,15 @@ pub enum TyTemplate {
     Map(Box<TyTemplate>, Box<TyTemplate>),
     /// `Class<A1, A2, ...>` (generic class instantiation)
     Class(TypeName, Vec<TyTemplate>),
+    /// `Interface<A1, Assoc = A2, ...>` (generic interface instantiation)
+    Interface(TypeName, Vec<TyTemplate>, Vec<(crate::Name, TyTemplate)>),
+    /// Matches any type at this position. Only meaningful as a type-argument
+    /// of a `Class` template in an `IsType` guard (BEP-044): it lets a partial
+    /// guard pin some class type-args while leaving others unconstrained — e.g.
+    /// `Pair<string, _>` to dispatch `implements Getter<L>` on a requested
+    /// `Getter<string>` without constraining `R`. Never materialized via
+    /// `LoadType`.
+    Wildcard,
 }
 
 impl TyTemplate {
@@ -73,6 +82,22 @@ impl TyTemplate {
                 let resolved: Vec<Ty> = args.iter().map(|a| a.substitute(type_args)).collect();
                 Ty::Class(name.clone(), resolved, TyAttr::default())
             }
+            Self::Interface(name, args, associated_bindings) => {
+                let resolved_args: Vec<Ty> = args.iter().map(|a| a.substitute(type_args)).collect();
+                let resolved_bindings = associated_bindings
+                    .iter()
+                    .map(|(name, ty)| (name.clone(), ty.substitute(type_args)))
+                    .collect();
+                Ty::Interface(
+                    name.clone(),
+                    resolved_args,
+                    resolved_bindings,
+                    TyAttr::default(),
+                )
+            }
+            // A wildcard never reaches `LoadType` materialization; if it ever
+            // does, fall back to `unknown` rather than panicking.
+            Self::Wildcard => Ty::unknown(),
         }
     }
 
@@ -85,6 +110,14 @@ impl TyTemplate {
             Self::Union(parts) => parts.iter().all(TyTemplate::is_fully_concrete),
             Self::Map(k, v) => k.is_fully_concrete() && v.is_fully_concrete(),
             Self::Class(_, args) => args.iter().all(TyTemplate::is_fully_concrete),
+            Self::Interface(_, args, associated_bindings) => {
+                args.iter().all(TyTemplate::is_fully_concrete)
+                    && associated_bindings
+                        .iter()
+                        .all(|(_, ty)| ty.is_fully_concrete())
+            }
+            // No `TypeArgRef` to substitute, so it needs no environment.
+            Self::Wildcard => true,
         }
     }
 }
@@ -115,6 +148,30 @@ impl fmt::Display for TyTemplate {
                 }
                 Ok(())
             }
+            Self::Interface(name, args, associated_bindings) => {
+                write!(f, "{name}")?;
+                if !args.is_empty() || !associated_bindings.is_empty() {
+                    write!(f, "<")?;
+                    let mut first = true;
+                    for arg in args {
+                        if !first {
+                            write!(f, ", ")?;
+                        }
+                        first = false;
+                        write!(f, "{arg}")?;
+                    }
+                    for (name, ty) in associated_bindings {
+                        if !first {
+                            write!(f, ", ")?;
+                        }
+                        first = false;
+                        write!(f, "{name} = {ty}")?;
+                    }
+                    write!(f, ">")?;
+                }
+                Ok(())
+            }
+            Self::Wildcard => write!(f, "_"),
         }
     }
 }

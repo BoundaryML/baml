@@ -20,7 +20,7 @@ fn user.Box.from_json(j: baml.json.json) -> Box<void> {
     }
 
     bb2: {
-        _0 = user.Box<TypeArgRef(0)> { copy _2 };
+        _0 = user.Box<#0> { copy _2 };
         goto -> bb3;
     }
 
@@ -170,7 +170,7 @@ fn user.Box.to_json(self: Box) -> baml.json.json {
     let _1: Box // self // param
     let _2: baml.json.json
     let _3: void
-    let _4: Box
+    let _4: Box<void>
     let _5: type
 
     bb0: {

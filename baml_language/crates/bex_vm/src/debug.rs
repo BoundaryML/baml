@@ -148,6 +148,10 @@ pub(crate) fn display_instruction(
         Instruction::Call { callee, .. } | Instruction::SysOp(callee) => {
             display_global_ref(*callee, globals, objects, compile_time_globals)
         }
+        Instruction::MakeGenericFunction { function, .. } => {
+            display_global_ref(*function, globals, objects, compile_time_globals)
+        }
+        Instruction::MakeGenericFunctionFromValue { .. } => String::new(),
         Instruction::LoadVar(index)
         | Instruction::StoreVar(index)
         | Instruction::StoreVarLoadVar(index)
@@ -224,6 +228,8 @@ pub(crate) fn display_instruction(
         | Instruction::CmpIntOp(_)
         | Instruction::CmpFloatOp(_)
         | Instruction::CmpBigintOp(_)
+        | Instruction::LoadVar2(..)
+        | Instruction::StoreVar2(..)
         | Instruction::UnaryOp(_)
         | Instruction::AllocArray(_)
         | Instruction::AllocMap(_)
@@ -357,12 +363,14 @@ fn instruction_style(instruction: &Instruction) -> Style {
         Instruction::NotifyBlock(_) => Style::new().yellow().bright(),
         Instruction::LoadConst(_)
         | Instruction::LoadVar(_)
+        | Instruction::LoadVar2(..)
         | Instruction::LoadGlobal(_)
         | Instruction::LoadField(_)
         | Instruction::LoadArrayElement
         | Instruction::LoadMapElement => Style::new().blue(),
         Instruction::StoreVar(_)
         | Instruction::StoreVarLoadVar(_)
+        | Instruction::StoreVar2(..)
         | Instruction::StoreGlobal(_)
         | Instruction::StoreField(_)
         | Instruction::InitField(_)
@@ -423,6 +431,8 @@ fn instruction_style(instruction: &Instruction) -> Style {
         Instruction::Unreachable => Style::new().red().bright(),
         Instruction::MakeClosure { .. }
         | Instruction::MakeBoundMethod(_)
+        | Instruction::MakeGenericFunction { .. }
+        | Instruction::MakeGenericFunctionFromValue { .. }
         | Instruction::MakeCell => Style::new().cyan(),
         Instruction::LoadDeref(_) | Instruction::LoadCapture(_) | Instruction::CaptureRef(_) => {
             Style::new().blue()
@@ -720,6 +730,8 @@ fn display_instruction_textual(
         Instruction::LoadVar(idx) => format!("load_var {}", meta_str(idx)),
         Instruction::StoreVar(idx) => format!("store_var {}", meta_str(idx)),
         Instruction::StoreVarLoadVar(idx) => format!("store_var_load_var {}", meta_str(idx)),
+        Instruction::LoadVar2(a, b) => format!("load_var2 {a} {b}"),
+        Instruction::StoreVar2(a, b) => format!("store_var2 {a} {b}"),
 
         // --- Globals ---
         Instruction::LoadGlobal(idx) => format!("load_global {}", meta_str(&idx.raw())),
@@ -946,6 +958,13 @@ fn display_instruction_textual(
         Instruction::MakeBoundMethod(_) => {
             let name = meta_str(&"");
             format!("make_bound_method {name}")
+        }
+        Instruction::MakeGenericFunction { ntypeargs, .. } => {
+            let name = meta_str(&"");
+            format!("make_generic_function {name} ntypeargs={ntypeargs}")
+        }
+        Instruction::MakeGenericFunctionFromValue { ntypeargs } => {
+            format!("make_generic_function_from_value ntypeargs={ntypeargs}")
         }
         Instruction::MakeCell => "make_cell".to_string(),
         Instruction::LoadDeref(slot) => {
@@ -1374,6 +1393,17 @@ pub fn display_compact_bytecode(
                 writeln!(f, "class={class_obj}  ntypeargs={ntypeargs}")?;
             }
 
+            OpCode::MakeGenericFunction => {
+                let function = read_u32(code, &mut pc);
+                let ntypeargs = read_u16(code, &mut pc);
+                writeln!(f, "function={function}  ntypeargs={ntypeargs}")?;
+            }
+
+            OpCode::MakeGenericFunctionFromValue => {
+                let ntypeargs = read_u16(code, &mut pc);
+                writeln!(f, "ntypeargs={ntypeargs}")?;
+            }
+
             OpCode::MakeClosure => {
                 let obj_idx = read_u32(code, &mut pc);
                 let capture_count = read_u16(code, &mut pc);
@@ -1382,6 +1412,13 @@ pub fn display_compact_bytecode(
                     f,
                     "obj={obj_idx}  captures={capture_count}  ntypeargs={ntypeargs}"
                 )?;
+            }
+
+            // Two u32 operands (operand-movement superinstructions)
+            OpCode::LoadVar2 | OpCode::StoreVar2 => {
+                let a = read_u32(code, &mut pc);
+                let b = read_u32(code, &mut pc);
+                writeln!(f, "{a} {b}")?;
             }
         }
     }

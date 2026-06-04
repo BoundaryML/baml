@@ -111,8 +111,8 @@ function user.GenericDestructureQualifiedLet() -> int {
 
 function user.GenericTypePatternNamespaceQualifiedMatch() -> int {
     load_const "ready"
-    pop 1
-    load_const null /* unknown class:  */
+    load_type string
+    init_instance<1> user.llm.openai.Box .value
     is_type llm.openai.Box<...>
     pop_jump_if_false L0
     jump L1
@@ -130,8 +130,8 @@ function user.GenericTypePatternNamespaceQualifiedMatch() -> int {
 
 function user.GenericTypePatternQualifiedMatch() -> int {
     load_const 50
-    pop 1
-    load_const null /* unknown class:  */
+    load_type int
+    init_instance<1> user.llm.openai.Box .value
     is_type llm.openai.Box<...>
     pop_jump_if_false L0
     jump L1
@@ -192,7 +192,7 @@ function user.llm.openai.Box.from_json(j: baml.json.json) -> llm.openai.Box<void
     return
 }
 
-function user.llm.openai.Box.to_json(self: null) -> baml.json.json {
+function user.llm.openai.Box.to_json(self: llm.openai.Box) -> baml.json.json {
     load_type #0
     load_var self
     load_field .value
@@ -221,7 +221,7 @@ function user.llm.openai.Outer.from_json(j: baml.json.json) -> llm.openai.Outer<
     return
 }
 
-function user.llm.openai.Outer.to_json(self: null) -> baml.json.json {
+function user.llm.openai.Outer.to_json(self: llm.openai.Outer) -> baml.json.json {
     load_type #0
     load_var self
     load_field .inner
@@ -250,7 +250,7 @@ function user.llm.openai.Response.from_json(j: baml.json.json) -> llm.openai.Res
     return
 }
 
-function user.llm.openai.Response.to_json(self: null) -> baml.json.json {
+function user.llm.openai.Response.to_json(self: llm.openai.Response) -> baml.json.json {
     load_var self
     load_field .text
     call baml.String.to_json

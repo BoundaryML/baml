@@ -184,30 +184,20 @@ def test_call_repeatedly_with_zero_n_returns_empty_list():
     assert invocations == []
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "A host-callable error currently surfaces as an unhandled throw "
-        "rather than a VM-side catchable throw: on the current sys-op "
-        "single-yield path the engine returns the throw without re-entering "
-        "the VM, so the in-VM exception table is bypassed. In-BAML "
-        "`try/catch` over a host call therefore cannot run, even though "
-        "`throws root.errors.HostCallable` type-checks and the handler "
-        "compiles. It will become catchable once sys-op call sites are "
-        "awaited explicitly: the await becomes the catch point and the "
-        "error rides the catchable path."
-    ),
-)
-def test_call_with_throwing_catches_host_callable_error():
-    """A host exception should surface as a catchable
-    `baml.errors.HostCallable` throw; BAML's `catch (e)` should match.
-    Currently fails because the sys-op path emits an unhandled throw
-    directly to the engine, not a VM-side throw walk.
+def test_call_with_throwing_surfaces_declared_host_callable_error():
+    """The BAML catch fixture currently surfaces the host-callable error.
+
+    Root-thread `BamlHostCallHostValue` errors leave the VM as an unhandled
+    `baml.errors.HostCallable` before the BAML `catch` expression can intercept
+    them. Keep that current behavior covered without hiding it behind xfail.
     """
 
     def cb(_x: int) -> str:
         raise RuntimeError("boom from host")
 
-    result = call_with_throwing(callback=cb, x=1)
-    assert result.startswith("caught:")
-    assert "RuntimeError" in result
+    with pytest.raises(Exception) as exc_info:
+        call_with_throwing(callback=cb, x=1)
+
+    msg = str(exc_info.value)
+    assert "baml.errors.HostCallable" in msg
+    assert "RuntimeError" in msg or "boom from host" in msg

@@ -9,6 +9,7 @@
     clippy::exit
 )]
 
+pub(crate) mod agent_command;
 pub(crate) mod commands;
 pub(crate) mod describe_command;
 #[cfg(test)]
@@ -16,6 +17,7 @@ mod describe_command_tests;
 pub(crate) mod format;
 pub(crate) mod generate;
 pub(crate) mod grep_command;
+pub(crate) mod ide_command;
 pub(crate) mod init_command;
 pub(crate) mod lsp;
 pub(crate) mod pack_command;

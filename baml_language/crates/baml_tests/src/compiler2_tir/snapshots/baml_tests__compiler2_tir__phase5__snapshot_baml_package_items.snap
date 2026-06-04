@@ -11,7 +11,7 @@ namespace baml:
   class Map<K, V> { methods: [length, has, keys, values, set, get, to_json, delete, get_or_insert, clear, from_json] }
   class Null { methods: [to_json, from_json] }
   class String { methods: [to_json, length, char_count, byte_length, to_lower_case, to_upper_case, trim, trim_start, trim_end, includes, starts_with, ends_with, split, lines, substring, replace, index_of, char_at, repeat, matches, replace_all, is_numeric, is_alphabetic, is_alphanumeric, is_uppercase, is_lowercase, is_whitespace, is_control, is_graphic, is_ascii, is_ascii_numeric, is_ascii_alphabetic, is_ascii_alphanumeric, is_ascii_uppercase, is_ascii_lowercase, is_ascii_whitespace, is_ascii_control, is_ascii_graphic, is_ascii_hex, to_utf8, from_utf8, from_code_points, from_json] }
-  class TypeValue { methods: [to_string, to_json, from_json] }
+  class TypeValue { methods: [to_string, implements, implemented_by, implementors, to_json, from_json] }
   class Uint8Array { methods: [to_json, length, at, push, pop, concat, includes, reverse, slice, zeroes, from_array, to_array, from_hex, to_hex, from_base64, to_base64, to_string, sort, from_json] }
   function deep_copy<T>
   function deep_equals<T>
@@ -57,7 +57,7 @@ namespace baml.future:
   function __await_any<T, E>
   function all<T, E>
   function all_complete<T, E>
-  function any<T, E>
+  function any<T, Err>
   function race<T, E>
 namespace baml.glob:
   class Glob { methods: [scan, matches, to_json, from_json] }

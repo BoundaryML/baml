@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use baml_type::MediaKind;
+use bex_heap::TlabHolder;
 use bex_vm_types::types::{Object, Value};
 use indexmap::IndexMap;
 
@@ -76,25 +77,25 @@ fn media_value_to_json(
     };
 
     let mime_val = match media.mime_type() {
-        Some(m) => vm.alloc_string(m),
+        Some(m) => Value::object(vm.alloc_string(m)),
         None => Value::NULL,
     };
 
     let mut map: IndexMap<bex_vm_types::BexStr, _> = IndexMap::new();
     map.insert(
         bex_vm_types::BexStr::from("kind"),
-        vm.alloc_string(kind_str.to_string()),
+        Value::object(vm.alloc_string(kind_str.to_string())),
     );
     map.insert(
         bex_vm_types::BexStr::from("source"),
-        vm.alloc_string(source_str.to_string()),
+        Value::object(vm.alloc_string(source_str.to_string())),
     );
     map.insert(
         bex_vm_types::BexStr::from("value"),
-        vm.alloc_string(value_str),
+        Value::object(vm.alloc_string(value_str)),
     );
     map.insert(bex_vm_types::BexStr::from("mime"), mime_val);
-    vm.alloc_map(map)
+    Value::object(vm.alloc_map(map))
 }
 
 // All media accessors and constructors live on `baml_builtins2::MediaValue`

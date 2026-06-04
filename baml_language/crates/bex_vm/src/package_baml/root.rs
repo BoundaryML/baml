@@ -123,6 +123,7 @@ fn deep_copy_value_recursive(
                 // state is shared by design (mutation semantics).
                 Object::Closure(c) => vm.tlab.alloc(Object::Closure(c)),
                 Object::BoundMethod(bm) => vm.tlab.alloc(Object::BoundMethod(bm)),
+                Object::GenericFunction(gf) => vm.tlab.alloc(Object::GenericFunction(gf)),
                 // `HostClosure` is a value-type wrapper around an
                 // `Arc<HostValueArc>`; cloning the Arc is cheap and matches
                 // the closure semantics (shared handle).
@@ -242,6 +243,14 @@ fn deep_equals_recursive(
                 }
 
                 (Object::Function(_), Object::Function(_)) => a_ptr == b_ptr,
+
+                // GenericFunction values compare structurally (same base
+                // function + same type args). The interned/pooled case already
+                // short-circuits via the `a_ptr == b_ptr` fast path above; this
+                // arm covers non-pooled copies (e.g. from `baml.deep_copy`).
+                (Object::GenericFunction(a_gf), Object::GenericFunction(b_gf)) => {
+                    a_gf.function == b_gf.function && a_gf.type_args == b_gf.type_args
+                }
 
                 (Object::Future(a_fut), Object::Future(b_fut)) => {
                     match (a_fut.read(), b_fut.read()) {

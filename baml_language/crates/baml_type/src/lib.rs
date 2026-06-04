@@ -158,6 +158,7 @@ pub enum Ty {
     Media(MediaKind, TyAttr),
     Literal(Literal, TyAttr),
     Class(TypeName, Vec<Ty>, TyAttr),
+    Interface(TypeName, Vec<Ty>, Vec<(Name, Ty)>, TyAttr),
     Enum(TypeName, TyAttr),
     /// A specific enum variant — `Status.HttpError`.
     /// Compiler-only: should not reach runtime.
@@ -258,6 +259,9 @@ impl Ty {
             Ty::Media(kind, _) => Ty::Media(kind, attr),
             Ty::Literal(lit, _) => Ty::Literal(lit, attr),
             Ty::Class(tn, args, _) => Ty::Class(tn, args, attr),
+            Ty::Interface(tn, args, associated_bindings, _) => {
+                Ty::Interface(tn, args, associated_bindings, attr)
+            }
             Ty::Enum(tn, _) => Ty::Enum(tn, attr),
             Ty::EnumVariant(tn, v, _) => Ty::EnumVariant(tn, v, attr),
             Ty::Optional(inner, _) => Ty::Optional(inner, attr),
@@ -299,6 +303,7 @@ impl Ty {
             Ty::Media(_, attr)
             | Ty::Literal(_, attr)
             | Ty::Class(_, _, attr)
+            | Ty::Interface(_, _, _, attr)
             | Ty::Enum(_, attr)
             | Ty::EnumVariant(_, _, attr)
             | Ty::Optional(_, attr)
@@ -655,6 +660,15 @@ impl Ty {
                 }
                 Ok(())
             }
+            Ty::Interface(_, args, associated_bindings, _) => {
+                for a in args {
+                    a.validate_runtime()?;
+                }
+                for (_, ty) in associated_bindings {
+                    ty.validate_runtime()?;
+                }
+                Ok(())
+            }
             Ty::Int { .. }
             | Ty::Bigint { .. }
             | Ty::Float { .. }
@@ -722,6 +736,29 @@ impl fmt::Display for Ty {
                             write!(f, ", ")?;
                         }
                         write!(f, "{arg}")?;
+                    }
+                    write!(f, ">")?;
+                }
+                Ok(())
+            }
+            Ty::Interface(tn, args, associated_bindings, _) => {
+                write!(f, "{tn}")?;
+                if !args.is_empty() || !associated_bindings.is_empty() {
+                    write!(f, "<")?;
+                    let mut first = true;
+                    for arg in args {
+                        if !first {
+                            write!(f, ", ")?;
+                        }
+                        first = false;
+                        write!(f, "{arg}")?;
+                    }
+                    for (name, ty) in associated_bindings {
+                        if !first {
+                            write!(f, ", ")?;
+                        }
+                        first = false;
+                        write!(f, "{name} = {ty}")?;
                     }
                     write!(f, ">")?;
                 }

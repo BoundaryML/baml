@@ -21,8 +21,8 @@ use crate::{
     ids::{FunctionMarker, LocalItemId},
     item_tree::ItemTree,
     loc::{
-        ClassLoc, ClientLoc, EnumLoc, FunctionLoc, GeneratorLoc, LetLoc, RetryPolicyLoc,
-        TemplateStringLoc, TestLoc, TypeAliasLoc,
+        ClassLoc, ClientLoc, EnumLoc, FunctionLoc, GeneratorLoc, InterfaceLoc, LetLoc,
+        RetryPolicyLoc, TemplateStringLoc, TestLoc, TypeAliasLoc,
     },
     scope::{FileScopeId, Scope, ScopeId, ScopeKind},
     semantic_index::{
@@ -415,6 +415,33 @@ impl<'db> SemanticIndexBuilder<'db> {
                 }
                 self.pop_scope();
             }
+            ast::Stmt::WhileLet {
+                pattern,
+                scrutinee,
+                body: loop_body,
+            } => {
+                // Scrutinee is evaluated in the enclosing scope (re-evaluated
+                // each iteration, but lexically outside the loop body) —
+                // mirrors `Stmt::While`'s condition and `Stmt::For`'s
+                // collection. Walk it BEFORE pushing the body scope so its
+                // paths don't falsely resolve to the loop's own bindings.
+                self.walk_expr(*scrutinee, body, source_map, true);
+
+                // Push ONE Block scope spanning the whole while-let statement,
+                // mirroring `Stmt::While` / `Stmt::For`. The pattern bindings
+                // live in THIS scope and are visible to the body (which adds
+                // its own nested block scope); they vanish after the loop.
+                self.push_scope(ScopeKind::Block, None, source_map.stmt_span(stmt_id));
+                self.register_local_pattern(
+                    *pattern,
+                    DefinitionSite::Statement(stmt_id),
+                    body,
+                    source_map,
+                    source_map.pattern_span(*pattern).start(),
+                );
+                self.walk_expr(*loop_body, body, source_map, true);
+                self.pop_scope();
+            }
             ast::Stmt::Return(expr) => {
                 if let Some(expr) = expr {
                     self.walk_expr(*expr, body, source_map, true);
@@ -564,7 +591,9 @@ impl<'db> SemanticIndexBuilder<'db> {
                     self.walk_expr(value, body, source_map, true);
                 }
             }
-            ast::Expr::MemberAccess { base, .. } | ast::Expr::OptionalMemberAccess { base, .. } => {
+            ast::Expr::MemberAccess { base, .. }
+            | ast::Expr::Upcast { base, .. }
+            | ast::Expr::OptionalMemberAccess { base, .. } => {
                 self.walk_expr(*base, body, source_map, true);
             }
             ast::Expr::Index { base, index } | ast::Expr::OptionalIndex { base, index } => {
@@ -580,6 +609,12 @@ impl<'db> SemanticIndexBuilder<'db> {
                         self.classify_path_expr(expr_id, segments, use_scope, use_offset);
                     }
                 }
+            }
+            ast::Expr::GenericApply { base, .. } => {
+                // `foo<int>` references the base callable; walk it so the path
+                // root is recorded for name resolution. Type args are types,
+                // not value references, so they need no walking here.
+                self.walk_expr(*base, body, source_map, true);
             }
             ast::Expr::Literal(_)
             | ast::Expr::ByteStringLiteral(_)
@@ -1007,6 +1042,8 @@ impl<'db> SemanticIndexBuilder<'db> {
             ast::Item::TemplateString(ts) => self.lower_template_string(ts),
             ast::Item::RetryPolicy(rp) => self.lower_retry_policy(rp),
             ast::Item::Let(l) => self.lower_let(l),
+            ast::Item::Interface(i) => self.lower_interface(i),
+            ast::Item::ImplementsFor(imp) => self.lower_implements_for(imp),
         }
     }
 
@@ -1093,12 +1130,137 @@ impl<'db> SemanticIndexBuilder<'db> {
         self.emit_duplicate_diagnostics(seen);
 
         // Walk class methods — inside class scope, so methods won't be
-        // contributed as top-level symbols.
+        // contributed as top-level symbols. We collapse class-level methods
+        // and all `implements I { ... }` method overrides into a single id
+        // list so downstream code (which queries `Class::methods`) sees them
+        // uniformly. Disambiguation of which interface a method satisfies
+        // happens in TIR via `class.implements`.
         self.class_depth += 1;
-        let method_ids: Vec<_> = c.methods.iter().map(|m| self.lower_function(m)).collect();
+        let mut method_ids: Vec<_> = c.methods.iter().map(|m| self.lower_function(m)).collect();
+        for impl_block in &c.implements {
+            for m in &impl_block.methods {
+                let fid = self.lower_function(m);
+                // BEP-044: remember which interface this method came from so
+                // `default.<name>()` calls inside the body can resolve back
+                // to the interface's default function.
+                self.item_tree
+                    .method_to_iface_target
+                    .insert(fid, impl_block.target.clone());
+                self.item_tree
+                    .method_to_iface_associated_type_bindings
+                    .insert(fid, impl_block.associated_type_bindings.clone());
+                method_ids.push(fid);
+            }
+        }
         self.class_depth -= 1;
 
         self.item_tree.set_class_methods(local_id, method_ids);
+        self.pop_scope();
+    }
+
+    fn lower_implements_for(&mut self, imp: &ast::ImplementsForDef) {
+        self.class_depth += 1;
+        // For blanket impls (implements<T> I for C<T>), push a class-like scope
+        // so TIR can resolve `self` and type variables in method bodies.
+        let has_generic_params = !imp.generic_params.is_empty();
+        if has_generic_params {
+            // Derive a synthetic scope name from the for_target for `self` resolution.
+            // Use the for_target's root name (e.g. "Container" from "Container<T>").
+            let scope_name = match &imp.for_target.expr {
+                baml_compiler2_ast::TypeExpr::Path { segments, .. } => segments.first().cloned(),
+                _ => None,
+            };
+            self.push_scope(ScopeKind::Class, scope_name, imp.span);
+        }
+        let mut method_ids = Vec::new();
+        for method in &imp.methods {
+            let fid = self.lower_function(method);
+            self.item_tree
+                .method_to_iface_target
+                .insert(fid, imp.interface_target.clone());
+            self.item_tree
+                .method_to_iface_associated_type_bindings
+                .insert(fid, imp.associated_type_bindings.clone());
+            method_ids.push(fid);
+        }
+        if has_generic_params {
+            self.pop_scope();
+        }
+        self.class_depth -= 1;
+        self.item_tree.add_implements_for(imp, method_ids);
+    }
+
+    /// Lower an `interface I { ... }` declaration (BEP-044).
+    ///
+    /// Mirrors `lower_class`: contributes the interface name to the type
+    /// namespace, pushes a member scope, walks default-method bodies so their
+    /// expressions get HIR scope coverage, and stores everything in the item
+    /// tree via `alloc_interface`.
+    fn lower_interface(&mut self, i: &ast::InterfaceDef) {
+        // Contribute the interface's name to the type namespace first so
+        // that within its own scope (and inside the bodies of its default
+        // methods) `Self`-style references resolve back to this interface.
+        // The interface's `local_id` is allocated only after the default
+        // methods so we can record their `FunctionMarker` ids on the
+        // interface.
+        self.push_scope(ScopeKind::Class, Some(i.name.clone()), i.span);
+
+        // BEP-044: default methods are lowered inside the interface's
+        // `Class`-kind scope so the semantic index reports the interface
+        // as their enclosing type. Without that, MIR can't resolve `self`
+        // back to the interface and field/method dispatch inside a default
+        // body falls through to dynamic map lookup.
+        self.class_depth += 1;
+        let default_method_ids: Vec<_> = i
+            .default_methods
+            .iter()
+            .map(|m| self.lower_function(m))
+            .collect();
+        self.class_depth -= 1;
+
+        let local_id = self.item_tree.alloc_interface(i, default_method_ids);
+        let loc = InterfaceLoc::new(self.db, self.file, local_id);
+        self.type_contributions.push((
+            i.name.clone(),
+            Contribution {
+                name_span: i.name_span,
+                definition: Definition::Interface(loc),
+            },
+        ));
+
+        // Member duplicate detection — interface fields and method names share
+        // a single namespace (just like classes).
+        let mut seen: FxHashMap<Name, Vec<MemberSite>> = FxHashMap::default();
+        for field in &i.fields {
+            seen.entry(field.name.clone())
+                .or_default()
+                .push(MemberSite {
+                    range: field.name_span,
+                    kind: DefinitionKind::Field,
+                });
+        }
+        for assoc in &i.associated_types {
+            seen.entry(assoc.name.clone())
+                .or_default()
+                .push(MemberSite {
+                    range: assoc.name_span,
+                    kind: DefinitionKind::AssociatedType,
+                });
+        }
+        for sig in &i.required_methods {
+            seen.entry(sig.name.clone()).or_default().push(MemberSite {
+                range: sig.name_span,
+                kind: DefinitionKind::Method,
+            });
+        }
+        for m in &i.default_methods {
+            seen.entry(m.name.clone()).or_default().push(MemberSite {
+                range: m.name_span,
+                kind: DefinitionKind::Method,
+            });
+        }
+        self.emit_duplicate_diagnostics(seen);
+
         self.pop_scope();
     }
 
@@ -1611,6 +1773,14 @@ impl<'db> SemanticIndexBuilder<'db> {
                         .as_ref()
                         .is_some_and(|throws| Self::type_expr_contains_rust(throws))
             }
+            ast::TypeExpr::AssociatedTypeProjection {
+                base, interface, ..
+            } => {
+                Self::type_expr_contains_rust(base)
+                    || interface
+                        .as_ref()
+                        .is_some_and(|interface| Self::type_expr_contains_rust(interface))
+            }
             _ => false,
         }
     }
@@ -1673,6 +1843,7 @@ impl<'db> SemanticIndexBuilder<'db> {
                 .map(Name::as_str)
                 .collect::<Vec<_>>()
                 .join("."),
+            ast::TypeExpr::AssociatedTypeProjection { .. } => type_expr.to_string(),
             ast::TypeExpr::Int { .. } => "int".to_string(),
             ast::TypeExpr::Bigint { .. } => "bigint".to_string(),
             ast::TypeExpr::Float { .. } => "float".to_string(),

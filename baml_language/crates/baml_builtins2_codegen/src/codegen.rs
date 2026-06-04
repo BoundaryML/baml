@@ -541,14 +541,18 @@ fn emit_copy_struct(out: &mut String, class_name: &str, def: &NativeClassDef, de
     }
 
     // Build the fields vec
-    write!(out, "{inner2}vm.alloc_instance(class_ptr, vec![").unwrap();
+    write!(
+        out,
+        "{inner2}Value::object(vm.alloc_instance(class_ptr, vec!["
+    )
+    .unwrap();
     for (i, field) in def.fields.iter().enumerate() {
         if i > 0 {
             out.push_str(", ");
         }
         write!(out, "f_{}", field.name).unwrap();
     }
-    out.push_str("])\n");
+    out.push_str("]))\n");
     writeln!(out, "{inner}}}").unwrap();
     writeln!(out, "{indent}}}\n").unwrap();
 }
@@ -577,7 +581,7 @@ fn copy_field_type(ty: &BamlType) -> String {
 /// Generate the expression to convert a copy struct field to a Value.
 fn copy_field_to_value(field_name: &str, ty: &BamlType) -> String {
     match ty {
-        BamlType::RustType => format!("vm.alloc_rust_data(self.{field_name})"),
+        BamlType::RustType => format!("Value::object(vm.alloc_rust_data(self.{field_name}))"),
         // `to_value` has no error channel (`fn to_value(self, vm) -> Value`),
         // so an out-of-i63 native i64 reaches this path only when caller-side
         // Rust constructed a struct field that violates the i63 BAML
@@ -598,7 +602,7 @@ fn copy_field_to_value(field_name: &str, ty: &BamlType) -> String {
             "vm.try_alloc_bigint(self.{field_name}).unwrap_or_else(|p| panic!(\
                 \"failed to allocate bigint field `{field_name}`: {{p}}\"))"
         ),
-        BamlType::Float => format!("vm.alloc_float(self.{field_name})"),
+        BamlType::Float => format!("Value::object(vm.alloc_float(self.{field_name}))"),
         BamlType::Bool => format!("Value::bool(self.{field_name})"),
         BamlType::Null => "Value::NULL".to_string(),
         // String, List, Map, Optional, Generic, Named, Media — already a Value
@@ -1632,10 +1636,14 @@ fn emit_result_conversion_ok(out: &mut String, b: &NativeBuiltin, indent: &str) 
     {
         writeln!(
             out,
-            "{indent}let result_values: Vec<Value> = result.into_iter().map(|s| vm.alloc_string(s)).collect();"
+            "{indent}let result_values: Vec<Value> = result.into_iter().map(|s| Value::object(vm.alloc_string(s))).collect();"
         )
         .unwrap();
-        writeln!(out, "{indent}Ok(vm.alloc_array(result_values))").unwrap();
+        writeln!(
+            out,
+            "{indent}Ok(Value::object(vm.alloc_array(result_values)))"
+        )
+        .unwrap();
         return;
     }
     let conversion = result_conversion_expr("result", &b.return_type);
@@ -1652,11 +1660,11 @@ fn return_type_needs_alloc(ty: &BamlType) -> bool {
         BamlType::String
         | BamlType::Uint8Array
         | BamlType::Bigint
+        | BamlType::Float
         | BamlType::List(_)
         | BamlType::Map(_, _) => true,
         BamlType::Optional(inner) => return_type_needs_alloc(inner),
         BamlType::Int
-        | BamlType::Float
         | BamlType::Bool
         | BamlType::Null
         | BamlType::Generic(_)
@@ -1678,8 +1686,8 @@ fn return_type_needs_alloc(ty: &BamlType) -> bool {
 /// `#[from]` on `VmRustFnError`.
 fn result_conversion_expr(name: &str, ty: &BamlType) -> String {
     match ty {
-        BamlType::String => format!("vm.alloc_string({name})"),
-        BamlType::Uint8Array => format!("vm.alloc_uint8array({name})"),
+        BamlType::String => format!("Value::object(vm.alloc_string({name}))"),
+        BamlType::Uint8Array => format!("Value::object(vm.alloc_uint8array({name}))"),
         // Surface out-of-i63 native returns as a normal VM error instead
         // of silently truncating via the bare `Value::int` constructor's
         // `debug_assert` (which is a no-op in release).
@@ -1690,11 +1698,11 @@ fn result_conversion_expr(name: &str, ty: &BamlType) -> String {
             }})?"
         ),
         BamlType::Bigint => format!("vm.try_alloc_bigint({name})?"),
-        BamlType::Float => format!("vm.alloc_float({name})"),
+        BamlType::Float => format!("Value::object(vm.alloc_float({name}))"),
         BamlType::Bool => format!("Value::bool({name})"),
         BamlType::Null => "Value::NULL".to_string(),
-        BamlType::List(_) => format!("vm.alloc_array({name})"),
-        BamlType::Map(_, _) => format!("vm.alloc_map({name})"),
+        BamlType::List(_) => format!("Value::object(vm.alloc_array({name}))"),
+        BamlType::Map(_, _) => format!("Value::object(vm.alloc_map({name}))"),
         BamlType::Optional(inner) => {
             let inner_conversion = result_conversion_expr("v", inner);
             format!("match {name} {{ Some(v) => {inner_conversion}, None => Value::NULL }}")

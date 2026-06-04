@@ -30,7 +30,7 @@ use std::fmt;
 use baml_base::Literal;
 use rustc_hash::FxHashSet;
 
-use crate::ty::{PrimitiveType, QualifiedTypeName, Ty};
+use crate::ty::{PrimitiveType, QualifiedTypeName, Ty, TyAttr};
 
 // ── Constructors ─────────────────────────────────────────────────────────────
 
@@ -53,7 +53,10 @@ pub enum Ctor {
     Slice(SliceShape),
     /// Class destructure. Sub-patterns' types come from the class's fields,
     /// with generic substitution applied.
-    Class(QualifiedTypeName),
+    Class(QualifiedTypeName, Vec<Ty>),
+    /// Interface destructure. Sub-patterns' types come from the interface's
+    /// field view, with generic substitution applied.
+    Interface(Ty),
 
     /// "Which member of a union" tag, with arity 1. Sub-pattern's type is
     /// the member type carried by the ctor. Specialising on `UnionMember(M)`
@@ -87,11 +90,14 @@ pub enum Ctor {
 
 impl PartialEq for Ctor {
     fn eq(&self, other: &Self) -> bool {
-        use Ctor::{Class, Missing, NonExhaustive, Or, Single, Slice, UnionMember, Wildcard};
+        use Ctor::{
+            Class, Interface, Missing, NonExhaustive, Or, Single, Slice, UnionMember, Wildcard,
+        };
         match (self, other) {
             (Single(a), Single(b)) => ty_ctor_identity(a) == ty_ctor_identity(b),
             (Slice(a), Slice(b)) => a == b,
-            (Class(a), Class(b)) => a == b,
+            (Class(a, _), Class(b, _)) => a == b,
+            (Interface(a), Interface(b)) => ty_ctor_identity(a) == ty_ctor_identity(b),
             (UnionMember(a), UnionMember(b)) => ty_ctor_identity(a) == ty_ctor_identity(b),
             (Or, Or)
             | (Wildcard, Wildcard)
@@ -105,12 +111,17 @@ impl Eq for Ctor {}
 
 impl std::hash::Hash for Ctor {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        use Ctor::{Class, Missing, NonExhaustive, Or, Single, Slice, UnionMember, Wildcard};
+        use Ctor::{
+            Class, Interface, Missing, NonExhaustive, Or, Single, Slice, UnionMember, Wildcard,
+        };
         std::mem::discriminant(self).hash(state);
         match self {
             Single(ty) => ty_ctor_identity(ty).hash(state),
             Slice(s) => s.hash(state),
-            Class(qtn) => qtn.hash(state),
+            Class(qtn, _) => {
+                qtn.hash(state);
+            }
+            Interface(ty) => ty_ctor_identity(ty).hash(state),
             UnionMember(ty) => ty_ctor_identity(ty).hash(state),
             Or | Wildcard | NonExhaustive | Missing => {}
         }
@@ -149,7 +160,10 @@ impl Ctor {
             Ctor::Single(_) | Ctor::Wildcard | Ctor::NonExhaustive | Ctor::Missing | Ctor::Or => 0,
             Ctor::UnionMember(_) => 1,
             Ctor::Slice(shape) => shape.arity(),
-            Ctor::Class(qtn) => cx.class_field_types(qtn, ty).len(),
+            Ctor::Class(qtn, args) => cx
+                .class_field_types(qtn, &class_ty_for_ctor(qtn, args, ty))
+                .len(),
+            Ctor::Interface(iface_ty) => cx.interface_field_types(iface_ty).len(),
         }
     }
 
@@ -159,12 +173,15 @@ impl Ctor {
     /// not handled here — Or rows are handled by matrix-level expansion
     /// before any normal cover check runs.
     pub fn covers(&self, other: &Ctor) -> bool {
-        use Ctor::{Class, Missing, NonExhaustive, Or, Single, Slice, UnionMember, Wildcard};
+        use Ctor::{
+            Class, Interface, Missing, NonExhaustive, Or, Single, Slice, UnionMember, Wildcard,
+        };
         match (self, other) {
             (Wildcard, _) => true,
             (_, Wildcard) => false,
             (Single(a), Single(b)) => ty_ctor_identity(a) == ty_ctor_identity(b),
-            (Class(a), Class(b)) => a == b,
+            (Class(a, _), Class(b, _)) => a == b,
+            (Interface(a), Interface(b)) => ty_ctor_identity(a) == ty_ctor_identity(b),
             (Slice(a), Slice(b)) => slice_covers(a, b),
             (UnionMember(a), UnionMember(b)) => ty_ctor_identity(a) == ty_ctor_identity(b),
             (NonExhaustive, NonExhaustive) => true,
@@ -172,6 +189,13 @@ impl Ctor {
             (Or, Or) => true,
             _ => false,
         }
+    }
+}
+
+fn class_ty_for_ctor(qtn: &QualifiedTypeName, args: &[Ty], fallback: &Ty) -> Ty {
+    match fallback {
+        Ty::Class(fallback_qtn, _, _) if fallback_qtn == qtn => fallback.clone(),
+        _ => Ty::Class(qtn.clone(), args.to_vec(), TyAttr::default()),
     }
 }
 
@@ -236,6 +260,40 @@ fn write_ty_identity(out: &mut String, ty: &Ty) {
                 write_ty_identity(out, a);
             }
             out.push('>');
+        }
+        Ty::Interface(qtn, args, associated_bindings, _) => {
+            let _ = write!(out, "I:{qtn}<");
+            let mut wrote_any = false;
+            for (i, a) in args.iter().enumerate() {
+                if i > 0 {
+                    out.push(',');
+                }
+                write_ty_identity(out, a);
+                wrote_any = true;
+            }
+            for (name, ty) in associated_bindings {
+                if wrote_any {
+                    out.push(',');
+                }
+                let _ = write!(out, "{name}=");
+                write_ty_identity(out, ty);
+                wrote_any = true;
+            }
+            out.push('>');
+        }
+        Ty::AssociatedTypeProjection {
+            base,
+            interface,
+            member,
+            ..
+        } => {
+            out.push_str("Assoc<");
+            write_ty_identity(out, base);
+            if let Some(interface) = interface {
+                out.push_str(" as ");
+                write_ty_identity(out, interface);
+            }
+            let _ = write!(out, ".{member}>");
         }
         Ty::Primitive(p, _) => {
             let _ = write!(out, "P:{p:?}");
@@ -364,7 +422,23 @@ impl DPat {
     }
     pub fn class(qtn: QualifiedTypeName, fields: Vec<DPat>, ty: Ty) -> Self {
         Self {
-            ctor: Ctor::Class(qtn),
+            ctor: Ctor::Class(qtn, Vec::new()),
+            arity: fields.len(),
+            fields,
+            ty,
+        }
+    }
+    pub fn class_inst(qtn: QualifiedTypeName, args: Vec<Ty>, fields: Vec<DPat>, ty: Ty) -> Self {
+        Self {
+            ctor: Ctor::Class(qtn, args),
+            arity: fields.len(),
+            fields,
+            ty,
+        }
+    }
+    pub fn interface(iface_ty: Ty, fields: Vec<DPat>, ty: Ty) -> Self {
+        Self {
+            ctor: Ctor::Interface(iface_ty),
             arity: fields.len(),
             fields,
             ty,
@@ -456,11 +530,26 @@ impl fmt::Display for WitnessPat {
                 _ => write_member_ty_witness(f, member_ty),
             },
             Ctor::Single(ty) => write_single_witness(f, ty),
-            Ctor::Class(qtn) => {
+            Ctor::Class(qtn, _) => {
+                let qtn = qtn.render_user_facing();
                 if self.fields.is_empty() {
                     return write!(f, "{qtn} {{}}");
                 }
                 write!(f, "{qtn} {{ ")?;
+                for (i, fld) in self.fields.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "{fld}")?;
+                }
+                write!(f, " }}")
+            }
+            Ctor::Interface(ty) => {
+                let ty = ty.render_user_facing();
+                if self.fields.is_empty() {
+                    return write!(f, "{ty} {{}}");
+                }
+                write!(f, "{ty} {{ ")?;
                 for (i, fld) in self.fields.iter().enumerate() {
                     if i > 0 {
                         write!(f, ", ")?;
@@ -530,8 +619,12 @@ fn write_single_witness(f: &mut fmt::Formatter<'_>, ty: &Ty) -> fmt::Result {
 fn write_member_ty_witness(f: &mut fmt::Formatter<'_>, ty: &Ty) -> fmt::Result {
     match ty {
         Ty::Primitive(p, _) => write!(f, "{p}"),
-        Ty::Class(qtn, _, _) | Ty::Enum(qtn, _) => write!(f, "{qtn}"),
-        Ty::EnumVariant(qtn, variant, _) => write!(f, "{qtn}.{variant}"),
+        // Interfaces are open-world, so a union-member witness names the
+        // uncovered interface (`Animal`, `Slot<int>`) rather than collapsing to
+        // a bare `_`. Rendered user-facing (no `user.` package prefix).
+        Ty::Interface(_, _, _, _) => write!(f, "{}", ty.render_user_facing()),
+        Ty::Class(qtn, _, _) | Ty::Enum(qtn, _) => write!(f, "{}", qtn.render_user_facing()),
+        Ty::EnumVariant(qtn, variant, _) => write!(f, "{}.{variant}", qtn.render_user_facing()),
         Ty::Literal(_, _, _) => write_single_witness(f, ty),
         _ => write!(f, "_"),
     }
@@ -556,6 +649,33 @@ pub trait PatCtx {
     /// type arguments), return the ordered field types after substitution. The
     /// `Vec` length is the class's field count.
     fn class_field_types(&self, qtn: &QualifiedTypeName, ty: &Ty) -> Vec<Ty>;
+
+    /// For an interface ctor, return the ordered field-view types after
+    /// substitution. Test contexts that do not model interfaces can use the
+    /// empty default.
+    fn interface_field_types(&self, _ty: &Ty) -> Vec<Ty> {
+        Vec::new()
+    }
+
+    /// When an interface pattern row is specialized through an implementing
+    /// class ctor, map each interface field slot to the class field slot that
+    /// supplies it. Test contexts that do not model interfaces can decline.
+    fn interface_field_projection_for_class(
+        &self,
+        _iface_ty: &Ty,
+        _class_qtn: &QualifiedTypeName,
+        _class_type_args: &[Ty],
+    ) -> Option<Vec<usize>> {
+        None
+    }
+
+    /// Whether an interface-pattern ctor covers every value in an interface
+    /// column. A narrower associated-type binding (for example
+    /// `Iterator<Item = int>` against a plain `Iterator`) must not make an
+    /// open interface column exhaustive.
+    fn interface_ctor_covers_column(&self, iface_ty: &Ty, col_ty: &Ty) -> bool {
+        ty_ctor_identity(iface_ty) == ty_ctor_identity(col_ty)
+    }
 
     /// For a slice ctor at column type `ty` (an array/list type), return the
     /// sub-pattern types — which is just the element type repeated `arity`
@@ -672,7 +792,13 @@ impl<'p> Matrix<'p> {
     /// matches rustc's approach — Or-pattern alternatives become independent
     /// rows, but their `useful` flags aggregate at the source-arm level
     /// because they share an `ArmId`.
-    fn specialize<'a>(&self, ctor: &Ctor, sub_tys: &[Ty], wild_pad: &'a [DPat]) -> Matrix<'a>
+    fn specialize<'a>(
+        &self,
+        cx: &dyn PatCtx,
+        ctor: &Ctor,
+        sub_tys: &[Ty],
+        wild_pad: &'a [DPat],
+    ) -> Matrix<'a>
     where
         'p: 'a,
     {
@@ -723,11 +849,20 @@ impl<'p> Matrix<'p> {
                         useful: row.useful,
                     });
                 }
-                _ if !head.ctor.covers(ctor) => {
-                    // Row's pattern doesn't accept any value of shape `ctor`.
-                    // Skip — this row can't contribute to this specialization.
-                }
                 _ => {
+                    let interface_projection = match (&head.ctor, ctor) {
+                        (Ctor::Interface(iface_ty), Ctor::Class(class_qtn, class_args)) => {
+                            cx.interface_field_projection_for_class(iface_ty, class_qtn, class_args)
+                        }
+                        _ => None,
+                    };
+                    if !head.ctor.covers(ctor) && interface_projection.is_none() {
+                        // Row's pattern doesn't accept any value of shape
+                        // `ctor`. Skip — this row can't contribute to this
+                        // specialization.
+                        continue;
+                    }
+
                     // Project the row's fields into the `arity` slots.
                     // Default to wildcards; then place the head's actual
                     // fields at their correct positions.
@@ -742,31 +877,42 @@ impl<'p> Matrix<'p> {
                     // cover `[true, false]`.
                     let mut pats: Vec<&DPat> = (0..arity).map(|i| &wild_pad[i]).collect();
                     let head_arity = head.fields.len();
-                    match &head.ctor {
-                        Ctor::Slice(SliceShape::Variable { prefix, suffix })
-                            if head_arity != arity =>
-                        {
-                            for (i, fld) in head.fields.iter().enumerate() {
-                                let new_idx = if i < *prefix {
-                                    i
-                                } else {
-                                    // Suffix slot j (counted from end of
-                                    // head's suffix): j = i - prefix from
-                                    // start; rightmost position is
-                                    // arity - suffix + j.
-                                    debug_assert!(i >= *prefix && i < prefix + suffix);
-                                    i + arity - head_arity
-                                };
-                                pats[new_idx] = fld;
-                            }
-                        }
-                        _ => {
-                            for (i, fld) in head.fields.iter().enumerate() {
-                                if i < arity {
-                                    pats[i] = fld;
+                    match interface_projection {
+                        Some(projection) => {
+                            for (interface_idx, class_idx) in projection.into_iter().enumerate() {
+                                if let Some(fld) = head.fields.get(interface_idx)
+                                    && class_idx < arity
+                                {
+                                    pats[class_idx] = fld;
                                 }
                             }
                         }
+                        None => match &head.ctor {
+                            Ctor::Slice(SliceShape::Variable { prefix, suffix })
+                                if head_arity != arity =>
+                            {
+                                for (i, fld) in head.fields.iter().enumerate() {
+                                    let new_idx = if i < *prefix {
+                                        i
+                                    } else {
+                                        // Suffix slot j (counted from end of
+                                        // head's suffix): j = i - prefix from
+                                        // start; rightmost position is
+                                        // arity - suffix + j.
+                                        debug_assert!(i >= *prefix && i < prefix + suffix);
+                                        i + arity - head_arity
+                                    };
+                                    pats[new_idx] = fld;
+                                }
+                            }
+                            _ => {
+                                for (i, fld) in head.fields.iter().enumerate() {
+                                    if i < arity {
+                                        pats[i] = fld;
+                                    }
+                                }
+                            }
+                        },
                     }
                     pats.extend_from_slice(tail);
                     new_rows.push(Row {
@@ -964,7 +1110,7 @@ fn compute_exhaustiveness(cx: &dyn PatCtx, matrix: &mut Matrix<'_>, witnesses: &
         let sub_tys = ctor_sub_tys(cx, ctor, &col_ty);
         let wild_pad: Vec<DPat> = sub_tys.iter().cloned().map(DPat::wildcard).collect();
 
-        let mut sub_matrix = matrix.specialize(ctor, &sub_tys, &wild_pad);
+        let mut sub_matrix = matrix.specialize(cx, ctor, &sub_tys, &wild_pad);
         let mut sub_witnesses = WitnessMatrix::empty();
         compute_exhaustiveness(cx, &mut sub_matrix, &mut sub_witnesses);
 
@@ -1072,6 +1218,13 @@ fn split_ctors(cx: &dyn PatCtx, col_ty: &Ty, matrix: &Matrix<'_>) -> (Vec<Ctor>,
     let all = cx.enumerate_ctors(col_ty);
 
     if all.iter().any(|c| matches!(c, Ctor::NonExhaustive)) {
+        if matches!(col_ty, Ty::Interface(..))
+            && present_no_wild.iter().any(|c| {
+                matches!(c, Ctor::Interface(iface_ty) if cx.interface_ctor_covers_column(iface_ty, col_ty))
+            })
+        {
+            return (present_no_wild, vec![]);
+        }
         // Infinite alphabet (raw int/string/float, generics, opaque types).
         let mut split: Vec<Ctor> = present_no_wild;
         let missing = vec![Ctor::NonExhaustive];
@@ -1232,7 +1385,8 @@ fn dedup_ctors(ctors: Vec<Ctor>) -> Vec<Ctor> {
 
 fn ctor_sub_tys(cx: &dyn PatCtx, ctor: &Ctor, col_ty: &Ty) -> Vec<Ty> {
     match ctor {
-        Ctor::Class(qtn) => cx.class_field_types(qtn, col_ty),
+        Ctor::Class(qtn, args) => cx.class_field_types(qtn, &class_ty_for_ctor(qtn, args, col_ty)),
+        Ctor::Interface(iface_ty) => cx.interface_field_types(iface_ty),
         Ctor::Slice(shape) => cx.slice_field_types(shape, col_ty),
         // UnionMember projects a column from the union type down to the
         // member type. Specialise recurses with that single sub-column.
@@ -1645,7 +1799,7 @@ mod tests {
                 Ty::Literal(_, _, _) | Ty::EnumVariant(_, _, _) => {
                     vec![Ctor::Single(ty.clone())]
                 }
-                Ty::Class(qtn, _, _) => vec![Ctor::Class(qtn.clone())],
+                Ty::Class(qtn, args, _) => vec![Ctor::Class(qtn.clone(), args.clone())],
                 // For slices, split_ctors handles enumeration via slice splitting;
                 // returning NonExhaustive here is OK because the slice path is taken
                 // before this is consulted.
@@ -1810,14 +1964,14 @@ mod tests {
             "all Optional<bool> pairs except false/false should be missing"
         );
         for expected in [
-            "user.OptionalPair { true, true }",
-            "user.OptionalPair { true, false }",
-            "user.OptionalPair { true, null }",
-            "user.OptionalPair { false, true }",
-            "user.OptionalPair { false, null }",
-            "user.OptionalPair { null, true }",
-            "user.OptionalPair { null, false }",
-            "user.OptionalPair { null, null }",
+            "OptionalPair { true, true }",
+            "OptionalPair { true, false }",
+            "OptionalPair { true, null }",
+            "OptionalPair { false, true }",
+            "OptionalPair { false, null }",
+            "OptionalPair { null, true }",
+            "OptionalPair { null, false }",
+            "OptionalPair { null, null }",
         ] {
             assert!(
                 witnesses.iter().any(|w| w == expected),
@@ -1836,10 +1990,7 @@ mod tests {
             2,
             "all pairs with a non-false right side should be missing"
         );
-        for expected in [
-            "user.OptionalPair { _, true }",
-            "user.OptionalPair { _, null }",
-        ] {
+        for expected in ["OptionalPair { _, true }", "OptionalPair { _, null }"] {
             assert!(
                 witnesses.iter().any(|w| w == expected),
                 "expected {expected} in witnesses, got {witnesses:?}"
@@ -3901,7 +4052,7 @@ mod tests {
                 Ty::Literal(_, _, _) | Ty::EnumVariant(_, _, _) => {
                     vec![Ctor::Single(ty.clone())]
                 }
-                Ty::Class(qtn, _, _) => vec![Ctor::Class(qtn.clone())],
+                Ty::Class(qtn, args, _) => vec![Ctor::Class(qtn.clone(), args.clone())],
                 Ty::List(_, _) | Ty::EvolvingList(_, _) => vec![],
                 Ty::Never { .. } => vec![],
                 Ty::TypeVar(_, _) => vec![Ctor::NonExhaustive],
@@ -4304,7 +4455,7 @@ mod tests {
                             Default::default(),
                         )),
                     ],
-                    Ty::Class(_, _, _) => vec![Ctor::Class(self.0.clone())],
+                    Ty::Class(_, args, _) => vec![Ctor::Class(self.0.clone(), args.clone())],
                     Ty::Literal(_, _, _) => vec![Ctor::Single(ty.clone())],
                     _ => vec![Ctor::NonExhaustive],
                 }

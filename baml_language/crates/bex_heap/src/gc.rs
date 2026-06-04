@@ -396,12 +396,15 @@ impl BexHeap {
             // `HostClosure` carries only an `Arc<HostValueArc>` (Rust-side
             // stub, not a heap object) and a `Box<Ty>` (no `HeapPtr`s).
             Object::HostClosure(_) => {}
+            // `GenericFunction` references its base function by `GlobalIndex`
+            // (not a `HeapPtr`) and holds only inline `Ty`s — nothing to trace.
             Object::String(_)
             | Object::Bigint(_)
             | Object::Uint8Array(_)
             | Object::Class(_)
             | Object::Enum(_)
             | Object::Function(_)
+            | Object::GenericFunction(_)
             | Object::RustData(_)
             | Object::Collector(_)
             | Object::Float(_)
@@ -547,6 +550,7 @@ impl BexHeap {
             | Object::Class(_)
             | Object::Enum(_)
             | Object::Function(_)
+            | Object::GenericFunction(_)
             | Object::RustData(_)
             | Object::Collector(_)
             | Object::Float(_)
@@ -812,6 +816,7 @@ impl BexHeap {
             | Object::Class(_)
             | Object::Enum(_)
             | Object::Function(_)
+            | Object::GenericFunction(_)
             | Object::RustData(_)
             | Object::Collector(_)
             | Object::Float(_)
@@ -1829,8 +1834,8 @@ mod tests {
         let captured = tlab.alloc_string("captured_value".to_string());
         let closure_ptr = tlab.alloc(Object::Closure(Closure {
             function: func_ptr,
-            captures: vec![Value::object(captured), Value::int(7)],
-            captured_type_args: vec![],
+            captures: Box::new([Value::object(captured), Value::int(7)]),
+            captured_type_args: Box::new([]),
         }));
 
         let roots = vec![closure_ptr];
@@ -2408,8 +2413,8 @@ mod tests {
         // --- Container: Object::Closure ---
         let closure_container = tlab.alloc(Object::Closure(Closure {
             function: leaf_func,
-            captures: vec![Value::object(leaf_for_closure_cap), Value::int(7)],
-            captured_type_args: vec![],
+            captures: Box::new([Value::object(leaf_for_closure_cap), Value::int(7)]),
+            captured_type_args: Box::new([]),
         }));
 
         // --- Container: Object::Cell ---

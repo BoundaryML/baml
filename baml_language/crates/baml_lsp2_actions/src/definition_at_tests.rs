@@ -398,4 +398,34 @@ function Foo(s: Success) -> string {
             "Should navigate to method 'Celebrate', got: {desc}"
         );
     }
+
+    #[test]
+    fn test_goto_def_keyword_named_method() {
+        let mut builder = CursorTest::builder();
+        builder.source(
+            "main.baml",
+            r#"
+class TypeValue {
+  function implements(self) -> string {
+    "ok"
+  }
+}
+
+function Foo(t: TypeValue) -> string {
+  t.<[CURSOR]implements()
+}
+"#,
+        );
+        let test = builder.build();
+
+        let loc = test.goto_definition();
+        let desc = loc
+            .as_ref()
+            .map(|l| test.format_location_with_name(l))
+            .unwrap_or_else(|| "No definition found".into());
+        assert!(
+            desc.contains("-> implements"),
+            "Should navigate to keyword-named method 'implements', got: {desc}"
+        );
+    }
 }

@@ -4,7 +4,7 @@ use baml_base::{Name, SourceFile};
 use text_size::TextRange;
 
 use crate::loc::{
-    ClassLoc, ClientLoc, EnumLoc, FunctionLoc, GeneratorLoc, LetLoc, RetryPolicyLoc,
+    ClassLoc, ClientLoc, EnumLoc, FunctionLoc, GeneratorLoc, InterfaceLoc, LetLoc, RetryPolicyLoc,
     TemplateStringLoc, TestLoc, TypeAliasLoc,
 };
 
@@ -20,6 +20,7 @@ pub enum DefinitionKind {
     // Namespace-level items
     Class,
     Enum,
+    Interface,
     TypeAlias,
     Function,
     TemplateString,
@@ -31,6 +32,7 @@ pub enum DefinitionKind {
 
     // Intra-item members
     Field,
+    AssociatedType,
     Method,
     Variant,
     Binding,
@@ -42,6 +44,7 @@ impl DefinitionKind {
         match self {
             Self::Class => "class",
             Self::Enum => "enum",
+            Self::Interface => "interface",
             Self::TypeAlias => "type",
             Self::Function => "function",
             Self::TemplateString => "template_string",
@@ -51,6 +54,7 @@ impl DefinitionKind {
             Self::RetryPolicy => "retry_policy",
             Self::Let => "let",
             Self::Field => "field",
+            Self::AssociatedType => "associated type",
             Self::Method => "method",
             Self::Variant => "variant",
             Self::Binding => "binding",
@@ -61,7 +65,10 @@ impl DefinitionKind {
     /// Whether this kind uses dot-qualified names (e.g. `Foo.bar`).
     /// Members of a type use dot notation; locals use "in" phrasing.
     pub fn is_member(self) -> bool {
-        matches!(self, Self::Field | Self::Method | Self::Variant)
+        matches!(
+            self,
+            Self::Field | Self::AssociatedType | Self::Method | Self::Variant
+        )
     }
 }
 
@@ -78,6 +85,7 @@ impl std::fmt::Display for DefinitionKind {
 pub enum Definition<'db> {
     Class(ClassLoc<'db>),
     Enum(EnumLoc<'db>),
+    Interface(InterfaceLoc<'db>),
     TypeAlias(TypeAliasLoc<'db>),
     Function(FunctionLoc<'db>),
     TemplateString(TemplateStringLoc<'db>),
@@ -94,6 +102,7 @@ impl<'db> Definition<'db> {
         match self {
             Definition::Class(loc) => loc.file(db),
             Definition::Enum(loc) => loc.file(db),
+            Definition::Interface(loc) => loc.file(db),
             Definition::TypeAlias(loc) => loc.file(db),
             Definition::Function(loc) => loc.file(db),
             Definition::TemplateString(loc) => loc.file(db),
@@ -110,6 +119,7 @@ impl<'db> Definition<'db> {
         match self {
             Definition::Class(_) => DefinitionKind::Class,
             Definition::Enum(_) => DefinitionKind::Enum,
+            Definition::Interface(_) => DefinitionKind::Interface,
             Definition::TypeAlias(_) => DefinitionKind::TypeAlias,
             Definition::Function(_) => DefinitionKind::Function,
             Definition::TemplateString(_) => DefinitionKind::TemplateString,

@@ -1,0 +1,31 @@
+[package]
+name = "baml_release"
+version = { workspace = true }
+publish = false
+authors = { workspace = true }
+edition = { workspace = true }
+rust-version = { workspace = true }
+homepage = { workspace = true }
+documentation = { workspace = true }
+repository = { workspace = true }
+license = { workspace = true }
+
+[lib]
+doctest = false
+
+[lints]
+workspace = true
+
+[dependencies]
+anyhow = { workspace = true }
+flate2 = { workspace = true }
+reqwest = { workspace = true, features = [ "blocking", "rustls" ] }
+serde = { workspace = true, features = [ "derive" ] }
+serde_json = { workspace = true }
+sha2 = { workspace = true }
+tar = { workspace = true }
+thiserror = { workspace = true }
+zip = { workspace = true }
+
+[package.metadata.ci]
+wasm_support = false

@@ -264,12 +264,12 @@ function json_auto_derive.BAliasFrom.from_json(j: baml.json.json) -> json_auto_d
     return
 }
 
-function json_auto_derive.BAliasTo.to_json(self: null) -> baml.json.json {
+function json_auto_derive.BAliasTo.to_json(self: json_auto_derive.BAliasTo) -> baml.json.json {
     load_const 42
     return
 }
 
-function json_auto_derive.BArr.to_json(self: null) -> baml.json.json {
+function json_auto_derive.BArr.to_json(self: json_auto_derive.BArr) -> baml.json.json {
     load_const 99
     return
 }
@@ -286,7 +286,7 @@ function json_auto_derive.BOnlyFrom.from_json(j: baml.json.json) -> json_auto_de
     return
 }
 
-function json_auto_derive.BOnlyTo.to_json(self: null) -> baml.json.json {
+function json_auto_derive.BOnlyTo.to_json(self: json_auto_derive.BOnlyTo) -> baml.json.json {
     load_const "[redacted]"
     return
 }
@@ -303,17 +303,17 @@ function json_auto_derive.BOverride.from_json(j: baml.json.json) -> json_auto_de
     return
 }
 
-function json_auto_derive.BSecret.to_json(self: null) -> baml.json.json {
+function json_auto_derive.BSecret.to_json(self: json_auto_derive.BSecret) -> baml.json.json {
     load_const "[secret]"
     return
 }
 
-function json_auto_derive.BStr.to_json(self: null) -> baml.json.json {
+function json_auto_derive.BStr.to_json(self: json_auto_derive.BStr) -> baml.json.json {
     load_const "B"
     return
 }
 
-function json_auto_derive.BZero.to_json(self: null) -> baml.json.json {
+function json_auto_derive.BZero.to_json(self: json_auto_derive.BZero) -> baml.json.json {
     load_const 0
     return
 }
@@ -324,7 +324,7 @@ function json_auto_derive.BZeroFrom.from_json(j: baml.json.json) -> json_auto_de
     return
 }
 
-function json_auto_derive.G.f(self: null) -> baml.json.json[] {
+function json_auto_derive.G.f(self: json_auto_derive.G) -> baml.json.json[] {
     load_var self
     load_field .items
     load_type #0
@@ -333,7 +333,7 @@ function json_auto_derive.G.f(self: null) -> baml.json.json[] {
     return
 }
 
-function json_auto_derive.Secret.to_json(self: null) -> baml.json.json {
+function json_auto_derive.Secret.to_json(self: json_auto_derive.Secret) -> baml.json.json {
     load_const "[redacted]"
     return
 }
@@ -344,17 +344,17 @@ function json_auto_derive.SecretBoth.from_json(j: baml.json.json) -> json_auto_d
     return
 }
 
-function json_auto_derive.SecretBoth.to_json(self: null) -> baml.json.json {
+function json_auto_derive.SecretBoth.to_json(self: json_auto_derive.SecretBoth) -> baml.json.json {
     load_const "[redacted]"
     return
 }
 
-function json_auto_derive.SecretRedact.to_json(self: null) -> baml.json.json {
+function json_auto_derive.SecretRedact.to_json(self: json_auto_derive.SecretRedact) -> baml.json.json {
     load_const "[redacted]"
     return
 }
 
-function json_auto_derive.SecretRedact2.to_json(self: null) -> baml.json.json {
+function json_auto_derive.SecretRedact2.to_json(self: json_auto_derive.SecretRedact2) -> baml.json.json {
     load_const "[redacted]"
     return
 }
@@ -867,8 +867,7 @@ function json_auto_derive.optional_primitive_field_from_json_sum() -> int {
     store_var v2
 
   L5:
-    load_var v1
-    load_var v2
+    load_var2 5 7
     add_int
     return
 }

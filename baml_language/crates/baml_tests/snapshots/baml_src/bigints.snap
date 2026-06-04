@@ -678,9 +678,8 @@ function bigints.$init_test_ns_bigints_bigints(registry: testing.TestCollector) 
     return
 }
 
-function bigints.BigintBox.set(self: null, x: void) -> void {
-    load_var self
-    load_var x
+function bigints.BigintBox.set(self: bigints.BigintBox, x: void) -> void {
+    load_var2 1 2
     store_field .v
     load_var x
     return
@@ -698,10 +697,12 @@ function bigints.bigint_box_caller() -> bigint {
 
 function bigints.bigint_compound_assign_add_fn() -> bigint {
     load_const 0n
-    store_var_load_var x
+    store_var x
+    load_var x
     load_const 1
     add_bigint
-    store_var_load_var x
+    store_var x
+    load_var x
     return
 }
 
@@ -719,20 +720,24 @@ function bigints.bigint_compound_assign_lambda_fn() -> bigint {
 
 function bigints.bigint_compound_assign_mul_fn() -> bigint {
     load_const 5n
-    store_var_load_var x
+    store_var x
+    load_var x
     load_const 2
     mul_bigint
-    store_var_load_var x
+    store_var x
+    load_var x
     return
 }
 
 function bigints.bigint_compound_assign_nonliteral_fn() -> bigint {
     load_const 100n
-    store_var_load_var x
+    store_var x
+    load_var x
     load_const 7
     unary_op -
     add_bigint
-    store_var_load_var x
+    store_var x
+    load_var x
     load_const 2
     load_const 3
     add_int
@@ -740,13 +745,14 @@ function bigints.bigint_compound_assign_nonliteral_fn() -> bigint {
     store_var x
     call user.bigints.bigint_nonliteral_inc
     store_var _4
-    load_var x
-    load_var _4
+    load_var2 1 2
     add_bigint
-    store_var_load_var x
+    store_var x
+    load_var x
     load_const 1
     sub_bigint
-    store_var_load_var x
+    store_var x
+    load_var x
     return
 }
 
@@ -821,8 +827,7 @@ function bigints.bigint_mul_preflight_fn() -> bigint {
     load_const 200000000n
     call baml.Bigint.pow
     store_var b
-    load_var a
-    load_var b
+    load_var2 1 2
     mul_bigint
     return
 }

@@ -61,8 +61,7 @@ use crate::EngineError;
 /// `collect_roots` / `forward_roots` on the inner. It is **never activated**
 /// by the manager itself — every method requires a [`PermitProof`] from
 /// the caller's own active permit, witnessing that GC is gated externally.
-/// The wrapping [`tokio::sync::Mutex`] provides the single-writer invariant
-/// that previous releases derived from `SharedHeapPermit`.
+/// The wrapping [`tokio::sync::Mutex`] provides the single-writer invariant.
 pub struct FutureManager {
     permit: Mutex<InactiveHeapPermit<FutureManagerInner>>,
 }

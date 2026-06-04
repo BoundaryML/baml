@@ -13,7 +13,7 @@ function user.Resume.from_json(j: baml.json.json) -> Resume {
     return
 }
 
-function user.Resume.to_json(self: null) -> baml.json.json {
+function user.Resume.to_json(self: Resume) -> baml.json.json {
     load_var self
     load_field .name
     call baml.String.to_json
@@ -22,8 +22,11 @@ function user.Resume.to_json(self: null) -> baml.json.json {
     return
 }
 
-function user.TypeBuilderFn(from_text: string) -> Resume {
-    load_type Resume
+function user.TypeBuilderFn(from_text: string, client: baml.llm.Client) -> Resume {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
     load_const "openai/gpt-4o-mini"
     load_const baml.llm.ClientType.Primitive
     alloc_variant baml.llm.ClientType
@@ -31,6 +34,11 @@ function user.TypeBuilderFn(from_text: string) -> Resume {
     load_const null
     load_const 0
     init_instance baml.llm.Client .name, .client_type, .sub_clients, .retry, .counter
+    store_var client
+
+  L0:
+    load_type Resume
+    load_var client
     load_const "TypeBuilderFn"
     load_var from_text
     load_const "from_text"
@@ -39,7 +47,11 @@ function user.TypeBuilderFn(from_text: string) -> Resume {
     return
 }
 
-function user.TypeBuilderFn$build_request(from_text: string) -> baml.http.Request {
+function user.TypeBuilderFn$build_request(from_text: string, client: baml.llm.Client) -> baml.http.Request {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
     load_const "openai/gpt-4o-mini"
     load_const baml.llm.ClientType.Primitive
     alloc_variant baml.llm.ClientType
@@ -47,6 +59,10 @@ function user.TypeBuilderFn$build_request(from_text: string) -> baml.http.Reques
     load_const null
     load_const 0
     init_instance baml.llm.Client .name, .client_type, .sub_clients, .retry, .counter
+    store_var client
+
+  L0:
+    load_var client
     load_const "TypeBuilderFn"
     load_var from_text
     load_const "from_text"
@@ -55,7 +71,11 @@ function user.TypeBuilderFn$build_request(from_text: string) -> baml.http.Reques
     return
 }
 
-function user.TypeBuilderFn$build_request_stream(from_text: string) -> baml.http.Request {
+function user.TypeBuilderFn$build_request_stream(from_text: string, client: baml.llm.Client) -> baml.http.Request {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
     load_const "openai/gpt-4o-mini"
     load_const baml.llm.ClientType.Primitive
     alloc_variant baml.llm.ClientType
@@ -63,6 +83,10 @@ function user.TypeBuilderFn$build_request_stream(from_text: string) -> baml.http
     load_const null
     load_const 0
     init_instance baml.llm.Client .name, .client_type, .sub_clients, .retry, .counter
+    store_var client
+
+  L0:
+    load_var client
     load_const "TypeBuilderFn"
     load_var from_text
     load_const "from_text"
@@ -71,7 +95,21 @@ function user.TypeBuilderFn$build_request_stream(from_text: string) -> baml.http
     return
 }
 
-function user.TypeBuilderFn$parse(json: string) -> Resume {
+function user.TypeBuilderFn$parse(json: string, client: baml.llm.Client) -> Resume {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const "openai/gpt-4o-mini"
+    load_const baml.llm.ClientType.Primitive
+    alloc_variant baml.llm.ClientType
+    alloc_array 0
+    load_const null
+    load_const 0
+    init_instance baml.llm.Client .name, .client_type, .sub_clients, .retry, .counter
+    store_var client
+
+  L0:
     load_type void
     load_type Resume
     load_const "TypeBuilderFn"
@@ -80,9 +118,11 @@ function user.TypeBuilderFn$parse(json: string) -> Resume {
     return
 }
 
-function user.TypeBuilderFn$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream<null | Resume$stream, Resume> {
-    load_type null | Resume$stream
-    load_type Resume
+function user.TypeBuilderFn$parse_stream(sse: baml.http.SseStream, client: baml.llm.Client) -> baml.llm.Stream<null | Resume$stream, Resume> {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
     load_const "openai/gpt-4o-mini"
     load_const baml.llm.ClientType.Primitive
     alloc_variant baml.llm.ClientType
@@ -90,13 +130,22 @@ function user.TypeBuilderFn$parse_stream(sse: baml.http.SseStream) -> baml.llm.S
     load_const null
     load_const 0
     init_instance baml.llm.Client .name, .client_type, .sub_clients, .retry, .counter
-    load_var sse
+    store_var client
+
+  L0:
+    load_type null | Resume$stream
+    load_type Resume
+    load_var2 2 1
     load_const "TypeBuilderFn"
     call baml.llm.Client.__make_stream
     return
 }
 
-function user.TypeBuilderFn$render_prompt(from_text: string) -> baml.llm.PromptAst {
+function user.TypeBuilderFn$render_prompt(from_text: string, client: baml.llm.Client) -> baml.llm.PromptAst {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
     load_const "openai/gpt-4o-mini"
     load_const baml.llm.ClientType.Primitive
     alloc_variant baml.llm.ClientType
@@ -104,6 +153,10 @@ function user.TypeBuilderFn$render_prompt(from_text: string) -> baml.llm.PromptA
     load_const null
     load_const 0
     init_instance baml.llm.Client .name, .client_type, .sub_clients, .retry, .counter
+    store_var client
+
+  L0:
+    load_var client
     load_const "TypeBuilderFn"
     load_var from_text
     load_const "from_text"
@@ -112,9 +165,11 @@ function user.TypeBuilderFn$render_prompt(from_text: string) -> baml.llm.PromptA
     return
 }
 
-function user.TypeBuilderFn$stream(from_text: string) -> baml.llm.Stream<null | Resume$stream, Resume> {
-    load_type null | Resume$stream
-    load_type Resume
+function user.TypeBuilderFn$stream(from_text: string, client: baml.llm.Client) -> baml.llm.Stream<null | Resume$stream, Resume> {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
     load_const "openai/gpt-4o-mini"
     load_const baml.llm.ClientType.Primitive
     alloc_variant baml.llm.ClientType
@@ -122,6 +177,12 @@ function user.TypeBuilderFn$stream(from_text: string) -> baml.llm.Stream<null | 
     load_const null
     load_const 0
     init_instance baml.llm.Client .name, .client_type, .sub_clients, .retry, .counter
+    store_var client
+
+  L0:
+    load_type null | Resume$stream
+    load_type Resume
+    load_var client
     load_const "TypeBuilderFn"
     load_var from_text
     load_const "from_text"

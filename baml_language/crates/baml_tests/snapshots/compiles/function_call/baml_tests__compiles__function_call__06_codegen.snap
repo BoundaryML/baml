@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 8859
 ---
 function user.Bar() -> int {
     load_const 1
@@ -7,7 +8,7 @@ function user.Bar() -> int {
     return
 }
 
-function user.Baz.Greeting(self: null) -> string {
+function user.Baz.Greeting(self: Baz) -> string {
     load_const "Hello, "
     load_var self
     load_field .name
@@ -29,7 +30,7 @@ function user.Baz.from_json(j: baml.json.json) -> Baz {
     return
 }
 
-function user.Baz.to_json(self: null) -> baml.json.json {
+function user.Baz.to_json(self: Baz) -> baml.json.json {
     load_var self
     load_field .name
     call baml.String.to_json

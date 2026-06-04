@@ -389,7 +389,10 @@ fn collect_place_index_locals(body: &MirFunctionBody) -> HashSet<Local> {
             crate::Rvalue::MakeBoundMethod { receiver, .. } => {
                 scan_operand(receiver, set);
             }
-            crate::Rvalue::LoadType(_) => {
+            crate::Rvalue::MakeGenericFunctionFromValue { value, .. } => {
+                scan_operand(value, set);
+            }
+            crate::Rvalue::LoadType(_) | crate::Rvalue::MakeGenericFunction { .. } => {
                 // LoadType takes no local operands.
             }
         }
@@ -601,8 +604,11 @@ fn count_in_rvalue(rv: &crate::Rvalue, uses: &mut [usize]) {
         crate::Rvalue::MakeBoundMethod { receiver, .. } => {
             count_in_operand(receiver, uses);
         }
-        crate::Rvalue::LoadType(_) => {
-            // LoadType takes no local operands.
+        crate::Rvalue::MakeGenericFunctionFromValue { value, .. } => {
+            count_in_operand(value, uses);
+        }
+        crate::Rvalue::LoadType(_) | crate::Rvalue::MakeGenericFunction { .. } => {
+            // No local operands.
         }
     }
 }
@@ -936,8 +942,11 @@ fn apply_subst_to_rvalue(rv: &mut crate::Rvalue, subst: &HashMap<Local, Operand>
         crate::Rvalue::MakeBoundMethod { receiver, .. } => {
             apply_subst_to_operand(receiver, subst);
         }
-        crate::Rvalue::LoadType(_) => {
-            // LoadType takes no local operands — nothing to substitute.
+        crate::Rvalue::MakeGenericFunctionFromValue { value, .. } => {
+            apply_subst_to_operand(value, subst);
+        }
+        crate::Rvalue::LoadType(_) | crate::Rvalue::MakeGenericFunction { .. } => {
+            // No local operands — nothing to substitute.
         }
     }
 }
@@ -1178,8 +1187,11 @@ fn remap_rvalue(rv: &mut crate::Rvalue, map: &[Option<Local>]) {
         crate::Rvalue::MakeBoundMethod { receiver, .. } => {
             remap_operand(receiver, map);
         }
-        crate::Rvalue::LoadType(_) => {
-            // LoadType takes no local operands — nothing to remap.
+        crate::Rvalue::MakeGenericFunctionFromValue { value, .. } => {
+            remap_operand(value, map);
+        }
+        crate::Rvalue::LoadType(_) | crate::Rvalue::MakeGenericFunction { .. } => {
+            // No local operands — nothing to remap.
         }
     }
 }
@@ -1412,7 +1424,10 @@ fn verify_mir(body: &MirFunctionBody, name: &crate::ItemRef) {
                         crate::Rvalue::MakeBoundMethod { receiver, .. } => {
                             check_operand(receiver, &blk);
                         }
-                        crate::Rvalue::LoadType(_) => {
+                        crate::Rvalue::MakeGenericFunctionFromValue { value, .. } => {
+                            check_operand(value, &blk);
+                        }
+                        crate::Rvalue::LoadType(_) | crate::Rvalue::MakeGenericFunction { .. } => {
                             // LoadType takes no local operands — nothing to check.
                         }
                     }

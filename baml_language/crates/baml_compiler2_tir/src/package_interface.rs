@@ -221,6 +221,21 @@ fn lower_class_method_signature<'db>(
     all_generic_params.extend(sig.user_generic_params.iter().cloned());
     all_generic_params.extend(sig.synthetic_effect_params.iter().cloned());
 
+    // BEP-044: pre-resolve `Self` to the enclosing class name so it
+    // surfaces as `Ty::Class(<enclosing>)` after regular lowering.
+    let self_replacement = crate::lower_type_expr::type_expr_for_name(class_data.name.clone());
+    let lower_with_self = |te: &baml_compiler2_ast::TypeExpr, diags: &mut Vec<TirTypeError>| {
+        let resolved = crate::lower_type_expr::substitute_self_in(te, &self_replacement);
+        lower_type_expr_in_ns(
+            db,
+            &resolved,
+            pkg_items,
+            ns_path,
+            &all_generic_params,
+            diags,
+        )
+    };
+
     let mut params = Vec::new();
     for param in &sig.params {
         let param_ty = if param.name.as_str() == "self"
@@ -228,14 +243,7 @@ fn lower_class_method_signature<'db>(
         {
             build_self_type_for_class(class_data, ns_path)
         } else {
-            lower_type_expr_in_ns(
-                db,
-                &param.ty,
-                pkg_items,
-                ns_path,
-                &all_generic_params,
-                diags,
-            )
+            lower_with_self(&param.ty, diags)
         };
         params.push(exported_function_param(
             param.name.clone(),
@@ -248,13 +256,10 @@ fn lower_class_method_signature<'db>(
         Ty::Unknown {
             attr: TyAttr::default(),
         },
-        |te| lower_type_expr_in_ns(db, te, pkg_items, ns_path, &all_generic_params, diags),
+        |te| lower_with_self(te, diags),
     );
 
-    let declared_throws = sig
-        .throws
-        .as_ref()
-        .map(|te| lower_type_expr_in_ns(db, te, pkg_items, ns_path, &all_generic_params, diags));
+    let declared_throws = sig.throws.as_ref().map(|te| lower_with_self(te, diags));
     let callable_throws = crate::callable::callable_throws(db, method_loc).clone();
 
     let builtin_kind = match body.as_ref() {
@@ -593,7 +598,8 @@ impl<'db> PackageResolutionContext<'db> {
                 return Some(result);
             }
         }
-        // No bare fallback from non-root namespaces — cross-namespace requires explicit qualification
+        // No bare fallback from non-root namespaces: cross-namespace references
+        // in the same package must start with `root`.
 
         // Try package-prefixed path (first segment is package name)
         if path.len() >= 2 {
@@ -864,6 +870,11 @@ fn def_to_ty<'db>(db: &'db dyn crate::Db, def: Definition<'db>) -> Ty {
             let data = &item_tree[loc.id(db)];
             data.name.clone()
         }
+        Definition::Interface(loc) => {
+            let item_tree = baml_compiler2_hir::file_item_tree(db, loc.file(db));
+            let data = &item_tree[loc.id(db)];
+            data.name.clone()
+        }
         Definition::TypeAlias(loc) => {
             let item_tree = baml_compiler2_ppir::file_item_tree(db, loc.file(db));
             let data = &item_tree[loc.id(db)];
@@ -877,6 +888,12 @@ fn def_to_ty<'db>(db: &'db dyn crate::Db, def: Definition<'db>) -> Ty {
     };
     match def {
         Definition::Class(_) => Ty::Class(qualify_def(db, def, &name), vec![], TyAttr::default()),
+        Definition::Interface(_) => Ty::Interface(
+            qualify_def(db, def, &name),
+            vec![],
+            vec![],
+            TyAttr::default(),
+        ),
         Definition::Enum(_) => Ty::Enum(qualify_def(db, def, &name), TyAttr::default()),
         Definition::TypeAlias(_) => Ty::TypeAlias(qualify_def(db, def, &name), TyAttr::default()),
         _ => Ty::Unknown {

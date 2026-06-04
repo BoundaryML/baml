@@ -25,10 +25,8 @@
 
 use std::{
     collections::HashMap,
-    io::{Cursor, Read},
     path::{Path, PathBuf},
     sync::Arc,
-    time::Duration,
 };
 
 use anyhow::{Context, Result, anyhow};
@@ -38,7 +36,6 @@ use baml_project::ProjectDatabase;
 use bex_engine::BexEngine;
 use bex_vm_types::types::Program;
 use clap::Args;
-use sha2::{Digest, Sha256};
 use sys_native::SysOpsExt;
 
 use crate::{
@@ -66,8 +63,9 @@ pub struct PackArgs {
     pub file: Option<PathBuf>,
 
     /// Output path for the packaged executable. Defaults to the
-    /// `[package].name` from `baml.toml`; for a single target with no
-    /// `[package].name`, falls back to the function name.
+    /// `[package].name` from `baml.toml`; for a manifest-less `baml_src/`
+    /// project, falls back to the project directory name; in `--file` mode,
+    /// to the file stem.
     #[arg(short, long)]
     pub output: Option<PathBuf>,
 
@@ -340,25 +338,34 @@ impl PackArgs {
         Ok((baml_exec::PackMode::Subcommand, resolved))
     }
 
-    /// Pick the default output basename. With `[package].name` mandatory
-    /// in `baml.toml` (validated up front by `project_load`), project-mode
-    /// output naming has exactly one source of truth.
+    /// Pick the default output basename.
     ///
     /// - `--file <PATH>` single-file mode: file stem (e.g. `foo.baml` →
     ///   `foo`). `baml.toml` isn't consulted — single-file packs are
     ///   intentionally hermetic.
-    /// - Project mode: `[package].name` from `<from>/baml.toml`. Guaranteed
-    ///   present (manifest validation happened at load time).
+    /// - Project mode: `[package].name` from `<from>/baml.toml` when a
+    ///   manifest is present, else the project directory name for a
+    ///   manifest-less `baml_src/` project (see
+    ///   [`crate::project_load::resolve_project_name`]).
     fn resolve_output_basename(&self) -> Result<String> {
         if let Some(file) = self.file.as_deref() {
-            if let Some(stem) = file.file_stem().and_then(|s| s.to_str()) {
-                return Ok(stem.to_string());
-            }
-            // Pathologically nameless file (e.g. `.baml`); fall through to
-            // the manifest lookup. In `--file` mode that may still fail
-            // (no project to consult); the user can always pass `-o`.
+            // Keep `--file` hermetic: derive the name from the file path
+            // alone, never from `--from`/project markers. A path with no
+            // usable file-name component (no stem, e.g. `..`, or a non-UTF-8
+            // name) can't be named automatically — bail rather than leak the
+            // cwd's project context into a single-file pack.
+            return file
+                .file_stem()
+                .and_then(|s| s.to_str())
+                .map(str::to_string)
+                .ok_or_else(|| {
+                    anyhow::anyhow!(
+                        "cannot derive an output name from `{}`; pass `-o <PATH>` to name the output.",
+                        file.display()
+                    )
+                });
         }
-        crate::project_load::read_package_name(&self.from)
+        crate::project_load::resolve_project_name(&self.from)
     }
 }
 
@@ -509,92 +516,16 @@ fn host_binary_name(target_triple: &str) -> String {
 
 fn download_host_binary_from_release(target: &str, host_name: &str) -> Result<Vec<u8>> {
     let version = release_version_for_download();
-    let url = release_archive_url(&version, target);
-
-    let archive_bytes = download_release_asset(&url)?;
-    verify_release_archive_checksum(&archive_bytes, &url)?;
-
-    extract_host_from_archive(&archive_bytes, &url, host_name)
-}
-
-fn download_release_asset(url: &str) -> Result<Vec<u8>> {
-    let rt = tokio::runtime::Runtime::new()
-        .context("Failed to create tokio runtime for release asset download")?;
-    rt.block_on(async {
-        let client = reqwest::Client::builder()
-            .timeout(Duration::from_secs(120))
-            .build()
-            .context("Failed to build HTTP client for release asset download")?;
-        let response = client
-            .get(url)
-            .send()
-            .await
-            .with_context(|| format!("Failed to download BAML release asset from {url}"))?
-            .error_for_status()
-            .with_context(|| format!("Failed to download BAML release asset from {url}"))?;
-        let bytes = response
-            .bytes()
-            .await
-            .with_context(|| format!("Failed to read BAML release asset from {url}"))?;
-        Ok(bytes.to_vec())
-    })
-}
-
-fn verify_release_archive_checksum(archive_bytes: &[u8], archive_url: &str) -> Result<()> {
-    let checksum_url = release_archive_checksum_url(archive_url);
-    let checksum_text = download_release_asset(&checksum_url)?;
-    let checksum_text = std::str::from_utf8(&checksum_text)
-        .with_context(|| format!("Checksum asset {checksum_url} was not valid UTF-8"))?;
-    verify_release_archive_checksum_text(archive_bytes, archive_url, checksum_text).with_context(
-        || format!("Failed to verify BAML release archive checksum from {checksum_url}"),
-    )
-}
-
-fn verify_release_archive_checksum_text(
-    archive_bytes: &[u8],
-    archive_url: &str,
-    checksum_text: &str,
-) -> Result<()> {
-    let archive_name = archive_url
-        .rsplit('/')
-        .next()
-        .ok_or_else(|| anyhow!("Archive URL did not contain a file name: {archive_url}"))?;
-    let expected = parse_release_checksum(checksum_text, archive_name)?;
-    let actual = format!("{:x}", Sha256::digest(archive_bytes));
-    if actual != expected {
-        anyhow::bail!(
-            "Checksum mismatch for BAML release archive {archive_name}: expected {expected}, got {actual}"
-        );
-    }
-    Ok(())
-}
-
-fn release_archive_checksum_url(archive_url: &str) -> String {
-    format!("{archive_url}.sha256")
-}
-
-fn parse_release_checksum(checksum_text: &str, archive_name: &str) -> Result<String> {
-    for line in checksum_text.lines() {
-        let mut parts = line.split_whitespace();
-        let Some(hash) = parts.next() else {
-            continue;
-        };
-        let Some(name) = parts.next() else {
-            continue;
-        };
-        if name == archive_name {
-            return validate_sha256(hash);
-        }
-    }
-    anyhow::bail!("Checksum file did not contain an entry for {archive_name}")
-}
-
-fn validate_sha256(hash: &str) -> Result<String> {
-    if hash.len() == 64 && hash.chars().all(|c| c.is_ascii_hexdigit()) {
-        Ok(hash.to_ascii_lowercase())
-    } else {
-        anyhow::bail!("Invalid SHA-256 checksum `{hash}`")
-    }
+    let fetcher = baml_release::Fetcher::default_for(
+        baml_release::ReleaseSpec {
+            version,
+            target: target.to_string(),
+        },
+        baml_release::Product::Toolchain,
+    );
+    fetcher
+        .fetch_binary(host_name)
+        .map_err(|err| anyhow!("{err}"))
 }
 
 fn release_version_for_download() -> String {
@@ -604,76 +535,14 @@ fn release_version_for_download() -> String {
         .unwrap_or_else(|| release_version().to_string())
 }
 
-fn release_archive_url(version: &str, target: &str) -> String {
-    if let Ok(base_url) = std::env::var("BAML_PACK_HOST_RELEASE_BASE_URL") {
-        let base = base_url.trim_end_matches('/');
-        return format!("{base}/{}", release_archive_filename(version, target));
-    }
-
-    let repo = std::env::var("BAML_PACK_HOST_RELEASE_REPO")
-        .ok()
-        .filter(|v| !v.trim().is_empty())
-        .unwrap_or_else(|| "BoundaryML/baml".to_string());
-    release_archive_url_for_repo(version, target, &repo)
-}
-
-fn release_archive_url_for_repo(version: &str, target: &str, repo: &str) -> String {
-    format!(
-        "https://github.com/{repo}/releases/download/baml-language-{version}/{}",
-        release_archive_filename(version, target)
-    )
-}
-
-fn release_archive_filename(version: &str, target: &str) -> String {
-    let ext = if target.ends_with("windows-msvc") {
-        "zip"
-    } else {
-        "tar.gz"
-    };
-    format!("baml-language-{version}-{target}.{ext}")
-}
-
 fn release_host_target_triple() -> Result<&'static str> {
-    #[cfg(target_env = "musl")]
-    const IS_MUSL: bool = true;
-    #[cfg(not(target_env = "musl"))]
-    const IS_MUSL: bool = false;
-
-    match (std::env::consts::OS, std::env::consts::ARCH, IS_MUSL) {
-        ("macos", "aarch64", _) => Ok("aarch64-apple-darwin"),
-        ("macos", "x86_64", _) => Ok("x86_64-apple-darwin"),
-        ("linux", "aarch64", true) => Ok("aarch64-unknown-linux-musl"),
-        ("linux", "aarch64", false) => Ok("aarch64-unknown-linux-gnu"),
-        ("linux", "x86_64", true) => Ok("x86_64-unknown-linux-musl"),
-        ("linux", "x86_64", false) => Ok("x86_64-unknown-linux-gnu"),
-        ("windows", "x86_64", _) => Ok("x86_64-pc-windows-msvc"),
-        (os, arch, _) => anyhow::bail!(
-            "No released `baml-pack-host` artifact is available for {arch}-{os}. \
-             Install `baml-pack-host` next to the `baml` binary to use `baml pack` on this platform."
-        ),
-    }
+    baml_release::release_host_target_triple()
 }
 
 fn validate_release_target_triple(target: &str) -> Result<&str> {
-    if SUPPORTED_PACK_TARGETS.contains(&target) {
-        Ok(target)
-    } else {
-        anyhow::bail!(
-            "Unsupported pack target `{target}`. Supported targets: {}",
-            SUPPORTED_PACK_TARGETS.join(", ")
-        )
-    }
+    baml_release::validate_release_target_triple(target)
+        .map_err(|err| anyhow!("Unsupported pack target `{target}`. {err}"))
 }
-
-const SUPPORTED_PACK_TARGETS: &[&str] = &[
-    "aarch64-apple-darwin",
-    "x86_64-apple-darwin",
-    "aarch64-unknown-linux-gnu",
-    "aarch64-unknown-linux-musl",
-    "x86_64-unknown-linux-gnu",
-    "x86_64-unknown-linux-musl",
-    "x86_64-pc-windows-msvc",
-];
 
 /// Heuristic: does this positional `<TARGET>` look like a filesystem
 /// path rather than a function name? Triggers when the user typed
@@ -693,57 +562,6 @@ fn default_output_path(default_basename: &str, target_triple: &str) -> PathBuf {
         path.set_extension("exe");
     }
     path
-}
-
-fn extract_host_from_archive(archive_bytes: &[u8], url: &str, host_name: &str) -> Result<Vec<u8>> {
-    if url.ends_with(".zip") {
-        extract_host_from_zip(archive_bytes, host_name)
-    } else {
-        extract_host_from_tar_gz(archive_bytes, host_name)
-    }
-    .with_context(|| format!("Failed to extract `{host_name}` from release archive {url}"))
-}
-
-fn extract_host_from_tar_gz(archive_bytes: &[u8], host_name: &str) -> Result<Vec<u8>> {
-    let decoder = flate2::read::GzDecoder::new(Cursor::new(archive_bytes));
-    let mut archive = tar::Archive::new(decoder);
-    for entry in archive.entries().context("Failed to read tar entries")? {
-        let mut entry = entry.context("Failed to read tar entry")?;
-        if entry
-            .path()
-            .ok()
-            .and_then(|path| path.file_name().map(|name| name == host_name))
-            .unwrap_or(false)
-        {
-            let mut bytes = Vec::new();
-            entry
-                .read_to_end(&mut bytes)
-                .context("Failed to read host binary from tar archive")?;
-            return Ok(bytes);
-        }
-    }
-    anyhow::bail!("Release archive did not contain `{host_name}`")
-}
-
-fn extract_host_from_zip(archive_bytes: &[u8], host_name: &str) -> Result<Vec<u8>> {
-    let mut archive =
-        zip::ZipArchive::new(Cursor::new(archive_bytes)).context("Failed to read zip archive")?;
-    for i in 0..archive.len() {
-        let mut file = archive
-            .by_index(i)
-            .with_context(|| format!("Failed to read zip entry {i}"))?;
-        if Path::new(file.name())
-            .file_name()
-            .map(|name| name == host_name)
-            .unwrap_or(false)
-        {
-            let mut bytes = Vec::new();
-            file.read_to_end(&mut bytes)
-                .context("Failed to read host binary from zip archive")?;
-            return Ok(bytes);
-        }
-    }
-    anyhow::bail!("Release archive did not contain `{host_name}`")
 }
 
 fn write_executable(
@@ -1217,62 +1035,35 @@ mod tests {
         assert_eq!(args.resolve_output_basename().unwrap(), "hello");
     }
 
-    // ── GitHub release fallback ───────────────────────────────────────
-
+    /// A `--file` path with no usable file-name component (here `..`, which
+    /// has no `file_stem`) must error rather than fall back to the project
+    /// name — `--file` stays hermetic. Even with a valid `baml.toml` in
+    /// `--from`, the result is an error, not the package name.
     #[test]
-    fn test_release_archive_filename_uses_platform_extension() {
-        assert_eq!(
-            release_archive_filename("1.2.3-alpha.4", "x86_64-unknown-linux-gnu"),
-            "baml-language-1.2.3-alpha.4-x86_64-unknown-linux-gnu.tar.gz"
-        );
-        assert_eq!(
-            release_archive_filename("1.2.3-alpha.4", "x86_64-pc-windows-msvc"),
-            "baml-language-1.2.3-alpha.4-x86_64-pc-windows-msvc.zip"
-        );
-    }
+    fn test_pack_file_mode_nameless_errors_instead_of_consulting_project() {
+        let tmp = tempfile::tempdir().unwrap();
+        std::fs::write(
+            tmp.path().join("baml.toml"),
+            "[package]\nname = \"should-not-be-used\"\n",
+        )
+        .unwrap();
 
-    #[test]
-    fn test_release_archive_url_defaults_to_github_release_asset() {
-        let url = release_archive_url_for_repo(
-            "1.2.3-alpha.4",
-            "x86_64-unknown-linux-gnu",
-            "BoundaryML/baml",
+        let mut args = pack_args();
+        args.from = tmp.path().to_path_buf();
+        args.file = Some(PathBuf::from("..")); // no file_stem
+
+        let err = args.resolve_output_basename().unwrap_err();
+        let msg = format!("{err}");
+        assert!(msg.contains("-o"), "expected a `-o` hint, got: {msg}");
+        assert!(
+            !msg.contains("should-not-be-used"),
+            "must not consult the project manifest in --file mode, got: {msg}"
         );
-        assert_eq!(
-            url,
-            "https://github.com/BoundaryML/baml/releases/download/baml-language-1.2.3-alpha.4/baml-language-1.2.3-alpha.4-x86_64-unknown-linux-gnu.tar.gz"
-        );
-    }
-
-    #[test]
-    fn test_release_archive_checksum_url_matches_uploaded_asset() {
-        assert_eq!(
-            release_archive_checksum_url(
-                "https://github.com/BoundaryML/baml/releases/download/baml-language-1.2.3-alpha.4/baml-language-1.2.3-alpha.4-x86_64-unknown-linux-gnu.tar.gz"
-            ),
-            "https://github.com/BoundaryML/baml/releases/download/baml-language-1.2.3-alpha.4/baml-language-1.2.3-alpha.4-x86_64-unknown-linux-gnu.tar.gz.sha256"
-        );
-    }
-
-    #[test]
-    fn test_verify_release_archive_checksum_text() {
-        let archive_name = "baml-language-1.2.3-alpha.4-x86_64-unknown-linux-gnu.tar.gz";
-        let archive_url = format!("https://example.com/releases/{archive_name}");
-        let archive_bytes = b"fake archive bytes";
-        let digest = format!("{:x}", Sha256::digest(archive_bytes));
-        let checksum_text = format!("{digest}  {archive_name}\n");
-
-        verify_release_archive_checksum_text(archive_bytes, &archive_url, &checksum_text).unwrap();
-
-        let err =
-            verify_release_archive_checksum_text(b"different bytes", &archive_url, &checksum_text)
-                .unwrap_err();
-        assert!(format!("{err}").contains("Checksum mismatch"));
     }
 
     #[test]
     fn test_validate_release_target_triple_accepts_supported_targets() {
-        for target in SUPPORTED_PACK_TARGETS {
+        for target in baml_release::SUPPORTED_RELEASE_TARGETS {
             assert_eq!(validate_release_target_triple(target).unwrap(), *target);
         }
     }
@@ -1310,49 +1101,6 @@ mod tests {
         assert_eq!(
             default_output_path("main", "x86_64-unknown-linux-gnu"),
             PathBuf::from("main")
-        );
-    }
-
-    #[test]
-    fn test_extract_host_from_tar_gz() {
-        let mut gzip = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::default());
-        {
-            let mut builder = tar::Builder::new(&mut gzip);
-            let bytes = b"fake host";
-            let mut header = tar::Header::new_gnu();
-            header.set_size(bytes.len() as u64);
-            header.set_mode(0o755);
-            header.set_cksum();
-            builder
-                .append_data(&mut header, "nested/baml-pack-host", &bytes[..])
-                .unwrap();
-            builder.finish().unwrap();
-        }
-        let archive = gzip.finish().unwrap();
-        assert_eq!(
-            extract_host_from_tar_gz(&archive, "baml-pack-host").unwrap(),
-            b"fake host"
-        );
-    }
-
-    #[test]
-    fn test_extract_host_from_zip() {
-        use std::io::Write;
-
-        let mut archive = Cursor::new(Vec::new());
-        {
-            let mut zip = zip::ZipWriter::new(&mut archive);
-            zip.start_file(
-                "nested/baml-pack-host.exe",
-                zip::write::SimpleFileOptions::default(),
-            )
-            .unwrap();
-            zip.write_all(b"fake windows host").unwrap();
-            zip.finish().unwrap();
-        }
-        assert_eq!(
-            extract_host_from_zip(&archive.into_inner(), "baml-pack-host.exe").unwrap(),
-            b"fake windows host"
         );
     }
 

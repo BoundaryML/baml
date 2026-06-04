@@ -6,7 +6,7 @@ use rowan::TextRange;
 use crate::{
     ast::{
         BinaryOp, FromCST, KnownKind, MatchPattern, Statement, StrongAstError, SyntaxNodeIter,
-        Token, UnaryOp, tokens as t,
+        Token, Type, UnaryOp, tokens as t,
     },
     printer::{PrintInfo, PrintMultiLine, Printable, Printer, Shape},
     trivia_classifier::TriviaSliceExt,
@@ -17,6 +17,12 @@ pub enum Expression {
     Literal(Literal),
     /// Includes things like `null`, `true`, `false`, `baml.fs`, etc.
     Path(PathExpr),
+    /// A generic instantiation whose base is NOT a plain path — e.g.
+    /// `(<T>(x: T) -> T { x })<int>` or `(foo)<int>`. The path-based form
+    /// (`foo<int>`, `a.b.foo<int>`) is carried by [`PathExpr::generic_args`];
+    /// the parser wraps both in a `PATH_EXPR` node, so this is selected when
+    /// that node's first child is not a word/path.
+    GenericApply(GenericApplyExpr),
     Paren(ParenExpr),
     Binary(BinaryExpr),
     Is(IsExpr),
@@ -67,8 +73,21 @@ impl FromCST for Expression {
             SyntaxKind::FLOAT_LITERAL => Expression::Literal(Literal::Float(
                 t::FloatLiteral::new_from_span(elem.text_range()),
             )),
-            SyntaxKind::PATH_EXPR | SyntaxKind::WORD => {
-                PathExpr::from_cst(elem).map(Expression::Path)?
+            SyntaxKind::WORD => PathExpr::from_cst(elem).map(Expression::Path)?,
+            SyntaxKind::PATH_EXPR => {
+                // The parser wraps any postfix `<...>` in a PATH_EXPR. When the
+                // base is a plain path (word / nested PATH_EXPR) it is a
+                // `PathExpr`; otherwise (a parenthesized expr, lambda, etc.) it
+                // is a generic instantiation on a non-path base.
+                let node = StrongAstError::assert_is_node(elem.clone())?;
+                let base_is_path = SyntaxNodeIter::new(&node)
+                    .next()
+                    .is_some_and(|c| matches!(c.kind(), SyntaxKind::WORD | SyntaxKind::PATH_EXPR));
+                if base_is_path {
+                    PathExpr::from_cst(elem).map(Expression::Path)?
+                } else {
+                    GenericApplyExpr::from_cst(elem).map(Expression::GenericApply)?
+                }
             }
             SyntaxKind::PAREN_EXPR => ParenExpr::from_cst(elem).map(Expression::Paren)?,
             SyntaxKind::BINARY_EXPR => BinaryExpr::from_cst(elem).map(Expression::Binary)?,
@@ -124,6 +143,7 @@ impl Expression {
         match self {
             Expression::Literal(lit) => lit.single_line_width(input),
             Expression::Path(path) => path.single_line_width(input),
+            Expression::GenericApply(ga) => ga.single_line_width(input),
             Expression::Paren(paren) => paren.single_line_width(input),
             Expression::Binary(binary) => binary.single_line_width(input),
             Expression::Is(is) => is.single_line_width(input),
@@ -171,6 +191,7 @@ impl Printable for Expression {
                 let chain = PrintChain::new(chain);
                 chain.print(shape, printer)
             }
+            Expression::GenericApply(ga) => ga.print(shape, printer),
             Expression::Paren(paren) => paren.print(shape, printer),
             Expression::Binary(binary) => binary.print(shape, printer),
             Expression::Is(is) => is.print(shape, printer),
@@ -196,6 +217,7 @@ impl Printable for Expression {
         match self {
             Expression::Literal(lit) => lit.leftmost_token(),
             Expression::Path(path) => path.leftmost_token(),
+            Expression::GenericApply(ga) => ga.leftmost_token(),
             Expression::Paren(paren) => paren.leftmost_token(),
             Expression::Binary(binary) => binary.leftmost_token(),
             Expression::Is(is) => is.leftmost_token(),
@@ -224,6 +246,7 @@ impl Printable for Expression {
         match self {
             Expression::Literal(lit) => lit.rightmost_token(),
             Expression::Path(path) => path.rightmost_token(),
+            Expression::GenericApply(ga) => ga.rightmost_token(),
             Expression::Paren(paren) => paren.rightmost_token(),
             Expression::Binary(binary) => binary.rightmost_token(),
             Expression::Is(is) => is.rightmost_token(),
@@ -462,6 +485,60 @@ impl Printable for PathExpr {
             .last()
             .map_or(&self.first, |(_, word)| word)
             .span()
+    }
+}
+
+/// A generic instantiation whose base is not a plain path, e.g.
+/// `(<T>(x: T) -> T { x })<int>` or `(foo)<int>`. Corresponds to a
+/// [`SyntaxKind::PATH_EXPR`] node whose first child is an arbitrary expression
+/// followed by `GENERIC_ARGS`.
+#[derive(Debug)]
+pub struct GenericApplyExpr {
+    pub base: Box<Expression>,
+    pub generic_args: GenericArgs,
+}
+
+impl FromCST for GenericApplyExpr {
+    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
+        let node = StrongAstError::assert_is_node(elem)?;
+        StrongAstError::assert_kind_node(&node, SyntaxKind::PATH_EXPR)?;
+
+        let mut it = SyntaxNodeIter::new(&node);
+        let base_elem = it
+            .next()
+            .ok_or_else(|| StrongAstError::missing(SyntaxKind::PAREN_EXPR, it.parent))?;
+        let base = Box::new(Expression::from_cst(base_elem)?);
+        let ga_elem = it
+            .next()
+            .ok_or_else(|| StrongAstError::missing(SyntaxKind::GENERIC_ARGS, it.parent))?;
+        let generic_args = GenericArgs::from_cst(ga_elem)?;
+        if let Some(extra) = it.next() {
+            return Err(StrongAstError::UnexpectedAdditionalElement {
+                parent: it.parent,
+                at: extra.text_range(),
+            });
+        }
+        Ok(GenericApplyExpr { base, generic_args })
+    }
+}
+
+impl GenericApplyExpr {
+    pub(crate) fn single_line_width(&self, input: &Printer<'_>) -> Option<usize> {
+        Some(self.base.single_line_width(input)? + self.generic_args.formatted_single_line_width())
+    }
+}
+
+impl Printable for GenericApplyExpr {
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        let info = self.base.print(shape.clone(), printer);
+        printer.print(&self.generic_args, shape);
+        info
+    }
+    fn leftmost_token(&self) -> TextRange {
+        self.base.leftmost_token()
+    }
+    fn rightmost_token(&self) -> TextRange {
+        self.generic_args.close_angle.span()
     }
 }
 
@@ -3566,9 +3643,22 @@ impl Printable for ObjectFieldKey {
 #[derive(Debug)]
 pub struct GenericParamList {
     pub open_angle: t::Less,
-    /// Comma-separated type parameter names: `(Word, Comma?)` pairs.
-    pub params: Vec<(t::Word, Option<t::Comma>)>,
+    /// Comma-separated type parameter declarations.
+    pub params: Vec<GenericParam>,
     pub close_angle: t::Greater,
+}
+
+#[derive(Debug)]
+pub struct GenericParam {
+    pub name: t::Word,
+    pub bounds: Option<GenericParamBounds>,
+    pub comma: Option<t::Comma>,
+}
+
+#[derive(Debug)]
+pub struct GenericParamBounds {
+    pub extends: t::Extends,
+    pub bounds: Vec<(Type, Option<t::And>)>,
 }
 
 impl FromCST for GenericParamList {
@@ -3590,15 +3680,27 @@ impl FromCST for GenericParamList {
                     break t::Greater::from_cst(elem)?;
                 }
                 SyntaxKind::GENERIC_PARAM => {
-                    // GENERIC_PARAM contains a single WORD
                     let param_node = StrongAstError::assert_is_node(elem)?;
                     let mut param_it = SyntaxNodeIter::new(&param_node);
-                    let word: t::Word = param_it.expect_parse()?;
+                    let name: t::Word = param_it.expect_parse()?;
+                    let bounds = if param_it.peek().map(SyntaxElement::kind)
+                        == Some(SyntaxKind::GENERIC_PARAM_BOUNDS)
+                    {
+                        let elem = param_it.next().expect("peeked");
+                        Some(GenericParamBounds::from_cst(elem)?)
+                    } else {
+                        None
+                    };
+                    param_it.expect_end()?;
                     let comma = it
                         .next_if_kind(SyntaxKind::COMMA)
                         .map(t::Comma::from_cst)
                         .transpose()?;
-                    params.push((word, comma));
+                    params.push(GenericParam {
+                        name,
+                        bounds,
+                        comma,
+                    });
                 }
                 _ => {
                     return Err(StrongAstError::UnexpectedAdditionalElement {
@@ -3619,6 +3721,28 @@ impl FromCST for GenericParamList {
     }
 }
 
+impl FromCST for GenericParamBounds {
+    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
+        let node = StrongAstError::assert_is_node(elem)?;
+        StrongAstError::assert_kind_node(&node, SyntaxKind::GENERIC_PARAM_BOUNDS)?;
+
+        let mut it = SyntaxNodeIter::new(&node);
+        let extends: t::Extends = it.expect_parse()?;
+        let mut bounds = Vec::new();
+        while it.peek().is_some() {
+            let ty: Type = it.expect_parse()?;
+            let and = it
+                .next_if_kind(SyntaxKind::AND)
+                .map(t::And::from_cst)
+                .transpose()?;
+            bounds.push((ty, and));
+        }
+        it.expect_end()?;
+
+        Ok(GenericParamBounds { extends, bounds })
+    }
+}
+
 impl KnownKind for GenericParamList {
     fn kind() -> SyntaxKind {
         SyntaxKind::GENERIC_PARAM_LIST
@@ -3628,8 +3752,12 @@ impl KnownKind for GenericParamList {
 impl Printable for GenericParamList {
     fn print(&self, _shape: Shape, printer: &mut Printer) -> PrintInfo {
         printer.print_raw_token(&self.open_angle);
-        for (i, (word, _comma)) in self.params.iter().enumerate() {
-            printer.print_raw_token(word);
+        for (i, param) in self.params.iter().enumerate() {
+            printer.print_raw_token(&param.name);
+            if let Some(bounds) = &param.bounds {
+                printer.print_str(" ");
+                printer.print(bounds, Shape::unlimited_single_line());
+            }
             if i + 1 < self.params.len() {
                 printer.print_str(", ");
             }
@@ -3642,6 +3770,30 @@ impl Printable for GenericParamList {
     }
     fn rightmost_token(&self) -> TextRange {
         self.close_angle.span()
+    }
+}
+
+impl Printable for GenericParamBounds {
+    fn print(&self, _shape: Shape, printer: &mut Printer) -> PrintInfo {
+        printer.print_raw_token(&self.extends);
+        for (idx, (bound, _and)) in self.bounds.iter().enumerate() {
+            if idx == 0 {
+                printer.print_str(" ");
+            } else {
+                printer.print_str(" & ");
+            }
+            printer.print(bound, Shape::unlimited_single_line());
+        }
+        PrintInfo::default_single_line()
+    }
+    fn leftmost_token(&self) -> TextRange {
+        self.extends.span()
+    }
+    fn rightmost_token(&self) -> TextRange {
+        self.bounds
+            .last()
+            .map(|(bound, _)| bound.rightmost_token())
+            .unwrap_or_else(|| self.extends.span())
     }
 }
 
