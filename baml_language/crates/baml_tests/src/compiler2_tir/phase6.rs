@@ -1739,7 +1739,7 @@ function f(value: A | B) -> int {
     let output = render_tir(&db, file);
 
     assert!(
-        output.contains("Or-pattern alternatives bind `x` with conflicting types"),
+        output.contains("or-pattern binding `x` has conflicting types"),
         "same or-pattern binding name with incompatible types should be rejected, got:\n{output}"
     );
 }

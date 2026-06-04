@@ -30,7 +30,7 @@ function user.or_pattern_leak() -> int throws never {
     let _ = v is x: int | x: string : bool
     x : unknown
   }
-  !! 881..894: Or-pattern alternatives bind `x` with conflicting types: `int` vs `string`
+  !! 881..894: or-pattern binding `x` has conflicting types: int and string
   !! 900..901: unresolved name: x
 }
 class user.WrapNonGeneric {

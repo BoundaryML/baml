@@ -373,7 +373,7 @@ fn missing_return() {
       { : int
         let x = 1 : 1 -> int
       }
-      !! 19..34: missing return: expected `int`
+      !! 19..34: missing return value of type int
     }
     ");
 }
@@ -387,7 +387,7 @@ fn block_ending_in_stmt() {
       { : string
         let x = "hello" : "hello" -> string
       }
-      !! 22..43: missing return: expected `string`
+      !! 22..43: missing return value of type string
     }
     "#);
 }

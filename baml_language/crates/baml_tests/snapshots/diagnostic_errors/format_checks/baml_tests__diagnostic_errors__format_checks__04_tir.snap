@@ -2046,11 +2046,11 @@ function user.MatchExprs(x: int, s: user.MatchStatus, r: user.MatchResult, b: bo
   !! 8474..8479: operator `Mul` cannot be applied to `bool` and `bool`
   !! 8486..8491: operator `Mul` cannot be applied to `int` and `bool`
   !! 8498..8503: operator `Mul` cannot be applied to `bool` and `int`
-  !! 10691..10814: non-exhaustive match on `int`; missing: _
-  !! 10814..10938: non-exhaustive match on `int`; missing: _
-  !! 10938..11058: non-exhaustive match on `int`; missing: _
-  !! 11058..11179: non-exhaustive match on `int`; missing: _
-  !! 11575..11739: non-exhaustive match on `int`; missing: _
+  !! 10691..10814: non-exhaustive match on type int; missing: _
+  !! 10814..10938: non-exhaustive match on type int; missing: _
+  !! 10938..11058: non-exhaustive match on type int; missing: _
+  !! 11058..11179: non-exhaustive match on type int; missing: _
+  !! 11575..11739: non-exhaustive match on type int; missing: _
   !! 11575..11739: type mismatch: expected string, got 0
 }
 class user.MatchSuccess$stream {

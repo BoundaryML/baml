@@ -294,427 +294,366 @@ fn ambiguous_iface_list<T: fmt::Display>(sources: &[T]) -> String {
         .join(", ")
 }
 
+/// Render a `TirTypeError` into its user-facing message, parameterized over the
+/// strategy used to turn an embedded [`Ty`] into text.
+///
+/// This is the single source of truth for diagnostic *templates*. Both the
+/// in-crate `impl fmt::Display for TirTypeError` (which renders `Ty` via
+/// [`Ty::render_user_facing`]) and the LSP's source-aware renderer (which uses a
+/// file/context-aware `Ty` renderer) call through here so the message wording
+/// stays in lockstep across channels. Non-`Ty` payloads (names, ops, pre-joined
+/// strings, suggestions, etc.) are emitted verbatim and never routed through
+/// `render_ty`.
+pub fn format_tir_type_error(error: &TirTypeError, render_ty: impl Fn(&Ty) -> String) -> String {
+    match error {
+        TirTypeError::TypeMismatch { expected, got } => {
+            format!(
+                "type mismatch: expected {}, got {}",
+                render_ty(expected),
+                render_ty(got)
+            )
+        }
+        TirTypeError::UnresolvedMember { base_type, member } => {
+            format!("type `{}` has no member `{member}`", render_ty(base_type))
+        }
+        TirTypeError::UnresolvedName { name } => {
+            format!("unresolved name: {name}")
+        }
+        TirTypeError::DeadCode {
+            unreachable_count, ..
+        } => {
+            format!(
+                "unreachable code: {unreachable_count} statement(s) after diverging statement"
+            )
+        }
+        TirTypeError::VoidUsedAsValue => {
+            "`if` without `else` cannot be used as a value; add an `else` branch".to_string()
+        }
+        TirTypeError::VoidFunctionResultUsed => {
+            "cannot use return value of a void function".to_string()
+        }
+        TirTypeError::NotCallable { ty } => {
+            format!(
+                "`{}` is not a function — it cannot be called",
+                render_ty(ty)
+            )
+        }
+        TirTypeError::NotIterable { ty } => {
+            format!("cannot iterate over type `{}`", render_ty(ty))
+        }
+        TirTypeError::NotIndexable { ty } => {
+            format!("type `{}` is not indexable", render_ty(ty))
+        }
+        TirTypeError::InvalidBinaryOp { op, lhs, rhs } => {
+            format!(
+                "operator `{op:?}` cannot be applied to `{}` and `{}`",
+                render_ty(lhs),
+                render_ty(rhs)
+            )
+        }
+        TirTypeError::InvalidUnaryOp { op, operand } => {
+            format!(
+                "operator `{op:?}` cannot be applied to `{}`",
+                render_ty(operand)
+            )
+        }
+        TirTypeError::UnresolvedType { name, suggestions } => {
+            if suggestions.is_empty() {
+                format!("unresolved type: {name}")
+            } else if suggestions.len() == 1 {
+                format!("unresolved type: {name}. Did you mean `{}`?", suggestions[0])
+            } else {
+                format!(
+                    "unresolved type: {name}. Did you mean one of these: `{}`?",
+                    suggestions.join("`, `")
+                )
+            }
+        }
+        TirTypeError::ArgumentCountMismatch { expected, got } => {
+            format!("expected {expected} argument(s), got {got}")
+        }
+        TirTypeError::PositionalArgumentAfterNamed => {
+            "positional arguments cannot appear after named arguments".to_string()
+        }
+        TirTypeError::DuplicateNamedArgument { name } => {
+            format!("duplicate named argument `{name}`")
+        }
+        TirTypeError::UnknownNamedArgument { name } => {
+            format!("unknown named argument `{name}`")
+        }
+        TirTypeError::DefaultedParamPassedPositionally { name } => {
+            format!("defaulted parameter `{name}` must be passed by name")
+        }
+        TirTypeError::MissingRequiredArgument { name } => {
+            format!("missing required argument `{name}`")
+        }
+        TirTypeError::RequiredParamAfterDefault { name } => {
+            format!("required parameter `{name}` cannot appear after a defaulted parameter")
+        }
+        TirTypeError::SelfParamDefault => "`self` cannot have a default value".to_string(),
+        TirTypeError::DefaultParamForwardReference { param, referenced } => {
+            format!(
+                "default for parameter `{param}` cannot reference later parameter `{referenced}`"
+            )
+        }
+        TirTypeError::MissingReturn { expected } => {
+            format!("missing return value of type {}", render_ty(expected))
+        }
+        TirTypeError::NonExhaustiveMatch {
+            scrutinee_type,
+            missing_cases,
+        } => {
+            format!(
+                "non-exhaustive match on type {}; missing: {}",
+                render_ty(scrutinee_type),
+                missing_cases.join(", ")
+            )
+        }
+        TirTypeError::UnreachableArm => "unreachable arm".to_string(),
+        TirTypeError::OrPatternBindingTypeMismatch {
+            name,
+            first_type,
+            other_type,
+        } => format!(
+            "or-pattern binding `{}` has conflicting types: {} and {}",
+            name,
+            render_ty(first_type),
+            render_ty(other_type)
+        ),
+        TirTypeError::GenericClassDestructureRequiresTypeArgs { class_name } => format!(
+            "generic class destructure `{class_name} {{ ... }}` must specify type arguments"
+        ),
+        TirTypeError::RestSubPatternNotSupported => {
+            "rest pattern `..` cannot carry a sub-pattern; only bare `..` is allowed".to_string()
+        }
+        TirTypeError::RefutablePatternInLet { context } => format!(
+            "refutable pattern in {} binding; refutable patterns belong in `match`",
+            context.as_str()
+        ),
+        TirTypeError::IrrefutablePatternInIfLet => {
+            "irrefutable `if let` pattern; the `else` branch is unreachable — use a plain `let` binding instead".to_string()
+        }
+        TirTypeError::LetElseMustDiverge { got } => format!(
+            "`let … else` requires a diverging else block (`return`, `throw`, `break`, or `continue`); got `{}`",
+            render_ty(got)
+        ),
+        TirTypeError::IrrefutablePatternInLetElse => {
+            "irrefutable `let … else` pattern; the `else` branch is unreachable — use a plain `let` binding instead".to_string()
+        }
+        TirTypeError::InvalidCatchBindingType { type_name } => format!(
+            "invalid catch binding type `{type_name}`; use a concrete type instead"
+        ),
+        TirTypeError::ThrowsContractViolation {
+            declared,
+            extra_types,
+        } => {
+            format!(
+                "declared throws is `{}`, but this function may also throw `{}`",
+                render_ty(declared),
+                extra_types.join(" | ")
+            )
+        }
+        TirTypeError::CallbackThrowsContractViolation {
+            callback_name,
+            declared,
+            concrete_throws,
+        } => {
+            let suffix = match concrete_throws {
+                Some(concrete_throws) => format!(
+                    "Add `throws {}` to the callback, catch the call, or make the callback non-throwing.",
+                    render_ty(concrete_throws)
+                ),
+                None => "Add an explicit `throws` to the callback, catch the call, or make the callback non-throwing.".to_string(),
+            };
+            format!(
+                "this body may throw through callback `{callback_name}`, but declared throws is `{}`. {suffix}",
+                render_ty(declared)
+            )
+        }
+        TirTypeError::ExtraneousThrowsDeclaration { extra_types } => {
+            format!("extraneous throws declaration: {}", extra_types.join(", "))
+        }
+        TirTypeError::WrongTypeArgArity {
+            callee_name,
+            expected,
+            got,
+        } => {
+            format!("function `{callee_name}` expects {expected} type argument(s), got {got}")
+        }
+        TirTypeError::TypeIsNotGeneric { type_name, kind } => {
+            format!("{kind} `{type_name}` is not generic and cannot take type arguments")
+        }
+        TirTypeError::TypeParamShadowed {
+            param_name,
+            class_name,
+        } => {
+            format!(
+                "type parameter `{param_name}` on method shadows the same parameter on class `{class_name}`. \
+                Please use a different name for the type parameter."
+            )
+        }
+        TirTypeError::CannotInferLambdaParamType { param_name } => {
+            format!(
+                "cannot infer type of lambda parameter `{param_name}` — add a type annotation or provide context"
+            )
+        }
+        TirTypeError::UnnecessaryOptionalChaining { expr, base } => {
+            // e.g. "did you mean `a.b`? `a?.b` is unnecessary, because `a` cannot be null"
+            // Build the rewrite from the base/suffix boundary so we strip the
+            // diagnosed `?.`, not the first one in the string (which may be
+            // inside a nested sub-expression like `foo(bar?.baz)?.qux`).
+            let suffix = &expr[base.len()..];
+            let dotted = if let Some(rest) = suffix.strip_prefix("?.(") {
+                format!("{base}({rest}")
+            } else if let Some(rest) = suffix.strip_prefix("?.[") {
+                format!("{base}[{rest}")
+            } else if let Some(rest) = suffix.strip_prefix("?.") {
+                format!("{base}.{rest}")
+            } else {
+                // Fallback: should not happen, but be safe
+                expr.replacen("?.", ".", 1)
+            };
+            format!(
+                "did you mean `{dotted}`? `{expr}` is unnecessary, because `{base}` cannot be null"
+            )
+        }
+        TirTypeError::UnnecessaryNullCoalesce { lhs, expr } => {
+            // e.g. "did you mean `a`? `a ?? b` is unnecessary, because `a` cannot be null"
+            format!(
+                "did you mean `{lhs}`? `{expr}` is unnecessary, because `{lhs}` cannot be null"
+            )
+        }
+        TirTypeError::SuggestNullCoalesce { lhs, rhs } => {
+            // e.g. "did you mean `a ?? b`? BAML uses `??` instead of `||` for null coalescing"
+            format!(
+                "did you mean `{lhs} ?? {rhs}`? BAML uses `??` instead of `||` for null coalescing"
+            )
+        }
+        TirTypeError::NullCoalesceWithNull { lhs } => {
+            // e.g. "did you mean `a`? `... ?? null` is unnecessary because `a` is already nullable"
+            format!(
+                "did you mean `{lhs}`? `... ?? null` is unnecessary because `{lhs}` is already nullable"
+            )
+        }
+        TirTypeError::NullableMemberAccess { base, member, expr } => {
+            // member is ".name" or "[...]" — construct suggestion by inserting ?
+            // e.g. base="a", member=".name" → "a?.name"
+            // e.g. base="a", member="[...]" → "a?.[...]"
+            let suggested = if member.starts_with('.') {
+                format!("{base}?{member}")
+            } else {
+                format!("{base}?.{member}")
+            };
+            format!(
+                "did you mean `{suggested}`? `{expr}` does not handle the case when `{base}` is null"
+            )
+        }
+        TirTypeError::AmbiguousInterfaceMethod {
+            class_name,
+            method_name,
+            sources,
+        } => {
+            let iface_list = ambiguous_iface_list(sources);
+            let hint = sources
+                .iter()
+                .map(|n| format!("obj.as<{n}>.{method_name}()"))
+                .collect::<Vec<_>>()
+                .join(" or ");
+            format!(
+                "method `{method_name}` on class `{class_name}` is declared by \
+                 multiple interfaces: {iface_list}; unqualified calls will be \
+                ambiguous — use {hint}"
+            )
+        }
+        TirTypeError::AmbiguousInterfaceField {
+            class_name,
+            field_name,
+            sources,
+        } => {
+            let iface_list = ambiguous_iface_list(sources);
+            let hint = sources
+                .iter()
+                .map(|n| format!("obj.as<{n}>.{field_name}"))
+                .collect::<Vec<_>>()
+                .join(" or ");
+            format!(
+                "field `{field_name}` on class `{class_name}` is ambiguous because it is declared by multiple interfaces: {iface_list}; use {hint}"
+            )
+        }
+        TirTypeError::InterfaceFieldRequiresProjection {
+            class_name,
+            field_name,
+            interface_name,
+        } => format!(
+            "field `{field_name}` is an interface field on `{interface_name}`, not a concrete field on class `{class_name}`; use obj.as<{interface_name}>.{field_name}"
+        ),
+        TirTypeError::InterfaceFieldRequiresQualifiedConstruction {
+            field_name,
+            qualified_name,
+        } => format!(
+            "interface-qualified field `{field_name}` cannot be used in a class constructor; use class field `{qualified_name}`"
+        ),
+        TirTypeError::DeprecatedInterfaceProjection {
+            interface_name,
+            as_target,
+        } => format!(
+            "interface projection uses `.as<{as_target}>`, not `.{interface_name}`"
+        ),
+        TirTypeError::InvalidInterfaceUpcastTarget { target } => {
+            format!("`.as<T>` requires an interface target, got {}", render_ty(target))
+        }
+        TirTypeError::InterfaceMemberRequiresReceiver {
+            interface_name,
+            member_name,
+        } => format!(
+            "interface member `{member_name}` on `{interface_name}` must be accessed through a value; use value.as<{interface_name}>.{member_name}"
+        ),
+        TirTypeError::InvalidSelfCallThroughInterface {
+            interface_name,
+            method_name,
+        } => format!(
+            "method `{method_name}` on interface `{interface_name}` uses `Self` in \
+             its parameters and requires a concrete receiver"
+        ),
+        TirTypeError::DefaultOnRequiredMethod {
+            interface_name,
+            method_name,
+        } => format!(
+            "`default.{method_name}()` is invalid: method `{method_name}` on interface \
+             `{interface_name}` has no default body"
+        ),
+        TirTypeError::BareDefaultKeyword => {
+            "`default` may only be used to call an interface default method, as \
+             `default.method(...)`".to_string()
+        }
+        TirTypeError::TypeDoesNotImplementInterface {
+            value_type,
+            interface_name,
+        } => format!(
+            "type `{}` does not implement interface `{interface_name}`",
+            render_ty(value_type)
+        ),
+        TirTypeError::BlanketBoundNotSatisfied { value_type, bound } => format!(
+            "type `{}` does not satisfy the bound `{}` required by the blanket \
+             `implements` rule",
+            render_ty(value_type),
+            render_ty(bound)
+        ),
+        TirTypeError::AmbiguousInterfaceInstantiation {
+            class_name,
+            interface,
+        } => format!(
+            "class `{class_name}` implements `{}` through more than one `implements` block at \
+             this instantiation (distinct generic blocks collapse to the same type); the \
+             projection is ambiguous",
+            render_ty(interface)
+        ),
+    }
+}
+
 impl fmt::Display for TirTypeError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            TirTypeError::TypeMismatch { expected, got } => {
-                write!(
-                    f,
-                    "type mismatch: expected {}, got {}",
-                    expected.render_user_facing(),
-                    got.render_user_facing()
-                )
-            }
-            TirTypeError::UnresolvedMember { base_type, member } => {
-                write!(
-                    f,
-                    "type `{}` has no member `{member}`",
-                    base_type.render_user_facing()
-                )
-            }
-            TirTypeError::UnresolvedName { name } => {
-                write!(f, "unresolved name: {name}")
-            }
-            TirTypeError::DeadCode {
-                unreachable_count, ..
-            } => {
-                write!(
-                    f,
-                    "unreachable code: {unreachable_count} statement(s) after diverging statement"
-                )
-            }
-            TirTypeError::VoidUsedAsValue => {
-                write!(
-                    f,
-                    "`if` without `else` cannot be used as a value; add an `else` branch"
-                )
-            }
-            TirTypeError::VoidFunctionResultUsed => {
-                write!(f, "cannot use return value of a void function")
-            }
-            TirTypeError::NotCallable { ty } => {
-                write!(
-                    f,
-                    "`{}` is not a function — it cannot be called",
-                    ty.render_user_facing()
-                )
-            }
-            TirTypeError::NotIterable { ty } => {
-                write!(f, "cannot iterate over type `{}`", ty.render_user_facing())
-            }
-            TirTypeError::NotIndexable { ty } => {
-                write!(f, "type `{}` is not indexable", ty.render_user_facing())
-            }
-            TirTypeError::InvalidBinaryOp { op, lhs, rhs } => {
-                write!(
-                    f,
-                    "operator `{op:?}` cannot be applied to `{}` and `{}`",
-                    lhs.render_user_facing(),
-                    rhs.render_user_facing()
-                )
-            }
-            TirTypeError::InvalidUnaryOp { op, operand } => {
-                write!(
-                    f,
-                    "operator `{op:?}` cannot be applied to `{}`",
-                    operand.render_user_facing()
-                )
-            }
-            TirTypeError::UnresolvedType { name, suggestions } => {
-                if suggestions.is_empty() {
-                    write!(f, "unresolved type: {name}")
-                } else if suggestions.len() == 1 {
-                    write!(
-                        f,
-                        "unresolved type: {name}. Did you mean `{}`?",
-                        suggestions[0]
-                    )
-                } else {
-                    write!(
-                        f,
-                        "unresolved type: {name}. Did you mean one of these: `{}`?",
-                        suggestions.join("`, `")
-                    )
-                }
-            }
-            TirTypeError::ArgumentCountMismatch { expected, got } => {
-                write!(f, "expected {expected} argument(s), got {got}")
-            }
-            TirTypeError::PositionalArgumentAfterNamed => {
-                write!(
-                    f,
-                    "positional arguments cannot appear after named arguments"
-                )
-            }
-            TirTypeError::DuplicateNamedArgument { name } => {
-                write!(f, "duplicate named argument `{name}`")
-            }
-            TirTypeError::UnknownNamedArgument { name } => {
-                write!(f, "unknown named argument `{name}`")
-            }
-            TirTypeError::DefaultedParamPassedPositionally { name } => {
-                write!(f, "defaulted parameter `{name}` must be passed by name")
-            }
-            TirTypeError::MissingRequiredArgument { name } => {
-                write!(f, "missing required argument `{name}`")
-            }
-            TirTypeError::RequiredParamAfterDefault { name } => {
-                write!(
-                    f,
-                    "required parameter `{name}` cannot appear after a defaulted parameter"
-                )
-            }
-            TirTypeError::SelfParamDefault => {
-                write!(f, "`self` cannot have a default value")
-            }
-            TirTypeError::DefaultParamForwardReference { param, referenced } => {
-                write!(
-                    f,
-                    "default for parameter `{param}` cannot reference later parameter `{referenced}`"
-                )
-            }
-            TirTypeError::MissingReturn { expected } => {
-                write!(
-                    f,
-                    "missing return: expected `{}`",
-                    expected.render_user_facing()
-                )
-            }
-            TirTypeError::NonExhaustiveMatch {
-                scrutinee_type,
-                missing_cases,
-            } => {
-                write!(
-                    f,
-                    "non-exhaustive match on `{}`; missing: {}",
-                    scrutinee_type.render_user_facing(),
-                    missing_cases.join(", ")
-                )
-            }
-            TirTypeError::UnreachableArm => write!(f, "unreachable arm"),
-            TirTypeError::OrPatternBindingTypeMismatch {
-                name,
-                first_type,
-                other_type,
-            } => write!(
-                f,
-                "Or-pattern alternatives bind `{}` with conflicting types: `{}` vs `{}`",
-                name,
-                first_type.render_user_facing(),
-                other_type.render_user_facing()
-            ),
-            TirTypeError::GenericClassDestructureRequiresTypeArgs { class_name } => write!(
-                f,
-                "generic class destructure `{class_name} {{ ... }}` must specify type arguments"
-            ),
-            TirTypeError::RestSubPatternNotSupported => write!(
-                f,
-                "rest pattern `..` cannot carry a sub-pattern; only bare `..` is allowed"
-            ),
-            TirTypeError::RefutablePatternInLet { context } => write!(
-                f,
-                "refutable pattern in {} binding; refutable patterns belong in `match`",
-                context.as_str()
-            ),
-            TirTypeError::IrrefutablePatternInIfLet => write!(
-                f,
-                "irrefutable `if let` pattern; the `else` branch is unreachable — use a plain `let` binding instead"
-            ),
-            TirTypeError::LetElseMustDiverge { got } => write!(
-                f,
-                "`let … else` requires a diverging else block (`return`, `throw`, `break`, or `continue`); got `{}`",
-                got.render_user_facing()
-            ),
-            TirTypeError::IrrefutablePatternInLetElse => write!(
-                f,
-                "irrefutable `let … else` pattern; the `else` branch is unreachable — use a plain `let` binding instead"
-            ),
-            TirTypeError::InvalidCatchBindingType { type_name } => write!(
-                f,
-                "invalid catch binding type `{type_name}`; use a concrete type instead"
-            ),
-            TirTypeError::ThrowsContractViolation {
-                declared,
-                extra_types,
-            } => {
-                write!(
-                    f,
-                    "declared throws is `{}`, but this function may also throw `{}`",
-                    declared.render_user_facing(),
-                    extra_types.join(" | ")
-                )
-            }
-            TirTypeError::CallbackThrowsContractViolation {
-                callback_name,
-                declared,
-                concrete_throws,
-            } => {
-                write!(
-                    f,
-                    "this body may throw through callback `{callback_name}`, but declared throws is `{}`. ",
-                    declared.render_user_facing()
-                )?;
-                if let Some(concrete_throws) = concrete_throws {
-                    write!(
-                        f,
-                        "Add `throws {}` to the callback, catch the call, or make the callback non-throwing.",
-                        concrete_throws.render_user_facing()
-                    )
-                } else {
-                    write!(
-                        f,
-                        "Add an explicit `throws` to the callback, catch the call, or make the callback non-throwing."
-                    )
-                }
-            }
-            TirTypeError::ExtraneousThrowsDeclaration { extra_types } => {
-                write!(
-                    f,
-                    "extraneous throws declaration: {}",
-                    extra_types.join(", ")
-                )
-            }
-            TirTypeError::WrongTypeArgArity {
-                callee_name,
-                expected,
-                got,
-            } => {
-                write!(
-                    f,
-                    "function `{callee_name}` expects {expected} type argument(s), got {got}"
-                )
-            }
-            TirTypeError::TypeIsNotGeneric { type_name, kind } => {
-                write!(
-                    f,
-                    "{kind} `{type_name}` is not generic and cannot take type arguments"
-                )
-            }
-            TirTypeError::TypeParamShadowed {
-                param_name,
-                class_name,
-            } => {
-                write!(
-                    f,
-                    "type parameter `{param_name}` on method shadows the same parameter on class `{class_name}`. \
-                    Please use a different name for the type parameter."
-                )
-            }
-            TirTypeError::CannotInferLambdaParamType { param_name } => {
-                write!(
-                    f,
-                    "cannot infer type of lambda parameter `{param_name}` — add a type annotation or provide context"
-                )
-            }
-            TirTypeError::UnnecessaryOptionalChaining { expr, base } => {
-                // e.g. "did you mean `a.b`? `a?.b` is unnecessary, because `a` cannot be null"
-                // Build the rewrite from the base/suffix boundary so we strip the
-                // diagnosed `?.`, not the first one in the string (which may be
-                // inside a nested sub-expression like `foo(bar?.baz)?.qux`).
-                let suffix = &expr[base.len()..];
-                let dotted = if let Some(rest) = suffix.strip_prefix("?.(") {
-                    format!("{base}({rest}")
-                } else if let Some(rest) = suffix.strip_prefix("?.[") {
-                    format!("{base}[{rest}")
-                } else if let Some(rest) = suffix.strip_prefix("?.") {
-                    format!("{base}.{rest}")
-                } else {
-                    // Fallback: should not happen, but be safe
-                    expr.replacen("?.", ".", 1)
-                };
-                write!(
-                    f,
-                    "did you mean `{dotted}`? `{expr}` is unnecessary, because `{base}` cannot be null"
-                )
-            }
-            TirTypeError::UnnecessaryNullCoalesce { lhs, expr } => {
-                // e.g. "did you mean `a`? `a ?? b` is unnecessary, because `a` cannot be null"
-                write!(
-                    f,
-                    "did you mean `{lhs}`? `{expr}` is unnecessary, because `{lhs}` cannot be null"
-                )
-            }
-            TirTypeError::SuggestNullCoalesce { lhs, rhs } => {
-                // e.g. "did you mean `a ?? b`? BAML uses `??` instead of `||` for null coalescing"
-                write!(
-                    f,
-                    "did you mean `{lhs} ?? {rhs}`? BAML uses `??` instead of `||` for null coalescing"
-                )
-            }
-            TirTypeError::NullCoalesceWithNull { lhs } => {
-                // e.g. "did you mean `a`? `... ?? null` is unnecessary because `a` is already nullable"
-                write!(
-                    f,
-                    "did you mean `{lhs}`? `... ?? null` is unnecessary because `{lhs}` is already nullable"
-                )
-            }
-            TirTypeError::NullableMemberAccess { base, member, expr } => {
-                // member is ".name" or "[...]" — construct suggestion by inserting ?
-                // e.g. base="a", member=".name" → "a?.name"
-                // e.g. base="a", member="[...]" → "a?.[...]"
-                let suggested = if member.starts_with('.') {
-                    format!("{base}?{member}")
-                } else {
-                    format!("{base}?.{member}")
-                };
-                write!(
-                    f,
-                    "did you mean `{suggested}`? `{expr}` does not handle the case when `{base}` is null"
-                )
-            }
-            TirTypeError::AmbiguousInterfaceMethod {
-                class_name,
-                method_name,
-                sources,
-            } => {
-                let iface_list = ambiguous_iface_list(sources);
-                let hint = sources
-                    .iter()
-                    .map(|n| format!("obj.as<{n}>.{method_name}()"))
-                    .collect::<Vec<_>>()
-                    .join(" or ");
-                write!(
-                    f,
-                    "method `{method_name}` on class `{class_name}` is declared by \
-                     multiple interfaces: {iface_list}; unqualified calls will be \
-                    ambiguous — use {hint}"
-                )
-            }
-            TirTypeError::AmbiguousInterfaceField {
-                class_name,
-                field_name,
-                sources,
-            } => {
-                let iface_list = ambiguous_iface_list(sources);
-                let hint = sources
-                    .iter()
-                    .map(|n| format!("obj.as<{n}>.{field_name}"))
-                    .collect::<Vec<_>>()
-                    .join(" or ");
-                write!(
-                    f,
-                    "field `{field_name}` on class `{class_name}` is ambiguous because it is declared by multiple interfaces: {iface_list}; use {hint}"
-                )
-            }
-            TirTypeError::InterfaceFieldRequiresProjection {
-                class_name,
-                field_name,
-                interface_name,
-            } => write!(
-                f,
-                "field `{field_name}` is an interface field on `{interface_name}`, not a concrete field on class `{class_name}`; use obj.as<{interface_name}>.{field_name}"
-            ),
-            TirTypeError::InterfaceFieldRequiresQualifiedConstruction {
-                field_name,
-                qualified_name,
-            } => write!(
-                f,
-                "interface-qualified field `{field_name}` cannot be used in a class constructor; use class field `{qualified_name}`"
-            ),
-            TirTypeError::DeprecatedInterfaceProjection {
-                interface_name,
-                as_target,
-            } => write!(
-                f,
-                "interface projection uses `.as<{as_target}>`, not `.{interface_name}`"
-            ),
-            TirTypeError::InvalidInterfaceUpcastTarget { target } => {
-                write!(f, "`.as<T>` target must be an interface, got `{target}`")
-            }
-            TirTypeError::InterfaceMemberRequiresReceiver {
-                interface_name,
-                member_name,
-            } => write!(
-                f,
-                "interface member `{member_name}` on `{interface_name}` must be accessed through a value; use value.as<{interface_name}>.{member_name}"
-            ),
-            TirTypeError::InvalidSelfCallThroughInterface {
-                interface_name,
-                method_name,
-            } => write!(
-                f,
-                "method `{method_name}` on interface `{interface_name}` uses `Self` in \
-                 its parameters and requires a concrete receiver"
-            ),
-            TirTypeError::DefaultOnRequiredMethod {
-                interface_name,
-                method_name,
-            } => write!(
-                f,
-                "`default.{method_name}()` is invalid: method `{method_name}` on interface \
-                 `{interface_name}` has no default body"
-            ),
-            TirTypeError::BareDefaultKeyword => write!(
-                f,
-                "`default` may only be used to call an interface default method, as \
-                 `default.method(...)`"
-            ),
-            TirTypeError::TypeDoesNotImplementInterface {
-                value_type,
-                interface_name,
-            } => write!(
-                f,
-                "type `{}` does not implement interface `{interface_name}`",
-                value_type.render_user_facing()
-            ),
-            TirTypeError::BlanketBoundNotSatisfied { value_type, bound } => write!(
-                f,
-                "type `{}` does not satisfy the bound `{}` required by the blanket \
-                 `implements` rule",
-                value_type.render_user_facing(),
-                bound.render_user_facing()
-            ),
-            TirTypeError::AmbiguousInterfaceInstantiation {
-                class_name,
-                interface,
-            } => write!(
-                f,
-                "class `{class_name}` implements `{}` through more than one `implements` block at \
-                 this instantiation (distinct generic blocks collapse to the same type); the \
-                 projection is ambiguous",
-                interface.render_user_facing()
-            ),
-        }
+        write!(f, "{}", format_tir_type_error(self, Ty::render_user_facing))
     }
 }
 

@@ -253,7 +253,7 @@ function user.class_destructure_or_pattern_same_binding_conflicting_types(v: use
       Person { age: age } | Admin { age: age } =>
         1 : 1
   }
-  !! 5785..5789: Or-pattern alternatives bind `age` with conflicting types: `int` vs `string`
+  !! 5785..5789: or-pattern binding `age` has conflicting types: int and string
 }
 function user.generic_class_destructure_or_pattern_same_binding_conflicting_types(v: user.Box<int> | user.Box<string>) -> int throws never {
   { : 1
@@ -261,7 +261,7 @@ function user.generic_class_destructure_or_pattern_same_binding_conflicting_type
       Box<int> { value: value } | Box<string> { value: value } =>
         1 : 1
   }
-  !! 5995..6005: Or-pattern alternatives bind `value` with conflicting types: `int` vs `string`
+  !! 5995..6005: or-pattern binding `value` has conflicting types: int and string
 }
 function user.nested_generic_class_destructure_duplicate_binding_name() -> int throws never {
   { : 0

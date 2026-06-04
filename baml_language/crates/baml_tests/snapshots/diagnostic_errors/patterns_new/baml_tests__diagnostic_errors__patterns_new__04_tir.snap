@@ -36,7 +36,7 @@ function user.or_same_name_distinct_narrows(v: int | string) -> int throws never
       x: int | x: string =>
         1 : 1
   }
-  !! 1289..1302: Or-pattern alternatives bind `x` with conflicting types: `int` vs `string`
+  !! 1289..1302: or-pattern binding `x` has conflicting types: int and string
 }
 function user.or_multiple_binds_diff_narrows(v: int | string) -> int throws never {
   { : 1
@@ -44,8 +44,8 @@ function user.or_multiple_binds_diff_narrows(v: int | string) -> int throws neve
       a: b: int | a: b: string =>
         1 : 1
   }
-  !! 1874..1894: Or-pattern alternatives bind `a` with conflicting types: `int` vs `string`
-  !! 1880..1894: Or-pattern alternatives bind `b` with conflicting types: `int` vs `string`
+  !! 1874..1894: or-pattern binding `a` has conflicting types: int and string
+  !! 1880..1894: or-pattern binding `b` has conflicting types: int and string
 }
 class user.Team {
   scores: int[]
@@ -128,7 +128,7 @@ function user.class_destructure_field_union_missing_int(m: user.Mixed) -> int th
       Mixed { value: bool } =>
         2 : 2
   }
-  !! 3872..3966: non-exhaustive match on `Mixed`; missing: user.Mixed { value: int }
+  !! 3872..3966: non-exhaustive match on type Mixed; missing: user.Mixed { value: int }
 }
 class user.Pair {
   kind: int | bool
@@ -150,7 +150,7 @@ function user.class_destructure_two_field_union_missing_combination(p: user.Pair
       Pair { kind: bool, payload: int } =>
         3 : 3
   }
-  !! 4338..4504: non-exhaustive match on `Pair`; missing: user.Pair { kind: true, payload: string }, user.Pair { kind: false, payload: string }
+  !! 4338..4504: non-exhaustive match on type Pair; missing: user.Pair { kind: true, payload: string }, user.Pair { kind: false, payload: string }
 }
 enum user.Color3
 function user.enum_with_single_missing_variant(c: user.Color3) -> int throws never {
@@ -161,7 +161,7 @@ function user.enum_with_single_missing_variant(c: user.Color3) -> int throws nev
       Color3.Blue =>
         2 : 2
   }
-  !! 5016..5090: non-exhaustive match on `Color3`; missing: user.Color3.Red
+  !! 5016..5090: non-exhaustive match on type Color3; missing: user.Color3.Red
 }
 enum user.Direction4
 function user.enum_with_multiple_missing_variants(d: user.Direction4) -> int throws never {
@@ -170,7 +170,7 @@ function user.enum_with_multiple_missing_variants(d: user.Direction4) -> int thr
       Direction4.North =>
         1 : 1
   }
-  !! 5314..5366: non-exhaustive match on `Direction4`; missing: user.Direction4.East, user.Direction4.South, user.Direction4.West
+  !! 5314..5366: non-exhaustive match on type Direction4; missing: user.Direction4.East, user.Direction4.South, user.Direction4.West
 }
 enum user.ExcessiveEnum
 function user.enum_with_excessive_missing_variants(e: user.ExcessiveEnum) -> int throws never {
@@ -179,7 +179,7 @@ function user.enum_with_excessive_missing_variants(e: user.ExcessiveEnum) -> int
       ExcessiveEnum.First =>
         1 : 1
   }
-  !! 5673..5728: non-exhaustive match on `ExcessiveEnum`; missing: user.ExcessiveEnum.Second, user.ExcessiveEnum.Third, user.ExcessiveEnum.Fourth, user.ExcessiveEnum.Fifth, user.ExcessiveEnum.Sixth, user.ExcessiveEnum.Seventh, user.ExcessiveEnum.Eighth, user.ExcessiveEnum.Ninth, user.ExcessiveEnum.Tenth, user.ExcessiveEnum.Eleventh, user.ExcessiveEnum.Twelfth
+  !! 5673..5728: non-exhaustive match on type ExcessiveEnum; missing: user.ExcessiveEnum.Second, user.ExcessiveEnum.Third, user.ExcessiveEnum.Fourth, user.ExcessiveEnum.Fifth, user.ExcessiveEnum.Sixth, user.ExcessiveEnum.Seventh, user.ExcessiveEnum.Eighth, user.ExcessiveEnum.Ninth, user.ExcessiveEnum.Tenth, user.ExcessiveEnum.Eleventh, user.ExcessiveEnum.Twelfth
 }
 class user.Flagged {
   flag: bool
@@ -199,7 +199,7 @@ function user.class_field_bool_narrowing_missing_true(f: user.Flagged) -> int th
       Flagged { flag: false, note: string } =>
         2 : 2
   }
-  !! 6045..6170: non-exhaustive match on `Flagged`; missing: user.Flagged { flag: true, note: _ }
+  !! 6045..6170: non-exhaustive match on type Flagged; missing: user.Flagged { flag: true, note: _ }
 }
 class user.Box2 {
   first: bool
@@ -221,7 +221,7 @@ function user.nested_class_optional_missing_combination(b: user.Box2) -> int thr
       Box2 { first: false, second: null } =>
         3 : 3
   }
-  !! 6509..6679: non-exhaustive match on `Box2`; missing: user.Box2 { first: false, second: [..] }
+  !! 6509..6679: non-exhaustive match on type Box2; missing: user.Box2 { first: false, second: [..] }
 }
 function user.int_literal_non_exhaustive(n: int) -> int throws never {
   { : 1
@@ -229,7 +229,7 @@ function user.int_literal_non_exhaustive(n: int) -> int throws never {
       1 =>
         1 : 1
   }
-  !! 6804..6841: non-exhaustive match on `int`; missing: _
+  !! 6804..6841: non-exhaustive match on type int; missing: _
 }
 class user.IntPair {
   a: int
@@ -247,7 +247,7 @@ function user.or_pattern_two_field_non_exhaustive(p: user.IntPair) -> int throws
       IntPair { a: 0 | 1, b: 2 | 3 } =>
         1 : 1
   }
-  !! 7321..7387: non-exhaustive match on `IntPair`; missing: user.IntPair { a: 0, b: _ }, user.IntPair { a: 1, b: _ }, user.IntPair { a: _, b: _ }
+  !! 7321..7387: non-exhaustive match on type IntPair; missing: user.IntPair { a: 0, b: _ }, user.IntPair { a: 1, b: _ }, user.IntPair { a: _, b: _ }
 }
 function user.or_pattern_optional_int_non_exhaustive(x: int?) -> int throws never {
   { : 0 | 1
@@ -257,7 +257,7 @@ function user.or_pattern_optional_int_non_exhaustive(x: int?) -> int throws neve
       0 | 1 =>
         1 : 1
   }
-  !! 7634..7694: non-exhaustive match on `int?`; missing: int
+  !! 7634..7694: non-exhaustive match on type int?; missing: int
 }
 function user.slice_prefix_or_suffix_non_exhaustive(xs: bool[]) -> int throws never {
   { : 0 | 1 | 2
@@ -269,7 +269,7 @@ function user.slice_prefix_or_suffix_non_exhaustive(xs: bool[]) -> int throws ne
       [.., false] =>
         2 : 2
   }
-  !! 8158..8248: non-exhaustive match on `bool[]`; missing: [false, .., true]
+  !! 8158..8248: non-exhaustive match on type bool[]; missing: [false, .., true]
 }
 function user.slice_repeated_prefix_unreachable(xs: bool[]) -> int throws never {
   { : 1 | 2 | 3
