@@ -73,6 +73,18 @@ Update advances a channel selector only:
 baml toolchain update
 ```
 
+Check remote freshness without installing or changing selection:
+
+```sh
+baml toolchain status
+```
+
+List installed toolchains without checking remote metadata:
+
+```sh
+baml toolchain list
+```
+
 ## IDE
 
 IDE installation is explicit and owned by the selected toolchain:

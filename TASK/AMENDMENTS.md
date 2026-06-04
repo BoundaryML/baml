@@ -97,7 +97,8 @@ Initial cache policy:
   - `baml toolchain update`: always checks the network and advances the active channel when possible.
   - `baml toolchain install`: always resolves/downloads/verifies the requested selector or version.
   - `baml toolchain use`: checks the network only when the relevant channel cache is missing or expired.
-  - `baml toolchain list`: local-only by default; a remote/latest mode may check the network when the relevant cache is missing or expired.
+  - `baml toolchain status`: always checks remote metadata, but is read-only and never installs or changes selection.
+  - `baml toolchain list`: local-only; it never checks remote versions.
 - All other commands, including `baml generate`, `baml run`, `baml describe`, `baml pack`, and `baml lsp`, use local state only and never hit the network.
 
 Network fetch behavior:

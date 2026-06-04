@@ -20,6 +20,7 @@ scripts/baml-language-version check
 scripts/baml-language-version compute --channel nightly
 scripts/baml-language-version compute --channel nightly --pypi
 scripts/baml-language-version plan --channel nightly --out release-plan.json
+baml toolchain status
 ```
 
 PyPI nightly versions use PEP 440 dev releases, for example `0.11.1-nightly.20260602.a` becomes `0.11.1.dev2026060200`.
