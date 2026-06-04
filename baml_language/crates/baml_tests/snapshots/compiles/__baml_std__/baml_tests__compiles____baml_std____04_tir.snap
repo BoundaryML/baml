@@ -183,15 +183,6 @@ function baml.errors.DevOther.to_json(self: baml.errors.DevOther) -> baml.json.j
 function baml.errors.DevOther.from_json(j: baml.json.json) -> baml.errors.DevOther throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   DevOther { message: baml.json.from_json<string>(baml.json.field(j, "message")) } : baml.errors.DevOther
 }
-class baml.errors.HostPanic {
-  message: string
-}
-function baml.errors.HostPanic.to_json(self: baml.errors.HostPanic) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  map { "message": self.message.to_json() } : map<string, baml.json.json>
-}
-function baml.errors.HostPanic.from_json(j: baml.json.json) -> baml.errors.HostPanic throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  HostPanic { message: baml.json.from_json<string>(baml.json.field(j, "message")) } : baml.errors.HostPanic
-}
 class baml.errors.HostCallable {
   message: string
   class_name: string
@@ -252,9 +243,6 @@ class baml.errors.LlmClient$stream {
   message: string | null
 }
 class baml.errors.DevOther$stream {
-  message: string | null
-}
-class baml.errors.HostPanic$stream {
   message: string | null
 }
 class baml.errors.HostCallable$stream {

@@ -50,11 +50,6 @@ class DevOther {
   message string
 }
 
-/// The host runtime panicked.
-class HostPanic {
-  message string
-}
-
 class HostCallable {
   message string
   class_name string

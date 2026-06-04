@@ -113,6 +113,22 @@ static TABLE: Lazy<RwLock<HashMap<u32, CompletionHandle>>> =
 
 static NEXT_CALL_ID: AtomicU32 = AtomicU32::new(1);
 
+// NOTE: there is no leak detection for hung host callables. A host
+// bridge that never calls `complete_host_call` for a given `call_id`
+// (and whose BAML caller never cancels) leaves a permanent entry in
+// `TABLE`. On a long-running process such entries could accumulate, and
+// after enough inserts the `u32` `call_id` space would wrap — at which
+// point [`insert`] catches the collision and fails the new call (it does
+// NOT corrupt the dead entry), but every subsequent call with the same
+// id would keep failing until the dead entry is somehow evicted.
+//
+// A size-based warning at `insert` time can't distinguish "legitimate
+// burst of concurrent calls" from "slow accumulation of hung calls";
+// the only signal that actually separates them is per-entry age. If
+// this becomes a real concern, add a `created_at: Instant` to
+// `CompletionHandle` and warn on any entry older than some threshold
+// (~5min).
+
 /// Allocate a fresh call id that is unique across the process lifetime.
 ///
 /// Zero is reserved as "invalid"; wrap-around skips 0.

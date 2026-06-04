@@ -1140,9 +1140,6 @@ mod tests {
             VmBamlError::DevOther {
                 message: "test".into(),
             },
-            VmBamlError::HostPanic {
-                message: "hp".into(),
-            },
             VmBamlError::HostCallable {
                 class_name: "C".into(),
                 message: "hc".into(),

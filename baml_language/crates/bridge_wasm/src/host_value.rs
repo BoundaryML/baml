@@ -80,7 +80,7 @@ use sys_ops::io::{
     self, BexExternalValue, CallId, OpError, SysOpContext, SysOpOutput, SysOpResult, VmBamlError,
     VmRustFnError,
 };
-use sys_types::{BexHeap, CompletionHandle, SysOp, VmPanic};
+use sys_types::{BexHeap, CompletionHandle, SysOp};
 use wasm_bindgen::prelude::*;
 
 use crate::send_wrapper::SendWrapper;
@@ -259,6 +259,23 @@ pub fn complete_host_call(call_id: u32, is_error: i32, content: &[u8]) {
         return;
     };
 
+    // Strict 0/1 contract: any other value is a bridge wire-protocol bug
+    // (an `i32` could carry uninitialised memory, a forgotten cast, or
+    // someone repurposing the flag) — surface it as `BridgeFailure` so the
+    // bug is loud, instead of silently aliasing into the throw branch.
+    if is_error != 0 && is_error != 1 {
+        completion.complete(Err(OpError::new(
+            SysOp::BamlHostCallHostValue,
+            sys_types::VmInternalError::BridgeFailure {
+                message: format!(
+                    "completeHostCall: invalid isError value {is_error}; \
+                     expected 0 (success) or 1 (error)"
+                ),
+            },
+        )));
+        return;
+    }
+
     if is_error == 0 {
         // Success: decode InboundValue → BexExternalValue.
         if content.is_empty() {
@@ -292,19 +309,21 @@ pub fn complete_host_call(call_id: u32, is_error: i32, content: &[u8]) {
         // engine's `materialize_host_throw` runs the declared-throws
         // contract check on the decoded value.
         let mapped = if content.is_empty() {
-            // An empty throw payload is a host bridge contract violation:
-            // `is_error == 1` requires a protobuf-encoded `InboundValue`.
-            // Surface it as a `HostContractViolation` panic so the bug is
-            // not silently masked into a bogus catchable throw.
+            // An empty throw payload is a host bridge bug, not a user
+            // contract violation: `is_error == 1` requires a protobuf-
+            // encoded `InboundValue`, and only the bridge itself decides
+            // what to send on the wire. A misbehaving bridge is an
+            // infrastructure fault — surface it as `BridgeFailure` (which
+            // codegens to `baml.panics.SdkPanic` on the host side), not as
+            // `HostContractViolation` (which would falsely accuse the
+            // user's callable of returning the wrong shape).
             OpError::new(
                 SysOp::BamlHostCallHostValue,
-                VmPanic::HostContractViolation {
+                sys_types::VmInternalError::BridgeFailure {
                     message: "host bridge called completeHostCall(isError=1) \
                               with no payload; expected a protobuf-encoded \
                               InboundValue describing the thrown value"
                         .to_string(),
-                    class_name: None,
-                    language: None,
                 },
             )
         } else {

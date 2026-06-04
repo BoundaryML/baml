@@ -169,7 +169,20 @@ pub fn complete_host_call(call_id: u32, is_error: i32, content: Buffer) {
 fn drop_registry_entry(host_value_key: u64) {
     let popped: Option<Arc<DispatchTsfn>> = match REGISTRY.table.lock() {
         Ok(mut t) => t.remove(&host_value_key),
-        Err(_) => return, // poisoned; nothing we can do safely
+        Err(e) => {
+            // Poisoning means an earlier panic occurred while holding the
+            // lock; the table is in an unknown state. Don't try to mutate
+            // it (could double-drop), but log so the underlying panic is
+            // attributable. We accept the leak: the engine has already
+            // dropped its `Arc<HostValueArc>` (we're on the release path),
+            // and a poisoned global registry implies the process is in a
+            // failing state anyway.
+            log::warn!(
+                "host-callable registry mutex poisoned during release of key \
+                 {host_value_key}: {e}; entry leaked"
+            );
+            return;
+        }
     };
     drop(popped);
 }
@@ -324,7 +337,17 @@ pub extern "C" fn host_dispatch_callback(
     // dispatch never blocks `register_host_callable` / `host_release_callback`.
     let tsfn: Option<Arc<DispatchTsfn>> = match REGISTRY.table.lock() {
         Ok(t) => t.get(&host_value_key).cloned(),
-        Err(_) => None,
+        Err(e) => {
+            // Treat poisoning as a "no callable" condition for this
+            // dispatch (the engine call must still complete), but log so
+            // the originating panic is attributable instead of being
+            // swallowed silently as an opaque `no-callable` error.
+            log::warn!(
+                "host-callable registry mutex poisoned during dispatch of key \
+                 {host_value_key}: {e}; treating as no-callable"
+            );
+            None
+        }
     };
     let Some(tsfn) = tsfn else {
         send_dispatch_error_no_callable(call_id, host_value_key);

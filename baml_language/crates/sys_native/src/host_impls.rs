@@ -121,12 +121,20 @@ impl io::IoNamespaceHost for NativeSysOps {
             let guard = host_dispatch::InflightGuard::new(call_id);
 
             // Fire the dispatch callback. If no bridge has registered, fail
-            // synchronously so the engine does not hang waiting on the oneshot.
+            // synchronously so the engine does not hang waiting on the
+            // oneshot. A missing dispatcher is an SDK / infrastructure
+            // fault, not a user-callable error — route as `BridgeFailure`
+            // so the host SDK surfaces it as `baml.panics.SdkPanic`
+            // (fatal), not a catchable error class. (In practice the
+            // working bridges register a dispatcher at module init *and*
+            // fast-fail missing-callable cases before this point — but the
+            // engine-side contract has to be self-enforcing for any new
+            // bridge that doesn't pre-check.)
             if !host_dispatch::fire_dispatch(host_arc.key, call_id, &encoded) {
                 if let Some(c) = host_dispatch::take(call_id) {
                     c.complete(Err(OpError::new(
                         SysOp::BamlHostCallHostValue,
-                        VmBamlError::NotImplemented {
+                        sys_types::VmInternalError::BridgeFailure {
                             message: "no host bridge registered for host-value dispatch"
                                 .to_string(),
                         },

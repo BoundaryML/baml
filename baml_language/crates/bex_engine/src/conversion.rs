@@ -543,16 +543,19 @@ impl BexEngine {
                         });
                     }
                 };
-                // The host's returned value is validated against `ret` when the
-                // call completes. A generic return type erases to `Ty::Void`
-                // (or `BuiltinUnknown`) at runtime, which the return validator
-                // treats as "accept anything" — letting the host inject a value
-                // of any type into a position BAML treats as the instantiated
-                // type variable. Reject such a callable at bind time rather than
-                // admit an unvalidatable return. (This also rejects a genuine
-                // bare `-> void` host callable, which is indistinguishable from
-                // an erased generic at runtime; such a callable must declare a
-                // concrete return type.)
+                // The host's returned value is validated against `ret` when
+                // the call completes. A generic return type erases to
+                // `Ty::Void` at MIR lowering (the post-erasure form of an
+                // unbounded TypeVar; see [convert_tir2_ty]); a return type
+                // explicitly declared `unknown` reaches here as
+                // `Ty::BuiltinUnknown`. The return validator treats both as
+                // "accept anything" — letting the host inject a value of any
+                // type into a position BAML treats as the instantiated type
+                // variable. Reject such a callable at bind time rather than
+                // admit an unvalidatable return. (This also rejects a
+                // genuine bare `-> void` host callable, which is
+                // indistinguishable from an erased generic at runtime; such a
+                // callable must declare a concrete return type.)
                 if ret_ty_has_unvalidatable_position(&ret) {
                     return Err(EngineError::TypeMismatch {
                         message: format!(
@@ -563,17 +566,25 @@ impl BexEngine {
                     });
                 }
                 // `throws` is the callable's declared error contract `E`
-                // (`call_host_value<T, E>`). An omitted throws on the parameter
-                // is a synthesized generic effect param that erases to
-                // `Ty::Void` at runtime. Unlike the return type — rejected just
-                // above when generic/void, since the host's return must be
-                // validatable — an unknown error contract is fine: the contract
-                // check treats `Void` as "accept any thrown value" (the
-                // `unknown` fallback).
+                // (`call_host_value<T, E>`). An omitted throws on the
+                // parameter is a synthesized generic effect param. By MIR
+                // lowering ([baml_compiler2_mir::lower::convert_tir2_ty]
+                // around the unbounded-TypeVar arm), such a generic erases
+                // to `Ty::Void` at runtime — but `Void` is also a valid
+                // declared type (a bare `-> void` throws contract, however
+                // unusual). To keep the FFI boundary's intent explicit and
+                // forward-compatible with a future FFI mechanism that
+                // supplies a real host-reported error type, normalize the
+                // erased-generic shape to `BuiltinUnknown` here. Concrete
+                // throws (e.g. `throws ParseError`) pass through unchanged.
+                let normalized_throws = match throws {
+                    Ty::Void { attr } => Ty::BuiltinUnknown { attr },
+                    other => other,
+                };
                 let host_closure = bex_vm_types::HostClosure {
                     handle: arc,
                     ret_ty: Box::new(ret),
-                    throws_ty: Box::new(throws),
+                    throws_ty: Box::new(normalized_throws),
                     arity: params.len(),
                 };
                 Value::object(

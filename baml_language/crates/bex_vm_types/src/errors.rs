@@ -129,9 +129,6 @@ pub enum VmBamlError {
     #[error("developer error: {message}")]
     DevOther { message: String },
 
-    #[error("host panic: {message}")]
-    HostPanic { message: String },
-
     /// An error value from the host language that has no direct BAML
     /// representation. The `handle` is the load-bearing field — it
     /// references the original host exception object via the
@@ -183,7 +180,6 @@ impl VmBamlError {
             Self::NotImplemented { .. } => "baml.errors.NotImplemented",
             Self::LlmClient { .. } => "baml.errors.LlmClient",
             Self::DevOther { .. } => "baml.errors.DevOther",
-            Self::HostPanic { .. } => "baml.errors.HostPanic",
             Self::HostCallable { .. } => "baml.errors.HostCallable",
         }
     }
@@ -203,12 +199,6 @@ impl VmBamlError {
             Self::NotImplemented { .. } => SysOpErrorCategory::NotImplemented,
             Self::LlmClient { .. } => SysOpErrorCategory::LlmClient,
             Self::DevOther { .. } => SysOpErrorCategory::DevOther,
-            // `HostPanic` predates the unification and is being phased out
-            // (the design retires `baml.errors.HostPanic` in favour of
-            // `baml.panics.HostContractViolation`); collapse it to the
-            // host-callable bucket so contract enforcement still surfaces
-            // it consistently while we migrate sites away.
-            Self::HostPanic { .. } => SysOpErrorCategory::HostCallable,
             Self::HostCallable { .. } => SysOpErrorCategory::HostCallable,
         }
     }

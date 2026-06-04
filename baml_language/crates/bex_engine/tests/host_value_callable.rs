@@ -142,6 +142,12 @@ enum FakeReturn {
     Ok(BexExternalValue),
     /// Complete the call with a `HostCallable` error.
     Err { class_name: String, message: String },
+    /// Complete the call with a fatal `VmInternalError::BridgeFailure` —
+    /// models a host-bridge wire-protocol bug (e.g. `is_error=1` with an
+    /// empty payload, or an `is_error` outside `{0, 1}`). Must surface to
+    /// the engine as `EngineError::VmInternalError` /
+    /// `TracedVmInternalError` rather than an `UnhandledThrow`.
+    BridgeFailure { message: String },
     /// Do **not** complete the call — model a hung host. The dispatched
     /// `call_id` is published on [`PENDING_CALL_ID`] so the test can cancel the
     /// BAML call and then assert the in-flight table entry was evicted.
@@ -242,6 +248,15 @@ extern "C" fn global_dispatch(host_value_key: u64, call_id: u32, args: *const u8
             message,
         } => {
             complete_with_test_error(call_id, &class_name, &message);
+        }
+        FakeReturn::BridgeFailure { message } => {
+            sys_native::host_dispatch::complete_with_error(
+                call_id,
+                sys_types::OpError::new(
+                    sys_types::SysOp::BamlHostCallHostValue,
+                    sys_types::VmInternalError::BridgeFailure { message },
+                ),
+            );
         }
         FakeReturn::NeverComplete => {
             // Model a hung host: publish the call_id (routed to the test that
@@ -782,6 +797,79 @@ async fn host_callable_wrong_generic_class_field_type_surfaces_as_host_callable_
         .await;
 
     assert_host_callable_throw(&result);
+    drop(arc);
+}
+
+// ============================================================================
+// Bridge-wire-protocol bug: the host bridge synthesises
+//         `VmInternalError::BridgeFailure` (e.g. an empty
+//         `complete_host_call(is_error=1)` payload, or an `is_error` outside
+//         `{0, 1}`). This is *infrastructure*, not a user contract violation:
+//         it must surface as a fatal `EngineError::VmInternalError` /
+//         `TracedVmInternalError`, NOT as an `UnhandledThrow` of
+//         `baml.panics.HostContractViolation` (which would falsely accuse
+//         the user's callable of returning the wrong shape).
+//
+//         The host SDKs (bridge_python / bridge_nodejs) then render this
+//         internal error as `baml.panics.SdkPanic` on their side, but that
+//         translation is the bridge SDK's responsibility; the engine's
+//         contract is only to surface it as an internal error.
+// ============================================================================
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn host_callable_bridge_failure_surfaces_as_internal_error() {
+    let source = r#"
+        function call_cb(f: (int) -> int, x: int) -> int {
+            return f(x);
+        }
+    "#;
+
+    let arc = register_host_callable(|_items| FakeReturn::BridgeFailure {
+        message: "synthetic wire-protocol fault".to_string(),
+    });
+
+    let snapshot = compile_for_engine(source);
+    let engine = Arc::new(
+        BexEngine::new(
+            snapshot,
+            Arc::new(sys_native::SysOps::native()),
+            None,
+            Vec::new(),
+        )
+        .expect("Failed to create engine"),
+    );
+
+    let result = engine
+        .call_function(
+            "call_cb",
+            vec![
+                BexExternalValue::HostValue(Arc::clone(&arc)),
+                BexExternalValue::Int(1),
+            ],
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+            true,
+        )
+        .await;
+
+    match result {
+        Err(
+            EngineError::VmInternalError(sys_types::VmInternalError::BridgeFailure { message })
+            | EngineError::TracedVmInternalError {
+                source: sys_types::VmInternalError::BridgeFailure { message },
+                ..
+            },
+        ) => {
+            assert!(
+                message.contains("synthetic wire-protocol fault"),
+                "expected the bridge-supplied diagnostic to round-trip onto the internal \
+                 error, got {message:?}"
+            );
+        }
+        other => panic!(
+            "expected EngineError::VmInternalError / TracedVmInternalError carrying \
+             BridgeFailure; got {other:?}"
+        ),
+    }
     drop(arc);
 }
 

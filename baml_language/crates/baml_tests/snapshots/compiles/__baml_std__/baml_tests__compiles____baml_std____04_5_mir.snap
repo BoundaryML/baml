@@ -464,23 +464,29 @@ fn baml.errors.InvalidArgument.from_json(j: baml.json.json) -> baml.errors.Inval
     }
 }
 
-fn baml.errors.HostCallable.from_json(j: baml.json.json) -> baml.errors.HostCallable {
+fn baml.errors.GenericSdkError.from_json(j: baml.json.json) -> baml.errors.GenericSdkError {
     // Locals:
-    let _0: baml.errors.HostCallable // _0 // return
+    let _0: baml.errors.GenericSdkError // _0 // return
     let _1: baml.json.json // j // param
     let _2: string
-    let _3: type
+    let _3: baml.json.json
+    let _4: type
 
     bb0: {
-        _2 = call const fn baml.json.stringify(copy _1) -> [bb1];
+        _3 = call const fn baml.json.field(copy _1, const "message") -> [bb1];
     }
 
     bb1: {
-        _3 = load_type(baml.errors.HostCallable);
-        _0 = call const fn baml.json.from_string<copy _3>(copy _2) -> [bb2];
+        _4 = load_type(string);
+        _2 = call const fn baml.json.from_json<copy _4>(copy _3) -> [bb2];
     }
 
     bb2: {
+        _0 = baml.errors.GenericSdkError { copy _2 };
+        goto -> bb3;
+    }
+
+    bb3: {
         return;
     }
 }
@@ -605,9 +611,9 @@ fn baml.errors.ParseError.from_json(j: baml.json.json) -> baml.errors.ParseError
     }
 }
 
-fn baml.errors.GenericSdkError.from_json(j: baml.json.json) -> baml.errors.GenericSdkError {
+fn baml.errors.CompilationError.from_json(j: baml.json.json) -> baml.errors.CompilationError {
     // Locals:
-    let _0: baml.errors.GenericSdkError // _0 // return
+    let _0: baml.errors.CompilationError // _0 // return
     let _1: baml.json.json // j // param
     let _2: string
     let _3: baml.json.json
@@ -623,7 +629,7 @@ fn baml.errors.GenericSdkError.from_json(j: baml.json.json) -> baml.errors.Gener
     }
 
     bb2: {
-        _0 = baml.errors.GenericSdkError { copy _2 };
+        _0 = baml.errors.CompilationError { copy _2 };
         goto -> bb3;
     }
 
@@ -686,29 +692,23 @@ fn baml.errors.NotImplemented.from_json(j: baml.json.json) -> baml.errors.NotImp
     }
 }
 
-fn baml.errors.HostPanic.from_json(j: baml.json.json) -> baml.errors.HostPanic {
+fn baml.errors.HostCallable.from_json(j: baml.json.json) -> baml.errors.HostCallable {
     // Locals:
-    let _0: baml.errors.HostPanic // _0 // return
+    let _0: baml.errors.HostCallable // _0 // return
     let _1: baml.json.json // j // param
     let _2: string
-    let _3: baml.json.json
-    let _4: type
+    let _3: type
 
     bb0: {
-        _3 = call const fn baml.json.field(copy _1, const "message") -> [bb1];
+        _2 = call const fn baml.json.stringify(copy _1) -> [bb1];
     }
 
     bb1: {
-        _4 = load_type(string);
-        _2 = call const fn baml.json.from_json<copy _4>(copy _3) -> [bb2];
+        _3 = load_type(baml.errors.HostCallable);
+        _0 = call const fn baml.json.from_string<copy _3>(copy _2) -> [bb2];
     }
 
     bb2: {
-        _0 = baml.errors.HostPanic { copy _2 };
-        goto -> bb3;
-    }
-
-    bb3: {
         return;
     }
 }
@@ -732,33 +732,6 @@ fn baml.errors.Io.from_json(j: baml.json.json) -> baml.errors.Io {
 
     bb2: {
         _0 = baml.errors.Io { copy _2 };
-        goto -> bb3;
-    }
-
-    bb3: {
-        return;
-    }
-}
-
-fn baml.errors.CompilationError.from_json(j: baml.json.json) -> baml.errors.CompilationError {
-    // Locals:
-    let _0: baml.errors.CompilationError // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: string
-    let _3: baml.json.json
-    let _4: type
-
-    bb0: {
-        _3 = call const fn baml.json.field(copy _1, const "message") -> [bb1];
-    }
-
-    bb1: {
-        _4 = load_type(string);
-        _2 = call const fn baml.json.from_json<copy _4>(copy _3) -> [bb2];
-    }
-
-    bb2: {
-        _0 = baml.errors.CompilationError { copy _2 };
         goto -> bb3;
     }
 
@@ -869,20 +842,23 @@ fn baml.errors.InvalidArgument.to_json(self: baml.errors.InvalidArgument) -> bam
     }
 }
 
-fn baml.errors.HostCallable.to_json(self: baml.errors.HostCallable) -> baml.json.json {
+fn baml.errors.GenericSdkError.to_json(self: baml.errors.GenericSdkError) -> baml.json.json {
     // Locals:
     let _0: baml.json.json // _0 // return
-    let _1: baml.errors.HostCallable // self // param
-    let _2: string
-    let _3: type
+    let _1: baml.errors.GenericSdkError // self // param
+    let _2: baml.json.json
+    let _3: string
+    let _4: baml.errors.GenericSdkError
 
     bb0: {
-        _3 = load_type(baml.errors.HostCallable);
-        _2 = call const fn baml.json.to_string<copy _3>(copy _1) -> [bb1];
+        _4 = copy _1;
+        _3 = copy _4.0;
+        _2 = call const fn baml.String.to_json(copy _3) -> [bb1];
     }
 
     bb1: {
-        _0 = call const fn baml.json.parse(copy _2) -> [bb2];
+        _0 = { const "message": copy _2 };
+        goto -> bb2;
     }
 
     bb2: {
@@ -1012,13 +988,13 @@ fn baml.errors.ParseError.to_json(self: baml.errors.ParseError) -> baml.json.jso
     }
 }
 
-fn baml.errors.GenericSdkError.to_json(self: baml.errors.GenericSdkError) -> baml.json.json {
+fn baml.errors.CompilationError.to_json(self: baml.errors.CompilationError) -> baml.json.json {
     // Locals:
     let _0: baml.json.json // _0 // return
-    let _1: baml.errors.GenericSdkError // self // param
+    let _1: baml.errors.CompilationError // self // param
     let _2: baml.json.json
     let _3: string
-    let _4: baml.errors.GenericSdkError
+    let _4: baml.errors.CompilationError
 
     bb0: {
         _4 = copy _1;
@@ -1084,23 +1060,20 @@ fn baml.errors.NotImplemented.to_json(self: baml.errors.NotImplemented) -> baml.
     }
 }
 
-fn baml.errors.HostPanic.to_json(self: baml.errors.HostPanic) -> baml.json.json {
+fn baml.errors.HostCallable.to_json(self: baml.errors.HostCallable) -> baml.json.json {
     // Locals:
     let _0: baml.json.json // _0 // return
-    let _1: baml.errors.HostPanic // self // param
-    let _2: baml.json.json
-    let _3: string
-    let _4: baml.errors.HostPanic
+    let _1: baml.errors.HostCallable // self // param
+    let _2: string
+    let _3: type
 
     bb0: {
-        _4 = copy _1;
-        _3 = copy _4.0;
-        _2 = call const fn baml.String.to_json(copy _3) -> [bb1];
+        _3 = load_type(baml.errors.HostCallable);
+        _2 = call const fn baml.json.to_string<copy _3>(copy _1) -> [bb1];
     }
 
     bb1: {
-        _0 = { const "message": copy _2 };
-        goto -> bb2;
+        _0 = call const fn baml.json.parse(copy _2) -> [bb2];
     }
 
     bb2: {
@@ -1115,30 +1088,6 @@ fn baml.errors.Io.to_json(self: baml.errors.Io) -> baml.json.json {
     let _2: baml.json.json
     let _3: string
     let _4: baml.errors.Io
-
-    bb0: {
-        _4 = copy _1;
-        _3 = copy _4.0;
-        _2 = call const fn baml.String.to_json(copy _3) -> [bb1];
-    }
-
-    bb1: {
-        _0 = { const "message": copy _2 };
-        goto -> bb2;
-    }
-
-    bb2: {
-        return;
-    }
-}
-
-fn baml.errors.CompilationError.to_json(self: baml.errors.CompilationError) -> baml.json.json {
-    // Locals:
-    let _0: baml.json.json // _0 // return
-    let _1: baml.errors.CompilationError // self // param
-    let _2: baml.json.json
-    let _3: string
-    let _4: baml.errors.CompilationError
 
     bb0: {
         _4 = copy _1;

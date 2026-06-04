@@ -736,27 +736,6 @@ function baml.errors.HostCallable.to_json(self: baml.errors.HostCallable) -> bam
     return
 }
 
-function baml.errors.HostPanic.from_json(j: baml.json.json) -> baml.errors.HostPanic {
-    load_var j
-    load_const "message"
-    call baml.json.field
-    store_var _3
-    load_type string
-    load_var _3
-    call baml.json.from_json
-    init_instance baml.errors.HostPanic .message
-    return
-}
-
-function baml.errors.HostPanic.to_json(self: baml.errors.HostPanic) -> baml.json.json {
-    load_var self
-    load_field .message
-    call baml.String.to_json
-    load_const "message"
-    alloc_map 1
-    return
-}
-
 function baml.errors.InvalidArgument.from_json(j: baml.json.json) -> baml.errors.InvalidArgument {
     load_var j
     load_const "message"

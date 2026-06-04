@@ -1893,9 +1893,12 @@ pub struct HostClosure {
     /// The declared error/throws contract of the host-callable (`E` in
     /// `call_host_value<T, E>`), threaded through
     /// `SysOp::BamlHostCallHostValue` as `type_arg_1`. A host throw is
-    /// checked against this contract; a generic/undeclared throws erases to
-    /// `Void`/`BuiltinUnknown` at runtime (i.e. `unknown`), which accepts any
-    /// thrown value.
+    /// checked against this contract. The FFI entry boundary (see
+    /// `bex_engine::conversion`'s `HostValue` arm) normalizes an
+    /// unbounded/undeclared generic throws to `Ty::BuiltinUnknown`, which
+    /// accepts any thrown value — the "unknown" fallback. Concrete throws
+    /// (e.g. `throws ParseError`) pass through unchanged so the contract
+    /// check can reject off-type throws as `HostContractViolation`.
     pub throws_ty: Box<baml_type::Ty>,
     /// Number of value arguments the host callable expects.
     ///

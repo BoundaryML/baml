@@ -2315,10 +2315,6 @@ impl BexVm {
                 ErrorClass::DevOther,
                 vec![Value::object(self.alloc_string(message))],
             ),
-            VmBamlError::HostPanic { message } => (
-                ErrorClass::HostPanic,
-                vec![Value::object(self.alloc_string(message))],
-            ),
             // Field order matches the `HostCallable` class in
             // `ns_errors/errors.baml`: message, class_name, language,
             // traceback?, _handle. `traceback?` surfaces as `Null` when

@@ -26,7 +26,7 @@ use sys_native::host_dispatch;
 /// Re-exported from `sys_native::host_dispatch::HostDispatchFn` for
 /// external consumers (cbindgen header generation, etc.).
 pub use sys_native::host_dispatch::HostDispatchFn;
-use sys_types::{OpError, SysOp, VmBamlError, VmPanic};
+use sys_types::{OpError, SysOp, VmBamlError, VmInternalError};
 
 /// Register the host dispatch callback. First call wins; subsequent calls
 /// are silently ignored (consistent with `register_callback` semantics).
@@ -105,6 +105,24 @@ pub extern "C" fn complete_host_call(
         return;
     }
 
+    // `from_raw_parts`'s soundness contract requires the slice's *total
+    // byte length* to fit in `isize` — a buggy host SDK passing garbage
+    // on a 64-bit platform could violate this and trigger undefined
+    // behaviour inside the slice access or downstream protobuf decoding.
+    // Reject as a `BridgeFailure` so the bug surfaces loudly.
+    if length > isize::MAX as usize {
+        host_dispatch::complete_with_error(
+            call_id,
+            OpError::new(
+                SysOp::BamlHostCallHostValue,
+                VmInternalError::BridgeFailure {
+                    message: format!("complete_host_call: length {length} exceeds isize::MAX"),
+                },
+            ),
+        );
+        return;
+    }
+
     // SAFETY: caller promises ptr is valid for `length` bytes; the guard above
     // ruled out a null pointer whenever `length > 0`.
     let bytes: &[u8] = if length == 0 {
@@ -112,6 +130,26 @@ pub extern "C" fn complete_host_call(
     } else {
         unsafe { std::slice::from_raw_parts(content as *const u8, length) }
     };
+
+    // Strict 0/1 contract: any other value is a bridge wire-protocol bug
+    // (an `i32` could carry uninitialised memory, a forgotten cast, or
+    // someone repurposing the flag) — surface it as `BridgeFailure` so the
+    // bug is loud, instead of silently aliasing into the throw branch.
+    if is_error != 0 && is_error != 1 {
+        host_dispatch::complete_with_error(
+            call_id,
+            OpError::new(
+                SysOp::BamlHostCallHostValue,
+                VmInternalError::BridgeFailure {
+                    message: format!(
+                        "complete_host_call: invalid is_error value {is_error}; \
+                         expected 0 (success) or 1 (error)"
+                    ),
+                },
+            ),
+        );
+        return;
+    }
 
     if is_error == 0 {
         // Success: decode InboundValue → BexExternalValue.
@@ -161,21 +199,23 @@ pub extern "C" fn complete_host_call(
         // either materialises it as a catchable throw or escalates to
         // a `HostContractViolation` panic.
         if bytes.is_empty() {
-            // An empty throw payload is a host bridge contract violation:
-            // `is_error == 1` requires a protobuf-encoded `InboundValue`.
-            // Surface it as a `HostContractViolation` panic so the bug is
-            // not silently masked into a bogus catchable throw.
+            // An empty throw payload is a host bridge bug, not a user
+            // contract violation: `is_error == 1` requires a protobuf-
+            // encoded `InboundValue`, and only the bridge itself decides
+            // what to send on the wire. A misbehaving bridge is an
+            // infrastructure fault — surface it as `BridgeFailure` (which
+            // codegens to `baml.panics.SdkPanic` on the host side), not as
+            // `HostContractViolation` (which would falsely accuse the
+            // user's callable of returning the wrong shape).
             host_dispatch::complete_with_error(
                 call_id,
                 OpError::new(
                     SysOp::BamlHostCallHostValue,
-                    VmPanic::HostContractViolation {
+                    VmInternalError::BridgeFailure {
                         message: "host bridge called complete_host_call(is_error=1) \
                                   with no payload; expected a protobuf-encoded \
                                   InboundValue describing the thrown value"
                             .to_string(),
-                        class_name: None,
-                        language: None,
                     },
                 ),
             );
