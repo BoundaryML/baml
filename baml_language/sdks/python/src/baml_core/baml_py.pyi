@@ -25,10 +25,8 @@ __all__ = [
     "flush_events",
     "get_runtime",
     "get_version",
-    "put_pyhandle_into_table",
     "register_host_callable",
     "release_host_callable",
-    "take_pyhandle_from_table",
 ]
 
 @typing.final
@@ -153,8 +151,10 @@ class BamlPdf:
 
 @typing.final
 class BamlPyHandle:
+    def __init__(self, handle_key: builtins.int, handle_type: builtins.int) -> None: ...
     def __copy__(self) -> BamlPyHandle: ...
     def __deepcopy__(self, _memo: typing.Any) -> BamlPyHandle: ...
+    def _clone_key_for_wire(self) -> tuple[builtins.int, builtins.int]: ...
 
 @typing.final
 class BamlRuntime:
@@ -448,14 +448,6 @@ def get_runtime() -> BamlRuntime:
 
 def get_version() -> builtins.str: ...
 
-def put_pyhandle_into_table(pyhandle: BamlPyHandle) -> tuple[builtins.int, builtins.int]:
-    r"""
-    Allocate a fresh `HANDLE_TABLE` row sharing the same `Arc` as
-    `pyhandle.handle_key`, return `(new_key, handle_type)`. The original
-    `BamlPyHandle` keeps its key and stays usable — Python may pass the
-    same handle to multiple calls.
-    """
-
 def register_host_callable(callable: typing.Any) -> builtins.int:
     r"""
     Insert a Python callable into the registry and return its key.
@@ -477,13 +469,4 @@ def release_host_callable(host_value_key: builtins.int) -> None:
     registry entry (holding a strong ref to the user callable) would leak for
     the life of the process. The encoder calls this for every key it
     registered during a failed encode.
-    """
-
-def take_pyhandle_from_table(key: builtins.int, handle_type: builtins.int) -> BamlPyHandle:
-    r"""
-    Wrap a `HANDLE_TABLE` key as a `BamlPyHandle`. Used by
-    `proto.py::_decode_handle`. Does **not** drain — the entry stays in
-    the table and is owned by the returned `BamlPyHandle`. Validates the
-    key exists so a malformed wire payload errors here rather than on
-    later use.
     """

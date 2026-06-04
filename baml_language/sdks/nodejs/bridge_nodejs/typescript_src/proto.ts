@@ -8,7 +8,6 @@ import { baml_core } from './proto/baml_cffi.js';
 import {
     BamlHandle,
     HandleKey,
-    putHandleIntoTable,
     BamlImage,
     BamlAudio,
     BamlVideo,
@@ -97,7 +96,7 @@ function setInboundValue(iv: baml_core.cffi.v1.IInboundValue, value: unknown, ct
         }
         // The Rust inbound decoder drains handle-table entries. Send a fresh
         // cloned key so the JS-owned handle remains valid for later calls.
-        iv.handle = { key: putHandleIntoTable(value), handleType: value.handleType };
+        iv.handle = { key: value._cloneKeyForWire(), handleType: value.handleType };
     } else if (value instanceof BamlStream) {
         // Stream wrapper → its inner TaggedHeapHandle. Mirrors the BamlHandle
         // branch above; the engine re-binds it to the heap value on decode.

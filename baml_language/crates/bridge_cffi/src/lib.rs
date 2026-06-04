@@ -37,7 +37,12 @@ pub use buffer::Buffer;
 pub use error::BridgeError;
 pub use ffi::{
     callbacks::{CallbackFn, register_callback},
-    handle::{clone_handle, release_handle},
+    handle::{
+        __testonly_seed_function_ref, __testonly_seed_generic_media, BamlCffiStatus,
+        baml_handle_clone, baml_handle_release, baml_media_base64, baml_media_file,
+        baml_media_from_base64, baml_media_from_file, baml_media_from_url, baml_media_mime_type,
+        baml_media_url,
+    },
     host_value::{
         HostDispatchFn, complete_host_call, register_host_dispatch_callback,
         register_host_release_callback,
