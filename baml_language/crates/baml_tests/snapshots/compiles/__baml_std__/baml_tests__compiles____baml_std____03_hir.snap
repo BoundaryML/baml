@@ -382,27 +382,50 @@ function baml.fs.write_bytes(self: ?, data: uint8array) -> int  [builtin]
 function baml.fs.write_bytes(path: string, content: uint8array) -> int  [builtin]
 
 --- <builtin>/baml/ns_future/future.baml ---
+class baml.future.AllFailed {
+  errors: baml.future.E[]
+}
 class baml.future.Future {
 }
 enum baml.future.FutureState {Pending, Ready, Error, Cancelled}
+function baml.future.__await_any(futures: baml.future.Future[]) -> int  [builtin]
+function baml.future.all(futures: baml.future.Future[]) -> baml.future.Future  [expr] {
+  {  } spawn { () -> { {  } futures.map((f) -> { {  } await f catch (e) { e => { futures.map((g) -> { {  } g.cancel() }); throw e } } }) } }
+}
 function baml.future.all_complete(futures: baml.future.Future[]) -> baml.future.Future  [expr] {
   {  } spawn { () -> { {  } futures.map((f) -> { {  } await f }) } }
+}
+function baml.future.any(futures: baml.future.Future[]) -> baml.future.Future  [expr] {
+  {  } spawn { () -> { { let errors: baml.future.E[] = []; let winners: baml.future.T[] = []; let remaining = futures; while remaining.length() Gt 0 { let i = baml.future.__await_any(remaining); let f = remaining[i]; if (f.is_result()) { winners.push(await f catch (e) { e => throw baml.future.AllFailed { errors: errors.concat([e]) } }); break }; if (f.is_error()) { await f catch (e) { e => { errors.push(e) } 0 } }; remaining = remaining.slice(0, i).concat(remaining.slice(i Add 1, remaining.length())) }; if (winners.length() Eq 0) { throw baml.future.AllFailed { errors: errors } }; futures.map((g) -> { {  } g.cancel() }) } winners[0] } }
 }
 function baml.future.cancel(self: ?) -> bool  [builtin]
 function baml.future.from_json(j: baml.json.json) -> baml.future.Future  [expr] {
   baml.future.Future {  }
 }
+function baml.future.from_json(j: baml.json.json) -> baml.future.AllFailed  [expr] {
+  baml.future.AllFailed { errors: baml.json.from_json(baml.json.field(j, "errors")) }
+}
 function baml.future.is_cancelled(self: ?) -> bool  [builtin]
 function baml.future.is_error(self: ?) -> bool  [builtin]
 function baml.future.is_result(self: ?) -> bool  [builtin]
 function baml.future.is_settled(self: ?) -> bool  [builtin]
+function baml.future.race(futures: baml.future.Future[]) -> baml.future.Future  [expr] {
+  {  } spawn { () -> { { let i = baml.future.__await_any(futures); futures.map((f) -> { {  } f.cancel() }) } await futures[i] } }
+}
 function baml.future.state(self: ?) -> baml.future.FutureState  [builtin]
 function baml.future.to_json(self: ?) -> baml.json.json  [expr] {
   map {  }
 }
+function baml.future.to_json(self: ?) -> baml.json.json  [expr] {
+  map { "errors": self.errors.to_json() }
+}
 
 --- captures ---
 lambda () in all_complete: captures [futures]
+lambda () in all: captures [futures]
+lambda (f) in ?: captures [futures]
+lambda () in race: captures [futures]
+lambda () in any: captures [futures]
 
 --- <builtin>/baml/ns_glob/glob.baml ---
 class baml.glob.Glob {

@@ -366,7 +366,48 @@ lambda baml.future.all_complete {
 }
 lambda baml.future.all_complete {
 }
+function baml.future.all<T, E>(futures: Future<T, E>[]) -> Future<T[], E> throws never {
+  { : Future<U[], null>
+    spawn { () -> { ... } } : Future<U[], null>
+  }
+}
+lambda baml.future.all {
+}
+lambda baml.future.all {
+}
+lambda baml.future.all {
+}
+class baml.future.AllFailed {
+  errors: E[]
+}
+function baml.future.AllFailed.to_json(self: baml.future.AllFailed) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  map { "errors": self.errors.to_json() } : map<string, baml.json.json>
+}
+function baml.future.AllFailed.from_json(j: baml.json.json) -> baml.future.AllFailed<unknown> throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  AllFailed { errors: baml.json.from_json<E[]>(baml.json.field(j, "errors")) } : baml.future.AllFailed<E>
+}
+function baml.future.race<T, E>(futures: Future<T, E>[]) -> Future<T, E> throws never {
+  { : Future<T, null>
+    spawn { () -> { ... } } : Future<T, null>
+  }
+}
+lambda baml.future.race {
+}
+lambda baml.future.race {
+}
+function baml.future.any<T, E>(futures: Future<T, E>[]) -> Future<T, baml.future.AllFailed<E>> throws never {
+  { : Future<T, null>
+    spawn { () -> { ... } } : Future<T, null>
+  }
+}
+lambda baml.future.any {
+}
+lambda baml.future.any {
+}
 class baml.future.Future$stream {
+}
+class baml.future.AllFailed$stream {
+  errors: E[]
 }
 
 --- <builtin>/baml/ns_glob/glob.baml ---

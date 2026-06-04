@@ -399,14 +399,6 @@ function control_flow.greet_if_let(u: control_flow.User | control_flow.Admin) ->
     load_var u
     is_type control_flow.User
     pop_jump_if_false L0
-    load_var u
-    load_field .0
-    is_type string
-    pop_jump_if_false L0
-    load_var u
-    load_field .1
-    is_type int
-    pop_jump_if_false L0
     jump L1
 
   L0:
@@ -424,14 +416,6 @@ function control_flow.greet_if_let(u: control_flow.User | control_flow.Admin) ->
 function control_flow.greet_let_else(u: control_flow.User | control_flow.Admin) -> string {
     load_var u
     is_type control_flow.User
-    pop_jump_if_false L0
-    load_var u
-    load_field .0
-    is_type string
-    pop_jump_if_false L0
-    load_var u
-    load_field .1
-    is_type int
     pop_jump_if_false L0
     jump L1
 
