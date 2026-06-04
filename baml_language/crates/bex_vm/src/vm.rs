@@ -272,6 +272,9 @@ mod tests {
             param_names: Vec::new(),
             param_types: Vec::new(),
             param_has_default: Vec::new(),
+            display_type_params: Vec::new(),
+            display_param_types: Vec::new(),
+            display_return_type: "int".to_string(),
             throws_type: None,
             origin: FunctionOrigin::Internal,
             body_meta: None,
@@ -1574,6 +1577,7 @@ impl BexVm {
         };
         bytecode.compact = Some(bytecode.lower_to_compact());
 
+        let display_return_type = return_type.to_string();
         let entry_function = Function {
             name: format!("$entry::{callee_name}"),
             source_file: String::new(),
@@ -1593,6 +1597,9 @@ impl BexVm {
             param_names: Vec::new(),
             param_types: Vec::new(),
             param_has_default: Vec::new(),
+            display_type_params: Vec::new(),
+            display_param_types: Vec::new(),
+            display_return_type,
             throws_type,
             origin: FunctionOrigin::Internal,
             body_meta: None,

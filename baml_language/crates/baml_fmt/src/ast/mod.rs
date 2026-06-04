@@ -18,7 +18,10 @@ pub use statements::*;
 pub use tokens::*;
 pub use types::*;
 
-use crate::printer::{PrintInfo, Printable, Printer, Shape};
+use crate::{
+    printer::{PrintInfo, Printable, Printer, Shape},
+    trivia_classifier::TriviaSliceExt as _,
+};
 
 pub trait FromCST: Sized {
     fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError>;
@@ -459,8 +462,15 @@ impl Printable for SourceFile {
         assert_eq!(shape.first_line_offset, 0);
         assert_eq!(shape.width, printer.config.line_width);
 
-        for decl in &self.items {
-            printer.print_standalone_with_trivia(decl, 0);
+        for (idx, decl) in self.items.iter().enumerate() {
+            if idx > 0 {
+                printer.print_newline();
+            }
+
+            let (leading_trivia, trailing_trivia) = printer.trivia.get_for_element(decl);
+            printer.print_trivia_with_newline(leading_trivia.trim_leading_blanks(), 0);
+            printer.print(decl, shape.clone());
+            printer.print_trivia_trailing(trailing_trivia);
             printer.print_newline();
         }
         for trivia in printer.trivia.get_for_eof() {

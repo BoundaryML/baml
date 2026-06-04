@@ -3178,6 +3178,59 @@ async fn class_own_method_callable_from_implements_block() {
 }
 
 #[tokio::test]
+async fn class_own_method_overrides_default_for_interface_dispatch() {
+    let output = baml_test!(
+        r#"
+        interface Greeter {
+            function greet(self) -> string {
+                return "default"
+            }
+        }
+
+        class Person {
+            name: string
+
+            implements Greeter {}
+
+            function greet(self) -> string {
+                return self.name
+            }
+        }
+
+        function main() -> string {
+            let greeter: Greeter = Person { name: "Ada" }
+            return greeter.greet()
+        }
+        "#
+    );
+
+    assert_eq!(
+        output.result.unwrap(),
+        BexExternalValue::String("Ada".into())
+    );
+}
+
+#[test]
+fn class_own_method_satisfying_interface_must_match_signature() {
+    assert_compile_error_contains(
+        r#"
+        interface Greeter {
+            function greet(self) -> string
+        }
+
+        class Person {
+            implements Greeter {}
+
+            function greet(self) -> int {
+                return 1
+            }
+        }
+        "#,
+        "does not match interface",
+    );
+}
+
+#[tokio::test]
 async fn _unused_imports_compile() {
     // Silence dead-code warnings for `Ty` if all runtime tests above eventually
     // get gated/removed. Touching it here keeps the import live.
@@ -5105,6 +5158,57 @@ fn out_of_body_implements_for_qualified_generic_class_uses_class_methods() {
         ),
     ];
     assert_no_compile_errors_multi(files);
+}
+
+#[tokio::test]
+async fn out_of_body_empty_implements_uses_class_method_runtime() {
+    let output = baml_test!(
+        r#"
+        interface Printable {
+            function label(self) -> string
+        }
+
+        class Box {
+            value: string
+
+            function label(self) -> string {
+                return self.value
+            }
+        }
+
+        implements Printable for Box {}
+
+        function main() -> string {
+            let printable: Printable = Box { value: "boxed" }
+            return printable.label()
+        }
+        "#
+    );
+
+    assert_eq!(
+        output.result.unwrap(),
+        BexExternalValue::String("boxed".into())
+    );
+}
+
+#[test]
+fn out_of_body_empty_implements_class_method_must_match_signature() {
+    assert_compile_error_contains(
+        r#"
+        interface Printable {
+            function label(self) -> string
+        }
+
+        class Box {
+            function label(self) -> int {
+                return 1
+            }
+        }
+
+        implements Printable for Box {}
+        "#,
+        "does not match interface",
+    );
 }
 
 #[test]

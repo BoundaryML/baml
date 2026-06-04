@@ -327,8 +327,27 @@ impl ImplementsRegistry {
             aliases,
             &mut bindings,
         )?;
+        if all_rule_generic_params_bound(rule, &bindings) {
+            let instantiated_interface_ty = generics::substitute_ty(&rule.interface_ty, &bindings);
+            let requested_iface_ty = generics::substitute_ty(requested_iface_ty, &bindings);
+            if !interface_ty_satisfies_request(
+                &instantiated_interface_ty,
+                &requested_iface_ty,
+                aliases,
+                &mut is_subtype,
+            ) {
+                return None;
+            }
+            validate_rule_bounds(rule, &bindings, &mut is_subtype, true)?;
+            return Some(InterfaceImplInstantiation {
+                bindings: bindings.clone(),
+                for_ty: generics::substitute_ty(&rule.for_ty_pattern, &bindings),
+                interface_ty: instantiated_interface_ty,
+            });
+        }
+        let interface_pattern = generics::substitute_ty(&rule.interface_ty, &bindings);
         match_ty_pattern_into(
-            &rule.interface_ty,
+            &interface_pattern,
             requested_iface_ty,
             &rule.generic_params,
             aliases,
@@ -366,16 +385,31 @@ impl ImplementsRegistry {
             {
                 continue;
             }
-            if match_ty_pattern_into(
-                &rule.interface_ty,
-                requested_iface_ty,
-                &rule.generic_params,
-                aliases,
-                &mut bindings,
-            )
-            .is_none()
-            {
-                continue;
+            if all_rule_generic_params_bound(rule, &bindings) {
+                let instantiated_interface_ty =
+                    generics::substitute_ty(&rule.interface_ty, &bindings);
+                let requested_iface_ty = generics::substitute_ty(requested_iface_ty, &bindings);
+                if !interface_ty_satisfies_request(
+                    &instantiated_interface_ty,
+                    &requested_iface_ty,
+                    aliases,
+                    &mut is_subtype,
+                ) {
+                    continue;
+                }
+            } else {
+                let interface_pattern = generics::substitute_ty(&rule.interface_ty, &bindings);
+                if match_ty_pattern_into(
+                    &interface_pattern,
+                    requested_iface_ty,
+                    &rule.generic_params,
+                    aliases,
+                    &mut bindings,
+                )
+                .is_none()
+                {
+                    continue;
+                }
             }
             for (param, bound) in rule
                 .generic_params
@@ -534,8 +568,27 @@ impl ImplementsRegistry {
                 &mut bindings,
             )?;
         }
+        if all_rule_generic_params_bound(rule, &bindings) {
+            let instantiated_interface_ty = generics::substitute_ty(&rule.interface_ty, &bindings);
+            let requested_iface_ty = generics::substitute_ty(requested_iface_ty, &bindings);
+            if !interface_ty_satisfies_request(
+                &instantiated_interface_ty,
+                &requested_iface_ty,
+                aliases,
+                &mut is_subtype,
+            ) {
+                return None;
+            }
+            validate_rule_bounds(rule, &bindings, &mut is_subtype, false)?;
+            return Some(InterfaceImplInstantiation {
+                bindings: bindings.clone(),
+                for_ty: generics::substitute_ty(&rule.for_ty_pattern, &bindings),
+                interface_ty: instantiated_interface_ty,
+            });
+        }
+        let interface_pattern = generics::substitute_ty(&rule.interface_ty, &bindings);
         match_ty_pattern_into(
-            &rule.interface_ty,
+            &interface_pattern,
             requested_iface_ty,
             &rule.generic_params,
             aliases,
@@ -786,6 +839,60 @@ fn interface_qtn(ty: &Ty) -> Option<&QualifiedTypeName> {
         Ty::Interface(qtn, _, _, _) => Some(qtn),
         _ => None,
     }
+}
+
+fn all_rule_generic_params_bound(rule: &InterfaceImplRule, bindings: &TypeBindings) -> bool {
+    rule.generic_params
+        .iter()
+        .all(|param| bindings.contains_key(param))
+}
+
+fn interface_ty_satisfies_request(
+    actual: &Ty,
+    requested: &Ty,
+    aliases: &std::collections::HashMap<QualifiedTypeName, Ty>,
+    is_subtype: &mut impl FnMut(&Ty, &Ty) -> bool,
+) -> bool {
+    let (
+        Ty::Interface(actual_qtn, actual_args, actual_assoc, _),
+        Ty::Interface(requested_qtn, requested_args, requested_assoc, _),
+    ) = (actual, requested)
+    else {
+        return normalize::is_same_normalized_type(actual, requested, aliases);
+    };
+    actual_qtn == requested_qtn
+        && actual_args.len() == requested_args.len()
+        && actual_args
+            .iter()
+            .zip(requested_args.iter())
+            .all(|(actual_arg, requested_arg)| {
+                types_equivalent_for_rule_match(actual_arg, requested_arg, aliases, is_subtype)
+            })
+        && requested_assoc
+            .iter()
+            .all(|(requested_name, requested_ty)| {
+                actual_assoc
+                    .iter()
+                    .find(|(actual_name, _)| actual_name == requested_name)
+                    .is_some_and(|(_, actual_ty)| {
+                        types_equivalent_for_rule_match(
+                            actual_ty,
+                            requested_ty,
+                            aliases,
+                            is_subtype,
+                        )
+                    })
+            })
+}
+
+fn types_equivalent_for_rule_match(
+    actual: &Ty,
+    requested: &Ty,
+    aliases: &std::collections::HashMap<QualifiedTypeName, Ty>,
+    is_subtype: &mut impl FnMut(&Ty, &Ty) -> bool,
+) -> bool {
+    normalize::is_same_normalized_type(actual, requested, aliases)
+        || (is_subtype(actual, requested) && is_subtype(requested, actual))
 }
 
 pub fn match_ty_pattern(

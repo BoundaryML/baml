@@ -647,6 +647,7 @@ impl DefaultParameterInference<'_> {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CallPlan {
     pub bindings: Vec<ParamBinding>,
+    pub type_args: Vec<Ty>,
 }
 
 impl CallPlan {

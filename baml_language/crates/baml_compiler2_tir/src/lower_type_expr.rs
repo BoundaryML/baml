@@ -50,6 +50,39 @@ pub fn substitute_self_in(type_expr: &TypeExpr, replacement: &TypeExpr) -> TypeE
     substitute_self(type_expr, replacement)
 }
 
+/// Like [`substitute_self_in`], but keeps `Self.Assoc` visible to generic
+/// binding substitution. Interface member lowering installs bindings such as
+/// `Item -> int`; eagerly rewriting `Self.Item` to `Iterator.Item` would hide
+/// that concrete associated type from the lowering pass.
+pub fn substitute_self_in_preserving_associated_projections(
+    type_expr: &TypeExpr,
+    replacement: &TypeExpr,
+) -> TypeExpr {
+    substitute_self_preserving_associated_projections(type_expr, replacement)
+}
+
+fn projection_chain_from_root(
+    root: TypeExpr,
+    members: &[baml_base::Name],
+    attrs: &[baml_compiler2_ast::RawAttribute],
+) -> TypeExpr {
+    members
+        .iter()
+        .enumerate()
+        .fold(root, |base, (idx, member)| {
+            TypeExpr::AssociatedTypeProjection {
+                base: Box::new(base),
+                interface: None,
+                member: member.clone(),
+                attrs: if idx + 1 == members.len() {
+                    attrs.to_vec()
+                } else {
+                    Vec::new()
+                },
+            }
+        })
+}
+
 /// BEP-044 generic bounds: walk `type_expr` and replace any single-
 /// segment `Path` whose name appears in `subst` with the matching
 /// replacement `TypeExpr`. Used at MIR lowering to substitute bounded
@@ -76,12 +109,14 @@ fn substitute_paths_walk(
             associated_type_bindings,
             attrs,
         } => {
-            if segments.len() == 1
-                && generic_args.is_empty()
+            if generic_args.is_empty()
                 && associated_type_bindings.is_empty()
                 && let Some(replacement) = subst.get(&segments[0])
             {
-                return replacement.clone();
+                if segments.len() == 1 {
+                    return replacement.clone();
+                }
+                return projection_chain_from_root(replacement.clone(), &segments[1..], attrs);
             }
             TypeExpr::Path {
                 segments: segments.clone(),
@@ -179,12 +214,14 @@ fn substitute_self(type_expr: &TypeExpr, replacement: &TypeExpr) -> TypeExpr {
             associated_type_bindings,
             attrs,
         } => {
-            if segments.len() == 1
-                && generic_args.is_empty()
+            if generic_args.is_empty()
                 && associated_type_bindings.is_empty()
                 && segments[0].as_str() == "Self"
             {
-                return replacement.clone();
+                if segments.len() == 1 {
+                    return replacement.clone();
+                }
+                return projection_chain_from_root(replacement.clone(), &segments[1..], attrs);
             }
             TypeExpr::Path {
                 segments: segments.clone(),
@@ -264,6 +301,143 @@ fn substitute_self(type_expr: &TypeExpr, replacement: &TypeExpr) -> TypeExpr {
             throws: throws
                 .as_ref()
                 .map(|ty| Box::new(substitute_self(ty, replacement))),
+            attrs: attrs.clone(),
+        },
+        _ => type_expr.clone(),
+    }
+}
+
+fn substitute_self_preserving_associated_projections(
+    type_expr: &TypeExpr,
+    replacement: &TypeExpr,
+) -> TypeExpr {
+    match type_expr {
+        TypeExpr::Path {
+            segments,
+            generic_args,
+            associated_type_bindings,
+            attrs,
+        } => {
+            if generic_args.is_empty()
+                && associated_type_bindings.is_empty()
+                && segments[0].as_str() == "Self"
+            {
+                if segments.len() == 1 {
+                    return replacement.clone();
+                }
+                return TypeExpr::Path {
+                    segments: segments.clone(),
+                    generic_args: Vec::new(),
+                    associated_type_bindings: Vec::new(),
+                    attrs: attrs.clone(),
+                };
+            }
+            TypeExpr::Path {
+                segments: segments.clone(),
+                generic_args: generic_args
+                    .iter()
+                    .map(|a| substitute_self_preserving_associated_projections(a, replacement))
+                    .collect(),
+                associated_type_bindings: associated_type_bindings
+                    .iter()
+                    .map(|binding| baml_compiler2_ast::AssociatedTypeBinding {
+                        name: binding.name.clone(),
+                        ty: Box::new(substitute_self_preserving_associated_projections(
+                            &binding.ty,
+                            replacement,
+                        )),
+                    })
+                    .collect(),
+                attrs: attrs.clone(),
+            }
+        }
+        TypeExpr::AssociatedTypeProjection {
+            base,
+            interface,
+            member,
+            attrs,
+        } => TypeExpr::AssociatedTypeProjection {
+            base: Box::new(substitute_self_preserving_associated_projections(
+                base,
+                replacement,
+            )),
+            interface: interface.as_ref().map(|interface| {
+                Box::new(substitute_self_preserving_associated_projections(
+                    interface,
+                    replacement,
+                ))
+            }),
+            member: member.clone(),
+            attrs: attrs.clone(),
+        },
+        TypeExpr::List { inner, attrs } => TypeExpr::List {
+            inner: Box::new(substitute_self_preserving_associated_projections(
+                inner,
+                replacement,
+            )),
+            attrs: attrs.clone(),
+        },
+        TypeExpr::Optional { inner, attrs } => TypeExpr::Optional {
+            inner: Box::new(substitute_self_preserving_associated_projections(
+                inner,
+                replacement,
+            )),
+            attrs: attrs.clone(),
+        },
+        TypeExpr::Map { key, value, attrs } => TypeExpr::Map {
+            key: Box::new(substitute_self_preserving_associated_projections(
+                key,
+                replacement,
+            )),
+            value: Box::new(substitute_self_preserving_associated_projections(
+                value,
+                replacement,
+            )),
+            attrs: attrs.clone(),
+        },
+        TypeExpr::Union { variants, attrs } => TypeExpr::Union {
+            variants: variants
+                .iter()
+                .map(|v| substitute_self_preserving_associated_projections(v, replacement))
+                .collect(),
+            attrs: attrs.clone(),
+        },
+        TypeExpr::Function {
+            generic_params,
+            generic_param_bounds,
+            params,
+            ret,
+            throws,
+            attrs,
+        } => TypeExpr::Function {
+            generic_params: generic_params.clone(),
+            generic_param_bounds: generic_param_bounds
+                .iter()
+                .map(|bound| {
+                    bound.as_ref().map(|bound| {
+                        substitute_self_preserving_associated_projections(bound, replacement)
+                    })
+                })
+                .collect(),
+            params: params
+                .iter()
+                .map(|param| {
+                    let mut param = param.clone();
+                    param.ty =
+                        substitute_self_preserving_associated_projections(&param.ty, replacement);
+                    param
+                })
+                .collect(),
+            ret: Box::new(substitute_self_preserving_associated_projections(
+                ret,
+                replacement,
+            )),
+            throws: throws.as_ref().map(|ty| {
+                Box::new(substitute_self_preserving_associated_projections(
+                    ty,
+                    replacement,
+                ))
+            }),
             attrs: attrs.clone(),
         },
         _ => type_expr.clone(),
@@ -895,8 +1069,12 @@ mod tests {
     impl crate::Db for TestDb {}
 
     fn path(name: &str) -> TypeExpr {
+        path_segments(&[name])
+    }
+
+    fn path_segments(names: &[&str]) -> TypeExpr {
         TypeExpr::Path {
-            segments: vec![Name::new(name)],
+            segments: names.iter().map(|name| Name::new(*name)).collect(),
             generic_args: vec![],
             associated_type_bindings: vec![],
             attrs: vec![],
@@ -937,6 +1115,28 @@ mod tests {
     }
 
     #[test]
+    fn substitute_paths_rewrites_substituted_root_member_path_to_projection() {
+        let type_expr = path_segments(&["T", "Item"]);
+        let replacement = path("Box");
+        let mut subst = std::collections::HashMap::new();
+        subst.insert(Name::new("T"), replacement.clone());
+
+        let TypeExpr::AssociatedTypeProjection {
+            base,
+            interface,
+            member,
+            ..
+        } = substitute_paths_in(&type_expr, &subst)
+        else {
+            panic!("expected associated type projection");
+        };
+
+        assert_eq!(*base, replacement);
+        assert!(interface.is_none());
+        assert_eq!(member, Name::new("Item"));
+    }
+
+    #[test]
     fn substitute_self_recurses_into_function_type() {
         let type_expr = TypeExpr::Function {
             generic_params: Vec::new(),
@@ -970,6 +1170,26 @@ mod tests {
         assert_eq!(params[0].ty, replacement);
         assert_eq!(*ret, replacement);
         assert_eq!(throws.map(|ty| *ty), Some(replacement));
+    }
+
+    #[test]
+    fn substitute_self_rewrites_member_path_to_projection() {
+        let type_expr = path_segments(&["Self", "Record"]);
+        let replacement = path("UserRepository");
+
+        let TypeExpr::AssociatedTypeProjection {
+            base,
+            interface,
+            member,
+            ..
+        } = substitute_self_in(&type_expr, &replacement)
+        else {
+            panic!("expected associated type projection");
+        };
+
+        assert_eq!(*base, replacement);
+        assert!(interface.is_none());
+        assert_eq!(member, Name::new("Record"));
     }
 
     #[test]

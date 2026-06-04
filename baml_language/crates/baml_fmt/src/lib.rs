@@ -123,6 +123,44 @@ mod lambda_format_tests {
     }
 
     #[test]
+    fn test_top_level_interface_spacing_is_idempotent() {
+        let source = r#"interface Named {
+  type Key = string
+  function label(self) -> string
+}
+
+interface Printable {
+  function display(self) -> string
+}
+
+class Ticket {
+  id: string
+  function label(self) -> string { return self.id }
+  implements Named {}
+}
+
+class Box<T> {
+  value: T
+}
+
+implements<T extends Named> Printable for Box<T> {
+  function display(self) -> string {
+    return self.value.label()
+  }
+}
+"#;
+        let options = FormatOptions::default();
+        let formatted =
+            format(source, &options).expect("formatter should succeed on interface syntax");
+        let second = format(&formatted, &options).expect("formatter should be idempotent");
+        assert_eq!(formatted, second, "formatter should be idempotent");
+        assert!(
+            !formatted.contains("\n\n\n"),
+            "top-level formatting should not grow multiple blank lines:\n{formatted}"
+        );
+    }
+
+    #[test]
     fn test_generic_lambda_formatting() {
         let source = "function test_generic() -> int {\n    let identity = <T>(x: T) -> T { x }\n    identity(42)\n}\n";
         let options = FormatOptions::default();

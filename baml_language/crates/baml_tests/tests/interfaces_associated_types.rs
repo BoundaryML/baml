@@ -9,8 +9,12 @@ use std::collections::HashSet;
 use baml_compiler_diagnostics::Severity;
 use baml_fmt::FormatOptions;
 use baml_project::{ProjectDatabase, collect_diagnostics, testing::setup_test_db};
-use baml_tests::baml_test;
+use baml_tests::{
+    baml_test,
+    engine::{OptLevel, compile_source_with_opt},
+};
 use bex_engine::BexExternalValue;
+use bex_vm_types::Object;
 
 fn collect_compile_errors(source: &str) -> Vec<String> {
     let db = setup_test_db(source);
@@ -83,6 +87,78 @@ fn assert_compile_error_contains(source: &str, needle: &str) {
     );
 }
 
+fn compiled_function_metadata(source: &str, display_name_suffix: &str) -> (Vec<String>, String) {
+    let program = compile_source_with_opt(source, OptLevel::One);
+    let matches: Vec<_> = program
+        .function_indices
+        .iter()
+        .filter(|(name, _)| {
+            name.strip_prefix("user.")
+                .unwrap_or(name)
+                .ends_with(display_name_suffix)
+        })
+        .collect();
+    assert_eq!(
+        matches.len(),
+        1,
+        "expected exactly one function ending with `{display_name_suffix}`, got: {:?}",
+        matches
+            .iter()
+            .map(|(name, _)| name.as_str())
+            .collect::<Vec<_>>()
+    );
+
+    let (name, idx) = matches[0];
+    let Some(Object::Function(function)) = program.objects.get(*idx) else {
+        panic!("`{name}` did not point at a function object");
+    };
+
+    (
+        function
+            .param_types
+            .iter()
+            .map(ToString::to_string)
+            .collect(),
+        function.return_type.to_string(),
+    )
+}
+
+fn compiled_function_display_metadata(
+    source: &str,
+    display_name_suffix: &str,
+) -> (Vec<String>, Vec<String>, String) {
+    let program = compile_source_with_opt(source, OptLevel::One);
+    let matches: Vec<_> = program
+        .function_indices
+        .iter()
+        .filter(|(name, _)| {
+            name.strip_prefix("user.")
+                .unwrap_or(name)
+                .ends_with(display_name_suffix)
+        })
+        .collect();
+    assert_eq!(
+        matches.len(),
+        1,
+        "expected exactly one function ending with `{display_name_suffix}`, got: {:?}",
+        matches
+            .iter()
+            .map(|(name, _)| name.as_str())
+            .collect::<Vec<_>>()
+    );
+
+    let (name, idx) = matches[0];
+    let Some(Object::Function(function)) = program.objects.get(*idx) else {
+        panic!("`{name}` did not point at a function object");
+    };
+
+    (
+        function.display_type_params.clone(),
+        function.display_param_types.clone(),
+        function.display_return_type.clone(),
+    )
+}
+
 #[test]
 fn associated_type_declaration_forms_compile() {
     assert_zero_compile_errors(
@@ -138,6 +214,115 @@ fn associated_type_declaration_forms_compile() {
         }
         "#,
     );
+}
+
+#[test]
+fn vm_metadata_resolves_concrete_associated_type_projection_return() {
+    let (_params, return_type) = compiled_function_metadata(
+        r#"
+        interface PublicIdentity {
+            type Key
+            key: Key
+        }
+
+        class AccountRecord {
+            public_key: string
+
+            implements PublicIdentity {
+                type Key = string
+                key as public_key
+            }
+        }
+
+        function get_public_key(account: AccountRecord) -> (AccountRecord as PublicIdentity).Key {
+            return account.as<PublicIdentity>.key
+        }
+        "#,
+        "get_public_key",
+    );
+
+    assert_eq!(return_type, "string");
+}
+
+#[test]
+fn vm_metadata_resolves_self_associated_type_return_in_implements_method() {
+    let (_params, return_type) = compiled_function_metadata(
+        r#"
+        interface Repository {
+            type Record
+            function find(self) -> Self.Record
+        }
+
+        class UserRecord {
+            name: string
+        }
+
+        class UserRepository {
+            value: UserRecord
+
+            implements Repository {
+                type Record = UserRecord
+
+                function find(self) -> Self.Record {
+                    return self.value
+                }
+            }
+        }
+        "#,
+        "UserRepository.Repository.find",
+    );
+
+    assert_eq!(return_type, "UserRecord");
+}
+
+#[test]
+fn vm_metadata_erases_unresolved_generic_associated_projection_to_unknown_not_void() {
+    let (params, return_type) = compiled_function_metadata(
+        r#"
+        interface BoxLike {
+            type Item
+            function get(self) -> Self.Item
+        }
+
+        function read_item<T extends BoxLike>(box: T) -> T.Item {
+            return box.get()
+        }
+        "#,
+        "read_item",
+    );
+
+    assert_eq!(params, vec!["unknown"]);
+    assert_eq!(return_type, "unknown");
+}
+
+#[test]
+fn vm_metadata_displays_interface_default_method_self_type() {
+    let (generic_params, params, return_type) = compiled_function_display_metadata(
+        r#"
+        interface Described<T> {
+            function label(self) -> string
+
+            function describe(self) -> string {
+                return self.label()
+            }
+        }
+
+        class Widget {
+            name: string
+
+            implements Described<string> {}
+
+            function label(self) -> string {
+                return self.name
+            }
+        }
+        "#,
+        "Described.describe",
+    );
+
+    assert_eq!(generic_params, vec!["T"]);
+    assert_eq!(params, vec!["Described<T>"]);
+    assert_eq!(return_type, "string");
 }
 
 #[test]
@@ -201,6 +386,84 @@ fn default_method_may_return_self_call_yielding_associated_type() {
             }
         }
         "#,
+    );
+}
+
+#[tokio::test]
+async fn default_method_self_call_yielding_associated_type_runs() {
+    let output = baml_test!(
+        r#"
+        interface Describable {
+            type Output
+
+            function value(self) -> Self.Output
+
+            function describe(self) -> Self.Output {
+                return self.value()
+            }
+        }
+
+        class Ticket {
+            id: string
+
+            implements Describable {
+                type Output = string
+
+                function value(self) -> Self.Output {
+                    return self.id
+                }
+            }
+        }
+
+        function main() -> string {
+            let ticket = Ticket { id: "A-100" }
+            return ticket.describe()
+        }
+        "#
+    );
+
+    assert_eq!(
+        output.result.unwrap(),
+        BexExternalValue::String("A-100".into())
+    );
+}
+
+#[tokio::test]
+async fn default_method_self_call_yielding_associated_type_with_out_of_body_method_runs() {
+    let output = baml_test!(
+        r#"
+        interface Describable {
+            type Output
+
+            function value(self) -> Self.Output
+
+            function describe(self) -> Self.Output {
+                return self.value()
+            }
+        }
+
+        class Ticket {
+            id: string
+
+            implements Describable {
+                type Output = string
+            }
+
+            function value(self) -> Self.Output {
+                return self.id
+            }
+        }
+
+        function main() -> string {
+            let ticket = Ticket { id: "A-100" }
+            return ticket.describe()
+        }
+        "#
+    );
+
+    assert_eq!(
+        output.result.unwrap(),
+        BexExternalValue::String("A-100".into())
     );
 }
 
@@ -424,6 +687,225 @@ fn associated_type_projection_from_generic_interface_bound_compiles() {
 }
 
 #[test]
+fn associated_type_binding_in_generic_bound_concretizes_projection() {
+    assert_zero_compile_errors(
+        r#"
+        interface Parser {
+            type Output
+
+            function parse(self) -> Self.Output
+        }
+
+        class ConstantParser<T> {
+            value: T
+        }
+
+        implements<T> Parser for ConstantParser<T> {
+            type Output = T
+
+            function parse(self) -> T {
+                return self.value
+            }
+        }
+
+        function parse_one<P extends Parser>(parser: P) -> P.Output {
+            return parser.parse()
+        }
+
+        function parse_known_int<P extends Parser<Output = int>>(parser: P) -> int {
+            return parse_one(parser)
+        }
+
+        function demo_int(parser: ConstantParser<int>) -> int {
+            return parse_one(parser)
+        }
+        "#,
+    );
+}
+
+#[tokio::test]
+async fn blanket_impl_self_associated_projection_uses_bounded_typevar() {
+    let output = baml_test!(
+        r#"
+        interface Source {
+            type Item
+            name: string
+            function get(self) -> Self.Item
+        }
+
+        class TextSource {
+            name: string
+            text: string
+
+            implements Source {
+                type Item = string
+
+                function get(self) -> Self.Item {
+                    return self.text
+                }
+            }
+        }
+
+        interface Renderable {
+            type Output
+            function render(self) -> Self.Output
+        }
+
+        class Wrapped<T extends Source<Item = string>> {
+            inner: T
+        }
+
+        implements<T extends Source<Item = string>> Renderable for Wrapped<T> {
+            type Output = T.Item
+
+            function render(self) -> Self.Output {
+                return self.inner.get()
+            }
+        }
+
+        function take_source<T extends Source<Item = string>>(source: T) -> T.Item {
+            return source.get()
+        }
+
+        function main() -> string {
+            let source = TextSource { name: "sample", text: "ok" }
+            let wrapped = Wrapped<TextSource> { inner: source }
+
+            return take_source(source) + ":" + wrapped.as<Renderable>.render()
+        }
+        "#
+    );
+
+    assert_eq!(
+        output.result.unwrap(),
+        BexExternalValue::String("ok:ok".into())
+    );
+}
+
+#[tokio::test]
+async fn blanket_impl_concrete_projection_return_resolves_at_callsite() {
+    let output = baml_test!(
+        r#"
+        interface Source {
+            type Item
+            function get(self) -> Self.Item
+        }
+
+        class TextSource {
+            text: string
+
+            implements Source {
+                type Item = string
+
+                function get(self) -> Self.Item {
+                    return self.text
+                }
+            }
+        }
+
+        interface WrapperView {
+            type Output
+            function output(self) -> Self.Output
+        }
+
+        class Wrapped<S extends Source<Item = string>> {
+            inner: S
+        }
+
+        implements<S extends Source<Item = string>> WrapperView for Wrapped<S> {
+            type Output = S.Item
+
+            function output(self) -> Self.Output {
+                return self.inner.get()
+            }
+        }
+
+        function main() -> string {
+            let wrapped = Wrapped<TextSource> { inner: TextSource { text: "hello" } }
+            return wrapped.output()
+        }
+        "#
+    );
+
+    assert_eq!(
+        output.result.unwrap(),
+        BexExternalValue::String("hello".into())
+    );
+}
+
+#[tokio::test]
+async fn upcast_of_bounded_typevar_preserves_associated_bindings() {
+    let output = baml_test!(
+        r#"
+        interface HasKey {
+            type Key
+            key: Self.Key
+        }
+
+        interface Named {
+            name: string
+        }
+
+        interface Entity requires HasKey<Key = string>, Named {
+        }
+
+        class User {
+            id: string
+            name: string
+
+            implements HasKey {
+                type Key = string
+                key as id
+            }
+
+            implements Named {
+            }
+
+            implements Entity {
+            }
+        }
+
+        class EntityBox<T extends Entity> {
+            value: T
+        }
+
+        interface Summarizes {
+            type Key
+            function key(self) -> Self.Key
+            function summary(self) -> string
+        }
+
+        implements<T extends Entity> Summarizes for EntityBox<T> {
+            type Key = (T as HasKey).Key
+
+            function key(self) -> Self.Key {
+                return self.value.as<HasKey>.key
+            }
+
+            function summary(self) -> string {
+                return self.value.name + ":" + self.key()
+            }
+        }
+
+        function entity_key<T extends Entity>(value: T) -> (T as HasKey).Key {
+            return value.as<HasKey>.key
+        }
+
+        function main() -> string {
+            let user = User { id: "u1", name: "Ada" }
+            let boxed = EntityBox<User> { value: user }
+            return boxed.summary() + "|" + entity_key(user)
+        }
+        "#
+    );
+
+    assert_eq!(
+        output.result.unwrap(),
+        BexExternalValue::String("Ada:u1|u1".into())
+    );
+}
+
+#[test]
 fn required_parent_associated_type_threads_into_child_interface() {
     assert_zero_compile_errors(
         r#"
@@ -586,6 +1068,84 @@ fn qualified_projection_requires_interface_qualifier() {
         type Bad = (IntIterator as IntIterator).Item
         "#,
         "qualified associated type projection must use an interface",
+    );
+}
+
+#[test]
+fn qualified_projection_on_unbounded_typevar_requires_interface_bound() {
+    assert_compile_error_contains(
+        r#"
+        interface HasKey {
+            type Key
+            key: Self.Key
+        }
+
+        function bad<T>(x: (T as HasKey).Key) -> (T as HasKey).Key {
+            return x
+        }
+        "#,
+        "type `T` does not implement interface `HasKey`",
+    );
+}
+
+#[test]
+fn qualified_projection_on_typevar_rejects_unproven_interface_bound() {
+    assert_compile_error_contains(
+        r#"
+        interface HasKey {
+            type Key
+            key: Self.Key
+        }
+
+        interface Entity requires HasKey<Key = string> {}
+
+        interface Other {
+            type Key
+            key: Self.Key
+        }
+
+        function bad<T extends Entity>(x: (T as Other).Key) -> (T as Other).Key {
+            return x
+        }
+        "#,
+        "type `T` does not implement interface `Other`",
+    );
+}
+
+#[test]
+fn qualified_projection_on_typevar_rejects_conflicting_associated_binding() {
+    assert_compile_error_contains(
+        r#"
+        interface HasKey {
+            type Key
+            key: Self.Key
+        }
+
+        interface Entity requires HasKey<Key = string> {}
+
+        function bad<T extends Entity>(x: (T as HasKey<Key = int>).Key) -> (T as HasKey<Key = int>).Key {
+            return x
+        }
+        "#,
+        "type `T` does not implement interface `HasKey<Key = int>`",
+    );
+}
+
+#[test]
+fn qualified_projection_on_typevar_accepts_proven_interface_bound() {
+    assert_zero_compile_errors(
+        r#"
+        interface HasKey {
+            type Key
+            key: Self.Key
+        }
+
+        interface Entity requires HasKey<Key = string> {}
+
+        function ok<T extends Entity>(x: (T as HasKey).Key) -> (T as HasKey).Key {
+            return x
+        }
+        "#,
     );
 }
 
@@ -2423,6 +2983,220 @@ fn associated_type_default_bound_failure_errors() {
         "#,
         "E0001",
     );
+}
+
+#[tokio::test]
+async fn associated_type_default_typevar_satisfies_declared_bound() {
+    let output = baml_test!(
+        r#"
+        interface Summarizable {
+            function summary(self) -> string
+        }
+
+        interface Holder<T extends Summarizable> {
+            type Item extends Summarizable = T
+
+            function get(self) -> Self.Item
+        }
+
+        class User {
+            name: string
+
+            implements Summarizable {
+                function summary(self) -> string {
+                    return self.name
+                }
+            }
+        }
+
+        class UserHolder {
+            user: User
+
+            implements Holder<User> {
+                function get(self) -> Self.Item {
+                    return self.user
+                }
+            }
+        }
+
+        function summarize<H extends Holder<User>>(holder: H) -> string {
+            return holder.get().summary()
+        }
+
+        function main() -> string {
+            return summarize(UserHolder { user: User { name: "Ada" } })
+        }
+        "#
+    );
+
+    assert_eq!(
+        output.result.unwrap(),
+        BexExternalValue::String("Ada".into())
+    );
+}
+
+#[test]
+fn abstract_associated_projection_uses_declared_bound_for_members() {
+    assert_zero_compile_errors(
+        r#"
+        interface Summarizable {
+            function summary(self) -> string
+        }
+
+        interface Holder {
+            type Item extends Summarizable
+
+            function get(self) -> Self.Item
+        }
+
+        function summarize<H extends Holder>(holder: H) -> string {
+            return holder.get().summary()
+        }
+        "#,
+    );
+}
+
+#[test]
+fn abstract_associated_projection_pins_self_for_bound_methods() {
+    assert_zero_compile_errors(
+        r#"
+        interface Comparable {
+            function same(self, other: Self) -> bool
+        }
+
+        interface Holder {
+            type Item extends Comparable
+
+            function left(self) -> Self.Item
+            function right(self) -> Self.Item
+        }
+
+        function compare<H extends Holder>(holder: H) -> bool {
+            return holder.left().same(holder.right())
+        }
+        "#,
+    );
+}
+
+#[test]
+fn abstract_associated_projection_self_param_rejects_unrelated_bound_typevar() {
+    assert_compile_error_code(
+        r#"
+        interface Comparable {
+            function same(self, other: Self) -> bool
+        }
+
+        interface Holder {
+            type Item extends Comparable
+
+            function left(self) -> Self.Item
+        }
+
+        function compare<H extends Holder, C extends Comparable>(holder: H, other: C) -> bool {
+            return holder.left().same(other)
+        }
+        "#,
+        "E0001",
+    );
+}
+
+#[tokio::test]
+async fn abstract_associated_projection_bound_method_dispatch_runs() {
+    let output = baml_test!(
+        r#"
+        interface SomeInterface {
+            function label(self) -> string
+
+            function same_label(self, other: Self) -> bool {
+                return self.label() == other.label()
+            }
+        }
+
+        interface Holder {
+            type Item extends SomeInterface
+
+            function get(self) -> Self.Item
+        }
+
+        class Widget {
+            name: string
+
+            implements SomeInterface {
+                function label(self) -> string {
+                    return self.name
+                }
+            }
+        }
+
+        class WidgetHolder {
+            item: Widget
+
+            implements Holder {
+                type Item = Widget
+
+                function get(self) -> Widget {
+                    return self.item
+                }
+            }
+        }
+
+        function label_from_holder<H extends Holder>(holder: H) -> string {
+            let item = holder.get()
+            return item.label()
+        }
+
+        function holder_matches_itself<H extends Holder>(holder: H) -> bool {
+            let item = holder.get()
+            return item.same_label(item)
+        }
+
+        function main() -> string {
+            let holder = WidgetHolder { item: Widget { name: "alpha" } }
+            let same = if holder_matches_itself(holder) { "true" } else { "false" }
+            return label_from_holder(holder) + ":" + same
+        }
+        "#
+    );
+
+    assert_eq!(
+        output.result.unwrap(),
+        BexExternalValue::String("alpha:true".into())
+    );
+}
+
+#[tokio::test]
+async fn inferred_native_generic_type_arg_from_interface_associated_return_runs() {
+    let output = baml_test!(
+        r#"
+        interface Iterator {
+            type Item
+
+            function next(self) -> Self.Item
+        }
+
+        class IntIterator {
+            value: int
+
+            implements Iterator {
+                type Item = int?
+
+                function next(self) -> Self.Item {
+                    return self.value
+                }
+            }
+        }
+
+        function stringify_next(iter: Iterator<Item = int?>) -> string {
+            return baml.json.to_string(iter.next())
+        }
+
+        function main() -> string {
+            return stringify_next(IntIterator { value: 7 })
+        }
+        "#
+    );
+
+    assert_eq!(output.result.unwrap(), BexExternalValue::String("7".into()));
 }
 
 #[test]
