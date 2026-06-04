@@ -148,6 +148,10 @@ pub(crate) fn display_instruction(
         Instruction::Call { callee, .. } | Instruction::SysOp(callee) => {
             display_global_ref(*callee, globals, objects, compile_time_globals)
         }
+        Instruction::MakeGenericFunction { function, .. } => {
+            display_global_ref(*function, globals, objects, compile_time_globals)
+        }
+        Instruction::MakeGenericFunctionFromValue { .. } => String::new(),
         Instruction::LoadVar(index)
         | Instruction::StoreVar(index)
         | Instruction::StoreVarLoadVar(index)
@@ -426,6 +430,8 @@ fn instruction_style(instruction: &Instruction) -> Style {
         Instruction::Unreachable => Style::new().red().bright(),
         Instruction::MakeClosure { .. }
         | Instruction::MakeBoundMethod(_)
+        | Instruction::MakeGenericFunction { .. }
+        | Instruction::MakeGenericFunctionFromValue { .. }
         | Instruction::MakeCell => Style::new().cyan(),
         Instruction::LoadDeref(_) | Instruction::LoadCapture(_) | Instruction::CaptureRef(_) => {
             Style::new().blue()
@@ -951,6 +957,13 @@ fn display_instruction_textual(
             let name = meta_str(&"");
             format!("make_bound_method {name}")
         }
+        Instruction::MakeGenericFunction { ntypeargs, .. } => {
+            let name = meta_str(&"");
+            format!("make_generic_function {name} ntypeargs={ntypeargs}")
+        }
+        Instruction::MakeGenericFunctionFromValue { ntypeargs } => {
+            format!("make_generic_function_from_value ntypeargs={ntypeargs}")
+        }
         Instruction::MakeCell => "make_cell".to_string(),
         Instruction::LoadDeref(slot) => {
             let name = meta_str(slot);
@@ -1375,6 +1388,17 @@ pub fn display_compact_bytecode(
                 let class_obj = read_u32(code, &mut pc);
                 let ntypeargs = read_u16(code, &mut pc);
                 writeln!(f, "class={class_obj}  ntypeargs={ntypeargs}")?;
+            }
+
+            OpCode::MakeGenericFunction => {
+                let function = read_u32(code, &mut pc);
+                let ntypeargs = read_u16(code, &mut pc);
+                writeln!(f, "function={function}  ntypeargs={ntypeargs}")?;
+            }
+
+            OpCode::MakeGenericFunctionFromValue => {
+                let ntypeargs = read_u16(code, &mut pc);
+                writeln!(f, "ntypeargs={ntypeargs}")?;
             }
 
             OpCode::MakeClosure => {

@@ -172,6 +172,16 @@ pub fn check_file(db: &dyn Db, file: SourceFile) -> Vec<Diagnostic> {
             method_to_class.push((method_id, *class_id));
         }
     }
+    // Out-of-body `implement Interface for Type` methods: their `Self` resolves
+    // to the `for` target and the block's generic params are in scope. Bodied
+    // (`$rust_function`/builtin) impl methods skip the scope-inference path, so
+    // without this their signatures would leave `Self` unresolved here.
+    let mut method_to_impl = Vec::new();
+    for imp in &item_tree.implements_for {
+        for &method_id in &imp.methods {
+            method_to_impl.push((method_id, imp));
+        }
+    }
 
     for (local_id, func_data) in &item_tree.functions {
         let func_loc = baml_compiler2_hir::loc::FunctionLoc::new(db, file, *local_id);
@@ -200,17 +210,43 @@ pub fn check_file(db: &dyn Db, file: SourceFile) -> Vec<Diagnostic> {
             merged.extend(generic_params);
             generic_params = merged;
         }
+        // BEP-044: inside an out-of-body `implement Interface for Type` block,
+        // `Self` is the `for` target and the block's generic params are in scope.
+        let enclosing_impl = method_to_impl
+            .iter()
+            .find(|(mid, _)| mid == local_id)
+            .map(|(_, imp)| *imp);
+        if let Some(imp) = enclosing_impl {
+            let mut merged = imp.generic_params.clone();
+            merged.extend(generic_params);
+            generic_params = merged;
+        }
+        // Pre-resolve `Self` to the enclosing impl's `for` target before lowering
+        // signature types, mirroring the body path in `tir::inference`.
+        let self_replacement = enclosing_impl.map(|imp| imp.for_target.expr.clone());
+        let lower_sig_te = |te: &baml_compiler2_ast::TypeExpr,
+                            generic_params: &[Name],
+                            diags: &mut Vec<baml_compiler2_tir::infer_context::TirTypeError>|
+         -> Ty {
+            let resolved = match &self_replacement {
+                Some(replacement) => {
+                    baml_compiler2_tir::lower_type_expr::substitute_self_in(te, replacement)
+                }
+                None => te.clone(),
+            };
+            baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns(
+                db,
+                &resolved,
+                pkg_items,
+                &pkg_info.namespace_path,
+                generic_params,
+                diags,
+            )
+        };
 
         // Check return type — use the span from the item tree's SpannedTypeExpr.
         if let Some(ret_te) = &sig.return_type {
-            baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns(
-                db,
-                ret_te,
-                pkg_items,
-                &pkg_info.namespace_path,
-                &generic_params,
-                &mut type_errors,
-            );
+            lower_sig_te(ret_te, &generic_params, &mut type_errors);
             if !type_errors.is_empty() {
                 if let Some(ret_spanned) = &func_data.return_type {
                     for error in type_errors.drain(..) {
@@ -236,36 +272,56 @@ pub fn check_file(db: &dyn Db, file: SourceFile) -> Vec<Diagnostic> {
             let param_ty = if param.name.as_str() == "self"
                 && matches!(param.ty, baml_compiler2_ast::TypeExpr::Unknown { .. })
             {
-                enclosing_class_id
-                    .as_ref()
-                    .and_then(|class_id| {
-                        let class_data = &item_tree[*class_id];
-                        pkg_items
-                            .lookup_type(&pkg_info.namespace_path, &class_data.name)
-                            .map(|def| {
-                                Ty::Class(
-                                    baml_compiler2_tir::lower_type_expr::qualify_def(
-                                        db,
-                                        def,
-                                        &class_data.name,
-                                    ),
-                                    vec![],
-                                    TyAttr::default(),
-                                )
-                            })
-                    })
-                    .unwrap_or(Ty::Unknown {
+                // `self`'s type is the enclosing receiver: the class for an in-body
+                // method, or the impl's `for` target for an out-of-body
+                // `implement I for C` method (mirroring the body path in
+                // `tir::inference`). Falling back to `Unknown` would otherwise
+                // leave `self` untyped in the latter case.
+                if let Some(class_id) = enclosing_class_id.as_ref() {
+                    let class_data = &item_tree[*class_id];
+                    pkg_items
+                        .lookup_type(&pkg_info.namespace_path, &class_data.name)
+                        .map(|def| {
+                            // Carry the class's generic params as TypeVars so `self`
+                            // is `Class<T..>`, not bare `Class` — mirrors the body
+                            // path in `tir::inference`. A bare `self` leaks an
+                            // unparameterized receiver into generic-class method
+                            // bodies (e.g. the auto-derived `to_json`'s
+                            // `to_string<Self>(self)`).
+                            let class_args: Vec<Ty> = class_data
+                                .generic_params
+                                .iter()
+                                .map(|p| Ty::TypeVar(p.clone(), TyAttr::default()))
+                                .collect();
+                            Ty::Class(
+                                baml_compiler2_tir::lower_type_expr::qualify_def(
+                                    db,
+                                    def,
+                                    &class_data.name,
+                                ),
+                                class_args,
+                                TyAttr::default(),
+                            )
+                        })
+                        .unwrap_or(Ty::Unknown {
+                            attr: TyAttr::default(),
+                        })
+                } else if let Some(imp) = enclosing_impl {
+                    baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns(
+                        db,
+                        &imp.for_target.expr,
+                        pkg_items,
+                        &pkg_info.namespace_path,
+                        &generic_params,
+                        &mut type_errors,
+                    )
+                } else {
+                    Ty::Unknown {
                         attr: TyAttr::default(),
-                    })
+                    }
+                }
             } else {
-                baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns(
-                    db,
-                    &param.ty,
-                    pkg_items,
-                    &pkg_info.namespace_path,
-                    &generic_params,
-                    &mut type_errors,
-                )
+                lower_sig_te(&param.ty, &generic_params, &mut type_errors)
             };
             if !type_errors.is_empty() {
                 if let Some(param) = func_data.params.get(i) {
@@ -3977,6 +4033,23 @@ fn validate_interface_extends_fields(
     }
 }
 
+/// Follow a chain of `Ty::TypeAlias` to its underlying definition, so callers
+/// reason about the concrete type rather than the opaque alias. Bounded to avoid
+/// looping on a (malformed) cyclic alias.
+fn expand_type_alias(ty: &Ty, aliases: &std::collections::HashMap<QualifiedTypeName, Ty>) -> Ty {
+    let mut current = ty.clone();
+    for _ in 0..64 {
+        let Ty::TypeAlias(qtn, _) = &current else {
+            break;
+        };
+        match aliases.get(qtn) {
+            Some(next) => current = next.clone(),
+            None => break,
+        }
+    }
+    current
+}
+
 #[allow(clippy::too_many_arguments)]
 fn validate_implements_for<'db>(
     db: &'db dyn Db,
@@ -4000,7 +4073,7 @@ fn validate_implements_for<'db>(
         aliases,
     };
     let mut target_type_errors = Vec::new();
-    baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns(
+    let target_ty = baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns(
         db,
         &imp.for_target.expr,
         pkg_items,
@@ -4019,6 +4092,49 @@ fn validate_implements_for<'db>(
                     .with_phase(DiagnosticPhase::Type),
             );
         }
+        return;
+    }
+
+    // BEP-044: an interface may only be implemented for a single *concrete* type
+    // — a class/enum/primitive, a concrete type constructor (`T[]`, `map<K, V>`),
+    // or a blanket type parameter (`implements<T> I for T`, whose `T` is itself a
+    // type variable). A union, optional, or bare interface ("dyn"/existential)
+    // target is rejected: an optional is `T | null` (a union), so each case /
+    // union member would need its own body, and an existential has no single
+    // concrete implementor for dispatch to recover. The user-facing top type
+    // `unknown` (`Ty::BuiltinUnknown`) is rejected for the same reason — it
+    // denotes "any type", with no single implementor to dispatch on. (The
+    // distinct `Ty::Unknown` only arises from an already-diagnosed unresolved
+    // target, so it is matched here purely as defence-in-depth.) `never` is
+    // intentionally allowed: it can never be instantiated, so the impl is vacuous.
+    //
+    // Aliases are expanded first so the gate sees through them — otherwise
+    // `type U = int | string; implements I for U {}` would slip past as an
+    // opaque `Ty::TypeAlias`.
+    let resolved_target = expand_type_alias(&target_ty, aliases);
+    if matches!(
+        &resolved_target,
+        Ty::Interface(..)
+            | Ty::Union(..)
+            | Ty::Optional(..)
+            | Ty::Unknown { .. }
+            | Ty::BuiltinUnknown { .. }
+    ) {
+        diagnostics.push(
+            Diagnostic::error(
+                DiagnosticId::ImplTargetNotConcrete,
+                format!(
+                    "cannot implement interface `{}` for `{}`: the `for` target must be a single \
+                     concrete type, not a union, optional, or interface",
+                    imp.interface_target.expr, imp.for_target.expr
+                ),
+            )
+            .with_primary_span(Span {
+                file_id,
+                range: imp.for_target.span,
+            })
+            .with_phase(DiagnosticPhase::Type),
+        );
         return;
     }
 

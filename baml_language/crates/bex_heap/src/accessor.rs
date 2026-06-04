@@ -809,6 +809,7 @@ fn convert_object(
         Object::Float(f) => Ok(BexExternalValue::Float(*f)),
         Object::Closure(_) => unconvertible("closure"),
         Object::BoundMethod(_) => unconvertible("bound_method"),
+        Object::GenericFunction(_) => unconvertible("generic_function"),
         // `HostClosure` is a callable wrapper for a host-owned value.
         // The native sysop impl matches on `BexExternalValue::HostValue`
         // and extracts the `Arc<HostValueArc>` from it, so unwrap the

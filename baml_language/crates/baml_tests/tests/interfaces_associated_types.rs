@@ -176,6 +176,96 @@ fn associated_type_bindings_substitute_inside_implements_blocks() {
 }
 
 #[test]
+fn default_method_may_return_self_call_yielding_associated_type() {
+    // A default method whose body returns the result of a `self`-method that
+    // yields the associated type must type-check: the declared return
+    // (`Self.Item?`) and the body (`self.next()` → `Self.Item?`) must produce
+    // the same associated-type projection. Both go through the interface's own
+    // `Item` binding, which projects onto the rigid `Self` (not the interface
+    // existential) — matching how the `self.next()` call resolves it. This is
+    // the lazy-cursor / iterator delegating-default-method pattern.
+    assert_zero_compile_errors(
+        r#"
+        interface It {
+            type Item
+            function next(self) -> Self.Item?
+            function firstOrNull(self) -> Self.Item? {
+                return self.next()
+            }
+        }
+        class IntCursor {
+            value int
+            implements It {
+                type Item = int
+                function next(self) -> Self.Item? { return self.value }
+            }
+        }
+        "#,
+    );
+}
+
+#[test]
+fn inherited_scalar_default_method_delegating_to_self_compiles() {
+    // The inherited sibling of
+    // `default_method_may_return_self_call_yielding_associated_type`: a child
+    // interface (`Cursor requires It`) whose default method returns the inherited
+    // associated type in a scalar/optional position (`Self.Item?`) and delegates
+    // through `self.next()`. The inherited `Item` projects onto the rigid `Self`,
+    // matching how `self.next()` resolves it, so the declared return and the body
+    // agree. Distinct from `required_parent_associated_type_threads_into_child_interface`,
+    // which uses a required child method implemented with a concrete `int[]` and so
+    // never reconciles the projection symbolically inside a default body.
+    assert_zero_compile_errors(
+        r#"
+        interface It {
+            type Item
+            function next(self) -> Self.Item?
+        }
+        interface Cursor requires It {
+            function peek(self) -> Self.Item? {
+                return self.next()
+            }
+        }
+        class IntCursor {
+            value int
+            implements It {
+                type Item = int
+                function next(self) -> Self.Item? { return self.value }
+            }
+            implements Cursor {}
+        }
+        "#,
+    );
+}
+
+#[test]
+fn blanket_impl_binds_associated_type_in_default_body() {
+    // A blanket out-of-body impl (`implements<T> Items for Box<T>`, so `Self = Box<T>`
+    // and `Item = T`) whose interface has a default method returning `Self.Item[]` by
+    // delegating through `self.items()`. Exercises associated-type binding through a
+    // constructed (generic) `Self` in a default body — distinct from the existing
+    // blanket tests, which bind associated types but have no `self`-delegating default.
+    assert_zero_compile_errors(
+        r#"
+        interface Items {
+            type Item
+            function items(self) -> Self.Item[]
+            function firstItems(self) -> Self.Item[] {
+                return self.items()
+            }
+        }
+        class Box<T> {
+            values: T[]
+        }
+        implements<T> Items for Box<T> {
+            type Item = T
+            function items(self) -> Self.Item[] { return self.values }
+        }
+        "#,
+    );
+}
+
+#[test]
 fn fully_bound_associated_type_interface_values_expose_projected_methods() {
     assert_zero_compile_errors(
         r#"
@@ -691,6 +781,40 @@ fn associated_type_default_from_qualified_interface_resolves_declaring_namespace
 }
 
 #[test]
+fn associated_type_default_can_reference_declaring_namespace_type_from_implementor_namespace() {
+    assert_zero_compile_errors_multi(&[
+        (
+            "ns_lib/types.baml",
+            r#"
+            interface Serializable {
+                type Format = Payload
+
+                function serialize(self) -> Format
+            }
+
+            class Payload {
+                data: string
+            }
+            "#,
+        ),
+        (
+            "ns_app/widget.baml",
+            r#"
+            class Widget {
+                name: string
+
+                implements root.lib.Serializable {
+                    function serialize(self) -> Format {
+                        return Format { data: self.name }
+                    }
+                }
+            }
+            "#,
+        ),
+    ]);
+}
+
+#[test]
 fn explicit_associated_type_witness_can_reference_earlier_witness() {
     assert_zero_compile_errors(
         r#"
@@ -1117,6 +1241,168 @@ fn union_associated_type_bindings_work_in_generic_bounds() {
 
         function main(source: MixedSource) -> int | string {
             return consume<MixedSource>(source)
+        }
+        "#,
+    );
+}
+
+#[test]
+fn associated_type_binding_in_generic_bound_preserves_outer_typevar() {
+    assert_zero_compile_errors(
+        r#"
+        interface Source {
+            type Item
+
+            function get(self) -> Item
+        }
+
+        class IntSource {
+            value: int
+
+            implements Source {
+                type Item = int
+
+                function get(self) -> int {
+                    return self.value
+                }
+            }
+        }
+
+        function score_bound<T, S extends Source<Item = T>>(source: S) -> T {
+            return source.get()
+        }
+
+        function main() -> int {
+            let source = IntSource { value: 42 }
+            return score_bound<int, IntSource>(source)
+        }
+        "#,
+    );
+}
+
+#[test]
+fn union_associated_type_binding_in_generic_bound_preserves_outer_typevar() {
+    assert_zero_compile_errors(
+        r#"
+        interface Source {
+            type Item
+
+            function get(self) -> Item
+        }
+
+        class MixedSource {
+            implements Source {
+                type Item = int | string
+
+                function get(self) -> int | string {
+                    return 1
+                }
+            }
+        }
+
+        function score_bound<T extends int | string, S extends Source<Item = T>>(source: S) -> T {
+            return source.get()
+        }
+
+        function main(source: MixedSource) -> int | string {
+            return score_bound<int | string, MixedSource>(source)
+        }
+        "#,
+    );
+}
+
+#[test]
+fn nested_associated_type_bindings_in_generic_bounds_preserve_outer_typevar() {
+    assert_zero_compile_errors(
+        r#"
+        interface Source {
+            type Item
+
+            function get(self) -> Item
+        }
+
+        class OptionalIntSource {
+            value: int?
+
+            implements Source {
+                type Item = int?
+
+                function get(self) -> int? {
+                    return self.value
+                }
+            }
+        }
+
+        class IntListSource {
+            value: int[]
+
+            implements Source {
+                type Item = int[]
+
+                function get(self) -> int[] {
+                    return self.value
+                }
+            }
+        }
+
+        class IntMapSource {
+            value: map<string, int>
+
+            implements Source {
+                type Item = map<string, int>
+
+                function get(self) -> map<string, int> {
+                    return self.value
+                }
+            }
+        }
+
+        class IntCallbackSource {
+            value: (x: int) -> int
+
+            implements Source {
+                type Item = (x: int) -> int
+
+                function get(self) -> (x: int) -> int {
+                    return self.value
+                }
+            }
+        }
+
+        function read_optional<T, S extends Source<Item = T?>>(source: S) -> T? {
+            return source.get()
+        }
+
+        function read_list<T, S extends Source<Item = T[]>>(source: S) -> T[] {
+            return source.get()
+        }
+
+        function read_map<T, S extends Source<Item = map<string, T>>>(source: S) -> map<string, T> {
+            return source.get()
+        }
+
+        function read_callback<T, S extends Source<Item = (x: T) -> T>>(source: S) -> (x: T) -> T {
+            return source.get()
+        }
+
+        function id(value: int) -> int {
+            return value
+        }
+
+        function use_optional() -> int? {
+            return read_optional<int, OptionalIntSource>(OptionalIntSource { value: 1 })
+        }
+
+        function use_list() -> int[] {
+            return read_list<int, IntListSource>(IntListSource { value: [2] })
+        }
+
+        function use_map() -> map<string, int> {
+            return read_map<int, IntMapSource>(IntMapSource { value: { "x": 3 } })
+        }
+
+        function use_callback() -> (x: int) -> int {
+            return read_callback<int, IntCallbackSource>(IntCallbackSource { value: id })
         }
         "#,
     );
@@ -2848,6 +3134,92 @@ async fn runtime_guard_accepts_generic_requested_associated_type_var() {
         "#
     );
     assert_eq!(output.result.unwrap(), BexExternalValue::Int(1));
+}
+
+#[tokio::test]
+async fn runtime_dispatch_substitutes_class_typevar_in_associated_type_binding() {
+    let output = baml_test!(
+        r#"
+        interface Container {
+            type Item
+
+            function get(self) -> Item
+        }
+
+        class Box<T> {
+            value: T
+
+            implements Container {
+                type Item = T
+
+                function get(self) -> T {
+                    return self.value
+                }
+            }
+        }
+
+        function unwrap(c: Container<Item = int>) -> int {
+            return c.get()
+        }
+
+        function main() -> int {
+            return unwrap(Box<int> { value: 42 })
+        }
+        "#
+    );
+    assert_eq!(output.result.unwrap(), BexExternalValue::Int(42));
+}
+
+#[tokio::test]
+async fn runtime_dispatch_substitutes_class_typevar_inside_nested_associated_binding() {
+    let output = baml_test!(
+        r#"
+        interface Source {
+            type Item
+
+            function get(self) -> Item
+        }
+
+        interface Outer {
+            type Inner
+
+            function inner(self) -> Inner
+        }
+
+        class Box<T> {
+            value: T
+
+            implements Source {
+                type Item = T
+
+                function get(self) -> T {
+                    return self.value
+                }
+            }
+        }
+
+        class OuterBox<T> {
+            source: Source<Item = T>
+
+            implements Outer {
+                type Inner = Source<Item = T>
+
+                function inner(self) -> Source<Item = T> {
+                    return self.source
+                }
+            }
+        }
+
+        function unwrap(outer: Outer<Inner = Source<Item = int>>) -> int {
+            return outer.inner().get()
+        }
+
+        function main() -> int {
+            return unwrap(OuterBox<int> { source: Box<int> { value: 42 } })
+        }
+        "#
+    );
+    assert_eq!(output.result.unwrap(), BexExternalValue::Int(42));
 }
 
 #[tokio::test]

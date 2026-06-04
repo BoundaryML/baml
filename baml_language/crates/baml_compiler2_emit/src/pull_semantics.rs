@@ -81,6 +81,21 @@ pub(crate) trait PullSink {
         self.make_closure(lambda_idx, capture_count)
     }
 
+    /// Build a generic-function value (`foo<T>`) for a param-dependent
+    /// instantiation: pops `ntypeargs` `Object::Type` values (pushed by
+    /// preceding `load_type` calls) and resolves `item` to a function global.
+    fn make_generic_function(
+        &mut self,
+        item: &baml_compiler2_mir::ItemRef,
+        ntypeargs: usize,
+    ) -> Result<(), Self::Error>;
+
+    /// Specialize a runtime callable *value* (`g<int>`): the callable and
+    /// `ntypeargs` `Object::Type` values are already on the stack (pushed by
+    /// preceding `load_type` calls and the value operand); emit
+    /// `MakeGenericFunctionFromValue`.
+    fn make_generic_function_from_value(&mut self, ntypeargs: usize) -> Result<(), Self::Error>;
+
     /// Load a captured variable from the current closure's captures array.
     /// Emits `LoadCapture(idx)` in the bytecode emitter.
     fn load_capture(&mut self, idx: usize) -> Result<(), Self::Error>;
@@ -437,6 +452,30 @@ pub(crate) fn walk_rvalue_pull<S: PullSink>(sink: &mut S, rvalue: &Rvalue) -> Re
         Rvalue::MakeBoundMethod { .. } => {
             // Handled specially in emit_rvalue_pull before this function is called.
             unreachable!("MakeBoundMethod must be handled in emit_rvalue_pull")
+        }
+        Rvalue::MakeGenericFunction {
+            item,
+            type_arg_templates,
+        } => {
+            // Push the type-arg templates (resolved against the current frame),
+            // then build the value via the base function's global.
+            for template in type_arg_templates {
+                sink.load_type(template)?;
+            }
+            sink.make_generic_function(item, type_arg_templates.len())
+        }
+        Rvalue::MakeGenericFunctionFromValue {
+            value,
+            type_arg_templates,
+        } => {
+            // Push the type-arg templates (resolved against the current frame),
+            // then the callable value, then specialize it. The value is pushed
+            // last so the opcode pops it off the top before the type args.
+            for template in type_arg_templates {
+                sink.load_type(template)?;
+            }
+            walk_operand_pull(sink, value)?;
+            sink.make_generic_function_from_value(type_arg_templates.len())
         }
         Rvalue::LoadType(template) => sink.load_type(template),
     }

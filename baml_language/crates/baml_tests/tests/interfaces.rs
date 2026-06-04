@@ -1991,6 +1991,220 @@ async fn default_method_dispatch_through_interface_var() {
 }
 
 #[tokio::test]
+async fn interface_default_method_calls_self_param_method() {
+    // BEP-044 Self-as-type-variable: the default method `neq` calls the
+    // required `Self`-param method `eq` on `self`. Inside the interface, `self`
+    // is a `Self` type variable bound by the interface, so this is sound —
+    // unlike a call on a bare interface *value* (see `bad(...)` cases), which
+    // stays an error. Invoked here through a generic bound so the receiver is a
+    // single concrete type.
+    let output = baml_test!(
+        r#"
+        interface Equatable {
+            function eq(self, other: Self) -> bool
+            function neq(self, other: Self) -> bool {
+                return !self.eq(other)
+            }
+        }
+        class Pair {
+            a: int
+            implements Equatable {
+                function eq(self, other: Self) -> bool { return self.a == other.a }
+            }
+        }
+        function differ<T extends Equatable>(x: T, y: T) -> bool {
+            return x.neq(y)
+        }
+        function main() -> bool {
+            return differ<Pair>(Pair { a: 1 }, Pair { a: 2 })
+        }
+        "#
+    );
+    assert_eq!(output.result.unwrap(), BexExternalValue::Bool(true));
+}
+
+#[tokio::test]
+async fn generic_bound_self_param_method_call() {
+    // A generic `T extends Equatable` may call a `Self`-param method on a value
+    // of type `T`: `T` is a single concrete type, so the argument (also `T`)
+    // satisfies the `Self` parameter.
+    let output = baml_test!(
+        r#"
+        interface Equatable {
+            function eq(self, other: Self) -> bool
+        }
+        class Pair {
+            a: int
+            implements Equatable {
+                function eq(self, other: Self) -> bool { return self.a == other.a }
+            }
+        }
+        function same<T extends Equatable>(x: T, y: T) -> bool {
+            return x.eq(y)
+        }
+        function main() -> bool {
+            return same<Pair>(Pair { a: 7 }, Pair { a: 7 })
+        }
+        "#
+    );
+    assert_eq!(output.result.unwrap(), BexExternalValue::Bool(true));
+}
+
+#[test]
+fn self_param_method_rejects_heterogeneous_generic_args() {
+    // Soundness: `Self` is rigid per receiver. `x: S` pins `Self = S`, so the
+    // `other: Self` argument must also be `S`. Passing `y: U` (an unrelated
+    // generic param) must NOT unify `S := U` — it is a type error.
+    assert_compile_error_contains(
+        r#"
+        interface Equatable {
+            function eq(self, other: Self) -> bool
+        }
+        function cmp<S extends Equatable, U extends Equatable>(x: S, y: U) -> bool {
+            return x.eq(y)
+        }
+        "#,
+        "got U",
+    );
+}
+
+#[test]
+fn self_param_method_rejects_mismatched_literal_arg() {
+    // `x: T` pins `Self = T`; the rigid `Self` must not be inferred to `int`
+    // from the `5` argument. Passing a concrete literal where `Self` is rigid
+    // is a type error.
+    assert_compile_error_contains(
+        r#"
+        interface Equatable {
+            function eq(self, other: Self) -> bool
+        }
+        function bad<T extends Equatable>(x: T) -> bool {
+            return x.eq(5)
+        }
+        "#,
+        "expected T, got 5",
+    );
+}
+
+#[test]
+fn generic_class_unannotated_self_is_parameterized() {
+    // An unannotated `self` in a generic class must be typed `Wrap<T>`, not bare
+    // `Wrap`, so it satisfies a parameterized expected type. Regression for the
+    // StreamCache builtin failure: the auto-derived `to_json` passed a bare
+    // `self` to `baml.json.to_string<StreamCache<TStream, TFinal>>`. Because the
+    // callee's generic is differently named, the class params stay rigid and the
+    // argument is *checked* (not deferred), which surfaced the bare `self`.
+    assert_zero_compile_errors(
+        r#"
+        function consume<X>(v: X) -> int { return 1 }
+        class Wrap<T> {
+            value: T
+            function use_self(self) -> int { return consume<Wrap<T>>(self) }
+        }
+        "#,
+    );
+}
+
+#[test]
+fn self_param_method_rejects_nested_self_mismatch() {
+    // Rigid `Self` must be enforced even when it appears *nested* in the
+    // parameter type (`Self[]`). `x: T` pins `Self = T`, so `others: Self[]`
+    // requires a `T[]`; passing a `U[]` (unrelated generic param) must error —
+    // not silently skip validation just because the type still contains a
+    // variable.
+    assert_compile_error_contains(
+        r#"
+        interface Adder {
+            function addAll(self, others: Self[]) -> int
+        }
+        function cross<T extends Adder, U extends Adder>(x: T, ys: U[]) -> int {
+            return x.addAll(ys)
+        }
+        "#,
+        "got U[]",
+    );
+}
+
+#[tokio::test]
+async fn self_param_method_accepts_matching_nested_self() {
+    // The matching case still type-checks and runs: `Self[]` accepts a `T[]`
+    // when the receiver is that same `T`.
+    let output = baml_test!(
+        r#"
+        interface Adder {
+            function addAll(self, others: Self[]) -> int
+        }
+        class Acc {
+            base: int
+            implements Adder {
+                function addAll(self, others: Self[]) -> int {
+                    return self.base + others[0].base
+                }
+            }
+        }
+        function combine<T extends Adder>(x: T, ys: T[]) -> int {
+            return x.addAll(ys)
+        }
+        function main() -> int {
+            return combine<Acc>(Acc { base: 10 }, [Acc { base: 5 }])
+        }
+        "#
+    );
+    assert_eq!(output.result.unwrap(), BexExternalValue::Int(15));
+}
+
+#[test]
+fn bound_self_method_value_rejects_heterogeneous_arg() {
+    // Binding a `Self`-param method to a value (`let f = x.addOne`) keeps `Self`
+    // pinned to the receiver's `T`. Calling that value with an unrelated `U` must
+    // still be rejected — the pin travels with the (non-generic) function value,
+    // so the indirect call is checked just like the direct `x.addOne(y)` form.
+    assert_compile_error_contains(
+        r#"
+        interface Adder {
+            function addOne(self, other: Self) -> int
+        }
+        function cross<T extends Adder, U extends Adder>(x: T, y: U) -> int {
+            let f = x.addOne
+            return f(y)
+        }
+        "#,
+        "got U",
+    );
+}
+
+#[tokio::test]
+async fn bound_self_method_value_accepts_matching_arg() {
+    // The matching case type-checks and runs: a bound method value obtained from
+    // a generic receiver (`let f = x.addOne`) binds the implementor's concrete
+    // method by the receiver's runtime type, so calling it with a same-`T`
+    // argument dispatches correctly.
+    let output = baml_test!(
+        r#"
+        interface Adder {
+            function addOne(self, other: Self) -> int
+        }
+        class Acc {
+            base: int
+            implements Adder {
+                function addOne(self, other: Self) -> int {
+                    return self.base + other.base
+                }
+            }
+        }
+        function combine<T extends Adder>(x: T, y: T) -> int {
+            let f = x.addOne
+            return f(y)
+        }
+        function main() -> int {
+            return combine<Acc>(Acc { base: 10 }, Acc { base: 5 })
+        }
+        "#
+    );
+    assert_eq!(output.result.unwrap(), BexExternalValue::Int(15));
+}
+
+#[tokio::test]
 async fn interface_default_method_reference_accepts_explicit_receiver() {
     let output = baml_test!(
         r#"
@@ -3023,6 +3237,26 @@ fn generic_bound_violation_is_compile_error() {
 }
 
 #[test]
+fn generic_bound_violation_in_instantiation_expr_is_compile_error() {
+    // BEP-044 bound enforcement must also apply when a generic callable is
+    // referenced as a VALUE (`let f = first_name<int>`), not only at call
+    // sites. `int` does not satisfy `extends Named`, so this is a type error.
+    assert_compile_error_contains(
+        r#"
+        interface Named { name: string }
+        function first_name<T extends Named>(items: T[]) -> string {
+            return items[0].name
+        }
+        function main() -> string {
+            let f = first_name<int>;
+            return "ok"
+        }
+        "#,
+        "Named",
+    );
+}
+
+#[test]
 fn generic_bound_alias_syntax_is_compile_error() {
     assert_compile_error_contains(
         r#"
@@ -3398,6 +3632,133 @@ fn multi_self_method_rejected_on_interface_typed_receiver() {
         "#,
         "concrete receiver",
     );
+}
+
+#[tokio::test]
+async fn concrete_receiver_inherited_default_self_param_method() {
+    // A `Self`-parameter default method inherited (not overridden) by a concrete
+    // class is callable directly on a value of that class: the receiver is a
+    // single concrete type, so `Self` resolves to it and the object-safety
+    // restriction (which only guards bare interface receivers) does not apply.
+    let output = baml_test!(
+        r#"
+        interface Equals {
+            function eq(self, other: Self) -> bool
+            function neq(self, other: Self) -> bool {
+                return !self.eq(other)
+            }
+        }
+        class Num {
+            v: int
+            implements Equals {
+                function eq(self, other: Self) -> bool { return self.v == other.v }
+            }
+        }
+        function main() -> bool {
+            return Num { v: 1 }.neq(Num { v: 2 })
+        }
+        "#
+    );
+    assert_eq!(output.result.unwrap(), BexExternalValue::Bool(true));
+}
+
+#[test]
+fn concrete_receiver_self_param_method_rejects_wrong_arg() {
+    // `Self` on a concrete receiver resolves to that concrete type, so a
+    // mismatched argument is a type error — checked by ordinary subtyping, not
+    // silently accepted.
+    assert_compile_error_contains(
+        r#"
+        interface Equals {
+            function eq(self, other: Self) -> bool
+            function neq(self, other: Self) -> bool {
+                return !self.eq(other)
+            }
+        }
+        class Num {
+            v: int
+            implements Equals {
+                function eq(self, other: Self) -> bool { return self.v == other.v }
+            }
+        }
+        class Other { w: int }
+        function main() -> bool {
+            return Num { v: 1 }.neq(Other { w: 2 })
+        }
+        "#,
+        "got Other",
+    );
+}
+
+#[test]
+fn unbounded_generic_forwarded_to_bounded_call_is_rejected() {
+    // Soundness: forwarding an *unbounded* generic `U` into a call requiring
+    // `T extends Equatable` must be rejected — even though the offending type is
+    // itself a type variable. Ordinary inference skips TypeVar→TypeVar binds, so
+    // the bound is checked via the captured correspondence; otherwise `U` (any
+    // type) would reach `eq` and trap at runtime.
+    assert_compile_error_contains(
+        r#"
+        interface Equatable {
+            function eq(self, other: Self) -> bool
+        }
+        function same<T extends Equatable>(x: T) -> bool {
+            return x.eq(x)
+        }
+        function forward<U>(x: U) -> bool {
+            return same(x)
+        }
+        "#,
+        "expected Equatable",
+    );
+}
+
+#[test]
+fn unbounded_generic_forwarded_through_container_is_rejected() {
+    // The same hole, leaked through container structure (`U[]` → `T[]`).
+    assert_compile_error_contains(
+        r#"
+        interface Equatable {
+            function eq(self, other: Self) -> bool
+        }
+        function firstEq<T extends Equatable>(xs: T[]) -> bool {
+            return xs[0].eq(xs[0])
+        }
+        function forward<U>(xs: U[]) -> bool {
+            return firstEq(xs)
+        }
+        "#,
+        "expected Equatable",
+    );
+}
+
+#[tokio::test]
+async fn bounded_generic_forwarded_to_bounded_call_is_accepted() {
+    // The matching case: a properly-bounded `V extends Equatable` forwarded into
+    // `same<T extends Equatable>` satisfies the bound and compiles + runs.
+    let output = baml_test!(
+        r#"
+        interface Equatable {
+            function eq(self, other: Self) -> bool
+        }
+        class Pair {
+            a: int
+            implements Equatable {
+                function eq(self, other: Self) -> bool { return self.a == other.a }
+            }
+        }
+        function same<T extends Equatable>(x: T) -> bool {
+            return x.eq(x)
+        }
+        function forward<V extends Equatable>(x: V) -> bool {
+            return same(x)
+        }
+        function main() -> bool {
+            return forward<Pair>(Pair { a: 1 })
+        }
+        "#
+    );
+    assert_eq!(output.result.unwrap(), BexExternalValue::Bool(true));
 }
 
 #[test]
@@ -5479,6 +5840,98 @@ fn existing_concrete_implements_for_still_works() {
     );
 }
 
+#[test]
+fn implements_for_union_target_is_rejected() {
+    // BEP-044: the `for` target must be a single concrete type. A union has no
+    // single implementation body, so it is rejected (E0138).
+    assert_compile_error_code(
+        r#"
+        interface Tag {
+            function tag(self) -> int
+        }
+        implements Tag for int | string {
+            function tag(self) -> int { return 0 }
+        }
+        "#,
+        "E0138",
+    );
+}
+
+#[test]
+fn implements_for_interface_target_is_rejected() {
+    // Implementing one interface "for" another (an existential) has no concrete
+    // implementor — rejected.
+    assert_compile_error_code(
+        r#"
+        interface Tag {
+            function tag(self) -> int
+        }
+        interface Other {
+            function other(self) -> int
+        }
+        implements Tag for Other {
+            function tag(self) -> int { return 0 }
+        }
+        "#,
+        "E0138",
+    );
+}
+
+#[test]
+fn implements_for_optional_target_is_rejected() {
+    // An optional is `T | null` — a union — so it has no single implementation
+    // body and is rejected just like any other union target (E0138).
+    assert_compile_error_code(
+        r#"
+        interface Label {
+            function label(self) -> string
+        }
+        implements<T> Label for T? {
+            function label(self) -> string { return "optional" }
+        }
+        "#,
+        "E0138",
+    );
+}
+
+#[test]
+fn implements_for_unknown_target_is_rejected() {
+    // The user-facing top type `unknown` denotes "any type" — it has no single
+    // concrete implementor for dispatch to recover, so it is rejected like a
+    // union/optional/interface (E0138). `unknown` lowers to `Ty::BuiltinUnknown`,
+    // which is distinct from the `Ty::Unknown` error-recovery sentinel, so the
+    // gate must list it explicitly.
+    assert_compile_error_code(
+        r#"
+        interface Tag {
+            function tag(self) -> int
+        }
+        implements Tag for unknown {
+            function tag(self) -> int { return 0 }
+        }
+        "#,
+        "E0138",
+    );
+}
+
+#[test]
+fn implements_for_concrete_container_target_is_allowed() {
+    // A concrete type constructor (`T[]`) is a valid `for` target — the gate only
+    // rejects unions / optionals / interfaces / `unknown`, not list/map/class.
+    // Asserts *zero* compile errors (not just the E0112–E0132 interface range) so
+    // the concreteness gate's E0138 is covered too.
+    assert_zero_compile_errors(
+        r#"
+        interface Tag {
+            function tag(self) -> int
+        }
+        implements<T> Tag for T[] {
+            function tag(self) -> int { return 0 }
+        }
+    "#,
+    );
+}
+
 // ── Group: Blanket implementations — Phase 2 (Form 1 runtime) ─────────────
 
 #[tokio::test]
@@ -5623,29 +6076,6 @@ async fn generic_rule_for_map_receiver_dispatches() {
     assert_eq!(
         output.result.unwrap(),
         BexExternalValue::String("map".into())
-    );
-}
-
-#[tokio::test]
-async fn generic_rule_for_optional_receiver_dispatches() {
-    let output = baml_test!(
-        r#"
-        interface Label {
-            function label(self) -> string
-        }
-        implements<T> Label for T? {
-            function label(self) -> string { return "optional" }
-        }
-        function main() -> string {
-            let value: int? = 1
-            let labelled: Label = value
-            return labelled.label()
-        }
-        "#
-    );
-    assert_eq!(
-        output.result.unwrap(),
-        BexExternalValue::String("optional".into())
     );
 }
 
@@ -9271,36 +9701,6 @@ fn wf3_out_of_body_primitive_field_bearing_is_e0126_pins() {
         function main() -> string { return "ok" }
         "#,
         "E0126",
-    );
-}
-
-/// wf3 pin: when a value matches two blanket rules (`int[]?` satisfies both
-/// `for T[]` and `for T?`), the innermost structural (list) match wins. Pins the
-/// (currently undocumented) precedence so a change is noticed.
-/// `_plan/wf3/generics-bounds-blanket/p2_optional_list_ambiguous.baml`
-#[tokio::test]
-async fn wf3_two_blanket_rules_list_wins_pins() {
-    let output = baml_test!(
-        r#"
-        interface Label {
-            function label(self) -> string
-        }
-        implements<T> Label for T[] {
-            function label(self) -> string { return "list" }
-        }
-        implements<T> Label for T? {
-            function label(self) -> string { return "optional" }
-        }
-        function main() -> string {
-            let xs: int[]? = [1, 2, 3]
-            let labelled: Label = xs
-            return labelled.label()
-        }
-        "#
-    );
-    assert_eq!(
-        output.result.unwrap(),
-        BexExternalValue::String("list".into())
     );
 }
 

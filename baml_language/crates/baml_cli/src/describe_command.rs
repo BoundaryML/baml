@@ -8,7 +8,7 @@ use baml_lsp2_actions::{ResolvedTarget, SymbolDescription, describe};
 use baml_project::ProjectDatabase;
 use clap::Args;
 
-use crate::project_load::load_project_from;
+use crate::project_load::load_project_or_default;
 
 #[derive(serde::Deserialize)]
 struct BamlKeywordDoc {
@@ -231,11 +231,12 @@ fn builtin_alias_class_path(name: &str) -> Option<&'static str> {
 
 impl DescribeArgs {
     pub fn run(&self) -> Result<crate::ExitCode> {
-        let (db, from, baml_files) = load_project_from(&self.from)?;
-        if baml_files.is_empty() {
-            eprintln!("No .baml files found in {}", from.display());
-            return Ok(crate::ExitCode::Other);
-        }
+        // Introspection never requires a `baml.toml`: with no project, we
+        // fall back to a stdlib-only "default state" so `baml describe
+        // baml.String` works anywhere. An empty user-file set is therefore
+        // expected, not an error — unresolved names still surface through
+        // the per-target "No symbol found" + did-you-mean paths below.
+        let (db, from, _baml_files) = load_project_or_default(&self.from)?;
 
         // ── --symbols deprecation ───────────────────────────────────────────
         if self.symbols {

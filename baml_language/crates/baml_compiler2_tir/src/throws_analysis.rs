@@ -319,6 +319,9 @@ fn collect_from_expr<C: ThrowsAnalysisContext>(
             }
             collect_from_template_segments(context, segments, body, out);
         }
+        Expr::GenericApply { base, .. } => {
+            collect_from_expr(context, *base, body, out);
+        }
         Expr::Lambda(_)
         | Expr::Literal(_)
         | Expr::ByteStringLiteral(_)

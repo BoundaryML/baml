@@ -1011,7 +1011,15 @@ fn lower_class(
         return None;
     };
 
-    let generic_params = extract_generic_params(node);
+    let generic_params_with_bounds = extract_generic_params_with_bounds(node);
+    let generic_params: Vec<Name> = generic_params_with_bounds
+        .iter()
+        .map(|(n, _)| n.clone())
+        .collect();
+    let generic_param_bounds: Vec<Option<crate::ast::TypeExpr>> = generic_params_with_bounds
+        .into_iter()
+        .map(|(_, b)| b)
+        .collect();
     let class_name = name_token.text().to_string();
 
     let fields = class
@@ -1096,6 +1104,7 @@ fn lower_class(
     let mut class_def = crate::ast::ClassDef {
         name: Name::new(name_token.text()),
         generic_params,
+        generic_param_bounds,
         fields,
         methods,
         implements,

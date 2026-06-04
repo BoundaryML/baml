@@ -682,6 +682,32 @@ pub enum Instruction {
     /// Stack: `[receiver]` -> `[bound_method]`
     MakeBoundMethod(GlobalIndex),
 
+    /// Create a generic-function value (`foo<T>`) from a base function's global
+    /// index, popping `ntypeargs` `Object::Type` values from the stack into its
+    /// `type_args`. Used for param-dependent instantiations; the fully-concrete
+    /// case is a pooled, interned constant loaded via `LoadConst`.
+    ///
+    /// Stack: `[type_args...]` -> `[generic_function]`
+    MakeGenericFunction {
+        /// Global index of the base function.
+        function: GlobalIndex,
+        /// Number of `Object::Type` values on the stack to pop into `type_args`.
+        ntypeargs: u16,
+    },
+
+    /// Specialize a *runtime callable value* with explicit type arguments
+    /// (`g<int>` where `g` is a local/captured function value, not a function
+    /// reference resolvable at compile time). Pops the callable value, then
+    /// `ntypeargs` `Object::Type` values, and pushes a `Closure` wrapping the
+    /// callable with those types as `captured_type_args` — so calling it seeds
+    /// `frame.type_args` exactly like the pooled `GenericFunction` path.
+    ///
+    /// Stack: `[type_args..., callable]` -> `[closure]`
+    MakeGenericFunctionFromValue {
+        /// Number of `Object::Type` values on the stack to pop into `type_args`.
+        ntypeargs: u16,
+    },
+
     /// Wrap the top-of-stack value in a `Cell` object.
     ///
     /// Stack: `[value]` -> `[cell]`
@@ -894,6 +920,12 @@ pub enum OpCode {
     JumpTable,   // u32 table_idx + i32 default_offset
     MakeClosure, // u32 object_idx (capture_count is popped from the stack)
 
+    // ── u32 + u16 (7 bytes) ────────────────────────────────────
+    MakeGenericFunction, // u32 function global + u16 ntypeargs
+
+    // ── u16 (3 bytes) ──────────────────────────────────────────
+    MakeGenericFunctionFromValue, // u16 ntypeargs (callable popped from stack)
+
     // ── Operand-movement superinstructions: two u32 operands (9 bytes) ──
     LoadVar2,
     StoreVar2,
@@ -1019,8 +1051,11 @@ impl OpCode {
             | Self::PopJumpIfFalse
             | Self::JumpIfFalse => 5,
 
+            // 3-byte: opcode + u16
+            Self::MakeGenericFunctionFromValue => 3,
+
             // 7-byte: opcode + u32 + u16 (type-arg threading)
-            Self::AllocInstance | Self::Call => 7,
+            Self::AllocInstance | Self::Call | Self::MakeGenericFunction => 7,
 
             // 9-byte: opcode + u32 + u16 + u16 (closure with capture+typearg counts)
             Self::MakeClosure => 9,
@@ -1153,6 +1188,10 @@ impl TryFrom<u8> for OpCode {
             x if x == Self::JumpIfFalse as u8 => Ok(Self::JumpIfFalse),
             x if x == Self::JumpTable as u8 => Ok(Self::JumpTable),
             x if x == Self::MakeClosure as u8 => Ok(Self::MakeClosure),
+            x if x == Self::MakeGenericFunction as u8 => Ok(Self::MakeGenericFunction),
+            x if x == Self::MakeGenericFunctionFromValue as u8 => {
+                Ok(Self::MakeGenericFunctionFromValue)
+            }
             x if x == Self::LoadVar2 as u8 => Ok(Self::LoadVar2),
             x if x == Self::StoreVar2 as u8 => Ok(Self::StoreVar2),
             _ => Err(byte),
@@ -1277,6 +1316,8 @@ impl std::fmt::Display for OpCode {
             Self::JumpIfFalse => "JUMP_IF_FALSE",
             Self::JumpTable => "JUMP_TABLE",
             Self::MakeClosure => "MAKE_CLOSURE",
+            Self::MakeGenericFunction => "MAKE_GENERIC_FUNCTION",
+            Self::MakeGenericFunctionFromValue => "MAKE_GENERIC_FUNCTION_FROM_VALUE",
             Self::LoadVar2 => "LOAD_VAR2",
             Self::StoreVar2 => "STORE_VAR2",
         };
@@ -1527,6 +1568,15 @@ impl std::fmt::Display for Instruction {
             Instruction::Await => f.write_str("AWAIT"),
             Instruction::Call { callee, ntypeargs } => {
                 write!(f, "CALL {callee} ntypeargs={ntypeargs}")
+            }
+            Instruction::MakeGenericFunction {
+                function,
+                ntypeargs,
+            } => {
+                write!(f, "MAKE_GENERIC_FUNCTION {function} ntypeargs={ntypeargs}")
+            }
+            Instruction::MakeGenericFunctionFromValue { ntypeargs } => {
+                write!(f, "MAKE_GENERIC_FUNCTION_FROM_VALUE ntypeargs={ntypeargs}")
             }
             Instruction::CallIndirect => f.write_str("CALL_INDIRECT"),
             Instruction::Throw => f.write_str("THROW"),
@@ -2052,6 +2102,24 @@ impl Bytecode {
                     code.extend_from_slice(&ntypeargs.to_le_bytes());
                 }
 
+                // ── MakeGenericFunction: u32 function + u16 ntypeargs ─
+                Instruction::MakeGenericFunction {
+                    function,
+                    ntypeargs,
+                } => {
+                    code.extend_from_slice(
+                        &u32::try_from(function.into_raw())
+                            .expect("global index fits u32")
+                            .to_le_bytes(),
+                    );
+                    code.extend_from_slice(&ntypeargs.to_le_bytes());
+                }
+
+                // ── MakeGenericFunctionFromValue: u16 ntypeargs ──────
+                Instruction::MakeGenericFunctionFromValue { ntypeargs } => {
+                    code.extend_from_slice(&ntypeargs.to_le_bytes());
+                }
+
                 // ── ObjectIndex operand → u32 ───────────────────────
                 Instruction::AllocVariant(o) => {
                     code.extend_from_slice(
@@ -2374,6 +2442,10 @@ impl Bytecode {
             // Two-operand variants
             Instruction::JumpTable(_) => OpCode::JumpTable,
             Instruction::MakeClosure { .. } => OpCode::MakeClosure,
+            Instruction::MakeGenericFunction { .. } => OpCode::MakeGenericFunction,
+            Instruction::MakeGenericFunctionFromValue { .. } => {
+                OpCode::MakeGenericFunctionFromValue
+            }
         }
     }
 }

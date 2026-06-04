@@ -18,8 +18,9 @@ pub struct FormatArgs {
     pub paths: Vec<PathBuf>,
 
     /// Project root to discover files from when no explicit paths are
-    /// passed. Mirrors `baml run`/`baml pack`'s `--from`; the directory
-    /// must contain a `baml.toml` or a `baml_src/` subdirectory.
+    /// passed. Mirrors `baml run`/`baml pack`'s `--from`. When the
+    /// directory has neither a `baml.toml` nor a `baml_src/` subdirectory,
+    /// there's nothing to format and `baml fmt` is a no-op success.
     #[arg(long, default_value = ".")]
     pub from: PathBuf,
 
@@ -35,14 +36,26 @@ pub struct FormatArgs {
 impl FormatArgs {
     pub fn run(&self) -> Result<crate::ExitCode> {
         // Cargo-style default: with no positional paths, discover every
-        // `.baml` file under the project root and format the lot. Same
-        // project-marker rule the rest of the CLI uses, so `baml fmt`
-        // in an unrelated directory fails fast instead of silently
-        // walking the cwd subtree.
+        // `.baml` file under the project root and format the lot. The
+        // project-marker rule keeps `baml fmt` from silently rewriting
+        // every `.baml` under cwd from an unrelated directory; with no
+        // marker there's simply nothing to format (a no-op success).
         let discovered;
         let paths: &[PathBuf] = if self.paths.is_empty() {
-            discovered = discover_project_files(&self.from)?;
-            &discovered
+            match discover_project_files(&self.from)? {
+                Some(files) => {
+                    discovered = files;
+                    &discovered
+                }
+                None => {
+                    // No `baml.toml` / `baml_src/` here — there's nothing to
+                    // format, so don't fail. A no-op success beats a hard
+                    // error for a command agents run reflexively; pass
+                    // explicit file paths to format loose `.baml` files.
+                    Reporter::new().finish("Finished", "no BAML project found; nothing to format");
+                    return Ok(crate::ExitCode::Success);
+                }
+            }
         } else {
             &self.paths
         };
@@ -135,13 +148,18 @@ impl FormatArgs {
     }
 }
 
-/// Walk a project root and return every `.baml` file inside it. Same
-/// rules as `project_load::load_project_from`: require a `baml.toml` or
-/// `baml_src/` marker so `baml fmt` doesn't accidentally rewrite every
-/// `.baml` under cwd from an unrelated directory, and prefer the
-/// `baml_src/` subtree when present so loose top-level fixtures aren't
+/// Walk a project root and return every `.baml` file inside it. Requires a
+/// `baml.toml` or `baml_src/` marker so `baml fmt` doesn't accidentally
+/// rewrite every `.baml` under cwd from an unrelated directory, and prefers
+/// the `baml_src/` subtree when present so loose top-level fixtures aren't
 /// touched.
-fn discover_project_files(from: &Path) -> Result<Vec<PathBuf>> {
+///
+/// Returns `Ok(None)` when neither marker is present — `baml fmt` mutates
+/// files, so unlike the read-only `describe`/`grep` introspection path it
+/// does **not** walk up to adopt a distant ancestor project (that could
+/// silently rewrite files far from the cwd). The caller turns `None` into a
+/// no-op success rather than a hard error.
+fn discover_project_files(from: &Path) -> Result<Option<Vec<PathBuf>>> {
     let canonical = fs::canonicalize(from)
         .with_context(|| format!("Could not resolve path: {}", from.display()))?;
 
@@ -149,14 +167,9 @@ fn discover_project_files(from: &Path) -> Result<Vec<PathBuf>> {
     let baml_src = canonical.join("baml_src");
     let has_baml_src = baml_src.is_dir();
     if !has_baml_toml && !has_baml_src {
-        anyhow::bail!(
-            "`{}` doesn't look like a BAML project.\n\
-             Expected `baml.toml` or a `baml_src/` directory at the project root.\n\
-             Pass `--from <project-dir>` or specific files to format.",
-            canonical.display()
-        );
+        return Ok(None);
     }
 
     let walk_root = if has_baml_src { baml_src } else { canonical };
-    Ok(discover_baml_files(&walk_root))
+    Ok(Some(discover_baml_files(&walk_root)))
 }

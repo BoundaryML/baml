@@ -327,6 +327,7 @@ pub(crate) mod support {
                 }
                 baml_compiler2_ast::TemplateTag::Default { .. } => "`...`".into(),
             },
+            Expr::GenericApply { base, .. } => format!("{}<...>", expr_desc(*base, body)),
             Expr::Missing => "<missing>".into(),
         }
     }
@@ -1792,6 +1793,12 @@ pub(crate) mod support {
                     ),
                     baml_compiler2_ast::TemplateTag::Default { .. } => "`...`".into(),
                 },
+                Expr::GenericApply { base, .. } => {
+                    format!(
+                        "{}<...>",
+                        expr_desc_hir(*base, body, prefix, local_type_names)
+                    )
+                }
                 Expr::Missing => "<missing>".into(),
             }
         }

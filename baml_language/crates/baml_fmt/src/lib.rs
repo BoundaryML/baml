@@ -131,6 +131,44 @@ mod lambda_format_tests {
         let second = format(&formatted, &options).expect("formatter should be idempotent");
         assert_eq!(formatted, second, "formatter should be idempotent");
     }
+
+    /// Generic instantiation expressions in every accepted base form must format
+    /// without error and be idempotent. Covers path / qualified-path bases
+    /// (carried by `PathExpr`) and non-path bases (`Expression::GenericApply`,
+    /// e.g. a parenthesized inline generic lambda).
+    #[test]
+    fn test_generic_instantiation_formatting() {
+        let options = FormatOptions::default();
+        let cases = [
+            "function f() -> int {\n    let g = foo<int>\n    g(5)\n}\n",
+            "function f() -> int {\n    foo<int>(5)\n}\n",
+            "function f() -> int {\n    let g = a.b.foo<int, string>\n    5\n}\n",
+            "function f() -> int {\n    let g = (foo)<int>\n    5\n}\n",
+            "function f() -> int {\n    let g = (<T>(x: T) -> T { x })<int>\n    g(5)\n}\n",
+        ];
+        for source in cases {
+            let formatted = format(source, &options).unwrap_or_else(|e| {
+                panic!("formatter must not error on valid syntax: {e:?}\nsource:\n{source}")
+            });
+            let second = format(&formatted, &options).expect("formatter should be idempotent");
+            assert_eq!(
+                formatted, second,
+                "formatter should be idempotent for:\n{source}"
+            );
+        }
+    }
+
+    /// The trailing `<...>` is preserved (not dropped) for a parenthesized base.
+    #[test]
+    fn test_generic_instantiation_paren_base_keeps_args() {
+        let options = FormatOptions::default();
+        let source = "function f() -> int {\n    let g = (foo)<int>\n    5\n}\n";
+        let formatted = format(source, &options).expect("formatter should succeed");
+        assert!(
+            formatted.contains("(foo)<int>"),
+            "expected `(foo)<int>` in:\n{formatted}"
+        );
+    }
 }
 
 #[cfg(test)]

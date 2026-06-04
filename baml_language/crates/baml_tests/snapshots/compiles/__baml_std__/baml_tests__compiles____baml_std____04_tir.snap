@@ -892,7 +892,7 @@ function baml.llm.Client.execute_once_stream<TStream, TFinal>(self: baml.llm.Cli
             }
           let idx = self.counter % self.sub_clients.length() : int
           self.counter Add= 1 : int
-          let result3: Stream<TStream, TFinal> = <missing>(context, active_delay_ms) : unknown -> baml.llm.Stream<TStream, TFinal>
+          let result3: Stream<TStream, TFinal> = self.sub_clients[idx].execute_stream(context, active_delay_ms) : baml.llm.Stream<TStream, TFinal>
           return result3 : baml.llm.Stream<TStream, TFinal>
         }
   }
@@ -1020,7 +1020,7 @@ function baml.llm.Client.execute_once_oneshot<T>(self: baml.llm.Client, context:
             }
           let idx = self.counter % self.sub_clients.length() : int
           self.counter Add= 1 : int
-          let result3: T = <missing>(context, active_delay_ms) : unknown -> T
+          let result3: T = self.sub_clients[idx].execute_oneshot<T>(context, active_delay_ms) : T
           return result3 : T
         }
   }

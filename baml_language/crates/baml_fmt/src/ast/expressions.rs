@@ -17,6 +17,12 @@ pub enum Expression {
     Literal(Literal),
     /// Includes things like `null`, `true`, `false`, `baml.fs`, etc.
     Path(PathExpr),
+    /// A generic instantiation whose base is NOT a plain path — e.g.
+    /// `(<T>(x: T) -> T { x })<int>` or `(foo)<int>`. The path-based form
+    /// (`foo<int>`, `a.b.foo<int>`) is carried by [`PathExpr::generic_args`];
+    /// the parser wraps both in a `PATH_EXPR` node, so this is selected when
+    /// that node's first child is not a word/path.
+    GenericApply(GenericApplyExpr),
     Paren(ParenExpr),
     Binary(BinaryExpr),
     Is(IsExpr),
@@ -68,8 +74,21 @@ impl FromCST for Expression {
             SyntaxKind::FLOAT_LITERAL => Expression::Literal(Literal::Float(
                 t::FloatLiteral::new_from_span(elem.text_range()),
             )),
-            SyntaxKind::PATH_EXPR | SyntaxKind::WORD => {
-                PathExpr::from_cst(elem).map(Expression::Path)?
+            SyntaxKind::WORD => PathExpr::from_cst(elem).map(Expression::Path)?,
+            SyntaxKind::PATH_EXPR => {
+                // The parser wraps any postfix `<...>` in a PATH_EXPR. When the
+                // base is a plain path (word / nested PATH_EXPR) it is a
+                // `PathExpr`; otherwise (a parenthesized expr, lambda, etc.) it
+                // is a generic instantiation on a non-path base.
+                let node = StrongAstError::assert_is_node(elem.clone())?;
+                let base_is_path = SyntaxNodeIter::new(&node)
+                    .next()
+                    .is_some_and(|c| matches!(c.kind(), SyntaxKind::WORD | SyntaxKind::PATH_EXPR));
+                if base_is_path {
+                    PathExpr::from_cst(elem).map(Expression::Path)?
+                } else {
+                    GenericApplyExpr::from_cst(elem).map(Expression::GenericApply)?
+                }
             }
             SyntaxKind::PAREN_EXPR => ParenExpr::from_cst(elem).map(Expression::Paren)?,
             SyntaxKind::BINARY_EXPR => BinaryExpr::from_cst(elem).map(Expression::Binary)?,
@@ -128,6 +147,7 @@ impl Expression {
         match self {
             Expression::Literal(lit) => lit.single_line_width(input),
             Expression::Path(path) => path.single_line_width(input),
+            Expression::GenericApply(ga) => ga.single_line_width(input),
             Expression::Paren(paren) => paren.single_line_width(input),
             Expression::Binary(binary) => binary.single_line_width(input),
             Expression::Is(is) => is.single_line_width(input),
@@ -182,6 +202,7 @@ impl Printable for Expression {
                 let chain = PrintChain::new(chain);
                 chain.print(shape, printer)
             }
+            Expression::GenericApply(ga) => ga.print(shape, printer),
             Expression::Paren(paren) => paren.print(shape, printer),
             Expression::Binary(binary) => binary.print(shape, printer),
             Expression::Is(is) => is.print(shape, printer),
@@ -208,6 +229,7 @@ impl Printable for Expression {
         match self {
             Expression::Literal(lit) => lit.leftmost_token(),
             Expression::Path(path) => path.leftmost_token(),
+            Expression::GenericApply(ga) => ga.leftmost_token(),
             Expression::Paren(paren) => paren.leftmost_token(),
             Expression::Binary(binary) => binary.leftmost_token(),
             Expression::Is(is) => is.leftmost_token(),
@@ -237,6 +259,7 @@ impl Printable for Expression {
         match self {
             Expression::Literal(lit) => lit.rightmost_token(),
             Expression::Path(path) => path.rightmost_token(),
+            Expression::GenericApply(ga) => ga.rightmost_token(),
             Expression::Paren(paren) => paren.rightmost_token(),
             Expression::Binary(binary) => binary.rightmost_token(),
             Expression::Is(is) => is.rightmost_token(),
@@ -476,6 +499,60 @@ impl Printable for PathExpr {
             .last()
             .map_or(&self.first, |(_, word)| word)
             .span()
+    }
+}
+
+/// A generic instantiation whose base is not a plain path, e.g.
+/// `(<T>(x: T) -> T { x })<int>` or `(foo)<int>`. Corresponds to a
+/// [`SyntaxKind::PATH_EXPR`] node whose first child is an arbitrary expression
+/// followed by `GENERIC_ARGS`.
+#[derive(Debug)]
+pub struct GenericApplyExpr {
+    pub base: Box<Expression>,
+    pub generic_args: GenericArgs,
+}
+
+impl FromCST for GenericApplyExpr {
+    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
+        let node = StrongAstError::assert_is_node(elem)?;
+        StrongAstError::assert_kind_node(&node, SyntaxKind::PATH_EXPR)?;
+
+        let mut it = SyntaxNodeIter::new(&node);
+        let base_elem = it
+            .next()
+            .ok_or_else(|| StrongAstError::missing(SyntaxKind::PAREN_EXPR, it.parent))?;
+        let base = Box::new(Expression::from_cst(base_elem)?);
+        let ga_elem = it
+            .next()
+            .ok_or_else(|| StrongAstError::missing(SyntaxKind::GENERIC_ARGS, it.parent))?;
+        let generic_args = GenericArgs::from_cst(ga_elem)?;
+        if let Some(extra) = it.next() {
+            return Err(StrongAstError::UnexpectedAdditionalElement {
+                parent: it.parent,
+                at: extra.text_range(),
+            });
+        }
+        Ok(GenericApplyExpr { base, generic_args })
+    }
+}
+
+impl GenericApplyExpr {
+    pub(crate) fn single_line_width(&self, input: &Printer<'_>) -> Option<usize> {
+        Some(self.base.single_line_width(input)? + self.generic_args.formatted_single_line_width())
+    }
+}
+
+impl Printable for GenericApplyExpr {
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        let info = self.base.print(shape.clone(), printer);
+        printer.print(&self.generic_args, shape);
+        info
+    }
+    fn leftmost_token(&self) -> TextRange {
+        self.base.leftmost_token()
+    }
+    fn rightmost_token(&self) -> TextRange {
+        self.generic_args.close_angle.span()
     }
 }
 

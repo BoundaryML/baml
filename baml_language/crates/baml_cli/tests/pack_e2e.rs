@@ -207,3 +207,31 @@ fn pack_e2e_sys_exit_propagates_to_shell() {
     let out = run(&bin, &[]);
     assert_eq!(out.status.code(), Some(7));
 }
+
+/// Pack a **manifest-less** `baml_src/`-only project (no `baml.toml`) and
+/// run the resulting binary. Proves the whole pack pipeline works without a
+/// manifest; `-o` overrides the artifact path, so the dir-name fallback in
+/// `resolve_project_name` is covered separately by the unit tests.
+#[test]
+fn pack_e2e_manifest_less_baml_src() {
+    let built = common::ensure_built();
+    let tmp = tempfile::tempdir().unwrap();
+    // No baml.toml — sources live under baml_src/.
+    let src = tmp.path().join("baml_src");
+    std::fs::create_dir_all(&src).unwrap();
+    std::fs::write(
+        src.join("main.baml"),
+        "function main(name: string) -> string { \"hi, \" + name }\n",
+    )
+    .unwrap();
+
+    let bin = pack(built, tmp.path(), &["main"]);
+    let out = run(&bin, &["--name", "Ada"]);
+    assert!(
+        out.status.success(),
+        "manifest-less packed binary exited {:?}; stderr:\n{}",
+        out.status.code(),
+        String::from_utf8_lossy(&out.stderr),
+    );
+    assert!(String::from_utf8_lossy(&out.stdout).contains("hi, Ada"));
+}
