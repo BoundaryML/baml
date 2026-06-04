@@ -2470,18 +2470,45 @@ impl<'db> TypeInferenceBuilder<'db> {
                 // `frame.type_args` at runtime. Values are recorded BEFORE
                 // typevar erasure: a binding to the *caller's* rigid `TypeVar`
                 // must survive so MIR can lower it to a `TypeArgRef` into the
-                // caller's own frame (generic→generic calls).
+                // caller's own frame (generic→generic calls). Fresh literal
+                // types widen to their base primitive (`"hi"` infers
+                // `T = Literal("hi")`, but the runtime tag must be `string`
+                // so `is Box<string>` compares equal).
                 if let Some(callee_id) = callee_expr {
                     if let Some((declared_params, _)) =
                         self.callee_declared_generic_params(callee_id)
                     {
                         if !declared_params.is_empty() {
+                            // The type-checking `bindings` pass refuses
+                            // TypeVar actuals (`infer_bindings` passes
+                            // allow_typevar_actuals=false), so a generic→
+                            // generic call (`any(fs)` inside `helper<E>`,
+                            // where `fs: Future<int, E>[]`) leaves E2 unbound
+                            // there. For RECORDING those rigid caller
+                            // TypeVars are exactly what we want (MIR lowers
+                            // them to TypeArgRef) — fill the gaps with an
+                            // allow-typevars pass over the checked arg types.
+                            let mut typevar_bindings: FxHashMap<Name, Ty> = FxHashMap::default();
+                            for (param, arg) in &param_arg_pairs {
+                                if let Some(arg_ty) = self.expressions.get(arg) {
+                                    crate::generics::infer_bindings_allow_typevars(
+                                        &param.ty,
+                                        arg_ty,
+                                        &mut typevar_bindings,
+                                    );
+                                }
+                            }
                             let instantiation: Vec<Ty> = declared_params
                                 .iter()
                                 .map(|name| {
-                                    bindings.get(name).cloned().unwrap_or(Ty::Unknown {
-                                        attr: TyAttr::default(),
-                                    })
+                                    bindings
+                                        .get(name)
+                                        .or_else(|| typevar_bindings.get(name))
+                                        .cloned()
+                                        .map(Ty::widen_fresh)
+                                        .unwrap_or(Ty::Unknown {
+                                            attr: TyAttr::default(),
+                                        })
                                 })
                                 .collect();
                             self.call_type_instantiations.insert(expr_id, instantiation);

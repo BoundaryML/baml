@@ -1548,6 +1548,28 @@ impl<'db> LoweringContext<'db> {
         self.resolved_aliases.convert(&tir_ty)
     }
 
+    /// Lower a pattern's type annotation to TIR with the enclosing function's
+    /// generic params in scope, so `TypeVar`s survive (unlike
+    /// [`Self::resolve_type_annotation`], which erases them). Used by typed
+    /// pattern tests, where a surviving `TypeVar` lowers to a `TypeArgRef`
+    /// template instead of a constant-false `Void` test.
+    fn lower_type_annotation_tir(&self, ty_expr: &baml_compiler2_ast::TypeExpr) -> Tir2Ty {
+        use baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns;
+        let generic_params = self.enclosing_generic_params();
+        let pkg_info = file_package(self.db, self.file);
+        let pkg_id = PackageId::new(self.db, pkg_info.package);
+        let pkg_items = package_items(self.db, pkg_id);
+        let mut diags = Vec::new();
+        lower_type_expr_in_ns(
+            self.db,
+            ty_expr,
+            pkg_items,
+            &pkg_info.namespace_path,
+            &generic_params,
+            &mut diags,
+        )
+    }
+
     /// Build a `Span` from an expression's source range.
     /// Returns `None` if no source map is available (e.g. synthesized bodies).
     fn span_for_expr(&self, expr_id: AstExprId) -> Option<baml_base::Span> {
@@ -6632,17 +6654,34 @@ impl LoweringContext<'_> {
             // the template is TyTemplate::Concrete(ty) — the emitter falls back
             // to the same fast path as before.
             let ty_template = ty_to_template_from_resolved_ty(&ty);
-            let test = Rvalue::IsType {
-                operand: Operand::Copy(Place::Local(scrutinee)),
-                ty_template,
-            };
-            let test_local = self.builder.temp(Ty::Bool {
-                attr: TyAttr::default(),
-            });
-            self.builder.assign(Place::local(test_local), test);
-            self.builder
-                .branch(Operand::Copy(Place::Local(test_local)), success, failure);
+            self.emit_is_type_template_branch(scrutinee, ty_template, success, failure);
         }
+    }
+
+    /// Emit an `IsType` test + branch for an already-built `TyTemplate`.
+    ///
+    /// Used directly (instead of [`Self::emit_is_type_branch`]) when the
+    /// pattern type still contains the enclosing function's `TypeVar`s: the
+    /// caller builds the template via `ty_to_template` so those lower to
+    /// `TypeArgRef` leaves resolved against `frame.type_args` at runtime,
+    /// rather than being erased to `Ty::Void` (a constant-false test).
+    fn emit_is_type_template_branch(
+        &mut self,
+        scrutinee: Local,
+        ty_template: TyTemplate,
+        success: BlockId,
+        failure: BlockId,
+    ) {
+        let test = Rvalue::IsType {
+            operand: Operand::Copy(Place::Local(scrutinee)),
+            ty_template,
+        };
+        let test_local = self.builder.temp(Ty::Bool {
+            attr: TyAttr::default(),
+        });
+        self.builder.assign(Place::local(test_local), test);
+        self.builder
+            .branch(Operand::Copy(Place::Local(test_local)), success, failure);
     }
 
     fn emit_is_tir_type_branch(
@@ -7219,11 +7258,30 @@ impl LoweringContext<'_> {
                         .branch(Operand::Copy(Place::Local(test_local)), success, failure);
                 }
                 _ => {
-                    let annotation_ty = self
+                    // The annotated-bind recursion (`let e: T => …` recurses
+                    // into its Type subpattern) has no `pat_types` entry for
+                    // the subpattern, so fall back to lowering the annotation
+                    // itself with the enclosing generic params in scope.
+                    let pat_tir_ty = self
                         .pat_types
                         .get(&self.pat_metadata_key(pat_id))
-                        .map(|tir_ty| convert_tir2_ty(tir_ty, &self.resolved_aliases))
-                        .unwrap_or_else(|| self.resolve_type_annotation(ty_expr));
+                        .cloned()
+                        .unwrap_or_else(|| self.lower_type_annotation_tir(ty_expr));
+                    // A class pattern type still carrying the enclosing
+                    // function's TypeVars (e.g. `let e: AllFailed<E>` inside
+                    // `any<T, E>`) must NOT go through `convert_tir2_ty` —
+                    // that erases TypeVar → Void and the test becomes
+                    // constant-false. Build a template instead so the args
+                    // lower to `TypeArgRef` resolved against the frame.
+                    if matches!(&pat_tir_ty, Tir2Ty::Class(..))
+                        && baml_compiler2_tir::generics::contains_typevar(&pat_tir_ty)
+                    {
+                        let generic_params = self.enclosing_generic_params();
+                        let template = self.ty_to_template(&pat_tir_ty, &generic_params);
+                        self.emit_is_type_template_branch(scrutinee, template, success, failure);
+                        return;
+                    }
+                    let annotation_ty = convert_tir2_ty(&pat_tir_ty, &self.resolved_aliases);
                     self.emit_is_type_branch(scrutinee, annotation_ty, success, failure);
                 }
             },
