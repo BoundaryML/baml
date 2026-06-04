@@ -974,6 +974,15 @@ type NetTcpStreamHandle = tokio::sync::Mutex<Option<tokio::net::TcpStream>>;
 type NetTcpListenerHandle = tokio::sync::Mutex<Option<Arc<tokio::net::TcpListener>>>;
 type NetUdpSocketHandle = tokio::sync::Mutex<Option<Arc<tokio::net::UdpSocket>>>;
 
+// Default connect deadline. Without it, connecting to an unresponsive host
+// (e.g. one behind silent DDoS filtering) blocks forever; this makes the
+// `throws root.errors.Timeout` clause on `connect` actually fire.
+//
+// TODO(net-timeout): make this configurable per call — `connect(addr, timeout)`
+// and `read(timeout)` / `write(..., timeout)` — once we have a datetime/Duration
+// type to pass a timeout through the BAML API. For now it's a fixed default.
+const DEFAULT_CONNECT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
+
 fn downcast_tcpstream(
     stream: &owned::net::TcpStream,
 ) -> Result<Arc<NetTcpStreamHandle>, OpErrorKind> {
@@ -1013,9 +1022,25 @@ impl io::IoClassNetTcpStream for NativeSysOps {
         _ctx: &SysOpContext,
     ) -> SysOpOutput<owned::net::TcpStream> {
         SysOpOutput::async_op(async move {
-            let stream = tokio::net::TcpStream::connect(&addr)
-                .await
-                .map_err(|e| OpErrorKind::Other(format!("Failed to connect to '{addr}': {e}")))?;
+            let stream = match tokio::time::timeout(
+                DEFAULT_CONNECT_TIMEOUT,
+                tokio::net::TcpStream::connect(&addr),
+            )
+            .await
+            {
+                Ok(Ok(stream)) => stream,
+                Ok(Err(e)) => {
+                    return Err(OpErrorKind::Io {
+                        message: format!("Failed to connect to '{addr}': {e}"),
+                    });
+                }
+                Err(_elapsed) => {
+                    return Err(OpErrorKind::Timeout {
+                        message: format!("Connecting to '{addr}' timed out"),
+                        duration: DEFAULT_CONNECT_TIMEOUT,
+                    });
+                }
+            };
             let handle: Arc<dyn std::any::Any + Send + Sync> =
                 Arc::new(tokio::sync::Mutex::new(Some(stream)));
             Ok(owned::net::TcpStream { _handle: handle })
