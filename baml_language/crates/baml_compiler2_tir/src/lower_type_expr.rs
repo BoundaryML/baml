@@ -19,6 +19,19 @@ use crate::{
 /// over the sink-based cores.
 pub type DiagSink<'a> = &'a mut dyn FnMut(TirTypeError);
 
+/// The read-only triple threaded through the recursive lowering cores: the
+/// salsa database, the resolved package items to resolve names against, and the
+/// namespace context (e.g. `["fs"]`) that unqualified paths resolve relative
+/// to first. All three are sourced from the same salsa db, so they share one
+/// `'db` lifetime. The per-recursion-varying inputs (`generic_params` /
+/// `bindings`) are deliberately kept as separate explicit parameters.
+#[derive(Clone, Copy)]
+pub struct LoweringCtx<'db> {
+    pub db: &'db dyn crate::Db,
+    pub package_items: &'db PackageItems<'db>,
+    pub ns_context: &'db [baml_base::Name],
+}
+
 /// Resolve an AST `TypeExpr` to a `Ty` using package-level name resolution.
 ///
 /// Names are resolved against `package_items`: classes, enums, and type aliases
@@ -53,14 +66,12 @@ pub fn lower_type_expr_in_ns_into(
     generic_params: &[baml_base::Name],
     sink: DiagSink<'_>,
 ) -> Ty {
-    lower_in_ns(
+    let ctx = LoweringCtx {
         db,
-        type_expr,
         package_items,
         ns_context,
-        generic_params,
-        sink,
-    )
+    };
+    lower_in_ns(ctx, type_expr, generic_params, sink)
 }
 
 /// BEP-044: walk `type_expr` and replace any `Self` reference with
@@ -184,20 +195,23 @@ pub fn type_expr_for_name(name: baml_base::Name) -> TypeExpr {
 /// path first, then the cross-package fallback (`root.*` or a package-named first
 /// segment). Returns the resolved [`Definition`], if any.
 fn resolve_type<'db>(
-    db: &'db dyn crate::Db,
-    package_items: &PackageItems<'db>,
-    ns_context: &[baml_base::Name],
+    ctx: LoweringCtx<'db>,
     path: &[baml_base::Name],
     item: &baml_base::Name,
 ) -> Option<Definition<'db>> {
     let seg_ns = &path[..path.len() - 1];
     // When we have a namespace context, try the qualified path first.
     // e.g. for ns_context=["fs"], path=["File"], try namespace ["fs"] item "File".
-    let resolved = if !ns_context.is_empty() {
-        let ns: Vec<baml_base::Name> = ns_context.iter().chain(seg_ns.iter()).cloned().collect();
-        package_items.lookup_type(&ns, item)
+    let resolved = if !ctx.ns_context.is_empty() {
+        let ns: Vec<baml_base::Name> = ctx
+            .ns_context
+            .iter()
+            .chain(seg_ns.iter())
+            .cloned()
+            .collect();
+        ctx.package_items.lookup_type(&ns, item)
     } else {
-        package_items.lookup_type(seg_ns, item)
+        ctx.package_items.lookup_type(seg_ns, item)
     };
     // Cross-package fallback: if not found in the current package and
     // the first segment is a known package name, look in that package
@@ -206,10 +220,11 @@ fn resolve_type<'db>(
     resolved.or_else(|| {
         if path.len() >= 2 {
             if path[0].as_str() == "root" {
-                package_items.lookup_type(&path[1..path.len() - 1], item)
+                ctx.package_items
+                    .lookup_type(&path[1..path.len() - 1], item)
             } else {
-                let pkg_id = PackageId::new(db, path[0].clone());
-                let pkg = baml_compiler2_ppir::package_items(db, pkg_id);
+                let pkg_id = PackageId::new(ctx.db, path[0].clone());
+                let pkg = baml_compiler2_ppir::package_items(ctx.db, pkg_id);
                 pkg.lookup_type(&path[1..path.len() - 1], item)
             }
         } else {
@@ -220,16 +235,14 @@ fn resolve_type<'db>(
 
 /// Lower each generic arg in turn, surfacing any nested diagnostics.
 fn lower_args(
-    db: &dyn crate::Db,
+    ctx: LoweringCtx<'_>,
     generic_args: &[TypeExpr],
-    package_items: &PackageItems<'_>,
-    ns_context: &[baml_base::Name],
     generic_params: &[baml_base::Name],
     sink: DiagSink<'_>,
 ) -> Vec<Ty> {
     generic_args
         .iter()
-        .map(|ga| lower_in_ns(db, ga, package_items, ns_context, generic_params, sink))
+        .map(|ga| lower_in_ns(ctx, ga, generic_params, sink))
         .collect()
 }
 
@@ -238,25 +251,16 @@ fn lower_args(
 /// `Ty` via `make_ty`.
 #[allow(clippy::too_many_arguments)]
 fn lower_non_generic(
-    db: &dyn crate::Db,
+    ctx: LoweringCtx<'_>,
     def: Definition,
     item: &baml_base::Name,
     generic_args: &[TypeExpr],
-    package_items: &PackageItems<'_>,
-    ns_context: &[baml_base::Name],
     generic_params: &[baml_base::Name],
     sink: DiagSink<'_>,
     kind: &'static str,
     make_ty: impl FnOnce(QualifiedTypeName) -> Ty,
 ) -> Ty {
-    lower_args(
-        db,
-        generic_args,
-        package_items,
-        ns_context,
-        generic_params,
-        sink,
-    );
+    lower_args(ctx, generic_args, generic_params, sink);
     // Flag generic args supplied for a non-generic type (enum / type alias).
     // The args were lowered just above so their own diagnostics still surface.
     if !generic_args.is_empty() {
@@ -265,7 +269,7 @@ fn lower_non_generic(
             kind,
         });
     }
-    make_ty(qualify_def(db, def, item))
+    make_ty(qualify_def(ctx.db, def, item))
 }
 
 /// Like [`lower_type_expr`], but resolves unqualified names relative to
@@ -283,23 +287,19 @@ pub fn lower_type_expr_in_ns(
     diagnostics: &mut Vec<TirTypeError>,
 ) -> Ty {
     let mut push = |e| diagnostics.push(e);
-    lower_in_ns(
+    let ctx = LoweringCtx {
         db,
-        type_expr,
         package_items,
         ns_context,
-        generic_params,
-        &mut push,
-    )
+    };
+    lower_in_ns(ctx, type_expr, generic_params, &mut push)
 }
 
 /// Sink-based core of [`lower_type_expr_in_ns`]. The public `Vec`-taking entry
 /// points are thin shims over this function.
 fn lower_in_ns(
-    db: &dyn crate::Db,
+    ctx: LoweringCtx<'_>,
     type_expr: &TypeExpr,
-    package_items: &PackageItems<'_>,
-    ns_context: &[baml_base::Name],
     generic_params: &[baml_base::Name],
     sink: DiagSink<'_>,
 ) -> Ty {
@@ -310,19 +310,12 @@ fn lower_in_ns(
             ..
         } => {
             let item = segments.last().expect("non-empty path");
-            let resolved = resolve_type(db, package_items, ns_context, segments, item);
+            let resolved = resolve_type(ctx, segments, item);
 
             if let Some(def) = resolved {
                 match def {
                     Definition::Class(_) => {
-                        let lowered_args = lower_args(
-                            db,
-                            generic_args,
-                            package_items,
-                            ns_context,
-                            generic_params,
-                            sink,
-                        );
+                        let lowered_args = lower_args(ctx, generic_args, generic_params, sink);
 
                         // BEP-034: `baml.future.Future<T, E>` resolves to the
                         // dedicated `Ty::Future` variant rather than the
@@ -332,7 +325,7 @@ fn lower_in_ns(
                         // `await` keys off `Ty::Future` directly. Mirrors
                         // how `int[]` resolves to `Ty::List` even though
                         // `class Array<T>` is a regular class declaration.
-                        let qtn = qualify_def(db, def, item);
+                        let qtn = qualify_def(ctx.db, def, item);
                         if qtn.is_builtin_future() && lowered_args.len() == 2 {
                             return Ty::Future(
                                 Box::new(lowered_args[0].clone()),
@@ -348,35 +341,24 @@ fn lower_in_ns(
                         Ty::Class(qtn, lowered_args)
                     }
                     Definition::Interface(_) => {
-                        let lowered_args = lower_args(
-                            db,
-                            generic_args,
-                            package_items,
-                            ns_context,
-                            generic_params,
-                            sink,
-                        );
-                        Ty::Interface(qualify_def(db, def, item), lowered_args)
+                        let lowered_args = lower_args(ctx, generic_args, generic_params, sink);
+                        Ty::Interface(qualify_def(ctx.db, def, item), lowered_args)
                     }
                     Definition::Enum(_) => lower_non_generic(
-                        db,
+                        ctx,
                         def,
                         item,
                         generic_args,
-                        package_items,
-                        ns_context,
                         generic_params,
                         sink,
                         "enum",
                         Ty::Enum,
                     ),
                     Definition::TypeAlias(_) => lower_non_generic(
-                        db,
+                        ctx,
                         def,
                         item,
                         generic_args,
-                        package_items,
-                        ns_context,
                         generic_params,
                         sink,
                         "type alias",
@@ -397,18 +379,18 @@ fn lower_in_ns(
                 if segments.len() >= 2 {
                     let (variant, enum_path) = segments.split_last().unwrap();
                     let enum_short = enum_path.last().unwrap();
-                    let enum_resolved =
-                        resolve_type(db, package_items, ns_context, enum_path, enum_short);
+                    let enum_resolved = resolve_type(ctx, enum_path, enum_short);
                     if let Some(def @ Definition::Enum(enum_loc)) = enum_resolved {
                         // Verify the variant actually exists on the enum;
                         // otherwise `Status.Typo` would silently produce a
                         // bogus `Ty::EnumVariant` and downstream code would
                         // never see `UnresolvedType`.
-                        let item_tree = baml_compiler2_ppir::file_item_tree(db, enum_loc.file(db));
-                        let enum_data = &item_tree[enum_loc.id(db)];
+                        let item_tree =
+                            baml_compiler2_ppir::file_item_tree(ctx.db, enum_loc.file(ctx.db));
+                        let enum_data = &item_tree[enum_loc.id(ctx.db)];
                         if enum_data.variants.iter().any(|v| v.name == *variant) {
                             return Ty::EnumVariant(
-                                qualify_def(db, def, enum_short),
+                                qualify_def(ctx.db, def, enum_short),
                                 variant.clone(),
                             );
                         }
@@ -420,7 +402,7 @@ fn lower_in_ns(
                 // encode the intended namespace.
                 let mut suggestions = Vec::new();
                 if segments.len() == 1 {
-                    for (ns_path, ns_items) in &package_items.namespaces {
+                    for (ns_path, ns_items) in &ctx.package_items.namespaces {
                         if ns_items.types.contains_key(item) {
                             if ns_path.is_empty() {
                                 suggestions.push(format!("root.{item}"));
@@ -458,46 +440,22 @@ fn lower_in_ns(
                 return Ty::Unknown;
             }
         }),
-        TypeExpr::Optional { inner, .. } => Ty::Optional(Box::new(lower_in_ns(
-            db,
-            inner,
-            package_items,
-            ns_context,
-            generic_params,
-            sink,
-        ))),
-        TypeExpr::List { inner, .. } => Ty::List(Box::new(lower_in_ns(
-            db,
-            inner,
-            package_items,
-            ns_context,
-            generic_params,
-            sink,
-        ))),
+        TypeExpr::Optional { inner, .. } => {
+            Ty::Optional(Box::new(lower_in_ns(ctx, inner, generic_params, sink)))
+        }
+        TypeExpr::List { inner, .. } => {
+            Ty::List(Box::new(lower_in_ns(ctx, inner, generic_params, sink)))
+        }
         TypeExpr::Map { key, value, .. } => Ty::Map(
-            Box::new(lower_in_ns(
-                db,
-                key,
-                package_items,
-                ns_context,
-                generic_params,
-                sink,
-            )),
-            Box::new(lower_in_ns(
-                db,
-                value,
-                package_items,
-                ns_context,
-                generic_params,
-                sink,
-            )),
+            Box::new(lower_in_ns(ctx, key, generic_params, sink)),
+            Box::new(lower_in_ns(ctx, value, generic_params, sink)),
         ),
         TypeExpr::Union {
             variants: members, ..
         } => Ty::Union(
             members
                 .iter()
-                .map(|m| lower_in_ns(db, m, package_items, ns_context, generic_params, sink))
+                .map(|m| lower_in_ns(ctx, m, generic_params, sink))
                 .collect(),
         ),
         TypeExpr::Function {
@@ -515,30 +473,16 @@ fn lower_in_ns(
                 generic_param_bounds: generic_param_bounds
                     .iter()
                     .map(|bound| {
-                        bound.as_ref().map(|bound| {
-                            lower_in_ns(
-                                db,
-                                bound,
-                                package_items,
-                                ns_context,
-                                &all_generic_params,
-                                sink,
-                            )
-                        })
+                        bound
+                            .as_ref()
+                            .map(|bound| lower_in_ns(ctx, bound, &all_generic_params, sink))
                     })
                     .collect(),
                 params: params
                     .iter()
                     .map(|p| FunctionParamTy {
                         name: p.name.clone(),
-                        ty: lower_in_ns(
-                            db,
-                            &p.ty,
-                            package_items,
-                            ns_context,
-                            &all_generic_params,
-                            sink,
-                        ),
+                        ty: lower_in_ns(ctx, &p.ty, &all_generic_params, sink),
                         mode: if p.optional {
                             FunctionParamMode::Optional
                         } else {
@@ -546,27 +490,11 @@ fn lower_in_ns(
                         },
                     })
                     .collect(),
-                ret: Box::new(lower_in_ns(
-                    db,
-                    ret,
-                    package_items,
-                    ns_context,
-                    &all_generic_params,
-                    sink,
-                )),
+                ret: Box::new(lower_in_ns(ctx, ret, &all_generic_params, sink)),
                 throws: Box::new(
                     throws
                         .as_deref()
-                        .map(|throws| {
-                            lower_in_ns(
-                                db,
-                                throws,
-                                package_items,
-                                ns_context,
-                                &all_generic_params,
-                                sink,
-                            )
-                        })
+                        .map(|throws| lower_in_ns(ctx, throws, &all_generic_params, sink))
                         .unwrap_or(Ty::Never),
                 ),
             }
