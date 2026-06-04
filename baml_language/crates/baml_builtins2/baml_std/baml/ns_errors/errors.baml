@@ -55,12 +55,16 @@ class HostCallable {
   class_name string
   language string
   traceback string?
-  // Opaque slot reserved for the bridge SDK's same-host rehydration
-  // handle. When set by the originating host, the BAML→host decoder on
-  // the same runtime can resolve it back to the original native
-  // exception object; foreign runtimes / released keys see `null` and
-  // fall back to the metadata fields above. Not yet populated end-to-end
-  // (HostValueKind::Error wiring is pending).
+  // Opaque slot carrying the bridge SDK's same-host rehydration handle.
+  // Always populated on the wire by the originating bridge — a `HostCallable`
+  // with no `_handle` is not a valid BAML value. The originating bridge
+  // can resolve the handle back to the original native exception object
+  // (same-process round-trip → `raised === caught` identity); foreign
+  // runtimes receive the same handle on the wire but their local lookup
+  // misses, at which point the host SDK degrades to constructing an
+  // exception from the metadata fields above. The fallback is a
+  // *lookup-result* concern on the host side, not a wire shape — the
+  // field itself is required.
   _handle $rust_type
 }
 

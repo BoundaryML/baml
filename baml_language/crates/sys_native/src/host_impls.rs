@@ -64,9 +64,29 @@ impl io::IoNamespaceHost for NativeSysOps {
         _type_arg_1: Ty,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<BexExternalValue> {
-        // Extract the HostValueArc from the incoming handle.
+        // Extract the HostValueArc from the incoming handle and confirm
+        // it's a callable. Only `HostValueKind::Callable` is dispatchable —
+        // the bridge's dispatcher invokes a host *function* through this
+        // path. An `HostValueKind::Error` arc represents an opaque
+        // host-thrown exception and has no callable identity; dispatching
+        // it would either find no entry in the bridge's callable registry
+        // (returning a confusing "no callable for key" error) or, worse,
+        // collide with a callable that happens to share its key. Reject
+        // up front with a clear `InvalidArgument`.
         let host_arc = match handle {
-            BexExternalValue::HostValue(arc) => arc,
+            BexExternalValue::HostValue(arc)
+                if arc.kind == bex_external_types::HostValueKind::Callable =>
+            {
+                arc
+            }
+            BexExternalValue::HostValue(arc) => {
+                return SysOpOutput::err(VmBamlError::InvalidArgument {
+                    message: format!(
+                        "expected a host callable, got a HostValue of kind {:?}",
+                        arc.kind,
+                    ),
+                });
+            }
             other => {
                 return SysOpOutput::err(VmBamlError::InvalidArgument {
                     message: format!("expected HostValue, got {other:?}"),

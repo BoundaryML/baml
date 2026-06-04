@@ -94,15 +94,30 @@ impl WasmHttp {
                 message: "Fetch response is not an object".into(),
             })?;
 
-            #[allow(clippy::cast_possible_truncation)]
-            let status = Reflect::get(&obj, &"status".into())
+            let status_f64 = Reflect::get(&obj, &"status".into())
                 .map_err(|_| VmBamlError::Io {
                     message: "Response missing 'status' field".into(),
                 })?
                 .as_f64()
                 .ok_or_else(|| VmBamlError::Io {
                     message: "Response 'status' is not a number".into(),
-                })? as i64;
+                })?;
+            // `as i64` for f64 is saturating: NaN → 0, +inf → i64::MAX,
+            // -inf → i64::MIN, fractionals → truncated toward zero. None
+            // of those make sense for an HTTP status code, and downstream
+            // consumers (`sys_llm`'s 2xx success check, auth's
+            // `u16::try_from`) would misclassify them as success / 0.
+            // `FromPrimitive::from_f64` returns `None` exactly when the
+            // value is non-finite, out of `i64` range, or non-integer —
+            // the precise set we want to reject.
+            let status =
+                <i64 as num_traits::FromPrimitive>::from_f64(status_f64).ok_or_else(|| {
+                    VmBamlError::Io {
+                        message: format!(
+                            "Response 'status' must be a finite integer, got {status_f64}"
+                        ),
+                    }
+                })?;
 
             let headers_str = Reflect::get(&obj, &"headersJson".into())
                 .map_err(|_| VmBamlError::Io {

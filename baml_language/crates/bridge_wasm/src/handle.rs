@@ -109,6 +109,19 @@ impl BamlHandle {
 
 impl Drop for BamlHandle {
     fn drop(&mut self) {
-        HANDLE_TABLE.release(self.key);
+        // Host-owned handles (`HostValueCallable`, `HostValueError`) are
+        // *not* tracked in HANDLE_TABLE — their lifetime is managed
+        // per-bridge via the `HostReleaseFn` dispatch. Releasing them here
+        // would call into the global HANDLE_TABLE with a key that may
+        // collide with an unrelated engine-side entry (the two keyspaces
+        // are disjoint by design but share the `u64` value space), evicting
+        // it. Skip the table release for those variants; their owners drop
+        // them through their own release path.
+        match self.handle_type {
+            BamlHandleType::HostValueCallable | BamlHandleType::HostValueError => {}
+            _ => {
+                let _ = HANDLE_TABLE.release(self.key);
+            }
+        }
     }
 }

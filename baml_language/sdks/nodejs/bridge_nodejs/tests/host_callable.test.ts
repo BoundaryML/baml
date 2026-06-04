@@ -25,9 +25,12 @@
 // runner from exiting on its own. Vitest terminates once the tests
 // themselves have completed.
 
+import { vi } from 'vitest';
+
 import { BamlRuntime } from '../dist/native.js';
 import { callFunction, callFunctionSync } from '../dist/index.js';
 import { encodeCallArgs } from '../dist/proto.js';
+import * as hostErrorRegistry from '../dist/host_error_registry.js';
 
 const CALLBACK_BAML = `
 function CallCb(callback: (int) -> string, x: int) -> string {
@@ -115,12 +118,24 @@ describe('host-callable error surfacing', () => {
         // inbound throw; BAML transports the `baml.errors.HostCallable`
         // Instance with the handle in `_handle`; the outbound decoder looks
         // the handle up and re-throws the original.
-        const rt = makeRuntime();
-        const raised = new Error('identity-check');
-        const cb = (_x: number): string => {
-            throw raised;
-        };
-        await expect(callFunction(rt, 'CallCb', { callback: cb, x: 1 })).rejects.toBe(raised);
+        //
+        // The spy on `tryRehydrateFromHandle` is defense-in-depth: identity
+        // (`===`) alone could in principle be satisfied by a future fast-path
+        // that bypasses the registry (e.g. a closure-captured shortcut).
+        // The spy pins the actual flow — proto.ts's outbound decoder MUST
+        // consult the host-error registry on every host-callable throw.
+        const spy = vi.spyOn(hostErrorRegistry, 'tryRehydrateFromHandle');
+        try {
+            const rt = makeRuntime();
+            const raised = new Error('identity-check');
+            const cb = (_x: number): string => {
+                throw raised;
+            };
+            await expect(callFunction(rt, 'CallCb', { callback: cb, x: 1 })).rejects.toBe(raised);
+            expect(spy).toHaveBeenCalled();
+        } finally {
+            spy.mockRestore();
+        }
     });
 
     test('custom Error subclass round-trips with identity + extra fields preserved', async () => {

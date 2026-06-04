@@ -50,9 +50,9 @@ function setInboundValue(iv, value, ctx) {
         }
     }
     else if (typeof value === 'bigint') {
-        // Hex / base sixteen on the wire (see Phase 10 of the bigint plan).
-        // BigInt.prototype.toString(16) yields e.g. "-2a"; signed values
-        // round-trip via num-bigint's LowerHex impl on the Rust side.
+        // Hex / base sixteen on the wire. BigInt.prototype.toString(16)
+        // yields e.g. "-2a"; signed values round-trip via num-bigint's
+        // LowerHex impl on the Rust side.
         iv.bigintValue = value.toString(16);
     }
     else if (typeof value === 'string') {
@@ -227,12 +227,12 @@ export function encodeCallArgs(kwargs, syncMode = false) {
     }
 }
 // ─── Outbound (Rust → TS) ───
-// Hex / base sixteen on the wire (see Phase 10 of the bigint plan). Shared
-// by `bigint_value` (runtime values) and `bigint_literal` (type literals)
-// since both fields use the same wire format. BigInt() accepts a "0x"-prefixed
-// hex literal; strip a leading minus so we can parse the magnitude. Guard
-// against empty or sign-only inputs — `BigInt("0x")` throws `SyntaxError`,
-// so we surface a clearer error instead.
+// Hex / base sixteen on the wire. Shared by `bigint_value` (runtime
+// values) and `bigint_literal` (type literals) since both fields use
+// the same wire format. BigInt() accepts a "0x"-prefixed hex literal;
+// strip a leading minus so we can parse the magnitude. Guard against
+// empty or sign-only inputs — `BigInt("0x")` throws `SyntaxError`, so
+// we surface a clearer error instead.
 // Workspace bigint cap = 2^28 bits ⇒ at most (2^28)/4 hex digits, plus a
 // small slack to match the Rust-side `MAX_BIGINT_HEX_LEN` constant in
 // `bridge_ctypes/src/value_decode.rs`. Reject longer inputs before calling
@@ -663,7 +663,7 @@ function sendHostCallableError(callId, err) {
     // `encode`, or the native `completeHostCall` itself), fall back to the
     // last-resort completion below.
     try {
-        // Phase A — `BamlError(value=<codegenned BAML class>)` unwrap.
+        // BAML-error-unwrap path: `BamlError(value=<codegenned BAML class>)`.
         // The user wrapped a real BAML class (or primitive) in a BamlError;
         // emit it as that real BAML class on the wire so the BAML caller's
         // typed `catch (e: MyError)` matches structurally and reads typed
@@ -671,11 +671,11 @@ function sendHostCallableError(callId, err) {
         //
         // `value == null` (a bare `new BamlError("msg")` with no wrapped
         // value, or `new BamlError("", { value: null })`) falls through to
-        // the opaque Phase B path: an unset / null inner oneof encodes as
-        // BAML `null`, which fails the engine's contract check for any
-        // concrete `E` (and produces a bizarre `null` throw for `E=unknown`).
-        // The opaque path always produces a well-formed `HostCallable`
-        // instance the engine can route.
+        // the opaque-handle fallback below: an unset / null inner oneof
+        // encodes as BAML `null`, which fails the engine's contract check
+        // for any concrete `E` (and produces a bizarre `null` throw for
+        // `E=unknown`). The opaque path always produces a well-formed
+        // `HostCallable` instance the engine can route.
         //
         // `BamlPanic extends BamlError`, so a `BamlPanic(value=...)` also
         // hits this branch. The engine routes by BAML class namespace
@@ -696,16 +696,26 @@ function sendHostCallableError(callId, err) {
             catch {
                 // Encoding the inner value failed — roll back any callable
                 // registrations its nested fields triggered and fall through
-                // to the opaque Phase B path below. The fall-through is
+                // to the opaque-handle path below. The fall-through is
                 // intentional: the throw must still reach the engine even if
                 // the typed-value encode broke, so we never leave the call
-                // hanging.
-                for (const key of ctx.registered)
-                    releaseHostCallable(key);
+                // hanging. Each release is wrapped in its own try/catch so
+                // a single bad entry doesn't abort the rest of the rollback
+                // and leak the remaining registrations (mirrors the other
+                // rollback sites in `setInboundValue` and
+                // `sendHostCallableResult`).
+                for (const key of ctx.registered) {
+                    try {
+                        releaseHostCallable(key);
+                    }
+                    catch {
+                        // Best-effort cleanup; never mask the original error.
+                    }
+                }
             }
         }
-        // Phase B — opaque `baml.errors.HostCallable` Instance carrying a
-        // handle to the originating JS error so the BAML→host decoder on
+        // Opaque-handle path: a `baml.errors.HostCallable` Instance carrying
+        // a handle to the originating JS error so the BAML→host decoder on
         // the same Node process can rehydrate the *same* exception object
         // on round-trip (`raised === caught` identity). Foreign runtimes /
         // released keys fall back to metadata.
@@ -753,8 +763,12 @@ function completeHostCallLastResort(callId, err) {
         const bytes = Buffer.from(InboundValue.encode(inbound).finish());
         completeHostCall(callId, 1, bytes);
     }
-    catch {
-        // Nothing more we can safely do; avoid throwing on the libuv loop.
+    catch (innerErr) {
+        // Nothing more we can safely do — a throw here would surface as an
+        // unhandled rejection on the libuv loop. The engine's lack of
+        // completion will then be the (unavoidable) failure mode; log so the
+        // failure is at least attributable.
+        console.error('BAML internal: last-resort host-call completion failed; call will hang.', { callId, originalError: safeStringify(err), lastResortError: innerErr });
     }
 }
 /** `String(err)` that cannot itself throw (e.g. a Proxy with a throwing

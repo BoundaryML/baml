@@ -369,17 +369,47 @@ impl<T> io::IoClassLlmPrimitiveClient for T {
 /// [`sys_types::resolve_name`] rule. The suffix-scan step handles
 /// functions declared inside a user namespace (e.g. `ns_lorem/`) — the
 /// synthesized companion passes the bare BAML identifier, not the FQN,
-/// so without it a namespaced LLM function fails to resolve. Ambiguity
-/// collapses to `None` so the caller's "not found" error path surfaces.
+/// so without it a namespaced LLM function fails to resolve. Returns the
+/// full `ResolveOutcome` (rather than collapsing to `Option`) so callers
+/// can distinguish ambiguity from a true not-found in their error
+/// messages: both still abort the sysop as a `DevOther`, but the
+/// distinction matters for diagnosing synthesis / name-resolution bugs.
 fn lookup_llm_function<'a>(
     function_name: &str,
     llm_functions: &'a std::collections::HashMap<String, LlmFunctionInfo>,
-) -> Option<&'a LlmFunctionInfo> {
-    // Ambiguity collapses to `None` so the existing "function not found"
-    // error path surfaces — cleaner than silently picking one match.
+) -> sys_types::ResolveOutcome<'a, LlmFunctionInfo> {
     sys_types::resolve_name(llm_functions, function_name)
-        .found()
-        .map(|(_k, info)| info)
+}
+
+/// Format a `lookup_llm_function` miss as a sysop error message,
+/// distinguishing ambiguous from not-found.
+fn llm_function_lookup_error(
+    function_name: &str,
+    outcome: &sys_types::ResolveOutcome<'_, LlmFunctionInfo>,
+) -> VmBamlError {
+    match outcome {
+        sys_types::ResolveOutcome::Found(_, _) => {
+            // Unreachable in practice — caller only invokes this on a miss.
+            // We still produce a coherent message rather than panicking so
+            // a future refactor can't accidentally trip on this.
+            VmBamlError::DevOther {
+                message: format!(
+                    "internal: llm_function_lookup_error called with a Found \
+                     outcome for `{function_name}`"
+                ),
+            }
+        }
+        sys_types::ResolveOutcome::NotFound => VmBamlError::DevOther {
+            message: format!("LLM function not found: {function_name}"),
+        },
+        sys_types::ResolveOutcome::Ambiguous => VmBamlError::DevOther {
+            message: format!(
+                "LLM function name `{function_name}` is ambiguous: two or more \
+                 namespaced functions end with `.{function_name}`. Pass a fully \
+                 qualified name (e.g. `<pkg>.<ns>.{function_name}`) to disambiguate."
+            ),
+        },
+    }
 }
 
 /// Blanket impl — all types get real `StreamAccumulator` behavior via `sys_llm` delegation.
@@ -566,14 +596,15 @@ impl<T> io::IoNamespaceLlm for T {
         function_name: String,
         ctx: &SysOpContext,
     ) -> SysOpOutput<String> {
-        let Some(info) = lookup_llm_function(&function_name, &ctx.llm_functions) else {
-            // Aligned with `get_constructor`: the function name passed here is
-            // synthesised by the compiler from the call site, so a missing
-            // entry indicates a build artifact mismatch (a synthesis bug),
-            // not a user-recoverable argument error.
-            return SysOpOutput::err(VmBamlError::DevOther {
-                message: format!("LLM function not found: {function_name}"),
-            });
+        // Aligned with `get_constructor`: the function name passed here is
+        // synthesised by the compiler from the call site, so a missing entry
+        // indicates a build artifact mismatch (a synthesis bug), not a
+        // user-recoverable argument error. Ambiguity is surfaced separately
+        // (rather than collapsed to "not found") so debuggers see the
+        // actual failure mode.
+        let outcome = lookup_llm_function(&function_name, &ctx.llm_functions);
+        let sys_types::ResolveOutcome::Found(_, info) = outcome else {
+            return SysOpOutput::err(llm_function_lookup_error(&function_name, &outcome));
         };
         let dedented = sys_llm::preprocess_template(&info.prompt_template);
         let template = if ctx.template_strings_macros.is_empty() {
@@ -591,10 +622,9 @@ impl<T> io::IoNamespaceLlm for T {
         function_name: String,
         ctx: &SysOpContext,
     ) -> SysOpOutput<baml_type::Ty> {
-        let Some(info) = lookup_llm_function(&function_name, &ctx.llm_functions) else {
-            return SysOpOutput::err(VmBamlError::DevOther {
-                message: format!("LLM function not found: {function_name}"),
-            });
+        let outcome = lookup_llm_function(&function_name, &ctx.llm_functions);
+        let sys_types::ResolveOutcome::Found(_, info) = outcome else {
+            return SysOpOutput::err(llm_function_lookup_error(&function_name, &outcome));
         };
         SysOpOutput::ok(info.return_type.clone())
     }
@@ -606,10 +636,9 @@ impl<T> io::IoNamespaceLlm for T {
         function_name: String,
         ctx: &SysOpContext,
     ) -> SysOpOutput<baml_type::Ty> {
-        let Some(info) = lookup_llm_function(&function_name, &ctx.llm_functions) else {
-            return SysOpOutput::err(VmBamlError::DevOther {
-                message: format!("LLM function not found: {function_name}"),
-            });
+        let outcome = lookup_llm_function(&function_name, &ctx.llm_functions);
+        let sys_types::ResolveOutcome::Found(_, info) = outcome else {
+            return SysOpOutput::err(llm_function_lookup_error(&function_name, &outcome));
         };
         SysOpOutput::ok(info.stream_return_type.clone())
     }

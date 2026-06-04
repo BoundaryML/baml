@@ -1535,3 +1535,268 @@ pub fn test_arg_to_external(v: &bex_vm_types::TestArgValue) -> BexExternalValue 
         },
     }
 }
+
+#[cfg(test)]
+mod peel_to_rust_type_tests {
+    use baml_type::{TyAttr, TypeName};
+
+    use super::*;
+
+    /// `Ty::Opaque("baml.rust.RustType", _)` — the canonical shape.
+    fn rust_type() -> Ty {
+        Ty::Opaque(
+            TypeName::from_dotted_path("baml.rust.RustType"),
+            TyAttr::default(),
+        )
+    }
+
+    #[test]
+    fn direct_rust_type_matches() {
+        assert_eq!(peel_to_rust_type(&rust_type()), Some(()));
+    }
+
+    #[test]
+    fn optional_rust_type_peels_through() {
+        // `Ty::optional(RustType)` lowers to `Ty::Union([RustType, Null])`
+        // post-`Ty::Optional`-removal; the union arm in `peel_to_rust_type`
+        // picks the single RustType member.
+        let ty = Ty::optional(rust_type());
+        assert_eq!(peel_to_rust_type(&ty), Some(()));
+    }
+
+    #[test]
+    fn nested_optional_rust_type_peels_through() {
+        // `T??` collapses to `T?` per `Ty::optional`'s idempotence rule
+        // (a union already containing `null` is returned unchanged), so
+        // this is effectively the same shape as the single-optional case
+        // — still a single non-null member that peels.
+        let ty = Ty::optional(Ty::optional(rust_type()));
+        assert_eq!(peel_to_rust_type(&ty), Some(()));
+    }
+
+    #[test]
+    fn singleton_union_with_rust_type_and_null_matches() {
+        // `RustType | null` — only one non-null arm so the peel
+        // unambiguously picks `RustType`.
+        let ty = Ty::Union(
+            vec![
+                rust_type(),
+                Ty::Null {
+                    attr: TyAttr::default(),
+                },
+            ],
+            TyAttr::default(),
+        );
+        assert_eq!(peel_to_rust_type(&ty), Some(()));
+    }
+
+    #[test]
+    fn union_with_rust_type_plus_non_rust_arm_still_unique_matches() {
+        // `RustType | string` — there's still exactly one `RustType` arm,
+        // and `peel_to_rust_type` only cares about uniqueness of *that*
+        // shape (non-`RustType` arms count as "doesn't match" and don't
+        // contribute to the duplicate-count).
+        let ty = Ty::Union(
+            vec![
+                rust_type(),
+                Ty::String {
+                    attr: TyAttr::default(),
+                },
+            ],
+            TyAttr::default(),
+        );
+        assert_eq!(peel_to_rust_type(&ty), Some(()));
+    }
+
+    #[test]
+    fn union_with_two_rust_type_arms_is_ambiguous() {
+        // `RustType | RustType` — two arms peel to the target. The
+        // function rejects to avoid silently picking one.
+        let ty = Ty::Union(vec![rust_type(), rust_type()], TyAttr::default());
+        assert_eq!(peel_to_rust_type(&ty), None);
+    }
+
+    #[test]
+    fn plain_string_does_not_match() {
+        assert_eq!(
+            peel_to_rust_type(&Ty::String {
+                attr: TyAttr::default()
+            }),
+            None,
+        );
+    }
+
+    #[test]
+    fn unrelated_opaque_does_not_match() {
+        // A different opaque type — e.g. `baml.llm.PromptAst` — must
+        // not be confused with `baml.rust.RustType`.
+        let ty = Ty::Opaque(
+            TypeName::from_dotted_path("baml.llm.PromptAst"),
+            TyAttr::default(),
+        );
+        assert_eq!(peel_to_rust_type(&ty), None);
+    }
+
+    #[test]
+    fn optional_of_unrelated_type_does_not_match() {
+        let ty = Ty::optional(Ty::String {
+            attr: TyAttr::default(),
+        });
+        assert_eq!(peel_to_rust_type(&ty), None);
+    }
+
+    #[test]
+    fn union_with_no_rust_type_arm_does_not_match() {
+        let ty = Ty::Union(
+            vec![
+                Ty::String {
+                    attr: TyAttr::default(),
+                },
+                Ty::Int {
+                    attr: TyAttr::default(),
+                },
+            ],
+            TyAttr::default(),
+        );
+        assert_eq!(peel_to_rust_type(&ty), None);
+    }
+}
+
+#[cfg(test)]
+mod peel_function_ty_tests {
+    use baml_type::TyAttr;
+
+    use super::*;
+
+    /// `(int) -> string` — the canonical concrete function shape.
+    fn fn_ty() -> Ty {
+        Ty::Function {
+            params: vec![Ty::Int {
+                attr: TyAttr::default(),
+            }],
+            ret: Box::new(Ty::String {
+                attr: TyAttr::default(),
+            }),
+            throws: Box::new(Ty::Void {
+                attr: TyAttr::default(),
+            }),
+            attr: TyAttr::default(),
+        }
+    }
+
+    /// A second, distinct function shape — `() -> int` — used to verify the
+    /// uniqueness rule rejects two function members in a union.
+    fn other_fn_ty() -> Ty {
+        Ty::Function {
+            params: vec![],
+            ret: Box::new(Ty::Int {
+                attr: TyAttr::default(),
+            }),
+            throws: Box::new(Ty::Void {
+                attr: TyAttr::default(),
+            }),
+            attr: TyAttr::default(),
+        }
+    }
+
+    #[test]
+    fn direct_function_returns_itself() {
+        let ty = fn_ty();
+        let peeled = peel_function_ty(&ty).expect("must peel a direct Function");
+        assert!(matches!(peeled, Ty::Function { .. }));
+    }
+
+    #[test]
+    fn optional_function_peels_through() {
+        // `Ty::optional(fn)` lowers to `Ty::Union([fn, Null])`; the union
+        // arm in `peel_function_ty` picks the single function member.
+        let ty = Ty::optional(fn_ty());
+        let peeled = peel_function_ty(&ty).expect("Union<fn, Null> must peel");
+        assert!(matches!(peeled, Ty::Function { .. }));
+    }
+
+    #[test]
+    fn nested_optional_function_peels_through() {
+        // `Ty::optional` is idempotent — `T??` collapses to `T?` — so this
+        // is effectively the same shape as the single-optional case.
+        let ty = Ty::optional(Ty::optional(fn_ty()));
+        assert!(peel_function_ty(&ty).is_some());
+    }
+
+    #[test]
+    fn union_with_single_function_arm_peels_through() {
+        // `((int) -> string) | null` — only one function member.
+        let ty = Ty::Union(
+            vec![
+                fn_ty(),
+                Ty::Null {
+                    attr: TyAttr::default(),
+                },
+            ],
+            TyAttr::default(),
+        );
+        assert!(peel_function_ty(&ty).is_some());
+    }
+
+    #[test]
+    fn union_with_function_plus_non_function_arm_peels_through() {
+        // `((int) -> string) | string` — exactly one function member.
+        let ty = Ty::Union(
+            vec![
+                fn_ty(),
+                Ty::String {
+                    attr: TyAttr::default(),
+                },
+            ],
+            TyAttr::default(),
+        );
+        assert!(peel_function_ty(&ty).is_some());
+    }
+
+    #[test]
+    fn union_with_two_distinct_function_arms_is_ambiguous() {
+        // `((int) -> string) | (() -> int)` — two function members.
+        // The peel rejects to avoid silently picking one. Pins the
+        // determinism contract of the helper.
+        let ty = Ty::Union(vec![fn_ty(), other_fn_ty()], TyAttr::default());
+        assert!(peel_function_ty(&ty).is_none());
+    }
+
+    #[test]
+    fn plain_string_does_not_match() {
+        let ty = Ty::String {
+            attr: TyAttr::default(),
+        };
+        assert!(peel_function_ty(&ty).is_none());
+    }
+
+    #[test]
+    fn optional_of_non_function_does_not_match() {
+        let ty = Ty::optional(Ty::String {
+            attr: TyAttr::default(),
+        });
+        assert!(peel_function_ty(&ty).is_none());
+    }
+
+    #[test]
+    fn union_with_no_function_arm_does_not_match() {
+        let ty = Ty::Union(
+            vec![
+                Ty::String {
+                    attr: TyAttr::default(),
+                },
+                Ty::Int {
+                    attr: TyAttr::default(),
+                },
+            ],
+            TyAttr::default(),
+        );
+        assert!(peel_function_ty(&ty).is_none());
+    }
+
+    #[test]
+    fn empty_union_does_not_match() {
+        let ty = Ty::Union(vec![], TyAttr::default());
+        assert!(peel_function_ty(&ty).is_none());
+    }
+}

@@ -1666,6 +1666,7 @@ dependencies = [
  "log",
  "lsp-server",
  "num-bigint",
+ "num-traits",
  "prost",
  "reqwest",
  "serde",

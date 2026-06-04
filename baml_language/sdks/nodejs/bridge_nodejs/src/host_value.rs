@@ -242,7 +242,7 @@ pub extern "C" fn host_release_callback(host_value_key: u64) {
 /// Threadsafe handle to the TS-installed release callback. Set once at
 /// module load via [`register_error_release_callback`].
 type ErrorReleaseTsfn =
-    ThreadsafeFunction<HandleKey, (), HandleKey, Status, false, false, ERROR_RELEASE_QUEUE_SIZE>;
+    ThreadsafeFunction<HandleKey, (), HandleKey, Status, false, true, ERROR_RELEASE_QUEUE_SIZE>;
 
 /// Upper bound on queued, not-yet-delivered error-release notifications.
 /// Generous because each notification is tiny (one `HandleKey`) and bursts
@@ -273,6 +273,22 @@ pub fn mint_host_error_key() -> HandleKey {
 /// for callable keys it's a TS-side no-op (`Map.delete(key)` on an absent
 /// key), so Rust doesn't need to distinguish kinds here.
 ///
+/// The tsfn is built with `weak::<true>()` (i.e. `napi_unref_threadsafe_
+/// function`). Holding it strong would pin the libuv loop for the
+/// lifetime of the process (the tsfn is parked in a `OnceLock` and never
+/// dropped), preventing the Node process from exiting even after all
+/// host work is done. Weak is correct here: the callback is a *release*
+/// notification — purely informational from the engine's side. Pending
+/// notifications that never deliver because the loop has already exited
+/// are harmless; the engine has already dropped its `Arc<HostValueArc>`,
+/// and the TS-side map entry would be torn down with the process
+/// anyway.
+///
+/// Note this is the inverse of `register_host_callable`'s dispatch tsfn,
+/// which is `weak::<false>()` — that one pins the loop because a hung
+/// host callback awaiting completion *must* keep the loop alive so the
+/// JS callback can actually run.
+///
 /// Exposed to JS as `registerErrorReleaseCallback(cb)`. Must be called
 /// exactly once at SDK module init, before any host call is dispatched.
 #[napi(ts_args_type = "callback: (key: HandleKey) => void")]
@@ -280,7 +296,7 @@ pub fn register_error_release_callback(callback: Function<'_, HandleKey, ()>) ->
     let tsfn: ErrorReleaseTsfn = callback
         .build_threadsafe_function()
         .callee_handled::<false>()
-        .weak::<false>()
+        .weak::<true>()
         .max_queue_size::<ERROR_RELEASE_QUEUE_SIZE>()
         .build()?;
     // First-call-wins; ignore the `Err(_)` from `set` on later calls

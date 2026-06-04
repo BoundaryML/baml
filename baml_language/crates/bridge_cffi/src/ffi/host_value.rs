@@ -361,4 +361,48 @@ mod tests {
             sys_types::SysOpResult::Ready(_) => panic!("expected async"),
         }
     }
+
+    /// Verify the `length > isize::MAX as usize` guard surfaces as a
+    /// `BridgeFailure` (→ `SdkPanic` on the host), not a silent UB from
+    /// `from_raw_parts`. A buggy host SDK passing garbage on a 64-bit
+    /// platform could violate the slice-soundness contract; the guard
+    /// turns that into a loud, host-attributable fault.
+    #[tokio::test]
+    async fn complete_host_call_length_exceeds_isize_max_surfaces_as_bridge_failure() {
+        use sys_types::{SysOp, SysOpResult, VmInternalError, VmRustFnError};
+
+        let (result, completion) = SysOpResult::pending(SysOp::BamlHostCallHostValue);
+        let id = host_dispatch::next_call_id();
+        assert!(
+            host_dispatch::insert(id, completion),
+            "a fresh call id must insert without colliding"
+        );
+
+        // We never dereference the pointer because the guard fires first;
+        // a small valid-but-unread byte slice is enough to pass the null
+        // check. `usize::MAX > isize::MAX` on both 32- and 64-bit targets.
+        let probe: [u8; 1] = [0];
+        complete_host_call(id, 1, probe.as_ptr() as *const i8, usize::MAX);
+
+        match result {
+            SysOpResult::Async(fut) => {
+                let err = fut.await.expect_err("should surface as a bridge failure");
+                match err.payload {
+                    sys_types::OpErrorPayload::Vm(VmRustFnError::InternalError(
+                        VmInternalError::BridgeFailure { ref message },
+                    )) => {
+                        assert!(
+                            message.contains("isize::MAX"),
+                            "expected the length-overflow guard's message, got {message:?}"
+                        );
+                    }
+                    other => panic!(
+                        "expected VmInternalError::BridgeFailure for an over-isize length, \
+                         got {other:?}"
+                    ),
+                }
+            }
+            SysOpResult::Ready(_) => panic!("expected async"),
+        }
+    }
 }

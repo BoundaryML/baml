@@ -27,8 +27,8 @@ class            errors.NotImplemented            <builtin>/baml/ns_errors/error
 class            errors.LlmClient                 <builtin>/baml/ns_errors/errors.baml:44
 class            errors.DevOther                  <builtin>/baml/ns_errors/errors.baml:49
 class            errors.HostCallable              <builtin>/baml/ns_errors/errors.baml:53
-class            errors.GenericSdkError           <builtin>/baml/ns_errors/errors.baml:70
-class            errors.CompilationError          <builtin>/baml/ns_errors/errors.baml:76
+class            errors.GenericSdkError           <builtin>/baml/ns_errors/errors.baml:74
+class            errors.CompilationError          <builtin>/baml/ns_errors/errors.baml:80
 class            errors.StackFrame                <builtin>/baml/ns_errors/stack_trace.baml:2
 class            errors.StackTrace                <builtin>/baml/ns_errors/stack_trace.baml:9
 function         events.send                      <builtin>/baml/ns_events/events.baml:3
@@ -49,8 +49,8 @@ class            future.Future                    <builtin>/baml/ns_future/futur
 class            glob.ScanOptions                 <builtin>/baml/ns_glob/glob.baml:2
 class            glob.Glob                        <builtin>/baml/ns_glob/glob.baml:18
 function         glob.new                         <builtin>/baml/ns_glob/glob.baml:34
-function         host.call_host_value             <builtin>/baml/ns_host/host.baml:11
-class            host.HostValue                   <builtin>/baml/ns_host/host.baml:18
+function         host.call_host_value             <builtin>/baml/ns_host/host.baml:13
+class            host.HostValue                   <builtin>/baml/ns_host/host.baml:20
 class            http.Request                     <builtin>/baml/ns_http/http.baml:2
 class            http.Response                    <builtin>/baml/ns_http/http.baml:10
 class            http.SseStream                   <builtin>/baml/ns_http/http.baml:33

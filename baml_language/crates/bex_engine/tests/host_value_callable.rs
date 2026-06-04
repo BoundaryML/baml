@@ -631,6 +631,90 @@ async fn host_callable_wrong_return_type_panics_as_host_contract_violation() {
     drop(arc);
 }
 
+// ============================================================================
+// Wrong-return-type when the callable *also* declares a concrete throws
+//         contract. The engine builds a `HostContractViolation` panic for
+//         the wrong return, then injects it through the same throw machinery
+//         used by host throws. The contract-check pass must recognize the
+//         panic as a panic and NOT re-validate it against `E` (which would
+//         wrap it in a second `HostContractViolation` and overwrite the
+//         original diagnostic). Mirrors the BAML rule that a fn's `throws E`
+//         clause never includes panics.
+// ============================================================================
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn host_callable_wrong_return_with_declared_throws_keeps_return_diagnostic() {
+    let source = r#"
+        class ParseError {
+            detail string
+        }
+        function add_one(f: (int) -> int throws ParseError, x: int) -> int {
+            return f(x);
+        }
+    "#;
+
+    // Behaviour: return a string where an int is expected, on a callable
+    // with a concrete `throws ParseError`. Pre-fix this would rewrite the
+    // "expected int, got string" diagnostic into "host callable threw a
+    // value of type `baml.panics.HostContractViolation` that is not in
+    // its declared throws contract (`ParseError`)" — the int/string detail
+    // would be lost.
+    let arc = register_host_callable(|_items| {
+        FakeReturn::Ok(BexExternalValue::String("not-an-int".to_string().into()))
+    });
+
+    let snapshot = compile_for_engine(source);
+    let engine = Arc::new(
+        BexEngine::new(
+            snapshot,
+            Arc::new(sys_native::SysOps::native()),
+            None,
+            Vec::new(),
+        )
+        .expect("Failed to create engine"),
+    );
+
+    let result = engine
+        .call_function(
+            "add_one",
+            vec![
+                BexExternalValue::HostValue(Arc::clone(&arc)),
+                BexExternalValue::Int(41),
+            ],
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+            true,
+        )
+        .await;
+
+    match result {
+        Err(EngineError::UnhandledThrow { value, .. }) => match value.as_ref() {
+            BexExternalValue::Instance { class_name, fields } => {
+                assert_eq!(
+                    class_name, "baml.panics.HostContractViolation",
+                    "expected baml.panics.HostContractViolation, got {class_name}"
+                );
+                match fields.get("message") {
+                    Some(BexExternalValue::String(m)) => {
+                        assert!(
+                            m.contains("string") && m.contains("int"),
+                            "expected the int/string return-type diagnostic, got {m:?} \
+                             (this means the panic was re-validated against `ParseError` \
+                             and the original message was overwritten)"
+                        );
+                        assert!(
+                            !m.contains("ParseError"),
+                            "diagnostic should not mention the throws contract, got {m:?}"
+                        );
+                    }
+                    other => panic!("expected a non-empty message field, got {other:?}"),
+                }
+            }
+            other => panic!("expected Instance, got {other:?}"),
+        },
+        other => panic!("expected UnhandledThrow(HostContractViolation), got {other:?}"),
+    }
+    drop(arc);
+}
+
 /// Assert that an *uncaught* host-callable error surfaces as a structured
 /// `root.errors.HostCallable` throw at the engine boundary.
 ///

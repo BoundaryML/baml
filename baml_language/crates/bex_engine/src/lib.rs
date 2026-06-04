@@ -544,18 +544,36 @@ fn _default_round_robin_start() -> usize {
 /// The VM packs the sys-op args as `[handle, args_array, ret_ty, throws_ty]`
 /// (see `bex_vm::vm`'s `CallIndirect`-`HostClosure` path): `ret_ty` is
 /// `type_arg_0` (`T`, the declared return type) and `throws_ty` is `type_arg_1`
-/// (`E`, the declared error contract). Returns `None` if the slot is absent or
-/// not a `Type` object.
-fn host_call_type_arg(ty_arg: Option<Value>) -> Option<baml_type::Ty> {
-    let ptr = ty_arg?.as_object_ptr()?;
+/// (`E`, the declared error contract). Returns `Err` if the slot is absent or
+/// not a `Type` object — for `BamlHostCallHostValue` that's an engine/compiler
+/// ABI bug and a missing slot would silently skip both
+/// `validate_host_return_schema` and `enforce_host_throw_contract`, so the
+/// caller surfaces it as a fatal internal error rather than soft-failing the
+/// contract checks. `slot_name` is used only for the diagnostic message.
+fn host_call_type_arg(
+    ty_arg: Option<Value>,
+    slot_index: usize,
+    slot_name: &'static str,
+) -> Result<baml_type::Ty, bex_vm::errors::VmInternalError> {
+    let bad_slot = || bex_vm::errors::VmInternalError::BridgeFailure {
+        message: format!(
+            "call_host_value: missing or non-Type {slot_name} (sysop arg slot \
+             {slot_index}); this is an engine/compiler ABI bug — expected the \
+             VM to pack args as [handle, args_array, ret_ty, throws_ty]"
+        ),
+    };
+    let ptr = ty_arg
+        .as_ref()
+        .and_then(Value::as_object_ptr)
+        .ok_or_else(bad_slot)?;
     // SAFETY: the pointer was just allocated by the VM for this sys-op call.
     // This MUST be read while the heap permit is held (i.e. *before* the sys-op
     // await releases it): the engine-local `args` Vec is not a GC root, so after
     // the await a moving GC may relocate/collect this `Object::Type` and the raw
     // pointer would dangle. The caller clones the `Ty` out before awaiting.
     match unsafe { ptr.get() } {
-        Object::Type(ty) => Some((**ty).clone()),
-        _ => None,
+        Object::Type(ty) => Ok((**ty).clone()),
+        _ => Err(bad_slot()),
     }
 }
 
@@ -602,6 +620,12 @@ pub(crate) fn op_error_to_throw_value(
 /// [`Ty::is_subtype_of`] — `BuiltinUnknown` accepts everything (the
 /// "throws unknown" fallback for undeclared host contracts); concrete
 /// classes reject anything not in their subtype lattice.
+///
+/// Panic-class values (`baml.panics.*`) bypass the contract entirely:
+/// panics are not catchable errors and a fn's `throws E` clause never
+/// includes them. This also avoids re-wrapping an engine-generated
+/// `HostContractViolation` (from a wrong-return-type check upstream)
+/// into a second `HostContractViolation` with a corrupted message.
 fn enforce_host_throw_contract(
     thread: &mut ActiveHeapPermit<BexThread>,
     value: Value,
@@ -613,6 +637,14 @@ fn enforce_host_throw_contract(
         return value;
     }
     let runtime_ty = value_runtime_baml_ty(value, thread.proof());
+    // Panics propagate as panics regardless of `E` — they're an
+    // engine-level failure mode, not something the user's callable opts
+    // into via `throws`.
+    if let Some(Ty::Class(name, _, _)) = runtime_ty.as_ref()
+        && name.is_panic_type()
+    {
+        return value;
+    }
     let on_contract = runtime_ty
         .as_ref()
         .is_some_and(|rt: &Ty| rt.is_subtype_of(contract));
@@ -2537,13 +2569,19 @@ impl BexEngine {
                     // a catchable throw.
                     let host_ret_ty: Option<baml_type::Ty> =
                         if operation == SysOp::BamlHostCallHostValue {
-                            host_call_type_arg(args.get(2).copied())
+                            Some(
+                                host_call_type_arg(args.get(2).copied(), 2, "ret_ty")
+                                    .map_err(EngineError::VmInternalError)?,
+                            )
                         } else {
                             None
                         };
                     let host_throws_ty: Option<baml_type::Ty> =
                         if operation == SysOp::BamlHostCallHostValue {
-                            host_call_type_arg(args.get(3).copied())
+                            Some(
+                                host_call_type_arg(args.get(3).copied(), 3, "throws_ty")
+                                    .map_err(EngineError::VmInternalError)?,
+                            )
                         } else {
                             None
                         };

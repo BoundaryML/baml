@@ -144,11 +144,20 @@ export type WasmShellCallback = (
 ///   1. Decode `argsBytes` (a protobuf-encoded `BamlOutboundValue` list)
 ///      into JS positional arguments.
 ///   2. Invoke the user callable (awaiting a returned Promise if any).
-///   3. Encode the result as an `InboundValue` protobuf payload — the value
-///      itself on success, or (on failure) an `Instance` of
-///      `baml.errors.HostCallable` carrying the host exception's metadata.
+///   3. Encode the outcome as an `InboundValue` protobuf payload:
+///      - **Return:** the returned value itself.
+///      - **Throw:** *any* `InboundValue` describing the thrown value.
+///        A typed BAML error class (when the wrapper unwraps a
+///        `BamlError(value=...)` whose inner value is a codegenned
+///        BAML class) round-trips as that class so the BAML caller's
+///        typed `catch (e: MyError)` matches structurally. An opaque
+///        native JS exception is wrapped as an `Instance` of
+///        `baml.errors.HostCallable` carrying the exception's metadata
+///        (`message`, `class_name`, `language`, optional `traceback`),
+///        with an optional same-host rehydration handle in `_handle`.
 ///   4. Call `completeHostCall(callId, isError, content)` (the wasm-bindgen
-///      export from this module) to resolve the in-flight call.
+///      export from this module) to resolve the in-flight call — `isError`
+///      is `0` for the return path and `1` for the throw path.
 export type WasmHostDispatchCallback = (
   key: bigint,
   callId: number,

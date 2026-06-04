@@ -132,14 +132,17 @@ describe("function_calls — generated SDK host callables", () => {
     expect(invocations).toEqual([]);
   });
 
-  it("surfaces the declared host-callable error from the BAML catch fixture", async () => {
+  it("catches a host-callable throw in the BAML catch arm", async () => {
+    // The fixture's body is `callback(x) catch (e) { _ => "caught:" + e.class_name }`.
+    // Now that sysop throws are injected into the VM's exception unwinder, the
+    // BAML `catch` actually fires and the function resolves to the caught
+    // string — instead of the pre-fix behaviour where the throw escaped the
+    // catch and surfaced to the host as a `baml.errors.HostCallable` reject.
     const cb = (_x: number): string => {
       throw new Error("boom from host");
     };
 
-    await expect(call_with_throwing_async(cb, 1)).rejects.toThrow(
-      /baml\.errors\.HostCallable|boom from host/,
-    );
+    await expect(call_with_throwing_async(cb, 1)).resolves.toBe("caught:Error");
   });
 });
 

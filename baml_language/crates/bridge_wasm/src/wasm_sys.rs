@@ -37,8 +37,13 @@ fn unpack_shell_result(obj: &JsValue) -> Result<io::owned::sys::ShellOutput, VmB
         })?
         .as_f64()
         .unwrap_or(-1.0);
-    #[allow(clippy::cast_possible_truncation)]
-    let exit_code = exit_code_f64 as i64;
+    // `as i64` for f64 is saturating: NaN → 0, ±inf → i64 extremes,
+    // fractionals → truncated toward zero. A NaN exit code would
+    // silently become 0 (success). `FromPrimitive::from_f64` returns
+    // `None` exactly when the value is non-finite, out of `i64` range,
+    // or non-integer — for those, fall back to `-1` (the same sentinel
+    // the `unwrap_or` above uses when `exit_code` is missing entirely).
+    let exit_code = <i64 as num_traits::FromPrimitive>::from_f64(exit_code_f64).unwrap_or(-1);
 
     let stdout = Reflect::get(obj, &"stdout_bytes".into())
         .ok()
