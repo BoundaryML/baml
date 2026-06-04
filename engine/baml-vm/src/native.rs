@@ -15,6 +15,8 @@ use crate::{
 
 type NativeFunctionResult = Result<Value, VmError>;
 
+pub const STRING_SPLIT_WHITESPACE: &str = "baml.String.split/0";
+
 /// String length.
 pub fn string_len(vm: &mut Vm, args: &[Value]) -> NativeFunctionResult {
     // Arity is already checked by the VM.
@@ -292,6 +294,18 @@ pub fn string_split(vm: &mut Vm, args: &[Value]) -> NativeFunctionResult {
 
     let parts: Vec<Value> = string
         .split(&delimiter)
+        .map(|s| vm.alloc_string(s.to_string()))
+        .collect();
+
+    Ok(vm.alloc_array(parts))
+}
+
+/// String split on contiguous whitespace, discarding empty tokens.
+pub fn string_split_whitespace(vm: &mut Vm, args: &[Value]) -> NativeFunctionResult {
+    let string = vm.objects.as_string(&args[0])?.to_owned();
+
+    let parts: Vec<Value> = string
+        .split_whitespace()
         .map(|s| vm.alloc_string(s.to_string()))
         .collect();
 
@@ -715,6 +729,7 @@ pub fn functions() -> BamlMap<String, (NativeFunction, usize)> {
         ("baml.String.startsWith", (string_starts_with, 2)),
         ("baml.String.endsWith", (string_ends_with, 2)),
         ("baml.String.split", (string_split, 2)),
+        (STRING_SPLIT_WHITESPACE, (string_split_whitespace, 1)),
         ("baml.String.substring", (string_substring, 3)),
         ("baml.String.replace", (string_replace, 3)),
         // Media

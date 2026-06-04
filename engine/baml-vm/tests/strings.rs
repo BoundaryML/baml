@@ -229,6 +229,24 @@ fn string_split() -> anyhow::Result<()> {
 }
 
 #[test]
+fn string_split_without_separator_splits_whitespace() -> anyhow::Result<()> {
+    assert_vm_executes(Program {
+        source: r#"
+            function main() -> string[] {
+                let s = " \thello  \nworld\r\nBAML ";
+                s.split()
+            }
+        "#,
+        function: "main",
+        expected: ExecState::Complete(Value::Object(Object::Array(vec![
+            Value::string("hello"),
+            Value::string("world"),
+            Value::string("BAML"),
+        ]))),
+    })
+}
+
+#[test]
 fn string_substring() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"

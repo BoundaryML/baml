@@ -2271,9 +2271,15 @@ pub fn typecheck_expression(
             } else {
                 args.len() + 1 // self
             };
+            let allow_no_arg_string_split = full_name == "baml.String.split"
+                && args.is_empty()
+                && !is_function_call_on_namespace;
 
             // Check argument count only for known functions
-            if is_known_function && passed_number_of_args != param_types.len() {
+            if is_known_function
+                && passed_number_of_args != param_types.len()
+                && !allow_no_arg_string_split
+            {
                 diagnostics.push_error(DatamodelError::new_validation_error(
                     &format!(
                         "Function {} expects {} arguments, got {}",
@@ -3299,6 +3305,42 @@ mod tests {
         } else {
             panic!("Expected let statement");
         }
+    }
+
+    #[test]
+    fn typecheck_string_split_without_separator() {
+        let source = r##"
+        function test_split(s: string) -> string[] {
+          s.split()
+        }
+        "##;
+
+        let (hir, mut diagnostics) = hir_from_source(source);
+        assert!(!diagnostics.has_errors(), "Should parse without errors");
+
+        let thir = typecheck(&hir, &mut diagnostics);
+        assert!(!diagnostics.has_errors(), "Should typecheck without errors");
+
+        let test_fn = thir
+            .expr_functions
+            .iter()
+            .find(|f| f.name == "test_split")
+            .expect("Should have test_split function");
+
+        let expr = test_fn
+            .body
+            .trailing_expr
+            .as_ref()
+            .expect("test_split should have a trailing expression");
+        assert!(expr
+            .meta()
+            .1
+            .as_ref()
+            .expect("split() should have an inferred return type")
+            .eq_up_to_span(&TypeIR::List(
+                Box::new(TypeIR::string()),
+                Default::default()
+            )));
     }
 
     #[test]

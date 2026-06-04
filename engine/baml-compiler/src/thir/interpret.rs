@@ -2929,16 +2929,22 @@ fn evaluate_method_call(
             let BamlValueWithMeta::String(s, _) = receiver else {
                 bail!("split() method only available on strings at {:?}", meta.0);
             };
-            if args.len() != 1 {
-                bail!("split() method takes exactly 1 argument at {:?}", meta.0);
-            }
-            let BamlValueWithMeta::String(delimiter, _) = &args[0] else {
-                bail!("split() argument must be a string at {:?}", meta.0);
+            let parts: Vec<BamlValueWithMeta<ExprMetadata>> = match args {
+                [] => s
+                    .split_whitespace()
+                    .map(|part| BamlValueWithMeta::String(part.to_string(), meta.clone()))
+                    .collect(),
+                [BamlValueWithMeta::String(delimiter, _)] => s
+                    .split(delimiter.as_str())
+                    .map(|part| BamlValueWithMeta::String(part.to_string(), meta.clone()))
+                    .collect(),
+                [_] => {
+                    bail!("split() argument must be a string at {:?}", meta.0);
+                }
+                _ => {
+                    bail!("split() method takes 0 or 1 arguments at {:?}", meta.0);
+                }
             };
-            let parts: Vec<BamlValueWithMeta<ExprMetadata>> = s
-                .split(delimiter.as_str())
-                .map(|part| BamlValueWithMeta::String(part.to_string(), meta.clone()))
-                .collect();
             Ok(BamlValueWithMeta::List(parts, meta.clone()))
         }
         "substring" => {
