@@ -145,43 +145,14 @@ pub(crate) fn uses_method_call_convention(
 /// Modeled after ruff's ty `ScopeInference<'db>`.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct ScopeInference<'db> {
-    /// Type of every expression within this scope (NOT nested child scopes).
-    expressions: FxHashMap<ExprId, Ty>,
-    /// Pattern types: the type each pattern is associated with. Used both for
-    /// `Pattern::Bind` (the variable's bound type, post widening) and for
-    /// `Pattern::Type` / `Pattern::Class` (the type to runtime-test against).
-    pattern_types: FxHashMap<PatId, Ty>,
-    /// Member resolutions: for field-access expressions that resolved to a
-    /// class field, enum variant, method, or free function — records the
-    /// structural path so MIR can emit the correct `QualifiedName` and LSP
-    /// can navigate to the definition.
-    resolutions: FxHashMap<ExprId, MemberResolution<'db>>,
-    /// Residual throw facts for each catch expression after its arms have been
-    /// applied. This lets downstream throw-surface queries reuse the same catch
-    /// semantics as the main type-checking builder instead of over-approximating.
-    catch_residual_throws: FxHashMap<ExprId, BTreeSet<Ty>>,
-    /// Match expressions that the exhaustiveness checker determined cover all cases.
-    exhaustive_matches: FxHashSet<ExprId>,
-    /// TIR-inferred root segment type for each multi-segment `Path` expression.
-    /// Populated in `infer_path` so that MIR can chain field projections even
-    /// when the MIR local was declared with a coarser type (e.g. catch variables
-    /// are declared as `BuiltinUnknown` by `lower_catch` before `bind_pattern`
-    /// has a chance to refine them).
-    path_root_types: FxHashMap<ExprId, Ty>,
-    /// TIR-inferred type of every prefix `segments[..=i]` for multi-segment
-    /// local-rooted `Path` expressions. Index `0` mirrors `path_root_types`;
-    /// later indices are produced by chaining `resolve_member` over each
-    /// segment. MIR uses this to thread receiver-prefix class type-args
-    /// through method-call paths of depth ≥ 3 (e.g. `holder.box.describe()`).
-    path_segment_types: FxHashMap<(ExprId, usize), Ty>,
-    /// Per-segment member resolutions for multi-segment local-rooted `Path` expressions.
+    /// The common cluster of per-body inference maps for this scope's body
+    /// (NOT nested child scopes).
+    body: InferenceMaps<'db>,
+    /// The same cluster of maps, but captured while checking parameter defaults.
     ///
-    /// For `obj.a.b` (`Path(["obj", "a", "b"])`), contains resolutions for segments
-    /// [1..] i.e., "a" (index 0) and "b" (index 1). Parallel to `segments[1..]`.
-    ///
-    /// Used by MIR to emit chained `Place::Field` projections and by LSP to
-    /// navigate to field definitions from within multi-segment paths.
-    path_member_resolutions: FxHashMap<ExprId, Vec<MemberResolution<'db>>>,
+    /// Defaults live in a separate AST arena from the function body, so their
+    /// `ExprId`s and `PatId`s are not safe to merge into the body maps above.
+    defaults: InferenceMaps<'db>,
     /// Lambda span → `Ty::Function` for every lambda expression encountered
     /// during inline body inference (including nested lambdas). Allows nested
     /// lambda scopes to look up their contextual param types without calling
@@ -191,43 +162,59 @@ pub struct ScopeInference<'db> {
     /// Populated for lambda scopes so LSP can resolve unannotated lambda
     /// parameter types (e.g. `items.map((item) -> { item. })`).
     param_types: Vec<(Name, Ty)>,
-    /// Full parameter binding plan for checked calls.
-    call_plans: FxHashMap<ExprId, CallPlan>,
-    /// Function value adapters required after structural function subtyping.
-    ///
-    /// Optional parameters are matched by name in TIR types, but runtime calls
-    /// are positional and exact-arity. MIR uses this metadata to synthesize a
-    /// wrapper that drops/reorders optional parameters before the VM sees the
-    /// call.
-    function_coercions: FxHashMap<ExprId, FunctionCoercion>,
-    /// Expression metadata produced while checking parameter defaults.
-    ///
-    /// Defaults live in a separate AST arena from the function body, so their
-    /// `ExprId`s and `PatId`s are not safe to merge into the normal per-scope
-    /// maps above.
-    parameter_defaults: DefaultParameterInference<'db>,
     /// Diagnostics. Heap-allocated only when non-empty.
     extra: Option<Box<TypeCheckDiagnostics<'db>>>,
 }
 
+/// The common cluster of per-body inference maps.
+///
+/// These ten maps are produced together while inferring a single body (function
+/// body, lambda body, or a parameter-default expression). They are duplicated in
+/// several places that all carry the same shape: the live builder fields, the
+/// saved/restored sub-body state, the captured parameter-default state, and the
+/// finished per-scope output. This newtype collapses that 4× duplication into a
+/// single struct so the cluster moves as one unit.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct DefaultParameterInference<'db> {
+pub struct InferenceMaps<'db> {
+    /// Type of every expression within this body.
     pub(crate) expressions: FxHashMap<ExprId, Ty>,
+    /// Pattern types: the type each pattern is associated with. Used both for
+    /// `Pattern::Bind` (the variable's bound type, post widening) and for
+    /// `Pattern::Type` / `Pattern::Class` (the type to runtime-test against).
     pub(crate) pattern_types: FxHashMap<PatId, Ty>,
+    /// Member resolutions: for field-access expressions that resolved to a
+    /// class field, enum variant, method, or free function — records the
+    /// structural path so MIR can emit the correct `QualifiedName` and LSP
+    /// can navigate to the definition.
     pub(crate) resolutions: FxHashMap<ExprId, MemberResolution<'db>>,
+    /// Residual throw facts for each catch expression after its arms have been
+    /// applied.
     pub(crate) catch_residual_throws: FxHashMap<ExprId, BTreeSet<Ty>>,
+    /// Match expressions that the exhaustiveness checker determined cover all cases.
     pub(crate) exhaustive_matches: FxHashSet<ExprId>,
+    /// TIR-inferred root segment type for each multi-segment `Path` expression.
     pub(crate) path_root_types: FxHashMap<ExprId, Ty>,
+    /// TIR-inferred type of every prefix `segments[..=i]` for multi-segment
+    /// local-rooted `Path` expressions.
     pub(crate) path_segment_types: FxHashMap<(ExprId, usize), Ty>,
+    /// Per-segment member resolutions for multi-segment local-rooted `Path` expressions.
     pub(crate) path_member_resolutions: FxHashMap<ExprId, Vec<MemberResolution<'db>>>,
+    /// Full parameter binding plan for checked calls.
     pub(crate) call_plans: FxHashMap<ExprId, CallPlan>,
+    /// Function value adapters required after structural function subtyping.
     pub(crate) function_coercions: FxHashMap<ExprId, FunctionCoercion>,
 }
 
-impl DefaultParameterInference<'_> {
-    pub(crate) fn empty() -> Self {
-        Self::default()
-    }
+/// Everything [`TypeInferenceBuilder::finish`] hands back to its consumers: the
+/// common cluster of per-body maps, the output-only maps that are not part of
+/// the cluster (`param_types`, `nested_lambda_types`), the accumulated
+/// diagnostics, and the separately-captured parameter-default cluster.
+pub struct FinishedInference<'db> {
+    pub maps: InferenceMaps<'db>,
+    pub param_types: Vec<(Name, Ty)>,
+    pub nested_lambda_types: FxHashMap<FileScopeId, Ty>,
+    pub diagnostics: TypeCheckDiagnostics<'db>,
+    pub parameter_defaults: InferenceMaps<'db>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -302,7 +289,7 @@ impl_partial_eq_salsa_update!(ScopeInference<'_>);
 impl<'db> ScopeInference<'db> {
     /// Look up the type of an expression in this scope.
     pub fn expression_type(&self, expr_id: ExprId) -> Option<&Ty> {
-        self.expressions.get(&expr_id)
+        self.body.expressions.get(&expr_id)
     }
 
     /// Look up the `Ty::Function` type assigned to a nested lambda by its span.
@@ -315,7 +302,7 @@ impl<'db> ScopeInference<'db> {
     /// Look up the binding type for a pattern (the type the variable is bound to,
     /// which may differ from the initializer expression type due to widening).
     pub fn binding_type(&self, pat_id: PatId) -> Option<&Ty> {
-        self.pattern_types.get(&pat_id)
+        self.body.pattern_types.get(&pat_id)
     }
 
     /// Look up the type of a parameter by index.
@@ -324,119 +311,121 @@ impl<'db> ScopeInference<'db> {
     }
 
     pub fn call_plan_for_provided_args(&self, args: &[ExprId]) -> Option<&CallPlan> {
-        self.call_plans
+        self.body
+            .call_plans
             .values()
             .find(|plan| plan.matches_provided_args(args))
     }
 
     /// Iterate over all call binding plans in this scope.
     pub fn iter_call_plans(&self) -> impl Iterator<Item = (&ExprId, &CallPlan)> {
-        self.call_plans.iter()
+        self.body.call_plans.iter()
     }
 
     /// Iterate over all function adapters required by checked coercions.
     pub fn iter_function_coercions(&self) -> impl Iterator<Item = (&ExprId, &FunctionCoercion)> {
-        self.function_coercions.iter()
+        self.body.function_coercions.iter()
     }
 
     /// Iterate over all default-parameter expression types for this scope.
     pub fn iter_default_expressions(&self) -> impl Iterator<Item = (&ExprId, &Ty)> {
-        self.parameter_defaults.expressions.iter()
+        self.defaults.expressions.iter()
     }
 
     /// Iterate over all default-parameter pattern types for this scope.
     pub fn iter_default_bindings(&self) -> impl Iterator<Item = (&PatId, &Ty)> {
-        self.parameter_defaults.pattern_types.iter()
+        self.defaults.pattern_types.iter()
     }
 
     /// Iterate over all default-parameter member resolutions for this scope.
     pub fn iter_default_resolutions(
         &self,
     ) -> impl Iterator<Item = (&ExprId, &MemberResolution<'db>)> {
-        self.parameter_defaults.resolutions.iter()
+        self.defaults.resolutions.iter()
     }
 
     /// Iterate over all exhaustive default-parameter match expressions.
     pub fn iter_default_exhaustive_matches(&self) -> impl Iterator<Item = &ExprId> {
-        self.parameter_defaults.exhaustive_matches.iter()
+        self.defaults.exhaustive_matches.iter()
     }
 
     /// Iterate over all default-parameter path root types.
     pub fn iter_default_path_root_types(&self) -> impl Iterator<Item = (&ExprId, &Ty)> {
-        self.parameter_defaults.path_root_types.iter()
+        self.defaults.path_root_types.iter()
     }
 
     /// Iterate over all default-parameter path prefix types.
     pub fn iter_default_path_segment_types(&self) -> impl Iterator<Item = (&(ExprId, usize), &Ty)> {
-        self.parameter_defaults.path_segment_types.iter()
+        self.defaults.path_segment_types.iter()
     }
 
     /// Iterate over all default-parameter per-segment path member resolutions.
     pub fn iter_default_path_member_resolutions(
         &self,
     ) -> impl Iterator<Item = (&ExprId, &Vec<MemberResolution<'db>>)> {
-        self.parameter_defaults.path_member_resolutions.iter()
+        self.defaults.path_member_resolutions.iter()
     }
 
     /// Iterate over all default-parameter call binding plans.
     pub fn iter_default_call_plans(&self) -> impl Iterator<Item = (&ExprId, &CallPlan)> {
-        self.parameter_defaults.call_plans.iter()
+        self.defaults.call_plans.iter()
     }
 
     /// Iterate over all default-parameter function adapters.
     pub fn iter_default_function_coercions(
         &self,
     ) -> impl Iterator<Item = (&ExprId, &FunctionCoercion)> {
-        self.parameter_defaults.function_coercions.iter()
+        self.defaults.function_coercions.iter()
     }
 
     /// Iterate over all (`ExprId`, Ty) pairs for expressions in this scope.
     pub fn iter_expressions(&self) -> impl Iterator<Item = (&ExprId, &Ty)> {
-        self.expressions.iter()
+        self.body.expressions.iter()
     }
 
     /// Iterate over all (`PatId`, Ty) pairs for pattern bindings in this scope.
     pub fn iter_bindings(&self) -> impl Iterator<Item = (&PatId, &Ty)> {
-        self.pattern_types.iter()
+        self.body.pattern_types.iter()
     }
 
     /// Look up the member resolution for an expression in this scope.
     pub fn resolution(&self, expr_id: ExprId) -> Option<&MemberResolution<'db>> {
-        self.resolutions.get(&expr_id)
+        self.body.resolutions.get(&expr_id)
     }
 
     /// Look up residual throw facts for a catch expression after handled arms
     /// have been removed.
     pub fn catch_residual_throws(&self, expr_id: ExprId) -> Option<&BTreeSet<Ty>> {
-        self.catch_residual_throws.get(&expr_id)
+        self.body.catch_residual_throws.get(&expr_id)
     }
 
     /// Iterate over all (`ExprId`, `MemberResolution`) pairs for this scope.
     pub fn iter_resolutions(&self) -> impl Iterator<Item = (&ExprId, &MemberResolution<'db>)> {
-        self.resolutions.iter()
+        self.body.resolutions.iter()
     }
 
     /// Iterate over all exhaustive match `ExprIds` in this scope.
     pub fn iter_exhaustive_matches(&self) -> impl Iterator<Item = &ExprId> {
-        self.exhaustive_matches.iter()
+        self.body.exhaustive_matches.iter()
     }
 
     /// Iterate over all (`ExprId`, root `Ty`) pairs for multi-segment paths in this scope.
     pub fn iter_path_root_types(&self) -> impl Iterator<Item = (&ExprId, &Ty)> {
-        self.path_root_types.iter()
+        self.body.path_root_types.iter()
     }
 
     /// Iterate over all `((ExprId, seg_idx), Ty)` entries for multi-segment
     /// local-rooted paths in this scope.
     pub fn iter_path_segment_types(&self) -> impl Iterator<Item = (&(ExprId, usize), &Ty)> {
-        self.path_segment_types.iter()
+        self.body.path_segment_types.iter()
     }
 
     /// Look up per-segment member resolutions for a multi-segment local-rooted
     /// `Path` expression. Returns `None` if not recorded (e.g. package-rooted
     /// paths or paths with only a single segment).
     pub fn path_member_resolution(&self, expr_id: ExprId) -> Option<&[MemberResolution<'db>]> {
-        self.path_member_resolutions
+        self.body
+            .path_member_resolutions
             .get(&expr_id)
             .map(Vec::as_slice)
     }
@@ -446,7 +435,7 @@ impl<'db> ScopeInference<'db> {
     pub fn iter_path_member_resolutions(
         &self,
     ) -> impl Iterator<Item = (&ExprId, &Vec<MemberResolution<'db>>)> {
-        self.path_member_resolutions.iter()
+        self.body.path_member_resolutions.iter()
     }
 
     /// Get diagnostics for this scope (empty slice if none).
@@ -1322,22 +1311,13 @@ pub fn infer_scope_types<'db>(
         }
     }
 
-    let (
-        expressions,
-        pattern_types,
-        resolutions,
-        catch_residual_throws,
-        exhaustive_matches,
-        diagnostics,
-        path_root_types,
-        path_segment_types,
-        path_member_resolutions,
+    let FinishedInference {
+        maps,
         param_types,
-        call_plans,
-        function_coercions,
         nested_lambda_types,
+        diagnostics,
         parameter_defaults,
-    ) = builder.finish();
+    } = builder.finish();
 
     let extra = if diagnostics.is_empty() {
         None
@@ -1346,19 +1326,10 @@ pub fn infer_scope_types<'db>(
     };
 
     ScopeInference {
-        expressions,
-        pattern_types,
-        resolutions,
-        catch_residual_throws,
-        exhaustive_matches,
-        path_root_types,
-        path_segment_types,
-        path_member_resolutions,
+        body: maps,
+        defaults: parameter_defaults,
         nested_lambda_types,
         param_types,
-        call_plans,
-        function_coercions,
-        parameter_defaults,
         extra,
     }
 }

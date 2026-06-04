@@ -31,10 +31,7 @@ use rustc_hash::{FxHashMap, FxHashSet};
 use text_size::TextRange;
 
 use crate::{
-    infer_context::{
-        DiagnosticLocation, InferContext, RelatedLocation, RelatedNote, TirTypeError,
-        TypeCheckDiagnostics,
-    },
+    infer_context::{DiagnosticLocation, InferContext, RelatedLocation, RelatedNote, TirTypeError},
     package_interface::PackageResolutionContext,
     throws_analysis::ThrowsAnalysisContext,
     ty::{Freshness, FunctionParamMode, FunctionParamTy, PrimitiveType, Ty},
@@ -367,17 +364,8 @@ pub(crate) struct LocalBinding {
 /// `declared_return_ty`, `generic_params`) are saved/restored inline by each
 /// caller, since their save/restore idiom is not shared.
 struct SavedInferenceState<'db> {
-    expressions: FxHashMap<ExprId, Ty>,
-    pattern_types: FxHashMap<PatId, Ty>,
-    resolutions: FxHashMap<ExprId, crate::inference::MemberResolution<'db>>,
-    catch_residual_throws: FxHashMap<ExprId, BTreeSet<Ty>>,
-    exhaustive_matches: FxHashSet<ExprId>,
-    path_root_types: FxHashMap<ExprId, Ty>,
-    path_segment_types: FxHashMap<(ExprId, usize), Ty>,
-    path_member_resolutions: FxHashMap<ExprId, Vec<crate::inference::MemberResolution<'db>>>,
+    maps: crate::inference::InferenceMaps<'db>,
     interface_method_generic_params: FxHashMap<ExprId, (Name, Vec<Name>)>,
-    call_plans: FxHashMap<ExprId, crate::inference::CallPlan>,
-    function_coercions: FxHashMap<ExprId, crate::inference::FunctionCoercion>,
     lambda_effective_throws: FxHashMap<ExprId, Ty>,
 }
 
@@ -428,12 +416,17 @@ struct BuilderThrowsAnalysis<'a, 'db> {
 
 impl ThrowsAnalysisContext for BuilderThrowsAnalysis<'_, '_> {
     fn expression_type(&self, expr_id: ExprId) -> Option<Ty> {
-        self.builder.expressions.get(&expr_id).cloned()
+        self.builder.maps.expressions.get(&expr_id).cloned()
     }
 
     fn catch_residual_throws(&self, expr_id: ExprId) -> Option<BTreeSet<Ty>> {
         match self.mode {
-            ThrowsMode::Normal => self.builder.catch_residual_throws.get(&expr_id).cloned(),
+            ThrowsMode::Normal => self
+                .builder
+                .maps
+                .catch_residual_throws
+                .get(&expr_id)
+                .cloned(),
             ThrowsMode::CatchBase => None,
         }
     }
@@ -446,6 +439,7 @@ impl ThrowsAnalysisContext for BuilderThrowsAnalysis<'_, '_> {
     ) -> Option<Ty> {
         let call_plan = self
             .builder
+            .maps
             .call_plans
             .values()
             .find(|plan| plan.matches_provided_args(args));
@@ -564,18 +558,11 @@ struct OptionalCallContext<'a> {
 pub struct TypeInferenceBuilder<'db> {
     /// Diagnostic sink.
     context: InferContext<'db>,
-    /// Expression types being built up.
-    expressions: FxHashMap<ExprId, Ty>,
-    /// Pattern types: the type each pattern is associated with. Two distinct
-    /// roles, both keyed by the pattern's `PatId`:
-    ///   - `Pattern::Bind`: the type bound to the variable (post widening /
-    ///     annotation), exposed downstream so name resolution can answer
-    ///     "what type is this variable?".
-    ///   - `Pattern::Type` / `Pattern::Class`: the type the pattern tests
-    ///     against at runtime. MIR uses this to choose between an `==`
-    ///     constant test (for literal/null/enum-variant types) or an
-    ///     `IsType` shape test (for primitives/classes/etc.).
-    pattern_types: FxHashMap<PatId, Ty>,
+    /// The common cluster of per-body inference maps. See
+    /// [`crate::inference::InferenceMaps`] for the ten maps it bundles. Taken
+    /// and restored as a unit at sub-body boundaries, and captured wholesale
+    /// for parameter defaults.
+    maps: crate::inference::InferenceMaps<'db>,
     /// Memoized [`Self::pattern_natural_type`] results, keyed by `PatId` and
     /// the choice of "unconstrained leaf" sentinel (`Unknown` for union
     /// dispatch, `Never` for the strict subtype check). The function walks
@@ -602,11 +589,6 @@ pub struct TypeInferenceBuilder<'db> {
     /// propagate — rule 3) from outer-binding assignments (which MUST
     /// propagate — rule 2).
     scoped_local_assignments: Vec<ScopedAssignment>,
-    /// Member resolutions: for field-access expressions that resolved to a
-    /// class field, enum variant, method, or free function — records the
-    /// structural path so MIR can emit the correct `QualifiedName` and LSP
-    /// can navigate to the definition.
-    resolutions: FxHashMap<ExprId, crate::inference::MemberResolution<'db>>,
     /// Resolution context: own `PackageItems` + dependency `PackageInterfaces`.
     res_ctx: &'db PackageResolutionContext<'db>,
     /// Convenience: own package items (from `res_ctx`).
@@ -626,10 +608,6 @@ pub struct TypeInferenceBuilder<'db> {
     /// inside an `implements I { ... }` block, this names `I`. Used to
     /// resolve `default.<method>(...)` calls to `I`'s default body.
     implements_block_interface: Option<crate::ty::QualifiedTypeName>,
-    /// Residual throw facts for each catch expression after applying all clauses.
-    catch_residual_throws: FxHashMap<ExprId, BTreeSet<Ty>>,
-    /// Match expressions that the exhaustiveness checker determined cover all cases.
-    exhaustive_matches: FxHashSet<ExprId>,
     /// Generic type parameters in scope for this function (e.g. `["T"]` for
     /// `function foo<T>(...)`). Used when lowering type annotations inside the
     /// function body so that `T` resolves to `Ty::TypeVar("T")` rather than
@@ -656,20 +634,6 @@ pub struct TypeInferenceBuilder<'db> {
     /// `Index` auto-unwrap nullable bases (null is caught by the chain wrapper).
     /// When 0, accessing a member on a nullable type is a type error.
     in_optional_chain: usize,
-    /// TIR-inferred type of the root (first) segment for each multi-segment
-    /// `Path` expression. Populated in `infer_path` so that MIR lowering can
-    /// chain field projections even when the MIR local was declared with a
-    /// coarser type (e.g. catch variables are declared as `BuiltinUnknown`).
-    pub path_root_types: FxHashMap<ExprId, Ty>,
-    /// TIR-inferred type of every prefix `segments[..=i]` for multi-segment
-    /// local-rooted `Path` expressions. Index `0` matches `path_root_types`;
-    /// later indices give the type of each chained field access. MIR uses this
-    /// to thread class-level type args from the receiver-prefix (segment
-    /// `len-2`) of method-call paths like `holder.box.describe()`.
-    pub path_segment_types: FxHashMap<(ExprId, usize), Ty>,
-    /// Per-segment member resolutions for multi-segment local-rooted `Path`
-    /// expressions. Populated by `infer_local_rooted_path`.
-    pub path_member_resolutions: FxHashMap<ExprId, Vec<crate::inference::MemberResolution<'db>>>,
     /// Interface method generic params keyed by the callee expression. Interface
     /// required methods do not have a `FunctionLoc`, so this supplements
     /// `resolutions` for explicit call-site type-arg checking.
@@ -677,13 +641,9 @@ pub struct TypeInferenceBuilder<'db> {
     /// Parameter types for this scope (populated for lambda/function scopes).
     /// Used by LSP to resolve lambda parameter types.
     pub param_types: Vec<(Name, Ty)>,
-    /// Full parameter binding plans for checked call expressions.
-    pub call_plans: FxHashMap<ExprId, crate::inference::CallPlan>,
-    /// Function adapters required by checked optional-parameter coercions.
-    pub function_coercions: FxHashMap<ExprId, crate::inference::FunctionCoercion>,
     /// Metadata produced while checking parameter defaults. Kept separate from
     /// the function body because defaults use their own expression arena.
-    default_parameter_inference: crate::inference::DefaultParameterInference<'db>,
+    default_parameter_inference: crate::inference::InferenceMaps<'db>,
     /// Accumulates `FileScopeId → Ty::Function` for every lambda expression
     /// encountered during inline body inference (including nested lambdas).
     /// NOT saved/restored by `infer_lambda_body`, so types from arbitrarily
@@ -762,19 +722,10 @@ impl<'db> TypeInferenceBuilder<'db> {
     /// pair with `restore_inference_state` to put the parent's maps back.
     fn take_inference_state(&mut self) -> SavedInferenceState<'db> {
         SavedInferenceState {
-            expressions: std::mem::take(&mut self.expressions),
-            pattern_types: std::mem::take(&mut self.pattern_types),
-            resolutions: std::mem::take(&mut self.resolutions),
-            catch_residual_throws: std::mem::take(&mut self.catch_residual_throws),
-            exhaustive_matches: std::mem::take(&mut self.exhaustive_matches),
-            path_root_types: std::mem::take(&mut self.path_root_types),
-            path_segment_types: std::mem::take(&mut self.path_segment_types),
-            path_member_resolutions: std::mem::take(&mut self.path_member_resolutions),
+            maps: std::mem::take(&mut self.maps),
             interface_method_generic_params: std::mem::take(
                 &mut self.interface_method_generic_params,
             ),
-            call_plans: std::mem::take(&mut self.call_plans),
-            function_coercions: std::mem::take(&mut self.function_coercions),
             lambda_effective_throws: std::mem::take(&mut self.lambda_effective_throws),
         }
     }
@@ -783,17 +734,8 @@ impl<'db> TypeInferenceBuilder<'db> {
     /// `take_inference_state`, overwriting whatever was accumulated for the
     /// sub-body.
     fn restore_inference_state(&mut self, saved: SavedInferenceState<'db>) {
-        self.expressions = saved.expressions;
-        self.pattern_types = saved.pattern_types;
-        self.resolutions = saved.resolutions;
-        self.catch_residual_throws = saved.catch_residual_throws;
-        self.exhaustive_matches = saved.exhaustive_matches;
-        self.path_root_types = saved.path_root_types;
-        self.path_segment_types = saved.path_segment_types;
-        self.path_member_resolutions = saved.path_member_resolutions;
+        self.maps = saved.maps;
         self.interface_method_generic_params = saved.interface_method_generic_params;
-        self.call_plans = saved.call_plans;
-        self.function_coercions = saved.function_coercions;
         self.lambda_effective_throws = saved.lambda_effective_throws;
     }
 
@@ -956,15 +898,13 @@ impl<'db> TypeInferenceBuilder<'db> {
         let ns_context = pkg_info.namespace_path;
         Self {
             context,
-            expressions: FxHashMap::default(),
-            pattern_types: FxHashMap::default(),
+            maps: crate::inference::InferenceMaps::default(),
             pattern_natural_cache: FxHashMap::default(),
             locals: FxHashMap::default(),
             scoped_local_declarations: Vec::new(),
             scoped_local_assignments: Vec::new(),
             body_source_map: None,
             current_body: None,
-            resolutions: FxHashMap::default(),
             res_ctx,
             package_items,
             package_id,
@@ -974,18 +914,11 @@ impl<'db> TypeInferenceBuilder<'db> {
             ns_context,
             implements_block_interface: None,
             generic_param_bounds: rustc_hash::FxHashMap::default(),
-            catch_residual_throws: FxHashMap::default(),
-            exhaustive_matches: FxHashSet::default(),
             generic_params: Vec::new(),
             in_optional_chain: 0,
-            path_root_types: FxHashMap::default(),
-            path_segment_types: FxHashMap::default(),
-            path_member_resolutions: FxHashMap::default(),
             interface_method_generic_params: FxHashMap::default(),
             param_types: Vec::new(),
-            call_plans: FxHashMap::default(),
-            function_coercions: FxHashMap::default(),
-            default_parameter_inference: crate::inference::DefaultParameterInference::empty(),
+            default_parameter_inference: crate::inference::InferenceMaps::default(),
             nested_lambda_types: FxHashMap::default(),
             lambda_effective_throws: FxHashMap::default(),
             is_auto_derived_body: false,
@@ -1053,42 +986,15 @@ impl<'db> TypeInferenceBuilder<'db> {
     }
 
     /// Finish building and return the accumulated results.
-    #[allow(clippy::type_complexity)]
-    pub fn finish(
-        self,
-    ) -> (
-        FxHashMap<ExprId, Ty>,
-        FxHashMap<PatId, Ty>,
-        FxHashMap<ExprId, crate::inference::MemberResolution<'db>>,
-        FxHashMap<ExprId, BTreeSet<Ty>>,
-        FxHashSet<ExprId>,
-        TypeCheckDiagnostics<'db>,
-        FxHashMap<ExprId, Ty>,
-        FxHashMap<(ExprId, usize), Ty>,
-        FxHashMap<ExprId, Vec<crate::inference::MemberResolution<'db>>>,
-        Vec<(Name, Ty)>,
-        FxHashMap<ExprId, crate::inference::CallPlan>,
-        FxHashMap<ExprId, crate::inference::FunctionCoercion>,
-        FxHashMap<FileScopeId, Ty>,
-        crate::inference::DefaultParameterInference<'db>,
-    ) {
+    pub fn finish(self) -> crate::inference::FinishedInference<'db> {
         let diagnostics = self.context.finish();
-        (
-            self.expressions,
-            self.pattern_types,
-            self.resolutions,
-            self.catch_residual_throws,
-            self.exhaustive_matches,
+        crate::inference::FinishedInference {
+            maps: self.maps,
+            param_types: self.param_types,
+            nested_lambda_types: self.nested_lambda_types,
             diagnostics,
-            self.path_root_types,
-            self.path_segment_types,
-            self.path_member_resolutions,
-            self.param_types,
-            self.call_plans,
-            self.function_coercions,
-            self.nested_lambda_types,
-            self.default_parameter_inference,
-        )
+            parameter_defaults: self.default_parameter_inference,
+        }
     }
 
     /// Set the declared return type (for return statement checking).
@@ -1170,13 +1076,13 @@ impl<'db> TypeInferenceBuilder<'db> {
 
     fn sync_let_binding_type(&mut self, name: &Name, ty: Ty) {
         if let Some(pattern_id) = self.locals.get(name).and_then(|binding| binding.pattern) {
-            self.pattern_types.insert(pattern_id, ty);
+            self.maps.pattern_types.insert(pattern_id, ty);
         }
     }
 
     /// Record the type of an expression.
     pub fn record_expr_type(&mut self, expr_id: ExprId, ty: Ty) {
-        self.expressions.insert(expr_id, ty);
+        self.maps.expressions.insert(expr_id, ty);
     }
 
     fn expand_alias_chains(&self, ty: Ty) -> Ty {
@@ -1354,7 +1260,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             }
         }
 
-        let expr_ty = self.expressions.get(&expr_id)?;
+        let expr_ty = self.maps.expressions.get(&expr_id)?;
         let function_ty = self.expected_lambda_function_ty(expr_ty)?;
         let Ty::Function { throws, .. } = function_ty else {
             return None;
@@ -1399,7 +1305,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             };
             let arg_exprs: Vec<_> = args.iter().map(|arg| arg.expr).collect();
 
-            let call_plan = self.call_plans.get(&expr_id);
+            let call_plan = self.maps.call_plans.get(&expr_id);
             let Some(call_throws) = self.instantiated_callee_throws(
                 callee_expr_id,
                 &arg_exprs,
@@ -1414,6 +1320,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             }
 
             let callee_ty = self
+                .maps
                 .expressions
                 .get(&callee_expr_id)
                 .cloned()
@@ -1684,7 +1591,7 @@ impl<'db> TypeInferenceBuilder<'db> {
 
     fn record_function_coercion_if_needed(&mut self, expr_id: ExprId, got: &Ty, expected: &Ty) {
         if let Some(coercion) = self.function_coercion_for(got, expected) {
-            self.function_coercions.insert(expr_id, coercion);
+            self.maps.function_coercions.insert(expr_id, coercion);
         }
     }
 
@@ -1716,7 +1623,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         call_expr_id: ExprId,
     ) -> Option<FxHashMap<Name, Ty>> {
         let db = self.context.db();
-        let resolution = self.resolutions.get(&callee_id).cloned();
+        let resolution = self.maps.resolutions.get(&callee_id).cloned();
         let (callee_name, declared_params, func_loc_for_bound_checks) =
             if let Some(resolution) = resolution {
                 let (func_loc, treat_as_static_method) = match resolution {
@@ -2005,7 +1912,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 None => None,
             })
             .collect();
-        self.call_plans.insert(
+        self.maps.call_plans.insert(
             expr_id,
             crate::inference::CallPlan {
                 bindings: plan_bindings,
@@ -2097,18 +2004,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             }
         }
 
-        self.default_parameter_inference = crate::inference::DefaultParameterInference {
-            expressions: std::mem::take(&mut self.expressions),
-            pattern_types: std::mem::take(&mut self.pattern_types),
-            resolutions: std::mem::take(&mut self.resolutions),
-            catch_residual_throws: std::mem::take(&mut self.catch_residual_throws),
-            exhaustive_matches: std::mem::take(&mut self.exhaustive_matches),
-            path_root_types: std::mem::take(&mut self.path_root_types),
-            path_segment_types: std::mem::take(&mut self.path_segment_types),
-            path_member_resolutions: std::mem::take(&mut self.path_member_resolutions),
-            call_plans: std::mem::take(&mut self.call_plans),
-            function_coercions: std::mem::take(&mut self.function_coercions),
-        };
+        self.default_parameter_inference = std::mem::take(&mut self.maps);
 
         self.restore_inference_state(saved_state);
         self.body_source_map = saved_body_source_map;
@@ -2793,6 +2689,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                     }
 
                     let arg_ty = self
+                        .maps
                         .expressions
                         .get(arg)
                         .cloned()
@@ -3013,15 +2910,15 @@ impl<'db> TypeInferenceBuilder<'db> {
                 then_branch,
                 else_branch,
             } => {
-                // Infer the condition first so its type is in `self.expressions`.
+                // Infer the condition first so its type is in `self.maps.expressions`.
                 self.infer_expr(*condition);
 
                 // Extract narrowings from the condition expression.
                 let narrowings = crate::narrowing::extract_narrowings(
                     *condition,
                     body.as_ref(),
-                    &self.expressions,
-                    &self.pattern_types,
+                    &self.maps.expressions,
+                    &self.maps.pattern_types,
                 );
 
                 // Apply then-branch narrowings, saving originals.
@@ -4173,15 +4070,15 @@ impl<'db> TypeInferenceBuilder<'db> {
                 then_branch,
                 else_branch,
             } => {
-                // Infer the condition first so its type is in `self.expressions`.
+                // Infer the condition first so its type is in `self.maps.expressions`.
                 self.infer_expr(*condition);
 
                 // Extract narrowings from the condition expression.
                 let narrowings = crate::narrowing::extract_narrowings(
                     *condition,
                     body.as_ref(),
-                    &self.expressions,
-                    &self.pattern_types,
+                    &self.maps.expressions,
+                    &self.maps.pattern_types,
                 );
 
                 // Apply then-branch narrowings, saving originals.
@@ -4761,7 +4658,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 let stmt_diverges = self.check_stmt(stmt_id);
 
                 if let Some(name) = scrutinee_name {
-                    let then_ty = self.expressions.get(&then_branch);
+                    let then_ty = self.maps.expressions.get(&then_branch);
                     let then_diverged = matches!(then_ty, Some(Ty::Never));
                     if then_diverged && !stmt_diverges {
                         // Look up the matched type recorded by
@@ -4769,7 +4666,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                         // pattern's PatId. The if-let's inference already
                         // populated this; we just subtract to get the
                         // complement.
-                        if let Some(matched_ty) = self.pattern_types.get(&pattern).cloned() {
+                        if let Some(matched_ty) = self.maps.pattern_types.get(&pattern).cloned() {
                             let complement =
                                 crate::narrowing::subtract_pattern_type(&scrutinee_ty, &matched_ty);
                             self.narrow_local(name, complement);
@@ -4793,7 +4690,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 let condition = *condition;
                 let then_branch = *then_branch;
 
-                // Infer the condition to populate its type in self.expressions.
+                // Infer the condition to populate its type in self.maps.expressions.
                 // (infer_expr for the full Expr::If will also do this, but we
                 // need narrowings before calling check_stmt.)
                 //
@@ -4805,13 +4702,13 @@ impl<'db> TypeInferenceBuilder<'db> {
                 // Extract narrowings from the condition. We need the condition
                 // type to be recorded first, so we infer it here. Note that
                 // infer_expr for the Expr::If will re-infer it (idempotent: the
-                // type is recorded and cached in self.expressions).
+                // type is recorded and cached in self.maps.expressions).
                 self.infer_expr(condition);
                 let narrowings = crate::narrowing::extract_narrowings(
                     condition,
                     body.as_ref(),
-                    &self.expressions,
-                    &self.pattern_types,
+                    &self.maps.expressions,
+                    &self.maps.pattern_types,
                 );
 
                 // Run the normal check_stmt (which handles the full Expr::If
@@ -4823,7 +4720,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 // branch, or else also diverged but then the whole stmt would
                 // have diverged too), apply the else-narrowings to locals.
                 if !narrowings.is_empty() {
-                    let then_ty = self.expressions.get(&then_branch);
+                    let then_ty = self.maps.expressions.get(&then_branch);
                     let then_diverged = matches!(then_ty, Some(Ty::Never));
 
                     if then_diverged && !stmt_diverges {
@@ -4962,7 +4859,7 @@ impl<'db> TypeInferenceBuilder<'db> {
 
         // Exhaustiveness diagnostic.
         if report.missing.is_empty() {
-            self.exhaustive_matches.insert(match_expr_id);
+            self.maps.exhaustive_matches.insert(match_expr_id);
         } else {
             let missing: Vec<String> = report
                 .missing
@@ -5169,7 +5066,8 @@ impl<'db> TypeInferenceBuilder<'db> {
                 Self::facts_to_ty(&residual)
             };
             // Record the clause binding type in the bindings map so MIR can read it.
-            self.pattern_types
+            self.maps
+                .pattern_types
                 .insert(clause.binding, clause_binding_ty.clone());
 
             // Type the optional stack trace binding as baml.errors.StackTrace.
@@ -5307,7 +5205,8 @@ impl<'db> TypeInferenceBuilder<'db> {
                 // Without this re-insertion, MIR/LSP would see whichever arm
                 // ran last as the clause header binding's type, even though
                 // the clause-level binding outlives any single arm.
-                self.pattern_types
+                self.maps
+                    .pattern_types
                     .insert(clause.binding, clause_binding_ty.clone());
 
                 for handled in &throw_matches.definitely_handled {
@@ -5331,7 +5230,8 @@ impl<'db> TypeInferenceBuilder<'db> {
             }
         }
 
-        self.catch_residual_throws
+        self.maps
+            .catch_residual_throws
             .insert(catch_expr_id, residual.clone());
         Self::join_all(&result_members)
     }
@@ -5906,10 +5806,11 @@ impl<'db> TypeInferenceBuilder<'db> {
 
     fn callee_uses_method_call_convention(&self, callee_expr_id: ExprId) -> bool {
         matches!(
-            self.resolutions.get(&callee_expr_id),
+            self.maps.resolutions.get(&callee_expr_id),
             Some(crate::inference::MemberResolution::BoundMethod { .. })
         ) || matches!(
-            self.path_member_resolutions
+            self.maps
+                .path_member_resolutions
                 .get(&callee_expr_id)
                 .and_then(|resolutions| resolutions.last()),
             Some(crate::inference::MemberResolution::BoundMethod { .. })
@@ -5923,7 +5824,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         unwrap_optional_callee: bool,
         call_plan: Option<&crate::inference::CallPlan>,
     ) -> Option<Ty> {
-        let callee_ty = self.expressions.get(&callee_expr_id)?;
+        let callee_ty = self.maps.expressions.get(&callee_expr_id)?;
         let typed_callee = if unwrap_optional_callee {
             self.analyze_optional_base(callee_ty).inner
         } else {
@@ -5966,7 +5867,8 @@ impl<'db> TypeInferenceBuilder<'db> {
             args,
             call_plan,
             |arg_expr_id| {
-                self.expressions
+                self.maps
+                    .expressions
                     .get(&arg_expr_id)
                     .cloned()
                     .unwrap_or(Ty::unknown())
@@ -5990,7 +5892,7 @@ impl<'db> TypeInferenceBuilder<'db> {
 
         // Check path_member_resolutions — handles 2+ segment paths correctly.
         // The last resolution for the callee path tells us the receiver class.
-        if let Some(resolutions) = self.path_member_resolutions.get(&callee_expr_id) {
+        if let Some(resolutions) = self.maps.path_member_resolutions.get(&callee_expr_id) {
             if let Some(
                 crate::inference::MemberResolution::BoundMethod { class_loc, .. }
                 | crate::inference::MemberResolution::UnboundMethod { class_loc, .. },
@@ -6067,7 +5969,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             // Multi-segment: thread the interface through the segment-
             // resolver so each suffix segment dispatches against `I`.
             let iface_ty = Ty::Interface(iface_qtn, Vec::new());
-            self.path_root_types.insert(expr_id, iface_ty.clone());
+            self.maps.path_root_types.insert(expr_id, iface_ty.clone());
             let mut current_ty = iface_ty;
             for (idx, seg) in segments[1..].iter().enumerate() {
                 let seg_idx = idx + 1;
@@ -6079,7 +5981,8 @@ impl<'db> TypeInferenceBuilder<'db> {
                     seg_idx,
                     bound_segment,
                 );
-                self.path_segment_types
+                self.maps
+                    .path_segment_types
                     .insert((expr_id, seg_idx), current_ty.clone());
             }
             return current_ty;
@@ -6094,7 +5997,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 if let Some(Definition::Function(func_loc)) =
                     self.package_items.lookup_value(&self.ns_context, name)
                 {
-                    self.resolutions.insert(
+                    self.maps.resolutions.insert(
                         expr_id,
                         crate::inference::MemberResolution::Free { func_loc },
                     );
@@ -6197,8 +6100,9 @@ impl<'db> TypeInferenceBuilder<'db> {
         // Record the root segment's TIR type for MIR field-chain lowering.
         // MIR catch variables are declared as BuiltinUnknown, so builder.local_ty()
         // would return a coarser type than TIR inferred here.
-        self.path_root_types.insert(expr_id, root_ty.clone());
-        self.path_segment_types
+        self.maps.path_root_types.insert(expr_id, root_ty.clone());
+        self.maps
+            .path_segment_types
             .insert((expr_id, 0), root_ty.clone());
 
         // Chain resolve_member for remaining segments, capturing per-segment resolutions.
@@ -6277,7 +6181,8 @@ impl<'db> TypeInferenceBuilder<'db> {
             // Record the type of segments[..=seg_idx] so MIR can read the
             // receiver-prefix type of multi-segment method calls (e.g.
             // `holder.box.describe()` — the prefix is `holder.box` at index 1).
-            self.path_segment_types
+            self.maps
+                .path_segment_types
                 .insert((expr_id, seg_idx), current_ty.clone());
 
             // Capture whatever resolution `resolve_member` (called by
@@ -6289,7 +6194,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             // builtin/primitive members (e.g. String.length) don't record a
             // MemberResolution. Consumers must use `.last()` or iterate by
             // value, not index-based correspondence with segments.
-            if let Some(res) = self.resolutions.remove(&expr_id) {
+            if let Some(res) = self.maps.resolutions.remove(&expr_id) {
                 member_resolutions.push(res);
             }
 
@@ -6299,7 +6204,8 @@ impl<'db> TypeInferenceBuilder<'db> {
         }
 
         if !member_resolutions.is_empty() {
-            self.path_member_resolutions
+            self.maps
+                .path_member_resolutions
                 .insert(expr_id, member_resolutions);
         }
 
@@ -6486,7 +6392,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         let item = path.last().expect("non-empty path");
         let lookup_val = pkg_items.lookup_value(&path[..path.len() - 1], item);
         if let Some(Definition::Function(func_loc)) = lookup_val {
-            self.resolutions.insert(
+            self.maps.resolutions.insert(
                 expr_id,
                 crate::inference::MemberResolution::Free { func_loc },
             );
@@ -6529,7 +6435,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 let db = self.context.db();
                 let enum_qtn =
                     crate::lower_type_expr::qualify_def(db, Definition::Enum(enum_loc), type_name);
-                self.resolutions.insert(
+                self.maps.resolutions.insert(
                     expr_id,
                     crate::inference::MemberResolution::Variant {
                         enum_loc,
@@ -6561,7 +6467,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 if let Some((method_ty, class_loc, func_loc)) =
                     self.lookup_class_method(&class_qtn, &[], method_name)
                 {
-                    self.resolutions.insert(
+                    self.maps.resolutions.insert(
                         expr_id,
                         crate::inference::MemberResolution::UnboundMethod {
                             class_loc,
@@ -6705,7 +6611,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 if let Some(field_ty) = class_fields.get(member) {
                     // Store field resolution for LSP navigation
                     if let Some(class_loc) = self.resolve_class_loc(class_name) {
-                        self.resolutions.insert(
+                        self.maps.resolutions.insert(
                             at,
                             crate::inference::MemberResolution::Field {
                                 class_loc,
@@ -6800,7 +6706,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                     if bound {
                         // Bound method reference: strip `self` from the type so the
                         // caller doesn't need to pass the receiver explicitly.
-                        self.resolutions.insert(
+                        self.maps.resolutions.insert(
                             at,
                             crate::inference::MemberResolution::BoundMethod {
                                 class_loc,
@@ -6827,7 +6733,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                         }
                     } else {
                         // Unbound method reference: keep `self` as the first parameter.
-                        self.resolutions.insert(
+                        self.maps.resolutions.insert(
                             at,
                             crate::inference::MemberResolution::UnboundMethod {
                                 class_loc,
@@ -6935,7 +6841,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 if variants.contains(member) {
                     // Store variant resolution for LSP navigation
                     if let Some(enum_loc) = self.resolve_enum_loc(enum_name) {
-                        self.resolutions.insert(
+                        self.maps.resolutions.insert(
                             at,
                             crate::inference::MemberResolution::Variant {
                                 enum_loc,
@@ -7561,7 +7467,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                             })
                     },
                     |this| {
-                        this.resolutions.insert(
+                        this.maps.resolutions.insert(
                             at,
                             crate::inference::MemberResolution::InterfaceDefaultMethod {
                                 iface_loc,
@@ -9004,7 +8910,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 func_loc,
             } => {
                 // Builtin methods are always accessed on value bases → BoundMethod.
-                self.resolutions.insert(
+                self.maps.resolutions.insert(
                     at,
                     crate::inference::MemberResolution::BoundMethod {
                         class_loc,
@@ -10566,8 +10472,8 @@ impl<'db> TypeInferenceBuilder<'db> {
 
         // Collect the lambda's expression types, then restore parent state.
         // Take the lambda's expressions before `restore_inference_state`
-        // overwrites `self.expressions` with the parent's.
-        let lambda_expressions = std::mem::take(&mut self.expressions);
+        // overwrites `self.maps.expressions` with the parent's.
+        let lambda_expressions = std::mem::take(&mut self.maps.expressions);
         self.restore_inference_state(saved_state);
         self.pattern_natural_cache = saved_pattern_natural_cache;
         self.locals = saved_locals;
@@ -10760,7 +10666,8 @@ impl TypeInferenceBuilder<'_> {
         // LSP/codegen can look up the binding's type at any of its source
         // positions (or-pattern alternatives, chain alias binds, etc.).
         for binding in &result.bindings {
-            self.pattern_types
+            self.maps
+                .pattern_types
                 .insert(binding.pat_id, binding.ty.clone());
         }
 
@@ -10812,7 +10719,7 @@ impl TypeInferenceBuilder<'_> {
     /// expectation; `matched_ty` is the narrowed type for the pattern's
     /// arm body (downward flow into the body's expression inference).
     ///
-    /// As a side effect, populates `self.pattern_types[pat_id]` with the
+    /// As a side effect, populates `self.maps.pattern_types[pat_id]` with the
     /// pattern's `matched_ty`. MIR's `pat_ty` looks up the type for
     /// *every* pattern `PatId` during structural destructure lowering — not
     /// just the binding `PatIds` — so this insertion at every recursion
@@ -10891,7 +10798,9 @@ impl TypeInferenceBuilder<'_> {
         // to `analyze_and_lower_inner`) flow through here, so MIR/LSP see
         // exactly the matched_ty that this call returned to its caller —
         // including the wrapped/joined types from the union/opaque paths.
-        self.pattern_types.insert(pat_id, result.matched_ty.clone());
+        self.maps
+            .pattern_types
+            .insert(pat_id, result.matched_ty.clone());
         result
     }
 

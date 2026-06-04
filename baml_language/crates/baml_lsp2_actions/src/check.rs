@@ -300,22 +300,10 @@ pub fn check_file(db: &dyn Db, file: SourceFile) -> Vec<Diagnostic> {
                 &param_types,
             );
 
-            let (
-                _expressions,
-                _pattern_types,
-                _resolutions,
-                _catch_residual_throws,
-                _exhaustive_matches,
-                type_check_diagnostics,
-                _path_root_types,
-                _path_segment_types,
-                _path_member_resolutions,
-                _param_types,
-                _call_plans,
-                _function_coercions,
-                _call_throws,
-                _default_parameter_inference,
-            ) = builder.finish();
+            let baml_compiler2_tir::inference::FinishedInference {
+                diagnostics: type_check_diagnostics,
+                ..
+            } = builder.finish();
             for tir_diag in type_check_diagnostics.diagnostics {
                 if !is_function_default_signature_diagnostic(&tir_diag) {
                     continue;
