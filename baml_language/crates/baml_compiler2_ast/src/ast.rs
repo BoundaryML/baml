@@ -1329,6 +1329,10 @@ pub struct ClassDef {
     pub name: Name,
     /// Generic type parameters (e.g., `["T"]` for `Array<T>`). Empty for non-generic classes.
     pub generic_params: Vec<Name>,
+    /// Generic bounds parallel to `generic_params`. `Some(te)` means the
+    /// parameter at the matching index was declared with `T extends <te>`;
+    /// `None` means unbounded.
+    pub generic_param_bounds: Vec<Option<TypeExpr>>,
     pub fields: Vec<FieldDef>,
     pub methods: Vec<FunctionDef>,
     /// `implements I { ... }` blocks declared inside the class body (BEP-044).

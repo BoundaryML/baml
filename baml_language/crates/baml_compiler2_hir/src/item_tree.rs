@@ -117,6 +117,9 @@ pub struct Class {
     /// Generic type parameters (e.g., `["T"]` for `Array<T>`).
     /// Empty for non-generic classes.
     pub generic_params: Vec<Name>,
+    /// Generic bounds parallel to `generic_params`. `Some(te)` means
+    /// `T extends <te>`; `None` means unbounded.
+    pub generic_param_bounds: Vec<Option<ast::TypeExpr>>,
     /// Fields of the class, in declaration order.
     pub fields: Vec<ClassField>,
     /// Methods defined inside this class, referencing their `Function` entries
@@ -505,6 +508,7 @@ impl ItemTree {
             Class {
                 name: c.name.clone(),
                 generic_params: c.generic_params.clone(),
+                generic_param_bounds: c.generic_param_bounds.clone(),
                 fields,
                 methods: Vec::new(),
                 implements,

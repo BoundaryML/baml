@@ -205,13 +205,35 @@ fn infer_interface_class_bindings(
                 && infer_interface_class_bindings(fth, ath, class_params, aliases, bindings)
         }
         (Tir2Ty::Class(fqtn, fargs, _), Tir2Ty::Class(aqtn, aargs, _))
-        | (Tir2Ty::Interface(fqtn, fargs, _, _), Tir2Ty::Interface(aqtn, aargs, _, _))
             if fqtn == aqtn && fargs.len() == aargs.len() =>
         {
             fargs
                 .iter()
                 .zip(aargs.iter())
                 .all(|(f, a)| infer_interface_class_bindings(f, a, class_params, aliases, bindings))
+        }
+        (
+            Tir2Ty::Interface(fqtn, fargs, f_assoc, _),
+            Tir2Ty::Interface(aqtn, aargs, a_assoc, _),
+        ) if fqtn == aqtn && fargs.len() == aargs.len() => {
+            fargs
+                .iter()
+                .zip(aargs.iter())
+                .all(|(f, a)| infer_interface_class_bindings(f, a, class_params, aliases, bindings))
+                && a_assoc.iter().all(|(name, actual_ty)| {
+                    f_assoc
+                        .iter()
+                        .find(|(formal_name, _)| formal_name == name)
+                        .is_some_and(|(_, formal_ty)| {
+                            infer_interface_class_bindings(
+                                formal_ty,
+                                actual_ty,
+                                class_params,
+                                aliases,
+                                bindings,
+                            )
+                        })
+                })
         }
         (Tir2Ty::Union(fparts, _), Tir2Ty::Union(aparts, _)) if fparts.len() == aparts.len() => {
             fparts
@@ -1916,17 +1938,40 @@ impl<'db> LoweringContext<'db> {
         let pkg_info = file_package(db, file);
         let pkg_id = PackageId::new(db, pkg_info.package.clone());
         let pkg_items_for_bounds = package_items(db, pkg_id);
-        let (bound_param_names, bound_exprs) = item_tree
+        let mut bound_param_names = Vec::new();
+        let mut bound_exprs = Vec::new();
+        if let Some(imp) = item_tree
             .implements_for
             .iter()
             .find(|imp| imp.methods.contains(&func_loc.id(db)))
-            .map(|imp| (imp.generic_params.clone(), imp.generic_param_bounds.clone()))
-            .unwrap_or_else(|| {
-                (
-                    func_data.generic_params.clone(),
-                    func_data.generic_param_bounds.clone(),
-                )
-            });
+        {
+            bound_param_names.extend(imp.generic_params.iter().cloned());
+            bound_exprs.extend(imp.generic_param_bounds.iter().cloned());
+        } else if let Some(parent_idx) = func_scope.parent {
+            let parent = &index.scopes[parent_idx.index() as usize];
+            if matches!(parent.kind, baml_compiler2_hir::scope::ScopeKind::Class)
+                && let Some(type_name) = &parent.name
+            {
+                if let Some(class_data) = item_tree
+                    .classes
+                    .values()
+                    .find(|class_data| class_data.name == *type_name)
+                {
+                    bound_param_names.extend(class_data.generic_params.iter().cloned());
+                    bound_exprs.extend(class_data.generic_param_bounds.iter().cloned());
+                } else if let Some(iface_data) = item_tree
+                    .interfaces
+                    .values()
+                    .find(|iface_data| iface_data.name == *type_name)
+                {
+                    bound_param_names.extend(iface_data.generic_params.iter().cloned());
+                    bound_exprs.extend(iface_data.generic_param_bounds.iter().cloned());
+                }
+            }
+        }
+        bound_param_names.extend(func_data.generic_params.iter().cloned());
+        bound_exprs.extend(func_data.generic_param_bounds.iter().cloned());
+        let all_generic_params = bound_param_names.clone();
         let mut generic_param_bounds: FxHashMap<Name, Tir2Ty> = FxHashMap::default();
         for (idx, name) in bound_param_names.iter().enumerate() {
             let Some(Some(bound_te)) = bound_exprs.get(idx) else {
@@ -1938,7 +1983,7 @@ impl<'db> LoweringContext<'db> {
                 bound_te,
                 pkg_items_for_bounds,
                 &pkg_info.namespace_path,
-                &bound_param_names,
+                &all_generic_params,
                 &mut diags,
             );
             if diags.is_empty() {
