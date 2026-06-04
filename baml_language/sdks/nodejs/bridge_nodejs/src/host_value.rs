@@ -255,8 +255,9 @@ const ERROR_RELEASE_QUEUE_SIZE: usize = 4096;
 static ERROR_RELEASE_CALLBACK: OnceLock<Arc<ErrorReleaseTsfn>> = OnceLock::new();
 
 /// Mint a fresh host-value key, drawing from the shared callable+error
-/// counter so the engine sees one globally-unique keyspace. Returned to TS
-/// by [`registerHostError`](crate ts function).
+/// counter so the engine sees one globally-unique keyspace. Returned to
+/// TS by `registerHostError` (the TS-side function in
+/// `host_error_registry.ts`).
 ///
 /// Exposed to JS as `mintHostErrorKey() -> HandleKey`. The TS-side error
 /// registry calls this once per `registerHostError(err)` before inserting

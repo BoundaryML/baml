@@ -316,20 +316,26 @@ def test_call_repeatedly_with_zero_n_returns_empty_list():
     assert invocations == []
 
 
-def test_call_with_throwing_surfaces_declared_host_callable_error():
-    """The BAML catch fixture currently surfaces the host-callable error.
+def test_call_with_throwing_in_baml_catches_host_callable_error():
+    """The BAML `catch (e)` clause around a host-callable invocation now
+    intercepts a host-thrown `baml.errors.HostCallable` and returns the
+    recovery branch.
 
-    Root-thread `BamlHostCallHostValue` errors leave the VM as an unhandled
-    `baml.errors.HostCallable` before the BAML `catch` expression can intercept
-    them. Keep that current behavior covered without hiding it behind xfail.
+    The fixture (`call_with_throwing`) declares the callback's throws
+    contract as `baml.errors.HostCallable` and wraps the call site in
+    ``catch (e) { _ => "caught:" + e.class_name }``. The host raises
+    `RuntimeError`; the bridge wraps it as a `HostCallable` Instance with
+    `class_name="RuntimeError"`; the engine's throws-contract check
+    accepts it (since the declared `E` is `HostCallable`); the throw is
+    injected through the VM's unwinder and caught by the BAML `catch`;
+    the recovery expression returns the string. Earlier in the branch
+    this surfaced as an unhandled Python exception — the engine now
+    threads sysop throws through the same unwinder a `throw` opcode uses,
+    so an in-BAML `catch` can intercept them like any other throw.
     """
 
     def cb(_x: int) -> str:
         raise RuntimeError("boom from host")
 
-    with pytest.raises(Exception) as exc_info:
-        call_with_throwing(callback=cb, x=1)
-
-    msg = str(exc_info.value)
-    assert "baml.errors.HostCallable" in msg
-    assert "RuntimeError" in msg or "boom from host" in msg
+    result = call_with_throwing(callback=cb, x=1)
+    assert result == "caught:RuntimeError"
