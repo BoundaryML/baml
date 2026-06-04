@@ -36,15 +36,6 @@ on:
         required: false
       BAML_SCCACHE_R2_SECRET_ACCESS_KEY:
         required: false
-  # EXPERIMENT HARNESS (build-caching/04): standalone push trigger so a *bare*
-  # push (no PR) to this branch runs ONLY the two Windows SDK jobs. Every other
-  # job below is gated `if: !<experiment>`, and the matrix is filtered to
-  # windows, so nothing else in this file runs; no other workflow matches a bare
-  # branch push either. DO NOT open a PR from this branch (that wakes ci.yaml /
-  # primary.yml). Remove this block + the `experiment` gates before merging.
-  push:
-    branches:
-      - sam/win-sdk-speedup
 
 # Read-only by design: these jobs run PR-controlled cargo build/test code, so
 # they should not need elevated repository permissions.
@@ -70,14 +61,12 @@ env:
   # core count, just 4 on the Windows runner) leaves cores idle waiting on the
   # network. Oversubscribe so cache-hit fetches overlap. Applies to every cargo
   # invocation in this workflow.
-  CARGO_BUILD_JOBS: "16"
+  CARGO_BUILD_JOBS: "32"
 
 jobs:
 
   cargo-test-linux:
     name: "cargo test (linux)"
-    # EXPERIMENT HARNESS (build-caching/04): skip on the win-sdk-speedup branch.
-    if: ${{ !(github.event_name == 'push' && github.ref == 'refs/heads/sam/win-sdk-speedup') }}
     runs-on: blacksmith-16vcpu-ubuntu-2404
     timeout-minutes: 25
     steps:
@@ -174,8 +163,7 @@ jobs:
     name: "cargo test (macos)"
     # Skip in the merge queue: macos already ran on the PR. The merge_group
     # event is inherited from ci.yaml through the workflow_call boundary.
-    # EXPERIMENT HARNESS (build-caching/04): also skip on win-sdk-speedup.
-    if: ${{ github.event_name != 'merge_group' && !(github.event_name == 'push' && github.ref == 'refs/heads/sam/win-sdk-speedup') }}
+    if: ${{ github.event_name != 'merge_group' }}
     runs-on: blacksmith-6vcpu-macos-latest
     timeout-minutes: 35
     steps:
@@ -263,9 +251,7 @@ jobs:
     name: "cargo test (windows)"
     # Skip in the merge queue: windows already ran on the PR. The merge_group
     # event is inherited from ci.yaml through the workflow_call boundary.
-    # EXPERIMENT HARNESS (build-caching/04): also skip on win-sdk-speedup — the
-    # SDK matrix below covers the Windows native build we're tuning.
-    if: ${{ github.event_name != 'merge_group' && !(github.event_name == 'push' && github.ref == 'refs/heads/sam/win-sdk-speedup') }}
+    if: ${{ github.event_name != 'merge_group' }}
     runs-on: blacksmith-4vcpu-windows-2025
     # TODO: Reduce this once our changes to aws-sdk-rust are upstreamed
     # Right now it needs to download our repo every time which is very slow
@@ -440,15 +426,7 @@ jobs:
               },
             ];
 
-            // EXPERIMENT HARNESS (build-caching/04): on a bare push to the
-            // win-sdk-speedup branch, run ONLY the two Windows SDK legs.
-            const isWinSdkExperiment =
-              context.eventName === "push" &&
-              context.ref === "refs/heads/sam/win-sdk-speedup";
-
-            const matrix = isWinSdkExperiment
-              ? baseMatrix.filter((entry) => entry["os-label"] === "windows")
-              : context.eventName === "merge_group"
+            const matrix = context.eventName === "merge_group"
               ? baseMatrix.filter((entry) => entry["os-label"] === "linux")
               : baseMatrix;
 
@@ -475,20 +453,14 @@ jobs:
         include: ${{ fromJSON(needs.sdk-test-matrix.outputs.matrix) }}
     runs-on: ${{ matrix.runs-on }}
     timeout-minutes: ${{ matrix.timeout }}
-    # EXPERIMENT HARNESS (build-caching/04): true only on a bare push to the
-    # win-sdk-speedup branch. Gates the experiment-only cache tweaks below so
-    # normal CI (workflow_call) keeps its existing cache semantics untouched.
     env:
-      WIN_SDK_EXP: ${{ github.event_name == 'push' && github.ref == 'refs/heads/sam/win-sdk-speedup' }}
-      # D (pnpm store caching) was tried and DROPPED: caching the ~hundreds-MB
-      # store via rust-cache made restore cost (+40s to +190s) >= the ~79s cold
-      # `pnpm install` it saved — a net wash/loss on Windows. See build-caching/04
-      # exp 3a/4b. The cold `pnpm install` is left as-is.
-      # B: resolve baml_core from the prebuilt wheelhouse (maturin build, see
-      # python setup.{sh,ps1}) at BOTH setup and test time — the test step's
-      # `uv run` is a separate process, so this must be a job-level env, not
-      # just exported inside setup. Empty on normal CI (editable path source).
-      UV_FIND_LINKS: ${{ (github.event_name == 'push' && github.ref == 'refs/heads/sam/win-sdk-speedup') && format('{0}/baml_language/target/wheels', github.workspace) || '' }}
+      # Resolve baml_core from the prebuilt wheelhouse that the Python setup
+      # script populates via `maturin build` (one cdylib build, then each
+      # fixture installs the wheel instead of rebuilding the editable extension
+      # per fixture). The test step's `uv run` is a separate process from setup,
+      # so this must be a job-level env, not just exported inside setup.sh.
+      # Harmless for the TypeScript leg (it runs no uv). See python setup.{sh,ps1}.
+      UV_FIND_LINKS: ${{ format('{0}/baml_language/target/wheels', github.workspace) }}
     steps:
       - uses: actions/checkout@v6
         with:
@@ -506,21 +478,13 @@ jobs:
       - name: "Verify sccache"
         run: sccache --version
 
-      # EXPERIMENT (build-caching/04, approach C): on the win-sdk-speedup
-      # branch, persist `target/` (cache-targets:true + save) under a per-SDK
-      # key so the cold cdylib/proc-macro link (which sccache structurally
-      # cannot cache) comes back warm on the next run — maturin ~1m25→~20s,
-      # napi ~1m39→~22s, the -p build step 44→14s. NOTE: needs one populating
-      # run before the warm one. Per-SDK key (not shared windows-cargo) so the
-      # python/ts targets don't clobber each other. Normal CI keeps
-      # cache-targets:false / save-if:false.
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: "baml_language -> target"
           cache-all-crates: true
-          cache-targets: ${{ env.WIN_SDK_EXP == 'true' }}
-          save-if: ${{ env.WIN_SDK_EXP == 'true' }}
-          shared-key: ${{ env.WIN_SDK_EXP == 'true' && format('windows-sdk-exp-{0}', matrix.sdk-label) || matrix.rust-cache-key }}
+          cache-targets: false
+          save-if: false
+          shared-key: ${{ matrix.rust-cache-key }}
 
       - name: "Load .envrc with direnv"
         run: |
@@ -609,8 +573,6 @@ jobs:
 
   cargo-test-wasm:
     name: "cargo test (wasm)"
-    # EXPERIMENT HARNESS (build-caching/04): skip on the win-sdk-speedup branch.
-    if: ${{ !(github.event_name == 'push' && github.ref == 'refs/heads/sam/win-sdk-speedup') }}
     runs-on: blacksmith-4vcpu-ubuntu-2404
     timeout-minutes: 45
     steps:
@@ -698,8 +660,6 @@ jobs:
 
   cargo-build-msrv:
     name: "cargo build (msrv)"
-    # EXPERIMENT HARNESS (build-caching/04): skip on the win-sdk-speedup branch.
-    if: ${{ !(github.event_name == 'push' && github.ref == 'refs/heads/sam/win-sdk-speedup') }}
     runs-on: blacksmith-16vcpu-ubuntu-2404
     timeout-minutes: 25
     steps:
@@ -787,8 +747,6 @@ jobs:
 
   cargo-doc:
     name: "cargo doc"
-    # EXPERIMENT HARNESS (build-caching/04): skip on the win-sdk-speedup branch.
-    if: ${{ !(github.event_name == 'push' && github.ref == 'refs/heads/sam/win-sdk-speedup') }}
     runs-on: blacksmith-4vcpu-ubuntu-2404
     timeout-minutes: 25
     steps:
@@ -864,8 +822,6 @@ jobs:
 
   snapshot-tests:
     name: "snapshot tests"
-    # EXPERIMENT HARNESS (build-caching/04): skip on the win-sdk-speedup branch.
-    if: ${{ !(github.event_name == 'push' && github.ref == 'refs/heads/sam/win-sdk-speedup') }}
     runs-on: blacksmith-4vcpu-ubuntu-2404
     timeout-minutes: 30
     steps:
@@ -969,9 +925,6 @@ jobs:
 
   cargo-timings:
     name: "cargo timings (merged)"
-    # EXPERIMENT HARNESS (build-caching/04): skip on the win-sdk-speedup branch
-    # (the gated-off jobs it needs are skipped there anyway).
-    if: ${{ !(github.event_name == 'push' && github.ref == 'refs/heads/sam/win-sdk-speedup') }}
     runs-on: ubuntu-latest
     needs:
       - cargo-test-linux
@@ -991,8 +944,6 @@ jobs:
           delete-merged: true
   sccache-stats:
     name: "sccache stats (merged)"
-    # EXPERIMENT HARNESS (build-caching/04): skip on the win-sdk-speedup branch.
-    if: ${{ !(github.event_name == 'push' && github.ref == 'refs/heads/sam/win-sdk-speedup') }}
     runs-on: ubuntu-latest
     needs:
       - cargo-test-linux
