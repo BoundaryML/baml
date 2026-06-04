@@ -117,7 +117,7 @@ Our side changes only:
 - build scripts target `dist/native.js`;
 - test runner changes from Jest to Vitest;
 - `@napi-rs/cli`, `protobufjs`, and related tooling are updated;
-- npm publish support is added through `release-sdk.yaml` and `build-nodejs-sdk.reusable.yaml`.
+- npm publish support is added through `release-sdk.yaml` and `build2-nodejs-sdk.reusable.yaml`.
 
 Resolution:
 
@@ -160,7 +160,7 @@ What should happen now:
 - Keep `bridge_nodejs::get_version()` wired to `baml_version::CANONICAL_VERSION`.
 - Preserve canary's Node SDK package shape and test/build changes.
 - Add enough release-plan language/comments so future SDK publish jobs can consume the same frozen `release-plan.json` rather than reading independent package versions.
-- If `build-nodejs-sdk.reusable.yaml` is kept, adapt it to accept `release_plan_json` and run `scripts/baml-language-version stamp --plan release-plan.json` before any build that reads `package.json` or Rust version constants.
+- If `build2-nodejs-sdk.reusable.yaml` is kept, adapt it to accept `release_plan_json` and run `scripts/baml-language-version stamp --plan release-plan.json` before any build that reads `package.json` or Rust version constants.
 
 What should not happen casually in this merge:
 
@@ -190,7 +190,7 @@ Git may not surface this as a direct conflict because our branch folds the Pytho
 
 ```text
 .github/workflows/release-baml-language.yml
-.github/workflows/build-python-sdk.reusable.yaml
+.github/workflows/build2-python-sdk.reusable.yaml
 ```
 
 But this is a semantic conflict.
@@ -198,7 +198,7 @@ But this is a semantic conflict.
 `canary` updates `release-sdk.yaml` to:
 
 - build Python wheels;
-- build Node native addons through `build-nodejs-sdk.reusable.yaml`;
+- build Node native addons through `build2-nodejs-sdk.reusable.yaml`;
 - publish Python to PyPI;
 - publish `@boundaryml/baml-core-node` to npm.
 
@@ -213,7 +213,7 @@ Recommended resolution:
 - Fold Python publishing into `release-baml-language.yml`: keep the reusable Python wheel builder, but put the final PyPI trusted-publishing upload in a top-level job.
 - Do not keep `release-sdk.yaml` as an independent release orchestrator in its canary form.
 - Preserve the useful Node build work by adapting it into the new graph or CI:
-  - keep `build-nodejs-sdk.reusable.yaml` if it is usable as a build/test matrix;
+  - keep `build2-nodejs-sdk.reusable.yaml` if it is usable as a build/test matrix;
   - add a `release_plan_json` input before relying on it for release builds;
   - stamp before `pnpm install`, `napi build`, TypeScript build, tests, or package assembly;
   - ensure npm package version comes from stamped `package.json`, not an independent manual bump.
@@ -240,7 +240,7 @@ Expected resolution:
 - If the new release graph depends on canary branch pushes being green before publishing nightly, confirm the `workflow_run` event still fires on pushes to `canary`.
 - Update CI change detection so new release-architecture files are not invisible:
   - `.github/workflows/release-baml-language.yml`
-  - `.github/workflows/build-python-sdk.reusable.yaml`
+  - `.github/workflows/build2-python-sdk.reusable.yaml`
   - `scripts/baml-release-manifests`
   - `scripts/baml-package-manager-artifacts`
   - `scripts/baml-wrapper-version`
