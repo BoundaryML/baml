@@ -3109,7 +3109,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         let callee_info = self.analyze_optional_base(callee_ty);
 
         if let Some(result_ty) = self.try_container_method_call(callee_id, args, body) {
-            let final_ty = Self::make_optional(result_ty);
+            let final_ty = Ty::nullable(result_ty);
             self.report_result_type_mismatch(expr_id, &final_ty, expected);
             self.record_expr_type(expr_id, final_ty.clone());
             return final_ty;
@@ -3134,7 +3134,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             explicit_type_arg_bindings: None,
             rigid_self_var: self.self_pinned_rigid_var.get(&callee_id).cloned(),
         });
-        let final_ty = Self::make_optional(checked.result);
+        let final_ty = Ty::nullable(checked.result);
         self.report_result_type_mismatch(expr_id, &final_ty, expected);
         self.record_expr_type(expr_id, final_ty.clone());
         final_ty
@@ -3438,7 +3438,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 // resolve the member, and re-wrap in Optional.
                 // This allows `a?.b.c` where `a?.b` returns `T?`.
                 let member_ty = self.resolve_member(&inner, member, expr_id, base_is_value);
-                Self::make_optional(member_ty)
+                Ty::nullable(member_ty)
             } else {
                 // Outside any chain: accessing `.member` on a nullable type
                 // is an error (e.g. `(a?.b).c`). Use `?.` instead.
@@ -3453,7 +3453,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 );
                 // Still resolve for downstream inference
                 let member_ty = self.resolve_member(&inner, member, expr_id, base_is_value);
-                Self::make_optional(member_ty)
+                Ty::nullable(member_ty)
             }
         } else {
             self.resolve_member(&base_ty, member, expr_id, base_is_value)
@@ -3580,7 +3580,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         } else {
             // OptionalMemberAccess always has a value base → bound = true.
             let member_ty = self.resolve_member(&base_info.inner, member, expr_id, true);
-            Self::make_optional(member_ty)
+            Ty::nullable(member_ty)
         }
     }
 
@@ -3637,7 +3637,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             }
         };
         if rewrap {
-            Self::make_optional(elem_ty)
+            Ty::nullable(elem_ty)
         } else {
             elem_ty
         }
@@ -3688,7 +3688,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                     }
                 }
             };
-            Self::make_optional(elem_ty)
+            Ty::nullable(elem_ty)
         }
     }
 
@@ -7047,7 +7047,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                         seg_idx,
                         bound,
                     );
-                    current_ty = Self::make_optional(member_ty.clone());
+                    current_ty = Ty::nullable(member_ty.clone());
                 } else {
                     // Outside any chain: null-safety violation — suggest `?.`.
                     let base_text = segments[..seg_idx]
@@ -7076,7 +7076,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                         seg_idx,
                         bound,
                     );
-                    current_ty = Self::make_optional(member_ty.clone());
+                    current_ty = Ty::nullable(member_ty.clone());
                 }
             } else {
                 member_ty =
@@ -11780,7 +11780,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                     },
                 };
                 let callee_expr_ty = match &body.exprs[callee_id] {
-                    Expr::OptionalMemberAccess { .. } => Self::make_optional(method_ty),
+                    Expr::OptionalMemberAccess { .. } => Ty::nullable(method_ty),
                     _ => method_ty,
                 };
 
@@ -11922,12 +11922,6 @@ impl<'db> TypeInferenceBuilder<'db> {
             }
             _ => false,
         }
-    }
-
-    fn make_optional(ty: Ty) -> Ty {
-        // `?` is sugar for `| null`; `Ty::nullable` is idempotent for types
-        // that are already nullable (`T?`, `null`, `T | null`).
-        Ty::nullable(ty)
     }
 
     fn join_types(a: &Ty, b: &Ty) -> Ty {
