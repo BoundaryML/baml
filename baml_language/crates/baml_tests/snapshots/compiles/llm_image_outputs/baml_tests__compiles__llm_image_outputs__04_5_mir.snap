@@ -56,9 +56,13 @@ fn user.GenerateImage$parse(json: string) -> image {
     // Locals:
     let _0: image // _0 // return
     let _1: string // json // param
+    let _2: type
+    let _3: type
 
     bb0: {
-        _0 = call const fn baml.llm.parse(const "GenerateImage", copy _1) -> [bb1];
+        _2 = load_type(void);
+        _3 = load_type(image);
+        _0 = call const fn baml.llm.parse<copy _2, copy _3>(const "GenerateImage", copy _1) -> [bb1];
     }
 
     bb1: {
@@ -136,9 +140,13 @@ fn user.GenerateImageSet$parse(json: string) -> image[] {
     // Locals:
     let _0: image[] // _0 // return
     let _1: string // json // param
+    let _2: type
+    let _3: type
 
     bb0: {
-        _0 = call const fn baml.llm.parse(const "GenerateImageSet", copy _1) -> [bb1];
+        _2 = load_type(void);
+        _3 = load_type(image[]);
+        _0 = call const fn baml.llm.parse<copy _2, copy _3>(const "GenerateImageSet", copy _1) -> [bb1];
     }
 
     bb1: {
@@ -216,9 +224,13 @@ fn user.GenerateMixedImageNarrative$parse(json: string) -> (image | string)[] {
     // Locals:
     let _0: (image | string)[] // _0 // return
     let _1: string // json // param
+    let _2: type
+    let _3: type
 
     bb0: {
-        _0 = call const fn baml.llm.parse(const "GenerateMixedImageNarrative", copy _1) -> [bb1];
+        _2 = load_type(void);
+        _3 = load_type(image | string[]);
+        _0 = call const fn baml.llm.parse<copy _2, copy _3>(const "GenerateMixedImageNarrative", copy _1) -> [bb1];
     }
 
     bb1: {

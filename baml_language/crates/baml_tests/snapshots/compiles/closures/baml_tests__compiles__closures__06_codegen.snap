@@ -15,6 +15,7 @@ function user.Box.from_json(j: baml.json.json) -> Box<void> {
 }
 
 function user.Box.to_json(self: null) -> baml.json.json {
+    load_type #0
     load_var self
     load_field .value
     call baml.json.to_json
@@ -324,6 +325,8 @@ function user.test_bound_in_lambda() -> string {
 }
 
 function user.test_bound_mapper() -> string[] {
+    load_type string
+    load_type void
     load_const "hello"
     load_const "world"
     alloc_array 2
@@ -335,6 +338,8 @@ function user.test_bound_mapper() -> string[] {
 }
 
 function user.test_bound_validator() -> bool[] {
+    load_type bool
+    load_type void
     load_const 5
     load_const 15
     load_const 25

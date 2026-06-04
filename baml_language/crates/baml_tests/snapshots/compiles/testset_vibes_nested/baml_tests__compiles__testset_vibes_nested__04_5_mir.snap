@@ -375,9 +375,13 @@ fn user.ClassifySentiment$parse(json: string) -> Sentiment {
     // Locals:
     let _0: Sentiment // _0 // return
     let _1: string // json // param
+    let _2: type
+    let _3: type
 
     bb0: {
-        _0 = call const fn baml.llm.parse(const "ClassifySentiment", copy _1) -> [bb1];
+        _2 = load_type(void);
+        _3 = load_type(Sentiment);
+        _0 = call const fn baml.llm.parse<copy _2, copy _3>(const "ClassifySentiment", copy _1) -> [bb1];
     }
 
     bb1: {
@@ -455,9 +459,13 @@ fn user.ClassifySentiment2$parse(json: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // json // param
+    let _2: type
+    let _3: type
 
     bb0: {
-        _0 = call const fn baml.llm.parse(const "ClassifySentiment2", copy _1) -> [bb1];
+        _2 = load_type(void);
+        _3 = load_type(string);
+        _0 = call const fn baml.llm.parse<copy _2, copy _3>(const "ClassifySentiment2", copy _1) -> [bb1];
     }
 
     bb1: {
@@ -611,9 +619,13 @@ fn user.GenerateTests$parse(json: string) -> string[] {
     // Locals:
     let _0: string[] // _0 // return
     let _1: string // json // param
+    let _2: type
+    let _3: type
 
     bb0: {
-        _0 = call const fn baml.llm.parse(const "GenerateTests", copy _1) -> [bb1];
+        _2 = load_type(void);
+        _3 = load_type(string[]);
+        _0 = call const fn baml.llm.parse<copy _2, copy _3>(const "GenerateTests", copy _1) -> [bb1];
     }
 
     bb1: {

@@ -1864,31 +1864,33 @@ fn .<lambda(any, 0)>() -> null {
     let _14: unknown // e
     let _15: null
     let _16: void // e
-    let _17: void
+    let _17: baml.future.AllFailed<void> // failure
     let _18: void[]
     let _19: void[]
     let _20: void
-    let _21: bool
-    let _22: void | 0
-    let _23: unknown // e
-    let _24: null
-    let _25: void // e
-    let _26: int
-    let _27: void
-    let _28: future<void, void>[]
-    let _29: int
-    let _30: future<void, void>[]
-    let _31: int
+    let _21: baml.future.AllFailed<void>
+    let _22: bool
+    let _23: void | 0
+    let _24: unknown // e
+    let _25: null
+    let _26: void // e
+    let _27: int
+    let _28: void
+    let _29: future<void, void>[]
+    let _30: int
+    let _31: future<void, void>[]
     let _32: int
     let _33: int
-    let _34: bool
-    let _35: int
-    let _36: void
-    let _37: void[]
-    let _38: bool[]
-    let _39: (future<void, void>) -> bool throws never
-    let _40: void[]
-    let _41: 0
+    let _34: int
+    let _35: bool
+    let _36: int
+    let _37: baml.future.AllFailed<void> // failure
+    let _38: void[]
+    let _39: baml.future.AllFailed<void>
+    let _40: bool[]
+    let _41: (future<void, void>) -> bool throws never
+    let _42: void[]
+    let _43: 0
 
     bb0: {
         _1 = [];
@@ -1898,38 +1900,38 @@ fn .<lambda(any, 0)>() -> null {
     }
 
     bb1: {
-        throw_if_panic copy _23 -> bb2;
+        throw_if_panic copy _24 -> bb2;
     }
 
     bb2: {
-        _25 = copy _23;
-        _27 = copy _25;
-        _26 = call const fn baml.Array.push(copy _1, copy _27) -> [bb3];
+        _26 = copy _24;
+        _28 = copy _26;
+        _27 = call const fn baml.Array.push(copy _1, copy _28) -> [bb3];
     }
 
     bb3: {
-        _22 = const 0_i64;
+        _23 = const 0_i64;
         goto -> bb4;
     }
 
     bb4: {
-        _29 = copy _6;
-        _28 = call const fn baml.Array.slice(copy _3, const 0_i64, copy _29) -> [bb5];
+        _30 = copy _6;
+        _29 = call const fn baml.Array.slice(copy _3, const 0_i64, copy _30) -> [bb5];
     }
 
     bb5: {
-        _32 = copy _6;
-        _31 = copy _32 + const 1_i64;
-        _33 = len(_3);
+        _33 = copy _6;
+        _32 = copy _33 + const 1_i64;
+        _34 = len(_3);
         goto -> bb6;
     }
 
     bb6: {
-        _30 = call const fn baml.Array.slice(copy _3, copy _31, copy _33) -> [bb7];
+        _31 = call const fn baml.Array.slice(copy _3, copy _32, copy _34) -> [bb7];
     }
 
     bb7: {
-        _3 = call const fn baml.Array.concat(copy _28, copy _30) -> [bb8];
+        _3 = call const fn baml.Array.concat(copy _29, copy _31) -> [bb8];
     }
 
     bb8: {
@@ -1959,16 +1961,16 @@ fn .<lambda(any, 0)>() -> null {
     }
 
     bb13: {
-        _21 = call const fn baml.future.Future.is_error(copy _8) -> [bb14];
+        _22 = call const fn baml.future.Future.is_error(copy _8) -> [bb14];
     }
 
     bb14: {
-        branch copy _21 -> [bb15, bb4];
+        branch copy _22 -> [bb15, bb4];
     }
 
     bb15: {
-        _24 = copy _8;
-        _22 = await _24 -> [bb4, unwind: bb1];
+        _25 = copy _8;
+        _23 = await _25 -> [bb4, unwind: bb1];
     }
 
     bb16: {
@@ -1988,8 +1990,9 @@ fn .<lambda(any, 0)>() -> null {
     }
 
     bb19: {
-        _17 = baml.future.AllFailed { copy _18 };
-        throw copy _17;
+        _17 = baml.future.AllFailed<TypeArgRef(1)> { copy _18 };
+        _21 = copy _17;
+        throw copy _21;
     }
 
     bb20: {
@@ -1997,24 +2000,24 @@ fn .<lambda(any, 0)>() -> null {
     }
 
     bb21: {
-        _35 = len(_2);
+        _36 = len(_2);
         goto -> bb22;
     }
 
     bb22: {
-        _34 = copy _35 == const 0_i64;
-        branch copy _34 -> [bb26, bb23];
+        _35 = copy _36 == const 0_i64;
+        branch copy _35 -> [bb26, bb23];
     }
 
     bb23: {
-        _39 = make_closure lambda[0]<2 type_args>();
-        _38 = call const fn baml.Array.map(copy capture[0], copy _39) -> [bb24];
+        _41 = make_closure lambda[0]<2 type_args>();
+        _40 = call const fn baml.Array.map(copy capture[0], copy _41) -> [bb24];
     }
 
     bb24: {
-        _40 = copy _2;
-        _41 = const 0_i64;
-        _0 = copy _40[_41];
+        _42 = copy _2;
+        _43 = const 0_i64;
+        _0 = copy _42[_43];
         goto -> bb25;
     }
 
@@ -2023,9 +2026,10 @@ fn .<lambda(any, 0)>() -> null {
     }
 
     bb26: {
-        _37 = copy _1;
-        _36 = baml.future.AllFailed { copy _37 };
-        throw copy _36;
+        _38 = copy _1;
+        _37 = baml.future.AllFailed<TypeArgRef(1)> { copy _38 };
+        _39 = copy _37;
+        throw copy _39;
     }
 }
 

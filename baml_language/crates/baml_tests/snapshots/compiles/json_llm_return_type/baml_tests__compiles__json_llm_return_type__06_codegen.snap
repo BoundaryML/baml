@@ -34,6 +34,8 @@ function user.ExtractAny$build_request_stream() -> baml.http.Request {
 }
 
 function user.ExtractAny$parse(json: string) -> baml.json.json {
+    load_type void
+    load_type baml.json.json
     load_const "ExtractAny"
     load_var json
     call baml.llm.parse
@@ -57,6 +59,8 @@ function user.ExtractAny$render_prompt() -> baml.llm.PromptAst {
 }
 
 function user.ExtractAny$stream() -> baml.llm.Stream<null | baml.json.json$stream, baml.json.json> {
+    load_type null | baml.json.json$stream
+    load_type baml.json.json
     load_global user.TestClient
     load_const "ExtractAny"
     alloc_map 0

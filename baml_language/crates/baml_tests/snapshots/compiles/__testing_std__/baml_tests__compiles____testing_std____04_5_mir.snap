@@ -595,10 +595,11 @@ fn testing.TestCollector.register_test(self: testing.TestCollector, name: string
     let _30: string
     let _31: int
     let _32: int
-    let _33: int
-    let _34: (testing.TestRegistration[], testing.TestRegistration) -> int throws never
-    let _35: testing.TestRegistration
-    let _36: string
+    let _33: type
+    let _34: int
+    let _35: (testing.TestRegistration[], testing.TestRegistration) -> int throws never
+    let _36: testing.TestRegistration
+    let _37: string
 
     bb0: {
         _7 = copy _1.0;
@@ -649,7 +650,8 @@ fn testing.TestCollector.register_test(self: testing.TestCollector, name: string
         _28 = copy _29 + const "#";
         _32 = copy _10;
         _31 = copy _32 + const 1_i64;
-        _30 = call const fn baml.unstable.string(copy _31) -> [bb8];
+        _33 = load_type(int);
+        _30 = call const fn baml.unstable.string<copy _33>(copy _31) -> [bb8];
     }
 
     bb8: {
@@ -658,10 +660,10 @@ fn testing.TestCollector.register_test(self: testing.TestCollector, name: string
     }
 
     bb9: {
-        _34 = copy _1.1;
-        _36 = copy _25;
-        _35 = testing.TestRegistration { copy _36, copy _3, copy _4 };
-        _33 = call const fn baml.Array.push(copy _34, copy _35) -> [bb10];
+        _35 = copy _1.1;
+        _37 = copy _25;
+        _36 = testing.TestRegistration { copy _37, copy _3, copy _4 };
+        _34 = call const fn baml.Array.push(copy _35, copy _36) -> [bb10];
     }
 
     bb10: {
@@ -739,10 +741,11 @@ fn testing.TestCollector.register_test_set(self: testing.TestCollector, name: st
     let _30: string
     let _31: int
     let _32: int
-    let _33: int
-    let _34: (testing.TestSetRegistration[], testing.TestSetRegistration) -> int throws never
-    let _35: testing.TestSetRegistration
-    let _36: string
+    let _33: type
+    let _34: int
+    let _35: (testing.TestSetRegistration[], testing.TestSetRegistration) -> int throws never
+    let _36: testing.TestSetRegistration
+    let _37: string
 
     bb0: {
         _7 = copy _1.0;
@@ -793,7 +796,8 @@ fn testing.TestCollector.register_test_set(self: testing.TestCollector, name: st
         _28 = copy _29 + const "#";
         _32 = copy _10;
         _31 = copy _32 + const 1_i64;
-        _30 = call const fn baml.unstable.string(copy _31) -> [bb8];
+        _33 = load_type(int);
+        _30 = call const fn baml.unstable.string<copy _33>(copy _31) -> [bb8];
     }
 
     bb8: {
@@ -802,10 +806,10 @@ fn testing.TestCollector.register_test_set(self: testing.TestCollector, name: st
     }
 
     bb9: {
-        _34 = copy _1.2;
-        _36 = copy _25;
-        _35 = testing.TestSetRegistration { copy _36, copy _3, copy _4 };
-        _33 = call const fn baml.Array.push(copy _34, copy _35) -> [bb10];
+        _35 = copy _1.2;
+        _37 = copy _25;
+        _36 = testing.TestSetRegistration { copy _37, copy _3, copy _4 };
+        _34 = call const fn baml.Array.push(copy _35, copy _36) -> [bb10];
     }
 
     bb10: {

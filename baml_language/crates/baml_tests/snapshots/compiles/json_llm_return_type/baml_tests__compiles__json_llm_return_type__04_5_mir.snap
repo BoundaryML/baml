@@ -53,9 +53,13 @@ fn user.ExtractAny$parse(json: string) -> baml.json.json {
     // Locals:
     let _0: baml.json.json // _0 // return
     let _1: string // json // param
+    let _2: type
+    let _3: type
 
     bb0: {
-        _0 = call const fn baml.llm.parse(const "ExtractAny", copy _1) -> [bb1];
+        _2 = load_type(void);
+        _3 = load_type(baml.json.json);
+        _0 = call const fn baml.llm.parse<copy _2, copy _3>(const "ExtractAny", copy _1) -> [bb1];
     }
 
     bb1: {

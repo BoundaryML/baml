@@ -72,6 +72,8 @@ function user.TypeBuilderFn$build_request_stream(from_text: string) -> baml.http
 }
 
 function user.TypeBuilderFn$parse(json: string) -> Resume {
+    load_type void
+    load_type Resume
     load_const "TypeBuilderFn"
     load_var json
     call baml.llm.parse
@@ -79,6 +81,8 @@ function user.TypeBuilderFn$parse(json: string) -> Resume {
 }
 
 function user.TypeBuilderFn$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream<null | Resume$stream, Resume> {
+    load_type null | Resume$stream
+    load_type Resume
     load_const "openai/gpt-4o-mini"
     load_const baml.llm.ClientType.Primitive
     alloc_variant baml.llm.ClientType
@@ -109,6 +113,8 @@ function user.TypeBuilderFn$render_prompt(from_text: string) -> baml.llm.PromptA
 }
 
 function user.TypeBuilderFn$stream(from_text: string) -> baml.llm.Stream<null | Resume$stream, Resume> {
+    load_type null | Resume$stream
+    load_type Resume
     load_const "openai/gpt-4o-mini"
     load_const baml.llm.ClientType.Primitive
     alloc_variant baml.llm.ClientType

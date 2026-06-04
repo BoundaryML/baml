@@ -255,6 +255,7 @@ function testing.TestCollector.register_test(self: null, name: string, body: () 
     load_const "#"
     bin_op +
     store_var _28
+    load_type int
     load_var count
     load_const 1
     add_int
@@ -370,6 +371,7 @@ function testing.TestCollector.register_test_set(self: null, name: string, colle
     load_const "#"
     bin_op +
     store_var _28
+    load_type int
     load_var count
     load_const 1
     add_int

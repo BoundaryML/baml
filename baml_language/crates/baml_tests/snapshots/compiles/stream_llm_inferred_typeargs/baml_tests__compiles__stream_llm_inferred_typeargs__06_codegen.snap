@@ -63,6 +63,8 @@ function user.TestFunc$build_request_stream(input: string) -> baml.http.Request 
 }
 
 function user.TestFunc$parse(json: string) -> string {
+    load_type void
+    load_type string
     load_const "TestFunc"
     load_var json
     call baml.llm.parse
@@ -88,6 +90,8 @@ function user.TestFunc$render_prompt(input: string) -> baml.llm.PromptAst {
 }
 
 function user.TestFunc$stream(input: string) -> baml.llm.Stream<null | string, string> {
+    load_type null | string
+    load_type string
     load_global user.TestClient
     load_const "TestFunc"
     load_var input
@@ -98,6 +102,8 @@ function user.TestFunc$stream(input: string) -> baml.llm.Stream<null | string, s
 }
 
 function user.call_stream_inferred() -> baml.llm.Stream<null | string, string> {
+    load_type null | string
+    load_type string
     load_global user.TestClient
     load_const "TestFunc"
     load_const "world"

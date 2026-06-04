@@ -100,6 +100,8 @@ function user.AskDocs$build_request_stream(query: string, max_results: int, filt
 }
 
 function user.AskDocs$parse(json: string) -> string {
+    load_type void
+    load_type string
     load_const "AskDocs"
     load_var json
     call baml.llm.parse
@@ -161,6 +163,8 @@ function user.AskDocs$stream(query: string, max_results: int, filter: string) ->
     store_var filter
 
   L1:
+    load_type null | string
+    load_type string
     load_global user.TestClient
     load_const "AskDocs"
     load_var query

@@ -59,6 +59,8 @@ function user.ClassifySentiment$build_request_stream(text: string) -> baml.http.
 }
 
 function user.ClassifySentiment$parse(json: string) -> Sentiment {
+    load_type void
+    load_type Sentiment
     load_const "ClassifySentiment"
     load_var json
     call baml.llm.parse
@@ -84,6 +86,8 @@ function user.ClassifySentiment$render_prompt(text: string) -> baml.llm.PromptAs
 }
 
 function user.ClassifySentiment$stream(text: string) -> baml.llm.Stream<null | Sentiment$stream, Sentiment> {
+    load_type null | Sentiment$stream
+    load_type Sentiment
     load_global user.GPT4o
     load_const "ClassifySentiment"
     load_var text
@@ -125,6 +129,8 @@ function user.ClassifySentiment2$build_request_stream(text: string) -> baml.http
 }
 
 function user.ClassifySentiment2$parse(json: string) -> string {
+    load_type void
+    load_type string
     load_const "ClassifySentiment2"
     load_var json
     call baml.llm.parse
@@ -150,6 +156,8 @@ function user.ClassifySentiment2$render_prompt(text: string) -> baml.llm.PromptA
 }
 
 function user.ClassifySentiment2$stream(text: string) -> baml.llm.Stream<null | string, string> {
+    load_type null | string
+    load_type string
     load_global user.GPT4o
     load_const "ClassifySentiment2"
     load_var text
@@ -252,6 +260,8 @@ function user.GenerateTests$build_request_stream(count: int, topic: string) -> b
 }
 
 function user.GenerateTests$parse(json: string) -> string[] {
+    load_type void
+    load_type string[]
     load_const "GenerateTests"
     load_var json
     call baml.llm.parse
@@ -279,6 +289,8 @@ function user.GenerateTests$render_prompt(count: int, topic: string) -> baml.llm
 }
 
 function user.GenerateTests$stream(count: int, topic: string) -> baml.llm.Stream<string[], string[]> {
+    load_type string[]
+    load_type string[]
     load_global user.GPT4o
     load_const "GenerateTests"
     load_var count

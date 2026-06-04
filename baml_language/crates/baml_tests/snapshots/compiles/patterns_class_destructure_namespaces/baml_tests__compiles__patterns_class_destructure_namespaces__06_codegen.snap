@@ -193,6 +193,7 @@ function user.llm.openai.Box.from_json(j: baml.json.json) -> llm.openai.Box<void
 }
 
 function user.llm.openai.Box.to_json(self: null) -> baml.json.json {
+    load_type #0
     load_var self
     load_field .value
     call baml.json.to_json

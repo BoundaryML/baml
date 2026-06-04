@@ -15,6 +15,7 @@ function user.Container.from_json(j: baml.json.json) -> Container<void> {
 }
 
 function user.Container.to_json(self: null) -> baml.json.json {
+    load_type #0
     load_var self
     load_field .item
     call baml.json.to_json

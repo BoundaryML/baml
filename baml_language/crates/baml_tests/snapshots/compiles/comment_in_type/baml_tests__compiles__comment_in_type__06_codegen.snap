@@ -34,6 +34,8 @@ function user.CommentAfterArrow$build_request_stream() -> baml.http.Request {
 }
 
 function user.CommentAfterArrow$parse(json: string) -> string {
+    load_type void
+    load_type string
     load_const "CommentAfterArrow"
     load_var json
     call baml.llm.parse
@@ -57,6 +59,8 @@ function user.CommentAfterArrow$render_prompt() -> baml.llm.PromptAst {
 }
 
 function user.CommentAfterArrow$stream() -> baml.llm.Stream<null | string, string> {
+    load_type null | string
+    load_type string
     load_global user.TestClient
     load_const "CommentAfterArrow"
     alloc_map 0
@@ -102,6 +106,8 @@ function user.FunctionWithComments$build_request_stream(a: string, b: int) -> ba
 }
 
 function user.FunctionWithComments$parse(json: string) -> string {
+    load_type void
+    load_type string
     load_const "FunctionWithComments"
     load_var json
     call baml.llm.parse
@@ -129,6 +135,8 @@ function user.FunctionWithComments$render_prompt(a: string, b: int) -> baml.llm.
 }
 
 function user.FunctionWithComments$stream(a: string, b: int) -> baml.llm.Stream<null | string, string> {
+    load_type null | string
+    load_type string
     load_global user.TestClient
     load_const "FunctionWithComments"
     load_var a

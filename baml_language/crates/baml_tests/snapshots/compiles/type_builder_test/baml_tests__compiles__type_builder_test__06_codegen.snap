@@ -45,6 +45,8 @@ function user.Fn$build_request_stream() -> baml.http.Request {
 }
 
 function user.Fn$parse(json: string) -> string {
+    load_type void
+    load_type string
     load_const "Fn"
     load_var json
     call baml.llm.parse
@@ -52,6 +54,8 @@ function user.Fn$parse(json: string) -> string {
 }
 
 function user.Fn$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream<null | string, string> {
+    load_type null | string
+    load_type string
     load_const "openai/gpt-4o"
     load_const baml.llm.ClientType.Primitive
     alloc_variant baml.llm.ClientType
@@ -80,6 +84,8 @@ function user.Fn$render_prompt() -> baml.llm.PromptAst {
 }
 
 function user.Fn$stream() -> baml.llm.Stream<null | string, string> {
+    load_type null | string
+    load_type string
     load_const "openai/gpt-4o"
     load_const baml.llm.ClientType.Primitive
     alloc_variant baml.llm.ClientType

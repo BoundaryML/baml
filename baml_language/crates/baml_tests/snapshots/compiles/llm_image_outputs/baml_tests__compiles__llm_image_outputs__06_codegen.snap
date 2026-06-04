@@ -40,6 +40,8 @@ function user.GenerateImage$build_request_stream(prompt: string) -> baml.http.Re
 }
 
 function user.GenerateImage$parse(json: string) -> image {
+    load_type void
+    load_type image
     load_const "GenerateImage"
     load_var json
     call baml.llm.parse
@@ -65,6 +67,8 @@ function user.GenerateImage$render_prompt(prompt: string) -> baml.llm.PromptAst 
 }
 
 function user.GenerateImage$stream(prompt: string) -> baml.llm.Stream<image, image> {
+    load_type image
+    load_type image
     load_global user.OpenAIImageResponses
     load_const "GenerateImage"
     load_var prompt
@@ -106,6 +110,8 @@ function user.GenerateImageSet$build_request_stream(prompt: string) -> baml.http
 }
 
 function user.GenerateImageSet$parse(json: string) -> image[] {
+    load_type void
+    load_type image[]
     load_const "GenerateImageSet"
     load_var json
     call baml.llm.parse
@@ -131,6 +137,8 @@ function user.GenerateImageSet$render_prompt(prompt: string) -> baml.llm.PromptA
 }
 
 function user.GenerateImageSet$stream(prompt: string) -> baml.llm.Stream<image[], image[]> {
+    load_type image[]
+    load_type image[]
     load_global user.OpenAIImageResponses
     load_const "GenerateImageSet"
     load_var prompt
@@ -172,6 +180,8 @@ function user.GenerateMixedImageNarrative$build_request_stream(prompt: string) -
 }
 
 function user.GenerateMixedImageNarrative$parse(json: string) -> (image | string)[] {
+    load_type void
+    load_type image | string[]
     load_const "GenerateMixedImageNarrative"
     load_var json
     call baml.llm.parse
@@ -197,6 +207,8 @@ function user.GenerateMixedImageNarrative$render_prompt(prompt: string) -> baml.
 }
 
 function user.GenerateMixedImageNarrative$stream(prompt: string) -> baml.llm.Stream<(image | string)[], (image | string)[]> {
+    load_type image | string[]
+    load_type image | string[]
     load_global user.OpenAIImageResponses
     load_const "GenerateMixedImageNarrative"
     load_var prompt
