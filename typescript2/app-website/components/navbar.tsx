@@ -127,13 +127,11 @@ export function Navbar() {
           <Link className="nav-link" href="/vs">
             BAML vs X
           </Link>
-          <Link
-            className="nav-link"
-            href="https://bench3-ui.fly.dev/"
-            rel="noopener noreferrer"
-            target="_blank"
-          >
-            agent-tries-baml
+          <Link className="nav-link" href="/changelog">
+            Changelog
+          </Link>
+          <Link className="nav-link" href="/agent-tries-baml">
+            agent tries baml
           </Link>
         </div>
         <div className="nav-desktop-actions">
@@ -182,12 +180,17 @@ export function Navbar() {
           </Link>
           <Link
             className="nav-mobile-link"
-            href="https://bench3-ui.fly.dev/"
+            href="/changelog"
             onClick={() => setOpen(false)}
-            rel="noopener noreferrer"
-            target="_blank"
           >
-            agent-tries-baml
+            Changelog
+          </Link>
+          <Link
+            className="nav-mobile-link"
+            href="/agent-tries-baml"
+            onClick={() => setOpen(false)}
+          >
+            agent tries baml
           </Link>
           <div className="nav-mobile-footer">
             <NavStars />
