@@ -22,3 +22,6 @@ ARCHITECTURE.md
 
 # Speedtest workload definitions
 tools/speedtest/workloads/**/*.md
+
+# TIR semantic model + refactor invariant contract (PR #3645)
+crates/baml_compiler2_tir/docs/*.md
