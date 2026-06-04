@@ -178,7 +178,7 @@ def test_callable_returning_unencodable_surfaces_as_error():
     """A callback whose *result* cannot be encoded must surface as a BAML
     error, not hang the engine. `object()` has no inbound encoding, so
     `encode_result_inbound` raises a `TypeError`; the dispatch path turns it
-    into a `HostCallableError` and completes the call."""
+    into a thrown `baml.errors.HostCallable` Instance and completes the call."""
     rt = _make_runtime()
 
     def cb(_x: int):

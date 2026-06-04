@@ -36,7 +36,11 @@ pub type HostReleaseFn = extern "C" fn(host_value_key: u64);
 ///
 /// `Drop` fires `host_release_dispatch::fire(self.key)` so the bridge can
 /// remove the underlying host object from its registry.
-#[derive(Debug)]
+///
+/// `PartialEq` compares by `(key, kind)`: the process-global interner
+/// guarantees one live `Arc<HostValueArc>` per key (see [`Self::intern`]),
+/// so two `Arc`s with the same key always refer to the same host object.
+#[derive(Debug, PartialEq, Eq)]
 pub struct HostValueArc {
     pub key: u64,
     pub kind: HostValueKind,

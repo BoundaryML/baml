@@ -469,72 +469,18 @@ fn baml.errors.HostCallable.from_json(j: baml.json.json) -> baml.errors.HostCall
     let _0: baml.errors.HostCallable // _0 // return
     let _1: baml.json.json // j // param
     let _2: string
-    let _3: baml.json.json
-    let _4: type
-    let _5: string
-    let _6: baml.json.json
-    let _7: type
-    let _8: string
-    let _9: baml.json.json
-    let _10: type
-    let _11: string | null
-    let _12: baml.json.json
-    let _13: type
-    let _14: int
-    let _15: baml.json.json
-    let _16: type
+    let _3: type
 
     bb0: {
-        _3 = call const fn baml.json.field(copy _1, const "message") -> [bb1];
+        _2 = call const fn baml.json.stringify(copy _1) -> [bb1];
     }
 
     bb1: {
-        _4 = load_type(string);
-        _2 = call const fn baml.json.from_json<copy _4>(copy _3) -> [bb2];
+        _3 = load_type(baml.errors.HostCallable);
+        _0 = call const fn baml.json.from_string<copy _3>(copy _2) -> [bb2];
     }
 
     bb2: {
-        _6 = call const fn baml.json.field(copy _1, const "class_name") -> [bb3];
-    }
-
-    bb3: {
-        _7 = load_type(string);
-        _5 = call const fn baml.json.from_json<copy _7>(copy _6) -> [bb4];
-    }
-
-    bb4: {
-        _9 = call const fn baml.json.field(copy _1, const "language") -> [bb5];
-    }
-
-    bb5: {
-        _10 = load_type(string);
-        _8 = call const fn baml.json.from_json<copy _10>(copy _9) -> [bb6];
-    }
-
-    bb6: {
-        _12 = call const fn baml.json.field(copy _1, const "traceback") -> [bb7];
-    }
-
-    bb7: {
-        _13 = load_type(string | null);
-        _11 = call const fn baml.json.from_json<copy _13>(copy _12) -> [bb8];
-    }
-
-    bb8: {
-        _15 = call const fn baml.json.field(copy _1, const "category") -> [bb9];
-    }
-
-    bb9: {
-        _16 = load_type(int);
-        _14 = call const fn baml.json.from_json<copy _16>(copy _15) -> [bb10];
-    }
-
-    bb10: {
-        _0 = baml.errors.HostCallable { copy _2, copy _5, copy _8, copy _11, copy _14 };
-        goto -> bb11;
-    }
-
-    bb11: {
         return;
     }
 }
@@ -927,75 +873,19 @@ fn baml.errors.HostCallable.to_json(self: baml.errors.HostCallable) -> baml.json
     // Locals:
     let _0: baml.json.json // _0 // return
     let _1: baml.errors.HostCallable // self // param
-    let _2: baml.json.json
-    let _3: string
-    let _4: baml.errors.HostCallable
-    let _5: baml.json.json
-    let _6: string
-    let _7: baml.errors.HostCallable
-    let _8: baml.json.json
-    let _9: string
-    let _10: baml.errors.HostCallable
-    let _11: baml.json.json | null
-    let _12: ((baml.String) -> baml.json.json throws never) | null
-    let _13: string | null
-    let _14: baml.errors.HostCallable
-    let _15: bool
-    let _16: string | null
-    let _17: baml.errors.HostCallable
-    let _18: baml.json.json
-    let _19: int
-    let _20: baml.errors.HostCallable
+    let _2: string
+    let _3: type
 
     bb0: {
-        _4 = copy _1;
-        _3 = copy _4.0;
-        _2 = call const fn baml.String.to_json(copy _3) -> [bb1];
+        _3 = load_type(baml.errors.HostCallable);
+        _2 = call const fn baml.json.to_string<copy _3>(copy _1) -> [bb1];
     }
 
     bb1: {
-        _7 = copy _1;
-        _6 = copy _7.1;
-        _5 = call const fn baml.String.to_json(copy _6) -> [bb2];
+        _0 = call const fn baml.json.parse(copy _2) -> [bb2];
     }
 
     bb2: {
-        _10 = copy _1;
-        _9 = copy _10.2;
-        _8 = call const fn baml.String.to_json(copy _9) -> [bb3];
-    }
-
-    bb3: {
-        _14 = copy _1;
-        _13 = copy _14.3;
-        _15 = copy _13 == const null;
-        branch copy _15 -> [bb5, bb4];
-    }
-
-    bb4: {
-        _17 = copy _1;
-        _16 = copy _17.3;
-        _12 = make_bound_method baml.String.to_json(copy _16);
-        _11 = call copy _12() -> [bb6];
-    }
-
-    bb5: {
-        _11 = const null;
-        goto -> bb6;
-    }
-
-    bb6: {
-        _20 = copy _1;
-        _19 = copy _20.4;
-        _18 = call const fn baml.Int.to_json(copy _19) -> [bb7];
-    }
-
-    bb7: {
-        _0 = { const "message": copy _2, const "class_name": copy _5, const "language": copy _8, const "traceback": copy _11, const "category": copy _18 };
-        goto -> bb8;
-    }
-
-    bb8: {
         return;
     }
 }
@@ -6584,10 +6474,10 @@ fn baml.panics.HostContractViolation.from_json(j: baml.json.json) -> baml.panics
     let _2: string
     let _3: baml.json.json
     let _4: type
-    let _5: string?
+    let _5: string | null
     let _6: baml.json.json
     let _7: type
-    let _8: string?
+    let _8: string | null
     let _9: baml.json.json
     let _10: type
 
@@ -6605,7 +6495,7 @@ fn baml.panics.HostContractViolation.from_json(j: baml.json.json) -> baml.panics
     }
 
     bb3: {
-        _7 = load_type(string?);
+        _7 = load_type(string | null);
         _5 = call const fn baml.json.from_json<copy _7>(copy _6) -> [bb4];
     }
 
@@ -6614,7 +6504,7 @@ fn baml.panics.HostContractViolation.from_json(j: baml.json.json) -> baml.panics
     }
 
     bb5: {
-        _10 = load_type(string?);
+        _10 = load_type(string | null);
         _8 = call const fn baml.json.from_json<copy _10>(copy _9) -> [bb6];
     }
 
@@ -7067,19 +6957,19 @@ fn baml.panics.HostContractViolation.to_json(self: baml.panics.HostContractViola
     let _2: baml.json.json
     let _3: string
     let _4: baml.panics.HostContractViolation
-    let _5: baml.json.json?
-    let _6: ((baml.String) -> baml.json.json throws never)?
-    let _7: string?
+    let _5: baml.json.json | null
+    let _6: ((baml.String) -> baml.json.json throws never) | null
+    let _7: string | null
     let _8: baml.panics.HostContractViolation
     let _9: bool
-    let _10: string?
+    let _10: string | null
     let _11: baml.panics.HostContractViolation
-    let _12: baml.json.json?
-    let _13: ((baml.String) -> baml.json.json throws never)?
-    let _14: string?
+    let _12: baml.json.json | null
+    let _13: ((baml.String) -> baml.json.json throws never) | null
+    let _14: string | null
     let _15: baml.panics.HostContractViolation
     let _16: bool
-    let _17: string?
+    let _17: string | null
     let _18: baml.panics.HostContractViolation
 
     bb0: {

@@ -60,7 +60,13 @@ class HostCallable {
   class_name string
   language string
   traceback string?
-  category int
+  // Opaque slot reserved for the bridge SDK's same-host rehydration
+  // handle. When set by the originating host, the BAML→host decoder on
+  // the same runtime can resolve it back to the original native
+  // exception object; foreign runtimes / released keys see `null` and
+  // fall back to the metadata fields above. Not yet populated end-to-end
+  // (HostValueKind::Error wiring is pending).
+  _handle $rust_type
 }
 
 /// A catch-all SDK-boundary failure with no more specific class. Synthesized

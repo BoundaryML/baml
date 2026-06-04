@@ -156,39 +156,75 @@ impl std::fmt::Display for CallId {
     }
 }
 
-/// Errors that can occur during external operation execution. Every error is
-/// tied to the operation (`fn_name`) that was being called; the inner `kind`
-/// is the same `VmRustFnError` the VM uses for `$rust_function` errors and
-/// `throw` opcodes, so a sysop error is delivered through the VM's normal
-/// exception-unwinding path without bespoke routing.
-///
-/// For the host-callable sysop, a successful host *throw* (the host
-/// language ran a callable and the callable raised something) is carried
-/// via [`Self::host_thrown`] rather than `kind`: it holds the decoded
-/// thrown value as a [`BexExternalValue`] so the engine can run the
-/// declared-throws contract check against `E` and either inject the value
-/// as a catchable throw (on-contract) or as a
-/// `baml.panics.HostContractViolation` (off-contract). When
-/// `host_thrown` is `Some`, `kind` carries a sentinel
-/// `VmBamlError::HostCallable` that mirrors the surfaced value's
-/// metadata for `Display` / `std::error::Error::source`, but the
-/// engine reads `host_thrown` for the actual semantic.
+/// Errors that can occur during external operation execution. Every error
+/// is tied to the operation (`fn_name`) that was being called; the inner
+/// `payload` is either a normal VM error (treated like a `$rust_function`
+/// error or `throw` opcode and delivered through the VM's exception-
+/// unwinding path) or a *host throw* — a decoded `BexExternalValue` that
+/// the engine runs through `materialize_host_throw` for the
+/// declared-throws contract check against the surrounding callable's `E`.
 #[derive(Debug, PartialEq, Clone)]
 pub struct OpError {
     pub fn_name: SysOp,
-    pub kind: bex_vm_types::errors::VmRustFnError,
-    pub host_thrown: Option<Box<BexExternalValue>>,
+    pub payload: OpErrorPayload,
+}
+
+/// Payload of an [`OpError`] — exactly one of:
+/// - [`Self::Vm`]: a normal sysop error (catchable `BamlError`, panic,
+///   internal fault, or pre-built thrown value).
+/// - [`Self::HostThrown`]: the bridge invoked a host callable and the
+///   callable raised something the bridge decoded to a `BexExternalValue`.
+///   The engine's `materialize_host_throw` reads this and either re-injects
+///   the value as a catchable throw (on-contract for `E`) or escalates to
+///   `baml.panics.HostContractViolation` (off-contract). The rehydration
+///   handle, when set, lives on the value itself as the `_handle` field
+///   of a `baml.errors.HostCallable` Instance.
+#[derive(Debug, PartialEq, Clone)]
+pub enum OpErrorPayload {
+    Vm(bex_vm_types::errors::VmRustFnError),
+    /// Boxed because `BexExternalValue` is ~3x the size of
+    /// `VmRustFnError`; keeping it inline would bloat every `OpError` on
+    /// the hot success path. The host-thrown payload is rare and the
+    /// extra indirection only fires on the throw branch.
+    HostThrown(Box<BexExternalValue>),
+}
+
+impl OpErrorPayload {
+    /// Short, human-facing summary for `Display`. The engine reads the
+    /// payload structurally — this is purely for diagnostic output.
+    fn display_summary(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Vm(e) => std::fmt::Display::fmt(e, f),
+            Self::HostThrown(boxed) => match boxed.as_ref() {
+                BexExternalValue::Instance { class_name, fields } => {
+                    let message = fields.get("message").and_then(|v| match v {
+                        BexExternalValue::String(s) => Some(s.as_str()),
+                        _ => None,
+                    });
+                    match message {
+                        Some(m) => write!(f, "host thrown {class_name}: {m}"),
+                        None => write!(f, "host thrown {class_name}"),
+                    }
+                }
+                other => write!(f, "host thrown {other:?}"),
+            },
+        }
+    }
 }
 
 impl std::fmt::Display for OpError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "failed to call {}: {}", self.fn_name, self.kind)
+        write!(f, "failed to call {}: ", self.fn_name)?;
+        self.payload.display_summary(f)
     }
 }
 
 impl std::error::Error for OpError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        self.kind.source()
+        match &self.payload {
+            OpErrorPayload::Vm(e) => e.source(),
+            OpErrorPayload::HostThrown(_) => None,
+        }
     }
 }
 
@@ -196,10 +232,9 @@ impl OpError {
     fn cancelled(operation: SysOp) -> Self {
         Self {
             fn_name: operation,
-            kind: bex_vm_types::errors::VmRustFnError::Panic(
+            payload: OpErrorPayload::Vm(bex_vm_types::errors::VmRustFnError::Panic(
                 bex_vm_types::errors::VmPanic::Cancelled,
-            ),
-            host_thrown: None,
+            )),
         }
     }
 
@@ -210,106 +245,43 @@ impl OpError {
     pub fn new(fn_name: SysOp, kind: impl Into<bex_vm_types::errors::VmRustFnError>) -> Self {
         Self {
             fn_name,
-            kind: kind.into(),
-            host_thrown: None,
+            payload: OpErrorPayload::Vm(kind.into()),
         }
     }
 
-    /// Construct an `OpError` representing a host throw: the host language
-    /// invoked a callable and the callable raised something the bridge
-    /// decoded to `value`. The engine runs the declared-throws contract
-    /// check against `value` and either re-injects it as a catchable
-    /// throw or produces a `HostContractViolation` panic.
-    ///
-    /// Convenience wrapper around [`OpErrorBody::host_thrown_value`] for
-    /// callers (such as `host_dispatch::complete_with_throw`) that produce
-    /// a [`SysOpResult`]-bound `OpError` directly rather than going through
-    /// the [`SysOpOutput`] glue.
+    /// Construct an `OpError` carrying a host-throw payload — the host
+    /// language invoked a callable and the callable raised something the
+    /// bridge decoded to `value`. The engine routes this through
+    /// `materialize_host_throw`.
     pub fn host_thrown_value(fn_name: SysOp, value: BexExternalValue) -> Self {
-        OpErrorBody::host_thrown_value(value).into_op_error(fn_name)
-    }
-
-    /// Construct a structured host-callable error (legacy compatibility
-    /// for the `HostCallableError` proto path). Prefer
-    /// [`Self::host_thrown_value`] for new code so the engine sees the
-    /// actual thrown `BexExternalValue` and runs the unified contract
-    /// check.
-    pub fn host_callable(
-        fn_name: SysOp,
-        class_name: String,
-        message: String,
-        traceback: Option<String>,
-        language: Option<String>,
-        category: i32,
-    ) -> Self {
         Self {
             fn_name,
-            kind: bex_vm_types::errors::VmRustFnError::BamlError(
-                bex_vm_types::errors::VmBamlError::HostCallable {
-                    class_name,
-                    message,
-                    traceback,
-                    language,
-                    category,
-                },
-            ),
-            host_thrown: None,
+            payload: OpErrorPayload::HostThrown(Box::new(value)),
         }
     }
 }
 
 pub use bex_vm_types::{
     SysOpErrorCategory, SysOpPanicCategory,
-    errors::{VmBamlError, VmPanic, VmRustFnError},
+    errors::{VmBamlError, VmInternalError, VmPanic, VmRustFnError},
 };
 
-/// Sysop-body error carrier: every field of [`OpError`] except `fn_name`.
+/// Sysop-body error carrier: an [`OpError`] without the `fn_name`.
 ///
-/// Used as the error type of [`SysOpOutput::Async`] futures so the body never
-/// has to know which [`SysOp`] variant it belongs to; the glue layer attaches
-/// `fn_name` at the [`SysOpOutput::into_result`] boundary.
-///
-/// Carries `host_thrown` end-to-end so the host-callable throw path can
-/// deliver the decoded thrown `BexExternalValue` to the engine without going
-/// through a lossy intermediate type. Every other sysop simply leaves it as
-/// `None`.
+/// Used as the error type of [`SysOpOutput::Async`] futures so the body
+/// never has to know which [`SysOp`] variant it belongs to; the glue layer
+/// attaches `fn_name` at the [`SysOpOutput::into_result`] boundary.
 #[derive(Debug)]
 pub struct OpErrorBody {
-    pub kind: bex_vm_types::errors::VmRustFnError,
-    pub host_thrown: Option<Box<BexExternalValue>>,
+    pub payload: OpErrorPayload,
 }
 
 impl OpErrorBody {
-    /// Construct an `OpErrorBody` carrying a host-thrown value. The engine's
-    /// `materialize_host_throw` reads `host_thrown` to run the declared-throws
-    /// contract check; `kind` is set to a sentinel `HostCallable` so the
-    /// `Display`/`Error::source` chain still reads coherently if anyone
-    /// inspects it.
+    /// Construct an `OpErrorBody` carrying a host-thrown value. The engine
+    /// reads the value through `materialize_host_throw`.
     pub fn host_thrown_value(value: BexExternalValue) -> Self {
-        let (sentinel_class, sentinel_message) = match &value {
-            BexExternalValue::Instance { class_name, fields } => {
-                let msg = fields.get("message").and_then(|v| match v {
-                    BexExternalValue::String(s) => Some(s.as_str().to_string()),
-                    _ => None,
-                });
-                (class_name.as_str().to_string(), msg.unwrap_or_default())
-            }
-            other => (
-                "baml.errors.HostCallable".to_string(),
-                format!("host threw {other:?}"),
-            ),
-        };
         Self {
-            kind: bex_vm_types::errors::VmRustFnError::BamlError(
-                bex_vm_types::errors::VmBamlError::HostCallable {
-                    class_name: sentinel_class,
-                    message: sentinel_message,
-                    traceback: None,
-                    language: None,
-                    category: 0,
-                },
-            ),
-            host_thrown: Some(Box::new(value)),
+            payload: OpErrorPayload::HostThrown(Box::new(value)),
         }
     }
 
@@ -318,44 +290,39 @@ impl OpErrorBody {
     pub fn into_op_error(self, fn_name: SysOp) -> OpError {
         OpError {
             fn_name,
-            kind: self.kind,
-            host_thrown: self.host_thrown,
+            payload: self.payload,
         }
     }
 }
 
 impl std::fmt::Display for OpErrorBody {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        // `host_thrown` is purely a side-channel for the engine; the
-        // human-facing message lives on `kind`.
-        std::fmt::Display::fmt(&self.kind, f)
+        self.payload.display_summary(f)
     }
 }
 
 /// Blanket `?`-coercion: any error type that converts into
 /// [`VmRustFnError`] (i.e. [`VmBamlError`], [`VmPanic`], [`VmRustFnError`]
-/// itself, etc.) auto-converts into an [`OpErrorBody`] with no
-/// `host_thrown` payload.
+/// itself, etc.) auto-converts into an [`OpErrorBody`] with payload
+/// [`OpErrorPayload::Vm`].
 impl<E: Into<bex_vm_types::errors::VmRustFnError>> From<E> for OpErrorBody {
     fn from(kind: E) -> Self {
         Self {
-            kind: kind.into(),
-            host_thrown: None,
+            payload: OpErrorPayload::Vm(kind.into()),
         }
     }
 }
 
 /// `?` conversion for sysop bodies that await a `SysOpResult::Async` future
 /// (whose error type is the full [`OpError`]) inside an `async_op` closure
-/// returning `Result<_, OpErrorBody>`. Preserves every field of `OpError`
-/// (including `host_thrown`); `fn_name` is dropped because the surrounding
-/// closure will have its own [`SysOp`] attached at the
+/// returning `Result<_, OpErrorBody>`. Preserves the payload verbatim
+/// (host-throw value or VM error); `fn_name` is dropped because the
+/// surrounding closure will have its own [`SysOp`] attached at the
 /// [`SysOpOutput::into_result`] boundary.
 impl From<OpError> for OpErrorBody {
     fn from(op_err: OpError) -> Self {
         Self {
-            kind: op_err.kind,
-            host_thrown: op_err.host_thrown,
+            payload: op_err.payload,
         }
     }
 }
@@ -1181,7 +1148,10 @@ mod tests {
                 message: "hc".into(),
                 traceback: None,
                 language: None,
-                category: 0,
+                handle: bex_external_types::HostValueArc::new(
+                    1,
+                    bex_external_types::HostValueKind::Error,
+                ),
             },
         ];
         for v in &variants {

@@ -191,7 +191,7 @@ class baml.errors.HostCallable {
   class_name: string
   language: string
   traceback: string?
-  category: int
+  _handle: $rust_type
 }
 class baml.errors.HostPanic {
   message: string
@@ -225,7 +225,7 @@ function baml.errors.from_json(j: baml.json.json) -> baml.errors.InvalidArgument
   baml.errors.InvalidArgument { message: baml.json.from_json(baml.json.field(j, "message")) }
 }
 function baml.errors.from_json(j: baml.json.json) -> baml.errors.HostCallable  [expr] {
-  baml.errors.HostCallable { message: baml.json.from_json(baml.json.field(j, "message")), class_name: baml.json.from_json(baml.json.field(j, "class_name")), language: baml.json.from_json(baml.json.field(j, "language")), traceback: baml.json.from_json(baml.json.field(j, "traceback")), category: baml.json.from_json(baml.json.field(j, "category")) }
+  baml.json.from_string(baml.json.stringify(j))
 }
 function baml.errors.from_json(j: baml.json.json) -> baml.errors.Timeout  [expr] {
   baml.errors.Timeout { message: baml.json.from_json(baml.json.field(j, "message")), duration_ms: baml.json.from_json(baml.json.field(j, "duration_ms")) }
@@ -270,7 +270,7 @@ function baml.errors.to_json(self: ?) -> baml.json.json  [expr] {
   map { "message": self.message.to_json() }
 }
 function baml.errors.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "message": self.message.to_json(), "class_name": self.class_name.to_json(), "language": self.language.to_json(), "traceback": self.traceback?.to_json(), "category": self.category.to_json() }
+  baml.json.parse(baml.json.to_string(self))
 }
 function baml.errors.to_json(self: ?) -> baml.json.json  [expr] {
   map { "message": self.message.to_json(), "duration_ms": self.duration_ms?.to_json() }

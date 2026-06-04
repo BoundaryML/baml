@@ -1903,8 +1903,10 @@ mod tests {
         match result {
             SysOpResult::Ready(Err(e)) => {
                 assert!(matches!(
-                    e.kind,
-                    VmRustFnError::BamlError(VmBamlError::Unsupported { .. })
+                    e.payload,
+                    sys_types::OpErrorPayload::Vm(VmRustFnError::BamlError(
+                        VmBamlError::Unsupported { .. }
+                    ))
                 ));
                 assert_eq!(e.fn_name, SysOp::BamlSysShell);
             }
@@ -1928,8 +1930,9 @@ mod tests {
             result,
             SysOpResult::Ready(Err(OpError {
                 fn_name: SysOp::BamlFsOpen,
-                kind: VmRustFnError::BamlError(VmBamlError::Unsupported { .. }),
-                ..
+                payload: sys_types::OpErrorPayload::Vm(VmRustFnError::BamlError(
+                    VmBamlError::Unsupported { .. }
+                )),
             }))
         ));
 
@@ -1939,8 +1942,9 @@ mod tests {
             result,
             SysOpResult::Ready(Err(OpError {
                 fn_name: SysOp::BamlSysShell,
-                kind: VmRustFnError::BamlError(VmBamlError::Unsupported { .. }),
-                ..
+                payload: sys_types::OpErrorPayload::Vm(VmRustFnError::BamlError(
+                    VmBamlError::Unsupported { .. }
+                )),
             }))
         ));
     }

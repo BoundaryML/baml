@@ -198,8 +198,9 @@ export declare function _seedGenericMediaHandle(): [HandleKey, number]
  *
  * Exposed to JS as `completeHostCall(callId, isError, content)`. The JS
  * dispatch wrapper invokes this after it has decoded `argsBytes`, called
- * the user function, and encoded the result (success) or constructed a
- * `HostCallableError` (failure).
+ * the user function, and encoded the result as an `InboundValue` (success
+ * is the value itself; an error is an `Instance` of
+ * `baml.errors.HostCallable` carrying the four metadata fields).
  *
  * Forwards directly to the `bridge_cffi::complete_host_call` C entry point
  * the engine uses for cross-language completion.

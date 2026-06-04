@@ -32,9 +32,7 @@ use bex_engine::{
     BexEngine, BexExternalValue, CancellationToken, EngineError, FunctionCallContextBuilder,
 };
 use bex_resource_types::{HostValueArc, HostValueKind};
-use bridge_ctypes::baml_core::cffi::{
-    BamlOutboundValue, HostCallableErrorCategory, baml_outbound_value,
-};
+use bridge_ctypes::baml_core::cffi::{BamlOutboundValue, baml_outbound_value};
 use common::compile_for_engine;
 use indexmap::IndexMap;
 use prost::Message;
@@ -281,11 +279,13 @@ fn complete_with_test_error(call_id: u32, class_name: &str, message: &str) {
         BexExternalValue::String("rust".to_string().into()),
     );
     fields.insert("traceback".to_string(), BexExternalValue::Null);
+    // The class's `_handle $rust_type` slot is required by the engine's
+    // structural check. Use a synthetic `HostValue(kind=Error)` handle
+    // so the BAML→host decoder has *something* to round-trip — the
+    // test doesn't rehydrate, so the key value is arbitrary.
     fields.insert(
-        "category".to_string(),
-        BexExternalValue::Int(i64::from(
-            HostCallableErrorCategory::HostCallableHostError as i32,
-        )),
+        "_handle".to_string(),
+        BexExternalValue::HostValue(HostValueArc::new(next_host_key(), HostValueKind::Error)),
     );
     sys_native::host_dispatch::complete_with_throw(
         call_id,

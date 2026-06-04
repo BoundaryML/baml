@@ -409,8 +409,10 @@ mod tests {
             SysOpResult::Ready(Err(e)) => e,
         };
         assert!(matches!(
-            second_err.kind,
-            sys_types::VmRustFnError::BamlError(VmBamlError::DevOther { message: _ })
+            second_err.payload,
+            sys_types::OpErrorPayload::Vm(sys_types::VmRustFnError::BamlError(
+                VmBamlError::DevOther { message: _ }
+            ))
         ));
     }
 }

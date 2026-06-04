@@ -9,7 +9,8 @@
 //!   pointer that fires when the last Rust clone of a `HostValueArc` is
 //!   dropped, telling the bridge it can remove its entry.
 //! - `complete_host_call` — host bridge calls this to resolve an in-flight
-//!   dispatch (either with a success `InboundValue` or a `HostCallableError`).
+//!   dispatch (either with a success `InboundValue` or a thrown
+//!   `InboundValue` carrying the host's exception as an `Instance`).
 //!
 //! The dispatch fn pointer and in-flight call table live in
 //! `sys_native::host_dispatch` (not here) to avoid a circular dependency:
@@ -25,7 +26,7 @@ use sys_native::host_dispatch;
 /// Re-exported from `sys_native::host_dispatch::HostDispatchFn` for
 /// external consumers (cbindgen header generation, etc.).
 pub use sys_native::host_dispatch::HostDispatchFn;
-use sys_types::{OpError, SysOp, VmBamlError};
+use sys_types::{OpError, SysOp, VmBamlError, VmPanic};
 
 /// Register the host dispatch callback. First call wins; subsequent calls
 /// are silently ignored (consistent with `register_callback` semantics).
@@ -70,7 +71,10 @@ pub extern "C" fn register_host_release_callback(cb: HostReleaseFn) {
 /// declared return type).
 ///
 /// **Error** (`is_error != 0`): `content` is a protobuf-encoded
-/// `HostCallableError`.
+/// `InboundValue` carrying the thrown value (typically an `Instance` of
+/// `baml.errors.HostCallable` with the host exception's metadata, or a
+/// codegenned BAML error class). The engine's `materialize_host_throw`
+/// runs the declared-throws contract check against the decoded value.
 ///
 /// # Safety
 ///
@@ -157,14 +161,24 @@ pub extern "C" fn complete_host_call(
         // either materialises it as a catchable throw or escalates to
         // a `HostContractViolation` panic.
         if bytes.is_empty() {
-            // Defensive: an empty throw payload is an SDK bug, but
-            // surface it as a structurally-valid `baml.errors.HostCallable`
-            // so the engine's unified contract check can still route it.
-            let stub = BexExternalValue::Instance {
-                class_name: "baml.errors.HostCallable".to_string(),
-                fields: ::indexmap::IndexMap::new(),
-            };
-            host_dispatch::complete_with_throw(call_id, stub);
+            // An empty throw payload is a host bridge contract violation:
+            // `is_error == 1` requires a protobuf-encoded `InboundValue`.
+            // Surface it as a `HostContractViolation` panic so the bug is
+            // not silently masked into a bogus catchable throw.
+            host_dispatch::complete_with_error(
+                call_id,
+                OpError::new(
+                    SysOp::BamlHostCallHostValue,
+                    VmPanic::HostContractViolation {
+                        message: "host bridge called complete_host_call(is_error=1) \
+                                  with no payload; expected a protobuf-encoded \
+                                  InboundValue describing the thrown value"
+                            .to_string(),
+                        class_name: None,
+                        language: None,
+                    },
+                ),
+            );
             return;
         }
         let inbound = match InboundValue::decode(bytes) {
@@ -287,10 +301,10 @@ mod tests {
         match result {
             sys_types::SysOpResult::Async(fut) => {
                 let err = fut.await.expect_err("should be error");
-                let thrown = err
-                    .host_thrown
-                    .as_deref()
-                    .expect("throw payload should set OpError.host_thrown");
+                let thrown: &BexExternalValue = match &err.payload {
+                    sys_types::OpErrorPayload::HostThrown(v) => v,
+                    other => panic!("expected HostThrown payload, got {other:?}"),
+                };
                 match thrown {
                     BexExternalValue::Instance { class_name, fields } => {
                         assert_eq!(class_name, "baml.errors.HostCallable");

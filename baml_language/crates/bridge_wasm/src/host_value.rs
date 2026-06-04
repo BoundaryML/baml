@@ -71,9 +71,8 @@ use std::{cell::RefCell, collections::HashMap, sync::Arc};
 
 use bex_project::{host_release_dispatch, validate_host_return};
 use bridge_ctypes::{
-    CffiHandleTableOptions, HANDLE_TABLE,
-    baml_core::cffi::{HostCallableError, HostCallableErrorCategory, InboundValue},
-    external_to_outbound, inbound_to_external,
+    CffiHandleTableOptions, HANDLE_TABLE, baml_core::cffi::InboundValue, external_to_outbound,
+    inbound_to_external,
 };
 use js_sys::Function;
 use prost::Message;
@@ -81,7 +80,7 @@ use sys_ops::io::{
     self, BexExternalValue, CallId, OpError, SysOpContext, SysOpOutput, SysOpResult, VmBamlError,
     VmRustFnError,
 };
-use sys_types::{BexHeap, CompletionHandle, SysOp};
+use sys_types::{BexHeap, CompletionHandle, SysOp, VmPanic};
 use wasm_bindgen::prelude::*;
 
 use crate::send_wrapper::SendWrapper;
@@ -240,7 +239,14 @@ pub fn register_host_callable(callable: Function) -> u64 {
 /// (host→engine direction, no type metadata — engine re-validates against the
 /// declared return type).
 ///
-/// On error (`is_error != 0`), `content` is a protobuf-encoded `HostCallableError`.
+/// On error (`is_error != 0`), `content` is a protobuf-encoded `InboundValue`
+/// representing the thrown value. The host bridge SDK wraps native exceptions
+/// in a synthetic `Instance` of class `baml.errors.HostCallable` carrying
+/// `message` / `class_name` / `language` / `traceback` fields; codegenned
+/// BAML errors flow through as their own `Instance` shape. The engine's
+/// `materialize_host_throw` runs the declared-throws contract check on the
+/// decoded value and either re-injects it as a catchable throw or escalates
+/// to a `HostContractViolation` panic.
 ///
 /// `call_id` is globally unique, so it resolves the originating runtime's
 /// pending call unambiguously. If `call_id` is unknown the call is silently
@@ -282,32 +288,40 @@ pub fn complete_host_call(call_id: u32, is_error: i32, content: &[u8]) {
             ))),
         }
     } else {
-        // Error: decode HostCallableError → OpError.
+        // Throw: decode `InboundValue` → `BexExternalValue` → engine. The
+        // engine's `materialize_host_throw` runs the declared-throws
+        // contract check on the decoded value.
         let mapped = if content.is_empty() {
+            // An empty throw payload is a host bridge contract violation:
+            // `is_error == 1` requires a protobuf-encoded `InboundValue`.
+            // Surface it as a `HostContractViolation` panic so the bug is
+            // not silently masked into a bogus catchable throw.
             OpError::new(
                 SysOp::BamlHostCallHostValue,
-                VmBamlError::HostCallable {
-                    class_name: String::new(),
-                    message: "host callable returned error with no payload".to_string(),
-                    traceback: None,
+                VmPanic::HostContractViolation {
+                    message: "host bridge called completeHostCall(isError=1) \
+                              with no payload; expected a protobuf-encoded \
+                              InboundValue describing the thrown value"
+                        .to_string(),
+                    class_name: None,
                     language: None,
-                    category: 0,
                 },
             )
         } else {
-            match HostCallableError::decode(content) {
-                Ok(err) => OpError::host_callable(
-                    SysOp::BamlHostCallHostValue,
-                    err.class_name,
-                    err.message,
-                    err.traceback,
-                    err.language,
-                    err.category,
-                ),
+            match InboundValue::decode(content) {
+                Ok(inbound) => match inbound_to_external(inbound, &HANDLE_TABLE) {
+                    Ok(v) => OpError::host_thrown_value(SysOp::BamlHostCallHostValue, v),
+                    Err(e) => OpError::new(
+                        SysOp::BamlHostCallHostValue,
+                        VmBamlError::ParseError {
+                            message: format!("completeHostCall throw-payload decode failure: {e}"),
+                        },
+                    ),
+                },
                 Err(e) => OpError::new(
                     SysOp::BamlHostCallHostValue,
                     VmBamlError::ParseError {
-                        message: format!("completeHostCall error-payload decode failure: {e}"),
+                        message: format!("completeHostCall throw-payload decode failure: {e}"),
                     },
                 ),
             }
@@ -414,12 +428,13 @@ impl io::IoNamespaceHost for WasmHost {
         let encoded: Vec<u8> = match external_to_outbound(&arg_values, &options) {
             Ok(value) => value.encode_to_vec(),
             Err(e) => {
-                return SysOpOutput::err(VmBamlError::HostCallable {
-                    class_name: String::new(),
+                // Arg encoding is bridge-side serialization, not a
+                // host-language error. A failure here means the engine
+                // had a `BexExternalValue` it could not put on the wire
+                // — an engine/bridge bug. Surface as a fatal internal
+                // error rather than a catchable `VmBamlError`.
+                return SysOpOutput::err(sys_types::VmInternalError::BridgeFailure {
                     message: format!("failed to encode host-call arguments: {e}"),
-                    traceback: None,
-                    language: None,
-                    category: HostCallableErrorCategory::HostCallableInvalidArgument as i32,
                 });
             }
         };
@@ -460,14 +475,17 @@ impl io::IoNamespaceHost for WasmHost {
                 let popped = IN_FLIGHT.with(|cell| cell.borrow_mut().remove(&call_id));
                 if let Some(c) = popped {
                     let msg = err.as_string().unwrap_or_else(|| format!("{err:?}"));
+                    // The WASM bridge's JS dispatch wrapper threw before
+                    // scheduling work — this is a bridge-layer fault.
+                    // The bridge is engine-owned infrastructure, so its
+                    // failure is treated as an engine bug (internal,
+                    // non-catchable) rather than a `HostCallable`
+                    // (which represents a user-level host-language
+                    // exception with a rehydration handle).
                     c.complete(Err(OpError::new(
                         SysOp::BamlHostCallHostValue,
-                        VmBamlError::HostCallable {
-                            class_name: "Error".to_string(),
+                        sys_types::VmInternalError::BridgeFailure {
                             message: format!("host_dispatch JS callback threw: {msg}"),
-                            traceback: None,
-                            language: Some("javascript".to_string()),
-                            category: HostCallableErrorCategory::HostCallableHostError as i32,
                         },
                     )));
                 }
@@ -513,7 +531,14 @@ fn drain_pending(
             Ok(()) => SysOpOutput::ok(value),
             Err(kind) => SysOpOutput::err(kind),
         },
-        SysOpResult::Ready(Err(err)) => SysOpOutput::err(err.kind),
+        SysOpResult::Ready(Err(err)) => match err.payload {
+            sys_types::OpErrorPayload::Vm(kind) => SysOpOutput::err(kind),
+            // `SysOpResult::pending` always yields `Async`, so a Ready(Err)
+            // here can't actually originate from the host-throw path.
+            sys_types::OpErrorPayload::HostThrown(_) => {
+                unreachable!("Ready(Err) is never produced for the host-callable sysop")
+            }
+        },
         SysOpResult::Async(fut) => {
             SysOpOutput::Async(Box::pin(crate::send_wrapper::SendFuture(async move {
                 // Move the guard into the future so cancellation (future drop)
@@ -532,21 +557,25 @@ fn drain_pending(
     }
 }
 
-/// Strictly validate a host-returned value against the declared return type,
-/// mapping a mismatch to a `VmBamlError::HostCallable` (invalid-argument).
+/// Strictly validate a host-returned value against the declared return type.
+/// A mismatch is a `baml.panics.HostContractViolation` panic — the host has
+/// violated its typed contract, so the call cannot be reasonably continued.
+/// Mirrors the native bridge's `validate_return_value` in
+/// `sys_native::host_impls`.
 fn validate_host_return_value(
     value: &BexExternalValue,
     expected: &baml_type::Ty,
 ) -> Result<(), VmRustFnError> {
-    validate_host_return(value, expected)
-        .map_err(|err| VmBamlError::HostCallable {
-            class_name: "TypeError".to_string(),
-            message: err.to_string(),
-            traceback: None,
+    validate_host_return(value, expected).map_err(|err| {
+        sys_types::VmPanic::HostContractViolation {
+            message: format!(
+                "host callable returned a value of the wrong type: {err} (expected {expected})"
+            ),
+            class_name: None,
             language: None,
-            category: HostCallableErrorCategory::HostCallableInvalidArgument as i32,
-        })
-        .map_err(VmRustFnError::from)
+        }
+        .into()
+    })
 }
 
 #[cfg(test)]

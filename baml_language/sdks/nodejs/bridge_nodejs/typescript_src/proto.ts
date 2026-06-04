@@ -24,8 +24,8 @@ const CallFunctionArgs = baml_core.cffi.v1.CallFunctionArgs;
 const BamlOutboundValue = baml_core.cffi.v1.BamlOutboundValue;
 const BamlOutboundResult = baml_core.cffi.v1.BamlOutboundResult;
 const InboundValue = baml_core.cffi.v1.InboundValue;
-const HostCallableError = baml_core.cffi.v1.HostCallableError;
-const HostCallableErrorCategory = baml_core.cffi.v1.HostCallableErrorCategory;
+const InboundClassValue = baml_core.cffi.v1.InboundClassValue;
+const InboundMapEntry = baml_core.cffi.v1.InboundMapEntry;
 const BamlHandleType = baml_core.cffi.v1.BamlHandleType;
 
 // ─── Inbound (TS → Rust) ───
@@ -632,22 +632,47 @@ function sendHostCallableResult(callId: number, value: unknown): void {
     completeHostCall(callId, 0, bytes);
 }
 
+/**
+ * Build an `InboundValue` carrying a `baml.errors.HostCallable` Instance with
+ * the four metadata fields. The engine's `materialize_host_throw` runs the
+ * declared-throws contract check against this value and either re-injects it
+ * as a catchable BAML throw or escalates to a `HostContractViolation` panic.
+ */
+function buildHostCallableInbound(
+    className: string,
+    message: string,
+    traceback: string | undefined,
+): InstanceType<typeof InboundValue> {
+    const stringField = (key: string, value: string) =>
+        InboundMapEntry.create({
+            stringKey: key,
+            value: InboundValue.create({ stringValue: value }),
+        });
+    const fields = [
+        stringField('message', message),
+        stringField('class_name', className),
+        stringField('language', 'nodejs'),
+    ];
+    if (traceback != null) {
+        fields.push(stringField('traceback', traceback));
+    }
+    return InboundValue.create({
+        classValue: InboundClassValue.create({
+            name: 'baml.errors.HostCallable',
+            fields,
+        }),
+    });
+}
+
 function sendHostCallableError(callId: number, err: unknown): void {
-    // This is the normal error path, but it must not be able to leave
-    // the call uncompleted. If building/encoding the `HostCallableError`
-    // throws (e.g. `describeError`, proto `create`/`encode`, or the native
-    // `completeHostCall` itself), fall back to a completion that does the
-    // minimum possible work.
+    // Normal error path: never leaves the call uncompleted. If building or
+    // encoding the Instance throws (e.g. `describeError`, proto `create` /
+    // `encode`, or the native `completeHostCall` itself), fall back to the
+    // last-resort completion below.
     try {
         const { className, message, stack } = describeError(err);
-        const msg = HostCallableError.create({
-            className,
-            message,
-            traceback: stack,
-            language: 'nodejs',
-            category: HostCallableErrorCategory.HOST_CALLABLE_HOST_ERROR,
-        });
-        const bytes = Buffer.from(HostCallableError.encode(msg).finish());
+        const inbound = buildHostCallableInbound(className, message, stack);
+        const bytes = Buffer.from(InboundValue.encode(inbound).finish());
         completeHostCall(callId, 1, bytes);
     } catch (innerErr) {
         completeHostCallLastResort(callId, innerErr);
@@ -656,21 +681,21 @@ function sendHostCallableError(callId: number, err: unknown): void {
 
 /**
  * Absolute last-resort completion. Encodes a fixed, minimal
- * `HostCallableError` with no dependence on the original error object, so the
- * only ways it can fail are a broken proto runtime or a broken native
- * binding — at which point nothing can complete the call. We swallow any
- * throw here to avoid surfacing an unhandled rejection on the libuv loop; the
- * engine's lack of completion would then be the (unavoidable) failure mode.
+ * `baml.errors.HostCallable` Instance with no dependence on the original
+ * error object, so the only ways it can fail are a broken proto runtime or a
+ * broken native binding — at which point nothing can complete the call. We
+ * swallow any throw here to avoid surfacing an unhandled rejection on the
+ * libuv loop; the engine's lack of completion would then be the
+ * (unavoidable) failure mode.
  */
 function completeHostCallLastResort(callId: number, err: unknown): void {
     try {
-        const msg = HostCallableError.create({
-            className: 'InternalError',
-            message: `host callable dispatch failed and the error could not be reported: ${safeStringify(err)}`,
-            language: 'nodejs',
-            category: HostCallableErrorCategory.HOST_CALLABLE_HOST_ERROR,
-        });
-        const bytes = Buffer.from(HostCallableError.encode(msg).finish());
+        const inbound = buildHostCallableInbound(
+            'InternalError',
+            `host callable dispatch failed and the error could not be reported: ${safeStringify(err)}`,
+            undefined,
+        );
+        const bytes = Buffer.from(InboundValue.encode(inbound).finish());
         completeHostCall(callId, 1, bytes);
     } catch {
         // Nothing more we can safely do; avoid throwing on the libuv loop.

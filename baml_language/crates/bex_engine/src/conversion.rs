@@ -397,7 +397,12 @@ impl BexEngine {
                     }
                 };
 
-                // Build field values in the order defined by the class
+                // Build field values in the order defined by the class.
+                // Each field's declared `Ty` is passed as the conversion
+                // context so type-polymorphic external values (notably
+                // `BexExternalValue::HostValue`, which can land in either a
+                // function-typed slot as a callable or a `$rust_type` slot
+                // as an opaque handle) can branch on the declared shape.
                 let mut values = Vec::with_capacity(class_fields.len());
                 for class_field in class_fields {
                     let ext = fields.get(&class_field.name).ok_or_else(|| {
@@ -408,7 +413,11 @@ impl BexEngine {
                             ),
                         }
                     })?;
-                    values.push(self.convert_external_to_vm_value(holder, ext.clone())?);
+                    values.push(self.convert_external_to_vm_value_with_ty(
+                        holder,
+                        ext.clone(),
+                        Some(&class_field.field_type),
+                    )?);
                 }
                 Value::object(
                     holder
@@ -491,22 +500,31 @@ impl BexEngine {
                 slice[global_index]
             }
             BexExternalValue::HostValue(arc) => {
-                // A `HostValue` argument materializes a callable
-                // `Object::HostClosure` bound to the declared parameter's
-                // function signature. The declared `Ty::Function` must be
-                // available at this site so the closure carries the arity
-                // (drained from the stack on `CallIndirect`) and the return
-                // type (handed to `SysOp::BamlHostCallHostValue` as
-                // `type_arg_0`).
+                // A `HostValue` lands in one of two declared shapes:
+                //
+                // - `Ty::RustType` (opaque `$rust_type` field, e.g. the
+                //   `_handle` slot on `baml.errors.HostCallable`): wrap the
+                //   arc in `Object::RustData` so the BAML→host decoder can
+                //   later downcast it back to a `HostValueArc`. No
+                //   function signature involved.
+                // - `Ty::Function` (host callable passed as a function
+                //   argument): build a `HostClosure` bound to the declared
+                //   signature so the call site can invoke it.
                 let ty = expected_ty.ok_or_else(|| EngineError::CannotConvert {
-                    type_name: "host_value (no declared function type in context)".to_string(),
+                    type_name: "host_value (no declared type in context)".to_string(),
                 })?;
+                if matches!(peel_to_rust_type(ty), Some(())) {
+                    let dyn_arc: std::sync::Arc<dyn std::any::Any + Send + Sync> = arc;
+                    return Ok(Value::object(
+                        holder.holder_mut().tlab_mut().alloc_rust_data(dyn_arc),
+                    ));
+                }
                 // Peel through Optional / Union to land on the function type.
                 let function_ty =
                     peel_function_ty(ty).ok_or_else(|| EngineError::TypeMismatch {
                         message: format!(
                             "host callable cannot be passed where the declared type \
-                             is `{ty}`; expected a function type",
+                             is `{ty}`; expected a function type or `$rust_type`",
                         ),
                     })?;
                 let (params, ret, throws) = match function_ty {
@@ -714,6 +732,33 @@ pub(crate) fn maybe_wrap_union(
 /// signature behind, e.g., `(int) -> int` and `((int) -> int)?` so that an
 /// inbound `BexExternalValue::HostValue` can be bound to it as an
 /// `Object::HostClosure`.
+/// Returns `Some(())` if `ty` is the runtime representation of
+/// `$rust_type` — i.e. `Ty::Opaque("baml.rust.RustType", _)` — possibly
+/// wrapped in a `Union` (the post-`Ty::Optional`-removal encoding of
+/// `T?` is `Ty::Union([T, Null], _)`, so nullable forms flow through
+/// the union arm). Mirrors [`peel_function_ty`] for the `$rust_type`
+/// field shape that a `HostValue` argument can land in.
+pub(crate) fn peel_to_rust_type(ty: &Ty) -> Option<()> {
+    if ty.is_opaque("baml.rust.RustType") {
+        return Some(());
+    }
+    match ty {
+        Ty::Union(members, _) => {
+            let mut found = false;
+            for m in members {
+                if peel_to_rust_type(m).is_some() {
+                    if found {
+                        return None;
+                    }
+                    found = true;
+                }
+            }
+            if found { Some(()) } else { None }
+        }
+        _ => None,
+    }
+}
+
 pub(crate) fn peel_function_ty(ty: &Ty) -> Option<&Ty> {
     match ty {
         Ty::Function { .. } => Some(ty),

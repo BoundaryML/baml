@@ -17,10 +17,9 @@
 use bridge_wasm::{
     BamlWasmRuntime, LspNotification,
     baml_core::cffi::{
-        BamlHandle, BamlHandleType, BamlOutboundValue, CallFunctionArgs, HostCallableError,
-        HostCallableErrorCategory, InboundMapEntry, InboundValue,
-        baml_outbound_value::Value as OutboundValue, inbound_map_entry::Key as MapKeyVariant,
-        inbound_value::Value as InboundVariant,
+        BamlHandle, BamlHandleType, BamlOutboundValue, CallFunctionArgs, InboundClassValue,
+        InboundMapEntry, InboundValue, baml_outbound_value::Value as OutboundValue,
+        inbound_map_entry::Key as MapKeyVariant, inbound_value::Value as InboundVariant,
     },
 };
 use prost::Message;
@@ -346,18 +345,29 @@ fn make_dispatch_multiply_to_string(factor: i64) -> js_sys::Function {
 }
 
 /// Build a `host_dispatch` JS function that always completes with a
-/// `HostCallableError`.
+/// thrown `baml.errors.HostCallable` Instance.
 fn make_dispatch_error() -> js_sys::Function {
     let closure = Closure::wrap(Box::new(
         move |_key: JsValue, call_id: f64, _args: js_sys::Uint8Array| {
-            let err = HostCallableError {
-                class_name: "RuntimeError".to_string(),
-                message: "test boom".to_string(),
-                traceback: None,
-                language: Some("javascript".to_string()),
-                category: HostCallableErrorCategory::HostCallableHostError as i32,
+            fn field(key: &str, value: &str) -> InboundMapEntry {
+                InboundMapEntry {
+                    key: Some(MapKeyVariant::StringKey(key.to_string())),
+                    value: Some(InboundValue {
+                        value: Some(InboundVariant::StringValue(value.to_string())),
+                    }),
+                }
+            }
+            let inbound = InboundValue {
+                value: Some(InboundVariant::ClassValue(InboundClassValue {
+                    name: "baml.errors.HostCallable".to_string(),
+                    fields: vec![
+                        field("message", "test boom"),
+                        field("class_name", "RuntimeError"),
+                        field("language", "javascript"),
+                    ],
+                })),
             };
-            let payload = err.encode_to_vec();
+            let payload = inbound.encode_to_vec();
             #[expect(
                 clippy::cast_possible_truncation,
                 clippy::cast_sign_loss,

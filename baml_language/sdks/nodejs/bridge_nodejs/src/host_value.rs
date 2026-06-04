@@ -49,7 +49,10 @@ use std::{
     },
 };
 
-use bridge_ctypes::baml_core::cffi::{HostCallableError, HostCallableErrorCategory};
+use bridge_ctypes::baml_core::cffi::{
+    InboundClassValue, InboundMapEntry, InboundValue, inbound_map_entry::Key as InboundMapKey,
+    inbound_value::Value as InboundValueVariant,
+};
 use napi::{
     Status,
     bindgen_prelude::{Buffer, FnArgs, Function},
@@ -144,8 +147,9 @@ pub fn register_host_callable(callable: Function<'_, DispatchArgs, ()>) -> napi:
 ///
 /// Exposed to JS as `completeHostCall(callId, isError, content)`. The JS
 /// dispatch wrapper invokes this after it has decoded `argsBytes`, called
-/// the user function, and encoded the result (success) or constructed a
-/// `HostCallableError` (failure).
+/// the user function, and encoded the result as an `InboundValue` (success
+/// is the value itself; an error is an `Instance` of
+/// `baml.errors.HostCallable` carrying the four metadata fields).
 ///
 /// Forwards directly to the `bridge_cffi::complete_host_call` C entry point
 /// the engine uses for cross-language completion.
@@ -250,30 +254,48 @@ pub extern "C" fn host_dispatch_callback(
     }
 }
 
-/// Synthesize a `HostCallableError` for "no registered JS callable for this
-/// host-value key" and forward it via `complete_host_call`.
+/// Build an `InboundValue` carrying a `baml.errors.HostCallable` Instance.
+/// Mirrors `bridge_python::host_value::build_host_callable_inbound`.
+fn build_host_callable_inbound(class_name: &str, message: &str) -> InboundValue {
+    fn string_field(key: &str, value: &str) -> InboundMapEntry {
+        InboundMapEntry {
+            key: Some(InboundMapKey::StringKey(key.to_string())),
+            value: Some(InboundValue {
+                value: Some(InboundValueVariant::StringValue(value.to_string())),
+            }),
+        }
+    }
+    InboundValue {
+        value: Some(InboundValueVariant::ClassValue(InboundClassValue {
+            name: "baml.errors.HostCallable".to_string(),
+            fields: vec![
+                string_field("message", message),
+                string_field("class_name", class_name),
+                string_field("language", "nodejs"),
+            ],
+        })),
+    }
+}
+
+/// Synthesize a thrown `baml.errors.HostCallable` for "no registered JS
+/// callable for this host-value key" and forward it via `complete_host_call`.
 fn send_dispatch_error_no_callable(call_id: u32, host_value_key: u64) {
-    let err = HostCallableError {
-        class_name: "KeyError".to_string(),
-        message: format!("no host callable registered for key {host_value_key}"),
-        traceback: None,
-        language: Some("nodejs".to_string()),
-        category: HostCallableErrorCategory::HostCallableHostError as i32,
-    };
-    let bytes = err.encode_to_vec();
+    let bytes = build_host_callable_inbound(
+        "KeyError",
+        &format!("no host callable registered for key {host_value_key}"),
+    )
+    .encode_to_vec();
     bridge_cffi::complete_host_call(call_id, 1, bytes.as_ptr() as *const i8, bytes.len());
 }
 
-/// Synthesize a `HostCallableError` for a tsfn-scheduling failure (queue
-/// full / aborted / library shutdown) and forward it via `complete_host_call`.
+/// Synthesize a thrown `baml.errors.HostCallable` for a tsfn-scheduling
+/// failure (queue full / aborted / library shutdown) and forward it via
+/// `complete_host_call`.
 fn send_dispatch_error_tsfn_status(call_id: u32, status: Status) {
-    let err = HostCallableError {
-        class_name: "RuntimeError".to_string(),
-        message: format!("threadsafe_function call failed with status {status:?}"),
-        traceback: None,
-        language: Some("nodejs".to_string()),
-        category: HostCallableErrorCategory::HostCallableHostError as i32,
-    };
-    let bytes = err.encode_to_vec();
+    let bytes = build_host_callable_inbound(
+        "RuntimeError",
+        &format!("threadsafe_function call failed with status {status:?}"),
+    )
+    .encode_to_vec();
     bridge_cffi::complete_host_call(call_id, 1, bytes.as_ptr() as *const i8, bytes.len());
 }

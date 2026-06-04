@@ -132,17 +132,34 @@ pub enum VmBamlError {
     #[error("host panic: {message}")]
     HostPanic { message: String },
 
-    /// A host-language callable raised an exception that surfaces in BAML as
-    /// `baml.errors.HostCallable`. Carries the host exception's identity
-    /// (class name, language, optional traceback) and a wire-defined
-    /// category (host raise vs bridge validation failure vs cancellation).
-    #[error("host callable error ({category}): {message} [class={class_name}, lang={language:?}]")]
+    /// An error value from the host language that has no direct BAML
+    /// representation. The `handle` is the load-bearing field — it
+    /// references the original host exception object via the
+    /// process-global host-value table, so the originating runtime can
+    /// recover the exact native exception on round-trip. The
+    /// `class_name` / `message` / `language` / `traceback` fields are
+    /// purely metadata for debugging, logging, and user-facing
+    /// formatting — they do not participate in error matching or
+    /// rehydration.
+    ///
+    /// Surfaces in BAML as a `baml.errors.HostCallable` Instance whose
+    /// `_handle` field is materialized from `handle`. Engine-side
+    /// failures with no underlying host exception (bridge serialization
+    /// faults, missing-bridge errors, etc.) MUST use a different
+    /// variant — they are not host-language errors and have nothing to
+    /// rehydrate. SDK/bridge faults route through [`super::VmPanic::SdkPanic`].
+    #[error("host callable error: {message} [class={class_name}, lang={language:?}]")]
     HostCallable {
         class_name: String,
         message: String,
         traceback: Option<String>,
         language: Option<String>,
-        category: i32,
+        /// Required: handle to the originating host exception object
+        /// (registered in the per-bridge host-value table at the point
+        /// of the throw). Materialized into the BAML class's `_handle`
+        /// field on the way out so the originating runtime can resolve
+        /// it back to the original native exception.
+        handle: std::sync::Arc<bex_resource_types::HostValueArc>,
     },
 }
 
@@ -262,6 +279,17 @@ pub enum VmInternalError {
     /// post-init `StoreGlobal` violates that invariant.
     #[error("StoreGlobal executed outside of $init (globals are frozen post-init)")]
     StoreGlobalAfterInit,
+
+    /// A bridge-layer fault that prevented a host operation from
+    /// proceeding — e.g. `external_to_outbound` could not serialize a
+    /// `BexExternalValue` (engine→bridge wire-encoding bug), or the
+    /// host-side dispatch wrapper threw before scheduling work
+    /// (host→bridge dispatch fault). The bridge is engine-owned
+    /// infrastructure, so any failure inside it is treated as an
+    /// engine bug and surfaces as a fatal internal error rather than a
+    /// catchable `VmBamlError` or `VmPanic`.
+    #[error("bridge failure: {message}")]
+    BridgeFailure { message: String },
 }
 
 /// Any kind of virtual machine error.

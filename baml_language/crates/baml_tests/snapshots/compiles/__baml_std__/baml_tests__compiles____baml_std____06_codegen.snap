@@ -720,90 +720,19 @@ function baml.errors.GenericSdkError.to_json(self: baml.errors.GenericSdkError) 
 
 function baml.errors.HostCallable.from_json(j: baml.json.json) -> baml.errors.HostCallable {
     load_var j
-    load_const "message"
-    call baml.json.field
-    store_var _3
-    load_type string
-    load_var _3
-    call baml.json.from_json
-    load_var j
-    load_const "class_name"
-    call baml.json.field
-    store_var _6
-    load_type string
-    load_var _6
-    call baml.json.from_json
-    load_var j
-    load_const "language"
-    call baml.json.field
-    store_var _9
-    load_type string
-    load_var _9
-    call baml.json.from_json
-    load_var j
-    load_const "traceback"
-    call baml.json.field
-    store_var _12
-    load_type string | null
-    load_var _12
-    call baml.json.from_json
-    load_var j
-    load_const "category"
-    call baml.json.field
-    store_var _15
-    load_type int
-    load_var _15
-    call baml.json.from_json
-    init_instance baml.errors.HostCallable .message, .class_name, .language, .traceback, .category
+    call baml.json.stringify
+    store_var _2
+    load_type baml.errors.HostCallable
+    load_var _2
+    call baml.json.from_string
     return
 }
 
 function baml.errors.HostCallable.to_json(self: baml.errors.HostCallable) -> baml.json.json {
+    load_type baml.errors.HostCallable
     load_var self
-    load_field .message
-    call baml.String.to_json
-    store_var _2
-    load_var self
-    load_field .class_name
-    call baml.String.to_json
-    store_var _5
-    load_var self
-    load_field .language
-    call baml.String.to_json
-    store_var _8
-    load_var self
-    load_field .traceback
-    load_const null
-    cmp_op ==
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
-    load_var self
-    load_field .traceback
-    make_bound_method baml.String.to_json
-    call_indirect
-    store_var _11
-    jump L2
-
-  L1:
-    load_const null
-    store_var _11
-
-  L2:
-    load_var self
-    load_field .category
-    call baml.Int.to_json
-    store_var _18
-    load_var2 2 3
-    load_var2 4 5
-    load_var _18
-    load_const "message"
-    load_const "class_name"
-    load_const "language"
-    load_const "traceback"
-    load_const "category"
-    alloc_map 5
+    call baml.json.to_string
+    call baml.json.parse
     return
 }
 
@@ -4355,14 +4284,14 @@ function baml.panics.HostContractViolation.from_json(j: baml.json.json) -> baml.
     load_const "class_name"
     call baml.json.field
     store_var _6
-    load_type string?
+    load_type string | null
     load_var _6
     call baml.json.from_json
     load_var j
     load_const "language"
     call baml.json.field
     store_var _9
-    load_type string?
+    load_type string | null
     load_var _9
     call baml.json.from_json
     init_instance baml.panics.HostContractViolation .message, .class_name, .language

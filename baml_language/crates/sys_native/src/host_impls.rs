@@ -37,9 +37,7 @@ use std::sync::Arc;
 use baml_type::Ty;
 use bex_external_types::validate_host_return;
 use bex_heap::BexHeap;
-use bridge_ctypes::{
-    CffiHandleTableOptions, baml_core::cffi::HostCallableErrorCategory, external_to_outbound,
-};
+use bridge_ctypes::{CffiHandleTableOptions, external_to_outbound};
 use prost::Message as _;
 use sys_ops::io::{
     self, BexExternalValue, CallId, SysOpContext, SysOpOutput, VmBamlError, VmRustFnError,
@@ -88,12 +86,13 @@ impl io::IoNamespaceHost for NativeSysOps {
         let encoded: Vec<u8> = match external_to_outbound(&arg_values, &options) {
             Ok(value) => value.encode_to_vec(),
             Err(e) => {
-                return SysOpOutput::err(VmBamlError::HostCallable {
-                    class_name: String::new(),
+                // Arg encoding is bridge-side serialization, not a
+                // host-language error. A failure here means the engine
+                // had a `BexExternalValue` it could not put on the wire
+                // — an engine/bridge bug. Surface as a fatal internal
+                // error rather than a catchable `VmBamlError`.
+                return SysOpOutput::err(sys_types::VmInternalError::BridgeFailure {
                     message: format!("failed to encode host-call arguments: {e}"),
-                    traceback: None,
-                    language: None,
-                    category: HostCallableErrorCategory::HostCallableInvalidArgument as i32,
                 });
             }
         };
@@ -157,14 +156,18 @@ impl io::IoNamespaceHost for NativeSysOps {
                 Err(err) => SysOpOutput::err(err),
             },
             // `Ready(Err)` is unreachable in practice because
-            // `SysOpResult::pending` always yields `Async`; if the path is
-            // ever entered, `host_thrown` is lost in the conversion below
-            // (the kind would still propagate). Routing through
-            // `SysOpOutput::err` matches the legacy shape.
-            SysOpResult::Ready(Err(err)) => SysOpOutput::err(err.kind),
+            // `SysOpResult::pending` always yields `Async`. Surface a
+            // VM-side payload conservatively — a host-throw can never
+            // reach here, so collapsing to a generic Vm payload is safe.
+            SysOpResult::Ready(Err(err)) => match err.payload {
+                sys_types::OpErrorPayload::Vm(kind) => SysOpOutput::err(kind),
+                sys_types::OpErrorPayload::HostThrown(_) => {
+                    unreachable!("Ready(Err) is never produced for the host-callable sysop")
+                }
+            },
             // Use `async_op_with_throw` (not `async_op`) so the future
-            // yields the full [`OpErrorBody`] (including `host_thrown`)
-            // rather than collapsing to a bare `VmRustFnError`. The
+            // yields the full [`OpErrorBody`] (preserving a `HostThrown`
+            // payload through to the engine).
             // host-throw path sets `host_thrown` to the decoded thrown
             // `BexExternalValue` (via `host_dispatch::complete_with_throw`);
             // the engine reads that field to run the unified contract
@@ -257,7 +260,12 @@ mod tests {
         );
         let result = match output {
             SysOpOutput::Ready(r) => r,
-            SysOpOutput::Async(fut) => fut.await.map_err(|body| body.kind),
+            SysOpOutput::Async(fut) => fut.await.map_err(|body| match body.payload {
+                sys_types::OpErrorPayload::Vm(kind) => kind,
+                sys_types::OpErrorPayload::HostThrown(_) => {
+                    panic!("expected a Vm payload, got a host-thrown value")
+                }
+            }),
         };
         let err = result.expect_err("expected type error");
         // The wrong-handle-type arg surfaces as a `VmBamlError::InvalidArgument`
@@ -320,7 +328,10 @@ mod tests {
                     message: "host raised".to_string(),
                     traceback: Some("at line 1".to_string()),
                     language: Some("python".to_string()),
-                    category: 2,
+                    handle: bex_resource_types::HostValueArc::new(
+                        42,
+                        bex_resource_types::HostValueKind::Error,
+                    ),
                 },
             ),
         );
@@ -330,16 +341,16 @@ mod tests {
             SysOpResult::Ready(Err(e)) => e,
             SysOpResult::Ready(Ok(_)) => panic!("expected error"),
         };
-        match &err.kind {
-            VmRustFnError::BamlError(VmBamlError::HostCallable {
-                class_name,
-                language,
-                category,
-                ..
-            }) => {
+        match &err.payload {
+            sys_types::OpErrorPayload::Vm(VmRustFnError::BamlError(
+                VmBamlError::HostCallable {
+                    class_name,
+                    language,
+                    ..
+                },
+            )) => {
                 assert_eq!(class_name, "RuntimeError");
                 assert_eq!(language.as_deref(), Some("python"));
-                assert_eq!(*category, 2);
             }
             other => panic!("expected HostCallable, got {other:?}"),
         }

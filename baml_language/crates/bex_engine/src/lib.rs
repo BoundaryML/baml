@@ -589,10 +589,10 @@ fn extract_host_diagnostics(value: &BexExternalValue) -> (Option<String>, Option
 
 pub(crate) fn op_error_to_throw_value(
     vm: &mut bex_vm::BexVm,
-    op_err: OpError,
+    kind: bex_vm::errors::VmRustFnError,
 ) -> Result<Value, bex_vm::errors::VmInternalError> {
     use bex_vm::errors::VmRustFnError;
-    match op_err.kind {
+    match kind {
         VmRustFnError::BamlError(err) => Ok(vm.error_to_exception_value(err)),
         VmRustFnError::Panic(panic) => Ok(vm.panic_to_exception_value(panic)),
         VmRustFnError::Thrown(value) => Ok(value),
@@ -1923,13 +1923,15 @@ impl BexEngine {
     async fn inject_host_call_throw(
         self: &Arc<Self>,
         thread: &mut ActiveHeapPermit<BexThread>,
-        mut op_err: OpError,
+        op_err: OpError,
         throws_type: Option<&Ty>,
     ) -> Result<Option<ThreadOutcome>, EngineError> {
-        let vm_value = if let Some(thrown_external) = op_err.host_thrown.take() {
-            self.materialize_host_throw(thread, *thrown_external, throws_type)?
-        } else {
-            op_error_to_throw_value(&mut thread.vm, op_err).map_err(EngineError::VmInternalError)?
+        let vm_value = match op_err.payload {
+            sys_types::OpErrorPayload::HostThrown(thrown) => {
+                self.materialize_host_throw(thread, *thrown, throws_type)?
+            }
+            sys_types::OpErrorPayload::Vm(kind) => op_error_to_throw_value(&mut thread.vm, kind)
+                .map_err(EngineError::VmInternalError)?,
         };
         match thread.vm.try_handle_external_exception(vm_value) {
             Ok(()) => Ok(None),
@@ -2959,6 +2961,13 @@ impl BexEngine {
         cancel: &CancellationToken,
         permit: bex_heap::PermitProof<'_>,
     ) -> SysOpResult {
+        fn check(op: SysOp, err: &OpError) {
+            if let sys_types::OpErrorPayload::Vm(kind) = &err.payload {
+                if let Err(violation) = sys_types::validate_sys_op_error(op, kind) {
+                    tracing::warn!("{violation}");
+                }
+            }
+        }
         let args = args.iter().map(std::convert::Into::into).collect();
         let fn_ptr = self.sys_ops.get(op);
         let mut ctx = self.sys_op_ctx.to_op_context(cancel.clone(), self.clone());
@@ -2968,21 +2977,21 @@ impl BexEngine {
             sys_ops::build_runtime_io(&self.sys_ops, &self.heap, &self.heap_permit_manager, &ctx);
         let result = fn_ptr(&self.heap, permit, args, &ctx, call_id);
 
+        // `validate_sys_op_error` only applies to the `Vm` payload variant —
+        // a `HostThrown` payload is checked engine-side against the
+        // surrounding callable's declared `E`, not against the sysop's
+        // category contract, so it short-circuits here.
         match result {
             SysOpResult::Ready(Ok(v)) => SysOpResult::Ready(Ok(v)),
             SysOpResult::Ready(Err(err)) => {
-                if let Err(violation) = sys_types::validate_sys_op_error(op, &err.kind) {
-                    tracing::warn!("{violation}");
-                }
+                check(op, &err);
                 SysOpResult::Ready(Err(err))
             }
             SysOpResult::Async(fut) => {
                 let boxed = Box::pin(async move {
                     let res = fut.await;
                     if let Err(err) = &res {
-                        if let Err(violation) = sys_types::validate_sys_op_error(op, &err.kind) {
-                            tracing::warn!("{violation}");
-                        }
+                        check(op, err);
                     }
                     res
                 });

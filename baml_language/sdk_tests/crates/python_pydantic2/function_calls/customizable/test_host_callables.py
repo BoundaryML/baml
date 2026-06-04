@@ -60,8 +60,8 @@ def test_throwing_callable_surfaces_as_baml_error():
     with pytest.raises(Exception) as exc_info:
         call_with_callback(callback=cb, x=1)
     # The host-callable error round-trips the class name and message
-    # via `HostCallableError` proto → `OpErrorKind::HostCallable` →
-    # `root.errors.HostCallable` throw → Python exception.
+    # as an `InboundValue.Class` of `baml.errors.HostCallable`, decoded
+    # engine-side and surfaced back to Python through `materialize_host_throw`.
     msg = str(exc_info.value)
     assert "nope" in msg or "ValueError" in msg
 

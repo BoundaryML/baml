@@ -197,13 +197,13 @@ class baml.errors.HostCallable {
   class_name: string
   language: string
   traceback: string | null
-  category: int
+  _handle: $rust_type
 }
 function baml.errors.HostCallable.to_json(self: baml.errors.HostCallable) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  map { "message": self.message.to_json(), "class_name": self.class_name.to_json(), "language": self.language.to_json(), "traceback": self.traceback?.to_json(), "category": self.category.to_json() } : map<string, baml.json.json | null>
+  baml.json.parse(baml.json.to_string<HostCallable>(self)) : baml.json.json
 }
 function baml.errors.HostCallable.from_json(j: baml.json.json) -> baml.errors.HostCallable throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  HostCallable { message: baml.json.from_json<string>(baml.json.field(j, "message")), class_name: baml.json.from_json<string>(baml.json.field(j, "class_name")), language: baml.json.from_json<string>(baml.json.field(j, "language")), traceback: baml.json.from_json<string?>(baml.json.field(j, "traceback")), category: baml.json.from_json<int>(baml.json.field(j, "category")) } : baml.errors.HostCallable
+  baml.json.from_string<T>(baml.json.stringify(j)) : baml.errors.HostCallable
 }
 class baml.errors.GenericSdkError {
   message: string
@@ -262,7 +262,7 @@ class baml.errors.HostCallable$stream {
   class_name: string | null
   language: string | null
   traceback: string | null
-  category: int | null
+  _handle: $rust_type
 }
 class baml.errors.GenericSdkError$stream {
   message: string | null
@@ -1483,11 +1483,11 @@ function baml.panics.SdkPanic.from_json(j: baml.json.json) -> baml.panics.SdkPan
 }
 class baml.panics.HostContractViolation {
   message: string
-  class_name: string?
-  language: string?
+  class_name: string | null
+  language: string | null
 }
 function baml.panics.HostContractViolation.to_json(self: baml.panics.HostContractViolation) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  map { "message": self.message.to_json(), "class_name": self.class_name?.to_json(), "language": self.language?.to_json() } : map<string, baml.json.json | baml.json.json?>
+  map { "message": self.message.to_json(), "class_name": self.class_name?.to_json(), "language": self.language?.to_json() } : map<string, baml.json.json | null>
 }
 function baml.panics.HostContractViolation.from_json(j: baml.json.json) -> baml.panics.HostContractViolation throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   HostContractViolation { message: baml.json.from_json<string>(baml.json.field(j, "message")), class_name: baml.json.from_json<string?>(baml.json.field(j, "class_name")), language: baml.json.from_json<string?>(baml.json.field(j, "language")) } : baml.panics.HostContractViolation
@@ -1539,9 +1539,9 @@ class baml.panics.SdkPanic$stream {
   message: string | null
 }
 class baml.panics.HostContractViolation$stream {
-  message: null | string
-  class_name: null | string
-  language: null | string
+  message: string | null
+  class_name: string | null
+  language: string | null
 }
 type baml.panics.Panic$stream = baml.panics.DivisionByZero$stream | baml.panics.IndexOutOfBounds$stream | baml.panics.InvalidFieldAccess$stream | baml.panics.MapKeyNotFound$stream | baml.panics.StackOverflow$stream | baml.panics.AssertionFailed$stream | baml.panics.Unreachable$stream | baml.panics.Cancelled$stream | baml.panics.UserPanic$stream | baml.panics.Exit$stream | baml.panics.AllocFailure$stream | baml.panics.HostUnavailable$stream | baml.panics.NegativeBitShift$stream | baml.panics.SdkPanic$stream | baml.panics.HostContractViolation$stream
 

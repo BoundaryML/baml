@@ -2321,22 +2321,31 @@ impl BexVm {
             ),
             // Field order matches the `HostCallable` class in
             // `ns_errors/errors.baml`: message, class_name, language,
-            // traceback?, category. `traceback?` surfaces as `Null` when
+            // traceback?, _handle. `traceback?` surfaces as `Null` when
             // absent; `language` is the empty string when absent (kept
-            // non-null for class-field type consistency).
+            // non-null for class-field type consistency). `_handle` is
+            // an opaque `$rust_type` slot — populated as
+            // `Object::RustData(Arc<HostValueArc>)` when a same-host
+            // rehydration handle is attached, else `Null`.
             VmBamlError::HostCallable {
                 class_name,
                 message,
                 traceback,
                 language,
-                category,
+                handle,
             } => {
                 let message_val = Value::object(self.alloc_string(message));
                 let class_name_val = Value::object(self.alloc_string(class_name));
                 let language_val = Value::object(self.alloc_string(language.unwrap_or_default()));
                 let traceback_val =
                     traceback.map_or(Value::NULL, |t| Value::object(self.alloc_string(t)));
-                let category_val = Value::int(i64::from(category));
+                // `handle` is required: `HostCallable` always carries a
+                // reference to the originating host exception. Materialize
+                // it as `Object::RustData(Arc<HostValueArc>)` so the BAML
+                // class's `_handle` slot can be downcast back to the
+                // original host-value reference on round-trip.
+                let dyn_arc: std::sync::Arc<dyn std::any::Any + Send + Sync> = handle;
+                let handle_val = Value::object(self.tlab.alloc(Object::RustData(dyn_arc)));
                 (
                     ErrorClass::HostCallable,
                     vec![
@@ -2344,7 +2353,7 @@ impl BexVm {
                         class_name_val,
                         language_val,
                         traceback_val,
-                        category_val,
+                        handle_val,
                     ],
                 )
             }
