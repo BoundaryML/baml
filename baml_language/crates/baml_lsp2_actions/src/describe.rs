@@ -916,16 +916,17 @@ fn collect_class_methods_impl(
 }
 
 /// Render the canonical one-line signature for a method:
-/// `function <name>(<params>) -> <ret>[ throws <t>]`. Uses resolved types from
-/// the package interface (`exported`) when available, falling back to the
-/// unresolved source `TypeExpr` rendering otherwise. The `self` parameter is
-/// shown bare (no type), as written.
+/// `function <name>[<generics>](<params>) -> <ret>[ throws <t>]`. Uses resolved
+/// types from the package interface (`exported`) when available, falling back
+/// to the unresolved source `TypeExpr` rendering otherwise. The `self`
+/// parameter is shown bare (no type), as written.
 fn render_method_signature(
     db: &dyn Db,
     file: SourceFile,
     m: &baml_compiler2_hir::item_tree::Function,
     exported: Option<&baml_compiler2_tir::package_interface::ExportedFunction>,
 ) -> String {
+    let generics = render_function_generics(&m.generic_params, &m.generic_param_bounds);
     let params: Vec<String> = m
         .params
         .iter()
@@ -981,10 +982,33 @@ fn render_method_signature(
     };
 
     format!(
-        "function {}({}){ret}{throws}",
+        "function {}{generics}({}){ret}{throws}",
         m.name.as_str(),
         params.join(", ")
     )
+}
+
+fn render_function_generics(
+    generic_params: &[baml_base::Name],
+    generic_param_bounds: &[Option<baml_compiler2_ast::TypeExpr>],
+) -> String {
+    if generic_params.is_empty() {
+        return String::new();
+    }
+
+    let params = generic_params
+        .iter()
+        .enumerate()
+        .map(|(idx, param)| {
+            if let Some(bound) = generic_param_bounds.get(idx).and_then(Option::as_ref) {
+                format!("{param} extends {}", crate::utils::display_type_expr(bound))
+            } else {
+                param.to_string()
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(", ");
+    format!("<{params}>")
 }
 
 /// Build `(instance_methods, static_methods)` for a class's describe output.
