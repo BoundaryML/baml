@@ -1458,6 +1458,7 @@ dependencies = [
  "codspeed-divan-compat",
  "indexmap",
  "num-bigint",
+ "thiserror 2.0.18",
  "tokio",
  "tokio-util",
 ]

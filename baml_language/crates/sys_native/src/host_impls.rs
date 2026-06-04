@@ -10,7 +10,8 @@
 //! 4. Returns `SysOpResult::Async` — the result is resolved when the host
 //!    calls `complete_host_call(call_id, ...)`. On completion the host's
 //!    returned value is validated against the expected return type
-//!    (`type_arg_0`), raising `OpErrorKind::HostCallable` on mismatch.
+//!    (`type_arg_0`), raising `VmBamlError::HostCallable` (wrapped as
+//!    `VmRustFnError::BamlError(...)`) on mismatch.
 //!
 //! ## In-flight lifetime / no timeout
 //!
@@ -36,7 +37,9 @@ use bridge_ctypes::{
     CffiHandleTableOptions, baml_core::cffi::HostCallableErrorCategory, external_to_outbound,
 };
 use prost::Message as _;
-use sys_ops::io::{self, BexExternalValue, CallId, OpErrorKind, SysOpContext, SysOpOutput};
+use sys_ops::io::{
+    self, BexExternalValue, CallId, SysOpContext, SysOpOutput, VmBamlError, VmRustFnError,
+};
 use sys_types::{OpError, SysOp, SysOpResult};
 
 use crate::{NativeSysOps, host_dispatch};
@@ -58,9 +61,8 @@ impl io::IoNamespaceHost for NativeSysOps {
         let host_arc = match handle {
             BexExternalValue::HostValue(arc) => arc,
             other => {
-                return SysOpOutput::err(OpErrorKind::TypeError {
-                    expected: "HostValue",
-                    actual: format!("{other:?}"),
+                return SysOpOutput::err(VmBamlError::InvalidArgument {
+                    message: format!("expected HostValue, got {other:?}"),
                 });
             }
         };
@@ -77,7 +79,7 @@ impl io::IoNamespaceHost for NativeSysOps {
         let encoded: Vec<u8> = match external_to_outbound(&arg_values, &options) {
             Ok(value) => value.encode_to_vec(),
             Err(e) => {
-                return SysOpOutput::err(OpErrorKind::HostCallable {
+                return SysOpOutput::err(VmBamlError::HostCallable {
                     class_name: String::new(),
                     message: format!("failed to encode host-call arguments: {e}"),
                     traceback: None,
@@ -116,7 +118,7 @@ impl io::IoNamespaceHost for NativeSysOps {
                 if let Some(c) = host_dispatch::take(call_id) {
                     c.complete(Err(OpError::new(
                         SysOp::BamlHostCallHostValue,
-                        OpErrorKind::NotImplemented {
+                        VmBamlError::NotImplemented {
                             message: "no host bridge registered for host-value dispatch"
                                 .to_string(),
                         },
@@ -150,7 +152,10 @@ impl io::IoNamespaceHost for NativeSysOps {
                 // `None` on the collision path (no entry of ours to evict); the
                 // awaited `fut` then resolves to the collision error.
                 let _guard = guard;
-                let value = fut.await.map_err(|op_err| op_err.kind)?;
+                // `fut.await` yields `Result<_, OpError>` and
+                // `validate_return_value` yields `Result<_, VmRustFnError>`;
+                // both propagate via the `From<…> for VmRustFnError` impls.
+                let value = fut.await?;
                 validate_return_value(&value, &type_arg_0)?;
                 Ok(value)
             }),
@@ -159,7 +164,7 @@ impl io::IoNamespaceHost for NativeSysOps {
 }
 
 /// Validate a host-returned value against the wrapper's declared return
-/// type, producing an `OpErrorKind::HostCallable` on mismatch.
+/// type, producing a `VmBamlError::HostCallable` on mismatch.
 ///
 /// Delegates to the shared, strict [`validate_host_return`] guard (shared
 /// with the WASM bridge) so the native and WASM bridges enforce an identical
@@ -167,21 +172,23 @@ impl io::IoNamespaceHost for NativeSysOps {
 /// recursion, enum identity, and class-name identity. Class *field types* are
 /// validated engine-side at the result-push site, where the resolved class
 /// schema is available.
-fn validate_return_value(value: &BexExternalValue, expected: &Ty) -> Result<(), OpErrorKind> {
-    validate_host_return(value, expected).map_err(|err| OpErrorKind::HostCallable {
-        class_name: "TypeError".to_string(),
-        message: err.to_string(),
-        traceback: None,
-        language: None,
-        category: HostCallableErrorCategory::HostCallableInvalidArgument as i32,
-    })
+fn validate_return_value(value: &BexExternalValue, expected: &Ty) -> Result<(), VmRustFnError> {
+    validate_host_return(value, expected)
+        .map_err(|err| VmBamlError::HostCallable {
+            class_name: "TypeError".to_string(),
+            message: err.to_string(),
+            traceback: None,
+            language: None,
+            category: HostCallableErrorCategory::HostCallableInvalidArgument as i32,
+        })
+        .map_err(VmRustFnError::from)
 }
 
 #[cfg(test)]
 mod tests {
     use baml_type::{Ty, TyAttr};
     use sys_ops::io::{BexExternalValue, CallId, IoNamespaceHost as _, SysOpContext, SysOpOutput};
-    use sys_types::{OpError, OpErrorKind, SysOp, SysOpResult};
+    use sys_types::{OpError, SysOp, SysOpResult, VmBamlError, VmRustFnError};
 
     use super::*;
     use crate::host_dispatch;
@@ -219,9 +226,15 @@ mod tests {
             SysOpOutput::Async(fut) => fut.await,
         };
         let err = result.expect_err("expected type error");
+        // The wrong-handle-type arg surfaces as a `VmBamlError::InvalidArgument`
+        // (which the host SDK sees as `baml.errors.InvalidArgument`), wrapped
+        // in the canonical `VmRustFnError::BamlError`.
         assert!(
-            matches!(err, OpErrorKind::TypeError { .. }),
-            "expected TypeError, got {err:?}"
+            matches!(
+                err,
+                VmRustFnError::BamlError(VmBamlError::InvalidArgument { .. })
+            ),
+            "expected InvalidArgument, got {err:?}"
         );
     }
 
@@ -268,7 +281,7 @@ mod tests {
             call_id,
             OpError::new(
                 SysOp::BamlHostCallHostValue,
-                OpErrorKind::HostCallable {
+                VmBamlError::HostCallable {
                     class_name: "RuntimeError".to_string(),
                     message: "host raised".to_string(),
                     traceback: Some("at line 1".to_string()),
@@ -284,12 +297,12 @@ mod tests {
             SysOpResult::Ready(Ok(_)) => panic!("expected error"),
         };
         match &err.kind {
-            OpErrorKind::HostCallable {
+            VmRustFnError::BamlError(VmBamlError::HostCallable {
                 class_name,
                 language,
                 category,
                 ..
-            } => {
+            }) => {
                 assert_eq!(class_name, "RuntimeError");
                 assert_eq!(language.as_deref(), Some("python"));
                 assert_eq!(*category, 2);
@@ -308,7 +321,7 @@ mod tests {
             u32::MAX - 3,
             OpError::new(
                 SysOp::BamlHostCallHostValue,
-                OpErrorKind::NotImplemented {
+                VmBamlError::NotImplemented {
                     message: "unknown id".to_string(),
                 },
             ),
@@ -335,13 +348,13 @@ mod tests {
         )
         .expect_err("a String should not match the `int` return type");
         match err {
-            OpErrorKind::HostCallable { category, .. } => {
+            VmRustFnError::BamlError(VmBamlError::HostCallable { category, .. }) => {
                 assert_eq!(
                     category,
                     HostCallableErrorCategory::HostCallableInvalidArgument as i32
                 );
             }
-            other => panic!("expected HostCallable, got {other:?}"),
+            other => panic!("expected BamlError(HostCallable), got {other:?}"),
         }
     }
 

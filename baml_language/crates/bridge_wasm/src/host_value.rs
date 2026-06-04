@@ -78,7 +78,8 @@ use bridge_ctypes::{
 use js_sys::Function;
 use prost::Message;
 use sys_ops::io::{
-    self, BexExternalValue, CallId, OpError, OpErrorKind, SysOpContext, SysOpOutput, SysOpResult,
+    self, BexExternalValue, CallId, OpError, SysOpContext, SysOpOutput, SysOpResult, VmBamlError,
+    VmRustFnError,
 };
 use sys_types::{BexHeap, CompletionHandle, SysOp};
 use wasm_bindgen::prelude::*;
@@ -178,9 +179,9 @@ fn insert_in_flight(call_id: u32, completion: CompletionHandle) -> bool {
         );
         completion.complete(Err(OpError::new(
             SysOp::BamlHostCallHostValue,
-            OpErrorKind::Other(format!(
-                "host-call id {call_id} collided with a live in-flight call"
-            )),
+            VmBamlError::DevOther {
+                message: format!("host-call id {call_id} collided with a live in-flight call"),
+            },
         )));
         return false;
     }
@@ -264,7 +265,9 @@ pub fn complete_host_call(call_id: u32, is_error: i32, content: &[u8]) {
             Err(e) => {
                 completion.complete(Err(OpError::new(
                     SysOp::BamlHostCallHostValue,
-                    OpErrorKind::Other(format!("completeHostCall decode failure: {e}")),
+                    VmBamlError::ParseError {
+                        message: format!("completeHostCall decode failure: {e}"),
+                    },
                 )));
                 return;
             }
@@ -273,7 +276,9 @@ pub fn complete_host_call(call_id: u32, is_error: i32, content: &[u8]) {
             Ok(v) => completion.complete(Ok(v)),
             Err(e) => completion.complete(Err(OpError::new(
                 SysOp::BamlHostCallHostValue,
-                OpErrorKind::Other(format!("completeHostCall decode failure: {e}")),
+                VmBamlError::ParseError {
+                    message: format!("completeHostCall decode failure: {e}"),
+                },
             ))),
         }
     } else {
@@ -281,7 +286,7 @@ pub fn complete_host_call(call_id: u32, is_error: i32, content: &[u8]) {
         let mapped = if content.is_empty() {
             OpError::new(
                 SysOp::BamlHostCallHostValue,
-                OpErrorKind::HostCallable {
+                VmBamlError::HostCallable {
                     class_name: String::new(),
                     message: "host callable returned error with no payload".to_string(),
                     traceback: None,
@@ -301,9 +306,9 @@ pub fn complete_host_call(call_id: u32, is_error: i32, content: &[u8]) {
                 ),
                 Err(e) => OpError::new(
                     SysOp::BamlHostCallHostValue,
-                    OpErrorKind::Other(format!(
-                        "completeHostCall error-payload decode failure: {e}"
-                    )),
+                    VmBamlError::ParseError {
+                        message: format!("completeHostCall error-payload decode failure: {e}"),
+                    },
                 ),
             }
         };
@@ -391,9 +396,8 @@ impl io::IoNamespaceHost for WasmHost {
         let host_arc = match handle {
             BexExternalValue::HostValue(arc) => arc,
             other => {
-                return SysOpOutput::err(OpErrorKind::TypeError {
-                    expected: "HostValue",
-                    actual: format!("{other:?}"),
+                return SysOpOutput::err(VmBamlError::InvalidArgument {
+                    message: format!("expected HostValue, got {other:?}"),
                 });
             }
         };
@@ -410,7 +414,7 @@ impl io::IoNamespaceHost for WasmHost {
         let encoded: Vec<u8> = match external_to_outbound(&arg_values, &options) {
             Ok(value) => value.encode_to_vec(),
             Err(e) => {
-                return SysOpOutput::err(OpErrorKind::HostCallable {
+                return SysOpOutput::err(VmBamlError::HostCallable {
                     class_name: String::new(),
                     message: format!("failed to encode host-call arguments: {e}"),
                     traceback: None,
@@ -458,7 +462,7 @@ impl io::IoNamespaceHost for WasmHost {
                     let msg = err.as_string().unwrap_or_else(|| format!("{err:?}"));
                     c.complete(Err(OpError::new(
                         SysOp::BamlHostCallHostValue,
-                        OpErrorKind::HostCallable {
+                        VmBamlError::HostCallable {
                             class_name: "Error".to_string(),
                             message: format!("host_dispatch JS callback threw: {msg}"),
                             traceback: None,
@@ -517,7 +521,10 @@ fn drain_pending(
                 // there is no entry of ours to evict and `fut` resolves to the
                 // collision error.
                 let _guard = guard;
-                let value = fut.await.map_err(|op_err| op_err.kind)?;
+                // `?` propagates `OpError → VmRustFnError` via the `From`
+                // impl in `sys_types`; `validate_host_return_value` yields
+                // `Result<_, VmRustFnError>` directly.
+                let value = fut.await?;
                 validate_host_return_value(&value, &expected)?;
                 Ok(value)
             })))
@@ -526,18 +533,20 @@ fn drain_pending(
 }
 
 /// Strictly validate a host-returned value against the declared return type,
-/// mapping a mismatch to an `OpErrorKind::HostCallable` (invalid-argument).
+/// mapping a mismatch to a `VmBamlError::HostCallable` (invalid-argument).
 fn validate_host_return_value(
     value: &BexExternalValue,
     expected: &baml_type::Ty,
-) -> Result<(), OpErrorKind> {
-    validate_host_return(value, expected).map_err(|err| OpErrorKind::HostCallable {
-        class_name: "TypeError".to_string(),
-        message: err.to_string(),
-        traceback: None,
-        language: None,
-        category: HostCallableErrorCategory::HostCallableInvalidArgument as i32,
-    })
+) -> Result<(), VmRustFnError> {
+    validate_host_return(value, expected)
+        .map_err(|err| VmBamlError::HostCallable {
+            class_name: "TypeError".to_string(),
+            message: err.to_string(),
+            traceback: None,
+            language: None,
+            category: HostCallableErrorCategory::HostCallableInvalidArgument as i32,
+        })
+        .map_err(VmRustFnError::from)
 }
 
 #[cfg(test)]

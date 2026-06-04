@@ -1,5 +1,9 @@
 /// Returns the value of the environment variable `key`, or `null` if not set.
-function get(key: string) -> string? throws root.errors.Io {
+///
+/// Throws `ParseError` if the variable is set but its value is not valid
+/// UTF-8 (the native bridge surfaces `std::env::VarError::NotUnicode` as a
+/// catchable parse error).
+function get(key: string) -> string? throws root.errors.Io | root.errors.ParseError {
   $rust_io_function
 }
 

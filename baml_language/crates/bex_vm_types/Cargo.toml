@@ -30,6 +30,7 @@ bex_str = { workspace = true }
 borsh = { workspace = true }
 indexmap = { workspace = true }
 num-bigint = { workspace = true }
+thiserror = { workspace = true }
 tokio = { workspace = true, features = [ "rt", "macros", "sync" ] }
 tokio-util = { workspace = true }
 

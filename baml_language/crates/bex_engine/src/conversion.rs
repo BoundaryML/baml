@@ -892,7 +892,7 @@ impl BexEngine {
     /// field's value against its instantiated field type.
     ///
     /// Returns `Err(message)` describing the first mismatch; the caller maps
-    /// it to an `OpErrorKind::HostCallable` so it surfaces as a catchable
+    /// it to a `VmBamlError::HostCallable` so it surfaces as a catchable
     /// `root.errors.HostCallable`.
     pub(crate) fn validate_host_return_schema(
         &self,

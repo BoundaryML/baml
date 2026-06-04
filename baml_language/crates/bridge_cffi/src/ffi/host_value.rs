@@ -29,7 +29,7 @@ use sys_native::host_dispatch;
 /// Re-exported from `sys_native::host_dispatch::HostDispatchFn` for
 /// external consumers (cbindgen header generation, etc.).
 pub use sys_native::host_dispatch::HostDispatchFn;
-use sys_types::{OpError, OpErrorKind, SysOp};
+use sys_types::{OpError, SysOp, VmBamlError};
 
 /// Register the host dispatch callback. First call wins; subsequent calls
 /// are silently ignored (consistent with `register_callback` semantics).
@@ -95,9 +95,11 @@ pub extern "C" fn complete_host_call(
             call_id,
             OpError::new(
                 SysOp::BamlHostCallHostValue,
-                OpErrorKind::Other(format!(
-                    "complete_host_call: null content pointer with length {length}"
-                )),
+                VmBamlError::Io {
+                    message: format!(
+                        "complete_host_call: null content pointer with length {length}"
+                    ),
+                },
             ),
         );
         return;
@@ -125,7 +127,9 @@ pub extern "C" fn complete_host_call(
                     call_id,
                     OpError::new(
                         SysOp::BamlHostCallHostValue,
-                        OpErrorKind::Other(format!("complete_host_call decode failure: {e}")),
+                        VmBamlError::ParseError {
+                            message: format!("complete_host_call decode failure: {e}"),
+                        },
                     ),
                 );
                 return;
@@ -137,7 +141,9 @@ pub extern "C" fn complete_host_call(
                 call_id,
                 OpError::new(
                     SysOp::BamlHostCallHostValue,
-                    OpErrorKind::Other(format!("complete_host_call decode failure: {e}")),
+                    VmBamlError::ParseError {
+                        message: format!("complete_host_call decode failure: {e}"),
+                    },
                 ),
             ),
         }
@@ -146,7 +152,7 @@ pub extern "C" fn complete_host_call(
         let mapped = if bytes.is_empty() {
             OpError::new(
                 SysOp::BamlHostCallHostValue,
-                OpErrorKind::HostCallable {
+                VmBamlError::HostCallable {
                     class_name: String::new(),
                     message: "host callable returned error with no payload".to_string(),
                     traceback: None,
@@ -166,9 +172,9 @@ pub extern "C" fn complete_host_call(
                 ),
                 Err(e) => OpError::new(
                     SysOp::BamlHostCallHostValue,
-                    OpErrorKind::Other(format!(
-                        "complete_host_call error-payload decode failure: {e}"
-                    )),
+                    VmBamlError::ParseError {
+                        message: format!("complete_host_call error-payload decode failure: {e}"),
+                    },
                 ),
             }
         };

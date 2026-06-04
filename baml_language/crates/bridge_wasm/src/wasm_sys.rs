@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use js_sys::{Function, Promise, Reflect, Uint8Array};
 use sys_ops::io::{self, IoNamespaceSys};
-use sys_types::{BexHeap, CallId, OpErrorKind, SysOpContext, SysOpOutput};
+use sys_types::{BexHeap, CallId, SysOpContext, SysOpOutput, VmBamlError, VmRustFnError};
 use wasm_bindgen::{JsCast, prelude::*};
 use wasm_bindgen_futures::JsFuture;
 
@@ -30,9 +30,9 @@ impl WasmSys {
 
 /// Unpack a JS result object `{ exit_code, stdout_bytes, stderr_bytes }`
 /// into an `owned::sys::ShellOutput`.
-fn unpack_shell_result(obj: &JsValue) -> Result<io::owned::sys::ShellOutput, OpErrorKind> {
+fn unpack_shell_result(obj: &JsValue) -> Result<io::owned::sys::ShellOutput, VmBamlError> {
     let exit_code_f64 = Reflect::get(obj, &"exit_code".into())
-        .map_err(|e| OpErrorKind::Io {
+        .map_err(|e| VmBamlError::Io {
             message: format!("missing exit_code: {e:?}"),
         })?
         .as_f64()
@@ -116,18 +116,18 @@ impl IoNamespaceSys for WasmSys {
 
             let result = exec_fn
                 .call3(&JsValue::NULL, &program_js, &args_js, &options_js)
-                .map_err(|e| OpErrorKind::Io {
+                .map_err(|e| VmBamlError::Io {
                     message: format!("exec callback failed: {e:?}"),
                 })?;
 
-            let promise: Promise = result.dyn_into().map_err(|_| OpErrorKind::Io {
+            let promise: Promise = result.dyn_into().map_err(|_| VmBamlError::Io {
                 message: "exec callback did not return a Promise".into(),
             })?;
-            let obj = JsFuture::from(promise).await.map_err(|e| OpErrorKind::Io {
+            let obj = JsFuture::from(promise).await.map_err(|e| VmBamlError::Io {
                 message: format!("exec callback rejected: {e:?}"),
             })?;
 
-            unpack_shell_result(&obj)
+            unpack_shell_result(&obj).map_err(VmRustFnError::from)
         }))
     }
 
@@ -146,18 +146,18 @@ impl IoNamespaceSys for WasmSys {
 
             let result = shell_fn
                 .call2(&JsValue::NULL, &command_js, &options_js)
-                .map_err(|e| OpErrorKind::Io {
+                .map_err(|e| VmBamlError::Io {
                     message: format!("shell callback failed: {e:?}"),
                 })?;
 
-            let promise: Promise = result.dyn_into().map_err(|_| OpErrorKind::Io {
+            let promise: Promise = result.dyn_into().map_err(|_| VmBamlError::Io {
                 message: "shell callback did not return a Promise".into(),
             })?;
-            let obj = JsFuture::from(promise).await.map_err(|e| OpErrorKind::Io {
+            let obj = JsFuture::from(promise).await.map_err(|e| VmBamlError::Io {
                 message: format!("shell callback rejected: {e:?}"),
             })?;
 
-            unpack_shell_result(&obj)
+            unpack_shell_result(&obj).map_err(VmRustFnError::from)
         }))
     }
 

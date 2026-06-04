@@ -595,22 +595,28 @@ pub fn generate_sys_op_enum(io_builtins: &[NativeBuiltin]) -> String {
             // (`throws never`) and `None` both map to no error categories.
             // A `throws` entry that names one of the builtin's generic params
             // (e.g. `call_host_value<T, E> ... throws E`) is a *dynamic* error
-            // contract, not a fixed `SysOpErrorCategory`; drop it from the
-            // static list so an empty result means "accept any category" in
-            // `validate_sys_op_error`, deferring the contract check to
-            // runtime. (The `throws` clause itself stays non-empty, so the
-            // builtin remains `is_fallible`.)
+            // contract, not a fixed `SysOpErrorCategory`. The static category
+            // list cannot represent a mix of "concrete X" + "dynamic E" — the
+            // dynamic component would be silently dropped, leaving
+            // `validate_sys_op_error` to wrongly reject any `E`-shaped throw
+            // as off-contract. Apply an all-or-nothing rule: if *any* throws
+            // entry is generic, emit an empty list ("accept any category")
+            // and defer the entire contract check to runtime. Concrete-only
+            // contracts still emit a precise category list. (The `throws`
+            // clause stays non-empty either way, so the builtin remains
+            // `is_fallible`.)
             match &b.throws {
                 Some(cats) => {
-                    let filtered: Vec<_> = cats
-                        .iter()
-                        .filter(|t| !b.generics.iter().any(|g| g == *t))
-                        .map(|t| format_ident!("{}", t))
-                        .collect();
-                    if filtered.is_empty() {
+                    let has_generic_throw = cats.iter().any(|t| b.generics.iter().any(|g| g == t));
+                    if has_generic_throw {
                         quote! { SysOp::#variant => &[] }
                     } else {
-                        quote! { SysOp::#variant => &[#(SysOpErrorCategory::#filtered),*] }
+                        let cats: Vec<_> = cats.iter().map(|t| format_ident!("{}", t)).collect();
+                        if cats.is_empty() {
+                            quote! { SysOp::#variant => &[] }
+                        } else {
+                            quote! { SysOp::#variant => &[#(SysOpErrorCategory::#cats),*] }
+                        }
                     }
                 }
                 None => quote! { SysOp::#variant => &[] },
@@ -1398,7 +1404,7 @@ fn emit_glue_method(
                 }
                 Err(e) => SysOpResult::Ready(Err(OpError::new(
                     SysOp::#variant_ident,
-                    OpErrorKind::AccessError(e),
+                    bex_vm_types::errors::VmBamlError::AccessError { message: e.to_string() },
                 ))),
             }
         }
@@ -1754,7 +1760,7 @@ fn emit_free_fn_glue(
                 }
                 Err(e) => SysOpResult::Ready(Err(OpError::new(
                     SysOp::#variant_ident,
-                    OpErrorKind::AccessError(e),
+                    bex_vm_types::errors::VmBamlError::AccessError { message: e.to_string() },
                 ))),
             }
         }
@@ -1831,7 +1837,9 @@ fn emit_sys_ops_struct(io_builtins: &[NativeBuiltin]) -> TokenStream {
                         t.get_sys_op_fn(#path_str, heap, permit, args, ctx, call_id)
                             .unwrap_or_else(|| SysOpResult::Ready(Err(OpError::new(
                                 SysOp::#variant_ident,
-                                OpErrorKind::Unsupported,
+                                bex_vm_types::errors::VmBamlError::Unsupported {
+                                    message: "Operation not supported on this platform".to_string(),
+                                },
                             ))))
                     })
                 }
@@ -1856,7 +1864,9 @@ fn emit_sys_ops_struct(io_builtins: &[NativeBuiltin]) -> TokenStream {
                 std::sync::Arc::new(move |_, _, _, _, _| {
                     SysOpResult::Ready(Err(OpError::new(
                         operation,
-                        OpErrorKind::Unsupported,
+                        bex_vm_types::errors::VmBamlError::Unsupported {
+                            message: "Operation not supported on this platform".to_string(),
+                        },
                     )))
                 })
             }

@@ -280,5 +280,9 @@ async fn http_response_text_consumed() {
         return
     }
     "#);
-    insta::assert_snapshot!(output.result.unwrap_err().to_string(), @"failed to call baml.http.Response.text: Response body has already been consumed");
+    insta::assert_snapshot!(output.result.unwrap_err().to_string(), @r#"
+    Traceback (most recent call last):
+      File "test.baml", line 5, in user.main
+    uncaught throw: Instance { class_name: "baml.errors.InvalidArgument", fields: {"message": String("Response body has already been consumed")} }
+    "#);
 }

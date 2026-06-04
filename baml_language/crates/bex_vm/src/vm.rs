@@ -2319,6 +2319,35 @@ impl BexVm {
                 ErrorClass::HostPanic,
                 vec![Value::object(self.alloc_string(message))],
             ),
+            // Field order matches the `HostCallable` class in
+            // `ns_errors/errors.baml`: message, class_name, language,
+            // traceback?, category. `traceback?` surfaces as `Null` when
+            // absent; `language` is the empty string when absent (kept
+            // non-null for class-field type consistency).
+            VmBamlError::HostCallable {
+                class_name,
+                message,
+                traceback,
+                language,
+                category,
+            } => {
+                let message_val = Value::object(self.alloc_string(message));
+                let class_name_val = Value::object(self.alloc_string(class_name));
+                let language_val = Value::object(self.alloc_string(language.unwrap_or_default()));
+                let traceback_val =
+                    traceback.map_or(Value::NULL, |t| Value::object(self.alloc_string(t)));
+                let category_val = Value::int(i64::from(category));
+                (
+                    ErrorClass::HostCallable,
+                    vec![
+                        message_val,
+                        class_name_val,
+                        language_val,
+                        traceback_val,
+                        category_val,
+                    ],
+                )
+            }
         };
         self.alloc_error_value(class, fields)
     }
@@ -2353,7 +2382,7 @@ impl BexVm {
         self.alloc_error_value(ErrorClass::StackTrace, vec![frames_array])
     }
 
-    pub(crate) fn panic_to_exception_value(&mut self, panic: VmPanic) -> Value {
+    pub fn panic_to_exception_value(&mut self, panic: VmPanic) -> Value {
         let (class, fields) = match panic {
             VmPanic::DivisionByZero { left, .. } => (PanicClass::DivisionByZero, vec![left]),
             VmPanic::IndexOutOfBounds { index, length } =>
@@ -2721,6 +2750,11 @@ impl BexVm {
     ///   args\[1\] = `args_array` (`Object::Array<Value>`)
     ///   args\[2\] = `ret_ty`     (`Object::Type<Ty>`) — `type_arg_0` (`T`)
     ///   args\[3\] = `throws_ty`  (`Object::Type<Ty>`) — `type_arg_1` (`E`)
+    ///
+    /// TODO: `throws_ty` is packed here but the engine doesn't yet read it
+    /// — a future phase will validate the host's thrown value against `E`
+    /// at the completion site and panic
+    /// `baml.panics.HostContractViolation` on mismatch.
     fn host_closure_call_sysop(
         &mut self,
         closure_ptr: HeapPtr,
@@ -3503,6 +3537,56 @@ impl BexVm {
             crate::kperf::exec_end(kp_start, self.op_count - ops_start);
         }
         result
+    }
+
+    /// Inject an exception value from outside the VM's execution loop (e.g. from
+    /// the engine's `SysOp` result handler) and let the VM's normal exception
+    /// unwinder walk frames and match handlers — the same path a `throw`
+    /// opcode or an internal bytecode throw site takes.
+    ///
+    /// On `Ok(())` a handler was found: `self.frames` is now at the catching
+    /// frame, the exception value is stored in the handler's binding slot, the
+    /// instruction pointer is at the handler's PC, and the next [`Self::exec`]
+    /// resumes the catch body. On `Err(VmError::ThrownUnhandled { .. })` (or,
+    /// for a degenerate Native-only frame stack, `Err(VmError::Thrown(..))`)
+    /// no handler matched; the caller should route the result through whatever
+    /// path it uses for any other VM unhandled throw.
+    ///
+    /// The unwinder reloads the `function` reference for each frame it visits,
+    /// so the `function` out-param it receives is only an initial seed — we
+    /// pick the topmost Bytecode frame's `Function` for that role, walking
+    /// past any Native frames at the top (which the unwinder would pop
+    /// unconditionally).
+    pub fn try_handle_external_exception(&mut self, exception_value: Value) -> Result<(), VmError> {
+        if self.frames.is_empty() {
+            let trace = self.capture_stack_trace();
+            return Err(VmError::ThrownUnhandled {
+                value: exception_value,
+                trace,
+            });
+        }
+        // Walk down from the top to find a Bytecode frame to seed `function`
+        // from. Native frames carry a continuation, not a `Function`, so
+        // `load_function` would fail on them — and the unwinder would pop
+        // them anyway. If every frame is Native, no bytecode catch handler
+        // can match; surface as unhandled.
+        let mut seed_idx = self.frames.len() - 1;
+        while !matches!(&self.frames[seed_idx], Frame::Bytecode(_)) {
+            if seed_idx == 0 {
+                let trace = self.capture_stack_trace();
+                return Err(VmError::ThrownUnhandled {
+                    value: exception_value,
+                    trace,
+                });
+            }
+            seed_idx -= 1;
+        }
+        let mut frame_idx = self.frames.len() - 1;
+        // SAFETY: see `load_function` doc — the frame at `seed_idx` is a
+        // Bytecode frame whose `function` pointer is valid for `&'static
+        // Function` while we hold `&mut self`.
+        let mut function = unsafe { self.load_function(seed_idx)? };
+        self.try_unwind_exception(&mut frame_idx, &mut function, exception_value)
     }
 
     #[allow(clippy::inline_always)] // Measured: 20-40% speedup from inlining the dispatch loop

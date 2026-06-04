@@ -101,11 +101,9 @@ pub mod generated {
 
     pub use bex_external_types::{AsBexExternalValue, BexExternalValue};
     pub use bex_heap::{AccessError, BexClass, BexValue, BuiltinClass, PermitProof};
-    pub use bex_vm_types::SysOp;
+    pub use bex_vm_types::{self, SysOp};
 
-    pub use crate::{
-        BexHeap, CallId, OpError, OpErrorKind, SysOpContext, SysOpFn, SysOpOutput, SysOpResult,
-    };
+    pub use crate::{BexHeap, CallId, OpError, SysOpContext, SysOpFn, SysOpOutput, SysOpResult};
 
     include!(concat!(env!("OUT_DIR"), "/io_generated.rs"));
 }
@@ -158,12 +156,15 @@ impl std::fmt::Display for CallId {
     }
 }
 
-/// Errors that can occur during external operation execution.
-/// Every error is tied to the operation (`fn_name`) that was being called.
+/// Errors that can occur during external operation execution. Every error is
+/// tied to the operation (`fn_name`) that was being called; the inner `kind`
+/// is the same `VmRustFnError` the VM uses for `$rust_function` errors and
+/// `throw` opcodes, so a sysop error is delivered through the VM's normal
+/// exception-unwinding path without bespoke routing.
 #[derive(Debug, PartialEq, Clone)]
 pub struct OpError {
     pub fn_name: SysOp,
-    pub kind: OpErrorKind,
+    pub kind: bex_vm_types::errors::VmRustFnError,
 }
 
 impl std::fmt::Display for OpError {
@@ -179,22 +180,24 @@ impl std::error::Error for OpError {
 }
 
 impl OpError {
-    fn _unsupported(operation: SysOp) -> Self {
-        Self {
-            fn_name: operation,
-            kind: OpErrorKind::Unsupported,
-        }
-    }
-
     fn cancelled(operation: SysOp) -> Self {
         Self {
             fn_name: operation,
-            kind: OpErrorKind::Cancelled,
+            kind: bex_vm_types::errors::VmRustFnError::Panic(
+                bex_vm_types::errors::VmPanic::Cancelled,
+            ),
         }
     }
 
-    pub fn new(fn_name: SysOp, kind: OpErrorKind) -> Self {
-        Self { fn_name, kind }
+    /// Construct an `OpError` for `fn_name` with any error convertible to
+    /// `VmRustFnError`. The `Into` bound lets sysop impls pass
+    /// `VmBamlError::X { ... }` / `VmPanic::X { ... }` (auto-converted via
+    /// their `From` impls) or a `VmRustFnError` directly.
+    pub fn new(fn_name: SysOp, kind: impl Into<bex_vm_types::errors::VmRustFnError>) -> Self {
+        Self {
+            fn_name,
+            kind: kind.into(),
+        }
     }
 
     /// Construct a structured host-callable error.
@@ -211,104 +214,34 @@ impl OpError {
     ) -> Self {
         Self {
             fn_name,
-            kind: OpErrorKind::HostCallable {
-                class_name,
-                message,
-                traceback,
-                language,
-                category,
-            },
+            kind: bex_vm_types::errors::VmRustFnError::BamlError(
+                bex_vm_types::errors::VmBamlError::HostCallable {
+                    class_name,
+                    message,
+                    traceback,
+                    language,
+                    category,
+                },
+            ),
         }
     }
 }
 
-pub use bex_vm_types::{SysOpErrorCategory, SysOpPanicCategory};
+pub use bex_vm_types::{
+    SysOpErrorCategory, SysOpPanicCategory,
+    errors::{VmBamlError, VmPanic, VmRustFnError},
+};
 
-// ============================================================================
-// Operation Errors
-// ============================================================================
-
-/// Errors that can occur during external operation execution.
-#[derive(Debug, PartialEq, thiserror::Error, Clone)]
-pub enum OpErrorKind {
-    #[error("Invalid number of arguments: expected {expected}, got {actual}")]
-    InvalidArgumentCount { expected: usize, actual: usize },
-
-    #[error("Invalid argument at position {position}: expected {expected}, got {actual}")]
-    InvalidArgument {
-        position: usize,
-        expected: &'static str,
-        actual: String,
-    },
-
-    #[error("{0}")]
-    Other(String),
-
-    #[error("Expected {expected}, got {actual}")]
-    TypeError {
-        expected: &'static str,
-        actual: String,
-    },
-
-    #[error("Expected resource of type {expected}")]
-    ResourceTypeMismatch { expected: &'static str },
-
-    #[error("Operation not supported on this platform")]
-    Unsupported,
-
-    #[error("Render prompt error: {0}")]
-    RenderPrompt(String),
-
-    #[error("Access error: {0}")]
-    AccessError(#[from] bex_heap::AccessError),
-
-    #[error("IO error: {message}")]
-    Io { message: String },
-
-    #[error("Operation cancelled")]
-    Cancelled,
-
-    #[error("Operation cancelled after {duration:?}: {message}")]
-    Timeout {
-        message: String,
-        duration: std::time::Duration,
-    },
-
-    #[error("Not implemented: {message}")]
-    NotImplemented { message: String },
-
-    #[error("LLM client error: {message}")]
-    LlmClientError { message: String },
-
-    #[error("Host callable error ({category}): {message} [class={class_name}, lang={language:?}]")]
-    HostCallable {
-        class_name: String,
-        message: String,
-        traceback: Option<String>,
-        language: Option<String>,
-        category: i32,
-    },
-}
-
-impl OpErrorKind {
-    /// Map this rich error to its contract-level category.
-    pub fn category(&self) -> SysOpErrorCategory {
-        match self {
-            Self::InvalidArgumentCount { .. }
-            | Self::InvalidArgument { .. }
-            | Self::TypeError { .. }
-            | Self::ResourceTypeMismatch { .. } => SysOpErrorCategory::InvalidArgument,
-            Self::Other(_) => SysOpErrorCategory::DevOther,
-            Self::Unsupported => SysOpErrorCategory::Unsupported,
-            Self::RenderPrompt(_) => SysOpErrorCategory::RenderPrompt,
-            Self::AccessError(_) => SysOpErrorCategory::AccessError,
-            Self::Io { .. } => SysOpErrorCategory::Io,
-            Self::Cancelled => SysOpErrorCategory::Io,
-            Self::Timeout { .. } => SysOpErrorCategory::Timeout,
-            Self::NotImplemented { .. } => SysOpErrorCategory::NotImplemented,
-            Self::LlmClientError { .. } => SysOpErrorCategory::LlmClient,
-            Self::HostCallable { .. } => SysOpErrorCategory::HostCallable,
-        }
+/// `?` conversion for sysop bodies that propagate an `OpFuture`'s
+/// `Result<_, OpError>` into a closure returning `Result<_, VmRustFnError>`.
+///
+/// Drops `fn_name` — the engine has already attributed the failure to the
+/// originating `SysOp` upstream (the `OpError` only existed to carry that
+/// attribution to the engine boundary). Used by `host_impls::call_host_value`
+/// when awaiting a `SysOpResult::Async` future inside an `async_op` closure.
+impl From<OpError> for bex_vm_types::errors::VmRustFnError {
+    fn from(op_err: OpError) -> Self {
+        op_err.kind
     }
 }
 
@@ -340,8 +273,22 @@ impl std::fmt::Display for ContractViolation {
 ///
 /// Returns `Ok(())` if the error category is in the allowed set, or
 /// `Err(ContractViolation)` with details for the implementer.
-pub fn validate_sys_op_error(op: SysOp, kind: &OpErrorKind) -> Result<(), ContractViolation> {
-    let category = kind.category();
+///
+/// Only the [`VmRustFnError::BamlError`] variant has a contract-level
+/// category to check. [`VmRustFnError::Panic`] is governed by the parallel
+/// `#[panics(...)]` contract (not enforced here yet);
+/// [`VmRustFnError::Thrown`] carries a pre-built host-provided exception
+/// `Value` whose type is checked against the callable's `E` in the engine,
+/// not against a sysop category; and [`VmRustFnError::InternalError`] is a
+/// fatal VM/engine fault outside the contract surface.
+pub fn validate_sys_op_error(op: SysOp, err: &VmRustFnError) -> Result<(), ContractViolation> {
+    let baml_err = match err {
+        VmRustFnError::BamlError(b) => b,
+        VmRustFnError::Panic(_) | VmRustFnError::Thrown(_) | VmRustFnError::InternalError(_) => {
+            return Ok(());
+        }
+    };
+    let category = baml_err.category();
     let allowed = op.allowed_error_categories();
     if allowed.is_empty() || allowed.contains(&category) {
         Ok(())
@@ -357,7 +304,11 @@ pub fn validate_sys_op_error(op: SysOp, kind: &OpErrorKind) -> Result<(), Contra
 // Operation Results
 // ============================================================================
 
-/// A boxed future for async operations.
+/// A boxed future for async operations. The error type is [`OpError`],
+/// which wraps the sysop body's [`VmRustFnError`] together with the
+/// originating [`SysOp`] for engine-side attribution. The body itself
+/// works with the bare `VmRustFnError`; the `SysOp` is attached at the
+/// `into_result` glue boundary (see [`SysOpOutput::into_result`]).
 pub type OpFuture = Pin<Box<dyn Future<Output = Result<BexExternalValue, OpError>> + Send>>;
 
 /// Result of a system operation - either immediate or async.
@@ -375,11 +326,12 @@ pub enum SysOpResult {
 
 /// Clean return type for `sys_op` trait methods, generic over the success value.
 ///
-/// Like [`SysOpResult`] but uses [`OpErrorKind`] instead of [`OpError`] —
-/// the implementor never needs to specify which [`SysOp`] variant they are.
-/// The generated glue code wraps this into a full [`SysOpResult`] via
-/// [`into_result`](SysOpOutput::into_result), which converts `T` into
-/// [`BexExternalValue`] using [`AsBexExternalValue`].
+/// Like [`SysOpResult`] but carries [`VmRustFnError`] without the
+/// `SysOp`-attribution wrapper — the implementor never needs to specify
+/// which [`SysOp`] variant they are. The generated glue code wraps this
+/// into a full [`SysOpResult`] via [`into_result`](SysOpOutput::into_result),
+/// which converts `T` into [`BexExternalValue`] using [`AsBexExternalValue`]
+/// and attaches the `SysOp`.
 ///
 /// # Example
 ///
@@ -388,7 +340,7 @@ pub enum SysOpResult {
 ///     fn baml_fs_open(path: String) -> SysOpOutput<FsFile> {
 ///         SysOpOutput::async_op(async move {
 ///             let file = File::open(&path).await
-///                 .map_err(|e| OpErrorKind::Other(format!("open failed: {e}")))?;
+///                 .map_err(|e| VmBamlError::Io { message: format!("open failed: {e}") })?;
 ///             let handle = REGISTRY.register_file(file, path);
 ///             Ok(FsFile { _handle: handle })
 ///         })
@@ -398,9 +350,9 @@ pub enum SysOpResult {
 #[allow(clippy::large_enum_variant)]
 pub enum SysOpOutput<T = BexExternalValue> {
     /// Operation completed synchronously.
-    Ready(Result<T, OpErrorKind>),
+    Ready(Result<T, bex_vm_types::errors::VmRustFnError>),
     /// Operation is async.
-    Async(Pin<Box<dyn Future<Output = Result<T, OpErrorKind>> + Send>>),
+    Async(Pin<Box<dyn Future<Output = Result<T, bex_vm_types::errors::VmRustFnError>> + Send>>),
 }
 
 impl<T> SysOpOutput<T> {
@@ -409,15 +361,37 @@ impl<T> SysOpOutput<T> {
         Self::Ready(Ok(value))
     }
 
-    /// Create a synchronous error.
-    pub fn err(kind: OpErrorKind) -> Self {
-        Self::Ready(Err(kind))
+    /// Create a synchronous error. The `Into` bound lets sysop impls pass
+    /// `VmBamlError::X { ... }` / `VmPanic::X { ... }` / a pre-built
+    /// `VmRustFnError` interchangeably.
+    pub fn err(err: impl Into<bex_vm_types::errors::VmRustFnError>) -> Self {
+        Self::Ready(Err(err.into()))
     }
 }
 
 impl<T: Send + 'static> SysOpOutput<T> {
-    /// Create an async result from a future.
-    pub fn async_op(fut: impl Future<Output = Result<T, OpErrorKind>> + Send + 'static) -> Self {
+    /// Create an async result from a future yielding [`VmRustFnError`].
+    ///
+    /// `VmRustFnError` is the right type because it carries every shape a
+    /// sysop body might produce: a catchable `BamlError(VmBamlError)`, a
+    /// `Panic(VmPanic)` (e.g. `Cancelled`), a fatal `InternalError`, or a
+    /// pre-built `Thrown(Value)`. Restricting to `VmBamlError` would lose
+    /// the panic and internal-error shapes.
+    ///
+    /// The `?` operator inside the closure auto-converts any error type
+    /// with a `From` impl to `VmRustFnError` (e.g. `VmBamlError` /
+    /// `VmPanic` / `VmInternalError`) — so propagation from helper
+    /// functions is transparent. Direct `Err(VmBamlError::X { … })`
+    /// returns still need an explicit `.into()` because `Err` doesn't
+    /// trigger the `?`-coercion path.
+    ///
+    /// We deliberately keep the bound concrete (rather than `impl
+    /// Into<VmRustFnError>`) because closure-body inference can't pick a
+    /// unique error type when `?` is used with a generic outer type, which
+    /// triggers `E0283` ambiguity.
+    pub fn async_op(
+        fut: impl Future<Output = Result<T, bex_vm_types::errors::VmRustFnError>> + Send + 'static,
+    ) -> Self {
         Self::Async(Box::pin(fut))
     }
 }
@@ -430,11 +404,11 @@ impl<T: AsBexExternalValue + Send + 'static> SysOpOutput<T> {
     pub fn into_result(self, op: SysOp) -> SysOpResult {
         match self {
             Self::Ready(Ok(v)) => SysOpResult::Ready(Ok(v.into_bex_external_value())),
-            Self::Ready(Err(kind)) => SysOpResult::Ready(Err(OpError::new(op, kind))),
+            Self::Ready(Err(err)) => SysOpResult::Ready(Err(OpError::new(op, err))),
             Self::Async(fut) => SysOpResult::Async(Box::pin(async move {
                 fut.await
                     .map(AsBexExternalValue::into_bex_external_value)
-                    .map_err(|kind| OpError::new(op, kind))
+                    .map_err(|err| OpError::new(op, err))
             })),
         }
     }
@@ -452,9 +426,9 @@ impl<T: Send + 'static> SysOpOutput<T> {
     ) -> SysOpResult {
         match self {
             Self::Ready(Ok(v)) => SysOpResult::Ready(Ok(f(v))),
-            Self::Ready(Err(kind)) => SysOpResult::Ready(Err(OpError::new(op, kind))),
+            Self::Ready(Err(err)) => SysOpResult::Ready(Err(OpError::new(op, err))),
             Self::Async(fut) => SysOpResult::Async(Box::pin(async move {
-                fut.await.map(f).map_err(|kind| OpError::new(op, kind))
+                fut.await.map(f).map_err(|err| OpError::new(op, err))
             })),
         }
     }
@@ -917,19 +891,22 @@ mod tests {
     #[test]
     fn contract_allows_declared_category() {
         let op = bex_vm_types::sys_op_for_path("baml.http.fetch").unwrap();
-        let err = OpErrorKind::Timeout {
+        let err: bex_vm_types::errors::VmRustFnError = bex_vm_types::errors::VmBamlError::Timeout {
             message: "timed out".into(),
-            duration: std::time::Duration::from_secs(30),
-        };
+            duration_ms: Some(30_000),
+        }
+        .into();
         assert!(validate_sys_op_error(op, &err).is_ok());
     }
 
     #[test]
     fn contract_rejects_undeclared_category() {
         let op = bex_vm_types::sys_op_for_path("baml.env.get").unwrap();
-        let err = OpErrorKind::LlmClientError {
-            message: "bad".into(),
-        };
+        let err: bex_vm_types::errors::VmRustFnError =
+            bex_vm_types::errors::VmBamlError::LlmClient {
+                message: "bad".into(),
+            }
+            .into();
         let result = validate_sys_op_error(op, &err);
         assert!(result.is_err());
         let violation = result.unwrap_err();
@@ -939,12 +916,70 @@ mod tests {
     #[test]
     fn contract_allows_devother_when_declared() {
         let op = bex_vm_types::sys_op_for_path("baml.http.fetch").unwrap();
-        let err = OpErrorKind::Other("some debug detail".into());
+        let err: bex_vm_types::errors::VmRustFnError =
+            bex_vm_types::errors::VmBamlError::DevOther {
+                message: "some debug detail".into(),
+            }
+            .into();
         let result = validate_sys_op_error(op, &err);
         assert!(
             result.is_err(),
             "DevOther should be rejected when not in #[throws]"
         );
+    }
+
+    /// `Panic` / `Thrown` / `InternalError` variants of `VmRustFnError` are
+    /// outside the `#[throws(...)]` contract surface; validation must let
+    /// them pass even on an op that declares no throws categories.
+    #[test]
+    fn contract_skips_non_baml_error_variants() {
+        let op = bex_vm_types::sys_op_for_path("baml.env.get").unwrap();
+        for err in [
+            bex_vm_types::errors::VmRustFnError::Panic(bex_vm_types::errors::VmPanic::Cancelled),
+            bex_vm_types::errors::VmRustFnError::Thrown(bex_vm_types::Value::NULL),
+            bex_vm_types::errors::VmRustFnError::InternalError(
+                bex_vm_types::errors::VmInternalError::UnexpectedEmptyStack,
+            ),
+        ] {
+            assert!(
+                validate_sys_op_error(op, &err).is_ok(),
+                "non-BamlError variants must skip contract validation"
+            );
+        }
+    }
+
+    /// An empty `allowed_error_categories` list means "accept any category".
+    /// `call_host_value`'s codegen relies on this (it emits `&[]` when the
+    /// `throws` contains a generic param like `E` — see
+    /// `codegen_io::error_cat_arms`). Anchor that semantics here so a
+    /// reviewer who reads `validate_sys_op_error` in isolation sees the
+    /// contract is intentional, not a missing check.
+    #[test]
+    fn contract_empty_allow_list_accepts_any_category() {
+        let op = bex_vm_types::sys_op_for_path("baml.host.call_host_value").unwrap();
+        // `call_host_value` declares `throws E` (generic only), so codegen
+        // emits an empty allow-list.
+        assert!(op.allowed_error_categories().is_empty());
+        for err in [
+            bex_vm_types::errors::VmBamlError::Io {
+                message: "io".into(),
+            },
+            bex_vm_types::errors::VmBamlError::LlmClient {
+                message: "llm".into(),
+            },
+            bex_vm_types::errors::VmBamlError::Unsupported {
+                message: "u".into(),
+            },
+            bex_vm_types::errors::VmBamlError::DevOther {
+                message: "x".into(),
+            },
+        ] {
+            let rust_err: bex_vm_types::errors::VmRustFnError = err.into();
+            assert!(
+                validate_sys_op_error(op, &rust_err).is_ok(),
+                "empty allow-list must accept every BAML-error category"
+            );
+        }
     }
 
     #[test]
@@ -961,39 +996,54 @@ mod tests {
         }
     }
 
+    /// Every `VmBamlError` variant must map to some `SysOpErrorCategory`
+    /// (used by `validate_sys_op_error` for the `#[throws(...)]` contract
+    /// check). Exercises each variant once; the assertion is just that
+    /// `category()` doesn't panic on any branch.
     #[test]
     fn category_mapping_covers_all_variants() {
+        use bex_vm_types::errors::VmBamlError;
         let variants = vec![
-            OpErrorKind::InvalidArgumentCount {
-                expected: 1,
-                actual: 2,
+            VmBamlError::InvalidArgument {
+                message: "bad arg".into(),
             },
-            OpErrorKind::InvalidArgument {
-                position: 0,
-                expected: "string",
-                actual: "int".into(),
+            VmBamlError::ParseError {
+                message: "parse fail".into(),
             },
-            OpErrorKind::Other("test".into()),
-            OpErrorKind::TypeError {
-                expected: "int",
-                actual: "string".into(),
-            },
-            OpErrorKind::ResourceTypeMismatch { expected: "File" },
-            OpErrorKind::Unsupported,
-            OpErrorKind::RenderPrompt("err".into()),
-            OpErrorKind::Io {
+            VmBamlError::Io {
                 message: "io error".into(),
             },
-            OpErrorKind::Cancelled,
-            OpErrorKind::Timeout {
+            VmBamlError::Timeout {
                 message: "t".into(),
-                duration: std::time::Duration::from_secs(1),
+                duration_ms: Some(1_000),
             },
-            OpErrorKind::NotImplemented {
+            VmBamlError::Unsupported {
+                message: "u".into(),
+            },
+            VmBamlError::AccessError {
+                message: "a".into(),
+            },
+            VmBamlError::RenderPrompt {
+                message: "r".into(),
+            },
+            VmBamlError::NotImplemented {
                 message: "n".into(),
             },
-            OpErrorKind::LlmClientError {
+            VmBamlError::LlmClient {
                 message: "l".into(),
+            },
+            VmBamlError::DevOther {
+                message: "test".into(),
+            },
+            VmBamlError::HostPanic {
+                message: "hp".into(),
+            },
+            VmBamlError::HostCallable {
+                class_name: "C".into(),
+                message: "hc".into(),
+                traceback: None,
+                language: None,
+                category: 0,
             },
         ];
         for v in &variants {

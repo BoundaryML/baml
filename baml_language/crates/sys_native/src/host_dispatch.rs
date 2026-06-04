@@ -43,7 +43,7 @@ use std::{
 };
 
 use once_cell::sync::{Lazy, OnceCell};
-use sys_types::{BexExternalValue, CompletionHandle, OpError, OpErrorKind, SysOp};
+use sys_types::{BexExternalValue, CompletionHandle, OpError, SysOp, VmBamlError};
 
 /// C-compatible dispatch callback installed by the host bridge.
 ///
@@ -165,9 +165,9 @@ pub fn insert(call_id: u32, completion: CompletionHandle) -> bool {
         );
         completion.complete(Err(OpError::new(
             SysOp::BamlHostCallHostValue,
-            OpErrorKind::Other(format!(
-                "host-call id {call_id} collided with a live in-flight call"
-            )),
+            VmBamlError::DevOther {
+                message: format!("host-call id {call_id} collided with a live in-flight call"),
+            },
         )));
         return false;
     }
@@ -387,6 +387,9 @@ mod tests {
             SysOpResult::Ready(Ok(_)) => panic!("expected an error for the rejected call"),
             SysOpResult::Ready(Err(e)) => e,
         };
-        assert!(matches!(second_err.kind, OpErrorKind::Other(_)));
+        assert!(matches!(
+            second_err.kind,
+            sys_types::VmRustFnError::BamlError(VmBamlError::DevOther { message: _ })
+        ));
     }
 }

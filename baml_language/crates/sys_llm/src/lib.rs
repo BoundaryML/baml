@@ -29,7 +29,7 @@ pub use jinja::{
 };
 // --- Crate-internal re-exports (used by submodules via `crate::`) ---
 pub(crate) use model_features::{AllowedMetadata, ModelFeatures};
-// Used by sys_types (From<LlmOpError> for OpErrorKind)
+// Used by sys_types (From<LlmOpError> for VmBamlError)
 pub use provider::LlmProvider;
 pub use sys_jinja::undeclared_prompt_variables;
 pub use types::LlmOpError;
