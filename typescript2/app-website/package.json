@@ -63,6 +63,7 @@
     "cobe": "0.6.4",
     "codemirror-copilot": "0.0.7",
     "color-bits": "1.1.0",
+    "cytoscape": "^3.33.4",
     "date-fns": "4.1.0",
     "dedent-js": "1.0.1",
     "elkjs": "^0.11.1",
@@ -117,6 +118,7 @@
   },
   "devDependencies": {
     "@boundaryml/baml-nextjs-plugin": "0.1.0",
+    "@types/cytoscape": "^3.31.0",
     "@types/lodash-es": "4.17.12",
     "@types/mdx": "2.0.13",
     "@types/node": "24.1.0",

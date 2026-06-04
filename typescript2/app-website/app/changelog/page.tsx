@@ -88,7 +88,10 @@ function formatDate(iso: string): string {
 async function loadEntries(): Promise<Entry[]> {
   if (!CHANGELOG_API) return [];
   try {
-    const res = await fetch(`${CHANGELOG_API}/entries`, { cache: 'no-store' });
+    const res = await fetch(`${CHANGELOG_API}/entries`, {
+      cache: 'no-store',
+      signal: AbortSignal.timeout(8000),
+    });
     if (!res.ok) return [];
     const data = (await res.json()) as { entries: Entry[] };
     return data.entries ?? [];
