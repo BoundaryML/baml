@@ -30,13 +30,15 @@ BRIDGE_NODEJS="$WORKSPACE_ROOT/sdks/nodejs/bridge_nodejs"
 export npm_config_store_dir="${BAML_SDK_PNPM_STORE_DIR:-$WORKSPACE_ROOT/target/pnpm-store}"
 mkdir -p "$npm_config_store_dir"
 
-# 1. Workspace deps. bridge_nodejs is a member of the repo-root
-#    pnpm-workspace.yaml, and `pnpm build:debug` needs that workspace
-#    install to have populated bridge_nodejs/node_modules.
-echo "==> pnpm install at repo root"
-(cd "$REPO_ROOT" && pnpm install)
+# bridge_nodejs is self-contained: its own pnpm-lock.yaml, no `workspace:`
+# deps, and fixtures depend on it via a `file:` path — so the SDK tests need
+# nothing from the repo-root pnpm workspace. We deliberately do NOT run a
+# repo-root `pnpm install`: that pulled all 39 workspace projects (~2928 pkgs:
+# canvas, turbo, vercel, the vscode-ext, the codemirror grammar build, … none
+# used here) and added ~80s. The bridge-local install below populates
+# bridge_nodejs/node_modules standalone — all `pnpm build:debug` needs.
 
-# 2. Bridge-local deps. The bridge package has its own lockfile and build
+# 1. Bridge-local deps. The bridge package has its own lockfile and build
 #    scripts invoke tools from bridge_nodejs/node_modules (for example
 #    node_modules/protobufjs-cli/bin/pbjs), so make that install explicit.
 echo "==> pnpm install in sdks/nodejs/bridge_nodejs"
