@@ -5,16 +5,12 @@ import builtins
 import typing
 __all__ = [
     "AbortController",
-    "BamlAudio",
     "BamlCancelledError",
     "BamlClientError",
     "BamlError",
-    "BamlImage",
     "BamlInvalidArgumentError",
-    "BamlPdf",
     "BamlPyHandle",
     "BamlRuntime",
-    "BamlVideo",
     "Collector",
     "FunctionLog",
     "FunctionResult",
@@ -60,32 +56,6 @@ class AbortController:
         Calling `abort()` multiple times is harmless.
         """
 
-@typing.final
-class BamlAudio:
-    @staticmethod
-    def from_url(url: builtins.str, mime_type: typing.Optional[builtins.str] = None) -> BamlAudio: ...
-    @staticmethod
-    def from_file(file: builtins.str, mime_type: typing.Optional[builtins.str] = None) -> BamlAudio: ...
-    @staticmethod
-    def from_base64(base64: builtins.str, mime_type: typing.Optional[builtins.str] = None) -> BamlAudio: ...
-    def url(self) -> typing.Optional[builtins.str]: ...
-    def file(self) -> typing.Optional[builtins.str]: ...
-    def base64(self) -> builtins.str: ...
-    def mime_type(self) -> typing.Optional[builtins.str]: ...
-    @classmethod
-    def _from_pyhandle(cls, pyhandle: BamlPyHandle) -> BamlAudio:
-        r"""
-        Internal: build a `$name` from a `BamlPyHandle`. Used by
-        `_decode_handle`. Validates the handle's `handle_type`
-        tag matches the expected media kind.
-        """
-    def _to_pyhandle(self) -> BamlPyHandle:
-        r"""
-        Internal: expose the inner `BamlPyHandle` for inbound encode.
-        """
-    @classmethod
-    def __get_pydantic_core_schema__(cls, _source_type: typing.Any, _handler: typing.Any) -> typing.Any: ...
-
 class BamlError(Exception):
     ...
 
@@ -96,65 +66,22 @@ class BamlClientError(BamlError):
     ...
 
 
-@typing.final
-class BamlImage:
-    @staticmethod
-    def from_url(url: builtins.str, mime_type: typing.Optional[builtins.str] = None) -> BamlImage: ...
-    @staticmethod
-    def from_file(file: builtins.str, mime_type: typing.Optional[builtins.str] = None) -> BamlImage: ...
-    @staticmethod
-    def from_base64(base64: builtins.str, mime_type: typing.Optional[builtins.str] = None) -> BamlImage: ...
-    def url(self) -> typing.Optional[builtins.str]: ...
-    def file(self) -> typing.Optional[builtins.str]: ...
-    def base64(self) -> builtins.str: ...
-    def mime_type(self) -> typing.Optional[builtins.str]: ...
-    @classmethod
-    def _from_pyhandle(cls, pyhandle: BamlPyHandle) -> BamlImage:
-        r"""
-        Internal: build a `$name` from a `BamlPyHandle`. Used by
-        `_decode_handle`. Validates the handle's `handle_type`
-        tag matches the expected media kind.
-        """
-    def _to_pyhandle(self) -> BamlPyHandle:
-        r"""
-        Internal: expose the inner `BamlPyHandle` for inbound encode.
-        """
-    @classmethod
-    def __get_pydantic_core_schema__(cls, _source_type: typing.Any, _handler: typing.Any) -> typing.Any: ...
-
 class BamlInvalidArgumentError(BamlError):
     ...
-
-@typing.final
-class BamlPdf:
-    @staticmethod
-    def from_url(url: builtins.str, mime_type: typing.Optional[builtins.str] = None) -> BamlPdf: ...
-    @staticmethod
-    def from_file(file: builtins.str, mime_type: typing.Optional[builtins.str] = None) -> BamlPdf: ...
-    @staticmethod
-    def from_base64(base64: builtins.str, mime_type: typing.Optional[builtins.str] = None) -> BamlPdf: ...
-    def url(self) -> typing.Optional[builtins.str]: ...
-    def file(self) -> typing.Optional[builtins.str]: ...
-    def base64(self) -> builtins.str: ...
-    def mime_type(self) -> typing.Optional[builtins.str]: ...
-    @classmethod
-    def _from_pyhandle(cls, pyhandle: BamlPyHandle) -> BamlPdf:
-        r"""
-        Internal: build a `$name` from a `BamlPyHandle`. Used by
-        `_decode_handle`. Validates the handle's `handle_type`
-        tag matches the expected media kind.
-        """
-    def _to_pyhandle(self) -> BamlPyHandle:
-        r"""
-        Internal: expose the inner `BamlPyHandle` for inbound encode.
-        """
-    @classmethod
-    def __get_pydantic_core_schema__(cls, _source_type: typing.Any, _handler: typing.Any) -> typing.Any: ...
 
 @typing.final
 class BamlPyHandle:
     def __copy__(self) -> BamlPyHandle: ...
     def __deepcopy__(self, _memo: typing.Any) -> BamlPyHandle: ...
+
+def _media_from_url(media_handle_type: builtins.int, url: builtins.str, mime_type: typing.Optional[builtins.str] = None) -> BamlPyHandle: ...
+def _media_from_file(media_handle_type: builtins.int, file: builtins.str, mime_type: typing.Optional[builtins.str] = None) -> BamlPyHandle: ...
+def _media_from_base64(media_handle_type: builtins.int, base64: builtins.str, mime_type: typing.Optional[builtins.str] = None) -> BamlPyHandle: ...
+def _media_url(pyhandle: BamlPyHandle, expected_handle_type: builtins.int) -> typing.Optional[builtins.str]: ...
+def _media_file(pyhandle: BamlPyHandle, expected_handle_type: builtins.int) -> typing.Optional[builtins.str]: ...
+def _media_base64(pyhandle: BamlPyHandle, expected_handle_type: builtins.int) -> builtins.str: ...
+def _media_mime_type(pyhandle: BamlPyHandle, expected_handle_type: builtins.int) -> typing.Optional[builtins.str]: ...
+def _media_validate(pyhandle: BamlPyHandle, expected_handle_type: builtins.int) -> None: ...
 
 @typing.final
 class BamlRuntime:
@@ -187,32 +114,6 @@ class BamlRuntime:
         r"""
         Call a BAML function synchronously (blocking).
         """
-
-@typing.final
-class BamlVideo:
-    @staticmethod
-    def from_url(url: builtins.str, mime_type: typing.Optional[builtins.str] = None) -> BamlVideo: ...
-    @staticmethod
-    def from_file(file: builtins.str, mime_type: typing.Optional[builtins.str] = None) -> BamlVideo: ...
-    @staticmethod
-    def from_base64(base64: builtins.str, mime_type: typing.Optional[builtins.str] = None) -> BamlVideo: ...
-    def url(self) -> typing.Optional[builtins.str]: ...
-    def file(self) -> typing.Optional[builtins.str]: ...
-    def base64(self) -> builtins.str: ...
-    def mime_type(self) -> typing.Optional[builtins.str]: ...
-    @classmethod
-    def _from_pyhandle(cls, pyhandle: BamlPyHandle) -> BamlVideo:
-        r"""
-        Internal: build a `$name` from a `BamlPyHandle`. Used by
-        `_decode_handle`. Validates the handle's `handle_type`
-        tag matches the expected media kind.
-        """
-    def _to_pyhandle(self) -> BamlPyHandle:
-        r"""
-        Internal: expose the inner `BamlPyHandle` for inbound encode.
-        """
-    @classmethod
-    def __get_pydantic_core_schema__(cls, _source_type: typing.Any, _handler: typing.Any) -> typing.Any: ...
 
 class Collector:
     r"""
@@ -447,6 +348,14 @@ def get_runtime() -> BamlRuntime:
     """
 
 def get_version() -> builtins.str: ...
+
+def _handle_validate(key: builtins.int, handle_type: builtins.int) -> None: ...
+
+def _handle_clone(key: builtins.int, handle_type: builtins.int) -> tuple[builtins.int, builtins.int]: ...
+
+def _handle_release(key: builtins.int, handle_type: builtins.int) -> None: ...
+
+def _handle_type(key: builtins.int) -> builtins.int: ...
 
 def put_pyhandle_into_table(pyhandle: BamlPyHandle) -> tuple[builtins.int, builtins.int]:
     r"""

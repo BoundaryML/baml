@@ -19,15 +19,8 @@ import typing
 from typing import Any, Dict, List, Optional
 
 from .cffi.v1 import baml_inbound_pb2, baml_outbound_pb2
-from .baml_py import (
-    BamlAudio,
-    BamlImage,
-    BamlPdf,
-    BamlPyHandle,
-    BamlVideo,
-    register_host_callable,
-    release_host_callable,
-)
+from .baml_py import BamlPyHandle, register_host_callable, release_host_callable
+from .media import BamlAudio, BamlImage, BamlPdf, BamlVideo
 from ._stream import BamlStream
 from .errors import BamlError, BamlPanic, attach_baml_traceback
 from .typemap import BamlTypeMap, get_type_map
@@ -48,12 +41,10 @@ def _is_pydantic_model_class(cls: type) -> bool:
     return issubclass(cls, BaseModel)
 
 
-# Media PyO3 types — kept as a tuple for `isinstance` dispatch in the
-# encoder and `_decode_class` unwrap (15b §line 21). The engine FQN
-# for each class is looked up via `get_type_map().py_type_to_baml_type(...)`
-# at encode time; the typemap seeds the PyO3 identity → `baml.media.*`
-# overrides at construction (25b2 §"reverse map overrides").
-_MEDIA_PYO3_TYPES = (BamlImage, BamlAudio, BamlVideo, BamlPdf)
+# Native Python media wrappers — kept as a tuple for `isinstance` dispatch
+# in the encoder and `_decode_class` unwrap. The engine FQN for each class
+# is looked up via `get_type_map().py_type_to_baml_type(...)` at encode time.
+_MEDIA_TYPES = (BamlImage, BamlAudio, BamlVideo, BamlPdf)
 
 
 # ---------------------------------------------------------------------------
@@ -245,11 +236,11 @@ def _set_inbound_value(
             inbound_value, value._to_pyhandle(), kwarg_name=kwarg_name, registered=registered
         )
 
-    # Media PyO3 types — wrap into an `InboundClassValue` per 15b. The
+    # Media types — wrap into an `InboundClassValue` per 15b. The
     # only field is `_data`, recursively encoded; the recursion lands on
     # the `BamlPyHandle` branch above. The engine FQN comes from the
     # typemap's reverse-map seeded overrides (25b2 §"reverse map").
-    if isinstance(value, _MEDIA_PYO3_TYPES):
+    if isinstance(value, _MEDIA_TYPES):
         cv = inbound_value.class_value
         cv.name = get_type_map().py_type_to_baml_type(type(value))
         data_entry = cv.fields.add()
@@ -507,13 +498,13 @@ def _decode_class(class_value, type_map: BamlTypeMap) -> Any:
         # error with an "Unknown class FQN" decode failure.
         return field_dict
 
-    # Media stdlib classes (`baml.media.*`) are PyO3 types wrapping a
+    # Media stdlib classes (`baml.media.*`) wrap a
     # `BamlPyHandle`. The engine emits them as
     # `class_value { name: "baml.media.Pdf", fields: { _data: handle_value }}`;
     # the inner `_data` decode already constructed a fresh `BamlPdf` via
     # `_decode_handle` → `cls._from_pyhandle(...)`. Unwrap and return it
     # directly — `BamlPdf` is not a Pydantic model.
-    if cls in _MEDIA_PYO3_TYPES and "_data" in field_dict:
+    if cls in _MEDIA_TYPES and "_data" in field_dict:
         return field_dict["_data"]
 
     parameterized = _parameterize(cls, class_value.name.generic_args, type_map)

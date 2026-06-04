@@ -7,28 +7,6 @@ export declare class AbortController {
   get aborted(): boolean
 }
 
-export declare class BamlAudio {
-  static fromUrl(url: string, mimeType?: string | undefined | null): BamlAudio
-  static fromFile(file: string, mimeType?: string | undefined | null): BamlAudio
-  static fromBase64(base64: string, mimeType?: string | undefined | null): BamlAudio
-  url(): string | null
-  file(): string | null
-  base64(): string
-  mimeType(): string | null
-  /**
-   * Internal: build from an existing `BamlHandle`. Used by proto
-   * decode. Validates the handle's `handle_type` tag matches the
-   * expected media kind, then clones the table row so the input
-   * handle stays usable.
-   */
-  static _fromHandle(handle: BamlHandle): BamlAudio
-  /**
-   * Internal: produce a fresh `BamlHandle` pointing at the same
-   * table row (cloned). Used by inbound encode.
-   */
-  _toHandle(): BamlHandle
-}
-
 /**
  * Base class for all opaque BAML handles.
  *
@@ -40,50 +18,6 @@ export declare class BamlHandle {
   get key(): HandleKey
   get handleType(): number
   clone(): BamlHandle
-}
-
-export declare class BamlImage {
-  static fromUrl(url: string, mimeType?: string | undefined | null): BamlImage
-  static fromFile(file: string, mimeType?: string | undefined | null): BamlImage
-  static fromBase64(base64: string, mimeType?: string | undefined | null): BamlImage
-  url(): string | null
-  file(): string | null
-  base64(): string
-  mimeType(): string | null
-  /**
-   * Internal: build from an existing `BamlHandle`. Used by proto
-   * decode. Validates the handle's `handle_type` tag matches the
-   * expected media kind, then clones the table row so the input
-   * handle stays usable.
-   */
-  static _fromHandle(handle: BamlHandle): BamlImage
-  /**
-   * Internal: produce a fresh `BamlHandle` pointing at the same
-   * table row (cloned). Used by inbound encode.
-   */
-  _toHandle(): BamlHandle
-}
-
-export declare class BamlPdf {
-  static fromUrl(url: string, mimeType?: string | undefined | null): BamlPdf
-  static fromFile(file: string, mimeType?: string | undefined | null): BamlPdf
-  static fromBase64(base64: string, mimeType?: string | undefined | null): BamlPdf
-  url(): string | null
-  file(): string | null
-  base64(): string
-  mimeType(): string | null
-  /**
-   * Internal: build from an existing `BamlHandle`. Used by proto
-   * decode. Validates the handle's `handle_type` tag matches the
-   * expected media kind, then clones the table row so the input
-   * handle stays usable.
-   */
-  static _fromHandle(handle: BamlHandle): BamlPdf
-  /**
-   * Internal: produce a fresh `BamlHandle` pointing at the same
-   * table row (cloned). Used by inbound encode.
-   */
-  _toHandle(): BamlHandle
 }
 
 /** The main BAML runtime. A zero-sized handle (see module docs). */
@@ -103,28 +37,6 @@ export declare class BamlRuntime {
   callFunctionSync(functionName: string, argsProto: Buffer, ctx?: HostSpanManager | undefined | null, collectors?: Array<Collector> | undefined | null, abortController?: AbortController | undefined | null): Buffer
   /** Call a BAML function asynchronously. */
   callFunction(functionName: string, argsProto: Buffer, ctx?: HostSpanManager | undefined | null, collectors?: Array<Collector> | undefined | null, abortController?: AbortController | undefined | null): Promise<Buffer>
-}
-
-export declare class BamlVideo {
-  static fromUrl(url: string, mimeType?: string | undefined | null): BamlVideo
-  static fromFile(file: string, mimeType?: string | undefined | null): BamlVideo
-  static fromBase64(base64: string, mimeType?: string | undefined | null): BamlVideo
-  url(): string | null
-  file(): string | null
-  base64(): string
-  mimeType(): string | null
-  /**
-   * Internal: build from an existing `BamlHandle`. Used by proto
-   * decode. Validates the handle's `handle_type` tag matches the
-   * expected media kind, then clones the table row so the input
-   * handle stays usable.
-   */
-  static _fromHandle(handle: BamlHandle): BamlVideo
-  /**
-   * Internal: produce a fresh `BamlHandle` pointing at the same
-   * table row (cloned). Used by inbound encode.
-   */
-  _toHandle(): BamlHandle
 }
 
 export declare class Collector {
@@ -211,6 +123,8 @@ export declare function getRuntime(): BamlRuntime
 
 export declare function getVersion(): string
 
+export declare function handleClone(key: HandleKey, handleType: number): HandlePayload
+
 /**
  * A u64 handle key split into two i32 halves, mirroring the shape of
  * protobufjs's `Long` type (`{ low: number, high: number }`).
@@ -227,6 +141,33 @@ export interface HandleKey {
   low: number
   high: number
 }
+
+export interface HandlePayload {
+  key: HandleKey
+  handleType: number
+}
+
+export declare function handleRelease(key: HandleKey, handleType: number): void
+
+export declare function handleType(key: HandleKey): number
+
+export declare function handleValidate(key: HandleKey, handleType: number): void
+
+export declare function mediaBase64(handle: BamlHandle, expectedHandleType: number): string
+
+export declare function mediaFile(handle: BamlHandle, expectedHandleType: number): string | null
+
+export declare function mediaFromBase64(mediaHandleType: number, base64: string, mimeType?: string | undefined | null): BamlHandle
+
+export declare function mediaFromFile(mediaHandleType: number, file: string, mimeType?: string | undefined | null): BamlHandle
+
+export declare function mediaFromUrl(mediaHandleType: number, url: string, mimeType?: string | undefined | null): BamlHandle
+
+export declare function mediaMimeType(handle: BamlHandle, expectedHandleType: number): string | null
+
+export declare function mediaUrl(handle: BamlHandle, expectedHandleType: number): string | null
+
+export declare function mediaValidate(handle: BamlHandle, expectedHandleType: number): void
 
 /**
  * Allocate a fresh `HANDLE_TABLE` row sharing the same `Arc` as `handle`,

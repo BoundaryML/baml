@@ -11,7 +11,8 @@
 // Decodes the BamlOutboundResult envelope → TS objects (call results), and
 // bare BamlOutboundValue bytes → TS objects (host-callable args).
 import { baml_core } from './proto/baml_cffi.js';
-import { BamlHandle, putHandleIntoTable, BamlImage, BamlAudio, BamlVideo, BamlPdf, registerHostCallable, releaseHostCallable, completeHostCall, } from './native.js';
+import { BamlHandle, putHandleIntoTable, takeHandleFromTable, registerHostCallable, releaseHostCallable, completeHostCall, } from './native.js';
+import { BamlImage, BamlAudio, BamlVideo, BamlPdf } from './media.js';
 import { BamlStream } from './stream.js';
 import { BamlError, BamlPanic } from './errors.js';
 import { getTypeMap } from './typemap.js';
@@ -314,7 +315,7 @@ function decodeValueHolder(holder, typeMap) {
             // Never a valid decoded handle (mirrors Python's _decode_handle).
             throw new BamlError('decoded handle has HANDLE_UNSPECIFIED handle_type');
         }
-        const handle = new BamlHandle(holder.handleValue.key, ht);
+        const handle = takeHandleFromTable(holder.handleValue.key, ht);
         if (ht === BamlHandleType.ADT_MEDIA_IMAGE)
             return BamlImage._fromHandle(handle);
         if (ht === BamlHandleType.ADT_MEDIA_AUDIO)

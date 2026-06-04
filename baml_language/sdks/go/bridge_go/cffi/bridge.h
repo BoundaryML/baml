@@ -16,6 +16,11 @@ typedef void (*CallbackFn)(uint32_t call_id, const int8_t *content, size_t lengt
 typedef void (*RegisterCallbackFn)(CallbackFn cb);
 typedef uint64_t (*CloneHandleFn)(uint64_t key);
 typedef void (*ReleaseHandleFn)(uint64_t key);
+typedef int32_t (*BamlHandleValidateFn)(uint64_t key, int32_t handle_type);
+typedef int32_t (*BamlHandleCloneFn)(uint64_t key, int32_t handle_type, uint64_t *out_key, int32_t *out_handle_type);
+typedef int32_t (*BamlHandleReleaseFn)(uint64_t key, int32_t handle_type);
+typedef int32_t (*BamlHandleTypeFn)(uint64_t key, int32_t *out_handle_type);
+typedef int32_t (*BamlHandleTestSeedFunctionRefFn)(uint64_t global_index, uint64_t *out_key, int32_t *out_handle_type);
 typedef int32_t (*CancelFunctionCallFn)(uint32_t id);
 typedef void (*FlushEventsFn)(void);
 // Host-value callable support
@@ -34,6 +39,11 @@ static void *callFunctionFnPtr = NULL;
 static void *registerCallbackFnPtr = NULL;
 static void *cloneHandleFnPtr = NULL;
 static void *releaseHandleFnPtr = NULL;
+static void *bamlHandleValidateFnPtr = NULL;
+static void *bamlHandleCloneFnPtr = NULL;
+static void *bamlHandleReleaseFnPtr = NULL;
+static void *bamlHandleTypeFnPtr = NULL;
+static void *bamlHandleTestSeedFunctionRefFnPtr = NULL;
 static void *cancelFunctionCallFnPtr = NULL;
 static void *flushEventsFnPtr = NULL;
 // Host-value callable function pointers
@@ -50,6 +60,11 @@ static void setCallFunctionFn(void *fn) { callFunctionFnPtr = fn; }
 static void setRegisterCallbackFn(void *fn) { registerCallbackFnPtr = fn; }
 static void setCloneHandleFn(void *fn) { cloneHandleFnPtr = fn; }
 static void setReleaseHandleFn(void *fn) { releaseHandleFnPtr = fn; }
+static void setBamlHandleValidateFn(void *fn) { bamlHandleValidateFnPtr = fn; }
+static void setBamlHandleCloneFn(void *fn) { bamlHandleCloneFnPtr = fn; }
+static void setBamlHandleReleaseFn(void *fn) { bamlHandleReleaseFnPtr = fn; }
+static void setBamlHandleTypeFn(void *fn) { bamlHandleTypeFnPtr = fn; }
+static void setBamlHandleTestSeedFunctionRefFn(void *fn) { bamlHandleTestSeedFunctionRefFnPtr = fn; }
 static void setCancelFunctionCallFn(void *fn) { cancelFunctionCallFnPtr = fn; }
 static void setFlushEventsFn(void *fn) { flushEventsFnPtr = fn; }
 // Host-value callable setters
@@ -87,6 +102,26 @@ static uint64_t wrapCloneHandle(uint64_t key) {
 }
 static void wrapReleaseHandle(uint64_t key) {
     if (releaseHandleFnPtr) ((ReleaseHandleFn)releaseHandleFnPtr)(key);
+}
+static int32_t wrapBamlHandleValidate(uint64_t key, int32_t handle_type) {
+    if (bamlHandleValidateFnPtr) return ((BamlHandleValidateFn)bamlHandleValidateFnPtr)(key, handle_type);
+    return 4;
+}
+static int32_t wrapBamlHandleClone(uint64_t key, int32_t handle_type, uint64_t *out_key, int32_t *out_handle_type) {
+    if (bamlHandleCloneFnPtr) return ((BamlHandleCloneFn)bamlHandleCloneFnPtr)(key, handle_type, out_key, out_handle_type);
+    return 4;
+}
+static int32_t wrapBamlHandleRelease(uint64_t key, int32_t handle_type) {
+    if (bamlHandleReleaseFnPtr) return ((BamlHandleReleaseFn)bamlHandleReleaseFnPtr)(key, handle_type);
+    return 4;
+}
+static int32_t wrapBamlHandleType(uint64_t key, int32_t *out_handle_type) {
+    if (bamlHandleTypeFnPtr) return ((BamlHandleTypeFn)bamlHandleTypeFnPtr)(key, out_handle_type);
+    return 4;
+}
+static int32_t wrapBamlHandleTestSeedFunctionRef(uint64_t global_index, uint64_t *out_key, int32_t *out_handle_type) {
+    if (bamlHandleTestSeedFunctionRefFnPtr) return ((BamlHandleTestSeedFunctionRefFn)bamlHandleTestSeedFunctionRefFnPtr)(global_index, out_key, out_handle_type);
+    return 4;
 }
 static int32_t wrapCancelFunctionCall(uint32_t id) {
     if (cancelFunctionCallFnPtr) return ((CancelFunctionCallFn)cancelFunctionCallFnPtr)(id);

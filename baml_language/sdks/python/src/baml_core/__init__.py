@@ -1,7 +1,7 @@
 # BAML Python runtime surface — the `baml_core` package.
 #
 # Everything generated `baml_sdk.*` code imports from the bridge lives here:
-# PyO3 runtime classes (re-exported from `baml_core.baml_py`), the protobuf
+# PyO3 runtime classes, native stdlib wrappers, the protobuf
 # encoder/decoder, the three factory entry points, and `get_runtime()`.
 
 import atexit
@@ -24,6 +24,7 @@ from .baml_py import (
 )
 from .errors import BamlError, BamlPanic, make_sdk_panic
 from ._stream import BamlStream
+from .media import BamlAudio, BamlImage, BamlPdf, BamlVideo
 from .ctx_manager import CtxManager as BamlCtxManager
 from .proto import decode_call_result, encode_call_args
 from .typemap import (

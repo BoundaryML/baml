@@ -8,15 +8,24 @@ type BamlHandle struct {
 	HandleType int32
 }
 
+// Validate checks that the key exists and that the stored type matches
+// HandleType unless HandleType is HANDLE_UNSPECIFIED.
+func (h BamlHandle) Validate() error {
+	return cffi.HandleValidate(h.Key, h.HandleType)
+}
+
 // Clone creates a new handle pointing to the same underlying value.
-func (h BamlHandle) Clone() BamlHandle {
-	newKey := cffi.CloneHandle(h.Key)
-	return BamlHandle{Key: newKey, HandleType: h.HandleType}
+func (h BamlHandle) Clone() (BamlHandle, error) {
+	newKey, handleType, err := cffi.HandleClone(h.Key, h.HandleType)
+	if err != nil {
+		return BamlHandle{}, err
+	}
+	return BamlHandle{Key: newKey, HandleType: handleType}, nil
 }
 
 // Release releases the handle, allowing Rust to free the underlying value.
-func (h BamlHandle) Release() {
-	cffi.ReleaseHandle(h.Key)
+func (h BamlHandle) Release() error {
+	return cffi.HandleRelease(h.Key, h.HandleType)
 }
 
 // FlushEvents flushes the BAML event sink.

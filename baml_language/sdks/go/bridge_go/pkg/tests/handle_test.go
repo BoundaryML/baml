@@ -12,14 +12,17 @@ func TestCloneAndReleaseHandle(t *testing.T) {
 	// clone_handle/release_handle paths with a synthetic key.
 	// Key 0 means "invalid" — clone should return 0.
 	h := pkg.BamlHandle{Key: 0, HandleType: 0}
-	cloned := h.Clone()
-	if cloned.Key != 0 {
-		t.Fatalf("expected clone of invalid handle to return 0, got %d", cloned.Key)
+	if err := h.Validate(); err == nil {
+		t.Fatal("expected invalid handle validate to fail")
 	}
 
-	// Release should not panic even for invalid keys.
-	h.Release()
-	cloned.Release()
+	if _, err := h.Clone(); err == nil {
+		t.Fatal("expected invalid handle clone to fail")
+	}
+
+	if err := h.Release(); err == nil {
+		t.Fatal("expected invalid handle release to fail")
+	}
 }
 
 func TestFlushEvents(t *testing.T) {

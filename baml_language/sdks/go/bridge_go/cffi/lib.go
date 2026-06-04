@@ -37,7 +37,14 @@ func Init(libraryPath string) error {
 		"cancel_function_call": func(p unsafe.Pointer) { C.setCancelFunctionCallFn(p) },
 		"clone_handle":         func(p unsafe.Pointer) { C.setCloneHandleFn(p) },
 		"release_handle":       func(p unsafe.Pointer) { C.setReleaseHandleFn(p) },
-		"flush_events":         func(p unsafe.Pointer) { C.setFlushEventsFn(p) },
+		"baml_handle_validate": func(p unsafe.Pointer) { C.setBamlHandleValidateFn(p) },
+		"baml_handle_clone":    func(p unsafe.Pointer) { C.setBamlHandleCloneFn(p) },
+		"baml_handle_release":  func(p unsafe.Pointer) { C.setBamlHandleReleaseFn(p) },
+		"baml_handle_type":     func(p unsafe.Pointer) { C.setBamlHandleTypeFn(p) },
+		"baml_handle_test_seed_function_ref": func(p unsafe.Pointer) {
+			C.setBamlHandleTestSeedFunctionRefFn(p)
+		},
+		"flush_events": func(p unsafe.Pointer) { C.setFlushEventsFn(p) },
 		// Host-value callable C symbols.
 		"register_host_dispatch_callback": func(p unsafe.Pointer) { C.setRegisterHostDispatchCallbackFn(p) },
 		"register_host_release_callback":  func(p unsafe.Pointer) { C.setRegisterHostReleaseCallbackFn(p) },
@@ -172,6 +179,80 @@ func CloneHandle(key uint64) uint64 {
 // ReleaseHandle releases an opaque handle.
 func ReleaseHandle(key uint64) {
 	C.wrapReleaseHandle(C.uint64_t(key))
+}
+
+const (
+	BamlOK                          int32 = 0
+	BamlHandleInvalidHandle         int32 = 1
+	BamlHandleTypeMismatch          int32 = 2
+	BamlHandleUnsupportedHandleType int32 = 3
+	BamlHandleInternalError         int32 = 4
+)
+
+func handleStatusError(context string, key uint64, status int32) error {
+	if status == BamlOK {
+		return nil
+	}
+	reason := "unknown handle error"
+	switch status {
+	case BamlHandleInvalidHandle:
+		reason = "invalid handle"
+	case BamlHandleTypeMismatch:
+		reason = "handle type mismatch"
+	case BamlHandleUnsupportedHandleType:
+		reason = "unsupported handle type"
+	case BamlHandleInternalError:
+		reason = "internal handle error"
+	}
+	return fmt.Errorf("%s for key %d: %s", context, key, reason)
+}
+
+func HandleValidate(key uint64, handleType int32) error {
+	status := int32(C.wrapBamlHandleValidate(C.uint64_t(key), C.int32_t(handleType)))
+	return handleStatusError("handle validate", key, status)
+}
+
+func HandleClone(key uint64, handleType int32) (uint64, int32, error) {
+	var outKey C.uint64_t
+	var outHandleType C.int32_t
+	status := int32(C.wrapBamlHandleClone(
+		C.uint64_t(key),
+		C.int32_t(handleType),
+		&outKey,
+		&outHandleType,
+	))
+	if err := handleStatusError("handle clone", key, status); err != nil {
+		return 0, 0, err
+	}
+	return uint64(outKey), int32(outHandleType), nil
+}
+
+func HandleRelease(key uint64, handleType int32) error {
+	status := int32(C.wrapBamlHandleRelease(C.uint64_t(key), C.int32_t(handleType)))
+	return handleStatusError("handle release", key, status)
+}
+
+func HandleType(key uint64) (int32, error) {
+	var outHandleType C.int32_t
+	status := int32(C.wrapBamlHandleType(C.uint64_t(key), &outHandleType))
+	if err := handleStatusError("handle type", key, status); err != nil {
+		return 0, err
+	}
+	return int32(outHandleType), nil
+}
+
+func HandleTestSeedFunctionRef(globalIndex uint64) (uint64, int32, error) {
+	var outKey C.uint64_t
+	var outHandleType C.int32_t
+	status := int32(C.wrapBamlHandleTestSeedFunctionRef(
+		C.uint64_t(globalIndex),
+		&outKey,
+		&outHandleType,
+	))
+	if err := handleStatusError("handle test seed function ref", globalIndex, status); err != nil {
+		return 0, 0, err
+	}
+	return uint64(outKey), int32(outHandleType), nil
 }
 
 // FlushEvents flushes the event sink.

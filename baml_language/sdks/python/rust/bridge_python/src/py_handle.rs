@@ -1,29 +1,52 @@
-//! `BamlPyHandle` — Python wrapper for a `HANDLE_TABLE` row.
+//! `BamlPyHandle` — Python wrapper for a shared CFFI handle-table row.
 //!
-//! Holds a `(handle_key, handle_type)` pair. The actual
-//! `CffiHandleTableEntry` lives in `bridge_ctypes::HANDLE_TABLE`; the
-//! Python object is just a token. This matches what Go/Rust client
-//! bindings will look like — they can only see `u64` handles across the
-//! CFFI boundary, so Python uses the same model for uniformity.
+//! Holds a `(handle_key, handle_type)` pair. The actual table entry is managed
+//! through `bridge_cffi`'s checked handle API; Python keeps only the protobuf
+//! handle payload and owns its key until drop.
 //!
 //! Lifecycle:
-//!  - Construct (decode side): `BamlPyHandle::new(key, ht)`. The wire
-//!    encoder is responsible for having inserted under `key`. The Python
-//!    object now owns the row; nobody else may drain it.
-//!  - `__copy__` / `__deepcopy__`: allocate a new row via
-//!    `HANDLE_TABLE.clone_handle(key)` and wrap. Sharing the same key
-//!    between two `BamlPyHandle`s would double-release on drop.
-//!  - Drop: `HANDLE_TABLE.release(key)`. Without this every handle leaks
-//!    one row.
+//!  - Construct (decode side): validate `(key, handle_type)` through
+//!    `bridge_cffi`, then wrap. The Python object now owns the row.
+//!  - `__copy__` / `__deepcopy__`: allocate a new row through
+//!    `bridge_cffi::handle_clone_impl`. Sharing the same key between two
+//!    `BamlPyHandle`s would double-release on drop.
+//!  - Drop: release through `bridge_cffi::handle_release_impl`.
 //!
 //! There is no public `handle_type()` method. The wire transmits
 //! `BamlHandle.handle_type`, the Python object stores it on construction,
 //! and Rust-internal callers (`put_pyhandle_into_table`, media class
 //! validation) read the field directly.
 
-use bridge_ctypes::{CffiHandleTableEntry, HANDLE_TABLE};
 use pyo3::prelude::*;
 use pyo3_stub_gen::derive::{gen_stub_pyclass, gen_stub_pyfunction, gen_stub_pymethods};
+
+fn handle_type_to_i32(handle_type: u64) -> PyResult<i32> {
+    i32::try_from(handle_type).map_err(|_| {
+        pyo3::exceptions::PyValueError::new_err(format!(
+            "BAML handle_type {handle_type} does not fit in int32"
+        ))
+    })
+}
+
+fn status_to_py_err(context: &str, key: Option<u64>, status: bridge_cffi::BamlCffiStatus) -> PyErr {
+    let key_text = key.map(|key| format!(" for key {key}")).unwrap_or_default();
+    let reason = match status {
+        bridge_cffi::BAML_HANDLE_INVALID_HANDLE => "invalid handle",
+        bridge_cffi::BAML_HANDLE_TYPE_MISMATCH => "handle type mismatch",
+        bridge_cffi::BAML_HANDLE_UNSUPPORTED_HANDLE_TYPE => "unsupported handle type",
+        bridge_cffi::BAML_HANDLE_INTERNAL_ERROR => "internal handle error",
+        _ => "unknown handle error",
+    };
+    pyo3::exceptions::PyRuntimeError::new_err(format!("{context}{key_text}: {reason}"))
+}
+
+fn ensure_ok(context: &str, key: Option<u64>, status: bridge_cffi::BamlCffiStatus) -> PyResult<()> {
+    if status == bridge_cffi::BAML_OK {
+        Ok(())
+    } else {
+        Err(status_to_py_err(context, key, status))
+    }
+}
 
 #[gen_stub_pyclass]
 #[pyclass]
@@ -41,15 +64,10 @@ pub struct BamlPyHandle {
 #[pymethods]
 impl BamlPyHandle {
     fn __copy__(&self) -> PyResult<Self> {
-        let new_key = HANDLE_TABLE.clone_handle(self.handle_key).ok_or_else(|| {
-            pyo3::exceptions::PyRuntimeError::new_err(format!(
-                "BamlPyHandle.__copy__: key {} not in HANDLE_TABLE",
-                self.handle_key
-            ))
-        })?;
+        let (new_key, handle_type) = _handle_clone(self.handle_key, self.handle_type)?;
         Ok(Self {
             handle_key: new_key,
-            handle_type: self.handle_type,
+            handle_type,
         })
     }
 
@@ -69,8 +87,59 @@ impl BamlPyHandle {
 
 impl Drop for BamlPyHandle {
     fn drop(&mut self) {
-        HANDLE_TABLE.release(self.handle_key);
+        if let Ok(handle_type) = handle_type_to_i32(self.handle_type) {
+            let _ = bridge_cffi::handle_release_impl(self.handle_key, handle_type);
+        }
     }
+}
+
+#[gen_stub_pyfunction]
+#[pyfunction]
+pub fn _handle_validate(key: u64, handle_type: u64) -> PyResult<()> {
+    let handle_type = handle_type_to_i32(handle_type)?;
+    ensure_ok(
+        "_handle_validate",
+        Some(key),
+        bridge_cffi::handle_validate_impl(key, handle_type),
+    )
+}
+
+#[gen_stub_pyfunction]
+#[pyfunction]
+pub fn _handle_clone(key: u64, handle_type: u64) -> PyResult<(u64, u64)> {
+    let handle_type = handle_type_to_i32(handle_type)?;
+    let mut out_key = 0;
+    let mut out_handle_type = 0;
+    ensure_ok(
+        "_handle_clone",
+        Some(key),
+        bridge_cffi::handle_clone_impl(
+            key,
+            handle_type,
+            Some(&mut out_key),
+            Some(&mut out_handle_type),
+        ),
+    )?;
+    Ok((out_key, out_handle_type as u64))
+}
+
+#[gen_stub_pyfunction]
+#[pyfunction]
+pub fn _handle_release(key: u64, handle_type: u64) -> PyResult<()> {
+    let handle_type = handle_type_to_i32(handle_type)?;
+    ensure_ok(
+        "_handle_release",
+        Some(key),
+        bridge_cffi::handle_release_impl(key, handle_type),
+    )
+}
+
+#[gen_stub_pyfunction]
+#[pyfunction]
+pub fn _handle_type(key: u64) -> PyResult<u64> {
+    bridge_cffi::handle_type_impl(key)
+        .map(|handle_type| handle_type as u64)
+        .map_err(|status| status_to_py_err("_handle_type", Some(key), status))
 }
 
 /// Wrap a `HANDLE_TABLE` key as a `BamlPyHandle`. Used by
@@ -81,11 +150,7 @@ impl Drop for BamlPyHandle {
 #[gen_stub_pyfunction]
 #[pyfunction]
 pub fn take_pyhandle_from_table(key: u64, handle_type: u64) -> PyResult<BamlPyHandle> {
-    if HANDLE_TABLE.resolve(key).is_none() {
-        return Err(pyo3::exceptions::PyRuntimeError::new_err(format!(
-            "BAML handle key {key} is not in HANDLE_TABLE"
-        )));
-    }
+    _handle_validate(key, handle_type)?;
     Ok(BamlPyHandle::new(key, handle_type))
 }
 
@@ -96,15 +161,7 @@ pub fn take_pyhandle_from_table(key: u64, handle_type: u64) -> PyResult<BamlPyHa
 #[gen_stub_pyfunction]
 #[pyfunction]
 pub fn put_pyhandle_into_table(pyhandle: &BamlPyHandle) -> PyResult<(u64, u64)> {
-    let new_key = HANDLE_TABLE
-        .clone_handle(pyhandle.handle_key)
-        .ok_or_else(|| {
-            pyo3::exceptions::PyRuntimeError::new_err(format!(
-                "BamlPyHandle key {} is not in HANDLE_TABLE",
-                pyhandle.handle_key
-            ))
-        })?;
-    Ok((new_key, pyhandle.handle_type))
+    _handle_clone(pyhandle.handle_key, pyhandle.handle_type)
 }
 
 /// Test-only: seed a `FunctionRef` entry directly into `HANDLE_TABLE`,
@@ -113,22 +170,21 @@ pub fn put_pyhandle_into_table(pyhandle: &BamlPyHandle) -> PyResult<(u64, u64)> 
 #[gen_stub_pyfunction]
 #[pyfunction]
 pub fn _seed_function_ref_handle(global_index: u64) -> (u64, u64) {
-    let entry = CffiHandleTableEntry::FunctionRef {
-        global_index: global_index as usize,
-    };
-    let ht = entry.handle_type() as u64;
-    let key = HANDLE_TABLE.insert(entry);
-    (key, ht)
+    let mut key = 0;
+    let mut handle_type = 0;
+    let status =
+        bridge_cffi::baml_handle_test_seed_function_ref(global_index, &mut key, &mut handle_type);
+    debug_assert_eq!(status, bridge_cffi::BAML_OK);
+    (key, handle_type as u64)
 }
 
 /// Test-only: seed an `Adt(Media(generic))` entry directly into `HANDLE_TABLE`.
 #[gen_stub_pyfunction]
 #[pyfunction]
 pub fn _seed_generic_media_handle() -> (u64, u64) {
-    use bex_project::{BexExternalAdt, MediaKind, MediaValue};
-    let media = MediaValue::from_url(MediaKind::Generic, "https://example.com/", None);
-    let entry = CffiHandleTableEntry::Adt(BexExternalAdt::Media(media));
-    let ht = entry.handle_type() as u64;
-    let key = HANDLE_TABLE.insert(entry);
-    (key, ht)
+    let mut key = 0;
+    let mut handle_type = 0;
+    let status = bridge_cffi::baml_handle_test_seed_generic_media(&mut key, &mut handle_type);
+    debug_assert_eq!(status, bridge_cffi::BAML_OK);
+    (key, handle_type as u64)
 }

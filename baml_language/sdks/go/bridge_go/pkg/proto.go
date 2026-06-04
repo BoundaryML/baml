@@ -115,10 +115,14 @@ func goToInboundValueTracking(v any, registered *[]uint64) (*pb.InboundValue, er
 			MapValue: &pb.InboundMapValue{Entries: entries},
 		}}, nil
 	case BamlHandle:
+		cloned, err := val.Clone()
+		if err != nil {
+			return nil, err
+		}
 		return &pb.InboundValue{Value: &pb.InboundValue_Handle{
 			Handle: &pb.BamlHandle{
-				Key:        val.Key,
-				HandleType: pb.BamlHandleType(val.HandleType),
+				Key:        cloned.Key,
+				HandleType: pb.BamlHandleType(cloned.HandleType),
 			},
 		}}, nil
 	default:
@@ -300,10 +304,14 @@ func outboundToGo(val *pb.BamlOutboundValue) (any, error) {
 		}
 		return DynamicUnion{Variant: v.UnionVariantValue.ValueOptionName, Value: inner}, nil
 	case *pb.BamlOutboundValue_HandleValue:
-		return BamlHandle{
+		handle := BamlHandle{
 			Key:        v.HandleValue.Key,
 			HandleType: int32(v.HandleValue.HandleType),
-		}, nil
+		}
+		if err := handle.Validate(); err != nil {
+			return nil, err
+		}
+		return handle, nil
 	case *pb.BamlOutboundValue_LiteralValue:
 		lit := v.LiteralValue
 		switch l := lit.Literal.(type) {

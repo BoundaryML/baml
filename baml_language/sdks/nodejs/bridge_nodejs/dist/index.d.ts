@@ -9,7 +9,7 @@ import { BamlRuntime, AbortController, HostSpanManager, Collector as NativeColle
 export { BamlRuntime, AbortController, BamlHandle, HostSpanManager, getRuntime, getVersion, flushEvents } from './native.js';
 export { Timing, Usage, LLMCall } from './native.js';
 export { takeHandleFromTable, putHandleIntoTable, _seedFunctionRefHandle, _seedGenericMediaHandle, } from './native.js';
-export { BamlImage, BamlAudio, BamlVideo, BamlPdf } from './native.js';
+export { BamlImage, BamlAudio, BamlVideo, BamlPdf } from './media.js';
 export { BamlStream } from './stream.js';
 export { encodeCallArgs, decodeCallResult } from './proto.js';
 export { CtxManager } from './ctx_manager.js';

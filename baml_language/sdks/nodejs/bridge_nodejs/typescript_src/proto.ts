@@ -9,14 +9,12 @@ import {
     BamlHandle,
     HandleKey,
     putHandleIntoTable,
-    BamlImage,
-    BamlAudio,
-    BamlVideo,
-    BamlPdf,
+    takeHandleFromTable,
     registerHostCallable,
     releaseHostCallable,
     completeHostCall,
 } from './native.js';
+import { BamlImage, BamlAudio, BamlVideo, BamlPdf } from './media.js';
 import { BamlStream } from './stream.js';
 import { BamlError, BamlPanic } from './errors.js';
 import { BamlTypeMap, getTypeMap } from './typemap.js';
@@ -336,7 +334,7 @@ function decodeValueHolder(
             // Never a valid decoded handle (mirrors Python's _decode_handle).
             throw new BamlError('decoded handle has HANDLE_UNSPECIFIED handle_type');
         }
-        const handle = new BamlHandle(holder.handleValue.key, ht);
+        const handle = takeHandleFromTable(holder.handleValue.key, ht);
         if (ht === BamlHandleType.ADT_MEDIA_IMAGE) return BamlImage._fromHandle(handle);
         if (ht === BamlHandleType.ADT_MEDIA_AUDIO) return BamlAudio._fromHandle(handle);
         if (ht === BamlHandleType.ADT_MEDIA_VIDEO) return BamlVideo._fromHandle(handle);

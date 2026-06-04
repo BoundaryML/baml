@@ -1,10 +1,10 @@
 """Media type tests for BamlImage, BamlAudio, BamlVideo, BamlPdf.
 
-Tests the PyO3 media constructors (from_url, from_file, from_base64)
+Tests the media constructors (from_url, from_file, from_base64)
 and accessors (url(), file(), base64(), mime_type()).
 """
 
-from baml_core.baml_py import BamlImage, BamlAudio, BamlVideo, BamlPdf
+from baml_core.media import BamlImage, BamlAudio, BamlVideo, BamlPdf
 
 
 # ---------------------------------------------------------------------------
