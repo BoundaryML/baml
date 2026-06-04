@@ -420,8 +420,23 @@ struct ScopedAssignment {
     pattern: Option<PatId>,
 }
 
+/// Selects which throws-analysis behavior `BuilderThrowsAnalysis` exhibits.
+///
+/// `Normal` treats every sub-expression as a regular throws source.
+/// `CatchBase` computes the residual throw set flowing *into* a `catch` from
+/// its base expression: a nested `catch` is opaque (its clause arms are not
+/// walked, and its residual is never substituted — only its `base` is walked),
+/// an `await` adds the awaited future's `E` parameter, and a plain `Call` on an
+/// `OptionalMemberAccess` callee is not optional-unwrapped.
+#[derive(Clone, Copy)]
+enum ThrowsMode {
+    Normal,
+    CatchBase,
+}
+
 struct BuilderThrowsAnalysis<'a, 'db> {
     builder: &'a TypeInferenceBuilder<'db>,
+    mode: ThrowsMode,
 }
 
 impl ThrowsAnalysisContext for BuilderThrowsAnalysis<'_, '_> {
@@ -430,7 +445,10 @@ impl ThrowsAnalysisContext for BuilderThrowsAnalysis<'_, '_> {
     }
 
     fn catch_residual_throws(&self, expr_id: ExprId) -> Option<BTreeSet<Ty>> {
-        self.builder.catch_residual_throws.get(&expr_id).cloned()
+        match self.mode {
+            ThrowsMode::Normal => self.builder.catch_residual_throws.get(&expr_id).cloned(),
+            ThrowsMode::CatchBase => None,
+        }
     }
 
     fn instantiated_callee_throws(
@@ -460,57 +478,17 @@ impl ThrowsAnalysisContext for BuilderThrowsAnalysis<'_, '_> {
         let target = self.builder.call_target_name(callee_expr_id, body)?;
         self.builder.lookup_named_throw_summary(&target)
     }
-}
-
-/// Throws-analysis adapter used to compute the residual throw set flowing
-/// *into* a `catch` from its base expression. It reuses the shared throws
-/// walk but with three "catch base" overrides:
-/// - a nested `catch` is opaque (its clause arms are not walked, and its
-///   residual is never substituted — only its `base` is walked),
-/// - an `await` adds the awaited future's `E` parameter, and
-/// - a plain `Call` on an `OptionalMemberAccess` callee is not optional-
-///   unwrapped.
-struct CatchBaseThrowsAnalysis<'a, 'db> {
-    inner: BuilderThrowsAnalysis<'a, 'db>,
-}
-
-impl ThrowsAnalysisContext for CatchBaseThrowsAnalysis<'_, '_> {
-    fn expression_type(&self, expr_id: ExprId) -> Option<Ty> {
-        self.inner.expression_type(expr_id)
-    }
-
-    fn catch_residual_throws(&self, _expr_id: ExprId) -> Option<BTreeSet<Ty>> {
-        None
-    }
-
-    fn instantiated_callee_throws(
-        &self,
-        callee_expr_id: ExprId,
-        args: &[ExprId],
-        unwrap_optional_callee: bool,
-    ) -> Option<Ty> {
-        self.inner
-            .instantiated_callee_throws(callee_expr_id, args, unwrap_optional_callee)
-    }
-
-    fn named_callee_summary(
-        &self,
-        callee_expr_id: ExprId,
-        body: &ExprBody,
-    ) -> Option<BTreeSet<Ty>> {
-        self.inner.named_callee_summary(callee_expr_id, body)
-    }
 
     fn walk_catch_clauses(&self) -> bool {
-        false
+        matches!(self.mode, ThrowsMode::Normal)
     }
 
     fn await_adds_future_error(&self) -> bool {
-        true
+        matches!(self.mode, ThrowsMode::CatchBase)
     }
 
     fn call_unwraps_optional_member_callee(&self) -> bool {
-        false
+        matches!(self.mode, ThrowsMode::Normal)
     }
 }
 
@@ -5899,8 +5877,9 @@ impl<'db> TypeInferenceBuilder<'db> {
     fn catch_base_throw_types(&self, base_expr_id: ExprId, body: &ExprBody) -> BTreeSet<Ty> {
         let mut out = BTreeSet::new();
         crate::throws_analysis::collect_from_expr(
-            &CatchBaseThrowsAnalysis {
-                inner: BuilderThrowsAnalysis { builder: self },
+            &BuilderThrowsAnalysis {
+                builder: self,
+                mode: ThrowsMode::CatchBase,
             },
             base_expr_id,
             body,
@@ -6000,7 +5979,10 @@ impl<'db> TypeInferenceBuilder<'db> {
 
     fn collect_effective_throws(&self, body: &ExprBody) -> BTreeSet<Ty> {
         crate::throws_analysis::collect_escaping_throws(
-            &BuilderThrowsAnalysis { builder: self },
+            &BuilderThrowsAnalysis {
+                builder: self,
+                mode: ThrowsMode::Normal,
+            },
             body,
         )
     }
