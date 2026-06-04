@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 11781
 ---
 === MIR2 ===
 fn user.decode_auto(j: baml.json.json) -> pkg.inner.AutoBox<int> {
@@ -95,7 +94,7 @@ fn user.pkg.inner.AutoBox.to_json(self: pkg.inner.AutoBox) -> baml.json.json {
     let _1: pkg.inner.AutoBox // self // param
     let _2: baml.json.json
     let _3: void
-    let _4: pkg.inner.AutoBox
+    let _4: pkg.inner.AutoBox<void>
 
     bb0: {
         _4 = copy _1;
@@ -119,7 +118,7 @@ fn user.pkg.inner.Box.to_json(self: pkg.inner.Box) -> baml.json.json {
     let _1: pkg.inner.Box // self // param
     let _2: baml.json.json
     let _3: void
-    let _4: pkg.inner.Box
+    let _4: pkg.inner.Box<void>
 
     bb0: {
         _4 = copy _1;

@@ -1954,6 +1954,30 @@ impl<'db> LoweringContext<'db> {
                 generic_param_bounds.insert(name.clone(), bound_ty);
             }
         }
+        // BEP-044 Self-as-type-variable: an interface default method's `self` is
+        // a `Self` type variable bound by the interface (matching the TIR
+        // typing in `inference.rs`). Registering the bound lets member access on
+        // `self` dispatch through the interface — `interface_dispatch_target_for_tir_ty`
+        // already follows type-var bounds — so default methods keep dispatching
+        // through the concrete implementor.
+        for iface in item_tree.interfaces.values() {
+            if iface.default_methods.contains(&func_loc.id(db))
+                && let Some(def) =
+                    pkg_items_for_bounds.lookup_type(&pkg_info.namespace_path, &iface.name)
+            {
+                let qtn = baml_compiler2_tir::lower_type_expr::qualify_def(db, def, &iface.name);
+                let args = iface
+                    .generic_params
+                    .iter()
+                    .map(|p| Tir2Ty::TypeVar(p.clone(), baml_compiler2_tir::ty::TyAttr::default()))
+                    .collect();
+                generic_param_bounds.insert(
+                    Name::new("Self"),
+                    Tir2Ty::Interface(qtn, args, vec![], baml_compiler2_tir::ty::TyAttr::default()),
+                );
+                break;
+            }
+        }
 
         // Class/enum/interface schema + resolved aliases, memoized per package
         // (was rebuilt — and every class field re-lowered — per function).
@@ -3875,6 +3899,54 @@ impl<'db> LoweringContext<'db> {
                         // Local-rooted field access — chain field projections.
                         // The root segment is a local; chain through class fields.
                         self.lower_multi_segment_path_as_field_chain(expr_id, segments, dest);
+                        return;
+                    }
+                }
+            }
+            // An interface method referenced as a *value* on a generic- or
+            // interface-typed receiver (`let f = x.eq`): no single concrete method
+            // exists statically, so bind the implementor's method by the
+            // receiver's runtime type (captured now). Mirrors the direct-call
+            // dispatch in `lower_call`, but yields a bound value. Candidates are
+            // resolved *before* lowering the receiver so a field access (no method
+            // candidates) falls through without lowering the prefix twice.
+            //
+            // Unlike the direct-call path this does not strip a trailing
+            // type-qualifier segment (`x.Iface.method`): a qualified method
+            // *reference* resolves through TIR's `member_resolutions` / flat
+            // `resolutions` above and returns before reaching here, so the
+            // receiver is always `segments[..len-1]`.
+            if segments.len() >= 2
+                && let Some(&recv_root_local) = self.locals.get(&segments[0])
+            {
+                let method_name = segments.last().unwrap().clone();
+                let recv_seg_idx = if segments.len() == 2 {
+                    0
+                } else {
+                    segments.len() - 2
+                };
+                let recv_tir_ty = self
+                    .path_segment_types
+                    .get(&(self.current_metadata_scope, expr_id, recv_seg_idx))
+                    .cloned();
+                if let Some((iface_tn, iface_type_args, iface_assoc)) = recv_tir_ty
+                    .as_ref()
+                    .and_then(|ty| self.interface_dispatch_target_for_tir_ty(ty))
+                {
+                    let resolved = self.interface_method_candidates_for(
+                        &iface_tn,
+                        &iface_type_args,
+                        &iface_assoc,
+                        &method_name,
+                    );
+                    if !resolved.is_empty() {
+                        let receiver_segments = &segments[..segments.len() - 1];
+                        let recv_local = self.lower_path_receiver_to_local(
+                            expr_id,
+                            receiver_segments,
+                            recv_root_local,
+                        );
+                        self.emit_bound_method_candidate_switch(recv_local, &resolved, &dest);
                         return;
                     }
                 }
@@ -6396,6 +6468,33 @@ impl<'db> LoweringContext<'db> {
             }
         }
 
+        // An interface method referenced as a *value* on a generic- or
+        // interface-typed receiver (`let f = x.eq`): there is no single concrete
+        // method to bind statically, so bind the implementor's method by the
+        // receiver's runtime type (captured now — its type is fixed at this
+        // point). Resolve candidates *before* lowering the receiver so a field
+        // access (no method candidates) falls through to the field path below
+        // without evaluating the receiver expression twice.
+        if let Some(recv_tir_ty) = self.expr_types.get(&self.expr_metadata_key(base)).cloned()
+            && let Some((iface_tn, iface_type_args, iface_assoc)) =
+                self.interface_dispatch_target_for_tir_ty(&recv_tir_ty)
+        {
+            let resolved = self.interface_method_candidates_for(
+                &iface_tn,
+                &iface_type_args,
+                &iface_assoc,
+                field,
+            );
+            if !resolved.is_empty() {
+                let recv_op = self.lower_to_operand(base);
+                let recv_local = self.builder.temp(self.expr_ty(base));
+                self.builder
+                    .assign(Place::local(recv_local), Rvalue::Use(recv_op));
+                self.emit_bound_method_candidate_switch(recv_local, &resolved, &dest);
+                return;
+            }
+        }
+
         // Check if TIR resolved this to an enum variant (e.g. baml.HttpMethod.Get via package path)
         if let Some(Tir2Ty::EnumVariant(qtn, variant, _)) = self
             .expr_types
@@ -7282,6 +7381,62 @@ impl<'db> LoweringContext<'db> {
 
         self.builder.set_current_block(bb_join);
         true
+    }
+
+    /// Per-arm analogue of [`Self::emit_method_candidate_switch`] that *binds* the
+    /// matching implementor's method as a bound-method value rather than calling
+    /// it. For `let f = x.eq` where `x`'s static type is a generic `T extends I`
+    /// (or a bare interface) there is no single concrete method to bind at compile
+    /// time, so this switches on the receiver's runtime type and binds the right
+    /// concrete method. The receiver is captured at bind time (its runtime type is
+    /// fixed then), so a later `f(y)` calls the correct concrete method — exactly
+    /// as `x.eq(y)` would dispatch directly.
+    ///
+    /// `resolved` must be non-empty: callers resolve candidates first (via
+    /// [`Self::interface_method_candidates_for`]) so they can tell a method from a
+    /// field — and avoid lowering the receiver — *before* committing to this path.
+    fn emit_bound_method_candidate_switch(
+        &mut self,
+        recv_local: Local,
+        resolved: &[InterfaceMethodCandidate],
+        dest: &Place,
+    ) {
+        let bb_entry = self.builder.current_block();
+        let bb_join = self.builder.create_block();
+        let bb_otherwise = self.builder.create_block();
+
+        let mut next_check = bb_entry;
+        for (idx, candidate) in resolved.iter().enumerate() {
+            let bb_body = self.builder.create_block();
+            let bb_next = if idx + 1 == resolved.len() {
+                bb_otherwise
+            } else {
+                self.builder.create_block()
+            };
+
+            self.builder.set_current_block(next_check);
+            self.emit_interface_dispatch_guard_branch(
+                recv_local,
+                &candidate.guard,
+                bb_body,
+                bb_next,
+            );
+            self.builder.set_current_block(bb_body);
+            self.builder.assign(
+                dest.clone(),
+                Rvalue::MakeBoundMethod {
+                    item_ref: candidate.item_ref.clone(),
+                    receiver: Operand::Copy(Place::Local(recv_local)),
+                },
+            );
+            self.builder.goto(bb_join);
+            next_check = bb_next;
+        }
+
+        self.builder.set_current_block(bb_otherwise);
+        self.builder.unreachable();
+
+        self.builder.set_current_block(bb_join);
     }
 
     fn try_lower_interface_field_access(

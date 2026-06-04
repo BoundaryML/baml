@@ -666,6 +666,46 @@ pub fn infer_scope_types<'db>(
                             }
                         }
                     }
+                    // BEP-044 (Self-as-type-variable): inside an interface's own
+                    // method, `self` is a `Self` type variable *bound by* the
+                    // interface — the implementing type, like Rust's `Self` or
+                    // Swift's conforming type — as opposed to the interface
+                    // *existential* (`Ty::Interface`). Registering it lets
+                    // `self.method(other: Self)` resolve with `Self` pinned (so
+                    // `Self`-typed parameters are sound and the object-safety
+                    // restriction does not apply), while a bare interface value
+                    // still cannot call such methods.
+                    let interface_self_bound: Option<Ty> = if enclosing_impl.is_none() {
+                        scope.parent.and_then(|parent_idx| {
+                            let parent = &index.scopes[parent_idx.index() as usize];
+                            if !matches!(parent.kind, ScopeKind::Class) {
+                                return None;
+                            }
+                            let cn = parent.name.as_ref()?;
+                            let def = pkg_items.lookup_type(&pkg_info.namespace_path, cn)?;
+                            if !matches!(
+                                def,
+                                baml_compiler2_hir::contributions::Definition::Interface(_)
+                            ) {
+                                return None;
+                            }
+                            let qtn = crate::lower_type_expr::qualify_def(db, def, cn);
+                            let iface = item_tree.interfaces.values().find(|i| &i.name == cn)?;
+                            let args = iface
+                                .generic_params
+                                .iter()
+                                .map(|p| Ty::TypeVar(p.clone(), TyAttr::default()))
+                                .collect();
+                            Some(Ty::Interface(qtn, args, Vec::new(), TyAttr::default()))
+                        })
+                    } else {
+                        None
+                    };
+                    if interface_self_bound.is_some()
+                        && !generic_params.iter().any(|p| p.as_str() == "Self")
+                    {
+                        generic_params.push(Name::new("Self"));
+                    }
                     builder.set_generic_params(generic_params.clone());
                     // BEP-044 generic bounds: lower each `extends Iface`
                     // expression to a TIR `Ty` and bind it under the
@@ -673,6 +713,9 @@ pub fn infer_scope_types<'db>(
                     // walks this map to expose the bound's contract.
                     let mut bounds: rustc_hash::FxHashMap<Name, Ty> =
                         rustc_hash::FxHashMap::default();
+                    if let Some(bound) = &interface_self_bound {
+                        bounds.insert(Name::new("Self"), bound.clone());
+                    }
                     let mut bound_param_names = Vec::new();
                     let mut bound_exprs = Vec::new();
                     if let Some(imp) = enclosing_impl {
@@ -745,13 +788,21 @@ pub fn infer_scope_types<'db>(
                         // implementation, `Self` is the rule receiver pattern
                         // (`Box<T>` or `T`). Otherwise it is the enclosing
                         // class/interface type.
-                        let self_replacement = enclosing_impl
-                            .map(|imp| imp.for_target.expr.clone())
-                            .or_else(|| {
-                                enclosing_class_name.as_ref().map(|cn| {
-                                    crate::lower_type_expr::type_expr_for_name(cn.clone())
+                        let self_replacement = if interface_self_bound.is_some() {
+                            // Interface method: `Self` is the bound type variable,
+                            // not the interface existential.
+                            Some(crate::lower_type_expr::type_expr_for_name(Name::new(
+                                "Self",
+                            )))
+                        } else {
+                            enclosing_impl
+                                .map(|imp| imp.for_target.expr.clone())
+                                .or_else(|| {
+                                    enclosing_class_name.as_ref().map(|cn| {
+                                        crate::lower_type_expr::type_expr_for_name(cn.clone())
+                                    })
                                 })
-                            });
+                        };
                         let mut type_bindings: rustc_hash::FxHashMap<Name, Ty> =
                             rustc_hash::FxHashMap::default();
                         for param in &generic_params {
@@ -860,15 +911,6 @@ pub fn infer_scope_types<'db>(
                             let iface_file = iface_loc.file(db);
                             let iface_tree = baml_compiler2_hir::file_item_tree(db, iface_file);
                             if let Some(iface_data) = iface_tree.interfaces.get(&iface_loc.id(db)) {
-                                let iface_qtn =
-                                    crate::lower_type_expr::qualify_def(db, def, iface_name);
-                                let iface_args: Vec<Ty> = iface_data
-                                    .generic_params
-                                    .iter()
-                                    .map(|param| Ty::TypeVar(param.clone(), TyAttr::default()))
-                                    .collect();
-                                let iface_ty =
-                                    Ty::Interface(iface_qtn, iface_args, vec![], TyAttr::default());
                                 let iface_ns =
                                     baml_compiler2_hir::file_package::file_package(db, iface_file)
                                         .namespace_path;
@@ -888,11 +930,25 @@ pub fn infer_scope_types<'db>(
                                         }
                                         type_bindings.insert(assoc.name.clone(), ty);
                                     } else {
+                                        // Inside the interface's own (default) method, `Self` is the
+                                        // rigid type variable bound by the interface, so an unbound
+                                        // associated type projects onto `Self` — not the interface
+                                        // existential. This must match how a `self.method()` call in
+                                        // the body resolves the same associated type
+                                        // (`add_interface_associated_type_bindings` via
+                                        // `SelfReceiver::RigidVar`: base `Self`, and `interface`
+                                        // unqualified for the enclosing interface). Projecting onto
+                                        // the existential here instead produced a spurious
+                                        // `expected (It as It).Item, got Self.Item` mismatch when a
+                                        // default method returned `self.<assoc-returning-method>()`.
                                         type_bindings.insert(
                                             assoc.name.clone(),
                                             Ty::AssociatedTypeProjection {
-                                                base: Box::new(iface_ty.clone()),
-                                                interface: Some(Box::new(iface_ty.clone())),
+                                                base: Box::new(Ty::TypeVar(
+                                                    Name::new("Self"),
+                                                    TyAttr::default(),
+                                                )),
+                                                interface: None,
                                                 member: assoc.name.clone(),
                                                 attr: TyAttr::default(),
                                             },
@@ -972,12 +1028,18 @@ pub fn infer_scope_types<'db>(
                                         }
                                     }
                                     ty
+                                } else if interface_self_bound.is_some() {
+                                    // BEP-044 Self-as-type-variable: inside an
+                                    // interface's own method `self` is the `Self`
+                                    // type variable (bound by this interface), not
+                                    // the interface existential — so `self.method(
+                                    // other: Self)` resolves with `Self` pinned.
+                                    // Member resolution walks the registered bound
+                                    // to reach the interface contract.
+                                    Ty::TypeVar(Name::new("Self"), TyAttr::default())
                                 } else {
                                     // `self` parameter with no type annotation — infer from
-                                    // enclosing class. For BEP-044 interface default methods
-                                    // the enclosing scope is the interface, so we produce
-                                    // `Ty::Interface` so member resolution dispatches through
-                                    // the interface contract.
+                                    // enclosing class.
                                     enclosing_class_name
                                         .as_ref()
                                         .and_then(|cn| {
@@ -1015,7 +1077,32 @@ pub fn infer_scope_types<'db>(
                                                             TyAttr::default(),
                                                         )
                                                     }
-                                                    _ => Ty::Class(qtn, vec![], TyAttr::default()),
+                                                    _ => {
+                                                        // Mirror the interface arm: a generic class's
+                                                        // method must type `self` as `Class<T..>`
+                                                        // carrying the class's own params as TypeVars.
+                                                        // Empty args left `self` as a bare `Class`, so
+                                                        // the auto-derived `to_json`'s
+                                                        // `to_string<Self>(self)` saw `self: StreamCache`
+                                                        // against `Self = StreamCache<TStream, TFinal>`,
+                                                        // and more generally a bare-class `self` leaked
+                                                        // into every generic-class method body.
+                                                        let class_args: Vec<Ty> = item_tree
+                                                            .classes
+                                                            .values()
+                                                            .find(|c| &c.name == cn)
+                                                            .map(|c| {
+                                                                c.generic_params
+                                                                    .iter()
+                                                                    .map(|p| Ty::TypeVar(
+                                                                        p.clone(),
+                                                                        TyAttr::default(),
+                                                                    ))
+                                                                    .collect()
+                                                            })
+                                                            .unwrap_or_default();
+                                                        Ty::Class(qtn, class_args, TyAttr::default())
+                                                    }
                                                 }
                                             })
                                         })
