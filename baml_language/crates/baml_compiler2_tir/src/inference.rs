@@ -205,6 +205,57 @@ pub struct InferenceMaps<'db> {
     pub(crate) function_coercions: FxHashMap<ExprId, FunctionCoercion>,
 }
 
+impl<'db> InferenceMaps<'db> {
+    /// Iterate over all (`ExprId`, Ty) pairs for expressions in this map.
+    pub fn iter_expressions(&self) -> impl Iterator<Item = (&ExprId, &Ty)> {
+        self.expressions.iter()
+    }
+
+    /// Iterate over all (`PatId`, Ty) pairs for pattern bindings in this map.
+    pub fn iter_bindings(&self) -> impl Iterator<Item = (&PatId, &Ty)> {
+        self.pattern_types.iter()
+    }
+
+    /// Iterate over all (`ExprId`, `MemberResolution`) pairs in this map.
+    pub fn iter_resolutions(&self) -> impl Iterator<Item = (&ExprId, &MemberResolution<'db>)> {
+        self.resolutions.iter()
+    }
+
+    /// Iterate over all exhaustive match `ExprIds` in this map.
+    pub fn iter_exhaustive_matches(&self) -> impl Iterator<Item = &ExprId> {
+        self.exhaustive_matches.iter()
+    }
+
+    /// Iterate over all (`ExprId`, root `Ty`) pairs for multi-segment paths in this map.
+    pub fn iter_path_root_types(&self) -> impl Iterator<Item = (&ExprId, &Ty)> {
+        self.path_root_types.iter()
+    }
+
+    /// Iterate over all `((ExprId, seg_idx), Ty)` entries for multi-segment
+    /// local-rooted paths in this map.
+    pub fn iter_path_segment_types(&self) -> impl Iterator<Item = (&(ExprId, usize), &Ty)> {
+        self.path_segment_types.iter()
+    }
+
+    /// Iterate over all (`ExprId`, per-segment resolutions) for multi-segment
+    /// local-rooted paths in this map.
+    pub fn iter_path_member_resolutions(
+        &self,
+    ) -> impl Iterator<Item = (&ExprId, &Vec<MemberResolution<'db>>)> {
+        self.path_member_resolutions.iter()
+    }
+
+    /// Iterate over all call binding plans in this map.
+    pub fn iter_call_plans(&self) -> impl Iterator<Item = (&ExprId, &CallPlan)> {
+        self.call_plans.iter()
+    }
+
+    /// Iterate over all function adapters required by checked coercions.
+    pub fn iter_function_coercions(&self) -> impl Iterator<Item = (&ExprId, &FunctionCoercion)> {
+        self.function_coercions.iter()
+    }
+}
+
 /// Everything [`TypeInferenceBuilder::finish`] hands back to its consumers: the
 /// common cluster of per-body maps, the output-only maps that are not part of
 /// the cluster (`param_types`, `nested_lambda_types`), the accumulated
@@ -317,75 +368,34 @@ impl<'db> ScopeInference<'db> {
             .find(|plan| plan.matches_provided_args(args))
     }
 
+    /// The per-body inference maps for this scope's own body.
+    pub fn body(&self) -> &InferenceMaps<'db> {
+        &self.body
+    }
+
+    /// The per-body inference maps captured while checking parameter defaults.
+    pub fn defaults(&self) -> &InferenceMaps<'db> {
+        &self.defaults
+    }
+
     /// Iterate over all call binding plans in this scope.
     pub fn iter_call_plans(&self) -> impl Iterator<Item = (&ExprId, &CallPlan)> {
-        self.body.call_plans.iter()
+        self.body.iter_call_plans()
     }
 
     /// Iterate over all function adapters required by checked coercions.
     pub fn iter_function_coercions(&self) -> impl Iterator<Item = (&ExprId, &FunctionCoercion)> {
-        self.body.function_coercions.iter()
-    }
-
-    /// Iterate over all default-parameter expression types for this scope.
-    pub fn iter_default_expressions(&self) -> impl Iterator<Item = (&ExprId, &Ty)> {
-        self.defaults.expressions.iter()
-    }
-
-    /// Iterate over all default-parameter pattern types for this scope.
-    pub fn iter_default_bindings(&self) -> impl Iterator<Item = (&PatId, &Ty)> {
-        self.defaults.pattern_types.iter()
-    }
-
-    /// Iterate over all default-parameter member resolutions for this scope.
-    pub fn iter_default_resolutions(
-        &self,
-    ) -> impl Iterator<Item = (&ExprId, &MemberResolution<'db>)> {
-        self.defaults.resolutions.iter()
-    }
-
-    /// Iterate over all exhaustive default-parameter match expressions.
-    pub fn iter_default_exhaustive_matches(&self) -> impl Iterator<Item = &ExprId> {
-        self.defaults.exhaustive_matches.iter()
-    }
-
-    /// Iterate over all default-parameter path root types.
-    pub fn iter_default_path_root_types(&self) -> impl Iterator<Item = (&ExprId, &Ty)> {
-        self.defaults.path_root_types.iter()
-    }
-
-    /// Iterate over all default-parameter path prefix types.
-    pub fn iter_default_path_segment_types(&self) -> impl Iterator<Item = (&(ExprId, usize), &Ty)> {
-        self.defaults.path_segment_types.iter()
-    }
-
-    /// Iterate over all default-parameter per-segment path member resolutions.
-    pub fn iter_default_path_member_resolutions(
-        &self,
-    ) -> impl Iterator<Item = (&ExprId, &Vec<MemberResolution<'db>>)> {
-        self.defaults.path_member_resolutions.iter()
-    }
-
-    /// Iterate over all default-parameter call binding plans.
-    pub fn iter_default_call_plans(&self) -> impl Iterator<Item = (&ExprId, &CallPlan)> {
-        self.defaults.call_plans.iter()
-    }
-
-    /// Iterate over all default-parameter function adapters.
-    pub fn iter_default_function_coercions(
-        &self,
-    ) -> impl Iterator<Item = (&ExprId, &FunctionCoercion)> {
-        self.defaults.function_coercions.iter()
+        self.body.iter_function_coercions()
     }
 
     /// Iterate over all (`ExprId`, Ty) pairs for expressions in this scope.
     pub fn iter_expressions(&self) -> impl Iterator<Item = (&ExprId, &Ty)> {
-        self.body.expressions.iter()
+        self.body.iter_expressions()
     }
 
     /// Iterate over all (`PatId`, Ty) pairs for pattern bindings in this scope.
     pub fn iter_bindings(&self) -> impl Iterator<Item = (&PatId, &Ty)> {
-        self.body.pattern_types.iter()
+        self.body.iter_bindings()
     }
 
     /// Look up the member resolution for an expression in this scope.
@@ -401,23 +411,23 @@ impl<'db> ScopeInference<'db> {
 
     /// Iterate over all (`ExprId`, `MemberResolution`) pairs for this scope.
     pub fn iter_resolutions(&self) -> impl Iterator<Item = (&ExprId, &MemberResolution<'db>)> {
-        self.body.resolutions.iter()
+        self.body.iter_resolutions()
     }
 
     /// Iterate over all exhaustive match `ExprIds` in this scope.
     pub fn iter_exhaustive_matches(&self) -> impl Iterator<Item = &ExprId> {
-        self.body.exhaustive_matches.iter()
+        self.body.iter_exhaustive_matches()
     }
 
     /// Iterate over all (`ExprId`, root `Ty`) pairs for multi-segment paths in this scope.
     pub fn iter_path_root_types(&self) -> impl Iterator<Item = (&ExprId, &Ty)> {
-        self.body.path_root_types.iter()
+        self.body.iter_path_root_types()
     }
 
     /// Iterate over all `((ExprId, seg_idx), Ty)` entries for multi-segment
     /// local-rooted paths in this scope.
     pub fn iter_path_segment_types(&self) -> impl Iterator<Item = (&(ExprId, usize), &Ty)> {
-        self.body.path_segment_types.iter()
+        self.body.iter_path_segment_types()
     }
 
     /// Look up per-segment member resolutions for a multi-segment local-rooted
@@ -435,7 +445,7 @@ impl<'db> ScopeInference<'db> {
     pub fn iter_path_member_resolutions(
         &self,
     ) -> impl Iterator<Item = (&ExprId, &Vec<MemberResolution<'db>>)> {
-        self.body.path_member_resolutions.iter()
+        self.body.iter_path_member_resolutions()
     }
 
     /// Get diagnostics for this scope (empty slice if none).

@@ -1084,6 +1084,86 @@ enum MetadataScope {
 type ExprMetadataKey = (MetadataScope, AstExprId);
 type PatMetadataKey = (MetadataScope, AstPatId);
 
+/// The nine per-scope metadata maps aggregated by `merge_scope`, keyed by
+/// `(MetadataScope, id)` so body and parameter-default entries stay disjoint.
+struct ScopeMetadataMaps<'db> {
+    expr_types: FxHashMap<ExprMetadataKey, Tir2Ty>,
+    pat_types: FxHashMap<PatMetadataKey, Tir2Ty>,
+    resolutions: FxHashMap<ExprMetadataKey, baml_compiler2_tir::inference::MemberResolution<'db>>,
+    exhaustive_matches: rustc_hash::FxHashSet<ExprMetadataKey>,
+    path_root_types: FxHashMap<ExprMetadataKey, Tir2Ty>,
+    path_segment_types: FxHashMap<(MetadataScope, AstExprId, usize), Tir2Ty>,
+    path_member_resolutions:
+        FxHashMap<ExprMetadataKey, Vec<baml_compiler2_tir::inference::MemberResolution<'db>>>,
+    call_plans: FxHashMap<ExprMetadataKey, baml_compiler2_tir::inference::CallPlan>,
+    function_coercions: FxHashMap<ExprMetadataKey, baml_compiler2_tir::inference::FunctionCoercion>,
+}
+
+impl ScopeMetadataMaps<'_> {
+    fn new() -> Self {
+        Self {
+            expr_types: FxHashMap::default(),
+            pat_types: FxHashMap::default(),
+            resolutions: FxHashMap::default(),
+            exhaustive_matches: rustc_hash::FxHashSet::default(),
+            path_root_types: FxHashMap::default(),
+            path_segment_types: FxHashMap::default(),
+            path_member_resolutions: FxHashMap::default(),
+            call_plans: FxHashMap::default(),
+            function_coercions: FxHashMap::default(),
+        }
+    }
+}
+
+/// Infer `fsi`'s scope and merge its body + parameter-default inference maps into
+/// `out`, tagging body entries with `MetadataScope::Body(fsi)` and default-expr
+/// entries with `MetadataScope::ParameterDefault(fsi)`. Body entries are merged
+/// before parameter-default entries; keys differ by tag so the two never collide.
+fn merge_scope<'db>(
+    db: &'db dyn crate::Db,
+    index: &baml_compiler2_hir::semantic_index::FileSemanticIndex<'db>,
+    fsi: FileScopeId,
+    out: &mut ScopeMetadataMaps<'db>,
+) {
+    let scope_id = index.scope_ids[fsi.index() as usize];
+    let inference = infer_scope_types(db, scope_id);
+    for (scope, maps) in [
+        (MetadataScope::Body(fsi), inference.body()),
+        (MetadataScope::ParameterDefault(fsi), inference.defaults()),
+    ] {
+        for (&expr_id, ty) in maps.iter_expressions() {
+            out.expr_types.insert((scope, expr_id), ty.clone());
+        }
+        for (&pat_id, ty) in maps.iter_bindings() {
+            out.pat_types.insert((scope, pat_id), ty.clone());
+        }
+        for (&expr_id, res) in maps.iter_resolutions() {
+            out.resolutions.insert((scope, expr_id), res.clone());
+        }
+        for &expr_id in maps.iter_exhaustive_matches() {
+            out.exhaustive_matches.insert((scope, expr_id));
+        }
+        for (&expr_id, ty) in maps.iter_path_root_types() {
+            out.path_root_types.insert((scope, expr_id), ty.clone());
+        }
+        for (&(expr_id, seg_idx), ty) in maps.iter_path_segment_types() {
+            out.path_segment_types
+                .insert((scope, expr_id, seg_idx), ty.clone());
+        }
+        for (&expr_id, member_resolutions) in maps.iter_path_member_resolutions() {
+            out.path_member_resolutions
+                .insert((scope, expr_id), member_resolutions.clone());
+        }
+        for (&expr_id, plan) in maps.iter_call_plans() {
+            out.call_plans.insert((scope, expr_id), plan.clone());
+        }
+        for (&expr_id, coercion) in maps.iter_function_coercions() {
+            out.function_coercions
+                .insert((scope, expr_id), coercion.clone());
+        }
+    }
+}
+
 struct LoweringContext<'db> {
     db: &'db dyn crate::Db,
     builder: MirBuilder,
@@ -1594,147 +1674,30 @@ impl<'db> LoweringContext<'db> {
             .unwrap_or_else(|| index.scope_at_offset(func_span.start(), Some(&func_data.name)));
 
         // --- Eagerly aggregate expr_types, pat_types, resolutions, exhaustive_matches, path_root_types, and path_member_resolutions from all scopes ---
-        let mut expr_types: FxHashMap<ExprMetadataKey, Tir2Ty> = FxHashMap::default();
-        let mut pat_types: FxHashMap<PatMetadataKey, Tir2Ty> = FxHashMap::default();
-        let mut resolutions: FxHashMap<
-            ExprMetadataKey,
-            baml_compiler2_tir::inference::MemberResolution<'db>,
-        > = FxHashMap::default();
-        let mut exhaustive_matches: rustc_hash::FxHashSet<ExprMetadataKey> =
-            rustc_hash::FxHashSet::default();
-        let mut path_root_types: FxHashMap<ExprMetadataKey, Tir2Ty> = FxHashMap::default();
-        let mut path_segment_types: FxHashMap<(MetadataScope, AstExprId, usize), Tir2Ty> =
-            FxHashMap::default();
-        let mut path_member_resolutions: FxHashMap<
-            ExprMetadataKey,
-            Vec<baml_compiler2_tir::inference::MemberResolution<'db>>,
-        > = FxHashMap::default();
-        let mut call_plans: FxHashMap<ExprMetadataKey, baml_compiler2_tir::inference::CallPlan> =
-            FxHashMap::default();
-        let mut function_coercions: FxHashMap<
-            ExprMetadataKey,
-            baml_compiler2_tir::inference::FunctionCoercion,
-        > = FxHashMap::default();
-
-        let merge_scope = |fsi: FileScopeId,
-                           expr_types: &mut FxHashMap<ExprMetadataKey, Tir2Ty>,
-                           pat_types: &mut FxHashMap<PatMetadataKey, Tir2Ty>,
-                           resolutions: &mut FxHashMap<
-            ExprMetadataKey,
-            baml_compiler2_tir::inference::MemberResolution<'db>,
-        >,
-                           exhaustive_matches: &mut rustc_hash::FxHashSet<ExprMetadataKey>,
-                           path_root_types: &mut FxHashMap<ExprMetadataKey, Tir2Ty>,
-                           path_segment_types: &mut FxHashMap<
-            (MetadataScope, AstExprId, usize),
-            Tir2Ty,
-        >,
-                           path_member_resolutions: &mut FxHashMap<
-            ExprMetadataKey,
-            Vec<baml_compiler2_tir::inference::MemberResolution<'db>>,
-        >,
-                           call_plans: &mut FxHashMap<
-            ExprMetadataKey,
-            baml_compiler2_tir::inference::CallPlan,
-        >,
-                           function_coercions: &mut FxHashMap<
-            ExprMetadataKey,
-            baml_compiler2_tir::inference::FunctionCoercion,
-        >| {
-            let scope_id = index.scope_ids[fsi.index() as usize];
-            let inference = infer_scope_types(db, scope_id);
-            let body_scope = MetadataScope::Body(fsi);
-            for (&expr_id, ty) in inference.iter_expressions() {
-                expr_types.insert((body_scope, expr_id), ty.clone());
-            }
-            for (&pat_id, ty) in inference.iter_bindings() {
-                pat_types.insert((body_scope, pat_id), ty.clone());
-            }
-            for (&expr_id, res) in inference.iter_resolutions() {
-                resolutions.insert((body_scope, expr_id), res.clone());
-            }
-            for &expr_id in inference.iter_exhaustive_matches() {
-                exhaustive_matches.insert((body_scope, expr_id));
-            }
-            for (&expr_id, ty) in inference.iter_path_root_types() {
-                path_root_types.insert((body_scope, expr_id), ty.clone());
-            }
-            for (&(expr_id, seg_idx), ty) in inference.iter_path_segment_types() {
-                path_segment_types.insert((body_scope, expr_id, seg_idx), ty.clone());
-            }
-            for (&expr_id, member_resolutions) in inference.iter_path_member_resolutions() {
-                path_member_resolutions.insert((body_scope, expr_id), member_resolutions.clone());
-            }
-            for (&expr_id, plan) in inference.iter_call_plans() {
-                call_plans.insert((body_scope, expr_id), plan.clone());
-            }
-            for (&expr_id, coercion) in inference.iter_function_coercions() {
-                function_coercions.insert((body_scope, expr_id), coercion.clone());
-            }
-
-            let default_scope = MetadataScope::ParameterDefault(fsi);
-            for (&expr_id, ty) in inference.iter_default_expressions() {
-                expr_types.insert((default_scope, expr_id), ty.clone());
-            }
-            for (&pat_id, ty) in inference.iter_default_bindings() {
-                pat_types.insert((default_scope, pat_id), ty.clone());
-            }
-            for (&expr_id, res) in inference.iter_default_resolutions() {
-                resolutions.insert((default_scope, expr_id), res.clone());
-            }
-            for &expr_id in inference.iter_default_exhaustive_matches() {
-                exhaustive_matches.insert((default_scope, expr_id));
-            }
-            for (&expr_id, ty) in inference.iter_default_path_root_types() {
-                path_root_types.insert((default_scope, expr_id), ty.clone());
-            }
-            for (&(expr_id, seg_idx), ty) in inference.iter_default_path_segment_types() {
-                path_segment_types.insert((default_scope, expr_id, seg_idx), ty.clone());
-            }
-            for (&expr_id, member_resolutions) in inference.iter_default_path_member_resolutions() {
-                path_member_resolutions
-                    .insert((default_scope, expr_id), member_resolutions.clone());
-            }
-            for (&expr_id, plan) in inference.iter_default_call_plans() {
-                call_plans.insert((default_scope, expr_id), plan.clone());
-            }
-            for (&expr_id, coercion) in inference.iter_default_function_coercions() {
-                function_coercions.insert((default_scope, expr_id), coercion.clone());
-            }
-        };
+        let mut maps = ScopeMetadataMaps::new();
 
         // Include the function scope itself
-        merge_scope(
-            func_scope_id,
-            &mut expr_types,
-            &mut pat_types,
-            &mut resolutions,
-            &mut exhaustive_matches,
-            &mut path_root_types,
-            &mut path_segment_types,
-            &mut path_member_resolutions,
-            &mut call_plans,
-            &mut function_coercions,
-        );
+        merge_scope(db, index, func_scope_id, &mut maps);
 
         // Include all descendant scopes (blocks, lambdas, etc.)
         let func_scope = &index.scopes[func_scope_id.index() as usize];
         let desc_start = func_scope.descendants.start.index();
         let desc_end = func_scope.descendants.end.index();
         for raw_idx in desc_start..desc_end {
-            merge_scope(
-                FileScopeId::new(raw_idx),
-                &mut expr_types,
-                &mut pat_types,
-                &mut resolutions,
-                &mut exhaustive_matches,
-                &mut path_root_types,
-                &mut path_segment_types,
-                &mut path_member_resolutions,
-                &mut call_plans,
-                &mut function_coercions,
-            );
+            merge_scope(db, index, FileScopeId::new(raw_idx), &mut maps);
         }
+
+        let ScopeMetadataMaps {
+            expr_types,
+            pat_types,
+            resolutions,
+            exhaustive_matches,
+            path_root_types,
+            path_segment_types,
+            path_member_resolutions,
+            call_plans,
+            function_coercions,
+        } = maps;
 
         // --- Build class_fields / enum_variants from PackageItems ---
         let pkg_info = file_package(db, file);
@@ -1869,147 +1832,30 @@ impl<'db> LoweringContext<'db> {
         let let_scope_id: FileScopeId = index.scope_at_offset(let_span.start(), Some(&let_name));
 
         // --- Eagerly aggregate expr_types, pat_types, resolutions, path_root_types, path_member_resolutions from let scope ---
-        let mut expr_types: FxHashMap<ExprMetadataKey, Tir2Ty> = FxHashMap::default();
-        let mut pat_types: FxHashMap<PatMetadataKey, Tir2Ty> = FxHashMap::default();
-        let mut resolutions: FxHashMap<
-            ExprMetadataKey,
-            baml_compiler2_tir::inference::MemberResolution<'db>,
-        > = FxHashMap::default();
-        let mut exhaustive_matches: rustc_hash::FxHashSet<ExprMetadataKey> =
-            rustc_hash::FxHashSet::default();
-        let mut path_root_types: FxHashMap<ExprMetadataKey, Tir2Ty> = FxHashMap::default();
-        let mut path_segment_types: FxHashMap<(MetadataScope, AstExprId, usize), Tir2Ty> =
-            FxHashMap::default();
-        let mut path_member_resolutions: FxHashMap<
-            ExprMetadataKey,
-            Vec<baml_compiler2_tir::inference::MemberResolution<'db>>,
-        > = FxHashMap::default();
-        let mut call_plans: FxHashMap<ExprMetadataKey, baml_compiler2_tir::inference::CallPlan> =
-            FxHashMap::default();
-        let mut function_coercions: FxHashMap<
-            ExprMetadataKey,
-            baml_compiler2_tir::inference::FunctionCoercion,
-        > = FxHashMap::default();
-
-        let merge_scope = |fsi: FileScopeId,
-                           expr_types: &mut FxHashMap<ExprMetadataKey, Tir2Ty>,
-                           pat_types: &mut FxHashMap<PatMetadataKey, Tir2Ty>,
-                           resolutions: &mut FxHashMap<
-            ExprMetadataKey,
-            baml_compiler2_tir::inference::MemberResolution<'db>,
-        >,
-                           exhaustive_matches: &mut rustc_hash::FxHashSet<ExprMetadataKey>,
-                           path_root_types: &mut FxHashMap<ExprMetadataKey, Tir2Ty>,
-                           path_segment_types: &mut FxHashMap<
-            (MetadataScope, AstExprId, usize),
-            Tir2Ty,
-        >,
-                           path_member_resolutions: &mut FxHashMap<
-            ExprMetadataKey,
-            Vec<baml_compiler2_tir::inference::MemberResolution<'db>>,
-        >,
-                           call_plans: &mut FxHashMap<
-            ExprMetadataKey,
-            baml_compiler2_tir::inference::CallPlan,
-        >,
-                           function_coercions: &mut FxHashMap<
-            ExprMetadataKey,
-            baml_compiler2_tir::inference::FunctionCoercion,
-        >| {
-            let scope_id = index.scope_ids[fsi.index() as usize];
-            let inference = infer_scope_types(db, scope_id);
-            let body_scope = MetadataScope::Body(fsi);
-            for (&expr_id, ty) in inference.iter_expressions() {
-                expr_types.insert((body_scope, expr_id), ty.clone());
-            }
-            for (&pat_id, ty) in inference.iter_bindings() {
-                pat_types.insert((body_scope, pat_id), ty.clone());
-            }
-            for (&expr_id, res) in inference.iter_resolutions() {
-                resolutions.insert((body_scope, expr_id), res.clone());
-            }
-            for &expr_id in inference.iter_exhaustive_matches() {
-                exhaustive_matches.insert((body_scope, expr_id));
-            }
-            for (&expr_id, ty) in inference.iter_path_root_types() {
-                path_root_types.insert((body_scope, expr_id), ty.clone());
-            }
-            for (&(expr_id, seg_idx), ty) in inference.iter_path_segment_types() {
-                path_segment_types.insert((body_scope, expr_id, seg_idx), ty.clone());
-            }
-            for (&expr_id, member_resolutions) in inference.iter_path_member_resolutions() {
-                path_member_resolutions.insert((body_scope, expr_id), member_resolutions.clone());
-            }
-            for (&expr_id, plan) in inference.iter_call_plans() {
-                call_plans.insert((body_scope, expr_id), plan.clone());
-            }
-            for (&expr_id, coercion) in inference.iter_function_coercions() {
-                function_coercions.insert((body_scope, expr_id), coercion.clone());
-            }
-
-            let default_scope = MetadataScope::ParameterDefault(fsi);
-            for (&expr_id, ty) in inference.iter_default_expressions() {
-                expr_types.insert((default_scope, expr_id), ty.clone());
-            }
-            for (&pat_id, ty) in inference.iter_default_bindings() {
-                pat_types.insert((default_scope, pat_id), ty.clone());
-            }
-            for (&expr_id, res) in inference.iter_default_resolutions() {
-                resolutions.insert((default_scope, expr_id), res.clone());
-            }
-            for &expr_id in inference.iter_default_exhaustive_matches() {
-                exhaustive_matches.insert((default_scope, expr_id));
-            }
-            for (&expr_id, ty) in inference.iter_default_path_root_types() {
-                path_root_types.insert((default_scope, expr_id), ty.clone());
-            }
-            for (&(expr_id, seg_idx), ty) in inference.iter_default_path_segment_types() {
-                path_segment_types.insert((default_scope, expr_id, seg_idx), ty.clone());
-            }
-            for (&expr_id, member_resolutions) in inference.iter_default_path_member_resolutions() {
-                path_member_resolutions
-                    .insert((default_scope, expr_id), member_resolutions.clone());
-            }
-            for (&expr_id, plan) in inference.iter_default_call_plans() {
-                call_plans.insert((default_scope, expr_id), plan.clone());
-            }
-            for (&expr_id, coercion) in inference.iter_default_function_coercions() {
-                function_coercions.insert((default_scope, expr_id), coercion.clone());
-            }
-        };
+        let mut maps = ScopeMetadataMaps::new();
 
         // Include the let scope itself
-        merge_scope(
-            let_scope_id,
-            &mut expr_types,
-            &mut pat_types,
-            &mut resolutions,
-            &mut exhaustive_matches,
-            &mut path_root_types,
-            &mut path_segment_types,
-            &mut path_member_resolutions,
-            &mut call_plans,
-            &mut function_coercions,
-        );
+        merge_scope(db, index, let_scope_id, &mut maps);
 
         // Include all descendant scopes (blocks, closures within the initializer)
         let let_scope = &index.scopes[let_scope_id.index() as usize];
         let desc_start = let_scope.descendants.start.index();
         let desc_end = let_scope.descendants.end.index();
         for raw_idx in desc_start..desc_end {
-            merge_scope(
-                FileScopeId::new(raw_idx),
-                &mut expr_types,
-                &mut pat_types,
-                &mut resolutions,
-                &mut exhaustive_matches,
-                &mut path_root_types,
-                &mut path_segment_types,
-                &mut path_member_resolutions,
-                &mut call_plans,
-                &mut function_coercions,
-            );
+            merge_scope(db, index, FileScopeId::new(raw_idx), &mut maps);
         }
+
+        let ScopeMetadataMaps {
+            expr_types,
+            pat_types,
+            resolutions,
+            exhaustive_matches,
+            path_root_types,
+            path_segment_types,
+            path_member_resolutions,
+            call_plans,
+            function_coercions,
+        } = maps;
 
         // --- Build class_fields / enum_variants from PackageItems ---
         let pkg_id = PackageId::new(db, file_package(db, file).package);
