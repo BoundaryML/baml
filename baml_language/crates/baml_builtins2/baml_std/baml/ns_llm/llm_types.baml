@@ -650,6 +650,40 @@ function get_jinja_template(function_name: string) -> string throws root.errors.
   $rust_io_function
 }
 
+/// BEP-049 §10 (M5d). Assemble a `PromptAst` from a tagged template's flattened
+/// `parts`/`values`. A `Role` value (from `${role("system")}`) starts a new chat
+/// message; strings — and other scalar values via their string form — accumulate
+/// into the current message's content. With no `Role` values the whole template
+/// becomes a single `PromptAst::Simple`. This replaces the magic-delimiter role
+/// mechanism of the Jinja path with direct structural assembly.
+function assemble_prompt_ast(parts: string[], values: unknown[]) -> PromptAst throws never {
+  $rust_io_function
+}
+
+/// The `role(...)` constructor passed into a `prompt` body lambda. Builds a
+/// typed `Role` marker; `prompt` threads this in as the body's `role` parameter.
+function make_role(name: string) -> Role throws never {
+  Role { name: name, metadata: {} }
+}
+
+/// BEP-049 §10. The built-in `prompt` tag: `` prompt`...` `` evaluates to a
+/// `(Context) -> PromptAst` closure that the LLM orchestrator invokes after it
+/// has resolved the client for the current attempt (lazy per-attempt eval).
+///
+/// The body lambda receives `role` (a `Role` constructor) and `ctx` (per-render
+/// `Context`); `${role("user")}` markers split the rendered template into chat
+/// messages. `ctx.output_format` schema injection lands in a later slice.
+//baml:tagged_string
+function prompt(
+  body: (role: (string) -> Role, ctx: Context) -> baml.TaggedString throws never,
+) -> (Context) -> PromptAst throws never {
+  let render = (ctx: Context) -> {
+    let t = body(make_role, ctx)
+    assemble_prompt_ast(t.parts, t.values)
+  }
+  render
+}
+
 function get_return_type(function_name: string) -> type throws root.errors.InvalidArgument {
   $rust_io_function
 }

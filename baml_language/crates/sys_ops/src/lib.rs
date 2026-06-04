@@ -548,6 +548,19 @@ impl<T> io::IoNamespaceLlm for T {
         SysOpOutput::ok(template)
     }
 
+    fn assemble_prompt_ast(
+        &self,
+        _heap: &std::sync::Arc<BexHeap>,
+        _call_id: CallId,
+        parts: Vec<String>,
+        values: Vec<BexExternalValue>,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<io::owned::llm::PromptAst> {
+        // BEP-049 §10 (M5d): structural PromptAst assembly — no magic delimiters.
+        let ast = std::sync::Arc::new(assemble_prompt_ast_impl(&parts, &values)).merge_adjacent();
+        SysOpOutput::ok(wrap_prompt_ast(ast))
+    }
+
     fn get_return_type(
         &self,
         _heap: &std::sync::Arc<BexHeap>,
@@ -656,6 +669,85 @@ impl<T> io::IoNamespaceLlm for T {
             Err(e) => Err(OpErrorKind::from(e)),
         };
         SysOpOutput::Ready(result)
+    }
+}
+
+/// Role name of an interpolated value if it is a `baml.llm.Role` instance (set
+/// by the in-template `role(...)` constructor), else `None`.
+fn prompt_role_name(v: &BexExternalValue) -> Option<String> {
+    if let BexExternalValue::Instance { class_name, fields } = v
+        && (class_name == "baml.llm.Role" || class_name.ends_with(".Role"))
+        && let Some(BexExternalValue::String(name)) = fields.get("name")
+    {
+        return Some(name.to_string());
+    }
+    None
+}
+
+/// Best-effort text form of a non-`Role` interpolated value (M5d slice: scalars;
+/// media / complex values are deferred).
+fn prompt_value_text(v: &BexExternalValue) -> String {
+    match v {
+        BexExternalValue::String(s) => s.to_string(),
+        BexExternalValue::Int(i) => i.to_string(),
+        BexExternalValue::Float(f) => f.to_string(),
+        BexExternalValue::Bool(b) => b.to_string(),
+        _ => String::new(),
+    }
+}
+
+/// BEP-049 §10 (M5d): fold a tagged template's `parts`/`values` into a
+/// `PromptAst`. Walks them interleaved — a `Role` value starts a new chat
+/// message; strings (and scalar values) accumulate into the current message's
+/// content. With no `Role` values the whole template is a single
+/// `PromptAst::Simple`. Mirrors the message-folding of `parse_chat_prompt` but
+/// off the structured arrays instead of magic-delimiter string parsing.
+fn assemble_prompt_ast_impl(
+    parts: &[String],
+    values: &[BexExternalValue],
+) -> baml_builtins2::PromptAst {
+    use baml_builtins2::{PromptAst, PromptAstSimple};
+    let mk_msg = |role: String, content: String| -> std::sync::Arc<PromptAst> {
+        std::sync::Arc::new(PromptAst::Message {
+            role,
+            content: std::sync::Arc::new(PromptAstSimple::String(content)),
+            // `metadata` is `serde_json::Value`, not a direct dep here, so it
+            // can't be named for `Value::default()`; its `Default` is
+            // `Value::Null`. Role metadata threading lands later.
+            #[allow(clippy::default_trait_access)]
+            metadata: Default::default(),
+        })
+    };
+    let mut messages: Vec<std::sync::Arc<PromptAst>> = Vec::new();
+    let mut current_role: Option<String> = None;
+    let mut content = String::new();
+    for (i, value) in values.iter().enumerate() {
+        if let Some(p) = parts.get(i) {
+            content.push_str(p);
+        }
+        if let Some(role) = prompt_role_name(value) {
+            if let Some(prev) = current_role.take() {
+                messages.push(mk_msg(prev, std::mem::take(&mut content)));
+            }
+            current_role = Some(role);
+        } else {
+            content.push_str(&prompt_value_text(value));
+        }
+    }
+    if let Some(p) = parts.get(values.len()) {
+        content.push_str(p);
+    }
+    match current_role {
+        Some(role) => {
+            messages.push(mk_msg(role, content));
+            if messages.len() == 1 {
+                std::sync::Arc::try_unwrap(messages.pop().unwrap())
+                    .unwrap_or_else(|arc| (*arc).clone())
+            } else {
+                PromptAst::Vec(messages)
+            }
+        }
+        None => PromptAst::Simple(std::sync::Arc::new(PromptAstSimple::String(content))),
     }
 }
 

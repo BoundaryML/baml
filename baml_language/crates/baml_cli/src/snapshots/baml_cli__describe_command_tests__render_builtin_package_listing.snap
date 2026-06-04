@@ -106,10 +106,13 @@ class            llm.Stream                       <builtin>/baml/ns_llm/llm_type
 class            llm.PrimitiveClient              <builtin>/baml/ns_llm/llm_types.baml:581
 function         llm.from_shorthand               <builtin>/baml/ns_llm/llm_types.baml:643
 function         llm.get_jinja_template           <builtin>/baml/ns_llm/llm_types.baml:649
-function         llm.get_return_type              <builtin>/baml/ns_llm/llm_types.baml:653
-function         llm.get_stream_return_type       <builtin>/baml/ns_llm/llm_types.baml:662
-function         llm.__sap_parse_final            <builtin>/baml/ns_llm/llm_types.baml:667
-function         llm.__sap_parse_partial          <builtin>/baml/ns_llm/llm_types.baml:672
+function         llm.assemble_prompt_ast          <builtin>/baml/ns_llm/llm_types.baml:659
+function         llm.make_role                    <builtin>/baml/ns_llm/llm_types.baml:665
+function         llm.prompt                       <builtin>/baml/ns_llm/llm_types.baml:677
+function         llm.get_return_type              <builtin>/baml/ns_llm/llm_types.baml:687
+function         llm.get_stream_return_type       <builtin>/baml/ns_llm/llm_types.baml:696
+function         llm.__sap_parse_final            <builtin>/baml/ns_llm/llm_types.baml:701
+function         llm.__sap_parse_partial          <builtin>/baml/ns_llm/llm_types.baml:706
 function         math.trunc                       <builtin>/baml/ns_math/math.baml:2
 class            media.Pdf                        <builtin>/baml/ns_media/media.baml:2
 class            media.Audio                      <builtin>/baml/ns_media/media.baml:53

@@ -112,6 +112,7 @@ namespace baml.llm:
   class VertexAiOptions { methods: [to_json, from_json] }
   function __sap_parse_final<TStream, TFinal>
   function __sap_parse_partial<TStream, TFinal>
+  function assemble_prompt_ast
   function build_request
   function build_request_stream
   function call_llm_function<T>
@@ -119,7 +120,9 @@ namespace baml.llm:
   function get_jinja_template
   function get_return_type
   function get_stream_return_type
+  function make_role
   function parse<TStream, TFinal>
+  function prompt
   function render_prompt
   function stream_llm_function<TStream, TFinal>
 namespace baml.math:

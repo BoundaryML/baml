@@ -3321,7 +3321,9 @@ impl LoweringContext<'_> {
         segments: &[baml_compiler2_ast::TemplateSegment],
         dest: Place,
     ) {
-        use baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns;
+        use baml_compiler2_tir::{
+            inference::MemberResolution, lower_type_expr::lower_type_expr_in_ns,
+        };
 
         // ── Resolve the tag function. TIR (M4d.3) already validated it is a
         //    //baml:tagged_string fn whose first param is
@@ -3332,31 +3334,48 @@ impl LoweringContext<'_> {
             .as_ref()
             .map(|sm| sm.expr_span(tag).start())
             .unwrap_or_default();
-        let tag_name = match &self.body.exprs[tag] {
-            AstExpr::Path(segs) => segs.last().cloned(),
-            _ => None,
+        // Prefer the resolution TIR recorded for the tag expression. A qualified
+        // tag like `baml.llm.prompt` is a multi-segment path whose `func_loc`
+        // lives in `resolutions` (`infer_multi_segment_path`); resolving only
+        // the bare last segment (`prompt`) in the user's scope would miss it.
+        // Fall back to bare-name resolution for unqualified, in-file tags.
+        let tag_func_loc = self
+            .resolutions
+            .get(&self.expr_metadata_key(tag))
+            .and_then(|r| match r {
+                MemberResolution::Free { func_loc }
+                | MemberResolution::UnboundMethod { func_loc, .. }
+                | MemberResolution::InterfaceDefaultMethod { func_loc, .. } => Some(*func_loc),
+                _ => None,
+            })
+            .or_else(|| {
+                let tag_name = match &self.body.exprs[tag] {
+                    AstExpr::Path(segs) => segs.last().cloned(),
+                    _ => None,
+                };
+                match tag_name.as_ref().map(|n| {
+                    resolve_name_at_in_scope(
+                        self.db,
+                        self.file,
+                        tag_span_start,
+                        n,
+                        self.scope_func_name.as_ref(),
+                    )
+                }) {
+                    Some(
+                        ResolvedName::Item(Definition::Function(fl))
+                        | ResolvedName::Builtin(Definition::Function(fl)),
+                    ) => Some(fl),
+                    _ => None,
+                }
+            });
+        let Some(tag_func_loc) = tag_func_loc else {
+            // Unreachable in well-typed programs (TIR rejects non-function
+            // tags); guard so codegen never proceeds on a malformed tag.
+            self.emit_panic_call("tagged-template tag did not resolve to a function", expr_id);
+            return;
         };
-        let resolved = tag_name.as_ref().map(|n| {
-            resolve_name_at_in_scope(
-                self.db,
-                self.file,
-                tag_span_start,
-                n,
-                self.scope_func_name.as_ref(),
-            )
-        });
-        let (tag_item_ref, tag_func_loc) = match resolved {
-            Some(ResolvedName::Item(Definition::Function(func_loc))) => (
-                def_to_item_ref(self.db, Definition::Function(func_loc)),
-                func_loc,
-            ),
-            _ => {
-                // Unreachable in well-typed programs (TIR rejects non-function
-                // tags); guard so codegen never proceeds on a malformed tag.
-                self.emit_panic_call("tagged-template tag did not resolve to a function", expr_id);
-                return;
-            }
-        };
+        let tag_item_ref = def_to_item_ref(self.db, Definition::Function(tag_func_loc));
 
         // ── Body-lambda params + closure type from the tag's `body` param. ──
         let tag_sig = baml_compiler2_ppir::function_signature(self.db, tag_func_loc);

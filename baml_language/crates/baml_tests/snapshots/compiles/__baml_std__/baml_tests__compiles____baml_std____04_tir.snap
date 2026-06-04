@@ -1221,6 +1221,24 @@ function baml.llm.PrimitiveClient.to_json(self: baml.llm.PrimitiveClient) -> bam
 function baml.llm.PrimitiveClient.from_json(j: baml.json.json) -> baml.llm.PrimitiveClient throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   PrimitiveClient { name: baml.json.from_json<string>(baml.json.field(j, "name")), provider: baml.json.from_json<string>(baml.json.field(j, "provider")), options: baml.json.from_json<PrimitiveClientOptions>(baml.json.field(j, "options")) } : baml.llm.PrimitiveClient
 }
+function baml.llm.make_role(name: string) -> baml.llm.Role throws never {
+  { : baml.llm.Role
+    Role { name: name, metadata: map {  } } : baml.llm.Role
+  }
+}
+function baml.llm.prompt(body: (role: (string) -> baml.llm.Role throws never, ctx: baml.llm.Context) -> baml.TaggedString throws never) -> (baml.llm.Context) -> baml.llm.PromptAst throws never throws never {
+  { : (ctx: baml.llm.Context) -> baml.llm.PromptAst throws never
+    let render = : (ctx: baml.llm.Context) -> baml.llm.PromptAst throws never
+      (ctx: Context) -> { ... } : (ctx: baml.llm.Context) -> baml.llm.PromptAst throws never
+        {
+          let t = body(make_role, ctx)
+          assemble_prompt_ast(t.parts, t.values)
+        }
+    render : (ctx: baml.llm.Context) -> baml.llm.PromptAst throws never
+  }
+}
+lambda baml.llm.prompt {
+}
 class baml.llm.PromptAst$stream {
   _data: $rust_type
 }

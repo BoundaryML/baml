@@ -5894,25 +5894,33 @@ impl<'db> TypeInferenceBuilder<'db> {
         !item_tree[class_loc.id(db)].generic_params.is_empty()
     }
 
-    fn ty_contains_recovery_unknown(ty: &Ty) -> bool {
+    /// Does `ty` contain an unknown-like leaf? `count_builtin` decides whether
+    /// the builtin `unknown` top type counts: callers that want to *skip* a
+    /// check when a type is unconstrained (or-pattern compat, exhaustiveness)
+    /// pass `true`; the `pattern_expected_ty` gate passes `false`, because a
+    /// genuine `unknown` annotation (e.g. `unknown[]`) is a usable expected
+    /// type — only a true resolution failure (`Unknown`/`Error`) disqualifies.
+    fn ty_contains_unknown_like(ty: &Ty, count_builtin: bool) -> bool {
         match ty {
-            Ty::Unknown { .. } | Ty::BuiltinUnknown { .. } | Ty::Error { .. } => true,
-            Ty::Class(_, args, _) | Ty::Interface(_, args, _, _) | Ty::Union(args, _) => {
-                args.iter().any(Self::ty_contains_recovery_unknown)
-            }
+            Ty::Unknown { .. } | Ty::Error { .. } => true,
+            Ty::BuiltinUnknown { .. } => count_builtin,
+            Ty::Class(_, args, _) | Ty::Interface(_, args, _, _) | Ty::Union(args, _) => args
+                .iter()
+                .any(|arg| Self::ty_contains_unknown_like(arg, count_builtin)),
             Ty::AssociatedTypeProjection {
                 base, interface, ..
             } => {
-                Self::ty_contains_recovery_unknown(base)
-                    || interface
-                        .as_ref()
-                        .is_some_and(|interface| Self::ty_contains_recovery_unknown(interface))
+                Self::ty_contains_unknown_like(base, count_builtin)
+                    || interface.as_ref().is_some_and(|interface| {
+                        Self::ty_contains_unknown_like(interface, count_builtin)
+                    })
             }
             Ty::List(elem, _) | Ty::EvolvingList(elem, _) | Ty::Optional(elem, _) => {
-                Self::ty_contains_recovery_unknown(elem)
+                Self::ty_contains_unknown_like(elem, count_builtin)
             }
             Ty::Map(key, value, _) | Ty::EvolvingMap(key, value, _) => {
-                Self::ty_contains_recovery_unknown(key) || Self::ty_contains_recovery_unknown(value)
+                Self::ty_contains_unknown_like(key, count_builtin)
+                    || Self::ty_contains_unknown_like(value, count_builtin)
             }
             Ty::Function {
                 params,
@@ -5922,13 +5930,13 @@ impl<'db> TypeInferenceBuilder<'db> {
             } => {
                 params
                     .iter()
-                    .any(|param| Self::ty_contains_recovery_unknown(&param.ty))
-                    || Self::ty_contains_recovery_unknown(ret)
-                    || Self::ty_contains_recovery_unknown(throws)
+                    .any(|param| Self::ty_contains_unknown_like(&param.ty, count_builtin))
+                    || Self::ty_contains_unknown_like(ret, count_builtin)
+                    || Self::ty_contains_unknown_like(throws, count_builtin)
             }
             Ty::Future(value, error, _) => {
-                Self::ty_contains_recovery_unknown(value)
-                    || Self::ty_contains_recovery_unknown(error)
+                Self::ty_contains_unknown_like(value, count_builtin)
+                    || Self::ty_contains_unknown_like(error, count_builtin)
             }
             Ty::Enum(..)
             | Ty::EnumVariant(..)
@@ -5941,6 +5949,22 @@ impl<'db> TypeInferenceBuilder<'db> {
             | Ty::RustType { .. }
             | Ty::Type { .. } => false,
         }
+    }
+
+    /// Recovery-placeholder check that treats the builtin `unknown` top type as
+    /// unconstrained too — for callers that want to *skip* work when a type is
+    /// either a resolution failure or genuinely `unknown`.
+    fn ty_contains_recovery_unknown(ty: &Ty) -> bool {
+        Self::ty_contains_unknown_like(ty, true)
+    }
+
+    /// Strict resolution-failure check: only the recovery placeholders
+    /// (`Unknown`/`Error`) count, NOT the builtin `unknown` top type. A `let`
+    /// annotation like `unknown[]` is a real expected type and must pin the
+    /// binding (so a later heterogeneous `push` type-checks), rather than fall
+    /// back to an evolving `never[]` that locks onto the first pushed value.
+    fn ty_contains_resolution_failure(ty: &Ty) -> bool {
+        Self::ty_contains_unknown_like(ty, false)
     }
 
     fn ty_contains_unfilled_generic_class(ty: &Ty) -> bool {
@@ -6107,7 +6131,8 @@ impl<'db> TypeInferenceBuilder<'db> {
             }
         };
 
-        if Self::ty_contains_recovery_unknown(&ty) || Self::ty_contains_unfilled_generic_class(&ty)
+        if Self::ty_contains_resolution_failure(&ty)
+            || Self::ty_contains_unfilled_generic_class(&ty)
         {
             None
         } else {

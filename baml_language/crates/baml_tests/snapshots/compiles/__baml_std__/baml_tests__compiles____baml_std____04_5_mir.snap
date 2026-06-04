@@ -3166,6 +3166,8 @@ fn baml.llm.__sap_parse_partial = builtin(io)
 
 fn baml.llm.StreamAccumulator.add_events = builtin(io)
 
+fn baml.llm.assemble_prompt_ast = builtin(io)
+
 fn baml.llm.Client.build_attempt(self: baml.llm.Client) -> baml.llm.OrchestrationStep[] {
     // Locals:
     let _0: baml.llm.OrchestrationStep[] // _0 // return
@@ -5163,6 +5165,23 @@ fn baml.llm.StreamAccumulator.input_tokens = builtin(io)
 
 fn baml.llm.StreamAccumulator.is_done = builtin(io)
 
+fn baml.llm.make_role(name: string) -> baml.llm.Role {
+    // Locals:
+    let _0: baml.llm.Role // _0 // return
+    let _1: string // name // param
+    let _2: map<string, unknown>
+
+    bb0: {
+        _2 = {  };
+        _0 = baml.llm.Role { copy _1, copy _2 };
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
 fn baml.llm.StreamAccumulator.model = builtin(io)
 
 fn baml.llm.StreamCache.new = builtin(io)
@@ -5285,6 +5304,49 @@ fn baml.llm.Stream.next(self: baml.llm.Stream) -> void | baml.stream.StreamFinis
 fn baml.llm.StreamAccumulator.output_tokens = builtin(io)
 
 fn baml.llm.PrimitiveClient.parse = builtin(io)
+
+fn baml.llm.prompt(body: ((string) -> baml.llm.Role throws never, baml.llm.Context) -> baml.TaggedString throws never) -> (baml.llm.Context) -> baml.llm.PromptAst throws never {
+    // Locals:
+    let _0: (baml.llm.Context) -> baml.llm.PromptAst throws never // _0 // return
+    let _1: ((string) -> baml.llm.Role throws never, baml.llm.Context) -> baml.TaggedString throws never // body // param [captured]
+    let _2: (baml.llm.Context) -> baml.llm.PromptAst throws never // render
+
+    bb0: {
+        _2 = make_closure lambda[0](copy _1);
+        _0 = copy _2;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+// lambda[0]
+fn .<lambda(prompt, 0)>(ctx: baml.llm.Context) -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: baml.llm.Context // ctx // param
+    let _2: baml.TaggedString // t
+    let _3: ((string) -> baml.llm.Role throws never, baml.llm.Context) -> baml.TaggedString throws never
+    let _4: string[]
+    let _5: unknown[]
+
+    bb0: {
+        _3 = copy capture[0];
+        _2 = call copy _3(const fn baml.llm.make_role, copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _4 = copy _2.0;
+        _5 = copy _2.1;
+        _0 = sys_op const fn baml.llm.assemble_prompt_ast(copy _4, copy _5) -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
 
 fn baml.llm.PrimitiveClient.render_prompt = builtin(io)
 

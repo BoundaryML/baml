@@ -1310,3 +1310,35 @@ function main() -> void {
         "expected lambdas to inherit void-returning aliased function context, got:\n{tir}"
     );
 }
+
+#[test]
+fn explicit_unknown_list_annotation_pins_element_type() {
+    // Regression (BEP-049 M5): `let xs: unknown[] = []` must honour the
+    // explicit `unknown[]` annotation instead of starting an evolving
+    // `never[]` that pins to the first pushed value's type. The built-in
+    // `prompt` tag's `values` accumulator depends on this to hold a
+    // heterogeneous mix (a `Role`, then a string), so a regression here
+    // surfaces as a bogus "expected Role, got string" on the second push.
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+function main() -> int {
+  let xs: unknown[] = []
+  let r = baml.llm.Role { name: "x", metadata: {} }
+  xs.push(r)
+  xs.push("hello")
+  return 0
+}
+"#,
+    );
+    let output = render_tir(&db, file);
+    assert!(
+        !output.contains("type mismatch"),
+        "heterogeneous pushes into `unknown[]` should type-check, got:\n{output}"
+    );
+    assert!(
+        !output.contains("(evolving)"),
+        "explicit `unknown[]` annotation should pin the element type, not evolve, got:\n{output}"
+    );
+}
