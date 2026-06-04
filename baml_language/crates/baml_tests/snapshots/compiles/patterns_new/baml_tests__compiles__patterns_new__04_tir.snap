@@ -268,7 +268,7 @@ function user.PatternMatrix.from_json(j: baml.json.json) -> user.PatternMatrix t
 }
 type user.Number$stream = int | float
 class user.AppError$stream {
-  code: null | int
+  code: int?
 }
 class user.PatternBucket$stream {
   values: int[]

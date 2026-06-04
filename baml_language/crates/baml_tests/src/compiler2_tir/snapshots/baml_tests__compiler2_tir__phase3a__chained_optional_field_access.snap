@@ -26,8 +26,8 @@ function user.f(u: user.User?) -> string? throws never {
   }
 }
 class user.Address$stream {
-  street: null | string
+  street: string?
 }
 class user.User$stream {
-  address: null | user.Address$stream
+  address: user.Address$stream?
 }

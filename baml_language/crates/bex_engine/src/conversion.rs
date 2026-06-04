@@ -653,6 +653,22 @@ pub(crate) fn maybe_wrap_union(
     declared_type: &Ty,
 ) -> Result<BexExternalValue, EngineError> {
     match declared_type {
+        // A nullable union (`T?` == `T | null`) is optionality, not a tagged
+        // union: a null value is bare `Null`, and a single non-null member is
+        // unwrapped to its bare value (recursing in case that member is itself a
+        // real union). This preserves the pre-desugaring behavior where optional
+        // values carried no union metadata.
+        Ty::Union(members, attr) if members.iter().any(Ty::is_null) => {
+            if matches!(value, BexExternalValue::Null) {
+                return Ok(BexExternalValue::Null);
+            }
+            let non_null: Vec<Ty> = members.iter().filter(|m| !m.is_null()).cloned().collect();
+            match non_null.len() {
+                0 => Ok(value),
+                1 => maybe_wrap_union(value, &non_null[0]),
+                _ => maybe_wrap_union(value, &Ty::Union(non_null, attr.clone())),
+            }
+        }
         Ty::Union(members, _) => {
             let selected = find_matching_member(&value, members)?;
             let metadata = UnionMetadata::new(declared_type.clone(), selected);
@@ -660,15 +676,6 @@ pub(crate) fn maybe_wrap_union(
                 value: Box::new(value),
                 metadata,
             })
-        }
-        Ty::Optional(inner, _opt_attr) => {
-            // Optional is just T | null. If the value is null, return Null directly.
-            // If non-null, recurse into the inner type to preserve union metadata.
-            if matches!(value, BexExternalValue::Null) {
-                Ok(BexExternalValue::Null)
-            } else {
-                maybe_wrap_union(value, inner)
-            }
         }
         _ => Ok(value),
     }
@@ -685,7 +692,6 @@ pub(crate) fn maybe_wrap_union(
 pub(crate) fn peel_function_ty(ty: &Ty) -> Option<&Ty> {
     match ty {
         Ty::Function { .. } => Some(ty),
-        Ty::Optional(inner, _) => peel_function_ty(inner),
         Ty::Union(members, _) => {
             // Find the single function member, if any. If there are multiple
             // function members or none, we can't pick deterministically.
@@ -714,7 +720,6 @@ pub(crate) fn peel_function_ty(ty: &Ty) -> Option<&Ty> {
 fn ret_ty_has_unvalidatable_position(ty: &Ty) -> bool {
     match ty {
         Ty::Void { .. } | Ty::BuiltinUnknown { .. } => true,
-        Ty::Optional(inner, _) => ret_ty_has_unvalidatable_position(inner),
         Ty::List(elem, _) => ret_ty_has_unvalidatable_position(elem),
         Ty::Map { value, .. } => ret_ty_has_unvalidatable_position(value),
         Ty::Union(members, _) => members.iter().any(ret_ty_has_unvalidatable_position),
@@ -841,11 +846,8 @@ fn value_matches_type(value: &BexExternalValue, ty: &Ty) -> bool {
             true
         }
         (BexExternalValue::Union { value, .. }, ty) => value_matches_type(value, ty),
-        // Handle nested unions/optionals in the type
+        // Handle nested unions (including nullable `T | null`) in the type.
         (value, Ty::Union(members, _)) => members.iter().any(|m| value_matches_type(value, m)),
-        (value, Ty::Optional(inner, _)) => {
-            matches!(value, BexExternalValue::Null) || value_matches_type(value, inner)
-        }
         _ => false,
     }
 }
@@ -877,16 +879,8 @@ impl BexEngine {
             // boundary).
             Ty::BuiltinUnknown { .. } => Ok(()),
 
-            // Optional: null or inner-valid.
-            Ty::Optional(inner, _) => {
-                if matches!(value, BexExternalValue::Null) {
-                    Ok(())
-                } else {
-                    self.validate_host_return_schema(value, inner)
-                }
-            }
-
-            // Union: must satisfy at least one member (schema-aware).
+            // Union (including nullable `T | null`): must satisfy at least one
+            // member (schema-aware).
             Ty::Union(members, _) => {
                 let inner = match value {
                     BexExternalValue::Union { value: inner, .. } => inner.as_ref(),
@@ -1062,13 +1056,6 @@ fn resolve_effective_type(value: Value, declared_type: &Ty) -> &Ty {
     match declared_type {
         Ty::Union(members, _) => find_matching_union_member(value, members)
             .unwrap_or_else(|| members.first().unwrap_or(declared_type)),
-        Ty::Optional(inner, _) => {
-            if value.is_null() {
-                declared_type
-            } else {
-                resolve_effective_type(value, inner)
-            }
-        }
         _ => declared_type,
     }
 }
@@ -1350,7 +1337,6 @@ pub(crate) fn coerce_arg_to_declared_type(
 fn union_class_arm(ty: &Ty) -> Option<&Ty> {
     match ty {
         Ty::Class(..) => Some(ty),
-        Ty::Optional(inner, _) => union_class_arm(inner),
         _ => None,
     }
 }
@@ -1406,11 +1392,10 @@ fn coerce_numeric_to_declared_type(
                 })
         }
 
-        // Optional<inner>: null short-circuits; otherwise unwrap and recurse.
-        (BexExternalValue::Null, Ty::Optional(_, _)) => Ok(BexExternalValue::Null),
-        (v, Ty::Optional(inner, _)) => coerce_numeric_to_declared_type(v, inner),
-
         // Union with exactly one of {Int, Bigint}: route to that member.
+        // Nullable numeric unions (`int | null`) flow through here too — a
+        // `Null` value coerced against the chosen numeric member falls to the
+        // catch-all `(v, _) => Ok(v)` and is preserved.
         // Unions containing both are left alone; `find_matching_union_member`
         // picks by value shape at the VM boundary.
         (v, Ty::Union(members, _)) => {

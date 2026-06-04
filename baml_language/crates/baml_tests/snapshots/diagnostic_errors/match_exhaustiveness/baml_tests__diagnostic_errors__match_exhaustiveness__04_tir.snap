@@ -562,7 +562,7 @@ function user.ExhaustiveDoubleMaybe(dm: user.DoubleMaybe) -> string throws never
       null =>
         "nothing" : "nothing"
   }
-  !! 17329..17448: non-exhaustive match on `DoubleMaybe`; missing: Success { data: _ }, Failure { reason: _ }
+  !! 17329..17448: non-exhaustive match on `DoubleMaybe`; missing: Success, Failure, null
   !! 17372..17379: unreachable arm
   !! 17406..17415: unreachable arm
 }
@@ -574,7 +574,7 @@ function user.NonExhaustiveDoubleMaybeMissingNull(dm: user.DoubleMaybe) -> strin
       f: Failure =>
         f.reason : string
   }
-  !! 17573..17665: non-exhaustive match on `DoubleMaybe`; missing: Success { data: _ }, Failure { reason: _ }, null, null
+  !! 17573..17665: non-exhaustive match on `DoubleMaybe`; missing: Success, Failure, null, null
   !! 17616..17623: unreachable arm
   !! 17650..17659: unreachable arm
 }
@@ -976,14 +976,14 @@ function user.JumpTableClassTypeTag(pet: user.Cat | user.Dog | user.Bird | user.
   }
 }
 class user.Success$stream {
-  data: null | string
+  data: string?
 }
 class user.Failure$stream {
-  reason: null | string
+  reason: string?
 }
 type user.Result$stream = user.Success$stream | user.Failure$stream
 class user.Pending$stream {
-  eta: null | int
+  eta: int?
 }
 type user.FullResult$stream = user.Success$stream | user.Failure$stream | user.Pending$stream
 type user.AlwaysTrue$stream = true
@@ -993,22 +993,22 @@ type user.Role$stream = "user" | "assistant" | "system"
 type user.HttpOk$stream = 200
 type user.HttpCreated$stream = 201
 type user.SuccessCode$stream = 200 | 201 | 204
-type user.MaybeResult$stream = null | user.Result$stream
-type user.MaybeOk$stream = null | 200
+type user.MaybeResult$stream = user.Result$stream?
+type user.MaybeOk$stream = 200?
 type user.MixedLiterals$stream = 200 | "success" | true
 type user.OkCode$stream = 200
 type user.OkOrCreated$stream = user.OkCode$stream | 201
-type user.DoubleMaybe$stream = null | user.MaybeResult$stream
+type user.DoubleMaybe$stream = user.MaybeResult$stream?
 type user.SuccessOr200$stream = user.Success$stream | 200
 class user.Cat$stream {
-  name: null | string
+  name: string?
 }
 class user.Dog$stream {
-  name: null | string
+  name: string?
 }
 class user.Bird$stream {
-  name: null | string
+  name: string?
 }
 class user.Fish$stream {
-  name: null | string
+  name: string?
 }

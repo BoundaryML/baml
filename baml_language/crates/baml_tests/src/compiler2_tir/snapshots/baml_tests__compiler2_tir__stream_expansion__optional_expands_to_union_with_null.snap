@@ -22,9 +22,9 @@ function user.WithOptionals.from_json(j: baml.json.json) -> user.WithOptionals t
   WithOptionals { name: baml.json.from_json<string?>(baml.json.field(j, "name")), inner: baml.json.from_json<Inner?>(baml.json.field(j, "inner")) } : user.WithOptionals
 }
 class user.Inner$stream {
-  value: null | string
+  value: string?
 }
 class user.WithOptionals$stream {
-  name: null | string
-  inner: null | user.Inner$stream
+  name: string?
+  inner: user.Inner$stream?
 }

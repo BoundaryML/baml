@@ -216,7 +216,7 @@ class user.Box2 {
   second: int[]?
 }
 function user.Box2.to_json(self: user.Box2) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  map { "first": self.first.to_json(), "second": self.second?.to_json() } : map<string, baml.json.json | baml.json.json?>
+  map { "first": self.first.to_json(), "second": self.second?.to_json() } : map<string, baml.json.json?>
 }
 function user.Box2.from_json(j: baml.json.json) -> user.Box2 throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   Box2 { first: baml.json.from_json<bool>(baml.json.field(j, "first")), second: baml.json.from_json<int[]?>(baml.json.field(j, "second")) } : user.Box2
@@ -321,24 +321,24 @@ class user.Team$stream {
   scores: int[]
 }
 class user.Bag$stream {
-  contents: null | int
+  contents: int?
 }
 class user.Mixed$stream {
-  value: null | int | float | bool
+  value: (int | float | bool)?
 }
 class user.Pair$stream {
-  kind: null | int | bool
-  payload: null | int | string
+  kind: (int | bool)?
+  payload: (int | string)?
 }
 class user.Flagged$stream {
-  flag: null | bool
-  note: null | string
+  flag: bool?
+  note: string?
 }
 class user.Box2$stream {
-  first: null | bool
-  second: null | int[]
+  first: bool?
+  second: int[]?
 }
 class user.IntPair$stream {
-  a: null | int
-  b: null | int
+  a: int?
+  b: int?
 }

@@ -60,7 +60,7 @@ function user.process_with_logging(input: string) -> string throws never {
   }
 }
 class user.User$stream {
-  id: null | int
-  name: null | string
-  email: null | string
+  id: int?
+  name: string?
+  email: string?
 }

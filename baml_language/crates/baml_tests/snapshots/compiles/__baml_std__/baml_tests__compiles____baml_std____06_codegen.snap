@@ -1771,7 +1771,7 @@ function baml.llm.AnthropicOptions.from_json(j: baml.json.json) -> baml.llm.Anth
     load_const "max_tokens"
     call baml.json.field
     store_var _3
-    load_type int | null
+    load_type int?
     load_var _3
     call baml.json.from_json
     init_instance baml.llm.AnthropicOptions .max_tokens
@@ -1810,14 +1810,14 @@ function baml.llm.AzureOpenAiOptions.from_json(j: baml.json.json) -> baml.llm.Az
     load_const "resource_name"
     call baml.json.field
     store_var _3
-    load_type string | null
+    load_type string?
     load_var _3
     call baml.json.from_json
     load_var j
     load_const "deployment_id"
     call baml.json.field
     store_var _6
-    load_type string | null
+    load_type string?
     load_var _6
     call baml.json.from_json
     load_var j
@@ -1831,7 +1831,7 @@ function baml.llm.AzureOpenAiOptions.from_json(j: baml.json.json) -> baml.llm.Az
     load_const "max_tokens"
     call baml.json.field
     store_var _12
-    load_type int | null
+    load_type int?
     load_var _12
     call baml.json.from_json
     init_instance baml.llm.AzureOpenAiOptions .resource_name, .deployment_id, .api_version, .max_tokens
@@ -1918,70 +1918,70 @@ function baml.llm.BedrockOptions.from_json(j: baml.json.json) -> baml.llm.Bedroc
     load_const "region"
     call baml.json.field
     store_var _3
-    load_type string | null
+    load_type string?
     load_var _3
     call baml.json.from_json
     load_var j
     load_const "endpoint_url"
     call baml.json.field
     store_var _6
-    load_type string | null
+    load_type string?
     load_var _6
     call baml.json.from_json
     load_var j
     load_const "access_key_id"
     call baml.json.field
     store_var _9
-    load_type string | null
+    load_type string?
     load_var _9
     call baml.json.from_json
     load_var j
     load_const "secret_access_key"
     call baml.json.field
     store_var _12
-    load_type string | null
+    load_type string?
     load_var _12
     call baml.json.from_json
     load_var j
     load_const "session_token"
     call baml.json.field
     store_var _15
-    load_type string | null
+    load_type string?
     load_var _15
     call baml.json.from_json
     load_var j
     load_const "profile"
     call baml.json.field
     store_var _18
-    load_type string | null
+    load_type string?
     load_var _18
     call baml.json.from_json
     load_var j
     load_const "stop_sequences"
     call baml.json.field
     store_var _21
-    load_type string[] | null
+    load_type string[]?
     load_var _21
     call baml.json.from_json
     load_var j
     load_const "max_tokens"
     call baml.json.field
     store_var _24
-    load_type int | null
+    load_type int?
     load_var _24
     call baml.json.from_json
     load_var j
     load_const "temperature"
     call baml.json.field
     store_var _27
-    load_type float | null
+    load_type float?
     load_var _27
     call baml.json.from_json
     load_var j
     load_const "top_p"
     call baml.json.field
     store_var _30
-    load_type float | null
+    load_type float?
     load_var _30
     call baml.json.from_json
     init_instance baml.llm.BedrockOptions .region, .endpoint_url, .access_key_id, .secret_access_key, .session_token, .profile, .stop_sequences, .max_tokens, .temperature, .top_p
@@ -3107,28 +3107,28 @@ function baml.llm.MediaUrlHandler.from_json(j: baml.json.json) -> baml.llm.Media
     load_const "image"
     call baml.json.field
     store_var _3
-    load_type string | null
+    load_type string?
     load_var _3
     call baml.json.from_json
     load_var j
     load_const "audio"
     call baml.json.field
     store_var _6
-    load_type string | null
+    load_type string?
     load_var _6
     call baml.json.from_json
     load_var j
     load_const "video"
     call baml.json.field
     store_var _9
-    load_type string | null
+    load_type string?
     load_var _9
     call baml.json.from_json
     load_var j
     load_const "pdf"
     call baml.json.field
     store_var _12
-    load_type string | null
+    load_type string?
     load_var _12
     call baml.json.from_json
     init_instance baml.llm.MediaUrlHandler .image, .audio, .video, .pdf
@@ -3745,28 +3745,28 @@ function baml.llm.VertexAiOptions.from_json(j: baml.json.json) -> baml.llm.Verte
     load_const "credentials"
     call baml.json.field
     store_var _3
-    load_type string | null
+    load_type string?
     load_var _3
     call baml.json.from_json
     load_var j
     load_const "credentials_content"
     call baml.json.field
     store_var _6
-    load_type string | null
+    load_type string?
     load_var _6
     call baml.json.from_json
     load_var j
     load_const "location"
     call baml.json.field
     store_var _9
-    load_type string | null
+    load_type string?
     load_var _9
     call baml.json.from_json
     load_var j
     load_const "project_id"
     call baml.json.field
     store_var _12
-    load_type string | null
+    load_type string?
     load_var _12
     call baml.json.from_json
     init_instance baml.llm.VertexAiOptions .credentials, .credentials_content, .location, .project_id

@@ -123,7 +123,7 @@ fn class_field_access() {
       }
     }
     class user.Foo$stream {
-      name: null | string
+      name: string?
     }
     "#);
 }
@@ -166,7 +166,7 @@ fn unresolved_field() {
       !! 66..73: type `Foo` has no member `missing`
     }
     class user.Foo$stream {
-      name: null | string
+      name: string?
     }
     "#);
 }
@@ -203,7 +203,7 @@ function f(data: Data) -> string {
       !! 78..83: type `Data` has no member `inner`
     }
     class user.Data$stream {
-      name: null | string
+      name: string?
     }
     "#);
 }
@@ -240,7 +240,7 @@ function f(s: Sentiment) -> string {
       !! 85..91: type `Sentiment` has no member `feelin`
     }
     class user.Sentiment$stream {
-      feeling: null | string
+      feeling: string?
     }
     "#);
 }
@@ -319,9 +319,9 @@ fn resolve_class_fields_query() {
       Point { x: baml.json.from_json<int>(baml.json.field(j, "x")), y: baml.json.from_json<float>(baml.json.field(j, "y")), label: baml.json.from_json<string>(baml.json.field(j, "label")) } : user.Point
     }
     class user.Point$stream {
-      x: null | int
-      y: null | float
-      label: null | string
+      x: int?
+      y: float?
+      label: string?
     }
     "#);
 }
@@ -355,7 +355,7 @@ fn class_field_bigint() {
       Foo { x: baml.json.from_json<bigint>(baml.json.field(j, "x")) } : user.Foo
     }
     class user.Foo$stream {
-      x: null | bigint
+      x: bigint?
     }
     "#);
 }

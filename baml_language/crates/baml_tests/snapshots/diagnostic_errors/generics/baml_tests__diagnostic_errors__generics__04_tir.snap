@@ -278,41 +278,41 @@ function user.bare_in_union_param(f: user.Foo<int> | user.Foo) -> string throws 
   }
 }
 class user.Box$stream {
-  value: null | T
+  value: T?
 }
 class user.Wrapper$stream {
-  data: null | T
+  data: T?
 }
 class user.Pair$stream {
-  first: null | A
-  second: null | B
+  first: A?
+  second: B?
 }
 class user.Maker$stream {
-  data: null | T
+  data: T?
 }
 class user.Holder$stream {
-  data: null | string
+  data: string?
 }
 class user.Shadow$stream {
-  value: null | T
+  value: T?
 }
 class user.Plain$stream {
-  name: null | string
+  name: string?
 }
 class user.Container$stream {
-  inner: null | user.Box$stream<T>
+  inner: user.Box$stream<T>?
 }
 class user.Factory$stream {
-  data: null | T
+  data: T?
 }
 class user.MaybeBox$stream {
-  value: null | T
+  value: T?
 }
 class user.Stack$stream {
   items: T[]
 }
 class user.Foo$stream {
-  value: null | T
+  value: T?
 }
 class user.Todo {
   id: int
@@ -334,8 +334,8 @@ function user.GetTodo() -> user.Todo throws never {
   !! 165..185: unresolved name: HttpMethod
 }
 class user.Todo$stream {
-  id: null | int
-  title: null | string
-  completed: null | bool
-  userId: null | int
+  id: int?
+  title: string?
+  completed: bool?
+  userId: int?
 }

@@ -12,5 +12,5 @@ function user.WithEnum.from_json(j: baml.json.json) -> user.WithEnum throws baml
   WithEnum { status: baml.json.from_json<Status>(baml.json.field(j, "status")) } : user.WithEnum
 }
 class user.WithEnum$stream {
-  status: null | user.Status
+  status: user.Status?
 }

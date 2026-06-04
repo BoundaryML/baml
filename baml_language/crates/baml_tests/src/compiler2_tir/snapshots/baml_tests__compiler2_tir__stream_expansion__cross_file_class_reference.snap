@@ -13,6 +13,6 @@ function user.Resume.from_json(j: baml.json.json) -> user.Resume throws baml.jso
   Resume { name: baml.json.from_json<string>(baml.json.field(j, "name")), education: baml.json.from_json<Education[]>(baml.json.field(j, "education")) } : user.Resume
 }
 class user.Resume$stream {
-  name: null | string
+  name: string?
   education: user.Education$stream[]
 }

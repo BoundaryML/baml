@@ -13,6 +13,6 @@ function user.TreeNode.from_json(j: baml.json.json) -> user.TreeNode throws baml
   TreeNode { value: baml.json.from_json<string>(baml.json.field(j, "value")), children: baml.json.from_json<TreeNode[]>(baml.json.field(j, "children")) } : user.TreeNode
 }
 class user.TreeNode$stream {
-  value: null | string
+  value: string?
   children: user.TreeNode$stream[]
 }

@@ -447,7 +447,7 @@ function match_types.classify_mixed_lit_typed_guard(x: int, flag: bool) -> strin
     return
 }
 
-function match_types.classify_null_with_class(x: match_types.Cat | match_types.Dog | null) -> string {
+function match_types.classify_null_with_class(x: (match_types.Cat | match_types.Dog)?) -> string {
     load_var x
     is_type match_types.Cat
     pop_jump_if_false L0
@@ -607,7 +607,7 @@ function match_types.classify_status_wildcard(s: match_types.Status) -> string {
     return
 }
 
-function match_types.classify_with_null(x: int | string | bool | null) -> string {
+function match_types.classify_with_null(x: (int | string | bool)?) -> string {
     load_var x
     type_tag
     jump_table [L3, L2, L1, L0], default L5

@@ -379,12 +379,17 @@ fn ty_to_field_type(ty: &Ty) -> BamlTy {
                 name: tn.display_name.to_string(),
             }))
         }
+        // A nullable union (`T | null`) preserves the old `Optional` wire format:
+        // detect it before the general union case and encode it as an
+        // `OptionalType` wrapping the non-null part.
+        Ty::Union(members, _) if members.iter().any(baml_type::Ty::is_null) => {
+            Some(FieldType::OptionalType(Box::new(BamlTyOptional {
+                value: Some(Box::new(ty_to_field_type(&ty.strip_null()))),
+            })))
+        }
         Ty::Union(_, _) => Some(FieldType::UnionVariantType(BamlTyUnionVariant {
             name: None,
         })),
-        Ty::Optional(inner, _) => Some(FieldType::OptionalType(Box::new(BamlTyOptional {
-            value: Some(Box::new(ty_to_field_type(inner))),
-        }))),
         Ty::Media(kind, _) => Some(FieldType::MediaType(BamlTyMedia {
             media: media_kind_to_proto_enum(*kind).into(),
         })),

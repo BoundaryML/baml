@@ -14,5 +14,5 @@ function user.WithDone.from_json(j: baml.json.json) -> user.WithDone throws baml
 }
 class user.WithDone$stream {
   name: string
-  age: null | int
+  age: int?
 }

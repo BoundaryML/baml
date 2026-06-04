@@ -279,34 +279,34 @@ function testing.run_testset(run_children: testing.TestSetReportThunk, runner: t
   }
 }
 class testing.TestRegistration$stream {
-  name: null | string
-  body: null | testing.TestBody$stream
-  runner: null | testing.TestRunner$stream
+  name: string?
+  body: testing.TestBody$stream?
+  runner: testing.TestRunner$stream?
 }
 class testing.TestSetRegistration$stream {
-  name: null | string
-  collector: null | testing.TestSetBody$stream
-  runner: null | testing.TestSetRunner$stream
+  name: string?
+  collector: testing.TestSetBody$stream?
+  runner: testing.TestSetRunner$stream?
 }
 class testing.TestCollector$stream {
-  prefix: null | string
+  prefix: string?
   tests: testing.TestRegistration$stream[]
   testsets: testing.TestSetRegistration$stream[]
 }
 class testing.SerializedTest$stream {
-  type: null | string
-  name: null | string
+  type: string?
+  name: string?
 }
 class testing.SerializedTestSet$stream {
-  name: null | string
+  name: string?
   items: testing.SerializedTestDef$stream[]
-  loadingTimeMs: null | int
+  loadingTimeMs: int?
 }
 type testing.SerializedTestDef$stream = testing.SerializedTest$stream | testing.SerializedTestSet$stream
 class testing.TestRegistry$stream {
-  collector: null | testing.TestCollector$stream
+  collector: testing.TestCollector$stream?
   expansions: map<string, testing.TestRegistry$stream>
-  loading_time_ms: null | int
+  loading_time_ms: int?
 }
 
 --- <builtin>/testing/types.baml ---
@@ -353,18 +353,18 @@ type testing.TestRunner = (testing.TestReportThunk) -> testing.TestReportThunk t
 type testing.TestSetRunner = (testing.TestSetReportThunk) -> testing.TestSetReportThunk throws never
 type testing.Outcome$stream = "pass" | "fail" | "error"
 class testing.RunReport$stream {
-  outcome: null | testing.Outcome$stream
-  duration_ms: null | int
+  outcome: testing.Outcome$stream?
+  duration_ms: int?
 }
 class testing.TestReport$stream {
-  outcome: null | testing.Outcome$stream
+  outcome: testing.Outcome$stream?
   runs: testing.RunReport$stream[]
 }
 class testing.TestSetReport$stream {
-  outcome: null | testing.Outcome$stream
-  passed: null | int
-  failed: null | int
-  total: null | int
+  outcome: testing.Outcome$stream?
+  passed: int?
+  failed: int?
+  total: int?
   results: testing.ChildReport$stream[]
 }
 type testing.ChildReport$stream = testing.TestReport$stream | testing.TestSetReport$stream

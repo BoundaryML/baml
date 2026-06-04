@@ -89,7 +89,7 @@ function user.Fn$parse(json: string, client: baml.llm.Client) -> string {
     return
 }
 
-function user.Fn$parse_stream(sse: baml.http.SseStream, client: baml.llm.Client) -> baml.llm.Stream<null | string, string> {
+function user.Fn$parse_stream(sse: baml.http.SseStream, client: baml.llm.Client) -> baml.llm.Stream<string?, string> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -132,7 +132,7 @@ function user.Fn$render_prompt(client: baml.llm.Client) -> baml.llm.PromptAst {
     return
 }
 
-function user.Fn$stream(client: baml.llm.Client) -> baml.llm.Stream<null | string, string> {
+function user.Fn$stream(client: baml.llm.Client) -> baml.llm.Stream<string?, string> {
     load_var client
     load_const <omitted>
     cmp_op ==

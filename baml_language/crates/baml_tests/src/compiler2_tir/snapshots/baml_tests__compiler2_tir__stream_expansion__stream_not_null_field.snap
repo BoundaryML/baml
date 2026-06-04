@@ -13,6 +13,6 @@ function user.WithNotNull.from_json(j: baml.json.json) -> user.WithNotNull throw
   WithNotNull { gpa: baml.json.from_json<float>(baml.json.field(j, "gpa")), name: baml.json.from_json<string>(baml.json.field(j, "name")) } : user.WithNotNull
 }
 class user.WithNotNull$stream {
-  gpa: null | float
-  name: null | string
+  gpa: float?
+  name: string?
 }

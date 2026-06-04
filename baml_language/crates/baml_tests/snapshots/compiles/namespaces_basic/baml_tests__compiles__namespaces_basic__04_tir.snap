@@ -18,8 +18,8 @@ function user.GetResponse(cfg: user.Config) -> user.llm.Response throws never {
   }
 }
 class user.Config$stream {
-  key: null | string
-  model: null | string
+  key: string?
+  model: string?
 }
 class user.llm.Response {
   text: string
@@ -37,6 +37,6 @@ function user.llm.MakeResponse(cfg: user.Config) -> user.llm.Response throws nev
   }
 }
 class user.llm.Response$stream {
-  text: null | string
-  model: null | string
+  text: string?
+  model: string?
 }

@@ -91,12 +91,12 @@ function user.SearchService.from_json(j: baml.json.json) -> user.SearchService t
 }
 type user.Searcher$stream = unknown
 type user.NarrowSearcher$stream = unknown
-function user.AskDocs$stream(query: string, max_results: int = 10, filter: string = DefaultFilter(), client: baml.llm.Client = TestClient) -> baml.llm.Stream<null | string, string> throws never {
-  baml.llm.stream_llm_function(client, "AskDocs", map { "query": query, "max_results": max_results, "filter": filter }) : baml.llm.Stream<null | string, string>
+function user.AskDocs$stream(query: string, max_results: int = 10, filter: string = DefaultFilter(), client: baml.llm.Client = TestClient) -> baml.llm.Stream<string?, string> throws never {
+  baml.llm.stream_llm_function(client, "AskDocs", map { "query": query, "max_results": max_results, "filter": filter }) : baml.llm.Stream<string?, string>
 }
-function user.AskDocs$parse_stream(sse: baml.http.SseStream, client: baml.llm.Client = TestClient) -> baml.llm.Stream<null | string, string> throws never {
-  client.__make_stream(sse, "AskDocs") : baml.llm.Stream<null | string, string>
+function user.AskDocs$parse_stream(sse: baml.http.SseStream, client: baml.llm.Client = TestClient) -> baml.llm.Stream<string?, string> throws never {
+  client.__make_stream(sse, "AskDocs") : baml.llm.Stream<string?, string>
 }
 class user.SearchService$stream {
-  base: null | string
+  base: string?
 }

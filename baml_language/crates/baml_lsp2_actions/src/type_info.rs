@@ -544,7 +544,6 @@ fn function_param_matches_effect_slot(ty: &baml_compiler2_tir::ty::Ty, effect_na
             throws.as_ref(),
             Ty::TypeVar(name, _) if name == effect_name
         ),
-        Ty::Optional(inner, _) => function_param_matches_effect_slot(inner, effect_name),
         Ty::Union(members, _) => {
             let mut matched = false;
             for member in members {

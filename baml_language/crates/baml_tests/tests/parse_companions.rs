@@ -1,5 +1,5 @@
 use baml_tests::baml_test;
-use bex_engine::{BexExternalValue, Ty};
+use bex_engine::BexExternalValue;
 use indexmap::indexmap;
 
 #[tokio::test]
@@ -71,16 +71,15 @@ async fn parse_companion_allows_missing_nullable_alias_field() {
         "##
     );
 
+    // `type MaybeText = string | null` is now identical to `string?` — a
+    // nullable union is optionality, so a missing/null value is bare `Null`
+    // (not wrapped in union metadata), matching the `string?` case above.
     assert_eq!(
         output.result,
         Ok(BexExternalValue::Instance {
             class_name: "user.Payload".to_string(),
             fields: indexmap! {
-                "text".to_string() => BexExternalValue::union(
-                    BexExternalValue::Null,
-                    [Ty::string(), Ty::null()],
-                    Ty::null(),
-                ),
+                "text".to_string() => BexExternalValue::Null,
             },
         })
     );

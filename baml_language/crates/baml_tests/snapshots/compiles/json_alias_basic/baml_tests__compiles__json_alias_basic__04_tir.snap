@@ -71,5 +71,5 @@ function user.MatchJson(j: baml.json.json) -> string throws never {
   }
 }
 class user.Wrapper$stream {
-  data: null | baml.json.json$stream
+  data: baml.json.json$stream?
 }

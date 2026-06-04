@@ -17,5 +17,5 @@ function user.f(callback: (() -> user.User throws never)?) -> string? throws nev
   }
 }
 class user.User$stream {
-  name: null | string
+  name: string?
 }

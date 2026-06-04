@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 6176
 ---
 === TIR2 ===
 class user.Formatter {
@@ -215,28 +214,28 @@ function user.test_repeated_bound_calls() -> int throws never {
   }
 }
 class user.Formatter$stream {
-  prefix: null | string
+  prefix: string?
 }
 class user.RangeCheck$stream {
-  min: null | int
-  max: null | int
+  min: int?
+  max: int?
 }
 class user.Counter$stream {
-  value: null | int
+  value: int?
 }
 class user.Employee$stream {
-  first: null | string
-  last: null | string
+  first: string?
+  last: string?
 }
 class user.Config$stream {
-  encoder: null | user.Encoder$stream
+  encoder: user.Encoder$stream?
 }
 class user.Encoder$stream {
-  charset: null | string
+  charset: string?
 }
 class user.Box$stream {
-  value: null | T
+  value: T?
 }
 class user.Calculator$stream {
-  op: null | string
+  op: string?
 }

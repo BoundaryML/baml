@@ -62,7 +62,6 @@ impl UnionMetadata {
                     .count();
                 (has_null, non_null_count == 1)
             }
-            Ty::Optional(..) => (true, true),
             _ => (false, false),
         };
 
@@ -388,7 +387,7 @@ impl BexExternalValue {
         } else {
             inner.clone()
         };
-        let optional_type = Ty::Optional(Box::new(inner), TyAttr::default());
+        let optional_type = Ty::optional(inner);
         BexExternalValue::Union {
             value: Box::new(value),
             metadata: UnionMetadata::new(optional_type, selected),

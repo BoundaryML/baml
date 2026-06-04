@@ -135,7 +135,7 @@ function user.AskDocs$parse(json: string, client: baml.llm.Client) -> string {
     return
 }
 
-function user.AskDocs$parse_stream(sse: baml.http.SseStream, client: baml.llm.Client) -> baml.llm.Stream<null | string, string> {
+function user.AskDocs$parse_stream(sse: baml.http.SseStream, client: baml.llm.Client) -> baml.llm.Stream<string?, string> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -187,7 +187,7 @@ function user.AskDocs$render_prompt(query: string, max_results: int, filter: str
     return
 }
 
-function user.AskDocs$stream(query: string, max_results: int, filter: string, client: baml.llm.Client) -> baml.llm.Stream<null | string, string> {
+function user.AskDocs$stream(query: string, max_results: int, filter: string, client: baml.llm.Client) -> baml.llm.Stream<string?, string> {
     load_var max_results
     load_const <omitted>
     cmp_op ==

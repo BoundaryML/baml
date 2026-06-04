@@ -22,5 +22,5 @@ function user.f(u: user.User?) -> string? throws never {
   }
 }
 class user.User$stream {
-  name: null | string
+  name: string?
 }

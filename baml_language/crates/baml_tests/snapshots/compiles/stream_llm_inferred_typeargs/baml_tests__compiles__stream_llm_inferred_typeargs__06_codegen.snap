@@ -101,7 +101,7 @@ function user.TestFunc$parse(json: string, client: baml.llm.Client) -> string {
     return
 }
 
-function user.TestFunc$parse_stream(sse: baml.http.SseStream, client: baml.llm.Client) -> baml.llm.Stream<null | string, string> {
+function user.TestFunc$parse_stream(sse: baml.http.SseStream, client: baml.llm.Client) -> baml.llm.Stream<string?, string> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -134,7 +134,7 @@ function user.TestFunc$render_prompt(input: string, client: baml.llm.Client) -> 
     return
 }
 
-function user.TestFunc$stream(input: string, client: baml.llm.Client) -> baml.llm.Stream<null | string, string> {
+function user.TestFunc$stream(input: string, client: baml.llm.Client) -> baml.llm.Stream<string?, string> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -152,7 +152,7 @@ function user.TestFunc$stream(input: string, client: baml.llm.Client) -> baml.ll
     return
 }
 
-function user.call_stream_inferred() -> baml.llm.Stream<null | string, string> {
+function user.call_stream_inferred() -> baml.llm.Stream<string?, string> {
     load_global user.TestClient
     load_const "TestFunc"
     load_const "world"

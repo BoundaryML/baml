@@ -4114,11 +4114,7 @@ fn validate_implements_for<'db>(
     let resolved_target = expand_type_alias(&target_ty, aliases);
     if matches!(
         &resolved_target,
-        Ty::Interface(..)
-            | Ty::Union(..)
-            | Ty::Optional(..)
-            | Ty::Unknown { .. }
-            | Ty::BuiltinUnknown { .. }
+        Ty::Interface(..) | Ty::Union(..) | Ty::Unknown { .. } | Ty::BuiltinUnknown { .. }
     ) {
         diagnostics.push(
             Diagnostic::error(
@@ -5003,15 +4999,6 @@ fn ty_nominal_subtype(
         return members
             .iter()
             .any(|member| ty_nominal_subtype(db, sub, member, aliases));
-    }
-    if let Ty::Optional(inner, _) = sup {
-        let sub_inner = match sub {
-            Ty::Optional(sub_inner, _) => sub_inner.as_ref(),
-            other => other,
-        };
-        if ty_nominal_subtype(db, sub_inner, inner, aliases) {
-            return true;
-        }
     }
     if let (
         Ty::Interface(sub_qtn, sub_args, sub_assoc, _),

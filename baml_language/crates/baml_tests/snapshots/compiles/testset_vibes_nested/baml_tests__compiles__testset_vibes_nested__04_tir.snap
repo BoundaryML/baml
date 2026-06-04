@@ -104,15 +104,15 @@ lambda user.$init_test_main {
 lambda user.$init_test_main {
 }
 class user.Sentiment$stream {
-  feeling: null | string
-  confidence: null | float
-  reasoning: null | string
+  feeling: string?
+  confidence: float?
+  reasoning: string?
 }
-function user.ClassifySentiment$stream(text: string, client: baml.llm.Client = GPT4o) -> baml.llm.Stream<null | user.Sentiment$stream, user.Sentiment> throws never {
-  baml.llm.stream_llm_function(client, "ClassifySentiment", map { "text": text }) : baml.llm.Stream<null | user.Sentiment$stream, user.Sentiment>
+function user.ClassifySentiment$stream(text: string, client: baml.llm.Client = GPT4o) -> baml.llm.Stream<user.Sentiment$stream?, user.Sentiment> throws never {
+  baml.llm.stream_llm_function(client, "ClassifySentiment", map { "text": text }) : baml.llm.Stream<user.Sentiment$stream?, user.Sentiment>
 }
-function user.ClassifySentiment$parse_stream(sse: baml.http.SseStream, client: baml.llm.Client = GPT4o) -> baml.llm.Stream<null | user.Sentiment$stream, user.Sentiment> throws never {
-  client.__make_stream(sse, "ClassifySentiment") : baml.llm.Stream<null | user.Sentiment$stream, user.Sentiment>
+function user.ClassifySentiment$parse_stream(sse: baml.http.SseStream, client: baml.llm.Client = GPT4o) -> baml.llm.Stream<user.Sentiment$stream?, user.Sentiment> throws never {
+  client.__make_stream(sse, "ClassifySentiment") : baml.llm.Stream<user.Sentiment$stream?, user.Sentiment>
 }
 function user.GenerateTests$stream(count: int, topic: string, client: baml.llm.Client = GPT4o) -> baml.llm.Stream<string[], string[]> throws never {
   baml.llm.stream_llm_function(client, "GenerateTests", map { "count": count, "topic": topic }) : baml.llm.Stream<string[], string[]>
@@ -120,9 +120,9 @@ function user.GenerateTests$stream(count: int, topic: string, client: baml.llm.C
 function user.GenerateTests$parse_stream(sse: baml.http.SseStream, client: baml.llm.Client = GPT4o) -> baml.llm.Stream<string[], string[]> throws never {
   client.__make_stream(sse, "GenerateTests") : baml.llm.Stream<string[], string[]>
 }
-function user.ClassifySentiment2$stream(text: string, client: baml.llm.Client = GPT4o) -> baml.llm.Stream<null | string, string> throws never {
-  baml.llm.stream_llm_function(client, "ClassifySentiment2", map { "text": text }) : baml.llm.Stream<null | string, string>
+function user.ClassifySentiment2$stream(text: string, client: baml.llm.Client = GPT4o) -> baml.llm.Stream<string?, string> throws never {
+  baml.llm.stream_llm_function(client, "ClassifySentiment2", map { "text": text }) : baml.llm.Stream<string?, string>
 }
-function user.ClassifySentiment2$parse_stream(sse: baml.http.SseStream, client: baml.llm.Client = GPT4o) -> baml.llm.Stream<null | string, string> throws never {
-  client.__make_stream(sse, "ClassifySentiment2") : baml.llm.Stream<null | string, string>
+function user.ClassifySentiment2$parse_stream(sse: baml.http.SseStream, client: baml.llm.Client = GPT4o) -> baml.llm.Stream<string?, string> throws never {
+  client.__make_stream(sse, "ClassifySentiment2") : baml.llm.Stream<string?, string>
 }

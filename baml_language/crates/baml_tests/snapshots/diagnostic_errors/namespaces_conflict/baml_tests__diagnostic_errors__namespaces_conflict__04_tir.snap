@@ -12,7 +12,7 @@ function user.llm.Response.from_json(j: baml.json.json) -> user.llm.Response thr
   Response { text: baml.json.from_json<string>(baml.json.field(j, "text")) } : user.llm.Response
 }
 class user.llm.Response$stream {
-  text: null | string
+  text: string?
 }
 class user.llm.Response {
   body: string
@@ -25,6 +25,6 @@ function user.llm.Response.from_json(j: baml.json.json) -> user.llm.Response thr
   Response { body: baml.json.from_json<string>(baml.json.field(j, "body")), status: baml.json.from_json<int>(baml.json.field(j, "status")) } : user.llm.Response
 }
 class user.llm.Response$stream {
-  body: null | string
-  status: null | int
+  body: string?
+  status: int?
 }

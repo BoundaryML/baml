@@ -262,10 +262,9 @@ pub enum Ty {
     List(Box<Ty>, TyAttr),
     /// map<K, V>
     Map(Box<Ty>, Box<Ty>, TyAttr),
-    /// A | B | C
+    /// A | B | C (a `Primitive(Null)` member encodes optionality — `T?` lowers
+    /// to `T | null`).
     Union(Vec<Ty>, TyAttr),
-    /// T?
-    Optional(Box<Ty>, TyAttr),
     /// Literal string/int/bool as a type.
     ///
     /// Carries a `Freshness` flag modeled after TypeScript's fresh/regular
@@ -583,7 +582,6 @@ impl Ty {
             | Ty::List(_, a)
             | Ty::Map(_, _, a)
             | Ty::Union(_, a)
-            | Ty::Optional(_, a)
             | Ty::Literal(_, _, a)
             | Ty::EvolvingList(_, a)
             | Ty::EvolvingMap(_, _, a)
@@ -614,7 +612,6 @@ impl Ty {
             | Ty::List(_, a)
             | Ty::Map(_, _, a)
             | Ty::Union(_, a)
-            | Ty::Optional(_, a)
             | Ty::Literal(_, _, a)
             | Ty::EvolvingList(_, a)
             | Ty::EvolvingMap(_, _, a)
@@ -656,7 +653,6 @@ impl Ty {
                 Box::new((*v).widen_fresh()),
                 attr,
             ),
-            Ty::Optional(inner, attr) => Ty::Optional(Box::new((*inner).widen_fresh()), attr),
             Ty::Class(name, type_args, attr) => {
                 let widened: Vec<Ty> = type_args.into_iter().map(Ty::widen_fresh).collect();
                 Ty::Class(name, widened, attr)
@@ -687,6 +683,39 @@ impl Ty {
                 Ty::EvolvingMap(k, v, attr)
             }
             other => other,
+        }
+    }
+
+    /// The `null` primitive with default attributes.
+    pub fn primitive_null() -> Ty {
+        Ty::Primitive(PrimitiveType::Null, TyAttr::default())
+    }
+
+    /// True if this is exactly the `null` primitive.
+    pub fn is_null(&self) -> bool {
+        matches!(self, Ty::Primitive(PrimitiveType::Null, _))
+    }
+
+    /// True if this is a union that includes `null` — i.e. an optional type.
+    /// `?` lowers to `T | null`, so this is the canonical "is nullable"
+    /// predicate that replaces matching on the former `Ty::Optional`.
+    pub fn is_nullable_union(&self) -> bool {
+        matches!(self, Ty::Union(members, _) if members.iter().any(Ty::is_null))
+    }
+
+    /// `T?` — sugar for `T | null`. Flattens so `(A | B)?` becomes a flat
+    /// `A | B | null`, and stays idempotent (`T??` == `T?`, `null?` == `null`).
+    #[must_use]
+    pub fn nullable(inner: Ty) -> Ty {
+        match inner {
+            Ty::Union(mut members, attr) => {
+                if !members.iter().any(Ty::is_null) {
+                    members.push(Ty::primitive_null());
+                }
+                Ty::Union(members, attr)
+            }
+            n @ Ty::Primitive(PrimitiveType::Null, _) => n,
+            other => Ty::Union(vec![other, Ty::primitive_null()], TyAttr::default()),
         }
     }
 }
@@ -832,12 +861,32 @@ impl Ty {
                     format!("map<{}, {}>", k.render_with(s), v.render_with(s))
                 }
             }
-            Ty::Union(members, _) => members
-                .iter()
-                .map(|m| m.render_with(s))
-                .collect::<Vec<_>>()
-                .join(" | "),
-            Ty::Optional(inner, _) => format!("{}?", inner.render_as_postfix_base(s)),
+            Ty::Union(members, _) => {
+                // A union containing `null` is an optional type — render it with
+                // the postfix `?`: `int | null` → `int?`, `int | string | null`
+                // → `(int | string)?`.
+                let non_null: Vec<&Ty> = members.iter().filter(|m| !m.is_null()).collect();
+                if non_null.len() == members.len() {
+                    members
+                        .iter()
+                        .map(|m| m.render_with(s))
+                        .collect::<Vec<_>>()
+                        .join(" | ")
+                } else {
+                    match non_null.as_slice() {
+                        [] => "null".to_string(),
+                        [single] => format!("{}?", single.render_as_postfix_base(s)),
+                        _ => {
+                            let inner = non_null
+                                .iter()
+                                .map(|m| m.render_with(s))
+                                .collect::<Vec<_>>()
+                                .join(" | ");
+                            format!("({inner})?")
+                        }
+                    }
+                }
+            }
             Ty::Literal(lit, _freshness, _) => lit.to_string(),
             Ty::Function {
                 generic_params,

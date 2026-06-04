@@ -107,7 +107,7 @@ impl LeafBody {
         fn ty_uses_rust_type(ty: &Ty) -> bool {
             match ty {
                 Ty::RustType => true,
-                Ty::Optional(inner) | Ty::List(inner) => ty_uses_rust_type(inner),
+                Ty::List(inner) => ty_uses_rust_type(inner),
                 Ty::Map { key, value } => ty_uses_rust_type(key) || ty_uses_rust_type(value),
                 Ty::Union(items) => items.iter().any(ty_uses_rust_type),
                 Ty::Class(_, args) => args.iter().any(ty_uses_rust_type),
@@ -422,7 +422,7 @@ fn collect_root_imports(ty: &Ty, current: &LeafPath, out: &mut RootImportSets) {
         Ty::Enum(name) | Ty::TypeAlias(name) => {
             record_name_routing(name, current, out);
         }
-        Ty::Optional(inner) | Ty::List(inner) => collect_root_imports(inner, current, out),
+        Ty::List(inner) => collect_root_imports(inner, current, out),
         Ty::Map { key, value } => {
             collect_root_imports(key, current, out);
             collect_root_imports(value, current, out);

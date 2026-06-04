@@ -1065,7 +1065,7 @@ fn .<lambda(test_map_multi_statement, 0)>(x: null) -> null {
 fn user.test_map_optional_inferred() -> int[] {
     // Locals:
     let _0: int[] // _0 // return
-    let _1: int?[] // items
+    let _1: (int?)[] // items
     let _2: (int?) -> int throws never
 
     bb0: {

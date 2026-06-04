@@ -108,5 +108,5 @@ function user.OptionalNameMismatch() -> int throws never {
 type user.NamedFilter$stream = unknown
 type user.NamedLimit$stream = unknown
 class user.Counter$stream {
-  value: null | int
+  value: int?
 }

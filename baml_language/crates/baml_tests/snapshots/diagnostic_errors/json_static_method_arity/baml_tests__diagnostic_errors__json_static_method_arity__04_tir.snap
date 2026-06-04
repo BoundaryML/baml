@@ -25,5 +25,5 @@ function user.bad_extra(j: baml.json.json) -> user.Box<int> throws baml.json.Jso
   !! 1498..1532: function `from_json` expects 1 type argument(s), got 2
 }
 class user.Box$stream {
-  value: null | T
+  value: T?
 }

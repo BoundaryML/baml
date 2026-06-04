@@ -105,5 +105,5 @@ function user.member_map(worker: user.Worker, values: int[]) -> int[] throws nev
   }
 }
 class user.Worker$stream {
-  factor: null | int
+  factor: int?
 }

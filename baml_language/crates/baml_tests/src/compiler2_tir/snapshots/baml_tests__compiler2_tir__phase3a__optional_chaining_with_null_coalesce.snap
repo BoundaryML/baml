@@ -17,5 +17,5 @@ function user.f(u: user.User?, fallback: string) -> string throws never {
   }
 }
 class user.User$stream {
-  name: null | string
+  name: string?
 }

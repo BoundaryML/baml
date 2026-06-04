@@ -414,7 +414,7 @@ fn calling_class_as_function() {
       !! 55..61: `Foo` is not a function — it cannot be called
     }
     class user.Foo$stream {
-      name: null | string
+      name: string?
     }
     "#);
 }
@@ -779,12 +779,12 @@ function f(x: Cat | Dog) -> string { return x.name; }"#,
       }
     }
     class user.Cat$stream {
-      name: null | string
-      legs: null | int
+      name: string?
+      legs: int?
     }
     class user.Dog$stream {
-      name: null | string
-      legs: null | int
+      name: string?
+      legs: int?
     }
     "#);
 }
@@ -828,12 +828,12 @@ function f(x: Cat | Dog) -> int { return x.whiskers; }"#,
       !! 118..126: type `Dog` has no member `whiskers`
     }
     class user.Cat$stream {
-      name: null | string
-      whiskers: null | int
+      name: string?
+      whiskers: int?
     }
     class user.Dog$stream {
-      name: null | string
-      tail: null | bool
+      name: string?
+      tail: bool?
     }
     "#);
 }
@@ -884,13 +884,13 @@ function f(x: A | B | C) -> string { return x.name; }"#,
       !! 114..118: type `C` has no member `name`
     }
     class user.A$stream {
-      name: null | string
+      name: string?
     }
     class user.B$stream {
-      name: null | string
+      name: string?
     }
     class user.C$stream {
-      age: null | int
+      age: int?
     }
     "#);
 }
@@ -942,13 +942,13 @@ function f(x: A | B | C) -> string { return x.name; }"#,
       !! 113..117: type `C` has no member `name`
     }
     class user.A$stream {
-      name: null | string
+      name: string?
     }
     class user.B$stream {
-      age: null | string
+      age: string?
     }
     class user.C$stream {
-      age: null | int
+      age: int?
     }
     "#);
 }
@@ -989,10 +989,10 @@ function f(x: A | B) -> string { return x.value; }"#,
       !! 86..94: type mismatch: expected string, got int | string
     }
     class user.A$stream {
-      value: null | int
+      value: int?
     }
     class user.B$stream {
-      value: null | string
+      value: string?
     }
     "#);
 }
@@ -1026,7 +1026,7 @@ function f(x: A | B | null) -> string { return x.name; }"#,
     function user.B.from_json(j: baml.json.json) -> user.B throws baml.json.JsonParseError | baml.json.JsonDecodeError {
       B { name: baml.json.from_json<string>(baml.json.field(j, "name")) } : user.B
     }
-    function user.f(x: user.A | user.B | null) -> string throws never {
+    function user.f(x: (user.A | user.B)?) -> string throws never {
       { : never
         return x.name : (string | string)?
       }
@@ -1034,10 +1034,10 @@ function f(x: A | B | null) -> string { return x.name; }"#,
       !! 94..101: type mismatch: expected string, got (string | string)?
     }
     class user.A$stream {
-      name: null | string
+      name: string?
     }
     class user.B$stream {
-      name: null | string
+      name: string?
     }
     "#);
 }

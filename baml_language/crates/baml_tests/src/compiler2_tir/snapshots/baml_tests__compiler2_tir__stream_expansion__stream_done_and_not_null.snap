@@ -17,6 +17,6 @@ function user.Combined.from_json(j: baml.json.json) -> user.Combined throws baml
 class user.Combined$stream {
   id: string
   name: string
-  age: null | int
-  score: null | float
+  age: int?
+  score: float?
 }

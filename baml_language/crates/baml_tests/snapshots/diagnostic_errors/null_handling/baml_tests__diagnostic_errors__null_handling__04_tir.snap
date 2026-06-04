@@ -7,7 +7,7 @@ class user.Address {
   zip: string?
 }
 function user.Address.to_json(self: user.Address) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  map { "street": self.street.to_json(), "zip": self.zip?.to_json() } : map<string, baml.json.json | baml.json.json?>
+  map { "street": self.street.to_json(), "zip": self.zip?.to_json() } : map<string, baml.json.json?>
 }
 function user.Address.from_json(j: baml.json.json) -> user.Address throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   Address { street: baml.json.from_json<string>(baml.json.field(j, "street")), zip: baml.json.from_json<string?>(baml.json.field(j, "zip")) } : user.Address
@@ -19,7 +19,7 @@ class user.Profile {
   settings: map<string, string>?
 }
 function user.Profile.to_json(self: user.Profile) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  map { "name": self.name.to_json(), "address": self.address?.to_json(), "scores": self.scores?.to_json(), "settings": self.settings?.to_json() } : map<string, baml.json.json | baml.json.json?>
+  map { "name": self.name.to_json(), "address": self.address?.to_json(), "scores": self.scores?.to_json(), "settings": self.settings?.to_json() } : map<string, baml.json.json?>
 }
 function user.Profile.from_json(j: baml.json.json) -> user.Profile throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   Profile { name: baml.json.from_json<string>(baml.json.field(j, "name")), address: baml.json.from_json<Address?>(baml.json.field(j, "address")), scores: baml.json.from_json<int[]?>(baml.json.field(j, "scores")), settings: baml.json.from_json<map<string, string>?>(baml.json.field(j, "settings")) } : user.Profile
@@ -29,7 +29,7 @@ class user.User {
   profile: user.Profile?
 }
 function user.User.to_json(self: user.User) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  map { "id": self.id.to_json(), "profile": self.profile?.to_json() } : map<string, baml.json.json | baml.json.json?>
+  map { "id": self.id.to_json(), "profile": self.profile?.to_json() } : map<string, baml.json.json?>
 }
 function user.User.from_json(j: baml.json.json) -> user.User throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   User { id: baml.json.from_json<int>(baml.json.field(j, "id")), profile: baml.json.from_json<Profile?>(baml.json.field(j, "profile")) } : user.User
@@ -41,7 +41,7 @@ class user.Node {
   labels: map<string, user.Node>?
 }
 function user.Node.to_json(self: user.Node) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  map { "value": self.value.to_json(), "next": self.next?.to_json(), "children": self.children?.to_json(), "labels": self.labels?.to_json() } : map<string, baml.json.json | baml.json.json?>
+  map { "value": self.value.to_json(), "next": self.next?.to_json(), "children": self.children?.to_json(), "labels": self.labels?.to_json() } : map<string, baml.json.json?>
 }
 function user.Node.from_json(j: baml.json.json) -> user.Node throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   Node { value: baml.json.from_json<int>(baml.json.field(j, "value")), next: baml.json.from_json<Node?>(baml.json.field(j, "next")), children: baml.json.from_json<Node[]?>(baml.json.field(j, "children")), labels: baml.json.from_json<map<string, Node>?>(baml.json.field(j, "labels")) } : user.Node
@@ -117,13 +117,13 @@ function user.NullCoalescing(user: user.User?, fallback: string, count: int) -> 
     let d1 = user?.profile?.name ?? "Anonymous" : string
     let d2 = user?.profile?.name ?? user?.profile?.address?.street ?? "Unknown" : string
     let d3: string = user?.profile?.name ?? fallback : string
-    let d4: string? = user?.profile?.name ?? user?.profile?.address?.zip : string? -> string | null
+    let d4: string? = user?.profile?.name ?? user?.profile?.address?.zip : string?
     let d5 = user?.profile?.scores?.[0] ?? 0 : int
     let d6 = user?.profile?.name ?? fallback : string
     user?.profile?.name = user?.profile?.address?.street ?? "no street" : string
     let d7 = user?.profile?.name ?? fallback : string
     let d8 = count ?? 0 : int
-    let d9 = user?.profile?.name ?? null : string | null
+    let d9 = user?.profile?.name ?? null : string?
     let d10 = user?.profile?.name || "Anonymous" : bool
     return d1 : string
   }
@@ -151,22 +151,22 @@ function user.Combined(user: user.User?, node: user.Node?, items: int[]?) -> str
   !! 8080..8175: did you mean `user?.profile?.name ?? node?.labels?.["name"]?.value.to_string()`? `user?.profile?.name ?? node?.labels?.["name"]?.value.to_string() ?? "fallback"` is unnecessary, because `user?.profile?.name ?? node?.labels?.["name"]?.value.to_string()` cannot be null
 }
 class user.Address$stream {
-  street: null | string
-  zip: null | string
+  street: string?
+  zip: string?
 }
 class user.Profile$stream {
-  name: null | string
-  address: null | user.Address$stream
-  scores: null | int[]
-  settings: null | map<string, string>
+  name: string?
+  address: user.Address$stream?
+  scores: int[]?
+  settings: map<string, string>?
 }
 class user.User$stream {
-  id: null | int
-  profile: null | user.Profile$stream
+  id: int?
+  profile: user.Profile$stream?
 }
 class user.Node$stream {
-  value: null | int
-  next: null | user.Node$stream
-  children: null | user.Node$stream[]
-  labels: null | map<string, user.Node$stream>
+  value: int?
+  next: user.Node$stream?
+  children: user.Node$stream[]?
+  labels: map<string, user.Node$stream>?
 }

@@ -18,6 +18,6 @@ function user.f(u: user.MaybeUser) -> string? throws never {
   }
 }
 class user.User$stream {
-  name: null | string
+  name: string?
 }
-type user.MaybeUser$stream = null | user.User$stream
+type user.MaybeUser$stream = user.User$stream?

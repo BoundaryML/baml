@@ -320,26 +320,26 @@ function user.class_destructure_formatter_empty_and_trailing_comma_trivia() -> i
   }
 }
 class user.Address$stream {
-  zip: null | int
+  zip: int?
 }
 class user.Person$stream {
-  age: null | int
-  flexible_age: null | int | string
-  address: null | user.Address$stream
+  age: int?
+  flexible_age: (int | string)?
+  address: user.Address$stream?
 }
 class user.SameNameInner$stream {
-  field: null | int
+  field: int?
 }
 class user.SameNameOuter$stream {
-  field: null | user.SameNameInner$stream
-  other: null | user.SameNameInner$stream
+  field: user.SameNameInner$stream?
+  other: user.SameNameInner$stream?
 }
 class user.Box$stream {
-  value: null | T
+  value: T?
 }
 class user.OptionalPerson$stream {
-  age: null | int
+  age: int?
 }
 class user.Admin$stream {
-  age: null | string
+  age: string?
 }

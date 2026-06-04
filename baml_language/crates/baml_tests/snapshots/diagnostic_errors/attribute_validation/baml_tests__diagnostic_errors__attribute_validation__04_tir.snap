@@ -36,13 +36,13 @@ enum user.HasDuplicateVariant
 enum user.HasDuplicateEnumAttr
 enum user.HasDuplicateVariantAttr
 class user.HasDuplicateDescription$stream {
-  name: null | string
+  name: string?
 }
 class user.HasDuplicateField$stream {
-  name: null | string
-  age: null | int
-  name: null | int
+  name: string?
+  age: int?
+  name: int?
 }
 class user.HasDuplicateFieldAttr$stream {
-  name: null | string @alias("n") @description("Name") @alias("nm")
+  name: string? @alias("n") @description("Name") @alias("nm")
 }

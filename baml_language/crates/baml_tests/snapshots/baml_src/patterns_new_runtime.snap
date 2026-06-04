@@ -854,7 +854,7 @@ function patterns_new_runtime.from_optional_box(box: patterns_new_runtime.BoxT<i
     return
 }
 
-function patterns_new_runtime.from_union_box(box: patterns_new_runtime.BoxT<int> | null) -> int {
+function patterns_new_runtime.from_union_box(box: patterns_new_runtime.BoxT<int>?) -> int {
     load_var box
     is_type patterns_new_runtime.BoxT<...>
     pop_jump_if_false L0

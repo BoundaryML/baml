@@ -823,7 +823,7 @@ mod tests {
                     ClassProperty {
                         name: BaseName::new("body"),
                         docstring: Some("Free-form body text.".to_string()),
-                        ty: Ty::Optional(Box::new(Ty::String)),
+                        ty: Ty::Union(vec![Ty::String, Ty::Null]),
                     },
                 ],
             ),
@@ -1467,7 +1467,7 @@ mod tests {
                 n,
                 vec![
                     ("name", Ty::String),
-                    ("email", Ty::Optional(Box::new(Ty::String))),
+                    ("email", Ty::Union(vec![Ty::String, Ty::Null])),
                     ("tags", Ty::List(Box::new(Ty::String))),
                 ],
                 "x.baml",
@@ -1660,7 +1660,7 @@ mod tests {
             class_with_props(
                 stream,
                 vec![
-                    ("summary", Ty::Optional(Box::new(Ty::String))),
+                    ("summary", Ty::Union(vec![Ty::String, Ty::Null])),
                     // Non-stream FQN -> resolves to baml_sdk.lorem.Resume
                     ("origin", Ty::Class(non_stream, vec![])),
                 ],
@@ -1911,10 +1911,10 @@ mod tests {
         assert!(!pyi.contains("UNSET"));
         assert!(!pyi.contains("_UNSET"));
         assert!(pyi.contains(
-            "def search(query: str, *, max_results: int = 10, filter: str = ..., tags: typing.List[str] = [], metadata: typing.Dict[str, str] = {}, fallback: typing.Union[str, None] = None) -> str: ...\n"
+            "def search(query: str, *, max_results: int = 10, filter: str = ..., tags: typing.List[str] = [], metadata: typing.Dict[str, str] = {}, fallback: typing.Optional[str] = None) -> str: ...\n"
         ));
         assert!(pyi.contains(
-            "async def search_async(query: str, *, max_results: int = 10, filter: str = ..., tags: typing.List[str] = [], metadata: typing.Dict[str, str] = {}, fallback: typing.Union[str, None] = None) -> str: ...\n"
+            "async def search_async(query: str, *, max_results: int = 10, filter: str = ..., tags: typing.List[str] = [], metadata: typing.Dict[str, str] = {}, fallback: typing.Optional[str] = None) -> str: ...\n"
         ));
     }
 
@@ -2033,10 +2033,10 @@ mod tests {
         assert!(!pyi.contains("from baml_core import UNSET as _UNSET\n"));
         assert!(!pyi.contains("_UNSET"));
         assert!(pyi.contains(
-            "def defaults(*, tags: typing.List[str] = [], metadata: typing.Dict[str, int] = {}, fallback: typing.Union[str, None] = None) -> str: ...\n"
+            "def defaults(*, tags: typing.List[str] = [], metadata: typing.Dict[str, int] = {}, fallback: typing.Optional[str] = None) -> str: ...\n"
         ));
         assert!(pyi.contains(
-            "async def defaults_async(*, tags: typing.List[str] = [], metadata: typing.Dict[str, int] = {}, fallback: typing.Union[str, None] = None) -> str: ...\n"
+            "async def defaults_async(*, tags: typing.List[str] = [], metadata: typing.Dict[str, int] = {}, fallback: typing.Optional[str] = None) -> str: ...\n"
         ));
     }
 
@@ -2419,7 +2419,7 @@ mod tests {
                 n,
                 vec![
                     ("name", Ty::String),
-                    ("email", Ty::Optional(Box::new(Ty::String))),
+                    ("email", Ty::Union(vec![Ty::String, Ty::Null])),
                 ],
                 "x.baml",
                 0,

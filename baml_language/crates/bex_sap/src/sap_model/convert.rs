@@ -419,25 +419,6 @@ impl TypeCtx {
                     convert_ty_attrs(attr),
                 )
             }
-            baml_type::Ty::Optional(ty, attr) => {
-                if self.is_union_like(ty) {
-                    return Err(ConvertError::UnflattenedUnion);
-                }
-                // becomes a union
-                let ty = self.convert_ty(ty)?;
-                TyWithMeta::new(
-                    sap_model::Ty::Resolved(TyResolved::Union(UnionTy {
-                        variants: vec![
-                            TyWithMeta::new(
-                                sap_model::Ty::Resolved(TyResolved::Null(NullTy)),
-                                TypeAnnotations::default(),
-                            ),
-                            ty,
-                        ],
-                    })),
-                    convert_ty_attrs(attr),
-                )
-            }
             baml_type::Ty::List(ty, attr) => TyWithMeta::new(
                 sap_model::Ty::Resolved(TyResolved::Array(ArrayTy {
                     ty: Box::new(self.convert_ty(ty)?),
@@ -525,7 +506,7 @@ impl TypeCtx {
 
     fn is_union_like(&self, ty: &baml_type::Ty) -> bool {
         match ty {
-            baml_type::Ty::Union(..) | baml_type::Ty::Optional(..) => true,
+            baml_type::Ty::Union(..) => true,
             baml_type::Ty::TypeAlias(name, ..) => self
                 .type_alias_definitions
                 .get(name)
@@ -573,7 +554,7 @@ impl TypeCtx {
             | ::baml_type::Ty::Interface(..)
             | ::baml_type::Ty::Enum(..)
             | ::baml_type::Ty::EnumVariant(..) => (AttrLiteral::Never, AttrLiteral::Never),
-            ::baml_type::Ty::Null { .. } | ::baml_type::Ty::Optional(..) => {
+            ::baml_type::Ty::Null { .. } => {
                 unreachable!("nullable fields should be returned before field attr derivation")
             }
             ::baml_type::Ty::List(..) => (
@@ -624,7 +605,7 @@ impl TypeCtx {
         }
 
         Ok(match field_type {
-            ::baml_type::Ty::Null { .. } | ::baml_type::Ty::Optional(..) => true,
+            ::baml_type::Ty::Null { .. } => true,
             ::baml_type::Ty::Union(members, ..) => {
                 let mut is_nullable = false;
                 for member in members {
@@ -760,7 +741,6 @@ fn is_sap_parseable(ty: &baml_type::Ty) -> Result<Vec<TypeName>, ()> {
             Ok(vec![name.clone()])
         }
         baml_type::Ty::Enum(..) | baml_type::Ty::EnumVariant(..) => Ok(Vec::new()),
-        baml_type::Ty::Optional(inner, _) => is_sap_parseable(inner),
         baml_type::Ty::List(inner, _) => is_sap_parseable(inner),
         baml_type::Ty::Map { key, value, .. } => {
             let keys = is_sap_parseable(key)?;

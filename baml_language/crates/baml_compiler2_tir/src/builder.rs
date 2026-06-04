@@ -1005,36 +1005,17 @@ impl<'db> TypeInferenceBuilder<'db> {
     }
 
     /// Pattern-matrix-internal normalization of a scrutinee type.
-    /// Rewrites `Ty::Optional(T)` into `Ty::Union([T, null])` so the
-    /// matrix's `UnionMember` dispatch applies uniformly. Optionals
-    /// embedded as members of an outer Union are flattened in the same
-    /// way (so `int? | string` becomes `int | null | string`), and
-    /// duplicate `null` members get deduplicated.
-    ///
-    /// Only the matrix's column type, dpat scrut tags, and witness
-    /// inputs use this form — `Ty::Optional` remains the canonical
-    /// representation everywhere else (subtyping, codegen, display in
-    /// non-match diagnostics, `pattern_types` map values, `matched_ty`
-    /// flowing into binding inference).
+    /// Flattens a union so the matrix's `UnionMember` dispatch applies
+    /// uniformly (so `int | null | string` keeps a single `null` member),
+    /// deduplicating `null` members.
     fn matrix_normalize_scrut(&self, ty: &Ty) -> Ty {
         let expanded = self.expand_alias_chains(ty.clone());
         match expanded {
-            Ty::Optional(inner, _) => Ty::Union(
-                vec![
-                    *inner,
-                    Ty::Primitive(PrimitiveType::Null, TyAttr::default()),
-                ],
-                TyAttr::default(),
-            ),
             Ty::Union(members, attr) => {
                 let mut flat: Vec<Ty> = Vec::with_capacity(members.len());
                 let mut has_null = false;
                 for m in members {
                     match self.expand_alias_chains(m) {
-                        Ty::Optional(inner, _) => {
-                            flat.push(*inner);
-                            has_null = true;
-                        }
                         Ty::Primitive(PrimitiveType::Null, _) => {
                             has_null = true;
                         }
@@ -1058,7 +1039,6 @@ impl<'db> TypeInferenceBuilder<'db> {
 
             match builder.expand_alias_chains(ty) {
                 fn_ty @ Ty::Function { .. } => Some(fn_ty),
-                Ty::Optional(inner, _) => peel(builder, *inner, depth - 1),
                 Ty::Union(members, _) => {
                     let mut function_member = None;
                     for member in members {
@@ -5966,7 +5946,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                         .as_ref()
                         .is_some_and(|interface| Self::ty_contains_recovery_unknown(interface))
             }
-            Ty::List(elem, _) | Ty::EvolvingList(elem, _) | Ty::Optional(elem, _) => {
+            Ty::List(elem, _) | Ty::EvolvingList(elem, _) => {
                 Self::ty_contains_recovery_unknown(elem)
             }
             Ty::Map(key, value, _) | Ty::EvolvingMap(key, value, _) => {
@@ -6018,7 +5998,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                     })
             }
             Ty::Union(args, _) => args.iter().any(Self::ty_contains_unfilled_generic_class),
-            Ty::List(elem, _) | Ty::EvolvingList(elem, _) | Ty::Optional(elem, _) => {
+            Ty::List(elem, _) | Ty::EvolvingList(elem, _) => {
                 Self::ty_contains_unfilled_generic_class(elem)
             }
             Ty::Map(key, value, _) | Ty::EvolvingMap(key, value, _) => {
@@ -6354,10 +6334,6 @@ impl<'db> TypeInferenceBuilder<'db> {
                 _ => false,
             },
             Ty::Literal(_, _, _) => false,
-            Ty::Optional(inner, _) => {
-                matches!(fact, Ty::Primitive(PrimitiveType::Null, _))
-                    || Self::ty_covers_fact(inner, fact)
-            }
             Ty::Union(parts, _) => parts.iter().any(|part| Self::ty_covers_fact(part, fact)),
             Ty::Class(qn, type_args, _) => matches!(
                 fact,
@@ -8981,10 +8957,6 @@ impl<'db> TypeInferenceBuilder<'db> {
                 throws: Box::new(json_parse_or_serialization_error_ty()),
                 attr: TyAttr::default(),
             }),
-            Ty::Optional(inner, _) => {
-                // Drill through Optional to resolve the member on the inner type
-                self.try_resolve_member_on_ty(inner, member)
-            }
             Ty::TypeAlias(qtn, _) => {
                 if let Some(expanded) = self.aliases.get(qtn) {
                     let expanded = expanded.clone();
@@ -11953,17 +11925,9 @@ impl<'db> TypeInferenceBuilder<'db> {
     }
 
     fn make_optional(ty: Ty) -> Ty {
-        match &ty {
-            Ty::Optional(..) | Ty::Primitive(PrimitiveType::Null, _) => ty,
-            Ty::Union(members, _)
-                if members
-                    .iter()
-                    .any(|m| matches!(m, Ty::Primitive(PrimitiveType::Null, _))) =>
-            {
-                ty
-            }
-            _ => Ty::Optional(Box::new(ty), TyAttr::default()),
-        }
+        // `?` is sugar for `| null`; `Ty::nullable` is idempotent for types
+        // that are already nullable (`T?`, `null`, `T | null`).
+        Ty::nullable(ty)
     }
 
     fn join_types(a: &Ty, b: &Ty) -> Ty {
@@ -12052,10 +12016,6 @@ impl<'db> TypeInferenceBuilder<'db> {
                     .map(|resolved| self.resolve_associated_projections_deep(&resolved))
                     .unwrap_or(projected)
             }
-            Ty::Optional(inner, attr) => Ty::Optional(
-                Box::new(self.resolve_associated_projections_deep(inner)),
-                attr.clone(),
-            ),
             Ty::List(inner, attr) => Ty::List(
                 Box::new(self.resolve_associated_projections_deep(inner)),
                 attr.clone(),
@@ -12424,9 +12384,6 @@ impl<'db> TypeInferenceBuilder<'db> {
 
     fn associated_projection_views_equivalent(&self, a: &Ty, b: &Ty) -> bool {
         match (a, b) {
-            (Ty::Optional(a_inner, _), Ty::Optional(b_inner, _)) => {
-                self.associated_projection_views_equivalent(a_inner, b_inner)
-            }
             (
                 Ty::AssociatedTypeProjection {
                     base: a_base,
@@ -12554,7 +12511,6 @@ impl<'db> TypeInferenceBuilder<'db> {
     fn typevar_is_reflexive_subtype(sub_name: &Name, sup: &Ty) -> bool {
         match sup {
             Ty::TypeVar(sup_name, _) => sup_name == sub_name,
-            Ty::Optional(inner, _) => Self::typevar_is_reflexive_subtype(sub_name, inner),
             Ty::Union(members, _) => members
                 .iter()
                 .any(|m| Self::typevar_is_reflexive_subtype(sub_name, m)),
@@ -12674,31 +12630,30 @@ impl<'db> TypeInferenceBuilder<'db> {
             }
         }
         // BEP-044: nominal interface subtyping must also hold when the target
-        // is an *optional* or *union* type. `normalize::is_subtype_of` has no
-        // interface arm, so without this a `Dog` (which implements `Animal`)
-        // would be rejected for `Animal?` or `Animal | string` even though it
-        // is a subtype of the wrapped interface. We only short-circuit on a
-        // positive result here — a negative falls through to the structural
-        // check below, so non-interface optional/union behaviour is unchanged.
-        match sup {
-            Ty::Optional(inner, _) => {
-                // `null <: T?` and other non-interface optional rules are
-                // handled by the structural check below; here we only add the
-                // nominal interface case for the unwrapped payload.
-                let sub_inner = match sub {
-                    Ty::Optional(si, _) => si.as_ref(),
-                    other => other,
-                };
-                if self.is_subtype(sub_inner, inner) {
-                    return true;
-                }
+        // is a *union* type (including a nullable `T | null`).
+        // `normalize::is_subtype_of` has no interface arm, so without this a
+        // `Dog` (which implements `Animal`) would be rejected for `Animal | null`
+        // or `Animal | string` even though it is a subtype of a wrapped
+        // interface. We only short-circuit on a positive result here — a
+        // negative falls through to the structural check below, so non-interface
+        // union behaviour is unchanged.
+        if let Ty::Union(members, _) = sup {
+            // Decompose `sub` into members too — a nullable `T?` is now the
+            // union `T | null` — and require every `sub` member to be a
+            // subtype of some `sup` member, using the recursive (nominal
+            // interface aware) `is_subtype`. This preserves `Dog? <: Animal?`
+            // (and `Dog <: Animal?`), which `normalize::is_subtype_of` cannot
+            // decide because it has no interface arm. Strictly adds positives.
+            let sub_members: Vec<&Ty> = match sub {
+                Ty::Union(sub_members, _) => sub_members.iter().collect(),
+                other => vec![other],
+            };
+            if sub_members
+                .iter()
+                .all(|sm| members.iter().any(|m| self.is_subtype(sm, m)))
+            {
+                return true;
             }
-            Ty::Union(members, _) => {
-                if members.iter().any(|m| self.is_subtype(sub, m)) {
-                    return true;
-                }
-            }
-            _ => {}
         }
         if let Some(result) = self.structural_subtype_with_nominal_interfaces(sub, sup) {
             return result;
@@ -12869,9 +12824,6 @@ impl<'db> TypeInferenceBuilder<'db> {
                 self.collect_interface_generic_bound_errors(qtn, type_args, errors);
             }
             Ty::List(inner, _) | Ty::EvolvingList(inner, _) => {
-                self.collect_type_generic_bound_errors_inner(inner, seen_aliases, errors);
-            }
-            Ty::Optional(inner, _) => {
                 self.collect_type_generic_bound_errors_inner(inner, seen_aliases, errors);
             }
             Ty::Map(key, value, _) | Ty::EvolvingMap(key, value, _) => {
@@ -13413,17 +13365,16 @@ impl<'db> TypeInferenceBuilder<'db> {
     }
 
     /// Returns true if any runtime value of `ty` could be `null` — i.e. the
-    /// type is `Optional<_>`, the bare `null` primitive, or a union that
-    /// contains either.
+    /// type is the bare `null` primitive or a union that contains it (a
+    /// nullable `T?` lowers to `T | null`).
     ///
     /// Used by the ordering arms of [`infer_binary_op`] to reject operands
     /// whose runtime value might be `null`. Arithmetic / bitwise rely on
     /// their respective `base_ty` classifiers (which return `None` for
-    /// `Optional`/`null` and short-circuit via the catch-all to `Unknown`),
+    /// `null` and short-circuit via the catch-all to `Unknown`),
     /// so they do not need this helper.
     fn may_be_null(ty: &Ty) -> bool {
         match ty {
-            Ty::Optional(_, _) => true,
             Ty::Primitive(PrimitiveType::Null, _) => true,
             Ty::Union(members, _) => members.iter().any(Self::may_be_null),
             _ => false,
@@ -13448,12 +13399,13 @@ impl<'db> TypeInferenceBuilder<'db> {
     /// pairing even though any one concrete value is only ever one
     /// representation. Narrow the operand first if you hit this.
     fn is_float_bigint_mix(lhs: &Ty, rhs: &Ty) -> bool {
-        /// `(could_be_float, could_be_bigint)` for a primitive/literal/union/
-        /// optional type — i.e. the set of primitive shapes any runtime branch
-        /// could carry. Optional **is** unwrapped here because this helper
-        /// asks about the *upcast* type, not about whether the operand itself
-        /// is a valid scalar (the latter check belongs at the operator's arm
-        /// entry, e.g. ordering rejecting nullable operands via `may_be_null`).
+        /// `(could_be_float, could_be_bigint)` for a primitive/literal/union
+        /// type — i.e. the set of primitive shapes any runtime branch could
+        /// carry. A nullable `T | null` is unwrapped through its members here
+        /// because this helper asks about the *upcast* type, not about whether
+        /// the operand itself is a valid scalar (the latter check belongs at
+        /// the operator's arm entry, e.g. ordering rejecting nullable operands
+        /// via `may_be_null`).
         fn shape(ty: &Ty) -> (bool, bool) {
             match ty {
                 Ty::Primitive(PrimitiveType::Float, _)
@@ -13464,7 +13416,6 @@ impl<'db> TypeInferenceBuilder<'db> {
                     let (mf, mb) = shape(m);
                     (f || mf, b || mb)
                 }),
-                Ty::Optional(inner, _) => shape(inner),
                 _ => (false, false),
             }
         }
@@ -14186,14 +14137,6 @@ impl crate::exhaustiveness::PatCtx for TypeInferenceBuilder<'_> {
             | Ty::TypeVar(_, _)
             | Ty::AssociatedTypeProjection { .. } => vec![Ctor::NonExhaustive],
             Ty::Never { .. } => vec![],
-            Ty::Optional(inner, _) => {
-                let mut out = self.enumerate_ctors(inner);
-                out.push(Ctor::Single(Ty::Primitive(
-                    PrimitiveType::Null,
-                    TyAttr::default(),
-                )));
-                out
-            }
             // Each union member becomes a `UnionMember` tag, mirroring
             // rustc's `Variant` ctor for enums. Specializing on
             // `UnionMember(M)` recurses into a column of type `M`, so
@@ -14476,19 +14419,14 @@ impl TypeInferenceBuilder<'_> {
                 .any(|m| self.is_subtype(pat, m) || self.is_subtype(m, pat))
     }
 
-    /// Flatten a (possibly nested) union/optional type into its leaf members,
-    /// with `null` materialized for each `Optional` layer.
+    /// Flatten a (possibly nested) union type into its leaf members. A nullable
+    /// `T?` lowers to `T | null`, so its `null` member surfaces here too.
     fn flatten_union_optional_members(&self, ty: &Ty) -> Vec<Ty> {
         match self.expand_alias_chains(ty.clone()) {
             Ty::Union(members, _) => members
                 .iter()
                 .flat_map(|m| self.flatten_union_optional_members(m))
                 .collect(),
-            Ty::Optional(inner, _) => {
-                let mut out = self.flatten_union_optional_members(&inner);
-                out.push(Ty::Primitive(PrimitiveType::Null, TyAttr::default()));
-                out
-            }
             other => vec![other],
         }
     }
@@ -14732,9 +14670,9 @@ impl TypeInferenceBuilder<'_> {
     }
 
     /// Two types overlap (for pattern dispatch) iff some atom of `a`
-    /// shares a runtime identity with some atom of `b`. Unions/Optionals
-    /// decompose into atoms; everything else is a single atom matched by
-    /// [`Self::atoms_overlap`].
+    /// shares a runtime identity with some atom of `b`. Unions (including a
+    /// nullable `T | null`) decompose into atoms; everything else is a single
+    /// atom matched by [`Self::atoms_overlap`].
     fn types_overlap(&self, a: &Ty, b: &Ty) -> bool {
         let mut a_atoms: Vec<Ty> = Vec::new();
         self.collect_overlap_atoms(a, &mut a_atoms);
@@ -14752,10 +14690,6 @@ impl TypeInferenceBuilder<'_> {
                 for m in members {
                     self.collect_overlap_atoms(&m, out);
                 }
-            }
-            Ty::Optional(inner, _) => {
-                self.collect_overlap_atoms(&inner, out);
-                out.push(Ty::Primitive(PrimitiveType::Null, TyAttr::default()));
             }
             other => out.push(other),
         }
@@ -15142,14 +15076,6 @@ impl TypeInferenceBuilder<'_> {
                     .map(|v| Ty::EnumVariant(qtn.clone(), v, TyAttr::default()))
                     .collect();
                 Self::or_of_singletons(variants, scrut_ty)
-            }
-            Ty::Optional(inner, _) => {
-                let inner_dpat = self.dpat_for_type(inner, scrut_ty);
-                let null_dpat = DPat::single(
-                    Ty::Primitive(PrimitiveType::Null, TyAttr::default()),
-                    scrut_ty.clone(),
-                );
-                Self::or_combine(vec![inner_dpat, null_dpat], scrut_ty)
             }
             Ty::Union(members, _) => {
                 let alts: Vec<DPat> = members

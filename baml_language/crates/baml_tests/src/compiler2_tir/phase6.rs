@@ -653,14 +653,14 @@ function f(callback: MaybeFn) -> int? {
 }
 "#,
     );
-    insta::assert_snapshot!(render_tir(&db, file), @r"
+    insta::assert_snapshot!(render_tir(&db, file), @"
     type user.MaybeFn = ((x: int) -> int throws never)?
     function user.f(callback: user.MaybeFn) -> int? throws never {
       { : never
         return callback?.(42) : int?
       }
     }
-    type user.MaybeFn$stream = null | unknown
+    type user.MaybeFn$stream = unknown?
     ");
 }
 
@@ -694,9 +694,9 @@ function f(u: MaybeUser) -> string? {
       }
     }
     class user.User$stream {
-      name: null | string
+      name: string?
     }
-    type user.MaybeUser$stream = null | user.User$stream
+    type user.MaybeUser$stream = user.User$stream?
     "#);
 }
 
@@ -712,15 +712,15 @@ function f(xs: MaybeInts) -> int? {
 }
 "#,
     );
-    insta::assert_snapshot!(render_tir(&db, file), @r#"
+    insta::assert_snapshot!(render_tir(&db, file), @"
     type user.MaybeInts = int[]?
     function user.f(xs: user.MaybeInts) -> int? throws never {
       { : never
         return xs?.[0] : int?
       }
     }
-    type user.MaybeInts$stream = null | int[]
-    "#);
+    type user.MaybeInts$stream = int[]?
+    ");
 }
 
 #[test]

@@ -45,8 +45,8 @@ function user.$init_test_main(registry: testing.TestCollector) -> ? throws never
 lambda user.$init_test_main {
 }
 class user.Foo$stream {
-  x: null | int
+  x: int?
 }
 class user.HasWith$stream {
-  with: null | int
+  with: int?
 }

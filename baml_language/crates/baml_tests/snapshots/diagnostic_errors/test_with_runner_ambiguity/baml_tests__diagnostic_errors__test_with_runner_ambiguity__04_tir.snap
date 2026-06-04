@@ -41,5 +41,5 @@ lambda user.$init_test_main {
 lambda user.$init_test_main {
 }
 class user.MyRunner$stream {
-  threshold: null | float
+  threshold: float?
 }

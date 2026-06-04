@@ -119,5 +119,5 @@ function user.BigintParamDefaultInt(x: bigint = 0) -> bigint throws never {
   !! 3316..3317: type mismatch: expected bigint, got 0
 }
 class user.BigintHolder$stream {
-  count: null | bigint
+  count: bigint?
 }

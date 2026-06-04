@@ -199,7 +199,6 @@ fn collect_raises_names(throws: Option<&baml_codegen_types::Ty>) -> Vec<String> 
                 }
             }
             Ty::Union(members) => members.iter().for_each(|m| walk(m, out)),
-            Ty::Optional(inner) => walk(inner, out),
             _ => {}
         }
     }
