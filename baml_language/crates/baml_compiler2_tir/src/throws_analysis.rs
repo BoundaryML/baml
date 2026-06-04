@@ -3,10 +3,7 @@ use std::collections::BTreeSet;
 use baml_base::Name;
 use baml_compiler2_ast::{CallArg, Expr, ExprBody, ExprId, Stmt, StmtId};
 
-use crate::{
-    throw_inference::flatten_ty_to_facts,
-    ty::{Ty, TyAttr},
-};
+use crate::{throw_inference::flatten_ty_to_facts, ty::Ty};
 
 pub(crate) trait ThrowsAnalysisContext {
     fn expression_type(&self, expr_id: ExprId) -> Option<Ty>;
@@ -83,9 +80,7 @@ fn collect_throw_value<C: ThrowsAnalysisContext>(
     out: &mut BTreeSet<Ty>,
 ) {
     collect_from_expr(context, value, body, out);
-    let thrown_ty = context.expression_type(value).unwrap_or(Ty::Unknown {
-        attr: TyAttr::default(),
-    });
+    let thrown_ty = context.expression_type(value).unwrap_or(Ty::Unknown);
     out.extend(flatten_ty_to_facts(&thrown_ty));
 }
 
@@ -104,9 +99,7 @@ pub(crate) fn collect_callee_escaping_throws<C: ThrowsAnalysisContext>(
     } else if let Some(summary) = context.named_callee_summary(callee_expr_id, body) {
         out.extend(summary);
     } else {
-        out.insert(Ty::Unknown {
-            attr: TyAttr::default(),
-        });
+        out.insert(Ty::Unknown);
     }
 }
 
@@ -325,7 +318,7 @@ pub(crate) fn collect_from_expr<C: ThrowsAnalysisContext>(
             // surrounding scope's throws include it.
             collect_from_expr(context, *future, body, out);
             if context.await_adds_future_error() {
-                if let Some(Ty::Future(_value, error, _)) = context.expression_type(*future) {
+                if let Some(Ty::Future(_value, error)) = context.expression_type(*future) {
                     out.extend(flatten_ty_to_facts(&error));
                 }
             }

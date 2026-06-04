@@ -32,7 +32,7 @@
 
 use std::collections::HashSet;
 
-use baml_base::{Name, SourceFile, attr::TyAttr};
+use baml_base::{Name, SourceFile};
 use baml_compiler_syntax::{SyntaxKind, SyntaxNode};
 use baml_compiler2_hir::{
     contributions::Definition,
@@ -1013,7 +1013,7 @@ fn completions_for_class_methods(
 /// For a `Ty::Class`, looks up resolved class fields and returns the field's type.
 fn resolve_field_type(db: &dyn Db, ty: &Ty, field_name: &str) -> Option<Ty> {
     match ty {
-        Ty::Class(qn, _, _) => {
+        Ty::Class(qn, _) => {
             let pkg_info_name = qn.package().as_str();
             let pkg_id = PackageId::new(db, Name::new(pkg_info_name));
             let pkg = package_items(db, pkg_id);
@@ -1119,7 +1119,7 @@ fn find_path_segments_for_word_after_dot(token: &baml_compiler_syntax::SyntaxTok
 /// Returns completions for the members of `ty`.
 fn completions_for_ty_members(db: &dyn Db, file: SourceFile, ty: &Ty) -> Vec<Completion> {
     match ty {
-        Ty::Class(qn, _, _) => {
+        Ty::Class(qn, _) => {
             // Find the class definition and return its fields and methods.
             let pkg_info_name = qn.package().as_str();
             let pkg_id = PackageId::new(db, Name::new(pkg_info_name));
@@ -1157,7 +1157,7 @@ fn completions_for_ty_members(db: &dyn Db, file: SourceFile, ty: &Ty) -> Vec<Com
             items
         }
 
-        Ty::Enum(qn, _) => {
+        Ty::Enum(qn) => {
             // Find the enum and return its variants.
             let pkg_id = PackageId::new(db, Name::new(qn.package().as_str()));
             let pkg = package_items(db, pkg_id);
@@ -1188,13 +1188,13 @@ fn completions_for_ty_members(db: &dyn Db, file: SourceFile, ty: &Ty) -> Vec<Com
             completions_for_builtin_class_methods(db, &["Map"], BuiltinMethodMode::Instance)
         }
 
-        Ty::Primitive(primitive, _) => builtin_instance_class_path_for_primitive(primitive)
+        Ty::Primitive(primitive) => builtin_instance_class_path_for_primitive(primitive)
             .map(|class_path| {
                 completions_for_builtin_class_methods(db, class_path, BuiltinMethodMode::Instance)
             })
             .unwrap_or_default(),
 
-        Ty::Literal(baml_base::Literal::String(_), _, _) => {
+        Ty::Literal(baml_base::Literal::String(_), _) => {
             completions_for_builtin_class_methods(db, &["String"], BuiltinMethodMode::Instance)
         }
 
@@ -1219,21 +1219,17 @@ fn definition_to_ty(db: &dyn Db, def: Definition<'_>) -> Option<Ty> {
                     class.name.clone(),
                 ),
                 vec![],
-                TyAttr::default(),
             ))
         }
         Definition::Enum(enum_loc) => {
             let item_tree = baml_compiler2_hir::file_item_tree(db, enum_loc.file(db));
             let enum_data = &item_tree[enum_loc.id(db)];
             let pkg_info = baml_compiler2_hir::file_package::file_package(db, enum_loc.file(db));
-            Some(Ty::Enum(
-                baml_compiler2_tir::ty::QualifiedTypeName::new(
-                    pkg_info.package,
-                    pkg_info.namespace_path,
-                    enum_data.name.clone(),
-                ),
-                TyAttr::default(),
-            ))
+            Some(Ty::Enum(baml_compiler2_tir::ty::QualifiedTypeName::new(
+                pkg_info.package,
+                pkg_info.namespace_path,
+                enum_data.name.clone(),
+            )))
         }
         _ => None,
     }

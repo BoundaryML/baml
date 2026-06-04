@@ -1062,7 +1062,7 @@ fn collect_ty_deps(
 ) {
     use baml_compiler2_tir::ty::Ty;
     match ty {
-        Ty::Class(qtn, generics, _) => {
+        Ty::Class(qtn, generics) => {
             let name_str = qtn.to_string();
             if seen.insert(name_str.clone()) {
                 // Look up the definition location via outline search.
@@ -1074,7 +1074,7 @@ fn collect_ty_deps(
                 collect_ty_deps(db, files, generic, deps, seen);
             }
         }
-        Ty::Enum(qtn, _) | Ty::TypeAlias(qtn, _) => {
+        Ty::Enum(qtn) | Ty::TypeAlias(qtn) => {
             let name_str = qtn.to_string();
             if seen.insert(name_str.clone()) {
                 // Look up the definition location via outline search.
@@ -1083,14 +1083,14 @@ fn collect_ty_deps(
                 }
             }
         }
-        Ty::Optional(inner, _) | Ty::List(inner, _) | Ty::EvolvingList(inner, _) => {
+        Ty::Optional(inner) | Ty::List(inner) | Ty::EvolvingList(inner) => {
             collect_ty_deps(db, files, inner, deps, seen);
         }
-        Ty::Map(k, v, _) | Ty::EvolvingMap(k, v, _) => {
+        Ty::Map(k, v) | Ty::EvolvingMap(k, v) => {
             collect_ty_deps(db, files, k, deps, seen);
             collect_ty_deps(db, files, v, deps, seen);
         }
-        Ty::Union(members, _) => {
+        Ty::Union(members) => {
             for m in members {
                 collect_ty_deps(db, files, m, deps, seen);
             }

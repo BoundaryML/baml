@@ -27,7 +27,7 @@ use baml_compiler2_hir::{body::FunctionBody, file_semantic_index, scope::ScopeKi
 use baml_compiler2_tir::{
     infer_context::{DiagnosticLocation, TirTypeError},
     inference::render_scope_diagnostics,
-    ty::{QualifiedTypeName, Ty, TyAttr},
+    ty::{QualifiedTypeName, Ty},
 };
 use indexmap::IndexMap;
 use text_size::{TextRange, TextSize};
@@ -242,13 +242,10 @@ pub fn check_file(db: &dyn Db, file: SourceFile) -> Vec<Diagnostic> {
                                         &class_data.name,
                                     ),
                                     vec![],
-                                    TyAttr::default(),
                                 )
                             })
                     })
-                    .unwrap_or(Ty::Unknown {
-                        attr: TyAttr::default(),
-                    })
+                    .unwrap_or(Ty::Unknown)
             } else {
                 baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns(
                     db,
@@ -1474,9 +1471,8 @@ fn implements_for_target_matches_class(
         class
             .generic_params
             .iter()
-            .map(|param| Ty::TypeVar(param.clone(), TyAttr::default()))
+            .map(|param| Ty::TypeVar(param.clone()))
             .collect(),
-        TyAttr::default(),
     );
     let mut target_diags = Vec::new();
     let target_ty = baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns(
@@ -1524,7 +1520,7 @@ fn class_method_names_for_implements_target(
         target_generic_params,
         &mut target_diags,
     );
-    let Ty::Class(class_qtn, _, _) = target_ty else {
+    let Ty::Class(class_qtn, _) = target_ty else {
         return HashSet::new();
     };
     let pkg_id = baml_compiler2_hir::package::PackageId::new(ctx.db, class_qtn.package().clone());
@@ -1730,9 +1726,8 @@ fn collect_impl_overlap_entries<'db>(
                     class
                         .generic_params
                         .iter()
-                        .map(|param| Ty::TypeVar(param.clone(), TyAttr::default()))
+                        .map(|param| Ty::TypeVar(param.clone()))
                         .collect(),
-                    TyAttr::default(),
                 );
                 for block in &class.implements {
                     let Some(resolved_iface) =
@@ -1749,11 +1744,7 @@ fn collect_impl_overlap_entries<'db>(
                     );
                     entries.push(ImplOverlapEntry {
                         iface_qtn: resolved_iface.qtn.clone(),
-                        iface_ty: Ty::Interface(
-                            resolved_iface.qtn.clone(),
-                            iface_args,
-                            TyAttr::default(),
-                        ),
+                        iface_ty: Ty::Interface(resolved_iface.qtn.clone(), iface_args),
                         for_ty: for_ty.clone(),
                         generic_params: class.generic_params.clone(),
                         span: block.target.span,
@@ -1796,11 +1787,7 @@ fn collect_impl_overlap_entries<'db>(
                 );
                 entries.push(ImplOverlapEntry {
                     iface_qtn: resolved_iface.qtn.clone(),
-                    iface_ty: Ty::Interface(
-                        resolved_iface.qtn.clone(),
-                        iface_args,
-                        TyAttr::default(),
-                    ),
+                    iface_ty: Ty::Interface(resolved_iface.qtn.clone(), iface_args),
                     for_ty,
                     generic_params,
                     span: imp.span,
@@ -2756,7 +2743,7 @@ fn ty_nominal_subtype(
     if baml_compiler2_tir::normalize::is_same_normalized_type(sub, sup, aliases) {
         return true;
     }
-    if let Ty::Interface(iface_qtn, _, _) = sup {
+    if let Ty::Interface(iface_qtn, _) = sup {
         let registry = baml_compiler2_tir::interfaces::package_implements_registry(
             db,
             baml_compiler2_hir::package::PackageId::new(db, iface_qtn.package().clone()),
@@ -2809,7 +2796,7 @@ fn throws_covariant_compatible(
     }
     let members = |ty: &Ty| -> Vec<Ty> {
         match ty {
-            Ty::Union(m, _) => m.clone(),
+            Ty::Union(m) => m.clone(),
             other => vec![other.clone()],
         }
     };
@@ -3629,12 +3616,8 @@ mod tests {
     fn dummy_rendered(severity: DiagnosticSeverity) -> RenderedTirDiagnostic {
         RenderedTirDiagnostic {
             error: baml_compiler2_tir::infer_context::TirTypeError::TypeMismatch {
-                expected: baml_compiler2_tir::ty::Ty::Never {
-                    attr: baml_compiler2_tir::ty::TyAttr::default(),
-                },
-                got: baml_compiler2_tir::ty::Ty::Never {
-                    attr: baml_compiler2_tir::ty::TyAttr::default(),
-                },
+                expected: baml_compiler2_tir::ty::Ty::Never,
+                got: baml_compiler2_tir::ty::Ty::Never,
             },
             message: "test message".to_string(),
             range: TextRange::new(TextSize::from(0u32), TextSize::from(5u32)),

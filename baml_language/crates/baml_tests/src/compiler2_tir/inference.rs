@@ -576,7 +576,7 @@ class SearchService {
 
     assert_eq!(&own_method.function.params, &exported_method.params);
     assert!(
-        !matches!(own_method.function.params[0].ty, Ty::Unknown { .. }),
+        !matches!(own_method.function.params[0].ty, Ty::Unknown),
         "implicit self should be reified before lowering"
     );
     assert_eq!(own_method.function.params[1].ty.to_string(), "string");

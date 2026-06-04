@@ -33,7 +33,7 @@ use text_size::TextRange;
 use crate::{
     builder::TypeInferenceBuilder,
     infer_context::{InferContext, TypeCheckDiagnostics},
-    ty::{FunctionParamTy, Ty, TyAttr},
+    ty::{FunctionParamTy, Ty},
 };
 
 /// Manual `salsa::Update` impl using `PartialEq` for early-cutoff.
@@ -652,9 +652,7 @@ fn seed_lambda_and_infer<'db>(
                     .and_then(|pts| pts.get(i))
                     .map(|param| param.ty.clone())
             })
-            .unwrap_or(Ty::Unknown {
-                attr: TyAttr::default(),
-            });
+            .unwrap_or(Ty::Unknown);
         builder.add_local(param.name.clone(), param_ty.clone());
         builder.param_types.push((param.name.clone(), param_ty));
     }
@@ -892,9 +890,7 @@ pub fn infer_scope_types<'db>(
                             .return_type
                             .as_ref()
                             .map(|te| lower_with_self(te, &mut diags))
-                            .unwrap_or(Ty::Unknown {
-                                attr: TyAttr::default(),
-                            });
+                            .unwrap_or(Ty::Unknown);
 
                         // Report unresolved type diagnostics for return type
                         if !diags.is_empty() {
@@ -968,21 +964,17 @@ pub fn infer_scope_types<'db>(
                                                                 i.generic_params
                                                                     .iter()
                                                                     .map(|p| Ty::TypeVar(
-                                                                        p.clone(),
-                                                                        TyAttr::default(),
-                                                                    ))
+                                                                        p.clone()))
                                                                     .collect()
                                                             })
                                                             .unwrap_or_default();
-                                                        Ty::Interface(qtn, iface_args, TyAttr::default())
+                                                        Ty::Interface(qtn, iface_args)
                                                     }
-                                                    _ => Ty::Class(qtn, vec![], TyAttr::default()),
+                                                    _ => Ty::Class(qtn, vec![]),
                                                 }
                                             })
                                         })
-                                        .unwrap_or(Ty::Unknown {
-                                            attr: TyAttr::default(),
-                                        })
+                                        .unwrap_or(Ty::Unknown)
                                 }
                             } else {
                                 let mut param_diags = Vec::new();
@@ -1085,12 +1077,7 @@ pub fn infer_scope_types<'db>(
             // diagnostics. The loop below will override these with proper types.
             let captures = &index.scope_bindings[file_scope.index() as usize].captures;
             for (capture_name, _binding_id) in captures {
-                builder.add_local(
-                    capture_name.clone(),
-                    Ty::Unknown {
-                        attr: TyAttr::default(),
-                    },
-                );
+                builder.add_local(capture_name.clone(), Ty::Unknown);
             }
 
             // Re-seed captured variables with their actual types by walking ALL
@@ -1508,9 +1495,7 @@ pub fn resolve_class_fields<'db>(
                     }
                     ty
                 })
-                .unwrap_or(Ty::Unknown {
-                    attr: TyAttr::default(),
-                });
+                .unwrap_or(Ty::Unknown);
             (f.name.clone(), ty, f.attributes.clone())
         })
         .collect();
@@ -1555,9 +1540,7 @@ pub fn resolve_type_alias<'db>(
             }
             ty
         })
-        .unwrap_or(Ty::Unknown {
-            attr: TyAttr::default(),
-        });
+        .unwrap_or(Ty::Unknown);
 
     Arc::new(ResolvedTypeAlias {
         ty,

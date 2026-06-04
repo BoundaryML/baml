@@ -453,7 +453,7 @@ fn resolve_constructor_field_at(
 
             // Get the Object's type
             let obj_ty = inference.expression_type(expr_id)?;
-            let Ty::Class(qtn, _, _) = obj_ty else {
+            let Ty::Class(qtn, _) = obj_ty else {
                 return None;
             };
 

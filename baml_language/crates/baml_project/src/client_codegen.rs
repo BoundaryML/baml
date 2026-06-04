@@ -508,7 +508,7 @@ fn resolve_throws<'db>(
     recursive_aliases: &std::collections::HashSet<QualifiedTypeName>,
 ) -> Option<cg::Ty> {
     match baml_compiler2_tir::callable::callable_throws(db, func_loc) {
-        TirTy::Never { .. } | TirTy::Unknown { .. } => None,
+        TirTy::Never | TirTy::Unknown => None,
         ty => Some(convert_tir_to_codegen_ty(ty, alias_map, recursive_aliases)),
     }
 }
@@ -539,17 +539,17 @@ fn convert_tir_leaf(
 ) -> cg::Ty {
     match ty {
         // Primitives
-        TirTy::Primitive(PrimitiveType::Int, _) => cg::Ty::Int,
-        TirTy::Primitive(PrimitiveType::Bigint, _) => cg::Ty::Bigint,
-        TirTy::Primitive(PrimitiveType::Float, _) => cg::Ty::Float,
-        TirTy::Primitive(PrimitiveType::String, _) => cg::Ty::String,
-        TirTy::Primitive(PrimitiveType::Bool, _) => cg::Ty::Bool,
-        TirTy::Primitive(PrimitiveType::Null, _) => cg::Ty::Null,
-        TirTy::Primitive(PrimitiveType::Uint8Array, _) => cg::Ty::Uint8Array,
-        TirTy::Primitive(PrimitiveType::Image, _) => cg::Ty::Media(baml_db::MediaKind::Image),
-        TirTy::Primitive(PrimitiveType::Audio, _) => cg::Ty::Media(baml_db::MediaKind::Audio),
-        TirTy::Primitive(PrimitiveType::Video, _) => cg::Ty::Media(baml_db::MediaKind::Video),
-        TirTy::Primitive(PrimitiveType::Pdf, _) => cg::Ty::Media(baml_db::MediaKind::Pdf),
+        TirTy::Primitive(PrimitiveType::Int) => cg::Ty::Int,
+        TirTy::Primitive(PrimitiveType::Bigint) => cg::Ty::Bigint,
+        TirTy::Primitive(PrimitiveType::Float) => cg::Ty::Float,
+        TirTy::Primitive(PrimitiveType::String) => cg::Ty::String,
+        TirTy::Primitive(PrimitiveType::Bool) => cg::Ty::Bool,
+        TirTy::Primitive(PrimitiveType::Null) => cg::Ty::Null,
+        TirTy::Primitive(PrimitiveType::Uint8Array) => cg::Ty::Uint8Array,
+        TirTy::Primitive(PrimitiveType::Image) => cg::Ty::Media(baml_db::MediaKind::Image),
+        TirTy::Primitive(PrimitiveType::Audio) => cg::Ty::Media(baml_db::MediaKind::Audio),
+        TirTy::Primitive(PrimitiveType::Video) => cg::Ty::Media(baml_db::MediaKind::Video),
+        TirTy::Primitive(PrimitiveType::Pdf) => cg::Ty::Media(baml_db::MediaKind::Pdf),
 
         // Named types — preserve full QualifiedTypeName via name_from_qtn.
         // Interfaces (BEP-044) lower to `cg::Ty::Class` in client codegen:
@@ -557,18 +557,18 @@ fn convert_tir_leaf(
         // (BEP-044 §LLM Functions), which the codegen path handles via union
         // simplification once the implementor set is enumerated; treating them
         // as a regular nominal type here lets that machinery run unchanged.
-        TirTy::Class(qtn, type_args, _) | TirTy::Interface(qtn, type_args, _) => cg::Ty::Class(
+        TirTy::Class(qtn, type_args) | TirTy::Interface(qtn, type_args) => cg::Ty::Class(
             name_from_qtn(qtn),
             type_args
                 .iter()
                 .map(|t| convert_tir_to_codegen_ty(t, alias_map, recursive_aliases))
                 .collect(),
         ),
-        TirTy::Enum(qtn, _) => cg::Ty::Enum(name_from_qtn(qtn)),
-        TirTy::EnumVariant(qtn, _variant, _) => cg::Ty::Enum(name_from_qtn(qtn)),
+        TirTy::Enum(qtn) => cg::Ty::Enum(name_from_qtn(qtn)),
+        TirTy::EnumVariant(qtn, _variant) => cg::Ty::Enum(name_from_qtn(qtn)),
 
         // Type aliases: if recursive, keep as TypeAlias (opaque); otherwise inline.
-        TirTy::TypeAlias(qtn, _) => {
+        TirTy::TypeAlias(qtn) => {
             if recursive_aliases.contains(qtn) {
                 cg::Ty::TypeAlias(name_from_qtn(qtn))
             } else if let Some(target) = alias_map.get(qtn) {
@@ -581,21 +581,21 @@ fn convert_tir_leaf(
         }
 
         // Containers — recurse via convert_tir_to_codegen_ty so children are simplified.
-        TirTy::List(inner, _) | TirTy::EvolvingList(inner, _) => cg::Ty::List(Box::new(
+        TirTy::List(inner) | TirTy::EvolvingList(inner) => cg::Ty::List(Box::new(
             convert_tir_to_codegen_ty(inner, alias_map, recursive_aliases),
         )),
-        TirTy::Map(k, v, _) | TirTy::EvolvingMap(k, v, _) => cg::Ty::Map {
+        TirTy::Map(k, v) | TirTy::EvolvingMap(k, v) => cg::Ty::Map {
             key: Box::new(convert_tir_to_codegen_ty(k, alias_map, recursive_aliases)),
             value: Box::new(convert_tir_to_codegen_ty(v, alias_map, recursive_aliases)),
         },
         // Unions and optionals: convert children, then let simplify_codegen_ty handle them.
-        TirTy::Union(members, _) => cg::Ty::Union(
+        TirTy::Union(members) => cg::Ty::Union(
             members
                 .iter()
                 .map(|m| convert_tir_to_codegen_ty(m, alias_map, recursive_aliases))
                 .collect(),
         ),
-        TirTy::Optional(inner, _) => {
+        TirTy::Optional(inner) => {
             // Desugar Optional<T> into Union(T, Null) so simplification can
             // flatten/dedup with any nulls already present.
             cg::Ty::Union(vec![
@@ -603,10 +603,10 @@ fn convert_tir_leaf(
                 cg::Ty::Null,
             ])
         }
-        TirTy::Literal(lit, _freshness, _) => cg::Ty::Literal(lit.clone()),
+        TirTy::Literal(lit, _freshness) => cg::Ty::Literal(lit.clone()),
 
         // BEP-030: BAML's `unknown` top type → BuiltinUnknown.
-        TirTy::BuiltinUnknown { .. } => cg::Ty::BuiltinUnknown,
+        TirTy::BuiltinUnknown => cg::Ty::BuiltinUnknown,
 
         // BEP-030: Function types → Callable.
         TirTy::Function { params, ret, .. } => cg::Ty::Callable {
@@ -625,26 +625,22 @@ fn convert_tir_leaf(
         },
 
         // Type variable — codegen-side `Ty::TypeVar` mirrors TIR.
-        TirTy::TypeVar(name, _) => cg::Ty::TypeVar(name.clone()),
+        TirTy::TypeVar(name) => cg::Ty::TypeVar(name.clone()),
 
         // `$rust_type` — opaque Rust-managed state. Surfaces as
         // `BamlPyHandle` in Python codegen; other languages will pick
         // their own opaque-handle mapping.
-        TirTy::RustType { .. } => cg::Ty::RustType,
+        TirTy::RustType => cg::Ty::RustType,
 
         // Bottom / sentinel / error recovery — map to Unit.
-        TirTy::Void { .. }
-        | TirTy::Never { .. }
-        | TirTy::Unknown { .. }
-        | TirTy::Error { .. }
-        | TirTy::Type { .. } => cg::Ty::Unit,
+        TirTy::Void | TirTy::Never | TirTy::Unknown | TirTy::Error | TirTy::Type => cg::Ty::Unit,
 
         // BEP-034: surface a `Future<T, E>` as the codegen-side `Unit`
         // for v1 — codegen for the host-side `Future` shape is a
         // follow-up. The error path is acceptable since BAML code that
         // returns futures must `await` them before crossing the host
         // boundary in v1.
-        TirTy::Future(_, _, _) => cg::Ty::Unit,
+        TirTy::Future(_, _) => cg::Ty::Unit,
     }
 }
 

@@ -307,10 +307,8 @@ pub fn type_info_for_definition(db: &dyn Db, def: Definition<'_>) -> TypeInfo {
                 .collect();
             let return_type = Some(display_surface_ty(db, file, &exported.return_type));
             let throws = if exported.declared_throws.is_some()
-                || !matches!(
-                    exported.callable_throws,
-                    baml_compiler2_tir::ty::Ty::Never { .. }
-                ) {
+                || !matches!(exported.callable_throws, baml_compiler2_tir::ty::Ty::Never)
+            {
                 Some(display_surface_ty(db, file, &exported.callable_throws))
             } else {
                 None
@@ -470,15 +468,15 @@ fn function_param_matches_effect_slot(ty: &baml_compiler2_tir::ty::Ty, effect_na
     match ty {
         Ty::Function { throws, .. } => matches!(
             throws.as_ref(),
-            Ty::TypeVar(name, _) if name == effect_name
+            Ty::TypeVar(name) if name == effect_name
         ),
-        Ty::Optional(inner, _) => function_param_matches_effect_slot(inner, effect_name),
-        Ty::Union(members, _) => {
+        Ty::Optional(inner) => function_param_matches_effect_slot(inner, effect_name),
+        Ty::Union(members) => {
             let mut matched = false;
             for member in members {
                 if matches!(
                     member,
-                    Ty::Primitive(baml_compiler2_tir::ty::PrimitiveType::Null, _)
+                    Ty::Primitive(baml_compiler2_tir::ty::PrimitiveType::Null)
                 ) {
                     continue;
                 }
@@ -504,7 +502,7 @@ fn callback_forwarding_note(
     let [only_fact] = throw_fact_refs.as_slice() else {
         return None;
     };
-    let Ty::TypeVar(effect_name, _) = only_fact else {
+    let Ty::TypeVar(effect_name) = only_fact else {
         return None;
     };
     if !baml_compiler2_tir::ty::is_synthetic_effect_param(effect_name) {

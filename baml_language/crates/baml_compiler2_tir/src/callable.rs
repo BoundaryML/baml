@@ -13,19 +13,17 @@ use crate::{
     package_interface::package_resolution_context,
     throw_inference::{function_throw_sets, throw_set_key},
     throws_analysis::ThrowsAnalysisContext,
-    ty::{Ty, TyAttr},
+    ty::Ty,
 };
 
 fn join_throw_facts(facts: &BTreeSet<Ty>) -> Ty {
     if facts.is_empty() {
-        return Ty::Never {
-            attr: TyAttr::default(),
-        };
+        return Ty::Never;
     }
     let tys: Vec<Ty> = facts.iter().cloned().collect();
     match tys.as_slice() {
         [single] => single.clone(),
-        _ => Ty::Union(tys, TyAttr::default()),
+        _ => Ty::Union(tys),
     }
 }
 
@@ -279,9 +277,7 @@ impl ThrowsAnalysisContext for CallableThrowsAnalysis<'_, '_> {
                 inference
                     .expression_type(arg_expr_id)
                     .cloned()
-                    .unwrap_or(Ty::Unknown {
-                        attr: TyAttr::default(),
-                    })
+                    .unwrap_or(Ty::Unknown)
             },
         ))
     }
@@ -363,9 +359,7 @@ pub fn callable_throws<'db>(db: &'db dyn crate::Db, function: FunctionLoc<'db>) 
     match baml_compiler2_ppir::function_body(db, function).as_ref() {
         FunctionBody::Expr(body) => {
             let Some(scope_id) = function_scope_id(db, function) else {
-                return Ty::Unknown {
-                    attr: TyAttr::default(),
-                };
+                return Ty::Unknown;
             };
             let inference = infer_scope_types(db, scope_id);
             let facts = crate::throws_analysis::collect_escaping_throws(
@@ -379,11 +373,7 @@ pub fn callable_throws<'db>(db: &'db dyn crate::Db, function: FunctionLoc<'db>) 
             );
             join_throw_facts(&facts)
         }
-        FunctionBody::Builtin(_) => Ty::Never {
-            attr: TyAttr::default(),
-        },
-        FunctionBody::Missing => Ty::Unknown {
-            attr: TyAttr::default(),
-        },
+        FunctionBody::Builtin(_) => Ty::Never,
+        FunctionBody::Missing => Ty::Unknown,
     }
 }

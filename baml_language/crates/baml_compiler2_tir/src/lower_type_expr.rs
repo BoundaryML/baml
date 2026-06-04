@@ -8,9 +8,7 @@ use baml_compiler2_hir::{
 
 use crate::{
     infer_context::TirTypeError,
-    ty::{
-        Freshness, FunctionParamMode, FunctionParamTy, PrimitiveType, QualifiedTypeName, Ty, TyAttr,
-    },
+    ty::{Freshness, FunctionParamMode, FunctionParamTy, PrimitiveType, QualifiedTypeName, Ty},
 };
 
 /// Resolve an AST `TypeExpr` to a `Ty` using package-level name resolution.
@@ -299,7 +297,6 @@ pub fn lower_type_expr_in_ns(
                             return Ty::Future(
                                 Box::new(lowered_args[0].clone()),
                                 Box::new(lowered_args[1].clone()),
-                                TyAttr::default(),
                             );
                         }
 
@@ -308,7 +305,7 @@ pub fn lower_type_expr_in_ns(
                         // assignment checks) already produce a clearer diagnostic
                         // (e.g. `expected Box<int>, got Box`) when the arity
                         // mismatch actually matters at the use site.
-                        Ty::Class(qtn, lowered_args, TyAttr::default())
+                        Ty::Class(qtn, lowered_args)
                     }
                     Definition::Interface(_) => {
                         let lowered_args = lower_args(
@@ -319,7 +316,7 @@ pub fn lower_type_expr_in_ns(
                             generic_params,
                             diagnostics,
                         );
-                        Ty::Interface(qualify_def(db, def, item), lowered_args, TyAttr::default())
+                        Ty::Interface(qualify_def(db, def, item), lowered_args)
                     }
                     Definition::Enum(_) => lower_non_generic(
                         db,
@@ -331,7 +328,7 @@ pub fn lower_type_expr_in_ns(
                         generic_params,
                         diagnostics,
                         "enum",
-                        |qtn| Ty::Enum(qtn, TyAttr::default()),
+                        Ty::Enum,
                     ),
                     Definition::TypeAlias(_) => lower_non_generic(
                         db,
@@ -343,16 +340,14 @@ pub fn lower_type_expr_in_ns(
                         generic_params,
                         diagnostics,
                         "type alias",
-                        |qtn| Ty::TypeAlias(qtn, TyAttr::default()),
+                        Ty::TypeAlias,
                     ),
-                    _ => Ty::Unknown {
-                        attr: TyAttr::default(),
-                    },
+                    _ => Ty::Unknown,
                 }
             } else {
                 if segments.len() == 1 {
                     if generic_params.iter().any(|p| *p == segments[0]) {
-                        return Ty::TypeVar(segments[0].clone(), TyAttr::default());
+                        return Ty::TypeVar(segments[0].clone());
                     }
                 }
                 // Enum-variant fallback: a path like `Status.Active` (or
@@ -375,7 +370,6 @@ pub fn lower_type_expr_in_ns(
                             return Ty::EnumVariant(
                                 qualify_def(db, def, enum_short),
                                 variant.clone(),
-                                TyAttr::default(),
                             );
                         }
                     }
@@ -402,61 +396,44 @@ pub fn lower_type_expr_in_ns(
                     name: baml_base::Name::new(&name_str),
                     suggestions,
                 });
-                Ty::Unknown {
-                    attr: TyAttr::default(),
-                }
+                Ty::Unknown
             }
         }
-        TypeExpr::Int { .. } => Ty::Primitive(PrimitiveType::Int, TyAttr::default()),
-        TypeExpr::Bigint { .. } => Ty::Primitive(PrimitiveType::Bigint, TyAttr::default()),
-        TypeExpr::Float { .. } => Ty::Primitive(PrimitiveType::Float, TyAttr::default()),
-        TypeExpr::String { .. } => Ty::Primitive(PrimitiveType::String, TyAttr::default()),
-        TypeExpr::Bool { .. } => Ty::Primitive(PrimitiveType::Bool, TyAttr::default()),
-        TypeExpr::Null { .. } => Ty::Primitive(PrimitiveType::Null, TyAttr::default()),
-        TypeExpr::Never { .. } => Ty::Never {
-            attr: TyAttr::default(),
-        },
-        TypeExpr::Void { .. } => Ty::Void {
-            attr: TyAttr::default(),
-        },
-        TypeExpr::Uint8Array { .. } => Ty::Primitive(PrimitiveType::Uint8Array, TyAttr::default()),
-        TypeExpr::Media { kind, .. } => Ty::Primitive(
-            match kind {
-                baml_base::MediaKind::Image => PrimitiveType::Image,
-                baml_base::MediaKind::Audio => PrimitiveType::Audio,
-                baml_base::MediaKind::Video => PrimitiveType::Video,
-                baml_base::MediaKind::Pdf => PrimitiveType::Pdf,
-                // Generic media — treated as unknown for type resolution purposes
-                baml_base::MediaKind::Generic => {
-                    return Ty::Unknown {
-                        attr: TyAttr::default(),
-                    };
-                }
-            },
-            TyAttr::default(),
-        ),
-        TypeExpr::Optional { inner, .. } => Ty::Optional(
-            Box::new(lower_type_expr_in_ns(
-                db,
-                inner,
-                package_items,
-                ns_context,
-                generic_params,
-                diagnostics,
-            )),
-            TyAttr::default(),
-        ),
-        TypeExpr::List { inner, .. } => Ty::List(
-            Box::new(lower_type_expr_in_ns(
-                db,
-                inner,
-                package_items,
-                ns_context,
-                generic_params,
-                diagnostics,
-            )),
-            TyAttr::default(),
-        ),
+        TypeExpr::Int { .. } => Ty::Primitive(PrimitiveType::Int),
+        TypeExpr::Bigint { .. } => Ty::Primitive(PrimitiveType::Bigint),
+        TypeExpr::Float { .. } => Ty::Primitive(PrimitiveType::Float),
+        TypeExpr::String { .. } => Ty::Primitive(PrimitiveType::String),
+        TypeExpr::Bool { .. } => Ty::Primitive(PrimitiveType::Bool),
+        TypeExpr::Null { .. } => Ty::Primitive(PrimitiveType::Null),
+        TypeExpr::Never { .. } => Ty::Never,
+        TypeExpr::Void { .. } => Ty::Void,
+        TypeExpr::Uint8Array { .. } => Ty::Primitive(PrimitiveType::Uint8Array),
+        TypeExpr::Media { kind, .. } => Ty::Primitive(match kind {
+            baml_base::MediaKind::Image => PrimitiveType::Image,
+            baml_base::MediaKind::Audio => PrimitiveType::Audio,
+            baml_base::MediaKind::Video => PrimitiveType::Video,
+            baml_base::MediaKind::Pdf => PrimitiveType::Pdf,
+            // Generic media — treated as unknown for type resolution purposes
+            baml_base::MediaKind::Generic => {
+                return Ty::Unknown;
+            }
+        }),
+        TypeExpr::Optional { inner, .. } => Ty::Optional(Box::new(lower_type_expr_in_ns(
+            db,
+            inner,
+            package_items,
+            ns_context,
+            generic_params,
+            diagnostics,
+        ))),
+        TypeExpr::List { inner, .. } => Ty::List(Box::new(lower_type_expr_in_ns(
+            db,
+            inner,
+            package_items,
+            ns_context,
+            generic_params,
+            diagnostics,
+        ))),
         TypeExpr::Map { key, value, .. } => Ty::Map(
             Box::new(lower_type_expr_in_ns(
                 db,
@@ -474,7 +451,6 @@ pub fn lower_type_expr_in_ns(
                 generic_params,
                 diagnostics,
             )),
-            TyAttr::default(),
         ),
         TypeExpr::Union {
             variants: members, ..
@@ -492,7 +468,6 @@ pub fn lower_type_expr_in_ns(
                     )
                 })
                 .collect(),
-            TyAttr::default(),
         ),
         TypeExpr::Function {
             generic_params: function_generic_params,
@@ -561,30 +536,17 @@ pub fn lower_type_expr_in_ns(
                                 diagnostics,
                             )
                         })
-                        .unwrap_or(Ty::Never {
-                            attr: TyAttr::default(),
-                        }),
+                        .unwrap_or(Ty::Never),
                 ),
-                attr: TyAttr::default(),
             }
         }
-        TypeExpr::Literal { value: lit, .. } => {
-            Ty::Literal(lit.clone(), Freshness::Regular, TyAttr::default())
-        }
-        TypeExpr::BuiltinUnknown { .. } => Ty::BuiltinUnknown {
-            attr: TyAttr::default(),
-        },
-        TypeExpr::Error { .. } | TypeExpr::Unknown { .. } => Ty::Unknown {
-            attr: TyAttr::default(),
-        },
+        TypeExpr::Literal { value: lit, .. } => Ty::Literal(lit.clone(), Freshness::Regular),
+        TypeExpr::BuiltinUnknown { .. } => Ty::BuiltinUnknown,
+        TypeExpr::Error { .. } | TypeExpr::Unknown { .. } => Ty::Unknown,
         // Dedicated Ty::Type variant — see ty.rs doc comment for design rationale.
-        TypeExpr::Type { .. } => Ty::Type {
-            attr: TyAttr::default(),
-        },
+        TypeExpr::Type { .. } => Ty::Type,
         // `$rust_type` — opaque Rust-managed state field type.
-        TypeExpr::Rust { .. } => Ty::RustType {
-            attr: TyAttr::default(),
-        },
+        TypeExpr::Rust { .. } => Ty::RustType,
     }
 }
 

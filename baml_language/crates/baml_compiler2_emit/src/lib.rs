@@ -54,13 +54,13 @@ fn contains_tir_type_var(ty: &baml_compiler2_tir::ty::Ty) -> bool {
 
     match ty {
         Ty::TypeVar(..) => true,
-        Ty::Class(_, args, _) | Ty::Interface(_, args, _) | Ty::Union(args, _) => {
+        Ty::Class(_, args) | Ty::Interface(_, args) | Ty::Union(args) => {
             args.iter().any(contains_tir_type_var)
         }
-        Ty::List(inner, _) | Ty::EvolvingList(inner, _) | Ty::Optional(inner, _) => {
+        Ty::List(inner) | Ty::EvolvingList(inner) | Ty::Optional(inner) => {
             contains_tir_type_var(inner)
         }
-        Ty::Map(k, v, _) | Ty::EvolvingMap(k, v, _) | Ty::Future(k, v, _) => {
+        Ty::Map(k, v) | Ty::EvolvingMap(k, v) | Ty::Future(k, v) => {
             contains_tir_type_var(k) || contains_tir_type_var(v)
         }
         Ty::Function {
@@ -985,7 +985,7 @@ pub fn generate_project_bytecode_with_opt(
             };
 
             for rule in &registry.interface_impl_rules {
-                let baml_compiler2_tir::ty::Ty::Interface(iface_qtn, iface_type_args, _) =
+                let baml_compiler2_tir::ty::Ty::Interface(iface_qtn, iface_type_args) =
                     &rule.interface_ty
                 else {
                     continue;
@@ -995,7 +995,7 @@ pub fn generate_project_bytecode_with_opt(
                     .map(|a| baml_compiler2_mir::convert_tir2_ty(a, cache))
                     .collect();
                 match &rule.for_ty_pattern {
-                    baml_compiler2_tir::ty::Ty::Class(class_qtn, _, _) => {
+                    baml_compiler2_tir::ty::Ty::Class(class_qtn, _) => {
                         let iface_args = if iface_type_args.iter().any(contains_tir_type_var) {
                             Vec::new()
                         } else {
@@ -1011,7 +1011,7 @@ pub fn generate_project_bytecode_with_opt(
                     // BEP-044 wf3 #G19: an out-of-body `implements I for <primitive>`
                     // is visible to reflection via a synthetic primitive TypeName
                     // (the name MUST match `bex_vm`'s `primitive_type_name`).
-                    baml_compiler2_tir::ty::Ty::Primitive(prim, _) => {
+                    baml_compiler2_tir::ty::Ty::Primitive(prim) => {
                         use baml_compiler2_tir::ty::PrimitiveType;
                         let prim_name = match prim {
                             PrimitiveType::Int => Some("int"),
@@ -1036,7 +1036,7 @@ pub fn generate_project_bytecode_with_opt(
                             );
                         }
                     }
-                    baml_compiler2_tir::ty::Ty::TypeVar(type_var, _) => {
+                    baml_compiler2_tir::ty::Ty::TypeVar(type_var) => {
                         let Some(bound) = rule
                             .generic_params
                             .iter()
@@ -1050,11 +1050,8 @@ pub fn generate_project_bytecode_with_opt(
                             continue;
                         };
                         for class_qtn in registry.class_implements.keys() {
-                            let actual = baml_compiler2_tir::ty::Ty::Class(
-                                class_qtn.clone(),
-                                Vec::new(),
-                                baml_compiler2_tir::ty::TyAttr::default(),
-                            );
+                            let actual =
+                                baml_compiler2_tir::ty::Ty::Class(class_qtn.clone(), Vec::new());
                             if registry.type_implements_interface_via_rule(
                                 &actual,
                                 bound,

@@ -498,12 +498,7 @@ fn rust_type_field_lowers_to_rust_type() {
         &mut diags,
     );
 
-    assert_eq!(
-        ty,
-        baml_compiler2_tir::ty::Ty::RustType {
-            attr: Default::default()
-        }
-    );
+    assert_eq!(ty, baml_compiler2_tir::ty::Ty::RustType);
     assert!(diags.is_empty(), "No diagnostics expected for $rust_type");
 }
 
@@ -568,7 +563,7 @@ fn cross_namespace_type_resolution_via_root() {
         diags
     );
     assert!(
-        !matches!(ty, baml_compiler2_tir::ty::Ty::Unknown { .. }),
+        !matches!(ty, baml_compiler2_tir::ty::Ty::Unknown),
         "root.llm.Response should not resolve to Unknown"
     );
 
@@ -594,7 +589,7 @@ fn cross_namespace_type_resolution_via_root() {
         diags
     );
     assert!(
-        !matches!(ty, baml_compiler2_tir::ty::Ty::Unknown { .. }),
+        !matches!(ty, baml_compiler2_tir::ty::Ty::Unknown),
         "root.Config should not resolve to Unknown from llm namespace"
     );
 }
@@ -634,7 +629,7 @@ fn same_namespace_resolution_no_prefix() {
         diags
     );
     assert!(
-        !matches!(ty, baml_compiler2_tir::ty::Ty::Unknown { .. }),
+        !matches!(ty, baml_compiler2_tir::ty::Ty::Unknown),
         "LLMConfig should not resolve to Unknown within same namespace"
     );
 }
@@ -690,7 +685,7 @@ fn nested_namespace_resolution() {
         diags
     );
     assert!(
-        !matches!(ty, baml_compiler2_tir::ty::Ty::Unknown { .. }),
+        !matches!(ty, baml_compiler2_tir::ty::Ty::Unknown),
         "root.llm.openai.OpenAIClient should not resolve to Unknown"
     );
 }
@@ -723,7 +718,7 @@ fn bare_name_cross_namespace_rejected() {
         &mut diags,
     );
     assert!(
-        matches!(ty, baml_compiler2_tir::ty::Ty::Unknown { .. }),
+        matches!(ty, baml_compiler2_tir::ty::Ty::Unknown),
         "bare Config from ns_llm should not resolve"
     );
     assert!(
@@ -766,7 +761,7 @@ fn multi_segment_bare_path_rejected() {
         &mut diags,
     );
     assert!(
-        matches!(ty, baml_compiler2_tir::ty::Ty::Unknown { .. }),
+        matches!(ty, baml_compiler2_tir::ty::Ty::Unknown),
         "ns2.MyClass from ns1 should not resolve without root. prefix"
     );
     assert!(!diags.is_empty(), "should emit UnresolvedType diagnostic");

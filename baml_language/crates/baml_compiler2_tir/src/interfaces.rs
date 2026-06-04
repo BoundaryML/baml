@@ -18,7 +18,7 @@ use crate::{
     generics,
     lower_type_expr::qualify_def,
     normalize,
-    ty::{FunctionParamTy, PrimitiveType, QualifiedTypeName, Ty, TyAttr},
+    ty::{FunctionParamTy, PrimitiveType, QualifiedTypeName, Ty},
 };
 
 pub type TypeBindings = FxHashMap<Name, Ty>;
@@ -256,10 +256,10 @@ fn derive_compatibility_views(
     }
 
     for rule in rules {
-        let Ty::Interface(iface_qtn, _, _) = &rule.interface_ty else {
+        let Ty::Interface(iface_qtn, _) = &rule.interface_ty else {
             continue;
         };
-        let Ty::Class(class_qtn, class_args, _) = &rule.for_ty_pattern else {
+        let Ty::Class(class_qtn, class_args) = &rule.for_ty_pattern else {
             continue;
         };
         // Blanket `implements<T> I for Container<T>` rules dispatch via the rule
@@ -348,7 +348,7 @@ fn match_ty_pattern_into(
     aliases: &std::collections::HashMap<QualifiedTypeName, Ty>,
     bindings: &mut TypeBindings,
 ) -> Option<()> {
-    if let Ty::TypeVar(name, _) = pattern
+    if let Ty::TypeVar(name) = pattern
         && generic_params.contains(name)
     {
         return bind_type_var(name, concrete, bindings, aliases);
@@ -367,8 +367,8 @@ fn match_ty_pattern_into(
     }
 
     match (pattern, concrete) {
-        (Ty::Class(p_qtn, p_args, _), Ty::Class(c_qtn, c_args, _))
-        | (Ty::Interface(p_qtn, p_args, _), Ty::Interface(c_qtn, c_args, _))
+        (Ty::Class(p_qtn, p_args), Ty::Class(c_qtn, c_args))
+        | (Ty::Interface(p_qtn, p_args), Ty::Interface(c_qtn, c_args))
             if p_qtn == c_qtn && p_args.len() == c_args.len() =>
         {
             for (p, c) in p_args.iter().zip(c_args.iter()) {
@@ -376,30 +376,27 @@ fn match_ty_pattern_into(
             }
             Some(())
         }
-        (Ty::List(p, _), Ty::List(c, _))
-        | (Ty::EvolvingList(p, _), Ty::EvolvingList(c, _))
-        | (Ty::Optional(p, _), Ty::Optional(c, _)) => {
+        (Ty::List(p), Ty::List(c))
+        | (Ty::EvolvingList(p), Ty::EvolvingList(c))
+        | (Ty::Optional(p), Ty::Optional(c)) => {
             match_ty_pattern_into(p, c, generic_params, aliases, bindings)
         }
-        (Ty::Optional(p, _), Ty::Union(c_members, _)) => {
+        (Ty::Optional(p), Ty::Union(c_members)) => {
             let inner = union_members_without_null(c_members)?;
             match_ty_pattern_into(p, &inner, generic_params, aliases, bindings)
         }
-        (Ty::Map(pk, pv, _), Ty::Map(ck, cv, _))
-        | (Ty::EvolvingMap(pk, pv, _), Ty::EvolvingMap(ck, cv, _)) => {
+        (Ty::Map(pk, pv), Ty::Map(ck, cv)) | (Ty::EvolvingMap(pk, pv), Ty::EvolvingMap(ck, cv)) => {
             match_ty_pattern_into(pk, ck, generic_params, aliases, bindings)?;
             match_ty_pattern_into(pv, cv, generic_params, aliases, bindings)
         }
-        (Ty::Future(pv, pe, _), Ty::Future(cv, ce, _)) => {
+        (Ty::Future(pv, pe), Ty::Future(cv, ce)) => {
             match_ty_pattern_into(pv, cv, generic_params, aliases, bindings)?;
             match_ty_pattern_into(pe, ce, generic_params, aliases, bindings)
         }
-        (Ty::Union(p_members, _), Ty::Union(c_members, _))
-            if p_members.len() == c_members.len() =>
-        {
+        (Ty::Union(p_members), Ty::Union(c_members)) if p_members.len() == c_members.len() => {
             match_union_members(p_members, c_members, generic_params, aliases, bindings)
         }
-        (Ty::Primitive(primitive, _), Ty::Literal(literal, _, _))
+        (Ty::Primitive(primitive), Ty::Literal(literal, _))
             if PrimitiveType::from_literal(literal) == *primitive =>
         {
             Some(())
@@ -515,12 +512,7 @@ fn function_generic_bindings(params: &[Name], canonical_params: &[Name]) -> Type
     params
         .iter()
         .zip(canonical_params.iter())
-        .map(|(param, canonical)| {
-            (
-                param.clone(),
-                Ty::TypeVar(canonical.clone(), TyAttr::default()),
-            )
-        })
+        .map(|(param, canonical)| (param.clone(), Ty::TypeVar(canonical.clone())))
         .collect()
 }
 
@@ -576,7 +568,7 @@ fn union_members_without_null(members: &[Ty]) -> Option<Ty> {
     let mut non_null = Vec::new();
     let mut saw_null = false;
     for member in members {
-        if matches!(member, Ty::Primitive(PrimitiveType::Null, _)) {
+        if matches!(member, Ty::Primitive(PrimitiveType::Null)) {
             saw_null = true;
         } else {
             non_null.push(member.clone());
@@ -588,7 +580,7 @@ fn union_members_without_null(members: &[Ty]) -> Option<Ty> {
     if non_null.len() == 1 {
         non_null.into_iter().next()
     } else {
-        Some(Ty::Union(non_null, TyAttr::default()))
+        Some(Ty::Union(non_null))
     }
 }
 
@@ -612,14 +604,14 @@ fn bind_type_var(
 
 fn contains_bound_typevar(ty: &Ty, generic_params: &[Name]) -> bool {
     match ty {
-        Ty::TypeVar(name, _) => generic_params.contains(name),
-        Ty::Class(_, args, _) | Ty::Interface(_, args, _) | Ty::Union(args, _) => args
+        Ty::TypeVar(name) => generic_params.contains(name),
+        Ty::Class(_, args) | Ty::Interface(_, args) | Ty::Union(args) => args
             .iter()
             .any(|arg| contains_bound_typevar(arg, generic_params)),
-        Ty::List(inner, _) | Ty::EvolvingList(inner, _) | Ty::Optional(inner, _) => {
+        Ty::List(inner) | Ty::EvolvingList(inner) | Ty::Optional(inner) => {
             contains_bound_typevar(inner, generic_params)
         }
-        Ty::Map(k, v, _) | Ty::EvolvingMap(k, v, _) | Ty::Future(k, v, _) => {
+        Ty::Map(k, v) | Ty::EvolvingMap(k, v) | Ty::Future(k, v) => {
             contains_bound_typevar(k, generic_params) || contains_bound_typevar(v, generic_params)
         }
         Ty::Function {
@@ -645,13 +637,13 @@ fn contains_bound_typevar(ty: &Ty, generic_params: &[Name]) -> bool {
 
 fn contains_generic_function_binders(ty: &Ty) -> bool {
     match ty {
-        Ty::Class(_, args, _) | Ty::Interface(_, args, _) | Ty::Union(args, _) => {
+        Ty::Class(_, args) | Ty::Interface(_, args) | Ty::Union(args) => {
             args.iter().any(contains_generic_function_binders)
         }
-        Ty::List(inner, _) | Ty::EvolvingList(inner, _) | Ty::Optional(inner, _) => {
+        Ty::List(inner) | Ty::EvolvingList(inner) | Ty::Optional(inner) => {
             contains_generic_function_binders(inner)
         }
-        Ty::Map(k, v, _) | Ty::EvolvingMap(k, v, _) | Ty::Future(k, v, _) => {
+        Ty::Map(k, v) | Ty::EvolvingMap(k, v) | Ty::Future(k, v) => {
             contains_generic_function_binders(k) || contains_generic_function_binders(v)
         }
         Ty::Function {
@@ -680,32 +672,22 @@ fn contains_generic_function_binders(ty: &Ty) -> bool {
 
 pub fn implementation_key_for_ty(ty: &Ty) -> Option<Ty> {
     match ty {
-        Ty::Primitive(primitive, _) => Some(Ty::Primitive(primitive.clone(), TyAttr::default())),
-        Ty::Literal(literal, _, _) => Some(Ty::Primitive(
-            PrimitiveType::from_literal(literal),
-            TyAttr::default(),
-        )),
-        Ty::List(inner, _) => Some(Ty::List(
-            Box::new(implementation_key_for_ty(inner)?),
-            TyAttr::default(),
-        )),
-        Ty::Map(key, value, _) => Some(Ty::Map(
+        Ty::Primitive(primitive) => Some(Ty::Primitive(primitive.clone())),
+        Ty::Literal(literal, _) => Some(Ty::Primitive(PrimitiveType::from_literal(literal))),
+        Ty::List(inner) => Some(Ty::List(Box::new(implementation_key_for_ty(inner)?))),
+        Ty::Map(key, value) => Some(Ty::Map(
             Box::new(implementation_key_for_ty(key)?),
             Box::new(implementation_key_for_ty(value)?),
-            TyAttr::default(),
         )),
-        Ty::Optional(inner, _) => Some(Ty::Optional(
-            Box::new(implementation_key_for_ty(inner)?),
-            TyAttr::default(),
-        )),
-        Ty::Union(members, _) => {
+        Ty::Optional(inner) => Some(Ty::Optional(Box::new(implementation_key_for_ty(inner)?))),
+        Ty::Union(members) => {
             let mut keys = members
                 .iter()
                 .map(implementation_key_for_ty)
                 .collect::<Option<Vec<_>>>()?;
             keys.sort();
             keys.dedup();
-            Some(Ty::Union(keys, TyAttr::default()))
+            Some(Ty::Union(keys))
         }
         // Class/Interface/Enum/TypeAlias and all other constructors are unkeyable.
         _ => None,
@@ -772,19 +754,14 @@ pub fn package_implements_registry<'db>(
                         class_data
                             .generic_params
                             .iter()
-                            .map(|param| Ty::TypeVar(param.clone(), TyAttr::default()))
+                            .map(|param| Ty::TypeVar(param.clone()))
                             .collect(),
-                        TyAttr::default(),
                     );
                     interface_impl_rules.push(InterfaceImplRule {
                         generic_params: class_data.generic_params.clone(),
                         generic_param_bounds: vec![None; class_data.generic_params.len()],
                         for_ty_pattern,
-                        interface_ty: Ty::Interface(
-                            iface_qtn.clone(),
-                            interface_args,
-                            TyAttr::default(),
-                        ),
+                        interface_ty: Ty::Interface(iface_qtn.clone(), interface_args),
                         origin: InterfaceImplOrigin::InBodyClass,
                     });
                 }
@@ -829,8 +806,7 @@ pub fn package_implements_registry<'db>(
                 &imp.generic_params,
                 &mut diags,
             );
-            let interface_ty =
-                Ty::Interface(iface_qtn.clone(), interface_args.clone(), TyAttr::default());
+            let interface_ty = Ty::Interface(iface_qtn.clone(), interface_args.clone());
             let bounds: Vec<Option<Ty>> = imp
                 .generic_param_bounds
                 .iter()
@@ -894,7 +870,7 @@ pub fn resolve_path_to_interface_identity<'db>(
     current_ns: &[Name],
 ) -> Option<ResolvedInterface<'db>> {
     let mut diagnostics = Vec::new();
-    let Ty::Interface(qtn, _, _) = crate::lower_type_expr::lower_type_expr_in_ns(
+    let Ty::Interface(qtn, _) = crate::lower_type_expr::lower_type_expr_in_ns(
         db,
         target,
         pkg_items,
@@ -1088,29 +1064,27 @@ mod tests {
     }
 
     fn class(namespace: &[&str], name: &str, args: Vec<Ty>) -> Ty {
-        Ty::Class(qtn(namespace, name), args, TyAttr::default())
+        Ty::Class(qtn(namespace, name), args)
     }
 
     fn interface(name: &str, args: Vec<Ty>) -> Ty {
-        Ty::Interface(qtn(&[], name), args, TyAttr::default())
+        Ty::Interface(qtn(&[], name), args)
     }
 
     fn int() -> Ty {
-        Ty::Primitive(PrimitiveType::Int, TyAttr::default())
+        Ty::Primitive(PrimitiveType::Int)
     }
 
     fn string() -> Ty {
-        Ty::Primitive(PrimitiveType::String, TyAttr::default())
+        Ty::Primitive(PrimitiveType::String)
     }
 
     fn type_var(name: &str) -> Ty {
-        Ty::TypeVar(Name::new(name), TyAttr::default())
+        Ty::TypeVar(Name::new(name))
     }
 
     fn never() -> Ty {
-        Ty::Never {
-            attr: TyAttr::default(),
-        }
+        Ty::Never
     }
 
     fn function(
@@ -1132,16 +1106,15 @@ mod tests {
                 .collect(),
             ret: Box::new(ret),
             throws: Box::new(never()),
-            attr: TyAttr::default(),
         }
     }
 
     #[test]
     fn implementation_key_for_ty_canonicalizes_union_members() {
-        let int = Ty::Primitive(PrimitiveType::Int, TyAttr::default());
-        let string = Ty::Primitive(PrimitiveType::String, TyAttr::default());
-        let lhs = Ty::Union(vec![int.clone(), string.clone()], TyAttr::default());
-        let rhs = Ty::Union(vec![string, int], TyAttr::default());
+        let int = Ty::Primitive(PrimitiveType::Int);
+        let string = Ty::Primitive(PrimitiveType::String);
+        let lhs = Ty::Union(vec![int.clone(), string.clone()]);
+        let rhs = Ty::Union(vec![string, int]);
 
         assert_eq!(
             implementation_key_for_ty(&lhs),
@@ -1151,12 +1124,12 @@ mod tests {
 
     #[test]
     fn implementation_key_for_ty_dedupes_union_members() {
-        let int = Ty::Primitive(PrimitiveType::Int, TyAttr::default());
-        let duplicated = Ty::Union(vec![int.clone(), int.clone()], TyAttr::default());
+        let int = Ty::Primitive(PrimitiveType::Int);
+        let duplicated = Ty::Union(vec![int.clone(), int.clone()]);
 
         assert_eq!(
             implementation_key_for_ty(&duplicated),
-            Some(Ty::Union(vec![int], TyAttr::default()))
+            Some(Ty::Union(vec![int]))
         );
     }
 
@@ -1189,14 +1162,8 @@ mod tests {
 
     #[test]
     fn match_ty_pattern_handles_nested_interface_args() {
-        let pattern = interface(
-            "Container",
-            vec![Ty::List(Box::new(type_var("T")), TyAttr::default())],
-        );
-        let actual = interface(
-            "Container",
-            vec![Ty::List(Box::new(int()), TyAttr::default())],
-        );
+        let pattern = interface("Container", vec![Ty::List(Box::new(type_var("T")))]);
+        let actual = interface("Container", vec![Ty::List(Box::new(int()))]);
         let params = vec![Name::new("T")];
 
         let bindings = match_ty_pattern(
@@ -1270,8 +1237,8 @@ mod tests {
 
     #[test]
     fn match_ty_pattern_unions_are_order_insensitive_with_bindings() {
-        let pattern = Ty::Union(vec![type_var("T"), string()], TyAttr::default());
-        let actual = Ty::Union(vec![string(), int()], TyAttr::default());
+        let pattern = Ty::Union(vec![type_var("T"), string()]);
+        let actual = Ty::Union(vec![string(), int()]);
         let params = vec![Name::new("T")];
 
         let bindings = match_ty_pattern(

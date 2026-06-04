@@ -286,10 +286,7 @@ pub fn annotations(db: &dyn Db, file: SourceFile) -> Vec<InlineAnnotation> {
 /// - `Ty::BuiltinUnknown` / `Ty::Unknown` — no useful info
 /// - `Ty::Never` — unreachable / error types
 fn should_suppress_type(ty: &Ty) -> bool {
-    matches!(
-        ty,
-        Ty::Error { .. } | Ty::BuiltinUnknown { .. } | Ty::Unknown { .. } | Ty::Never { .. }
-    )
+    matches!(ty, Ty::Error | Ty::BuiltinUnknown | Ty::Unknown | Ty::Never)
 }
 
 /// Search all scopes in the file for the binding type of `pat_id`.

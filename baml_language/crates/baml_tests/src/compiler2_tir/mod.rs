@@ -744,18 +744,18 @@ pub(crate) mod support {
     fn collect_typevars_inner(ty: &baml_compiler2_tir::ty::Ty, out: &mut Vec<String>) {
         use baml_compiler2_tir::ty::Ty;
         match ty {
-            Ty::TypeVar(name, _) => {
+            Ty::TypeVar(name) => {
                 let s = name.to_string();
                 if !out.contains(&s) {
                     out.push(s);
                 }
             }
-            Ty::List(inner, _) | Ty::Optional(inner, _) => collect_typevars_inner(inner, out),
-            Ty::Map(k, v, _) => {
+            Ty::List(inner) | Ty::Optional(inner) => collect_typevars_inner(inner, out),
+            Ty::Map(k, v) => {
                 collect_typevars_inner(k, out);
                 collect_typevars_inner(v, out);
             }
-            Ty::Union(members, _) => {
+            Ty::Union(members) => {
                 for m in members {
                     collect_typevars_inner(m, out);
                 }
@@ -964,7 +964,6 @@ pub(crate) mod support {
                                 let resolved = resolve_class_fields(db, class_loc);
                                 writeln!(output, "{kind_str} {fqn} {{").ok();
                                 for (fname, fty, fattrs) in &resolved.fields {
-                                    let ty_attr_names = fty.attr().attr_names();
                                     let field_attr_strs: Vec<String> = fattrs
                                         .iter()
                                         .map(|a| {
@@ -984,17 +983,10 @@ pub(crate) mod support {
                                             }
                                         })
                                         .collect();
-                                    // Format: field: (Ty @ty_attr) @field_attr
-                                    let ty_str = if ty_attr_names.is_empty() {
-                                        format!("{fty}")
-                                    } else {
-                                        let ta = ty_attr_names
-                                            .iter()
-                                            .map(|a| format!("@{a}"))
-                                            .collect::<Vec<_>>()
-                                            .join(" ");
-                                        format!("({fty} {ta})")
-                                    };
+                                    // Format: field: Ty @field_attr.
+                                    // TIR field types carry no attribute
+                                    // annotations, so the type renders bare.
+                                    let ty_str = format!("{fty}");
                                     if field_attr_strs.is_empty() {
                                         writeln!(output, "  {fname}: {ty_str}").ok();
                                     } else {
@@ -1088,7 +1080,6 @@ pub(crate) mod support {
                                                     db, def, cn,
                                                 ),
                                                 vec![],
-                                                Default::default(),
                                             )
                                         })
                                     })
@@ -1117,11 +1108,9 @@ pub(crate) mod support {
                                         param.ty,
                                         baml_compiler2_ast::TypeExpr::Unknown { .. }
                                     ) {
-                                    enclosing_class_ty.clone().unwrap_or(
-                                        baml_compiler2_tir::ty::Ty::Unknown {
-                                            attr: Default::default(),
-                                        },
-                                    )
+                                    enclosing_class_ty
+                                        .clone()
+                                        .unwrap_or(baml_compiler2_tir::ty::Ty::Unknown)
                                 } else {
                                     let mut diags = Vec::new();
                                     lower_type_expr_in_ns(

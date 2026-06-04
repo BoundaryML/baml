@@ -169,36 +169,36 @@ impl fmt::Display for QualifiedTypeName {
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum Ty {
     /// A class type — just the name, no expansion.
-    Class(QualifiedTypeName, Vec<Ty>, TyAttr),
+    Class(QualifiedTypeName, Vec<Ty>),
     /// An interface type (BEP-044) — nominal contract. Subtyping is
     /// determined by explicit `implements I { ... }` blocks on classes.
     /// Generic args follow the same shape as `Class` for parameterised
     /// interfaces like `Container<T>`.
-    Interface(QualifiedTypeName, Vec<Ty>, TyAttr),
+    Interface(QualifiedTypeName, Vec<Ty>),
     /// An enum type.
-    Enum(QualifiedTypeName, TyAttr),
+    Enum(QualifiedTypeName),
     /// An enum variant — Enum(qualified) . Variant(name).
-    EnumVariant(QualifiedTypeName, Name, TyAttr),
+    EnumVariant(QualifiedTypeName, Name),
     /// A type alias — opaque name reference, NOT expanded.
     /// Expansion happens lazily at subtype-checking time.
-    TypeAlias(QualifiedTypeName, TyAttr),
+    TypeAlias(QualifiedTypeName),
     /// Primitive types.
-    Primitive(PrimitiveType, TyAttr),
+    Primitive(PrimitiveType),
     /// T[]
-    List(Box<Ty>, TyAttr),
+    List(Box<Ty>),
     /// map<K, V>
-    Map(Box<Ty>, Box<Ty>, TyAttr),
+    Map(Box<Ty>, Box<Ty>),
     /// A | B | C
-    Union(Vec<Ty>, TyAttr),
+    Union(Vec<Ty>),
     /// T?
-    Optional(Box<Ty>, TyAttr),
+    Optional(Box<Ty>),
     /// Literal string/int/bool as a type.
     ///
     /// Carries a `Freshness` flag modeled after TypeScript's fresh/regular
     /// literal types. Fresh literals (from expressions) widen to their base
     /// primitive at mutable binding sites. Regular literals (from type
     /// annotations or contextual typing) are preserved.
-    Literal(baml_base::Literal, Freshness, TyAttr),
+    Literal(baml_base::Literal, Freshness),
     /// Evolving list — created from empty array literal `[]` at mutable
     /// binding sites (via `make_evolving()`). Element type starts as `Never`
     /// and is refined by mutations (`.push()`, index assignment).
@@ -210,10 +210,10 @@ pub enum Ty {
     /// Parallel to `Freshness` on literals: `make_evolving()` is the mirror
     /// of `widen_fresh()` — both called at `let` binding sites without
     /// type annotations.
-    EvolvingList(Box<Ty>, TyAttr),
+    EvolvingList(Box<Ty>),
     /// Evolving map — created from empty map literal at mutable binding sites.
     /// Same semantics as `EvolvingList` but for maps (see doc on `EvolvingList`).
-    EvolvingMap(Box<Ty>, Box<Ty>, TyAttr),
+    EvolvingMap(Box<Ty>, Box<Ty>),
     /// Function type: (params) -> return.
     Function {
         generic_params: Vec<Name>,
@@ -221,7 +221,6 @@ pub enum Ty {
         params: Vec<FunctionParamTy>,
         ret: Box<Ty>,
         throws: Box<Ty>,
-        attr: TyAttr,
     },
     /// A type variable (generic parameter) — e.g. `T` in `Array<T>`.
     ///
@@ -230,11 +229,11 @@ pub enum Ty {
     /// the inference algorithm in `check_expr` substitutes concrete types.
     /// Any `TypeVar` remaining after inference is erased to `Ty::Unknown` with
     /// a `CannotInferTypeParameter` diagnostic before reaching VIR/runtime.
-    TypeVar(Name, TyAttr),
+    TypeVar(Name),
     /// The bottom type — expression never produces a value.
     /// Assigned to `return`, `break`, `continue`, and blocks that always diverge.
     /// `Never` is a subtype of every type: `join(Never, T) = T`.
-    Never { attr: TyAttr },
+    Never,
     /// The void type — produced by statements and expressions that don't yield
     /// a useful value (e.g. `if` without `else`, bare function calls used as
     /// statements, `while` loops).
@@ -245,7 +244,7 @@ pub enum Ty {
     ///
     /// Analogous to TypeScript's fresh-object excess-property check pattern:
     /// the type is valid only when nobody reads the value.
-    Void { attr: TyAttr },
+    Void,
     /// The explicit `unknown` keyword type — a top type (supertype of everything).
     ///
     /// Any `T` is a subtype of `BuiltinUnknown`, but `BuiltinUnknown` is NOT a
@@ -259,7 +258,7 @@ pub enum Ty {
     /// NOTE: This is **distinct** from `Ty::Unknown` which is the error-recovery
     /// sentinel meaning "type inference failed". `BuiltinUnknown` is a well-formed
     /// type that appears in valid programs; `Unknown` signals a compiler error.
-    BuiltinUnknown { attr: TyAttr },
+    BuiltinUnknown,
     /// Opaque Rust-managed state.
     ///
     /// Used for `$rust_type` fields in builtin class stubs (e.g., `Media._data`,
@@ -268,7 +267,7 @@ pub enum Ty {
     ///
     /// This is distinct from `Ty::Unknown` (which means "type inference failed") —
     /// `RustType` is intentional and well-formed in the builtin stubs.
-    RustType { attr: TyAttr },
+    RustType,
     /// The `type` metatype keyword — represents a BAML type value at runtime.
     ///
     /// Modeled as a dedicated variant (like `RustType`) rather than collapsing to
@@ -279,15 +278,15 @@ pub enum Ty {
     ///
     /// Follows the same pattern as `RustType`: opaque builtin, leaf type, no inner
     /// structure. Group with `RustType` in match arms.
-    Type { attr: TyAttr },
+    Type,
     /// Error recovery — the type is structurally unknown (e.g., name unresolved).
-    Unknown { attr: TyAttr },
+    Unknown,
     /// Error sentinel — a hard error was emitted for this expression.
-    Error { attr: TyAttr },
+    Error,
     /// BEP-034 `Future<T, E>` — the result of `spawn { ... }` or a sys-op
     /// call before `await`. Carries both the resolved value type and the
     /// errors the producing computation may throw.
-    Future(Box<Ty>, Box<Ty>, TyAttr),
+    Future(Box<Ty>, Box<Ty>),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -399,11 +398,11 @@ pub type LiteralValue = baml_base::Literal;
 /// Collapse a list of union members into a single `Ty` without deduplicating:
 /// `0 => Never` / `1 => unwrap` / `_ => Union`. Callers that need flattening or
 /// deduplication should do it before calling this (see [`dedup_and_collapse`]).
-pub(crate) fn union_of(members: Vec<Ty>, attr: TyAttr) -> Ty {
+pub(crate) fn union_of(members: Vec<Ty>) -> Ty {
     match members.len() {
-        0 => Ty::Never { attr },
+        0 => Ty::Never,
         1 => members.into_iter().next().unwrap(),
-        _ => Ty::Union(members, attr),
+        _ => Ty::Union(members),
     }
 }
 
@@ -415,11 +414,11 @@ pub(crate) fn union_of(members: Vec<Ty>, attr: TyAttr) -> Ty {
 /// - Flattens nested unions one level
 /// - Deduplicates by `PartialEq`
 /// - Unwraps singletons
-fn dedup_and_collapse(types: Vec<Ty>, attr: TyAttr) -> Ty {
+fn dedup_and_collapse(types: Vec<Ty>) -> Ty {
     let mut members: Vec<Ty> = Vec::new();
     for ty in types {
         match ty {
-            Ty::Union(inner, _) => {
+            Ty::Union(inner) => {
                 for m in inner {
                     if !members.contains(&m) {
                         members.push(m);
@@ -433,70 +432,10 @@ fn dedup_and_collapse(types: Vec<Ty>, attr: TyAttr) -> Ty {
             }
         }
     }
-    union_of(members, attr)
+    union_of(members)
 }
 
 impl Ty {
-    /// Access the `TyAttr` on this type.
-    pub fn attr(&self) -> &TyAttr {
-        match self {
-            Ty::Class(_, _, a)
-            | Ty::Interface(_, _, a)
-            | Ty::Enum(_, a)
-            | Ty::EnumVariant(_, _, a)
-            | Ty::TypeAlias(_, a)
-            | Ty::Primitive(_, a)
-            | Ty::List(_, a)
-            | Ty::Map(_, _, a)
-            | Ty::Union(_, a)
-            | Ty::Optional(_, a)
-            | Ty::Literal(_, _, a)
-            | Ty::EvolvingList(_, a)
-            | Ty::EvolvingMap(_, _, a)
-            | Ty::TypeVar(_, a)
-            | Ty::Future(_, _, a) => a,
-            Ty::Function { attr, .. }
-            | Ty::Never { attr }
-            | Ty::Void { attr }
-            | Ty::BuiltinUnknown { attr }
-            | Ty::RustType { attr }
-            | Ty::Type { attr }
-            | Ty::Unknown { attr }
-            | Ty::Error { attr } => attr,
-        }
-    }
-
-    /// Return a copy of this type with the given `TyAttr`.
-    #[must_use]
-    pub fn with_attr(mut self, new_attr: TyAttr) -> Ty {
-        match &mut self {
-            Ty::Class(_, _, a)
-            | Ty::Interface(_, _, a)
-            | Ty::Enum(_, a)
-            | Ty::EnumVariant(_, _, a)
-            | Ty::TypeAlias(_, a)
-            | Ty::Primitive(_, a)
-            | Ty::List(_, a)
-            | Ty::Map(_, _, a)
-            | Ty::Union(_, a)
-            | Ty::Optional(_, a)
-            | Ty::Literal(_, _, a)
-            | Ty::EvolvingList(_, a)
-            | Ty::EvolvingMap(_, _, a)
-            | Ty::TypeVar(_, a)
-            | Ty::Future(_, _, a) => *a = new_attr,
-            Ty::Function { attr, .. }
-            | Ty::Never { attr }
-            | Ty::Void { attr }
-            | Ty::BuiltinUnknown { attr }
-            | Ty::RustType { attr }
-            | Ty::Type { attr }
-            | Ty::Unknown { attr }
-            | Ty::Error { attr } => *attr = new_attr,
-        }
-        self
-    }
-
     /// Widen fresh literal types to their base primitive.
     ///
     /// Called at mutable binding sites (`let` without annotation).
@@ -507,23 +446,17 @@ impl Ty {
     #[must_use]
     pub fn widen_fresh(self) -> Ty {
         match self {
-            Ty::Literal(lit, Freshness::Fresh, attr) => {
-                Ty::Primitive(PrimitiveType::from_literal(&lit), attr)
-            }
-            Ty::Union(members, attr) => {
+            Ty::Literal(lit, Freshness::Fresh) => Ty::Primitive(PrimitiveType::from_literal(&lit)),
+            Ty::Union(members) => {
                 let widened: Vec<Ty> = members.into_iter().map(Ty::widen_fresh).collect();
-                dedup_and_collapse(widened, attr)
+                dedup_and_collapse(widened)
             }
-            Ty::List(inner, attr) => Ty::List(Box::new((*inner).widen_fresh()), attr),
-            Ty::Map(k, v, attr) => Ty::Map(
-                Box::new((*k).widen_fresh()),
-                Box::new((*v).widen_fresh()),
-                attr,
-            ),
-            Ty::Optional(inner, attr) => Ty::Optional(Box::new((*inner).widen_fresh()), attr),
-            Ty::Class(name, type_args, attr) => {
+            Ty::List(inner) => Ty::List(Box::new((*inner).widen_fresh())),
+            Ty::Map(k, v) => Ty::Map(Box::new((*k).widen_fresh()), Box::new((*v).widen_fresh())),
+            Ty::Optional(inner) => Ty::Optional(Box::new((*inner).widen_fresh())),
+            Ty::Class(name, type_args) => {
                 let widened: Vec<Ty> = type_args.into_iter().map(Ty::widen_fresh).collect();
-                Ty::Class(name, widened, attr)
+                Ty::Class(name, widened)
             }
             other => other,
         }
@@ -542,13 +475,9 @@ impl Ty {
     #[must_use]
     pub fn make_evolving(self) -> Ty {
         match self {
-            Ty::List(inner, attr) if matches!(*inner, Ty::Never { .. }) => {
-                Ty::EvolvingList(inner, attr)
-            }
-            Ty::Map(k, v, attr)
-                if matches!(*k, Ty::Never { .. }) && matches!(*v, Ty::Never { .. }) =>
-            {
-                Ty::EvolvingMap(k, v, attr)
+            Ty::List(inner) if matches!(*inner, Ty::Never) => Ty::EvolvingList(inner),
+            Ty::Map(k, v) if matches!(*k, Ty::Never) && matches!(*v, Ty::Never) => {
+                Ty::EvolvingMap(k, v)
             }
             other => other,
         }
@@ -642,7 +571,7 @@ impl Ty {
     /// funnels through here so the structure is described in exactly one place.
     pub fn render_with(&self, s: &dyn TyRenderStrategy) -> String {
         match self {
-            Ty::Class(qn, type_args, _) | Ty::Interface(qn, type_args, _) => {
+            Ty::Class(qn, type_args) | Ty::Interface(qn, type_args) => {
                 let mut out = s.qtn(qn, false);
                 if !type_args.is_empty() {
                     let args: Vec<_> = type_args.iter().map(|a| a.render_with(s)).collect();
@@ -658,13 +587,13 @@ impl Ty {
                 }
                 out
             }
-            Ty::Enum(qn, _) | Ty::TypeAlias(qn, _) => s.qtn(qn, true),
-            Ty::EnumVariant(qn, v, _) => format!("{}.{v}", s.qtn(qn, true)),
-            Ty::Primitive(p, _) => p.to_string(),
-            Ty::List(inner, _) => format!("{}[]", inner.render_as_postfix_base(s)),
-            Ty::Map(k, v, _) => format!("map<{}, {}>", k.render_with(s), v.render_with(s)),
-            Ty::EvolvingList(inner, _) => {
-                let all_never = matches!(**inner, Ty::Never { .. });
+            Ty::Enum(qn) | Ty::TypeAlias(qn) => s.qtn(qn, true),
+            Ty::EnumVariant(qn, v) => format!("{}.{v}", s.qtn(qn, true)),
+            Ty::Primitive(p) => p.to_string(),
+            Ty::List(inner) => format!("{}[]", inner.render_as_postfix_base(s)),
+            Ty::Map(k, v) => format!("map<{}, {}>", k.render_with(s), v.render_with(s)),
+            Ty::EvolvingList(inner) => {
+                let all_never = matches!(**inner, Ty::Never);
                 render_evolving(
                     "_[]",
                     || format!("{}[]", inner.render_as_postfix_base(s)),
@@ -672,8 +601,8 @@ impl Ty {
                     s.show_evolving(),
                 )
             }
-            Ty::EvolvingMap(k, v, _) => {
-                let all_never = matches!(**k, Ty::Never { .. }) && matches!(**v, Ty::Never { .. });
+            Ty::EvolvingMap(k, v) => {
+                let all_never = matches!(**k, Ty::Never) && matches!(**v, Ty::Never);
                 render_evolving(
                     "map<_, _>",
                     || format!("map<{}, {}>", k.render_with(s), v.render_with(s)),
@@ -681,13 +610,13 @@ impl Ty {
                     s.show_evolving(),
                 )
             }
-            Ty::Union(members, _) => members
+            Ty::Union(members) => members
                 .iter()
                 .map(|m| m.render_with(s))
                 .collect::<Vec<_>>()
                 .join(" | "),
-            Ty::Optional(inner, _) => format!("{}?", inner.render_as_postfix_base(s)),
-            Ty::Literal(lit, _freshness, _) => lit.to_string(),
+            Ty::Optional(inner) => format!("{}?", inner.render_as_postfix_base(s)),
+            Ty::Literal(lit, _freshness) => lit.to_string(),
             Ty::Function {
                 generic_params,
                 generic_param_bounds,
@@ -730,14 +659,14 @@ impl Ty {
                     throws.render_with(s),
                 )
             }
-            Ty::TypeVar(name, _) => s.type_var(name),
-            Ty::Never { .. } => "never".to_string(),
-            Ty::Void { .. } => "void".to_string(),
-            Ty::BuiltinUnknown { .. } | Ty::Unknown { .. } => "unknown".to_string(),
-            Ty::RustType { .. } => "$rust_type".to_string(),
-            Ty::Type { .. } => "type".to_string(),
-            Ty::Error { .. } => "!error".to_string(),
-            Ty::Future(value, error, _) => {
+            Ty::TypeVar(name) => s.type_var(name),
+            Ty::Never => "never".to_string(),
+            Ty::Void => "void".to_string(),
+            Ty::BuiltinUnknown | Ty::Unknown => "unknown".to_string(),
+            Ty::RustType => "$rust_type".to_string(),
+            Ty::Type => "type".to_string(),
+            Ty::Error => "!error".to_string(),
+            Ty::Future(value, error) => {
                 format!("Future<{}, {}>", value.render_with(s), error.render_with(s))
             }
         }

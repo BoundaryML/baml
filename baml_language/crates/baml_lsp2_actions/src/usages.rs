@@ -470,7 +470,7 @@ fn find_field_definition_usages(
                     let Some(obj_ty) = inference.expression_type(expr_id) else {
                         continue;
                     };
-                    let Ty::Class(qtn, _, _) = obj_ty else {
+                    let Ty::Class(qtn, _) = obj_ty else {
                         continue;
                     };
 

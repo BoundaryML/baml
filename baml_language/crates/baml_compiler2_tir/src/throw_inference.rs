@@ -16,7 +16,7 @@ use baml_compiler2_hir::{
 
 use crate::{
     lower_type_expr::{lower_type_expr_in_ns, qualify_def},
-    ty::{PrimitiveType, Ty, TyAttr},
+    ty::{PrimitiveType, Ty},
 };
 
 /// A throw fact is a `Ty`.
@@ -281,10 +281,10 @@ fn collect_direct_throws<'db>(
 /// Get a display name for a throw fact, used for the catch binding name filter.
 fn fact_display_name(fact: &Ty) -> String {
     match fact {
-        Ty::Primitive(p, _) => p.to_string(),
-        Ty::Class(qn, _, _) | Ty::Enum(qn, _) | Ty::TypeAlias(qn, _) => qn.to_string(),
-        Ty::EnumVariant(qn, variant, _) => format!("{qn}.{variant}"),
-        Ty::Unknown { .. } => "unknown".to_string(),
+        Ty::Primitive(p) => p.to_string(),
+        Ty::Class(qn, _) | Ty::Enum(qn) | Ty::TypeAlias(qn) => qn.to_string(),
+        Ty::EnumVariant(qn, variant) => format!("{qn}.{variant}"),
+        Ty::Unknown => "unknown".to_string(),
         _ => format!("{fact}"),
     }
 }
@@ -322,27 +322,21 @@ fn throw_fact_from_expr<'db>(
     body: &ExprBody,
 ) -> Ty {
     match &body.exprs[expr_id] {
-        Expr::Literal(Literal::String(_)) => {
-            Ty::Primitive(PrimitiveType::String, TyAttr::default())
-        }
-        Expr::Literal(Literal::Int(_)) => Ty::Primitive(PrimitiveType::Int, TyAttr::default()),
-        Expr::Literal(Literal::Float(_)) => Ty::Primitive(PrimitiveType::Float, TyAttr::default()),
-        Expr::Literal(Literal::Bool(_)) => Ty::Primitive(PrimitiveType::Bool, TyAttr::default()),
-        Expr::Null => Ty::Primitive(PrimitiveType::Null, TyAttr::default()),
+        Expr::Literal(Literal::String(_)) => Ty::Primitive(PrimitiveType::String),
+        Expr::Literal(Literal::Int(_)) => Ty::Primitive(PrimitiveType::Int),
+        Expr::Literal(Literal::Float(_)) => Ty::Primitive(PrimitiveType::Float),
+        Expr::Literal(Literal::Bool(_)) => Ty::Primitive(PrimitiveType::Bool),
+        Expr::Null => Ty::Primitive(PrimitiveType::Null),
         Expr::Path(_) | Expr::MemberAccess { .. } => {
             crate::throws_analysis::expr_to_path_segments(expr_id, body)
                 .map(|segments| resolve_path_to_ty(db, pkg_items, ns_context, &segments))
-                .unwrap_or(Ty::Unknown {
-                    attr: TyAttr::default(),
-                })
+                .unwrap_or(Ty::Unknown)
         }
         Expr::Object {
             type_name: Some(path),
             ..
         } => resolve_path_to_ty(db, pkg_items, ns_context, path.segments()),
-        _ => Ty::Unknown {
-            attr: TyAttr::default(),
-        },
+        _ => Ty::Unknown,
     }
 }
 
@@ -397,7 +391,7 @@ fn resolve_path_to_ty<'db>(
         if let Some(def) = def {
             if let Definition::Enum(_) = def {
                 let qtn = qualify_def(db, def, enum_name);
-                return Ty::EnumVariant(qtn, variant.clone(), TyAttr::default());
+                return Ty::EnumVariant(qtn, variant.clone());
             }
         }
     }
@@ -426,22 +420,14 @@ fn resolve_path_to_ty<'db>(
     });
     if let Some(def) = def {
         return match def {
-            Definition::Class(_) => {
-                Ty::Class(qualify_def(db, def, name), vec![], TyAttr::default())
-            }
-            Definition::Enum(_) => Ty::Enum(qualify_def(db, def, name), TyAttr::default()),
-            Definition::TypeAlias(_) => {
-                Ty::TypeAlias(qualify_def(db, def, name), TyAttr::default())
-            }
-            _ => Ty::Unknown {
-                attr: TyAttr::default(),
-            },
+            Definition::Class(_) => Ty::Class(qualify_def(db, def, name), vec![]),
+            Definition::Enum(_) => Ty::Enum(qualify_def(db, def, name)),
+            Definition::TypeAlias(_) => Ty::TypeAlias(qualify_def(db, def, name)),
+            _ => Ty::Unknown,
         };
     }
 
-    Ty::Unknown {
-        attr: TyAttr::default(),
-    }
+    Ty::Unknown
 }
 
 fn collect_catch_binding_names(body: &ExprBody) -> HashSet<&str> {
@@ -469,24 +455,21 @@ pub fn flatten_ty_to_facts(ty: &Ty) -> BTreeSet<ThrowFact> {
 fn collect_leaf_types(ty: &Ty, out: &mut BTreeSet<Ty>) {
     match ty {
         // Compound types: decompose
-        Ty::Optional(inner, _) => {
+        Ty::Optional(inner) => {
             collect_leaf_types(inner, out);
-            out.insert(Ty::Primitive(PrimitiveType::Null, TyAttr::default()));
+            out.insert(Ty::Primitive(PrimitiveType::Null));
         }
-        Ty::Union(members, _) => {
+        Ty::Union(members) => {
             for member in members {
                 collect_leaf_types(member, out);
             }
         }
         // Literal types: widen to primitive for throw fact purposes
-        Ty::Literal(lit, _, _) => {
-            out.insert(Ty::Primitive(
-                PrimitiveType::from_literal(lit),
-                TyAttr::default(),
-            ));
+        Ty::Literal(lit, _) => {
+            out.insert(Ty::Primitive(PrimitiveType::from_literal(lit)));
         }
         // Bottom/void: no facts
-        Ty::Never { .. } | Ty::Void { .. } => {}
+        Ty::Never | Ty::Void => {}
         // Everything else: keep as-is
         _ => {
             out.insert(ty.clone());
@@ -513,7 +496,7 @@ fn lookup_dep_throw_set<'a>(
 /// distinguish between them at this point, so the diagnostic just says
 /// "unknown".
 pub fn is_banned_catch_binding_type(ty: &Ty) -> Option<&'static str> {
-    if matches!(ty, Ty::BuiltinUnknown { .. } | Ty::Unknown { .. }) {
+    if matches!(ty, Ty::BuiltinUnknown | Ty::Unknown) {
         Some("unknown")
     } else {
         None

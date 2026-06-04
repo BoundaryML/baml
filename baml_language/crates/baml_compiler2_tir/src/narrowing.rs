@@ -34,7 +34,7 @@ use rustc_hash::FxHashMap;
 
 use crate::{
     builder::LocalBinding,
-    ty::{PrimitiveType, Ty, TyAttr},
+    ty::{PrimitiveType, Ty},
 };
 
 // ── Narrowing descriptor ──────────────────────────────────────────────────────
@@ -223,11 +223,11 @@ fn null_check_name(
 /// with null) or is directly `Null`.
 fn is_nullable(ty: &Ty) -> bool {
     match ty {
-        Ty::Optional(_, _) => true,
-        Ty::Primitive(PrimitiveType::Null, _) => true,
-        Ty::Union(members, _) => members
+        Ty::Optional(_) => true,
+        Ty::Primitive(PrimitiveType::Null) => true,
+        Ty::Union(members) => members
             .iter()
-            .any(|m| matches!(m, Ty::Primitive(PrimitiveType::Null, _))),
+            .any(|m| matches!(m, Ty::Primitive(PrimitiveType::Null))),
         _ => false,
     }
 }
@@ -249,12 +249,12 @@ fn is_nullable(ty: &Ty) -> bool {
 /// shape only is sound for the membership test we need here.
 pub(crate) fn subtract_pattern_type(scrutinee: &Ty, matched: &Ty) -> Ty {
     let matched_set: Vec<&Ty> = match matched {
-        Ty::Union(members, _) => members.iter().collect(),
+        Ty::Union(members) => members.iter().collect(),
         _ => vec![matched],
     };
 
     let scrut_members: Vec<&Ty> = match scrutinee {
-        Ty::Union(members, _) => members.iter().collect(),
+        Ty::Union(members) => members.iter().collect(),
         _ => return scrutinee.clone(),
     };
 
@@ -270,19 +270,17 @@ pub(crate) fn subtract_pattern_type(scrutinee: &Ty, matched: &Ty) -> Ty {
         return scrutinee.clone();
     }
 
-    crate::ty::union_of(remaining, TyAttr::default())
+    crate::ty::union_of(remaining)
 }
 
 /// Fixed `null` type constructor used by null-narrowing.
 fn null_ty() -> Ty {
-    Ty::Primitive(PrimitiveType::Null, TyAttr::default())
+    Ty::Primitive(PrimitiveType::Null)
 }
 
 /// Fixed `never` type constructor used by union collapse.
 fn never_ty() -> Ty {
-    Ty::Never {
-        attr: TyAttr::default(),
-    }
+    Ty::Never
 }
 
 /// Structural shape-equality for `Ty` that ignores `TyAttr` and literal
@@ -295,19 +293,19 @@ fn never_ty() -> Ty {
 /// (less narrowing, never unsound).
 fn ty_shape_eq(a: &Ty, b: &Ty) -> bool {
     match (a, b) {
-        (Ty::Primitive(p1, _), Ty::Primitive(p2, _)) => p1 == p2,
-        (Ty::Class(n1, args1, _), Ty::Class(n2, args2, _)) => {
+        (Ty::Primitive(p1), Ty::Primitive(p2)) => p1 == p2,
+        (Ty::Class(n1, args1), Ty::Class(n2, args2)) => {
             n1 == n2
                 && args1.len() == args2.len()
                 && args1.iter().zip(args2).all(|(a, b)| ty_shape_eq(a, b))
         }
-        (Ty::Enum(n1, _), Ty::Enum(n2, _)) => n1 == n2,
-        (Ty::EnumVariant(n1, v1, _), Ty::EnumVariant(n2, v2, _)) => n1 == n2 && v1 == v2,
-        (Ty::TypeAlias(n1, _), Ty::TypeAlias(n2, _)) => n1 == n2,
-        (Ty::List(t1, _), Ty::List(t2, _)) => ty_shape_eq(t1, t2),
-        (Ty::Map(k1, v1, _), Ty::Map(k2, v2, _)) => ty_shape_eq(k1, k2) && ty_shape_eq(v1, v2),
-        (Ty::Optional(t1, _), Ty::Optional(t2, _)) => ty_shape_eq(t1, t2),
-        (Ty::Literal(l1, _, _), Ty::Literal(l2, _, _)) => l1 == l2,
+        (Ty::Enum(n1), Ty::Enum(n2)) => n1 == n2,
+        (Ty::EnumVariant(n1, v1), Ty::EnumVariant(n2, v2)) => n1 == n2 && v1 == v2,
+        (Ty::TypeAlias(n1), Ty::TypeAlias(n2)) => n1 == n2,
+        (Ty::List(t1), Ty::List(t2)) => ty_shape_eq(t1, t2),
+        (Ty::Map(k1, v1), Ty::Map(k2, v2)) => ty_shape_eq(k1, k2) && ty_shape_eq(v1, v2),
+        (Ty::Optional(t1), Ty::Optional(t2)) => ty_shape_eq(t1, t2),
+        (Ty::Literal(l1, _), Ty::Literal(l2, _)) => l1 == l2,
         _ => false,
     }
 }
@@ -322,16 +320,16 @@ fn ty_shape_eq(a: &Ty, b: &Ty) -> bool {
 /// | `T` (not nullable)  | `T` (unchanged)            |
 pub fn remove_null(ty: &Ty) -> Ty {
     match ty {
-        Ty::Optional(inner, _) => inner.as_ref().clone(),
-        Ty::Union(members, _) => {
+        Ty::Optional(inner) => inner.as_ref().clone(),
+        Ty::Union(members) => {
             let filtered: Vec<Ty> = members
                 .iter()
-                .filter(|m| !matches!(m, Ty::Primitive(PrimitiveType::Null, _)))
+                .filter(|m| !matches!(m, Ty::Primitive(PrimitiveType::Null)))
                 .cloned()
                 .collect();
-            crate::ty::union_of(filtered, TyAttr::default())
+            crate::ty::union_of(filtered)
         }
-        Ty::Primitive(PrimitiveType::Null, _) => never_ty(),
+        Ty::Primitive(PrimitiveType::Null) => never_ty(),
         _ => ty.clone(),
     }
 }

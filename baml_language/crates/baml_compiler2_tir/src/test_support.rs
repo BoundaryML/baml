@@ -4,8 +4,8 @@
 //! This module is `#[cfg(test)]`-only. It consolidates the `Ty`-builder
 //! helpers and the `PatCtx` test fixture previously duplicated across the
 //! `exhaustiveness` and `normalize` test modules. Values produced here are
-//! bit-identical to the originals (same `TyAttr::default()`, same
-//! `Freshness::Regular`), so no assertion outcomes change.
+//! bit-identical to the originals (same `Freshness::Regular`), so no
+//! assertion outcomes change.
 
 #![allow(
     clippy::default_trait_access,
@@ -25,29 +25,25 @@ use baml_base::{Literal, Name};
 
 use crate::{
     exhaustiveness::*,
-    ty::{Freshness, FunctionParamTy, PrimitiveType, QualifiedTypeName, Ty, TyAttr},
+    ty::{Freshness, FunctionParamTy, PrimitiveType, QualifiedTypeName, Ty},
 };
 
 // ── Ty-builder DSL (shared) ──────────────────────────────────────────────────
 
 pub(crate) fn bool_lit(v: bool) -> Ty {
-    Ty::Literal(Literal::Bool(v), Freshness::Regular, Default::default())
+    Ty::Literal(Literal::Bool(v), Freshness::Regular)
 }
 pub(crate) fn int_lit(v: i64) -> Ty {
-    Ty::Literal(Literal::Int(v), Freshness::Regular, Default::default())
+    Ty::Literal(Literal::Int(v), Freshness::Regular)
 }
 pub(crate) fn float_lit(s: &str) -> Ty {
-    Ty::Literal(
-        Literal::Float(s.into()),
-        Freshness::Regular,
-        Default::default(),
-    )
+    Ty::Literal(Literal::Float(s.into()), Freshness::Regular)
 }
 pub(crate) fn bool_ty() -> Ty {
-    Ty::Primitive(PrimitiveType::Bool, Default::default())
+    Ty::Primitive(PrimitiveType::Bool)
 }
 pub(crate) fn int_ty() -> Ty {
-    Ty::Primitive(PrimitiveType::Int, Default::default())
+    Ty::Primitive(PrimitiveType::Int)
 }
 
 /// Stringify a report's missing-case witnesses for assertions.
@@ -56,24 +52,22 @@ pub(crate) fn missing_strings(report: &UsefulnessReport) -> Vec<String> {
 }
 
 pub(crate) fn class_ty(q: &QualifiedTypeName) -> Ty {
-    Ty::Class(q.clone(), vec![], Default::default())
+    Ty::Class(q.clone(), vec![])
 }
 pub(crate) fn list_of(elem: Ty) -> Ty {
-    Ty::List(Box::new(elem), Default::default())
+    Ty::List(Box::new(elem))
 }
 pub(crate) fn opt_of(t: Ty) -> Ty {
-    Ty::Optional(Box::new(t), Default::default())
+    Ty::Optional(Box::new(t))
 }
 pub(crate) fn union_of(ts: Vec<Ty>) -> Ty {
-    Ty::Union(ts, Default::default())
+    Ty::Union(ts)
 }
 pub(crate) fn null_ty() -> Ty {
-    Ty::Primitive(PrimitiveType::Null, Default::default())
+    Ty::Primitive(PrimitiveType::Null)
 }
 pub(crate) fn never_ty() -> Ty {
-    Ty::Never {
-        attr: Default::default(),
-    }
+    Ty::Never
 }
 
 /// A `QualifiedTypeName` in the implicit `user` package (exhaustiveness DSL).
@@ -93,7 +87,7 @@ pub(crate) fn qn(name: &str) -> QualifiedTypeName {
 }
 
 pub(crate) fn type_alias(name: &str) -> Ty {
-    Ty::TypeAlias(qn(name), TyAttr::default())
+    Ty::TypeAlias(qn(name))
 }
 
 pub(crate) fn required_param(ty: Ty) -> FunctionParamTy {
@@ -106,13 +100,13 @@ pub(crate) fn optional_param(name: &str, ty: Ty) -> FunctionParamTy {
 
 // Simple Ty-variant builders normalize uses heavily.
 pub(crate) fn string_ty() -> Ty {
-    Ty::Primitive(PrimitiveType::String, Default::default())
+    Ty::Primitive(PrimitiveType::String)
 }
 pub(crate) fn float_ty() -> Ty {
-    Ty::Primitive(PrimitiveType::Float, Default::default())
+    Ty::Primitive(PrimitiveType::Float)
 }
 pub(crate) fn bigint_ty() -> Ty {
-    Ty::Primitive(PrimitiveType::Bigint, Default::default())
+    Ty::Primitive(PrimitiveType::Bigint)
 }
 
 // ── Reusable PatCtx test fixture ─────────────────────────────────────────────
@@ -157,7 +151,7 @@ impl TestingCtx {
         let mut current = ty.clone();
         let mut seen: std::collections::HashSet<QualifiedTypeName> =
             std::collections::HashSet::new();
-        while let Ty::TypeAlias(qtn, _) = &current {
+        while let Ty::TypeAlias(qtn) = &current {
             if !seen.insert(qtn.clone()) {
                 return current;
             }
@@ -174,39 +168,36 @@ impl PatCtx for TestingCtx {
         // Peel aliases first, the same way the real builder will.
         let ty = self.expand_alias(ty);
         match &ty {
-            Ty::Primitive(PrimitiveType::Bool, _) => {
+            Ty::Primitive(PrimitiveType::Bool) => {
                 vec![Ctor::Single(bool_lit(true)), Ctor::Single(bool_lit(false))]
             }
-            Ty::Primitive(PrimitiveType::Int, _)
-            | Ty::Primitive(PrimitiveType::Float, _)
-            | Ty::Primitive(PrimitiveType::String, _) => vec![Ctor::NonExhaustive],
-            Ty::Primitive(PrimitiveType::Null, _) => vec![Ctor::Single(ty.clone())],
-            Ty::Optional(inner, _) => {
+            Ty::Primitive(PrimitiveType::Int)
+            | Ty::Primitive(PrimitiveType::Float)
+            | Ty::Primitive(PrimitiveType::String) => vec![Ctor::NonExhaustive],
+            Ty::Primitive(PrimitiveType::Null) => vec![Ctor::Single(ty.clone())],
+            Ty::Optional(inner) => {
                 let mut out = self.enumerate_ctors(inner);
-                out.push(Ctor::Single(Ty::Primitive(
-                    PrimitiveType::Null,
-                    Default::default(),
-                )));
+                out.push(Ctor::Single(Ty::Primitive(PrimitiveType::Null)));
                 out
             }
-            Ty::Union(members, _) if self.union_as_members => members
+            Ty::Union(members) if self.union_as_members => members
                 .iter()
                 .map(|m| Ctor::UnionMember(m.clone()))
                 .collect(),
-            Ty::Union(members, _) => members
+            Ty::Union(members) => members
                 .iter()
                 .flat_map(|m| self.enumerate_ctors(m))
                 .collect(),
-            Ty::Literal(_, _, _) | Ty::EnumVariant(_, _, _) => {
+            Ty::Literal(_, _) | Ty::EnumVariant(_, _) => {
                 vec![Ctor::Single(ty.clone())]
             }
-            Ty::Class(qtn, args, _) => vec![Ctor::Class(qtn.clone(), args.clone())],
+            Ty::Class(qtn, args) => vec![Ctor::Class(qtn.clone(), args.clone())],
             // For slices, split_ctors handles enumeration via slice splitting;
             // returning NonExhaustive here is OK because the slice path is taken
             // before this is consulted.
-            Ty::List(_, _) | Ty::EvolvingList(_, _) => vec![Ctor::NonExhaustive],
-            Ty::Never { .. } => vec![],
-            Ty::TypeVar(_, _) => vec![Ctor::NonExhaustive],
+            Ty::List(_) | Ty::EvolvingList(_) => vec![Ctor::NonExhaustive],
+            Ty::Never => vec![],
+            Ty::TypeVar(_) => vec![Ctor::NonExhaustive],
             _ => vec![Ctor::NonExhaustive],
         }
     }
@@ -215,7 +206,7 @@ impl PatCtx for TestingCtx {
     }
     fn list_element_type(&self, ty: &Ty) -> Ty {
         match self.expand_alias(ty) {
-            Ty::List(e, _) | Ty::EvolvingList(e, _) => (*e).clone(),
+            Ty::List(e) | Ty::EvolvingList(e) => (*e).clone(),
             t => t,
         }
     }

@@ -30,7 +30,7 @@ use std::fmt;
 use baml_base::Literal;
 use rustc_hash::FxHashSet;
 
-use crate::ty::{PrimitiveType, QualifiedTypeName, Ty, TyAttr};
+use crate::ty::{PrimitiveType, QualifiedTypeName, Ty};
 
 // ── Constructors ─────────────────────────────────────────────────────────────
 
@@ -173,8 +173,8 @@ impl Ctor {
 
 fn class_ty_for_ctor(qtn: &QualifiedTypeName, args: &[Ty], fallback: &Ty) -> Ty {
     match fallback {
-        Ty::Class(fallback_qtn, _, _) if fallback_qtn == qtn => fallback.clone(),
-        _ => Ty::Class(qtn.clone(), args.to_vec(), TyAttr::default()),
+        Ty::Class(fallback_qtn, _) if fallback_qtn == qtn => fallback.clone(),
+        _ => Ty::Class(qtn.clone(), args.to_vec()),
     }
 }
 
@@ -234,26 +234,26 @@ fn write_qtn_args(out: &mut String, tag: char, qtn: &QualifiedTypeName, args: &[
 fn write_ty_identity(out: &mut String, ty: &Ty) {
     use std::fmt::Write;
     match ty {
-        Ty::Literal(lit, _, _) => {
+        Ty::Literal(lit, _) => {
             out.push_str("L:");
             write_literal_identity(out, lit);
         }
-        Ty::EnumVariant(qtn, name, _) => {
+        Ty::EnumVariant(qtn, name) => {
             let _ = write!(out, "EV:{qtn}::{name}");
         }
-        Ty::Enum(qtn, _) => {
+        Ty::Enum(qtn) => {
             let _ = write!(out, "E:{qtn}");
         }
-        Ty::Class(qtn, args, _) => write_qtn_args(out, 'C', qtn, args),
-        Ty::Interface(qtn, args, _) => write_qtn_args(out, 'I', qtn, args),
-        Ty::Primitive(p, _) => {
+        Ty::Class(qtn, args) => write_qtn_args(out, 'C', qtn, args),
+        Ty::Interface(qtn, args) => write_qtn_args(out, 'I', qtn, args),
+        Ty::Primitive(p) => {
             let _ = write!(out, "P:{p:?}");
         }
-        Ty::Optional(inner, _) => {
+        Ty::Optional(inner) => {
             out.push_str("O:");
             write_ty_identity(out, inner);
         }
-        Ty::Union(members, _) => {
+        Ty::Union(members) => {
             out.push_str("U:[");
             for (i, m) in members.iter().enumerate() {
                 if i > 0 {
@@ -263,29 +263,29 @@ fn write_ty_identity(out: &mut String, ty: &Ty) {
             }
             out.push(']');
         }
-        Ty::List(elem, _) | Ty::EvolvingList(elem, _) => {
+        Ty::List(elem) | Ty::EvolvingList(elem) => {
             out.push_str("Lst:");
             write_ty_identity(out, elem);
         }
-        Ty::Map(k, v, _) | Ty::EvolvingMap(k, v, _) => {
+        Ty::Map(k, v) | Ty::EvolvingMap(k, v) => {
             out.push_str("M:");
             write_ty_identity(out, k);
             out.push(',');
             write_ty_identity(out, v);
         }
-        Ty::TypeAlias(qtn, _) => {
+        Ty::TypeAlias(qtn) => {
             let _ = write!(out, "A:{qtn}");
         }
-        Ty::TypeVar(name, _) => {
+        Ty::TypeVar(name) => {
             let _ = write!(out, "V:{name}");
         }
-        Ty::Never { .. } => out.push_str("Never"),
-        Ty::Void { .. } => out.push_str("Void"),
-        Ty::BuiltinUnknown { .. } => out.push_str("BUnk"),
-        Ty::Unknown { .. } => out.push_str("Unk"),
-        Ty::Error { .. } => out.push_str("Err"),
-        Ty::RustType { .. } => out.push_str("Rust"),
-        Ty::Type { .. } => out.push_str("Type"),
+        Ty::Never => out.push_str("Never"),
+        Ty::Void => out.push_str("Void"),
+        Ty::BuiltinUnknown => out.push_str("BUnk"),
+        Ty::Unknown => out.push_str("Unk"),
+        Ty::Error => out.push_str("Err"),
+        Ty::RustType => out.push_str("Rust"),
+        Ty::Type => out.push_str("Type"),
         Ty::Function {
             params,
             ret,
@@ -304,7 +304,7 @@ fn write_ty_identity(out: &mut String, ty: &Ty) {
             out.push('!');
             write_ty_identity(out, throws);
         }
-        Ty::Future(value, error, _) => {
+        Ty::Future(value, error) => {
             out.push_str("Fut<");
             write_ty_identity(out, value);
             out.push(',');
@@ -532,15 +532,15 @@ fn write_braced(
 
 fn write_single_witness(f: &mut fmt::Formatter<'_>, ty: &Ty) -> fmt::Result {
     match ty {
-        Ty::Literal(lit, _, _) => match lit {
+        Ty::Literal(lit, _) => match lit {
             Literal::Int(v) => write!(f, "{v}"),
             Literal::Bigint(v) => write!(f, "{v}n"),
             Literal::Bool(v) => write!(f, "{v}"),
             Literal::String(v) => write!(f, "{v:?}"),
             Literal::Float(s) => write!(f, "{s}"),
         },
-        Ty::EnumVariant(qtn, variant, _) => write!(f, "{qtn}.{variant}"),
-        Ty::Primitive(PrimitiveType::Null, _) => write!(f, "null"),
+        Ty::EnumVariant(qtn, variant) => write!(f, "{qtn}.{variant}"),
+        Ty::Primitive(PrimitiveType::Null) => write!(f, "null"),
         _ => write!(f, "{ty:?}"),
     }
 }
@@ -550,10 +550,10 @@ fn write_single_witness(f: &mut fmt::Formatter<'_>, ty: &Ty) -> fmt::Result {
 /// shape — `int`, `string`, `Foo`, etc. — rather than `_`.
 fn write_member_ty_witness(f: &mut fmt::Formatter<'_>, ty: &Ty) -> fmt::Result {
     match ty {
-        Ty::Primitive(p, _) => write!(f, "{p}"),
-        Ty::Class(qtn, _, _) | Ty::Enum(qtn, _) => write!(f, "{qtn}"),
-        Ty::EnumVariant(qtn, variant, _) => write!(f, "{qtn}.{variant}"),
-        Ty::Literal(_, _, _) => write_single_witness(f, ty),
+        Ty::Primitive(p) => write!(f, "{p}"),
+        Ty::Class(qtn, _) | Ty::Enum(qtn) => write!(f, "{qtn}"),
+        Ty::EnumVariant(qtn, variant) => write!(f, "{qtn}.{variant}"),
+        Ty::Literal(_, _) => write_single_witness(f, ty),
         _ => write!(f, "_"),
     }
 }
@@ -623,8 +623,8 @@ fn is_inhabited_default<C: PatCtx + ?Sized>(
     seen: &mut FxHashSet<QualifiedTypeName>,
 ) -> bool {
     match ty {
-        Ty::Never { .. } => false,
-        Ty::Class(qtn, _, _) => {
+        Ty::Never => false,
+        Ty::Class(qtn, _) => {
             if !seen.insert(qtn.clone()) {
                 // Cycle: assume inhabited. Uninhabitedness is only
                 // *proven* by reaching a Never; we never assume it.
@@ -637,7 +637,7 @@ fn is_inhabited_default<C: PatCtx + ?Sized>(
             seen.remove(qtn);
             r
         }
-        Ty::Union(members, _) => members.iter().any(|m| is_inhabited_default(m, cx, seen)),
+        Ty::Union(members) => members.iter().any(|m| is_inhabited_default(m, cx, seen)),
         // Everything else is inhabited: e.g. `T?` always inhabits null and
         // `T[]` always inhabits `[]`, regardless of T.
         _ => true,
@@ -1054,7 +1054,7 @@ fn compute_exhaustiveness(cx: &dyn PatCtx, matrix: &mut Matrix<'_>, witnesses: &
 /// Whether `ty` is a list-shaped type (`List` or `EvolvingList`), which the
 /// usefulness algorithm handles via slice splitting rather than ctor enumeration.
 fn is_list_ty(ty: &Ty) -> bool {
-    matches!(ty, Ty::List(_, _) | Ty::EvolvingList(_, _))
+    matches!(ty, Ty::List(_) | Ty::EvolvingList(_))
 }
 
 /// Decide which ctors to specialize on. Returns `(split, missing_from_matrix)`:
@@ -1399,7 +1399,7 @@ mod tests {
 
     #[test]
     fn typevar_requires_wildcard() {
-        let tv = Ty::TypeVar(Name::new("T"), Default::default());
+        let tv = Ty::TypeVar(Name::new("T"));
         let arms = vec![DPat::wildcard(tv.clone())];
         let report = compute_match_usefulness(&TestingCtx::new(), &arms, tv);
         assert!(report.missing.is_empty());
@@ -1407,9 +1407,7 @@ mod tests {
 
     #[test]
     fn never_is_vacuously_exhaustive() {
-        let never = Ty::Never {
-            attr: Default::default(),
-        };
+        let never = Ty::Never;
         let arms: Vec<DPat> = vec![];
         let report = compute_match_usefulness(&TestingCtx::new(), &arms, never);
         assert!(report.missing.is_empty());
@@ -1428,7 +1426,7 @@ mod tests {
     /// `[false, false]` as missing.
     #[test]
     fn array_pair_missing_diagonal() {
-        let array_bool = Ty::List(Box::new(bool_ty()), Default::default());
+        let array_bool = Ty::List(Box::new(bool_ty()));
 
         let arm1 = DPat::slice(
             SliceShape::Fixed(2),
@@ -1462,7 +1460,7 @@ mod tests {
     /// over all lengths.
     #[test]
     fn array_rest_covers_all_lengths() {
-        let array_bool = Ty::List(Box::new(bool_ty()), Default::default());
+        let array_bool = Ty::List(Box::new(bool_ty()));
 
         let arms = vec![
             DPat::slice(SliceShape::Fixed(0), vec![], array_bool.clone()),
@@ -3794,7 +3792,7 @@ mod tests {
         let foo = qtn("Foo");
         cx.register_alias(foo.clone(), bool_ty());
 
-        let alias_ty = Ty::TypeAlias(foo.clone(), Default::default());
+        let alias_ty = Ty::TypeAlias(foo.clone());
 
         // Both branches → exhaustive.
         let arms = vec![
@@ -3833,7 +3831,7 @@ mod tests {
             tri.clone(),
             union_of(vec![int_lit(1), int_lit(2), int_lit(3)]),
         );
-        let tri_ty = Ty::TypeAlias(tri, Default::default());
+        let tri_ty = Ty::TypeAlias(tri);
 
         let arms = vec![
             DPat::single(int_lit(1), tri_ty.clone()),
@@ -3863,7 +3861,7 @@ mod tests {
         cx.register(n.clone(), vec![bool_ty(), opt_n.clone()]);
         let alias = qtn("Tree");
         cx.register_alias(alias.clone(), opt_n.clone());
-        let alias_ty = Ty::TypeAlias(alias, Default::default());
+        let alias_ty = Ty::TypeAlias(alias);
 
         let null_top = DPat::single(null_ty(), alias_ty.clone());
         let some_any = DPat::class(

@@ -34,38 +34,30 @@ use crate::{
     },
     package_interface::PackageResolutionContext,
     throws_analysis::ThrowsAnalysisContext,
-    ty::{Freshness, FunctionParamMode, FunctionParamTy, PrimitiveType, Ty, TyAttr},
+    ty::{Freshness, FunctionParamMode, FunctionParamTy, PrimitiveType, Ty},
 };
 
 impl Ty {
     /// `Ty::Unknown` with default attributes — the inference placeholder used
     /// before a type is known (or when it cannot be determined).
     fn unknown() -> Ty {
-        Ty::Unknown {
-            attr: TyAttr::default(),
-        }
+        Ty::Unknown
     }
 
     /// `Ty::Error` with default attributes — the type assigned after a type
     /// error so downstream checks can short-circuit silently.
     fn error() -> Ty {
-        Ty::Error {
-            attr: TyAttr::default(),
-        }
+        Ty::Error
     }
 
     /// `Ty::Never` with default attributes — the type of diverging expressions.
     fn never() -> Ty {
-        Ty::Never {
-            attr: TyAttr::default(),
-        }
+        Ty::Never
     }
 
     /// `Ty::Void` with default attributes — the unit/no-value type.
     fn void() -> Ty {
-        Ty::Void {
-            attr: TyAttr::default(),
-        }
+        Ty::Void
     }
 }
 
@@ -99,7 +91,7 @@ fn json_qtn(name: &str) -> crate::ty::QualifiedTypeName {
 
 /// Construct `Ty::TypeAlias` for `baml.json.json`.
 fn json_alias_ty() -> Ty {
-    Ty::TypeAlias(json_qtn("json"), TyAttr::default())
+    Ty::TypeAlias(json_qtn("json"))
 }
 
 /// Construct the throws type `JsonSerializationError | JsonParseError`.
@@ -108,17 +100,10 @@ fn json_alias_ty() -> Ty {
 /// `Ty::TypeVar` — it is a superset of any concrete type's actual throws, so
 /// call-site throw inference stays sound.
 fn json_serialization_or_parse_error_ty() -> Ty {
-    Ty::Union(
-        vec![
-            Ty::Class(
-                json_qtn("JsonSerializationError"),
-                vec![],
-                TyAttr::default(),
-            ),
-            Ty::Class(json_qtn("JsonParseError"), vec![], TyAttr::default()),
-        ],
-        TyAttr::default(),
-    )
+    Ty::Union(vec![
+        Ty::Class(json_qtn("JsonSerializationError"), vec![]),
+        Ty::Class(json_qtn("JsonParseError"), vec![]),
+    ])
 }
 
 /// Build a dotted method key `[ns.]type_name.method` (the namespace prefix is
@@ -139,36 +124,38 @@ fn dotted_method_key(ns: &[Name], type_name: &Name, method: &Name) -> String {
 /// has no builtin companion class.
 fn builtin_companion_class(ty: &Ty) -> Option<(&'static [&'static str], Vec<Ty>)> {
     Some(match ty {
-        Ty::List(element_ty, _) => (&["Array"], vec![element_ty.as_ref().clone()]),
-        Ty::Map(key_ty, val_ty, _) => (
+        Ty::List(element_ty) => (&["Array"], vec![element_ty.as_ref().clone()]),
+        Ty::Map(key_ty, val_ty) => (
             &["Map"],
             vec![key_ty.as_ref().clone(), val_ty.as_ref().clone()],
         ),
-        Ty::Future(value_ty, error_ty, _) => (
+        Ty::Future(value_ty, error_ty) => (
             &["future", "Future"],
             vec![value_ty.as_ref().clone(), error_ty.as_ref().clone()],
         ),
-        Ty::Primitive(PrimitiveType::String, _)
-        | Ty::Literal(baml_base::Literal::String(_), _, _) => (&["String"], vec![]),
-        Ty::Primitive(PrimitiveType::Int, _) | Ty::Literal(baml_base::Literal::Int(_), _, _) => {
+        Ty::Primitive(PrimitiveType::String) | Ty::Literal(baml_base::Literal::String(_), _) => {
+            (&["String"], vec![])
+        }
+        Ty::Primitive(PrimitiveType::Int) | Ty::Literal(baml_base::Literal::Int(_), _) => {
             (&["Int"], vec![])
         }
-        Ty::Primitive(PrimitiveType::Bigint, _)
-        | Ty::Literal(baml_base::Literal::Bigint(_), _, _) => (&["Bigint"], vec![]),
-        Ty::Primitive(PrimitiveType::Float, _)
-        | Ty::Literal(baml_base::Literal::Float(_), _, _) => (&["Float"], vec![]),
-        Ty::Primitive(PrimitiveType::Bool, _) | Ty::Literal(baml_base::Literal::Bool(_), _, _) => {
+        Ty::Primitive(PrimitiveType::Bigint) | Ty::Literal(baml_base::Literal::Bigint(_), _) => {
+            (&["Bigint"], vec![])
+        }
+        Ty::Primitive(PrimitiveType::Float) | Ty::Literal(baml_base::Literal::Float(_), _) => {
+            (&["Float"], vec![])
+        }
+        Ty::Primitive(PrimitiveType::Bool) | Ty::Literal(baml_base::Literal::Bool(_), _) => {
             (&["Bool"], vec![])
         }
-        Ty::Primitive(PrimitiveType::Null, _) => (&["Null"], vec![]),
-        Ty::Type { .. } => (&["TypeValue"], vec![]),
+        Ty::Primitive(PrimitiveType::Null) => (&["Null"], vec![]),
+        Ty::Type => (&["TypeValue"], vec![]),
         Ty::Primitive(
             p @ (PrimitiveType::Uint8Array
             | PrimitiveType::Image
             | PrimitiveType::Audio
             | PrimitiveType::Video
             | PrimitiveType::Pdf),
-            _,
         ) => (p.builtin_class_path(), vec![]),
         _ => return None,
     })
@@ -191,7 +178,6 @@ fn typevar_json_method_ty(name: &Name, member: &Name) -> Option<Ty> {
             params: vec![],
             ret: Box::new(json_alias_ty()),
             throws: Box::new(json_serialization_or_parse_error_ty()),
-            attr: TyAttr::default(),
         }),
         "from_json" => Some(Ty::Function {
             generic_params: Vec::new(),
@@ -200,9 +186,8 @@ fn typevar_json_method_ty(name: &Name, member: &Name) -> Option<Ty> {
                 Some(Name::new("j")),
                 json_alias_ty(),
             )],
-            ret: Box::new(Ty::TypeVar(name.clone(), TyAttr::default())),
+            ret: Box::new(Ty::TypeVar(name.clone())),
             throws: Box::new(json_serialization_or_parse_error_ty()),
-            attr: TyAttr::default(),
         }),
         _ => None,
     }
@@ -217,7 +202,6 @@ fn enum_to_json_method_ty(self_ty: Ty) -> Ty {
         params: vec![FunctionParamTy::required(Some(Name::new("self")), self_ty)],
         ret: Box::new(json_alias_ty()),
         throws: Box::new(Ty::never()),
-        attr: TyAttr::default(),
     }
 }
 
@@ -523,7 +507,7 @@ impl OptionalBaseInfo {
     }
 
     fn is_null_only(&self) -> bool {
-        matches!(self.inner, Ty::Never { .. })
+        matches!(self.inner, Ty::Never)
     }
 }
 
@@ -645,7 +629,7 @@ pub struct TypeInferenceBuilder<'db> {
     exhaustive_matches: FxHashSet<ExprId>,
     /// Generic type parameters in scope for this function (e.g. `["T"]` for
     /// `function foo<T>(...)`). Used when lowering type annotations inside the
-    /// function body so that `T` resolves to `Ty::TypeVar("T", TyAttr::default())` rather than
+    /// function body so that `T` resolves to `Ty::TypeVar("T")` rather than
     /// `Ty::Unknown`.
     pub generic_params: Vec<Name>,
     /// BEP-044 generic bounds: `T → bound_ty`. Populated alongside
@@ -1171,7 +1155,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         let mut ty = ty;
         for _ in 0..64 {
             match &ty {
-                Ty::TypeAlias(qtn, _) => match self.aliases.get(qtn) {
+                Ty::TypeAlias(qtn) => match self.aliases.get(qtn) {
                     Some(expanded) => ty = expanded.clone(),
                     None => break,
                 },
@@ -1196,32 +1180,26 @@ impl<'db> TypeInferenceBuilder<'db> {
     fn matrix_normalize_scrut(&self, ty: &Ty) -> Ty {
         let expanded = self.expand_alias_chains(ty.clone());
         match expanded {
-            Ty::Optional(inner, _) => Ty::Union(
-                vec![
-                    *inner,
-                    Ty::Primitive(PrimitiveType::Null, TyAttr::default()),
-                ],
-                TyAttr::default(),
-            ),
-            Ty::Union(members, attr) => {
+            Ty::Optional(inner) => Ty::Union(vec![*inner, Ty::Primitive(PrimitiveType::Null)]),
+            Ty::Union(members) => {
                 let mut flat: Vec<Ty> = Vec::with_capacity(members.len());
                 let mut has_null = false;
                 for m in members {
                     match self.expand_alias_chains(m) {
-                        Ty::Optional(inner, _) => {
+                        Ty::Optional(inner) => {
                             flat.push(*inner);
                             has_null = true;
                         }
-                        Ty::Primitive(PrimitiveType::Null, _) => {
+                        Ty::Primitive(PrimitiveType::Null) => {
                             has_null = true;
                         }
                         other => flat.push(other),
                     }
                 }
                 if has_null {
-                    flat.push(Ty::Primitive(PrimitiveType::Null, TyAttr::default()));
+                    flat.push(Ty::Primitive(PrimitiveType::Null));
                 }
-                Ty::Union(flat, attr)
+                Ty::Union(flat)
             }
             other => other,
         }
@@ -1235,12 +1213,12 @@ impl<'db> TypeInferenceBuilder<'db> {
 
             match builder.expand_alias_chains(ty) {
                 fn_ty @ Ty::Function { .. } => Some(fn_ty),
-                Ty::Optional(inner, _) => peel(builder, *inner, depth - 1),
-                Ty::Union(members, _) => {
+                Ty::Optional(inner) => peel(builder, *inner, depth - 1),
+                Ty::Union(members) => {
                     let mut function_member = None;
                     for member in members {
                         let expanded_member = builder.expand_alias_chains(member);
-                        if matches!(expanded_member, Ty::Primitive(PrimitiveType::Null, _)) {
+                        if matches!(expanded_member, Ty::Primitive(PrimitiveType::Null)) {
                             continue;
                         }
 
@@ -1318,17 +1296,14 @@ impl<'db> TypeInferenceBuilder<'db> {
         throws_facts.iter().any(|fact| {
             matches!(
                 fact,
-                Ty::TypeVar(_, _)
-                    | Ty::Unknown { .. }
-                    | Ty::BuiltinUnknown { .. }
-                    | Ty::Error { .. }
+                Ty::TypeVar(_) | Ty::Unknown | Ty::BuiltinUnknown | Ty::Error
             )
         })
     }
 
     fn synthetic_effect_param_name(fact: &Ty) -> Option<&Name> {
         match fact {
-            Ty::TypeVar(name, _) if crate::ty::is_synthetic_effect_param(name) => Some(name),
+            Ty::TypeVar(name) if crate::ty::is_synthetic_effect_param(name) => Some(name),
             _ => None,
         }
     }
@@ -1611,19 +1586,19 @@ impl<'db> TypeInferenceBuilder<'db> {
         // `List`/`Map` are invariant, so an `int[]` argument does not satisfy
         // an `(int | string)[]` slot.
         match (&expanded_expected, &expanded_got) {
-            (Ty::Class(class_name, expected_args, _), Ty::List(actual_inner, _))
+            (Ty::Class(class_name, expected_args), Ty::List(actual_inner))
                 if class_name.is_builtin_root_type("Array") && expected_args.len() == 1 =>
             {
                 self.is_subtype(actual_inner, &expected_args[0])
             }
-            (Ty::Class(class_name, expected_args, _), Ty::EvolvingList(actual_inner, _))
+            (Ty::Class(class_name, expected_args), Ty::EvolvingList(actual_inner))
                 if class_name.is_builtin_root_type("Array") && expected_args.len() == 1 =>
             {
                 self.is_subtype(actual_inner, &expected_args[0])
             }
             (
-                Ty::Class(class_name, expected_args, _),
-                Ty::Map(actual_key, actual_val, _) | Ty::EvolvingMap(actual_key, actual_val, _),
+                Ty::Class(class_name, expected_args),
+                Ty::Map(actual_key, actual_val) | Ty::EvolvingMap(actual_key, actual_val),
             ) if class_name.is_builtin_root_type("Map") && expected_args.len() == 2 => {
                 self.is_subtype(actual_key, &expected_args[0])
                     && self.is_subtype(actual_val, &expected_args[1])
@@ -2061,7 +2036,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 .map(|(_, ty)| ty.clone())
                 .unwrap_or(Ty::unknown());
             let got_ty = self.infer_expr(default_expr, &defaults.exprs);
-            if !matches!(expected_ty, Ty::Unknown { .. } | Ty::Error { .. })
+            if !matches!(expected_ty, Ty::Unknown | Ty::Error)
                 && !self.argument_matches_expected(&got_ty, &expected_ty)
             {
                 self.report_at_span(
@@ -2680,28 +2655,27 @@ impl<'db> TypeInferenceBuilder<'db> {
                 // ambiguity about the intended type instantiation.
                 let run_inference_phases = bindings.is_empty();
 
-                let phase0_expected = if is_optional_call
-                    && !matches!(expected, Ty::Unknown { .. } | Ty::Error { .. })
-                {
-                    let ret_info = self.analyze_optional_base(ret);
-                    let expected_info = self.analyze_optional_base(expected);
-                    if ret_info.is_nullable() {
-                        Some(expected_info.expanded)
-                    } else if expected_info.is_null_only() {
-                        None
+                let phase0_expected =
+                    if is_optional_call && !matches!(expected, Ty::Unknown | Ty::Error) {
+                        let ret_info = self.analyze_optional_base(ret);
+                        let expected_info = self.analyze_optional_base(expected);
+                        if ret_info.is_nullable() {
+                            Some(expected_info.expanded)
+                        } else if expected_info.is_null_only() {
+                            None
+                        } else {
+                            Some(expected_info.inner)
+                        }
                     } else {
-                        Some(expected_info.inner)
-                    }
-                } else {
-                    Some(expected.clone())
-                };
+                        Some(expected.clone())
+                    };
 
                 // Phase 0: reverse-infer from expected return type (low priority).
                 // Skip when expected is Unknown/Error, or when explicit type args were given.
                 if run_inference_phases
                     && let Some(phase0_expected) = phase0_expected.as_ref()
                     && crate::generics::contains_typevar(ret)
-                    && !matches!(phase0_expected, Ty::Unknown { .. } | Ty::Error { .. })
+                    && !matches!(phase0_expected, Ty::Unknown | Ty::Error)
                 {
                     crate::generics::infer_bindings(ret, phase0_expected, &mut bindings);
                 }
@@ -2787,7 +2761,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                         continue;
                     }
 
-                    if matches!(expected_arg_ty, Ty::Unknown { .. } | Ty::Error { .. })
+                    if matches!(expected_arg_ty, Ty::Unknown | Ty::Error)
                         || crate::generics::contains_typevar(&expected_arg_ty)
                     {
                         continue;
@@ -2820,14 +2794,14 @@ impl<'db> TypeInferenceBuilder<'db> {
                     bindings_from_inference: !bindings.is_empty() && !explicit_args_used,
                 }
             }
-            Ty::Unknown { .. } | Ty::Error { .. } => {
+            Ty::Unknown | Ty::Error => {
                 self.infer_args_for_recovery(args, body);
                 CheckedCallInner {
                     result: Ty::unknown(),
                     bindings_from_inference: false,
                 }
             }
-            Ty::Union(arms, _) => {
+            Ty::Union(arms) => {
                 // When ALL union arms are functions (e.g. method lookup on a union
                 // type such as the `json` alias `null | bool | int | ... | json[]`),
                 // fold them into a single representative callable.
@@ -2895,7 +2869,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                         fn_components.iter().map(|(_, r, _)| r.clone()).collect();
                     let folded_ret = match ret_set.len() {
                         1 => ret_set.into_iter().next().unwrap(),
-                        _ => Ty::Union(ret_set.into_iter().collect(), TyAttr::default()),
+                        _ => Ty::Union(ret_set.into_iter().collect()),
                     };
 
                     // Union of all throws types (flattened and deduplicated).
@@ -2906,7 +2880,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                     let folded_throws = match throws_set.len() {
                         0 => Ty::never(),
                         1 => throws_set.into_iter().next().unwrap(),
-                        _ => Ty::Union(throws_set.into_iter().collect(), TyAttr::default()),
+                        _ => Ty::Union(throws_set.into_iter().collect()),
                     };
 
                     let folded_fn = Ty::Function {
@@ -2915,7 +2889,6 @@ impl<'db> TypeInferenceBuilder<'db> {
                         params: first_params,
                         ret: Box::new(folded_ret),
                         throws: Box::new(folded_throws),
-                        attr: TyAttr::default(),
                     };
 
                     return self.check_call_inner(CallCheckRequest {
@@ -2941,9 +2914,7 @@ impl<'db> TypeInferenceBuilder<'db> {
     }
 
     fn report_result_type_mismatch(&mut self, expr_id: ExprId, got: &Ty, expected: &Ty) {
-        if !matches!(expected, Ty::Unknown { .. } | Ty::Error { .. })
-            && !self.is_subtype(got, expected)
-        {
+        if !matches!(expected, Ty::Unknown | Ty::Error) && !self.is_subtype(got, expected) {
             self.context.report(
                 TirTypeError::TypeMismatch {
                     expected: expected.clone(),
@@ -2983,7 +2954,7 @@ impl<'db> TypeInferenceBuilder<'db> {
 
         if callee_info.is_null_only() {
             self.infer_args_for_recovery(args, body);
-            let ty = Ty::Primitive(PrimitiveType::Null, TyAttr::default());
+            let ty = Ty::Primitive(PrimitiveType::Null);
             self.report_result_type_mismatch(expr_id, &ty, expected);
             self.record_expr_type(expr_id, ty.clone());
             return ty;
@@ -3008,11 +2979,9 @@ impl<'db> TypeInferenceBuilder<'db> {
     pub fn infer_expr(&mut self, expr_id: ExprId, body: &ExprBody) -> Ty {
         let expr = &body.exprs[expr_id];
         let ty = match expr {
-            Expr::Literal(lit) => Ty::Literal(lit.clone(), Freshness::Fresh, TyAttr::default()),
-            Expr::ByteStringLiteral(_) => {
-                Ty::Primitive(PrimitiveType::Uint8Array, TyAttr::default())
-            }
-            Expr::Null => Ty::Primitive(PrimitiveType::Null, TyAttr::default()),
+            Expr::Literal(lit) => Ty::Literal(lit.clone(), Freshness::Fresh),
+            Expr::ByteStringLiteral(_) => Ty::Primitive(PrimitiveType::Uint8Array),
+            Expr::Null => Ty::Primitive(PrimitiveType::Null),
             Expr::Path(segments) => self.infer_path(segments.as_slice(), body, expr_id),
             Expr::If {
                 condition,
@@ -3094,7 +3063,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 let elem_types: Vec<Ty> =
                     elements.iter().map(|e| self.infer_expr(*e, body)).collect();
                 let elem_ty = Self::join_all(&elem_types).widen_fresh();
-                Ty::List(Box::new(elem_ty), TyAttr::default())
+                Ty::List(Box::new(elem_ty))
             }
             Expr::Map { entries } => {
                 let mut key_types = Vec::new();
@@ -3105,7 +3074,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 }
                 let key_ty = Self::join_all(&key_types).widen_fresh();
                 let val_ty = Self::join_all(&val_types).widen_fresh();
-                Ty::Map(Box::new(key_ty), Box::new(val_ty), TyAttr::default())
+                Ty::Map(Box::new(key_ty), Box::new(val_ty))
             }
             Expr::Binary { op, lhs, rhs } => {
                 let lhs_ty = self.infer_expr(*lhs, body);
@@ -3116,9 +3085,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                     baml_compiler2_ast::BinaryOp::NullCoalesce => {
                         // E3: LHS is non-nullable — ?? is unnecessary
                         let inner_lhs = crate::narrowing::remove_null(&lhs_ty);
-                        if inner_lhs == lhs_ty
-                            && !matches!(lhs_ty, Ty::Unknown { .. } | Ty::Error { .. })
-                        {
+                        if inner_lhs == lhs_ty && !matches!(lhs_ty, Ty::Unknown | Ty::Error) {
                             let lhs_text = body.display_expr(*lhs);
                             let expr_text = body.display_expr(expr_id);
                             self.context.report_simple(
@@ -3141,9 +3108,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                     baml_compiler2_ast::BinaryOp::Or => {
                         // W1: LHS is nullable — suggest ?? instead of ||
                         let inner_lhs = crate::narrowing::remove_null(&lhs_ty);
-                        if inner_lhs != lhs_ty
-                            && !matches!(lhs_ty, Ty::Unknown { .. } | Ty::Error { .. })
-                        {
+                        if inner_lhs != lhs_ty && !matches!(lhs_ty, Ty::Unknown | Ty::Error) {
                             let lhs_text = body.display_expr(*lhs);
                             let rhs_text = body.display_expr(*rhs);
                             self.context.report_warning(
@@ -3278,11 +3243,8 @@ impl<'db> TypeInferenceBuilder<'db> {
         // `Primitive(Null)` is a concrete non-optional type (the null value
         // itself) with its own companion class. Treat it like any other
         // primitive — do NOT require `?.` chaining for direct method calls.
-        let is_pure_null = matches!(base_ty, Ty::Primitive(PrimitiveType::Null, _));
-        if inner != base_ty
-            && !is_pure_null
-            && !matches!(base_ty, Ty::Unknown { .. } | Ty::Error { .. })
-        {
+        let is_pure_null = matches!(base_ty, Ty::Primitive(PrimitiveType::Null));
+        if inner != base_ty && !is_pure_null && !matches!(base_ty, Ty::Unknown | Ty::Error) {
             // Inside an OptionalChain (`a?.b.c` where `a?.b` returns `T?`):
             // auto-unwrap the nullable base, resolve the member, re-wrap in
             // Optional. Outside any chain, accessing `.member` on a nullable
@@ -3327,8 +3289,8 @@ impl<'db> TypeInferenceBuilder<'db> {
         for diag in diags {
             self.context.report_simple(diag, expr_id);
         }
-        let valid_target = matches!(target_ty, Ty::Interface(_, _, _));
-        if !valid_target && !matches!(target_ty, Ty::Unknown { .. } | Ty::Error { .. }) {
+        let valid_target = matches!(target_ty, Ty::Interface(_, _));
+        if !valid_target && !matches!(target_ty, Ty::Unknown | Ty::Error) {
             self.context.report_simple(
                 TirTypeError::InvalidInterfaceUpcastTarget {
                     target: target_ty.clone(),
@@ -3336,15 +3298,15 @@ impl<'db> TypeInferenceBuilder<'db> {
                 expr_id,
             );
         } else if !self.is_subtype(&base_ty, &target_ty)
-            && !matches!(base_ty, Ty::Unknown { .. } | Ty::Error { .. })
-            && !matches!(target_ty, Ty::Unknown { .. } | Ty::Error { .. })
+            && !matches!(base_ty, Ty::Unknown | Ty::Error)
+            && !matches!(target_ty, Ty::Unknown | Ty::Error)
         {
             // BEP-044 wf3 #G9d: when a *concrete* value is projected to
             // an interface it doesn't implement, say so directly rather
             // than emitting a generic `type mismatch`. (Interface→sibling
             // projections keep the type-mismatch form, which names both
             // interfaces.)
-            if let (Ty::Interface(iface_qtn, _, _), false) =
+            if let (Ty::Interface(iface_qtn, _), false) =
                 (&target_ty, matches!(base_ty, Ty::Interface(..)))
             {
                 self.context.report_simple(
@@ -3380,7 +3342,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         let base_ty = self.infer_expr(base, body);
         let base_info = self.analyze_optional_base(&base_ty);
         // E2: warn if base is not nullable (?.  is unnecessary)
-        if !base_info.is_nullable() && !matches!(base_ty, Ty::Unknown { .. } | Ty::Error { .. }) {
+        if !base_info.is_nullable() && !matches!(base_ty, Ty::Unknown | Ty::Error) {
             let base_text = body.display_expr(base);
             self.context.report_simple(
                 TirTypeError::UnnecessaryOptionalChaining {
@@ -3392,7 +3354,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         }
         if base_info.is_null_only() {
             // Base is just null — result is null
-            Ty::Primitive(PrimitiveType::Null, TyAttr::default())
+            Ty::Primitive(PrimitiveType::Null)
         } else {
             // OptionalMemberAccess always has a value base → bound = true.
             let member_ty = self.resolve_member(&base_info.inner, member, expr_id, true);
@@ -3411,30 +3373,27 @@ impl<'db> TypeInferenceBuilder<'db> {
         let base_ty = self.infer_expr(base, body);
         self.infer_expr(index, body);
         let inner = crate::narrowing::remove_null(&base_ty);
-        let (resolve_ty, rewrap) = if inner != base_ty
-            && !matches!(base_ty, Ty::Unknown { attr: _ } | Ty::Error { attr: _ })
-        {
-            if self.in_optional_chain == 0 {
-                // Outside any chain: indexing a nullable type is an error.
-                let base_text = body.display_expr(base);
-                let expr_text = body.display_expr(expr_id);
-                self.context.report_simple(
-                    TirTypeError::NullableMemberAccess {
-                        base: base_text,
-                        member: "[...]".to_string(),
-                        expr: expr_text,
-                    },
-                    expr_id,
-                );
-            }
-            (inner, true)
-        } else {
-            (base_ty, false)
-        };
+        let (resolve_ty, rewrap) =
+            if inner != base_ty && !matches!(base_ty, Ty::Unknown | Ty::Error) {
+                if self.in_optional_chain == 0 {
+                    // Outside any chain: indexing a nullable type is an error.
+                    let base_text = body.display_expr(base);
+                    let expr_text = body.display_expr(expr_id);
+                    self.context.report_simple(
+                        TirTypeError::NullableMemberAccess {
+                            base: base_text,
+                            member: "[...]".to_string(),
+                            expr: expr_text,
+                        },
+                        expr_id,
+                    );
+                }
+                (inner, true)
+            } else {
+                (base_ty, false)
+            };
         let elem_ty = match resolve_ty {
-            Ty::Primitive(PrimitiveType::Uint8Array, _) => {
-                Ty::Primitive(PrimitiveType::Int, TyAttr::default())
-            }
+            Ty::Primitive(PrimitiveType::Uint8Array) => Ty::Primitive(PrimitiveType::Int),
             other => self.index_element_ty(&other, expr_id),
         };
         if rewrap {
@@ -3457,7 +3416,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         self.infer_expr(index, body);
         let base_info = self.analyze_optional_base(&base_ty);
         // E2: warn if base is not nullable
-        if !base_info.is_nullable() && !matches!(base_ty, Ty::Unknown { .. } | Ty::Error { .. }) {
+        if !base_info.is_nullable() && !matches!(base_ty, Ty::Unknown | Ty::Error) {
             let base_text = body.display_expr(base);
             let expr_text = body.display_expr(expr_id);
             self.context.report_simple(
@@ -3469,7 +3428,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             );
         }
         if base_info.is_null_only() {
-            Ty::Primitive(PrimitiveType::Null, TyAttr::default())
+            Ty::Primitive(PrimitiveType::Null)
         } else {
             let elem_ty = self.index_element_ty(&base_info.inner, expr_id);
             Self::make_optional(elem_ty)
@@ -3481,9 +3440,9 @@ impl<'db> TypeInferenceBuilder<'db> {
     /// `NotIndexable` at `expr_id` and returns Unknown.
     fn index_element_ty(&mut self, container: &Ty, expr_id: ExprId) -> Ty {
         match container {
-            Ty::List(elem_ty, _) | Ty::EvolvingList(elem_ty, _) => elem_ty.as_ref().clone(),
-            Ty::Map(_, val_ty, _) | Ty::EvolvingMap(_, val_ty, _) => val_ty.as_ref().clone(),
-            Ty::Unknown { .. } | Ty::Error { .. } => Ty::unknown(),
+            Ty::List(elem_ty) | Ty::EvolvingList(elem_ty) => elem_ty.as_ref().clone(),
+            Ty::Map(_, val_ty) | Ty::EvolvingMap(_, val_ty) => val_ty.as_ref().clone(),
+            Ty::Unknown | Ty::Error => Ty::unknown(),
             _ => {
                 self.context.report_simple(
                     TirTypeError::NotIndexable {
@@ -3527,16 +3486,16 @@ impl<'db> TypeInferenceBuilder<'db> {
             .get(&spawn_body)
             .cloned()
             .map_or_else(
-                || Ty::Primitive(PrimitiveType::Null, TyAttr::default()),
+                || Ty::Primitive(PrimitiveType::Null),
                 |t| {
-                    if matches!(t, Ty::Never { .. }) {
-                        Ty::Primitive(PrimitiveType::Null, TyAttr::default())
+                    if matches!(t, Ty::Never) {
+                        Ty::Primitive(PrimitiveType::Null)
                     } else {
                         t
                     }
                 },
             );
-        Ty::Future(Box::new(value_ty), Box::new(throws_ty), TyAttr::default())
+        Ty::Future(Box::new(value_ty), Box::new(throws_ty))
     }
 
     #[inline(never)]
@@ -3544,8 +3503,8 @@ impl<'db> TypeInferenceBuilder<'db> {
         // BEP-034: `await e : T` where `e : Future<T, E>`.
         let fut_ty = self.infer_expr(future, body);
         match fut_ty {
-            Ty::Future(value, _error, _) => *value,
-            Ty::Unknown { .. } | Ty::Error { .. } => fut_ty,
+            Ty::Future(value, _error) => *value,
+            Ty::Unknown | Ty::Error => fut_ty,
             other => {
                 // `await` requires a Future operand. Emit a
                 // TypeMismatch with `Future<unknown, unknown>` as
@@ -3553,11 +3512,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 // wanted instead of silently getting `Unknown`.
                 self.context.report_simple(
                     TirTypeError::TypeMismatch {
-                        expected: Ty::Future(
-                            Box::new(Ty::unknown()),
-                            Box::new(Ty::unknown()),
-                            TyAttr::default(),
-                        ),
+                        expected: Ty::Future(Box::new(Ty::unknown()), Box::new(Ty::unknown())),
                         got: other,
                     },
                     future,
@@ -3625,7 +3580,6 @@ impl<'db> TypeInferenceBuilder<'db> {
             params: param_tys,
             ret: Box::new(surface_ret_ty),
             throws: Box::new(throws_ty),
-            attr: TyAttr::default(),
         };
         self.lambda_effective_throws
             .insert(expr_id, lambda_effective_throws);
@@ -3718,7 +3672,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             })
             .unwrap_or(Ty::unknown());
         let ty = match ty {
-            Ty::Class(class_name, type_args, attr) => {
+            Ty::Class(class_name, type_args) => {
                 if type_args.is_empty()
                     && obj_type_args.is_empty()
                     && let Some(class_loc) = self.resolve_class_loc(&class_name)
@@ -3751,22 +3705,22 @@ impl<'db> TypeInferenceBuilder<'db> {
                             .collect();
                         if inferred_type_args
                             .iter()
-                            .any(|ty| !matches!(ty, Ty::Unknown { .. }))
+                            .any(|ty| !matches!(ty, Ty::Unknown))
                         {
-                            Ty::Class(class_name, inferred_type_args, attr)
+                            Ty::Class(class_name, inferred_type_args)
                         } else {
-                            Ty::Class(class_name, type_args, attr)
+                            Ty::Class(class_name, type_args)
                         }
                     } else {
-                        Ty::Class(class_name, type_args, attr)
+                        Ty::Class(class_name, type_args)
                     }
                 } else {
-                    Ty::Class(class_name, type_args, attr)
+                    Ty::Class(class_name, type_args)
                 }
             }
             ty => ty,
         };
-        if let Ty::Class(class_name, type_args, _) = &ty {
+        if let Ty::Class(class_name, type_args) = &ty {
             self.check_object_fields(expr_id, body, class_name, type_args, fields);
         } else {
             for (_, expr_id) in fields {
@@ -3788,7 +3742,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         // class that differs from the expected class, it must be a subtype.
         // Keep this out of `check_expr` proper so its temporary lowering
         // state doesn't bloat every recursive checking frame in debug builds.
-        let (Ty::Class(expected_qtn, _, _), Some(path)) = (expected, type_name) else {
+        let (Ty::Class(expected_qtn, _), Some(path)) = (expected, type_name) else {
             return None;
         };
 
@@ -3805,12 +3759,11 @@ impl<'db> TypeInferenceBuilder<'db> {
             &self.generic_params,
             &mut diags,
         );
-        if let Ty::Class(lit_qtn, _, _) = &lit_ty
+        if let Ty::Class(lit_qtn, _) = &lit_ty
             && lit_qtn != expected_qtn
         {
             let inferred = self.infer_expr(expr_id, body);
-            if !matches!(inferred, Ty::Unknown { .. } | Ty::Error { .. })
-                && !self.is_subtype(&inferred, expected)
+            if !matches!(inferred, Ty::Unknown | Ty::Error) && !self.is_subtype(&inferred, expected)
             {
                 self.context.report(
                     TirTypeError::TypeMismatch {
@@ -3841,15 +3794,14 @@ impl<'db> TypeInferenceBuilder<'db> {
         {
             return inferred;
         }
-        if let Ty::Class(class_name, type_args, _) = expected {
+        if let Ty::Class(class_name, type_args) = expected {
             self.check_object_fields(expr_id, body, class_name, type_args, fields);
             let ty = expected.clone();
             self.record_expr_type(expr_id, ty.clone());
             ty
         } else {
             let inferred = self.infer_expr(expr_id, body);
-            if !matches!(expected, Ty::Unknown { .. } | Ty::Error { .. })
-                && !self.is_subtype(&inferred, expected)
+            if !matches!(expected, Ty::Unknown | Ty::Error) && !self.is_subtype(&inferred, expected)
             {
                 // BEP-044 wf3 #G18: if the value almost implements the
                 // expected interface via a blanket rule but a generic
@@ -3999,7 +3951,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         let callee_ty = self.infer_expr(callee, body);
 
         if !self.analyze_optional_base(&callee_ty).is_nullable()
-            && !matches!(&callee_ty, Ty::Unknown { .. } | Ty::Error { .. })
+            && !matches!(&callee_ty, Ty::Unknown | Ty::Error)
         {
             let callee_text = body.display_expr(callee);
             let expr_text = body.display_expr(expr_id);
@@ -4121,10 +4073,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                         warn_extraneous_throws,
                     );
                 let surface_ret_ty = return_annotation.unwrap_or_else(|| {
-                    if matches!(
-                        expected_ret.as_ref(),
-                        Ty::Unknown { .. } | Ty::TypeVar(_, _)
-                    ) {
+                    if matches!(expected_ret.as_ref(), Ty::Unknown | Ty::TypeVar(_)) {
                         ret_ty.clone()
                     } else {
                         expected_ret.as_ref().clone()
@@ -4137,7 +4086,6 @@ impl<'db> TypeInferenceBuilder<'db> {
                     params: param_tys,
                     ret: Box::new(surface_ret_ty),
                     throws: Box::new(throws_ty),
-                    attr: TyAttr::default(),
                 };
                 self.lambda_effective_throws
                     .insert(expr_id, lambda_effective_throws);
@@ -4196,14 +4144,14 @@ impl<'db> TypeInferenceBuilder<'db> {
                 {
                     never
                 } else if let Some(tail) = tail_expr {
-                    if matches!(expected, Ty::Void { .. }) {
+                    if matches!(expected, Ty::Void) {
                         // Void context: infer the tail for diagnostics but discard its value.
                         let _ = self.infer_expr(*tail, body);
                         Ty::void()
                     } else {
                         self.check_expr(*tail, body, expected)
                     }
-                } else if !matches!(expected, Ty::Unknown { .. } | Ty::Void { .. }) {
+                } else if !matches!(expected, Ty::Unknown | Ty::Void) {
                     // No tail expression, no divergence — block falls through
                     // without producing a value. Report missing return.
                     self.context.report_simple(
@@ -4267,7 +4215,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                     let else_ty = self.check_expr(*else_id, body, expected);
                     Self::join_types(&then_ty, &else_ty)
                 } else {
-                    if !matches!(expected, Ty::Void { .. } | Ty::Unknown { .. }) {
+                    if !matches!(expected, Ty::Void | Ty::Unknown) {
                         self.context
                             .report_simple(TirTypeError::VoidUsedAsValue, expr_id);
                     }
@@ -4282,7 +4230,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             }
             Expr::Array { elements } => {
                 let elem_ty = match expected {
-                    Ty::List(e, _) | Ty::EvolvingList(e, _) => Some(e),
+                    Ty::List(e) | Ty::EvolvingList(e) => Some(e),
                     _ => None,
                 };
                 if let Some(elem_ty) = elem_ty {
@@ -4294,7 +4242,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                     ty
                 } else {
                     let inferred = self.infer_expr(expr_id, body);
-                    if !matches!(expected, Ty::Unknown { .. } | Ty::Error { .. })
+                    if !matches!(expected, Ty::Unknown | Ty::Error)
                         && !self.is_subtype(&inferred, expected)
                     {
                         self.context.report(
@@ -4321,7 +4269,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             } => self.check_object_expr(expr_id, body, expected, fields, type_name.as_ref()),
             Expr::Map { entries } => {
                 let kv = match expected {
-                    Ty::Map(k, v, _) | Ty::EvolvingMap(k, v, _) => Some((k, v)),
+                    Ty::Map(k, v) | Ty::EvolvingMap(k, v) => Some((k, v)),
                     _ => None,
                 };
                 if let Some((key_ty, val_ty)) = kv {
@@ -4341,12 +4289,11 @@ impl<'db> TypeInferenceBuilder<'db> {
             // to the default infer-then-check path which will report the error.
             Expr::Literal(lit) if matches!(expected, Ty::Literal(..)) => {
                 use crate::ty::Freshness;
-                let Ty::Literal(expected_lit, _, _) = expected else {
+                let Ty::Literal(expected_lit, _) = expected else {
                     unreachable!()
                 };
                 if lit == expected_lit {
-                    let ty =
-                        Ty::Literal(expected_lit.clone(), Freshness::Regular, TyAttr::default());
+                    let ty = Ty::Literal(expected_lit.clone(), Freshness::Regular);
                     self.record_expr_type(expr_id, ty.clone());
                     ty
                 } else {
@@ -4384,9 +4331,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             // All other expressions: infer then subtype-check
             _ => {
                 let inferred = self.infer_expr(expr_id, body);
-                if matches!(inferred, Ty::Void { .. })
-                    && !matches!(expected, Ty::Void { .. } | Ty::Unknown { .. })
-                {
+                if matches!(inferred, Ty::Void) && !matches!(expected, Ty::Void | Ty::Unknown) {
                     let err = if matches!(
                         body.exprs[expr_id],
                         Expr::Call { .. } | Expr::OptionalCall { .. }
@@ -4409,7 +4354,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                     // BEP-044 wf3 #18: coercing a concrete class to an interface
                     // it provides via >1 in-body block at this instantiation is
                     // ambiguous (`Getter<L>`+`Getter<R>` collapse at `Pair<int,int>`).
-                    if let (Ty::Class(cqtn, ctargs, _), Ty::Interface(iqtn, iargs, _)) =
+                    if let (Ty::Class(cqtn, ctargs), Ty::Interface(iqtn, iargs)) =
                         (&inferred, expected)
                         && self.class_interface_instantiation_count(cqtn, ctargs, iqtn, iargs) > 1
                     {
@@ -4436,7 +4381,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         match stmt {
             Stmt::Expr(expr_id) => {
                 let ty = self.infer_expr(*expr_id, body);
-                matches!(ty, Ty::Never { .. })
+                matches!(ty, Ty::Never)
             }
             Stmt::Let {
                 pattern,
@@ -4472,13 +4417,13 @@ impl<'db> TypeInferenceBuilder<'db> {
                         }
                     };
                     let ty = if let Some(expected) = expected_for_check.as_ref()
-                        && !matches!(expected, Ty::Void { .. })
+                        && !matches!(expected, Ty::Void)
                     {
                         self.check_expr(init, body, expected)
                     } else {
                         self.infer_expr(init, body)
                     };
-                    if matches!(ty, Ty::Void { .. }) {
+                    if matches!(ty, Ty::Void) {
                         let err = if matches!(
                             body.exprs[init],
                             Expr::Call { .. } | Expr::OptionalCall { .. }
@@ -4499,7 +4444,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                     (None, None, None)
                 };
 
-                let diverges = matches!(init_result_ty, Some(Ty::Never { .. }));
+                let diverges = matches!(init_result_ty, Some(Ty::Never));
                 if !diverges && let Some(flow_ty) = pattern_subject_ty {
                     // For `let … else`, check the else branch FIRST, in the
                     // scope before pattern bindings are introduced. The else
@@ -4517,7 +4462,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                         // `restore_scoped_locals` that an `if`/`if let`
                         // branch would use.
                         self.discard_scoped_locals(snapshot);
-                        if !matches!(else_ty, Ty::Never { .. } | Ty::Unknown { .. }) {
+                        if !matches!(else_ty, Ty::Never | Ty::Unknown) {
                             let err = TirTypeError::LetElseMustDiverge { got: else_ty };
                             self.context.report_simple(err, *else_expr);
                         }
@@ -4628,8 +4573,8 @@ impl<'db> TypeInferenceBuilder<'db> {
 
                 // 2. Derive the element type from the collection
                 let elem_ty = match &coll_ty {
-                    Ty::List(elem, _) => *elem.clone(),
-                    Ty::EvolvingList(elem, _) => *elem.clone(),
+                    Ty::List(elem) => *elem.clone(),
+                    Ty::EvolvingList(elem) => *elem.clone(),
                     _ => {
                         self.context
                             .report_simple(TirTypeError::NotIterable { ty: coll_ty }, *collection);
@@ -4698,8 +4643,8 @@ impl<'db> TypeInferenceBuilder<'db> {
                 let declared_ty = self.get_declared_type(*target, body);
                 let value_ty = self.infer_expr(*value, body);
                 if let Some(ref decl_ty) = declared_ty {
-                    if !matches!(decl_ty, Ty::Unknown { .. } | Ty::Error { .. })
-                        && !matches!(value_ty, Ty::Unknown { .. } | Ty::Error { .. })
+                    if !matches!(decl_ty, Ty::Unknown | Ty::Error)
+                        && !matches!(value_ty, Ty::Unknown | Ty::Error)
                         && !self.is_subtype(&value_ty, decl_ty)
                     {
                         self.context.report(
@@ -4832,7 +4777,7 @@ impl<'db> TypeInferenceBuilder<'db> {
 
                 if let Some(name) = scrutinee_name {
                     let then_ty = self.expressions.get(&then_branch);
-                    let then_diverged = matches!(then_ty, Some(Ty::Never { .. }));
+                    let then_diverged = matches!(then_ty, Some(Ty::Never));
                     if then_diverged && !stmt_diverges {
                         // Look up the matched type recorded by
                         // `analyze_and_lower_no_subtype_check` keyed on the
@@ -4894,7 +4839,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 // have diverged too), apply the else-narrowings to locals.
                 if !narrowings.is_empty() {
                     let then_ty = self.expressions.get(&then_branch);
-                    let then_diverged = matches!(then_ty, Some(Ty::Never { .. }));
+                    let then_diverged = matches!(then_ty, Some(Ty::Never));
 
                     if then_diverged && !stmt_diverges {
                         // The then-branch always diverges but execution can
@@ -5101,7 +5046,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         // value position is the same error as `if cond { ... }` without
         // an else — `Expr::If`'s check arm reports `VoidUsedAsValue`
         // here, and we match that.
-        if else_branch.is_none() && !matches!(expected, Ty::Void { .. } | Ty::Unknown { .. }) {
+        if else_branch.is_none() && !matches!(expected, Ty::Void | Ty::Unknown) {
             self.context
                 .report_simple(TirTypeError::VoidUsedAsValue, if_let_expr_id);
         }
@@ -5223,7 +5168,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         self.finalize_pattern_lowering(pattern_id, &result, None, None, &scrutinee_ty);
         self.restore_scoped_locals(&snapshot);
 
-        Ty::Primitive(PrimitiveType::Bool, TyAttr::default())
+        Ty::Primitive(PrimitiveType::Bool)
     }
 
     fn infer_catch_expr(
@@ -5279,7 +5224,6 @@ impl<'db> TypeInferenceBuilder<'db> {
                         Ty::Class(
                             crate::lower_type_expr::qualify_def(db, def, &st_name),
                             Vec::new(),
-                            TyAttr::default(),
                         )
                     })
                     .unwrap_or(Ty::unknown());
@@ -5352,7 +5296,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 }
 
                 let catch_binding_ty = |fallback: Ty| -> Ty {
-                    if matches!(narrowed_binding_ty, Ty::Never { .. }) {
+                    if matches!(narrowed_binding_ty, Ty::Never) {
                         fallback
                     } else {
                         narrowed_binding_ty.clone()
@@ -5492,16 +5436,14 @@ impl<'db> TypeInferenceBuilder<'db> {
             };
             if matches!(
                 ty,
-                Ty::Class(..) | Ty::Interface(..) | Ty::Unknown { .. } | Ty::Error { .. }
+                Ty::Class(..) | Ty::Interface(..) | Ty::Unknown | Ty::Error
             ) {
                 return ty;
             }
             if let Some((pat_id, fallback)) = anchor {
                 self.report_at_pat_or_expr(
                     TirTypeError::TypeMismatch {
-                        expected: Ty::Type {
-                            attr: TyAttr::default(),
-                        },
+                        expected: Ty::Type,
                         got: ty,
                     },
                     pat_id,
@@ -5534,7 +5476,7 @@ impl<'db> TypeInferenceBuilder<'db> {
     }
 
     fn class_pattern_missing_generic_args(&self, class_ty: &Ty, generic_args: &[TypeExpr]) -> bool {
-        let Ty::Class(qn, args, _) = class_ty else {
+        let Ty::Class(qn, args) = class_ty else {
             return false;
         };
         if !generic_args.is_empty() {
@@ -5557,14 +5499,14 @@ impl<'db> TypeInferenceBuilder<'db> {
 
     fn ty_contains_recovery_unknown(ty: &Ty) -> bool {
         match ty {
-            Ty::Unknown { .. } | Ty::BuiltinUnknown { .. } | Ty::Error { .. } => true,
-            Ty::Class(_, args, _) | Ty::Interface(_, args, _) | Ty::Union(args, _) => {
+            Ty::Unknown | Ty::BuiltinUnknown | Ty::Error => true,
+            Ty::Class(_, args) | Ty::Interface(_, args) | Ty::Union(args) => {
                 args.iter().any(Self::ty_contains_recovery_unknown)
             }
-            Ty::List(elem, _) | Ty::EvolvingList(elem, _) | Ty::Optional(elem, _) => {
+            Ty::List(elem) | Ty::EvolvingList(elem) | Ty::Optional(elem) => {
                 Self::ty_contains_recovery_unknown(elem)
             }
-            Ty::Map(key, value, _) | Ty::EvolvingMap(key, value, _) => {
+            Ty::Map(key, value) | Ty::EvolvingMap(key, value) => {
                 Self::ty_contains_recovery_unknown(key) || Self::ty_contains_recovery_unknown(value)
             }
             Ty::Function {
@@ -5579,7 +5521,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                     || Self::ty_contains_recovery_unknown(ret)
                     || Self::ty_contains_recovery_unknown(throws)
             }
-            Ty::Future(value, error, _) => {
+            Ty::Future(value, error) => {
                 Self::ty_contains_recovery_unknown(value)
                     || Self::ty_contains_recovery_unknown(error)
             }
@@ -5589,26 +5531,26 @@ impl<'db> TypeInferenceBuilder<'db> {
             | Ty::Primitive(..)
             | Ty::Literal(..)
             | Ty::TypeVar(..)
-            | Ty::Never { .. }
-            | Ty::Void { .. }
-            | Ty::RustType { .. }
-            | Ty::Type { .. } => false,
+            | Ty::Never
+            | Ty::Void
+            | Ty::RustType
+            | Ty::Type => false,
         }
     }
 
     fn ty_contains_unfilled_generic_class(ty: &Ty) -> bool {
         match ty {
-            Ty::Class(qn, type_args, _) | Ty::Interface(qn, type_args, _) => {
+            Ty::Class(qn, type_args) | Ty::Interface(qn, type_args) => {
                 type_args.is_empty() && !qn.generic_params.is_empty()
                     || type_args
                         .iter()
                         .any(Self::ty_contains_unfilled_generic_class)
             }
-            Ty::Union(args, _) => args.iter().any(Self::ty_contains_unfilled_generic_class),
-            Ty::List(elem, _) | Ty::EvolvingList(elem, _) | Ty::Optional(elem, _) => {
+            Ty::Union(args) => args.iter().any(Self::ty_contains_unfilled_generic_class),
+            Ty::List(elem) | Ty::EvolvingList(elem) | Ty::Optional(elem) => {
                 Self::ty_contains_unfilled_generic_class(elem)
             }
-            Ty::Map(key, value, _) | Ty::EvolvingMap(key, value, _) => {
+            Ty::Map(key, value) | Ty::EvolvingMap(key, value) => {
                 Self::ty_contains_unfilled_generic_class(key)
                     || Self::ty_contains_unfilled_generic_class(value)
             }
@@ -5624,7 +5566,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                     || Self::ty_contains_unfilled_generic_class(ret)
                     || Self::ty_contains_unfilled_generic_class(throws)
             }
-            Ty::Future(value, error, _) => {
+            Ty::Future(value, error) => {
                 Self::ty_contains_unfilled_generic_class(value)
                     || Self::ty_contains_unfilled_generic_class(error)
             }
@@ -5634,21 +5576,21 @@ impl<'db> TypeInferenceBuilder<'db> {
             | Ty::Primitive(..)
             | Ty::Literal(..)
             | Ty::TypeVar(..)
-            | Ty::Unknown { .. }
-            | Ty::BuiltinUnknown { .. }
-            | Ty::Never { .. }
-            | Ty::Void { .. }
-            | Ty::Error { .. }
-            | Ty::RustType { .. }
-            | Ty::Type { .. } => false,
+            | Ty::Unknown
+            | Ty::BuiltinUnknown
+            | Ty::Never
+            | Ty::Void
+            | Ty::Error
+            | Ty::RustType
+            | Ty::Type => false,
         }
     }
 
     fn intersect_pattern_flow_types(&self, incoming: &Ty, constraint: &Ty) -> Ty {
-        if matches!(incoming, Ty::Unknown { .. } | Ty::Error { .. }) {
+        if matches!(incoming, Ty::Unknown | Ty::Error) {
             return constraint.clone();
         }
-        if matches!(constraint, Ty::Unknown { .. } | Ty::Error { .. }) {
+        if matches!(constraint, Ty::Unknown | Ty::Error) {
             return incoming.clone();
         }
         self.intersect_types(incoming, constraint)
@@ -5712,12 +5654,12 @@ impl<'db> TypeInferenceBuilder<'db> {
                         && let Some(ty) = self
                             .pattern_expected_ty(rest_pat, body)
                             .map(PatternExpectedTy::into_ty)
-                        && let Ty::List(elem, _) | Ty::EvolvingList(elem, _) = ty
+                        && let Ty::List(elem) | Ty::EvolvingList(elem) = ty
                     {
                         elem_tys.push(*elem);
                     }
                     let elem_ty = (!elem_tys.is_empty()).then(|| Self::join_all(&elem_tys))?;
-                    Ty::List(Box::new(elem_ty), TyAttr::default())
+                    Ty::List(Box::new(elem_ty))
                 }
             }
             // Or has its own Full/Partial tracking and returns directly —
@@ -5849,8 +5791,8 @@ impl<'db> TypeInferenceBuilder<'db> {
 
     fn ty_panic_subset(&self, ty: &Ty) -> Option<Ty> {
         match ty {
-            Ty::Class(qtn, _, _) => qtn.is_panic_type().then(|| ty.clone()),
-            Ty::TypeAlias(qtn, _) => {
+            Ty::Class(qtn, _) => qtn.is_panic_type().then(|| ty.clone()),
+            Ty::TypeAlias(qtn) => {
                 if let Some(expanded) = self.aliases.get(qtn) {
                     self.ty_panic_subset(expanded)
                 } else if qtn.is_panic_type() {
@@ -5859,7 +5801,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                     None
                 }
             }
-            Ty::Union(parts, _) => {
+            Ty::Union(parts) => {
                 let panic_members: Vec<_> = parts
                     .iter()
                     .filter_map(|part| self.ty_panic_subset(part))
@@ -5903,29 +5845,29 @@ impl<'db> TypeInferenceBuilder<'db> {
             return true;
         }
         match pattern_ty {
-            Ty::Primitive(p, _) => match fact {
-                Ty::Primitive(fp, _) => p == fp,
-                Ty::Literal(lit, _, _) => *p == PrimitiveType::from_literal(lit),
+            Ty::Primitive(p) => match fact {
+                Ty::Primitive(fp) => p == fp,
+                Ty::Literal(lit, _) => *p == PrimitiveType::from_literal(lit),
                 _ => false,
             },
-            Ty::Literal(_, _, _) => false,
-            Ty::Optional(inner, _) => {
-                matches!(fact, Ty::Primitive(PrimitiveType::Null, _))
+            Ty::Literal(_, _) => false,
+            Ty::Optional(inner) => {
+                matches!(fact, Ty::Primitive(PrimitiveType::Null))
                     || Self::ty_covers_fact(inner, fact)
             }
-            Ty::Union(parts, _) => parts.iter().any(|part| Self::ty_covers_fact(part, fact)),
-            Ty::Class(qn, type_args, _) => matches!(
+            Ty::Union(parts) => parts.iter().any(|part| Self::ty_covers_fact(part, fact)),
+            Ty::Class(qn, type_args) => matches!(
                 fact,
-                Ty::Class(fqn, fact_args, _) if fqn == qn && fact_args == type_args
+                Ty::Class(fqn, fact_args) if fqn == qn && fact_args == type_args
             ),
-            Ty::Enum(qn, _) => match fact {
-                Ty::Enum(fqn, _) => fqn == qn,
-                Ty::EnumVariant(fqn, _, _) => fqn == qn,
+            Ty::Enum(qn) => match fact {
+                Ty::Enum(fqn) => fqn == qn,
+                Ty::EnumVariant(fqn, _) => fqn == qn,
                 _ => false,
             },
-            Ty::TypeAlias(qn, _) => matches!(fact, Ty::TypeAlias(fqn, _) if fqn == qn),
-            Ty::EnumVariant(qn, variant, _) => {
-                matches!(fact, Ty::EnumVariant(fqn, fv, _) if fqn == qn && fv == variant)
+            Ty::TypeAlias(qn) => matches!(fact, Ty::TypeAlias(fqn) if fqn == qn),
+            Ty::EnumVariant(qn, variant) => {
+                matches!(fact, Ty::EnumVariant(fqn, fv) if fqn == qn && fv == variant)
             }
             _ => false,
         }
@@ -5933,24 +5875,21 @@ impl<'db> TypeInferenceBuilder<'db> {
 
     fn ty_may_match_fact(pattern_ty: &Ty, fact: &Ty) -> bool {
         match pattern_ty {
-            Ty::Literal(lit, _, _) => {
-                let widened = Ty::Primitive(PrimitiveType::from_literal(lit), TyAttr::default());
+            Ty::Literal(lit, _) => {
+                let widened = Ty::Primitive(PrimitiveType::from_literal(lit));
                 &widened == fact
-                    || matches!(fact, Ty::Primitive(p, _) if *p == PrimitiveType::from_literal(lit))
+                    || matches!(fact, Ty::Primitive(p) if *p == PrimitiveType::from_literal(lit))
             }
-            Ty::EnumVariant(qn, _, _) => {
-                matches!(fact, Ty::Enum(fqn, _) if fqn == qn)
+            Ty::EnumVariant(qn, _) => {
+                matches!(fact, Ty::Enum(fqn) if fqn == qn)
             }
-            Ty::BuiltinUnknown { .. } | Ty::Unknown { .. } | Ty::Error { .. } => true,
+            Ty::BuiltinUnknown | Ty::Unknown | Ty::Error => true,
             _ => false,
         }
     }
 
     fn ty_match_strength(narrowed_ty: &Ty, throw_fact: &Ty) -> PatternMatchStrength {
-        let is_unknown = matches!(
-            throw_fact,
-            Ty::Unknown { .. } | Ty::BuiltinUnknown { .. } | Ty::Error { .. }
-        );
+        let is_unknown = matches!(throw_fact, Ty::Unknown | Ty::BuiltinUnknown | Ty::Error);
         if Self::ty_covers_fact(narrowed_ty, throw_fact) {
             PatternMatchStrength::DefiniteMatch
         } else if is_unknown || Self::ty_may_match_fact(narrowed_ty, throw_fact) {
@@ -6027,7 +5966,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         // is a separate function that might execute.  Conservatively union all of
         // their throws — if every member is a function we can compute a precise
         // answer; otherwise fall through to return `None` (unknown).
-        if let Ty::Union(ref members, _) = typed_callee {
+        if let Ty::Union(ref members) = typed_callee {
             let mut all_throws: BTreeSet<Ty> = BTreeSet::new();
             for member in members {
                 if let Ty::Function { throws, .. } = member {
@@ -6098,8 +6037,7 @@ impl<'db> TypeInferenceBuilder<'db> {
 
         // Fallback: 2-segment path with locals lookup (existing logic)
         let receiver = &segments[0];
-        if let Some(Ty::Class(qn, _, _)) =
-            self.locals.get(receiver).map(|binding| &binding.current_ty)
+        if let Some(Ty::Class(qn, _)) = self.locals.get(receiver).map(|binding| &binding.current_ty)
         {
             let key = dotted_method_key(qn.namespace(), qn.name(), method);
             Some(Name::new(key))
@@ -6157,7 +6095,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             }
             // Multi-segment: thread the interface through the segment-
             // resolver so each suffix segment dispatches against `I`.
-            let iface_ty = Ty::Interface(iface_qtn, Vec::new(), TyAttr::default());
+            let iface_ty = Ty::Interface(iface_qtn, Vec::new());
             self.path_root_types.insert(expr_id, iface_ty.clone());
             let mut current_ty = iface_ty;
             for (idx, seg) in segments[1..].iter().enumerate() {
@@ -6194,7 +6132,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             // Don't report "unresolved name" for dependency package names —
             // they'll be resolved by the parent FieldAccess expression.
             let is_dep_package = self.res_ctx.dep_interfaces.iter().any(|(n, _)| n == name);
-            if matches!(ty, Ty::Unknown { .. })
+            if matches!(ty, Ty::Unknown)
                 && !self.locals.contains_key(name)
                 && self
                     .package_items
@@ -6223,7 +6161,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 // Root is not a known local. Try full package/namespace resolution:
                 // 1. Package path (e.g. baml.llm.ClientType.Primitive, baml.env.get)
                 let pkg_ty = self.infer_multi_segment_path(segments, expr_id);
-                if !matches!(pkg_ty, Ty::Unknown { .. }) {
+                if !matches!(pkg_ty, Ty::Unknown) {
                     return pkg_ty;
                 }
                 // 2. Primitive static access (e.g. image.from_url)
@@ -6244,7 +6182,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 //    Use infer_local_rooted_path which chains resolve_member for segments[1..].
                 //    root_is_value = false → last segment is an unbound method reference.
                 let root_ty = self.infer_single_name(&segments[0]);
-                if !matches!(root_ty, Ty::Unknown { .. }) {
+                if !matches!(root_ty, Ty::Unknown) {
                     return self.infer_local_rooted_path(segments, expr_id, false);
                 }
                 // 4. Truly unresolved — report error if not a known namespace/package name.
@@ -6281,7 +6219,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         root_is_value: bool,
     ) -> Ty {
         let root_ty = self.infer_single_name(&segments[0]);
-        if matches!(root_ty, Ty::Unknown { .. }) {
+        if matches!(root_ty, Ty::Unknown) {
             return Ty::unknown();
         }
 
@@ -6309,10 +6247,10 @@ impl<'db> TypeInferenceBuilder<'db> {
             // `Primitive(Null)` is a concrete non-optional type with a companion
             // class. Calling methods on it directly (e.g. `n.to_json()`) is valid
             // — do NOT require `?.` chaining.
-            let is_pure_null = matches!(current_ty, Ty::Primitive(PrimitiveType::Null, _));
+            let is_pure_null = matches!(current_ty, Ty::Primitive(PrimitiveType::Null));
             let is_nullable = inner != current_ty
                 && !is_pure_null
-                && !matches!(current_ty, Ty::Unknown { .. } | Ty::Error { .. });
+                && !matches!(current_ty, Ty::Unknown | Ty::Error);
             // Use `current_ty` for dispatch when the base is Primitive(Null) (or
             // any non-nullable type): `inner` would be `Never` for Null, which has
             // no members.
@@ -6384,7 +6322,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 member_resolutions.push(res);
             }
 
-            if matches!(current_ty, Ty::Unknown { .. }) {
+            if matches!(current_ty, Ty::Unknown) {
                 break;
             }
         }
@@ -6552,7 +6490,6 @@ impl<'db> TypeInferenceBuilder<'db> {
                     .unwrap_or(Ty::unknown()),
             ),
             throws: Box::new(crate::callable::callable_throws(db, func_loc).clone()),
-            attr: TyAttr::default(),
         }
     }
 
@@ -6592,15 +6529,15 @@ impl<'db> TypeInferenceBuilder<'db> {
             match def {
                 Definition::Class(_) => {
                     let class_qtn = crate::lower_type_expr::qualify_def(db, def, name);
-                    return Some(Ty::Class(class_qtn, vec![], TyAttr::default()));
+                    return Some(Ty::Class(class_qtn, vec![]));
                 }
                 Definition::Enum(_) => {
                     let enum_qtn = crate::lower_type_expr::qualify_def(db, def, name);
-                    return Some(Ty::Enum(enum_qtn, TyAttr::default()));
+                    return Some(Ty::Enum(enum_qtn));
                 }
                 Definition::Interface(_) => {
                     let iface_qtn = crate::lower_type_expr::qualify_def(db, def, name);
-                    return Some(Ty::Interface(iface_qtn, vec![], TyAttr::default()));
+                    return Some(Ty::Interface(iface_qtn, vec![]));
                 }
                 _ => {}
             }
@@ -6628,11 +6565,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                         variant_name: variant_name.clone(),
                     },
                 );
-                return Some(Ty::EnumVariant(
-                    enum_qtn,
-                    variant_name.clone(),
-                    TyAttr::default(),
-                ));
+                return Some(Ty::EnumVariant(enum_qtn, variant_name.clone()));
             }
         }
 
@@ -6680,8 +6613,8 @@ impl<'db> TypeInferenceBuilder<'db> {
         if let Some(binding) = self.locals.get(name) {
             let ty = &binding.current_ty;
             return match ty {
-                Ty::EvolvingList(inner, attr) => Ty::List(inner.clone(), attr.clone()),
-                Ty::EvolvingMap(k, v, attr) => Ty::Map(k.clone(), v.clone(), attr.clone()),
+                Ty::EvolvingList(inner) => Ty::List(inner.clone()),
+                Ty::EvolvingMap(k, v) => Ty::Map(k.clone(), v.clone()),
                 other => other.clone(),
             };
         }
@@ -6695,24 +6628,16 @@ impl<'db> TypeInferenceBuilder<'db> {
         } else if let Some(def) = self.package_items.lookup_type(&self.ns_context, name) {
             let db = self.context.db();
             match def {
-                Definition::Class(_) => Ty::Class(
-                    crate::lower_type_expr::qualify_def(db, def, name),
-                    vec![],
-                    TyAttr::default(),
-                ),
-                Definition::Enum(_) => Ty::Enum(
-                    crate::lower_type_expr::qualify_def(db, def, name),
-                    TyAttr::default(),
-                ),
-                Definition::Interface(_) => Ty::Interface(
-                    crate::lower_type_expr::qualify_def(db, def, name),
-                    vec![],
-                    TyAttr::default(),
-                ),
-                Definition::TypeAlias(_) => Ty::TypeAlias(
-                    crate::lower_type_expr::qualify_def(db, def, name),
-                    TyAttr::default(),
-                ),
+                Definition::Class(_) => {
+                    Ty::Class(crate::lower_type_expr::qualify_def(db, def, name), vec![])
+                }
+                Definition::Enum(_) => Ty::Enum(crate::lower_type_expr::qualify_def(db, def, name)),
+                Definition::Interface(_) => {
+                    Ty::Interface(crate::lower_type_expr::qualify_def(db, def, name), vec![])
+                }
+                Definition::TypeAlias(_) => {
+                    Ty::TypeAlias(crate::lower_type_expr::qualify_def(db, def, name))
+                }
                 _ => Ty::unknown(),
             }
         } else {
@@ -6767,7 +6692,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             // the union-as-a-whole (e.g. @stream.done), but the result describes field
             // types which may have different streaming semantics. TyAttr::default() is
             // probably correct but needs confirmation.
-            Ty::Union(field_tys, TyAttr::default())
+            Ty::Union(field_tys)
         } else {
             // Report an error for each member that's missing the field.
             for (member_ty, result) in &resolved {
@@ -6796,14 +6721,14 @@ impl<'db> TypeInferenceBuilder<'db> {
     /// Resolve a member access on a known base type.
     ///
     /// For class types, checks data fields. For enum types, validates variants.
-    /// For builtin container types (`Ty::List`, `Ty::Map`) and `Ty::Primitive(String, TyAttr::default())`,
+    /// For builtin container types (`Ty::List`, `Ty::Map`) and `Ty::Primitive(String)`,
     /// bridges to the `.baml`-declared builtin classes via `resolve_builtin_method`.
     /// Emits `UnresolvedMember` diagnostics when the base type is known but
     /// the member doesn't exist.
     pub fn resolve_member(&mut self, base_ty: &Ty, member: &Name, at: ExprId, bound: bool) -> Ty {
         let companion = builtin_companion_class(base_ty);
         match base_ty {
-            Ty::Class(class_name, type_args, _) => {
+            Ty::Class(class_name, type_args) => {
                 // Check class fields
                 let class_fields = self.lookup_class_fields(class_name, type_args);
                 if let Some(field_ty) = class_fields.get(member) {
@@ -6917,7 +6842,6 @@ impl<'db> TypeInferenceBuilder<'db> {
                             params,
                             ret,
                             throws,
-                            attr,
                         } = ty
                         {
                             let stripped_params =
@@ -6928,7 +6852,6 @@ impl<'db> TypeInferenceBuilder<'db> {
                                 params: stripped_params,
                                 ret,
                                 throws,
-                                attr,
                             };
                         }
                     } else {
@@ -7006,7 +6929,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 );
                 Ty::unknown()
             }
-            Ty::Interface(iface_name, type_args, _) => {
+            Ty::Interface(iface_name, type_args) => {
                 if let Some(ty) =
                     self.resolve_interface_member(iface_name, type_args, member, at, bound)
                 {
@@ -7028,7 +6951,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 );
                 Ty::unknown()
             }
-            Ty::Enum(enum_name, _) => {
+            Ty::Enum(enum_name) => {
                 // `to_json` on an enum: returns the variant name as a JSON string.
                 // BEP-038 specifies the enum JSON representation as its variant name string.
                 // Throws `never` — enum serialization always succeeds.
@@ -7049,7 +6972,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                             },
                         );
                     }
-                    return Ty::EnumVariant(enum_name.clone(), member.clone(), TyAttr::default());
+                    return Ty::EnumVariant(enum_name.clone(), member.clone());
                 }
 
                 // Known enum but variant not found — error
@@ -7070,8 +6993,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             }
             // int literal / int → Int companion class, with a registry fallback
             // (`try_registry_member`) that the other companion bridges lack.
-            Ty::Primitive(PrimitiveType::Int, _)
-            | Ty::Literal(baml_base::Literal::Int(_), _, _) => {
+            Ty::Primitive(PrimitiveType::Int) | Ty::Literal(baml_base::Literal::Int(_), _) => {
                 let r = self
                     .resolve_builtin_member(&["Int"], &[], member, at)
                     .or_else(|| {
@@ -7089,7 +7011,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             // BEP-044 generic bound: when `T extends I` is in scope and the
             // member isn't a universal builtin (`to_json` / `from_json`),
             // delegate to `I`'s contract.
-            Ty::TypeVar(name, _)
+            Ty::TypeVar(name)
                 if member.as_str() != "to_json"
                     && member.as_str() != "from_json"
                     && self.generic_param_bounds.contains_key(name) =>
@@ -7101,10 +7023,10 @@ impl<'db> TypeInferenceBuilder<'db> {
             // No MemberResolution stored — concrete dispatch is deferred to
             // Phase 5b.4 (native Array/Map impls) and never runs with an
             // unresolved TypeVar at runtime.
-            Ty::TypeVar(name, _) if typevar_json_method_ty(name, member).is_some() => {
+            Ty::TypeVar(name) if typevar_json_method_ty(name, member).is_some() => {
                 typevar_json_method_ty(name, member).unwrap()
             }
-            Ty::Union(members, _) => {
+            Ty::Union(members) => {
                 // For union types, try to resolve the field on each member.
                 // If ALL members have the field, return Union(resolved_types).
                 // If any member is missing the field, report per-member errors.
@@ -7119,7 +7041,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                     );
                 })
             }
-            Ty::TypeAlias(_, _) => {
+            Ty::TypeAlias(_) => {
                 // Expand the alias chain to its concrete type, then recurse on
                 // the result.  `expand_alias_chains` already caps iterations at
                 // 64, so cyclic aliases (`type One = Two; type Two = One`)
@@ -7127,13 +7049,13 @@ impl<'db> TypeInferenceBuilder<'db> {
                 // chain bottoms out on another `TypeAlias` (cycle never
                 // resolves), fall through to `Unknown`.
                 let expanded = self.expand_alias_chains(base_ty.clone());
-                if matches!(expanded, Ty::TypeAlias(_, _)) {
+                if matches!(expanded, Ty::TypeAlias(_)) {
                     Ty::unknown()
                 } else {
                     self.resolve_member(&expanded, member, at, bound)
                 }
             }
-            Ty::Unknown { .. } => {
+            Ty::Unknown => {
                 // Base type unknown — can't resolve member, but don't emit error
                 // (the base type error was already reported upstream)
                 Ty::unknown()
@@ -7213,7 +7135,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         bound: bool,
     ) -> Ty {
         match base_ty {
-            Ty::Class(class_name, _, _) => {
+            Ty::Class(class_name, _) => {
                 // Use the no-side-effect helper to check membership WITHOUT
                 // calling lookup_class_fields (which emits field-type diagnostics).
                 if self.class_has_member(class_name, member) {
@@ -7295,7 +7217,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 );
                 Ty::unknown()
             }
-            Ty::Interface(iface_name, type_args, _) => {
+            Ty::Interface(iface_name, type_args) => {
                 if let Some(ty) =
                     self.resolve_interface_member(iface_name, type_args, member, path_id, bound)
                 {
@@ -7317,7 +7239,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 );
                 Ty::unknown()
             }
-            Ty::Enum(enum_name, _) => {
+            Ty::Enum(enum_name) => {
                 // `to_json` on an enum (path-segment form): same as the
                 // enum arm in `resolve_member` — variant name as JSON string.
                 if member.as_str() == "to_json" {
@@ -7345,7 +7267,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 );
                 Ty::unknown()
             }
-            Ty::Union(members, _) => {
+            Ty::Union(members) => {
                 // For union types, try to resolve the member on each constituent.
                 // Use report_at_segment for missing members so the span points at the
                 // segment token, not the full path.
@@ -7362,7 +7284,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                     );
                 })
             }
-            Ty::Unknown { .. } => {
+            Ty::Unknown => {
                 // Base type unknown — don't emit another error.
                 Ty::unknown()
             }
@@ -7381,7 +7303,7 @@ impl<'db> TypeInferenceBuilder<'db> {
     fn try_resolve_member_on_ty(&self, ty: &Ty, member: &Name) -> Option<Ty> {
         let companion = builtin_companion_class(ty);
         match ty {
-            Ty::Class(class_name, type_args, _) => {
+            Ty::Class(class_name, type_args) => {
                 let fields = self.lookup_class_fields(class_name, type_args);
                 if let Some(field_ty) = fields.get(member) {
                     return Some(field_ty.clone());
@@ -7401,14 +7323,14 @@ impl<'db> TypeInferenceBuilder<'db> {
             }
             // Universal `to_json` / `from_json` on generic type variables.
             // Mirrors the arm in `resolve_member` — no side effects needed here.
-            Ty::TypeVar(name, _) if typevar_json_method_ty(name, member).is_some() => {
+            Ty::TypeVar(name) if typevar_json_method_ty(name, member).is_some() => {
                 typevar_json_method_ty(name, member)
             }
-            Ty::Optional(inner, _) => {
+            Ty::Optional(inner) => {
                 // Drill through Optional to resolve the member on the inner type
                 self.try_resolve_member_on_ty(inner, member)
             }
-            Ty::TypeAlias(qtn, _) => {
+            Ty::TypeAlias(qtn) => {
                 if let Some(expanded) = self.aliases.get(qtn) {
                     let expanded = expanded.clone();
                     self.try_resolve_member_on_ty(&expanded, member)
@@ -7416,7 +7338,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                     None
                 }
             }
-            Ty::Unknown { .. } => {
+            Ty::Unknown => {
                 // Unknown propagates — treat as if the field exists with Unknown type
                 Some(Ty::unknown())
             }
@@ -7425,7 +7347,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             // to the arm that actually lacks it (`Swimmer`) instead of falsely
             // blaming `Animal` too. The only caller is union-member resolution,
             // which needs Some/None; a precise member type isn't required here.
-            Ty::Interface(iface_qtn, _, _) => (self
+            Ty::Interface(iface_qtn, _) => (self
                 .interface_closure_declares_method(iface_qtn, member)
                 || self.interface_closure_declares_field(iface_qtn, member))
             .then(Ty::unknown),
@@ -7802,18 +7724,18 @@ impl<'db> TypeInferenceBuilder<'db> {
         for generic_param in &iface_data.generic_params {
             bindings
                 .entry(generic_param.clone())
-                .or_insert_with(|| Ty::TypeVar(generic_param.clone(), TyAttr::default()));
+                .or_insert_with(|| Ty::TypeVar(generic_param.clone()));
         }
         for generic_param in method_generic_params {
             bindings
                 .entry(generic_param.clone())
-                .or_insert_with(|| Ty::TypeVar(generic_param.clone(), TyAttr::default()));
+                .or_insert_with(|| Ty::TypeVar(generic_param.clone()));
         }
         let mut all_generic_params = iface_data.generic_params.clone();
         if let Some(receiver_generic) = &receiver_generic {
             bindings.insert(
                 receiver_generic.clone(),
-                Ty::TypeVar(receiver_generic.clone(), TyAttr::default()),
+                Ty::TypeVar(receiver_generic.clone()),
             );
             all_generic_params.push(receiver_generic.clone());
         }
@@ -7824,16 +7746,15 @@ impl<'db> TypeInferenceBuilder<'db> {
                 iface_data
                     .generic_params
                     .iter()
-                    .map(|gp| Ty::TypeVar(gp.clone(), TyAttr::default()))
+                    .map(|gp| Ty::TypeVar(gp.clone()))
                     .collect()
             } else {
                 iface_type_args.to_vec()
             },
-            TyAttr::default(),
         );
         let receiver_ty = receiver_generic
             .as_ref()
-            .map(|name| Ty::TypeVar(name.clone(), TyAttr::default()))
+            .map(|name| Ty::TypeVar(name.clone()))
             .unwrap_or_else(|| iface_ty.clone());
         let self_replacement = receiver_generic
             .as_ref()
@@ -7885,7 +7806,6 @@ impl<'db> TypeInferenceBuilder<'db> {
             params,
             ret: Box::new(ret_ty),
             throws: Box::new(throws_ty),
-            attr: TyAttr::default(),
         };
         if bound {
             if let Ty::Function {
@@ -7894,7 +7814,6 @@ impl<'db> TypeInferenceBuilder<'db> {
                 params,
                 ret,
                 throws,
-                attr,
             } = fn_ty
             {
                 let stripped = crate::generics::skip_self_param(&params).to_vec();
@@ -7904,7 +7823,6 @@ impl<'db> TypeInferenceBuilder<'db> {
                     params: stripped,
                     ret,
                     throws,
-                    attr,
                 };
             }
         }
@@ -8413,7 +8331,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 &class_data.generic_params,
                 &mut diags,
             ) {
-                Ty::Interface(_, args, _) => args,
+                Ty::Interface(_, args) => args,
                 _ => Vec::new(),
             };
             for (iface_loc, iface_args) in
@@ -8461,7 +8379,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             baml_compiler2_hir::file_package::file_package(db, class_loc.file(db)).namespace_path;
         for impl_target in &class_data.implements {
             let mut diags = Vec::new();
-            if let Ty::Interface(qtn, args, _) = crate::lower_type_expr::lower_type_expr_in_ns(
+            if let Ty::Interface(qtn, args) = crate::lower_type_expr::lower_type_expr_in_ns(
                 db,
                 &impl_target.target.expr,
                 pkg_items,
@@ -8537,7 +8455,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 &class_data.generic_params,
                 &mut diags,
             );
-            let Ty::Interface(_root_qtn, root_args, _) = lowered else {
+            let Ty::Interface(_root_qtn, root_args) = lowered else {
                 continue;
             };
 
@@ -8673,7 +8591,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 &class_data.generic_params,
                 &mut diags,
             );
-            if let Ty::Interface(qtn, args, _) = lowered
+            if let Ty::Interface(qtn, args) = lowered
                 && &qtn == target_iface_qtn
             {
                 let subst: Vec<Ty> = args
@@ -8742,7 +8660,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 continue;
             };
             let iface_ty = crate::generics::substitute_ty(&rule.interface_ty, &b);
-            let Ty::Interface(iface_qtn, iface_args, _) = iface_ty else {
+            let Ty::Interface(iface_qtn, iface_args) = iface_ty else {
                 continue;
             };
             if !self.interface_closure_declares_method(&iface_qtn, member) {
@@ -8750,7 +8668,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             }
             // Confirm via the full rule check so generic bounds are honored
             // (e.g. `implements<T extends Named> Printable for Box<T>`).
-            let requested = Ty::Interface(iface_qtn.clone(), iface_args.clone(), TyAttr::default());
+            let requested = Ty::Interface(iface_qtn.clone(), iface_args.clone());
             if !registry.type_implements_interface_via_rule(
                 base_ty,
                 &requested,
@@ -8927,14 +8845,14 @@ impl<'db> TypeInferenceBuilder<'db> {
                 for gp in &class_data.generic_params {
                     bindings
                         .entry(gp.clone())
-                        .or_insert_with(|| Ty::TypeVar(gp.clone(), TyAttr::default()));
+                        .or_insert_with(|| Ty::TypeVar(gp.clone()));
                 }
                 // Seed method-level generics as TypeVar entries so they survive
                 // lowering and can be resolved by call-site inference.
                 for gp in &method_data.generic_params {
                     bindings
                         .entry(gp.clone())
-                        .or_insert_with(|| Ty::TypeVar(gp.clone(), TyAttr::default()));
+                        .or_insert_with(|| Ty::TypeVar(gp.clone()));
                 }
 
                 let func_loc = baml_compiler2_hir::loc::FunctionLoc::new(db, file, method_id);
@@ -8947,12 +8865,12 @@ impl<'db> TypeInferenceBuilder<'db> {
                     class_data
                         .generic_params
                         .iter()
-                        .map(|gp| Ty::TypeVar(gp.clone(), TyAttr::default()))
+                        .map(|gp| Ty::TypeVar(gp.clone()))
                         .collect()
                 } else {
                     class_type_args.to_vec()
                 };
-                let class_ty = Ty::Class(class_name.clone(), class_ty_args, TyAttr::default());
+                let class_ty = Ty::Class(class_name.clone(), class_ty_args);
 
                 // All generic params for fallback lowering (class + method).
                 let mut all_generic_params = class_data.generic_params.clone();
@@ -9059,7 +8977,6 @@ impl<'db> TypeInferenceBuilder<'db> {
                     } else {
                         crate::generics::substitute_ty(&callable_throws, &bindings)
                     }),
-                    attr: TyAttr::default(),
                 };
                 // Note: diags from method signatures are reported at definition site.
                 return Some((ty, class_loc, func_loc));
@@ -9176,7 +9093,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 for gp in &method_data.generic_params {
                     bindings
                         .entry(gp.clone())
-                        .or_insert_with(|| Ty::TypeVar(gp.clone(), TyAttr::default()));
+                        .or_insert_with(|| Ty::TypeVar(gp.clone()));
                 }
                 let func_loc = baml_compiler2_hir::loc::FunctionLoc::new(db, file, method_id);
                 let sig = baml_compiler2_ppir::elaborated_function_signature(db, func_loc);
@@ -9195,15 +9112,12 @@ impl<'db> TypeInferenceBuilder<'db> {
                             class_data.generic_params.clone(),
                         ),
                         vec![],
-                        TyAttr::default(),
                     ),
                     // Container special cases: Array<T> → List(T), Map<K, V> → Map(K, V).
-                    ("Array", [elem]) => Ty::List(Box::new(elem.clone()), TyAttr::default()),
-                    ("Map", [key, value]) => Ty::Map(
-                        Box::new(key.clone()),
-                        Box::new(value.clone()),
-                        TyAttr::default(),
-                    ),
+                    ("Array", [elem]) => Ty::List(Box::new(elem.clone())),
+                    ("Map", [key, value]) => {
+                        Ty::Map(Box::new(key.clone()), Box::new(value.clone()))
+                    }
                     _ => Ty::Class(
                         crate::ty::QualifiedTypeName::new(
                             pkg_info.package,
@@ -9211,7 +9125,6 @@ impl<'db> TypeInferenceBuilder<'db> {
                             class_data.name.clone(),
                         ),
                         type_args.to_vec(),
-                        TyAttr::default(),
                     ),
                 };
 
@@ -9275,7 +9188,6 @@ impl<'db> TypeInferenceBuilder<'db> {
                         params,
                         ret: Box::new(ret),
                         throws: Box::new(throws),
-                        attr: TyAttr::default(),
                     },
                     class_loc,
                     func_loc,
@@ -9381,16 +9293,15 @@ impl<'db> TypeInferenceBuilder<'db> {
             return;
         };
         let new_ty = match (&binding.current_ty, expected) {
-            (Ty::EvolvingList(inner, attr), Ty::List(exp, _) | Ty::EvolvingList(exp, _))
-                if matches!(**inner, Ty::Never { .. }) =>
+            (Ty::EvolvingList(inner), Ty::List(exp) | Ty::EvolvingList(exp))
+                if matches!(**inner, Ty::Never) =>
             {
-                Ty::EvolvingList(exp.clone(), attr.clone())
+                Ty::EvolvingList(exp.clone())
             }
-            (
-                Ty::EvolvingMap(k, v, attr),
-                Ty::Map(exp_k, exp_v, _) | Ty::EvolvingMap(exp_k, exp_v, _),
-            ) if matches!(**k, Ty::Never { .. }) && matches!(**v, Ty::Never { .. }) => {
-                Ty::EvolvingMap(exp_k.clone(), exp_v.clone(), attr.clone())
+            (Ty::EvolvingMap(k, v), Ty::Map(exp_k, exp_v) | Ty::EvolvingMap(exp_k, exp_v))
+                if matches!(**k, Ty::Never) && matches!(**v, Ty::Never) =>
+            {
+                Ty::EvolvingMap(exp_k.clone(), exp_v.clone())
             }
             _ => return,
         };
@@ -9446,20 +9357,20 @@ impl<'db> TypeInferenceBuilder<'db> {
 
         match method_name.as_str() {
             "push" | "append" if args.len() == 1 => {
-                let (elem_ty, is_evolving, container_attr) = match &local_ty {
-                    Ty::EvolvingList(elem, attr) => (elem, true, attr.clone()),
-                    Ty::List(elem, attr) => (elem, false, attr.clone()),
+                let (elem_ty, is_evolving) = match &local_ty {
+                    Ty::EvolvingList(elem) => (elem, true),
+                    Ty::List(elem) => (elem, false),
                     _ => return None,
                 };
 
                 let arg_ty = self.infer_expr(args[0], body);
                 let widened_arg = arg_ty.widen_fresh();
 
-                let effective_local_ty = if matches!(**elem_ty, Ty::Never { .. }) {
+                let effective_local_ty = if matches!(**elem_ty, Ty::Never) {
                     let new_ty = if is_evolving {
-                        Ty::EvolvingList(Box::new(widened_arg), container_attr)
+                        Ty::EvolvingList(Box::new(widened_arg))
                     } else {
-                        Ty::List(Box::new(widened_arg), container_attr)
+                        Ty::List(Box::new(widened_arg))
                     };
                     self.assign_local(local_name.clone(), new_ty.clone());
                     self.sync_let_binding_type(&local_name, new_ty.clone());
@@ -9481,7 +9392,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 // Record a MemberResolution so MIR emits a proper method call
                 // instead of a dynamic map lookup.
                 let effective_elem = match &effective_local_ty {
-                    Ty::EvolvingList(e, _) | Ty::List(e, _) => e.as_ref().clone(),
+                    Ty::EvolvingList(e) | Ty::List(e) => e.as_ref().clone(),
                     _ => Ty::unknown(),
                 };
                 let method_ty = self
@@ -9530,18 +9441,17 @@ impl<'db> TypeInferenceBuilder<'db> {
         };
 
         match &local_ty {
-            Ty::List(elem_ty, container_attr) | Ty::EvolvingList(elem_ty, container_attr) => {
-                let is_evolving = matches!(local_ty, Ty::EvolvingList(_, _));
-                let container_attr = container_attr.clone();
+            Ty::List(elem_ty) | Ty::EvolvingList(elem_ty) => {
+                let is_evolving = matches!(local_ty, Ty::EvolvingList(_));
                 let index_ty = self.infer_expr(index_id, body);
                 let val_ty = self.infer_expr(value_id, body);
                 let widened_val = val_ty.clone().widen_fresh();
 
-                if matches!(**elem_ty, Ty::Never { .. }) {
+                if matches!(**elem_ty, Ty::Never) {
                     let new_ty = if is_evolving {
-                        Ty::EvolvingList(Box::new(widened_val.clone()), container_attr)
+                        Ty::EvolvingList(Box::new(widened_val.clone()))
                     } else {
-                        Ty::List(Box::new(widened_val.clone()), container_attr)
+                        Ty::List(Box::new(widened_val.clone()))
                     };
                     self.assign_local(local_name.clone(), new_ty.clone());
                     self.sync_let_binding_type(&local_name, new_ty);
@@ -9562,28 +9472,18 @@ impl<'db> TypeInferenceBuilder<'db> {
                 self.record_expr_type(value_id, val_ty);
                 true
             }
-            Ty::Map(key_ty, val_ty, container_attr)
-            | Ty::EvolvingMap(key_ty, val_ty, container_attr) => {
-                let is_evolving = matches!(local_ty, Ty::EvolvingMap(_, _, _));
-                let container_attr = container_attr.clone();
+            Ty::Map(key_ty, val_ty) | Ty::EvolvingMap(key_ty, val_ty) => {
+                let is_evolving = matches!(local_ty, Ty::EvolvingMap(_, _));
                 let index_ty = self.infer_expr(index_id, body);
                 let value_ty = self.infer_expr(value_id, body);
                 let widened_key = index_ty.clone().widen_fresh();
                 let widened_val = value_ty.clone().widen_fresh();
 
-                if matches!(**key_ty, Ty::Never { .. }) && matches!(**val_ty, Ty::Never { .. }) {
+                if matches!(**key_ty, Ty::Never) && matches!(**val_ty, Ty::Never) {
                     let new_ty = if is_evolving {
-                        Ty::EvolvingMap(
-                            Box::new(widened_key),
-                            Box::new(widened_val.clone()),
-                            container_attr,
-                        )
+                        Ty::EvolvingMap(Box::new(widened_key), Box::new(widened_val.clone()))
                     } else {
-                        Ty::Map(
-                            Box::new(widened_key),
-                            Box::new(widened_val.clone()),
-                            container_attr,
-                        )
+                        Ty::Map(Box::new(widened_key), Box::new(widened_val.clone()))
                     };
                     self.assign_local(local_name.clone(), new_ty.clone());
                     self.sync_let_binding_type(&local_name, new_ty);
@@ -9638,26 +9538,26 @@ impl<'db> TypeInferenceBuilder<'db> {
     /// Wrap a type in `Optional` unless it is already nullable.
     fn make_optional(ty: Ty) -> Ty {
         match &ty {
-            Ty::Optional(..) | Ty::Primitive(PrimitiveType::Null, _) => ty,
-            Ty::Union(members, _)
+            Ty::Optional(..) | Ty::Primitive(PrimitiveType::Null) => ty,
+            Ty::Union(members)
                 if members
                     .iter()
-                    .any(|m| matches!(m, Ty::Primitive(PrimitiveType::Null, _))) =>
+                    .any(|m| matches!(m, Ty::Primitive(PrimitiveType::Null))) =>
             {
                 ty
             }
-            _ => Ty::Optional(Box::new(ty), TyAttr::default()),
+            _ => Ty::Optional(Box::new(ty)),
         }
     }
 
     fn join_types(a: &Ty, b: &Ty) -> Ty {
-        if matches!(a, Ty::Never { .. }) {
+        if matches!(a, Ty::Never) {
             return b.clone();
         }
-        if matches!(b, Ty::Never { .. }) {
+        if matches!(b, Ty::Never) {
             return a.clone();
         }
-        if matches!(a, Ty::Void { .. }) || matches!(b, Ty::Void { .. }) {
+        if matches!(a, Ty::Void) || matches!(b, Ty::Void) {
             // TODO(TyAttr): Control-flow merge where either branch is Void — neither
             // branch's attr is obviously "the right one" to keep. May need a merge
             // operation on TyAttr, or default may be correct for synthesized types.
@@ -9667,21 +9567,17 @@ impl<'db> TypeInferenceBuilder<'db> {
             return a.clone();
         }
         // Same literal value, different freshness → normalize to Regular
-        if let (Ty::Literal(lit_a, _, _), Ty::Literal(lit_b, _, _)) = (a, b) {
+        if let (Ty::Literal(lit_a, _), Ty::Literal(lit_b, _)) = (a, b) {
             if lit_a == lit_b {
                 // TODO(TyAttr): Same literal from two branches with different freshness.
                 // Could pick either side's attr or merge them; unclear which is correct.
-                return Ty::Literal(
-                    lit_a.clone(),
-                    crate::ty::Freshness::Regular,
-                    TyAttr::default(),
-                );
+                return Ty::Literal(lit_a.clone(), crate::ty::Freshness::Regular);
             }
         }
         // Build a flat union, deduplicating members
         let mut members = Vec::new();
         let mut push = |ty: &Ty| {
-            if let Ty::Union(inner, _) = ty {
+            if let Ty::Union(inner) = ty {
                 for m in inner {
                     if !members.contains(m) {
                         members.push(m.clone());
@@ -9698,7 +9594,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         } else {
             // TODO(TyAttr): Novel union synthesized from two different branch types.
             // No single original attr to preserve. Same question as union_ty in generics.rs.
-            Ty::Union(members, TyAttr::default())
+            Ty::Union(members)
         }
     }
 
@@ -9722,7 +9618,7 @@ impl<'db> TypeInferenceBuilder<'db> {
     /// `implements I` block never satisfies `I`, even if it has matching
     /// fields and methods.
     fn is_subtype(&self, sub: &Ty, sup: &Ty) -> bool {
-        if let Ty::TypeVar(name, _) = sub
+        if let Ty::TypeVar(name) = sub
             && let Some(bound) = self.generic_param_bounds.get(name)
         {
             return self.is_subtype(&bound.clone(), sup);
@@ -9735,19 +9631,18 @@ impl<'db> TypeInferenceBuilder<'db> {
         // because those assume a non-union `sub` and would reject `Dog | Cat`
         // against `Animal` early. `Dog?` (= `Dog | null`) is still rejected
         // because `null` is not a subtype of the interface.
-        if let Ty::Union(members, _) = sub
+        if let Ty::Union(members) = sub
             && !members.is_empty()
             && members.iter().all(|m| self.is_subtype(m, sup))
         {
             return true;
         }
-        if let Ty::Interface(iface_qtn, iface_args, _) = sup
+        if let Ty::Interface(iface_qtn, iface_args) = sup
             && !matches!(sub, Ty::Interface(..))
         {
             let db = self.context.db();
             let registry = crate::interfaces::package_implements_registry(db, self.package_id);
-            let requested_iface_ty =
-                Ty::Interface(iface_qtn.clone(), iface_args.clone(), TyAttr::default());
+            let requested_iface_ty = Ty::Interface(iface_qtn.clone(), iface_args.clone());
             return registry.type_implements_interface_via_rule(
                 sub,
                 &requested_iface_ty,
@@ -9759,7 +9654,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         // iff A == B or A requires B (transitively). Two unrelated interfaces
         // that happen to share an implementor are NOT subtypes — the user must
         // narrow via `match`/`is` first.
-        if let (Ty::Interface(a_qtn, a_args, _), Ty::Interface(b_qtn, b_args, _)) = (sub, sup) {
+        if let (Ty::Interface(a_qtn, a_args), Ty::Interface(b_qtn, b_args)) = (sub, sup) {
             let db = self.context.db();
             let registry = crate::interfaces::package_implements_registry(db, self.package_id);
             if a_qtn == b_qtn
@@ -9786,19 +9681,19 @@ impl<'db> TypeInferenceBuilder<'db> {
         // positive result here — a negative falls through to the structural
         // check below, so non-interface optional/union behaviour is unchanged.
         match sup {
-            Ty::Optional(inner, _) => {
+            Ty::Optional(inner) => {
                 // `null <: T?` and other non-interface optional rules are
                 // handled by the structural check below; here we only add the
                 // nominal interface case for the unwrapped payload.
                 let sub_inner = match sub {
-                    Ty::Optional(si, _) => si.as_ref(),
+                    Ty::Optional(si) => si.as_ref(),
                     other => other,
                 };
                 if self.is_subtype(sub_inner, inner) {
                     return true;
                 }
             }
-            Ty::Union(members, _) if members.iter().any(|m| self.is_subtype(sub, m)) => {
+            Ty::Union(members) if members.iter().any(|m| self.is_subtype(sub, m)) => {
                 return true;
             }
             _ => {}
@@ -9917,10 +9812,7 @@ impl<'db> TypeInferenceBuilder<'db> {
     ) -> (Vec<Option<Ty>>, Ty) {
         let mut bindings = FxHashMap::default();
         for (param, canonical) in generic_params.iter().zip(canonical_params.iter()) {
-            bindings.insert(
-                param.clone(),
-                Ty::TypeVar(canonical.clone(), TyAttr::default()),
-            );
+            bindings.insert(param.clone(), Ty::TypeVar(canonical.clone()));
         }
         let bounds = generic_param_bounds
             .iter()
@@ -9943,7 +9835,6 @@ impl<'db> TypeInferenceBuilder<'db> {
                 .collect(),
             ret: Box::new(crate::generics::substitute_ty(ret, &bindings)),
             throws: Box::new(crate::generics::substitute_ty(throws, &bindings)),
-            attr: TyAttr::default(),
         };
         (bounds, function)
     }
@@ -9969,19 +9860,19 @@ impl<'db> TypeInferenceBuilder<'db> {
             return b;
         }
         // Distribute over unions: (X | Y) ∩ T = (X ∩ T) | (Y ∩ T).
-        if let Ty::Union(members, _) = &a {
+        if let Ty::Union(members) = &a {
             let intersected: Vec<Ty> = members
                 .iter()
                 .map(|m| self.intersect_types(m, &b))
-                .filter(|t| !matches!(t, Ty::Never { .. }))
+                .filter(|t| !matches!(t, Ty::Never))
                 .collect();
             return match intersected.len() {
                 0 => Ty::never(),
                 1 => intersected.into_iter().next().unwrap(),
-                _ => Ty::Union(intersected, TyAttr::default()),
+                _ => Ty::Union(intersected),
             };
         }
-        if matches!(&b, Ty::Union(_, _)) {
+        if matches!(&b, Ty::Union(_)) {
             return self.intersect_types(&b, &a);
         }
         // No overlap — disjoint types intersect to Never.
@@ -10019,8 +9910,8 @@ impl<'db> TypeInferenceBuilder<'db> {
             // `is_float_bigint_mix` flags it (matching arithmetic/ordering).
             BinaryOp::Eq | BinaryOp::Ne => {
                 if Self::is_float_bigint_mix(lhs, rhs)
-                    && !matches!(lhs, Ty::Unknown { .. } | Ty::Error { .. })
-                    && !matches!(rhs, Ty::Unknown { .. } | Ty::Error { .. })
+                    && !matches!(lhs, Ty::Unknown | Ty::Error)
+                    && !matches!(rhs, Ty::Unknown | Ty::Error)
                 {
                     self.context.report_simple(
                         TirTypeError::InvalidBinaryOp {
@@ -10031,7 +9922,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                         at,
                     );
                 }
-                Ty::Primitive(PrimitiveType::Bool, TyAttr::default())
+                Ty::Primitive(PrimitiveType::Bool)
             }
 
             // Ordering (`<`, `<=`, `>`, `>=`): unlike equality, there is no
@@ -10040,11 +9931,11 @@ impl<'db> TypeInferenceBuilder<'db> {
             // `null` / bare `null`) before the float-bigint mix check.
             BinaryOp::Lt | BinaryOp::Le | BinaryOp::Gt | BinaryOp::Ge => {
                 let invalid_null = (Self::may_be_null(lhs) || Self::may_be_null(rhs))
-                    && !matches!(lhs, Ty::Unknown { .. } | Ty::Error { .. })
-                    && !matches!(rhs, Ty::Unknown { .. } | Ty::Error { .. });
+                    && !matches!(lhs, Ty::Unknown | Ty::Error)
+                    && !matches!(rhs, Ty::Unknown | Ty::Error);
                 let invalid_mix = Self::is_float_bigint_mix(lhs, rhs)
-                    && !matches!(lhs, Ty::Unknown { .. } | Ty::Error { .. })
-                    && !matches!(rhs, Ty::Unknown { .. } | Ty::Error { .. });
+                    && !matches!(lhs, Ty::Unknown | Ty::Error)
+                    && !matches!(rhs, Ty::Unknown | Ty::Error);
                 if invalid_null || invalid_mix {
                     self.context.report_simple(
                         TirTypeError::InvalidBinaryOp {
@@ -10055,18 +9946,18 @@ impl<'db> TypeInferenceBuilder<'db> {
                         at,
                     );
                 }
-                Ty::Primitive(PrimitiveType::Bool, TyAttr::default())
+                Ty::Primitive(PrimitiveType::Bool)
             }
 
             // Logical → bool
-            BinaryOp::And | BinaryOp::Or => Ty::Primitive(PrimitiveType::Bool, TyAttr::default()),
+            BinaryOp::And | BinaryOp::Or => Ty::Primitive(PrimitiveType::Bool),
 
             // Arithmetic: result type depends on operands
             BinaryOp::Add | BinaryOp::Sub | BinaryOp::Mul | BinaryOp::Div | BinaryOp::Mod => {
                 let result = Self::infer_arithmetic(op, lhs, rhs);
-                if matches!(result, Ty::Unknown { .. })
-                    && !matches!(lhs, Ty::Unknown { .. } | Ty::Error { .. })
-                    && !matches!(rhs, Ty::Unknown { .. } | Ty::Error { .. })
+                if matches!(result, Ty::Unknown)
+                    && !matches!(lhs, Ty::Unknown | Ty::Error)
+                    && !matches!(rhs, Ty::Unknown | Ty::Error)
                 {
                     self.context.report_simple(
                         TirTypeError::InvalidBinaryOp {
@@ -10087,9 +9978,9 @@ impl<'db> TypeInferenceBuilder<'db> {
             | BinaryOp::Shl
             | BinaryOp::Shr => {
                 let result = Self::infer_bitwise(lhs, rhs);
-                if matches!(result, Ty::Unknown { .. })
-                    && !matches!(lhs, Ty::Unknown { .. } | Ty::Error { .. })
-                    && !matches!(rhs, Ty::Unknown { .. } | Ty::Error { .. })
+                if matches!(result, Ty::Unknown)
+                    && !matches!(lhs, Ty::Unknown | Ty::Error)
+                    && !matches!(rhs, Ty::Unknown | Ty::Error)
                 {
                     self.context.report_simple(
                         TirTypeError::InvalidBinaryOp {
@@ -10146,15 +10037,15 @@ impl<'db> TypeInferenceBuilder<'db> {
             // `InvalidBinaryOp` diagnostic. Adding a new `PrimitiveType` or
             // `Literal` variant forces a deliberate opt-in here.
             match ty {
-                Ty::Primitive(PrimitiveType::Int, _) => Some(PrimitiveType::Int),
-                Ty::Primitive(PrimitiveType::Bigint, _) => Some(PrimitiveType::Bigint),
-                Ty::Primitive(PrimitiveType::Float, _) => Some(PrimitiveType::Float),
-                Ty::Primitive(PrimitiveType::String, _) => Some(PrimitiveType::String),
-                Ty::Literal(baml_base::Literal::Int(_), _, _) => Some(PrimitiveType::Int),
-                Ty::Literal(baml_base::Literal::Bigint(_), _, _) => Some(PrimitiveType::Bigint),
-                Ty::Literal(baml_base::Literal::Float(_), _, _) => Some(PrimitiveType::Float),
-                Ty::Literal(baml_base::Literal::String(_), _, _) => Some(PrimitiveType::String),
-                Ty::Union(members, _) => {
+                Ty::Primitive(PrimitiveType::Int) => Some(PrimitiveType::Int),
+                Ty::Primitive(PrimitiveType::Bigint) => Some(PrimitiveType::Bigint),
+                Ty::Primitive(PrimitiveType::Float) => Some(PrimitiveType::Float),
+                Ty::Primitive(PrimitiveType::String) => Some(PrimitiveType::String),
+                Ty::Literal(baml_base::Literal::Int(_), _) => Some(PrimitiveType::Int),
+                Ty::Literal(baml_base::Literal::Bigint(_), _) => Some(PrimitiveType::Bigint),
+                Ty::Literal(baml_base::Literal::Float(_), _) => Some(PrimitiveType::Float),
+                Ty::Literal(baml_base::Literal::String(_), _) => Some(PrimitiveType::String),
+                Ty::Union(members) => {
                     let mut result: Option<PrimitiveType> = None;
                     for m in members {
                         let p = base_ty(m)?;
@@ -10175,19 +10066,19 @@ impl<'db> TypeInferenceBuilder<'db> {
             (Some(PrimitiveType::Float), Some(PrimitiveType::Bigint))
             | (Some(PrimitiveType::Bigint), Some(PrimitiveType::Float)) => Ty::unknown(),
             (Some(PrimitiveType::Float), _) | (_, Some(PrimitiveType::Float)) => {
-                Ty::Primitive(PrimitiveType::Float, TyAttr::default())
+                Ty::Primitive(PrimitiveType::Float)
             }
             (Some(PrimitiveType::Bigint | PrimitiveType::Int), Some(PrimitiveType::Bigint))
             | (Some(PrimitiveType::Bigint), Some(PrimitiveType::Int)) => {
-                Ty::Primitive(PrimitiveType::Bigint, TyAttr::default())
+                Ty::Primitive(PrimitiveType::Bigint)
             }
             (Some(PrimitiveType::Int), Some(PrimitiveType::Int)) => {
-                Ty::Primitive(PrimitiveType::Int, TyAttr::default())
+                Ty::Primitive(PrimitiveType::Int)
             }
             (Some(PrimitiveType::String), _) | (_, Some(PrimitiveType::String)) => {
                 // String concatenation only for Add
                 if matches!(op, baml_compiler2_ast::BinaryOp::Add) {
-                    Ty::Primitive(PrimitiveType::String, TyAttr::default())
+                    Ty::Primitive(PrimitiveType::String)
                 } else {
                     Ty::unknown()
                 }
@@ -10207,9 +10098,9 @@ impl<'db> TypeInferenceBuilder<'db> {
     /// so they do not need this helper.
     fn may_be_null(ty: &Ty) -> bool {
         match ty {
-            Ty::Optional(_, _) => true,
-            Ty::Primitive(PrimitiveType::Null, _) => true,
-            Ty::Union(members, _) => members.iter().any(Self::may_be_null),
+            Ty::Optional(_) => true,
+            Ty::Primitive(PrimitiveType::Null) => true,
+            Ty::Union(members) => members.iter().any(Self::may_be_null),
             _ => false,
         }
     }
@@ -10240,15 +10131,15 @@ impl<'db> TypeInferenceBuilder<'db> {
         /// entry, e.g. ordering rejecting nullable operands via `may_be_null`).
         fn shape(ty: &Ty) -> (bool, bool) {
             match ty {
-                Ty::Primitive(PrimitiveType::Float, _)
-                | Ty::Literal(baml_base::Literal::Float(_), _, _) => (true, false),
-                Ty::Primitive(PrimitiveType::Bigint, _)
-                | Ty::Literal(baml_base::Literal::Bigint(_), _, _) => (false, true),
-                Ty::Union(members, _) => members.iter().fold((false, false), |(f, b), m| {
+                Ty::Primitive(PrimitiveType::Float)
+                | Ty::Literal(baml_base::Literal::Float(_), _) => (true, false),
+                Ty::Primitive(PrimitiveType::Bigint)
+                | Ty::Literal(baml_base::Literal::Bigint(_), _) => (false, true),
+                Ty::Union(members) => members.iter().fold((false, false), |(f, b), m| {
                     let (mf, mb) = shape(m);
                     (f || mf, b || mb)
                 }),
-                Ty::Optional(inner, _) => shape(inner),
+                Ty::Optional(inner) => shape(inner),
                 _ => (false, false),
             }
         }
@@ -10270,11 +10161,11 @@ impl<'db> TypeInferenceBuilder<'db> {
             // return `None` so the outer match falls through to `Unknown`
             // (which surfaces as `InvalidBinaryOp`).
             match ty {
-                Ty::Primitive(PrimitiveType::Int, _) => Some(PrimitiveType::Int),
-                Ty::Primitive(PrimitiveType::Bigint, _) => Some(PrimitiveType::Bigint),
-                Ty::Literal(baml_base::Literal::Int(_), _, _) => Some(PrimitiveType::Int),
-                Ty::Literal(baml_base::Literal::Bigint(_), _, _) => Some(PrimitiveType::Bigint),
-                Ty::Union(members, _) => {
+                Ty::Primitive(PrimitiveType::Int) => Some(PrimitiveType::Int),
+                Ty::Primitive(PrimitiveType::Bigint) => Some(PrimitiveType::Bigint),
+                Ty::Literal(baml_base::Literal::Int(_), _) => Some(PrimitiveType::Int),
+                Ty::Literal(baml_base::Literal::Bigint(_), _) => Some(PrimitiveType::Bigint),
+                Ty::Union(members) => {
                     let mut result: Option<PrimitiveType> = None;
                     for m in members {
                         let p = base_ty(m)?;
@@ -10298,11 +10189,11 @@ impl<'db> TypeInferenceBuilder<'db> {
 
         match (base_ty(lhs), base_ty(rhs)) {
             (Some(PrimitiveType::Int), Some(PrimitiveType::Int)) => {
-                Ty::Primitive(PrimitiveType::Int, TyAttr::default())
+                Ty::Primitive(PrimitiveType::Int)
             }
             (Some(PrimitiveType::Bigint | PrimitiveType::Int), Some(PrimitiveType::Bigint))
             | (Some(PrimitiveType::Bigint), Some(PrimitiveType::Int)) => {
-                Ty::Primitive(PrimitiveType::Bigint, TyAttr::default())
+                Ty::Primitive(PrimitiveType::Bigint)
             }
             _ => Ty::unknown(),
         }
@@ -10313,20 +10204,13 @@ impl<'db> TypeInferenceBuilder<'db> {
         if let Some(folded) = Self::try_fold_unary(op, operand) {
             return folded;
         }
-        let operand_attr = operand.attr().clone();
         match op {
-            baml_compiler2_ast::UnaryOp::Not => Ty::Primitive(PrimitiveType::Bool, operand_attr),
+            baml_compiler2_ast::UnaryOp::Not => Ty::Primitive(PrimitiveType::Bool),
             baml_compiler2_ast::UnaryOp::Neg => match operand {
-                Ty::Primitive(PrimitiveType::Int, attr) => {
-                    Ty::Primitive(PrimitiveType::Int, attr.clone())
-                }
-                Ty::Primitive(PrimitiveType::Float, attr) => {
-                    Ty::Primitive(PrimitiveType::Float, attr.clone())
-                }
-                Ty::Primitive(PrimitiveType::Bigint, attr) => {
-                    Ty::Primitive(PrimitiveType::Bigint, attr.clone())
-                }
-                Ty::Unknown { attr } | Ty::Error { attr } => Ty::Unknown { attr: attr.clone() },
+                Ty::Primitive(PrimitiveType::Int) => Ty::Primitive(PrimitiveType::Int),
+                Ty::Primitive(PrimitiveType::Float) => Ty::Primitive(PrimitiveType::Float),
+                Ty::Primitive(PrimitiveType::Bigint) => Ty::Primitive(PrimitiveType::Bigint),
+                Ty::Unknown | Ty::Error => Ty::Unknown,
                 _ => {
                     self.context.report_simple(
                         TirTypeError::InvalidUnaryOp {
@@ -10335,7 +10219,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                         },
                         at,
                     );
-                    Ty::Unknown { attr: operand_attr }
+                    Ty::Unknown
                 }
             },
         }
@@ -10355,35 +10239,21 @@ impl<'db> TypeInferenceBuilder<'db> {
     fn try_fold_unary(op: baml_compiler2_ast::UnaryOp, operand: &Ty) -> Option<Ty> {
         use crate::ty::LiteralValue;
         let (lit, f) = match operand {
-            Ty::Literal(lit, f, _) => (lit, *f),
+            Ty::Literal(lit, f) => (lit, *f),
             _ => return None,
         };
         match op {
             baml_compiler2_ast::UnaryOp::Neg => match lit {
-                LiteralValue::Int(n) => Some(Ty::Literal(
-                    LiteralValue::Int(n.checked_neg()?),
-                    f,
-                    TyAttr::default(),
-                )),
+                LiteralValue::Int(n) => Some(Ty::Literal(LiteralValue::Int(n.checked_neg()?), f)),
                 LiteralValue::Float(s) => {
                     let v: f64 = s.parse().ok()?;
-                    Some(Ty::Literal(
-                        LiteralValue::Float(format_float(-v)?),
-                        f,
-                        TyAttr::default(),
-                    ))
+                    Some(Ty::Literal(LiteralValue::Float(format_float(-v)?), f))
                 }
-                LiteralValue::Bigint(n) => Some(Ty::Literal(
-                    LiteralValue::Bigint(-n.clone()),
-                    f,
-                    TyAttr::default(),
-                )),
+                LiteralValue::Bigint(n) => Some(Ty::Literal(LiteralValue::Bigint(-n.clone()), f)),
                 _ => None,
             },
             baml_compiler2_ast::UnaryOp::Not => match lit {
-                LiteralValue::Bool(b) => {
-                    Some(Ty::Literal(LiteralValue::Bool(!b), f, TyAttr::default()))
-                }
+                LiteralValue::Bool(b) => Some(Ty::Literal(LiteralValue::Bool(!b), f)),
                 _ => None,
             },
         }
@@ -10396,11 +10266,11 @@ impl<'db> TypeInferenceBuilder<'db> {
         use crate::ty::LiteralValue;
 
         let (lhs_lit, lhs_f) = match lhs {
-            Ty::Literal(lit, f, _) => (lit, *f),
+            Ty::Literal(lit, f) => (lit, *f),
             _ => return None,
         };
         let (rhs_lit, rhs_f) = match rhs {
-            Ty::Literal(lit, f, _) => (lit, *f),
+            Ty::Literal(lit, f) => (lit, *f),
             _ => return None,
         };
         let f = Self::merge_freshness(lhs_f, rhs_f);
@@ -10409,78 +10279,28 @@ impl<'db> TypeInferenceBuilder<'db> {
         if let (LiteralValue::Int(a), LiteralValue::Int(b)) = (lhs_lit, rhs_lit) {
             let (a, b) = (*a, *b);
             return match op {
-                BinaryOp::Add => Some(Ty::Literal(
-                    LiteralValue::Int(a.checked_add(b)?),
-                    f,
-                    TyAttr::default(),
-                )),
-                BinaryOp::Sub => Some(Ty::Literal(
-                    LiteralValue::Int(a.checked_sub(b)?),
-                    f,
-                    TyAttr::default(),
-                )),
-                BinaryOp::Mul => Some(Ty::Literal(
-                    LiteralValue::Int(a.checked_mul(b)?),
-                    f,
-                    TyAttr::default(),
-                )),
-                BinaryOp::Div => Some(Ty::Literal(
-                    LiteralValue::Int(a.checked_div(b)?),
-                    f,
-                    TyAttr::default(),
-                )),
-                BinaryOp::Mod => Some(Ty::Literal(
-                    LiteralValue::Int(a.checked_rem(b)?),
-                    f,
-                    TyAttr::default(),
-                )),
-                BinaryOp::BitAnd => {
-                    Some(Ty::Literal(LiteralValue::Int(a & b), f, TyAttr::default()))
-                }
-                BinaryOp::BitOr => {
-                    Some(Ty::Literal(LiteralValue::Int(a | b), f, TyAttr::default()))
-                }
-                BinaryOp::BitXor => {
-                    Some(Ty::Literal(LiteralValue::Int(a ^ b), f, TyAttr::default()))
-                }
+                BinaryOp::Add => Some(Ty::Literal(LiteralValue::Int(a.checked_add(b)?), f)),
+                BinaryOp::Sub => Some(Ty::Literal(LiteralValue::Int(a.checked_sub(b)?), f)),
+                BinaryOp::Mul => Some(Ty::Literal(LiteralValue::Int(a.checked_mul(b)?), f)),
+                BinaryOp::Div => Some(Ty::Literal(LiteralValue::Int(a.checked_div(b)?), f)),
+                BinaryOp::Mod => Some(Ty::Literal(LiteralValue::Int(a.checked_rem(b)?), f)),
+                BinaryOp::BitAnd => Some(Ty::Literal(LiteralValue::Int(a & b), f)),
+                BinaryOp::BitOr => Some(Ty::Literal(LiteralValue::Int(a | b), f)),
+                BinaryOp::BitXor => Some(Ty::Literal(LiteralValue::Int(a ^ b), f)),
                 BinaryOp::Shl => {
                     let shift = u32::try_from(b).ok()?;
-                    Some(Ty::Literal(
-                        LiteralValue::Int(a.checked_shl(shift)?),
-                        f,
-                        TyAttr::default(),
-                    ))
+                    Some(Ty::Literal(LiteralValue::Int(a.checked_shl(shift)?), f))
                 }
                 BinaryOp::Shr => {
                     let shift = u32::try_from(b).ok()?;
-                    Some(Ty::Literal(
-                        LiteralValue::Int(a.checked_shr(shift)?),
-                        f,
-                        TyAttr::default(),
-                    ))
+                    Some(Ty::Literal(LiteralValue::Int(a.checked_shr(shift)?), f))
                 }
-                BinaryOp::Eq => Some(Ty::Literal(
-                    LiteralValue::Bool(a == b),
-                    f,
-                    TyAttr::default(),
-                )),
-                BinaryOp::Ne => Some(Ty::Literal(
-                    LiteralValue::Bool(a != b),
-                    f,
-                    TyAttr::default(),
-                )),
-                BinaryOp::Lt => Some(Ty::Literal(LiteralValue::Bool(a < b), f, TyAttr::default())),
-                BinaryOp::Le => Some(Ty::Literal(
-                    LiteralValue::Bool(a <= b),
-                    f,
-                    TyAttr::default(),
-                )),
-                BinaryOp::Gt => Some(Ty::Literal(LiteralValue::Bool(a > b), f, TyAttr::default())),
-                BinaryOp::Ge => Some(Ty::Literal(
-                    LiteralValue::Bool(a >= b),
-                    f,
-                    TyAttr::default(),
-                )),
+                BinaryOp::Eq => Some(Ty::Literal(LiteralValue::Bool(a == b), f)),
+                BinaryOp::Ne => Some(Ty::Literal(LiteralValue::Bool(a != b), f)),
+                BinaryOp::Lt => Some(Ty::Literal(LiteralValue::Bool(a < b), f)),
+                BinaryOp::Le => Some(Ty::Literal(LiteralValue::Bool(a <= b), f)),
+                BinaryOp::Gt => Some(Ty::Literal(LiteralValue::Bool(a > b), f)),
+                BinaryOp::Ge => Some(Ty::Literal(LiteralValue::Bool(a >= b), f)),
                 _ => None,
             };
         }
@@ -10495,55 +10315,23 @@ impl<'db> TypeInferenceBuilder<'db> {
             let a: f64 = a_s.parse().ok()?;
             let b: f64 = b_s.parse().ok()?;
             return match op {
-                BinaryOp::Add => Some(Ty::Literal(
-                    LiteralValue::Float(format_float(a + b)?),
-                    f,
-                    TyAttr::default(),
-                )),
-                BinaryOp::Sub => Some(Ty::Literal(
-                    LiteralValue::Float(format_float(a - b)?),
-                    f,
-                    TyAttr::default(),
-                )),
-                BinaryOp::Mul => Some(Ty::Literal(
-                    LiteralValue::Float(format_float(a * b)?),
-                    f,
-                    TyAttr::default(),
-                )),
-                BinaryOp::Div if b != 0.0 => Some(Ty::Literal(
-                    LiteralValue::Float(format_float(a / b)?),
-                    f,
-                    TyAttr::default(),
-                )),
-                BinaryOp::Mod if b != 0.0 => Some(Ty::Literal(
-                    LiteralValue::Float(format_float(a % b)?),
-                    f,
-                    TyAttr::default(),
-                )),
+                BinaryOp::Add => Some(Ty::Literal(LiteralValue::Float(format_float(a + b)?), f)),
+                BinaryOp::Sub => Some(Ty::Literal(LiteralValue::Float(format_float(a - b)?), f)),
+                BinaryOp::Mul => Some(Ty::Literal(LiteralValue::Float(format_float(a * b)?), f)),
+                BinaryOp::Div if b != 0.0 => {
+                    Some(Ty::Literal(LiteralValue::Float(format_float(a / b)?), f))
+                }
+                BinaryOp::Mod if b != 0.0 => {
+                    Some(Ty::Literal(LiteralValue::Float(format_float(a % b)?), f))
+                }
                 #[allow(clippy::float_cmp)] // Intentional: folding literal float equality
-                BinaryOp::Eq => Some(Ty::Literal(
-                    LiteralValue::Bool(a == b),
-                    f,
-                    TyAttr::default(),
-                )),
+                BinaryOp::Eq => Some(Ty::Literal(LiteralValue::Bool(a == b), f)),
                 #[allow(clippy::float_cmp)] // Intentional: folding literal float inequality
-                BinaryOp::Ne => Some(Ty::Literal(
-                    LiteralValue::Bool(a != b),
-                    f,
-                    TyAttr::default(),
-                )),
-                BinaryOp::Lt => Some(Ty::Literal(LiteralValue::Bool(a < b), f, TyAttr::default())),
-                BinaryOp::Le => Some(Ty::Literal(
-                    LiteralValue::Bool(a <= b),
-                    f,
-                    TyAttr::default(),
-                )),
-                BinaryOp::Gt => Some(Ty::Literal(LiteralValue::Bool(a > b), f, TyAttr::default())),
-                BinaryOp::Ge => Some(Ty::Literal(
-                    LiteralValue::Bool(a >= b),
-                    f,
-                    TyAttr::default(),
-                )),
+                BinaryOp::Ne => Some(Ty::Literal(LiteralValue::Bool(a != b), f)),
+                BinaryOp::Lt => Some(Ty::Literal(LiteralValue::Bool(a < b), f)),
+                BinaryOp::Le => Some(Ty::Literal(LiteralValue::Bool(a <= b), f)),
+                BinaryOp::Gt => Some(Ty::Literal(LiteralValue::Bool(a > b), f)),
+                BinaryOp::Ge => Some(Ty::Literal(LiteralValue::Bool(a >= b), f)),
                 _ => None,
             };
         }
@@ -10552,26 +10340,10 @@ impl<'db> TypeInferenceBuilder<'db> {
         if let (LiteralValue::Bool(a), LiteralValue::Bool(b)) = (lhs_lit, rhs_lit) {
             let (a, b) = (*a, *b);
             return match op {
-                BinaryOp::And => Some(Ty::Literal(
-                    LiteralValue::Bool(a && b),
-                    f,
-                    TyAttr::default(),
-                )),
-                BinaryOp::Or => Some(Ty::Literal(
-                    LiteralValue::Bool(a || b),
-                    f,
-                    TyAttr::default(),
-                )),
-                BinaryOp::Eq => Some(Ty::Literal(
-                    LiteralValue::Bool(a == b),
-                    f,
-                    TyAttr::default(),
-                )),
-                BinaryOp::Ne => Some(Ty::Literal(
-                    LiteralValue::Bool(a != b),
-                    f,
-                    TyAttr::default(),
-                )),
+                BinaryOp::And => Some(Ty::Literal(LiteralValue::Bool(a && b), f)),
+                BinaryOp::Or => Some(Ty::Literal(LiteralValue::Bool(a || b), f)),
+                BinaryOp::Eq => Some(Ty::Literal(LiteralValue::Bool(a == b), f)),
+                BinaryOp::Ne => Some(Ty::Literal(LiteralValue::Bool(a != b), f)),
                 _ => None,
             };
         }
@@ -10579,33 +10351,13 @@ impl<'db> TypeInferenceBuilder<'db> {
         // String × String
         if let (LiteralValue::String(a), LiteralValue::String(b)) = (lhs_lit, rhs_lit) {
             return match op {
-                BinaryOp::Add => Some(Ty::Literal(
-                    LiteralValue::String(format!("{a}{b}")),
-                    f,
-                    TyAttr::default(),
-                )),
-                BinaryOp::Eq => Some(Ty::Literal(
-                    LiteralValue::Bool(a == b),
-                    f,
-                    TyAttr::default(),
-                )),
-                BinaryOp::Ne => Some(Ty::Literal(
-                    LiteralValue::Bool(a != b),
-                    f,
-                    TyAttr::default(),
-                )),
-                BinaryOp::Lt => Some(Ty::Literal(LiteralValue::Bool(a < b), f, TyAttr::default())),
-                BinaryOp::Le => Some(Ty::Literal(
-                    LiteralValue::Bool(a <= b),
-                    f,
-                    TyAttr::default(),
-                )),
-                BinaryOp::Gt => Some(Ty::Literal(LiteralValue::Bool(a > b), f, TyAttr::default())),
-                BinaryOp::Ge => Some(Ty::Literal(
-                    LiteralValue::Bool(a >= b),
-                    f,
-                    TyAttr::default(),
-                )),
+                BinaryOp::Add => Some(Ty::Literal(LiteralValue::String(format!("{a}{b}")), f)),
+                BinaryOp::Eq => Some(Ty::Literal(LiteralValue::Bool(a == b), f)),
+                BinaryOp::Ne => Some(Ty::Literal(LiteralValue::Bool(a != b), f)),
+                BinaryOp::Lt => Some(Ty::Literal(LiteralValue::Bool(a < b), f)),
+                BinaryOp::Le => Some(Ty::Literal(LiteralValue::Bool(a <= b), f)),
+                BinaryOp::Gt => Some(Ty::Literal(LiteralValue::Bool(a > b), f)),
+                BinaryOp::Ge => Some(Ty::Literal(LiteralValue::Bool(a >= b), f)),
                 _ => None,
             };
         }
@@ -10641,11 +10393,9 @@ impl<'db> TypeInferenceBuilder<'db> {
             if !within_cap(&n) {
                 return None;
             }
-            Some(Ty::Literal(LiteralValue::Bigint(n), f, TyAttr::default()))
+            Some(Ty::Literal(LiteralValue::Bigint(n), f))
         };
-        let lit_bool = |v: bool| -> Option<Ty> {
-            Some(Ty::Literal(LiteralValue::Bool(v), f, TyAttr::default()))
-        };
+        let lit_bool = |v: bool| -> Option<Ty> { Some(Ty::Literal(LiteralValue::Bool(v), f)) };
 
         match op {
             BinaryOp::Add => lit_bigint(a + b),
@@ -10837,7 +10587,7 @@ impl<'db> TypeInferenceBuilder<'db> {
 
         // Infer or check the lambda body
         let ret_ty = if let Some(expected) = expected_ret {
-            if matches!(expected, Ty::Unknown { .. } | Ty::TypeVar(_, _)) {
+            if matches!(expected, Ty::Unknown | Ty::TypeVar(_)) {
                 // Expected return is unknown or a type var — just infer
                 self.infer_expr(root_expr, lambda_body)
             } else {
@@ -10897,39 +10647,34 @@ impl crate::exhaustiveness::PatCtx for TypeInferenceBuilder<'_> {
         // `Ty::TypeAlias` as an opaque ctor when the alias has a target.
         let ty = self.expand_alias_chains(ty.clone());
         match &ty {
-            Ty::Primitive(PrimitiveType::Bool, _) => vec![
+            Ty::Primitive(PrimitiveType::Bool) => vec![
                 Ctor::Single(Ty::Literal(
                     baml_base::Literal::Bool(true),
                     Freshness::Regular,
-                    TyAttr::default(),
                 )),
                 Ctor::Single(Ty::Literal(
                     baml_base::Literal::Bool(false),
                     Freshness::Regular,
-                    TyAttr::default(),
                 )),
             ],
-            Ty::Primitive(PrimitiveType::Null, _) => vec![Ctor::Single(ty.clone())],
+            Ty::Primitive(PrimitiveType::Null) => vec![Ctor::Single(ty.clone())],
             // Infinite-alphabet / opaque primitives and types — all
             // require a wildcard arm for exhaustiveness.
-            Ty::Primitive(_, _)
+            Ty::Primitive(_)
             | Ty::Map(..)
             | Ty::EvolvingMap(..)
             | Ty::Function { .. }
-            | Ty::Type { .. }
-            | Ty::RustType { .. }
-            | Ty::Void { .. }
-            | Ty::BuiltinUnknown { .. }
-            | Ty::Unknown { .. }
-            | Ty::Error { .. }
-            | Ty::TypeVar(_, _) => vec![Ctor::NonExhaustive],
-            Ty::Never { .. } => vec![],
-            Ty::Optional(inner, _) => {
+            | Ty::Type
+            | Ty::RustType
+            | Ty::Void
+            | Ty::BuiltinUnknown
+            | Ty::Unknown
+            | Ty::Error
+            | Ty::TypeVar(_) => vec![Ctor::NonExhaustive],
+            Ty::Never => vec![],
+            Ty::Optional(inner) => {
                 let mut out = self.enumerate_ctors(inner);
-                out.push(Ctor::Single(Ty::Primitive(
-                    PrimitiveType::Null,
-                    TyAttr::default(),
-                )));
+                out.push(Ctor::Single(Ty::Primitive(PrimitiveType::Null)));
                 out
             }
             // Each union member becomes a `UnionMember` tag, mirroring
@@ -10939,22 +10684,20 @@ impl crate::exhaustiveness::PatCtx for TypeInferenceBuilder<'_> {
             // analysed with their full ctor set at that depth — slice
             // splitting fires for `[]` + `[_, ..]` to recognise full
             // coverage of a list branch, etc.
-            Ty::Union(members, _) => members
+            Ty::Union(members) => members
                 .iter()
                 .map(|m| Ctor::UnionMember(m.clone()))
                 .collect(),
-            Ty::Literal(_, _, _) | Ty::EnumVariant(_, _, _) => vec![Ctor::Single(ty.clone())],
-            Ty::Enum(qtn, _) => self
+            Ty::Literal(_, _) | Ty::EnumVariant(_, _) => vec![Ctor::Single(ty.clone())],
+            Ty::Enum(qtn) => self
                 .lookup_enum_variants(qtn)
                 .into_iter()
-                .map(|variant| {
-                    Ctor::Single(Ty::EnumVariant(qtn.clone(), variant, TyAttr::default()))
-                })
+                .map(|variant| Ctor::Single(Ty::EnumVariant(qtn.clone(), variant)))
                 .collect(),
-            Ty::Class(qtn, args, _) => vec![Ctor::Class(qtn.clone(), args.clone())],
+            Ty::Class(qtn, args) => vec![Ctor::Class(qtn.clone(), args.clone())],
             // Open interfaces always require a wildcard — new implementors
             // can appear in any file. See BEP-044 §"Interaction with match".
-            Ty::Interface(_, _, _) => vec![Ctor::NonExhaustive],
+            Ty::Interface(_, _) => vec![Ctor::NonExhaustive],
             // Futures are non-exhaustive at the pattern level: there is
             // no surface syntax to match against `Future<T, E>` other
             // than a wildcard.
@@ -10963,16 +10706,16 @@ impl crate::exhaustiveness::PatCtx for TypeInferenceBuilder<'_> {
             // the matrix; this branch is only reached if the algorithm
             // calls into us with a List directly, in which case empty
             // means "let the slice path handle it."
-            Ty::List(_, _) | Ty::EvolvingList(_, _) => vec![],
+            Ty::List(_) | Ty::EvolvingList(_) => vec![],
             // After expand_alias_chains, no remaining `TypeAlias` should
             // appear; if it does (cycle), treat as opaque.
-            Ty::TypeAlias(_, _) => vec![Ctor::NonExhaustive],
+            Ty::TypeAlias(_) => vec![Ctor::NonExhaustive],
         }
     }
 
     fn class_field_types(&self, qtn: &crate::ty::QualifiedTypeName, ty: &Ty) -> Vec<Ty> {
         let args = match ty {
-            Ty::Class(_, args, _) => args.clone(),
+            Ty::Class(_, args) => args.clone(),
             _ => Vec::new(),
         };
         // Normalize each field type for matrix consumption — matches the
@@ -10989,7 +10732,7 @@ impl crate::exhaustiveness::PatCtx for TypeInferenceBuilder<'_> {
     }
 
     fn interface_field_types(&self, ty: &Ty) -> Vec<Ty> {
-        let Ty::Interface(qtn, args, _) = ty else {
+        let Ty::Interface(qtn, args) = ty else {
             return Vec::new();
         };
         self.interface_field_infos_ordered(qtn, args)
@@ -11004,7 +10747,7 @@ impl crate::exhaustiveness::PatCtx for TypeInferenceBuilder<'_> {
         class_qtn: &crate::ty::QualifiedTypeName,
         class_type_args: &[Ty],
     ) -> Option<Vec<usize>> {
-        let Ty::Interface(iface_qtn, iface_args, _) = iface_ty else {
+        let Ty::Interface(iface_qtn, iface_args) = iface_ty else {
             return None;
         };
         let class_fields = self.class_actual_fields_ordered(class_qtn, class_type_args);
@@ -11030,7 +10773,7 @@ impl crate::exhaustiveness::PatCtx for TypeInferenceBuilder<'_> {
 
     fn list_element_type(&self, ty: &Ty) -> Ty {
         let elem = match self.expand_alias_chains(ty.clone()) {
-            Ty::List(elem, _) | Ty::EvolvingList(elem, _) => *elem,
+            Ty::List(elem) | Ty::EvolvingList(elem) => *elem,
             other => other,
         };
         // Same rationale as class_field_types: list element columns flow
@@ -11236,7 +10979,7 @@ impl TypeInferenceBuilder<'_> {
         at_expr: ExprId,
     ) -> crate::pattern_lowering::PatternResult {
         let normalized_scrut = self.matrix_normalize_scrut(scrut_ty);
-        if let Ty::Union(members, _) = &normalized_scrut {
+        if let Ty::Union(members) = &normalized_scrut {
             let targets = self.union_targets_for_pattern(pat_id, body, members);
             if targets.len() == 1 {
                 let member_ty = targets.into_iter().next().unwrap();
@@ -11324,11 +11067,11 @@ impl TypeInferenceBuilder<'_> {
         // `UnionMember(int)` lets the matrix split this row from a
         // sibling wildcard via the same `NonExhaustive`-vs-concrete-ctor
         // mechanism it uses for `int` literals.
-        if matches!(scrut_ty, Ty::Unknown { .. } | Ty::BuiltinUnknown { .. }) {
+        if matches!(scrut_ty, Ty::Unknown | Ty::BuiltinUnknown) {
             let natural = self.pattern_natural_type(pat_id, body, &Ty::unknown());
             if !matches!(
                 natural,
-                Ty::Unknown { .. } | Ty::BuiltinUnknown { .. } | Ty::Error { .. } | Ty::TypeVar(..)
+                Ty::Unknown | Ty::BuiltinUnknown | Ty::Error | Ty::TypeVar(..)
             ) {
                 let inner = self.analyze_and_lower_inner(pat_id, &natural, body, at_expr);
                 let wrapped = crate::exhaustiveness::DPat::union_member(
@@ -11371,7 +11114,7 @@ impl TypeInferenceBuilder<'_> {
         let natural = self.pattern_natural_type(pat_id, body, &Ty::unknown());
         // Pure `Unknown` natural type means a wildcard/bind: targets
         // every member, but the dispatcher prefers no-wrap in that case.
-        if matches!(natural, Ty::Unknown { .. }) {
+        if matches!(natural, Ty::Unknown) {
             return Vec::new();
         }
         // Pattern matching dispatches on runtime type identity, not the
@@ -11406,14 +11149,14 @@ impl TypeInferenceBuilder<'_> {
     fn collect_overlap_atoms(&self, t: &Ty, out: &mut Vec<Ty>) {
         let expanded = self.expand_alias_chains(t.clone());
         match expanded {
-            Ty::Union(members, _) => {
+            Ty::Union(members) => {
                 for m in members {
                     self.collect_overlap_atoms(&m, out);
                 }
             }
-            Ty::Optional(inner, _) => {
+            Ty::Optional(inner) => {
                 self.collect_overlap_atoms(&inner, out);
-                out.push(Ty::Primitive(PrimitiveType::Null, TyAttr::default()));
+                out.push(Ty::Primitive(PrimitiveType::Null));
             }
             other => out.push(other),
         }
@@ -11424,9 +11167,7 @@ impl TypeInferenceBuilder<'_> {
     fn atoms_overlap(&self, a: &Ty, b: &Ty) -> bool {
         // Error/recovery types are bidirectionally compatible with
         // anything to suppress cascading diagnostics.
-        if matches!(a, Ty::Unknown { .. } | Ty::Error { .. })
-            || matches!(b, Ty::Unknown { .. } | Ty::Error { .. })
-        {
+        if matches!(a, Ty::Unknown | Ty::Error) || matches!(b, Ty::Unknown | Ty::Error) {
             return true;
         }
         // Unconstrained type variables target every atom.
@@ -11435,16 +11176,15 @@ impl TypeInferenceBuilder<'_> {
         }
         match (a, b) {
             // Primitives: strict head equality (no `Int <: Float`).
-            (Ty::Primitive(p1, _), Ty::Primitive(p2, _)) => p1 == p2,
+            (Ty::Primitive(p1), Ty::Primitive(p2)) => p1 == p2,
             // Literal vs primitive: literal's primitive head must match.
-            (Ty::Literal(lit, _, _), Ty::Primitive(p, _))
-            | (Ty::Primitive(p, _), Ty::Literal(lit, _, _)) => {
+            (Ty::Literal(lit, _), Ty::Primitive(p)) | (Ty::Primitive(p), Ty::Literal(lit, _)) => {
                 PrimitiveType::from_literal(lit) == *p
             }
             // Two literals: same value (modulo float canonicalization).
-            (Ty::Literal(l1, _, _), Ty::Literal(l2, _, _)) => l1 == l2,
+            (Ty::Literal(l1, _), Ty::Literal(l2, _)) => l1 == l2,
             // Class: same qtn AND every type-arg pair overlaps.
-            (Ty::Class(q1, args1, _), Ty::Class(q2, args2, _)) => {
+            (Ty::Class(q1, args1), Ty::Class(q2, args2)) => {
                 q1 == q2
                     && args1.len() == args2.len()
                     && args1
@@ -11454,21 +11194,22 @@ impl TypeInferenceBuilder<'_> {
             }
             // Enum/EnumVariant: same enum qtn. Variants of the same enum
             // overlap with each other and with the bare enum.
-            (Ty::Enum(q1, _), Ty::Enum(q2, _)) => q1 == q2,
-            (Ty::EnumVariant(q1, v1, _), Ty::EnumVariant(q2, v2, _)) => q1 == q2 && v1 == v2,
-            (Ty::Enum(q1, _), Ty::EnumVariant(q2, _, _))
-            | (Ty::EnumVariant(q2, _, _), Ty::Enum(q1, _)) => q1 == q2,
+            (Ty::Enum(q1), Ty::Enum(q2)) => q1 == q2,
+            (Ty::EnumVariant(q1, v1), Ty::EnumVariant(q2, v2)) => q1 == q2 && v1 == v2,
+            (Ty::Enum(q1), Ty::EnumVariant(q2, _)) | (Ty::EnumVariant(q2, _), Ty::Enum(q1)) => {
+                q1 == q2
+            }
             // List/Map: same head AND inner types overlap. The element /
             // key / value types are part of the pattern's natural shape
             // (e.g. `[let x: int]` has natural `List<int>`), so a pattern
             // targeting `List<int>` does not target `List<string>`.
             (
-                Ty::List(a_elem, _) | Ty::EvolvingList(a_elem, _),
-                Ty::List(b_elem, _) | Ty::EvolvingList(b_elem, _),
+                Ty::List(a_elem) | Ty::EvolvingList(a_elem),
+                Ty::List(b_elem) | Ty::EvolvingList(b_elem),
             ) => self.types_overlap(a_elem, b_elem),
             (
-                Ty::Map(a_k, a_v, _) | Ty::EvolvingMap(a_k, a_v, _),
-                Ty::Map(b_k, b_v, _) | Ty::EvolvingMap(b_k, b_v, _),
+                Ty::Map(a_k, a_v) | Ty::EvolvingMap(a_k, a_v),
+                Ty::Map(b_k, b_v) | Ty::EvolvingMap(b_k, b_v),
             ) => self.types_overlap(a_k, b_k) && self.types_overlap(a_v, b_v),
             // Function: arities match AND every param pair overlaps AND
             // returns overlap. A `(int) -> int` pattern can never match a
@@ -11494,7 +11235,7 @@ impl TypeInferenceBuilder<'_> {
                     && self.types_overlap(a_ret, b_ret)
             }
             // Never has no values, so it doesn't overlap with anything.
-            (Ty::Never { .. }, _) | (_, Ty::Never { .. }) => false,
+            (Ty::Never, _) | (_, Ty::Never) => false,
             // BEP-044: an interface atom overlaps a value whose runtime class
             // could satisfy it — the same/`requires`-related interface, or a
             // class that nominally implements it. This is genuine runtime-tag
@@ -11511,10 +11252,10 @@ impl TypeInferenceBuilder<'_> {
             // etc. Without these, e.g. `Optional<type>` looks like it
             // overlaps only its `null` branch, breaking refutability checks
             // for `let t: type? = null`.
-            (Ty::Type { .. }, Ty::Type { .. })
-            | (Ty::Void { .. }, Ty::Void { .. })
-            | (Ty::BuiltinUnknown { .. }, Ty::BuiltinUnknown { .. })
-            | (Ty::RustType { .. }, Ty::RustType { .. }) => true,
+            (Ty::Type, Ty::Type)
+            | (Ty::Void, Ty::Void)
+            | (Ty::BuiltinUnknown, Ty::BuiltinUnknown)
+            | (Ty::RustType, Ty::RustType) => true,
             // Anything else: distinct heads.
             _ => false,
         }
@@ -11543,7 +11284,7 @@ impl TypeInferenceBuilder<'_> {
     /// - `Or(parts)` ⇒ join of each part's natural type
     fn pattern_natural_type(&mut self, pat_id: PatId, body: &ExprBody, unconstrained: &Ty) -> Ty {
         let kind = match unconstrained {
-            Ty::Never { .. } => NaturalKind::Never,
+            Ty::Never => NaturalKind::Never,
             _ => NaturalKind::Unknown,
         };
         if let Some(cached) = self.pattern_natural_cache.get(&(pat_id, kind)) {
@@ -11581,7 +11322,7 @@ impl TypeInferenceBuilder<'_> {
                         && let ast::Pattern::Array { .. } = &body.patterns[rest_pat]
                     {
                         let rest_natural = self.pattern_natural_type(rest_pat, body, unconstrained);
-                        if let Ty::List(inner, _) | Ty::EvolvingList(inner, _) = rest_natural {
+                        if let Ty::List(inner) | Ty::EvolvingList(inner) = rest_natural {
                             elem_tys.push(*inner);
                         }
                     }
@@ -11596,16 +11337,16 @@ impl TypeInferenceBuilder<'_> {
                     // targets unrelated union members.
                     let any_concrete = elem_tys
                         .iter()
-                        .any(|t| !matches!(t, Ty::Unknown { .. } | Ty::Never { .. }));
+                        .any(|t| !matches!(t, Ty::Unknown | Ty::Never));
                     if any_concrete {
-                        elem_tys.retain(|t| !matches!(t, Ty::Unknown { .. } | Ty::Never { .. }));
+                        elem_tys.retain(|t| !matches!(t, Ty::Unknown | Ty::Never));
                     }
                     let elem = if elem_tys.is_empty() {
                         unconstrained.clone()
                     } else {
                         Self::join_all(&elem_tys)
                     };
-                    Ty::List(Box::new(elem), TyAttr::default())
+                    Ty::List(Box::new(elem))
                 }
             }
             ast::Pattern::Or(parts) => {
@@ -11758,45 +11499,32 @@ impl TypeInferenceBuilder<'_> {
         let expanded = self.expand_alias_chains(t.clone());
         match &expanded {
             // Singletons.
-            Ty::Literal(_, _, _) | Ty::EnumVariant(_, _, _) => {
+            Ty::Literal(_, _) | Ty::EnumVariant(_, _) => {
                 DPat::single(expanded.clone(), scrut_ty.clone())
             }
-            Ty::Primitive(PrimitiveType::Null, _) => {
-                DPat::single(expanded.clone(), scrut_ty.clone())
-            }
+            Ty::Primitive(PrimitiveType::Null) => DPat::single(expanded.clone(), scrut_ty.clone()),
             // Finite enumerations: build an Or of singletons.
-            Ty::Primitive(PrimitiveType::Bool, _) => Self::or_of_singletons(
+            Ty::Primitive(PrimitiveType::Bool) => Self::or_of_singletons(
                 vec![
-                    Ty::Literal(
-                        baml_base::Literal::Bool(true),
-                        Freshness::Regular,
-                        TyAttr::default(),
-                    ),
-                    Ty::Literal(
-                        baml_base::Literal::Bool(false),
-                        Freshness::Regular,
-                        TyAttr::default(),
-                    ),
+                    Ty::Literal(baml_base::Literal::Bool(true), Freshness::Regular),
+                    Ty::Literal(baml_base::Literal::Bool(false), Freshness::Regular),
                 ],
                 scrut_ty,
             ),
-            Ty::Enum(qtn, _) => {
+            Ty::Enum(qtn) => {
                 let variants: Vec<Ty> = self
                     .lookup_enum_variants(qtn)
                     .into_iter()
-                    .map(|v| Ty::EnumVariant(qtn.clone(), v, TyAttr::default()))
+                    .map(|v| Ty::EnumVariant(qtn.clone(), v))
                     .collect();
                 Self::or_of_singletons(variants, scrut_ty)
             }
-            Ty::Optional(inner, _) => {
+            Ty::Optional(inner) => {
                 let inner_dpat = self.dpat_for_type(inner, scrut_ty);
-                let null_dpat = DPat::single(
-                    Ty::Primitive(PrimitiveType::Null, TyAttr::default()),
-                    scrut_ty.clone(),
-                );
+                let null_dpat = DPat::single(Ty::Primitive(PrimitiveType::Null), scrut_ty.clone());
                 Self::or_combine(vec![inner_dpat, null_dpat], scrut_ty)
             }
-            Ty::Union(members, _) => {
+            Ty::Union(members) => {
                 let alts: Vec<DPat> = members
                     .iter()
                     .map(|m| self.dpat_for_type(m, scrut_ty))
@@ -11804,7 +11532,7 @@ impl TypeInferenceBuilder<'_> {
                 Self::or_combine(alts, scrut_ty)
             }
             // Classes: structural ctor with all fields wildcarded.
-            Ty::Class(qtn, args, _) => {
+            Ty::Class(qtn, args) => {
                 let field_tys = self.class_field_types_ordered(qtn, args);
                 let fields = field_tys.into_iter().map(DPat::wildcard).collect();
                 DPat::class_inst(qtn.clone(), args.clone(), fields, scrut_ty.clone())
@@ -11879,7 +11607,7 @@ impl TypeInferenceBuilder<'_> {
         // implementor necessarily provides the interface's declared fields,
         // elided fields are wildcarded, while named fields preserve their
         // lowered subpatterns for exhaustiveness/refutability.
-        if let Ty::Interface(iface_name, type_args, _) = &class_ty {
+        if let Ty::Interface(iface_name, type_args) = &class_ty {
             let iface_name = iface_name.clone();
             let type_args = type_args.clone();
             let mut by_name: FxHashMap<Name, &ast::FieldPat> = FxHashMap::default();
@@ -11955,7 +11683,7 @@ impl TypeInferenceBuilder<'_> {
         }
 
         let (qtn, args) = match &class_ty {
-            Ty::Class(qtn, args, _) => (qtn.clone(), args.clone()),
+            Ty::Class(qtn, args) => (qtn.clone(), args.clone()),
             _ => unreachable!("class_ty is Class by check above"),
         };
 
@@ -12082,7 +11810,7 @@ impl TypeInferenceBuilder<'_> {
 
         // Determine element type from the (possibly narrowed) scrutinee.
         let elem_ty = match self.expand_alias_chains(effective_scrut.clone()) {
-            Ty::List(elem, _) | Ty::EvolvingList(elem, _) => *elem,
+            Ty::List(elem) | Ty::EvolvingList(elem) => *elem,
             _ => Ty::unknown(),
         };
 
@@ -12137,7 +11865,7 @@ impl TypeInferenceBuilder<'_> {
         // Rest binding: contributes a binding (typed at List<elem_ty>) but
         // doesn't consume a slot in the slice shape.
         if let Some(rest_pat) = rest_binding_pat {
-            let rest_ty = Ty::List(Box::new(elem_ty.clone()), TyAttr::default());
+            let rest_ty = Ty::List(Box::new(elem_ty.clone()));
             // The rest sub-pattern matches against the *slice* (a list),
             // not against an element. If the user annotates it with a
             // non-list type (e.g. `..let r: int`, or `..Box { .. }`, or
@@ -12177,7 +11905,7 @@ impl TypeInferenceBuilder<'_> {
             None
         } else {
             let joined = Self::join_all(&element_required_tys);
-            Some(Ty::List(Box::new(joined), TyAttr::default()))
+            Some(Ty::List(Box::new(joined)))
         };
 
         PatternResult {
@@ -12311,16 +12039,16 @@ impl TypeInferenceBuilder<'_> {
 /// Returns `None` for class/enum names that need full resolution.
 fn bare_type_sugar_to_ty(name: &Name) -> Option<Ty> {
     match name.as_str() {
-        "int" => Some(Ty::Primitive(PrimitiveType::Int, TyAttr::default())),
-        "bigint" => Some(Ty::Primitive(PrimitiveType::Bigint, TyAttr::default())),
-        "float" => Some(Ty::Primitive(PrimitiveType::Float, TyAttr::default())),
-        "string" => Some(Ty::Primitive(PrimitiveType::String, TyAttr::default())),
-        "bool" => Some(Ty::Primitive(PrimitiveType::Bool, TyAttr::default())),
-        "null" => Some(Ty::Primitive(PrimitiveType::Null, TyAttr::default())),
-        "image" => Some(Ty::Primitive(PrimitiveType::Image, TyAttr::default())),
-        "audio" => Some(Ty::Primitive(PrimitiveType::Audio, TyAttr::default())),
-        "video" => Some(Ty::Primitive(PrimitiveType::Video, TyAttr::default())),
-        "pdf" => Some(Ty::Primitive(PrimitiveType::Pdf, TyAttr::default())),
+        "int" => Some(Ty::Primitive(PrimitiveType::Int)),
+        "bigint" => Some(Ty::Primitive(PrimitiveType::Bigint)),
+        "float" => Some(Ty::Primitive(PrimitiveType::Float)),
+        "string" => Some(Ty::Primitive(PrimitiveType::String)),
+        "bool" => Some(Ty::Primitive(PrimitiveType::Bool)),
+        "null" => Some(Ty::Primitive(PrimitiveType::Null)),
+        "image" => Some(Ty::Primitive(PrimitiveType::Image)),
+        "audio" => Some(Ty::Primitive(PrimitiveType::Audio)),
+        "video" => Some(Ty::Primitive(PrimitiveType::Video)),
+        "pdf" => Some(Ty::Primitive(PrimitiveType::Pdf)),
         _ => None,
     }
 }

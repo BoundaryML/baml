@@ -2206,17 +2206,10 @@ impl CompilerRunner {
                                         writeln!(output, "{header}").ok();
                                         output_annotated.push((header, status));
                                         for (fname, fty, _fattrs) in &resolved.fields {
-                                            let attr_names = fty.attr().attr_names();
-                                            let line = if attr_names.is_empty() {
-                                                format!("    {fname}: {fty}")
-                                            } else {
-                                                let attrs_str = attr_names
-                                                    .iter()
-                                                    .map(|a| format!("@{a}"))
-                                                    .collect::<Vec<_>>()
-                                                    .join(" ");
-                                                format!("    {fname}: {fty} {attrs_str}")
-                                            };
+                                            // TIR field types carry no attribute
+                                            // annotations, so this always renders the
+                                            // bare `name: type` form.
+                                            let line = format!("    {fname}: {fty}");
                                             writeln!(output, "{line}").ok();
                                             output_annotated.push((line, status));
                                         }
@@ -2303,13 +2296,10 @@ impl CompilerRunner {
                 let mut expr_types: Vec<_> = Vec::new();
                 for (expr_id, owner_scope) in &index.expr_scopes {
                     if owner_scope.index() as usize == i {
-                        let ty =
-                            inference
-                                .expression_type(*expr_id)
-                                .cloned()
-                                .unwrap_or(Ty::Unknown {
-                                    attr: Default::default(),
-                                });
+                        let ty = inference
+                            .expression_type(*expr_id)
+                            .cloned()
+                            .unwrap_or(Ty::Unknown);
                         expr_types.push((*expr_id, ty));
                     }
                 }
