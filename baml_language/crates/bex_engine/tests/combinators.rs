@@ -104,7 +104,7 @@ async fn all_collects_in_order() {
 
 /// `all` re-throws the first failure; the surrounding `catch` observes it.
 /// The failing input's error is consumed by `all`'s await (deferred-error
-/// observation, see tests/fire_and_forget.rs), so it does NOT also resurface
+/// observation, see `tests/fire_and_forget.rs`), so it does NOT also resurface
 /// fire-and-forget at `main`.
 #[tokio::test]
 async fn all_rethrows_failure_to_catch() {
@@ -155,10 +155,10 @@ async fn any_returns_first_success() {
 
 /// `any` throws `AllFailed` carrying every error when all futures fail.
 ///
-/// The arm binds UNTYPED: a typed arm (`let e: baml.future.AllFailed<string>`)
-/// currently fails its `IsType` because instances of a generic class
-/// constructed inside a generic function carry unsubstituted
-/// `class_type_args` — a separate, pre-existing generic-runtime gap.
+/// The arm binds TYPED: `AllFailed<string>` only matches because inferred
+/// call-site type args are threaded into `any`'s frame (`T=int, E=string`),
+/// so the `new AllFailed<E>(...)` constructed inside generic `any` carries
+/// `class_type_args = [string]` at runtime.
 #[tokio::test]
 async fn any_all_fail_throws_allfailed() {
     let source = r#"
@@ -167,7 +167,7 @@ async fn any_all_fail_throws_allfailed() {
         function main() -> int {
             let fs = [spawn { bad1() }, spawn { bad2() }];
             await baml.future.any(fs) catch (e) {
-                let e => e.errors.length()
+                let e: baml.future.AllFailed<string> => e.errors.length()
             }
         }
     "#;
@@ -250,8 +250,5 @@ async fn any_all_success_returns_a_value() {
     // first success wins (both succeed) — either 5 or 6; deterministic-ish but
     // assert it's a real success, not -1 / error.
     let r = run_main(source).await.unwrap();
-    assert!(
-        matches!(r, BexExternalValue::Int(5) | BexExternalValue::Int(6)),
-        "got {r:?}"
-    );
+    assert!(matches!(r, BexExternalValue::Int(5 | 6)), "got {r:?}");
 }

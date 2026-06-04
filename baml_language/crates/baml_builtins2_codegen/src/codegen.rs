@@ -937,7 +937,7 @@ fn emit_required_method(out: &mut String, method_name: &str, b: &NativeBuiltin) 
 
     match b.vm_usage {
         VmUsage::None => {
-            writeln!(out, "    fn {method_name}({params}) -> {return_type};",).unwrap();
+            writeln!(out, "    fn {method_name}({params}) -> {return_type};").unwrap();
         }
         VmUsage::Ref => writeln!(
             out,

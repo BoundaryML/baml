@@ -445,7 +445,7 @@ impl<'s> JsonParseState<'s> {
                 ',' if in_object_value || in_array => {
                     if closing_char_count % 2 == 0 {
                         // We're ready to close the value
-                        log::debug!("Closing due to: value",);
+                        log::debug!("Closing due to: value");
                         true
                     } else {
                         // We're not ready to close the value
@@ -454,7 +454,7 @@ impl<'s> JsonParseState<'s> {
                 }
                 '}' if in_object_value => {
                     // We're ready to close the value
-                    log::debug!("Closing due to: value",);
+                    log::debug!("Closing due to: value");
                     true
                 }
                 ']' if in_array => {
@@ -495,13 +495,9 @@ impl<'s> JsonParseState<'s> {
                     // We'll close the string the next time around.
                     false
                 }
-                '{' | '"' | '\'' | '[' => {
-                    if !has_some_object {
-                        // We're in a string
-                        true
-                    } else {
-                        false
-                    }
+                '{' | '"' | '\'' | '[' if !has_some_object => {
+                    // We're in a string
+                    true
                 }
                 _ => {
                     // Almost every other character should not close the string

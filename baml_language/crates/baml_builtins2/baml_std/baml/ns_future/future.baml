@@ -159,7 +159,10 @@ function any<T, E>(futures: baml.future.Future<T, E>[]) -> baml.future.Future<T,
         // `f` succeeded; record its value and stop. The catch is unreachable
         // and only there to keep the throws type `AllFailed<E>` (not `E`).
         winners.push((await f) catch (e) {
-          let e => throw baml.future.AllFailed { errors: errors.concat([e]) }
+          let e => {
+            let failure: baml.future.AllFailed<E> = baml.future.AllFailed { errors: errors.concat([e]) };
+            throw failure
+          }
         });
         break;
       }
@@ -173,7 +176,13 @@ function any<T, E>(futures: baml.future.Future<T, E>[]) -> baml.future.Future<T,
       remaining = remaining.slice(0, i).concat(remaining.slice(i + 1, remaining.length()));
     }
     if (winners.length() == 0) {
-      throw baml.future.AllFailed { errors: errors };
+      // The typed let drives bidirectional checking: a BARE generic literal
+      // records no class type args (TIR does not infer literal type args from
+      // fields), but checking it against the annotation records
+      // `AllFailed<E>`, which MIR threads to the runtime instance — typed
+      // arms like `let e: AllFailed<string>` compare them.
+      let failure: baml.future.AllFailed<E> = baml.future.AllFailed { errors: errors };
+      throw failure;
     }
     // A success was recorded; cancel the losers and return it.
     futures.map((g) -> { g.cancel() });

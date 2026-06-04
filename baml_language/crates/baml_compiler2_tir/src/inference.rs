@@ -150,6 +150,12 @@ pub struct ScopeInference<'db> {
     param_types: Vec<(Name, Ty)>,
     /// Full parameter binding plan for checked calls.
     call_plans: FxHashMap<ExprId, CallPlan>,
+    /// Generic instantiation for checked calls whose callee declares type
+    /// params, in declared De Bruijn order ([class params...] ++ [fn
+    /// params...]). Values may contain the *caller's* rigid `TypeVar`s
+    /// (generic→generic calls); MIR lowers those to `TypeArgRef` templates
+    /// resolved against the caller's `frame.type_args` at runtime.
+    call_type_instantiations: FxHashMap<ExprId, Vec<Ty>>,
     /// Function value adapters required after structural function subtyping.
     ///
     /// Optional parameters are matched by name in TIR types, but runtime calls
@@ -178,6 +184,7 @@ pub struct DefaultParameterInference<'db> {
     pub(crate) path_segment_types: FxHashMap<(ExprId, usize), Ty>,
     pub(crate) path_member_resolutions: FxHashMap<ExprId, Vec<MemberResolution<'db>>>,
     pub(crate) call_plans: FxHashMap<ExprId, CallPlan>,
+    pub(crate) call_type_instantiations: FxHashMap<ExprId, Vec<Ty>>,
     pub(crate) function_coercions: FxHashMap<ExprId, FunctionCoercion>,
 }
 
@@ -193,6 +200,7 @@ impl DefaultParameterInference<'_> {
             path_segment_types: FxHashMap::default(),
             path_member_resolutions: FxHashMap::default(),
             call_plans: FxHashMap::default(),
+            call_type_instantiations: FxHashMap::default(),
             function_coercions: FxHashMap::default(),
         }
     }
@@ -328,6 +336,12 @@ impl<'db> ScopeInference<'db> {
         self.call_plans.iter()
     }
 
+    /// Iterate over the generic instantiations recorded for checked calls
+    /// (callee's declared type params, in De Bruijn order).
+    pub fn iter_call_type_instantiations(&self) -> impl Iterator<Item = (&ExprId, &Vec<Ty>)> {
+        self.call_type_instantiations.iter()
+    }
+
     /// Iterate over all function adapters required by checked coercions.
     pub fn iter_function_coercions(&self) -> impl Iterator<Item = (&ExprId, &FunctionCoercion)> {
         self.function_coercions.iter()
@@ -375,6 +389,13 @@ impl<'db> ScopeInference<'db> {
     /// Iterate over all default-parameter call binding plans.
     pub fn iter_default_call_plans(&self) -> impl Iterator<Item = (&ExprId, &CallPlan)> {
         self.parameter_defaults.call_plans.iter()
+    }
+
+    /// Iterate over all default-parameter call generic instantiations.
+    pub fn iter_default_call_type_instantiations(
+        &self,
+    ) -> impl Iterator<Item = (&ExprId, &Vec<Ty>)> {
+        self.parameter_defaults.call_type_instantiations.iter()
     }
 
     /// Iterate over all default-parameter function adapters.
@@ -545,6 +566,7 @@ fn infer_scope_types_cycle_initial<'db>(
         nested_lambda_types: FxHashMap::default(),
         param_types: Vec::new(),
         call_plans: FxHashMap::default(),
+        call_type_instantiations: FxHashMap::default(),
         function_coercions: FxHashMap::default(),
         parameter_defaults: DefaultParameterInference::empty(),
         extra: None,
@@ -1181,6 +1203,7 @@ pub fn infer_scope_types<'db>(
         path_member_resolutions,
         param_types,
         call_plans,
+        call_type_instantiations,
         function_coercions,
         nested_lambda_types,
         parameter_defaults,
@@ -1204,6 +1227,7 @@ pub fn infer_scope_types<'db>(
         nested_lambda_types,
         param_types,
         call_plans,
+        call_type_instantiations,
         function_coercions,
         parameter_defaults,
         extra,

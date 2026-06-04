@@ -1501,14 +1501,12 @@ impl<'db> SemanticIndexBuilder<'db> {
                         });
                     }
                 }
-                "skip" => {
-                    if !attr.args.is_empty() {
-                        self.diagnostics.push(Hir2Diagnostic::DiagnosticMessage {
-                            diagnostic_id: DiagnosticId::UnexpectedAttributeArg,
-                            message: "`@skip` does not take any arguments".to_string(),
-                            span: attr.span,
-                        });
-                    }
+                "skip" if !attr.args.is_empty() => {
+                    self.diagnostics.push(Hir2Diagnostic::DiagnosticMessage {
+                        diagnostic_id: DiagnosticId::UnexpectedAttributeArg,
+                        message: "`@skip` does not take any arguments".to_string(),
+                        span: attr.span,
+                    });
                 }
                 _ => {
                     // Unknown attributes passed through silently (e.g. @stream.*)

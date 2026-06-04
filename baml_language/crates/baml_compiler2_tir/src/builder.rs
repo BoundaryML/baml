@@ -348,6 +348,10 @@ struct CallCheckRequest<'a> {
     /// site. `Some(map)` means the caller already validated arity and resolved each `TypeExpr`;
     /// `None` means use the existing forward/reverse inference paths.
     explicit_type_arg_bindings: Option<FxHashMap<Name, Ty>>,
+    /// The callee expression, when one exists. Used to resolve the callee's
+    /// declared generic params so the call's final type-arg bindings can be
+    /// recorded (in declared order) in `call_type_instantiations` for MIR.
+    callee_expr: Option<ExprId>,
 }
 
 #[derive(Clone, Copy)]
@@ -459,6 +463,10 @@ pub struct TypeInferenceBuilder<'db> {
     pub param_types: Vec<(Name, Ty)>,
     /// Full parameter binding plans for checked call expressions.
     pub call_plans: FxHashMap<ExprId, crate::inference::CallPlan>,
+    /// Generic instantiation per checked call whose callee declares type
+    /// params, in declared De Bruijn order. See
+    /// `ScopeInference::call_type_instantiations`.
+    pub call_type_instantiations: FxHashMap<ExprId, Vec<Ty>>,
     /// Function adapters required by checked optional-parameter coercions.
     pub function_coercions: FxHashMap<ExprId, crate::inference::FunctionCoercion>,
     /// Metadata produced while checking parameter defaults. Kept separate from
@@ -671,6 +679,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             path_member_resolutions: FxHashMap::default(),
             param_types: Vec::new(),
             call_plans: FxHashMap::default(),
+            call_type_instantiations: FxHashMap::default(),
             function_coercions: FxHashMap::default(),
             default_parameter_inference: crate::inference::DefaultParameterInference::empty(),
             nested_lambda_types: FxHashMap::default(),
@@ -717,6 +726,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         FxHashMap<ExprId, Vec<crate::inference::MemberResolution<'db>>>,
         Vec<(Name, Ty)>,
         FxHashMap<ExprId, crate::inference::CallPlan>,
+        FxHashMap<ExprId, Vec<Ty>>,
         FxHashMap<ExprId, crate::inference::FunctionCoercion>,
         FxHashMap<FileScopeId, Ty>,
         crate::inference::DefaultParameterInference<'db>,
@@ -734,6 +744,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             self.path_member_resolutions,
             self.param_types,
             self.call_plans,
+            self.call_type_instantiations,
             self.function_coercions,
             self.nested_lambda_types,
             self.default_parameter_inference,
@@ -1359,6 +1370,52 @@ impl<'db> TypeInferenceBuilder<'db> {
         }
     }
 
+    /// The callee's declared generic-param names in De Bruijn order
+    /// (`[class params...] ++ [user fn params...]`), plus the callee's name
+    /// for diagnostics. Resolved from the callee expression's recorded
+    /// `MemberResolution`; `None` when the callee is not a declared function
+    /// (lambda values, unresolved callees).
+    fn callee_declared_generic_params(&self, callee_id: ExprId) -> Option<(Vec<Name>, Name)> {
+        let resolution = self.resolutions.get(&callee_id).cloned()?;
+        let (func_loc, treat_as_static_method) = match resolution {
+            crate::inference::MemberResolution::Free { func_loc } => (func_loc, true),
+            // `UnboundMethod` covers `Class.method` / `Class<...>.method` call
+            // sites where the receiver is a type name.  When the call writes
+            // `Class<...>.method(...)`, the receiver-type's `<...>` is parsed
+            // as the call's type-args by `find_callee_generic_args` in
+            // `lower_expr_body.rs`; those args fill the *enclosing class's*
+            // generic params (BEP-039), so we include them in the declared
+            // list.
+            crate::inference::MemberResolution::UnboundMethod { func_loc, .. } => (func_loc, true),
+            // BoundMethod calls (`inst.method(args)`) get class type-args
+            // from the receiver instance's `class_type_args` at runtime, not
+            // from the call site.
+            crate::inference::MemberResolution::BoundMethod { func_loc, .. } => (func_loc, false),
+            _ => return None,
+        };
+        let db = self.context.db();
+        let sig = baml_compiler2_ppir::elaborated_function_signature(db, func_loc);
+        // Only user-declared generic params are supplied at the call site;
+        // synthetic effect params are always inferred.  For
+        // static-method-on-generic-class calls, prepend the class's generic
+        // params: type-args fill `[class_params..., function_params...]`.
+        let class_params: Vec<Name> = if treat_as_static_method {
+            let file = func_loc.file(db);
+            let item_tree = baml_compiler2_ppir::file_item_tree(db, file);
+            item_tree
+                .classes
+                .values()
+                .find(|class_data| class_data.methods.contains(&func_loc.id(db)))
+                .map(|class_data| class_data.generic_params.clone())
+                .unwrap_or_default()
+        } else {
+            Vec::new()
+        };
+        let mut declared_params: Vec<Name> = class_params;
+        declared_params.extend(sig.user_generic_params.iter().cloned());
+        Some((declared_params, sig.name.clone()))
+    }
+
     /// Resolve explicit type arguments written at a call site (e.g. `foo<int, string>(x)`).
     ///
     /// Returns `Some(bindings)` when all type args are valid, where `bindings` maps each
@@ -1374,48 +1431,12 @@ impl<'db> TypeInferenceBuilder<'db> {
         type_args: &[TypeExpr],
         call_expr_id: ExprId,
     ) -> Option<FxHashMap<Name, Ty>> {
-        // Look up the callee's resolution to find the declared generic param names.
-        let resolution = self.resolutions.get(&callee_id).cloned()?;
-        let (func_loc, treat_as_static_method) = match resolution {
-            crate::inference::MemberResolution::Free { func_loc } => (func_loc, true),
-            // `UnboundMethod` covers `Class.method` / `Class<...>.method` call
-            // sites where the receiver is a type name.  When the call writes
-            // `Class<...>.method(...)`, the receiver-type's `<...>` is parsed
-            // as the call's type-args by `find_callee_generic_args` in
-            // `lower_expr_body.rs`; those args fill the *enclosing class's*
-            // generic params (BEP-039), so we include them in the
-            // expected-arity check below.
-            crate::inference::MemberResolution::UnboundMethod { func_loc, .. } => (func_loc, true),
-            // BoundMethod calls (`inst.method(args)`) get class type-args
-            // from the receiver instance's `class_type_args` at runtime, not
-            // from the call site.
-            crate::inference::MemberResolution::BoundMethod { func_loc, .. } => (func_loc, false),
-            _ => return None,
-        };
-        let db = self.context.db();
-        let sig = baml_compiler2_ppir::elaborated_function_signature(db, func_loc);
-        // Only user-declared generic params are supplied explicitly; synthetic effect params
-        // are always inferred.  For static-method-on-generic-class calls, prepend the
-        // class's generic params: type-args fill `[class_params..., function_params...]`.
-        let class_params: Vec<Name> = if treat_as_static_method {
-            let file = func_loc.file(db);
-            let item_tree = baml_compiler2_ppir::file_item_tree(db, file);
-            item_tree
-                .classes
-                .values()
-                .find(|class_data| class_data.methods.contains(&func_loc.id(db)))
-                .map(|class_data| class_data.generic_params.clone())
-                .unwrap_or_default()
-        } else {
-            Vec::new()
-        };
-        let mut declared_params: Vec<Name> = class_params;
-        declared_params.extend(sig.user_generic_params.iter().cloned());
+        let (declared_params, callee_name) = self.callee_declared_generic_params(callee_id)?;
 
         if type_args.len() != declared_params.len() {
             self.context.report_simple(
                 TirTypeError::WrongTypeArgArity {
-                    callee_name: sig.name.clone(),
+                    callee_name,
                     expected: declared_params.len(),
                     got: type_args.len(),
                 },
@@ -1425,6 +1446,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         }
 
         // Resolve each type argument in the current namespace context.
+        let db = self.context.db();
         let mut bindings = FxHashMap::default();
         let ns = self.ns_context.clone();
         let caller_generic_params = self.generic_params.clone();
@@ -1639,6 +1661,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         let saved_path_segment_types = std::mem::take(&mut self.path_segment_types);
         let saved_path_member_resolutions = std::mem::take(&mut self.path_member_resolutions);
         let saved_call_plans = std::mem::take(&mut self.call_plans);
+        let saved_call_type_instantiations = std::mem::take(&mut self.call_type_instantiations);
         let saved_function_coercions = std::mem::take(&mut self.function_coercions);
         let saved_lambda_effective_throws = std::mem::take(&mut self.lambda_effective_throws);
         let defaults = &parameter_defaults.defaults;
@@ -1718,6 +1741,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             path_segment_types: std::mem::take(&mut self.path_segment_types),
             path_member_resolutions: std::mem::take(&mut self.path_member_resolutions),
             call_plans: std::mem::take(&mut self.call_plans),
+            call_type_instantiations: std::mem::take(&mut self.call_type_instantiations),
             function_coercions: std::mem::take(&mut self.function_coercions),
         };
 
@@ -1730,6 +1754,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         self.path_segment_types = saved_path_segment_types;
         self.path_member_resolutions = saved_path_member_resolutions;
         self.call_plans = saved_call_plans;
+        self.call_type_instantiations = saved_call_type_instantiations;
         self.function_coercions = saved_function_coercions;
         self.lambda_effective_throws = saved_lambda_effective_throws;
         self.body_source_map = saved_body_source_map;
@@ -2278,6 +2303,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             is_method_call,
             is_optional_call,
             explicit_type_arg_bindings,
+            callee_expr,
         } = request;
         let explicit_args_used = explicit_type_arg_bindings.is_some();
         let callee_ty = self.expand_alias_chains(callee_ty);
@@ -2439,6 +2465,30 @@ impl<'db> TypeInferenceBuilder<'db> {
                     }
                 }
 
+                // Record the call's final generic instantiation (declared
+                // De Bruijn order) so MIR can thread it into the callee's
+                // `frame.type_args` at runtime. Values are recorded BEFORE
+                // typevar erasure: a binding to the *caller's* rigid `TypeVar`
+                // must survive so MIR can lower it to a `TypeArgRef` into the
+                // caller's own frame (generic→generic calls).
+                if let Some(callee_id) = callee_expr {
+                    if let Some((declared_params, _)) =
+                        self.callee_declared_generic_params(callee_id)
+                    {
+                        if !declared_params.is_empty() {
+                            let instantiation: Vec<Ty> = declared_params
+                                .iter()
+                                .map(|name| {
+                                    bindings.get(name).cloned().unwrap_or(Ty::Unknown {
+                                        attr: TyAttr::default(),
+                                    })
+                                })
+                                .collect();
+                            self.call_type_instantiations.insert(expr_id, instantiation);
+                        }
+                    }
+                }
+
                 let substituted_ret = crate::generics::substitute_ty(ret, &bindings);
                 let mut erase_diags = Vec::new();
                 let result =
@@ -2576,6 +2626,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                         is_method_call,
                         is_optional_call,
                         explicit_type_arg_bindings,
+                        callee_expr,
                     });
                 }
 
@@ -2667,6 +2718,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             is_method_call,
             is_optional_call: true,
             explicit_type_arg_bindings: None,
+            callee_expr: Some(callee_id),
         });
         let final_ty = Self::make_optional(checked.result);
         self.report_result_type_mismatch(expr_id, &final_ty, expected);
@@ -3003,7 +3055,17 @@ impl<'db> TypeInferenceBuilder<'db> {
                         if path.is_qualified() {
                             self.res_ctx
                                 .resolve_type(db, path.segments(), &self.ns_context)
-                                .map(|(_, ty)| ty)
+                                .map(|(_, ty)| match ty {
+                                    // Apply explicit literal type args
+                                    // (`pkg.Foo<int> { ... }`): the resolver
+                                    // returns the class with its declared
+                                    // params, not the instantiation written
+                                    // at the literal.
+                                    Ty::Class(tn, _, attr) if !lowered_type_args.is_empty() => {
+                                        Ty::Class(tn, lowered_type_args.clone(), attr)
+                                    }
+                                    other => other,
+                                })
                         } else {
                             let leaf = path.leaf();
                             self.package_items
@@ -3599,6 +3661,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                     is_method_call,
                     is_optional_call: false,
                     explicit_type_arg_bindings,
+                    callee_expr: Some(*callee),
                 });
 
                 if !checked.bindings_from_inference {
@@ -9063,6 +9126,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         let saved_path_member_resolutions = std::mem::take(&mut self.path_member_resolutions);
         let saved_lambda_effective_throws = std::mem::take(&mut self.lambda_effective_throws);
         let saved_call_plans = std::mem::take(&mut self.call_plans);
+        let saved_call_type_instantiations = std::mem::take(&mut self.call_type_instantiations);
         let saved_function_coercions = std::mem::take(&mut self.function_coercions);
         let saved_body_source_map = self.body_source_map.clone();
         self.body_source_map = Some(lambda_source_map.clone());
@@ -9165,6 +9229,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         self.path_member_resolutions = saved_path_member_resolutions;
         self.lambda_effective_throws = saved_lambda_effective_throws;
         self.call_plans = saved_call_plans;
+        self.call_type_instantiations = saved_call_type_instantiations;
         self.function_coercions = saved_function_coercions;
         self.locals = saved_locals;
         self.scoped_local_declarations = saved_scoped_local_declarations;
