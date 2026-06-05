@@ -1,5 +1,5 @@
 // Iterator protocol and concrete sources for the native BAML iterator tests.
-// The tests live one namespace up, in `user.iter`, so they exercise qualified
+// The tests live one namespace up, in `user.iter_impl_generics_only`, so they exercise qualified
 // generic interface types across nested namespaces.
 
 class Done {}

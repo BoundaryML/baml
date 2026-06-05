@@ -1107,7 +1107,30 @@ pub fn infer_scope_types<'db>(
                                 .iter()
                                 .map(|p| Ty::TypeVar(p.clone(), TyAttr::default()))
                                 .collect();
-                            Some(Ty::Interface(qtn, args, Vec::new(), TyAttr::default()))
+                            let associated_bindings = iface
+                                .associated_types
+                                .iter()
+                                .map(|assoc| {
+                                    (
+                                        assoc.name.clone(),
+                                        Ty::AssociatedTypeProjection {
+                                            base: Box::new(Ty::TypeVar(
+                                                Name::new("Self"),
+                                                TyAttr::default(),
+                                            )),
+                                            interface: None,
+                                            member: assoc.name.clone(),
+                                            attr: TyAttr::default(),
+                                        },
+                                    )
+                                })
+                                .collect();
+                            Some(Ty::Interface(
+                                qtn,
+                                args,
+                                associated_bindings,
+                                TyAttr::default(),
+                            ))
                         })
                     } else {
                         None
@@ -1318,7 +1341,7 @@ pub fn infer_scope_types<'db>(
                                 for assoc in &iface_data.associated_types {
                                     if let Some(default) = &assoc.default {
                                         let mut default_diags = Vec::new();
-                                        let ty = crate::generics::lower_type_expr_with_generics(
+                                        let _ = crate::generics::lower_type_expr_with_generics(
                                             db,
                                             &default.expr,
                                             pkg_items,
@@ -1329,24 +1352,19 @@ pub fn infer_scope_types<'db>(
                                         for diag in default_diags {
                                             builder.report_at_span(diag, default.span);
                                         }
-                                        type_bindings.insert(assoc.name.clone(), ty);
-                                    } else {
-                                        // Inside the interface's own (default) method, `Self` is the
-                                        // rigid type variable bound by the interface, so an unbound
-                                        // associated type projects onto `Self` — not the interface
-                                        // existential. This must match how a `self.method()` call in
-                                        // the body resolves the same associated type
-                                        // (`add_interface_associated_type_bindings` via
-                                        // `SelfReceiver::RigidVar`: base `Self`, and `interface`
-                                        // unqualified for the enclosing interface). Projecting onto
-                                        // the existential here instead produced a spurious
-                                        // `expected (It as It).Item, got Self.Item` mismatch when a
-                                        // default method returned `self.<assoc-returning-method>()`.
-                                        type_bindings.insert(
-                                            assoc.name.clone(),
-                                            self_assoc_projection(assoc.name.clone()),
-                                        );
                                     }
+                                    // Inside the interface's own (default) method, `Self` is the
+                                    // rigid type variable bound by the interface, not an existential
+                                    // interface value. Associated types therefore project onto `Self`
+                                    // even when they have defaults. Defaults are for omitted bindings
+                                    // at interface type-use sites; a default body must stay
+                                    // polymorphic over implementors that override the associated type.
+                                    // This also matches how `self.method()` resolves the same
+                                    // associated type via `SelfReceiver::RigidVar`.
+                                    type_bindings.insert(
+                                        assoc.name.clone(),
+                                        self_assoc_projection(assoc.name.clone()),
+                                    );
                                 }
                                 let own_associated: FxHashSet<Name> = iface_data
                                     .associated_types
@@ -1377,6 +1395,7 @@ pub fn infer_scope_types<'db>(
                                 }
                             }
                         }
+                        builder.set_type_bindings(type_bindings.clone());
                         let lower_with_self = |te: &baml_compiler2_ast::TypeExpr,
                                                diags: &mut Vec<
                             crate::infer_context::TirTypeError,

@@ -14,7 +14,7 @@ use baml_compiler2_mir::{
     BasicBlock, BinOp, BlockId, Constant, IndexKind, IntrinsicOp, Local, LogLevel, MirFunctionBody,
     Operand, Place, Rvalue, StatementKind, Terminator, UnaryOp,
 };
-use baml_type::{Ty, TyTemplate};
+use baml_type::{Ty, TyTemplate, TypeName};
 use bex_vm_types::{
     BinOp as VmBinOp, Bytecode, CmpOp, ConstValue, Function, FunctionKind, FunctionOrigin,
     GlobalIndex, Instruction, Object, ObjectIndex, ObjectPool, UnaryOp as VmUnaryOp,
@@ -434,6 +434,29 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
         }
     }
 
+    fn class_object_index_for_type_name(&self, tn: &TypeName) -> Option<usize> {
+        let full_name = if tn.module_path.is_empty() {
+            tn.name.to_string()
+        } else {
+            let module = tn
+                .module_path
+                .iter()
+                .map(baml_base::Name::as_str)
+                .collect::<Vec<_>>()
+                .join(".");
+            format!("{module}.{}", tn.name)
+        };
+        self.class_object_indices
+            .get(&full_name)
+            .copied()
+            .or_else(|| {
+                self.class_object_indices
+                    .get(tn.display_name.as_str())
+                    .copied()
+            })
+            .or_else(|| self.class_object_indices.get(tn.name.as_str()).copied())
+    }
+
     /// Resolve the type of a MIR Place by walking from the root local through projections.
     fn resolve_place_type(&self, place: &Place) -> Option<Ty> {
         match place {
@@ -443,9 +466,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 let base_ty = self.resolve_place_type(base)?;
                 match &base_ty {
                     Ty::Class(type_name, _, _) => {
-                        let &obj_idx = self
-                            .class_object_indices
-                            .get(type_name.display_name.as_str())?;
+                        let obj_idx = self.class_object_index_for_type_name(type_name)?;
                         match self.objects.get(obj_idx)? {
                             Object::Class(class) => {
                                 class.fields.get(*field).map(|f| f.field_type.clone())
@@ -3101,7 +3122,7 @@ impl PullSink for StackifyCodegen<'_, '_> {
                 // concrete-but-parametric (e.g. Foo<int>).  Use the
                 // ClassWithTypeArgs constant so the VM can compare args.
                 let class_name_str = tn.display_name.as_str();
-                if let Some(&class_obj_idx) = self.class_object_indices.get(class_name_str) {
+                if let Some(class_obj_idx) = self.class_object_index_for_type_name(tn) {
                     let c = self.add_constant(ConstValue::ClassWithTypeArgs {
                         class_obj: ObjectIndex::from_raw(class_obj_idx),
                         type_args_templates: type_args_templates.clone(),
@@ -3125,7 +3146,7 @@ impl PullSink for StackifyCodegen<'_, '_> {
                 };
                 if let Some((tn, ty_args_opt)) = maybe_class {
                     let class_name_str = tn.display_name.as_str();
-                    if let Some(&class_obj_idx) = self.class_object_indices.get(class_name_str) {
+                    if let Some(class_obj_idx) = self.class_object_index_for_type_name(tn) {
                         match ty_args_opt {
                             Some(ty_args) if !ty_args.is_empty() => {
                                 // Concrete generic class, e.g. Foo<int>: emit

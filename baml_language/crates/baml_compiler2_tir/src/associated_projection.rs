@@ -12,7 +12,7 @@ use baml_compiler2_hir::{
     contributions::Definition,
     package::{PackageId, PackageItems},
 };
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::{
     package_interface::PackageResolutionContext,
@@ -88,6 +88,10 @@ impl<'a, 'db, B: TypeVarBounds + ?Sized> AssociatedProjectionResolver<'a, 'db, B
     /// Resolve every associated projection contained in `ty` that can be
     /// concretized from the available package and generic-bound context.
     pub fn resolve_deep(&self, ty: &Ty) -> Ty {
+        self.resolve_deep_inner(ty, &mut FxHashSet::default())
+    }
+
+    fn resolve_deep_inner(&self, ty: &Ty, resolving: &mut FxHashSet<Ty>) -> Ty {
         match ty {
             Ty::AssociatedTypeProjection {
                 base,
@@ -96,55 +100,73 @@ impl<'a, 'db, B: TypeVarBounds + ?Sized> AssociatedProjectionResolver<'a, 'db, B
                 attr,
             } => {
                 let projected = Ty::AssociatedTypeProjection {
-                    base: Box::new(self.resolve_deep(base)),
+                    base: Box::new(self.resolve_deep_inner(base, resolving)),
                     interface: interface
                         .as_ref()
-                        .map(|interface| Box::new(self.resolve_deep(interface))),
+                        .map(|interface| Box::new(self.resolve_deep_inner(interface, resolving))),
                     member: member.clone(),
                     attr: attr.clone(),
                 };
-                self.resolve_projection(&projected)
-                    .map(|resolved| self.resolve_deep(&resolved))
-                    .unwrap_or(projected)
+                if !resolving.insert(projected.clone()) {
+                    return projected;
+                }
+                let resolved = self
+                    .resolve_projection(&projected)
+                    .map(|resolved| {
+                        if resolved == projected {
+                            projected.clone()
+                        } else {
+                            self.resolve_deep_inner(&resolved, resolving)
+                        }
+                    })
+                    .unwrap_or_else(|| projected.clone());
+                resolving.remove(&projected);
+                resolved
             }
             Ty::Class(qtn, args, attr) => Ty::Class(
                 qtn.clone(),
-                args.iter().map(|arg| self.resolve_deep(arg)).collect(),
+                args.iter()
+                    .map(|arg| self.resolve_deep_inner(arg, resolving))
+                    .collect(),
                 attr.clone(),
             ),
             Ty::Interface(qtn, args, associated_bindings, attr) => Ty::Interface(
                 qtn.clone(),
-                args.iter().map(|arg| self.resolve_deep(arg)).collect(),
+                args.iter()
+                    .map(|arg| self.resolve_deep_inner(arg, resolving))
+                    .collect(),
                 associated_bindings
                     .iter()
-                    .map(|(name, ty)| (name.clone(), self.resolve_deep(ty)))
+                    .map(|(name, ty)| (name.clone(), self.resolve_deep_inner(ty, resolving)))
                     .collect(),
                 attr.clone(),
             ),
-            Ty::List(inner, attr) => Ty::List(Box::new(self.resolve_deep(inner)), attr.clone()),
+            Ty::List(inner, attr) => {
+                Ty::List(Box::new(self.resolve_deep_inner(inner, resolving)), attr.clone())
+            }
             Ty::EvolvingList(inner, attr) => {
-                Ty::EvolvingList(Box::new(self.resolve_deep(inner)), attr.clone())
+                Ty::EvolvingList(Box::new(self.resolve_deep_inner(inner, resolving)), attr.clone())
             }
             Ty::Map(key, value, attr) => Ty::Map(
-                Box::new(self.resolve_deep(key)),
-                Box::new(self.resolve_deep(value)),
+                Box::new(self.resolve_deep_inner(key, resolving)),
+                Box::new(self.resolve_deep_inner(value, resolving)),
                 attr.clone(),
             ),
             Ty::EvolvingMap(key, value, attr) => Ty::EvolvingMap(
-                Box::new(self.resolve_deep(key)),
-                Box::new(self.resolve_deep(value)),
+                Box::new(self.resolve_deep_inner(key, resolving)),
+                Box::new(self.resolve_deep_inner(value, resolving)),
                 attr.clone(),
             ),
             Ty::Union(members, attr) => Ty::Union(
                 members
                     .iter()
-                    .map(|member| self.resolve_deep(member))
+                    .map(|member| self.resolve_deep_inner(member, resolving))
                     .collect(),
                 attr.clone(),
             ),
             Ty::Future(value, error, attr) => Ty::Future(
-                Box::new(self.resolve_deep(value)),
-                Box::new(self.resolve_deep(error)),
+                Box::new(self.resolve_deep_inner(value, resolving)),
+                Box::new(self.resolve_deep_inner(error, resolving)),
                 attr.clone(),
             ),
             Ty::Function {
@@ -158,18 +180,22 @@ impl<'a, 'db, B: TypeVarBounds + ?Sized> AssociatedProjectionResolver<'a, 'db, B
                 generic_params: generic_params.clone(),
                 generic_param_bounds: generic_param_bounds
                     .iter()
-                    .map(|bound| bound.as_ref().map(|bound| self.resolve_deep(bound)))
+                    .map(|bound| {
+                        bound
+                            .as_ref()
+                            .map(|bound| self.resolve_deep_inner(bound, resolving))
+                    })
                     .collect(),
                 params: params
                     .iter()
                     .map(|param| FunctionParamTy {
                         name: param.name.clone(),
-                        ty: self.resolve_deep(&param.ty),
+                        ty: self.resolve_deep_inner(&param.ty, resolving),
                         mode: param.mode,
                     })
                     .collect(),
-                ret: Box::new(self.resolve_deep(ret)),
-                throws: Box::new(self.resolve_deep(throws)),
+                ret: Box::new(self.resolve_deep_inner(ret, resolving)),
+                throws: Box::new(self.resolve_deep_inner(throws, resolving)),
                 attr: attr.clone(),
             },
             _ => ty.clone(),

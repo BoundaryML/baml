@@ -72,6 +72,22 @@ namespace baml.io:
   function input
   function print
   function println
+namespace baml.iter:
+  class ArrayIterator<T> { methods: [new, to_json, from_json, iter, next] }
+  class Chain<T, E> { methods: [to_json, from_json, iter, next] }
+  class Done { methods: [to_json, from_json] }
+  class Filter<T, E, E2> { methods: [to_json, from_json, iter, next] }
+  class FilterMap<T, R, E, E2> { methods: [to_json, from_json, iter, next] }
+  class FlatMap<T, R, E, E2, E3> { methods: [to_json, from_json, iter, next] }
+  class Flatten<R, E, E3> { methods: [to_json, from_json, iter, next] }
+  type Iterable
+  type Iterator
+  class Map<T, R, E, E2> { methods: [to_json, from_json, iter, next] }
+  class Peekable<T, E> { methods: [peek, to_json, from_json, iter, next] }
+  class Range { methods: [new, to_json, from_json, iter, next] }
+  class Repeat<T> { methods: [new, to_json, from_json, iter, next] }
+  class StepBy<T, E> { methods: [to_json, from_json, iter, next] }
+  function flatten<R, E, E3>
 namespace baml.json:
   class JsonDecodeError { methods: [to_json, from_json] }
   class JsonParseError { methods: [to_json, from_json] }

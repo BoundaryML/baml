@@ -481,6 +481,254 @@ function baml.io.input(prompt: string?) -> string  [builtin]
 function baml.io.print(s: string) -> null  [builtin]
 function baml.io.println(s: string) -> null  [builtin]
 
+--- <builtin>/baml/ns_iter/iter.baml ---
+class baml.iter.ArrayIterator {
+  arr: T[]
+  idx: int
+}
+class baml.iter.Chain {
+  iter: Iterator<Item = T, Error = E>
+  other: Iterator<Item = T, Error = E>
+  first_done: bool
+}
+class baml.iter.Done {
+}
+class baml.iter.Filter {
+  iter: Iterator<Item = T, Error = E>
+  predicate: (T) -> bool throws E2
+}
+class baml.iter.FilterMap {
+  iter: Iterator<Item = T, Error = E>
+  func: (T) -> R? throws E2
+}
+class baml.iter.FlatMap {
+  iter: Iterator<Item = T, Error = E>
+  func: (T) -> Iterable<Item = R, Error = E3> throws E2
+  inner: Iterator<Item = R, Error = E3> | baml.iter.Done
+}
+class baml.iter.Flatten {
+  iter: Iterator<Item = Iterable<Item = R, Error = E3>, Error = E>
+  inner: Iterator<Item = R, Error = E3> | baml.iter.Done
+}
+class baml.iter.Map {
+  iter: Iterator<Item = T, Error = E>
+  func: (T) -> R throws E2
+}
+class baml.iter.Peekable {
+  iter: Iterator<Item = T, Error = E>
+  buffer: T | baml.iter.Done
+  has_buffer: bool
+}
+class baml.iter.Range {
+  i: int
+  max: int
+  step: int
+}
+class baml.iter.Repeat {
+  value: T
+  count: int
+}
+class baml.iter.StepBy {
+  iter: Iterator<Item = T, Error = E>
+  n: int
+  first: bool
+}
+function baml.iter.chain(self: ?, other: Iterator<Item = Item, Error = Error>) -> Iterator<Item = Item, Error = Error>  [expr] {
+  {  } baml.iter.Chain { iter: self, other: other, first_done: false }
+}
+function baml.iter.collect(self: ?) -> Item[]  [expr] {
+  { let r: Item[] = []; while true {  } match (self.next()) { baml.iter.Done => { break }, x: Item => r.push(x) } } r
+}
+function baml.iter.count(self: ?) -> int  [expr] {
+  { let n: int = 0; while true {  } match (self.next()) { baml.iter.Done => { break }, x: Item => { n Add= 1 } } } n
+}
+function baml.iter.every(self: ?, predicate: (Item) -> bool throws E2) -> bool  [expr] {
+  { while true {  } match (self.next()) { baml.iter.Done => { break }, x: Item => {  } if (Not predicate(x)) { return false } } } true
+}
+function baml.iter.filter(self: ?, predicate: (Item) -> bool throws E2) -> Iterator<Item = Item, Error = Error | E2>  [expr] {
+  {  } baml.iter.Filter { iter: self, predicate: predicate }
+}
+function baml.iter.filter_map(self: ?, fn: (Item) -> R? throws E2) -> Iterator<Item = R, Error = Error | E2>  [expr] {
+  {  } baml.iter.FilterMap { iter: self, func: fn }
+}
+function baml.iter.find(self: ?, predicate: (Item) -> bool throws E2) -> Item?  [expr] {
+  { while true {  } match (self.next()) { baml.iter.Done => { break }, x: Item => {  } if (predicate(x)) { return x } } } null
+}
+function baml.iter.flat_map(self: ?, fn: (Item) -> Iterable<Item = R, Error = E3> throws E2) -> Iterator<Item = R, Error = Error | E2 | E3>  [expr] {
+  {  } baml.iter.FlatMap { iter: self, func: fn, inner: baml.iter.Done {  } }
+}
+function baml.iter.flatten(src: Iterator<Item = Iterable<Item = R, Error = E3>, Error = E>) -> Iterator<Item = R, Error = E | E3>  [expr] {
+  {  } baml.iter.Flatten { iter: src, inner: baml.iter.Done {  } }
+}
+function baml.iter.from_json(j: baml.json.json) -> baml.iter.Chain<T, E>  [expr] {
+  baml.iter.Chain { iter: baml.json.from_json(baml.json.field(j, "iter")), other: baml.json.from_json(baml.json.field(j, "other")), first_done: baml.json.from_json(baml.json.field(j, "first_done")) }
+}
+function baml.iter.from_json(j: baml.json.json) -> baml.iter.Map<T, R, E, E2>  [expr] {
+  baml.json.from_string(baml.json.stringify(j))
+}
+function baml.iter.from_json(j: baml.json.json) -> baml.iter.StepBy<T, E>  [expr] {
+  baml.iter.StepBy { iter: baml.json.from_json(baml.json.field(j, "iter")), n: baml.json.from_json(baml.json.field(j, "n")), first: baml.json.from_json(baml.json.field(j, "first")) }
+}
+function baml.iter.from_json(j: baml.json.json) -> baml.iter.Repeat<T>  [expr] {
+  baml.iter.Repeat { value: baml.json.from_json(baml.json.field(j, "value")), count: baml.json.from_json(baml.json.field(j, "count")) }
+}
+function baml.iter.from_json(j: baml.json.json) -> baml.iter.Peekable<T, E>  [expr] {
+  baml.iter.Peekable { iter: baml.json.from_json(baml.json.field(j, "iter")), buffer: baml.json.from_json(baml.json.field(j, "buffer")), has_buffer: baml.json.from_json(baml.json.field(j, "has_buffer")) }
+}
+function baml.iter.from_json(j: baml.json.json) -> baml.iter.Range  [expr] {
+  baml.iter.Range { i: baml.json.from_json(baml.json.field(j, "i")), max: baml.json.from_json(baml.json.field(j, "max")), step: baml.json.from_json(baml.json.field(j, "step")) }
+}
+function baml.iter.from_json(j: baml.json.json) -> baml.iter.Flatten<R, E, E3>  [expr] {
+  baml.iter.Flatten { iter: baml.json.from_json(baml.json.field(j, "iter")), inner: baml.json.from_json(baml.json.field(j, "inner")) }
+}
+function baml.iter.from_json(j: baml.json.json) -> baml.iter.ArrayIterator<T>  [expr] {
+  baml.iter.ArrayIterator { arr: baml.json.from_json(baml.json.field(j, "arr")), idx: baml.json.from_json(baml.json.field(j, "idx")) }
+}
+function baml.iter.from_json(j: baml.json.json) -> baml.iter.FlatMap<T, R, E, E2, E3>  [expr] {
+  baml.json.from_string(baml.json.stringify(j))
+}
+function baml.iter.from_json(j: baml.json.json) -> baml.iter.Done  [expr] {
+  baml.iter.Done {  }
+}
+function baml.iter.from_json(j: baml.json.json) -> baml.iter.FilterMap<T, R, E, E2>  [expr] {
+  baml.json.from_string(baml.json.stringify(j))
+}
+function baml.iter.from_json(j: baml.json.json) -> baml.iter.Filter<T, E, E2>  [expr] {
+  baml.json.from_string(baml.json.stringify(j))
+}
+function baml.iter.iter(self: ?) -> Iterator<Item = T, Error = never>  [expr] {
+  {  } self
+}
+function baml.iter.iter(self: ?) -> Iterator<Item = R, Error = E | E2 | E3>  [expr] {
+  {  } self
+}
+function baml.iter.iter(self: ?) -> Iterator<Item = R, Error = E | E2>  [expr] {
+  {  } self
+}
+function baml.iter.iter(self: ?) -> Iterator<Item = T, Error = never>  [expr] {
+  {  } ArrayIterator.new(self)
+}
+function baml.iter.iter(self: ?) -> Iterator<Item = T, Error = E | E2>  [expr] {
+  {  } self
+}
+function baml.iter.iter(self: ?) -> Iterator<Item = T, Error = E>  [expr] {
+  {  } self
+}
+function baml.iter.iter(self: ?) -> Iterator<Item = R, Error = E | E2>  [expr] {
+  {  } self
+}
+function baml.iter.iter(self: ?) -> Iterator<Item = T, Error = E>  [expr] {
+  {  } self
+}
+function baml.iter.iter(self: ?) -> Iterator<Item = T, Error = never>  [expr] {
+  {  } self
+}
+function baml.iter.iter(self: ?) -> Iterator<Item = T, Error = E>  [expr] {
+  {  } self
+}
+function baml.iter.iter(self: ?) -> Iterator<Item = int, Error = never>  [expr] {
+  {  } self
+}
+function baml.iter.iter(self: ?) -> Iterator<Item = R, Error = E | E3>  [expr] {
+  {  } self
+}
+function baml.iter.map(self: ?, fn: (Item) -> R throws E2) -> Iterator<Item = R, Error = Error | E2>  [expr] {
+  {  } baml.iter.Map { iter: self, func: fn }
+}
+function baml.iter.new(value: T, count: int = ...) -> baml.iter.Repeat<T>  [expr] {
+  {  } baml.iter.Repeat { value: value, count: count }
+}
+function baml.iter.new(min: int, max: int, step: int = 1) -> baml.iter.Range  [expr] {
+  {  } baml.iter.Range { i: min, max: max, step: step }
+}
+function baml.iter.new(arr: T[]) -> baml.iter.ArrayIterator<T>  [expr] {
+  {  } baml.iter.ArrayIterator { arr: arr.slice(0, arr.length()), idx: 0 }
+}
+function baml.iter.next(self: ?) -> T | baml.iter.Done  [expr] {
+  { while true {  } match (self.iter.next()) { baml.iter.Done => { return baml.iter.Done {  } }, x: T => {  } if (self.predicate(x)) { return x } } } baml.iter.Done {  }
+}
+function baml.iter.next(self: ?) -> T | baml.iter.Done  [expr] {
+  { if (Not self.first_done) {  } match (self.iter.next()) { baml.iter.Done => { self.first_done = true }, x: T => { return x } } } self.other.next()
+}
+function baml.iter.next(self: ?) -> R | baml.iter.Done  [expr] {
+  {  } match (self.iter.next()) { baml.iter.Done => baml.iter.Done {  }, x: T => self.func(x) }
+}
+function baml.iter.next(self: ?) -> T | baml.iter.Done  [expr] {
+  { if (self.first) { self.first = false; return self.iter.next() }; { let i = 0; while i Lt self.n Sub 1 {  } match (self.iter.next()) { baml.iter.Done => { return baml.iter.Done {  } }, x: T => {  } } } } self.iter.next()
+}
+function baml.iter.next(self: ?) -> T | baml.iter.Done  [expr] {
+  {  } if (self.count Lt 0) {  } self.value else if (self.count Gt 0) { self.count Sub= 1 } self.value else {  } baml.iter.Done {  }
+}
+function baml.iter.next(self: ?) -> T | baml.iter.Done  [expr] {
+  { if (self.has_buffer) { let v = self.buffer; self.buffer = baml.iter.Done {  }; self.has_buffer = false; return v } } self.iter.next()
+}
+function baml.iter.next(self: ?) -> int | baml.iter.Done  [expr] {
+  {  } if (self.i Lt self.max) { let cur = self.i; self.i Add= self.step } cur else {  } baml.iter.Done {  }
+}
+function baml.iter.next(self: ?) -> R | baml.iter.Done  [expr] {
+  { while true {  } match (self.inner) { cur: Iterator<Item = R, Error = E3> => {  } match (cur.next()) { baml.iter.Done => { self.inner = baml.iter.Done {  } }, y: R => { return y } }, baml.iter.Done => {  } match (self.iter.next()) { baml.iter.Done => { return baml.iter.Done {  } }, x: Iterable<Item = R, Error = E3> => { let it = x.iter(); self.inner = it } } } } baml.iter.Done {  }
+}
+function baml.iter.next(self: ?) -> T | baml.iter.Done  [expr] {
+  {  } match (self.arr.at(self.idx)) { null => baml.iter.Done {  }, item: T => { self.idx Add= 1 } item }
+}
+function baml.iter.next(self: ?) -> R | baml.iter.Done  [expr] {
+  { while true {  } match (self.inner) { cur: Iterator<Item = R, Error = E3> => {  } match (cur.next()) { baml.iter.Done => { self.inner = baml.iter.Done {  } }, y: R => { return y } }, baml.iter.Done => {  } match (self.iter.next()) { baml.iter.Done => { return baml.iter.Done {  } }, x: T => { let it = self.func(x).iter(); self.inner = it } } } } baml.iter.Done {  }
+}
+function baml.iter.next(self: ?) -> R | baml.iter.Done  [expr] {
+  { while true {  } match (self.iter.next()) { baml.iter.Done => { return baml.iter.Done {  } }, x: T => {  } match (self.func(x)) { null => {  }, y: R => { return y } } } } baml.iter.Done {  }
+}
+function baml.iter.peek(self: ?) -> T | baml.iter.Done  [expr] {
+  { if (self.has_buffer) { return self.buffer }; let v = self.iter.next(); self.buffer = v; self.has_buffer = true } v
+}
+function baml.iter.peekable(self: ?) -> baml.iter.Peekable<Item, Error>  [expr] {
+  {  } baml.iter.Peekable { iter: self, buffer: baml.iter.Done {  }, has_buffer: false }
+}
+function baml.iter.reduce(self: ?, fn: (A, Item) -> A throws E2, initial: A) -> A  [expr] {
+  { let acc: A = initial; while true {  } match (self.next()) { baml.iter.Done => { break }, x: Item => { acc = fn(acc, x) } } } acc
+}
+function baml.iter.some(self: ?, predicate: (Item) -> bool throws E2) -> bool  [expr] {
+  { while true {  } match (self.next()) { baml.iter.Done => { break }, x: Item => {  } if (predicate(x)) { return true } } } false
+}
+function baml.iter.step_by(self: ?, n: int) -> Iterator<Item = Item, Error = Error>  [expr] {
+  {  } baml.iter.StepBy { iter: self, n: n, first: true }
+}
+function baml.iter.to_json(self: ?) -> baml.json.json  [expr] {
+  map { "iter": self.iter.to_json(), "other": self.other.to_json(), "first_done": self.first_done.to_json() }
+}
+function baml.iter.to_json(self: ?) -> baml.json.json  [expr] {
+  baml.json.parse(baml.json.to_string(self))
+}
+function baml.iter.to_json(self: ?) -> baml.json.json  [expr] {
+  map { "iter": self.iter.to_json(), "n": self.n.to_json(), "first": self.first.to_json() }
+}
+function baml.iter.to_json(self: ?) -> baml.json.json  [expr] {
+  map { "value": baml.json.to_json(self.value), "count": self.count.to_json() }
+}
+function baml.iter.to_json(self: ?) -> baml.json.json  [expr] {
+  map { "iter": self.iter.to_json(), "buffer": baml.json.to_json(self.buffer), "has_buffer": self.has_buffer.to_json() }
+}
+function baml.iter.to_json(self: ?) -> baml.json.json  [expr] {
+  map { "i": self.i.to_json(), "max": self.max.to_json(), "step": self.step.to_json() }
+}
+function baml.iter.to_json(self: ?) -> baml.json.json  [expr] {
+  map { "iter": self.iter.to_json(), "inner": self.inner.to_json() }
+}
+function baml.iter.to_json(self: ?) -> baml.json.json  [expr] {
+  map { "arr": self.arr.to_json(), "idx": self.idx.to_json() }
+}
+function baml.iter.to_json(self: ?) -> baml.json.json  [expr] {
+  baml.json.parse(baml.json.to_string(self))
+}
+function baml.iter.to_json(self: ?) -> baml.json.json  [expr] {
+  map {  }
+}
+function baml.iter.to_json(self: ?) -> baml.json.json  [expr] {
+  baml.json.parse(baml.json.to_string(self))
+}
+function baml.iter.to_json(self: ?) -> baml.json.json  [expr] {
+  baml.json.parse(baml.json.to_string(self))
+}
+
 --- <builtin>/baml/ns_json/json.baml ---
 class baml.json.JsonDecodeError {
   message: string

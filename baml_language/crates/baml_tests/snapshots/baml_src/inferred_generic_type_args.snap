@@ -240,7 +240,7 @@ function inferred_generic_type_args.Counter.element_type(self: inferred_generic_
 
 function inferred_generic_type_args.Cursor.take_one(self: inferred_generic_type_args.Cursor<unknown>) -> inferred_generic_type_args.Cursor<unknown> {
     load_var self
-    is_type SingleCursor<...>
+    is_type inferred_generic_type_args.SingleCursor<...>
     pop_jump_if_false L0
     jump L1
 
@@ -368,7 +368,7 @@ function inferred_generic_type_args.NextIter.collect2(self: inferred_generic_typ
     load_const true
     pop_jump_if_false L5
     load_var self
-    is_type LoneIter<...>
+    is_type inferred_generic_type_args.LoneIter<...>
     pop_jump_if_false L1
     jump L2
 
@@ -537,7 +537,7 @@ function inferred_generic_type_args.class_method_builds_generic() -> int {
     call user.inferred_generic_type_args.SrcWrap.boxed
     store_var w
     load_var w
-    is_type Boxed<...>
+    is_type inferred_generic_type_args.Boxed<...>
     pop_jump_if_false L0
     jump L1
 
@@ -561,7 +561,7 @@ function inferred_generic_type_args.default_forward_reads_type_var() -> string {
     load_type int
     init_instance<1> user.inferred_generic_type_args.IntCounter .value
     store_var_load_var c
-    is_type StrCounter<...>
+    is_type inferred_generic_type_args.StrCounter<...>
     pop_jump_if_false L0
     jump L1
 
@@ -589,7 +589,7 @@ function inferred_generic_type_args.default_method_typevar_name() -> string {
     load_type int
     init_instance<1> user.inferred_generic_type_args.ArrNamed .arr, .idx
     store_var_load_var s
-    is_type ArrNamed<...>
+    is_type inferred_generic_type_args.ArrNamed<...>
     pop_jump_if_false L0
     jump L1
 
@@ -635,7 +635,7 @@ function inferred_generic_type_args.generic_behind_nongeneric_iface() -> string 
     load_type int
     init_instance<1> user.inferred_generic_type_args.TypedBox .value
     store_var_load_var d
-    is_type TypedBox
+    is_type inferred_generic_type_args.TypedBox
     pop_jump_if_false L0
     jump L1
 
@@ -662,7 +662,7 @@ function inferred_generic_type_args.inferred_ctor_collect_count() -> int {
     call user.inferred_generic_type_args.ArrIter.of
     store_var it
     load_var it
-    is_type LoneIter<...>
+    is_type inferred_generic_type_args.LoneIter<...>
     pop_jump_if_false L0
     jump L1
 
@@ -727,7 +727,7 @@ function inferred_generic_type_args.inferred_static_ctor_first() -> int {
     call user.inferred_generic_type_args.ArrBag.make
     store_var s
     load_var s
-    is_type OneBag<...>
+    is_type inferred_generic_type_args.OneBag<...>
     pop_jump_if_false L0
     jump L1
 
@@ -752,7 +752,7 @@ function inferred_generic_type_args.inferred_static_ctor_speak() -> string {
     call user.inferred_generic_type_args.Dog.make
     store_var d
     load_var d
-    is_type Cat
+    is_type inferred_generic_type_args.Cat
     pop_jump_if_false L0
     jump L1
 
@@ -778,7 +778,7 @@ function inferred_generic_type_args.interface_dispatch_inferred_method_type_arg(
     load_type int
     store_var _4
     load_var p
-    is_type ProbeA
+    is_type inferred_generic_type_args.ProbeA
     pop_jump_if_false L0
     jump L1
 
@@ -801,7 +801,7 @@ function inferred_generic_type_args.nested_self_inferred_binding() -> string {
     load_const 1
     init_instance user.inferred_generic_type_args.EchoA .n
     store_var_load_var e
-    is_type EchoB
+    is_type inferred_generic_type_args.EchoB
     pop_jump_if_false L0
     jump L1
 
@@ -827,7 +827,7 @@ function inferred_generic_type_args.take_one_then_head() -> int {
     call user.inferred_generic_type_args.ArrayCursor.of
     store_var cursor
     load_var cursor
-    is_type SingleCursor<...>
+    is_type inferred_generic_type_args.SingleCursor<...>
     pop_jump_if_false L0
     jump L1
 
@@ -846,7 +846,7 @@ function inferred_generic_type_args.take_one_then_head() -> int {
 
   L2:
     load_var single
-    is_type SingleCursor<...>
+    is_type inferred_generic_type_args.SingleCursor<...>
     pop_jump_if_false L3
     jump L4
 

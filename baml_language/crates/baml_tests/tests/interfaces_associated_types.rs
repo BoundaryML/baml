@@ -217,6 +217,273 @@ fn associated_type_declaration_forms_compile() {
 }
 
 #[test]
+fn implementor_self_coerces_to_interface_with_associated_bindings_in_return_context() {
+    assert_zero_compile_errors(
+        r#"
+        class Done {}
+
+        interface Iterable {
+            type Item
+            type Error = never
+
+            function iter(self) -> Iterator<Item = Item, Error = Error> throws never
+        }
+
+        interface Iterator requires Iterable<Item = Self.Item, Error = Self.Error> {
+            type Item
+            type Error = never
+
+            function next(self) -> Item | Done throws Error
+        }
+
+        class ArrayIterator<T> {
+            values: T[]
+            idx: int
+
+            implements Iterable {
+                type Item = T
+                type Error = never
+
+                function iter(self) -> Iterator<Item = T, Error = never> throws never {
+                    return self
+                }
+            }
+
+            implements Iterator {
+                type Item = T
+                type Error = never
+
+                function next(self) -> T | Done throws never {
+                    match (self.values.at(self.idx)) {
+                        null => Done {},
+                        let value: T => {
+                            self.idx += 1
+                            value
+                        },
+                    }
+                }
+            }
+        }
+        "#,
+    );
+}
+
+#[tokio::test]
+async fn associated_type_projection_in_throws_position_runs() {
+    let output = baml_test!(
+        r#"
+        class Boom {
+            message: string
+        }
+
+        interface Fallible {
+            type Error
+
+            function value(self) -> int throws Error
+
+            function value_plus_one(self) -> int throws Error {
+                return self.value() + 1
+            }
+        }
+
+        class AlwaysFails {
+            implements Fallible {
+                type Error = Boom
+
+                function value(self) -> int throws Boom {
+                    throw Boom { message: "boom" }
+                }
+            }
+        }
+
+        function call_value<F extends Fallible>(value: F) -> int throws F.Error {
+            return value.value()
+        }
+
+        function main() -> string {
+            let default_result = AlwaysFails {}.value_plus_one() catch (e) {
+                Boom => "default:" + e.message
+            }
+            let generic_result = call_value(AlwaysFails {}) catch (e) {
+                Boom => "generic:" + e.message
+            }
+            return default_result + "|" + generic_result
+        }
+        "#
+    );
+
+    assert_eq!(
+        output.result.unwrap(),
+        BexExternalValue::String("default:boom|generic:boom".into())
+    );
+}
+
+#[test]
+fn default_interface_method_can_thread_associated_error_through_callback() {
+    assert_zero_compile_errors(
+        r#"
+        class Done {}
+
+        interface Iterator {
+            type Item
+            type Error = never
+
+            function next(self) -> Item | Done throws Error
+
+            function map<R, E2>(self, f: (Item) -> R throws E2) -> Mapper<Item, R, Error, E2> throws never {
+                return Mapper<Item, R, Error, E2> { inner: self, f: f }
+            }
+        }
+
+        class Mapper<T, R, E, E2> {
+            inner: Iterator<Item = T, Error = E>
+            f: (T) -> R throws E2
+
+            implements Iterator {
+                type Item = R
+                type Error = E | E2
+
+                function next(self) -> R | Done throws E | E2 {
+                    match (self.inner.next()) {
+                        Done => Done {},
+                        let value: T => self.f(value),
+                    }
+                }
+            }
+        }
+        "#,
+    );
+}
+
+#[test]
+fn associated_type_adapter_class_with_never_error_coerces_to_iterator() {
+    assert_zero_compile_errors(
+        r#"
+        class Done {}
+
+        interface Iterable {
+            type Item
+            type Error = never
+
+            function iter(self) -> Iterator<Item = Item, Error = Error> throws never
+        }
+
+        interface Iterator requires Iterable<Item = Self.Item, Error = Self.Error> {
+            type Item
+            type Error = never
+
+            function next(self) -> Item | Done throws Error
+        }
+
+        class Map<T, R, E, E2> {
+            iter: Iterator<Item = T, Error = E>
+            f: (T) -> R throws E2
+
+            implements Iterable {
+                type Item = R
+                type Error = E | E2
+
+                function iter(self) -> Iterator<Item = R, Error = E | E2> throws never {
+                    self
+                }
+            }
+
+            implements Iterator {
+                type Item = R
+                type Error = E | E2
+
+                function next(self) -> R | Done throws E | E2 {
+                    Done {}
+                }
+            }
+        }
+
+        function use_map() -> int {
+            let source: Iterator<Item = int, Error = never> = Map<int, int, never, never> {
+                iter: Empty {},
+                f: (x: int) -> int { x },
+            }
+            let mapped: Iterator<Item = int, Error = never> = Map<int, int, never, never> {
+                iter: source,
+                f: (x: int) -> int { x * 3 },
+            }
+            1
+        }
+
+        class Empty {
+            implements Iterable {
+                type Item = int
+                type Error = never
+
+                function iter(self) -> Iterator<Item = int, Error = never> throws never {
+                    self
+                }
+            }
+
+            implements Iterator {
+                type Item = int
+                type Error = never
+
+                function next(self) -> int | Done throws never {
+                    Done {}
+                }
+            }
+        }
+        "#,
+    );
+}
+
+#[test]
+fn default_iterator_adapter_method_returns_adapter_with_symbolic_error_projection() {
+    assert_zero_compile_errors(
+        r#"
+        class Done {}
+
+        interface Iterable {
+            type Item
+            type Error = never
+
+            function iter(self) -> Iterator<Item = Item, Error = Error> throws never
+        }
+
+        interface Iterator requires Iterable<Item = Self.Item, Error = Self.Error> {
+            type Item
+            type Error = never
+
+            function next(self) -> Item | Done throws Error
+
+            function map<R, E2>(self, f: (Item) -> R throws E2) -> Iterator<Item = R, Error = Error | E2> throws never {
+                Map<Item, R, Error, E2> { iter: self, f: f }
+            }
+        }
+
+        class Map<T, R, E, E2> {
+            iter: Iterator<Item = T, Error = E>
+            f: (T) -> R throws E2
+
+            implements Iterable {
+                type Item = R
+                type Error = E | E2
+
+                function iter(self) -> Iterator<Item = R, Error = E | E2> throws never {
+                    self
+                }
+            }
+
+            implements Iterator {
+                type Item = R
+                type Error = E | E2
+
+                function next(self) -> R | Done throws E | E2 {
+                    Done {}
+                }
+            }
+        }
+        "#,
+    );
+}
+
+#[test]
 fn vm_metadata_resolves_concrete_associated_type_projection_return() {
     let (_params, return_type) = compiled_function_metadata(
         r#"

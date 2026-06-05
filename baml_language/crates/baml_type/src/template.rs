@@ -17,7 +17,10 @@
 //! `TypeArgRef(n)` refers to the n-th entry in the enclosing call-frame's
 //! `type_args` vector (0-based).  The compiler assigns indices using
 //! `function_generic_params` ordering so that the mapping is stable across
-//! compilation.
+//! compilation. `TypeArgRefOrWildcard(n)` has the same index, but is only valid
+//! in dispatch guards: if the runtime slot is unconcretized, it matches any
+//! actual type argument instead of materializing `unknown` as a concrete
+//! constraint.
 
 use std::fmt;
 
@@ -32,6 +35,14 @@ pub enum TyTemplate {
     Concrete(Ty),
     /// De Bruijn index into the enclosing frame's `type_args`.
     TypeArgRef(u32),
+    /// De Bruijn index into the enclosing frame's `type_args`, with
+    /// unconcretized runtime slots treated as wildcards in dispatch guards.
+    ///
+    /// This is intentionally distinct from `TypeArgRef`: normal type
+    /// materialization must preserve `unknown`, while guard matching needs to
+    /// express "this position came from receiver-relative associated evidence
+    /// that was not concretized at runtime."
+    TypeArgRefOrWildcard(u32),
     /// `T[]`
     Array(Box<TyTemplate>),
     /// `T1 | T2 | ...` (a member being `Concrete(null)` encodes optionality)
@@ -64,7 +75,7 @@ impl TyTemplate {
     pub fn substitute(&self, type_args: &[Ty]) -> Ty {
         match self {
             Self::Concrete(t) => t.clone(),
-            Self::TypeArgRef(n) => type_args
+            Self::TypeArgRef(n) | Self::TypeArgRefOrWildcard(n) => type_args
                 .get(*n as usize)
                 .cloned()
                 .unwrap_or_else(Ty::unknown),
@@ -102,7 +113,7 @@ impl TyTemplate {
     pub fn is_fully_concrete(&self) -> bool {
         match self {
             Self::Concrete(_) => true,
-            Self::TypeArgRef(_) => false,
+            Self::TypeArgRef(_) | Self::TypeArgRefOrWildcard(_) => false,
             Self::Array(inner) => inner.is_fully_concrete(),
             Self::Union(parts) => parts.iter().all(TyTemplate::is_fully_concrete),
             Self::Map(k, v) => k.is_fully_concrete() && v.is_fully_concrete(),
@@ -124,6 +135,7 @@ impl fmt::Display for TyTemplate {
         match self {
             Self::Concrete(ty) => write!(f, "{ty}"),
             Self::TypeArgRef(n) => write!(f, "#{n}"),
+            Self::TypeArgRefOrWildcard(n) => write!(f, "#{n}?"),
             Self::Array(inner) => write!(f, "{inner}[]"),
             Self::Union(parts) => {
                 // `?` is sugar that exists only in source/lowering; after that a

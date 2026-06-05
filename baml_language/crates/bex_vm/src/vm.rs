@@ -5135,6 +5135,52 @@ impl BexVm {
                     // (parametric class identity check). Other kinds fall through
                     // to the pre-resolved Object/Int path.
                     let raw_const = &function.bytecode.constants[const_idx];
+                    fn guard_template_matches(
+                        template: &baml_type::TyTemplate,
+                        frame_type_args: &[baml_type::Ty],
+                        actual: &baml_type::Ty,
+                    ) -> bool {
+                        match template {
+                            baml_type::TyTemplate::Wildcard => true,
+                            baml_type::TyTemplate::TypeArgRefOrWildcard(n) => {
+                                match frame_type_args.get(*n as usize) {
+                                    Some(baml_type::Ty::BuiltinUnknown { .. }) | None => true,
+                                    Some(expected) => expected == actual,
+                                }
+                            }
+                            baml_type::TyTemplate::TypeArgRef(n) => {
+                                frame_type_args
+                                    .get(*n as usize)
+                                    .cloned()
+                                    .unwrap_or_else(baml_type::Ty::unknown)
+                                    == *actual
+                            }
+                            baml_type::TyTemplate::Concrete(expected) => expected == actual,
+                            baml_type::TyTemplate::Array(inner) => {
+                                matches!(actual, baml_type::Ty::List(actual_inner, _) if guard_template_matches(inner, frame_type_args, actual_inner))
+                            }
+                            baml_type::TyTemplate::Map(k, v) => {
+                                matches!(actual, baml_type::Ty::Map { key, value, .. } if guard_template_matches(k, frame_type_args, key) && guard_template_matches(v, frame_type_args, value))
+                            }
+                            baml_type::TyTemplate::Class(name, args) => {
+                                matches!(actual, baml_type::Ty::Class(actual_name, actual_args, _) if name == actual_name && args.len() == actual_args.len() && args.iter().zip(actual_args).all(|(template, actual)| guard_template_matches(template, frame_type_args, actual)))
+                            }
+                            baml_type::TyTemplate::Interface(name, args, assoc) => {
+                                matches!(actual, baml_type::Ty::Interface(actual_name, actual_args, actual_assoc, _) if name == actual_name
+                                && args.len() == actual_args.len()
+                                && args.iter().zip(actual_args).all(|(template, actual)| guard_template_matches(template, frame_type_args, actual))
+                                && assoc.iter().all(|(name, template)| {
+                                    actual_assoc
+                                        .iter()
+                                        .find(|(actual_name, _)| actual_name == name)
+                                        .is_some_and(|(_, actual)| guard_template_matches(template, frame_type_args, actual))
+                                }))
+                            }
+                            baml_type::TyTemplate::Union(parts) => parts
+                                .iter()
+                                .any(|part| guard_template_matches(part, frame_type_args, actual)),
+                        }
+                    }
                     let result = match raw_const {
                         ConstValue::ClassWithTypeArgs {
                             class_obj,
@@ -5150,20 +5196,21 @@ impl BexVm {
                                             } else {
                                                 vec![]
                                             };
-                                        // Position-wise match so a `Wildcard`
-                                        // template arg (BEP-044 partial guard)
-                                        // matches any concrete arg, while
-                                        // pinned positions must compare equal.
+                                        // Position-wise match: plain
+                                        // `TypeArgRef` is exact, while
+                                        // guard-only wildcard templates can
+                                        // intentionally leave a position
+                                        // unconstrained.
                                         type_args_templates.len() == inst.class_type_args.len()
                                             && type_args_templates
                                                 .iter()
                                                 .zip(&inst.class_type_args)
                                                 .all(|(template, actual)| {
-                                                    matches!(
+                                                    guard_template_matches(
                                                         template,
-                                                        baml_type::TyTemplate::Wildcard
-                                                    ) || template.substitute(&frame_type_args)
-                                                        == *actual
+                                                        &frame_type_args,
+                                                        actual,
+                                                    )
                                                 })
                                     }
                                     _ => false,

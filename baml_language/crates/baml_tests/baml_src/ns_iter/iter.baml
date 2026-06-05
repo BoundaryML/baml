@@ -1,9 +1,7 @@
-// Native coverage for the lazy-iterator protocol shape from the iterators2
-// worktree. This keeps the executable coverage in BAML, without wiring the
-// experimental `baml.iter` stdlib namespace into every test project yet.
+// Native coverage for the associated-type `baml.iter` stdlib.
 
 function iter_collect() -> int[] throws unknown {
-  let it: user.iter.core.Iterator<int, never> = user.iter.core.ArrayIterator.new([5, 6, 7]);
+  let it: baml.iter.Iterator<Item = int, Error = never> = baml.iter.ArrayIterator.new([5, 6, 7]);
   it.collect()
 }
 
@@ -12,7 +10,7 @@ test "iter_collect" {
 }
 
 function iter_reduce() -> int throws unknown {
-  let it: user.iter.core.Iterator<int, never> = user.iter.core.ArrayIterator.new([1, 2, 3, 4]);
+  let it: baml.iter.Iterator<Item = int, Error = never> = baml.iter.ArrayIterator.new([1, 2, 3, 4]);
   it.reduce((a: int, x: int) -> int { a + x }, 0)
 }
 
@@ -21,7 +19,7 @@ test "iter_reduce" {
 }
 
 function iter_count() -> int throws unknown {
-  let it: user.iter.core.Iterator<int, never> = user.iter.core.ArrayIterator.new([9, 9, 9]);
+  let it: baml.iter.Iterator<Item = int, Error = never> = baml.iter.ArrayIterator.new([9, 9, 9]);
   it.count()
 }
 
@@ -30,9 +28,9 @@ test "iter_count" {
 }
 
 function iter_some_every_find() -> bool throws unknown {
-  let some_large = user.iter.core.ArrayIterator.new([1, 2, 3]).some((x: int) -> bool { x > 2 });
-  let every_small = user.iter.core.ArrayIterator.new([1, 2, 3]).every((x: int) -> bool { x < 4 });
-  let found = user.iter.core.ArrayIterator.new([1, 2, 3, 4]).find((x: int) -> bool { x % 2 == 0 });
+  let some_large = baml.iter.ArrayIterator.new([1, 2, 3]).some((x: int) -> bool { x > 2 });
+  let every_small = baml.iter.ArrayIterator.new([1, 2, 3]).every((x: int) -> bool { x < 4 });
+  let found = baml.iter.ArrayIterator.new([1, 2, 3, 4]).find((x: int) -> bool { x % 2 == 0 });
   some_large && every_small && found == 2
 }
 
@@ -41,7 +39,7 @@ test "iter_some_every_find" {
 }
 
 function iter_range() -> int[] throws unknown {
-  user.iter.core.Range.new(0, 5).collect()
+  baml.iter.Range.new(0, 5).collect()
 }
 
 test "iter_range" {
@@ -49,8 +47,8 @@ test "iter_range" {
 }
 
 function iter_chain() -> int[] throws unknown {
-  let a: user.iter.core.Iterator<int, never> = user.iter.core.ArrayIterator.new([1, 2]);
-  let b: user.iter.core.Iterator<int, never> = user.iter.core.ArrayIterator.new([3, 4]);
+  let a: baml.iter.Iterator<Item = int, Error = never> = baml.iter.ArrayIterator.new([1, 2]);
+  let b: baml.iter.Iterator<Item = int, Error = never> = baml.iter.ArrayIterator.new([3, 4]);
   a.chain(b).collect()
 }
 
@@ -59,7 +57,7 @@ test "iter_chain" {
 }
 
 function iter_repeat() -> int[] throws unknown {
-  user.iter.core.Repeat<int> { value: 7, count: 3 }.collect()
+  baml.iter.Repeat<int> { value: 7, count: 3 }.collect()
 }
 
 test "iter_repeat" {
@@ -67,7 +65,7 @@ test "iter_repeat" {
 }
 
 function iter_map() -> int[] throws unknown {
-  let it: user.iter.core.Iterator<int, never> = user.iter.core.ArrayIterator.new([1, 2, 3]);
+  let it: baml.iter.Iterator<Item = int, Error = never> = baml.iter.ArrayIterator.new([1, 2, 3]);
   it.map((x: int) -> int { x * 2 }).collect()
 }
 
@@ -76,7 +74,7 @@ test "iter_map" {
 }
 
 function iter_map_implicit_source() -> int[] throws unknown {
-  user.iter.core.ArrayIterator.new([1, 2, 3]).map((x: int) -> int { x * 2 }).collect()
+  baml.iter.ArrayIterator.new([1, 2, 3]).map((x: int) -> int { x * 2 }).collect()
 }
 
 test "iter_map_implicit_source" {
@@ -84,8 +82,8 @@ test "iter_map_implicit_source" {
 }
 
 function iter_explicit_map_coerces_to_iterator() -> int[] throws unknown {
-  let it: user.iter.core.Iterator<int, never> = user.iter.core.ArrayIterator.new([1, 2, 3]);
-  let mapped: user.iter.core.Iterator<int, never> = user.iter.core.Map<int, int, never, never> {
+  let it: baml.iter.Iterator<Item = int, Error = never> = baml.iter.ArrayIterator.new([1, 2, 3]);
+  let mapped: baml.iter.Iterator<Item = int, Error = never> = baml.iter.Map<int, int, never, never> {
     iter: it,
     func: (x: int) -> int { x * 3 },
   };
@@ -97,7 +95,7 @@ test "iter_explicit_map_coerces_to_iterator" {
 }
 
 function iter_filter() -> int[] throws unknown {
-  let it: user.iter.core.Iterator<int, never> = user.iter.core.ArrayIterator.new([1, 2, 3, 4]);
+  let it: baml.iter.Iterator<Item = int, Error = never> = baml.iter.ArrayIterator.new([1, 2, 3, 4]);
   it.filter((x: int) -> bool { x % 2 == 0 }).collect()
 }
 
@@ -106,7 +104,7 @@ test "iter_filter" {
 }
 
 function iter_filter_implicit_source() -> int[] throws unknown {
-  user.iter.core.ArrayIterator.new([1, 2, 3, 4]).filter((x: int) -> bool { x % 2 == 0 }).collect()
+  baml.iter.ArrayIterator.new([1, 2, 3, 4]).filter((x: int) -> bool { x % 2 == 0 }).collect()
 }
 
 test "iter_filter_implicit_source" {
@@ -114,7 +112,7 @@ test "iter_filter_implicit_source" {
 }
 
 function iter_filter_map() -> int[] throws unknown {
-  let it: user.iter.core.Iterator<int, never> = user.iter.core.ArrayIterator.new([1, 2, 3, 4]);
+  let it: baml.iter.Iterator<Item = int, Error = never> = baml.iter.ArrayIterator.new([1, 2, 3, 4]);
   it.filter_map((x: int) -> int? {
     if (x % 2 == 0) {
       x * 10
@@ -129,7 +127,7 @@ test "iter_filter_map" {
 }
 
 function iter_filter_map_implicit_source() -> int[] throws unknown {
-  user.iter.core.ArrayIterator.new([1, 2, 3, 4]).filter_map((x: int) -> int? {
+  baml.iter.ArrayIterator.new([1, 2, 3, 4]).filter_map((x: int) -> int? {
     if (x % 2 == 0) {
       x * 10
     } else {
@@ -143,9 +141,9 @@ test "iter_filter_map_implicit_source" {
 }
 
 function iter_flat_map() -> int[] throws unknown {
-  let it: user.iter.core.Iterator<int, never> = user.iter.core.ArrayIterator.new([1, 2]);
-  it.flat_map((x: int) -> user.iter.core.Iterable<int, never> {
-    user.iter.core.ArrayIterator.new([x, x + 10])
+  let it: baml.iter.Iterator<Item = int, Error = never> = baml.iter.ArrayIterator.new([1, 2]);
+  it.flat_map((x: int) -> baml.iter.Iterable<Item = int, Error = never> {
+    baml.iter.ArrayIterator.new([x, x + 10])
   }).collect()
 }
 
@@ -154,8 +152,8 @@ test "iter_flat_map" {
 }
 
 function iter_flat_map_implicit_source() -> int[] throws unknown {
-  user.iter.core.ArrayIterator.new([1, 2]).flat_map((x: int) -> user.iter.core.Iterable<int, never> {
-    user.iter.core.ArrayIterator.new([x, x + 10])
+  baml.iter.ArrayIterator.new([1, 2]).flat_map((x: int) -> baml.iter.Iterable<Item = int, Error = never> {
+    baml.iter.ArrayIterator.new([x, x + 10])
   }).collect()
 }
 
@@ -164,12 +162,12 @@ test "iter_flat_map_implicit_source" {
 }
 
 function iter_flatten() -> int[] throws unknown {
-  let xs: user.iter.core.Iterable<int, never>[] = [
-    user.iter.core.ArrayIterator.new([1, 2]),
-    user.iter.core.ArrayIterator.new([3, 4]),
+  let xs: baml.iter.Iterable<Item = int, Error = never>[] = [
+    baml.iter.ArrayIterator.new([1, 2]),
+    baml.iter.ArrayIterator.new([3, 4]),
   ];
-  let outer: user.iter.core.Iterator<user.iter.core.Iterable<int, never>, never> = user.iter.core.ArrayIterator.new(xs);
-  user.iter.core.flatten(outer).collect()
+  let outer: baml.iter.Iterator<Item = baml.iter.Iterable<Item = int, Error = never>, Error = never> = baml.iter.ArrayIterator.new(xs);
+  baml.iter.flatten(outer).collect()
 }
 
 test "iter_flatten" {
@@ -177,22 +175,22 @@ test "iter_flatten" {
 }
 
 function iter_peekable() -> int[] throws unknown {
-  let p = user.iter.core.ArrayIterator.new([4, 5]).peekable();
+  let p = baml.iter.ArrayIterator.new([4, 5]).peekable();
   let out: int[] = [];
   match (p.peek()) {
-    user.iter.core.Done => {},
+    baml.iter.Done => {},
     let x: int => out.push(x),
   }
   match (p.next()) {
-    user.iter.core.Done => {},
+    baml.iter.Done => {},
     let x: int => out.push(x),
   }
   match (p.next()) {
-    user.iter.core.Done => {},
+    baml.iter.Done => {},
     let x: int => out.push(x),
   }
   match (p.peek()) {
-    user.iter.core.Done => out.push(99),
+    baml.iter.Done => out.push(99),
     let x: int => out.push(x),
   }
   out
@@ -203,7 +201,7 @@ test "iter_peekable" {
 }
 
 function iter_step_by() -> int[] throws unknown {
-  user.iter.core.Range.new(0, 6).step_by(2).collect()
+  baml.iter.Range.new(0, 6).step_by(2).collect()
 }
 
 test "iter_step_by" {
@@ -216,13 +214,4 @@ function iter_array_iter() -> int[] throws unknown {
 
 test "iter_array_iter" {
   assert.is_true(baml.deep_equals(iter_array_iter(), [1, 2, 3]))
-}
-
-function out_of_body_inferred_ctor_dispatch() -> int throws unknown {
-  let value: user.iter.core.OutOfBodyValue<int> = user.iter.core.OutOfBodyBox.new(11);
-  value.get()
-}
-
-test "out_of_body_inferred_ctor_dispatch" {
-  assert.equal(out_of_body_inferred_ctor_dispatch(), 11)
 }
