@@ -590,6 +590,22 @@ const HeroSection = () => {
           <p style={customStyles.p}>
             Python and Java were built for humans. BAML was built for agents.
           </p>
+          {/* Not a link — the arrow just points at the live playground that
+              sits in this hero. */}
+          <p
+            style={{
+              alignItems: 'center',
+              color: '#6D28D9',
+              display: 'inline-flex',
+              fontSize: '17px',
+              fontWeight: 500,
+              gap: '6px',
+              margin: '0 0 1.75rem',
+            }}
+          >
+            Try it in your browser
+            <span aria-hidden>→</span>
+          </p>
           <div style={customStyles.ctaContainer}>
             <div className="w-full max-w-xl">
               <p

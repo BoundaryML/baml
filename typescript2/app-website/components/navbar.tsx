@@ -116,12 +116,7 @@ export function Navbar() {
               {link.name}
             </Link>
           ))}
-          <Link
-            className="nav-link"
-            href="https://docs.boundaryml.com/?utm_source=marketing-site&utm_medium=navbar-docs"
-            rel="noopener noreferrer"
-            target="_blank"
-          >
+          <Link className="nav-link" href="/quickstart">
             Docs
           </Link>
           <Link className="nav-link" href="/vs">
@@ -130,7 +125,12 @@ export function Navbar() {
           <Link className="nav-link" href="/changelog">
             Changelog
           </Link>
-          <Link className="nav-link" href="/agent-tries-baml">
+          <Link
+            className="nav-link"
+            href="https://bench3-ui.fly.dev/"
+            rel="noopener noreferrer"
+            target="_blank"
+          >
             agent tries baml
           </Link>
         </div>
@@ -164,10 +164,8 @@ export function Navbar() {
           ))}
           <Link
             className="nav-mobile-link"
-            href="https://docs.boundaryml.com/?utm_source=marketing-site&utm_medium=navbar-docs"
+            href="/quickstart"
             onClick={() => setOpen(false)}
-            rel="noopener noreferrer"
-            target="_blank"
           >
             Docs
           </Link>
@@ -187,7 +185,7 @@ export function Navbar() {
           </Link>
           <Link
             className="nav-mobile-link"
-            href="/agent-tries-baml"
+            href="https://bench3-ui.fly.dev/"
             onClick={() => setOpen(false)}
           >
             agent tries baml

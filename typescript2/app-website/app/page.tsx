@@ -1,8 +1,9 @@
+import { AsciiBootLoader } from '@/components/ascii-boot-loader';
 import { FooterSection } from '@/components/footer-section';
 import { ForceLightTheme } from '@/components/force-light-theme';
 import { IncrementalAdoption } from '@/components/landing/incremental-adoption';
 import { LanguageFanout } from '@/components/landing/language-fanout';
-import { PlaygroundShowcase } from '@/components/landing/playground-showcase';
+import { PerspectiveSlider } from '@/components/landing/perspective-slider';
 import { VariantHome } from '@/components/landing/variant-home';
 import { WhyALanguage } from '@/components/landing/why-a-language';
 import { TestimonialSection } from '@/components/testimonial-section';
@@ -10,6 +11,7 @@ import { TestimonialSection } from '@/components/testimonial-section';
 export default async function Page() {
   return (
     <div className="w-full bg-background text-foreground">
+      <AsciiBootLoader />
       <ForceLightTheme />
       {/* Variant UI shell (Nav + Hero + Statement + Exhibit) */}
       <VariantHome />
@@ -31,8 +33,8 @@ export default async function Page() {
       {/* Incremental adoption — sticky scroll explainer */}
       <IncrementalAdoption />
 
-      {/* Larger live playground */}
-      <PlaygroundShowcase />
+      {/* Same program, two views — code ↔ graph */}
+      <PerspectiveSlider />
 
       {/* One file → every language fanout */}
       <LanguageFanout />

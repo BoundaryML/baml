@@ -438,7 +438,7 @@ export const siteConfig = {
           title: 'Changelog',
           url: 'https://docs.boundaryml.com/changelog/changelog',
         },
-        { id: 18, title: 'Docs', url: 'https://docs.boundaryml.com' },
+        { id: 18, title: 'Docs', url: '/quickstart' },
         { id: 19, title: 'Jobs', url: '/jobs' },
       ],
       title: 'Resources',
