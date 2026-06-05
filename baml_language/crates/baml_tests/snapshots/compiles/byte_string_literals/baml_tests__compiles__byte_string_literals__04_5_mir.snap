@@ -121,9 +121,9 @@ fn user.ByteStringInCondition() -> int {
     }
 }
 
-fn user.ByteStringIndexAccess() -> int? {
+fn user.ByteStringIndexAccess() -> int | null {
     // Locals:
-    let _0: int? // _0 // return
+    let _0: int | null // _0 // return
     let _1: uint8array // data
 
     bb0: {
@@ -151,9 +151,9 @@ fn user.ByteStringLiteralAsArg() -> int {
     }
 }
 
-fn user.ByteStringMutate() -> int? {
+fn user.ByteStringMutate() -> int | null {
     // Locals:
-    let _0: int? // _0 // return
+    let _0: int | null // _0 // return
     let _1: uint8array // data
     let _2: 0
 

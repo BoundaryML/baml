@@ -62,7 +62,6 @@ impl UnionMetadata {
                     .count();
                 (has_null, non_null_count == 1)
             }
-            Ty::Optional(..) => (true, true),
             _ => (false, false),
         };
 
@@ -388,7 +387,7 @@ impl BexExternalValue {
         } else {
             inner.clone()
         };
-        let optional_type = Ty::Optional(Box::new(inner), TyAttr::default());
+        let optional_type = Ty::optional(inner);
         BexExternalValue::Union {
             value: Box::new(value),
             metadata: UnionMetadata::new(optional_type, selected),
@@ -648,6 +647,15 @@ pub fn try_convert_rust_data(
     }
     if let Ok(typed) = arc.clone().downcast::<baml_builtins2::MediaValue>() {
         return Some(typed.to_bex_external_value());
+    }
+    // A `HostValueArc` wrapped into `Object::RustData` (e.g. the `_handle`
+    // slot of a `baml.errors.HostCallable` inbound from the host bridge):
+    // convert back to a `BexExternalValue::HostValue` so the outbound
+    // encoder emits a `Handle(HOST_VALUE_{CALLABLE,ERROR})` carrying the
+    // same `(key, kind)` — letting the originating bridge resolve the
+    // handle back to the original native object on round-trip.
+    if let Ok(typed) = arc.clone().downcast::<bex_resource_types::HostValueArc>() {
+        return Some(BexExternalValue::HostValue(typed));
     }
     None
 }

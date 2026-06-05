@@ -6,16 +6,11 @@
 # For plain `cargo test` (no nextest), run this manually after
 # `cargo test --no-run` populates each fixture's `generated/pyproject.toml`.
 #
-# See setup.sh for the full rationale. In short: `uv sync` per fixture
-# creates each venv + editable-links baml_core, then a single
-# `maturin develop` against `sdks/python/.venv` rebuilds the shared
-# extension module incrementally (~7s steady state). That venv is
-# populated from `sdks/python/pyproject.toml`'s dev group so the maturin
-# version constraint lives in TOML, not in an error-prone shell argument.
-# The old `uv sync --reinstall-package baml_core` was strictly slower
-# (~70s every run): uv's isolated build used an ephemeral interpreter
-# whose path moved each run, busting pyo3's fingerprint and forcing a
-# full bridge_python rebuild. The steps below are equivalent to setup.sh.
+# See setup.sh for the baseline rationale. The Windows CI path uses the
+# build-caching/04 approach B optimization: build baml_core once as a
+# wheel, then install that wheel into every fixture venv. This avoids the
+# redundant per-fixture editable build that `uv sync` can trigger before
+# the shared extension rebuild.
 
 $ErrorActionPreference = 'Stop'
 Set-Location $PSScriptRoot
@@ -35,33 +30,13 @@ if (-not (Get-Command uv -ErrorAction SilentlyContinue)) {
     $UvBin = (mise which uv).Trim()
 }
 
-# 1. Ensure each fixture venv exists, deps are installed, and baml_core
-#    is editable-linked. Plain `uv sync` (no --reinstall): on a fresh
-#    checkout this builds the editable wheel once; afterward it's a
-#    no-op. The shared extension it points at is (re)built by step 2.
-Get-ChildItem -Directory | ForEach-Object {
-    $generated = Join-Path $_.FullName 'generated'
-    if (Test-Path $generated) {
-        Write-Host "==> uv sync in $($_.Name)/generated"
-        Push-Location $generated
-        try {
-            & $UvBin sync
-            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-        } finally {
-            Pop-Location
-        }
-    }
-}
-
-# 2. Rebuild the shared baml_core extension incrementally via maturin.
-#    The build venv is `sdks/python/.venv` — uv's default project venv,
-#    at a stable path (see setup.sh for why that matters for the cargo
-#    cache). abi3 wheels are interpreter-version-agnostic, so any
-#    >=3.10 works. `sdks/python/pyproject.toml` owns the maturin
-#    version constraint; the sync below installs dev tools without
-#    installing/building baml_core (`maturin develop` does that).
+# 1. Build the shared baml_core wheel once. `sdks/python/.venv` supplies
+#    maturin at a stable path, keeping pyo3 fingerprints stable.
 $SdkPyVenv = Join-Path $SdkPy '.venv'
 $MaturinExe = Join-Path $SdkPyVenv 'Scripts\maturin.exe'
+$WheelDir = Join-Path $WorkspaceRoot 'target\wheels'
+# Must exist before the first uv command when CI exports UV_FIND_LINKS.
+New-Item -ItemType Directory -Force -Path $WheelDir | Out-Null
 Write-Host "==> uv sync (dev) in $SdkPy"
 Push-Location $SdkPy
 try {
@@ -71,14 +46,49 @@ try {
 } finally {
     Pop-Location
 }
-Write-Host '==> maturin develop (shared baml_core extension)'
+Write-Host '==> maturin build (shared baml_core wheel)'
 Push-Location $SdkPy
 try {
     $env:VIRTUAL_ENV = $SdkPyVenv
-    & $MaturinExe develop
+    & $MaturinExe build --out $WheelDir
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 } finally {
     Pop-Location
+}
+
+# 2. Per fixture: install deps + the prebuilt baml_core wheel. Strip the
+#    editable `[tool.uv.sources] baml_core` block so baml_core resolves
+#    as a normal dependency from UV_FIND_LINKS.
+if (-not $env:UV_FIND_LINKS) { $env:UV_FIND_LINKS = $WheelDir }
+Get-ChildItem -Directory | ForEach-Object {
+    $generated = Join-Path $_.FullName 'generated'
+    if (Test-Path $generated) {
+        $pyproject = Join-Path $generated 'pyproject.toml'
+        $lines = Get-Content $pyproject
+        $out = New-Object System.Collections.Generic.List[string]
+        $skip = $false
+        foreach ($line in $lines) {
+            if ($line -match '^\[tool\.uv\.sources\]$') {
+                $skip = $true
+                continue
+            }
+            if ($skip) {
+                if ($line -match '^\s*$') { $skip = $false }
+                continue
+            }
+            $out.Add($line)
+        }
+        Set-Content -Path $pyproject -Value $out
+
+        Write-Host "==> uv sync in $($_.Name)/generated"
+        Push-Location $generated
+        try {
+            & $UvBin sync
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        } finally {
+            Pop-Location
+        }
+    }
 }
 
 # Per-run breadcrumb for the in-test guard. nextest reads $NEXTEST_ENV

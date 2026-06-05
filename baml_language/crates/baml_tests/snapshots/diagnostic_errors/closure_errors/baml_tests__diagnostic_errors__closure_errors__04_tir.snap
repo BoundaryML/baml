@@ -91,12 +91,12 @@ function user.test_err_bound_for_unbound() -> string throws never {
   !! 1259..1270: type mismatch: expected (Employee) -> string throws never, got () -> string throws never
 }
 class user.Formatter$stream {
-  prefix: null | string
+  prefix: string | null
 }
 class user.Counter$stream {
-  value: null | int
+  value: int | null
 }
 class user.Employee$stream {
-  first: null | string
-  last: null | string
+  first: string | null
+  last: string | null
 }

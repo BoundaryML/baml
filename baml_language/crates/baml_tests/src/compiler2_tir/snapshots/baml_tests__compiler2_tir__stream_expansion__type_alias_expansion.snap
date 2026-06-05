@@ -14,11 +14,11 @@ function user.Inner.from_json(j: baml.json.json) -> user.Inner throws baml.json.
 type user.SimpleAlias = string
 type user.ClassAlias = user.Inner
 type user.UnionAlias = int | user.Inner
-type user.OptionalAlias = user.Inner?
+type user.OptionalAlias = user.Inner | null
 class user.Inner$stream {
-  value: null | string
+  value: string | null
 }
 type user.SimpleAlias$stream = string
 type user.ClassAlias$stream = user.Inner$stream
 type user.UnionAlias$stream = int | user.Inner$stream
-type user.OptionalAlias$stream = null | user.Inner$stream
+type user.OptionalAlias$stream = user.Inner$stream | null

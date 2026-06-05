@@ -44,9 +44,9 @@ function user.test_generic_capture(box: user.Box<user.User>) -> string throws ne
 lambda user.test_generic_capture {
 }
 class user.Box$stream {
-  value: null | T
+  value: T | null
 }
 class user.User$stream {
-  name: null | string
-  age: null | int
+  name: string | null
+  age: int | null
 }

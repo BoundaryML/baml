@@ -111,9 +111,9 @@ function user.test_lambda_param_and_capture(obj: user.Outer) -> int throws never
 lambda user.test_lambda_param_and_capture {
 }
 class user.Inner$stream {
-  value: null | int
+  value: int | null
 }
 class user.Outer$stream {
-  inner: null | user.Inner$stream
-  name: null | string
+  inner: user.Inner$stream | null
+  name: string | null
 }

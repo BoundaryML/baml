@@ -218,11 +218,13 @@ jobs:
 
   size-gate-windows:
     name: "size-gate (windows)"
-    runs-on: blacksmith-4vcpu-windows-2025
+    runs-on: blacksmith-8vcpu-windows-2025
     # TODO: Reduce this once our changes to aws-sdk-rust are upstreamed
     # Right now it needs to download our repo every time which is very slow
     timeout-minutes: 45
     continue-on-error: true
+    env:
+      CARGO_BUILD_JOBS: "16"
     steps:
       - uses: actions/checkout@v6
         with:

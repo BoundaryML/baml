@@ -146,6 +146,7 @@ pub fn external_to_outbound(
             use crate::baml_core::cffi::BamlHandleType;
             let ht = match arc.kind {
                 bex_project::HostValueKind::Callable => BamlHandleType::HostValueCallable as i32,
+                bex_project::HostValueKind::Error => BamlHandleType::HostValueError as i32,
             };
             Some(BamlValueVariant::HandleValue(BamlOutboundHandle {
                 key: arc.key,
@@ -379,12 +380,17 @@ fn ty_to_field_type(ty: &Ty) -> BamlTy {
                 name: tn.display_name.to_string(),
             }))
         }
+        // A nullable union (`T | null`) preserves the old `Optional` wire format:
+        // detect it before the general union case and encode it as an
+        // `OptionalType` wrapping the non-null part.
+        Ty::Union(members, _) if members.iter().any(baml_type::Ty::is_null) => {
+            Some(FieldType::OptionalType(Box::new(BamlTyOptional {
+                value: Some(Box::new(ty_to_field_type(&ty.strip_null()))),
+            })))
+        }
         Ty::Union(_, _) => Some(FieldType::UnionVariantType(BamlTyUnionVariant {
             name: None,
         })),
-        Ty::Optional(inner, _) => Some(FieldType::OptionalType(Box::new(BamlTyOptional {
-            value: Some(Box::new(ty_to_field_type(inner))),
-        }))),
         Ty::Media(kind, _) => Some(FieldType::MediaType(BamlTyMedia {
             media: media_kind_to_proto_enum(*kind).into(),
         })),
@@ -480,6 +486,25 @@ mod tests {
         assert!(
             options.table.resolve(42).is_none(),
             "HOST_VALUE_CALLABLE must not be inserted into HANDLE_TABLE"
+        );
+    }
+
+    #[test]
+    fn encode_outbound_host_value_error() {
+        let arc = HostValueArc::new(42, HostValueKind::Error);
+        let value = BexExternalValue::HostValue(arc);
+        let options = CffiHandleTableOptions::for_in_process();
+        let encoded = external_to_outbound(&value, &options).expect("encode succeeds");
+        let handle = match encoded.value {
+            Some(BamlValueVariant::HandleValue(h)) => h,
+            other => panic!("unexpected: {other:?}"),
+        };
+        assert_eq!(handle.key, 42);
+        assert_eq!(handle.handle_type, BamlHandleType::HostValueError as i32);
+        // Like callables, opaque error handles bypass the HANDLE_TABLE.
+        assert!(
+            options.table.resolve(42).is_none(),
+            "HOST_VALUE_ERROR must not be inserted into HANDLE_TABLE"
         );
     }
 }

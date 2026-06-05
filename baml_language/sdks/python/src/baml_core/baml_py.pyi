@@ -6,11 +6,7 @@ import typing
 __all__ = [
     "AbortController",
     "BamlAudio",
-    "BamlCancelledError",
-    "BamlClientError",
-    "BamlError",
     "BamlImage",
-    "BamlInvalidArgumentError",
     "BamlPdf",
     "BamlPyHandle",
     "BamlRuntime",
@@ -25,10 +21,9 @@ __all__ = [
     "flush_events",
     "get_runtime",
     "get_version",
-    "put_pyhandle_into_table",
+    "lookup_host_value",
     "register_host_callable",
     "release_host_callable",
-    "take_pyhandle_from_table",
 ]
 
 @typing.final
@@ -86,16 +81,6 @@ class BamlAudio:
     @classmethod
     def __get_pydantic_core_schema__(cls, _source_type: typing.Any, _handler: typing.Any) -> typing.Any: ...
 
-class BamlError(Exception):
-    ...
-
-class BamlCancelledError(BamlError):
-    ...
-
-class BamlClientError(BamlError):
-    ...
-
-
 @typing.final
 class BamlImage:
     @staticmethod
@@ -121,9 +106,6 @@ class BamlImage:
         """
     @classmethod
     def __get_pydantic_core_schema__(cls, _source_type: typing.Any, _handler: typing.Any) -> typing.Any: ...
-
-class BamlInvalidArgumentError(BamlError):
-    ...
 
 @typing.final
 class BamlPdf:
@@ -153,13 +135,18 @@ class BamlPdf:
 
 @typing.final
 class BamlPyHandle:
+    def __init__(self, handle_key: builtins.int, handle_type: builtins.int) -> None: ...
     def __copy__(self) -> BamlPyHandle: ...
     def __deepcopy__(self, _memo: typing.Any) -> BamlPyHandle: ...
+    def _clone_key_for_wire(self) -> tuple[builtins.int, builtins.int]: ...
 
 @typing.final
 class BamlRuntime:
     r"""
-    The main BAML runtime, wrapping a `dyn Bex` instance.
+    The main BAML runtime. A zero-sized handle: the single source of truth for
+    the `Arc<dyn Bex>` singleton is `bridge_cffi`, fetched via
+    `bridge_cffi::get_runtime()` at each call site (31e-phase4), so this
+    no longer caches its own clone.
     """
     @staticmethod
     def initialize_runtime(root_path: builtins.str, files: typing.Mapping[builtins.str, builtins.str]) -> BamlRuntime:
@@ -175,9 +162,15 @@ class BamlRuntime:
         * `files` - Map of filename to file content
         """
     @staticmethod
-    def initialize_runtime_from_bytecode(bytecode: bytes) -> BamlRuntime:
+    def initialize_runtime_from_bytecode(bytecode: typing.Sequence[builtins.int]) -> BamlRuntime:
         r"""
         Initialize the process-global runtime from serialized BAML bytecode.
+        
+        Generated SDKs use this path so importing `baml_sdk` can skip parsing
+        and compiling the inlined BAML source files.
+        
+        # Arguments
+        * `bytecode` - borsh-encoded BAML bytecode program
         """
     def call_function(self, function_name: str, args_proto: bytes, ctx: typing.Optional["HostSpanManager"] = None, collectors: typing.Optional[typing.Sequence["Collector"]] = None, abort_controller: typing.Optional["AbortController"] = None) -> typing.Any:
         r"""
@@ -448,18 +441,26 @@ def get_runtime() -> BamlRuntime:
 
 def get_version() -> builtins.str: ...
 
-def put_pyhandle_into_table(pyhandle: BamlPyHandle) -> tuple[builtins.int, builtins.int]:
+def lookup_host_value(handle: BamlPyHandle) -> typing.Optional[typing.Any]:
     r"""
-    Allocate a fresh `HANDLE_TABLE` row sharing the same `Arc` as
-    `pyhandle.handle_key`, return `(new_key, handle_type)`. The original
-    `BamlPyHandle` keeps its key and stays usable — Python may pass the
-    same handle to multiple calls.
+    Look up the host-registered Python object referenced by a
+    `BamlPyHandle` whose `handle_type` is `HOST_VALUE_CALLABLE` /
+    `HOST_VALUE_ERROR`, returning a fresh strong reference if the entry
+    is still live. Used by the outbound error decoder in
+    `baml_core.proto` to rehydrate a `baml.errors.HostCallable` thrown
+    by BAML back to the original Python exception object on same-host
+    round-trip.
+
+    Returns `None` if the handle is the wrong kind, the entry has been
+    released (last `HostValueArc` clone already dropped), or the key
+    never existed in this runtime's registry (cross-runtime handle):
+    callers should fall back to a metadata-built exception in that case.
     """
 
 def register_host_callable(callable: typing.Any) -> builtins.int:
     r"""
     Insert a Python callable into the registry and return its key.
-
+    
     Exposed to Python as `baml_py.register_host_callable(callable) -> int`.
     Called from the inbound encoder in `baml_core.proto` whenever a Python
     callable appears as a kwarg.
@@ -469,7 +470,7 @@ def release_host_callable(host_value_key: builtins.int) -> None:
     r"""
     Release a host callable the inbound encoder registered but never handed to
     the engine — the encode-error rollback path.
-
+    
     Exposed to Python as `baml_py.release_host_callable(key)`. When
     `encode_call_args` registers a callable for an early kwarg and then a
     later kwarg fails to encode, the `CallFunctionArgs` is never sent, so the
@@ -477,13 +478,4 @@ def release_host_callable(host_value_key: builtins.int) -> None:
     registry entry (holding a strong ref to the user callable) would leak for
     the life of the process. The encoder calls this for every key it
     registered during a failed encode.
-    """
-
-def take_pyhandle_from_table(key: builtins.int, handle_type: builtins.int) -> BamlPyHandle:
-    r"""
-    Wrap a `HANDLE_TABLE` key as a `BamlPyHandle`. Used by
-    `proto.py::_decode_handle`. Does **not** drain — the entry stays in
-    the table and is owned by the returned `BamlPyHandle`. Validates the
-    key exists so a malformed wire payload errors here rather than on
-    later use.
     """

@@ -114,7 +114,7 @@ function typed_inputs.half(x: float) -> float {
     return
 }
 
-function typed_inputs.is_null(x: int?) -> bool {
+function typed_inputs.is_null(x: int | null) -> bool {
     load_var x
     load_const null
     cmp_op ==

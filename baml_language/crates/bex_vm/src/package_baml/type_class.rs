@@ -135,9 +135,7 @@ fn ty_equivalent(a: &baml_type::Ty, b: &baml_type::Ty) -> bool {
         // them is still compared order-insensitively (`Box<(int | string)?>` ==
         // `Box<(string | int)?>`); otherwise the wrapper would fall to the
         // structural `==` below and defeat the union-set comparison.
-        (Ty::Optional(ai, _), Ty::Optional(bi, _)) | (Ty::List(ai, _), Ty::List(bi, _)) => {
-            ty_equivalent(ai, bi)
-        }
+        (Ty::List(ai, _), Ty::List(bi, _)) => ty_equivalent(ai, bi),
         (
             Ty::Map {
                 key: ak, value: av, ..

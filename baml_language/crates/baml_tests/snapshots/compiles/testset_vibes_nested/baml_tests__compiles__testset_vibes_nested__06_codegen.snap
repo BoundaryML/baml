@@ -99,7 +99,7 @@ function user.ClassifySentiment$parse(json: string, client: baml.llm.Client) -> 
     return
 }
 
-function user.ClassifySentiment$parse_stream(sse: baml.http.SseStream, client: baml.llm.Client) -> baml.llm.Stream<null | Sentiment$stream, Sentiment> {
+function user.ClassifySentiment$parse_stream(sse: baml.http.SseStream, client: baml.llm.Client) -> baml.llm.Stream<Sentiment$stream | null, Sentiment> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -108,7 +108,7 @@ function user.ClassifySentiment$parse_stream(sse: baml.http.SseStream, client: b
     store_var client
 
   L0:
-    load_type null | Sentiment$stream
+    load_type Sentiment$stream | null
     load_type Sentiment
     load_var2 2 1
     load_const "ClassifySentiment"
@@ -134,7 +134,7 @@ function user.ClassifySentiment$render_prompt(text: string, client: baml.llm.Cli
     return
 }
 
-function user.ClassifySentiment$stream(text: string, client: baml.llm.Client) -> baml.llm.Stream<null | Sentiment$stream, Sentiment> {
+function user.ClassifySentiment$stream(text: string, client: baml.llm.Client) -> baml.llm.Stream<Sentiment$stream | null, Sentiment> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -143,7 +143,7 @@ function user.ClassifySentiment$stream(text: string, client: baml.llm.Client) ->
     store_var client
 
   L0:
-    load_type null | Sentiment$stream
+    load_type Sentiment$stream | null
     load_type Sentiment
     load_var client
     load_const "ClassifySentiment"
@@ -226,7 +226,7 @@ function user.ClassifySentiment2$parse(json: string, client: baml.llm.Client) ->
     return
 }
 
-function user.ClassifySentiment2$parse_stream(sse: baml.http.SseStream, client: baml.llm.Client) -> baml.llm.Stream<null | string, string> {
+function user.ClassifySentiment2$parse_stream(sse: baml.http.SseStream, client: baml.llm.Client) -> baml.llm.Stream<string | null, string> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -235,7 +235,7 @@ function user.ClassifySentiment2$parse_stream(sse: baml.http.SseStream, client: 
     store_var client
 
   L0:
-    load_type null | string
+    load_type string | null
     load_type string
     load_var2 2 1
     load_const "ClassifySentiment2"
@@ -261,7 +261,7 @@ function user.ClassifySentiment2$render_prompt(text: string, client: baml.llm.Cl
     return
 }
 
-function user.ClassifySentiment2$stream(text: string, client: baml.llm.Client) -> baml.llm.Stream<null | string, string> {
+function user.ClassifySentiment2$stream(text: string, client: baml.llm.Client) -> baml.llm.Stream<string | null, string> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -270,7 +270,7 @@ function user.ClassifySentiment2$stream(text: string, client: baml.llm.Client) -
     store_var client
 
   L0:
-    load_type null | string
+    load_type string | null
     load_type string
     load_var client
     load_const "ClassifySentiment2"

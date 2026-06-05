@@ -67,6 +67,22 @@ test "is_with_not" {
     assert.is_true(baml.deep_equals(is_with_not_fn(), true))
 }
 
+// Regression: `int | string?` lowers to a nested union `int | (string | null)`.
+// The else branch of `is string?` must subtract the nested nullable-union member
+// so the residual narrows to `int` (otherwise `v + 1` fails to type-check).
+function is_else_narrows_nested_optional_member_fn() -> int {
+    let v: int | string? = 7
+    if (v is string?) {
+        -1
+    } else {
+        v + 1
+    }
+}
+
+test "is_else_narrows_nested_optional_member" {
+    assert.is_true(baml.deep_equals(is_else_narrows_nested_optional_member_fn(), 8))
+}
+
 // ── Group B: pattern shape catalog ───────────────────────────────────────────
 
 function is_null_pattern_on_null_fn() -> bool {

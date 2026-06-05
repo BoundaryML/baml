@@ -703,7 +703,7 @@ function patterns_new_runtime.describe_direction(d: patterns_new_runtime.Directi
     unreachable
 }
 
-function patterns_new_runtime.dispatch_int_cb(cb: (int) -> int throws never | (string) -> int throws never) -> int {
+function patterns_new_runtime.dispatch_int_cb(cb: ((int) -> int throws never) | ((string) -> int throws never)) -> int {
     load_var cb
     is_type (int) -> int throws never
     pop_jump_if_false L0
@@ -724,7 +724,7 @@ function patterns_new_runtime.dispatch_int_cb(cb: (int) -> int throws never | (s
     return
 }
 
-function patterns_new_runtime.dispatch_union_cb(cb: (int) -> int throws never | (string) -> int throws never) -> int {
+function patterns_new_runtime.dispatch_union_cb(cb: ((int) -> int throws never) | ((string) -> int throws never)) -> int {
     load_var cb
     is_type (int) -> int throws never
     pop_jump_if_false L0
@@ -828,7 +828,7 @@ function patterns_new_runtime.from_array_boxes(boxes: patterns_new_runtime.BoxT<
     jump L0
 }
 
-function patterns_new_runtime.from_optional_box(box: patterns_new_runtime.BoxT<int>?) -> int {
+function patterns_new_runtime.from_optional_box(box: patterns_new_runtime.BoxT<int> | null) -> int {
     load_var box
     is_type patterns_new_runtime.BoxT<...>
     pop_jump_if_false L0
@@ -1914,7 +1914,7 @@ function patterns_new_runtime.score_foo_union(f: patterns_new_runtime.FooUnion) 
     return
 }
 
-function patterns_new_runtime.score_int_optional(x: int?) -> int {
+function patterns_new_runtime.score_int_optional(x: int | null) -> int {
     load_var x
     load_const null
     cmp_op ==

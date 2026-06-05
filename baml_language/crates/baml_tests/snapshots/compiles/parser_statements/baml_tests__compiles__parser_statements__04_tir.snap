@@ -118,7 +118,7 @@ function user.edge_semicolon_forces_boundary(bar: () -> int[] throws never) -> i
   }
 }
 class user.EdgeFoo$stream {
-  x: null | int
+  x: int | null
 }
 function user.simple_break() -> int throws never {
   { : never
@@ -276,8 +276,8 @@ function user.Point.from_json(j: baml.json.json) -> user.Point throws baml.json.
   Point { x: baml.json.from_json<int>(baml.json.field(j, "x")), y: baml.json.from_json<int>(baml.json.field(j, "y")) } : user.Point
 }
 class user.Point$stream {
-  x: null | int
-  y: null | int
+  x: int | null
+  y: int | null
 }
 function user.simple_while_loop() -> int throws never {
   { : never

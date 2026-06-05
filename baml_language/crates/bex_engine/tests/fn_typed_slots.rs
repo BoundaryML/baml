@@ -1,15 +1,31 @@
 //! Function-typed parameters and class fields accepting lambdas.
 
 mod common;
-use std::sync::Arc;
 use bex_engine::{BexEngine, BexExternalValue, FunctionCallContextBuilder};
 use common::compile_for_engine;
+use std::sync::Arc;
 use sys_native::SysOpsExt;
 
 async fn run(source: &str) -> BexExternalValue {
     let snapshot = compile_for_engine(source);
-    let engine = Arc::new(BexEngine::new(snapshot, Arc::new(sys_native::SysOps::native()), None, Vec::new()).expect("engine"));
-    engine.call_function("main", vec![], FunctionCallContextBuilder::new(sys_types::CallId::next()).build(), true).await.unwrap()
+    let engine = Arc::new(
+        BexEngine::new(
+            snapshot,
+            Arc::new(sys_native::SysOps::native()),
+            None,
+            Vec::new(),
+        )
+        .expect("engine"),
+    );
+    engine
+        .call_function(
+            "main",
+            vec![],
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+            true,
+        )
+        .await
+        .unwrap()
 }
 
 #[tokio::test]
@@ -17,7 +33,8 @@ async fn clean_lambda_into_fn_param() {
     let r = run(r#"
         function take_f(f: (int) -> int) -> int { f(20) }
         function main() -> int { take_f((x) -> { x + 22 }) }
-    "#).await;
+    "#)
+    .await;
     assert_eq!(r, BexExternalValue::Int(42));
 }
 
@@ -30,7 +47,8 @@ async fn clean_lambda_into_class_field() {
             let g = holder.f;
             g(21)
         }
-    "#).await;
+    "#)
+    .await;
     assert_eq!(r, BexExternalValue::Int(42));
 }
 
@@ -48,5 +66,6 @@ async fn throwing_lambda_violates_explicit_never_contract() {
         function main() -> int throws never {
             take_f((x: int) -> int { throw "boom" })
         }
-    "#).await;
+    "#)
+    .await;
 }

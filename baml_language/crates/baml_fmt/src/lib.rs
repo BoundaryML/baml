@@ -523,3 +523,85 @@ mod while_let_format_tests {
         assert_formats_to(source, source);
     }
 }
+
+#[cfg(test)]
+mod const_format_tests {
+    use super::*;
+
+    fn assert_formats_to(source: &str, expected: &str) {
+        let options = FormatOptions::default();
+        let formatted = format(source, &options).expect("formatter should succeed on `const`");
+        assert_eq!(
+            formatted, expected,
+            "formatter output didn't match expected\n--- got ---\n{formatted}\n--- want ---\n{expected}"
+        );
+        let second = format(&formatted, &options).expect("formatter should be idempotent");
+        assert_eq!(formatted, second, "formatter should be idempotent");
+    }
+
+    #[test]
+    fn test_const_basic_binding() {
+        let source = "function f() -> int {\n    const x = 1;\n    x\n}\n";
+        assert_formats_to(source, source);
+    }
+
+    #[test]
+    fn test_const_typed_binding() {
+        let source = "function f() -> int {\n    const x: int = 1;\n    x\n}\n";
+        assert_formats_to(source, source);
+    }
+
+    #[test]
+    fn test_const_array_pattern() {
+        let source = "function f(xs: int[]) -> int {\n    const [x] = xs;\n    x\n}\n";
+        assert_formats_to(source, source);
+    }
+
+    #[test]
+    fn test_if_const_binding() {
+        let source = "function f(value: int | string) -> int {\n    if const x: int = value {\n        x\n    } else {\n        0\n    }\n}\n";
+        assert_formats_to(source, source);
+    }
+
+    #[test]
+    fn test_while_const_binding() {
+        let source = "function f(value: int | string) -> int {\n    while const x: int = value {\n        break;\n    }\n    0\n}\n";
+        assert_formats_to(source, source);
+    }
+
+    #[test]
+    fn test_for_const_c_style() {
+        let source = "function f() -> int {\n    const sum = 0;\n    for (const i = 0; i < 3; i += 1) {\n        sum += i;\n    }\n    sum\n}\n";
+        assert_formats_to(source, source);
+    }
+
+    #[test]
+    fn test_for_const_iterator() {
+        let source = "function f(items: int[]) -> int {\n    const sum = 0;\n    for (const item in items) {\n        sum += item;\n    }\n    sum\n}\n";
+        assert_formats_to(source, source);
+    }
+
+    #[test]
+    fn test_const_binding_keyword_trailing_trivia_preserved() {
+        let source = "function f() -> int {\n    const /*keep*/ x = 1;\n    x\n}\n";
+        assert_formats_to(source, source);
+    }
+
+    #[test]
+    fn test_const_wildcard_keyword_trailing_trivia_preserved() {
+        let source = "function f() -> int {\n    const /*keep*/ _ = 1;\n    0\n}\n";
+        assert_formats_to(source, source);
+    }
+
+    #[test]
+    fn test_const_destructure_keyword_trailing_trivia_preserved() {
+        let source = "class Foo {\n    a: int,\n}\n\nfunction f(foo: Foo) -> int {\n    const /*keep*/ Foo { a } = foo;\n    a\n}\n";
+        assert_formats_to(source, source);
+    }
+
+    #[test]
+    fn test_while_const_array_keyword_trailing_trivia_preserved() {
+        let source = "function f(xs: int[]) -> int {\n    while const /*keep*/ [x] = xs {\n        break;\n    }\n    0\n}\n";
+        assert_formats_to(source, source);
+    }
+}

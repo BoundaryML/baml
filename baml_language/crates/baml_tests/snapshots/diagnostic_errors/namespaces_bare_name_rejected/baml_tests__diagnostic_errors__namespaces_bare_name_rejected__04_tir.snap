@@ -12,7 +12,7 @@ function user.Config.from_json(j: baml.json.json) -> user.Config throws baml.jso
   Config { key: baml.json.from_json<string>(baml.json.field(j, "key")) } : user.Config
 }
 class user.Config$stream {
-  key: null | string
+  key: string | null
 }
 class user.llm.Response {
   text: string
@@ -30,5 +30,5 @@ function user.llm.UseConfig(cfg: unknown) -> user.llm.Response throws never {
   !! 191..198: unresolved type: Config. Did you mean `root.Config`?
 }
 class user.llm.Response$stream {
-  text: null | string
+  text: string | null
 }

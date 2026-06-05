@@ -413,7 +413,7 @@ fn baml.env.get_or_panic(key: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // key // param
-    let _2: string?
+    let _2: string | null
     let _3: bool
     let _4: string
 
@@ -464,25 +464,13 @@ fn baml.errors.InvalidArgument.from_json(j: baml.json.json) -> baml.errors.Inval
     }
 }
 
-fn baml.errors.HostCallable.from_json(j: baml.json.json) -> baml.errors.HostCallable {
+fn baml.errors.GenericSdkError.from_json(j: baml.json.json) -> baml.errors.GenericSdkError {
     // Locals:
-    let _0: baml.errors.HostCallable // _0 // return
+    let _0: baml.errors.GenericSdkError // _0 // return
     let _1: baml.json.json // j // param
     let _2: string
     let _3: baml.json.json
     let _4: type
-    let _5: string
-    let _6: baml.json.json
-    let _7: type
-    let _8: string
-    let _9: baml.json.json
-    let _10: type
-    let _11: string?
-    let _12: baml.json.json
-    let _13: type
-    let _14: int
-    let _15: baml.json.json
-    let _16: type
 
     bb0: {
         _3 = call const fn baml.json.field(copy _1, const "message") -> [bb1];
@@ -494,47 +482,11 @@ fn baml.errors.HostCallable.from_json(j: baml.json.json) -> baml.errors.HostCall
     }
 
     bb2: {
-        _6 = call const fn baml.json.field(copy _1, const "class_name") -> [bb3];
+        _0 = baml.errors.GenericSdkError { copy _2 };
+        goto -> bb3;
     }
 
     bb3: {
-        _7 = load_type(string);
-        _5 = call const fn baml.json.from_json<copy _7>(copy _6) -> [bb4];
-    }
-
-    bb4: {
-        _9 = call const fn baml.json.field(copy _1, const "language") -> [bb5];
-    }
-
-    bb5: {
-        _10 = load_type(string);
-        _8 = call const fn baml.json.from_json<copy _10>(copy _9) -> [bb6];
-    }
-
-    bb6: {
-        _12 = call const fn baml.json.field(copy _1, const "traceback") -> [bb7];
-    }
-
-    bb7: {
-        _13 = load_type(string?);
-        _11 = call const fn baml.json.from_json<copy _13>(copy _12) -> [bb8];
-    }
-
-    bb8: {
-        _15 = call const fn baml.json.field(copy _1, const "category") -> [bb9];
-    }
-
-    bb9: {
-        _16 = load_type(int);
-        _14 = call const fn baml.json.from_json<copy _16>(copy _15) -> [bb10];
-    }
-
-    bb10: {
-        _0 = baml.errors.HostCallable { copy _2, copy _5, copy _8, copy _11, copy _14 };
-        goto -> bb11;
-    }
-
-    bb11: {
         return;
     }
 }
@@ -546,7 +498,7 @@ fn baml.errors.Timeout.from_json(j: baml.json.json) -> baml.errors.Timeout {
     let _2: string
     let _3: baml.json.json
     let _4: type
-    let _5: int?
+    let _5: int | null
     let _6: baml.json.json
     let _7: type
 
@@ -564,7 +516,7 @@ fn baml.errors.Timeout.from_json(j: baml.json.json) -> baml.errors.Timeout {
     }
 
     bb3: {
-        _7 = load_type(int?);
+        _7 = load_type(int | null);
         _5 = call const fn baml.json.from_json<copy _7>(copy _6) -> [bb4];
     }
 
@@ -659,9 +611,9 @@ fn baml.errors.ParseError.from_json(j: baml.json.json) -> baml.errors.ParseError
     }
 }
 
-fn baml.errors.GenericSdkError.from_json(j: baml.json.json) -> baml.errors.GenericSdkError {
+fn baml.errors.CompilationError.from_json(j: baml.json.json) -> baml.errors.CompilationError {
     // Locals:
-    let _0: baml.errors.GenericSdkError // _0 // return
+    let _0: baml.errors.CompilationError // _0 // return
     let _1: baml.json.json // j // param
     let _2: string
     let _3: baml.json.json
@@ -677,7 +629,7 @@ fn baml.errors.GenericSdkError.from_json(j: baml.json.json) -> baml.errors.Gener
     }
 
     bb2: {
-        _0 = baml.errors.GenericSdkError { copy _2 };
+        _0 = baml.errors.CompilationError { copy _2 };
         goto -> bb3;
     }
 
@@ -740,29 +692,23 @@ fn baml.errors.NotImplemented.from_json(j: baml.json.json) -> baml.errors.NotImp
     }
 }
 
-fn baml.errors.HostPanic.from_json(j: baml.json.json) -> baml.errors.HostPanic {
+fn baml.errors.HostCallable.from_json(j: baml.json.json) -> baml.errors.HostCallable {
     // Locals:
-    let _0: baml.errors.HostPanic // _0 // return
+    let _0: baml.errors.HostCallable // _0 // return
     let _1: baml.json.json // j // param
     let _2: string
-    let _3: baml.json.json
-    let _4: type
+    let _3: type
 
     bb0: {
-        _3 = call const fn baml.json.field(copy _1, const "message") -> [bb1];
+        _2 = call const fn baml.json.stringify(copy _1) -> [bb1];
     }
 
     bb1: {
-        _4 = load_type(string);
-        _2 = call const fn baml.json.from_json<copy _4>(copy _3) -> [bb2];
+        _3 = load_type(baml.errors.HostCallable);
+        _0 = call const fn baml.json.from_string<copy _3>(copy _2) -> [bb2];
     }
 
     bb2: {
-        _0 = baml.errors.HostPanic { copy _2 };
-        goto -> bb3;
-    }
-
-    bb3: {
         return;
     }
 }
@@ -786,33 +732,6 @@ fn baml.errors.Io.from_json(j: baml.json.json) -> baml.errors.Io {
 
     bb2: {
         _0 = baml.errors.Io { copy _2 };
-        goto -> bb3;
-    }
-
-    bb3: {
-        return;
-    }
-}
-
-fn baml.errors.CompilationError.from_json(j: baml.json.json) -> baml.errors.CompilationError {
-    // Locals:
-    let _0: baml.errors.CompilationError // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: string
-    let _3: baml.json.json
-    let _4: type
-
-    bb0: {
-        _3 = call const fn baml.json.field(copy _1, const "message") -> [bb1];
-    }
-
-    bb1: {
-        _4 = load_type(string);
-        _2 = call const fn baml.json.from_json<copy _4>(copy _3) -> [bb2];
-    }
-
-    bb2: {
-        _0 = baml.errors.CompilationError { copy _2 };
         goto -> bb3;
     }
 
@@ -923,29 +842,13 @@ fn baml.errors.InvalidArgument.to_json(self: baml.errors.InvalidArgument) -> bam
     }
 }
 
-fn baml.errors.HostCallable.to_json(self: baml.errors.HostCallable) -> baml.json.json {
+fn baml.errors.GenericSdkError.to_json(self: baml.errors.GenericSdkError) -> baml.json.json {
     // Locals:
     let _0: baml.json.json // _0 // return
-    let _1: baml.errors.HostCallable // self // param
+    let _1: baml.errors.GenericSdkError // self // param
     let _2: baml.json.json
     let _3: string
-    let _4: baml.errors.HostCallable
-    let _5: baml.json.json
-    let _6: string
-    let _7: baml.errors.HostCallable
-    let _8: baml.json.json
-    let _9: string
-    let _10: baml.errors.HostCallable
-    let _11: baml.json.json?
-    let _12: ((baml.String) -> baml.json.json throws never)?
-    let _13: string?
-    let _14: baml.errors.HostCallable
-    let _15: bool
-    let _16: string?
-    let _17: baml.errors.HostCallable
-    let _18: baml.json.json
-    let _19: int
-    let _20: baml.errors.HostCallable
+    let _4: baml.errors.GenericSdkError
 
     bb0: {
         _4 = copy _1;
@@ -954,48 +857,11 @@ fn baml.errors.HostCallable.to_json(self: baml.errors.HostCallable) -> baml.json
     }
 
     bb1: {
-        _7 = copy _1;
-        _6 = copy _7.1;
-        _5 = call const fn baml.String.to_json(copy _6) -> [bb2];
+        _0 = { const "message": copy _2 };
+        goto -> bb2;
     }
 
     bb2: {
-        _10 = copy _1;
-        _9 = copy _10.2;
-        _8 = call const fn baml.String.to_json(copy _9) -> [bb3];
-    }
-
-    bb3: {
-        _14 = copy _1;
-        _13 = copy _14.3;
-        _15 = copy _13 == const null;
-        branch copy _15 -> [bb5, bb4];
-    }
-
-    bb4: {
-        _17 = copy _1;
-        _16 = copy _17.3;
-        _12 = make_bound_method baml.String.to_json(copy _16);
-        _11 = call copy _12() -> [bb6];
-    }
-
-    bb5: {
-        _11 = const null;
-        goto -> bb6;
-    }
-
-    bb6: {
-        _20 = copy _1;
-        _19 = copy _20.4;
-        _18 = call const fn baml.Int.to_json(copy _19) -> [bb7];
-    }
-
-    bb7: {
-        _0 = { const "message": copy _2, const "class_name": copy _5, const "language": copy _8, const "traceback": copy _11, const "category": copy _18 };
-        goto -> bb8;
-    }
-
-    bb8: {
         return;
     }
 }
@@ -1007,12 +873,12 @@ fn baml.errors.Timeout.to_json(self: baml.errors.Timeout) -> baml.json.json {
     let _2: baml.json.json
     let _3: string
     let _4: baml.errors.Timeout
-    let _5: baml.json.json?
-    let _6: ((baml.Int) -> baml.json.json throws never)?
-    let _7: int?
+    let _5: baml.json.json | null
+    let _6: ((baml.Int) -> baml.json.json throws never) | null
+    let _7: int | null
     let _8: baml.errors.Timeout
     let _9: bool
-    let _10: int?
+    let _10: int | null
     let _11: baml.errors.Timeout
 
     bb0: {
@@ -1122,13 +988,13 @@ fn baml.errors.ParseError.to_json(self: baml.errors.ParseError) -> baml.json.jso
     }
 }
 
-fn baml.errors.GenericSdkError.to_json(self: baml.errors.GenericSdkError) -> baml.json.json {
+fn baml.errors.CompilationError.to_json(self: baml.errors.CompilationError) -> baml.json.json {
     // Locals:
     let _0: baml.json.json // _0 // return
-    let _1: baml.errors.GenericSdkError // self // param
+    let _1: baml.errors.CompilationError // self // param
     let _2: baml.json.json
     let _3: string
-    let _4: baml.errors.GenericSdkError
+    let _4: baml.errors.CompilationError
 
     bb0: {
         _4 = copy _1;
@@ -1194,23 +1060,20 @@ fn baml.errors.NotImplemented.to_json(self: baml.errors.NotImplemented) -> baml.
     }
 }
 
-fn baml.errors.HostPanic.to_json(self: baml.errors.HostPanic) -> baml.json.json {
+fn baml.errors.HostCallable.to_json(self: baml.errors.HostCallable) -> baml.json.json {
     // Locals:
     let _0: baml.json.json // _0 // return
-    let _1: baml.errors.HostPanic // self // param
-    let _2: baml.json.json
-    let _3: string
-    let _4: baml.errors.HostPanic
+    let _1: baml.errors.HostCallable // self // param
+    let _2: string
+    let _3: type
 
     bb0: {
-        _4 = copy _1;
-        _3 = copy _4.0;
-        _2 = call const fn baml.String.to_json(copy _3) -> [bb1];
+        _3 = load_type(baml.errors.HostCallable);
+        _2 = call const fn baml.json.to_string<copy _3>(copy _1) -> [bb1];
     }
 
     bb1: {
-        _0 = { const "message": copy _2 };
-        goto -> bb2;
+        _0 = call const fn baml.json.parse(copy _2) -> [bb2];
     }
 
     bb2: {
@@ -1225,30 +1088,6 @@ fn baml.errors.Io.to_json(self: baml.errors.Io) -> baml.json.json {
     let _2: baml.json.json
     let _3: string
     let _4: baml.errors.Io
-
-    bb0: {
-        _4 = copy _1;
-        _3 = copy _4.0;
-        _2 = call const fn baml.String.to_json(copy _3) -> [bb1];
-    }
-
-    bb1: {
-        _0 = { const "message": copy _2 };
-        goto -> bb2;
-    }
-
-    bb2: {
-        return;
-    }
-}
-
-fn baml.errors.CompilationError.to_json(self: baml.errors.CompilationError) -> baml.json.json {
-    // Locals:
-    let _0: baml.json.json // _0 // return
-    let _1: baml.errors.CompilationError // self // param
-    let _2: baml.json.json
-    let _3: string
-    let _4: baml.errors.CompilationError
 
     bb0: {
         _4 = copy _1;
@@ -2216,22 +2055,22 @@ fn baml.glob.ScanOptions.from_json(j: baml.json.json) -> baml.glob.ScanOptions {
     // Locals:
     let _0: baml.glob.ScanOptions // _0 // return
     let _1: baml.json.json // j // param
-    let _2: string?
+    let _2: string | null
     let _3: baml.json.json
     let _4: type
-    let _5: bool?
+    let _5: bool | null
     let _6: baml.json.json
     let _7: type
-    let _8: bool?
+    let _8: bool | null
     let _9: baml.json.json
     let _10: type
-    let _11: bool?
+    let _11: bool | null
     let _12: baml.json.json
     let _13: type
-    let _14: bool?
+    let _14: bool | null
     let _15: baml.json.json
     let _16: type
-    let _17: bool?
+    let _17: bool | null
     let _18: baml.json.json
     let _19: type
 
@@ -2240,7 +2079,7 @@ fn baml.glob.ScanOptions.from_json(j: baml.json.json) -> baml.glob.ScanOptions {
     }
 
     bb1: {
-        _4 = load_type(string?);
+        _4 = load_type(string | null);
         _2 = call const fn baml.json.from_json<copy _4>(copy _3) -> [bb2];
     }
 
@@ -2249,7 +2088,7 @@ fn baml.glob.ScanOptions.from_json(j: baml.json.json) -> baml.glob.ScanOptions {
     }
 
     bb3: {
-        _7 = load_type(bool?);
+        _7 = load_type(bool | null);
         _5 = call const fn baml.json.from_json<copy _7>(copy _6) -> [bb4];
     }
 
@@ -2258,7 +2097,7 @@ fn baml.glob.ScanOptions.from_json(j: baml.json.json) -> baml.glob.ScanOptions {
     }
 
     bb5: {
-        _10 = load_type(bool?);
+        _10 = load_type(bool | null);
         _8 = call const fn baml.json.from_json<copy _10>(copy _9) -> [bb6];
     }
 
@@ -2267,7 +2106,7 @@ fn baml.glob.ScanOptions.from_json(j: baml.json.json) -> baml.glob.ScanOptions {
     }
 
     bb7: {
-        _13 = load_type(bool?);
+        _13 = load_type(bool | null);
         _11 = call const fn baml.json.from_json<copy _13>(copy _12) -> [bb8];
     }
 
@@ -2276,7 +2115,7 @@ fn baml.glob.ScanOptions.from_json(j: baml.json.json) -> baml.glob.ScanOptions {
     }
 
     bb9: {
-        _16 = load_type(bool?);
+        _16 = load_type(bool | null);
         _14 = call const fn baml.json.from_json<copy _16>(copy _15) -> [bb10];
     }
 
@@ -2285,7 +2124,7 @@ fn baml.glob.ScanOptions.from_json(j: baml.json.json) -> baml.glob.ScanOptions {
     }
 
     bb11: {
-        _19 = load_type(bool?);
+        _19 = load_type(bool | null);
         _17 = call const fn baml.json.from_json<copy _19>(copy _18) -> [bb12];
     }
 
@@ -2351,47 +2190,47 @@ fn baml.glob.ScanOptions.to_json(self: baml.glob.ScanOptions) -> baml.json.json 
     // Locals:
     let _0: baml.json.json // _0 // return
     let _1: baml.glob.ScanOptions // self // param
-    let _2: baml.json.json?
-    let _3: ((baml.String) -> baml.json.json throws never)?
-    let _4: string?
+    let _2: baml.json.json | null
+    let _3: ((baml.String) -> baml.json.json throws never) | null
+    let _4: string | null
     let _5: baml.glob.ScanOptions
     let _6: bool
-    let _7: string?
+    let _7: string | null
     let _8: baml.glob.ScanOptions
-    let _9: baml.json.json?
-    let _10: ((baml.Bool) -> baml.json.json throws never)?
-    let _11: bool?
+    let _9: baml.json.json | null
+    let _10: ((baml.Bool) -> baml.json.json throws never) | null
+    let _11: bool | null
     let _12: baml.glob.ScanOptions
     let _13: bool
-    let _14: bool?
+    let _14: bool | null
     let _15: baml.glob.ScanOptions
-    let _16: baml.json.json?
-    let _17: ((baml.Bool) -> baml.json.json throws never)?
-    let _18: bool?
+    let _16: baml.json.json | null
+    let _17: ((baml.Bool) -> baml.json.json throws never) | null
+    let _18: bool | null
     let _19: baml.glob.ScanOptions
     let _20: bool
-    let _21: bool?
+    let _21: bool | null
     let _22: baml.glob.ScanOptions
-    let _23: baml.json.json?
-    let _24: ((baml.Bool) -> baml.json.json throws never)?
-    let _25: bool?
+    let _23: baml.json.json | null
+    let _24: ((baml.Bool) -> baml.json.json throws never) | null
+    let _25: bool | null
     let _26: baml.glob.ScanOptions
     let _27: bool
-    let _28: bool?
+    let _28: bool | null
     let _29: baml.glob.ScanOptions
-    let _30: baml.json.json?
-    let _31: ((baml.Bool) -> baml.json.json throws never)?
-    let _32: bool?
+    let _30: baml.json.json | null
+    let _31: ((baml.Bool) -> baml.json.json throws never) | null
+    let _32: bool | null
     let _33: baml.glob.ScanOptions
     let _34: bool
-    let _35: bool?
+    let _35: bool | null
     let _36: baml.glob.ScanOptions
-    let _37: baml.json.json?
-    let _38: ((baml.Bool) -> baml.json.json throws never)?
-    let _39: bool?
+    let _37: baml.json.json | null
+    let _38: ((baml.Bool) -> baml.json.json throws never) | null
+    let _39: bool | null
     let _40: baml.glob.ScanOptions
     let _41: bool
-    let _42: bool?
+    let _42: bool | null
     let _43: baml.glob.ScanOptions
 
     bb0: {
@@ -3806,7 +3645,7 @@ fn baml.llm.Client.build_plan_with_state(self: baml.llm.Client, planner_state: b
     let _0: baml.llm.OrchestrationStep[] // _0 // return
     let _1: baml.llm.Client // self // param
     let _2: baml.llm.PlannerState // planner_state // param
-    let _3: baml.llm.RetryPolicy?
+    let _3: baml.llm.RetryPolicy | null
     let _4: bool
     let _5: baml.llm.RetryPolicy // r
     let _6: baml.llm.OrchestrationStep[] // result
@@ -4410,7 +4249,7 @@ fn baml.llm.Client.execute_oneshot(self: baml.llm.Client, context: baml.llm.Exec
     let _1: baml.llm.Client // self // param
     let _2: baml.llm.ExecutionContext // context // param
     let _3: int // inherited_delay_ms // param
-    let _4: baml.llm.RetryPolicy?
+    let _4: baml.llm.RetryPolicy | null
     let _5: bool
     let _6: baml.llm.RetryPolicy // r
     let _7: float // current_delay
@@ -4555,7 +4394,7 @@ fn baml.llm.Client.execute_stream(self: baml.llm.Client, context: baml.llm.Execu
     let _1: baml.llm.Client // self // param
     let _2: baml.llm.ExecutionContext // context // param
     let _3: int // inherited_delay_ms // param
-    let _4: baml.llm.RetryPolicy?
+    let _4: baml.llm.RetryPolicy | null
     let _5: bool
     let _6: baml.llm.RetryPolicy // r
     let _7: float // current_delay
@@ -4706,8 +4545,8 @@ fn baml.llm.Stream.final(self: baml.llm.Stream) -> void {
     let _3: bool
     let _4: () -> bool throws baml.errors.LlmClient
     let _5: string // next
-    let _6: string?
-    let _7: () -> string? throws baml.errors.Io
+    let _6: string | null
+    let _7: () -> string | null throws baml.errors.Io
     let _8: bool
     let _9: string // next
     let _10: null
@@ -4718,8 +4557,8 @@ fn baml.llm.Stream.final(self: baml.llm.Stream) -> void {
     let _15: null
     let _16: () -> null throws never
     let _17: null
-    let _18: string?
-    let _19: () -> string? throws baml.errors.LlmClient
+    let _18: string | null
+    let _19: () -> string | null throws baml.errors.LlmClient
     let _20: bool
     let _21: void
     let _22: string // reason
@@ -5026,7 +4865,7 @@ fn baml.llm.Client.from_json(j: baml.json.json) -> baml.llm.Client {
     let _8: baml.llm.Client[]
     let _9: baml.json.json
     let _10: type
-    let _11: baml.llm.RetryPolicy?
+    let _11: baml.llm.RetryPolicy | null
     let _12: baml.json.json
     let _13: type
     let _14: int
@@ -5065,7 +4904,7 @@ fn baml.llm.Client.from_json(j: baml.json.json) -> baml.llm.Client {
     }
 
     bb7: {
-        _13 = load_type(baml.llm.RetryPolicy?);
+        _13 = load_type(baml.llm.RetryPolicy | null);
         _11 = call const fn baml.json.from_json<copy _13>(copy _12) -> [bb8];
     }
 
@@ -5536,8 +5375,8 @@ fn baml.llm.Stream.next(self: baml.llm.Stream) -> void | baml.stream.StreamFinis
     let _0: void | baml.stream.StreamFinished // _0 // return
     let _1: baml.llm.Stream // self // param
     let _2: string // next
-    let _3: string?
-    let _4: () -> string? throws baml.errors.Io
+    let _3: string | null
+    let _4: () -> string | null throws baml.errors.Io
     let _5: bool
     let _6: string // next
     let _7: null
@@ -5753,29 +5592,29 @@ fn baml.llm.MediaUrlHandler.to_json(self: baml.llm.MediaUrlHandler) -> baml.json
     // Locals:
     let _0: baml.json.json // _0 // return
     let _1: baml.llm.MediaUrlHandler // self // param
-    let _2: baml.json.json?
-    let _3: ((baml.String) -> baml.json.json throws never)?
+    let _2: baml.json.json | null
+    let _3: ((baml.String) -> baml.json.json throws never) | null
     let _4: string | null
     let _5: baml.llm.MediaUrlHandler
     let _6: bool
     let _7: string | null
     let _8: baml.llm.MediaUrlHandler
-    let _9: baml.json.json?
-    let _10: ((baml.String) -> baml.json.json throws never)?
+    let _9: baml.json.json | null
+    let _10: ((baml.String) -> baml.json.json throws never) | null
     let _11: string | null
     let _12: baml.llm.MediaUrlHandler
     let _13: bool
     let _14: string | null
     let _15: baml.llm.MediaUrlHandler
-    let _16: baml.json.json?
-    let _17: ((baml.String) -> baml.json.json throws never)?
+    let _16: baml.json.json | null
+    let _17: ((baml.String) -> baml.json.json throws never) | null
     let _18: string | null
     let _19: baml.llm.MediaUrlHandler
     let _20: bool
     let _21: string | null
     let _22: baml.llm.MediaUrlHandler
-    let _23: baml.json.json?
-    let _24: ((baml.String) -> baml.json.json throws never)?
+    let _23: baml.json.json | null
+    let _24: ((baml.String) -> baml.json.json throws never) | null
     let _25: string | null
     let _26: baml.llm.MediaUrlHandler
     let _27: bool
@@ -5904,12 +5743,12 @@ fn baml.llm.Client.to_json(self: baml.llm.Client) -> baml.json.json {
     let _10: baml.json.json
     let _11: baml.llm.Client[]
     let _12: baml.llm.Client
-    let _13: baml.json.json?
-    let _14: (() -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError)?
-    let _15: baml.llm.RetryPolicy?
+    let _13: baml.json.json | null
+    let _14: (() -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError) | null
+    let _15: baml.llm.RetryPolicy | null
     let _16: baml.llm.Client
     let _17: bool
-    let _18: baml.llm.RetryPolicy?
+    let _18: baml.llm.RetryPolicy | null
     let _19: baml.llm.Client
     let _20: baml.json.json
     let _21: int
@@ -5974,71 +5813,71 @@ fn baml.llm.BedrockOptions.to_json(self: baml.llm.BedrockOptions) -> baml.json.j
     // Locals:
     let _0: baml.json.json // _0 // return
     let _1: baml.llm.BedrockOptions // self // param
-    let _2: baml.json.json?
-    let _3: ((baml.String) -> baml.json.json throws never)?
+    let _2: baml.json.json | null
+    let _3: ((baml.String) -> baml.json.json throws never) | null
     let _4: string | null
     let _5: baml.llm.BedrockOptions
     let _6: bool
     let _7: string | null
     let _8: baml.llm.BedrockOptions
-    let _9: baml.json.json?
-    let _10: ((baml.String) -> baml.json.json throws never)?
+    let _9: baml.json.json | null
+    let _10: ((baml.String) -> baml.json.json throws never) | null
     let _11: string | null
     let _12: baml.llm.BedrockOptions
     let _13: bool
     let _14: string | null
     let _15: baml.llm.BedrockOptions
-    let _16: baml.json.json?
-    let _17: ((baml.String) -> baml.json.json throws never)?
+    let _16: baml.json.json | null
+    let _17: ((baml.String) -> baml.json.json throws never) | null
     let _18: string | null
     let _19: baml.llm.BedrockOptions
     let _20: bool
     let _21: string | null
     let _22: baml.llm.BedrockOptions
-    let _23: baml.json.json?
-    let _24: ((baml.String) -> baml.json.json throws never)?
+    let _23: baml.json.json | null
+    let _24: ((baml.String) -> baml.json.json throws never) | null
     let _25: string | null
     let _26: baml.llm.BedrockOptions
     let _27: bool
     let _28: string | null
     let _29: baml.llm.BedrockOptions
-    let _30: baml.json.json?
-    let _31: ((baml.String) -> baml.json.json throws never)?
+    let _30: baml.json.json | null
+    let _31: ((baml.String) -> baml.json.json throws never) | null
     let _32: string | null
     let _33: baml.llm.BedrockOptions
     let _34: bool
     let _35: string | null
     let _36: baml.llm.BedrockOptions
-    let _37: baml.json.json?
-    let _38: ((baml.String) -> baml.json.json throws never)?
+    let _37: baml.json.json | null
+    let _38: ((baml.String) -> baml.json.json throws never) | null
     let _39: string | null
     let _40: baml.llm.BedrockOptions
     let _41: bool
     let _42: string | null
     let _43: baml.llm.BedrockOptions
-    let _44: baml.json.json?
-    let _45: ((string[]) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError)?
+    let _44: baml.json.json | null
+    let _45: ((string[]) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError) | null
     let _46: string[] | null
     let _47: baml.llm.BedrockOptions
     let _48: bool
     let _49: string[] | null
     let _50: baml.llm.BedrockOptions
-    let _51: baml.json.json?
-    let _52: ((baml.Int) -> baml.json.json throws never)?
+    let _51: baml.json.json | null
+    let _52: ((baml.Int) -> baml.json.json throws never) | null
     let _53: int | null
     let _54: baml.llm.BedrockOptions
     let _55: bool
     let _56: int | null
     let _57: baml.llm.BedrockOptions
-    let _58: baml.json.json?
-    let _59: ((baml.Float) -> baml.json.json throws never)?
+    let _58: baml.json.json | null
+    let _59: ((baml.Float) -> baml.json.json throws never) | null
     let _60: float | null
     let _61: baml.llm.BedrockOptions
     let _62: bool
     let _63: float | null
     let _64: baml.llm.BedrockOptions
-    let _65: baml.json.json?
-    let _66: ((baml.Float) -> baml.json.json throws never)?
+    let _65: baml.json.json | null
+    let _66: ((baml.Float) -> baml.json.json throws never) | null
     let _67: float | null
     let _68: baml.llm.BedrockOptions
     let _69: bool
@@ -6300,29 +6139,29 @@ fn baml.llm.VertexAiOptions.to_json(self: baml.llm.VertexAiOptions) -> baml.json
     // Locals:
     let _0: baml.json.json // _0 // return
     let _1: baml.llm.VertexAiOptions // self // param
-    let _2: baml.json.json?
-    let _3: ((baml.String) -> baml.json.json throws never)?
+    let _2: baml.json.json | null
+    let _3: ((baml.String) -> baml.json.json throws never) | null
     let _4: string | null
     let _5: baml.llm.VertexAiOptions
     let _6: bool
     let _7: string | null
     let _8: baml.llm.VertexAiOptions
-    let _9: baml.json.json?
-    let _10: ((baml.String) -> baml.json.json throws never)?
+    let _9: baml.json.json | null
+    let _10: ((baml.String) -> baml.json.json throws never) | null
     let _11: string | null
     let _12: baml.llm.VertexAiOptions
     let _13: bool
     let _14: string | null
     let _15: baml.llm.VertexAiOptions
-    let _16: baml.json.json?
-    let _17: ((baml.String) -> baml.json.json throws never)?
+    let _16: baml.json.json | null
+    let _17: ((baml.String) -> baml.json.json throws never) | null
     let _18: string | null
     let _19: baml.llm.VertexAiOptions
     let _20: bool
     let _21: string | null
     let _22: baml.llm.VertexAiOptions
-    let _23: baml.json.json?
-    let _24: ((baml.String) -> baml.json.json throws never)?
+    let _23: baml.json.json | null
+    let _24: ((baml.String) -> baml.json.json throws never) | null
     let _25: string | null
     let _26: baml.llm.VertexAiOptions
     let _27: bool
@@ -6440,8 +6279,8 @@ fn baml.llm.AnthropicOptions.to_json(self: baml.llm.AnthropicOptions) -> baml.js
     // Locals:
     let _0: baml.json.json // _0 // return
     let _1: baml.llm.AnthropicOptions // self // param
-    let _2: baml.json.json?
-    let _3: ((baml.Int) -> baml.json.json throws never)?
+    let _2: baml.json.json | null
+    let _3: ((baml.Int) -> baml.json.json throws never) | null
     let _4: int | null
     let _5: baml.llm.AnthropicOptions
     let _6: bool
@@ -6523,15 +6362,15 @@ fn baml.llm.AzureOpenAiOptions.to_json(self: baml.llm.AzureOpenAiOptions) -> bam
     // Locals:
     let _0: baml.json.json // _0 // return
     let _1: baml.llm.AzureOpenAiOptions // self // param
-    let _2: baml.json.json?
-    let _3: ((baml.String) -> baml.json.json throws never)?
+    let _2: baml.json.json | null
+    let _3: ((baml.String) -> baml.json.json throws never) | null
     let _4: string | null
     let _5: baml.llm.AzureOpenAiOptions
     let _6: bool
     let _7: string | null
     let _8: baml.llm.AzureOpenAiOptions
-    let _9: baml.json.json?
-    let _10: ((baml.String) -> baml.json.json throws never)?
+    let _9: baml.json.json | null
+    let _10: ((baml.String) -> baml.json.json throws never) | null
     let _11: string | null
     let _12: baml.llm.AzureOpenAiOptions
     let _13: bool
@@ -6540,8 +6379,8 @@ fn baml.llm.AzureOpenAiOptions.to_json(self: baml.llm.AzureOpenAiOptions) -> bam
     let _16: baml.json.json
     let _17: string
     let _18: baml.llm.AzureOpenAiOptions
-    let _19: baml.json.json?
-    let _20: ((baml.Int) -> baml.json.json throws never)?
+    let _19: baml.json.json | null
+    let _20: ((baml.Int) -> baml.json.json throws never) | null
     let _21: int | null
     let _22: baml.llm.AzureOpenAiOptions
     let _23: bool
@@ -6811,15 +6650,21 @@ fn baml.media.Audio.url = builtin(vm)
 
 fn baml.net.TcpListener.accept = builtin(io)
 
-fn baml.net.Socket.close = builtin(io)
+fn baml.net.TcpListener.bind = builtin(io)
+
+fn baml.net.UdpSocket.bind = builtin(io)
+
+fn baml.net.TcpStream.close = builtin(io)
 
 fn baml.net.TcpListener.close = builtin(io)
 
-fn baml.net.connect = builtin(io)
+fn baml.net.UdpSocket.close = builtin(io)
 
-fn baml.net.Socket.from_json(j: baml.json.json) -> baml.net.Socket {
+fn baml.net.TcpStream.connect = builtin(io)
+
+fn baml.net.TcpStream.from_json(j: baml.json.json) -> baml.net.TcpStream {
     // Locals:
-    let _0: baml.net.Socket // _0 // return
+    let _0: baml.net.TcpStream // _0 // return
     let _1: baml.json.json // j // param
     let _2: string
     let _3: type
@@ -6829,11 +6674,50 @@ fn baml.net.Socket.from_json(j: baml.json.json) -> baml.net.Socket {
     }
 
     bb1: {
-        _3 = load_type(baml.net.Socket);
+        _3 = load_type(baml.net.TcpStream);
         _0 = call const fn baml.json.from_string<copy _3>(copy _2) -> [bb2];
     }
 
     bb2: {
+        return;
+    }
+}
+
+fn baml.net.Datagram.from_json(j: baml.json.json) -> baml.net.Datagram {
+    // Locals:
+    let _0: baml.net.Datagram // _0 // return
+    let _1: baml.json.json // j // param
+    let _2: uint8array
+    let _3: baml.json.json
+    let _4: type
+    let _5: string
+    let _6: baml.json.json
+    let _7: type
+
+    bb0: {
+        _3 = call const fn baml.json.field(copy _1, const "data") -> [bb1];
+    }
+
+    bb1: {
+        _4 = load_type(uint8array);
+        _2 = call const fn baml.json.from_json<copy _4>(copy _3) -> [bb2];
+    }
+
+    bb2: {
+        _6 = call const fn baml.json.field(copy _1, const "addr") -> [bb3];
+    }
+
+    bb3: {
+        _7 = load_type(string);
+        _5 = call const fn baml.json.from_json<copy _7>(copy _6) -> [bb4];
+    }
+
+    bb4: {
+        _0 = baml.net.Datagram { copy _2, copy _5 };
+        goto -> bb5;
+    }
+
+    bb5: {
         return;
     }
 }
@@ -6859,9 +6743,86 @@ fn baml.net.TcpListener.from_json(j: baml.json.json) -> baml.net.TcpListener {
     }
 }
 
-fn baml.net.listen = builtin(io)
+fn baml.net.UdpSocket.from_json(j: baml.json.json) -> baml.net.UdpSocket {
+    // Locals:
+    let _0: baml.net.UdpSocket // _0 // return
+    let _1: baml.json.json // j // param
+    let _2: string
+    let _3: type
 
-fn baml.net.Socket.read = builtin(io)
+    bb0: {
+        _2 = call const fn baml.json.stringify(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _3 = load_type(baml.net.UdpSocket);
+        _0 = call const fn baml.json.from_string<copy _3>(copy _2) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn baml.net.TcpStream.read = builtin(io)
+
+fn baml.net.UdpSocket.recv_from = builtin(io)
+
+fn baml.net.UdpSocket.send_to = builtin(io)
+
+fn baml.net.TcpStream.to_json(self: baml.net.TcpStream) -> baml.json.json {
+    // Locals:
+    let _0: baml.json.json // _0 // return
+    let _1: baml.net.TcpStream // self // param
+    let _2: string
+    let _3: type
+
+    bb0: {
+        _3 = load_type(baml.net.TcpStream);
+        _2 = call const fn baml.json.to_string<copy _3>(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _0 = call const fn baml.json.parse(copy _2) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn baml.net.Datagram.to_json(self: baml.net.Datagram) -> baml.json.json {
+    // Locals:
+    let _0: baml.json.json // _0 // return
+    let _1: baml.net.Datagram // self // param
+    let _2: baml.json.json
+    let _3: uint8array
+    let _4: baml.net.Datagram
+    let _5: baml.json.json
+    let _6: string
+    let _7: baml.net.Datagram
+
+    bb0: {
+        _4 = copy _1;
+        _3 = copy _4.0;
+        _2 = call const fn baml.Uint8Array.to_json(copy _3) -> [bb1];
+    }
+
+    bb1: {
+        _7 = copy _1;
+        _6 = copy _7.1;
+        _5 = call const fn baml.String.to_json(copy _6) -> [bb2];
+    }
+
+    bb2: {
+        _0 = { const "data": copy _2, const "addr": copy _5 };
+        goto -> bb3;
+    }
+
+    bb3: {
+        return;
+    }
+}
 
 fn baml.net.TcpListener.to_json(self: baml.net.TcpListener) -> baml.json.json {
     // Locals:
@@ -6884,15 +6845,15 @@ fn baml.net.TcpListener.to_json(self: baml.net.TcpListener) -> baml.json.json {
     }
 }
 
-fn baml.net.Socket.to_json(self: baml.net.Socket) -> baml.json.json {
+fn baml.net.UdpSocket.to_json(self: baml.net.UdpSocket) -> baml.json.json {
     // Locals:
     let _0: baml.json.json // _0 // return
-    let _1: baml.net.Socket // self // param
+    let _1: baml.net.UdpSocket // self // param
     let _2: string
     let _3: type
 
     bb0: {
-        _3 = load_type(baml.net.Socket);
+        _3 = load_type(baml.net.UdpSocket);
         _2 = call const fn baml.json.to_string<copy _3>(copy _1) -> [bb1];
     }
 
@@ -6905,34 +6866,7 @@ fn baml.net.Socket.to_json(self: baml.net.Socket) -> baml.json.json {
     }
 }
 
-fn baml.net.Socket.write = builtin(io)
-
-fn baml.panics.DivisionByZero.from_json(j: baml.json.json) -> baml.panics.DivisionByZero {
-    // Locals:
-    let _0: baml.panics.DivisionByZero // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: int
-    let _3: baml.json.json
-    let _4: type
-
-    bb0: {
-        _3 = call const fn baml.json.field(copy _1, const "dividend") -> [bb1];
-    }
-
-    bb1: {
-        _4 = load_type(int);
-        _2 = call const fn baml.json.from_json<copy _4>(copy _3) -> [bb2];
-    }
-
-    bb2: {
-        _0 = baml.panics.DivisionByZero { copy _2 };
-        goto -> bb3;
-    }
-
-    bb3: {
-        return;
-    }
-}
+fn baml.net.TcpStream.write = builtin(io)
 
 fn baml.panics.HostUnavailable.from_json(j: baml.json.json) -> baml.panics.HostUnavailable {
     // Locals:
@@ -6973,40 +6907,19 @@ fn baml.panics.HostUnavailable.from_json(j: baml.json.json) -> baml.panics.HostU
     }
 }
 
-fn baml.panics.MapKeyNotFound.from_json(j: baml.json.json) -> baml.panics.MapKeyNotFound {
+fn baml.panics.HostContractViolation.from_json(j: baml.json.json) -> baml.panics.HostContractViolation {
     // Locals:
-    let _0: baml.panics.MapKeyNotFound // _0 // return
+    let _0: baml.panics.HostContractViolation // _0 // return
     let _1: baml.json.json // j // param
     let _2: string
     let _3: baml.json.json
     let _4: type
-
-    bb0: {
-        _3 = call const fn baml.json.field(copy _1, const "key") -> [bb1];
-    }
-
-    bb1: {
-        _4 = load_type(string);
-        _2 = call const fn baml.json.from_json<copy _4>(copy _3) -> [bb2];
-    }
-
-    bb2: {
-        _0 = baml.panics.MapKeyNotFound { copy _2 };
-        goto -> bb3;
-    }
-
-    bb3: {
-        return;
-    }
-}
-
-fn baml.panics.Unreachable.from_json(j: baml.json.json) -> baml.panics.Unreachable {
-    // Locals:
-    let _0: baml.panics.Unreachable // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: string
-    let _3: baml.json.json
-    let _4: type
+    let _5: string | null
+    let _6: baml.json.json
+    let _7: type
+    let _8: string | null
+    let _9: baml.json.json
+    let _10: type
 
     bb0: {
         _3 = call const fn baml.json.field(copy _1, const "message") -> [bb1];
@@ -7018,38 +6931,29 @@ fn baml.panics.Unreachable.from_json(j: baml.json.json) -> baml.panics.Unreachab
     }
 
     bb2: {
-        _0 = baml.panics.Unreachable { copy _2 };
-        goto -> bb3;
+        _6 = call const fn baml.json.field(copy _1, const "class_name") -> [bb3];
     }
 
     bb3: {
-        return;
-    }
-}
-
-fn baml.panics.Exit.from_json(j: baml.json.json) -> baml.panics.Exit {
-    // Locals:
-    let _0: baml.panics.Exit // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: int
-    let _3: baml.json.json
-    let _4: type
-
-    bb0: {
-        _3 = call const fn baml.json.field(copy _1, const "code") -> [bb1];
+        _7 = load_type(string | null);
+        _5 = call const fn baml.json.from_json<copy _7>(copy _6) -> [bb4];
     }
 
-    bb1: {
-        _4 = load_type(int);
-        _2 = call const fn baml.json.from_json<copy _4>(copy _3) -> [bb2];
+    bb4: {
+        _9 = call const fn baml.json.field(copy _1, const "language") -> [bb5];
     }
 
-    bb2: {
-        _0 = baml.panics.Exit { copy _2 };
-        goto -> bb3;
+    bb5: {
+        _10 = load_type(string | null);
+        _8 = call const fn baml.json.from_json<copy _10>(copy _9) -> [bb6];
     }
 
-    bb3: {
+    bb6: {
+        _0 = baml.panics.HostContractViolation { copy _2, copy _5, copy _8 };
+        goto -> bb7;
+    }
+
+    bb7: {
         return;
     }
 }
@@ -7089,33 +6993,6 @@ fn baml.panics.IndexOutOfBounds.from_json(j: baml.json.json) -> baml.panics.Inde
     }
 
     bb5: {
-        return;
-    }
-}
-
-fn baml.panics.NegativeBitShift.from_json(j: baml.json.json) -> baml.panics.NegativeBitShift {
-    // Locals:
-    let _0: baml.panics.NegativeBitShift // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: string
-    let _3: baml.json.json
-    let _4: type
-
-    bb0: {
-        _3 = call const fn baml.json.field(copy _1, const "message") -> [bb1];
-    }
-
-    bb1: {
-        _4 = load_type(string);
-        _2 = call const fn baml.json.from_json<copy _4>(copy _3) -> [bb2];
-    }
-
-    bb2: {
-        _0 = baml.panics.NegativeBitShift { copy _2 };
-        goto -> bb3;
-    }
-
-    bb3: {
         return;
     }
 }
@@ -7201,6 +7078,168 @@ fn baml.panics.AllocFailure.from_json(j: baml.json.json) -> baml.panics.AllocFai
     }
 }
 
+fn baml.panics.SdkPanic.from_json(j: baml.json.json) -> baml.panics.SdkPanic {
+    // Locals:
+    let _0: baml.panics.SdkPanic // _0 // return
+    let _1: baml.json.json // j // param
+    let _2: string
+    let _3: baml.json.json
+    let _4: type
+
+    bb0: {
+        _3 = call const fn baml.json.field(copy _1, const "message") -> [bb1];
+    }
+
+    bb1: {
+        _4 = load_type(string);
+        _2 = call const fn baml.json.from_json<copy _4>(copy _3) -> [bb2];
+    }
+
+    bb2: {
+        _0 = baml.panics.SdkPanic { copy _2 };
+        goto -> bb3;
+    }
+
+    bb3: {
+        return;
+    }
+}
+
+fn baml.panics.DivisionByZero.from_json(j: baml.json.json) -> baml.panics.DivisionByZero {
+    // Locals:
+    let _0: baml.panics.DivisionByZero // _0 // return
+    let _1: baml.json.json // j // param
+    let _2: int
+    let _3: baml.json.json
+    let _4: type
+
+    bb0: {
+        _3 = call const fn baml.json.field(copy _1, const "dividend") -> [bb1];
+    }
+
+    bb1: {
+        _4 = load_type(int);
+        _2 = call const fn baml.json.from_json<copy _4>(copy _3) -> [bb2];
+    }
+
+    bb2: {
+        _0 = baml.panics.DivisionByZero { copy _2 };
+        goto -> bb3;
+    }
+
+    bb3: {
+        return;
+    }
+}
+
+fn baml.panics.MapKeyNotFound.from_json(j: baml.json.json) -> baml.panics.MapKeyNotFound {
+    // Locals:
+    let _0: baml.panics.MapKeyNotFound // _0 // return
+    let _1: baml.json.json // j // param
+    let _2: string
+    let _3: baml.json.json
+    let _4: type
+
+    bb0: {
+        _3 = call const fn baml.json.field(copy _1, const "key") -> [bb1];
+    }
+
+    bb1: {
+        _4 = load_type(string);
+        _2 = call const fn baml.json.from_json<copy _4>(copy _3) -> [bb2];
+    }
+
+    bb2: {
+        _0 = baml.panics.MapKeyNotFound { copy _2 };
+        goto -> bb3;
+    }
+
+    bb3: {
+        return;
+    }
+}
+
+fn baml.panics.Unreachable.from_json(j: baml.json.json) -> baml.panics.Unreachable {
+    // Locals:
+    let _0: baml.panics.Unreachable // _0 // return
+    let _1: baml.json.json // j // param
+    let _2: string
+    let _3: baml.json.json
+    let _4: type
+
+    bb0: {
+        _3 = call const fn baml.json.field(copy _1, const "message") -> [bb1];
+    }
+
+    bb1: {
+        _4 = load_type(string);
+        _2 = call const fn baml.json.from_json<copy _4>(copy _3) -> [bb2];
+    }
+
+    bb2: {
+        _0 = baml.panics.Unreachable { copy _2 };
+        goto -> bb3;
+    }
+
+    bb3: {
+        return;
+    }
+}
+
+fn baml.panics.Exit.from_json(j: baml.json.json) -> baml.panics.Exit {
+    // Locals:
+    let _0: baml.panics.Exit // _0 // return
+    let _1: baml.json.json // j // param
+    let _2: int
+    let _3: baml.json.json
+    let _4: type
+
+    bb0: {
+        _3 = call const fn baml.json.field(copy _1, const "code") -> [bb1];
+    }
+
+    bb1: {
+        _4 = load_type(int);
+        _2 = call const fn baml.json.from_json<copy _4>(copy _3) -> [bb2];
+    }
+
+    bb2: {
+        _0 = baml.panics.Exit { copy _2 };
+        goto -> bb3;
+    }
+
+    bb3: {
+        return;
+    }
+}
+
+fn baml.panics.NegativeBitShift.from_json(j: baml.json.json) -> baml.panics.NegativeBitShift {
+    // Locals:
+    let _0: baml.panics.NegativeBitShift // _0 // return
+    let _1: baml.json.json // j // param
+    let _2: string
+    let _3: baml.json.json
+    let _4: type
+
+    bb0: {
+        _3 = call const fn baml.json.field(copy _1, const "message") -> [bb1];
+    }
+
+    bb1: {
+        _4 = load_type(string);
+        _2 = call const fn baml.json.from_json<copy _4>(copy _3) -> [bb2];
+    }
+
+    bb2: {
+        _0 = baml.panics.NegativeBitShift { copy _2 };
+        goto -> bb3;
+    }
+
+    bb3: {
+        return;
+    }
+}
+
 fn baml.panics.InvalidFieldAccess.from_json(j: baml.json.json) -> baml.panics.InvalidFieldAccess {
     // Locals:
     let _0: baml.panics.InvalidFieldAccess // _0 // return
@@ -7236,33 +7275,6 @@ fn baml.panics.InvalidFieldAccess.from_json(j: baml.json.json) -> baml.panics.In
     }
 
     bb5: {
-        return;
-    }
-}
-
-fn baml.panics.SdkPanic.from_json(j: baml.json.json) -> baml.panics.SdkPanic {
-    // Locals:
-    let _0: baml.panics.SdkPanic // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: string
-    let _3: baml.json.json
-    let _4: type
-
-    bb0: {
-        _3 = call const fn baml.json.field(copy _1, const "message") -> [bb1];
-    }
-
-    bb1: {
-        _4 = load_type(string);
-        _2 = call const fn baml.json.from_json<copy _4>(copy _3) -> [bb2];
-    }
-
-    bb2: {
-        _0 = baml.panics.SdkPanic { copy _2 };
-        goto -> bb3;
-    }
-
-    bb3: {
         return;
     }
 }
@@ -7345,30 +7357,6 @@ fn baml.panics.UserPanic.to_json(self: baml.panics.UserPanic) -> baml.json.json 
     }
 }
 
-fn baml.panics.DivisionByZero.to_json(self: baml.panics.DivisionByZero) -> baml.json.json {
-    // Locals:
-    let _0: baml.json.json // _0 // return
-    let _1: baml.panics.DivisionByZero // self // param
-    let _2: baml.json.json
-    let _3: int
-    let _4: baml.panics.DivisionByZero
-
-    bb0: {
-        _4 = copy _1;
-        _3 = copy _4.0;
-        _2 = call const fn baml.Int.to_json(copy _3) -> [bb1];
-    }
-
-    bb1: {
-        _0 = { const "dividend": copy _2 };
-        goto -> bb2;
-    }
-
-    bb2: {
-        return;
-    }
-}
-
 fn baml.panics.HostUnavailable.to_json(self: baml.panics.HostUnavailable) -> baml.json.json {
     // Locals:
     let _0: baml.json.json // _0 // return
@@ -7402,13 +7390,27 @@ fn baml.panics.HostUnavailable.to_json(self: baml.panics.HostUnavailable) -> bam
     }
 }
 
-fn baml.panics.MapKeyNotFound.to_json(self: baml.panics.MapKeyNotFound) -> baml.json.json {
+fn baml.panics.HostContractViolation.to_json(self: baml.panics.HostContractViolation) -> baml.json.json {
     // Locals:
     let _0: baml.json.json // _0 // return
-    let _1: baml.panics.MapKeyNotFound // self // param
+    let _1: baml.panics.HostContractViolation // self // param
     let _2: baml.json.json
     let _3: string
-    let _4: baml.panics.MapKeyNotFound
+    let _4: baml.panics.HostContractViolation
+    let _5: baml.json.json | null
+    let _6: ((baml.String) -> baml.json.json throws never) | null
+    let _7: string | null
+    let _8: baml.panics.HostContractViolation
+    let _9: bool
+    let _10: string | null
+    let _11: baml.panics.HostContractViolation
+    let _12: baml.json.json | null
+    let _13: ((baml.String) -> baml.json.json throws never) | null
+    let _14: string | null
+    let _15: baml.panics.HostContractViolation
+    let _16: bool
+    let _17: string | null
+    let _18: baml.panics.HostContractViolation
 
     bb0: {
         _4 = copy _1;
@@ -7417,59 +7419,49 @@ fn baml.panics.MapKeyNotFound.to_json(self: baml.panics.MapKeyNotFound) -> baml.
     }
 
     bb1: {
-        _0 = { const "key": copy _2 };
-        goto -> bb2;
+        _8 = copy _1;
+        _7 = copy _8.1;
+        _9 = copy _7 == const null;
+        branch copy _9 -> [bb3, bb2];
     }
 
     bb2: {
-        return;
-    }
-}
-
-fn baml.panics.Unreachable.to_json(self: baml.panics.Unreachable) -> baml.json.json {
-    // Locals:
-    let _0: baml.json.json // _0 // return
-    let _1: baml.panics.Unreachable // self // param
-    let _2: baml.json.json
-    let _3: string
-    let _4: baml.panics.Unreachable
-
-    bb0: {
-        _4 = copy _1;
-        _3 = copy _4.0;
-        _2 = call const fn baml.String.to_json(copy _3) -> [bb1];
+        _11 = copy _1;
+        _10 = copy _11.1;
+        _6 = make_bound_method baml.String.to_json(copy _10);
+        _5 = call copy _6() -> [bb4];
     }
 
-    bb1: {
-        _0 = { const "message": copy _2 };
-        goto -> bb2;
+    bb3: {
+        _5 = const null;
+        goto -> bb4;
     }
 
-    bb2: {
-        return;
-    }
-}
-
-fn baml.panics.Exit.to_json(self: baml.panics.Exit) -> baml.json.json {
-    // Locals:
-    let _0: baml.json.json // _0 // return
-    let _1: baml.panics.Exit // self // param
-    let _2: baml.json.json
-    let _3: int
-    let _4: baml.panics.Exit
-
-    bb0: {
-        _4 = copy _1;
-        _3 = copy _4.0;
-        _2 = call const fn baml.Int.to_json(copy _3) -> [bb1];
+    bb4: {
+        _15 = copy _1;
+        _14 = copy _15.2;
+        _16 = copy _14 == const null;
+        branch copy _16 -> [bb6, bb5];
     }
 
-    bb1: {
-        _0 = { const "code": copy _2 };
-        goto -> bb2;
+    bb5: {
+        _18 = copy _1;
+        _17 = copy _18.2;
+        _13 = make_bound_method baml.String.to_json(copy _17);
+        _12 = call copy _13() -> [bb7];
     }
 
-    bb2: {
+    bb6: {
+        _12 = const null;
+        goto -> bb7;
+    }
+
+    bb7: {
+        _0 = { const "message": copy _2, const "class_name": copy _5, const "language": copy _12 };
+        goto -> bb8;
+    }
+
+    bb8: {
         return;
     }
 }
@@ -7503,30 +7495,6 @@ fn baml.panics.IndexOutOfBounds.to_json(self: baml.panics.IndexOutOfBounds) -> b
     }
 
     bb3: {
-        return;
-    }
-}
-
-fn baml.panics.NegativeBitShift.to_json(self: baml.panics.NegativeBitShift) -> baml.json.json {
-    // Locals:
-    let _0: baml.json.json // _0 // return
-    let _1: baml.panics.NegativeBitShift // self // param
-    let _2: baml.json.json
-    let _3: string
-    let _4: baml.panics.NegativeBitShift
-
-    bb0: {
-        _4 = copy _1;
-        _3 = copy _4.0;
-        _2 = call const fn baml.String.to_json(copy _3) -> [bb1];
-    }
-
-    bb1: {
-        _0 = { const "message": copy _2 };
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -7603,6 +7571,150 @@ fn baml.panics.AllocFailure.to_json(self: baml.panics.AllocFailure) -> baml.json
     }
 }
 
+fn baml.panics.SdkPanic.to_json(self: baml.panics.SdkPanic) -> baml.json.json {
+    // Locals:
+    let _0: baml.json.json // _0 // return
+    let _1: baml.panics.SdkPanic // self // param
+    let _2: baml.json.json
+    let _3: string
+    let _4: baml.panics.SdkPanic
+
+    bb0: {
+        _4 = copy _1;
+        _3 = copy _4.0;
+        _2 = call const fn baml.String.to_json(copy _3) -> [bb1];
+    }
+
+    bb1: {
+        _0 = { const "message": copy _2 };
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn baml.panics.DivisionByZero.to_json(self: baml.panics.DivisionByZero) -> baml.json.json {
+    // Locals:
+    let _0: baml.json.json // _0 // return
+    let _1: baml.panics.DivisionByZero // self // param
+    let _2: baml.json.json
+    let _3: int
+    let _4: baml.panics.DivisionByZero
+
+    bb0: {
+        _4 = copy _1;
+        _3 = copy _4.0;
+        _2 = call const fn baml.Int.to_json(copy _3) -> [bb1];
+    }
+
+    bb1: {
+        _0 = { const "dividend": copy _2 };
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn baml.panics.MapKeyNotFound.to_json(self: baml.panics.MapKeyNotFound) -> baml.json.json {
+    // Locals:
+    let _0: baml.json.json // _0 // return
+    let _1: baml.panics.MapKeyNotFound // self // param
+    let _2: baml.json.json
+    let _3: string
+    let _4: baml.panics.MapKeyNotFound
+
+    bb0: {
+        _4 = copy _1;
+        _3 = copy _4.0;
+        _2 = call const fn baml.String.to_json(copy _3) -> [bb1];
+    }
+
+    bb1: {
+        _0 = { const "key": copy _2 };
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn baml.panics.Unreachable.to_json(self: baml.panics.Unreachable) -> baml.json.json {
+    // Locals:
+    let _0: baml.json.json // _0 // return
+    let _1: baml.panics.Unreachable // self // param
+    let _2: baml.json.json
+    let _3: string
+    let _4: baml.panics.Unreachable
+
+    bb0: {
+        _4 = copy _1;
+        _3 = copy _4.0;
+        _2 = call const fn baml.String.to_json(copy _3) -> [bb1];
+    }
+
+    bb1: {
+        _0 = { const "message": copy _2 };
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn baml.panics.Exit.to_json(self: baml.panics.Exit) -> baml.json.json {
+    // Locals:
+    let _0: baml.json.json // _0 // return
+    let _1: baml.panics.Exit // self // param
+    let _2: baml.json.json
+    let _3: int
+    let _4: baml.panics.Exit
+
+    bb0: {
+        _4 = copy _1;
+        _3 = copy _4.0;
+        _2 = call const fn baml.Int.to_json(copy _3) -> [bb1];
+    }
+
+    bb1: {
+        _0 = { const "code": copy _2 };
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn baml.panics.NegativeBitShift.to_json(self: baml.panics.NegativeBitShift) -> baml.json.json {
+    // Locals:
+    let _0: baml.json.json // _0 // return
+    let _1: baml.panics.NegativeBitShift // self // param
+    let _2: baml.json.json
+    let _3: string
+    let _4: baml.panics.NegativeBitShift
+
+    bb0: {
+        _4 = copy _1;
+        _3 = copy _4.0;
+        _2 = call const fn baml.String.to_json(copy _3) -> [bb1];
+    }
+
+    bb1: {
+        _0 = { const "message": copy _2 };
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
 fn baml.panics.InvalidFieldAccess.to_json(self: baml.panics.InvalidFieldAccess) -> baml.json.json {
     // Locals:
     let _0: baml.json.json // _0 // return
@@ -7632,30 +7744,6 @@ fn baml.panics.InvalidFieldAccess.to_json(self: baml.panics.InvalidFieldAccess) 
     }
 
     bb3: {
-        return;
-    }
-}
-
-fn baml.panics.SdkPanic.to_json(self: baml.panics.SdkPanic) -> baml.json.json {
-    // Locals:
-    let _0: baml.json.json // _0 // return
-    let _1: baml.panics.SdkPanic // self // param
-    let _2: baml.json.json
-    let _3: string
-    let _4: baml.panics.SdkPanic
-
-    bb0: {
-        _4 = copy _1;
-        _3 = copy _4.0;
-        _2 = call const fn baml.String.to_json(copy _3) -> [bb1];
-    }
-
-    bb1: {
-        _0 = { const "message": copy _2 };
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -7765,12 +7853,12 @@ fn baml.spawn.CancelToken.new = builtin(vm)
 
 fn baml.spawn.TaskGroup.new = builtin(vm)
 
-fn baml.spawn.options(group: baml.spawn.TaskGroup?, cancel: baml.spawn.CancelToken?, detach: bool?) -> (baml.spawn.SpawnParams<void, void>) -> baml.spawn.SpawnParams<void, void> throws never {
+fn baml.spawn.options(group: baml.spawn.TaskGroup | null, cancel: baml.spawn.CancelToken | null, detach: bool | null) -> (baml.spawn.SpawnParams<void, void>) -> baml.spawn.SpawnParams<void, void> throws never {
     // Locals:
     let _0: (baml.spawn.SpawnParams<void, void>) -> baml.spawn.SpawnParams<void, void> throws never // _0 // return
-    let _1: baml.spawn.TaskGroup? // group // param [captured]
-    let _2: baml.spawn.CancelToken? // cancel // param [captured]
-    let _3: bool? // detach // param [captured]
+    let _1: baml.spawn.TaskGroup | null // group // param [captured]
+    let _2: baml.spawn.CancelToken | null // cancel // param [captured]
+    let _3: bool | null // detach // param [captured]
     let _4: bool
     let _5: bool
     let _6: bool
@@ -7821,15 +7909,15 @@ fn .<lambda(options, 0)>(params: baml.spawn.SpawnParams<void, void>) -> null {
     let _0: null // _0 // return
     let _1: baml.spawn.SpawnParams<void, void> // params // param
     let _2: () -> void throws never
-    let _3: string?
-    let _4: baml.spawn.TaskGroup?
-    let _5: baml.spawn.TaskGroup?
+    let _3: string | null
+    let _4: baml.spawn.TaskGroup | null
+    let _5: baml.spawn.TaskGroup | null
     let _6: bool
-    let _7: baml.spawn.CancelToken?
-    let _8: baml.spawn.CancelToken?
+    let _7: baml.spawn.CancelToken | null
+    let _8: baml.spawn.CancelToken | null
     let _9: bool
     let _10: bool
-    let _11: bool?
+    let _11: bool | null
     let _12: bool
 
     bb0: {
@@ -8017,16 +8105,16 @@ fn baml.sys.ProcessOptions.from_json(j: baml.json.json) -> baml.sys.ProcessOptio
     // Locals:
     let _0: baml.sys.ProcessOptions // _0 // return
     let _1: baml.json.json // j // param
-    let _2: string?
+    let _2: string | null
     let _3: baml.json.json
     let _4: type
-    let _5: map<string, string>?
+    let _5: map<string, string> | null
     let _6: baml.json.json
     let _7: type
-    let _8: int?
+    let _8: int | null
     let _9: baml.json.json
     let _10: type
-    let _11: string?
+    let _11: string | null
     let _12: baml.json.json
     let _13: type
 
@@ -8035,7 +8123,7 @@ fn baml.sys.ProcessOptions.from_json(j: baml.json.json) -> baml.sys.ProcessOptio
     }
 
     bb1: {
-        _4 = load_type(string?);
+        _4 = load_type(string | null);
         _2 = call const fn baml.json.from_json<copy _4>(copy _3) -> [bb2];
     }
 
@@ -8044,7 +8132,7 @@ fn baml.sys.ProcessOptions.from_json(j: baml.json.json) -> baml.sys.ProcessOptio
     }
 
     bb3: {
-        _7 = load_type(map<string, string>?);
+        _7 = load_type(map<string, string> | null);
         _5 = call const fn baml.json.from_json<copy _7>(copy _6) -> [bb4];
     }
 
@@ -8053,7 +8141,7 @@ fn baml.sys.ProcessOptions.from_json(j: baml.json.json) -> baml.sys.ProcessOptio
     }
 
     bb5: {
-        _10 = load_type(int?);
+        _10 = load_type(int | null);
         _8 = call const fn baml.json.from_json<copy _10>(copy _9) -> [bb6];
     }
 
@@ -8062,7 +8150,7 @@ fn baml.sys.ProcessOptions.from_json(j: baml.json.json) -> baml.sys.ProcessOptio
     }
 
     bb7: {
-        _13 = load_type(string?);
+        _13 = load_type(string | null);
         _11 = call const fn baml.json.from_json<copy _13>(copy _12) -> [bb8];
     }
 
@@ -8198,33 +8286,33 @@ fn baml.sys.ProcessOptions.to_json(self: baml.sys.ProcessOptions) -> baml.json.j
     // Locals:
     let _0: baml.json.json // _0 // return
     let _1: baml.sys.ProcessOptions // self // param
-    let _2: baml.json.json?
-    let _3: ((baml.String) -> baml.json.json throws never)?
-    let _4: string?
+    let _2: baml.json.json | null
+    let _3: ((baml.String) -> baml.json.json throws never) | null
+    let _4: string | null
     let _5: baml.sys.ProcessOptions
     let _6: bool
-    let _7: string?
+    let _7: string | null
     let _8: baml.sys.ProcessOptions
-    let _9: baml.json.json?
-    let _10: ((map<string, string>) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError)?
-    let _11: map<string, string>?
+    let _9: baml.json.json | null
+    let _10: ((map<string, string>) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError) | null
+    let _11: map<string, string> | null
     let _12: baml.sys.ProcessOptions
     let _13: bool
-    let _14: map<string, string>?
+    let _14: map<string, string> | null
     let _15: baml.sys.ProcessOptions
-    let _16: baml.json.json?
-    let _17: ((baml.Int) -> baml.json.json throws never)?
-    let _18: int?
+    let _16: baml.json.json | null
+    let _17: ((baml.Int) -> baml.json.json throws never) | null
+    let _18: int | null
     let _19: baml.sys.ProcessOptions
     let _20: bool
-    let _21: int?
+    let _21: int | null
     let _22: baml.sys.ProcessOptions
-    let _23: baml.json.json?
-    let _24: ((baml.String) -> baml.json.json throws never)?
-    let _25: string?
+    let _23: baml.json.json | null
+    let _24: ((baml.String) -> baml.json.json throws never) | null
+    let _25: string | null
     let _26: baml.sys.ProcessOptions
     let _27: bool
-    let _28: string?
+    let _28: string | null
     let _29: baml.sys.ProcessOptions
 
     bb0: {

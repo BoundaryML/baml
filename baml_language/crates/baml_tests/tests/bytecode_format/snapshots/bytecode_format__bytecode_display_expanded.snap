@@ -47,7 +47,7 @@ function assert.is_true(condition: bool) -> null {
       8   return                 
 }
 
-function assert.not_null(value: unknown?) -> null {
+function assert.not_null(value: unknown | null) -> null {
   14   0   load_var 1             (value)
        1   load_const 0           (null)
        2   cmp_op ==              
@@ -72,18 +72,18 @@ function testing.$invoke_collector(collector: (testing.TestCollector) -> void th
 function testing.RunReport.from_json(j: baml.json.json) -> testing.RunReport {
   7   0    load_var 1             (j)
       1    load_const 0           ("outcome")
-      2    call 378 ntypeargs=0   (baml.json.field)
+      2    call 386 ntypeargs=0   (baml.json.field)
       3    store_var 2            (_3)
       4    load_type 1            
       5    load_var 2             (_3)
-      6    call 370 ntypeargs=1   (baml.json.from_json)
+      6    call 378 ntypeargs=1   (baml.json.from_json)
       7    load_var 1             (j)
       8    load_const 2           ("duration_ms")
-      9    call 378 ntypeargs=0   (baml.json.field)
+      9    call 386 ntypeargs=0   (baml.json.field)
       10   store_var 3            (_6)
       11   load_type 3            
       12   load_var 3             (_6)
-      13   call 370 ntypeargs=1   (baml.json.from_json)
+      13   call 378 ntypeargs=1   (baml.json.from_json)
       14   init_instance 0        (testing.RunReport .outcome, .duration_ms)
       15   return                 
 }
@@ -106,18 +106,18 @@ function testing.RunReport.to_json(self: testing.RunReport) -> baml.json.json {
 function testing.SerializedTest.from_json(j: baml.json.json) -> testing.SerializedTest {
   78   0    load_var 1             (j)
        1    load_const 0           ("type")
-       2    call 378 ntypeargs=0   (baml.json.field)
+       2    call 386 ntypeargs=0   (baml.json.field)
        3    store_var 2            (_3)
        4    load_type 1            
        5    load_var 2             (_3)
-       6    call 370 ntypeargs=1   (baml.json.from_json)
+       6    call 378 ntypeargs=1   (baml.json.from_json)
        7    load_var 1             (j)
        8    load_const 2           ("name")
-       9    call 378 ntypeargs=0   (baml.json.field)
+       9    call 386 ntypeargs=0   (baml.json.field)
        10   store_var 3            (_6)
        11   load_type 1            
        12   load_var 3             (_6)
-       13   call 370 ntypeargs=1   (baml.json.from_json)
+       13   call 378 ntypeargs=1   (baml.json.from_json)
        14   init_instance 0        (testing.SerializedTest .type, .name)
        15   return                 
 }
@@ -138,25 +138,25 @@ function testing.SerializedTest.to_json(self: testing.SerializedTest) -> baml.js
 function testing.SerializedTestSet.from_json(j: baml.json.json) -> testing.SerializedTestSet {
   83   0    load_var 1             (j)
        1    load_const 0           ("name")
-       2    call 378 ntypeargs=0   (baml.json.field)
+       2    call 386 ntypeargs=0   (baml.json.field)
        3    store_var 2            (_3)
        4    load_type 1            
        5    load_var 2             (_3)
-       6    call 370 ntypeargs=1   (baml.json.from_json)
+       6    call 378 ntypeargs=1   (baml.json.from_json)
        7    load_var 1             (j)
        8    load_const 2           ("items")
-       9    call 378 ntypeargs=0   (baml.json.field)
+       9    call 386 ntypeargs=0   (baml.json.field)
        10   store_var 3            (_6)
        11   load_type 3            
        12   load_var 3             (_6)
-       13   call 370 ntypeargs=1   (baml.json.from_json)
+       13   call 378 ntypeargs=1   (baml.json.from_json)
        14   load_var 1             (j)
        15   load_const 4           ("loadingTimeMs")
-       16   call 378 ntypeargs=0   (baml.json.field)
+       16   call 386 ntypeargs=0   (baml.json.field)
        17   store_var 4            (_9)
        18   load_type 5            
        19   load_var 4             (_9)
-       20   call 370 ntypeargs=1   (baml.json.from_json)
+       20   call 378 ntypeargs=1   (baml.json.from_json)
        21   init_instance 0        (testing.SerializedTestSet .name, .items, .loadingTimeMs)
        22   return                 
 }
@@ -218,25 +218,25 @@ function testing.TestCollector.find_testset(self: testing.TestCollector, name: s
 function testing.TestCollector.from_json(j: baml.json.json) -> testing.TestCollector {
   29   0    load_var 1             (j)
        1    load_const 0           ("prefix")
-       2    call 378 ntypeargs=0   (baml.json.field)
+       2    call 386 ntypeargs=0   (baml.json.field)
        3    store_var 2            (_3)
        4    load_type 1            
        5    load_var 2             (_3)
-       6    call 370 ntypeargs=1   (baml.json.from_json)
+       6    call 378 ntypeargs=1   (baml.json.from_json)
        7    load_var 1             (j)
        8    load_const 2           ("tests")
-       9    call 378 ntypeargs=0   (baml.json.field)
+       9    call 386 ntypeargs=0   (baml.json.field)
        10   store_var 3            (_6)
        11   load_type 3            
        12   load_var 3             (_6)
-       13   call 370 ntypeargs=1   (baml.json.from_json)
+       13   call 378 ntypeargs=1   (baml.json.from_json)
        14   load_var 1             (j)
        15   load_const 4           ("testsets")
-       16   call 378 ntypeargs=0   (baml.json.field)
+       16   call 386 ntypeargs=0   (baml.json.field)
        17   store_var 4            (_9)
        18   load_type 5            
        19   load_var 4             (_9)
-       20   call 370 ntypeargs=1   (baml.json.from_json)
+       20   call 378 ntypeargs=1   (baml.json.from_json)
        21   init_instance 0        (testing.TestCollector .prefix, .tests, .testsets)
        22   return                 
 }
@@ -249,7 +249,7 @@ function testing.TestCollector.new(prefix: string) -> testing.TestCollector {
        4   return            
 }
 
-function testing.TestCollector.register_test(self: testing.TestCollector, name: string, body: () -> void throws unknown, runner: ((() -> testing.TestReport throws never) -> (() -> testing.TestReport throws never) throws never)?) -> void {
+function testing.TestCollector.register_test(self: testing.TestCollector, name: string, body: () -> void throws unknown, runner: ((() -> testing.TestReport throws never) -> (() -> testing.TestReport throws never) throws never) | null) -> void {
   39   0    load_var 1              (self)
        1    load_field 0            (prefix)
        2    load_const 0            ("")
@@ -284,7 +284,7 @@ function testing.TestCollector.register_test(self: testing.TestCollector, name: 
        28   container_len           
        29   cmp_int_op <            
        30   pop_jump_if_false +2    (to 32)
-       31   jump +30                (to 61)
+       31   jump +31                (to 62)
 
   45   32   load_var 6              (count)
        33   load_const 2            (0)
@@ -293,59 +293,60 @@ function testing.TestCollector.register_test(self: testing.TestCollector, name: 
        36   jump +4                 (to 40)
        37   load_var 5              (full_name)
        38   store_var 11            (final_name)
-       39   jump +13                (to 52)
+       39   jump +14                (to 53)
        40   load_var 5              (full_name)
        41   load_const 4            ("#")
        42   bin_op +                
        43   store_var 12            (_28)
-       44   load_var 6              (count)
-       45   load_const 5            (1)
-       46   add_int                 
-       47   call 383 ntypeargs=0    (baml.unstable.string)
-       48   store_var 13            (_30)
-       49   load_var2 12 13         
-       50   bin_op +                
-       51   store_var 11            (final_name)
+       44   load_type 5             
+       45   load_var 6              (count)
+       46   load_const 6            (1)
+       47   add_int                 
+       48   call 391 ntypeargs=1    (baml.unstable.string)
+       49   store_var 13            (_30)
+       50   load_var2 12 13         
+       51   bin_op +                
+       52   store_var 11            (final_name)
 
-  46   52   load_var 1              (self)
-       53   load_field 1            (tests)
-       54   load_var2 11 3          
-       55   load_var 4              (runner)
-       56   init_instance 0         (testing.TestRegistration .name, .body, .runner)
-       57   call 15 ntypeargs=0     (baml.Array.push)
-       58   pop 1                   
+  46   53   load_var 1              (self)
+       54   load_field 1            (tests)
+       55   load_var2 11 3          
+       56   load_var 4              (runner)
+       57   init_instance 0         (testing.TestRegistration .name, .body, .runner)
+       58   call 15 ntypeargs=0     (baml.Array.push)
+       59   pop 1                   
 
-  38   59   load_const 6            (null)
-       60   return                  
+  38   60   load_const 7            (null)
+       61   return                  
 
-  42   61   load_var2 8 9           
-       62   load_array_element      
-       63   store_var_load_var 10   (t)
+  42   62   load_var2 8 9           
+       63   load_array_element      
+       64   store_var_load_var 10   (t)
 
-  43   64   load_field 0            (name)
-       65   load_var 5              (full_name)
-       66   cmp_op ==               
-       67   jump_if_false +2        (to 69)
-       68   jump +6                 (to 74)
-       69   pop 1                   
-       70   load_var 10             (t)
-       71   load_field 0            (name)
-       72   load_var 7              (hash_prefix)
-       73   call 141 ntypeargs=0    (baml.String.starts_with)
-       74   pop_jump_if_false +5    (to 79)
-       75   load_var 6              (count)
-       76   load_const 5            (1)
-       77   add_int                 
-       78   store_var 6             (count)
+  43   65   load_field 0            (name)
+       66   load_var 5              (full_name)
+       67   cmp_op ==               
+       68   jump_if_false +2        (to 70)
+       69   jump +6                 (to 75)
+       70   pop 1                   
+       71   load_var 10             (t)
+       72   load_field 0            (name)
+       73   load_var 7              (hash_prefix)
+       74   call 141 ntypeargs=0    (baml.String.starts_with)
+       75   pop_jump_if_false +5    (to 80)
+       76   load_var 6              (count)
+       77   load_const 6            (1)
+       78   add_int                 
+       79   store_var 6             (count)
 
-  42   79   load_var 9              (__for_idx)
-       80   load_const 5            (1)
-       81   add_int                 
-       82   store_var 9             (__for_idx)
-       83   jump -56                (to 27)
+  42   80   load_var 9              (__for_idx)
+       81   load_const 6            (1)
+       82   add_int                 
+       83   store_var 9             (__for_idx)
+       84   jump -57                (to 27)
 }
 
-function testing.TestCollector.register_test_set(self: testing.TestCollector, name: string, collector: (testing.TestCollector) -> void throws unknown, runner: ((() -> testing.TestSetReport throws never) -> (() -> testing.TestSetReport throws never) throws never)?) -> void {
+function testing.TestCollector.register_test_set(self: testing.TestCollector, name: string, collector: (testing.TestCollector) -> void throws unknown, runner: ((() -> testing.TestSetReport throws never) -> (() -> testing.TestSetReport throws never) throws never) | null) -> void {
   50   0    load_var 1              (self)
        1    load_field 0            (prefix)
        2    load_const 0            ("")
@@ -380,7 +381,7 @@ function testing.TestCollector.register_test_set(self: testing.TestCollector, na
        28   container_len           
        29   cmp_int_op <            
        30   pop_jump_if_false +2    (to 32)
-       31   jump +30                (to 61)
+       31   jump +31                (to 62)
 
   56   32   load_var 6              (count)
        33   load_const 2            (0)
@@ -389,56 +390,57 @@ function testing.TestCollector.register_test_set(self: testing.TestCollector, na
        36   jump +4                 (to 40)
        37   load_var 5              (full_name)
        38   store_var 11            (final_name)
-       39   jump +13                (to 52)
+       39   jump +14                (to 53)
        40   load_var 5              (full_name)
        41   load_const 4            ("#")
        42   bin_op +                
        43   store_var 12            (_28)
-       44   load_var 6              (count)
-       45   load_const 5            (1)
-       46   add_int                 
-       47   call 383 ntypeargs=0    (baml.unstable.string)
-       48   store_var 13            (_30)
-       49   load_var2 12 13         
-       50   bin_op +                
-       51   store_var 11            (final_name)
+       44   load_type 5             
+       45   load_var 6              (count)
+       46   load_const 6            (1)
+       47   add_int                 
+       48   call 391 ntypeargs=1    (baml.unstable.string)
+       49   store_var 13            (_30)
+       50   load_var2 12 13         
+       51   bin_op +                
+       52   store_var 11            (final_name)
 
-  57   52   load_var 1              (self)
-       53   load_field 2            (testsets)
-       54   load_var2 11 3          
-       55   load_var 4              (runner)
-       56   init_instance 0         (testing.TestSetRegistration .name, .collector, .runner)
-       57   call 15 ntypeargs=0     (baml.Array.push)
-       58   pop 1                   
+  57   53   load_var 1              (self)
+       54   load_field 2            (testsets)
+       55   load_var2 11 3          
+       56   load_var 4              (runner)
+       57   init_instance 0         (testing.TestSetRegistration .name, .collector, .runner)
+       58   call 15 ntypeargs=0     (baml.Array.push)
+       59   pop 1                   
 
-  49   59   load_const 6            (null)
-       60   return                  
+  49   60   load_const 7            (null)
+       61   return                  
 
-  53   61   load_var2 8 9           
-       62   load_array_element      
-       63   store_var_load_var 10   (ts)
+  53   62   load_var2 8 9           
+       63   load_array_element      
+       64   store_var_load_var 10   (ts)
 
-  54   64   load_field 0            (name)
-       65   load_var 5              (full_name)
-       66   cmp_op ==               
-       67   jump_if_false +2        (to 69)
-       68   jump +6                 (to 74)
-       69   pop 1                   
-       70   load_var 10             (ts)
-       71   load_field 0            (name)
-       72   load_var 7              (hash_prefix)
-       73   call 141 ntypeargs=0    (baml.String.starts_with)
-       74   pop_jump_if_false +5    (to 79)
-       75   load_var 6              (count)
-       76   load_const 5            (1)
-       77   add_int                 
-       78   store_var 6             (count)
+  54   65   load_field 0            (name)
+       66   load_var 5              (full_name)
+       67   cmp_op ==               
+       68   jump_if_false +2        (to 70)
+       69   jump +6                 (to 75)
+       70   pop 1                   
+       71   load_var 10             (ts)
+       72   load_field 0            (name)
+       73   load_var 7              (hash_prefix)
+       74   call 141 ntypeargs=0    (baml.String.starts_with)
+       75   pop_jump_if_false +5    (to 80)
+       76   load_var 6              (count)
+       77   load_const 6            (1)
+       78   add_int                 
+       79   store_var 6             (count)
 
-  53   79   load_var 9              (__for_idx)
-       80   load_const 5            (1)
-       81   add_int                 
-       82   store_var 9             (__for_idx)
-       83   jump -56                (to 27)
+  53   80   load_var 9              (__for_idx)
+       81   load_const 6            (1)
+       82   add_int                 
+       83   store_var 9             (__for_idx)
+       84   jump -57                (to 27)
 }
 
 function testing.TestCollector.to_json(self: testing.TestCollector) -> baml.json.json {
@@ -461,25 +463,25 @@ function testing.TestCollector.to_json(self: testing.TestCollector) -> baml.json
 function testing.TestRegistration.from_json(j: baml.json.json) -> testing.TestRegistration {
   5   0    load_var 1             (j)
       1    load_const 0           ("name")
-      2    call 378 ntypeargs=0   (baml.json.field)
+      2    call 386 ntypeargs=0   (baml.json.field)
       3    store_var 2            (_3)
       4    load_type 1            
       5    load_var 2             (_3)
-      6    call 370 ntypeargs=1   (baml.json.from_json)
+      6    call 378 ntypeargs=1   (baml.json.from_json)
       7    load_var 1             (j)
       8    load_const 2           ("body")
-      9    call 378 ntypeargs=0   (baml.json.field)
+      9    call 386 ntypeargs=0   (baml.json.field)
       10   store_var 3            (_6)
       11   load_type 3            
       12   load_var 3             (_6)
-      13   call 370 ntypeargs=1   (baml.json.from_json)
+      13   call 378 ntypeargs=1   (baml.json.from_json)
       14   load_var 1             (j)
       15   load_const 4           ("runner")
-      16   call 378 ntypeargs=0   (baml.json.field)
+      16   call 386 ntypeargs=0   (baml.json.field)
       17   store_var 4            (_9)
       18   load_type 5            
       19   load_var 4             (_9)
-      20   call 370 ntypeargs=1   (baml.json.from_json)
+      20   call 378 ntypeargs=1   (baml.json.from_json)
       21   init_instance 0        (testing.TestRegistration .name, .body, .runner)
       22   return                 
 }
@@ -487,8 +489,8 @@ function testing.TestRegistration.from_json(j: baml.json.json) -> testing.TestRe
 function testing.TestRegistration.to_json(self: testing.TestRegistration) -> baml.json.json {
   13   0   load_type 0            
        1   load_var 1             (self)
-       2   call 380 ntypeargs=1   (baml.json.to_string)
-       3   call 375 ntypeargs=0   (baml.json.parse)
+       2   call 388 ntypeargs=1   (baml.json.to_string)
+       3   call 383 ntypeargs=0   (baml.json.parse)
        4   return                 
 }
 
@@ -548,7 +550,7 @@ function testing.TestRegistry.expand_set(self: testing.TestRegistry, name: strin
         44   jump -27               (to 17)
 
   176   45   load_var2 12 2         
-        46   call 520 ntypeargs=0   (testing.TestRegistry.expand_set)
+        46   call 552 ntypeargs=0   (testing.TestRegistry.expand_set)
         47   jump +38               (to 85)
 
   156   48   load_var2 3 4          
@@ -597,32 +599,32 @@ function testing.TestRegistry.expand_set(self: testing.TestRegistry, name: strin
         82   pop 1                  
 
   169   83   load_var 1             (self)
-        84   call 515 ntypeargs=0   (testing.TestRegistry.serialize)
+        84   call 547 ntypeargs=0   (testing.TestRegistry.serialize)
         85   return                 
 }
 
 function testing.TestRegistry.from_json(j: baml.json.json) -> testing.TestRegistry {
   93   0    load_var 1             (j)
        1    load_const 0           ("collector")
-       2    call 378 ntypeargs=0   (baml.json.field)
+       2    call 386 ntypeargs=0   (baml.json.field)
        3    store_var 2            (_3)
        4    load_type 1            
        5    load_var 2             (_3)
-       6    call 370 ntypeargs=1   (baml.json.from_json)
+       6    call 378 ntypeargs=1   (baml.json.from_json)
        7    load_var 1             (j)
        8    load_const 2           ("expansions")
-       9    call 378 ntypeargs=0   (baml.json.field)
+       9    call 386 ntypeargs=0   (baml.json.field)
        10   store_var 3            (_6)
        11   load_type 3            
        12   load_var 3             (_6)
-       13   call 370 ntypeargs=1   (baml.json.from_json)
+       13   call 378 ntypeargs=1   (baml.json.from_json)
        14   load_var 1             (j)
        15   load_const 4           ("loading_time_ms")
-       16   call 378 ntypeargs=0   (baml.json.field)
+       16   call 386 ntypeargs=0   (baml.json.field)
        17   store_var 4            (_9)
        18   load_type 5            
        19   load_var 4             (_9)
-       20   call 370 ntypeargs=1   (baml.json.from_json)
+       20   call 378 ntypeargs=1   (baml.json.from_json)
        21   init_instance 0        (testing.TestRegistry .collector, .expansions, .loading_time_ms)
        22   return                 
 }
@@ -693,7 +695,7 @@ function testing.TestRegistry.run_test(self: testing.TestRegistry, name: string)
         44   jump -27               (to 17)
 
   147   45   load_var2 9 2          
-        46   call 519 ntypeargs=0   (testing.TestRegistry.run_test)
+        46   call 551 ntypeargs=0   (testing.TestRegistry.run_test)
         47   jump +19               (to 66)
 
   136   48   load_var2 3 4          
@@ -716,7 +718,7 @@ function testing.TestRegistry.run_test(self: testing.TestRegistry, name: string)
         62   load_field 1           (body)
         63   load_var 5             (t)
         64   load_field 2           (runner)
-        65   call 526 ntypeargs=0   (testing.run_test)
+        65   call 558 ntypeargs=0   (testing.run_test)
         66   return                 
 }
 
@@ -784,7 +786,7 @@ function testing.TestRegistry.serialize(self: testing.TestRegistry) -> (testing.
         51   store_var 10           (_25)
 
   122   52   load_var 9             (sub)
-        53   call 515 ntypeargs=0   (testing.TestRegistry.serialize)
+        53   call 547 ntypeargs=0   (testing.TestRegistry.serialize)
         54   store_var 11           (_26)
 
   120   55   load_var2 2 10         
@@ -820,7 +822,7 @@ function testing.TestRegistry.serialize(self: testing.TestRegistry) -> (testing.
 function testing.TestRegistry.to_json(self: testing.TestRegistry) -> baml.json.json {
   93   0    load_var 1             (self)
        1    load_field 0           (collector)
-       2    call 527 ntypeargs=0   (testing.TestCollector.to_json)
+       2    call 559 ntypeargs=0   (testing.TestCollector.to_json)
        3    load_var 1             (self)
        4    load_field 1           (expansions)
        5    call 19 ntypeargs=0    (baml.Map.to_json)
@@ -837,18 +839,18 @@ function testing.TestRegistry.to_json(self: testing.TestRegistry) -> baml.json.j
 function testing.TestReport.from_json(j: baml.json.json) -> testing.TestReport {
   18   0    load_var 1             (j)
        1    load_const 0           ("outcome")
-       2    call 378 ntypeargs=0   (baml.json.field)
+       2    call 386 ntypeargs=0   (baml.json.field)
        3    store_var 2            (_3)
        4    load_type 1            
        5    load_var 2             (_3)
-       6    call 370 ntypeargs=1   (baml.json.from_json)
+       6    call 378 ntypeargs=1   (baml.json.from_json)
        7    load_var 1             (j)
        8    load_const 2           ("runs")
-       9    call 378 ntypeargs=0   (baml.json.field)
+       9    call 386 ntypeargs=0   (baml.json.field)
        10   store_var 3            (_6)
        11   load_type 3            
        12   load_var 3             (_6)
-       13   call 370 ntypeargs=1   (baml.json.from_json)
+       13   call 378 ntypeargs=1   (baml.json.from_json)
        14   init_instance 0        (testing.TestReport .outcome, .runs)
        15   return                 
 }
@@ -871,25 +873,25 @@ function testing.TestReport.to_json(self: testing.TestReport) -> baml.json.json 
 function testing.TestSetRegistration.from_json(j: baml.json.json) -> testing.TestSetRegistration {
   17   0    load_var 1             (j)
        1    load_const 0           ("name")
-       2    call 378 ntypeargs=0   (baml.json.field)
+       2    call 386 ntypeargs=0   (baml.json.field)
        3    store_var 2            (_3)
        4    load_type 1            
        5    load_var 2             (_3)
-       6    call 370 ntypeargs=1   (baml.json.from_json)
+       6    call 378 ntypeargs=1   (baml.json.from_json)
        7    load_var 1             (j)
        8    load_const 2           ("collector")
-       9    call 378 ntypeargs=0   (baml.json.field)
+       9    call 386 ntypeargs=0   (baml.json.field)
        10   store_var 3            (_6)
        11   load_type 3            
        12   load_var 3             (_6)
-       13   call 370 ntypeargs=1   (baml.json.from_json)
+       13   call 378 ntypeargs=1   (baml.json.from_json)
        14   load_var 1             (j)
        15   load_const 4           ("runner")
-       16   call 378 ntypeargs=0   (baml.json.field)
+       16   call 386 ntypeargs=0   (baml.json.field)
        17   store_var 4            (_9)
        18   load_type 5            
        19   load_var 4             (_9)
-       20   call 370 ntypeargs=1   (baml.json.from_json)
+       20   call 378 ntypeargs=1   (baml.json.from_json)
        21   init_instance 0        (testing.TestSetRegistration .name, .collector, .runner)
        22   return                 
 }
@@ -897,47 +899,47 @@ function testing.TestSetRegistration.from_json(j: baml.json.json) -> testing.Tes
 function testing.TestSetRegistration.to_json(self: testing.TestSetRegistration) -> baml.json.json {
   25   0   load_type 0            
        1   load_var 1             (self)
-       2   call 380 ntypeargs=1   (baml.json.to_string)
-       3   call 375 ntypeargs=0   (baml.json.parse)
+       2   call 388 ntypeargs=1   (baml.json.to_string)
+       3   call 383 ntypeargs=0   (baml.json.parse)
        4   return                 
 }
 
 function testing.TestSetReport.from_json(j: baml.json.json) -> testing.TestSetReport {
   25   0    load_var 1             (j)
        1    load_const 0           ("outcome")
-       2    call 378 ntypeargs=0   (baml.json.field)
+       2    call 386 ntypeargs=0   (baml.json.field)
        3    store_var 2            (_3)
        4    load_type 1            
        5    load_var 2             (_3)
-       6    call 370 ntypeargs=1   (baml.json.from_json)
+       6    call 378 ntypeargs=1   (baml.json.from_json)
        7    load_var 1             (j)
        8    load_const 2           ("passed")
-       9    call 378 ntypeargs=0   (baml.json.field)
+       9    call 386 ntypeargs=0   (baml.json.field)
        10   store_var 3            (_6)
        11   load_type 3            
        12   load_var 3             (_6)
-       13   call 370 ntypeargs=1   (baml.json.from_json)
+       13   call 378 ntypeargs=1   (baml.json.from_json)
        14   load_var 1             (j)
        15   load_const 4           ("failed")
-       16   call 378 ntypeargs=0   (baml.json.field)
+       16   call 386 ntypeargs=0   (baml.json.field)
        17   store_var 4            (_9)
        18   load_type 3            
        19   load_var 4             (_9)
-       20   call 370 ntypeargs=1   (baml.json.from_json)
+       20   call 378 ntypeargs=1   (baml.json.from_json)
        21   load_var 1             (j)
        22   load_const 5           ("total")
-       23   call 378 ntypeargs=0   (baml.json.field)
+       23   call 386 ntypeargs=0   (baml.json.field)
        24   store_var 5            (_12)
        25   load_type 3            
        26   load_var 5             (_12)
-       27   call 370 ntypeargs=1   (baml.json.from_json)
+       27   call 378 ntypeargs=1   (baml.json.from_json)
        28   load_var 1             (j)
        29   load_const 6           ("results")
-       30   call 378 ntypeargs=0   (baml.json.field)
+       30   call 386 ntypeargs=0   (baml.json.field)
        31   store_var 6            (_15)
        32   load_type 7            
        33   load_var 6             (_15)
-       34   call 370 ntypeargs=1   (baml.json.from_json)
+       34   call 378 ntypeargs=1   (baml.json.from_json)
        35   init_instance 0        (testing.TestSetReport .outcome, .passed, .failed, .total, .results)
        36   return                 
 }
@@ -969,13 +971,13 @@ function testing.TestSetReport.to_json(self: testing.TestSetReport) -> baml.json
        23   return                
 }
 
-function testing.run_test(body: () -> void throws unknown, runner: ((() -> testing.TestReport throws never) -> (() -> testing.TestReport throws never) throws never)?) -> testing.TestReport {
+function testing.run_test(body: () -> void throws unknown, runner: ((() -> testing.TestReport throws never) -> (() -> testing.TestReport throws never) throws never) | null) -> testing.TestReport {
         0    load_var 1             
         1    make_cell              
         2    store_var 1            
 
   185   3    load_var 1             (body)
-        4    make_closure 1022 1    
+        4    make_closure 1076 1    
         5    store_var 3            (base_run)
 
   200   6    load_var 2             (runner)
@@ -995,7 +997,7 @@ function testing.run_test(body: () -> void throws unknown, runner: ((() -> testi
         17   return                 
 }
 
-function testing.run_testset(run_children: () -> testing.TestSetReport throws never, runner: ((() -> testing.TestSetReport throws never) -> (() -> testing.TestSetReport throws never) throws never)?) -> testing.TestSetReport {
+function testing.run_testset(run_children: () -> testing.TestSetReport throws never, runner: ((() -> testing.TestSetReport throws never) -> (() -> testing.TestSetReport throws never) throws never) | null) -> testing.TestSetReport {
   211   0    load_var 2             (runner)
         1    load_const 0           (null)
         2    cmp_op ==              
@@ -1016,18 +1018,18 @@ function testing.run_testset(run_children: () -> testing.TestSetReport throws ne
 function user.ErrorInfo.from_json(j: baml.json.json) -> ErrorInfo {
   26   0    load_var 1             (j)
        1    load_const 0           ("code")
-       2    call 378 ntypeargs=0   (baml.json.field)
+       2    call 386 ntypeargs=0   (baml.json.field)
        3    store_var 2            (_3)
        4    load_type 1            
        5    load_var 2             (_3)
-       6    call 370 ntypeargs=1   (baml.json.from_json)
+       6    call 378 ntypeargs=1   (baml.json.from_json)
        7    load_var 1             (j)
        8    load_const 2           ("message")
-       9    call 378 ntypeargs=0   (baml.json.field)
+       9    call 386 ntypeargs=0   (baml.json.field)
        10   store_var 3            (_6)
        11   load_type 3            
        12   load_var 3             (_6)
-       13   call 370 ntypeargs=1   (baml.json.from_json)
+       13   call 378 ntypeargs=1   (baml.json.from_json)
        14   init_instance 0        (user.ErrorInfo .code, .message)
        15   return                 
 }
@@ -1048,25 +1050,25 @@ function user.ErrorInfo.to_json(self: ErrorInfo) -> baml.json.json {
 function user.Report.from_json(j: baml.json.json) -> Report {
   20   0    load_var 1             (j)
        1    load_const 0           ("score")
-       2    call 378 ntypeargs=0   (baml.json.field)
+       2    call 386 ntypeargs=0   (baml.json.field)
        3    store_var 2            (_3)
        4    load_type 1            
        5    load_var 2             (_3)
-       6    call 370 ntypeargs=1   (baml.json.from_json)
+       6    call 378 ntypeargs=1   (baml.json.from_json)
        7    load_var 1             (j)
        8    load_const 2           ("label")
-       9    call 378 ntypeargs=0   (baml.json.field)
+       9    call 386 ntypeargs=0   (baml.json.field)
        10   store_var 3            (_6)
        11   load_type 3            
        12   load_var 3             (_6)
-       13   call 370 ntypeargs=1   (baml.json.from_json)
+       13   call 378 ntypeargs=1   (baml.json.from_json)
        14   load_var 1             (j)
        15   load_const 4           ("breakdown")
-       16   call 378 ntypeargs=0   (baml.json.field)
+       16   call 386 ntypeargs=0   (baml.json.field)
        17   store_var 4            (_9)
        18   load_type 5            
        19   load_var 4             (_9)
-       20   call 370 ntypeargs=1   (baml.json.from_json)
+       20   call 378 ntypeargs=1   (baml.json.from_json)
        21   init_instance 0        (user.Report .score, .label, .breakdown)
        22   return                 
 }
@@ -1091,25 +1093,25 @@ function user.Report.to_json(self: Report) -> baml.json.json {
 function user.User.from_json(j: baml.json.json) -> User {
   3   0    load_var 1             (j)
       1    load_const 0           ("name")
-      2    call 378 ntypeargs=0   (baml.json.field)
+      2    call 386 ntypeargs=0   (baml.json.field)
       3    store_var 2            (_3)
       4    load_type 1            
       5    load_var 2             (_3)
-      6    call 370 ntypeargs=1   (baml.json.from_json)
+      6    call 378 ntypeargs=1   (baml.json.from_json)
       7    load_var 1             (j)
       8    load_const 2           ("age")
-      9    call 378 ntypeargs=0   (baml.json.field)
+      9    call 386 ntypeargs=0   (baml.json.field)
       10   store_var 3            (_6)
       11   load_type 3            
       12   load_var 3             (_6)
-      13   call 370 ntypeargs=1   (baml.json.from_json)
+      13   call 378 ntypeargs=1   (baml.json.from_json)
       14   load_var 1             (j)
       15   load_const 4           ("role")
-      16   call 378 ntypeargs=0   (baml.json.field)
+      16   call 386 ntypeargs=0   (baml.json.field)
       17   store_var 4            (_9)
       18   load_type 5            
       19   load_var 4             (_9)
-      20   call 370 ntypeargs=1   (baml.json.from_json)
+      20   call 378 ntypeargs=1   (baml.json.from_json)
       21   init_instance 0        (user.User .name, .age, .role)
       22   return                 
 }

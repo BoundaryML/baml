@@ -9,14 +9,17 @@ type BamlHandle struct {
 }
 
 // Clone creates a new handle pointing to the same underlying value.
-func (h BamlHandle) Clone() BamlHandle {
-	newKey := cffi.CloneHandle(h.Key)
-	return BamlHandle{Key: newKey, HandleType: h.HandleType}
+func (h BamlHandle) Clone() (BamlHandle, error) {
+	newKey, err := cffi.CloneHandle(h.Key)
+	if err != nil {
+		return BamlHandle{}, err
+	}
+	return BamlHandle{Key: newKey, HandleType: h.HandleType}, nil
 }
 
 // Release releases the handle, allowing Rust to free the underlying value.
-func (h BamlHandle) Release() {
-	cffi.ReleaseHandle(h.Key)
+func (h BamlHandle) Release() error {
+	return cffi.ReleaseHandle(h.Key)
 }
 
 // FlushEvents flushes the BAML event sink.

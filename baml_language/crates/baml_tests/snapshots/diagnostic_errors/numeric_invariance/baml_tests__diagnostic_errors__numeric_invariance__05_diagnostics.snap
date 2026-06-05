@@ -122,52 +122,52 @@ source: crates/baml_tests/src/generated_tests.rs
     │ Note: Error code: E0001
 ────╯
 
-  [type] error: operator `Add` cannot be applied to `int?` and `int`
+  [type] error: operator `Add` cannot be applied to `int | null` and `int`
     ╭─[ numeric_invariance.baml:67:5 ]
     │
  67 │     x + y
     │     ──┬──  
-    │       ╰──── operator `Add` cannot be applied to `int?` and `int`
+    │       ╰──── operator `Add` cannot be applied to `int | null` and `int`
     │ 
     │ Note: Error code: E0004
 ────╯
 
-  [type] error: operator `BitAnd` cannot be applied to `int?` and `int`
+  [type] error: operator `BitAnd` cannot be applied to `int | null` and `int`
     ╭─[ numeric_invariance.baml:72:5 ]
     │
  72 │     x & y
     │     ──┬──  
-    │       ╰──── operator `BitAnd` cannot be applied to `int?` and `int`
+    │       ╰──── operator `BitAnd` cannot be applied to `int | null` and `int`
     │ 
     │ Note: Error code: E0004
 ────╯
 
-  [type] error: operator `Lt` cannot be applied to `int?` and `int`
+  [type] error: operator `Lt` cannot be applied to `int | null` and `int`
     ╭─[ numeric_invariance.baml:79:5 ]
     │
  79 │     x < y
     │     ──┬──  
-    │       ╰──── operator `Lt` cannot be applied to `int?` and `int`
+    │       ╰──── operator `Lt` cannot be applied to `int | null` and `int`
     │ 
     │ Note: Error code: E0004
 ────╯
 
-  [type] error: operator `Eq` cannot be applied to `float?` and `bigint`
+  [type] error: operator `Eq` cannot be applied to `float | null` and `bigint`
     ╭─[ numeric_invariance.baml:85:5 ]
     │
  85 │     x == y
     │     ───┬──  
-    │        ╰──── operator `Eq` cannot be applied to `float?` and `bigint`
+    │        ╰──── operator `Eq` cannot be applied to `float | null` and `bigint`
     │ 
     │ Note: Error code: E0004
 ────╯
 
-  [type] error: operator `Lt` cannot be applied to `float?` and `bigint`
+  [type] error: operator `Lt` cannot be applied to `float | null` and `bigint`
     ╭─[ numeric_invariance.baml:91:5 ]
     │
  91 │     x < y
     │     ──┬──  
-    │       ╰──── operator `Lt` cannot be applied to `float?` and `bigint`
+    │       ╰──── operator `Lt` cannot be applied to `float | null` and `bigint`
     │ 
     │ Note: Error code: E0004
 ────╯

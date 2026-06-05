@@ -107,7 +107,7 @@ impl LeafBody {
         fn ty_uses_rust_type(ty: &Ty) -> bool {
             match ty {
                 Ty::RustType => true,
-                Ty::Optional(inner) | Ty::List(inner) => ty_uses_rust_type(inner),
+                Ty::List(inner) => ty_uses_rust_type(inner),
                 Ty::Map { key, value } => ty_uses_rust_type(key) || ty_uses_rust_type(value),
                 Ty::Union(items) => items.iter().any(ty_uses_rust_type),
                 Ty::Class(_, args) => args.iter().any(ty_uses_rust_type),
@@ -122,10 +122,14 @@ impl LeafBody {
             EmittedSymbol::Class(c) => {
                 c.properties.iter().any(|p| ty_uses_rust_type(&p.ty))
                     || c.static_methods.iter().any(|m| {
-                        m.arg_tys.iter().any(ty_uses_rust_type) || ty_uses_rust_type(&m.return_ty)
+                        m.required_args.iter().any(|arg| ty_uses_rust_type(&arg.ty))
+                            || m.optional_args.iter().any(|arg| ty_uses_rust_type(&arg.ty))
+                            || ty_uses_rust_type(&m.return_ty)
                     })
                     || c.instance_methods.iter().any(|m| {
-                        m.arg_tys.iter().any(ty_uses_rust_type) || ty_uses_rust_type(&m.return_ty)
+                        m.required_args.iter().any(|arg| ty_uses_rust_type(&arg.ty))
+                            || m.optional_args.iter().any(|arg| ty_uses_rust_type(&arg.ty))
+                            || ty_uses_rust_type(&m.return_ty)
                     })
             }
             EmittedSymbol::Function(f) => {
@@ -172,14 +176,20 @@ impl LeafBody {
                         collect_root_imports(&prop.ty, current, &mut acc);
                     }
                     for m in &c.static_methods {
-                        for ty in &m.arg_tys {
-                            collect_root_imports(ty, current, &mut acc);
+                        for arg in &m.required_args {
+                            collect_root_imports(&arg.ty, current, &mut acc);
+                        }
+                        for arg in &m.optional_args {
+                            collect_root_imports(&arg.ty, current, &mut acc);
                         }
                         collect_root_imports(&m.return_ty, current, &mut acc);
                     }
                     for m in &c.instance_methods {
-                        for ty in &m.arg_tys {
-                            collect_root_imports(ty, current, &mut acc);
+                        for arg in &m.required_args {
+                            collect_root_imports(&arg.ty, current, &mut acc);
+                        }
+                        for arg in &m.optional_args {
+                            collect_root_imports(&arg.ty, current, &mut acc);
                         }
                         collect_root_imports(&m.return_ty, current, &mut acc);
                     }
@@ -246,14 +256,20 @@ impl LeafBody {
                         collect_root_imports(&prop.ty, current, &mut acc);
                     }
                     for m in &c.static_methods {
-                        for ty in &m.arg_tys {
-                            collect_root_imports(ty, current, &mut acc);
+                        for arg in &m.required_args {
+                            collect_root_imports(&arg.ty, current, &mut acc);
+                        }
+                        for arg in &m.optional_args {
+                            collect_root_imports(&arg.ty, current, &mut acc);
                         }
                         collect_root_imports(&m.return_ty, current, &mut acc);
                     }
                     for m in &c.instance_methods {
-                        for ty in &m.arg_tys {
-                            collect_root_imports(ty, current, &mut acc);
+                        for arg in &m.required_args {
+                            collect_root_imports(&arg.ty, current, &mut acc);
+                        }
+                        for arg in &m.optional_args {
+                            collect_root_imports(&arg.ty, current, &mut acc);
                         }
                         collect_root_imports(&m.return_ty, current, &mut acc);
                     }
@@ -284,6 +300,18 @@ impl LeafBody {
                 true
             }
             EmittedSymbol::Enum(_) => false,
+        })
+    }
+
+    pub(crate) fn has_defaulted_call_params(&self) -> bool {
+        self.symbols.iter().any(|(s, _)| match s {
+            EmittedSymbol::Function(f) => f.arg_defaults.iter().any(Option::is_some),
+            EmittedSymbol::Class(c) => c
+                .static_methods
+                .iter()
+                .chain(&c.instance_methods)
+                .any(|m| !m.optional_args.is_empty()),
+            EmittedSymbol::Enum(_) | EmittedSymbol::TypeAlias(_) => false,
         })
     }
 
@@ -422,7 +450,7 @@ fn collect_root_imports(ty: &Ty, current: &LeafPath, out: &mut RootImportSets) {
         Ty::Enum(name) | Ty::TypeAlias(name) => {
             record_name_routing(name, current, out);
         }
-        Ty::Optional(inner) | Ty::List(inner) => collect_root_imports(inner, current, out),
+        Ty::List(inner) => collect_root_imports(inner, current, out),
         Ty::Map { key, value } => {
             collect_root_imports(key, current, out);
             collect_root_imports(value, current, out);
@@ -960,8 +988,8 @@ fn source_method_root(fqn: &str) -> &str {
 /// but pad to align columns:
 ///
 /// ```text
-/// foo       = _define_function("<fqn>", "sync",  [<params>])
-/// foo_async = _define_function("<fqn>", "async", [<params>])
+/// foo       = _define_function("<fqn>", "sync",  [<required>], [<optional>])
+/// foo_async = _define_function("<fqn>", "async", [<required>], [<optional>])
 /// ```
 fn render_factory_binding(f: &crate::emit::function::PyFunction) -> String {
     // 6 = len("_async"): sync LHS aligns with async sibling's `=`
@@ -971,12 +999,11 @@ fn render_factory_binding(f: &crate::emit::function::PyFunction) -> String {
         SyncAsync::Sync => ("      ", "\"sync\", "),
         SyncAsync::Async => ("", "\"async\","),
     };
-    let params = render_param_list(&f.param_names);
-    let required_positional_count = required_positional_count(&f.arg_defaults, 0);
-    let default_arg =
-        render_required_positional_arg(required_positional_count, f.param_names.len());
+    let (required_params, optional_params) = split_param_names(&f.param_names, &f.arg_defaults, 0);
+    let required_params = render_param_list(&required_params);
+    let optional_params = optional_param_list_arg(&optional_params);
     format!(
-        "{name}{lhs_pad} = _define_function({fqn}, {mode_str} {params}{default_arg})",
+        "{name}{lhs_pad} = _define_function({fqn}, {mode_str} {required_params}{optional_params})",
         name = f.py_name,
         fqn = py_string(&f.baml_fqn),
     )
@@ -990,13 +1017,12 @@ fn render_method_binding(m: &PyMethodBinding) -> String {
         SyncAsync::Sync => ("      ", "\"sync\", "),
         SyncAsync::Async => ("", "\"async\","),
     };
-    let params = render_param_list(&m.param_names);
-    let receiver_count = usize::from(matches!(m.kind, MethodKind::Instance));
-    let required_positional_count = required_positional_count(&m.arg_defaults, receiver_count);
-    let default_arg =
-        render_required_positional_arg(required_positional_count, m.param_names.len());
+    let required_params = m.runtime_required_names();
+    let optional_params = m.optional_names();
+    let required_params = render_param_list(&required_params);
+    let optional_params = optional_param_list_arg(&optional_params);
     let inner = format!(
-        "_define_function({fqn}, {mode_str} {params}{default_arg})",
+        "_define_function({fqn}, {mode_str} {required_params}{optional_params})",
         fqn = py_string(&m.baml_fqn),
     );
     // `staticmethod(...)` wrap stops Python's descriptor protocol from
@@ -1024,6 +1050,23 @@ fn render_param_list(names: &[String]) -> String {
     s
 }
 
+fn optional_param_list_arg(names: &[String]) -> String {
+    if names.is_empty() {
+        String::new()
+    } else {
+        format!(", {}", render_param_list(names))
+    }
+}
+
+fn split_param_names(
+    names: &[String],
+    arg_defaults: &[Option<FunctionArgumentDefault>],
+    receiver_count: usize,
+) -> (Vec<String>, Vec<String>) {
+    let required = required_positional_count(arg_defaults, receiver_count);
+    (names[..required].to_vec(), names[required..].to_vec())
+}
+
 fn required_positional_count(
     arg_defaults: &[Option<FunctionArgumentDefault>],
     receiver_count: usize,
@@ -1033,14 +1076,6 @@ fn required_positional_count(
             .iter()
             .take_while(|default| default.is_none())
             .count()
-}
-
-fn render_required_positional_arg(required: usize, total: usize) -> String {
-    if required == total {
-        String::new()
-    } else {
-        format!(", {required}")
-    }
 }
 
 /// Leaf body: imports + symbol bodies + `__all__`. Empty string when
@@ -1168,13 +1203,16 @@ pub(crate) fn render_leaf_body(body: &LeafBody) -> String {
         }
     }
 
-    // The `BamlError` / `BamlPanic` wrappers are defined in `baml_core` and
+    // The `BamlError` / `BamlPanic` wrappers and optional-argument sentinel
+    // are defined in `baml_core` and
     // re-exported on the top-level `baml` builtins package so user code can
-    // `from baml_sdk.baml import BamlError, BamlPanic` (31a-spec / 31f-phase5).
+    // `from baml_sdk.baml import BamlError, BamlPanic, UNSET`.
     let is_baml_builtins_root = body.leaf.segments == ["baml"];
     if is_baml_builtins_root {
         out.push('\n');
-        out.push_str("from baml_core import BamlError as BamlError, BamlPanic as BamlPanic\n");
+        out.push_str(
+            "from baml_core import BamlError as BamlError, BamlPanic as BamlPanic, Unset as Unset, UNSET as UNSET\n",
+        );
     }
 
     let typevars = body.generic_typevars();
@@ -1221,6 +1259,8 @@ pub(crate) fn render_leaf_body(body: &LeafBody) -> String {
     if is_baml_builtins_root {
         names.push("BamlError");
         names.push("BamlPanic");
+        names.push("Unset");
+        names.push("UNSET");
     }
     if !names.is_empty() {
         out.push_str("\n\n");
@@ -1415,27 +1455,54 @@ fn render_symbol_pyi(s: &EmittedSymbol, leaf: &LeafPath) -> String {
 /// methods (`self` takes no annotation).
 fn render_method_params_pyi(m: &PyMethodBinding, ctx: &TranslateCtx) -> String {
     match m.kind {
-        MethodKind::Static => render_typed_params(&m.param_names, &m.arg_tys, &m.arg_defaults, ctx),
+        MethodKind::Static => render_typed_method_arguments(m, ctx),
         MethodKind::Instance => {
             let mut s = String::from("self");
-            let mut inserted_kw_marker = false;
-            for ((n, t), default) in m
-                .param_names
-                .iter()
-                .skip(1)
-                .zip(m.arg_tys.iter())
-                .zip(m.arg_defaults.iter())
-            {
-                if default.is_some() && !inserted_kw_marker {
-                    s.push_str(", *");
-                    inserted_kw_marker = true;
-                }
+            for arg in &m.required_args {
                 s.push_str(", ");
-                s.push_str(&render_param_pyi(n, t, default.as_ref(), ctx));
+                s.push_str(&render_param_pyi(arg.name.as_str(), &arg.ty, None, ctx));
+            }
+            if !m.optional_args.is_empty() {
+                s.push_str(", *");
+            }
+            for arg in &m.optional_args {
+                s.push_str(", ");
+                s.push_str(&render_param_pyi(
+                    arg.name.as_str(),
+                    &arg.ty,
+                    Some(&arg.default),
+                    ctx,
+                ));
             }
             s
         }
     }
+}
+
+fn render_typed_method_arguments(m: &PyMethodBinding, ctx: &TranslateCtx) -> String {
+    let mut s = String::new();
+    for (i, arg) in m.required_args.iter().enumerate() {
+        if i > 0 {
+            s.push_str(", ");
+        }
+        s.push_str(&render_param_pyi(arg.name.as_str(), &arg.ty, None, ctx));
+    }
+    if !m.optional_args.is_empty() {
+        if !s.is_empty() {
+            s.push_str(", ");
+        }
+        s.push('*');
+    }
+    for arg in &m.optional_args {
+        s.push_str(", ");
+        s.push_str(&render_param_pyi(
+            arg.name.as_str(),
+            &arg.ty,
+            Some(&arg.default),
+            ctx,
+        ));
+    }
+    s
 }
 
 fn render_function_signature_pyi(f: &PyFunction, ctx: &TranslateCtx) -> String {
@@ -1500,12 +1567,35 @@ fn render_param_pyi(
     default: Option<&FunctionArgumentDefault>,
     ctx: &TranslateCtx,
 ) -> String {
-    let mut s = format!("{name}: {}", translate_ty(ty, ctx));
+    let ty_py = translate_ty(ty, ctx);
+    let mut s = if default.is_some() {
+        format!("{name}: {}", with_unset_union(&ty_py))
+    } else {
+        format!("{name}: {ty_py}")
+    };
     if let Some(default) = default {
         s.push_str(" = ");
         s.push_str(&render_default_pyi(default));
     }
     s
+}
+
+fn with_unset_union(ty_py: &str) -> String {
+    if let Some(inner) = ty_py
+        .strip_prefix("typing.Union[")
+        .and_then(|inner| inner.strip_suffix(']'))
+    {
+        format!("typing.Union[{inner}, baml.Unset]")
+    } else if let Some(inner) = ty_py
+        .strip_prefix("typing.Optional[")
+        .and_then(|inner| inner.strip_suffix(']'))
+    {
+        // `Optional[X]` is `Union[X, None]`; flatten so a nullable keyword
+        // argument composes into a single `Union[X, None, baml.Unset]`.
+        format!("typing.Union[{inner}, None, baml.Unset]")
+    } else {
+        format!("typing.Union[{ty_py}, baml.Unset]")
+    }
 }
 
 fn render_default_pyi(default: &FunctionArgumentDefault) -> String {
@@ -1516,7 +1606,7 @@ fn render_default_pyi(default: &FunctionArgumentDefault) -> String {
         }
         FunctionArgumentDefault::Literal(DefaultLiteral::EmptyList) => "[]".to_string(),
         FunctionArgumentDefault::Literal(DefaultLiteral::EmptyMap) => "{}".to_string(),
-        FunctionArgumentDefault::Expression { .. } => "...".to_string(),
+        FunctionArgumentDefault::Expression { .. } => "baml.UNSET".to_string(),
     }
 }
 
@@ -1550,7 +1640,16 @@ pub(crate) fn render_leaf_body_pyi(body: &LeafBody) -> String {
     // `.py`, but wraps all of them under `if typing.TYPE_CHECKING:` —
     // the stub doesn't run at runtime, so the guard is a no-op for
     // type checkers and keeps the stub minimal.
-    let rel_imports = body.all_rel_imports_py();
+    let mut rel_imports = body.all_rel_imports_py();
+    if body.has_defaulted_call_params() && body.leaf.segments != ["baml"] {
+        rel_imports.push(RelImport {
+            depth: body.leaf.segments.len() + 1,
+            from_path: String::new(),
+            anchor: "baml".to_string(),
+        });
+        rel_imports.sort();
+        rel_imports.dedup();
+    }
     let needs_typing = body.needs_typing_pyi() || !rel_imports.is_empty();
     let needs_typing_extensions = body.has_recursive_alias();
     let needs_pydantic = body.needs_pydantic();
@@ -1587,11 +1686,13 @@ pub(crate) fn render_leaf_body_pyi(body: &LeafBody) -> String {
     }
 
     // Mirror the `.py` re-export so `from baml_sdk.baml import BamlError,
-    // BamlPanic` type-checks.
+    // BamlPanic, UNSET` type-checks.
     let is_baml_builtins_root = body.leaf.segments == ["baml"];
     if is_baml_builtins_root {
         out.push('\n');
-        out.push_str("from baml_core import BamlError as BamlError, BamlPanic as BamlPanic\n");
+        out.push_str(
+            "from baml_core import BamlError as BamlError, BamlPanic as BamlPanic, Unset as Unset, UNSET as UNSET\n",
+        );
     }
 
     // The `.pyi` re-declares TypeVars because stubs don't import from
@@ -1633,6 +1734,8 @@ pub(crate) fn render_leaf_body_pyi(body: &LeafBody) -> String {
     if is_baml_builtins_root {
         names.push("BamlError");
         names.push("BamlPanic");
+        names.push("Unset");
+        names.push("UNSET");
     }
     if !names.is_empty() {
         out.push_str("\n\n");

@@ -36,8 +36,6 @@ fn flush_events() {
 fn baml_py(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<abort_controller::AbortController>()?;
     m.add_class::<py_handle::BamlPyHandle>()?;
-    m.add_wrapped(wrap_pyfunction!(py_handle::take_pyhandle_from_table))?;
-    m.add_wrapped(wrap_pyfunction!(py_handle::put_pyhandle_into_table))?;
     m.add_wrapped(wrap_pyfunction!(py_handle::_seed_function_ref_handle))?;
     m.add_wrapped(wrap_pyfunction!(py_handle::_seed_generic_media_handle))?;
     m.add_class::<runtime::BamlRuntime>()?;
@@ -54,6 +52,7 @@ fn baml_py(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_wrapped(wrap_pyfunction!(runtime::get_runtime))?;
     m.add_wrapped(wrap_pyfunction!(host_value::register_host_callable))?;
     m.add_wrapped(wrap_pyfunction!(host_value::release_host_callable))?;
+    m.add_wrapped(wrap_pyfunction!(host_value::lookup_host_value))?;
 
     // Wire the bridge_cffi C entry points to this bridge's per-process
     // Python host-value registry. First-call-wins inside bridge_cffi, so

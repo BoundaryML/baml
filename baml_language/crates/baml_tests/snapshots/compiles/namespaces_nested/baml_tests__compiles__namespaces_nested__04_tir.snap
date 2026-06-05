@@ -17,7 +17,7 @@ function user.CallOpenAI(cfg: user.AppConfig) -> user.llm.openai.OpenAIResponse 
   }
 }
 class user.AppConfig$stream {
-  api_key: null | string
+  api_key: string | null
 }
 class user.llm.openai.OpenAIResponse {
   text: string
@@ -30,6 +30,6 @@ function user.llm.openai.OpenAIResponse.from_json(j: baml.json.json) -> user.llm
   OpenAIResponse { text: baml.json.from_json<string>(baml.json.field(j, "text")), model: baml.json.from_json<string>(baml.json.field(j, "model")) } : user.llm.openai.OpenAIResponse
 }
 class user.llm.openai.OpenAIResponse$stream {
-  text: null | string
-  model: null | string
+  text: string | null
+  model: string | null
 }

@@ -20,7 +20,7 @@ fn narrow_ne_null_then_branch_is_non_nullable() {
 }"#,
     );
     insta::assert_snapshot!(render_tir(&db, file), @"
-    function user.f(x: int?) -> int throws never {
+    function user.f(x: int | null) -> int throws never {
       { : never
         if (x != null : bool) : void
           { : never
@@ -45,7 +45,7 @@ fn narrow_ne_null_rhs_form() {
 }"#,
     );
     insta::assert_snapshot!(render_tir(&db, file), @"
-    function user.f(x: int?) -> int throws never {
+    function user.f(x: int | null) -> int throws never {
       { : never
         if (null != x : bool) : void
           { : never
@@ -73,7 +73,7 @@ fn narrow_eq_null_else_branch_is_non_nullable() {
 }"#,
     );
     insta::assert_snapshot!(render_tir(&db, file), @"
-    function user.f(x: int?) -> int throws never {
+    function user.f(x: int | null) -> int throws never {
       { : never
         if (x == null : bool) : never
           { : never
@@ -103,9 +103,9 @@ fn narrow_truthiness_then_branch_non_null() {
 }"#,
     );
     insta::assert_snapshot!(render_tir(&db, file), @"
-    function user.f(x: int?) -> int throws never {
+    function user.f(x: int | null) -> int throws never {
       { : never
-        if (x : int?) : void
+        if (x : int | null) : void
           { : never
             return x : int
           }
@@ -130,7 +130,7 @@ fn narrow_negated_eq_null_then_branch_non_null() {
 }"#,
     );
     insta::assert_snapshot!(render_tir(&db, file), @"
-    function user.f(x: int?) -> int throws never {
+    function user.f(x: int | null) -> int throws never {
       { : never
         if (Not x == null : bool) : void
           { : never
@@ -157,7 +157,7 @@ fn early_return_null_check_narrows_rest_of_block() {
 }"#,
     );
     insta::assert_snapshot!(render_tir(&db, file), @"
-    function user.f(x: int?) -> int throws never {
+    function user.f(x: int | null) -> int throws never {
       { : never
         if (x == null : bool) : void
           { : never
@@ -182,7 +182,7 @@ fn early_return_ne_null_check_narrows_rest_of_block() {
 }"#,
     );
     insta::assert_snapshot!(render_tir(&db, file), @"
-    function user.f(x: int?) -> int? throws never {
+    function user.f(x: int | null) -> int | null throws never {
       { : never
         if (x != null : bool) : void
           { : never
@@ -210,7 +210,7 @@ fn narrowed_type_captured_in_let_binding() {
 }"#,
     );
     insta::assert_snapshot!(render_tir(&db, file), @"
-    function user.f(x: int?) -> int throws never {
+    function user.f(x: int | null) -> int throws never {
       { : never
         if (x == null : bool) : void
           { : never
@@ -238,7 +238,7 @@ fn narrowed_int_arithmetic_no_error() {
 }"#,
     );
     insta::assert_snapshot!(render_tir(&db, file), @"
-    function user.f(x: int?) -> int throws never {
+    function user.f(x: int | null) -> int throws never {
       { : never
         if (x != null : bool) : void
           { : never
@@ -269,7 +269,7 @@ fn snapshot_narrowing_patterns() {
 }"#,
     );
     insta::assert_snapshot!(render_tir(&db, file), @"
-    function user.f(a: int?, b: string?) -> int throws never {
+    function user.f(a: int | null, b: string | null) -> int throws never {
       { : never
         if (a == null : bool) : void
           { : never
@@ -303,7 +303,7 @@ fn assign_wrong_type_in_null_branch_is_error() {
 }"#,
     );
     insta::assert_snapshot!(render_tir(&db, file), @r#"
-    function user.f(x: int?) -> int throws never {
+    function user.f(x: int | null) -> int throws never {
       { : never
         if (x == null : bool) : never
           { : never
@@ -315,7 +315,7 @@ fn assign_wrong_type_in_null_branch_is_error() {
             return x : int
           }
       }
-      !! 56..64: type mismatch: expected int?, got "string"
+      !! 56..64: type mismatch: expected int | null, got "string"
     }
     "#);
 }
@@ -335,7 +335,7 @@ fn assign_method_result_in_null_branch_works() {
 }"#,
     );
     insta::assert_snapshot!(render_tir(&db, file), @r#"
-    function user.f(x: int?) -> int throws never {
+    function user.f(x: int | null) -> int throws never {
       { : never
         if (x == null : bool) : never
           { : never
@@ -463,7 +463,7 @@ fn early_return_narrowing_inside_nested_block_does_not_leak() {
     );
     let output = render_tir(&db, file);
     assert!(
-        output.contains("return x : int?"),
+        output.contains("return x : int | null"),
         "early-return narrowing should be scoped to the nested block:\n{output}"
     );
 }
@@ -483,7 +483,7 @@ fn early_return_string_null_check() {
 }"#,
     );
     insta::assert_snapshot!(render_tir(&db, file), @r#"
-    function user.f(s: string?) -> string throws never {
+    function user.f(s: string | null) -> string throws never {
       { : never
         if (s == null : bool) : void
           { : never

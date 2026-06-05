@@ -47,5 +47,5 @@ function user.MakeJSON(i: user.NotJSON) -> user.JSON throws never {
 }
 type user.JSON$stream = int | float | string | bool | user.JSON$stream[] | map<string, baml.json.json$stream>
 class user.NotJSON$stream {
-  inner: null | unknown
+  inner: unknown | null
 }

@@ -46,8 +46,8 @@ fn testing.TestRegistry.expand_set(self: testing.TestRegistry, name: string) -> 
     let _22: testing.TestCollector
     let _23: map<string, testing.TestRegistry>
     let _24: int
-    let _25: testing.TestRegistry?
-    let _26: (map<string, testing.TestRegistry>, string, testing.TestRegistry) -> testing.TestRegistry? throws never
+    let _25: testing.TestRegistry | null
+    let _26: (map<string, testing.TestRegistry>, string, testing.TestRegistry) -> testing.TestRegistry | null throws never
     let _27: testing.TestRegistry
     let _28: string[]
     let _29: (map<string, testing.TestRegistry>) -> string[] throws never
@@ -240,7 +240,7 @@ fn testing.TestRegistration.from_json(j: baml.json.json) -> testing.TestRegistra
     let _5: () -> void throws unknown
     let _6: baml.json.json
     let _7: type
-    let _8: ((() -> testing.TestReport throws never) -> (() -> testing.TestReport throws never) throws never)?
+    let _8: ((() -> testing.TestReport throws never) -> (() -> testing.TestReport throws never) throws never) | null
     let _9: baml.json.json
     let _10: type
 
@@ -267,7 +267,7 @@ fn testing.TestRegistration.from_json(j: baml.json.json) -> testing.TestRegistra
     }
 
     bb5: {
-        _10 = load_type((() -> testing.TestReport throws never) -> (() -> testing.TestReport throws never) throws never?);
+        _10 = load_type(((() -> testing.TestReport throws never) -> (() -> testing.TestReport throws never) throws never) | null);
         _8 = call const fn baml.json.from_json<copy _10>(copy _9) -> [bb6];
     }
 
@@ -330,7 +330,7 @@ fn testing.TestSetRegistration.from_json(j: baml.json.json) -> testing.TestSetRe
     let _5: (testing.TestCollector) -> void throws unknown
     let _6: baml.json.json
     let _7: type
-    let _8: ((() -> testing.TestSetReport throws never) -> (() -> testing.TestSetReport throws never) throws never)?
+    let _8: ((() -> testing.TestSetReport throws never) -> (() -> testing.TestSetReport throws never) throws never) | null
     let _9: baml.json.json
     let _10: type
 
@@ -357,7 +357,7 @@ fn testing.TestSetRegistration.from_json(j: baml.json.json) -> testing.TestSetRe
     }
 
     bb5: {
-        _10 = load_type((() -> testing.TestSetReport throws never) -> (() -> testing.TestSetReport throws never) throws never?);
+        _10 = load_type(((() -> testing.TestSetReport throws never) -> (() -> testing.TestSetReport throws never) throws never) | null);
         _8 = call const fn baml.json.from_json<copy _10>(copy _9) -> [bb6];
     }
 
@@ -560,13 +560,13 @@ fn testing.TestCollector.new(prefix: string) -> testing.TestCollector {
     }
 }
 
-fn testing.TestCollector.register_test(self: testing.TestCollector, name: string, body: () -> void throws unknown, runner: ((() -> testing.TestReport throws never) -> (() -> testing.TestReport throws never) throws never)?) -> void {
+fn testing.TestCollector.register_test(self: testing.TestCollector, name: string, body: () -> void throws unknown, runner: ((() -> testing.TestReport throws never) -> (() -> testing.TestReport throws never) throws never) | null) -> void {
     // Locals:
     let _0: void // _0 // return
     let _1: testing.TestCollector // self // param
     let _2: string // name // param
     let _3: () -> void throws unknown // body // param
-    let _4: ((() -> testing.TestReport throws never) -> (() -> testing.TestReport throws never) throws never)? // runner // param
+    let _4: ((() -> testing.TestReport throws never) -> (() -> testing.TestReport throws never) throws never) | null // runner // param
     let _5: string // full_name
     let _6: bool
     let _7: string
@@ -706,13 +706,13 @@ fn testing.TestCollector.register_test(self: testing.TestCollector, name: string
     }
 }
 
-fn testing.TestCollector.register_test_set(self: testing.TestCollector, name: string, collector: (testing.TestCollector) -> void throws unknown, runner: ((() -> testing.TestSetReport throws never) -> (() -> testing.TestSetReport throws never) throws never)?) -> void {
+fn testing.TestCollector.register_test_set(self: testing.TestCollector, name: string, collector: (testing.TestCollector) -> void throws unknown, runner: ((() -> testing.TestSetReport throws never) -> (() -> testing.TestSetReport throws never) throws never) | null) -> void {
     // Locals:
     let _0: void // _0 // return
     let _1: testing.TestCollector // self // param
     let _2: string // name // param
     let _3: (testing.TestCollector) -> void throws unknown // collector // param
-    let _4: ((() -> testing.TestSetReport throws never) -> (() -> testing.TestSetReport throws never) throws never)? // runner // param
+    let _4: ((() -> testing.TestSetReport throws never) -> (() -> testing.TestSetReport throws never) throws never) | null // runner // param
     let _5: string // full_name
     let _6: bool
     let _7: string
@@ -866,7 +866,7 @@ fn testing.TestRegistry.run_test(self: testing.TestRegistry, name: string) -> te
     let _9: bool
     let _10: string
     let _11: () -> void throws unknown
-    let _12: ((() -> testing.TestReport throws never) -> (() -> testing.TestReport throws never) throws never)?
+    let _12: ((() -> testing.TestReport throws never) -> (() -> testing.TestReport throws never) throws never) | null
     let _13: string[]
     let _14: (map<string, testing.TestRegistry>) -> string[] throws never
     let _15: int // __for_idx_1
@@ -965,11 +965,11 @@ fn testing.TestRegistry.run_test(self: testing.TestRegistry, name: string) -> te
     }
 }
 
-fn testing.run_test(body: () -> void throws unknown, runner: ((() -> testing.TestReport throws never) -> (() -> testing.TestReport throws never) throws never)?) -> testing.TestReport {
+fn testing.run_test(body: () -> void throws unknown, runner: ((() -> testing.TestReport throws never) -> (() -> testing.TestReport throws never) throws never) | null) -> testing.TestReport {
     // Locals:
     let _0: testing.TestReport // _0 // return
     let _1: () -> void throws unknown // body // param [captured]
-    let _2: ((() -> testing.TestReport throws never) -> (() -> testing.TestReport throws never) throws never)? // runner // param
+    let _2: ((() -> testing.TestReport throws never) -> (() -> testing.TestReport throws never) throws never) | null // runner // param
     let _3: () -> testing.TestReport throws never // base_run
     let _4: bool
     let _5: () -> testing.TestReport throws never
@@ -1067,11 +1067,11 @@ fn .<lambda(run_test, 0)>() -> null {
     }
 }
 
-fn testing.run_testset(run_children: () -> testing.TestSetReport throws never, runner: ((() -> testing.TestSetReport throws never) -> (() -> testing.TestSetReport throws never) throws never)?) -> testing.TestSetReport {
+fn testing.run_testset(run_children: () -> testing.TestSetReport throws never, runner: ((() -> testing.TestSetReport throws never) -> (() -> testing.TestSetReport throws never) throws never) | null) -> testing.TestSetReport {
     // Locals:
     let _0: testing.TestSetReport // _0 // return
     let _1: () -> testing.TestSetReport throws never // run_children // param
-    let _2: ((() -> testing.TestSetReport throws never) -> (() -> testing.TestSetReport throws never) throws never)? // runner // param
+    let _2: ((() -> testing.TestSetReport throws never) -> (() -> testing.TestSetReport throws never) throws never) | null // runner // param
     let _3: bool
     let _4: (() -> testing.TestSetReport throws never) -> (() -> testing.TestSetReport throws never) throws never // r
     let _5: () -> testing.TestSetReport throws never // wrapped
@@ -1124,8 +1124,8 @@ fn testing.TestRegistry.serialize(self: testing.TestRegistry) -> (testing.Serial
     let _16: testing.TestSetRegistration
     let _17: testing.TestSetRegistration // ts
     let _18: void
-    let _19: testing.TestRegistry? // expanded
-    let _20: (map<string, testing.TestRegistry>, string) -> testing.TestRegistry? throws never
+    let _19: testing.TestRegistry | null // expanded
+    let _20: (map<string, testing.TestRegistry>, string) -> testing.TestRegistry | null throws never
     let _21: string
     let _22: bool
     let _23: testing.TestRegistry // sub
@@ -1581,7 +1581,7 @@ fn testing.TestReport.to_json(self: testing.TestReport) -> baml.json.json {
     let _0: baml.json.json // _0 // return
     let _1: testing.TestReport // self // param
     let _2: baml.json.json
-    let _3: (baml.String) -> baml.json.json throws never | (baml.String) -> baml.json.json throws never | (baml.String) -> baml.json.json throws never
+    let _3: ((baml.String) -> baml.json.json throws never) | ((baml.String) -> baml.json.json throws never) | ((baml.String) -> baml.json.json throws never)
     let _4: "pass" | "fail" | "error"
     let _5: testing.TestReport
     let _6: string
@@ -1618,7 +1618,7 @@ fn testing.RunReport.to_json(self: testing.RunReport) -> baml.json.json {
     let _0: baml.json.json // _0 // return
     let _1: testing.RunReport // self // param
     let _2: baml.json.json
-    let _3: (baml.String) -> baml.json.json throws never | (baml.String) -> baml.json.json throws never | (baml.String) -> baml.json.json throws never
+    let _3: ((baml.String) -> baml.json.json throws never) | ((baml.String) -> baml.json.json throws never) | ((baml.String) -> baml.json.json throws never)
     let _4: "pass" | "fail" | "error"
     let _5: testing.RunReport
     let _6: string
@@ -1655,7 +1655,7 @@ fn testing.TestSetReport.to_json(self: testing.TestSetReport) -> baml.json.json 
     let _0: baml.json.json // _0 // return
     let _1: testing.TestSetReport // self // param
     let _2: baml.json.json
-    let _3: (baml.String) -> baml.json.json throws never | (baml.String) -> baml.json.json throws never | (baml.String) -> baml.json.json throws never
+    let _3: ((baml.String) -> baml.json.json throws never) | ((baml.String) -> baml.json.json throws never) | ((baml.String) -> baml.json.json throws never)
     let _4: "pass" | "fail" | "error"
     let _5: testing.TestSetReport
     let _6: string

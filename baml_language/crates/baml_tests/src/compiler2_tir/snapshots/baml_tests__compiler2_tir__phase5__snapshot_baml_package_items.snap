@@ -24,7 +24,6 @@ namespace baml.errors:
   class DevOther { methods: [to_json, from_json] }
   class GenericSdkError { methods: [to_json, from_json] }
   class HostCallable { methods: [to_json, from_json] }
-  class HostPanic { methods: [to_json, from_json] }
   class InvalidArgument { methods: [to_json, from_json] }
   class Io { methods: [to_json, from_json] }
   class LlmClient { methods: [to_json, from_json] }
@@ -65,7 +64,7 @@ namespace baml.glob:
   function new
 namespace baml.host:
   class HostValue { methods: [to_json, from_json] }
-  function call_host_value<T>
+  function call_host_value<T, E>
 namespace baml.http:
   class Request { methods: [to_json, from_json] }
   class Response { methods: [text, bytes, ok, to_json, from_json] }
@@ -132,16 +131,17 @@ namespace baml.media:
   class Pdf { methods: [to_json, url, file, base64, mime_type, from_url, from_file, from_base64, from_json] }
   class Video { methods: [to_json, url, file, base64, mime_type, from_url, from_file, from_base64, from_json] }
 namespace baml.net:
-  class Socket { methods: [read, write, close, to_json, from_json] }
-  class TcpListener { methods: [accept, close, to_json, from_json] }
-  function connect
-  function listen
+  class Datagram { methods: [to_json, from_json] }
+  class TcpListener { methods: [bind, accept, close, to_json, from_json] }
+  class TcpStream { methods: [connect, read, write, close, to_json, from_json] }
+  class UdpSocket { methods: [bind, send_to, recv_from, close, to_json, from_json] }
 namespace baml.panics:
   class AllocFailure { methods: [to_json, from_json] }
   class AssertionFailed { methods: [to_json, from_json] }
   class Cancelled { methods: [to_json, from_json] }
   class DivisionByZero { methods: [to_json, from_json] }
   class Exit { methods: [to_json, from_json] }
+  class HostContractViolation { methods: [to_json, from_json] }
   class HostUnavailable { methods: [to_json, from_json] }
   class IndexOutOfBounds { methods: [to_json, from_json] }
   class InvalidFieldAccess { methods: [to_json, from_json] }

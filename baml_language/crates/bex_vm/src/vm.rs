@@ -2330,10 +2330,44 @@ impl BexVm {
                 ErrorClass::DevOther,
                 vec![Value::object(self.alloc_string(message))],
             ),
-            VmBamlError::HostPanic { message } => (
-                ErrorClass::HostPanic,
-                vec![Value::object(self.alloc_string(message))],
-            ),
+            // Field order matches the `HostCallable` class in
+            // `ns_errors/errors.baml`: message, class_name, language,
+            // traceback?, _handle. `traceback?` surfaces as `Null` when
+            // absent; `language` is the empty string when absent (kept
+            // non-null for class-field type consistency). `_handle` is
+            // an opaque `$rust_type` slot — populated as
+            // `Object::RustData(Arc<HostValueArc>)` when a same-host
+            // rehydration handle is attached, else `Null`.
+            VmBamlError::HostCallable {
+                class_name,
+                message,
+                traceback,
+                language,
+                handle,
+            } => {
+                let message_val = Value::object(self.alloc_string(message));
+                let class_name_val = Value::object(self.alloc_string(class_name));
+                let language_val = Value::object(self.alloc_string(language.unwrap_or_default()));
+                let traceback_val =
+                    traceback.map_or(Value::NULL, |t| Value::object(self.alloc_string(t)));
+                // `handle` is required: `HostCallable` always carries a
+                // reference to the originating host exception. Materialize
+                // it as `Object::RustData(Arc<HostValueArc>)` so the BAML
+                // class's `_handle` slot can be downcast back to the
+                // original host-value reference on round-trip.
+                let dyn_arc: std::sync::Arc<dyn std::any::Any + Send + Sync> = handle;
+                let handle_val = Value::object(self.tlab.alloc(Object::RustData(dyn_arc)));
+                (
+                    ErrorClass::HostCallable,
+                    vec![
+                        message_val,
+                        class_name_val,
+                        language_val,
+                        traceback_val,
+                        handle_val,
+                    ],
+                )
+            }
         };
         self.alloc_error_value(class, fields)
     }
@@ -2368,7 +2402,7 @@ impl BexVm {
         self.alloc_error_value(ErrorClass::StackTrace, vec![frames_array])
     }
 
-    pub(crate) fn panic_to_exception_value(&mut self, panic: VmPanic) -> Value {
+    pub fn panic_to_exception_value(&mut self, panic: VmPanic) -> Value {
         let (class, fields) = match panic {
             VmPanic::DivisionByZero { left, .. } => (PanicClass::DivisionByZero, vec![left]),
             VmPanic::IndexOutOfBounds { index, length } =>
@@ -2430,6 +2464,24 @@ impl BexVm {
             VmPanic::NegativeBitShift { message } => {
                 let msg = Value::object(self.alloc_string(message));
                 (PanicClass::NegativeBitShift, vec![msg])
+            }
+            // Field order matches the `HostContractViolation` class in
+            // `ns_panics/panics.baml`: message, class_name?, language?.
+            // The optionals surface as `Null` when absent.
+            VmPanic::HostContractViolation {
+                message,
+                class_name,
+                language,
+            } => {
+                let msg = Value::object(self.alloc_string(message));
+                let class_name_val =
+                    class_name.map_or(Value::NULL, |c| Value::object(self.alloc_string(c)));
+                let language_val =
+                    language.map_or(Value::NULL, |l| Value::object(self.alloc_string(l)));
+                (
+                    PanicClass::HostContractViolation,
+                    vec![msg, class_name_val, language_val],
+                )
             }
         };
         self.alloc_panic_value(class, fields)
@@ -2734,16 +2786,27 @@ impl BexVm {
     /// `baml.host.call_host_value` in `sys_ops/.../io_generated.rs`):
     ///   args\[0\] = `handle`     (`Object::HostClosure` → `BexExternalValue::HostValue`)
     ///   args\[1\] = `args_array` (`Object::Array<Value>`)
-    ///   args\[2\] = `ret_ty`     (`Object::Type<Ty>`)
+    ///   args\[2\] = `ret_ty`     (`Object::Type<Ty>`) — `type_arg_0` (`T`)
+    ///   args\[3\] = `throws_ty`  (`Object::Type<Ty>`) — `type_arg_1` (`E`)
+    ///
+    /// TODO: `throws_ty` is packed here but the engine doesn't yet read it
+    /// — a future phase will validate the host's thrown value against `E`
+    /// at the completion site and panic
+    /// `baml.panics.HostContractViolation` on mismatch.
     fn host_closure_call_sysop(
         &mut self,
         closure_ptr: HeapPtr,
         user_args: Vec<Value>,
     ) -> VmExecState {
-        // Read arity + return type out of the closure, then drop the borrow
-        // before allocating (a TLAB allocation may move/collect heap objects).
-        let (arity, ret_ty) = match self.get_object(closure_ptr) {
-            Object::HostClosure(hc) => (hc.arity, hc.ret_ty.as_ref().clone()),
+        // Read arity + return/throws types out of the closure, then drop the
+        // borrow before allocating (a TLAB allocation may move/collect heap
+        // objects).
+        let (arity, ret_ty, throws_ty) = match self.get_object(closure_ptr) {
+            Object::HostClosure(hc) => (
+                hc.arity,
+                hc.ret_ty.as_ref().clone(),
+                hc.throws_ty.as_ref().clone(),
+            ),
             // Every caller gates on `Object::HostClosure` before calling.
             _ => unreachable!("host_closure_call_sysop requires an Object::HostClosure"),
         };
@@ -2755,12 +2818,14 @@ impl BexVm {
         );
         let args_array_ptr = self.tlab.alloc(Object::Array(user_args.into()));
         let ret_ty_ptr = self.tlab.alloc(Object::Type(Box::new(ret_ty)));
+        let throws_ty_ptr = self.tlab.alloc(Object::Type(Box::new(throws_ty)));
         VmExecState::SysOp {
             operation: bex_vm_types::SysOp::BamlHostCallHostValue,
             args: vec![
                 Value::object(closure_ptr),
                 Value::object(args_array_ptr),
                 Value::object(ret_ty_ptr),
+                Value::object(throws_ty_ptr),
             ],
         }
     }
@@ -3510,6 +3575,56 @@ impl BexVm {
             crate::kperf::exec_end(kp_start, self.op_count - ops_start);
         }
         result
+    }
+
+    /// Inject an exception value from outside the VM's execution loop (e.g. from
+    /// the engine's `SysOp` result handler) and let the VM's normal exception
+    /// unwinder walk frames and match handlers — the same path a `throw`
+    /// opcode or an internal bytecode throw site takes.
+    ///
+    /// On `Ok(())` a handler was found: `self.frames` is now at the catching
+    /// frame, the exception value is stored in the handler's binding slot, the
+    /// instruction pointer is at the handler's PC, and the next [`Self::exec`]
+    /// resumes the catch body. On `Err(VmError::ThrownUnhandled { .. })` (or,
+    /// for a degenerate Native-only frame stack, `Err(VmError::Thrown(..))`)
+    /// no handler matched; the caller should route the result through whatever
+    /// path it uses for any other VM unhandled throw.
+    ///
+    /// The unwinder reloads the `function` reference for each frame it visits,
+    /// so the `function` out-param it receives is only an initial seed — we
+    /// pick the topmost Bytecode frame's `Function` for that role, walking
+    /// past any Native frames at the top (which the unwinder would pop
+    /// unconditionally).
+    pub fn try_handle_external_exception(&mut self, exception_value: Value) -> Result<(), VmError> {
+        if self.frames.is_empty() {
+            let trace = self.capture_stack_trace();
+            return Err(VmError::ThrownUnhandled {
+                value: exception_value,
+                trace,
+            });
+        }
+        // Walk down from the top to find a Bytecode frame to seed `function`
+        // from. Native frames carry a continuation, not a `Function`, so
+        // `load_function` would fail on them — and the unwinder would pop
+        // them anyway. If every frame is Native, no bytecode catch handler
+        // can match; surface as unhandled.
+        let mut seed_idx = self.frames.len() - 1;
+        while !matches!(&self.frames[seed_idx], Frame::Bytecode(_)) {
+            if seed_idx == 0 {
+                let trace = self.capture_stack_trace();
+                return Err(VmError::ThrownUnhandled {
+                    value: exception_value,
+                    trace,
+                });
+            }
+            seed_idx -= 1;
+        }
+        let mut frame_idx = self.frames.len() - 1;
+        // SAFETY: see `load_function` doc — the frame at `seed_idx` is a
+        // Bytecode frame whose `function` pointer is valid for `&'static
+        // Function` while we hold `&mut self`.
+        let mut function = unsafe { self.load_function(seed_idx)? };
+        self.try_unwind_exception(&mut frame_idx, &mut function, exception_value)
     }
 
     #[allow(clippy::inline_always)] // Measured: 20-40% speedup from inlining the dispatch loop

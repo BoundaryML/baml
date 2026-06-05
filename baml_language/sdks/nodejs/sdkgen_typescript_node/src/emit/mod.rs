@@ -12,14 +12,14 @@ pub(crate) mod method;
 pub(crate) mod type_alias;
 pub(crate) mod typemap_file;
 
-use baml_codegen_types::{Name, Symbol, SymbolPool, Ty};
+use baml_codegen_types::{FunctionArgument, Name, Symbol, SymbolPool, Ty};
 
 use crate::{
     emit::{
         class::{NodeClass, NodeClassProperty},
         enum_::{NodeEnum, NodeEnumVariant},
         function::{NodeFunction, SyncAsync},
-        method::{MethodKind, NodeMethodBinding},
+        method::{MethodKind, NodeMethodBinding, OptionalArg, RequiredArg},
         type_alias::NodeTypeAlias,
     },
     routing::{LeafPath, route},
@@ -163,7 +163,7 @@ fn expand_function(
         &fqn_root,
         &f.arguments,
         &f.return_type,
-        |name, fqn, mode, params, arg_tys, return_ty| {
+        |name, fqn, mode, params, arg_tys, arg_defaults, return_ty| {
             out.push((
                 leaf.clone(),
                 EmittedSymbol::Function(NodeFunction {
@@ -172,6 +172,7 @@ fn expand_function(
                     mode,
                     param_names: params,
                     arg_tys,
+                    arg_defaults,
                     return_ty,
                     generic_params: func_generic_params.clone(),
                     docstring: func_docstring.clone(),
@@ -199,7 +200,6 @@ fn collect_raises_names(throws: Option<&baml_codegen_types::Ty>) -> Vec<String> 
                 }
             }
             Ty::Union(members) => members.iter().for_each(|m| walk(m, out)),
-            Ty::Optional(inner) => walk(inner, out),
             _ => {}
         }
     }
@@ -234,37 +234,53 @@ fn expand_methods(
             .collect();
         let method_docstring = m.docstring.clone();
         let raises_names = collect_raises_names(m.throws.as_ref());
-        expand_callable(
-            &bare,
-            &fqn_root,
-            &m.arguments,
-            &m.return_type,
-            |name, fqn, mode, params, arg_tys, return_ty| {
-                let param_names = match kind {
-                    MethodKind::Static => params,
-                    MethodKind::Instance => {
-                        let mut with_self = Vec::with_capacity(params.len() + 1);
-                        with_self.push("self".to_string());
-                        with_self.extend(params);
-                        with_self
-                    }
-                };
-                out.push(NodeMethodBinding {
-                    name,
-                    baml_fqn: fqn,
-                    mode,
-                    param_names,
-                    kind,
-                    arg_tys,
-                    return_ty,
-                    generic_params: method_generic_params.clone(),
-                    docstring: method_docstring.clone(),
-                    raises_names: raises_names.clone(),
-                });
-            },
-        );
+        let (required_args, optional_args) = split_arguments(&m.arguments);
+        for (name, mode) in [
+            (bare.clone(), SyncAsync::Sync),
+            (format!("{bare}_async"), SyncAsync::Async),
+        ] {
+            out.push(NodeMethodBinding {
+                name,
+                baml_fqn: fqn_root.clone(),
+                mode,
+                kind,
+                required_args: required_args.clone(),
+                optional_args: optional_args.clone(),
+                return_ty: m.return_type.clone(),
+                generic_params: method_generic_params.clone(),
+                docstring: method_docstring.clone(),
+                raises_names: raises_names.clone(),
+            });
+        }
     }
     out
+}
+
+fn split_arguments(arguments: &[FunctionArgument]) -> (Vec<RequiredArg>, Vec<OptionalArg>) {
+    let first_optional = arguments
+        .iter()
+        .position(|arg| arg.default.is_some())
+        .unwrap_or(arguments.len());
+    (
+        arguments[..first_optional]
+            .iter()
+            .map(|arg| RequiredArg {
+                name: arg.name.as_str().to_string(),
+                ty: arg.ty.clone(),
+            })
+            .collect(),
+        arguments[first_optional..]
+            .iter()
+            .map(|arg| OptionalArg {
+                name: arg.name.as_str().to_string(),
+                ty: arg.ty.clone(),
+                default: arg
+                    .default
+                    .clone()
+                    .expect("arguments after the first defaulted method arg must have defaults"),
+            })
+            .collect(),
+    )
 }
 
 /// The TS-side bare identifier for a callable's BAML name, used as the LHS
@@ -279,8 +295,8 @@ fn bare_callable_name(name: &str) -> String {
     name.to_string()
 }
 
-/// Shared fan-out for free functions and methods. Calls `emit` twice:
-/// once for the sync binding and once for the async binding.
+/// Shared fan-out for free functions. Calls `emit` twice: once for the sync
+/// binding and once for the async binding.
 #[allow(clippy::type_complexity)]
 fn expand_callable<F>(
     bare: &str,
@@ -289,19 +305,30 @@ fn expand_callable<F>(
     return_type: &Ty,
     mut emit: F,
 ) where
-    F: FnMut(String, String, SyncAsync, Vec<String>, Vec<Ty>, Ty),
+    F: FnMut(
+        String,
+        String,
+        SyncAsync,
+        Vec<String>,
+        Vec<Ty>,
+        Vec<Option<baml_codegen_types::FunctionArgumentDefault>>,
+        Ty,
+    ),
 {
     let params: Vec<String> = arguments
         .iter()
         .map(|a| a.name.as_str().to_string())
         .collect();
     let arg_types: Vec<Ty> = arguments.iter().map(|a| a.ty.clone()).collect();
+    let arg_defaults: Vec<Option<baml_codegen_types::FunctionArgumentDefault>> =
+        arguments.iter().map(|a| a.default.clone()).collect();
     emit(
         bare.to_string(),
         fqn_root.to_string(),
         SyncAsync::Sync,
         params.clone(),
         arg_types.clone(),
+        arg_defaults.clone(),
         return_type.clone(),
     );
     emit(
@@ -310,6 +337,7 @@ fn expand_callable<F>(
         SyncAsync::Async,
         params,
         arg_types,
+        arg_defaults,
         return_type.clone(),
     );
 }

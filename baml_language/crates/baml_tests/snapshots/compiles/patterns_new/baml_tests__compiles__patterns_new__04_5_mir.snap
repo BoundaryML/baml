@@ -28,10 +28,10 @@ fn user.bare_type_arm(v: int | string) -> int {
     }
 }
 
-fn user.call_either_int_caller(cb: (int) -> int throws never | (bool) -> int throws never) -> int {
+fn user.call_either_int_caller(cb: ((int) -> int throws never) | ((bool) -> int throws never)) -> int {
     // Locals:
     let _0: int // _0 // return
-    let _1: (int) -> int throws never | (bool) -> int throws never // cb // param
+    let _1: ((int) -> int throws never) | ((bool) -> int throws never) // cb // param
     let _2: bool
 
     bb0: {
@@ -72,10 +72,10 @@ fn user.call_int_callback(cb: (int) -> int throws never) -> int {
     }
 }
 
-fn user.call_with_callback(runner: ((int) -> int throws never) -> int throws never | ((string) -> int throws never) -> int throws never) -> int {
+fn user.call_with_callback(runner: (((int) -> int throws never) -> int throws never) | (((string) -> int throws never) -> int throws never)) -> int {
     // Locals:
     let _0: int // _0 // return
-    let _1: ((int) -> int throws never) -> int throws never | ((string) -> int throws never) -> int throws never // runner // param
+    let _1: (((int) -> int throws never) -> int throws never) | (((string) -> int throws never) -> int throws never) // runner // param
     let _2: bool
     let _3: ((int) -> int throws never) -> int throws never // r
     let _4: ((int) -> int throws never) -> int throws never
@@ -281,10 +281,10 @@ fn user.chain_narrow_then_wildcard(v: int | string | bool) -> int {
     }
 }
 
-fn user.dispatch_callback(cb: (int) -> int throws never | (string) -> string throws never) -> int {
+fn user.dispatch_callback(cb: ((int) -> int throws never) | ((string) -> string throws never)) -> int {
     // Locals:
     let _0: int // _0 // return
-    let _1: (int) -> int throws never | (string) -> string throws never // cb // param
+    let _1: ((int) -> int throws never) | ((string) -> string throws never) // cb // param
     let _2: bool
     let _3: (int) -> int throws never // f
     let _4: (int) -> int throws never
@@ -310,10 +310,10 @@ fn user.dispatch_callback(cb: (int) -> int throws never | (string) -> string thr
     }
 }
 
-fn user.dispatch_with_wildcard(cb: (int) -> int throws never | (string) -> int throws never) -> int {
+fn user.dispatch_with_wildcard(cb: ((int) -> int throws never) | ((string) -> int throws never)) -> int {
     // Locals:
     let _0: int // _0 // return
-    let _1: (int) -> int throws never | (string) -> int throws never // cb // param
+    let _1: ((int) -> int throws never) | ((string) -> int throws never) // cb // param
     let _2: bool
 
     bb0: {
@@ -682,10 +682,10 @@ fn user.nested_paren_union_array_one(items: (int | string)[]) -> int {
     }
 }
 
-fn user.nested_paren_union_array_optional(v: (int | string)[]?) -> int {
+fn user.nested_paren_union_array_optional(v: (int | string)[] | null) -> int {
     // Locals:
     let _0: int // _0 // return
-    let _1: (int | string)[]? // v // param
+    let _1: (int | string)[] | null // v // param
 
     bb0: {
         _0 = const 1_i64;
@@ -915,10 +915,10 @@ fn user.PatternMatrix.to_json(self: PatternMatrix) -> baml.json.json {
     }
 }
 
-fn user.unwrap_curried(f: (int) -> ((int) -> ((int) -> int throws never) throws never) throws never | (string) -> ((string) -> string throws never) throws never) -> int {
+fn user.unwrap_curried(f: ((int) -> ((int) -> ((int) -> int throws never) throws never) throws never) | ((string) -> ((string) -> string throws never) throws never)) -> int {
     // Locals:
     let _0: int // _0 // return
-    let _1: (int) -> ((int) -> ((int) -> int throws never) throws never) throws never | (string) -> ((string) -> string throws never) throws never // f // param
+    let _1: ((int) -> ((int) -> ((int) -> int throws never) throws never) throws never) | ((string) -> ((string) -> string throws never) throws never) // f // param
     let _2: bool
     let _3: (int) -> ((int) -> ((int) -> int throws never) throws never) throws never // triple
     let _4: (int) -> int throws never
@@ -954,10 +954,10 @@ fn user.unwrap_curried(f: (int) -> ((int) -> ((int) -> int throws never) throws 
     }
 }
 
-fn user.unwrap_typed(cb: (int) -> void throws never | (string) -> void throws never) -> void {
+fn user.unwrap_typed(cb: ((int) -> void throws never) | ((string) -> void throws never)) -> void {
     // Locals:
     let _0: void // _0 // return
-    let _1: (int) -> void throws never | (string) -> void throws never // cb // param
+    let _1: ((int) -> void throws never) | ((string) -> void throws never) // cb // param
     let _2: bool
     let _3: (int) -> void throws never // f
     let _4: (int) -> void throws never

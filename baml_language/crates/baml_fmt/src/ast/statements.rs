@@ -182,16 +182,16 @@ impl Printable for ExpressionStmt {
 
 /// Corresponds to a [`SyntaxKind::LET_STMT`] node or a [`SyntaxKind::WATCH_LET`] node.
 ///
-/// Post-pattern-rewrite shape: `KW_WATCH? KW_LET? PATTERN EQUALS? <expr>? (KW_ELSE BLOCK_EXPR)? SEMICOLON?`.
-/// Simple bindings carry `let` inside the [`super::MatchPattern`] (e.g.
+/// Post-pattern-rewrite shape: `KW_WATCH? (KW_LET|KW_CONST)? PATTERN EQUALS? <expr>? (KW_ELSE BLOCK_EXPR)? SEMICOLON?`.
+/// Simple bindings carry the introducer inside the [`super::MatchPattern`] (e.g.
 /// `let x: int` parses as a `Chain([Bind, Type])`). Array destructuring uses
-/// the statement-level `let` before an `ARRAY_PATTERN`. The optional
+/// the statement-level introducer before an `ARRAY_PATTERN`. The optional
 /// `else BLOCK_EXPR` tail is the `let … else` form: a refutable binding
 /// whose else branch must diverge.
 #[derive(Debug)]
 pub struct LetStmt {
     pub watch: Option<t::Watch>,
-    pub let_keyword: Option<t::Let>,
+    pub let_keyword: Option<t::BindingKeyword>,
     pub pattern: super::MatchPattern,
     pub initializer: Option<(t::Equals, Expression)>,
     /// `else { … }` tail for `let … else`. None for plain `let`. Boxed
@@ -223,8 +223,8 @@ impl FromCST for LetStmt {
         };
 
         let let_keyword = it
-            .next_if_kind(SyntaxKind::KW_LET)
-            .map(t::Let::from_cst)
+            .next_if(|elem| matches!(elem.kind(), SyntaxKind::KW_LET | SyntaxKind::KW_CONST))
+            .map(t::BindingKeyword::from_cst)
             .transpose()?;
 
         let pattern: super::MatchPattern = it.expect_parse()?;
@@ -271,7 +271,7 @@ impl Printable for LetStmt {
         if let Some(let_keyword) = &self.let_keyword {
             printer.print_raw_token(let_keyword);
             printer.print_str(" ");
-            // Preserve trivia between `let` and the pattern — e.g.
+            // Preserve trivia between the introducer and the pattern — e.g.
             // `let /*keep*/ [x]` would otherwise lose the comment.
             let (_, let_trailing) = printer.trivia.get_for_range_split(let_keyword.span());
             if printer.print_trivia_squished(let_trailing) > 0 {
@@ -427,12 +427,13 @@ impl Printable for WhileStmt {
 #[derive(Debug)]
 pub struct WhileLetStmt {
     pub keyword: t::While,
-    /// Standalone leading `let`, present only for top-level array-pattern heads
-    /// (`while let [x] = xs`), where the parser keeps `let` at the statement
-    /// level instead of inside the pattern. For binding / class / type heads the
-    /// `let` lives inside `pattern` and this is `None`. Mirrors
+    /// Standalone leading binding introducer, present only for top-level
+    /// array-pattern heads (`while let [x] = xs`), where the parser keeps the
+    /// introducer at the statement level instead of inside the pattern. For
+    /// binding / class / type heads the introducer lives inside `pattern` and
+    /// this is `None`. Mirrors
     /// `LetStmt::let_keyword`.
-    pub let_keyword: Option<t::Let>,
+    pub let_keyword: Option<t::BindingKeyword>,
     pub pattern: MatchPattern,
     pub equals: t::Equals,
     pub scrutinee: Box<Expression>,
@@ -449,11 +450,11 @@ impl FromCST for WhileLetStmt {
         // KW_WHILE
         let keyword = it.expect_parse()?;
 
-        // Optional standalone KW_LET for top-level array-pattern heads
+        // Optional standalone KW_LET/KW_CONST for top-level array-pattern heads
         // (`while let [x] = xs`); for other heads `let` is inside the pattern.
         let let_keyword = it
-            .next_if_kind(SyntaxKind::KW_LET)
-            .map(t::Let::from_cst)
+            .next_if(|elem| matches!(elem.kind(), SyntaxKind::KW_LET | SyntaxKind::KW_CONST))
+            .map(t::BindingKeyword::from_cst)
             .transpose()?;
 
         // PATTERN (carries its own leading `let` unless consumed above)
@@ -498,6 +499,10 @@ impl Printable for WhileLetStmt {
         if let Some(let_keyword) = &self.let_keyword {
             printer.print_raw_token(let_keyword);
             printer.print_str(" ");
+            let (_, trailing) = printer.trivia.get_for_range_split(let_keyword.span());
+            if printer.print_trivia_squished(trailing) > 0 {
+                printer.print_str(" ");
+            }
         }
         printer.print(&self.pattern, shape.clone());
         printer.print_str(" ");

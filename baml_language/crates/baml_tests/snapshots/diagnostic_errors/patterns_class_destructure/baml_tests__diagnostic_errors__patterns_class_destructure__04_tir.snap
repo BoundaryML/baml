@@ -160,10 +160,10 @@ function user.class_destructure_box(boxed: user.Box<int>) -> int throws never {
   }
 }
 class user.OptionalPerson {
-  age: int?
+  age: int | null
 }
 function user.OptionalPerson.to_json(self: user.OptionalPerson) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  map { "age": self.age?.to_json() } : map<string, baml.json.json?>
+  map { "age": self.age?.to_json() } : map<string, baml.json.json | null>
 }
 function user.OptionalPerson.from_json(j: baml.json.json) -> user.OptionalPerson throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   OptionalPerson { age: baml.json.from_json<int?>(baml.json.field(j, "age")) } : user.OptionalPerson
@@ -320,26 +320,26 @@ function user.class_destructure_formatter_empty_and_trailing_comma_trivia() -> i
   }
 }
 class user.Address$stream {
-  zip: null | int
+  zip: int | null
 }
 class user.Person$stream {
-  age: null | int
-  flexible_age: null | int | string
-  address: null | user.Address$stream
+  age: int | null
+  flexible_age: int | string | null
+  address: user.Address$stream | null
 }
 class user.SameNameInner$stream {
-  field: null | int
+  field: int | null
 }
 class user.SameNameOuter$stream {
-  field: null | user.SameNameInner$stream
-  other: null | user.SameNameInner$stream
+  field: user.SameNameInner$stream | null
+  other: user.SameNameInner$stream | null
 }
 class user.Box$stream {
-  value: null | T
+  value: T | null
 }
 class user.OptionalPerson$stream {
-  age: null | int
+  age: int | null
 }
 class user.Admin$stream {
-  age: null | string
+  age: string | null
 }

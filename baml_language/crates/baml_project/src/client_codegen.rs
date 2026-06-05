@@ -602,21 +602,14 @@ fn convert_tir_leaf(
             key: Box::new(convert_tir_to_codegen_ty(k, alias_map, recursive_aliases)),
             value: Box::new(convert_tir_to_codegen_ty(v, alias_map, recursive_aliases)),
         },
-        // Unions and optionals: convert children, then let simplify_codegen_ty handle them.
+        // Unions: convert children, then let simplify_codegen_ty handle them.
+        // Nullable types (`T | null`) are just unions whose members include null.
         TirTy::Union(members, _) => cg::Ty::Union(
             members
                 .iter()
                 .map(|m| convert_tir_to_codegen_ty(m, alias_map, recursive_aliases))
                 .collect(),
         ),
-        TirTy::Optional(inner, _) => {
-            // Desugar Optional<T> into Union(T, Null) so simplification can
-            // flatten/dedup with any nulls already present.
-            cg::Ty::Union(vec![
-                convert_tir_to_codegen_ty(inner, alias_map, recursive_aliases),
-                cg::Ty::Null,
-            ])
-        }
         TirTy::Literal(lit, _freshness, _) => cg::Ty::Literal(lit.clone()),
 
         // BEP-030: BAML's `unknown` top type → BuiltinUnknown.
@@ -671,10 +664,6 @@ fn convert_tir_leaf(
 fn simplify_codegen_ty(ty: cg::Ty) -> cg::Ty {
     match ty {
         cg::Ty::Union(variants) => simplify_union(variants),
-        cg::Ty::Optional(inner) => {
-            // Shouldn't normally appear (we desugar above), but handle defensively.
-            simplify_union(vec![*inner, cg::Ty::Null])
-        }
         // Recurse into containers.
         cg::Ty::List(inner) => cg::Ty::List(Box::new(simplify_codegen_ty(*inner))),
         cg::Ty::Map { key, value } => cg::Ty::Map {
@@ -1027,7 +1016,6 @@ function Extract(client: string, text: string) -> string {
                     out.push(n.name.as_str().to_string());
                 }
                 cg::Ty::Union(ms) => ms.iter().for_each(|m| walk(m, out)),
-                cg::Ty::Optional(i) => walk(i, out),
                 _ => {}
             }
         }

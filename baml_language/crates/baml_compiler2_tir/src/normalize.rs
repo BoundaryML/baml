@@ -89,7 +89,6 @@ enum StructuralTy {
     Enum(QualifiedTypeName),
     EnumVariant(QualifiedTypeName, Name),
     // Constructors
-    Optional(Box<StructuralTy>),
     List(Box<StructuralTy>),
     Map {
         key: Box<StructuralTy>,
@@ -156,7 +155,6 @@ impl StructuralTy {
                 interface: interface.map(|interface| Box::new(interface.canonicalize())),
                 member,
             },
-            StructuralTy::Optional(inner) => StructuralTy::Optional(Box::new(inner.canonicalize())),
             StructuralTy::List(inner) => StructuralTy::List(Box::new(inner.canonicalize())),
             StructuralTy::Map { key, value } => StructuralTy::Map {
                 key: Box::new(key.canonicalize()),
@@ -283,32 +281,6 @@ impl StructuralTy {
 
             // TyVar (inside Mu bodies)
             (StructuralTy::TyVar(v1), StructuralTy::TyVar(v2)) => v1 == v2,
-
-            // Null <: Optional<T>
-            (StructuralTy::Null, StructuralTy::Optional(_)) => true,
-
-            // Optional<T> <: Optional<U> iff T <: U (covariance)
-            (StructuralTy::Optional(inner), StructuralTy::Optional(opt_inner)) => {
-                inner.is_subtype_of(opt_inner, assumptions)
-            }
-
-            // Union<T1, ..., Tn> <: Optional<U> iff every Ti is either Null or <: U
-            (StructuralTy::Union(types), StructuralTy::Optional(opt_inner)) => {
-                types.iter().all(|t| {
-                    matches!(t, StructuralTy::Null) || t.is_subtype_of(opt_inner, assumptions)
-                })
-            }
-
-            // Optional<T> <: Union  iff Null <: Union and T <: Union
-            (StructuralTy::Optional(inner), StructuralTy::Union(types)) => {
-                types.iter().any(|t| matches!(t, StructuralTy::Null))
-                    && types.iter().any(|t| inner.is_subtype_of(t, assumptions))
-            }
-
-            // T <: Optional<T>
-            (inner, StructuralTy::Optional(opt_inner)) => {
-                inner.is_subtype_of(opt_inner, assumptions)
-            }
 
             // Union<T1, T2> <: U iff all Ti <: U.
             // (Order matters: this must come before the `T <: Union` rule
@@ -482,9 +454,6 @@ fn substitute(
 ) -> StructuralTy {
     match ty {
         StructuralTy::TyVar(v) if v == var => replacement.clone(),
-        StructuralTy::Optional(inner) => {
-            StructuralTy::Optional(Box::new(substitute(inner, var, replacement)))
-        }
         StructuralTy::List(inner) => {
             StructuralTy::List(Box::new(substitute(inner, var, replacement)))
         }
@@ -637,9 +606,6 @@ fn normalize_impl(
             }
         }
 
-        Ty::Optional(inner, _) => StructuralTy::Optional(Box::new(normalize_impl(
-            inner, aliases, recursive, expanding,
-        ))),
         Ty::List(inner, _) | Ty::EvolvingList(inner, _) => StructuralTy::List(Box::new(
             normalize_impl(inner, aliases, recursive, expanding),
         )),
@@ -730,7 +696,7 @@ fn ty_has_cycle(
 ) -> bool {
     match ty {
         Ty::TypeAlias(qn, _) if aliases.contains_key(qn) => has_cycle(qn, aliases, visited, stack),
-        Ty::Optional(inner, _) | Ty::List(inner, _) | Ty::EvolvingList(inner, _) => {
+        Ty::List(inner, _) | Ty::EvolvingList(inner, _) => {
             ty_has_cycle(inner, aliases, visited, stack)
         }
         Ty::Map(key, value, _) | Ty::EvolvingMap(key, value, _) => {
@@ -862,8 +828,8 @@ fn build_alias_graph(aliases: &HashMap<QualifiedTypeName, Ty>) -> GraphResult {
 ///
 /// Returns `(non_structural_deps, structural_deps)` where structural means
 /// the reference goes through `List` or `Map` (which provide a termination
-/// point via empty container). `Optional` and `Union` are pass-through —
-/// they do NOT create structural context.
+/// point via empty container). `Union` (including a nullable `T | null`) is
+/// pass-through — it does NOT create structural context.
 fn extract_type_alias_deps(
     ty: &Ty,
     aliases: &HashMap<QualifiedTypeName, Ty>,
@@ -882,10 +848,6 @@ fn extract_type_alias_deps(
                 } else {
                     non_structural.insert(qn.clone());
                 }
-            }
-            Ty::Optional(inner, _) => {
-                // Optional does NOT create structural context
-                visit(inner, aliases, non_structural, structural, in_structural);
             }
             Ty::List(inner, _) | Ty::EvolvingList(inner, _) => {
                 // List provides structural guard (can be empty)
@@ -1204,18 +1166,6 @@ fn extract_required_class_deps(
                     visiting.remove(qn);
                 }
             }
-        }
-        Ty::Optional(inner, _) => {
-            // Optional breaks the hard dependency
-            extract_required_class_deps(
-                inner,
-                class_fields,
-                type_aliases,
-                deps,
-                true,
-                in_list_or_map,
-                visiting,
-            );
         }
         Ty::List(inner, _) | Ty::EvolvingList(inner, _) => {
             // List breaks the hard dependency (can be empty)
@@ -1556,10 +1506,7 @@ mod tests {
             &Ty::Never {
                 attr: TyAttr::default()
             },
-            &Ty::Optional(
-                Box::new(Ty::Primitive(PrimitiveType::Int, TyAttr::default())),
-                TyAttr::default()
-            ),
+            &Ty::nullable(Ty::Primitive(PrimitiveType::Int, TyAttr::default())),
             &aliases
         ));
     }
@@ -2034,28 +1981,19 @@ mod tests {
         // int <: int?
         assert!(is_subtype_of(
             &Ty::Primitive(PrimitiveType::Int, TyAttr::default()),
-            &Ty::Optional(
-                Box::new(Ty::Primitive(PrimitiveType::Int, TyAttr::default())),
-                TyAttr::default()
-            ),
+            &Ty::nullable(Ty::Primitive(PrimitiveType::Int, TyAttr::default())),
             &aliases
         ));
         // null <: int?
         assert!(is_subtype_of(
             &Ty::Primitive(PrimitiveType::Null, TyAttr::default()),
-            &Ty::Optional(
-                Box::new(Ty::Primitive(PrimitiveType::Int, TyAttr::default())),
-                TyAttr::default()
-            ),
+            &Ty::nullable(Ty::Primitive(PrimitiveType::Int, TyAttr::default())),
             &aliases
         ));
         // string NOT <: int?
         assert!(!is_subtype_of(
             &Ty::Primitive(PrimitiveType::String, TyAttr::default()),
-            &Ty::Optional(
-                Box::new(Ty::Primitive(PrimitiveType::Int, TyAttr::default())),
-                TyAttr::default()
-            ),
+            &Ty::nullable(Ty::Primitive(PrimitiveType::Int, TyAttr::default())),
             &aliases
         ));
     }
@@ -2546,7 +2484,7 @@ mod tests {
     fn test_typevar_subtype_of_optional_same_typevar() {
         let aliases = HashMap::new();
         let t = Ty::TypeVar(Name::new("T"), TyAttr::default());
-        let opt_t = Ty::Optional(Box::new(t.clone()), TyAttr::default());
+        let opt_t = Ty::nullable(t.clone());
         // T <: T? should hold
         assert!(is_subtype_of(&t, &opt_t, &aliases));
     }
