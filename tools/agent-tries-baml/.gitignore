@@ -1,0 +1,33 @@
+# agent-tries-baml — local/secret/build artifacts. The monorepo root .gitignore already
+# covers *.env, .next, node_modules, __pycache__, .venv, target/, .claude/; these are
+# the deltas specific to this tool.
+
+# Fly local state. The fly.*.toml deploy configs ARE committed (environment is
+# non-secret; secrets are injected from Infisical at runtime).
+.fly/
+
+# Convex codegen
+convex/_generated/
+
+# Python build / editable-install metadata
+*.egg-info/
+.pytest_cache/
+
+# Runtime volumes / blobs
+/data/
+.pytest-blobs/
+
+# Internal, non-committed planning docs (merge plan, slides, runbooks)
+docs/internal/
+
+# Code-analysis + presentation artifacts
+.codeboarding/
+docs/**/*.html
+
+# Local env (belt-and-suspenders on top of the root *.env rule)
+.env
+.env.local
+.env.*.local
+
+# local ops script holding Infisical bootstrap creds
+set-infisical-secrets.sh

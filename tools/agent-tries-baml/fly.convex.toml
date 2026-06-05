@@ -1,0 +1,34 @@
+app            = 'bench3-convex'
+primary_region = 'sjc'
+
+# Self-hosted Convex backend. Internal-only; push functions over a
+# `fly proxy 3210` tunnel. Services reach it at bench3-convex.internal:3210.
+[build]
+  image = 'ghcr.io/get-convex/convex-backend:latest'
+
+[env]
+  INSTANCE_NAME = 'bench3'
+  # CONVEX_CLOUD_ORIGIN / SITE set so generated URLs are correct over .internal
+  CONVEX_CLOUD_ORIGIN = 'http://bench3-convex.internal:3210'
+  CONVEX_SITE_ORIGIN  = 'http://bench3-convex.internal:3211'
+
+# Convex binds IPv4-only, but Fly's private network is IPv6. Front it with
+# Fly's proxy (this [[services]] block) so IPv6 callers reach the IPv4
+# backend. Services connect via bench3-convex.flycast:3210 (private).
+[[services]]
+  internal_port = 3210
+  protocol      = 'tcp'
+  auto_stop_machines   = 'off'
+  auto_start_machines  = true
+  min_machines_running = 1
+
+  [[services.ports]]
+    port = 3210
+
+[[mounts]]
+  source      = 'bench3_convex_data'
+  destination = '/convex/data'
+
+[[vm]]
+  size   = 'shared-cpu-2x'
+  memory = '2gb'

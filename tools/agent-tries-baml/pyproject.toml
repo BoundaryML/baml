@@ -1,0 +1,33 @@
+[project]
+name = "agent-tries-baml"
+version = "0.1.0"
+description = "agent-tries-baml — BAML benchmarking pipeline (Python + Convex, event-driven)"
+requires-python = ">=3.11"
+dependencies = [
+    "convex>=0.7.0",
+    "httpx>=0.27",
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.30",
+    "sse-starlette>=2.1",
+    "pydantic>=2.7",
+    "pydantic-settings>=2.3",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "pytest-asyncio>=0.23", "respx>=0.21"]
+
+[tool.setuptools.packages.find]
+where = ["libs", "."]
+include = ["bench_core*", "services*"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+pythonpath = ["libs", "."]
+markers = [
+    "integration: per-hop pipeline test that boots the stack (api/ingress/fake_proxy)",
+    "system: full end-to-end pipeline flow, /bug through fix dispatch",
+]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"

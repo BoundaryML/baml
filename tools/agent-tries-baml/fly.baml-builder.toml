@@ -1,0 +1,22 @@
+app            = 'bench3-baml-builder'
+primary_region = 'sjc'
+
+# Downloads the latest BAML alpha-channel release binary (no compilation),
+# so it runs on the slim python image with a tiny VM.
+[build]
+  dockerfile = 'docker/Dockerfile.python'
+
+[processes]
+  app = 'python -m services.baml_builder'
+
+[env]
+  INFISICAL_PROJECT_ID = 'bdd280e2-259c-4750-9b16-a8597a67214c'
+  INFISICAL_ENV        = 'prod'
+  INFISICAL_PATH       = '/'
+  SERVICE_URL    = 'http://bench3-api.internal:8080'
+  BAML_REPO_SLUG = 'BoundaryML/baml'
+  # secrets: SERVICE_TOKEN, GITHUB_TOKEN
+
+[[vm]]
+  size   = 'shared-cpu-1x'
+  memory = '512mb'

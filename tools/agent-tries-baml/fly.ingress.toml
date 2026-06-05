@@ -1,0 +1,32 @@
+app            = 'bench3-ingress'
+primary_region = 'sjc'
+
+# Public webhook gateway: /slack/events, /notion/webhook, /pr, /bug.
+[build]
+  dockerfile = 'docker/Dockerfile.python'
+
+[processes]
+  app = 'python -m services.ingress'
+
+[env]
+  INFISICAL_PROJECT_ID = 'bdd280e2-259c-4750-9b16-a8597a67214c'
+  INFISICAL_ENV        = 'prod'
+  INFISICAL_PATH       = '/'
+  PORT        = '8081'
+  SERVICE_URL = 'http://bench3-api.internal:8080'
+  # Webhook routing labels — must match notion-fixer's. Read case-insensitively.
+  NOTION_STATUS_APPROVED = 'approved'
+  NOTION_STATUS_REDRAFT  = 'redraft'
+  # secrets: SERVICE_TOKEN, SLACK_SIGNING_SECRET, SLACK_BOT_TOKEN, NOTION_TOKEN
+
+[http_service]
+  internal_port        = 8081
+  force_https          = true
+  processes            = ['app']
+  auto_stop_machines   = 'off'
+  auto_start_machines  = true
+  min_machines_running = 1
+
+[[vm]]
+  size   = 'shared-cpu-1x'
+  memory = '512mb'

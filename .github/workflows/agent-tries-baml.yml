@@ -1,0 +1,82 @@
+name: CI - agent-tries-baml
+
+# The whole suite (unit + integration + system) runs against the in-process
+# MemoryGateway by default, so it needs no Convex deployment and no Docker and
+# finishes in seconds - it runs and blocks on every PR that touches agent-tries-baml.
+# A separate fidelity job re-runs the heavy tiers against the REAL Convex backend
+# (Docker) on canary and manual dispatch, off the PR critical path. No secrets:
+# everything runs against tests/fake_proxy.py.
+on:
+  pull_request:
+    paths:
+      - "tools/agent-tries-baml/**"
+      - ".github/workflows/agent-tries-baml.yml"
+  push:
+    branches: [canary]
+    paths:
+      - "tools/agent-tries-baml/**"
+      - ".github/workflows/agent-tries-baml.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref_name }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  tests:
+    name: tests (unit + integration + system)
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: tools/agent-tries-baml
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@v8
+        with:
+          enable-cache: true
+          cache-dependency-glob: "tools/agent-tries-baml/uv.lock"
+      - name: Run full suite (in-memory backend, no Docker)
+        run: uv run --extra dev pytest -q
+
+  real-convex:
+    name: fidelity (integration + system vs real Convex)
+    # Off the PR critical path: only canary pushes and manual dispatch. Re-runs the
+    # heavy tiers against the actual Convex backend so the MemoryGateway can't drift.
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'push' && github.ref == 'refs/heads/canary')
+    runs-on: blacksmith-8vcpu-ubuntu-2404
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: tools/agent-tries-baml
+    env:
+      BAML_BENCH_REAL_CONVEX: "1"     # boot the real Convex container instead of the fake
+      BAML_BENCH_REQUIRE_DOCKER: "1"  # fail loudly if Docker is unavailable (don't silently skip)
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@v8
+        with:
+          enable-cache: true
+          cache-dependency-glob: "tools/agent-tries-baml/uv.lock"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Pre-pull the Convex backend image
+        run: docker pull ghcr.io/get-convex/convex-backend:latest
+      - name: Install Convex CLI deps
+        run: npm ci
+      - name: Run integration + system vs real Convex
+        run: uv run --extra dev pytest -m "integration or system" -q

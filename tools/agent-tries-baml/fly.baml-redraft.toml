@@ -1,0 +1,23 @@
+app            = 'bench3-baml-redraft'
+primary_region = 'sjc'
+
+# Human-feedback redraft loop: claims issues a reviewer moved to "redraft" on
+# the Notion board, pulls their comments, and rewrites the issue via the proxy.
+[build]
+  dockerfile = 'docker/Dockerfile.python'
+
+[processes]
+  app = 'python -m services.baml_redraft'
+
+[env]
+  INFISICAL_PROJECT_ID = 'bdd280e2-259c-4750-9b16-a8597a67214c'
+  INFISICAL_ENV        = 'prod'
+  INFISICAL_PATH       = '/'
+  SERVICE_URL       = 'http://bench3-api.internal:8080'
+  CLAUDE_PROXY_URLS = 'http://bench3-claude-proxy.internal:9090'
+  BAML_REDRAFT_MODEL     = 'claude-sonnet-4-6'
+  # secrets (from Infisical): SERVICE_TOKEN, CLAUDE_PROXY_TOKEN, NOTION_TOKEN
+
+[[vm]]
+  size   = 'shared-cpu-1x'
+  memory = '512mb'

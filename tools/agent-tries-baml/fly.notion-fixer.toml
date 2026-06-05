@@ -1,0 +1,24 @@
+app            = 'bench3-notion-fixer'
+primary_region = 'sjc'
+
+[build]
+  dockerfile = 'docker/Dockerfile.python'
+
+[processes]
+  app = 'python -m services.notion_fixer'
+
+[env]
+  INFISICAL_PROJECT_ID = 'bdd280e2-259c-4750-9b16-a8597a67214c'
+  INFISICAL_ENV        = 'prod'
+  INFISICAL_PATH       = '/'
+  SERVICE_URL             = 'http://bench3-api.internal:8080'
+  UI_BASE_URL             = 'https://bench3-ui.fly.dev'
+  NOTION_STATUS_CONFIRMED = 'not started'
+  NOTION_STATUS_APPROVED  = 'approved'
+  NOTION_STATUS_FIXING    = 'to cursor'
+  # secrets: SERVICE_TOKEN, NOTION_TOKEN, NOTION_SKILL_DB_ID, NOTION_LANG_DB_ID,
+  #          SLACK_BOT_TOKEN, SLACK_FIX_CHANNEL, CURSOR_SLACK_USER_ID
+
+[[vm]]
+  size   = 'shared-cpu-1x'
+  memory = '512mb'

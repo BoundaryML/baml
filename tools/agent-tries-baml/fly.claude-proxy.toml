@@ -1,0 +1,35 @@
+app            = 'bench3-claude-proxy'
+primary_region = 'sjc'
+
+# Claude wrapper. Internal-only (reached at bench3-claude-proxy.internal:9090).
+# OAuth state persists on claude_state; one-time `fly ssh console -C "claude /login"`.
+[build]
+  dockerfile = 'docker/Dockerfile.claude-proxy'
+
+[env]
+  INFISICAL_PROJECT_ID = 'bdd280e2-259c-4750-9b16-a8597a67214c'
+  INFISICAL_ENV        = 'prod'
+  INFISICAL_PATH       = '/'
+  PROXY_LISTEN_PORT = '9090'
+  HOST              = '::'
+  STAGING_ROOT      = '/tmp/staging'
+  BAML_CACHE_DIR    = '/var/baml-cache'
+  SERVICE_URL       = 'http://bench3-api.internal:8080'
+  CLAUDE_AUTH_MODE  = 'auto'
+  CLAUDE_INVOCATION_TIMEOUT_SECS = '3600'
+  # secrets: CLAUDE_PROXY_TOKEN, SERVICE_TOKEN, (optional ANTHROPIC_API_KEY)
+
+[[services]]
+  internal_port = 9090
+  protocol      = 'tcp'
+  auto_stop_machines   = 'off'
+  auto_start_machines  = true
+  min_machines_running = 1
+
+[[mounts]]
+  source      = 'bench3_claude_state'
+  destination = '/home/cproxy/.claude'
+
+[[vm]]
+  size   = 'shared-cpu-2x'
+  memory = '2gb'
