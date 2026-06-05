@@ -3219,6 +3219,7 @@ function iter.out_of_body_inferred_ctor_dispatch() -> int {
     load_const 11
     call user.iter.core.OutOfBodyBox.new
     store_var value
+    load_type int
     load_var value
     call user.iter.core.OutOfBodyValue<T>$for$OutOfBodyBox<T>.get
     return

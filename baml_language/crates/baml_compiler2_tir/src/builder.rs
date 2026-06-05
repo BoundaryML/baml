@@ -2061,7 +2061,10 @@ impl<'db> TypeInferenceBuilder<'db> {
             .iter()
             .find(|imp| imp.methods.contains(&func_id))
         {
-            return (imp.generic_params.clone(), Vec::new());
+            return (
+                imp.generic_params.clone(),
+                item_tree[func_id].generic_params.clone(),
+            );
         }
 
         let fn_params = item_tree[func_id].generic_params.clone();

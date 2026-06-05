@@ -5154,6 +5154,44 @@ fn all_required_parents_satisfied_is_ok() {
 }
 
 #[test]
+fn in_body_implicit_method_match_ignores_param_names() {
+    assert_zero_compile_errors(
+        r#"
+        interface Label {
+            function label(self, name: string) -> string
+        }
+
+        class Thing {
+            function label(self, value: string) -> string {
+                return value
+            }
+
+            implements Label {}
+        }
+        "#,
+    );
+}
+
+#[test]
+fn out_of_body_implicit_method_match_ignores_param_names() {
+    assert_zero_compile_errors(
+        r#"
+        interface Label {
+            function label(self, name: string) -> string
+        }
+
+        class Thing {
+            function label(self, value: string) -> string {
+                return value
+            }
+        }
+
+        implements Label for Thing {}
+        "#,
+    );
+}
+
+#[test]
 fn required_parent_lookup_uses_declaring_interface_namespace() {
     let files = &[
         (
@@ -5675,6 +5713,36 @@ async fn default_call_from_generic_out_of_body_override_runtime() {
     assert_eq!(
         output.result.unwrap(),
         BexExternalValue::String("P:[L] hi".into())
+    );
+}
+
+#[tokio::test]
+async fn generic_out_of_body_override_preserves_method_type_args_runtime() {
+    let output = baml_test!(
+        r#"
+        interface Describer<T> {
+            function describe<U>(self, value: U) -> string
+        }
+
+        class Box<T> {
+            value: T
+        }
+
+        implements<T> Describer<T> for Box<T> {
+            function describe<U>(self, value: U) -> string {
+                return reflect.type_of<T>().to_string() + ":" + reflect.type_of<U>().to_string()
+            }
+        }
+
+        function main() -> string {
+            let d: Describer<int> = Box<int> { value: 1 }
+            return d.describe<string>("ok")
+        }
+        "#
+    );
+    assert_eq!(
+        output.result.unwrap(),
+        BexExternalValue::String("int:string".into())
     );
 }
 

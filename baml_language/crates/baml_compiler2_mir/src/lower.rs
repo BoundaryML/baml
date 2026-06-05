@@ -5515,7 +5515,7 @@ impl LoweringContext<'_> {
         // args are still passed, but TIR-inferred frame seeds are for regular
         // BAML callee frames.
         let is_sys_op = self.check_sys_op(callee);
-        let call_type_arg_operands = self.lower_call_type_args(expr_id, !is_sys_op);
+        let call_type_arg_operands = self.lower_call_type_args(expr_id, true);
 
         // ── Prepend receiver's class-level type args ─────────────────────────
         // For `b.describe()` where `b: Box<int>`, the method `describe` is compiled
@@ -5994,7 +5994,9 @@ impl LoweringContext<'_> {
             .iter()
             .find(|imp| imp.methods.contains(&func_id))
         {
-            return imp.generic_params.clone();
+            let mut params = imp.generic_params.clone();
+            params.extend(item_tree[func_id].generic_params.iter().cloned());
+            return params;
         }
         // BEP-044: interface default methods are lowered as standalone
         // functions, but their bodies reference the *interface's* generic
@@ -8273,6 +8275,17 @@ impl<'db> LoweringContext<'db> {
                                 let func_loc = baml_compiler2_hir::loc::FunctionLoc::new(
                                     self.db, file, *method_id,
                                 );
+                                let frame_type_args = imp
+                                    .generic_params
+                                    .iter()
+                                    .map(|param| {
+                                        instantiation.bindings.get(param).cloned().unwrap_or_else(
+                                            || Tir2Ty::BuiltinUnknown {
+                                                attr: baml_compiler2_tir::ty::TyAttr::default(),
+                                            },
+                                        )
+                                    })
+                                    .collect();
                                 out.push((
                                     requested_idx,
                                     InterfaceMethodCandidate {
@@ -8288,10 +8301,9 @@ impl<'db> LoweringContext<'db> {
                                         ),
                                         // Out-of-body override: its frame uses
                                         // `imp.generic_params` order, which can
-                                        // differ from both the class- and
-                                        // interface-arg orders. Not threaded
-                                        // here. (Unchanged from prior behavior.)
-                                        frame_seed: CalleeFrameSeed::Static(Vec::new()),
+                                        // differ from both class- and
+                                        // interface-arg order.
+                                        frame_seed: CalleeFrameSeed::Static(frame_type_args),
                                     },
                                 ));
                                 break 'blanket_search;

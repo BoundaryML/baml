@@ -3036,6 +3036,54 @@ async fn associated_type_default_typevar_satisfies_declared_bound() {
 }
 
 #[test]
+fn associated_type_binding_def_typevar_satisfies_declared_bound() {
+    assert_zero_compile_errors(
+        r#"
+        interface Summarizable {
+            function summary(self) -> string
+        }
+
+        interface Holder {
+            type Item extends Summarizable
+            function get(self) -> Self.Item
+        }
+
+        class Box<T> {
+            value: T
+        }
+
+        implements<T extends Summarizable> Holder for Box<T> {
+            type Item = T
+
+            function get(self) -> Self.Item {
+                return self.value
+            }
+        }
+        "#,
+    );
+}
+
+#[test]
+fn associated_type_interface_binding_typevar_satisfies_declared_bound() {
+    assert_zero_compile_errors(
+        r#"
+        interface Summarizable {
+            function summary(self) -> string
+        }
+
+        interface Holder {
+            type Item extends Summarizable
+            function get(self) -> Self.Item
+        }
+
+        function summarize<T extends Summarizable>(holder: Holder<Item = T>) -> string {
+            return holder.get().summary()
+        }
+        "#,
+    );
+}
+
+#[test]
 fn abstract_associated_projection_uses_declared_bound_for_members() {
     assert_zero_compile_errors(
         r#"

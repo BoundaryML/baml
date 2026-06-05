@@ -26,7 +26,7 @@ for i in range(1000000): s += gapply(double, i)
 print(s)
 ```
 
-## Typescript
+## TypeScript
 ```ts
 function gapply(f,x){return f(x)}
 const double=x=>x*2;let s=0;

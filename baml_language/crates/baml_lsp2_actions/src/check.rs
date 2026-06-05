@@ -792,6 +792,7 @@ struct SignatureMatchContext<'a, 'db> {
     actual_pkg_items: &'a baml_compiler2_hir::package::PackageItems<'db>,
     actual_namespace_path: &'a [Name],
     aliases: &'a std::collections::HashMap<QualifiedTypeName, Ty>,
+    ignore_param_names: bool,
 }
 
 #[derive(Clone, Copy)]
@@ -1013,7 +1014,7 @@ impl MethodSignature {
             )
         };
         for (i, ((an, at), (bn, bt))) in self.params.iter().zip(&other.params).enumerate() {
-            if an != bn {
+            if !ctx.ignore_param_names && an != bn {
                 return false;
             }
             match (
@@ -1314,6 +1315,7 @@ fn validate_associated_type_binding_defs(
     iface_namespace_path: &[Name],
     binding_namespace_path: &[Name],
     generic_params: &[Name],
+    generic_bounds: &GenericBoundExprMap,
     generic_subst: &std::collections::HashMap<Name, baml_compiler2_ast::TypeExpr>,
     bindings: &[baml_compiler2_ast::AssociatedTypeBindingDef],
     aliases: &std::collections::HashMap<QualifiedTypeName, Ty>,
@@ -1427,7 +1429,16 @@ fn validate_associated_type_binding_defs(
         );
         if binding_diags.is_empty()
             && bound_diags.is_empty()
-            && !ty_nominal_subtype(db, &binding_ty, &bound_ty, aliases)
+            && !ty_nominal_subtype_with_generic_bounds(
+                db,
+                &binding_ty,
+                &bound_ty,
+                binding_pkg_items,
+                binding_namespace_path,
+                generic_params,
+                generic_bounds,
+                aliases,
+            )
         {
             diagnostics.push(
                 Diagnostic::error(
@@ -2234,6 +2245,7 @@ fn validate_associated_type_bindings_in_type_expr(
                 pkg_items,
                 namespace_path,
                 generic_params,
+                generic_bounds,
                 aliases,
                 diagnostics,
             );
@@ -2248,6 +2260,7 @@ fn validate_associated_type_bindings_in_type_expr(
                     pkg_items,
                     namespace_path,
                     generic_params,
+                    generic_bounds,
                     aliases,
                     diagnostics,
                 );
@@ -2435,6 +2448,7 @@ fn validate_unqualified_associated_type_projection(
     pkg_items: &baml_compiler2_hir::package::PackageItems<'_>,
     namespace_path: &[Name],
     generic_params: &[Name],
+    _generic_bounds: &GenericBoundExprMap,
     aliases: &std::collections::HashMap<QualifiedTypeName, Ty>,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
@@ -3093,6 +3107,7 @@ fn validate_associated_type_bindings_on_interface_type(
     pkg_items: &baml_compiler2_hir::package::PackageItems<'_>,
     namespace_path: &[Name],
     generic_params: &[Name],
+    generic_bounds: &GenericBoundExprMap,
     aliases: &std::collections::HashMap<QualifiedTypeName, Ty>,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
@@ -3204,7 +3219,16 @@ fn validate_associated_type_bindings_on_interface_type(
         );
         if binding_diags.is_empty()
             && bound_diags.is_empty()
-            && !ty_nominal_subtype(db, &binding_ty, &bound_ty, aliases)
+            && !ty_nominal_subtype_with_generic_bounds(
+                db,
+                &binding_ty,
+                &bound_ty,
+                pkg_items,
+                namespace_path,
+                generic_params,
+                generic_bounds,
+                aliases,
+            )
         {
             diagnostics.push(
                 Diagnostic::error(
@@ -4362,6 +4386,12 @@ fn validate_implements_for<'db>(
     let target_name = Name::new(format!("{}", imp.for_target.expr));
     let generic_param_names: Vec<Name> =
         imp.generic_params.iter().map(|(n, _)| n.clone()).collect();
+    let generic_param_bounds: Vec<Option<baml_compiler2_ast::TypeExpr>> = imp
+        .generic_params
+        .iter()
+        .map(|(_, bound)| bound.clone())
+        .collect();
+    let generic_bounds = generic_bound_expr_map(&generic_param_names, &generic_param_bounds);
     let ctx = InterfaceValidationCtx {
         db,
         pkg_items,
@@ -4537,6 +4567,7 @@ fn validate_implements_for<'db>(
         &iface_namespace_path,
         namespace_path,
         &generic_param_names,
+        &generic_bounds,
         &generic_subst,
         &imp.associated_type_bindings,
         aliases,
@@ -4615,6 +4646,7 @@ fn validate_implements_for<'db>(
                         actual_pkg_items: pkg_items,
                         actual_namespace_path: namespace_path,
                         aliases,
+                        ignore_param_names: false,
                     },
                 ) {
                     diagnostics.push(
@@ -4672,6 +4704,7 @@ fn validate_implements_for<'db>(
                     actual_pkg_items: &source.pkg_items,
                     actual_namespace_path: &source.namespace_path,
                     aliases,
+                    ignore_param_names: true,
                 },
             )
         {
@@ -4927,6 +4960,7 @@ fn validate_class_implements<'db>(
             &iface_namespace_path,
             namespace_path,
             &class.generic_params,
+            &generic_bound_expr_map(&class.generic_params, &class.generic_param_bounds),
             &generic_subst,
             &block.associated_type_bindings,
             aliases,
@@ -5008,6 +5042,7 @@ fn validate_class_implements<'db>(
                             actual_pkg_items: pkg_items,
                             actual_namespace_path: namespace_path,
                             aliases,
+                            ignore_param_names: false,
                         },
                     ) {
                         diagnostics.push(
@@ -5059,6 +5094,7 @@ fn validate_class_implements<'db>(
                         actual_pkg_items: pkg_items,
                         actual_namespace_path: namespace_path,
                         aliases,
+                        ignore_param_names: true,
                     },
                 ) {
                     diagnostics.push(

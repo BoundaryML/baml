@@ -2222,6 +2222,8 @@ function baml.llm.Client.__make_stream(self: baml.llm.Client, sse: baml.http.Sse
     sys_op baml.llm.PrimitiveClient.new_stream_accumulator
     store_var acc
     load_var2 5 6
+    load_type #0
+    load_type #1
     sys_op baml.llm.StreamCache.new
     store_var cache
     load_var2 4 7
