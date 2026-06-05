@@ -354,6 +354,38 @@ async fn mock_nested_same_mock_preserves_call_count() {
     assert_eq!(output.result, Ok(BexExternalValue::Int(3)));
 }
 
+/// A replacement may itself open an inner `baml.mock.scope`. The replacement
+/// lambda's type comes from the mock's inferred generic param, and the inner
+/// `scope`'s synthetic effect var must still unify to `never` so the
+/// non-throwing replacement compiles.
+#[tokio::test]
+async fn mock_replacement_opens_inner_scope() {
+    let output = baml_test!(
+        r#"
+        function greeting() -> string { "real" }
+
+        function main() -> string {
+            let inner = baml.mock.new(greeting);
+            inner.replace(() -> string { "I" });
+            let outer = baml.mock.new(greeting);
+            outer.replace(() -> string {
+                let captured = "";
+                baml.mock.scope(inner, () -> void {
+                    captured = greeting();      // inner's replacement -> "I"
+                });
+                "O[" + captured + "]"
+            });
+            let r = "";
+            baml.mock.scope(outer, () -> void {
+                r = greeting();                 // outer's replacement opens inner -> "O[I]"
+            });
+            r
+        }
+        "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::String("O[I]".into())));
+}
+
 // ─── Slice 7: unwind — scope pops the mock even when the body throws ───────────
 
 /// If the scope body throws, the mock is still deactivated as the error unwinds

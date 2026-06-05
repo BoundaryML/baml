@@ -1331,6 +1331,20 @@ impl<'db> TypeInferenceBuilder<'db> {
         }
     }
 
+    /// Whether the callback at `value_expr` is a literal lambda whose ACTUAL
+    /// (effective) throws are definitively `never` (the empty fact set). Reads
+    /// `lambda_effective_throws` — the throws computed from the lambda body —
+    /// rather than the expected/declared throws on its expression type (which may
+    /// still carry an unresolved effect var). Used to drop a spurious effect type
+    /// var forwarded from a known non-throwing callback (see
+    /// `check_throws_surface`); a non-lambda or throwing callback is kept.
+    fn callback_throws_definitely_never(&self, value_expr: ExprId) -> bool {
+        match self.lambda_effective_throws.get(&value_expr) {
+            Some(throws) => crate::throw_inference::flatten_ty_to_facts(throws).is_empty(),
+            None => false,
+        }
+    }
+
     fn check_throws_surface(
         &mut self,
         body: &ExprBody,
@@ -1360,6 +1374,27 @@ impl<'db> TypeInferenceBuilder<'db> {
             effective
                 .iter()
                 .filter(|eff| !covered_by_declared(eff))
+                // An unresolved generic effect-param type var (e.g. `scope<T, E>`'s
+                // `E`, left unbound at a generic-effect call inside a lambda) is
+                // spurious when the forwarded callback is a known value whose
+                // throws are DEFINITIVELY `never` (a non-throwing literal lambda).
+                // Its effect is `never`, not an uncovered throw, so drop it. Keep
+                // the type var when the callback throws something, when its throws
+                // are themselves unresolved, or when the callback is a direct
+                // reference (no value expr), so real contract violations are still
+                // reported.
+                .filter(|eff| {
+                    if !matches!(eff, Ty::TypeVar(..)) {
+                        return true;
+                    }
+                    match self
+                        .find_callback_throw_provenance(body, eff)
+                        .and_then(|p| p.callback_value_expr)
+                    {
+                        Some(value_expr) => !self.callback_throws_definitely_never(value_expr),
+                        None => true,
+                    }
+                })
                 .cloned()
                 .collect()
         };
