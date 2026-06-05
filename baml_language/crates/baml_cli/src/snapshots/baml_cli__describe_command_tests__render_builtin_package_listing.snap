@@ -191,6 +191,7 @@ class            net.UdpSocket                    <builtin>/baml/ns_net/net.baml
 class            net.Datagram                     <builtin>/baml/ns_net/net.baml:132
 interface        ops.Equals                       <builtin>/baml/ns_ops/comparison.baml:1
 interface        ops.Compare                      <builtin>/baml/ns_ops/comparison.baml:8
+function         ops.equals                       <builtin>/baml/ns_ops/comparison.baml:34
 class            panics.DivisionByZero            <builtin>/baml/ns_panics/panics.baml:2
 class            panics.IndexOutOfBounds          <builtin>/baml/ns_panics/panics.baml:7
 class            panics.InvalidFieldAccess        <builtin>/baml/ns_panics/panics.baml:13

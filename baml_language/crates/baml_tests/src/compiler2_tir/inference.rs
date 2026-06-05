@@ -7,7 +7,7 @@ use baml_compiler2_tir::{
     interfaces::{package_implements_registry, type_implements_with_deps},
     package_interface::{ExportedType, package_interface, package_resolution_context},
     resolve::{ResolvedName, resolve_name_at_in_scope},
-    ty::{FunctionParamMode, PrimitiveType, QualifiedTypeName, Ty, TyAttr},
+    ty::{FunctionParamMode, QualifiedTypeName, Ty, TyAttr},
 };
 use text_size::TextSize;
 
@@ -558,8 +558,8 @@ fn builtin_equals_compare_visible_from_user_package() {
         vec![Name::new("ops")],
         Name::new("Compare"),
     );
-    let int_ty = Ty::Primitive(PrimitiveType::Int, TyAttr::default());
-    let u8_ty = Ty::Primitive(PrimitiveType::Uint8Array, TyAttr::default());
+    let int_ty = Ty::int();
+    let u8_ty = Ty::uint8array();
     let bare = Ty::Class(
         QualifiedTypeName::new(Name::new("user"), vec![], Name::new("Bare")),
         vec![],

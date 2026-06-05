@@ -18,6 +18,23 @@ interface Compare requires Equals {
     }
 }
 
+// The broad `==` / `!=` operator driver.
+//
+// Unlike `Equals` (which is only available on types that implement it), `==`
+// works on any pair of compatible types. The compiler emits specialized
+// comparison bytecode or a direct `Equals.eq` call whenever the operand types
+// are statically known; `equals` is the runtime fallback for erased operands
+// (`unknown`, unions, interfaces) and the recursion target for structural
+// comparison. It compares by the operands' concrete runtime types: a type that
+// implements `Equals` uses its `eq`; a class without `Equals` compares
+// structurally (field by field); enums compare by identity; and operands whose
+// concrete runtime types differ are never equal.
+//baml:mut_vm
+//baml:may_yield
+function equals(a: unknown, b: unknown) -> bool throws never {
+    $rust_function
+}
+
 // Implement for primitives, containers, and `null`.
 //
 // Note that the compiler usually special-cases these for performance, emitting
@@ -126,14 +143,19 @@ implement Equals for uint8array {
     }
 }
 
-implement<T extends Equals> Equals for T[] {
+// Containers implement `Equals` for *all* element types (unbounded), comparing
+// element-wise with the broad `==` (`baml.ops.equals`) rather than the element
+// `Equals.eq`. This is sound because `==` is total — it always produces a result
+// for operands of the same type — and `self`/`other` are the same container type
+// here. It also lets `T[]`/`map<K, V>` satisfy `Equals` bounds for any `T`/`V`.
+implement<T> Equals for T[] {
     function eq(self, other: Self) -> bool throws never {
-        $rust_function
+        baml.ops.equals(self, other)
     }
 }
 
-implement<K extends Equals, V extends Equals> Equals for map<K, V> {
+implement<K, V> Equals for map<K, V> {
     function eq(self, other: Self) -> bool throws never {
-        $rust_function
+        baml.ops.equals(self, other)
     }
 }

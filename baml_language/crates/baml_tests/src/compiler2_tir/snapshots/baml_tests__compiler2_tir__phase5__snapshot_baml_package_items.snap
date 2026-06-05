@@ -210,6 +210,7 @@ namespace baml.net:
 namespace baml.ops:
   type Compare
   type Equals
+  function equals
 namespace baml.panics:
   class AllocFailure { methods: [to_json, from_json] }
   class AssertionFailed { methods: [to_json, from_json] }

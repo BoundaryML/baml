@@ -3309,6 +3309,16 @@ function baml.ops.neq(self: unknown, other: unknown) -> bool throws never {
     false : false
   }
 }
+function baml.ops.eq(self: unknown, other: unknown) -> bool throws never {
+  { : bool
+    baml.ops.equals(self, other) : bool
+  }
+}
+function baml.ops.eq(self: unknown, other: unknown) -> bool throws never {
+  { : bool
+    baml.ops.equals(self, other) : bool
+  }
+}
 
 --- <builtin>/baml/ns_panics/panics.baml ---
 class baml.panics.DivisionByZero {
