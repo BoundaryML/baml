@@ -51,25 +51,27 @@ class ZonedDateTime {
     }
 
     /// Creates a `ZonedDateTime` from calendar/clock components read in
-    /// `timezone`. Omitted clock components default to zero. `month` and
-    /// `day` are 1-based. With an IANA timezone, DST gaps/overlaps are
-    /// resolved per `disambiguation` (defaults to `"compatible"`; see
-    /// `Disambiguation`).
+    /// `timezone`. `month` and `day` are 1-based. Defaulted clock components
+    /// and `disambiguation` are passed by name. With an IANA timezone, DST
+    /// gaps/overlaps are resolved per `disambiguation` (see `Disambiguation`).
     function from_components(
         timezone: TimeZoneOffset | string,
         year: int,
         month: int,
         day: int,
-        hour: int?,
-        minute: int?,
-        second: int?,
-        millisecond: int?,
-        microsecond: int?,
-        nanosecond: int?,
-        disambiguation: Disambiguation?,
+        hour: int = 0,
+        minute: int = 0,
+        second: int = 0,
+        millisecond: int = 0,
+        microsecond: int = 0,
+        nanosecond: int = 0,
+        disambiguation: Disambiguation = "compatible",
     ) -> ZonedDateTime throws root.errors.InvalidArgument | UnknownTimezoneError | AmbiguousTimeError | root.errors.Io {
-        PlainDateTime.from_components(year, month, day, hour, minute, second, millisecond, microsecond, nanosecond)
-            .to_zoned(timezone, disambiguation)
+        PlainDateTime.from_components(
+            year, month, day,
+            hour = hour, minute = minute, second = second,
+            millisecond = millisecond, microsecond = microsecond, nanosecond = nanosecond,
+        ).to_zoned(timezone, disambiguation = disambiguation)
     }
 
     /// Parses [RFC 3339](https://datatracker.ietf.org/doc/html/rfc3339)

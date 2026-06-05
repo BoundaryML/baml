@@ -27,9 +27,15 @@ class PlainDate {
     }
 
     /// Combines with a time-of-day into a `PlainDateTime`. Defaults to
-    /// midnight when `time` is omitted.
+    /// midnight when `time` is omitted (pass by name to override:
+    /// `d.to_plain_datetime(time = t)`).
+    function to_plain_datetime(self, time: PlainTime? = null) -> PlainDateTime throws never {
+        self._to_plain_datetime(time)
+    }
+    /// Internal: all-required native behind `to_plain_datetime` (native
+    /// functions have no BAML prologue to fill defaulted parameters).
     //baml:mut_vm
-    function to_plain_datetime(self, time: PlainTime?) -> PlainDateTime throws never {
+    function _to_plain_datetime(self, time: PlainTime?) -> PlainDateTime throws never {
         $rust_function
     }
 

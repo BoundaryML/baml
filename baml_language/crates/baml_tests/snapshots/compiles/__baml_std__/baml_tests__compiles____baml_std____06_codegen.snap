@@ -5120,6 +5120,9 @@ function baml.time.Instant.to_timestamp_seconds(self: baml.time.Instant) -> bigi
     return
 }
 
+function baml.time.PlainDate._to_plain_datetime(self: baml.time.PlainDate, time: baml.time.PlainTime | null) -> baml.time.PlainDateTime {
+}
+
 function baml.time.PlainDate.day(self: baml.time.PlainDate) -> int {
 }
 
@@ -5203,6 +5206,17 @@ function baml.time.PlainDate.to_json(self: baml.time.PlainDate) -> string {
 }
 
 function baml.time.PlainDate.to_plain_datetime(self: baml.time.PlainDate, time: baml.time.PlainTime | null) -> baml.time.PlainDateTime {
+    load_var time
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const null
+    store_var time
+
+  L0:
+    load_var2 1 2
+    call baml.time.PlainDate._to_plain_datetime
+    return
 }
 
 function baml.time.PlainDate.to_string(self: baml.time.PlainDate) -> string {
@@ -5211,10 +5225,69 @@ function baml.time.PlainDate.to_string(self: baml.time.PlainDate) -> string {
 function baml.time.PlainDate.year(self: baml.time.PlainDate) -> int {
 }
 
+function baml.time.PlainDateTime._from_components(year: int, month: int, day: int, hour: int, minute: int, second: int, millisecond: int, microsecond: int, nanosecond: int) -> baml.time.PlainDateTime {
+}
+
 function baml.time.PlainDateTime.day(self: baml.time.PlainDateTime) -> int {
 }
 
-function baml.time.PlainDateTime.from_components(year: int, month: int, day: int, hour: int | null, minute: int | null, second: int | null, millisecond: int | null, microsecond: int | null, nanosecond: int | null) -> baml.time.PlainDateTime {
+function baml.time.PlainDateTime.from_components(year: int, month: int, day: int, hour: int, minute: int, second: int, millisecond: int, microsecond: int, nanosecond: int) -> baml.time.PlainDateTime {
+    load_var hour
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const 0
+    store_var hour
+
+  L0:
+    load_var minute
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L1
+    load_const 0
+    store_var minute
+
+  L1:
+    load_var second
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L2
+    load_const 0
+    store_var second
+
+  L2:
+    load_var millisecond
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L3
+    load_const 0
+    store_var millisecond
+
+  L3:
+    load_var microsecond
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L4
+    load_const 0
+    store_var microsecond
+
+  L4:
+    load_var nanosecond
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L5
+    load_const 0
+    store_var nanosecond
+
+  L5:
+    load_const null
+    load_var2 1 2
+    load_var2 3 4
+    load_var2 5 6
+    load_var2 7 8
+    load_var nanosecond
+    call baml.time.PlainDateTime._from_components
+    return
 }
 
 function baml.time.PlainDateTime.from_json(j: baml.json.json) -> baml.time.PlainDateTime {
@@ -5354,134 +5427,125 @@ function baml.time.PlainDateTime.to_plain_time(self: baml.time.PlainDateTime) ->
 function baml.time.PlainDateTime.to_string(self: baml.time.PlainDateTime) -> string {
 }
 
-function baml.time.PlainDateTime.to_zoned(self: baml.time.PlainDateTime, timezone: baml.time.TimeZoneOffset | string, disambiguation: "compatible" | "earlier" | "later" | "reject" | null) -> baml.time.ZonedDateTime {
-    load_var timezone
-    is_type baml.time.TimeZoneOffset
+function baml.time.PlainDateTime.to_zoned(self: baml.time.PlainDateTime, timezone: baml.time.TimeZoneOffset | string, disambiguation: "compatible" | "earlier" | "later" | "reject") -> baml.time.ZonedDateTime {
+    load_var disambiguation
+    load_const <omitted>
+    cmp_op ==
     pop_jump_if_false L0
-    jump L15
+    load_const "compatible"
+    store_var disambiguation
 
   L0:
-    load_var disambiguation
-    store_var _10
-    load_var disambiguation
-    load_const null
-    cmp_op ==
+    load_var timezone
+    is_type baml.time.TimeZoneOffset
     pop_jump_if_false L1
-    load_const "compatible"
-    store_var _10
+    jump L14
 
   L1:
-    load_var _10
+    load_var disambiguation
     load_const "reject"
     cmp_op ==
     pop_jump_if_false L2
-    jump L7
+    jump L6
 
   L2:
-    load_var self
+    load_var2 2 1
     load_field ._nanoseconds
-    store_var _31
     load_var disambiguation
-    store_var _32
-    load_var disambiguation
+    sys_op baml.time._tz_to_instant
+    store_var _29
+    load_var _29
     load_const null
     cmp_op ==
     pop_jump_if_false L3
-    load_const "compatible"
-    store_var _32
+    jump L5
 
   L3:
-    load_var2 2 11
-    load_var _32
-    sys_op baml.time._tz_to_instant
-    store_var _30
-    load_var _30
+    load_var _29
+    store_var _35
+    load_var _35
+    store_var _34
+    load_var _35
     load_const null
     cmp_op ==
     pop_jump_if_false L4
-    jump L6
+    load_const 0n
+    store_var _34
 
   L4:
-    load_var _30
-    store_var _38
-    load_var _38
-    store_var _37
-    load_var _38
-    load_const null
-    cmp_op ==
-    pop_jump_if_false L5
-    load_const 0n
-    store_var _37
-
-  L5:
-    load_var _37
+    load_var _34
     load_const null
     load_var timezone
     init_instance baml.time.ZonedDateTime ._nanoseconds, ._offset_ns, ._iana
-    jump L16
+    jump L15
 
-  L6:
+  L5:
     load_var timezone
     init_instance baml.time.UnknownTimezoneError .timezone
     throw
 
-  L7:
+  L6:
     load_var2 2 1
     load_field ._nanoseconds
     load_const "earlier"
     sys_op baml.time._tz_to_instant
-    store_var _12
-    load_var _12
+    store_var _11
+    load_var _11
     load_const null
     cmp_op ==
-    pop_jump_if_false L8
-    jump L14
+    pop_jump_if_false L7
+    jump L13
 
-  L8:
-    load_var _12
+  L7:
+    load_var _11
     store_var earlier
     load_var2 2 1
     load_field ._nanoseconds
     load_const "later"
     sys_op baml.time._tz_to_instant
-    store_var _17
-    load_var _17
+    store_var _16
+    load_var _16
     load_const null
     cmp_op ==
+    pop_jump_if_false L8
+    jump L12
+
+  L8:
+    load_var2 5 6
+    cmp_op ==
     pop_jump_if_false L9
-    jump L13
+    jump L10
 
   L9:
-    load_var2 6 7
-    cmp_op ==
-    pop_jump_if_false L10
-    jump L11
-
-  L10:
     load_const "wall-clock time is ambiguous or skipped in timezone "
     load_var timezone
     bin_op +
     init_instance baml.time.AmbiguousTimeError .message
     throw
 
-  L11:
+  L10:
     load_var earlier
-    store_var _26
-    load_var _26
     store_var _25
-    load_var _26
+    load_var _25
+    store_var _24
+    load_var _25
     load_const null
     cmp_op ==
-    pop_jump_if_false L12
+    pop_jump_if_false L11
     load_const 0n
-    store_var _25
+    store_var _24
 
-  L12:
-    load_var _25
+  L11:
+    load_var _24
     load_const null
     load_var timezone
     init_instance baml.time.ZonedDateTime ._nanoseconds, ._offset_ns, ._iana
-    jump L16
+    jump L15
+
+  L12:
+    load_var timezone
+    init_instance baml.time.UnknownTimezoneError .timezone
+    throw
 
   L13:
     load_var timezone
@@ -5489,11 +5553,6 @@ function baml.time.PlainDateTime.to_zoned(self: baml.time.PlainDateTime, timezon
     throw
 
   L14:
-    load_var timezone
-    init_instance baml.time.UnknownTimezoneError .timezone
-    throw
-
-  L15:
     load_var self
     load_field ._nanoseconds
     load_var timezone
@@ -5504,14 +5563,63 @@ function baml.time.PlainDateTime.to_zoned(self: baml.time.PlainDateTime, timezon
     load_const null
     init_instance baml.time.ZonedDateTime ._nanoseconds, ._offset_ns, ._iana
 
-  L16:
+  L15:
     return
 }
 
 function baml.time.PlainDateTime.year(self: baml.time.PlainDateTime) -> int {
 }
 
-function baml.time.PlainTime.from_components(hour: int, minute: int | null, second: int | null, millisecond: int | null, microsecond: int | null, nanosecond: int | null) -> baml.time.PlainTime {
+function baml.time.PlainTime._from_components(hour: int, minute: int, second: int, millisecond: int, microsecond: int, nanosecond: int) -> baml.time.PlainTime {
+}
+
+function baml.time.PlainTime.from_components(hour: int, minute: int, second: int, millisecond: int, microsecond: int, nanosecond: int) -> baml.time.PlainTime {
+    load_var minute
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const 0
+    store_var minute
+
+  L0:
+    load_var second
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L1
+    load_const 0
+    store_var second
+
+  L1:
+    load_var millisecond
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L2
+    load_const 0
+    store_var millisecond
+
+  L2:
+    load_var microsecond
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L3
+    load_const 0
+    store_var microsecond
+
+  L3:
+    load_var nanosecond
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L4
+    load_const 0
+    store_var nanosecond
+
+  L4:
+    load_const null
+    load_var2 1 2
+    load_var2 3 4
+    load_var2 5 6
+    call baml.time.PlainTime._from_components
+    return
 }
 
 function baml.time.PlainTime.from_json(j: baml.json.json) -> baml.time.PlainTime {
@@ -5813,7 +5921,63 @@ function baml.time.ZonedDateTime.day(self: baml.time.ZonedDateTime) -> int {
     return
 }
 
-function baml.time.ZonedDateTime.from_components(timezone: baml.time.TimeZoneOffset | string, year: int, month: int, day: int, hour: int | null, minute: int | null, second: int | null, millisecond: int | null, microsecond: int | null, nanosecond: int | null, disambiguation: "compatible" | "earlier" | "later" | "reject" | null) -> baml.time.ZonedDateTime {
+function baml.time.ZonedDateTime.from_components(timezone: baml.time.TimeZoneOffset | string, year: int, month: int, day: int, hour: int, minute: int, second: int, millisecond: int, microsecond: int, nanosecond: int, disambiguation: "compatible" | "earlier" | "later" | "reject") -> baml.time.ZonedDateTime {
+    load_var hour
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const 0
+    store_var hour
+
+  L0:
+    load_var minute
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L1
+    load_const 0
+    store_var minute
+
+  L1:
+    load_var second
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L2
+    load_const 0
+    store_var second
+
+  L2:
+    load_var millisecond
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L3
+    load_const 0
+    store_var millisecond
+
+  L3:
+    load_var microsecond
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L4
+    load_const 0
+    store_var microsecond
+
+  L4:
+    load_var nanosecond
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L5
+    load_const 0
+    store_var nanosecond
+
+  L5:
+    load_var disambiguation
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L6
+    load_const "compatible"
+    store_var disambiguation
+
+  L6:
     load_const null
     load_var2 2 3
     load_var2 4 5

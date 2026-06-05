@@ -10,22 +10,38 @@ class PlainDateTime {
     /// This is a civil quantity, not an absolute time.
     _nanoseconds: bigint;
 
-    /// Creates a `PlainDateTime` from calendar/clock components. Omitted
-    /// clock components default to zero. `month` and `day` are 1-based.
+    /// Creates a `PlainDateTime` from calendar/clock components. `month` and
+    /// `day` are 1-based. Defaulted clock components are passed by name:
+    /// `PlainDateTime.from_components(1979, 5, 27, hour = 7)`.
     ///
     /// Throws `root.errors.InvalidArgument` if a component is out of range
     /// (e.g. month 13, Feb 30) or the year is outside ±9999.
-    //baml:mut_vm
     function from_components(
         year: int,
         month: int,
         day: int,
-        hour: int?,
-        minute: int?,
-        second: int?,
-        millisecond: int?,
-        microsecond: int?,
-        nanosecond: int?,
+        hour: int = 0,
+        minute: int = 0,
+        second: int = 0,
+        millisecond: int = 0,
+        microsecond: int = 0,
+        nanosecond: int = 0,
+    ) -> PlainDateTime throws root.errors.InvalidArgument {
+        PlainDateTime._from_components(year, month, day, hour, minute, second, millisecond, microsecond, nanosecond)
+    }
+    /// Internal: all-required native behind `from_components` (native
+    /// functions have no BAML prologue to fill defaulted parameters).
+    //baml:mut_vm
+    function _from_components(
+        year: int,
+        month: int,
+        day: int,
+        hour: int,
+        minute: int,
+        second: int,
+        millisecond: int,
+        microsecond: int,
+        nanosecond: int,
     ) -> PlainDateTime throws root.errors.InvalidArgument {
         $rust_function
     }
@@ -49,11 +65,11 @@ class PlainDateTime {
     /// Locates this wall-clock reading in a timezone, producing an absolute
     /// time. With a `TimeZoneOffset` the conversion is exact. With an IANA
     /// identifier, DST gaps/overlaps are resolved per `disambiguation`
-    /// (defaults to `"compatible"`; see `Disambiguation`).
+    /// (passed by name: `dt.to_zoned(tz, disambiguation = "earlier")`).
     function to_zoned(
         self,
         timezone: TimeZoneOffset | string,
-        disambiguation: Disambiguation?,
+        disambiguation: Disambiguation = "compatible",
     ) -> ZonedDateTime throws UnknownTimezoneError | AmbiguousTimeError | root.errors.Io {
         match (timezone) {
             TimeZoneOffset => ZonedDateTime {
@@ -61,7 +77,7 @@ class PlainDateTime {
                 _offset_ns: timezone._nanoseconds,
                 _iana: null,
             },
-            string => if ((disambiguation ?? "compatible") == "reject") {
+            string => if (disambiguation == "reject") {
                 // "reject" is implemented as: resolve both sides of any DST
                 // gap/overlap and require them to agree.
                 match (_tz_to_instant(timezone, self._nanoseconds, "earlier")) {
@@ -77,7 +93,7 @@ class PlainDateTime {
                     },
                 }
             } else {
-                match (_tz_to_instant(timezone, self._nanoseconds, disambiguation ?? "compatible")) {
+                match (_tz_to_instant(timezone, self._nanoseconds, disambiguation)) {
                     null => throw UnknownTimezoneError { timezone: timezone },
                     // `?? 0n` is unreachable: the null arm already matched.
                     let resolved => ZonedDateTime { _nanoseconds: resolved ?? 0n, _offset_ns: null, _iana: timezone },

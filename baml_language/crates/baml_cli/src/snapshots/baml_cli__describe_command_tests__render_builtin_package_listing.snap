@@ -154,7 +154,7 @@ function         time.system_timezone             <builtin>/baml/ns_time/timezon
 function         time._tz_offset_at               <builtin>/baml/ns_time/timezone.baml:99
 function         time._tz_to_instant              <builtin>/baml/ns_time/timezone.baml:111
 class            time.ZonedDateTime               <builtin>/baml/ns_time/zoneddatetime.baml:11
-function         time._format_zoned               <builtin>/baml/ns_time/zoneddatetime.baml:197
+function         time._format_zoned               <builtin>/baml/ns_time/zoneddatetime.baml:199
 type             toml.Item                        <builtin>/baml/ns_toml/toml.baml:5
 class            toml.Table                       <builtin>/baml/ns_toml/toml.baml:7
 function         toml.item_to_json                <builtin>/baml/ns_toml/toml.baml:46

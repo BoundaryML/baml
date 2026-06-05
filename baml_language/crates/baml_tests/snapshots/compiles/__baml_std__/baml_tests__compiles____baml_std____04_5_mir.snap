@@ -8289,6 +8289,8 @@ fn baml.time.Instant.to_timestamp_seconds(self: baml.time.Instant) -> bigint {
     }
 }
 
+fn baml.time.PlainDate._to_plain_datetime = builtin(vm)
+
 fn baml.time.PlainDate.day = builtin(vm)
 
 fn baml.time.PlainDate.from_components = builtin(vm)
@@ -8399,15 +8401,127 @@ fn baml.time.PlainDate.to_json(self: baml.time.PlainDate) -> string {
     }
 }
 
-fn baml.time.PlainDate.to_plain_datetime = builtin(vm)
+fn baml.time.PlainDate.to_plain_datetime(self: baml.time.PlainDate, time: baml.time.PlainTime | null) -> baml.time.PlainDateTime {
+    // Locals:
+    let _0: baml.time.PlainDateTime // _0 // return
+    let _1: baml.time.PlainDate // self // param
+    let _2: baml.time.PlainTime | null // time // param
+    let _3: bool
+
+    bb0: {
+        _3 = copy _2 == const <omitted>;
+        branch copy _3 -> [bb1, bb2];
+    }
+
+    bb1: {
+        _2 = const null;
+        goto -> bb2;
+    }
+
+    bb2: {
+        _0 = call const fn baml.time.PlainDate._to_plain_datetime(copy _1, copy _2) -> [bb3];
+    }
+
+    bb3: {
+        return;
+    }
+}
 
 fn baml.time.PlainDate.to_string = builtin(vm)
 
 fn baml.time.PlainDate.year = builtin(vm)
 
+fn baml.time.PlainDateTime._from_components = builtin(vm)
+
 fn baml.time.PlainDateTime.day = builtin(vm)
 
-fn baml.time.PlainDateTime.from_components = builtin(vm)
+fn baml.time.PlainDateTime.from_components(year: int, month: int, day: int, hour: int, minute: int, second: int, millisecond: int, microsecond: int, nanosecond: int) -> baml.time.PlainDateTime {
+    // Locals:
+    let _0: baml.time.PlainDateTime // _0 // return
+    let _1: int // year // param
+    let _2: int // month // param
+    let _3: int // day // param
+    let _4: int // hour // param
+    let _5: int // minute // param
+    let _6: int // second // param
+    let _7: int // millisecond // param
+    let _8: int // microsecond // param
+    let _9: int // nanosecond // param
+    let _10: bool
+    let _11: bool
+    let _12: bool
+    let _13: bool
+    let _14: bool
+    let _15: bool
+
+    bb0: {
+        _10 = copy _4 == const <omitted>;
+        branch copy _10 -> [bb1, bb2];
+    }
+
+    bb1: {
+        _4 = const 0_i64;
+        goto -> bb2;
+    }
+
+    bb2: {
+        _11 = copy _5 == const <omitted>;
+        branch copy _11 -> [bb3, bb4];
+    }
+
+    bb3: {
+        _5 = const 0_i64;
+        goto -> bb4;
+    }
+
+    bb4: {
+        _12 = copy _6 == const <omitted>;
+        branch copy _12 -> [bb5, bb6];
+    }
+
+    bb5: {
+        _6 = const 0_i64;
+        goto -> bb6;
+    }
+
+    bb6: {
+        _13 = copy _7 == const <omitted>;
+        branch copy _13 -> [bb7, bb8];
+    }
+
+    bb7: {
+        _7 = const 0_i64;
+        goto -> bb8;
+    }
+
+    bb8: {
+        _14 = copy _8 == const <omitted>;
+        branch copy _14 -> [bb9, bb10];
+    }
+
+    bb9: {
+        _8 = const 0_i64;
+        goto -> bb10;
+    }
+
+    bb10: {
+        _15 = copy _9 == const <omitted>;
+        branch copy _15 -> [bb11, bb12];
+    }
+
+    bb11: {
+        _9 = const 0_i64;
+        goto -> bb12;
+    }
+
+    bb12: {
+        _0 = call const fn baml.time.PlainDateTime._from_components(const null, copy _1, copy _2, copy _3, copy _4, copy _5, copy _6, copy _7, copy _8, copy _9) -> [bb13];
+    }
+
+    bb13: {
+        return;
+    }
+}
 
 fn baml.time.PlainDateTime.from_json(j: baml.json.json) -> baml.time.PlainDateTime {
     // Locals:
@@ -8591,193 +8705,252 @@ fn baml.time.PlainDateTime.to_plain_time = builtin(vm)
 
 fn baml.time.PlainDateTime.to_string = builtin(vm)
 
-fn baml.time.PlainDateTime.to_zoned(self: baml.time.PlainDateTime, timezone: baml.time.TimeZoneOffset | string, disambiguation: "compatible" | "earlier" | "later" | "reject" | null) -> baml.time.ZonedDateTime {
+fn baml.time.PlainDateTime.to_zoned(self: baml.time.PlainDateTime, timezone: baml.time.TimeZoneOffset | string, disambiguation: "compatible" | "earlier" | "later" | "reject") -> baml.time.ZonedDateTime {
     // Locals:
     let _0: baml.time.ZonedDateTime // _0 // return
     let _1: baml.time.PlainDateTime // self // param
     let _2: baml.time.TimeZoneOffset | string // timezone // param
-    let _3: "compatible" | "earlier" | "later" | "reject" | null // disambiguation // param
+    let _3: "compatible" | "earlier" | "later" | "reject" // disambiguation // param
     let _4: bool
-    let _5: bigint
+    let _5: bool
     let _6: bigint
-    let _7: int
+    let _7: bigint
     let _8: int
-    let _9: bool
-    let _10: "compatible" | "earlier" | "later" | "reject"
-    let _11: bool
-    let _12: bigint | null
-    let _13: bigint
-    let _14: bool
-    let _15: baml.time.UnknownTimezoneError
-    let _16: bigint | null // earlier
-    let _17: bigint | null
-    let _18: bigint
-    let _19: bool
-    let _20: baml.time.UnknownTimezoneError
-    let _21: bigint | null // later
-    let _22: bool
+    let _9: int
+    let _10: bool
+    let _11: bigint | null
+    let _12: bigint
+    let _13: bool
+    let _14: baml.time.UnknownTimezoneError
+    let _15: bigint | null // earlier
+    let _16: bigint | null
+    let _17: bigint
+    let _18: bool
+    let _19: baml.time.UnknownTimezoneError
+    let _20: bigint | null // later
+    let _21: bool
+    let _22: bigint | null
     let _23: bigint | null
-    let _24: bigint | null
-    let _25: bigint
-    let _26: bigint | null
-    let _27: bool
-    let _28: baml.time.AmbiguousTimeError
-    let _29: string
-    let _30: bigint | null
-    let _31: bigint
-    let _32: "compatible" | "earlier" | "later" | "reject"
-    let _33: bool
-    let _34: bool
-    let _35: baml.time.UnknownTimezoneError
-    let _36: bigint | null // resolved
-    let _37: bigint
-    let _38: bigint | null
-    let _39: bool
+    let _24: bigint
+    let _25: bigint | null
+    let _26: bool
+    let _27: baml.time.AmbiguousTimeError
+    let _28: string
+    let _29: bigint | null
+    let _30: bigint
+    let _31: bool
+    let _32: baml.time.UnknownTimezoneError
+    let _33: bigint | null // resolved
+    let _34: bigint
+    let _35: bigint | null
+    let _36: bool
 
     bb0: {
-        _4 = is_type(copy _2, baml.time.TimeZoneOffset);
-        branch copy _4 -> [bb23, bb1];
+        _4 = copy _3 == const <omitted>;
+        branch copy _4 -> [bb1, bb2];
     }
 
     bb1: {
-        _10 = copy _3;
-        _11 = copy _3 == const null;
-        branch copy _11 -> [bb2, bb3];
+        _3 = const "compatible";
+        goto -> bb2;
     }
 
     bb2: {
-        _10 = const "compatible";
-        goto -> bb3;
+        _5 = is_type(copy _2, baml.time.TimeZoneOffset);
+        branch copy _5 -> [bb21, bb3];
     }
 
     bb3: {
-        _9 = copy _10 == const "reject";
-        branch copy _9 -> [bb12, bb4];
+        _10 = copy _3 == const "reject";
+        branch copy _10 -> [bb10, bb4];
     }
 
     bb4: {
-        _31 = copy _1.0;
-        _32 = copy _3;
-        _33 = copy _3 == const null;
-        branch copy _33 -> [bb5, bb6];
+        _30 = copy _1.0;
+        _29 = sys_op const fn baml.time._tz_to_instant(copy _2, copy _30, copy _3) -> bb5;
     }
 
     bb5: {
-        _32 = const "compatible";
-        goto -> bb6;
+        _31 = copy _29 == const null;
+        branch copy _31 -> [bb9, bb6];
     }
 
     bb6: {
-        _30 = sys_op const fn baml.time._tz_to_instant(copy _2, copy _31, copy _32) -> bb7;
+        _33 = copy _29;
+        _35 = copy _33;
+        _34 = copy _35;
+        _36 = copy _35 == const null;
+        branch copy _36 -> [bb7, bb8];
     }
 
     bb7: {
-        _34 = copy _30 == const null;
-        branch copy _34 -> [bb11, bb8];
+        _34 = const 0n;
+        goto -> bb8;
     }
 
     bb8: {
-        _36 = copy _30;
-        _38 = copy _36;
-        _37 = copy _38;
-        _39 = copy _38 == const null;
-        branch copy _39 -> [bb9, bb10];
+        _0 = baml.time.ZonedDateTime { copy _34, const null, copy _2 };
+        goto -> bb22;
     }
 
     bb9: {
-        _37 = const 0n;
-        goto -> bb10;
+        _32 = baml.time.UnknownTimezoneError { copy _2 };
+        throw copy _32;
     }
 
     bb10: {
-        _0 = baml.time.ZonedDateTime { copy _37, const null, copy _2 };
-        goto -> bb24;
+        _12 = copy _1.0;
+        _11 = sys_op const fn baml.time._tz_to_instant(copy _2, copy _12, const "earlier") -> bb11;
     }
 
     bb11: {
-        _35 = baml.time.UnknownTimezoneError { copy _2 };
-        throw copy _35;
+        _13 = copy _11 == const null;
+        branch copy _13 -> [bb20, bb12];
     }
 
     bb12: {
-        _13 = copy _1.0;
-        _12 = sys_op const fn baml.time._tz_to_instant(copy _2, copy _13, const "earlier") -> bb13;
+        _15 = copy _11;
+        _17 = copy _1.0;
+        _16 = sys_op const fn baml.time._tz_to_instant(copy _2, copy _17, const "later") -> bb13;
     }
 
     bb13: {
-        _14 = copy _12 == const null;
-        branch copy _14 -> [bb22, bb14];
+        _18 = copy _16 == const null;
+        branch copy _18 -> [bb19, bb14];
     }
 
     bb14: {
-        _16 = copy _12;
-        _18 = copy _1.0;
-        _17 = sys_op const fn baml.time._tz_to_instant(copy _2, copy _18, const "later") -> bb15;
+        _20 = copy _16;
+        _22 = copy _15;
+        _23 = copy _20;
+        _21 = copy _22 == copy _23;
+        branch copy _21 -> [bb16, bb15];
     }
 
     bb15: {
-        _19 = copy _17 == const null;
-        branch copy _19 -> [bb21, bb16];
+        _28 = const "wall-clock time is ambiguous or skipped in timezone " + copy _2;
+        _27 = baml.time.AmbiguousTimeError { copy _28 };
+        throw copy _27;
     }
 
     bb16: {
-        _21 = copy _17;
-        _23 = copy _16;
-        _24 = copy _21;
-        _22 = copy _23 == copy _24;
-        branch copy _22 -> [bb18, bb17];
+        _25 = copy _15;
+        _24 = copy _25;
+        _26 = copy _25 == const null;
+        branch copy _26 -> [bb17, bb18];
     }
 
     bb17: {
-        _29 = const "wall-clock time is ambiguous or skipped in timezone " + copy _2;
-        _28 = baml.time.AmbiguousTimeError { copy _29 };
-        throw copy _28;
+        _24 = const 0n;
+        goto -> bb18;
     }
 
     bb18: {
-        _26 = copy _16;
-        _25 = copy _26;
-        _27 = copy _26 == const null;
-        branch copy _27 -> [bb19, bb20];
+        _0 = baml.time.ZonedDateTime { copy _24, const null, copy _2 };
+        goto -> bb22;
     }
 
     bb19: {
-        _25 = const 0n;
-        goto -> bb20;
+        _19 = baml.time.UnknownTimezoneError { copy _2 };
+        throw copy _19;
     }
 
     bb20: {
-        _0 = baml.time.ZonedDateTime { copy _25, const null, copy _2 };
-        goto -> bb24;
+        _14 = baml.time.UnknownTimezoneError { copy _2 };
+        throw copy _14;
     }
 
     bb21: {
-        _20 = baml.time.UnknownTimezoneError { copy _2 };
-        throw copy _20;
+        _7 = copy _1.0;
+        _8 = copy _2.0;
+        _6 = copy _7 - copy _8;
+        _9 = copy _2.0;
+        _0 = baml.time.ZonedDateTime { copy _6, copy _9, const null };
+        goto -> bb22;
     }
 
     bb22: {
-        _15 = baml.time.UnknownTimezoneError { copy _2 };
-        throw copy _15;
-    }
-
-    bb23: {
-        _6 = copy _1.0;
-        _7 = copy _2.0;
-        _5 = copy _6 - copy _7;
-        _8 = copy _2.0;
-        _0 = baml.time.ZonedDateTime { copy _5, copy _8, const null };
-        goto -> bb24;
-    }
-
-    bb24: {
         return;
     }
 }
 
 fn baml.time.PlainDateTime.year = builtin(vm)
 
-fn baml.time.PlainTime.from_components = builtin(vm)
+fn baml.time.PlainTime._from_components = builtin(vm)
+
+fn baml.time.PlainTime.from_components(hour: int, minute: int, second: int, millisecond: int, microsecond: int, nanosecond: int) -> baml.time.PlainTime {
+    // Locals:
+    let _0: baml.time.PlainTime // _0 // return
+    let _1: int // hour // param
+    let _2: int // minute // param
+    let _3: int // second // param
+    let _4: int // millisecond // param
+    let _5: int // microsecond // param
+    let _6: int // nanosecond // param
+    let _7: bool
+    let _8: bool
+    let _9: bool
+    let _10: bool
+    let _11: bool
+
+    bb0: {
+        _7 = copy _2 == const <omitted>;
+        branch copy _7 -> [bb1, bb2];
+    }
+
+    bb1: {
+        _2 = const 0_i64;
+        goto -> bb2;
+    }
+
+    bb2: {
+        _8 = copy _3 == const <omitted>;
+        branch copy _8 -> [bb3, bb4];
+    }
+
+    bb3: {
+        _3 = const 0_i64;
+        goto -> bb4;
+    }
+
+    bb4: {
+        _9 = copy _4 == const <omitted>;
+        branch copy _9 -> [bb5, bb6];
+    }
+
+    bb5: {
+        _4 = const 0_i64;
+        goto -> bb6;
+    }
+
+    bb6: {
+        _10 = copy _5 == const <omitted>;
+        branch copy _10 -> [bb7, bb8];
+    }
+
+    bb7: {
+        _5 = const 0_i64;
+        goto -> bb8;
+    }
+
+    bb8: {
+        _11 = copy _6 == const <omitted>;
+        branch copy _11 -> [bb9, bb10];
+    }
+
+    bb9: {
+        _6 = const 0_i64;
+        goto -> bb10;
+    }
+
+    bb10: {
+        _0 = call const fn baml.time.PlainTime._from_components(const null, copy _1, copy _2, copy _3, copy _4, copy _5, copy _6) -> [bb11];
+    }
+
+    bb11: {
+        return;
+    }
+}
 
 fn baml.time.PlainTime.from_json(j: baml.json.json) -> baml.time.PlainTime {
     // Locals:
@@ -9359,31 +9532,108 @@ fn baml.time.ZonedDateTime.day(self: baml.time.ZonedDateTime) -> int {
     }
 }
 
-fn baml.time.ZonedDateTime.from_components(timezone: baml.time.TimeZoneOffset | string, year: int, month: int, day: int, hour: int | null, minute: int | null, second: int | null, millisecond: int | null, microsecond: int | null, nanosecond: int | null, disambiguation: "compatible" | "earlier" | "later" | "reject" | null) -> baml.time.ZonedDateTime {
+fn baml.time.ZonedDateTime.from_components(timezone: baml.time.TimeZoneOffset | string, year: int, month: int, day: int, hour: int, minute: int, second: int, millisecond: int, microsecond: int, nanosecond: int, disambiguation: "compatible" | "earlier" | "later" | "reject") -> baml.time.ZonedDateTime {
     // Locals:
     let _0: baml.time.ZonedDateTime // _0 // return
     let _1: baml.time.TimeZoneOffset | string // timezone // param
     let _2: int // year // param
     let _3: int // month // param
     let _4: int // day // param
-    let _5: int | null // hour // param
-    let _6: int | null // minute // param
-    let _7: int | null // second // param
-    let _8: int | null // millisecond // param
-    let _9: int | null // microsecond // param
-    let _10: int | null // nanosecond // param
-    let _11: "compatible" | "earlier" | "later" | "reject" | null // disambiguation // param
-    let _12: baml.time.PlainDateTime
+    let _5: int // hour // param
+    let _6: int // minute // param
+    let _7: int // second // param
+    let _8: int // millisecond // param
+    let _9: int // microsecond // param
+    let _10: int // nanosecond // param
+    let _11: "compatible" | "earlier" | "later" | "reject" // disambiguation // param
+    let _12: bool
+    let _13: bool
+    let _14: bool
+    let _15: bool
+    let _16: bool
+    let _17: bool
+    let _18: bool
+    let _19: baml.time.PlainDateTime
 
     bb0: {
-        _12 = call const fn baml.time.PlainDateTime.from_components(const null, copy _2, copy _3, copy _4, copy _5, copy _6, copy _7, copy _8, copy _9, copy _10) -> [bb1];
+        _12 = copy _5 == const <omitted>;
+        branch copy _12 -> [bb1, bb2];
     }
 
     bb1: {
-        _0 = call const fn baml.time.PlainDateTime.to_zoned(copy _12, copy _1, copy _11) -> [bb2];
+        _5 = const 0_i64;
+        goto -> bb2;
     }
 
     bb2: {
+        _13 = copy _6 == const <omitted>;
+        branch copy _13 -> [bb3, bb4];
+    }
+
+    bb3: {
+        _6 = const 0_i64;
+        goto -> bb4;
+    }
+
+    bb4: {
+        _14 = copy _7 == const <omitted>;
+        branch copy _14 -> [bb5, bb6];
+    }
+
+    bb5: {
+        _7 = const 0_i64;
+        goto -> bb6;
+    }
+
+    bb6: {
+        _15 = copy _8 == const <omitted>;
+        branch copy _15 -> [bb7, bb8];
+    }
+
+    bb7: {
+        _8 = const 0_i64;
+        goto -> bb8;
+    }
+
+    bb8: {
+        _16 = copy _9 == const <omitted>;
+        branch copy _16 -> [bb9, bb10];
+    }
+
+    bb9: {
+        _9 = const 0_i64;
+        goto -> bb10;
+    }
+
+    bb10: {
+        _17 = copy _10 == const <omitted>;
+        branch copy _17 -> [bb11, bb12];
+    }
+
+    bb11: {
+        _10 = const 0_i64;
+        goto -> bb12;
+    }
+
+    bb12: {
+        _18 = copy _11 == const <omitted>;
+        branch copy _18 -> [bb13, bb14];
+    }
+
+    bb13: {
+        _11 = const "compatible";
+        goto -> bb14;
+    }
+
+    bb14: {
+        _19 = call const fn baml.time.PlainDateTime.from_components(const null, copy _2, copy _3, copy _4, copy _5, copy _6, copy _7, copy _8, copy _9, copy _10) -> [bb15];
+    }
+
+    bb15: {
+        _0 = call const fn baml.time.PlainDateTime.to_zoned(copy _19, copy _1, copy _11) -> [bb16];
+    }
+
+    bb16: {
         return;
     }
 }

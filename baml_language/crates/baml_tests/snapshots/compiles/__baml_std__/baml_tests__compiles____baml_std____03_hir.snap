@@ -1220,6 +1220,7 @@ function baml.time.to_timestamp_seconds(self: ?) -> bigint  [expr] {
 class baml.time.PlainDate {
   _days: int
 }
+function baml.time._to_plain_datetime(self: ?, time: PlainTime?) -> PlainDateTime  [builtin]
 function baml.time.day(self: ?) -> int  [builtin]
 function baml.time.from_components(year: int, month: int, day: int) -> baml.time.PlainDate  [builtin]
 function baml.time.from_json(j: baml.json.json) -> baml.time.PlainDate  [expr] {
@@ -1230,7 +1231,9 @@ function baml.time.parse(s: string) -> baml.time.PlainDate  [builtin]
 function baml.time.to_json(self: ?) -> string  [expr] {
   {  } self.to_string() catch (_) { root.errors.InvalidArgument { message: message } => throw root.json.JsonSerializationError { message: message, path: "" } }
 }
-function baml.time.to_plain_datetime(self: ?, time: PlainTime?) -> PlainDateTime  [builtin]
+function baml.time.to_plain_datetime(self: ?, time: PlainTime? = null) -> PlainDateTime  [expr] {
+  {  } self._to_plain_datetime(time)
+}
 function baml.time.to_string(self: ?) -> string  [builtin]
 function baml.time.year(self: ?) -> int  [builtin]
 
@@ -1238,8 +1241,11 @@ function baml.time.year(self: ?) -> int  [builtin]
 class baml.time.PlainDateTime {
   _nanoseconds: bigint
 }
+function baml.time._from_components(year: int, month: int, day: int, hour: int, minute: int, second: int, millisecond: int, microsecond: int, nanosecond: int) -> baml.time.PlainDateTime  [builtin]
 function baml.time.day(self: ?) -> int  [builtin]
-function baml.time.from_components(year: int, month: int, day: int, hour: int?, minute: int?, second: int?, millisecond: int?, microsecond: int?, nanosecond: int?) -> baml.time.PlainDateTime  [builtin]
+function baml.time.from_components(year: int, month: int, day: int, hour: int = 0, minute: int = 0, second: int = 0, millisecond: int = 0, microsecond: int = 0, nanosecond: int = 0) -> baml.time.PlainDateTime  [expr] {
+  {  } PlainDateTime._from_components(year, month, day, hour, minute, second, millisecond, microsecond, nanosecond)
+}
 function baml.time.from_json(j: baml.json.json) -> baml.time.PlainDateTime  [expr] {
   {  } match (j) { string => PlainDateTime.parse(j) catch (_) { root.errors.ParseError { message: message } => throw root.json.JsonDecodeError { message: message, path: "" } }, _ => throw root.json.JsonDecodeError { message: "Expected zoneless..." } }
 }
@@ -1261,8 +1267,8 @@ function baml.time.to_json(self: ?) -> string  [expr] {
 function baml.time.to_plain_date(self: ?) -> PlainDate  [builtin]
 function baml.time.to_plain_time(self: ?) -> PlainTime  [builtin]
 function baml.time.to_string(self: ?) -> string  [builtin]
-function baml.time.to_zoned(self: ?, timezone: TimeZoneOffset | string, disambiguation: Disambiguation?) -> ZonedDateTime  [expr] {
-  {  } match (timezone) { TimeZoneOffset => ZonedDateTime { _nanoseconds: self._nanoseconds Sub timezone._nanoseconds, _offset_ns: timezone._nanoseconds, _iana: null }, string => if (disambiguation NullCoalesce "compatible" Eq "reject") {  } match (_tz_to_instant(timezone, self._nanoseconds, "earlier")) { null => throw UnknownTimezoneError { timezone: timezone }, earlier => match (_tz_to_instant(timezone, self._nanoseconds, "later")) { null => throw UnknownTimezoneError { timezone: timezone }, later => if (earlier Eq later) {  } ZonedDateTime { _nanoseconds: earlier NullCoalesce 0n, _offset_ns: null, _iana: timezone } else { throw AmbiguousTimeError { message: "wall-clock time i..." Add timezone } } } } else {  } match (_tz_to_instant(timezone, self._nanoseconds, disambiguation NullCoalesce "compatible")) { null => throw UnknownTimezoneError { timezone: timezone }, resolved => ZonedDateTime { _nanoseconds: resolved NullCoalesce 0n, _offset_ns: null, _iana: timezone } } }
+function baml.time.to_zoned(self: ?, timezone: TimeZoneOffset | string, disambiguation: Disambiguation = "compatible") -> ZonedDateTime  [expr] {
+  {  } match (timezone) { TimeZoneOffset => ZonedDateTime { _nanoseconds: self._nanoseconds Sub timezone._nanoseconds, _offset_ns: timezone._nanoseconds, _iana: null }, string => if (disambiguation Eq "reject") {  } match (_tz_to_instant(timezone, self._nanoseconds, "earlier")) { null => throw UnknownTimezoneError { timezone: timezone }, earlier => match (_tz_to_instant(timezone, self._nanoseconds, "later")) { null => throw UnknownTimezoneError { timezone: timezone }, later => if (earlier Eq later) {  } ZonedDateTime { _nanoseconds: earlier NullCoalesce 0n, _offset_ns: null, _iana: timezone } else { throw AmbiguousTimeError { message: "wall-clock time i..." Add timezone } } } } else {  } match (_tz_to_instant(timezone, self._nanoseconds, disambiguation)) { null => throw UnknownTimezoneError { timezone: timezone }, resolved => ZonedDateTime { _nanoseconds: resolved NullCoalesce 0n, _offset_ns: null, _iana: timezone } } }
 }
 function baml.time.year(self: ?) -> int  [builtin]
 
@@ -1270,7 +1276,10 @@ function baml.time.year(self: ?) -> int  [builtin]
 class baml.time.PlainTime {
   _nanoseconds: int
 }
-function baml.time.from_components(hour: int, minute: int?, second: int?, millisecond: int?, microsecond: int?, nanosecond: int?) -> baml.time.PlainTime  [builtin]
+function baml.time._from_components(hour: int, minute: int, second: int, millisecond: int, microsecond: int, nanosecond: int) -> baml.time.PlainTime  [builtin]
+function baml.time.from_components(hour: int, minute: int = 0, second: int = 0, millisecond: int = 0, microsecond: int = 0, nanosecond: int = 0) -> baml.time.PlainTime  [expr] {
+  {  } PlainTime._from_components(hour, minute, second, millisecond, microsecond, nanosecond)
+}
 function baml.time.from_json(j: baml.json.json) -> baml.time.PlainTime  [expr] {
   {  } match (j) { string => PlainTime.parse(j) catch (_) { root.errors.ParseError { message: message } => throw root.json.JsonDecodeError { message: message, path: "" } }, _ => throw root.json.JsonDecodeError { message: "Expected ISO 8601..." } }
 }
@@ -1291,7 +1300,7 @@ function baml.time.to_json(self: ?) -> string  [expr] {
   {  } self.to_string()
 }
 function baml.time.to_plain_datetime(self: ?, date: PlainDate) -> PlainDateTime  [expr] {
-  {  } date.to_plain_datetime(self)
+  {  } date.to_plain_datetime(time = self)
 }
 function baml.time.to_string(self: ?) -> string  [builtin]
 
@@ -1360,8 +1369,8 @@ function baml.time._format_zoned(epoch_ns: bigint, offset_ns: int, iana: string?
 function baml.time.day(self: ?) -> int  [expr] {
   {  } self.to_plain().day()
 }
-function baml.time.from_components(timezone: TimeZoneOffset | string, year: int, month: int, day: int, hour: int?, minute: int?, second: int?, millisecond: int?, microsecond: int?, nanosecond: int?, disambiguation: Disambiguation?) -> baml.time.ZonedDateTime  [expr] {
-  {  } PlainDateTime.from_components(year, month, day, hour, minute, second, millisecond, microsecond, nanosecond).to_zoned(timezone, disambiguation)
+function baml.time.from_components(timezone: TimeZoneOffset | string, year: int, month: int, day: int, hour: int = 0, minute: int = 0, second: int = 0, millisecond: int = 0, microsecond: int = 0, nanosecond: int = 0, disambiguation: Disambiguation = "compatible") -> baml.time.ZonedDateTime  [expr] {
+  {  } PlainDateTime.from_components(year, month, day, hour = hour, minute = minute, second = second, millisecond = millisecond, microsecond = microsecond, nanosecond = nanosecond).to_zoned(timezone, disambiguation = disambiguation)
 }
 function baml.time.from_instant(instant: Instant, timezone: TimeZoneOffset | string) -> baml.time.ZonedDateTime  [expr] {
   {  } match (timezone) { TimeZoneOffset => baml.time.ZonedDateTime { _nanoseconds: instant._nanoseconds, _offset_ns: timezone._nanoseconds, _iana: null }, string => baml.time.ZonedDateTime { _nanoseconds: instant._nanoseconds, _offset_ns: null, _iana: timezone } }

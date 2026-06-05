@@ -54,13 +54,13 @@ test "plain_date_rejects_invalid" {
 function plain_date_to_plain_datetime_with_time() -> string {
     let d = baml.time.PlainDate.parse("1979-05-27");
     let t = baml.time.PlainTime.parse("07:32:00");
-    d.to_plain_datetime(t).to_string()
+    d.to_plain_datetime(time = t).to_string()
 }
 test "plain_date_to_plain_datetime" {
     assert.equal(plain_date_to_plain_datetime_with_time(), "1979-05-27T07:32:00");
     // Omitted time defaults to midnight.
     assert.equal(
-        baml.time.PlainDate.parse("1979-05-27").to_plain_datetime(null).to_string(),
+        baml.time.PlainDate.parse("1979-05-27").to_plain_datetime().to_string(),
         "1979-05-27T00:00:00",
     )
 }
@@ -73,7 +73,7 @@ test "plain_time_parse_round_trip_subseconds" {
 
 test "plain_time_from_components_matches_parse" {
     assert.equal(
-        baml.time.PlainTime.from_components(7, 32, 0, 500, null, null).to_string(),
+        baml.time.PlainTime.from_components(7, minute = 32, millisecond = 500).to_string(),
         baml.time.PlainTime.parse("07:32:00.5").to_string(),
     )
 }
@@ -88,7 +88,7 @@ test "plain_time_components" {
 
 test "plain_time_rejects_out_of_range" {
     {
-        baml.time.PlainTime.from_components(24, null, null, null, null, null);
+        baml.time.PlainTime.from_components(24);
         baml.sys.panic("expected PlainTime.from_components(24, …) to throw")
     } catch (e) {
         baml.errors.InvalidArgument => null
@@ -118,7 +118,7 @@ test "plain_datetime_components_and_projections" {
 
 // Pre-epoch civil values exercise the euclidean day/time split.
 test "plain_datetime_pre_epoch" {
-    let dt = baml.time.PlainDateTime.from_components(1969, 12, 31, 23, 59, 59, null, null, null);
+    let dt = baml.time.PlainDateTime.from_components(1969, 12, 31, hour = 23, minute = 59, second = 59);
     assert.equal(dt.to_string(), "1969-12-31T23:59:59");
     assert.equal(dt.to_plain_date().to_string(), "1969-12-31");
     assert.equal(dt.to_plain_time().to_string(), "23:59:59")
@@ -172,7 +172,7 @@ test "plain_to_zoned_fixed_offset" {
     let dt = baml.time.PlainDateTime.parse("1979-05-27T00:32:00");
     // Locating a wall-clock reading at -07:00 lands 7h later in UTC.
     assert.equal(
-        dt.to_zoned(baml.time.TimeZoneOffset.new(-7, 0), null).to_instant().to_string(),
+        dt.to_zoned(baml.time.TimeZoneOffset.new(-7, 0)).to_instant().to_string(),
         "1979-05-27T07:32:00Z",
     )
 }
@@ -181,7 +181,7 @@ test "zoned_from_components_fixed_offset" {
     assert.equal(
         baml.time.ZonedDateTime.from_components(
             baml.time.TimeZoneOffset.new(5, 30),
-            2026, 3, 18, 13, 4, 27, null, null, null, null
+            2026, 3, 18, hour = 13, minute = 4, second = 27,
         ).to_string(),
         "2026-03-18T13:04:27+05:30",
     )
@@ -233,11 +233,11 @@ test "unknown_timezone_throws" {
 test "to_zoned_dst_gap_disambiguation" {
     let dt = baml.time.PlainDateTime.parse("2011-03-13T02:15:00");
     assert.equal(
-        dt.to_zoned("America/Los_Angeles", null).to_instant().to_string(),
+        dt.to_zoned("America/Los_Angeles").to_instant().to_string(),
         "2011-03-13T10:15:00Z",
     );
     assert.equal(
-        dt.to_zoned("America/Los_Angeles", "earlier").to_instant().to_string(),
+        dt.to_zoned("America/Los_Angeles", disambiguation = "earlier").to_instant().to_string(),
         "2011-03-13T09:15:00Z",
     )
 }
@@ -247,11 +247,11 @@ test "to_zoned_dst_gap_disambiguation" {
 test "to_zoned_dst_overlap_disambiguation" {
     let dt = baml.time.PlainDateTime.parse("2011-11-06T01:15:00");
     assert.equal(
-        dt.to_zoned("America/Los_Angeles", null).to_instant().to_string(),
+        dt.to_zoned("America/Los_Angeles").to_instant().to_string(),
         "2011-11-06T08:15:00Z",
     );
     assert.equal(
-        dt.to_zoned("America/Los_Angeles", "later").to_instant().to_string(),
+        dt.to_zoned("America/Los_Angeles", disambiguation = "later").to_instant().to_string(),
         "2011-11-06T09:15:00Z",
     )
 }
@@ -259,7 +259,7 @@ test "to_zoned_dst_overlap_disambiguation" {
 test "to_zoned_reject_throws_on_ambiguity" {
     {
         baml.time.PlainDateTime.parse("2011-11-06T01:15:00")
-            .to_zoned("America/Los_Angeles", "reject");
+            .to_zoned("America/Los_Angeles", disambiguation = "reject");
         baml.sys.panic("expected to_zoned(…, \"reject\") of an ambiguous time to throw")
     } catch (e) {
         baml.time.AmbiguousTimeError => null
@@ -269,7 +269,7 @@ test "to_zoned_reject_throws_on_ambiguity" {
 test "to_zoned_reject_accepts_unambiguous" {
     assert.equal(
         baml.time.PlainDateTime.parse("2011-11-06T12:00:00")
-            .to_zoned("America/Los_Angeles", "reject")
+            .to_zoned("America/Los_Angeles", disambiguation = "reject")
             .to_instant()
             .to_string(),
         "2011-11-06T20:00:00Z",

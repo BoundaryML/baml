@@ -5,19 +5,33 @@ class PlainTime {
     /// Internal representation: nanoseconds since midnight, in `[0, 24h)`.
     _nanoseconds: int;
 
-    /// Creates a `PlainTime` from clock components. Omitted components
-    /// default to zero.
+    /// Creates a `PlainTime` from clock components. Defaulted components
+    /// are passed by name: `PlainTime.from_components(7, minute = 32)`.
     ///
     /// Throws `root.errors.InvalidArgument` if a component is out of range
     /// (e.g. hour 24, minute 60).
-    //baml:mut_vm
     function from_components(
         hour: int,
-        minute: int?,
-        second: int?,
-        millisecond: int?,
-        microsecond: int?,
-        nanosecond: int?,
+        minute: int = 0,
+        second: int = 0,
+        millisecond: int = 0,
+        microsecond: int = 0,
+        nanosecond: int = 0,
+    ) -> PlainTime throws root.errors.InvalidArgument {
+        PlainTime._from_components(hour, minute, second, millisecond, microsecond, nanosecond)
+    }
+    /// Internal: all-required native behind `from_components`. Native
+    /// functions have no BAML prologue, so defaulted parameters cannot live
+    /// on the native itself (an omitted argument would reach the native
+    /// unfilled).
+    //baml:mut_vm
+    function _from_components(
+        hour: int,
+        minute: int,
+        second: int,
+        millisecond: int,
+        microsecond: int,
+        nanosecond: int,
     ) -> PlainTime throws root.errors.InvalidArgument {
         $rust_function
     }
@@ -34,7 +48,7 @@ class PlainTime {
 
     /// Combines with a date into a `PlainDateTime`.
     function to_plain_datetime(self, date: PlainDate) -> PlainDateTime throws never {
-        date.to_plain_datetime(self)
+        date.to_plain_datetime(time = self)
     }
 
     /// The hour of the day, in `[0, 23]`.
