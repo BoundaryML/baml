@@ -26,12 +26,12 @@ function user.Resume.to_json(self: user.Resume) -> baml.json.json throws baml.js
 function user.Resume.from_json(j: baml.json.json) -> user.Resume throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   Resume { name: baml.json.from_json<string>(baml.json.field(j, "name")) } : user.Resume
 }
-function user.TypeBuilderFn$stream(from_text: string, client: baml.llm.Client = ...) -> baml.llm.Stream<user.Resume$stream?, user.Resume> throws never {
-  baml.llm.stream_llm_function(client, "TypeBuilderFn", map { "from_text": from_text }) : baml.llm.Stream<user.Resume$stream?, user.Resume>
+function user.TypeBuilderFn$stream(from_text: string, client: baml.llm.Client = ...) -> baml.llm.Stream<user.Resume$stream | null, user.Resume> throws never {
+  baml.llm.stream_llm_function(client, "TypeBuilderFn", map { "from_text": from_text }) : baml.llm.Stream<user.Resume$stream | null, user.Resume>
 }
-function user.TypeBuilderFn$parse_stream(sse: baml.http.SseStream, client: baml.llm.Client = ...) -> baml.llm.Stream<user.Resume$stream?, user.Resume> throws never {
-  client.__make_stream(sse, "TypeBuilderFn") : baml.llm.Stream<user.Resume$stream?, user.Resume>
+function user.TypeBuilderFn$parse_stream(sse: baml.http.SseStream, client: baml.llm.Client = ...) -> baml.llm.Stream<user.Resume$stream | null, user.Resume> throws never {
+  client.__make_stream(sse, "TypeBuilderFn") : baml.llm.Stream<user.Resume$stream | null, user.Resume>
 }
 class user.Resume$stream {
-  name: string?
+  name: string | null
 }

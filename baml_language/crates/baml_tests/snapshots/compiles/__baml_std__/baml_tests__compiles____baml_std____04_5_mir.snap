@@ -413,7 +413,7 @@ fn baml.env.get_or_panic(key: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // key // param
-    let _2: string?
+    let _2: string | null
     let _3: bool
     let _4: string
 
@@ -477,7 +477,7 @@ fn baml.errors.HostCallable.from_json(j: baml.json.json) -> baml.errors.HostCall
     let _8: string
     let _9: baml.json.json
     let _10: type
-    let _11: string?
+    let _11: string | null
     let _12: baml.json.json
     let _13: type
     let _14: int
@@ -516,7 +516,7 @@ fn baml.errors.HostCallable.from_json(j: baml.json.json) -> baml.errors.HostCall
     }
 
     bb7: {
-        _13 = load_type(string?);
+        _13 = load_type(string | null);
         _11 = call const fn baml.json.from_json<copy _13>(copy _12) -> [bb8];
     }
 
@@ -546,7 +546,7 @@ fn baml.errors.Timeout.from_json(j: baml.json.json) -> baml.errors.Timeout {
     let _2: string
     let _3: baml.json.json
     let _4: type
-    let _5: int?
+    let _5: int | null
     let _6: baml.json.json
     let _7: type
 
@@ -564,7 +564,7 @@ fn baml.errors.Timeout.from_json(j: baml.json.json) -> baml.errors.Timeout {
     }
 
     bb3: {
-        _7 = load_type(int?);
+        _7 = load_type(int | null);
         _5 = call const fn baml.json.from_json<copy _7>(copy _6) -> [bb4];
     }
 
@@ -936,12 +936,12 @@ fn baml.errors.HostCallable.to_json(self: baml.errors.HostCallable) -> baml.json
     let _8: baml.json.json
     let _9: string
     let _10: baml.errors.HostCallable
-    let _11: baml.json.json?
-    let _12: ((baml.String) -> baml.json.json throws never)?
-    let _13: string?
+    let _11: baml.json.json | null
+    let _12: (baml.String) -> baml.json.json throws never | null
+    let _13: string | null
     let _14: baml.errors.HostCallable
     let _15: bool
-    let _16: string?
+    let _16: string | null
     let _17: baml.errors.HostCallable
     let _18: baml.json.json
     let _19: int
@@ -1007,12 +1007,12 @@ fn baml.errors.Timeout.to_json(self: baml.errors.Timeout) -> baml.json.json {
     let _2: baml.json.json
     let _3: string
     let _4: baml.errors.Timeout
-    let _5: baml.json.json?
-    let _6: ((baml.Int) -> baml.json.json throws never)?
-    let _7: int?
+    let _5: baml.json.json | null
+    let _6: (baml.Int) -> baml.json.json throws never | null
+    let _7: int | null
     let _8: baml.errors.Timeout
     let _9: bool
-    let _10: int?
+    let _10: int | null
     let _11: baml.errors.Timeout
 
     bb0: {
@@ -1725,22 +1725,22 @@ fn baml.glob.ScanOptions.from_json(j: baml.json.json) -> baml.glob.ScanOptions {
     // Locals:
     let _0: baml.glob.ScanOptions // _0 // return
     let _1: baml.json.json // j // param
-    let _2: string?
+    let _2: string | null
     let _3: baml.json.json
     let _4: type
-    let _5: bool?
+    let _5: bool | null
     let _6: baml.json.json
     let _7: type
-    let _8: bool?
+    let _8: bool | null
     let _9: baml.json.json
     let _10: type
-    let _11: bool?
+    let _11: bool | null
     let _12: baml.json.json
     let _13: type
-    let _14: bool?
+    let _14: bool | null
     let _15: baml.json.json
     let _16: type
-    let _17: bool?
+    let _17: bool | null
     let _18: baml.json.json
     let _19: type
 
@@ -1749,7 +1749,7 @@ fn baml.glob.ScanOptions.from_json(j: baml.json.json) -> baml.glob.ScanOptions {
     }
 
     bb1: {
-        _4 = load_type(string?);
+        _4 = load_type(string | null);
         _2 = call const fn baml.json.from_json<copy _4>(copy _3) -> [bb2];
     }
 
@@ -1758,7 +1758,7 @@ fn baml.glob.ScanOptions.from_json(j: baml.json.json) -> baml.glob.ScanOptions {
     }
 
     bb3: {
-        _7 = load_type(bool?);
+        _7 = load_type(bool | null);
         _5 = call const fn baml.json.from_json<copy _7>(copy _6) -> [bb4];
     }
 
@@ -1767,7 +1767,7 @@ fn baml.glob.ScanOptions.from_json(j: baml.json.json) -> baml.glob.ScanOptions {
     }
 
     bb5: {
-        _10 = load_type(bool?);
+        _10 = load_type(bool | null);
         _8 = call const fn baml.json.from_json<copy _10>(copy _9) -> [bb6];
     }
 
@@ -1776,7 +1776,7 @@ fn baml.glob.ScanOptions.from_json(j: baml.json.json) -> baml.glob.ScanOptions {
     }
 
     bb7: {
-        _13 = load_type(bool?);
+        _13 = load_type(bool | null);
         _11 = call const fn baml.json.from_json<copy _13>(copy _12) -> [bb8];
     }
 
@@ -1785,7 +1785,7 @@ fn baml.glob.ScanOptions.from_json(j: baml.json.json) -> baml.glob.ScanOptions {
     }
 
     bb9: {
-        _16 = load_type(bool?);
+        _16 = load_type(bool | null);
         _14 = call const fn baml.json.from_json<copy _16>(copy _15) -> [bb10];
     }
 
@@ -1794,7 +1794,7 @@ fn baml.glob.ScanOptions.from_json(j: baml.json.json) -> baml.glob.ScanOptions {
     }
 
     bb11: {
-        _19 = load_type(bool?);
+        _19 = load_type(bool | null);
         _17 = call const fn baml.json.from_json<copy _19>(copy _18) -> [bb12];
     }
 
@@ -1860,47 +1860,47 @@ fn baml.glob.ScanOptions.to_json(self: baml.glob.ScanOptions) -> baml.json.json 
     // Locals:
     let _0: baml.json.json // _0 // return
     let _1: baml.glob.ScanOptions // self // param
-    let _2: baml.json.json?
-    let _3: ((baml.String) -> baml.json.json throws never)?
-    let _4: string?
+    let _2: baml.json.json | null
+    let _3: (baml.String) -> baml.json.json throws never | null
+    let _4: string | null
     let _5: baml.glob.ScanOptions
     let _6: bool
-    let _7: string?
+    let _7: string | null
     let _8: baml.glob.ScanOptions
-    let _9: baml.json.json?
-    let _10: ((baml.Bool) -> baml.json.json throws never)?
-    let _11: bool?
+    let _9: baml.json.json | null
+    let _10: (baml.Bool) -> baml.json.json throws never | null
+    let _11: bool | null
     let _12: baml.glob.ScanOptions
     let _13: bool
-    let _14: bool?
+    let _14: bool | null
     let _15: baml.glob.ScanOptions
-    let _16: baml.json.json?
-    let _17: ((baml.Bool) -> baml.json.json throws never)?
-    let _18: bool?
+    let _16: baml.json.json | null
+    let _17: (baml.Bool) -> baml.json.json throws never | null
+    let _18: bool | null
     let _19: baml.glob.ScanOptions
     let _20: bool
-    let _21: bool?
+    let _21: bool | null
     let _22: baml.glob.ScanOptions
-    let _23: baml.json.json?
-    let _24: ((baml.Bool) -> baml.json.json throws never)?
-    let _25: bool?
+    let _23: baml.json.json | null
+    let _24: (baml.Bool) -> baml.json.json throws never | null
+    let _25: bool | null
     let _26: baml.glob.ScanOptions
     let _27: bool
-    let _28: bool?
+    let _28: bool | null
     let _29: baml.glob.ScanOptions
-    let _30: baml.json.json?
-    let _31: ((baml.Bool) -> baml.json.json throws never)?
-    let _32: bool?
+    let _30: baml.json.json | null
+    let _31: (baml.Bool) -> baml.json.json throws never | null
+    let _32: bool | null
     let _33: baml.glob.ScanOptions
     let _34: bool
-    let _35: bool?
+    let _35: bool | null
     let _36: baml.glob.ScanOptions
-    let _37: baml.json.json?
-    let _38: ((baml.Bool) -> baml.json.json throws never)?
-    let _39: bool?
+    let _37: baml.json.json | null
+    let _38: (baml.Bool) -> baml.json.json throws never | null
+    let _39: bool | null
     let _40: baml.glob.ScanOptions
     let _41: bool
-    let _42: bool?
+    let _42: bool | null
     let _43: baml.glob.ScanOptions
 
     bb0: {
@@ -3315,7 +3315,7 @@ fn baml.llm.Client.build_plan_with_state(self: baml.llm.Client, planner_state: b
     let _0: baml.llm.OrchestrationStep[] // _0 // return
     let _1: baml.llm.Client // self // param
     let _2: baml.llm.PlannerState // planner_state // param
-    let _3: baml.llm.RetryPolicy?
+    let _3: baml.llm.RetryPolicy | null
     let _4: bool
     let _5: baml.llm.RetryPolicy // r
     let _6: baml.llm.OrchestrationStep[] // result
@@ -3919,7 +3919,7 @@ fn baml.llm.Client.execute_oneshot(self: baml.llm.Client, context: baml.llm.Exec
     let _1: baml.llm.Client // self // param
     let _2: baml.llm.ExecutionContext // context // param
     let _3: int // inherited_delay_ms // param
-    let _4: baml.llm.RetryPolicy?
+    let _4: baml.llm.RetryPolicy | null
     let _5: bool
     let _6: baml.llm.RetryPolicy // r
     let _7: float // current_delay
@@ -4064,7 +4064,7 @@ fn baml.llm.Client.execute_stream(self: baml.llm.Client, context: baml.llm.Execu
     let _1: baml.llm.Client // self // param
     let _2: baml.llm.ExecutionContext // context // param
     let _3: int // inherited_delay_ms // param
-    let _4: baml.llm.RetryPolicy?
+    let _4: baml.llm.RetryPolicy | null
     let _5: bool
     let _6: baml.llm.RetryPolicy // r
     let _7: float // current_delay
@@ -4215,8 +4215,8 @@ fn baml.llm.Stream.final(self: baml.llm.Stream) -> void {
     let _3: bool
     let _4: () -> bool throws baml.errors.LlmClient
     let _5: string // next
-    let _6: string?
-    let _7: () -> string? throws baml.errors.Io
+    let _6: string | null
+    let _7: () -> string | null throws baml.errors.Io
     let _8: bool
     let _9: string // next
     let _10: null
@@ -4227,8 +4227,8 @@ fn baml.llm.Stream.final(self: baml.llm.Stream) -> void {
     let _15: null
     let _16: () -> null throws never
     let _17: null
-    let _18: string?
-    let _19: () -> string? throws baml.errors.LlmClient
+    let _18: string | null
+    let _19: () -> string | null throws baml.errors.LlmClient
     let _20: bool
     let _21: void
     let _22: string // reason
@@ -4442,16 +4442,16 @@ fn baml.llm.MediaUrlHandler.from_json(j: baml.json.json) -> baml.llm.MediaUrlHan
     // Locals:
     let _0: baml.llm.MediaUrlHandler // _0 // return
     let _1: baml.json.json // j // param
-    let _2: string?
+    let _2: string | null
     let _3: baml.json.json
     let _4: type
-    let _5: string?
+    let _5: string | null
     let _6: baml.json.json
     let _7: type
-    let _8: string?
+    let _8: string | null
     let _9: baml.json.json
     let _10: type
-    let _11: string?
+    let _11: string | null
     let _12: baml.json.json
     let _13: type
 
@@ -4460,7 +4460,7 @@ fn baml.llm.MediaUrlHandler.from_json(j: baml.json.json) -> baml.llm.MediaUrlHan
     }
 
     bb1: {
-        _4 = load_type(string?);
+        _4 = load_type(string | null);
         _2 = call const fn baml.json.from_json<copy _4>(copy _3) -> [bb2];
     }
 
@@ -4469,7 +4469,7 @@ fn baml.llm.MediaUrlHandler.from_json(j: baml.json.json) -> baml.llm.MediaUrlHan
     }
 
     bb3: {
-        _7 = load_type(string?);
+        _7 = load_type(string | null);
         _5 = call const fn baml.json.from_json<copy _7>(copy _6) -> [bb4];
     }
 
@@ -4478,7 +4478,7 @@ fn baml.llm.MediaUrlHandler.from_json(j: baml.json.json) -> baml.llm.MediaUrlHan
     }
 
     bb5: {
-        _10 = load_type(string?);
+        _10 = load_type(string | null);
         _8 = call const fn baml.json.from_json<copy _10>(copy _9) -> [bb6];
     }
 
@@ -4487,7 +4487,7 @@ fn baml.llm.MediaUrlHandler.from_json(j: baml.json.json) -> baml.llm.MediaUrlHan
     }
 
     bb7: {
-        _13 = load_type(string?);
+        _13 = load_type(string | null);
         _11 = call const fn baml.json.from_json<copy _13>(copy _12) -> [bb8];
     }
 
@@ -4535,7 +4535,7 @@ fn baml.llm.Client.from_json(j: baml.json.json) -> baml.llm.Client {
     let _8: baml.llm.Client[]
     let _9: baml.json.json
     let _10: type
-    let _11: baml.llm.RetryPolicy?
+    let _11: baml.llm.RetryPolicy | null
     let _12: baml.json.json
     let _13: type
     let _14: int
@@ -4574,7 +4574,7 @@ fn baml.llm.Client.from_json(j: baml.json.json) -> baml.llm.Client {
     }
 
     bb7: {
-        _13 = load_type(baml.llm.RetryPolicy?);
+        _13 = load_type(baml.llm.RetryPolicy | null);
         _11 = call const fn baml.json.from_json<copy _13>(copy _12) -> [bb8];
     }
 
@@ -4601,34 +4601,34 @@ fn baml.llm.BedrockOptions.from_json(j: baml.json.json) -> baml.llm.BedrockOptio
     // Locals:
     let _0: baml.llm.BedrockOptions // _0 // return
     let _1: baml.json.json // j // param
-    let _2: string?
+    let _2: string | null
     let _3: baml.json.json
     let _4: type
-    let _5: string?
+    let _5: string | null
     let _6: baml.json.json
     let _7: type
-    let _8: string?
+    let _8: string | null
     let _9: baml.json.json
     let _10: type
-    let _11: string?
+    let _11: string | null
     let _12: baml.json.json
     let _13: type
-    let _14: string?
+    let _14: string | null
     let _15: baml.json.json
     let _16: type
-    let _17: string?
+    let _17: string | null
     let _18: baml.json.json
     let _19: type
-    let _20: string[]?
+    let _20: string[] | null
     let _21: baml.json.json
     let _22: type
-    let _23: int?
+    let _23: int | null
     let _24: baml.json.json
     let _25: type
-    let _26: float?
+    let _26: float | null
     let _27: baml.json.json
     let _28: type
-    let _29: float?
+    let _29: float | null
     let _30: baml.json.json
     let _31: type
 
@@ -4637,7 +4637,7 @@ fn baml.llm.BedrockOptions.from_json(j: baml.json.json) -> baml.llm.BedrockOptio
     }
 
     bb1: {
-        _4 = load_type(string?);
+        _4 = load_type(string | null);
         _2 = call const fn baml.json.from_json<copy _4>(copy _3) -> [bb2];
     }
 
@@ -4646,7 +4646,7 @@ fn baml.llm.BedrockOptions.from_json(j: baml.json.json) -> baml.llm.BedrockOptio
     }
 
     bb3: {
-        _7 = load_type(string?);
+        _7 = load_type(string | null);
         _5 = call const fn baml.json.from_json<copy _7>(copy _6) -> [bb4];
     }
 
@@ -4655,7 +4655,7 @@ fn baml.llm.BedrockOptions.from_json(j: baml.json.json) -> baml.llm.BedrockOptio
     }
 
     bb5: {
-        _10 = load_type(string?);
+        _10 = load_type(string | null);
         _8 = call const fn baml.json.from_json<copy _10>(copy _9) -> [bb6];
     }
 
@@ -4664,7 +4664,7 @@ fn baml.llm.BedrockOptions.from_json(j: baml.json.json) -> baml.llm.BedrockOptio
     }
 
     bb7: {
-        _13 = load_type(string?);
+        _13 = load_type(string | null);
         _11 = call const fn baml.json.from_json<copy _13>(copy _12) -> [bb8];
     }
 
@@ -4673,7 +4673,7 @@ fn baml.llm.BedrockOptions.from_json(j: baml.json.json) -> baml.llm.BedrockOptio
     }
 
     bb9: {
-        _16 = load_type(string?);
+        _16 = load_type(string | null);
         _14 = call const fn baml.json.from_json<copy _16>(copy _15) -> [bb10];
     }
 
@@ -4682,7 +4682,7 @@ fn baml.llm.BedrockOptions.from_json(j: baml.json.json) -> baml.llm.BedrockOptio
     }
 
     bb11: {
-        _19 = load_type(string?);
+        _19 = load_type(string | null);
         _17 = call const fn baml.json.from_json<copy _19>(copy _18) -> [bb12];
     }
 
@@ -4691,7 +4691,7 @@ fn baml.llm.BedrockOptions.from_json(j: baml.json.json) -> baml.llm.BedrockOptio
     }
 
     bb13: {
-        _22 = load_type(string[]?);
+        _22 = load_type(string[] | null);
         _20 = call const fn baml.json.from_json<copy _22>(copy _21) -> [bb14];
     }
 
@@ -4700,7 +4700,7 @@ fn baml.llm.BedrockOptions.from_json(j: baml.json.json) -> baml.llm.BedrockOptio
     }
 
     bb15: {
-        _25 = load_type(int?);
+        _25 = load_type(int | null);
         _23 = call const fn baml.json.from_json<copy _25>(copy _24) -> [bb16];
     }
 
@@ -4709,7 +4709,7 @@ fn baml.llm.BedrockOptions.from_json(j: baml.json.json) -> baml.llm.BedrockOptio
     }
 
     bb17: {
-        _28 = load_type(float?);
+        _28 = load_type(float | null);
         _26 = call const fn baml.json.from_json<copy _28>(copy _27) -> [bb18];
     }
 
@@ -4718,7 +4718,7 @@ fn baml.llm.BedrockOptions.from_json(j: baml.json.json) -> baml.llm.BedrockOptio
     }
 
     bb19: {
-        _31 = load_type(float?);
+        _31 = load_type(float | null);
         _29 = call const fn baml.json.from_json<copy _31>(copy _30) -> [bb20];
     }
 
@@ -4799,16 +4799,16 @@ fn baml.llm.VertexAiOptions.from_json(j: baml.json.json) -> baml.llm.VertexAiOpt
     // Locals:
     let _0: baml.llm.VertexAiOptions // _0 // return
     let _1: baml.json.json // j // param
-    let _2: string?
+    let _2: string | null
     let _3: baml.json.json
     let _4: type
-    let _5: string?
+    let _5: string | null
     let _6: baml.json.json
     let _7: type
-    let _8: string?
+    let _8: string | null
     let _9: baml.json.json
     let _10: type
-    let _11: string?
+    let _11: string | null
     let _12: baml.json.json
     let _13: type
 
@@ -4817,7 +4817,7 @@ fn baml.llm.VertexAiOptions.from_json(j: baml.json.json) -> baml.llm.VertexAiOpt
     }
 
     bb1: {
-        _4 = load_type(string?);
+        _4 = load_type(string | null);
         _2 = call const fn baml.json.from_json<copy _4>(copy _3) -> [bb2];
     }
 
@@ -4826,7 +4826,7 @@ fn baml.llm.VertexAiOptions.from_json(j: baml.json.json) -> baml.llm.VertexAiOpt
     }
 
     bb3: {
-        _7 = load_type(string?);
+        _7 = load_type(string | null);
         _5 = call const fn baml.json.from_json<copy _7>(copy _6) -> [bb4];
     }
 
@@ -4835,7 +4835,7 @@ fn baml.llm.VertexAiOptions.from_json(j: baml.json.json) -> baml.llm.VertexAiOpt
     }
 
     bb5: {
-        _10 = load_type(string?);
+        _10 = load_type(string | null);
         _8 = call const fn baml.json.from_json<copy _10>(copy _9) -> [bb6];
     }
 
@@ -4844,7 +4844,7 @@ fn baml.llm.VertexAiOptions.from_json(j: baml.json.json) -> baml.llm.VertexAiOpt
     }
 
     bb7: {
-        _13 = load_type(string?);
+        _13 = load_type(string | null);
         _11 = call const fn baml.json.from_json<copy _13>(copy _12) -> [bb8];
     }
 
@@ -4883,7 +4883,7 @@ fn baml.llm.AnthropicOptions.from_json(j: baml.json.json) -> baml.llm.AnthropicO
     // Locals:
     let _0: baml.llm.AnthropicOptions // _0 // return
     let _1: baml.json.json // j // param
-    let _2: int?
+    let _2: int | null
     let _3: baml.json.json
     let _4: type
 
@@ -4892,7 +4892,7 @@ fn baml.llm.AnthropicOptions.from_json(j: baml.json.json) -> baml.llm.AnthropicO
     }
 
     bb1: {
-        _4 = load_type(int?);
+        _4 = load_type(int | null);
         _2 = call const fn baml.json.from_json<copy _4>(copy _3) -> [bb2];
     }
 
@@ -4961,16 +4961,16 @@ fn baml.llm.AzureOpenAiOptions.from_json(j: baml.json.json) -> baml.llm.AzureOpe
     // Locals:
     let _0: baml.llm.AzureOpenAiOptions // _0 // return
     let _1: baml.json.json // j // param
-    let _2: string?
+    let _2: string | null
     let _3: baml.json.json
     let _4: type
-    let _5: string?
+    let _5: string | null
     let _6: baml.json.json
     let _7: type
     let _8: string
     let _9: baml.json.json
     let _10: type
-    let _11: int?
+    let _11: int | null
     let _12: baml.json.json
     let _13: type
 
@@ -4979,7 +4979,7 @@ fn baml.llm.AzureOpenAiOptions.from_json(j: baml.json.json) -> baml.llm.AzureOpe
     }
 
     bb1: {
-        _4 = load_type(string?);
+        _4 = load_type(string | null);
         _2 = call const fn baml.json.from_json<copy _4>(copy _3) -> [bb2];
     }
 
@@ -4988,7 +4988,7 @@ fn baml.llm.AzureOpenAiOptions.from_json(j: baml.json.json) -> baml.llm.AzureOpe
     }
 
     bb3: {
-        _7 = load_type(string?);
+        _7 = load_type(string | null);
         _5 = call const fn baml.json.from_json<copy _7>(copy _6) -> [bb4];
     }
 
@@ -5006,7 +5006,7 @@ fn baml.llm.AzureOpenAiOptions.from_json(j: baml.json.json) -> baml.llm.AzureOpe
     }
 
     bb7: {
-        _13 = load_type(int?);
+        _13 = load_type(int | null);
         _11 = call const fn baml.json.from_json<copy _13>(copy _12) -> [bb8];
     }
 
@@ -5045,8 +5045,8 @@ fn baml.llm.Stream.next(self: baml.llm.Stream) -> void | baml.stream.StreamFinis
     let _0: void | baml.stream.StreamFinished // _0 // return
     let _1: baml.llm.Stream // self // param
     let _2: string // next
-    let _3: string?
-    let _4: () -> string? throws baml.errors.Io
+    let _3: string | null
+    let _4: () -> string | null throws baml.errors.Io
     let _5: bool
     let _6: string // next
     let _7: null
@@ -5262,33 +5262,33 @@ fn baml.llm.MediaUrlHandler.to_json(self: baml.llm.MediaUrlHandler) -> baml.json
     // Locals:
     let _0: baml.json.json // _0 // return
     let _1: baml.llm.MediaUrlHandler // self // param
-    let _2: baml.json.json?
-    let _3: ((baml.String) -> baml.json.json throws never)?
-    let _4: string?
+    let _2: baml.json.json | null
+    let _3: (baml.String) -> baml.json.json throws never | null
+    let _4: string | null
     let _5: baml.llm.MediaUrlHandler
     let _6: bool
-    let _7: string?
+    let _7: string | null
     let _8: baml.llm.MediaUrlHandler
-    let _9: baml.json.json?
-    let _10: ((baml.String) -> baml.json.json throws never)?
-    let _11: string?
+    let _9: baml.json.json | null
+    let _10: (baml.String) -> baml.json.json throws never | null
+    let _11: string | null
     let _12: baml.llm.MediaUrlHandler
     let _13: bool
-    let _14: string?
+    let _14: string | null
     let _15: baml.llm.MediaUrlHandler
-    let _16: baml.json.json?
-    let _17: ((baml.String) -> baml.json.json throws never)?
-    let _18: string?
+    let _16: baml.json.json | null
+    let _17: (baml.String) -> baml.json.json throws never | null
+    let _18: string | null
     let _19: baml.llm.MediaUrlHandler
     let _20: bool
-    let _21: string?
+    let _21: string | null
     let _22: baml.llm.MediaUrlHandler
-    let _23: baml.json.json?
-    let _24: ((baml.String) -> baml.json.json throws never)?
-    let _25: string?
+    let _23: baml.json.json | null
+    let _24: (baml.String) -> baml.json.json throws never | null
+    let _25: string | null
     let _26: baml.llm.MediaUrlHandler
     let _27: bool
-    let _28: string?
+    let _28: string | null
     let _29: baml.llm.MediaUrlHandler
 
     bb0: {
@@ -5413,12 +5413,12 @@ fn baml.llm.Client.to_json(self: baml.llm.Client) -> baml.json.json {
     let _10: baml.json.json
     let _11: baml.llm.Client[]
     let _12: baml.llm.Client
-    let _13: baml.json.json?
-    let _14: (() -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError)?
-    let _15: baml.llm.RetryPolicy?
+    let _13: baml.json.json | null
+    let _14: () -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError | null
+    let _15: baml.llm.RetryPolicy | null
     let _16: baml.llm.Client
     let _17: bool
-    let _18: baml.llm.RetryPolicy?
+    let _18: baml.llm.RetryPolicy | null
     let _19: baml.llm.Client
     let _20: baml.json.json
     let _21: int
@@ -5483,75 +5483,75 @@ fn baml.llm.BedrockOptions.to_json(self: baml.llm.BedrockOptions) -> baml.json.j
     // Locals:
     let _0: baml.json.json // _0 // return
     let _1: baml.llm.BedrockOptions // self // param
-    let _2: baml.json.json?
-    let _3: ((baml.String) -> baml.json.json throws never)?
-    let _4: string?
+    let _2: baml.json.json | null
+    let _3: (baml.String) -> baml.json.json throws never | null
+    let _4: string | null
     let _5: baml.llm.BedrockOptions
     let _6: bool
-    let _7: string?
+    let _7: string | null
     let _8: baml.llm.BedrockOptions
-    let _9: baml.json.json?
-    let _10: ((baml.String) -> baml.json.json throws never)?
-    let _11: string?
+    let _9: baml.json.json | null
+    let _10: (baml.String) -> baml.json.json throws never | null
+    let _11: string | null
     let _12: baml.llm.BedrockOptions
     let _13: bool
-    let _14: string?
+    let _14: string | null
     let _15: baml.llm.BedrockOptions
-    let _16: baml.json.json?
-    let _17: ((baml.String) -> baml.json.json throws never)?
-    let _18: string?
+    let _16: baml.json.json | null
+    let _17: (baml.String) -> baml.json.json throws never | null
+    let _18: string | null
     let _19: baml.llm.BedrockOptions
     let _20: bool
-    let _21: string?
+    let _21: string | null
     let _22: baml.llm.BedrockOptions
-    let _23: baml.json.json?
-    let _24: ((baml.String) -> baml.json.json throws never)?
-    let _25: string?
+    let _23: baml.json.json | null
+    let _24: (baml.String) -> baml.json.json throws never | null
+    let _25: string | null
     let _26: baml.llm.BedrockOptions
     let _27: bool
-    let _28: string?
+    let _28: string | null
     let _29: baml.llm.BedrockOptions
-    let _30: baml.json.json?
-    let _31: ((baml.String) -> baml.json.json throws never)?
-    let _32: string?
+    let _30: baml.json.json | null
+    let _31: (baml.String) -> baml.json.json throws never | null
+    let _32: string | null
     let _33: baml.llm.BedrockOptions
     let _34: bool
-    let _35: string?
+    let _35: string | null
     let _36: baml.llm.BedrockOptions
-    let _37: baml.json.json?
-    let _38: ((baml.String) -> baml.json.json throws never)?
-    let _39: string?
+    let _37: baml.json.json | null
+    let _38: (baml.String) -> baml.json.json throws never | null
+    let _39: string | null
     let _40: baml.llm.BedrockOptions
     let _41: bool
-    let _42: string?
+    let _42: string | null
     let _43: baml.llm.BedrockOptions
-    let _44: baml.json.json?
-    let _45: ((string[]) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError)?
-    let _46: string[]?
+    let _44: baml.json.json | null
+    let _45: (string[]) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError | null
+    let _46: string[] | null
     let _47: baml.llm.BedrockOptions
     let _48: bool
-    let _49: string[]?
+    let _49: string[] | null
     let _50: baml.llm.BedrockOptions
-    let _51: baml.json.json?
-    let _52: ((baml.Int) -> baml.json.json throws never)?
-    let _53: int?
+    let _51: baml.json.json | null
+    let _52: (baml.Int) -> baml.json.json throws never | null
+    let _53: int | null
     let _54: baml.llm.BedrockOptions
     let _55: bool
-    let _56: int?
+    let _56: int | null
     let _57: baml.llm.BedrockOptions
-    let _58: baml.json.json?
-    let _59: ((baml.Float) -> baml.json.json throws never)?
-    let _60: float?
+    let _58: baml.json.json | null
+    let _59: (baml.Float) -> baml.json.json throws never | null
+    let _60: float | null
     let _61: baml.llm.BedrockOptions
     let _62: bool
-    let _63: float?
+    let _63: float | null
     let _64: baml.llm.BedrockOptions
-    let _65: baml.json.json?
-    let _66: ((baml.Float) -> baml.json.json throws never)?
-    let _67: float?
+    let _65: baml.json.json | null
+    let _66: (baml.Float) -> baml.json.json throws never | null
+    let _67: float | null
     let _68: baml.llm.BedrockOptions
     let _69: bool
-    let _70: float?
+    let _70: float | null
     let _71: baml.llm.BedrockOptions
 
     bb0: {
@@ -5809,33 +5809,33 @@ fn baml.llm.VertexAiOptions.to_json(self: baml.llm.VertexAiOptions) -> baml.json
     // Locals:
     let _0: baml.json.json // _0 // return
     let _1: baml.llm.VertexAiOptions // self // param
-    let _2: baml.json.json?
-    let _3: ((baml.String) -> baml.json.json throws never)?
-    let _4: string?
+    let _2: baml.json.json | null
+    let _3: (baml.String) -> baml.json.json throws never | null
+    let _4: string | null
     let _5: baml.llm.VertexAiOptions
     let _6: bool
-    let _7: string?
+    let _7: string | null
     let _8: baml.llm.VertexAiOptions
-    let _9: baml.json.json?
-    let _10: ((baml.String) -> baml.json.json throws never)?
-    let _11: string?
+    let _9: baml.json.json | null
+    let _10: (baml.String) -> baml.json.json throws never | null
+    let _11: string | null
     let _12: baml.llm.VertexAiOptions
     let _13: bool
-    let _14: string?
+    let _14: string | null
     let _15: baml.llm.VertexAiOptions
-    let _16: baml.json.json?
-    let _17: ((baml.String) -> baml.json.json throws never)?
-    let _18: string?
+    let _16: baml.json.json | null
+    let _17: (baml.String) -> baml.json.json throws never | null
+    let _18: string | null
     let _19: baml.llm.VertexAiOptions
     let _20: bool
-    let _21: string?
+    let _21: string | null
     let _22: baml.llm.VertexAiOptions
-    let _23: baml.json.json?
-    let _24: ((baml.String) -> baml.json.json throws never)?
-    let _25: string?
+    let _23: baml.json.json | null
+    let _24: (baml.String) -> baml.json.json throws never | null
+    let _25: string | null
     let _26: baml.llm.VertexAiOptions
     let _27: bool
-    let _28: string?
+    let _28: string | null
     let _29: baml.llm.VertexAiOptions
 
     bb0: {
@@ -5949,12 +5949,12 @@ fn baml.llm.AnthropicOptions.to_json(self: baml.llm.AnthropicOptions) -> baml.js
     // Locals:
     let _0: baml.json.json // _0 // return
     let _1: baml.llm.AnthropicOptions // self // param
-    let _2: baml.json.json?
-    let _3: ((baml.Int) -> baml.json.json throws never)?
-    let _4: int?
+    let _2: baml.json.json | null
+    let _3: (baml.Int) -> baml.json.json throws never | null
+    let _4: int | null
     let _5: baml.llm.AnthropicOptions
     let _6: bool
-    let _7: int?
+    let _7: int | null
     let _8: baml.llm.AnthropicOptions
 
     bb0: {
@@ -6032,29 +6032,29 @@ fn baml.llm.AzureOpenAiOptions.to_json(self: baml.llm.AzureOpenAiOptions) -> bam
     // Locals:
     let _0: baml.json.json // _0 // return
     let _1: baml.llm.AzureOpenAiOptions // self // param
-    let _2: baml.json.json?
-    let _3: ((baml.String) -> baml.json.json throws never)?
-    let _4: string?
+    let _2: baml.json.json | null
+    let _3: (baml.String) -> baml.json.json throws never | null
+    let _4: string | null
     let _5: baml.llm.AzureOpenAiOptions
     let _6: bool
-    let _7: string?
+    let _7: string | null
     let _8: baml.llm.AzureOpenAiOptions
-    let _9: baml.json.json?
-    let _10: ((baml.String) -> baml.json.json throws never)?
-    let _11: string?
+    let _9: baml.json.json | null
+    let _10: (baml.String) -> baml.json.json throws never | null
+    let _11: string | null
     let _12: baml.llm.AzureOpenAiOptions
     let _13: bool
-    let _14: string?
+    let _14: string | null
     let _15: baml.llm.AzureOpenAiOptions
     let _16: baml.json.json
     let _17: string
     let _18: baml.llm.AzureOpenAiOptions
-    let _19: baml.json.json?
-    let _20: ((baml.Int) -> baml.json.json throws never)?
-    let _21: int?
+    let _19: baml.json.json | null
+    let _20: (baml.Int) -> baml.json.json throws never | null
+    let _21: int | null
     let _22: baml.llm.AzureOpenAiOptions
     let _23: bool
-    let _24: int?
+    let _24: int | null
     let _25: baml.llm.AzureOpenAiOptions
 
     bb0: {
@@ -7385,16 +7385,16 @@ fn baml.sys.ProcessOptions.from_json(j: baml.json.json) -> baml.sys.ProcessOptio
     // Locals:
     let _0: baml.sys.ProcessOptions // _0 // return
     let _1: baml.json.json // j // param
-    let _2: string?
+    let _2: string | null
     let _3: baml.json.json
     let _4: type
-    let _5: map<string, string>?
+    let _5: map<string, string> | null
     let _6: baml.json.json
     let _7: type
-    let _8: int?
+    let _8: int | null
     let _9: baml.json.json
     let _10: type
-    let _11: string?
+    let _11: string | null
     let _12: baml.json.json
     let _13: type
 
@@ -7403,7 +7403,7 @@ fn baml.sys.ProcessOptions.from_json(j: baml.json.json) -> baml.sys.ProcessOptio
     }
 
     bb1: {
-        _4 = load_type(string?);
+        _4 = load_type(string | null);
         _2 = call const fn baml.json.from_json<copy _4>(copy _3) -> [bb2];
     }
 
@@ -7412,7 +7412,7 @@ fn baml.sys.ProcessOptions.from_json(j: baml.json.json) -> baml.sys.ProcessOptio
     }
 
     bb3: {
-        _7 = load_type(map<string, string>?);
+        _7 = load_type(map<string, string> | null);
         _5 = call const fn baml.json.from_json<copy _7>(copy _6) -> [bb4];
     }
 
@@ -7421,7 +7421,7 @@ fn baml.sys.ProcessOptions.from_json(j: baml.json.json) -> baml.sys.ProcessOptio
     }
 
     bb5: {
-        _10 = load_type(int?);
+        _10 = load_type(int | null);
         _8 = call const fn baml.json.from_json<copy _10>(copy _9) -> [bb6];
     }
 
@@ -7430,7 +7430,7 @@ fn baml.sys.ProcessOptions.from_json(j: baml.json.json) -> baml.sys.ProcessOptio
     }
 
     bb7: {
-        _13 = load_type(string?);
+        _13 = load_type(string | null);
         _11 = call const fn baml.json.from_json<copy _13>(copy _12) -> [bb8];
     }
 
@@ -7566,33 +7566,33 @@ fn baml.sys.ProcessOptions.to_json(self: baml.sys.ProcessOptions) -> baml.json.j
     // Locals:
     let _0: baml.json.json // _0 // return
     let _1: baml.sys.ProcessOptions // self // param
-    let _2: baml.json.json?
-    let _3: ((baml.String) -> baml.json.json throws never)?
-    let _4: string?
+    let _2: baml.json.json | null
+    let _3: (baml.String) -> baml.json.json throws never | null
+    let _4: string | null
     let _5: baml.sys.ProcessOptions
     let _6: bool
-    let _7: string?
+    let _7: string | null
     let _8: baml.sys.ProcessOptions
-    let _9: baml.json.json?
-    let _10: ((map<string, string>) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError)?
-    let _11: map<string, string>?
+    let _9: baml.json.json | null
+    let _10: (map<string, string>) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError | null
+    let _11: map<string, string> | null
     let _12: baml.sys.ProcessOptions
     let _13: bool
-    let _14: map<string, string>?
+    let _14: map<string, string> | null
     let _15: baml.sys.ProcessOptions
-    let _16: baml.json.json?
-    let _17: ((baml.Int) -> baml.json.json throws never)?
-    let _18: int?
+    let _16: baml.json.json | null
+    let _17: (baml.Int) -> baml.json.json throws never | null
+    let _18: int | null
     let _19: baml.sys.ProcessOptions
     let _20: bool
-    let _21: int?
+    let _21: int | null
     let _22: baml.sys.ProcessOptions
-    let _23: baml.json.json?
-    let _24: ((baml.String) -> baml.json.json throws never)?
-    let _25: string?
+    let _23: baml.json.json | null
+    let _24: (baml.String) -> baml.json.json throws never | null
+    let _25: string | null
     let _26: baml.sys.ProcessOptions
     let _27: bool
-    let _28: string?
+    let _28: string | null
     let _29: baml.sys.ProcessOptions
 
     bb0: {

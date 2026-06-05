@@ -205,7 +205,7 @@ function maps.map_clear_already_empty_main() -> int {
     return
 }
 
-function maps.map_clear_makes_get_return_null_main() -> int? {
+function maps.map_clear_makes_get_return_null_main() -> int | null {
     alloc_map 0
     store_var m
     load_var m
@@ -278,14 +278,14 @@ function maps.map_clear_then_reuse_main() -> int {
     return
 }
 
-function maps.map_delete_absent_main() -> int? {
+function maps.map_delete_absent_main() -> int | null {
     alloc_map 0
     load_const "missing"
     call baml.Map.delete
     return
 }
 
-function maps.map_delete_already_deleted_main() -> int? {
+function maps.map_delete_already_deleted_main() -> int | null {
     alloc_map 0
     store_var m
     load_var m
@@ -339,7 +339,7 @@ function maps.map_delete_does_not_affect_other_keys_main() -> int {
     return
 }
 
-function maps.map_delete_returns_previous_main() -> int? {
+function maps.map_delete_returns_previous_main() -> int | null {
     alloc_map 0
     store_var m
     load_var m
@@ -517,7 +517,7 @@ function maps.map_len_helper() -> int {
     return
 }
 
-function maps.map_set_first_insert_main() -> int? {
+function maps.map_set_first_insert_main() -> int | null {
     alloc_map 0
     load_const "a"
     load_const 1
@@ -571,7 +571,7 @@ function maps.map_set_replace_preserves_length_main() -> int {
     return
 }
 
-function maps.map_set_replace_returns_previous_main() -> int? {
+function maps.map_set_replace_returns_previous_main() -> int | null {
     alloc_map 0
     store_var m
     load_var m

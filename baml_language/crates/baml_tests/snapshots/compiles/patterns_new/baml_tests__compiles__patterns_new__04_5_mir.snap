@@ -682,10 +682,10 @@ fn user.nested_paren_union_array_one(items: (int | string)[]) -> int {
     }
 }
 
-fn user.nested_paren_union_array_optional(v: (int | string)[]?) -> int {
+fn user.nested_paren_union_array_optional(v: (int | string)[] | null) -> int {
     // Locals:
     let _0: int // _0 // return
-    let _1: (int | string)[]? // v // param
+    let _1: (int | string)[] | null // v // param
 
     bb0: {
         _0 = const 1_i64;

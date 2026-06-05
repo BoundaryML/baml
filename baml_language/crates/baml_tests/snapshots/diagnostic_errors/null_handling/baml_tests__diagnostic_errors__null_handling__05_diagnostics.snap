@@ -22,12 +22,12 @@ source: crates/baml_tests/src/generated_tests.rs
     │ Note: Error code: E0004
 ────╯
 
-  [type] error: `unknown?` is not a function — it cannot be called
+  [type] error: `unknown | null` is not a function — it cannot be called
      ╭─[ null_handling.baml:121:13 ]
      │
  121 │     let b9 = (items?.[0]).to_string();
      │             ────────────┬────────────  
-     │                         ╰────────────── `unknown?` is not a function — it cannot be called
+     │                         ╰────────────── `unknown | null` is not a function — it cannot be called
      │ 
      │ Note: Error code: E0006
 ─────╯
@@ -164,12 +164,12 @@ source: crates/baml_tests/src/generated_tests.rs
      │     Note: Error code: E0004
 ─────╯
 
-  [type] error: `unknown?` is not a function — it cannot be called
+  [type] error: `unknown | null` is not a function — it cannot be called
      ╭─[ null_handling.baml:257:11 ]
      │
  257 │         ?? node?.labels?.["name"]?.value.to_string()
      │           ─────────────────────┬────────────────────  
-     │                                ╰────────────────────── `unknown?` is not a function — it cannot be called
+     │                                ╰────────────────────── `unknown | null` is not a function — it cannot be called
      │ 
      │ Note: Error code: E0006
 ─────╯

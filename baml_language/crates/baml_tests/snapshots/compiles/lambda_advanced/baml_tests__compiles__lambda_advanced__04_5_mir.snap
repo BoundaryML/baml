@@ -1065,8 +1065,8 @@ fn .<lambda(test_map_multi_statement, 0)>(x: null) -> null {
 fn user.test_map_optional_inferred() -> int[] {
     // Locals:
     let _0: int[] // _0 // return
-    let _1: (int?)[] // items
-    let _2: (int?) -> int throws never
+    let _1: (int | null)[] // items
+    let _2: (int | null) -> int throws never
 
     bb0: {
         _1 = [const 1_i64, const null, const 3_i64];
@@ -1276,11 +1276,11 @@ fn .<lambda(<lambda(test_nested_map, 0)>, 1)>(x: null) -> null {
     }
 }
 
-fn user.test_optional_return() -> int? {
+fn user.test_optional_return() -> int | null {
     // Locals:
-    let _0: int? // _0 // return
-    let _1: (int) -> int? throws never // maybe
-    let _2: (int) -> int? throws never
+    let _0: int | null // _0 // return
+    let _1: (int) -> int | null throws never // maybe
+    let _2: (int) -> int | null throws never
 
     bb0: {
         _1 = make_closure lambda[0]();

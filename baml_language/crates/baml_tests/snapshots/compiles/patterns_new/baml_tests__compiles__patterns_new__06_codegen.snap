@@ -404,7 +404,7 @@ function user.nested_paren_union_array_one(items: (int | string)[]) -> int {
     return
 }
 
-function user.nested_paren_union_array_optional(v: (int | string)[]?) -> int {
+function user.nested_paren_union_array_optional(v: (int | string)[] | null) -> int {
     load_const 1
     return
 }

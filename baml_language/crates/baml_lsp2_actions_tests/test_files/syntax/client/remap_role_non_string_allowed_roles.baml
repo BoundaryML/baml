@@ -11,14 +11,14 @@ client<llm> MyClient {
 
 //----
 //- diagnostics
-// error: type mismatch: expected string[]?, got (string?)[]
+// error: type mismatch: expected string[] | null, got (string | null)[]
 //     ╭─[ client_remap_role_non_string_allowed_roles.baml:1:1 ]
 //     │
 //   1 │ ╭─▶ client<llm> MyClient {
 //     ┆ ┆
 //  10 │ ├─▶ }
 //     │ │
-//     │ ╰────── type mismatch: expected string[]?, got (string?)[]
+//     │ ╰────── type mismatch: expected string[] | null, got (string | null)[]
 //     │
 //     │     Note: Error code: E0001
 // ────╯

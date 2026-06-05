@@ -828,7 +828,7 @@ function patterns_new_runtime.from_array_boxes(boxes: patterns_new_runtime.BoxT<
     jump L0
 }
 
-function patterns_new_runtime.from_optional_box(box: patterns_new_runtime.BoxT<int>?) -> int {
+function patterns_new_runtime.from_optional_box(box: patterns_new_runtime.BoxT<int> | null) -> int {
     load_var box
     is_type patterns_new_runtime.BoxT<...>
     pop_jump_if_false L0
@@ -854,7 +854,7 @@ function patterns_new_runtime.from_optional_box(box: patterns_new_runtime.BoxT<i
     return
 }
 
-function patterns_new_runtime.from_union_box(box: patterns_new_runtime.BoxT<int>?) -> int {
+function patterns_new_runtime.from_union_box(box: patterns_new_runtime.BoxT<int> | null) -> int {
     load_var box
     is_type patterns_new_runtime.BoxT<...>
     pop_jump_if_false L0
@@ -1950,7 +1950,7 @@ function patterns_new_runtime.score_foo_union(f: patterns_new_runtime.FooUnion) 
     return
 }
 
-function patterns_new_runtime.score_int_optional(x: int?) -> int {
+function patterns_new_runtime.score_int_optional(x: int | null) -> int {
     load_var x
     load_const null
     cmp_op ==

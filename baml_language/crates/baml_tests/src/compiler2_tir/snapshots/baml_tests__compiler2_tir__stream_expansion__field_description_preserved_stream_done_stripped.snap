@@ -14,5 +14,5 @@ function user.WithDesc.from_json(j: baml.json.json) -> user.WithDesc throws baml
 }
 class user.WithDesc$stream {
   name: string @description("The name")
-  age: int? @description("Age in years")
+  age: int | null @description("Age in years")
 }

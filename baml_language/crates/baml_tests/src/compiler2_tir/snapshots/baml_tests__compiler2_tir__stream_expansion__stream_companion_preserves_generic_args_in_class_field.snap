@@ -21,8 +21,8 @@ function user.Container.from_json(j: baml.json.json) -> user.Container throws ba
   Container { inner: baml.json.from_json<Box<int>>(baml.json.field(j, "inner")) } : user.Container
 }
 class user.Box$stream {
-  value: T?
+  value: T | null
 }
 class user.Container$stream {
-  inner: user.Box$stream<int>?
+  inner: user.Box$stream<int> | null
 }

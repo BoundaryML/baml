@@ -23,10 +23,10 @@ function user.References.from_json(j: baml.json.json) -> user.References throws 
   References { education: baml.json.from_json<NotNullEducation>(baml.json.field(j, "education")), educations: baml.json.from_json<NotNullEducation[]>(baml.json.field(j, "educations")) } : user.References
 }
 class user.NotNullEducation$stream {
-  school: string?
-  year: int?
+  school: string | null
+  year: int | null
 }
 class user.References$stream {
-  education: user.NotNullEducation$stream?
+  education: user.NotNullEducation$stream | null
   educations: user.NotNullEducation$stream[]
 }

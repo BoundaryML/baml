@@ -52,5 +52,5 @@ function user.param_in_if_statement(b: bool) -> int throws never {
   }
 }
 class user.Baz$stream {
-  name: string?
+  name: string | null
 }

@@ -54,7 +54,7 @@ function type_of_optional_to_string_fn() -> string {
 }
 
 test "type_of_optional_to_string" {
-    assert.is_true(baml.deep_equals(type_of_optional_to_string_fn(), "reflect_type_of.User?"))
+    assert.is_true(baml.deep_equals(type_of_optional_to_string_fn(), "reflect_type_of.User | null"))
 }
 
 function type_of_map_to_string_fn() -> string {

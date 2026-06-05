@@ -126,25 +126,10 @@ impl fmt::Display for TyTemplate {
             Self::TypeArgRef(n) => write!(f, "#{n}"),
             Self::Array(inner) => write!(f, "{inner}[]"),
             Self::Union(parts) => {
-                // A union containing `null` is an optional type and renders with
-                // the postfix `?` (mirroring the former `TyTemplate::Optional`).
-                let is_null =
-                    |p: &TyTemplate| matches!(p, TyTemplate::Concrete(ty) if ty.is_null());
-                let non_null: Vec<&TyTemplate> = parts.iter().filter(|p| !is_null(p)).collect();
-                if non_null.len() == parts.len() {
-                    let strs: Vec<String> = parts.iter().map(ToString::to_string).collect();
-                    write!(f, "{}", strs.join(" | "))
-                } else {
-                    match non_null.as_slice() {
-                        [] => write!(f, "null"),
-                        [single] => write!(f, "{single}?"),
-                        _ => {
-                            let strs: Vec<String> =
-                                non_null.iter().map(ToString::to_string).collect();
-                            write!(f, "{}?", strs.join(" | "))
-                        }
-                    }
-                }
+                // `?` is sugar that exists only in source/lowering; after that a
+                // nullable type is a plain union.
+                let strs: Vec<String> = parts.iter().map(ToString::to_string).collect();
+                write!(f, "{}", strs.join(" | "))
             }
             Self::Map(k, v) => write!(f, "map<{k}, {v}>"),
             Self::Class(name, args) => {

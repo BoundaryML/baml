@@ -22,5 +22,5 @@ function user.main() -> int throws never {
   !! 386..391: type mismatch: expected int, got T
 }
 class user.Box$stream {
-  value: T?
+  value: T | null
 }

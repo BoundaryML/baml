@@ -215,11 +215,11 @@ function user.use_factory() -> int throws never {
   }
 }
 class user.MaybeBox {
-  value: T?
+  value: T | null
 }
 function user.MaybeBox.get_or_default(self: user.MaybeBox, default: unknown) -> unknown throws never {
   { : T
-    match (self.value : T?) : T
+    match (self.value : T | null) : T
       v: T =>
         v : T
       null =>
@@ -278,41 +278,41 @@ function user.bare_in_union_param(f: user.Foo<int> | user.Foo) -> string throws 
   }
 }
 class user.Box$stream {
-  value: T?
+  value: T | null
 }
 class user.Wrapper$stream {
-  data: T?
+  data: T | null
 }
 class user.Pair$stream {
-  first: A?
-  second: B?
+  first: A | null
+  second: B | null
 }
 class user.Maker$stream {
-  data: T?
+  data: T | null
 }
 class user.Holder$stream {
-  data: string?
+  data: string | null
 }
 class user.Shadow$stream {
-  value: T?
+  value: T | null
 }
 class user.Plain$stream {
-  name: string?
+  name: string | null
 }
 class user.Container$stream {
-  inner: user.Box$stream<T>?
+  inner: user.Box$stream<T> | null
 }
 class user.Factory$stream {
-  data: T?
+  data: T | null
 }
 class user.MaybeBox$stream {
-  value: T?
+  value: T | null
 }
 class user.Stack$stream {
   items: T[]
 }
 class user.Foo$stream {
-  value: T?
+  value: T | null
 }
 class user.Todo {
   id: int
@@ -334,8 +334,8 @@ function user.GetTodo() -> user.Todo throws never {
   !! 165..185: unresolved name: HttpMethod
 }
 class user.Todo$stream {
-  id: int?
-  title: string?
-  completed: bool?
-  userId: int?
+  id: int | null
+  title: string | null
+  completed: bool | null
+  userId: int | null
 }

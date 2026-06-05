@@ -197,7 +197,7 @@ function closure_captures_type_arg_optional_of_int_fn() -> string {
 }
 
 test "closure_captures_type_arg_optional_of_int" {
-    assert.is_true(baml.deep_equals(closure_captures_type_arg_optional_of_int_fn(), "int?"))
+    assert.is_true(baml.deep_equals(closure_captures_type_arg_optional_of_int_fn(), "int | null"))
 }
 
 // ─── Depth-3 method-call paths ────────────────────────────────────────────────

@@ -3,7 +3,7 @@ source: crates/baml_tests/src/generated_tests.rs
 ---
 === TIR2 ===
 type user.Searcher = (query: string, max_results?: int) -> int throws never
-type user.NarrowSearcher = (query: string, filter?: string?) -> string[] throws never
+type user.NarrowSearcher = (query: string, filter?: string | null) -> string[] throws never
 function user.TestClient$new() -> ? throws never {
   baml.llm.PrimitiveClient { name: "TestClient", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: null, base_url: null, allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: null, provider_options: null, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map {  } } } : baml.llm.PrimitiveClient
 }
@@ -17,7 +17,7 @@ function user.Search(query: string, max_results: int = 10, filter: string = "non
     max_results : int
   }
 }
-function user.SearchDocs(query: string, max_results: int = 10, filter: string? = null, chunk_size: int = query.length()) -> string[] throws never {
+function user.SearchDocs(query: string, max_results: int = 10, filter: string | null = null, chunk_size: int = query.length()) -> string[] throws never {
   { : string[]
     [query] : string[]
   }
@@ -39,11 +39,11 @@ function user.UseRequiredByName() -> string[] throws never {
 }
 function user.UseOptionalDropping() -> string[] throws never {
   { : string[]
-    let narrowed: NarrowSearcher = SearchDocs : (query: string, max_results?: int, filter?: string?, chunk_size?: int) -> string[] throws never -> (query: string, filter?: string?) -> string[] throws never
+    let narrowed: NarrowSearcher = SearchDocs : (query: string, max_results?: int, filter?: string | null, chunk_size?: int) -> string[] throws never -> (query: string, filter?: string | null) -> string[] throws never
     narrowed("cats", filter = "recent") : string[]
   }
 }
-function user.HostEntry(query: string, max_results: int = 10, filter: string? = null) -> int throws never {
+function user.HostEntry(query: string, max_results: int = 10, filter: string | null = null) -> int throws never {
   { : int
     if (filter == null : bool) : int
       { : int
@@ -78,7 +78,7 @@ function user.SearchService.Run(self: user.SearchService, query: string, limit: 
     Search(query = query, max_results = limit, filter = self.base) : int
   }
 }
-function user.SearchService.Docs(self: user.SearchService, query: string, filter: string? = null) -> string[] throws never {
+function user.SearchService.Docs(self: user.SearchService, query: string, filter: string | null = null) -> string[] throws never {
   { : string[]
     SearchDocs(query, filter = filter) : string[]
   }
@@ -91,12 +91,12 @@ function user.SearchService.from_json(j: baml.json.json) -> user.SearchService t
 }
 type user.Searcher$stream = unknown
 type user.NarrowSearcher$stream = unknown
-function user.AskDocs$stream(query: string, max_results: int = 10, filter: string = DefaultFilter(), client: baml.llm.Client = TestClient) -> baml.llm.Stream<string?, string> throws never {
-  baml.llm.stream_llm_function(client, "AskDocs", map { "query": query, "max_results": max_results, "filter": filter }) : baml.llm.Stream<string?, string>
+function user.AskDocs$stream(query: string, max_results: int = 10, filter: string = DefaultFilter(), client: baml.llm.Client = TestClient) -> baml.llm.Stream<string | null, string> throws never {
+  baml.llm.stream_llm_function(client, "AskDocs", map { "query": query, "max_results": max_results, "filter": filter }) : baml.llm.Stream<string | null, string>
 }
-function user.AskDocs$parse_stream(sse: baml.http.SseStream, client: baml.llm.Client = TestClient) -> baml.llm.Stream<string?, string> throws never {
-  client.__make_stream(sse, "AskDocs") : baml.llm.Stream<string?, string>
+function user.AskDocs$parse_stream(sse: baml.http.SseStream, client: baml.llm.Client = TestClient) -> baml.llm.Stream<string | null, string> throws never {
+  client.__make_stream(sse, "AskDocs") : baml.llm.Stream<string | null, string>
 }
 class user.SearchService$stream {
-  base: string?
+  base: string | null
 }

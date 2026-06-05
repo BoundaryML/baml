@@ -31,7 +31,7 @@ function user.too_many_type_args() -> type throws never {
   !! 884..919: function `type_of` expects 1 type argument(s), got 2
 }
 class user.User$stream {
-  name: string?
+  name: string | null
 }
 function user.assign_type_to_int(function_name: string) -> int throws never {
   { : never

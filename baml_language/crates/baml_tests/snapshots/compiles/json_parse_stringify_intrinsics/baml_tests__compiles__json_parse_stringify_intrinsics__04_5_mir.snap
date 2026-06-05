@@ -6,7 +6,7 @@ fn user.match_parsed(s: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // s // param
-    let _2: (bool | int | float | string | baml.json.json[] | map<string, baml.json.json>)? // j
+    let _2: bool | int | float | string | baml.json.json[] | map<string, baml.json.json> | null // j
     let _3: int
     let _4: baml.json.json[] // arr
     let _5: baml.json.json[]
@@ -74,8 +74,8 @@ fn user.parse_and_roundtrip(s: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // s // param
-    let _2: (bool | int | float | string | baml.json.json[] | map<string, baml.json.json>)? // j
-    let _3: (bool | int | float | string | baml.json.json[] | map<string, baml.json.json>)?
+    let _2: bool | int | float | string | baml.json.json[] | map<string, baml.json.json> | null // j
+    let _3: bool | int | float | string | baml.json.json[] | map<string, baml.json.json> | null
 
     bb0: {
         _2 = call const fn baml.json.parse(copy _1) -> [bb1];
@@ -95,8 +95,8 @@ fn user.parse_and_roundtrip_pretty(s: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // s // param
-    let _2: (bool | int | float | string | baml.json.json[] | map<string, baml.json.json>)? // j
-    let _3: (bool | int | float | string | baml.json.json[] | map<string, baml.json.json>)?
+    let _2: bool | int | float | string | baml.json.json[] | map<string, baml.json.json> | null // j
+    let _3: bool | int | float | string | baml.json.json[] | map<string, baml.json.json> | null
 
     bb0: {
         _2 = call const fn baml.json.parse(copy _1) -> [bb1];

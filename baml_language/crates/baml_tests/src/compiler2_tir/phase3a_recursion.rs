@@ -68,8 +68,8 @@ fn type_alias_valid_recursive_via_container() {
         "type JSON = string | int | bool | null | JSON[] | map<string, JSON>",
     );
     insta::assert_snapshot!(render_tir(&db, file), @"
-    type user.JSON = (string | int | bool | user.JSON[] | map<string, user.JSON>)?
-    type user.JSON$stream = (string | int | bool | user.JSON$stream[] | map<string, user.JSON$stream>)?
+    type user.JSON = string | int | bool | null | user.JSON[] | map<string, user.JSON>
+    type user.JSON$stream = string | int | bool | null | user.JSON$stream[] | map<string, user.JSON$stream>
     ");
 }
 
@@ -112,7 +112,7 @@ fn class_field_self_reference() {
       Node { next: baml.json.from_json<Node>(baml.json.field(j, "next")) } : user.Node
     }
     class user.Node$stream {
-      next: user.Node$stream?
+      next: user.Node$stream | null
     }
     "#);
 }
@@ -148,10 +148,10 @@ fn class_field_mutual_reference() {
       Wife { husband: baml.json.from_json<Husband>(baml.json.field(j, "husband")) } : user.Wife
     }
     class user.Husband$stream {
-      wife: user.Wife$stream?
+      wife: user.Wife$stream | null
     }
     class user.Wife$stream {
-      husband: user.Husband$stream?
+      husband: user.Husband$stream | null
     }
     "#);
 }
@@ -169,9 +169,9 @@ fn type_alias_optional_self_reference() {
     let mut db = make_db();
     let file = db.add_file("test.baml", "type A = A?");
     insta::assert_snapshot!(render_tir(&db, file), @"
-    type user.A = user.A?
+    type user.A = user.A | null
       !! 0..11: recursive type alias cycle: A
-    type user.A$stream = user.A$stream?
+    type user.A$stream = user.A$stream | null
       !! 0..0: recursive type alias cycle: A$stream
     ");
 }
@@ -209,8 +209,8 @@ fn type_alias_optional_list_self_reference() {
     let mut db = make_db();
     let file = db.add_file("test.baml", "type A = A[]?");
     insta::assert_snapshot!(render_tir(&db, file), @"
-    type user.A = user.A[]?
-    type user.A$stream = user.A$stream[]?
+    type user.A = user.A[] | null
+    type user.A$stream = user.A$stream[] | null
     ");
 }
 
@@ -233,11 +233,11 @@ fn type_alias_mutual_cycle_through_optional() {
     let mut db = make_db();
     let file = db.add_file("test.baml", "type A = B?\ntype B = A");
     insta::assert_snapshot!(render_tir(&db, file), @"
-    type user.A = user.B?
+    type user.A = user.B | null
       !! 0..11: recursive type alias cycle: A
     type user.B = user.A
       !! 11..22: recursive type alias cycle: B
-    type user.A$stream = user.B$stream?
+    type user.A$stream = user.B$stream | null
       !! 0..0: recursive type alias cycle: A$stream
     type user.B$stream = user.A$stream
       !! 0..0: recursive type alias cycle: B$stream
@@ -293,10 +293,10 @@ fn class_required_field_mutual_cycle() {
       B { a: baml.json.from_json<A>(baml.json.field(j, "a")) } : user.B
     }
     class user.A$stream {
-      b: user.B$stream?
+      b: user.B$stream | null
     }
     class user.B$stream {
-      a: user.A$stream?
+      a: user.A$stream | null
     }
     "#);
 }
@@ -319,7 +319,7 @@ fn class_required_field_self_cycle() {
       A { self_ref: baml.json.from_json<A>(baml.json.field(j, "self_ref")) } : user.A
     }
     class user.A$stream {
-      self_ref: user.A$stream?
+      self_ref: user.A$stream | null
     }
     "#);
 }
@@ -364,13 +364,13 @@ fn class_required_field_three_way_cycle() {
       C { a: baml.json.from_json<A>(baml.json.field(j, "a")) } : user.C
     }
     class user.A$stream {
-      b: user.B$stream?
+      b: user.B$stream | null
     }
     class user.B$stream {
-      c: user.C$stream?
+      c: user.C$stream | null
     }
     class user.C$stream {
-      a: user.A$stream?
+      a: user.A$stream | null
     }
     "#);
 }
@@ -384,10 +384,10 @@ fn class_optional_field_breaks_cycle() {
     let file = db.add_file("test.baml", "class A { b B? }\nclass B { a A }");
     insta::assert_snapshot!(render_tir(&db, file), @r#"
     class user.A {
-      b: user.B?
+      b: user.B | null
     }
     function user.A.to_json(self: user.A) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-      map { "b": self.b?.to_json() } : map<string, baml.json.json?>
+      map { "b": self.b?.to_json() } : map<string, baml.json.json | null>
     }
     function user.A.from_json(j: baml.json.json) -> user.A throws baml.json.JsonParseError | baml.json.JsonDecodeError {
       A { b: baml.json.from_json<B?>(baml.json.field(j, "b")) } : user.A
@@ -402,10 +402,10 @@ fn class_optional_field_breaks_cycle() {
       B { a: baml.json.from_json<A>(baml.json.field(j, "a")) } : user.B
     }
     class user.A$stream {
-      b: user.B$stream?
+      b: user.B$stream | null
     }
     class user.B$stream {
-      a: user.A$stream?
+      a: user.A$stream | null
     }
     "#);
 }
@@ -440,7 +440,7 @@ fn class_list_field_breaks_cycle() {
       bs: user.B$stream[]
     }
     class user.B$stream {
-      a: user.A$stream?
+      a: user.A$stream | null
     }
     "#);
 }
@@ -478,7 +478,7 @@ fn class_map_field_breaks_cycle() {
       bm: map<string, user.B$stream>
     }
     class user.B$stream {
-      a: user.A$stream?
+      a: user.A$stream | null
     }
     "#);
 }
@@ -515,11 +515,11 @@ fn class_cycle_through_type_alias() {
       B { a: baml.json.from_json<A>(baml.json.field(j, "a")) } : user.B
     }
     class user.A$stream {
-      b: user.B$stream?
+      b: user.B$stream | null
     }
     type user.AliasB$stream = user.B$stream
     class user.B$stream {
-      a: user.A$stream?
+      a: user.A$stream | null
     }
     "#);
 }
@@ -543,7 +543,7 @@ fn class_cycle_broken_by_alias_to_optional() {
     function user.A.from_json(j: baml.json.json) -> user.A throws baml.json.JsonParseError | baml.json.JsonDecodeError {
       A { b: baml.json.from_json<AliasB>(baml.json.field(j, "b")) } : user.A
     }
-    type user.AliasB = user.B?
+    type user.AliasB = user.B | null
     class user.B {
       a: user.A
     }
@@ -554,11 +554,11 @@ fn class_cycle_broken_by_alias_to_optional() {
       B { a: baml.json.from_json<A>(baml.json.field(j, "a")) } : user.B
     }
     class user.A$stream {
-      b: user.B$stream?
+      b: user.B$stream | null
     }
-    type user.AliasB$stream = user.B$stream?
+    type user.AliasB$stream = user.B$stream | null
     class user.B$stream {
-      a: user.A$stream?
+      a: user.A$stream | null
     }
     "#);
 }
@@ -591,10 +591,10 @@ fn class_union_field_all_variants_same_class() {
       B { a: baml.json.from_json<A>(baml.json.field(j, "a")) } : user.B
     }
     class user.A$stream {
-      b: (user.B$stream | user.B$stream)?
+      b: user.B$stream | user.B$stream | null
     }
     class user.B$stream {
-      a: user.A$stream?
+      a: user.A$stream | null
     }
     "#);
 }
@@ -626,10 +626,10 @@ fn class_union_field_different_variants_breaks_cycle() {
       B { a: baml.json.from_json<A>(baml.json.field(j, "a")) } : user.B
     }
     class user.A$stream {
-      b: (user.B$stream | string)?
+      b: user.B$stream | string | null
     }
     class user.B$stream {
-      a: user.A$stream?
+      a: user.A$stream | null
     }
     "#);
 }

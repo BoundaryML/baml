@@ -35,8 +35,8 @@ function user.check_instanceof_in_if(x: user.Cat | user.Dog) -> string throws ne
   }
 }
 class user.Cat$stream {
-  name: string?
+  name: string | null
 }
 class user.Dog$stream {
-  breed: string?
+  breed: string | null
 }

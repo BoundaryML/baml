@@ -35,8 +35,8 @@ function user.MetaField.from_json(j: baml.json.json) -> user.MetaField throws ba
 }
 enum user.Kind
 class user.RiskFactor$stream {
-  type: string?
-  severity: float?
+  type: string | null
+  severity: float | null
 }
 class user.MetaField$stream {
   type: unknown
@@ -59,7 +59,7 @@ function user.test_return_type(function_name: string) -> type throws never {
 }
 function user.test_optional(function_name: string) -> string throws never {
   { : never
-    let t: type? = null : null -> type?
+    let t: type? = null : null -> type | null
     return "ok" : "ok"
   }
 }

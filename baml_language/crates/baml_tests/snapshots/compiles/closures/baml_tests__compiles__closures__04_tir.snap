@@ -214,28 +214,28 @@ function user.test_repeated_bound_calls() -> int throws never {
   }
 }
 class user.Formatter$stream {
-  prefix: string?
+  prefix: string | null
 }
 class user.RangeCheck$stream {
-  min: int?
-  max: int?
+  min: int | null
+  max: int | null
 }
 class user.Counter$stream {
-  value: int?
+  value: int | null
 }
 class user.Employee$stream {
-  first: string?
-  last: string?
+  first: string | null
+  last: string | null
 }
 class user.Config$stream {
-  encoder: user.Encoder$stream?
+  encoder: user.Encoder$stream | null
 }
 class user.Encoder$stream {
-  charset: string?
+  charset: string | null
 }
 class user.Box$stream {
-  value: T?
+  value: T | null
 }
 class user.Calculator$stream {
-  op: string?
+  op: string | null
 }

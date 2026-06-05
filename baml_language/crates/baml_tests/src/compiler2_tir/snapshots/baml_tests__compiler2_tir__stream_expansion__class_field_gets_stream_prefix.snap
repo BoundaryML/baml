@@ -21,8 +21,8 @@ function user.Outer.from_json(j: baml.json.json) -> user.Outer throws baml.json.
   Outer { inner: baml.json.from_json<Inner>(baml.json.field(j, "inner")) } : user.Outer
 }
 class user.Inner$stream {
-  value: string?
+  value: string | null
 }
 class user.Outer$stream {
-  inner: user.Inner$stream?
+  inner: user.Inner$stream | null
 }

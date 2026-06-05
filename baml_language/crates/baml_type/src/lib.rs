@@ -429,22 +429,6 @@ impl Ty {
         self
     }
 
-    /// Split a union's members into its non-null members and whether a `null`
-    /// member was present. Used to render nullable unions as `base?` and to
-    /// strip the null on narrowing.
-    fn separate_null(members: &[Ty]) -> (Vec<&Ty>, bool) {
-        let mut non_null = Vec::new();
-        let mut had_null = false;
-        for m in members {
-            if m.is_null() {
-                had_null = true;
-            } else {
-                non_null.push(m);
-            }
-        }
-        (non_null, had_null)
-    }
-
     /// `T[]` (list) with default attributes.
     pub fn list(inner: Ty) -> Self {
         Ty::List(Box::new(inner), TyAttr::default())
@@ -840,33 +824,11 @@ impl fmt::Display for Ty {
             }
             Ty::Map { key, value, .. } => write!(f, "map<{key}, {value}>"),
             Ty::Union(types, _) => {
-                // A union containing `null` is an optional type and renders with
-                // the postfix `?`: `int | null` → `int?`, `int | string | null`
-                // → `(int | string)?`.
-                let (non_null, had_null) = Ty::separate_null(types);
-                if had_null {
-                    match non_null.as_slice() {
-                        [] => write!(f, "null"),
-                        [single] => {
-                            single.fmt_as_postfix_base(f)?;
-                            write!(f, "?")
-                        }
-                        _ => {
-                            write!(f, "(")?;
-                            for (i, m) in non_null.iter().enumerate() {
-                                if i > 0 {
-                                    write!(f, " | ")?;
-                                }
-                                write!(f, "{m}")?;
-                            }
-                            write!(f, ")?")
-                        }
-                    }
-                } else {
-                    let parts: Vec<std::string::String> =
-                        types.iter().map(std::string::ToString::to_string).collect();
-                    write!(f, "{}", parts.join(" | "))
-                }
+                // `?` is sugar that exists only in source/lowering; after that a
+                // nullable type is a plain union and renders as `T | null`.
+                let parts: Vec<std::string::String> =
+                    types.iter().map(std::string::ToString::to_string).collect();
+                write!(f, "{}", parts.join(" | "))
             }
             Ty::Function {
                 params,
@@ -1066,9 +1028,10 @@ mod tests {
     }
 
     #[test]
-    fn test_display_optional_union_parenthesized() {
+    fn test_display_nullable_union_is_plain_union() {
+        // `?` does not survive lowering; a nullable type displays as a union.
         let ty = Ty::optional(Ty::union([ty_int(), ty_string()]));
-        assert_eq!(ty.to_string(), "(int | string)?");
+        assert_eq!(ty.to_string(), "int | string | null");
     }
 
     #[test]
@@ -1146,7 +1109,7 @@ mod tests {
 
         assert_eq!(
             Ty::optional(callback.clone()).to_string(),
-            "((int) -> string throws never)?"
+            "(int) -> string throws never | null"
         );
         assert_eq!(
             Ty::list(callback).to_string(),

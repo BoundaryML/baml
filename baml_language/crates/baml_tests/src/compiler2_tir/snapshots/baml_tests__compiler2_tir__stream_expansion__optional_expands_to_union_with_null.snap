@@ -12,19 +12,19 @@ function user.Inner.from_json(j: baml.json.json) -> user.Inner throws baml.json.
   Inner { value: baml.json.from_json<string>(baml.json.field(j, "value")) } : user.Inner
 }
 class user.WithOptionals {
-  name: string?
-  inner: user.Inner?
+  name: string | null
+  inner: user.Inner | null
 }
 function user.WithOptionals.to_json(self: user.WithOptionals) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  map { "name": self.name?.to_json(), "inner": self.inner?.to_json() } : map<string, baml.json.json?>
+  map { "name": self.name?.to_json(), "inner": self.inner?.to_json() } : map<string, baml.json.json | null>
 }
 function user.WithOptionals.from_json(j: baml.json.json) -> user.WithOptionals throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   WithOptionals { name: baml.json.from_json<string?>(baml.json.field(j, "name")), inner: baml.json.from_json<Inner?>(baml.json.field(j, "inner")) } : user.WithOptionals
 }
 class user.Inner$stream {
-  value: string?
+  value: string | null
 }
 class user.WithOptionals$stream {
-  name: string?
-  inner: user.Inner$stream?
+  name: string | null
+  inner: user.Inner$stream | null
 }

@@ -862,30 +862,13 @@ impl Ty {
                 }
             }
             Ty::Union(members, _) => {
-                // A union containing `null` is an optional type — render it with
-                // the postfix `?`: `int | null` → `int?`, `int | string | null`
-                // → `(int | string)?`.
-                let non_null: Vec<&Ty> = members.iter().filter(|m| !m.is_null()).collect();
-                if non_null.len() == members.len() {
-                    members
-                        .iter()
-                        .map(|m| m.render_with(s))
-                        .collect::<Vec<_>>()
-                        .join(" | ")
-                } else {
-                    match non_null.as_slice() {
-                        [] => "null".to_string(),
-                        [single] => format!("{}?", single.render_as_postfix_base(s)),
-                        _ => {
-                            let inner = non_null
-                                .iter()
-                                .map(|m| m.render_with(s))
-                                .collect::<Vec<_>>()
-                                .join(" | ");
-                            format!("({inner})?")
-                        }
-                    }
-                }
+                // `?` is sugar that exists only in source/lowering; after that a
+                // nullable type is a plain union and renders as `T | null`.
+                members
+                    .iter()
+                    .map(|m| m.render_with(s))
+                    .collect::<Vec<_>>()
+                    .join(" | ")
             }
             Ty::Literal(lit, _freshness, _) => lit.to_string(),
             Ty::Function {

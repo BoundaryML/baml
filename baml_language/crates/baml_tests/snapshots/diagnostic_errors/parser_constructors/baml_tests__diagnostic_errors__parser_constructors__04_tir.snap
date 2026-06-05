@@ -43,8 +43,8 @@ function user.mixedArray() -> (int | string)[] throws never {
   }
 }
 class user.Point$stream {
-  x: int?
-  y: int?
+  x: int | null
+  y: int | null
 }
 class user.Point {
   x: int
@@ -77,12 +77,12 @@ function user.vec2d() -> user.Vec2D throws never {
   }
 }
 class user.Point$stream {
-  x: int?
-  y: int?
+  x: int | null
+  y: int | null
 }
 class user.Vec2D$stream {
-  p: user.Point$stream?
-  q: user.Point$stream?
+  p: user.Point$stream | null
+  q: user.Point$stream | null
 }
 function user.stringValues() -> map<string, string> throws never {
   { : map<string, string>

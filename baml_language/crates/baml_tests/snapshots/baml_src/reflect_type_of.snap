@@ -184,7 +184,7 @@ function reflect_type_of.type_of_map_to_string_fn() -> string {
 }
 
 function reflect_type_of.type_of_optional_to_string_fn() -> string {
-    load_type reflect_type_of.User?
+    load_type reflect_type_of.User | null
     call baml.TypeValue.to_string
     return
 }

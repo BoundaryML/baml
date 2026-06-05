@@ -235,26 +235,11 @@ impl fmt::Display for Ty {
             Ty::List(inner) => write!(f, "{inner}[]"),
             Ty::Map { key, value } => write!(f, "map<{key}, {value}>"),
             Ty::Union(types) => {
-                // A union containing `null` is an optional type and renders with
-                // the postfix `?`: `int | null` → `int?`.
-                let non_null: Vec<&Ty> = types.iter().filter(|t| !matches!(t, Ty::Null)).collect();
-                if non_null.len() == types.len() {
-                    let parts: Vec<std::string::String> =
-                        types.iter().map(std::string::ToString::to_string).collect();
-                    write!(f, "({})", parts.join(" | "))
-                } else {
-                    match non_null.as_slice() {
-                        [] => write!(f, "null"),
-                        [single] => write!(f, "{single}?"),
-                        _ => {
-                            let parts: Vec<std::string::String> = non_null
-                                .iter()
-                                .map(std::string::ToString::to_string)
-                                .collect();
-                            write!(f, "({})?", parts.join(" | "))
-                        }
-                    }
-                }
+                // `?` is sugar that exists only in source/lowering; after that a
+                // nullable type is a plain union.
+                let parts: Vec<std::string::String> =
+                    types.iter().map(std::string::ToString::to_string).collect();
+                write!(f, "({})", parts.join(" | "))
             }
             Ty::RustType => write!(f, "$rust_type"),
             Ty::Literal(lit) => match lit {

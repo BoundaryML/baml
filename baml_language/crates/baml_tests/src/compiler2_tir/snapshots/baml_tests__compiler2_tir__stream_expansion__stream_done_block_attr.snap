@@ -13,6 +13,6 @@ function user.AtomicPoint.from_json(j: baml.json.json) -> user.AtomicPoint throw
   AtomicPoint { x: baml.json.from_json<float>(baml.json.field(j, "x")), y: baml.json.from_json<float>(baml.json.field(j, "y")) } : user.AtomicPoint
 }
 class user.AtomicPoint$stream {
-  x: float?
-  y: float?
+  x: float | null
+  y: float | null
 }

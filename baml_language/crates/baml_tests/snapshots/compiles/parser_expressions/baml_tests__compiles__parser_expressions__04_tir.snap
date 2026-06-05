@@ -51,16 +51,16 @@ function user.Settings.from_json(j: baml.json.json) -> user.Settings throws baml
   Settings { theme: baml.json.from_json<string>(baml.json.field(j, "theme")) } : user.Settings
 }
 class user.User$stream {
-  name: string?
-  profile: user.Profile$stream?
+  name: string | null
+  profile: user.Profile$stream | null
   tags: string[]
 }
 class user.Profile$stream {
-  bio: string?
-  settings: user.Settings$stream?
+  bio: string | null
+  settings: user.Settings$stream | null
 }
 class user.Settings$stream {
-  theme: string?
+  theme: string | null
 }
 class user.IndexUser {
   name: string
@@ -84,8 +84,8 @@ function user.IndexAccess(users: user.IndexUser[]) -> string throws never {
   }
 }
 class user.IndexUser$stream {
-  name: string?
-  age: int?
+  name: string | null
+  age: int | null
   tags: string[]
 }
 function user.TestPrecedence() -> bool throws never {

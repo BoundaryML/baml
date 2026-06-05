@@ -302,7 +302,7 @@ function user.test_nested_map() -> int[][] {
     return
 }
 
-function user.test_optional_return() -> int? {
+function user.test_optional_return() -> int | null {
     load_const -1
     make_closure .<lambda(test_optional_return, 0)>, 0
     call_indirect

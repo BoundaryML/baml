@@ -147,12 +147,12 @@ function user.llm.openai.DestructureBareInNamespace(response: user.llm.openai.Re
   }
 }
 class user.llm.openai.Response$stream {
-  text: string?
-  score: int?
+  text: string | null
+  score: int | null
 }
 class user.llm.openai.Box$stream {
-  value: T?
+  value: T | null
 }
 class user.llm.openai.Outer$stream {
-  inner: user.llm.openai.Box$stream<T>?
+  inner: user.llm.openai.Box$stream<T> | null
 }

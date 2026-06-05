@@ -23,6 +23,6 @@ function user.deserialize_user(s: string) -> user.User throws baml.json.JsonPars
   }
 }
 class user.User$stream {
-  name: string?
-  age: int?
+  name: string | null
+  age: int | null
 }

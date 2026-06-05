@@ -347,26 +347,26 @@ source: crates/baml_tests/src/generated_tests.rs
      │ Note: Error code: E0063
 ─────╯
 
-  [type] error: non-exhaustive match on type Status?; missing: null
+  [type] error: non-exhaustive match on type Status | null; missing: null
      ╭─[ match_exhaustiveness.baml:671:70 ]
      │
  671 │ ╭─▶ function NonExhaustiveNullableEnumMissingNull(s: Status?) -> string {
      ┆ ┆   
  676 │ ├─▶     }
      │ │           
-     │ ╰─────────── non-exhaustive match on type Status?; missing: null
+     │ ╰─────────── non-exhaustive match on type Status | null; missing: null
      │     
      │     Note: Error code: E0062
 ─────╯
 
-  [type] error: non-exhaustive match on type Status?; missing: user.Status.Pending
+  [type] error: non-exhaustive match on type Status | null; missing: user.Status.Pending
      ╭─[ match_exhaustiveness.baml:680:73 ]
      │
  680 │ ╭─▶ function NonExhaustiveNullableEnumMissingVariant(s: Status?) -> string {
      ┆ ┆   
  685 │ ├─▶     }
      │ │           
-     │ ╰─────────── non-exhaustive match on type Status?; missing: user.Status.Pending
+     │ ╰─────────── non-exhaustive match on type Status | null; missing: user.Status.Pending
      │     
      │     Note: Error code: E0062
 ─────╯

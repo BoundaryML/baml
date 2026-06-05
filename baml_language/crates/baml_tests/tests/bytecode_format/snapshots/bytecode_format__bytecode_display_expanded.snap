@@ -47,7 +47,7 @@ function assert.is_true(condition: bool) -> null {
       8   return                 
 }
 
-function assert.not_null(value: unknown?) -> null {
+function assert.not_null(value: unknown | null) -> null {
   14   0   load_var 1             (value)
        1   load_const 0           (null)
        2   cmp_op ==              
@@ -249,7 +249,7 @@ function testing.TestCollector.new(prefix: string) -> testing.TestCollector {
        4   return            
 }
 
-function testing.TestCollector.register_test(self: testing.TestCollector, name: string, body: () -> void throws unknown, runner: ((() -> testing.TestReport throws never) -> (() -> testing.TestReport throws never) throws never)?) -> void {
+function testing.TestCollector.register_test(self: testing.TestCollector, name: string, body: () -> void throws unknown, runner: (() -> testing.TestReport throws never) -> (() -> testing.TestReport throws never) throws never | null) -> void {
   39   0    load_var 1              (self)
        1    load_field 0            (prefix)
        2    load_const 0            ("")
@@ -345,7 +345,7 @@ function testing.TestCollector.register_test(self: testing.TestCollector, name: 
        83   jump -56                (to 27)
 }
 
-function testing.TestCollector.register_test_set(self: testing.TestCollector, name: string, collector: (testing.TestCollector) -> void throws unknown, runner: ((() -> testing.TestSetReport throws never) -> (() -> testing.TestSetReport throws never) throws never)?) -> void {
+function testing.TestCollector.register_test_set(self: testing.TestCollector, name: string, collector: (testing.TestCollector) -> void throws unknown, runner: (() -> testing.TestSetReport throws never) -> (() -> testing.TestSetReport throws never) throws never | null) -> void {
   50   0    load_var 1              (self)
        1    load_field 0            (prefix)
        2    load_const 0            ("")
@@ -969,7 +969,7 @@ function testing.TestSetReport.to_json(self: testing.TestSetReport) -> baml.json
        23   return                
 }
 
-function testing.run_test(body: () -> void throws unknown, runner: ((() -> testing.TestReport throws never) -> (() -> testing.TestReport throws never) throws never)?) -> testing.TestReport {
+function testing.run_test(body: () -> void throws unknown, runner: (() -> testing.TestReport throws never) -> (() -> testing.TestReport throws never) throws never | null) -> testing.TestReport {
         0    load_var 1             
         1    make_cell              
         2    store_var 1            
@@ -995,7 +995,7 @@ function testing.run_test(body: () -> void throws unknown, runner: ((() -> testi
         17   return                 
 }
 
-function testing.run_testset(run_children: () -> testing.TestSetReport throws never, runner: ((() -> testing.TestSetReport throws never) -> (() -> testing.TestSetReport throws never) throws never)?) -> testing.TestSetReport {
+function testing.run_testset(run_children: () -> testing.TestSetReport throws never, runner: (() -> testing.TestSetReport throws never) -> (() -> testing.TestSetReport throws never) throws never | null) -> testing.TestSetReport {
   211   0    load_var 2             (runner)
         1    load_const 0           (null)
         2    cmp_op ==              

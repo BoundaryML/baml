@@ -941,7 +941,7 @@ function match_basics.nested_match() -> int {
     return
 }
 
-function match_basics.process_optional(x: int?) -> string {
+function match_basics.process_optional(x: int | null) -> string {
     load_var x
     load_const null
     cmp_op ==
@@ -959,7 +959,7 @@ function match_basics.process_optional(x: int?) -> string {
     return
 }
 
-function match_basics.process_optional_with_zero(x: int?) -> string {
+function match_basics.process_optional_with_zero(x: int | null) -> string {
     load_var x
     load_const null
     cmp_op ==
