@@ -1188,6 +1188,11 @@ impl<'db> TypeInferenceBuilder<'db> {
     fn callback_concrete_throws_from_expr(&self, expr_id: ExprId) -> Option<Ty> {
         if let Some(throws) = self.lambda_effective_throws.get(&expr_id) {
             let facts = crate::throw_inference::flatten_ty_to_facts(throws);
+            if facts.is_empty() {
+                return Some(Ty::Never {
+                    attr: TyAttr::default(),
+                });
+            }
             if let Some(concrete) = Self::ty_from_concrete_facts(&facts) {
                 return Some(concrete);
             }
@@ -1199,7 +1204,50 @@ impl<'db> TypeInferenceBuilder<'db> {
             return None;
         };
         let facts = crate::throw_inference::flatten_ty_to_facts(&throws);
+        if facts.is_empty() {
+            return Some(Ty::Never {
+                attr: TyAttr::default(),
+            });
+        }
         Self::ty_from_concrete_facts(&facts)
+    }
+
+    fn replace_callable_throws(ty: Ty, concrete_throws: &Ty) -> Ty {
+        match ty {
+            Ty::Function {
+                generic_params,
+                generic_param_bounds,
+                params,
+                ret,
+                attr,
+                ..
+            } => Ty::Function {
+                generic_params,
+                generic_param_bounds,
+                params,
+                ret,
+                throws: Box::new(concrete_throws.clone()),
+                attr,
+            },
+            Ty::Optional(inner, attr) => Ty::Optional(
+                Box::new(Self::replace_callable_throws(*inner, concrete_throws)),
+                attr,
+            ),
+            Ty::Union(members, attr) => Ty::Union(
+                members
+                    .into_iter()
+                    .map(|member| Self::replace_callable_throws(member, concrete_throws))
+                    .collect(),
+                attr,
+            ),
+            other => other,
+        }
+    }
+
+    fn call_arg_ty_for_generic_inference(&self, expr_id: ExprId, ty: Ty) -> Ty {
+        self.callback_concrete_throws_from_expr(expr_id)
+            .map(|throws| Self::replace_callable_throws(ty.clone(), &throws))
+            .unwrap_or(ty)
     }
 
     fn function_throws_exactly_missing_effect(&self, ty: &Ty, missing_effect_fact: &Ty) -> bool {
@@ -2851,7 +2899,8 @@ impl<'db> TypeInferenceBuilder<'db> {
                         } else {
                             self.infer_expr(*arg, body)
                         };
-                        crate::generics::infer_bindings_rigid_self(
+                        let arg_ty = self.call_arg_ty_for_generic_inference(*arg, arg_ty);
+                        self.infer_call_bindings_rigid_self(
                             param_ty,
                             &arg_ty,
                             &mut bindings,
@@ -2882,7 +2931,8 @@ impl<'db> TypeInferenceBuilder<'db> {
                         } else {
                             self.infer_expr(*arg, body)
                         };
-                        crate::generics::infer_bindings_rigid_self(
+                        let arg_ty = self.call_arg_ty_for_generic_inference(*arg, arg_ty);
+                        self.infer_call_bindings_rigid_self(
                             param_ty,
                             &arg_ty,
                             &mut bindings,
@@ -2960,12 +3010,13 @@ impl<'db> TypeInferenceBuilder<'db> {
                         .get(arg)
                         .cloned()
                         .unwrap_or_else(|| self.infer_expr(*arg, body));
-                    crate::generics::infer_bindings_allow_typevars(
+                    let arg_ty = self.call_arg_ty_for_generic_inference(*arg, arg_ty);
+                    self.infer_call_bindings_allow_typevars(
                         &param.ty,
                         &arg_ty,
                         &mut bound_check_bindings,
                     );
-                    crate::generics::infer_bindings_allow_typevars(
+                    self.infer_call_bindings_allow_typevars(
                         &param.ty,
                         &arg_ty,
                         &mut runtime_type_arg_bindings,
@@ -8084,6 +8135,9 @@ impl<'db> TypeInferenceBuilder<'db> {
             Ty::List(element_ty, _) => {
                 // Bridge: int[] → Array<int> — resolve via builtin Array class.
                 self.resolve_builtin_member(&["Array"], &[element_ty.as_ref().clone()], member, at)
+                    .or_else(|| {
+                        self.try_registry_member(base_ty, Name::new("array"), member, at, bound)
+                    })
                     .unwrap_or_else(|| {
                         self.context.report_at_member_simple(
                             TirTypeError::UnresolvedMember {
@@ -8105,6 +8159,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                     member,
                     at,
                 )
+                .or_else(|| self.try_registry_member(base_ty, Name::new("map"), member, at, bound))
                 .unwrap_or_else(|| {
                     self.context.report_at_member_simple(
                         TirTypeError::UnresolvedMember {
@@ -8126,6 +8181,9 @@ impl<'db> TypeInferenceBuilder<'db> {
                     member,
                     at,
                 )
+                .or_else(|| {
+                    self.try_registry_member(base_ty, Name::new("future"), member, at, bound)
+                })
                 .unwrap_or_else(|| {
                     self.context.report_at_member_simple(
                         TirTypeError::UnresolvedMember {
@@ -8250,6 +8308,9 @@ impl<'db> TypeInferenceBuilder<'db> {
             Ty::Type { .. } => {
                 // Bridge: type → TypeValue companion class (provides `.to_string()`, etc.)
                 self.resolve_builtin_member(&["TypeValue"], &[], member, at)
+                    .or_else(|| {
+                        self.try_registry_member(base_ty, Name::new("type"), member, at, bound)
+                    })
                     .unwrap_or_else(|| {
                         self.context.report_at_member_simple(
                             TirTypeError::UnresolvedMember {
@@ -8273,6 +8334,9 @@ impl<'db> TypeInferenceBuilder<'db> {
             ) => {
                 // Bridge: media / binary primitives with builtin companion classes
                 self.resolve_builtin_member(p.builtin_class_path(), &[], member, at)
+                    .or_else(|| {
+                        self.try_registry_member(base_ty, Name::new(p.alias()), member, at, bound)
+                    })
                     .unwrap_or_else(|| {
                         self.context.report_at_member_simple(
                             TirTypeError::UnresolvedMember {
@@ -8591,6 +8655,261 @@ impl<'db> TypeInferenceBuilder<'db> {
             }
         }
         false
+    }
+
+    fn interface_view_in_requires_closure(
+        &self,
+        root_interface_ty: &Ty,
+        target_qtn: &crate::ty::QualifiedTypeName,
+    ) -> Option<Ty> {
+        let Ty::Interface(root_qtn, root_args, root_associated_bindings, _) = root_interface_ty
+        else {
+            return None;
+        };
+        let pkg_items = self.resolve_class_pkg_items(root_qtn.package())?;
+        let Some(Definition::Interface(root_loc)) =
+            pkg_items.lookup_type(root_qtn.namespace(), root_qtn.name())
+        else {
+            return None;
+        };
+        let db = self.context.db();
+        let pkg = baml_compiler2_hir::file_package::file_package(db, root_loc.file(db));
+        for (iface_loc, iface_args, iface_associated_bindings) in
+            crate::interfaces::interface_closure_locs_with_args_and_assoc(
+                db,
+                root_loc,
+                root_args,
+                root_associated_bindings,
+                pkg_items,
+                &pkg.namespace_path,
+            )
+        {
+            let iface_tree = baml_compiler2_hir::file_item_tree(db, iface_loc.file(db));
+            let Some(iface_data) = iface_tree.interfaces.get(&iface_loc.id(db)) else {
+                continue;
+            };
+            let iface_qtn = crate::lower_type_expr::qualify_def(
+                db,
+                Definition::Interface(iface_loc),
+                &iface_data.name,
+            );
+            if &iface_qtn == target_qtn {
+                return Some(Ty::Interface(
+                    iface_qtn,
+                    iface_args,
+                    iface_associated_bindings,
+                    TyAttr::default(),
+                ));
+            }
+        }
+        None
+    }
+
+    fn merge_interface_inference_candidate(&self, current: &mut Option<Ty>, candidate: Ty) -> bool {
+        match current {
+            Some(existing) => self.types_equivalent(existing, &candidate),
+            slot @ None => {
+                *slot = Some(candidate);
+                true
+            }
+        }
+    }
+
+    /// View `actual_ty` through the concrete interface instantiation required
+    /// by `formal_ty`.
+    ///
+    /// Generic call inference normally matches parameter and argument types by
+    /// structure. Interface implementations are nominal, so a concrete class
+    /// like `ArrayIterator<int>` must first be viewed as its implemented
+    /// `Iterator<int, never>` before a formal `Iterator<T, E>` can bind
+    /// `T = int` and `E = never`.
+    fn actual_interface_view_for_formal(&self, formal_ty: &Ty, actual_ty: &Ty) -> Option<Ty> {
+        let formal_ty = self.interface_type_with_default_associated_bindings(
+            self.expand_alias_chains(formal_ty.clone()),
+        );
+        let Ty::Interface(formal_qtn, _, _, _) = &formal_ty else {
+            return None;
+        };
+        let actual_ty = self.expand_alias_chains(actual_ty.clone());
+        let mut candidate = None;
+
+        if let Some(view) = self.interface_view_in_requires_closure(&actual_ty, formal_qtn)
+            && !self.merge_interface_inference_candidate(&mut candidate, view)
+        {
+            return None;
+        }
+
+        let db = self.context.db();
+        let registry = crate::interfaces::package_implements_registry(db, self.package_id);
+        for rule in &registry.interface_impl_rules {
+            let Some(bindings) = crate::interfaces::match_ty_pattern(
+                &rule.for_ty_pattern,
+                &actual_ty,
+                &rule.generic_params,
+                &self.aliases,
+            ) else {
+                continue;
+            };
+            let implemented_iface = crate::generics::substitute_ty(&rule.interface_ty, &bindings);
+            let Some(view) =
+                self.interface_view_in_requires_closure(&implemented_iface, formal_qtn)
+            else {
+                continue;
+            };
+            if !registry.type_implements_interface_via_rule(
+                &actual_ty,
+                &implemented_iface,
+                &self.aliases,
+                |actual, bound| self.is_subtype(actual, bound),
+            ) {
+                continue;
+            }
+            if !self.merge_interface_inference_candidate(&mut candidate, view) {
+                return None;
+            }
+        }
+
+        candidate
+    }
+
+    fn infer_call_bindings_rigid_self(
+        &self,
+        formal: &Ty,
+        actual: &Ty,
+        bindings: &mut FxHashMap<Name, Ty>,
+        rigid: Option<&Name>,
+    ) {
+        crate::generics::infer_bindings_rigid_self(formal, actual, bindings, rigid);
+        self.infer_call_bindings_via_interface_views_rigid(formal, actual, bindings, rigid);
+    }
+
+    fn infer_call_bindings_allow_typevars(
+        &self,
+        formal: &Ty,
+        actual: &Ty,
+        bindings: &mut FxHashMap<Name, Ty>,
+    ) {
+        crate::generics::infer_bindings_allow_typevars(formal, actual, bindings);
+        self.infer_call_bindings_via_interface_views_allow_typevars(formal, actual, bindings);
+    }
+
+    fn infer_call_bindings_via_interface_views_rigid(
+        &self,
+        formal: &Ty,
+        actual: &Ty,
+        bindings: &mut FxHashMap<Name, Ty>,
+        rigid: Option<&Name>,
+    ) {
+        if let Some(view) = self.actual_interface_view_for_formal(formal, actual) {
+            crate::generics::infer_bindings_rigid_self(formal, &view, bindings, rigid);
+        }
+        self.infer_call_bindings_via_matching_shape(formal, actual, bindings, rigid, false);
+    }
+
+    fn infer_call_bindings_via_interface_views_allow_typevars(
+        &self,
+        formal: &Ty,
+        actual: &Ty,
+        bindings: &mut FxHashMap<Name, Ty>,
+    ) {
+        if let Some(view) = self.actual_interface_view_for_formal(formal, actual) {
+            crate::generics::infer_bindings_allow_typevars(formal, &view, bindings);
+        }
+        self.infer_call_bindings_via_matching_shape(formal, actual, bindings, None, true);
+    }
+
+    fn infer_call_bindings_via_matching_shape(
+        &self,
+        formal: &Ty,
+        actual: &Ty,
+        bindings: &mut FxHashMap<Name, Ty>,
+        rigid: Option<&Name>,
+        allow_typevar_actuals: bool,
+    ) {
+        match (formal, actual) {
+            (Ty::List(f, _), Ty::List(a, _))
+            | (Ty::EvolvingList(f, _), Ty::EvolvingList(a, _))
+            | (Ty::Optional(f, _), Ty::Optional(a, _)) => {
+                if allow_typevar_actuals {
+                    self.infer_call_bindings_via_interface_views_allow_typevars(f, a, bindings);
+                } else {
+                    self.infer_call_bindings_via_interface_views_rigid(f, a, bindings, rigid);
+                }
+            }
+            (Ty::Map(fk, fv, _), Ty::Map(ak, av, _))
+            | (Ty::EvolvingMap(fk, fv, _), Ty::EvolvingMap(ak, av, _)) => {
+                if allow_typevar_actuals {
+                    self.infer_call_bindings_via_interface_views_allow_typevars(fk, ak, bindings);
+                    self.infer_call_bindings_via_interface_views_allow_typevars(fv, av, bindings);
+                } else {
+                    self.infer_call_bindings_via_interface_views_rigid(fk, ak, bindings, rigid);
+                    self.infer_call_bindings_via_interface_views_rigid(fv, av, bindings, rigid);
+                }
+            }
+            (Ty::Future(fv, fe, _), Ty::Future(av, ae, _)) => {
+                if allow_typevar_actuals {
+                    self.infer_call_bindings_via_interface_views_allow_typevars(fv, av, bindings);
+                    self.infer_call_bindings_via_interface_views_allow_typevars(fe, ae, bindings);
+                } else {
+                    self.infer_call_bindings_via_interface_views_rigid(fv, av, bindings, rigid);
+                    self.infer_call_bindings_via_interface_views_rigid(fe, ae, bindings, rigid);
+                }
+            }
+            (
+                Ty::Function {
+                    params: fp,
+                    ret: fr,
+                    throws: fth,
+                    ..
+                },
+                Ty::Function {
+                    params: ap,
+                    ret: ar,
+                    throws: ath,
+                    ..
+                },
+            ) => {
+                for (fp, ap) in fp.iter().zip(ap.iter()) {
+                    if allow_typevar_actuals {
+                        self.infer_call_bindings_via_interface_views_allow_typevars(
+                            &fp.ty, &ap.ty, bindings,
+                        );
+                    } else {
+                        self.infer_call_bindings_via_interface_views_rigid(
+                            &fp.ty, &ap.ty, bindings, rigid,
+                        );
+                    }
+                }
+                if allow_typevar_actuals {
+                    self.infer_call_bindings_via_interface_views_allow_typevars(fr, ar, bindings);
+                    self.infer_call_bindings_via_interface_views_allow_typevars(fth, ath, bindings);
+                } else {
+                    self.infer_call_bindings_via_interface_views_rigid(fr, ar, bindings, rigid);
+                    self.infer_call_bindings_via_interface_views_rigid(fth, ath, bindings, rigid);
+                }
+            }
+            (Ty::Union(f_members, _), Ty::Union(a_members, _))
+                if f_members.len() == a_members.len() =>
+            {
+                for (formal_member, actual_member) in f_members.iter().zip(a_members.iter()) {
+                    if allow_typevar_actuals {
+                        self.infer_call_bindings_via_interface_views_allow_typevars(
+                            formal_member,
+                            actual_member,
+                            bindings,
+                        );
+                    } else {
+                        self.infer_call_bindings_via_interface_views_rigid(
+                            formal_member,
+                            actual_member,
+                            bindings,
+                            rigid,
+                        );
+                    }
+                }
+            }
+            _ => {}
+        }
     }
 
     /// Resolve a member access for a specific segment of a multi-segment `Path` expression.

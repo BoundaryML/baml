@@ -1,0 +1,3225 @@
+---
+source: crates/baml_tests/tests/baml_src.rs
+---
+function iter.$init_test_ns_iter_iter(registry: testing.TestCollector) -> null {
+    load_var registry
+    load_const "iter_collect"
+    make_closure .<lambda($init_test_ns_iter_iter, 0)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "iter_reduce"
+    make_closure .<lambda($init_test_ns_iter_iter, 1)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "iter_count"
+    make_closure .<lambda($init_test_ns_iter_iter, 2)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "iter_some_every_find"
+    make_closure .<lambda($init_test_ns_iter_iter, 3)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "iter_range"
+    make_closure .<lambda($init_test_ns_iter_iter, 4)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "iter_chain"
+    make_closure .<lambda($init_test_ns_iter_iter, 5)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "iter_repeat"
+    make_closure .<lambda($init_test_ns_iter_iter, 6)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "iter_map"
+    make_closure .<lambda($init_test_ns_iter_iter, 7)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "iter_map_implicit_source"
+    make_closure .<lambda($init_test_ns_iter_iter, 8)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "iter_explicit_map_coerces_to_iterator"
+    make_closure .<lambda($init_test_ns_iter_iter, 9)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "iter_filter"
+    make_closure .<lambda($init_test_ns_iter_iter, 10)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "iter_filter_implicit_source"
+    make_closure .<lambda($init_test_ns_iter_iter, 11)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "iter_filter_map"
+    make_closure .<lambda($init_test_ns_iter_iter, 12)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "iter_filter_map_implicit_source"
+    make_closure .<lambda($init_test_ns_iter_iter, 13)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "iter_flat_map"
+    make_closure .<lambda($init_test_ns_iter_iter, 14)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "iter_flat_map_implicit_source"
+    make_closure .<lambda($init_test_ns_iter_iter, 15)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "iter_flatten"
+    make_closure .<lambda($init_test_ns_iter_iter, 16)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "iter_peekable"
+    make_closure .<lambda($init_test_ns_iter_iter, 17)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "iter_step_by"
+    make_closure .<lambda($init_test_ns_iter_iter, 18)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "iter_array_iter"
+    make_closure .<lambda($init_test_ns_iter_iter, 19)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "out_of_body_inferred_ctor_dispatch"
+    make_closure .<lambda($init_test_ns_iter_iter, 20)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_const null
+    return
+}
+
+function iter.iter_array_iter() -> int[] {
+    load_const 1
+    load_const 2
+    load_const 3
+    alloc_array 3
+    store_var_load_var _2
+    is_type StepBy<...>
+    pop_jump_if_false L0
+    jump L11
+
+  L0:
+    load_var _2
+    is_type Repeat<...>
+    pop_jump_if_false L1
+    jump L10
+
+  L1:
+    load_var _2
+    is_type Range
+    pop_jump_if_false L2
+    jump L9
+
+  L2:
+    load_var _2
+    is_type ArrayIterator<...>
+    pop_jump_if_false L3
+    jump L8
+
+  L3:
+    load_var _2
+    is_type Chain<...>
+    pop_jump_if_false L4
+    jump L7
+
+  L4:
+    load_var _2
+    is_type Peekable<...>
+    pop_jump_if_false L5
+    jump L6
+
+  L5:
+    load_type int
+    load_var _2
+    call user.iter.core.Iterable<T, never>$for$T[].iter
+    store_var _1
+    jump L12
+
+  L6:
+    load_type int
+    load_type void
+    load_var _2
+    call user.iter.core.Peekable.Iterable<T, E>.iter
+    store_var _1
+    jump L12
+
+  L7:
+    load_type int
+    load_type void
+    load_var _2
+    call user.iter.core.Chain.Iterable<T, E>.iter
+    store_var _1
+    jump L12
+
+  L8:
+    load_type int
+    load_var _2
+    call user.iter.core.ArrayIterator.Iterable<T, never>.iter
+    store_var _1
+    jump L12
+
+  L9:
+    load_var _2
+    call user.iter.core.Range.Iterable<int, never>.iter
+    store_var _1
+    jump L12
+
+  L10:
+    load_type int
+    load_var _2
+    call user.iter.core.Repeat.Iterable<T, never>.iter
+    store_var _1
+    jump L12
+
+  L11:
+    load_type int
+    load_type void
+    load_var _2
+    call user.iter.core.StepBy.Iterable<T, E>.iter
+    store_var _1
+
+  L12:
+    load_var _1
+    is_type StepBy<...>
+    pop_jump_if_false L13
+    jump L22
+
+  L13:
+    load_var _1
+    is_type Repeat<...>
+    pop_jump_if_false L14
+    jump L21
+
+  L14:
+    load_var _1
+    is_type Range
+    pop_jump_if_false L15
+    jump L20
+
+  L15:
+    load_var _1
+    is_type ArrayIterator<...>
+    pop_jump_if_false L16
+    jump L19
+
+  L16:
+    load_var _1
+    is_type Chain<...>
+    pop_jump_if_false L17
+    jump L18
+
+  L17:
+    load_type int
+    load_type void
+    load_var _1
+    call user.iter.core.Iterator.collect
+    jump L23
+
+  L18:
+    load_type int
+    load_type void
+    load_var _1
+    call user.iter.core.Iterator.collect
+    jump L23
+
+  L19:
+    load_type int
+    load_type void
+    load_var _1
+    call user.iter.core.Iterator.collect
+    jump L23
+
+  L20:
+    load_type int
+    load_type void
+    load_var _1
+    call user.iter.core.Iterator.collect
+    jump L23
+
+  L21:
+    load_type int
+    load_type void
+    load_var _1
+    call user.iter.core.Iterator.collect
+    jump L23
+
+  L22:
+    load_type int
+    load_type void
+    load_var _1
+    call user.iter.core.Iterator.collect
+
+  L23:
+    return
+}
+
+function iter.iter_chain() -> int[] {
+    load_type int
+    load_const 1
+    load_const 2
+    alloc_array 2
+    call user.iter.core.ArrayIterator.new
+    store_var a
+    load_type int
+    load_const 3
+    load_const 4
+    alloc_array 2
+    call user.iter.core.ArrayIterator.new
+    store_var _8
+    load_var a
+    is_type StepBy<...>
+    pop_jump_if_false L0
+    jump L9
+
+  L0:
+    load_var a
+    is_type Repeat<...>
+    pop_jump_if_false L1
+    jump L8
+
+  L1:
+    load_var a
+    is_type Range
+    pop_jump_if_false L2
+    jump L7
+
+  L2:
+    load_var a
+    is_type ArrayIterator<...>
+    pop_jump_if_false L3
+    jump L6
+
+  L3:
+    load_var a
+    is_type Chain<...>
+    pop_jump_if_false L4
+    jump L5
+
+  L4:
+    load_type int
+    load_type void
+    load_var2 1 3
+    call user.iter.core.Iterator.chain
+    store_var _7
+    jump L10
+
+  L5:
+    load_type int
+    load_type void
+    load_var2 1 3
+    call user.iter.core.Iterator.chain
+    store_var _7
+    jump L10
+
+  L6:
+    load_type int
+    load_type void
+    load_var2 1 3
+    call user.iter.core.Iterator.chain
+    store_var _7
+    jump L10
+
+  L7:
+    load_type int
+    load_type void
+    load_var2 1 3
+    call user.iter.core.Iterator.chain
+    store_var _7
+    jump L10
+
+  L8:
+    load_type int
+    load_type void
+    load_var2 1 3
+    call user.iter.core.Iterator.chain
+    store_var _7
+    jump L10
+
+  L9:
+    load_type int
+    load_type void
+    load_var2 1 3
+    call user.iter.core.Iterator.chain
+    store_var _7
+
+  L10:
+    load_var _7
+    is_type StepBy<...>
+    pop_jump_if_false L11
+    jump L20
+
+  L11:
+    load_var _7
+    is_type Repeat<...>
+    pop_jump_if_false L12
+    jump L19
+
+  L12:
+    load_var _7
+    is_type Range
+    pop_jump_if_false L13
+    jump L18
+
+  L13:
+    load_var _7
+    is_type ArrayIterator<...>
+    pop_jump_if_false L14
+    jump L17
+
+  L14:
+    load_var _7
+    is_type Chain<...>
+    pop_jump_if_false L15
+    jump L16
+
+  L15:
+    load_type int
+    load_type void
+    load_var _7
+    call user.iter.core.Iterator.collect
+    jump L21
+
+  L16:
+    load_type int
+    load_type void
+    load_var _7
+    call user.iter.core.Iterator.collect
+    jump L21
+
+  L17:
+    load_type int
+    load_type void
+    load_var _7
+    call user.iter.core.Iterator.collect
+    jump L21
+
+  L18:
+    load_type int
+    load_type void
+    load_var _7
+    call user.iter.core.Iterator.collect
+    jump L21
+
+  L19:
+    load_type int
+    load_type void
+    load_var _7
+    call user.iter.core.Iterator.collect
+    jump L21
+
+  L20:
+    load_type int
+    load_type void
+    load_var _7
+    call user.iter.core.Iterator.collect
+
+  L21:
+    return
+}
+
+function iter.iter_collect() -> int[] {
+    load_type int
+    load_const 5
+    load_const 6
+    load_const 7
+    alloc_array 3
+    call user.iter.core.ArrayIterator.new
+    store_var it
+    load_var it
+    is_type StepBy<...>
+    pop_jump_if_false L0
+    jump L9
+
+  L0:
+    load_var it
+    is_type Repeat<...>
+    pop_jump_if_false L1
+    jump L8
+
+  L1:
+    load_var it
+    is_type Range
+    pop_jump_if_false L2
+    jump L7
+
+  L2:
+    load_var it
+    is_type ArrayIterator<...>
+    pop_jump_if_false L3
+    jump L6
+
+  L3:
+    load_var it
+    is_type Chain<...>
+    pop_jump_if_false L4
+    jump L5
+
+  L4:
+    load_type int
+    load_type void
+    load_var it
+    call user.iter.core.Iterator.collect
+    jump L10
+
+  L5:
+    load_type int
+    load_type void
+    load_var it
+    call user.iter.core.Iterator.collect
+    jump L10
+
+  L6:
+    load_type int
+    load_type void
+    load_var it
+    call user.iter.core.Iterator.collect
+    jump L10
+
+  L7:
+    load_type int
+    load_type void
+    load_var it
+    call user.iter.core.Iterator.collect
+    jump L10
+
+  L8:
+    load_type int
+    load_type void
+    load_var it
+    call user.iter.core.Iterator.collect
+    jump L10
+
+  L9:
+    load_type int
+    load_type void
+    load_var it
+    call user.iter.core.Iterator.collect
+
+  L10:
+    return
+}
+
+function iter.iter_count() -> int {
+    load_type int
+    load_const 9
+    load_const 9
+    load_const 9
+    alloc_array 3
+    call user.iter.core.ArrayIterator.new
+    store_var it
+    load_var it
+    is_type StepBy<...>
+    pop_jump_if_false L0
+    jump L9
+
+  L0:
+    load_var it
+    is_type Repeat<...>
+    pop_jump_if_false L1
+    jump L8
+
+  L1:
+    load_var it
+    is_type Range
+    pop_jump_if_false L2
+    jump L7
+
+  L2:
+    load_var it
+    is_type ArrayIterator<...>
+    pop_jump_if_false L3
+    jump L6
+
+  L3:
+    load_var it
+    is_type Chain<...>
+    pop_jump_if_false L4
+    jump L5
+
+  L4:
+    load_type int
+    load_type void
+    load_var it
+    call user.iter.core.Iterator.count
+    jump L10
+
+  L5:
+    load_type int
+    load_type void
+    load_var it
+    call user.iter.core.Iterator.count
+    jump L10
+
+  L6:
+    load_type int
+    load_type void
+    load_var it
+    call user.iter.core.Iterator.count
+    jump L10
+
+  L7:
+    load_type int
+    load_type void
+    load_var it
+    call user.iter.core.Iterator.count
+    jump L10
+
+  L8:
+    load_type int
+    load_type void
+    load_var it
+    call user.iter.core.Iterator.count
+    jump L10
+
+  L9:
+    load_type int
+    load_type void
+    load_var it
+    call user.iter.core.Iterator.count
+
+  L10:
+    return
+}
+
+function iter.iter_explicit_map_coerces_to_iterator() -> int[] {
+    load_type int
+    load_const 1
+    load_const 2
+    load_const 3
+    alloc_array 3
+    call user.iter.core.ArrayIterator.new
+    store_var it
+    load_var it
+    make_closure .<lambda(iter_explicit_map_coerces_to_iterator, 0)>, 0
+    load_type int
+    load_type int
+    load_type void
+    load_type void
+    init_instance<4> user.iter.core.Map .iter, .func
+    store_var_load_var mapped
+    is_type StepBy<...>
+    pop_jump_if_false L0
+    jump L9
+
+  L0:
+    load_var mapped
+    is_type Repeat<...>
+    pop_jump_if_false L1
+    jump L8
+
+  L1:
+    load_var mapped
+    is_type Range
+    pop_jump_if_false L2
+    jump L7
+
+  L2:
+    load_var mapped
+    is_type ArrayIterator<...>
+    pop_jump_if_false L3
+    jump L6
+
+  L3:
+    load_var mapped
+    is_type Chain<...>
+    pop_jump_if_false L4
+    jump L5
+
+  L4:
+    load_type int
+    load_type void
+    load_var mapped
+    call user.iter.core.Iterator.collect
+    jump L10
+
+  L5:
+    load_type int
+    load_type void
+    load_var mapped
+    call user.iter.core.Iterator.collect
+    jump L10
+
+  L6:
+    load_type int
+    load_type void
+    load_var mapped
+    call user.iter.core.Iterator.collect
+    jump L10
+
+  L7:
+    load_type int
+    load_type void
+    load_var mapped
+    call user.iter.core.Iterator.collect
+    jump L10
+
+  L8:
+    load_type int
+    load_type void
+    load_var mapped
+    call user.iter.core.Iterator.collect
+    jump L10
+
+  L9:
+    load_type int
+    load_type void
+    load_var mapped
+    call user.iter.core.Iterator.collect
+
+  L10:
+    return
+}
+
+function iter.iter_filter() -> int[] {
+    load_type int
+    load_const 1
+    load_const 2
+    load_const 3
+    load_const 4
+    alloc_array 4
+    call user.iter.core.ArrayIterator.new
+    store_var it
+    make_closure .<lambda(iter_filter, 0)>, 0
+    store_var _5
+    load_type void
+    store_var _6
+    load_var it
+    is_type StepBy<...>
+    pop_jump_if_false L0
+    jump L9
+
+  L0:
+    load_var it
+    is_type Repeat<...>
+    pop_jump_if_false L1
+    jump L8
+
+  L1:
+    load_var it
+    is_type Range
+    pop_jump_if_false L2
+    jump L7
+
+  L2:
+    load_var it
+    is_type ArrayIterator<...>
+    pop_jump_if_false L3
+    jump L6
+
+  L3:
+    load_var it
+    is_type Chain<...>
+    pop_jump_if_false L4
+    jump L5
+
+  L4:
+    load_type int
+    load_type void
+    load_var2 4 1
+    load_var _5
+    call user.iter.core.Iterator.filter
+    store_var _4
+    jump L10
+
+  L5:
+    load_type int
+    load_type void
+    load_var2 4 1
+    load_var _5
+    call user.iter.core.Iterator.filter
+    store_var _4
+    jump L10
+
+  L6:
+    load_type int
+    load_type void
+    load_var2 4 1
+    load_var _5
+    call user.iter.core.Iterator.filter
+    store_var _4
+    jump L10
+
+  L7:
+    load_type int
+    load_type void
+    load_var2 4 1
+    load_var _5
+    call user.iter.core.Iterator.filter
+    store_var _4
+    jump L10
+
+  L8:
+    load_type int
+    load_type void
+    load_var2 4 1
+    load_var _5
+    call user.iter.core.Iterator.filter
+    store_var _4
+    jump L10
+
+  L9:
+    load_type int
+    load_type void
+    load_var2 4 1
+    load_var _5
+    call user.iter.core.Iterator.filter
+    store_var _4
+
+  L10:
+    load_var _4
+    is_type StepBy<...>
+    pop_jump_if_false L11
+    jump L20
+
+  L11:
+    load_var _4
+    is_type Repeat<...>
+    pop_jump_if_false L12
+    jump L19
+
+  L12:
+    load_var _4
+    is_type Range
+    pop_jump_if_false L13
+    jump L18
+
+  L13:
+    load_var _4
+    is_type ArrayIterator<...>
+    pop_jump_if_false L14
+    jump L17
+
+  L14:
+    load_var _4
+    is_type Chain<...>
+    pop_jump_if_false L15
+    jump L16
+
+  L15:
+    load_type int
+    load_type void
+    load_var _4
+    call user.iter.core.Iterator.collect
+    jump L21
+
+  L16:
+    load_type int
+    load_type void
+    load_var _4
+    call user.iter.core.Iterator.collect
+    jump L21
+
+  L17:
+    load_type int
+    load_type void
+    load_var _4
+    call user.iter.core.Iterator.collect
+    jump L21
+
+  L18:
+    load_type int
+    load_type void
+    load_var _4
+    call user.iter.core.Iterator.collect
+    jump L21
+
+  L19:
+    load_type int
+    load_type void
+    load_var _4
+    call user.iter.core.Iterator.collect
+    jump L21
+
+  L20:
+    load_type int
+    load_type void
+    load_var _4
+    call user.iter.core.Iterator.collect
+
+  L21:
+    return
+}
+
+function iter.iter_filter_implicit_source() -> int[] {
+    load_type int
+    load_const 1
+    load_const 2
+    load_const 3
+    load_const 4
+    alloc_array 4
+    call user.iter.core.ArrayIterator.new
+    store_var _2
+    make_closure .<lambda(iter_filter_implicit_source, 0)>, 0
+    store_var _5
+    load_type void
+    store_var _6
+    load_var _2
+    is_type StepBy<...>
+    pop_jump_if_false L0
+    jump L9
+
+  L0:
+    load_var _2
+    is_type Repeat<...>
+    pop_jump_if_false L1
+    jump L8
+
+  L1:
+    load_var _2
+    is_type Range
+    pop_jump_if_false L2
+    jump L7
+
+  L2:
+    load_var _2
+    is_type ArrayIterator<...>
+    pop_jump_if_false L3
+    jump L6
+
+  L3:
+    load_var _2
+    is_type Chain<...>
+    pop_jump_if_false L4
+    jump L5
+
+  L4:
+    load_type int
+    load_type void
+    load_var2 4 2
+    load_var _5
+    call user.iter.core.Iterator.filter
+    store_var _1
+    jump L10
+
+  L5:
+    load_type int
+    load_type void
+    load_var2 4 2
+    load_var _5
+    call user.iter.core.Iterator.filter
+    store_var _1
+    jump L10
+
+  L6:
+    load_type int
+    load_type void
+    load_var2 4 2
+    load_var _5
+    call user.iter.core.Iterator.filter
+    store_var _1
+    jump L10
+
+  L7:
+    load_type int
+    load_type void
+    load_var2 4 2
+    load_var _5
+    call user.iter.core.Iterator.filter
+    store_var _1
+    jump L10
+
+  L8:
+    load_type int
+    load_type void
+    load_var2 4 2
+    load_var _5
+    call user.iter.core.Iterator.filter
+    store_var _1
+    jump L10
+
+  L9:
+    load_type int
+    load_type void
+    load_var2 4 2
+    load_var _5
+    call user.iter.core.Iterator.filter
+    store_var _1
+
+  L10:
+    load_var _1
+    is_type StepBy<...>
+    pop_jump_if_false L11
+    jump L20
+
+  L11:
+    load_var _1
+    is_type Repeat<...>
+    pop_jump_if_false L12
+    jump L19
+
+  L12:
+    load_var _1
+    is_type Range
+    pop_jump_if_false L13
+    jump L18
+
+  L13:
+    load_var _1
+    is_type ArrayIterator<...>
+    pop_jump_if_false L14
+    jump L17
+
+  L14:
+    load_var _1
+    is_type Chain<...>
+    pop_jump_if_false L15
+    jump L16
+
+  L15:
+    load_type int
+    load_type void
+    load_var _1
+    call user.iter.core.Iterator.collect
+    jump L21
+
+  L16:
+    load_type int
+    load_type void
+    load_var _1
+    call user.iter.core.Iterator.collect
+    jump L21
+
+  L17:
+    load_type int
+    load_type void
+    load_var _1
+    call user.iter.core.Iterator.collect
+    jump L21
+
+  L18:
+    load_type int
+    load_type void
+    load_var _1
+    call user.iter.core.Iterator.collect
+    jump L21
+
+  L19:
+    load_type int
+    load_type void
+    load_var _1
+    call user.iter.core.Iterator.collect
+    jump L21
+
+  L20:
+    load_type int
+    load_type void
+    load_var _1
+    call user.iter.core.Iterator.collect
+
+  L21:
+    return
+}
+
+function iter.iter_filter_map() -> int[] {
+    load_type int
+    load_const 1
+    load_const 2
+    load_const 3
+    load_const 4
+    alloc_array 4
+    call user.iter.core.ArrayIterator.new
+    store_var it
+    make_closure .<lambda(iter_filter_map, 0)>, 0
+    store_var _5
+    load_type int
+    store_var _6
+    load_type void
+    store_var _7
+    load_var it
+    is_type StepBy<...>
+    pop_jump_if_false L0
+    jump L9
+
+  L0:
+    load_var it
+    is_type Repeat<...>
+    pop_jump_if_false L1
+    jump L8
+
+  L1:
+    load_var it
+    is_type Range
+    pop_jump_if_false L2
+    jump L7
+
+  L2:
+    load_var it
+    is_type ArrayIterator<...>
+    pop_jump_if_false L3
+    jump L6
+
+  L3:
+    load_var it
+    is_type Chain<...>
+    pop_jump_if_false L4
+    jump L5
+
+  L4:
+    load_type int
+    load_type void
+    load_var2 4 5
+    load_var2 1 3
+    call user.iter.core.Iterator.filter_map
+    store_var _4
+    jump L10
+
+  L5:
+    load_type int
+    load_type void
+    load_var2 4 5
+    load_var2 1 3
+    call user.iter.core.Iterator.filter_map
+    store_var _4
+    jump L10
+
+  L6:
+    load_type int
+    load_type void
+    load_var2 4 5
+    load_var2 1 3
+    call user.iter.core.Iterator.filter_map
+    store_var _4
+    jump L10
+
+  L7:
+    load_type int
+    load_type void
+    load_var2 4 5
+    load_var2 1 3
+    call user.iter.core.Iterator.filter_map
+    store_var _4
+    jump L10
+
+  L8:
+    load_type int
+    load_type void
+    load_var2 4 5
+    load_var2 1 3
+    call user.iter.core.Iterator.filter_map
+    store_var _4
+    jump L10
+
+  L9:
+    load_type int
+    load_type void
+    load_var2 4 5
+    load_var2 1 3
+    call user.iter.core.Iterator.filter_map
+    store_var _4
+
+  L10:
+    load_var _4
+    is_type StepBy<...>
+    pop_jump_if_false L11
+    jump L20
+
+  L11:
+    load_var _4
+    is_type Repeat<...>
+    pop_jump_if_false L12
+    jump L19
+
+  L12:
+    load_var _4
+    is_type Range
+    pop_jump_if_false L13
+    jump L18
+
+  L13:
+    load_var _4
+    is_type ArrayIterator<...>
+    pop_jump_if_false L14
+    jump L17
+
+  L14:
+    load_var _4
+    is_type Chain<...>
+    pop_jump_if_false L15
+    jump L16
+
+  L15:
+    load_type int
+    load_type void
+    load_var _4
+    call user.iter.core.Iterator.collect
+    jump L21
+
+  L16:
+    load_type int
+    load_type void
+    load_var _4
+    call user.iter.core.Iterator.collect
+    jump L21
+
+  L17:
+    load_type int
+    load_type void
+    load_var _4
+    call user.iter.core.Iterator.collect
+    jump L21
+
+  L18:
+    load_type int
+    load_type void
+    load_var _4
+    call user.iter.core.Iterator.collect
+    jump L21
+
+  L19:
+    load_type int
+    load_type void
+    load_var _4
+    call user.iter.core.Iterator.collect
+    jump L21
+
+  L20:
+    load_type int
+    load_type void
+    load_var _4
+    call user.iter.core.Iterator.collect
+
+  L21:
+    return
+}
+
+function iter.iter_filter_map_implicit_source() -> int[] {
+    load_type int
+    load_const 1
+    load_const 2
+    load_const 3
+    load_const 4
+    alloc_array 4
+    call user.iter.core.ArrayIterator.new
+    store_var _2
+    make_closure .<lambda(iter_filter_map_implicit_source, 0)>, 0
+    store_var _5
+    load_type int
+    store_var _6
+    load_type void
+    store_var _7
+    load_var _2
+    is_type StepBy<...>
+    pop_jump_if_false L0
+    jump L9
+
+  L0:
+    load_var _2
+    is_type Repeat<...>
+    pop_jump_if_false L1
+    jump L8
+
+  L1:
+    load_var _2
+    is_type Range
+    pop_jump_if_false L2
+    jump L7
+
+  L2:
+    load_var _2
+    is_type ArrayIterator<...>
+    pop_jump_if_false L3
+    jump L6
+
+  L3:
+    load_var _2
+    is_type Chain<...>
+    pop_jump_if_false L4
+    jump L5
+
+  L4:
+    load_type int
+    load_type void
+    load_var2 4 5
+    load_var2 2 3
+    call user.iter.core.Iterator.filter_map
+    store_var _1
+    jump L10
+
+  L5:
+    load_type int
+    load_type void
+    load_var2 4 5
+    load_var2 2 3
+    call user.iter.core.Iterator.filter_map
+    store_var _1
+    jump L10
+
+  L6:
+    load_type int
+    load_type void
+    load_var2 4 5
+    load_var2 2 3
+    call user.iter.core.Iterator.filter_map
+    store_var _1
+    jump L10
+
+  L7:
+    load_type int
+    load_type void
+    load_var2 4 5
+    load_var2 2 3
+    call user.iter.core.Iterator.filter_map
+    store_var _1
+    jump L10
+
+  L8:
+    load_type int
+    load_type void
+    load_var2 4 5
+    load_var2 2 3
+    call user.iter.core.Iterator.filter_map
+    store_var _1
+    jump L10
+
+  L9:
+    load_type int
+    load_type void
+    load_var2 4 5
+    load_var2 2 3
+    call user.iter.core.Iterator.filter_map
+    store_var _1
+
+  L10:
+    load_var _1
+    is_type StepBy<...>
+    pop_jump_if_false L11
+    jump L20
+
+  L11:
+    load_var _1
+    is_type Repeat<...>
+    pop_jump_if_false L12
+    jump L19
+
+  L12:
+    load_var _1
+    is_type Range
+    pop_jump_if_false L13
+    jump L18
+
+  L13:
+    load_var _1
+    is_type ArrayIterator<...>
+    pop_jump_if_false L14
+    jump L17
+
+  L14:
+    load_var _1
+    is_type Chain<...>
+    pop_jump_if_false L15
+    jump L16
+
+  L15:
+    load_type int
+    load_type void
+    load_var _1
+    call user.iter.core.Iterator.collect
+    jump L21
+
+  L16:
+    load_type int
+    load_type void
+    load_var _1
+    call user.iter.core.Iterator.collect
+    jump L21
+
+  L17:
+    load_type int
+    load_type void
+    load_var _1
+    call user.iter.core.Iterator.collect
+    jump L21
+
+  L18:
+    load_type int
+    load_type void
+    load_var _1
+    call user.iter.core.Iterator.collect
+    jump L21
+
+  L19:
+    load_type int
+    load_type void
+    load_var _1
+    call user.iter.core.Iterator.collect
+    jump L21
+
+  L20:
+    load_type int
+    load_type void
+    load_var _1
+    call user.iter.core.Iterator.collect
+
+  L21:
+    return
+}
+
+function iter.iter_flat_map() -> int[] {
+    load_type int
+    load_const 1
+    load_const 2
+    alloc_array 2
+    call user.iter.core.ArrayIterator.new
+    store_var it
+    make_closure .<lambda(iter_flat_map, 0)>, 0
+    store_var _5
+    load_type int
+    store_var _6
+    load_type void
+    store_var _7
+    load_type void
+    store_var _8
+    load_var it
+    is_type StepBy<...>
+    pop_jump_if_false L0
+    jump L9
+
+  L0:
+    load_var it
+    is_type Repeat<...>
+    pop_jump_if_false L1
+    jump L8
+
+  L1:
+    load_var it
+    is_type Range
+    pop_jump_if_false L2
+    jump L7
+
+  L2:
+    load_var it
+    is_type ArrayIterator<...>
+    pop_jump_if_false L3
+    jump L6
+
+  L3:
+    load_var it
+    is_type Chain<...>
+    pop_jump_if_false L4
+    jump L5
+
+  L4:
+    load_type int
+    load_type void
+    load_var2 4 5
+    load_var2 6 1
+    load_var _5
+    call user.iter.core.Iterator.flat_map
+    store_var _4
+    jump L10
+
+  L5:
+    load_type int
+    load_type void
+    load_var2 4 5
+    load_var2 6 1
+    load_var _5
+    call user.iter.core.Iterator.flat_map
+    store_var _4
+    jump L10
+
+  L6:
+    load_type int
+    load_type void
+    load_var2 4 5
+    load_var2 6 1
+    load_var _5
+    call user.iter.core.Iterator.flat_map
+    store_var _4
+    jump L10
+
+  L7:
+    load_type int
+    load_type void
+    load_var2 4 5
+    load_var2 6 1
+    load_var _5
+    call user.iter.core.Iterator.flat_map
+    store_var _4
+    jump L10
+
+  L8:
+    load_type int
+    load_type void
+    load_var2 4 5
+    load_var2 6 1
+    load_var _5
+    call user.iter.core.Iterator.flat_map
+    store_var _4
+    jump L10
+
+  L9:
+    load_type int
+    load_type void
+    load_var2 4 5
+    load_var2 6 1
+    load_var _5
+    call user.iter.core.Iterator.flat_map
+    store_var _4
+
+  L10:
+    load_var _4
+    is_type StepBy<...>
+    pop_jump_if_false L11
+    jump L20
+
+  L11:
+    load_var _4
+    is_type Repeat<...>
+    pop_jump_if_false L12
+    jump L19
+
+  L12:
+    load_var _4
+    is_type Range
+    pop_jump_if_false L13
+    jump L18
+
+  L13:
+    load_var _4
+    is_type ArrayIterator<...>
+    pop_jump_if_false L14
+    jump L17
+
+  L14:
+    load_var _4
+    is_type Chain<...>
+    pop_jump_if_false L15
+    jump L16
+
+  L15:
+    load_type int
+    load_type void
+    load_var _4
+    call user.iter.core.Iterator.collect
+    jump L21
+
+  L16:
+    load_type int
+    load_type void
+    load_var _4
+    call user.iter.core.Iterator.collect
+    jump L21
+
+  L17:
+    load_type int
+    load_type void
+    load_var _4
+    call user.iter.core.Iterator.collect
+    jump L21
+
+  L18:
+    load_type int
+    load_type void
+    load_var _4
+    call user.iter.core.Iterator.collect
+    jump L21
+
+  L19:
+    load_type int
+    load_type void
+    load_var _4
+    call user.iter.core.Iterator.collect
+    jump L21
+
+  L20:
+    load_type int
+    load_type void
+    load_var _4
+    call user.iter.core.Iterator.collect
+
+  L21:
+    return
+}
+
+function iter.iter_flat_map_implicit_source() -> int[] {
+    load_type int
+    load_const 1
+    load_const 2
+    alloc_array 2
+    call user.iter.core.ArrayIterator.new
+    store_var _2
+    make_closure .<lambda(iter_flat_map_implicit_source, 0)>, 0
+    store_var _5
+    load_type int
+    store_var _6
+    load_type void
+    store_var _7
+    load_type void
+    store_var _8
+    load_var _2
+    is_type StepBy<...>
+    pop_jump_if_false L0
+    jump L9
+
+  L0:
+    load_var _2
+    is_type Repeat<...>
+    pop_jump_if_false L1
+    jump L8
+
+  L1:
+    load_var _2
+    is_type Range
+    pop_jump_if_false L2
+    jump L7
+
+  L2:
+    load_var _2
+    is_type ArrayIterator<...>
+    pop_jump_if_false L3
+    jump L6
+
+  L3:
+    load_var _2
+    is_type Chain<...>
+    pop_jump_if_false L4
+    jump L5
+
+  L4:
+    load_type int
+    load_type void
+    load_var2 4 5
+    load_var2 6 2
+    load_var _5
+    call user.iter.core.Iterator.flat_map
+    store_var _1
+    jump L10
+
+  L5:
+    load_type int
+    load_type void
+    load_var2 4 5
+    load_var2 6 2
+    load_var _5
+    call user.iter.core.Iterator.flat_map
+    store_var _1
+    jump L10
+
+  L6:
+    load_type int
+    load_type void
+    load_var2 4 5
+    load_var2 6 2
+    load_var _5
+    call user.iter.core.Iterator.flat_map
+    store_var _1
+    jump L10
+
+  L7:
+    load_type int
+    load_type void
+    load_var2 4 5
+    load_var2 6 2
+    load_var _5
+    call user.iter.core.Iterator.flat_map
+    store_var _1
+    jump L10
+
+  L8:
+    load_type int
+    load_type void
+    load_var2 4 5
+    load_var2 6 2
+    load_var _5
+    call user.iter.core.Iterator.flat_map
+    store_var _1
+    jump L10
+
+  L9:
+    load_type int
+    load_type void
+    load_var2 4 5
+    load_var2 6 2
+    load_var _5
+    call user.iter.core.Iterator.flat_map
+    store_var _1
+
+  L10:
+    load_var _1
+    is_type StepBy<...>
+    pop_jump_if_false L11
+    jump L20
+
+  L11:
+    load_var _1
+    is_type Repeat<...>
+    pop_jump_if_false L12
+    jump L19
+
+  L12:
+    load_var _1
+    is_type Range
+    pop_jump_if_false L13
+    jump L18
+
+  L13:
+    load_var _1
+    is_type ArrayIterator<...>
+    pop_jump_if_false L14
+    jump L17
+
+  L14:
+    load_var _1
+    is_type Chain<...>
+    pop_jump_if_false L15
+    jump L16
+
+  L15:
+    load_type int
+    load_type void
+    load_var _1
+    call user.iter.core.Iterator.collect
+    jump L21
+
+  L16:
+    load_type int
+    load_type void
+    load_var _1
+    call user.iter.core.Iterator.collect
+    jump L21
+
+  L17:
+    load_type int
+    load_type void
+    load_var _1
+    call user.iter.core.Iterator.collect
+    jump L21
+
+  L18:
+    load_type int
+    load_type void
+    load_var _1
+    call user.iter.core.Iterator.collect
+    jump L21
+
+  L19:
+    load_type int
+    load_type void
+    load_var _1
+    call user.iter.core.Iterator.collect
+    jump L21
+
+  L20:
+    load_type int
+    load_type void
+    load_var _1
+    call user.iter.core.Iterator.collect
+
+  L21:
+    return
+}
+
+function iter.iter_flatten() -> int[] {
+    load_type int
+    load_const 1
+    load_const 2
+    alloc_array 2
+    call user.iter.core.ArrayIterator.new
+    store_var _2
+    load_type int
+    load_const 3
+    load_const 4
+    alloc_array 2
+    call user.iter.core.ArrayIterator.new
+    store_var _5
+    load_type iter.core.Iterable<int, void>
+    load_var2 1 2
+    alloc_array 2
+    call user.iter.core.ArrayIterator.new
+    store_var outer
+    load_type int
+    load_type void
+    load_type void
+    load_var outer
+    call user.iter.core.flatten
+    store_var _11
+    load_var _11
+    is_type StepBy<...>
+    pop_jump_if_false L0
+    jump L9
+
+  L0:
+    load_var _11
+    is_type Repeat<...>
+    pop_jump_if_false L1
+    jump L8
+
+  L1:
+    load_var _11
+    is_type Range
+    pop_jump_if_false L2
+    jump L7
+
+  L2:
+    load_var _11
+    is_type ArrayIterator<...>
+    pop_jump_if_false L3
+    jump L6
+
+  L3:
+    load_var _11
+    is_type Chain<...>
+    pop_jump_if_false L4
+    jump L5
+
+  L4:
+    load_type int
+    load_type void
+    load_var _11
+    call user.iter.core.Iterator.collect
+    jump L10
+
+  L5:
+    load_type int
+    load_type void
+    load_var _11
+    call user.iter.core.Iterator.collect
+    jump L10
+
+  L6:
+    load_type int
+    load_type void
+    load_var _11
+    call user.iter.core.Iterator.collect
+    jump L10
+
+  L7:
+    load_type int
+    load_type void
+    load_var _11
+    call user.iter.core.Iterator.collect
+    jump L10
+
+  L8:
+    load_type int
+    load_type void
+    load_var _11
+    call user.iter.core.Iterator.collect
+    jump L10
+
+  L9:
+    load_type int
+    load_type void
+    load_var _11
+    call user.iter.core.Iterator.collect
+
+  L10:
+    return
+}
+
+function iter.iter_map() -> int[] {
+    load_type int
+    load_const 1
+    load_const 2
+    load_const 3
+    alloc_array 3
+    call user.iter.core.ArrayIterator.new
+    store_var it
+    make_closure .<lambda(iter_map, 0)>, 0
+    store_var _5
+    load_type int
+    store_var _6
+    load_type void
+    store_var _7
+    load_var it
+    is_type StepBy<...>
+    pop_jump_if_false L0
+    jump L9
+
+  L0:
+    load_var it
+    is_type Repeat<...>
+    pop_jump_if_false L1
+    jump L8
+
+  L1:
+    load_var it
+    is_type Range
+    pop_jump_if_false L2
+    jump L7
+
+  L2:
+    load_var it
+    is_type ArrayIterator<...>
+    pop_jump_if_false L3
+    jump L6
+
+  L3:
+    load_var it
+    is_type Chain<...>
+    pop_jump_if_false L4
+    jump L5
+
+  L4:
+    load_type int
+    load_type void
+    load_var2 4 5
+    load_var2 1 3
+    call user.iter.core.Iterator.map
+    store_var _4
+    jump L10
+
+  L5:
+    load_type int
+    load_type void
+    load_var2 4 5
+    load_var2 1 3
+    call user.iter.core.Iterator.map
+    store_var _4
+    jump L10
+
+  L6:
+    load_type int
+    load_type void
+    load_var2 4 5
+    load_var2 1 3
+    call user.iter.core.Iterator.map
+    store_var _4
+    jump L10
+
+  L7:
+    load_type int
+    load_type void
+    load_var2 4 5
+    load_var2 1 3
+    call user.iter.core.Iterator.map
+    store_var _4
+    jump L10
+
+  L8:
+    load_type int
+    load_type void
+    load_var2 4 5
+    load_var2 1 3
+    call user.iter.core.Iterator.map
+    store_var _4
+    jump L10
+
+  L9:
+    load_type int
+    load_type void
+    load_var2 4 5
+    load_var2 1 3
+    call user.iter.core.Iterator.map
+    store_var _4
+
+  L10:
+    load_var _4
+    is_type StepBy<...>
+    pop_jump_if_false L11
+    jump L20
+
+  L11:
+    load_var _4
+    is_type Repeat<...>
+    pop_jump_if_false L12
+    jump L19
+
+  L12:
+    load_var _4
+    is_type Range
+    pop_jump_if_false L13
+    jump L18
+
+  L13:
+    load_var _4
+    is_type ArrayIterator<...>
+    pop_jump_if_false L14
+    jump L17
+
+  L14:
+    load_var _4
+    is_type Chain<...>
+    pop_jump_if_false L15
+    jump L16
+
+  L15:
+    load_type int
+    load_type void
+    load_var _4
+    call user.iter.core.Iterator.collect
+    jump L21
+
+  L16:
+    load_type int
+    load_type void
+    load_var _4
+    call user.iter.core.Iterator.collect
+    jump L21
+
+  L17:
+    load_type int
+    load_type void
+    load_var _4
+    call user.iter.core.Iterator.collect
+    jump L21
+
+  L18:
+    load_type int
+    load_type void
+    load_var _4
+    call user.iter.core.Iterator.collect
+    jump L21
+
+  L19:
+    load_type int
+    load_type void
+    load_var _4
+    call user.iter.core.Iterator.collect
+    jump L21
+
+  L20:
+    load_type int
+    load_type void
+    load_var _4
+    call user.iter.core.Iterator.collect
+
+  L21:
+    return
+}
+
+function iter.iter_map_implicit_source() -> int[] {
+    load_type int
+    load_const 1
+    load_const 2
+    load_const 3
+    alloc_array 3
+    call user.iter.core.ArrayIterator.new
+    store_var _2
+    make_closure .<lambda(iter_map_implicit_source, 0)>, 0
+    store_var _5
+    load_type int
+    store_var _6
+    load_type void
+    store_var _7
+    load_var _2
+    is_type StepBy<...>
+    pop_jump_if_false L0
+    jump L9
+
+  L0:
+    load_var _2
+    is_type Repeat<...>
+    pop_jump_if_false L1
+    jump L8
+
+  L1:
+    load_var _2
+    is_type Range
+    pop_jump_if_false L2
+    jump L7
+
+  L2:
+    load_var _2
+    is_type ArrayIterator<...>
+    pop_jump_if_false L3
+    jump L6
+
+  L3:
+    load_var _2
+    is_type Chain<...>
+    pop_jump_if_false L4
+    jump L5
+
+  L4:
+    load_type int
+    load_type void
+    load_var2 4 5
+    load_var2 2 3
+    call user.iter.core.Iterator.map
+    store_var _1
+    jump L10
+
+  L5:
+    load_type int
+    load_type void
+    load_var2 4 5
+    load_var2 2 3
+    call user.iter.core.Iterator.map
+    store_var _1
+    jump L10
+
+  L6:
+    load_type int
+    load_type void
+    load_var2 4 5
+    load_var2 2 3
+    call user.iter.core.Iterator.map
+    store_var _1
+    jump L10
+
+  L7:
+    load_type int
+    load_type void
+    load_var2 4 5
+    load_var2 2 3
+    call user.iter.core.Iterator.map
+    store_var _1
+    jump L10
+
+  L8:
+    load_type int
+    load_type void
+    load_var2 4 5
+    load_var2 2 3
+    call user.iter.core.Iterator.map
+    store_var _1
+    jump L10
+
+  L9:
+    load_type int
+    load_type void
+    load_var2 4 5
+    load_var2 2 3
+    call user.iter.core.Iterator.map
+    store_var _1
+
+  L10:
+    load_var _1
+    is_type StepBy<...>
+    pop_jump_if_false L11
+    jump L20
+
+  L11:
+    load_var _1
+    is_type Repeat<...>
+    pop_jump_if_false L12
+    jump L19
+
+  L12:
+    load_var _1
+    is_type Range
+    pop_jump_if_false L13
+    jump L18
+
+  L13:
+    load_var _1
+    is_type ArrayIterator<...>
+    pop_jump_if_false L14
+    jump L17
+
+  L14:
+    load_var _1
+    is_type Chain<...>
+    pop_jump_if_false L15
+    jump L16
+
+  L15:
+    load_type int
+    load_type void
+    load_var _1
+    call user.iter.core.Iterator.collect
+    jump L21
+
+  L16:
+    load_type int
+    load_type void
+    load_var _1
+    call user.iter.core.Iterator.collect
+    jump L21
+
+  L17:
+    load_type int
+    load_type void
+    load_var _1
+    call user.iter.core.Iterator.collect
+    jump L21
+
+  L18:
+    load_type int
+    load_type void
+    load_var _1
+    call user.iter.core.Iterator.collect
+    jump L21
+
+  L19:
+    load_type int
+    load_type void
+    load_var _1
+    call user.iter.core.Iterator.collect
+    jump L21
+
+  L20:
+    load_type int
+    load_type void
+    load_var _1
+    call user.iter.core.Iterator.collect
+
+  L21:
+    return
+}
+
+function iter.iter_peekable() -> int[] {
+    load_type int
+    load_const 4
+    load_const 5
+    alloc_array 2
+    call user.iter.core.ArrayIterator.new
+    store_var _2
+    load_var _2
+    is_type StepBy<...>
+    pop_jump_if_false L0
+    jump L9
+
+  L0:
+    load_var _2
+    is_type Repeat<...>
+    pop_jump_if_false L1
+    jump L8
+
+  L1:
+    load_var _2
+    is_type Range
+    pop_jump_if_false L2
+    jump L7
+
+  L2:
+    load_var _2
+    is_type ArrayIterator<...>
+    pop_jump_if_false L3
+    jump L6
+
+  L3:
+    load_var _2
+    is_type Chain<...>
+    pop_jump_if_false L4
+    jump L5
+
+  L4:
+    load_type int
+    load_type void
+    load_var _2
+    call user.iter.core.Iterator.peekable
+    store_var p
+    jump L10
+
+  L5:
+    load_type int
+    load_type void
+    load_var _2
+    call user.iter.core.Iterator.peekable
+    store_var p
+    jump L10
+
+  L6:
+    load_type int
+    load_type void
+    load_var _2
+    call user.iter.core.Iterator.peekable
+    store_var p
+    jump L10
+
+  L7:
+    load_type int
+    load_type void
+    load_var _2
+    call user.iter.core.Iterator.peekable
+    store_var p
+    jump L10
+
+  L8:
+    load_type int
+    load_type void
+    load_var _2
+    call user.iter.core.Iterator.peekable
+    store_var p
+    jump L10
+
+  L9:
+    load_type int
+    load_type void
+    load_var _2
+    call user.iter.core.Iterator.peekable
+    store_var p
+
+  L10:
+    alloc_array 0
+    store_var out
+    load_type int
+    load_type void
+    load_var p
+    call user.iter.core.Peekable.peek
+    store_var _25
+    load_var _25
+    is_type iter.core.Done
+    pop_jump_if_false L11
+    jump L12
+
+  L11:
+    load_var2 3 4
+    call baml.Array.push
+    pop 1
+
+  L12:
+    load_var p
+    is_type StepBy<...>
+    pop_jump_if_false L13
+    jump L22
+
+  L13:
+    load_var p
+    is_type Repeat<...>
+    pop_jump_if_false L14
+    jump L21
+
+  L14:
+    load_var p
+    is_type Range
+    pop_jump_if_false L15
+    jump L20
+
+  L15:
+    load_var p
+    is_type ArrayIterator<...>
+    pop_jump_if_false L16
+    jump L19
+
+  L16:
+    load_var p
+    is_type Chain<...>
+    pop_jump_if_false L17
+    jump L18
+
+  L17:
+    load_type int
+    load_type void
+    load_var p
+    call user.iter.core.Peekable.Iterator<T, E>.next
+    store_var _32
+    jump L23
+
+  L18:
+    load_type int
+    load_type void
+    load_var p
+    call user.iter.core.Chain.Iterator<T, E>.next
+    store_var _32
+    jump L23
+
+  L19:
+    load_type int
+    load_var p
+    call user.iter.core.ArrayIterator.Iterator<T, never>.next
+    store_var _32
+    jump L23
+
+  L20:
+    load_var p
+    call user.iter.core.Range.Iterator<int, never>.next
+    store_var _32
+    jump L23
+
+  L21:
+    load_type int
+    load_var p
+    call user.iter.core.Repeat.Iterator<T, never>.next
+    store_var _32
+    jump L23
+
+  L22:
+    load_type int
+    load_type void
+    load_var p
+    call user.iter.core.StepBy.Iterator<T, E>.next
+    store_var _32
+
+  L23:
+    load_var _32
+    is_type iter.core.Done
+    pop_jump_if_false L24
+    jump L25
+
+  L24:
+    load_var2 3 5
+    call baml.Array.push
+    pop 1
+
+  L25:
+    load_var p
+    is_type StepBy<...>
+    pop_jump_if_false L26
+    jump L35
+
+  L26:
+    load_var p
+    is_type Repeat<...>
+    pop_jump_if_false L27
+    jump L34
+
+  L27:
+    load_var p
+    is_type Range
+    pop_jump_if_false L28
+    jump L33
+
+  L28:
+    load_var p
+    is_type ArrayIterator<...>
+    pop_jump_if_false L29
+    jump L32
+
+  L29:
+    load_var p
+    is_type Chain<...>
+    pop_jump_if_false L30
+    jump L31
+
+  L30:
+    load_type int
+    load_type void
+    load_var p
+    call user.iter.core.Peekable.Iterator<T, E>.next
+    store_var _51
+    jump L36
+
+  L31:
+    load_type int
+    load_type void
+    load_var p
+    call user.iter.core.Chain.Iterator<T, E>.next
+    store_var _51
+    jump L36
+
+  L32:
+    load_type int
+    load_var p
+    call user.iter.core.ArrayIterator.Iterator<T, never>.next
+    store_var _51
+    jump L36
+
+  L33:
+    load_var p
+    call user.iter.core.Range.Iterator<int, never>.next
+    store_var _51
+    jump L36
+
+  L34:
+    load_type int
+    load_var p
+    call user.iter.core.Repeat.Iterator<T, never>.next
+    store_var _51
+    jump L36
+
+  L35:
+    load_type int
+    load_type void
+    load_var p
+    call user.iter.core.StepBy.Iterator<T, E>.next
+    store_var _51
+
+  L36:
+    load_var _51
+    is_type iter.core.Done
+    pop_jump_if_false L37
+    jump L38
+
+  L37:
+    load_var2 3 6
+    call baml.Array.push
+    pop 1
+
+  L38:
+    load_type int
+    load_type void
+    load_var p
+    call user.iter.core.Peekable.peek
+    store_var _70
+    load_var _70
+    is_type iter.core.Done
+    pop_jump_if_false L39
+    jump L40
+
+  L39:
+    load_var2 3 7
+    call baml.Array.push
+    pop 1
+    jump L41
+
+  L40:
+    load_var out
+    load_const 99
+    call baml.Array.push
+    pop 1
+
+  L41:
+    load_var out
+    return
+}
+
+function iter.iter_range() -> int[] {
+    load_const 0
+    load_const 5
+    load_const <omitted>
+    call user.iter.core.Range.new
+    store_var _1
+    load_var _1
+    is_type StepBy<...>
+    pop_jump_if_false L0
+    jump L9
+
+  L0:
+    load_var _1
+    is_type Repeat<...>
+    pop_jump_if_false L1
+    jump L8
+
+  L1:
+    load_var _1
+    is_type Range
+    pop_jump_if_false L2
+    jump L7
+
+  L2:
+    load_var _1
+    is_type ArrayIterator<...>
+    pop_jump_if_false L3
+    jump L6
+
+  L3:
+    load_var _1
+    is_type Chain<...>
+    pop_jump_if_false L4
+    jump L5
+
+  L4:
+    load_type int
+    load_type void
+    load_var _1
+    call user.iter.core.Iterator.collect
+    jump L10
+
+  L5:
+    load_type int
+    load_type void
+    load_var _1
+    call user.iter.core.Iterator.collect
+    jump L10
+
+  L6:
+    load_type int
+    load_type void
+    load_var _1
+    call user.iter.core.Iterator.collect
+    jump L10
+
+  L7:
+    load_type int
+    load_type void
+    load_var _1
+    call user.iter.core.Iterator.collect
+    jump L10
+
+  L8:
+    load_type int
+    load_type void
+    load_var _1
+    call user.iter.core.Iterator.collect
+    jump L10
+
+  L9:
+    load_type int
+    load_type void
+    load_var _1
+    call user.iter.core.Iterator.collect
+
+  L10:
+    return
+}
+
+function iter.iter_reduce() -> int {
+    load_type int
+    load_const 1
+    load_const 2
+    load_const 3
+    load_const 4
+    alloc_array 4
+    call user.iter.core.ArrayIterator.new
+    store_var it
+    make_closure .<lambda(iter_reduce, 0)>, 0
+    store_var _4
+    load_type int | 0
+    store_var _6
+    load_type void
+    store_var _7
+    load_var it
+    is_type StepBy<...>
+    pop_jump_if_false L0
+    jump L9
+
+  L0:
+    load_var it
+    is_type Repeat<...>
+    pop_jump_if_false L1
+    jump L8
+
+  L1:
+    load_var it
+    is_type Range
+    pop_jump_if_false L2
+    jump L7
+
+  L2:
+    load_var it
+    is_type ArrayIterator<...>
+    pop_jump_if_false L3
+    jump L6
+
+  L3:
+    load_var it
+    is_type Chain<...>
+    pop_jump_if_false L4
+    jump L5
+
+  L4:
+    load_type int
+    load_type void
+    load_var2 3 4
+    load_var2 1 2
+    load_const 0
+    call user.iter.core.Iterator.reduce
+    jump L10
+
+  L5:
+    load_type int
+    load_type void
+    load_var2 3 4
+    load_var2 1 2
+    load_const 0
+    call user.iter.core.Iterator.reduce
+    jump L10
+
+  L6:
+    load_type int
+    load_type void
+    load_var2 3 4
+    load_var2 1 2
+    load_const 0
+    call user.iter.core.Iterator.reduce
+    jump L10
+
+  L7:
+    load_type int
+    load_type void
+    load_var2 3 4
+    load_var2 1 2
+    load_const 0
+    call user.iter.core.Iterator.reduce
+    jump L10
+
+  L8:
+    load_type int
+    load_type void
+    load_var2 3 4
+    load_var2 1 2
+    load_const 0
+    call user.iter.core.Iterator.reduce
+    jump L10
+
+  L9:
+    load_type int
+    load_type void
+    load_var2 3 4
+    load_var2 1 2
+    load_const 0
+    call user.iter.core.Iterator.reduce
+
+  L10:
+    return
+}
+
+function iter.iter_repeat() -> int[] {
+    load_const 7
+    load_const 3
+    load_type int
+    init_instance<1> user.iter.core.Repeat .value, .count
+    store_var_load_var _1
+    is_type StepBy<...>
+    pop_jump_if_false L0
+    jump L9
+
+  L0:
+    load_var _1
+    is_type Repeat<...>
+    pop_jump_if_false L1
+    jump L8
+
+  L1:
+    load_var _1
+    is_type Range
+    pop_jump_if_false L2
+    jump L7
+
+  L2:
+    load_var _1
+    is_type ArrayIterator<...>
+    pop_jump_if_false L3
+    jump L6
+
+  L3:
+    load_var _1
+    is_type Chain<...>
+    pop_jump_if_false L4
+    jump L5
+
+  L4:
+    load_type int
+    load_type void
+    load_var _1
+    call user.iter.core.Iterator.collect
+    jump L10
+
+  L5:
+    load_type int
+    load_type void
+    load_var _1
+    call user.iter.core.Iterator.collect
+    jump L10
+
+  L6:
+    load_type int
+    load_type void
+    load_var _1
+    call user.iter.core.Iterator.collect
+    jump L10
+
+  L7:
+    load_type int
+    load_type void
+    load_var _1
+    call user.iter.core.Iterator.collect
+    jump L10
+
+  L8:
+    load_type int
+    load_type void
+    load_var _1
+    call user.iter.core.Iterator.collect
+    jump L10
+
+  L9:
+    load_type int
+    load_type void
+    load_var _1
+    call user.iter.core.Iterator.collect
+
+  L10:
+    return
+}
+
+function iter.iter_some_every_find() -> bool {
+    load_type int
+    load_const 1
+    load_const 2
+    load_const 3
+    alloc_array 3
+    call user.iter.core.ArrayIterator.new
+    store_var _2
+    make_closure .<lambda(iter_some_every_find, 0)>, 0
+    store_var _5
+    load_type void
+    store_var _6
+    load_var _2
+    is_type StepBy<...>
+    pop_jump_if_false L0
+    jump L9
+
+  L0:
+    load_var _2
+    is_type Repeat<...>
+    pop_jump_if_false L1
+    jump L8
+
+  L1:
+    load_var _2
+    is_type Range
+    pop_jump_if_false L2
+    jump L7
+
+  L2:
+    load_var _2
+    is_type ArrayIterator<...>
+    pop_jump_if_false L3
+    jump L6
+
+  L3:
+    load_var _2
+    is_type Chain<...>
+    pop_jump_if_false L4
+    jump L5
+
+  L4:
+    load_type int
+    load_type void
+    load_var2 4 2
+    load_var _5
+    call user.iter.core.Iterator.some
+    store_var some_large
+    jump L10
+
+  L5:
+    load_type int
+    load_type void
+    load_var2 4 2
+    load_var _5
+    call user.iter.core.Iterator.some
+    store_var some_large
+    jump L10
+
+  L6:
+    load_type int
+    load_type void
+    load_var2 4 2
+    load_var _5
+    call user.iter.core.Iterator.some
+    store_var some_large
+    jump L10
+
+  L7:
+    load_type int
+    load_type void
+    load_var2 4 2
+    load_var _5
+    call user.iter.core.Iterator.some
+    store_var some_large
+    jump L10
+
+  L8:
+    load_type int
+    load_type void
+    load_var2 4 2
+    load_var _5
+    call user.iter.core.Iterator.some
+    store_var some_large
+    jump L10
+
+  L9:
+    load_type int
+    load_type void
+    load_var2 4 2
+    load_var _5
+    call user.iter.core.Iterator.some
+    store_var some_large
+
+  L10:
+    load_type int
+    load_const 1
+    load_const 2
+    load_const 3
+    alloc_array 3
+    call user.iter.core.ArrayIterator.new
+    store_var _26
+    make_closure .<lambda(iter_some_every_find, 1)>, 0
+    store_var _29
+    load_type void
+    store_var _30
+    load_var _26
+    is_type StepBy<...>
+    pop_jump_if_false L11
+    jump L20
+
+  L11:
+    load_var _26
+    is_type Repeat<...>
+    pop_jump_if_false L12
+    jump L19
+
+  L12:
+    load_var _26
+    is_type Range
+    pop_jump_if_false L13
+    jump L18
+
+  L13:
+    load_var _26
+    is_type ArrayIterator<...>
+    pop_jump_if_false L14
+    jump L17
+
+  L14:
+    load_var _26
+    is_type Chain<...>
+    pop_jump_if_false L15
+    jump L16
+
+  L15:
+    load_type int
+    load_type void
+    load_var2 8 6
+    load_var _29
+    call user.iter.core.Iterator.every
+    store_var every_small
+    jump L21
+
+  L16:
+    load_type int
+    load_type void
+    load_var2 8 6
+    load_var _29
+    call user.iter.core.Iterator.every
+    store_var every_small
+    jump L21
+
+  L17:
+    load_type int
+    load_type void
+    load_var2 8 6
+    load_var _29
+    call user.iter.core.Iterator.every
+    store_var every_small
+    jump L21
+
+  L18:
+    load_type int
+    load_type void
+    load_var2 8 6
+    load_var _29
+    call user.iter.core.Iterator.every
+    store_var every_small
+    jump L21
+
+  L19:
+    load_type int
+    load_type void
+    load_var2 8 6
+    load_var _29
+    call user.iter.core.Iterator.every
+    store_var every_small
+    jump L21
+
+  L20:
+    load_type int
+    load_type void
+    load_var2 8 6
+    load_var _29
+    call user.iter.core.Iterator.every
+    store_var every_small
+
+  L21:
+    load_type int
+    load_const 1
+    load_const 2
+    load_const 3
+    load_const 4
+    alloc_array 4
+    call user.iter.core.ArrayIterator.new
+    store_var _50
+    make_closure .<lambda(iter_some_every_find, 2)>, 0
+    store_var _53
+    load_type void
+    store_var _54
+    load_var _50
+    is_type StepBy<...>
+    pop_jump_if_false L22
+    jump L31
+
+  L22:
+    load_var _50
+    is_type Repeat<...>
+    pop_jump_if_false L23
+    jump L30
+
+  L23:
+    load_var _50
+    is_type Range
+    pop_jump_if_false L24
+    jump L29
+
+  L24:
+    load_var _50
+    is_type ArrayIterator<...>
+    pop_jump_if_false L25
+    jump L28
+
+  L25:
+    load_var _50
+    is_type Chain<...>
+    pop_jump_if_false L26
+    jump L27
+
+  L26:
+    load_type int
+    load_type void
+    load_var2 12 10
+    load_var _53
+    call user.iter.core.Iterator.find
+    store_var found
+    jump L32
+
+  L27:
+    load_type int
+    load_type void
+    load_var2 12 10
+    load_var _53
+    call user.iter.core.Iterator.find
+    store_var found
+    jump L32
+
+  L28:
+    load_type int
+    load_type void
+    load_var2 12 10
+    load_var _53
+    call user.iter.core.Iterator.find
+    store_var found
+    jump L32
+
+  L29:
+    load_type int
+    load_type void
+    load_var2 12 10
+    load_var _53
+    call user.iter.core.Iterator.find
+    store_var found
+    jump L32
+
+  L30:
+    load_type int
+    load_type void
+    load_var2 12 10
+    load_var _53
+    call user.iter.core.Iterator.find
+    store_var found
+    jump L32
+
+  L31:
+    load_type int
+    load_type void
+    load_var2 12 10
+    load_var _53
+    call user.iter.core.Iterator.find
+    store_var found
+
+  L32:
+    load_var some_large
+    jump_if_false L33
+    pop 1
+    load_var every_small
+
+  L33:
+    jump_if_false L34
+    pop 1
+    load_var found
+    load_const 2
+    cmp_op ==
+
+  L34:
+    return
+}
+
+function iter.iter_step_by() -> int[] {
+    load_const 0
+    load_const 6
+    load_const <omitted>
+    call user.iter.core.Range.new
+    store_var _2
+    load_var _2
+    is_type StepBy<...>
+    pop_jump_if_false L0
+    jump L9
+
+  L0:
+    load_var _2
+    is_type Repeat<...>
+    pop_jump_if_false L1
+    jump L8
+
+  L1:
+    load_var _2
+    is_type Range
+    pop_jump_if_false L2
+    jump L7
+
+  L2:
+    load_var _2
+    is_type ArrayIterator<...>
+    pop_jump_if_false L3
+    jump L6
+
+  L3:
+    load_var _2
+    is_type Chain<...>
+    pop_jump_if_false L4
+    jump L5
+
+  L4:
+    load_type int
+    load_type void
+    load_var _2
+    load_const 2
+    call user.iter.core.Iterator.step_by
+    store_var _1
+    jump L10
+
+  L5:
+    load_type int
+    load_type void
+    load_var _2
+    load_const 2
+    call user.iter.core.Iterator.step_by
+    store_var _1
+    jump L10
+
+  L6:
+    load_type int
+    load_type void
+    load_var _2
+    load_const 2
+    call user.iter.core.Iterator.step_by
+    store_var _1
+    jump L10
+
+  L7:
+    load_type int
+    load_type void
+    load_var _2
+    load_const 2
+    call user.iter.core.Iterator.step_by
+    store_var _1
+    jump L10
+
+  L8:
+    load_type int
+    load_type void
+    load_var _2
+    load_const 2
+    call user.iter.core.Iterator.step_by
+    store_var _1
+    jump L10
+
+  L9:
+    load_type int
+    load_type void
+    load_var _2
+    load_const 2
+    call user.iter.core.Iterator.step_by
+    store_var _1
+
+  L10:
+    load_var _1
+    is_type StepBy<...>
+    pop_jump_if_false L11
+    jump L20
+
+  L11:
+    load_var _1
+    is_type Repeat<...>
+    pop_jump_if_false L12
+    jump L19
+
+  L12:
+    load_var _1
+    is_type Range
+    pop_jump_if_false L13
+    jump L18
+
+  L13:
+    load_var _1
+    is_type ArrayIterator<...>
+    pop_jump_if_false L14
+    jump L17
+
+  L14:
+    load_var _1
+    is_type Chain<...>
+    pop_jump_if_false L15
+    jump L16
+
+  L15:
+    load_type int
+    load_type void
+    load_var _1
+    call user.iter.core.Iterator.collect
+    jump L21
+
+  L16:
+    load_type int
+    load_type void
+    load_var _1
+    call user.iter.core.Iterator.collect
+    jump L21
+
+  L17:
+    load_type int
+    load_type void
+    load_var _1
+    call user.iter.core.Iterator.collect
+    jump L21
+
+  L18:
+    load_type int
+    load_type void
+    load_var _1
+    call user.iter.core.Iterator.collect
+    jump L21
+
+  L19:
+    load_type int
+    load_type void
+    load_var _1
+    call user.iter.core.Iterator.collect
+    jump L21
+
+  L20:
+    load_type int
+    load_type void
+    load_var _1
+    call user.iter.core.Iterator.collect
+
+  L21:
+    return
+}
+
+function iter.out_of_body_inferred_ctor_dispatch() -> int {
+    load_type 11
+    load_const 11
+    call user.iter.core.OutOfBodyBox.new
+    store_var value
+    load_var value
+    call user.iter.core.OutOfBodyValue<T>$for$OutOfBodyBox<T>.get
+    return
+}

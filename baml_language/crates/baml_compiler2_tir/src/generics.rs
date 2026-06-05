@@ -91,8 +91,8 @@ pub fn substitute_ty(ty: &Ty, bindings: &FxHashMap<Name, Ty>) -> Ty {
             member: member.clone(),
             attr: attr.clone(),
         },
-        Ty::Union(members, attr) => Ty::Union(
-            members.iter().map(|m| substitute_ty(m, bindings)).collect(),
+        Ty::Union(members, attr) => normalize_union_members(
+            members.iter().map(|m| substitute_ty(m, bindings)),
             attr.clone(),
         ),
         Ty::Function {
@@ -688,36 +688,38 @@ pub fn infer_bindings_rigid_self(
 /// Used when the same type variable is inferred from multiple arguments
 /// (e.g., `deep_equals(myInt, myString)` → `T` gets `int` then `string`).
 pub fn union_ty(a: &Ty, b: &Ty) -> Ty {
-    if a == b {
-        return a.clone();
-    }
-    let mut members = Vec::new();
-    match a {
-        Ty::Union(tys, _) => members.extend(tys.iter().cloned()),
-        other => members.push(other.clone()),
-    }
-    match b {
-        Ty::Union(tys, _) => {
-            for t in tys {
-                if !members.contains(t) {
-                    members.push(t.clone());
+    normalize_union_members([a.clone(), b.clone()], TyAttr::default())
+}
+
+fn normalize_union_members(members: impl IntoIterator<Item = Ty>, attr: TyAttr) -> Ty {
+    let mut normalized = Vec::new();
+    for member in members {
+        match member {
+            Ty::Never { .. } => {}
+            Ty::Union(inner, _) => {
+                for inner_member in inner {
+                    if !matches!(inner_member, Ty::Never { .. })
+                        && !normalized.contains(&inner_member)
+                    {
+                        normalized.push(inner_member);
+                    }
                 }
             }
-        }
-        other => {
-            if !members.contains(other) {
-                members.push(other.clone());
-            }
+            other if !normalized.contains(&other) => normalized.push(other),
+            _ => {}
         }
     }
-    if members.len() == 1 {
-        members.pop().unwrap()
-    } else {
-        // TODO(TyAttr): This union is synthesized from two input types — there's no single
-        // "original attr" to preserve. If both inputs are unions with different attrs, which
-        // one wins? May need a merge/lattice operation on TyAttr, or TyAttr::default() may
-        // be correct if attrs describe declaration sites rather than computed types.
-        Ty::Union(members, TyAttr::default())
+
+    match normalized.len() {
+        0 => Ty::Never { attr },
+        1 => normalized.pop().expect("length checked"),
+        _ => {
+            // TODO(TyAttr): This union is synthesized from multiple input types — there's no
+            // single "original attr" to preserve. If inputs carry different attrs, which one
+            // wins? May need a merge/lattice operation on TyAttr, or default may be correct if
+            // attrs describe declaration sites rather than computed types.
+            Ty::Union(normalized, attr)
+        }
     }
 }
 

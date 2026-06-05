@@ -3440,6 +3440,170 @@ fn generic_interface_method_explicit_type_args_are_checked() {
 }
 
 #[test]
+fn class_type_reference_rejects_wrong_generic_arg_count() {
+    assert_compile_error_contains(
+        r#"
+        class Box<T> {
+            value: T
+        }
+        function bad(value: Box<int, string>) -> int {
+            return 1
+        }
+        "#,
+        "expects 1 type argument(s), got 2",
+    );
+}
+
+#[test]
+fn class_type_reference_rejects_too_few_explicit_generic_arg_count() {
+    assert_compile_error_contains(
+        r#"
+        class Pair<L, R> {
+            left: L
+            right: R
+        }
+        function bad(value: Pair<int>) -> int {
+            return 1
+        }
+        "#,
+        "expects 2 type argument(s), got 1",
+    );
+}
+
+#[test]
+fn function_call_rejects_wrong_explicit_generic_arg_count() {
+    assert_compile_error_contains(
+        r#"
+        function id<T>(value: T) -> T {
+            return value
+        }
+        function bad() -> int {
+            return id<int, string>(1)
+        }
+        "#,
+        "function `id` expects 1 type argument(s), got 2",
+    );
+}
+
+#[test]
+fn function_call_rejects_too_few_explicit_generic_arg_count() {
+    assert_compile_error_contains(
+        r#"
+        function pair<L, R>(left: L, right: R) -> L {
+            return left
+        }
+        function bad() -> int {
+            return pair<int>(1, "nope")
+        }
+        "#,
+        "function `pair` expects 2 type argument(s), got 1",
+    );
+}
+
+#[test]
+fn in_body_implements_rejects_wrong_interface_generic_arg_count() {
+    assert_compile_error_contains(
+        r#"
+        interface Label<T> {
+            function label(self) -> T
+        }
+        class Thing {
+            implements Label<int, string> {
+                function label(self) -> int {
+                    return 1
+                }
+            }
+        }
+        "#,
+        "expects 1 type argument(s), got 2",
+    );
+}
+
+#[test]
+fn in_body_implements_rejects_too_few_explicit_interface_generic_arg_count() {
+    assert_compile_error_contains(
+        r#"
+        interface PairLabel<L, R> {
+            function label(self) -> L
+        }
+        class Thing {
+            implements PairLabel<int> {
+                function label(self) -> int {
+                    return 1
+                }
+            }
+        }
+        "#,
+        "expects 2 type argument(s), got 1",
+    );
+}
+
+#[test]
+fn out_of_body_implements_rejects_wrong_interface_generic_arg_count() {
+    assert_compile_error_contains(
+        r#"
+        interface Label<T> {
+            function label(self) -> T
+        }
+        class Thing {}
+        implements Label<int, string> for Thing {
+            function label(self) -> int {
+                return 1
+            }
+        }
+        "#,
+        "expects 1 type argument(s), got 2",
+    );
+}
+
+#[test]
+fn out_of_body_implements_rejects_too_few_explicit_interface_generic_arg_count() {
+    assert_compile_error_contains(
+        r#"
+        interface PairLabel<L, R> {
+            function label(self) -> L
+        }
+        class Thing {}
+        implements PairLabel<int> for Thing {
+            function label(self) -> int {
+                return 1
+            }
+        }
+        "#,
+        "expects 2 type argument(s), got 1",
+    );
+}
+
+#[test]
+fn out_of_body_implements_rejects_wrong_target_class_generic_arg_count() {
+    assert_compile_error_contains(
+        r#"
+        interface Marker {}
+        class Box<T> {
+            value: T
+        }
+        implements Marker for Box<int, string> {}
+        "#,
+        "expects 1 type argument(s), got 2",
+    );
+}
+
+#[test]
+fn out_of_body_implements_rejects_too_few_explicit_target_class_generic_arg_count() {
+    assert_compile_error_contains(
+        r#"
+        interface Marker {}
+        class Pair<L, R> {
+            left: L
+            right: R
+        }
+        implements Marker for Pair<int> {}
+        "#,
+        "expects 2 type argument(s), got 1",
+    );
+}
+
+#[test]
 fn required_interface_method_generic_bound_mismatch_is_error() {
     assert_compile_error_code(
         r#"

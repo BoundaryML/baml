@@ -514,7 +514,7 @@ pub fn lower_type_expr_in_ns(
             if let Some(def) = resolved {
                 let short = segments.last().expect("non-empty path");
                 match def {
-                    Definition::Class(_) => {
+                    Definition::Class(class_loc) => {
                         // Collect and lower generic args, storing them in Ty::Class.
                         let lowered_args: Vec<Ty> = generic_args
                             .iter()
@@ -529,6 +529,21 @@ pub fn lower_type_expr_in_ns(
                                 )
                             })
                             .collect();
+
+                        let class_tree =
+                            baml_compiler2_ppir::file_item_tree(db, class_loc.file(db));
+                        let expected_type_args = class_tree
+                            .classes
+                            .get(&class_loc.id(db))
+                            .map(|class| class.generic_params.len())
+                            .unwrap_or(0);
+                        if !generic_args.is_empty() && generic_args.len() != expected_type_args {
+                            diagnostics.push(TirTypeError::WrongNumberOfTypeArgs {
+                                type_name: short.clone(),
+                                expected: expected_type_args,
+                                got: generic_args.len(),
+                            });
+                        }
 
                         // BEP-034: `baml.future.Future<T, E>` resolves to the
                         // dedicated `Ty::Future` variant rather than the
@@ -552,11 +567,6 @@ pub fn lower_type_expr_in_ns(
                             );
                         }
 
-                        // Class arity mismatches are not flagged here — downstream
-                        // checks (pattern subtype check, generic substitution,
-                        // assignment checks) already produce a clearer diagnostic
-                        // (e.g. `expected Box<int>, got Box`) when the arity
-                        // mismatch actually matters at the use site.
                         Ty::Class(qtn, lowered_args, TyAttr::default())
                     }
                     Definition::Interface(iface_loc) => {
@@ -575,7 +585,20 @@ pub fn lower_type_expr_in_ns(
                                 )
                             })
                             .collect();
-                        let iface_tree = baml_compiler2_hir::file_item_tree(db, iface_loc.file(db));
+                        let iface_tree =
+                            baml_compiler2_ppir::file_item_tree(db, iface_loc.file(db));
+                        let expected_type_args = iface_tree
+                            .interfaces
+                            .get(&iface_loc.id(db))
+                            .map(|iface| iface.generic_params.len())
+                            .unwrap_or(0);
+                        if !generic_args.is_empty() && generic_args.len() != expected_type_args {
+                            diagnostics.push(TirTypeError::WrongNumberOfTypeArgs {
+                                type_name: short.clone(),
+                                expected: expected_type_args,
+                                got: generic_args.len(),
+                            });
+                        }
                         let known_associated_types: FxHashSet<baml_base::Name> = iface_tree
                             .interfaces
                             .get(&iface_loc.id(db))

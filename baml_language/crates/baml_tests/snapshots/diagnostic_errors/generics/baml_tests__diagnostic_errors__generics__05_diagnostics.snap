@@ -36,12 +36,42 @@ source: crates/baml_tests/src/generated_tests.rs
      │     Note: Error code: E0001
 ─────╯
 
+  [type] error: type `Box` expects 1 type argument(s), got 2
+     ╭─[ classes.baml:128:32 ]
+     │
+ 128 │ function wrong_arity_extra() -> Box<int, string> {
+     │                                ────────┬────────  
+     │                                        ╰────────── type `Box` expects 1 type argument(s), got 2
+     │ 
+     │ Note: Error code: E0001
+─────╯
+
+  [type] error: type `Pair` expects 2 type argument(s), got 1
+     ╭─[ classes.baml:133:34 ]
+     │
+ 133 │ function wrong_arity_partial() -> Pair<int> {
+     │                                  ─────┬────  
+     │                                       ╰────── type `Pair` expects 2 type argument(s), got 1
+     │ 
+     │ Note: Error code: E0001
+─────╯
+
   [type] error: type mismatch: expected B, got "two"
      ╭─[ classes.baml:134:35 ]
      │
  134 │     Pair<int> { first: 1, second: "two" }
      │                                   ──┬──  
      │                                     ╰──── type mismatch: expected B, got "two"
+     │ 
+     │ Note: Error code: E0001
+─────╯
+
+  [type] error: type `Plain` expects 0 type argument(s), got 1
+     ╭─[ classes.baml:145:41 ]
+     │
+ 145 │ function wrong_arity_on_non_generic() -> Plain<int> {
+     │                                         ─────┬─────  
+     │                                              ╰─────── type `Plain` expects 0 type argument(s), got 1
      │ 
      │ Note: Error code: E0001
 ─────╯

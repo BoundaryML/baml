@@ -160,11 +160,12 @@ fn infer_interface_class_bindings(
         (Tir2Ty::TypeVar(name, _), _) if class_params.contains(name) => {
             bind_interface_class_type_arg(name, actual, bindings, aliases)
         }
-        // The *requested* arg is an opaque type-var (an enclosing generic
-        // function's param, not a class param): it can't constrain a class
-        // type-arg, so it matches without binding — leaving that class position
-        // a wildcard for the runtime guard.
-        (_, Tir2Ty::TypeVar(name, _)) if !class_params.contains(name) => true,
+        // The requested arg is an open type-var from the dispatch site, not
+        // necessarily the candidate class's parameter even if it has the same
+        // spelling (`T`, `E`, ...). If the formal side was not a direct class
+        // parameter handled above, treat it as a wildcard; this lets
+        // `Iterator<R, E | E2>` satisfy an open `Iterator<T, E>` request.
+        (_, Tir2Ty::TypeVar(_, _)) => true,
         (Tir2Ty::List(f, _), Tir2Ty::List(a, _))
         | (Tir2Ty::EvolvingList(f, _), Tir2Ty::EvolvingList(a, _))
         | (Tir2Ty::Optional(f, _), Tir2Ty::Optional(a, _))
@@ -318,7 +319,7 @@ fn interface_class_guard_for_args(
         let (_, impl_ty) = substituted_assoc
             .iter()
             .find(|(impl_name, _)| impl_name == requested_name)?;
-        if matches!(requested_ty, Tir2Ty::TypeVar(name, _) if !class_params.contains(name)) {
+        if matches!(requested_ty, Tir2Ty::TypeVar(_, _)) {
             continue;
         }
         if !baml_compiler2_tir::normalize::is_same_normalized_type(impl_ty, requested_ty, aliases) {
@@ -2647,7 +2648,7 @@ impl<'db> LoweringContext<'db> {
         }
     }
 
-    /// BEP-044 wf3 #G7: for a *concrete* receiver (class or primitive) whose
+    /// BEP-044 wf3 #G7: for a *concrete* receiver whose
     /// method is provided by a blanket / out-of-body `implements … for …` rule
     /// (not an in-body block), find the single interface that provides `method`
     /// so a direct `recv.method()` dispatches through the normal interface
@@ -2660,8 +2661,16 @@ impl<'db> LoweringContext<'db> {
         method: &Name,
     ) -> Option<InterfaceTypeView> {
         // Only concrete receivers — interfaces/type-vars dispatch via the
-        // arms above.
-        if !matches!(recv_ty, Tir2Ty::Class(..) | Tir2Ty::Primitive(..)) {
+        // arms above. Containers are concrete too (`implements<T> I for T[]`).
+        if !matches!(
+            recv_ty,
+            Tir2Ty::Class(..)
+                | Tir2Ty::Primitive(..)
+                | Tir2Ty::List(..)
+                | Tir2Ty::Map(..)
+                | Tir2Ty::Future(..)
+                | Tir2Ty::Optional(..)
+        ) {
             return None;
         }
         let pkg = baml_compiler2_hir::file_package::file_package(self.db, self.file).package;
@@ -7484,7 +7493,7 @@ impl<'db> LoweringContext<'db> {
             if !self.interface_tir_assoc_match(&implementor.iface_assoc, iface_assoc) {
                 continue;
             }
-            let Some(item_ref) = self.resolve_type_implementor_method(
+            let Some((item_ref, frame_type_args)) = self.resolve_type_implementor_method(
                 &implementor.tir_ty,
                 iface_tn,
                 iface_type_args,
@@ -7496,10 +7505,33 @@ impl<'db> LoweringContext<'db> {
             resolved.push(InterfaceMethodCandidate {
                 guard: InterfaceDispatchGuard::Type(implementor.runtime_ty.clone()),
                 item_ref,
-                // Type-implementor (primitive / out-of-body) dispatch: frame
-                // type args not threaded here. (Unchanged from prior behavior.)
-                frame_seed: CalleeFrameSeed::Static(Vec::new()),
+                frame_seed: CalleeFrameSeed::Static(frame_type_args),
             });
+        }
+        if let Some(recv_tir_ty) = recv_tir_ty
+            && !matches!(
+                recv_tir_ty,
+                Tir2Ty::Class(..) | Tir2Ty::Interface(..) | Tir2Ty::TypeVar(..)
+            )
+            && let Some((item_ref, frame_type_args)) = self.resolve_type_implementor_method(
+                recv_tir_ty,
+                iface_tn,
+                iface_type_args,
+                iface_assoc,
+                method,
+            )
+        {
+            let runtime_ty = self.convert_tir_ty_for_runtime(recv_tir_ty);
+            if !resolved.iter().any(|candidate| {
+                matches!(&candidate.guard, InterfaceDispatchGuard::Type(ty) if *ty == runtime_ty)
+                    && candidate.item_ref == item_ref
+            }) {
+                resolved.push(InterfaceMethodCandidate {
+                    guard: InterfaceDispatchGuard::Type(runtime_ty),
+                    item_ref,
+                    frame_seed: CalleeFrameSeed::Static(frame_type_args),
+                });
+            }
         }
         resolved
     }
@@ -8475,7 +8507,7 @@ impl<'db> LoweringContext<'db> {
         iface_type_args: &[Tir2Ty],
         iface_assoc: &[(Name, Tir2Ty)],
         method: &Name,
-    ) -> Option<ItemRef> {
+    ) -> Option<(ItemRef, Vec<Tir2Ty>)> {
         let requested_views =
             self.interface_closure_type_name_views(iface_tn, iface_type_args, iface_assoc)?;
 
@@ -8618,17 +8650,28 @@ impl<'db> LoweringContext<'db> {
                     {
                         let func_loc =
                             baml_compiler2_hir::loc::FunctionLoc::new(self.db, file, *method_id);
-                        return Some(def_to_item_ref(self.db, Definition::Function(func_loc)));
+                        let frame_type_args = imp
+                            .generic_params
+                            .iter()
+                            .filter_map(|param| bindings.get(param).cloned())
+                            .collect();
+                        return Some((
+                            def_to_item_ref(self.db, Definition::Function(func_loc)),
+                            frame_type_args,
+                        ));
                     }
 
                     for &fn_id in &iface_data.default_methods {
                         if iface_tree[fn_id].name == *method {
-                            return Some(ItemRef::Method {
-                                package: iface_pkg.package.clone(),
-                                namespace: iface_pkg.namespace_path,
-                                class: iface_data.name.clone(),
-                                name: method.clone(),
-                            });
+                            return Some((
+                                ItemRef::Method {
+                                    package: iface_pkg.package.clone(),
+                                    namespace: iface_pkg.namespace_path,
+                                    class: iface_data.name.clone(),
+                                    name: method.clone(),
+                                },
+                                current_iface_args,
+                            ));
                         }
                     }
                 }
