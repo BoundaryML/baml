@@ -41,8 +41,8 @@ function user.test_direct_method(b: user.B) -> string throws never {
   }
 }
 class user.B$stream {
-  label: null | string
+  label: string | null
 }
 class user.A$stream {
-  b: null | user.B$stream
+  b: user.B$stream | null
 }

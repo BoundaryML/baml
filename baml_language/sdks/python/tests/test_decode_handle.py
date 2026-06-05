@@ -10,6 +10,7 @@ which return `(key, handle_type)` so tests can stage a wire
 from __future__ import annotations
 
 import typing
+import copy
 
 import pytest
 
@@ -46,11 +47,14 @@ def test_adt_media_generic_decodes_to_pyhandle():
 
 def test_decoded_pyhandle_releases_on_drop():
     """Dropping a `BamlPyHandle` removes its row from `HANDLE_TABLE` —
-    a subsequent decode of the same key fails because the entry is gone.
+    a subsequent wrapper can still be created from the wire payload, but
+    cloning it fails because the entry is gone.
     """
     key, ht = _seed_function_ref_handle(7)
     pyh = _decode_handle(_make_handle(key, ht), BamlTypeMap())
     assert isinstance(pyh, BamlPyHandle)
     del pyh  # CPython refcount drops to 0; Drop runs HANDLE_TABLE.release.
-    with pytest.raises(RuntimeError, match="not in HANDLE_TABLE"):
-        _decode_handle(_make_handle(key, ht), BamlTypeMap())
+    stale = _decode_handle(_make_handle(key, ht), BamlTypeMap())
+    assert isinstance(stale, BamlPyHandle)
+    with pytest.raises(RuntimeError, match="invalid handle"):
+        copy.copy(stale)

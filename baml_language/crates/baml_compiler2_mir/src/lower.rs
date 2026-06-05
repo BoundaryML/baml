@@ -157,18 +157,18 @@ fn infer_interface_class_bindings(
     bindings: &mut FxHashMap<Name, Tir2Ty>,
 ) -> bool {
     match (formal, actual) {
-        (Tir2Ty::TypeVar(name, _), _) if class_params.contains(name) => {
-            bind_interface_class_type_arg(name, actual, bindings, aliases)
-        }
         // The requested arg is an open type-var from the dispatch site, not
         // necessarily the candidate class's parameter even if it has the same
-        // spelling (`T`, `E`, ...). If the formal side was not a direct class
-        // parameter handled above, treat it as a wildcard; this lets
+        // spelling (`T`, `E`, ...). If the formal side was not a bindable
+        // candidate parameter, treat it as a wildcard; this lets
         // `Iterator<R, E | E2>` satisfy an open `Iterator<T, E>` request.
+        (Tir2Ty::TypeVar(name, _), Tir2Ty::TypeVar(_, _)) if !class_params.contains(name) => true,
+        (Tir2Ty::TypeVar(name, _), _) => {
+            bind_interface_class_type_arg(name, actual, bindings, aliases)
+        }
         (_, Tir2Ty::TypeVar(_, _)) => true,
         (Tir2Ty::List(f, _), Tir2Ty::List(a, _))
         | (Tir2Ty::EvolvingList(f, _), Tir2Ty::EvolvingList(a, _))
-        | (Tir2Ty::Optional(f, _), Tir2Ty::Optional(a, _))
         | (Tir2Ty::Future(f, _, _), Tir2Ty::Future(a, _, _)) => {
             infer_interface_class_bindings(f, a, class_params, aliases, bindings)
         }
@@ -242,6 +242,9 @@ fn infer_interface_class_bindings(
                 .zip(aparts.iter())
                 .all(|(f, a)| infer_interface_class_bindings(f, a, class_params, aliases, bindings))
         }
+        (Tir2Ty::Union(fparts, _), actual @ Tir2Ty::Never { .. }) => fparts
+            .iter()
+            .all(|f| infer_interface_class_bindings(f, actual, class_params, aliases, bindings)),
         _ => baml_compiler2_tir::normalize::is_same_normalized_type(formal, actual, aliases),
     }
 }
@@ -444,9 +447,6 @@ pub fn convert_tir2_ty(ty: &Tir2Ty, resolved: &ResolvedAliases) -> Ty {
                 .collect(),
             attr.clone(),
         ),
-        Tir2Ty::Optional(inner, attr) => {
-            Ty::Optional(Box::new(convert_tir2_ty(inner, resolved)), attr.clone())
-        }
         Tir2Ty::Literal(lit, _freshness, attr) => Ty::Literal(lit.clone(), attr.clone()),
 
         // Evolving containers → freeze to regular containers
@@ -615,9 +615,6 @@ pub fn tir2_to_template(
         }
         Tir2Ty::List(inner, _) => {
             TyTemplate::Array(Box::new(tir2_to_template(inner, resolved, generic_params)))
-        }
-        Tir2Ty::Optional(inner, _) => {
-            TyTemplate::Optional(Box::new(tir2_to_template(inner, resolved, generic_params)))
         }
         Tir2Ty::Map(k, v, _) => TyTemplate::Map(
             Box::new(tir2_to_template(k, resolved, generic_params)),
@@ -2669,7 +2666,6 @@ impl<'db> LoweringContext<'db> {
                 | Tir2Ty::List(..)
                 | Tir2Ty::Map(..)
                 | Tir2Ty::Future(..)
-                | Tir2Ty::Optional(..)
         ) {
             return None;
         }
@@ -5188,6 +5184,7 @@ impl LoweringContext<'_> {
                             expr_id,
                             args,
                             &dest,
+                            None,
                         )
                     {
                         return;
@@ -6124,6 +6121,13 @@ impl LoweringContext<'_> {
         self.emit_frame_type_arg_ops(&inferred_type_args)
     }
 
+    fn call_has_explicit_type_args(&self, call_expr_id: AstExprId) -> bool {
+        matches!(
+            &self.body.exprs[call_expr_id],
+            AstExpr::Call { type_args, .. } if !type_args.is_empty()
+        )
+    }
+
     /// Emit `LoadType` rvalue assignments for the explicit type arguments of a
     /// generic call and return the resulting operands plus the count.
     ///
@@ -6784,13 +6788,10 @@ impl<'db> LoweringContext<'db> {
 
         // Unwrap Optional — when called from lower_optional_member_access,
         // the base type is T? but we've already null-checked, so use the inner type.
-        let unwrapped_ty = match &base_ty {
-            Ty::Optional(inner, _) => inner.as_ref(),
-            _ => &base_ty,
-        };
+        let unwrapped_ty = base_ty.strip_null();
 
         // Look up field index from class_fields
-        let field_idx = if let Ty::Class(tn, _, _) = unwrapped_ty {
+        let field_idx = if let Ty::Class(tn, _, _) = &unwrapped_ty {
             self.class_fields
                 .get(tn)
                 .and_then(|fields| fields.get(&field_str))
@@ -6799,7 +6800,7 @@ impl<'db> LoweringContext<'db> {
             None
         };
 
-        let base_local = self.operand_to_local(base_op, base_ty.clone());
+        let base_local = self.operand_to_local(base_op, base_ty);
 
         if let Some(idx) = field_idx {
             self.builder.assign(
@@ -6811,7 +6812,7 @@ impl<'db> LoweringContext<'db> {
             );
         } else {
             let handled_interface_field = self
-                .interface_receiver_for_field_access(base, unwrapped_ty)
+                .interface_receiver_for_field_access(base, &unwrapped_ty)
                 .is_some_and(|(iface_tn, iface_type_args, iface_assoc)| {
                     self.try_lower_interface_field_access(
                         base_local,
@@ -6826,7 +6827,7 @@ impl<'db> LoweringContext<'db> {
                 || self.lower_union_class_field_access(
                     expr_id,
                     base_local,
-                    unwrapped_ty,
+                    &unwrapped_ty,
                     field,
                     &dest,
                 )
@@ -6840,7 +6841,7 @@ impl<'db> LoweringContext<'db> {
             if handled_union_field {
                 return;
             }
-            if let Ty::Class(tn, _, _) = unwrapped_ty {
+            if let Ty::Class(tn, _, _) = &unwrapped_ty {
                 self.emit_panic_call(
                     &format!(
                         "internal compiler error: MIR failed to resolve field access \
@@ -7021,13 +7022,7 @@ impl<'db> LoweringContext<'db> {
                     _ => None,
                 })
                 .collect(),
-            Ty::Class(class_name, _, _) => {
-                if let Some(impls) = self.interface_implementors.get(class_name) {
-                    impls.clone()
-                } else {
-                    return None;
-                }
-            }
+            Ty::Class(class_name, _, _) => self.interface_implementors.get(class_name)?.clone(),
             _ => return None,
         };
         if class_names.is_empty() {
@@ -7064,12 +7059,9 @@ impl<'db> LoweringContext<'db> {
 
         // Unwrap Optional — when called from lower_optional_index,
         // the base type is T? but we've already null-checked.
-        let unwrapped_ty = match &base_ty {
-            Ty::Optional(inner, _) => inner.as_ref(),
-            _ => &base_ty,
-        };
+        let unwrapped_ty = base_ty.strip_null();
 
-        let kind = if matches!(unwrapped_ty, Ty::List(..) | Ty::Uint8Array { .. }) {
+        let kind = if matches!(&unwrapped_ty, Ty::List(..) | Ty::Uint8Array { .. }) {
             IndexKind::Array
         } else {
             IndexKind::Map
@@ -7255,7 +7247,7 @@ impl<'db> LoweringContext<'db> {
         let receiver_op = self.lower_to_operand(base);
         let receiver_ty = self.expr_ty(base);
         let recv_local = self.operand_to_local(receiver_op, receiver_ty);
-        self.emit_method_candidate_switch(recv_local, &candidates, expr_id, args, dest)
+        self.emit_method_candidate_switch(recv_local, &candidates, expr_id, args, dest, None)
     }
 
     /// Build the runtime-class dispatch candidates for calling `method` on a
@@ -7473,7 +7465,14 @@ impl<'db> LoweringContext<'db> {
         if resolved.is_empty() {
             return false;
         }
-        self.emit_method_candidate_switch(recv_local, &resolved, expr_id, args, dest)
+        self.emit_method_candidate_switch(
+            recv_local,
+            &resolved,
+            expr_id,
+            args,
+            dest,
+            Some((iface_tn, iface_type_args, method)),
+        )
     }
 
     /// Resolve every concrete-class dispatch candidate for calling `method`
@@ -7581,6 +7580,7 @@ impl<'db> LoweringContext<'db> {
         expr_id: AstExprId,
         args: &[AstExprId],
         dest: &Place,
+        interface_default_context: Option<(&TypeName, &[Tir2Ty], &Name)>,
     ) -> bool {
         if resolved.is_empty() {
             return false;
@@ -7589,6 +7589,7 @@ impl<'db> LoweringContext<'db> {
         // Lower args once; same operands used in every arm.
         let arg_ops = self.lower_call_arg_operands(expr_id, args);
         let type_arg_ops = self.lower_call_type_args(expr_id, true, None);
+        let has_explicit_type_args = self.call_has_explicit_type_args(expr_id);
         let ntypeargs = type_arg_ops.len();
         let unwind = self.catch_context.as_ref().map(|c| c.unwind_target);
 
@@ -7648,13 +7649,35 @@ impl<'db> LoweringContext<'db> {
                 CalleeFrameSeed::Static(tys) => {
                     let callee_op =
                         Operand::Constant(Constant::Function(candidate.item_ref.clone()));
+                    let call_type_arg_ops = if let Some((iface_tn, iface_type_args, method)) =
+                        interface_default_context
+                        && Self::item_ref_is_interface_method(&candidate.item_ref, iface_tn, method)
+                    {
+                        let mut owner_ops = self.emit_frame_type_arg_ops(iface_type_args);
+                        let owner_arg_count = iface_type_args.len();
+                        let method_arg_count = self
+                            .interface_method_generic_count(iface_tn, method)
+                            .unwrap_or(0);
+                        if has_explicit_type_args {
+                            owner_ops.extend(type_arg_ops.iter().cloned());
+                        } else if method_arg_count > 0 && type_arg_ops.len() == method_arg_count {
+                            owner_ops.extend(type_arg_ops.iter().cloned());
+                        } else if type_arg_ops.len() == owner_arg_count + method_arg_count {
+                            owner_ops.extend(type_arg_ops[owner_arg_count..].iter().cloned());
+                        } else {
+                            owner_ops.extend(type_arg_ops.iter().cloned());
+                        }
+                        owner_ops
+                    } else {
+                        type_arg_ops.clone()
+                    };
                     // De Bruijn order: class/iface params first, then method
                     // call type args. Lowered per-arm because the class/iface
                     // seed can vary by candidate.
                     let frame_type_arg_ops = self.emit_frame_type_arg_ops(tys);
-                    let arm_ntypeargs = frame_type_arg_ops.len() + ntypeargs;
+                    let arm_ntypeargs = frame_type_arg_ops.len() + call_type_arg_ops.len();
                     let mut all_args = frame_type_arg_ops;
-                    all_args.extend(type_arg_ops.iter().cloned());
+                    all_args.extend(call_type_arg_ops);
                     all_args.push(Operand::Copy(Place::Local(recv_local)));
                     all_args.extend(arg_ops.iter().cloned());
                     self.builder.call_with_type_args(
@@ -7675,6 +7698,52 @@ impl<'db> LoweringContext<'db> {
 
         self.builder.set_current_block(bb_join);
         true
+    }
+
+    fn item_ref_is_interface_method(
+        item_ref: &ItemRef,
+        iface_tn: &TypeName,
+        method: &Name,
+    ) -> bool {
+        let ItemRef::Method {
+            package,
+            namespace,
+            class,
+            name,
+        } = item_ref
+        else {
+            return false;
+        };
+        name == method
+            && class == &iface_tn.name
+            && iface_tn.module_path.first() == Some(package)
+            && iface_tn.module_path.iter().skip(1).eq(namespace.iter())
+    }
+
+    fn interface_method_generic_count(&self, iface_tn: &TypeName, method: &Name) -> Option<usize> {
+        let iface_pkg_name = iface_tn.module_path.first()?;
+        let iface_pkg_items = self.resolve_class_pkg_items_by_name(iface_pkg_name);
+        let iface_ns: Vec<Name> = iface_tn.module_path.iter().skip(1).cloned().collect();
+        let Definition::Interface(iface_loc) =
+            iface_pkg_items.lookup_type(&iface_ns, &iface_tn.name)?
+        else {
+            return None;
+        };
+        let iface_tree = baml_compiler2_hir::file_item_tree(self.db, iface_loc.file(self.db));
+        let iface_data = iface_tree.interfaces.get(&iface_loc.id(self.db))?;
+        iface_data
+            .default_methods
+            .iter()
+            .find_map(|fn_id| {
+                let func = &iface_tree[*fn_id];
+                (func.name == *method).then_some(func.generic_params.len())
+            })
+            .or_else(|| {
+                iface_data
+                    .required_methods
+                    .iter()
+                    .find_map(|sig| (sig.name == *method).then_some(sig.generic_params.len()))
+            })
     }
 
     /// Per-arm analogue of [`Self::emit_method_candidate_switch`] that *binds* the
@@ -8036,15 +8105,6 @@ impl<'db> LoweringContext<'db> {
                 else {
                     continue;
                 };
-                // An inherited interface default reads the *interface's* type
-                // vars (interface-param order), which can differ from the
-                // implementor's class args when the `implements` block
-                // renames/reorders params. Seed from the matched interface
-                // view's args, not the class guard.
-                let frame_type_args = requested_views
-                    .get(requested_idx)
-                    .map(|(_, args, _)| args.clone())
-                    .unwrap_or_default();
                 out.push((
                     requested_idx,
                     InterfaceMethodCandidate {
@@ -8053,7 +8113,7 @@ impl<'db> LoweringContext<'db> {
                             guard,
                         },
                         item_ref,
-                        frame_seed: CalleeFrameSeed::Static(frame_type_args),
+                        frame_seed: CalleeFrameSeed::Static(Vec::new()),
                     },
                 ));
             }
@@ -8376,22 +8436,6 @@ impl<'db> LoweringContext<'db> {
                             // No override in blanket impl — check for interface default method
                             for &fn_id in &iface_data.default_methods {
                                 if iface_tree[fn_id].name == *method {
-                                    // Inherited default for an out-of-body
-                                    // implementor: its body reads the owning
-                                    // interface's type vars (interface-param
-                                    // order). Seed from the resolved closure
-                                    // view args, but only when fully concrete —
-                                    // any residual TypeVar there is `imp`-level,
-                                    // not a caller generic, so it must not be
-                                    // emitted as a caller `TypeArgRef`.
-                                    let frame_type_args = if current_iface_args
-                                        .iter()
-                                        .any(baml_compiler2_tir::generics::contains_typevar)
-                                    {
-                                        Vec::new()
-                                    } else {
-                                        current_iface_args
-                                    };
                                     out.push((
                                         requested_idx,
                                         InterfaceMethodCandidate {
@@ -8405,7 +8449,7 @@ impl<'db> LoweringContext<'db> {
                                                 class: iface_data.name.clone(),
                                                 name: method.clone(),
                                             },
-                                            frame_seed: CalleeFrameSeed::Static(frame_type_args),
+                                            frame_seed: CalleeFrameSeed::Static(Vec::new()),
                                         },
                                     ));
                                     break 'blanket_search;
@@ -10028,11 +10072,8 @@ impl LoweringContext<'_> {
                 let base_ty = self.expr_ty(base_id);
                 let index_ty = self.expr_ty(index_id);
                 let index_local = self.operand_to_local(index_op, index_ty);
-                let unwrapped_ty = match &base_ty {
-                    Ty::Optional(inner, _) => inner.as_ref(),
-                    _ => &base_ty,
-                };
-                let kind = if matches!(unwrapped_ty, Ty::List(..) | Ty::Uint8Array { .. }) {
+                let unwrapped_ty = base_ty.strip_null();
+                let kind = if matches!(&unwrapped_ty, Ty::List(..) | Ty::Uint8Array { .. }) {
                     IndexKind::Array
                 } else {
                     IndexKind::Map
@@ -10079,11 +10120,8 @@ impl LoweringContext<'_> {
                 // Project member from the same temp local — no second evaluation
                 let base_place = Place::Local(base_local);
                 // Unwrap Optional — we've already null-checked, so use the inner type.
-                let unwrapped_ty = match &base_ty {
-                    Ty::Optional(inner, _) => inner.as_ref(),
-                    _ => &base_ty,
-                };
-                if let Ty::Class(tn, _, _) = unwrapped_ty {
+                let unwrapped_ty = base_ty.strip_null();
+                if let Ty::Class(tn, _, _) = &unwrapped_ty {
                     if let Some(fields) = self.class_fields.get(tn) {
                         if let Some(&idx) = fields.get(member_name.as_str()) {
                             return Place::Field {
@@ -10144,11 +10182,8 @@ impl LoweringContext<'_> {
                 let index_op = self.lower_to_operand(index_id);
                 let index_ty = self.expr_ty(index_id);
                 let index_local = self.operand_to_local(index_op, index_ty);
-                let unwrapped_ty = match &base_ty {
-                    Ty::Optional(inner, _) => inner.as_ref(),
-                    _ => &base_ty,
-                };
-                let kind = if matches!(unwrapped_ty, Ty::List(..)) {
+                let unwrapped_ty = base_ty.strip_null();
+                let kind = if matches!(&unwrapped_ty, Ty::List(..) | Ty::Uint8Array { .. }) {
                     IndexKind::Array
                 } else {
                     IndexKind::Map
@@ -10848,7 +10883,6 @@ impl LoweringContext<'_> {
     fn tir_union_members(ty: &Tir2Ty) -> Option<Vec<Tir2Ty>> {
         match ty {
             Tir2Ty::Union(members, _) => Some(members.clone()),
-            Tir2Ty::Optional(inner, _) => Self::tir_union_members(inner),
             _ => None,
         }
     }
@@ -10865,7 +10899,6 @@ impl LoweringContext<'_> {
             Tir2Ty::Union(members, _) => {
                 members.iter().any(Self::tir_ty_needs_interface_shape_test)
             }
-            Tir2Ty::Optional(inner, _) => Self::tir_ty_needs_interface_shape_test(inner),
             _ => false,
         }
     }
@@ -10894,23 +10927,6 @@ impl LoweringContext<'_> {
                         self.builder.set_current_block(next_check);
                     }
                 }
-            }
-            Tir2Ty::Optional(inner, _) => {
-                let test = Rvalue::BinaryOp {
-                    op: BinOp::Eq,
-                    left: Operand::Copy(Place::Local(scrutinee)),
-                    right: Operand::Constant(Constant::Null),
-                };
-                let test_local = self.builder.temp(Ty::Bool {
-                    attr: TyAttr::default(),
-                });
-                self.builder.assign(Place::local(test_local), test);
-
-                let bb_inner = self.builder.create_block();
-                self.builder
-                    .branch(Operand::Copy(Place::Local(test_local)), success, bb_inner);
-                self.builder.set_current_block(bb_inner);
-                self.emit_is_tir_type_branch_inner(scrutinee, inner, success, failure, visited);
             }
             Tir2Ty::Class(qtn, type_args, _) if !type_args.is_empty() => {
                 let erased = self.resolved_aliases.convert(ty);

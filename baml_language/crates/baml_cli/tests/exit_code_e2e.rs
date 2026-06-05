@@ -54,6 +54,84 @@ generator py {
 }
 
 // ============================================================================
+// Tests for `baml check` exit codes
+// ============================================================================
+
+/// A valid project should return exit code 0 from `baml check`.
+#[test]
+fn check_valid_project_returns_zero_exit_code() {
+    let built = common::ensure_built();
+    let tmp = tempfile::tempdir().unwrap();
+
+    create_project(
+        tmp.path(),
+        "function greet(name: string) -> string {\n  \"Hello, \" + name\n}\n",
+    );
+
+    let output = run_baml_cli(built, tmp.path(), &["check", "--from", "."]);
+
+    assert!(
+        output.status.success(),
+        "Expected exit code 0 for valid project, got: {:?}\nstdout: {}\nstderr: {}",
+        output.status.code(),
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr),
+    );
+}
+
+/// `baml check` with no `--from` is sugar for `baml check --from .`.
+#[test]
+fn check_defaults_from_to_current_directory() {
+    let built = common::ensure_built();
+    let tmp = tempfile::tempdir().unwrap();
+
+    create_project(
+        tmp.path(),
+        "function greet(name: string) -> string {\n  \"Hello, \" + name\n}\n",
+    );
+
+    let output = run_baml_cli(built, tmp.path(), &["check"]);
+
+    assert!(
+        output.status.success(),
+        "Expected exit code 0 for `baml check` defaulting to cwd, got: {:?}\nstdout: {}\nstderr: {}",
+        output.status.code(),
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr),
+    );
+}
+
+/// Compilation errors must result in a non-zero exit code for `baml check`.
+#[test]
+fn check_compilation_error_returns_nonzero_exit_code() {
+    let built = common::ensure_built();
+    let tmp = tempfile::tempdir().unwrap();
+
+    create_project(
+        tmp.path(),
+        "function broken() -> MissingType {\n  \"never\"\n}\n",
+    );
+
+    let output = run_baml_cli(built, tmp.path(), &["check", "--from", "."]);
+
+    assert!(
+        !output.status.success(),
+        "Expected non-zero exit code for compilation error in `baml check`",
+    );
+    assert_eq!(
+        output.status.code(),
+        Some(4),
+        "Expected exit code 4 for compilation error",
+    );
+
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("MissingType") || stderr.contains("unresolved"),
+        "Expected error message to mention the unresolved type, got: {stderr}",
+    );
+}
+
+// ============================================================================
 // Tests for `baml generate` exit codes
 // ============================================================================
 

@@ -38,11 +38,11 @@ class user.Config$stream {
   data: user.AttrFoo
 }
 class user.AttrFoo$stream {
-  x: null | int
+  x: int | null
 }
 class user.WithBlockAttrs$stream {
-  a: null | int
-  b: null | string
+  a: int | null
+  b: string | null
 }
 class user.Foo {
   a: int
@@ -61,26 +61,26 @@ class user.Bar {
   items: int[]
   nested: user.Foo[]
   mapping: map<string, int>
-  opt: int?
+  opt: int | null
 }
 function user.Bar.to_json(self: user.Bar) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  map { "ref": self.ref.to_json(), "items": self.items.to_json(), "nested": self.nested.to_json(), "mapping": self.mapping.to_json(), "opt": self.opt?.to_json() } : map<string, baml.json.json | baml.json.json?>
+  map { "ref": self.ref.to_json(), "items": self.items.to_json(), "nested": self.nested.to_json(), "mapping": self.mapping.to_json(), "opt": self.opt?.to_json() } : map<string, baml.json.json | null>
 }
 function user.Bar.from_json(j: baml.json.json) -> user.Bar throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   Bar { ref: baml.json.from_json<Foo>(baml.json.field(j, "ref")), items: baml.json.from_json<int[]>(baml.json.field(j, "items")), nested: baml.json.from_json<Foo[]>(baml.json.field(j, "nested")), mapping: baml.json.from_json<map<string, int>>(baml.json.field(j, "mapping")), opt: baml.json.from_json<int?>(baml.json.field(j, "opt")) } : user.Bar
 }
 class user.Foo$stream {
-  a: null | int
-  b: null | string
-  c: null | float
-  d: null | bool
+  a: int | null
+  b: string | null
+  c: float | null
+  d: bool | null
 }
 class user.Bar$stream {
-  ref: null | user.Foo$stream
+  ref: user.Foo$stream | null
   items: int[]
   nested: user.Foo$stream[]
   mapping: map<string, int>
-  opt: null | int
+  opt: int | null
 }
 class user.ApiCall {
   request: baml.http.Request
@@ -105,11 +105,11 @@ function user.WithResponse.from_json(j: baml.json.json) -> user.WithResponse thr
 class user.MixedBuiltin {
   requests: baml.http.Request[]
   metadata: map<string, baml.http.Request>
-  maybe_request: baml.http.Request?
+  maybe_request: baml.http.Request | null
   union_request: baml.http.Request | string
 }
 function user.MixedBuiltin.to_json(self: user.MixedBuiltin) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  map { "requests": self.requests.to_json(), "metadata": self.metadata.to_json(), "maybe_request": self.maybe_request?.to_json(), "union_request": self.union_request.to_json() } : map<string, baml.json.json | baml.json.json?>
+  map { "requests": self.requests.to_json(), "metadata": self.metadata.to_json(), "maybe_request": self.maybe_request?.to_json(), "union_request": self.union_request.to_json() } : map<string, baml.json.json | null>
 }
 function user.MixedBuiltin.from_json(j: baml.json.json) -> user.MixedBuiltin throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   MixedBuiltin { requests: baml.json.from_json<baml.http.Request[]>(baml.json.field(j, "requests")), metadata: baml.json.from_json<map<string, baml.http.Request>>(baml.json.field(j, "metadata")), maybe_request: baml.json.from_json<baml.http.Request?>(baml.json.field(j, "maybe_request")), union_request: baml.json.from_json<baml.http.Request | string>(baml.json.field(j, "union_request")) } : user.MixedBuiltin
@@ -124,21 +124,21 @@ function user.WithStreamRef.from_json(j: baml.json.json) -> user.WithStreamRef t
   WithStreamRef { partial: baml.json.from_json<baml.http.Request$stream>(baml.json.field(j, "partial")) } : user.WithStreamRef
 }
 class user.ApiCall$stream {
-  request: null | baml.http.Request$stream
-  label: null | string
+  request: baml.http.Request$stream | null
+  label: string | null
 }
 class user.WithResponse$stream {
-  response: null | baml.http.Response$stream
-  status: null | string
+  response: baml.http.Response$stream | null
+  status: string | null
 }
 class user.MixedBuiltin$stream {
   requests: baml.http.Request$stream[]
   metadata: map<string, baml.http.Request$stream>
-  maybe_request: null | baml.http.Request$stream
-  union_request: null | baml.http.Request$stream | string
+  maybe_request: baml.http.Request$stream | null
+  union_request: baml.http.Request$stream | string | null
 }
 class user.WithStreamRef$stream {
-  partial: null | baml.http.Request$stream
+  partial: baml.http.Request$stream | null
 }
 enum user.Color
 class user.Inner {
@@ -158,28 +158,28 @@ class user.Complex {
   union_field: int | string[]
   alias_field: user.StringAlias
   nested_list: user.Inner[][]
-  optional_class: user.Inner?
+  optional_class: user.Inner | null
   union_with_null: int | null | string
 }
 function user.Complex.to_json(self: user.Complex) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  map { "color": self.color.to_json(), "literal": self.literal.to_json(), "str_literal": self.str_literal.to_json(), "union_field": self.union_field.to_json(), "alias_field": self.alias_field.to_json(), "nested_list": self.nested_list.to_json(), "optional_class": self.optional_class?.to_json(), "union_with_null": self.union_with_null?.to_json() } : map<string, baml.json.json | baml.json.json?>
+  map { "color": self.color.to_json(), "literal": self.literal.to_json(), "str_literal": self.str_literal.to_json(), "union_field": self.union_field.to_json(), "alias_field": self.alias_field.to_json(), "nested_list": self.nested_list.to_json(), "optional_class": self.optional_class?.to_json(), "union_with_null": self.union_with_null?.to_json() } : map<string, baml.json.json | null>
 }
 function user.Complex.from_json(j: baml.json.json) -> user.Complex throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   Complex { color: baml.json.from_json<Color>(baml.json.field(j, "color")), literal: baml.json.from_json<5>(baml.json.field(j, "literal")), str_literal: baml.json.from_json<"hello">(baml.json.field(j, "str_literal")), union_field: baml.json.from_json<int | string[]>(baml.json.field(j, "union_field")), alias_field: baml.json.from_json<StringAlias>(baml.json.field(j, "alias_field")), nested_list: baml.json.from_json<Inner[][]>(baml.json.field(j, "nested_list")), optional_class: baml.json.from_json<Inner?>(baml.json.field(j, "optional_class")), union_with_null: baml.json.from_json<int | null | string>(baml.json.field(j, "union_with_null")) } : user.Complex
 }
 type user.AliasToClass = user.Inner
 class user.Inner$stream {
-  value: null | int
+  value: int | null
 }
 type user.StringAlias$stream = string
 class user.Complex$stream {
-  color: null | user.Color
+  color: user.Color | null
   literal: 5
   str_literal: "hello"
-  union_field: null | int | string[]
-  alias_field: null | string
+  union_field: int | string[] | null
+  alias_field: string | null
   nested_list: user.Inner$stream[][]
-  optional_class: null | user.Inner$stream
+  optional_class: user.Inner$stream | null
   union_with_null: int | null | string
 }
 type user.AliasToClass$stream = user.Inner$stream
@@ -254,7 +254,7 @@ function user.UnionWithMustExist.from_json(j: baml.json.json) -> user.UnionWithM
   UnionWithMustExist { mixed: baml.json.from_json<MustExistClass | 5>(baml.json.field(j, "mixed")) } : user.UnionWithMustExist
 }
 class user.SelfRef$stream {
-  name: null | string
+  name: string | null
   children: user.SelfRef$stream[]
 }
 class user.AllMustExist$stream {
@@ -268,7 +268,7 @@ class user.AllDone$stream {
   c: user.EdgeFoo
 }
 class user.EdgeFoo$stream {
-  x: null | int
+  x: int | null
 }
 class user.NeverFields$stream {
   lit_int: 42
@@ -276,7 +276,7 @@ class user.NeverFields$stream {
   lit_bool: true
 }
 class user.MustExistClass$stream {
-  v: null | int
+  v: int | null
 }
 class user.UnionWithMustExist$stream {
   mixed: user.MustExistClass$stream | 5
@@ -378,12 +378,12 @@ function user.WithUnions.from_json(j: baml.json.json) -> user.WithUnions throws 
   WithUnions { simple: baml.json.from_json<int | string>(baml.json.field(j, "simple")), with_class: baml.json.from_json<Inner | Primitives>(baml.json.field(j, "with_class")), mixed: baml.json.from_json<int | Inner>(baml.json.field(j, "mixed")) } : user.WithUnions
 }
 class user.WithOptionals {
-  name: string?
-  inner: user.Inner?
-  items: int[]?
+  name: string | null
+  inner: user.Inner | null
+  items: int[] | null
 }
 function user.WithOptionals.to_json(self: user.WithOptionals) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  map { "name": self.name?.to_json(), "inner": self.inner?.to_json(), "items": self.items?.to_json() } : map<string, baml.json.json?>
+  map { "name": self.name?.to_json(), "inner": self.inner?.to_json(), "items": self.items?.to_json() } : map<string, baml.json.json | null>
 }
 function user.WithOptionals.from_json(j: baml.json.json) -> user.WithOptionals throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   WithOptionals { name: baml.json.from_json<string?>(baml.json.field(j, "name")), inner: baml.json.from_json<Inner?>(baml.json.field(j, "inner")), items: baml.json.from_json<int[]?>(baml.json.field(j, "items")) } : user.WithOptionals
@@ -391,7 +391,7 @@ function user.WithOptionals.from_json(j: baml.json.json) -> user.WithOptionals t
 type user.SimpleAlias = string
 type user.ClassAlias = user.Inner
 type user.UnionAlias = int | user.Inner
-type user.OptionalAlias = user.Inner?
+type user.OptionalAlias = user.Inner | null
 class user.DynamicClass {
   name: string
 }
@@ -427,11 +427,11 @@ class user.AllDefaults {
   edu_map: map<string, user.Education>
   data: user.AliasedType
   mixed: int | user.Education
-  maybe: string?
-  maybe_list: int[]?
+  maybe: string | null
+  maybe_list: int[] | null
 }
 function user.AllDefaults.to_json(self: user.AllDefaults) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  map { "name": self.name.to_json(), "age": self.age.to_json(), "score": self.score.to_json(), "active": self.active.to_json(), "type": self.type.to_json(), "version": self.version.to_json(), "status": self.status.to_json(), "edu": self.edu.to_json(), "scores": self.scores.to_json(), "education": self.education.to_json(), "nested_edu": self.nested_edu.to_json(), "edu_map": self.edu_map.to_json(), "data": self.data.to_json(), "mixed": self.mixed.to_json(), "maybe": self.maybe?.to_json(), "maybe_list": self.maybe_list?.to_json() } : map<string, baml.json.json | baml.json.json?>
+  map { "name": self.name.to_json(), "age": self.age.to_json(), "score": self.score.to_json(), "active": self.active.to_json(), "type": self.type.to_json(), "version": self.version.to_json(), "status": self.status.to_json(), "edu": self.edu.to_json(), "scores": self.scores.to_json(), "education": self.education.to_json(), "nested_edu": self.nested_edu.to_json(), "edu_map": self.edu_map.to_json(), "data": self.data.to_json(), "mixed": self.mixed.to_json(), "maybe": self.maybe?.to_json(), "maybe_list": self.maybe_list?.to_json() } : map<string, baml.json.json | null>
 }
 function user.AllDefaults.from_json(j: baml.json.json) -> user.AllDefaults throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   AllDefaults { name: baml.json.from_json<string>(baml.json.field(j, "name")), age: baml.json.from_json<int>(baml.json.field(j, "age")), score: baml.json.from_json<float>(baml.json.field(j, "score")), active: baml.json.from_json<bool>(baml.json.field(j, "active")), type: baml.json.from_json<"resume">(baml.json.field(j, "type")), version: baml.json.from_json<42>(baml.json.field(j, "version")), status: baml.json.from_json<Status>(baml.json.field(j, "status")), edu: baml.json.from_json<Education>(baml.json.field(j, "edu")), scores: baml.json.from_json<int[]>(baml.json.field(j, "scores")), education: baml.json.from_json<Education[]>(baml.json.field(j, "education")), nested_edu: baml.json.from_json<Education[][]>(baml.json.field(j, "nested_edu")), edu_map: baml.json.from_json<map<string, Education>>(baml.json.field(j, "edu_map")), data: baml.json.from_json<AliasedType>(baml.json.field(j, "data")), mixed: baml.json.from_json<int | Education>(baml.json.field(j, "mixed")), maybe: baml.json.from_json<string?>(baml.json.field(j, "maybe")), maybe_list: baml.json.from_json<int[]?>(baml.json.field(j, "maybe_list")) } : user.AllDefaults
@@ -476,13 +476,13 @@ function user.Container.from_json(j: baml.json.json) -> user.Container throws ba
 type user.Foo = int | string
 type user.Bar = user.Foo | bool
 class user.Primitives$stream {
-  name: null | string
-  count: null | int
-  flag: null | bool
-  score: null | float
+  name: string | null
+  count: int | null
+  flag: bool | null
+  score: float | null
 }
 class user.WithEnum$stream {
-  status: null | user.Status
+  status: user.Status | null
 }
 class user.WithLiterals$stream {
   type: "resume"
@@ -490,10 +490,10 @@ class user.WithLiterals$stream {
   enabled: true
 }
 class user.Inner$stream {
-  value: null | string
+  value: string | null
 }
 class user.Outer$stream {
-  inner: null | user.Inner$stream
+  inner: user.Inner$stream | null
 }
 class user.WithLists$stream {
   strings: string[]
@@ -511,57 +511,57 @@ class user.WithNested$stream {
   class_nested_map: map<string, user.Inner$stream[]>
 }
 class user.WithUnions$stream {
-  simple: null | int | string
-  with_class: null | user.Inner$stream | user.Primitives$stream
-  mixed: null | int | user.Inner$stream
+  simple: int | string | null
+  with_class: user.Inner$stream | user.Primitives$stream | null
+  mixed: int | user.Inner$stream | null
 }
 class user.WithOptionals$stream {
-  name: null | string
-  inner: null | user.Inner$stream
-  items: null | int[]
+  name: string | null
+  inner: user.Inner$stream | null
+  items: int[] | null
 }
 type user.SimpleAlias$stream = string
 type user.ClassAlias$stream = user.Inner$stream
 type user.UnionAlias$stream = int | user.Inner$stream
-type user.OptionalAlias$stream = null | user.Inner$stream
+type user.OptionalAlias$stream = user.Inner$stream | null
 class user.DynamicClass$stream {
-  name: null | string
+  name: string | null
 }
 class user.Education$stream {
-  school: null | string
-  year: null | int
+  school: string | null
+  year: int | null
 }
 type user.AliasedType$stream = string | int
 class user.AllDefaults$stream {
-  name: null | string
-  age: null | int
-  score: null | float
-  active: null | bool
+  name: string | null
+  age: int | null
+  score: float | null
+  active: bool | null
   type: "resume"
   version: 42
-  status: null | user.Status
-  edu: null | user.Education$stream
+  status: user.Status | null
+  edu: user.Education$stream | null
   scores: int[]
   education: user.Education$stream[]
   nested_edu: user.Education$stream[][]
   edu_map: map<string, user.Education$stream>
-  data: null | string | int
-  mixed: null | int | user.Education$stream
-  maybe: null | string
-  maybe_list: null | int[]
+  data: string | int | null
+  mixed: int | user.Education$stream | null
+  maybe: string | null
+  maybe_list: int[] | null
 }
 class user.Resume$stream {
-  name: null | string
-  age: null | int
+  name: string | null
+  age: int | null
   type: "resume"
-  status: null | user.Status
+  status: user.Status | null
   education: user.Education$stream[]
   scores: int[]
   metadata: map<string, string>
 }
 type user.MixedType$stream = int | user.Education$stream
 class user.TreeNode$stream {
-  value: null | string
+  value: string | null
   children: user.TreeNode$stream[]
 }
 class user.Container$stream {
@@ -595,14 +595,14 @@ function user.foo.NsRefToTop.from_json(j: baml.json.json) -> user.foo.NsRefToTop
   NsRefToTop { inner: baml.json.from_json<root.Inner>(baml.json.field(j, "inner")), status: baml.json.from_json<root.Status>(baml.json.field(j, "status")), items: baml.json.from_json<root.Inner[]>(baml.json.field(j, "items")), alias_ref: baml.json.from_json<root.ClassAlias>(baml.json.field(j, "alias_ref")) } : user.foo.NsRefToTop
 }
 class user.foo.NsClass$stream {
-  value: null | string
+  value: string | null
 }
 type user.foo.NsAlias$stream = string | int
 class user.foo.NsRefToTop$stream {
-  inner: null | user.Inner$stream
-  status: null | user.Status
+  inner: user.Inner$stream | null
+  status: user.Status | null
   items: user.Inner$stream[]
-  alias_ref: null | user.Inner$stream
+  alias_ref: user.Inner$stream | null
 }
 class user.TopRefToNs {
   ns_class: user.foo.NsClass
@@ -618,9 +618,9 @@ function user.TopRefToNs.from_json(j: baml.json.json) -> user.TopRefToNs throws 
   TopRefToNs { ns_class: baml.json.from_json<root.foo.NsClass>(baml.json.field(j, "ns_class")), ns_enum: baml.json.from_json<root.foo.NsEnum>(baml.json.field(j, "ns_enum")), ns_items: baml.json.from_json<root.foo.NsClass[]>(baml.json.field(j, "ns_items")), ns_map: baml.json.from_json<map<string, root.foo.NsClass>>(baml.json.field(j, "ns_map")), ns_alias: baml.json.from_json<root.foo.NsAlias>(baml.json.field(j, "ns_alias")) } : user.TopRefToNs
 }
 class user.TopRefToNs$stream {
-  ns_class: null | user.foo.NsClass$stream
-  ns_enum: null | user.foo.NsEnum
+  ns_class: user.foo.NsClass$stream | null
+  ns_enum: user.foo.NsEnum | null
   ns_items: user.foo.NsClass$stream[]
   ns_map: map<string, user.foo.NsClass$stream>
-  ns_alias: null | string | int
+  ns_alias: string | int | null
 }

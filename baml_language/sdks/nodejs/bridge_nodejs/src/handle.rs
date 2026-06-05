@@ -1,10 +1,32 @@
 //! Node.js handle lifecycle — released via ObjectFinalize.
 //! Mirrors bridge_python/src/handle.rs.
 
-use bex_project::{BexExternalAdt, MediaKind, MediaValue};
-use bridge_ctypes::{CffiHandleTableEntry, HANDLE_TABLE};
+use bridge_cffi::{
+    __testonly_seed_function_ref, __testonly_seed_generic_media, BamlCffiStatus, baml_handle_clone,
+    baml_handle_release,
+};
 use napi::bindgen_prelude::*;
 use napi_derive::napi;
+
+pub(crate) fn status_to_napi(context: &str, status: BamlCffiStatus) -> napi::Error {
+    let detail = match status {
+        BamlCffiStatus::Ok => "ok",
+        BamlCffiStatus::InvalidHandle => "invalid handle",
+        BamlCffiStatus::TypeMismatch => "handle type mismatch",
+        BamlCffiStatus::UnsupportedHandleType => "unsupported handle type",
+        BamlCffiStatus::InternalError => "internal error",
+        BamlCffiStatus::UnexpectedNullptr => "unexpected null pointer",
+    };
+    napi::Error::new(napi::Status::GenericFailure, format!("{context}: {detail}"))
+}
+
+pub(crate) fn handle_clone(key: u64, context: &str) -> napi::Result<u64> {
+    let mut out_key = 0;
+    match unsafe { baml_handle_clone(key, &mut out_key) } {
+        BamlCffiStatus::Ok => Ok(out_key),
+        status => Err(status_to_napi(context, status)),
+    }
+}
 
 /// A u64 handle key split into two i32 halves, mirroring the shape of
 /// protobufjs's `Long` type (`{ low: number, high: number }`).
@@ -67,20 +89,24 @@ impl BamlHandle {
 
     #[napi(js_name = "clone")]
     pub fn clone_handle(&self) -> napi::Result<BamlHandle> {
-        let new_key = HANDLE_TABLE.clone_handle(self.key).ok_or_else(|| {
-            napi::Error::new(napi::Status::GenericFailure, "Handle is no longer valid")
-        })?;
+        let new_key = handle_clone(self.key, "BamlHandle.clone")?;
         Ok(BamlHandle {
             key: new_key,
             handle_type: self.handle_type,
         })
     }
+
+    #[napi(js_name = "_cloneKeyForWire")]
+    pub fn clone_key_for_wire(&self) -> napi::Result<HandleKey> {
+        let new_key = handle_clone(self.key, "BamlHandle._cloneKeyForWire")?;
+        Ok(HandleKey::from_u64(new_key))
+    }
 }
 
 impl BamlHandle {
     /// Construct directly from a raw `(key, handle_type)` pair. Used by the
-    /// handle-table helpers and the media classes — `BamlHandle`'s fields are
-    /// private, so callers outside this module need this constructor.
+    /// media classes — `BamlHandle`'s fields are private, so callers outside
+    /// this module need this constructor.
     pub(crate) fn from_parts(key: u64, handle_type: i32) -> Self {
         BamlHandle { key, handle_type }
     }
@@ -93,60 +119,30 @@ impl BamlHandle {
 
 impl ObjectFinalize for BamlHandle {
     fn finalize(self, _env: Env) -> napi::Result<()> {
-        HANDLE_TABLE.release(self.key);
+        let _ = unsafe { baml_handle_release(self.key) };
         Ok(())
     }
-}
-
-/// Validate that `key` exists in `HANDLE_TABLE`, then wrap as a `BamlHandle`.
-/// Used by the proto decoder's handle path. Does **not** drain — the entry
-/// stays in the table and is owned by the returned `BamlHandle`. Mirrors
-/// `bridge_python::py_handle::take_pyhandle_from_table`.
-#[napi]
-pub fn take_handle_from_table(key: HandleKey, handle_type: i32) -> napi::Result<BamlHandle> {
-    let key_u64 = key.to_u64();
-    if HANDLE_TABLE.resolve(key_u64).is_none() {
-        return Err(napi::Error::new(
-            napi::Status::GenericFailure,
-            format!("BAML handle key {key_u64} is not in HANDLE_TABLE"),
-        ));
-    }
-    Ok(BamlHandle::from_parts(key_u64, handle_type))
-}
-
-/// Allocate a fresh `HANDLE_TABLE` row sharing the same `Arc` as `handle`,
-/// returning the new key so the caller can stage a wire `BamlHandle`. The
-/// original `handle` keeps its key and stays usable. Mirrors
-/// `bridge_python::py_handle::put_pyhandle_into_table`.
-#[napi]
-pub fn put_handle_into_table(handle: &BamlHandle) -> napi::Result<HandleKey> {
-    let new_key = HANDLE_TABLE.clone_handle(handle.key_u64()).ok_or_else(|| {
-        napi::Error::new(
-            napi::Status::GenericFailure,
-            format!("BamlHandle key {} is not in HANDLE_TABLE", handle.key_u64()),
-        )
-    })?;
-    Ok(HandleKey::from_u64(new_key))
 }
 
 /// Test-only: seed a `FunctionRef` entry into `HANDLE_TABLE`, returning
 /// `[key, handleType]` so test code can construct a `BamlHandle`.
 #[napi(js_name = "_seedFunctionRefHandle")]
-pub fn seed_function_ref_handle(global_index: u32) -> (HandleKey, i32) {
-    let entry = CffiHandleTableEntry::FunctionRef {
-        global_index: global_index as usize,
-    };
-    let ht = entry.handle_type();
-    let key = HANDLE_TABLE.insert(entry);
-    (HandleKey::from_u64(key), ht as i32)
+pub fn seed_function_ref_handle(global_index: u32) -> napi::Result<(HandleKey, i32)> {
+    let mut key = 0;
+    let mut handle_type = 0;
+    match unsafe { __testonly_seed_function_ref(global_index as u64, &mut key, &mut handle_type) } {
+        BamlCffiStatus::Ok => Ok((HandleKey::from_u64(key), handle_type)),
+        status => Err(status_to_napi("_seedFunctionRefHandle", status)),
+    }
 }
 
 /// Test-only: seed an `Adt(Media(generic))` entry into `HANDLE_TABLE`.
 #[napi(js_name = "_seedGenericMediaHandle")]
-pub fn seed_generic_media_handle() -> (HandleKey, i32) {
-    let media = MediaValue::from_url(MediaKind::Generic, "https://example.com/", None);
-    let entry = CffiHandleTableEntry::Adt(BexExternalAdt::Media(media));
-    let ht = entry.handle_type();
-    let key = HANDLE_TABLE.insert(entry);
-    (HandleKey::from_u64(key), ht as i32)
+pub fn seed_generic_media_handle() -> napi::Result<(HandleKey, i32)> {
+    let mut key = 0;
+    let mut handle_type = 0;
+    match unsafe { __testonly_seed_generic_media(&mut key, &mut handle_type) } {
+        BamlCffiStatus::Ok => Ok((HandleKey::from_u64(key), handle_type)),
+        status => Err(status_to_napi("_seedGenericMediaHandle", status)),
+    }
 }

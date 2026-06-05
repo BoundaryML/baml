@@ -7,7 +7,7 @@
 use std::sync::{Arc, OnceLock};
 
 use bex_heap::{BexExternalValue, BexHeap};
-use sys_ops::io::{self, CallId, OpErrorKind, SysOpContext, SysOpOutput, owned};
+use sys_ops::io::{self, CallId, SysOpContext, SysOpOutput, VmBamlError, VmRustFnError, owned};
 
 // Process-level shared BufReader for stdin, preventing data loss when
 // BufReader over-reads into its internal buffer across multiple io.input() calls.
@@ -36,9 +36,9 @@ impl io::IoNamespaceEnv for NativeSysOps {
         match std::env::var(&key) {
             Ok(val) => SysOpOutput::ok(Some(val)),
             Err(std::env::VarError::NotPresent) => SysOpOutput::ok(None),
-            Err(std::env::VarError::NotUnicode(_)) => SysOpOutput::err(OpErrorKind::Other(
-                format!("Environment variable '{key}' is not valid UTF-8"),
-            )),
+            Err(std::env::VarError::NotUnicode(_)) => SysOpOutput::err(VmBamlError::ParseError {
+                message: format!("Environment variable '{key}' is not valid UTF-8"),
+            }),
         }
     }
 }
@@ -66,7 +66,99 @@ impl io::IoClassTimeInstant for NativeSysOps {
     }
 }
 
-impl io::IoNamespaceTime for NativeSysOps {}
+/// Converts an absolute time (nanoseconds since the Unix epoch, as an
+/// arbitrary-precision integer) into a `jiff::Timestamp`, saturating at
+/// jiff's representable range. Saturation is fine for offset queries: a
+/// timezone's offset is constant beyond the last tzdb transition, so the
+/// boundary instant resolves to the same offset as any farther one.
+fn saturating_timestamp(ns: &num_bigint::BigInt) -> jiff::Timestamp {
+    use num_bigint::Sign;
+    match i128::try_from(ns) {
+        Ok(ns) => jiff::Timestamp::from_nanosecond(ns).unwrap_or(if ns < 0 {
+            jiff::Timestamp::MIN
+        } else {
+            jiff::Timestamp::MAX
+        }),
+        Err(_) if ns.sign() == Sign::Minus => jiff::Timestamp::MIN,
+        Err(_) => jiff::Timestamp::MAX,
+    }
+}
+
+impl io::IoNamespaceTime for NativeSysOps {
+    fn system_timezone(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<String> {
+        // The host's timezone database / system configuration, per BEP-021
+        // (Deno-style: no tzdata is bundled on platforms that provide one).
+        match jiff::tz::TimeZone::system().iana_name() {
+            Some(name) => SysOpOutput::ok(name.to_string()),
+            None => SysOpOutput::err(VmBamlError::Io {
+                message: "could not determine the system's IANA timezone".to_string(),
+            }),
+        }
+    }
+
+    fn _tz_offset_at(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        timezone: String,
+        at_ns: Arc<num_bigint::BigInt>,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<Option<i64>> {
+        // Unknown identifier → None (the BAML layer turns this into
+        // `UnknownTimezoneError`).
+        let Ok(tz) = jiff::tz::TimeZone::get(&timezone) else {
+            return SysOpOutput::ok(None);
+        };
+        let offset = tz.to_offset(saturating_timestamp(&at_ns));
+        SysOpOutput::ok(Some(i64::from(offset.seconds()) * 1_000_000_000))
+    }
+
+    fn _tz_to_instant(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        timezone: String,
+        civil_ns: Arc<num_bigint::BigInt>,
+        disambiguation: String,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<Option<Arc<num_bigint::BigInt>>> {
+        let Ok(tz) = jiff::tz::TimeZone::get(&timezone) else {
+            return SysOpOutput::ok(None);
+        };
+        // The civil reading is encoded as nanoseconds since
+        // 1970-01-01T00:00:00 as if it were UTC; decode it through UTC.
+        let civil = match i128::try_from(&*civil_ns)
+            .ok()
+            .and_then(|ns| jiff::Timestamp::from_nanosecond(ns).ok())
+        {
+            Some(ts) => ts.to_zoned(jiff::tz::TimeZone::UTC).datetime(),
+            None => {
+                return SysOpOutput::err(VmBamlError::Io {
+                    message: "civil time is outside the supported year range".to_string(),
+                });
+            }
+        };
+        let ambiguous = tz.to_ambiguous_timestamp(civil);
+        // TC39 disambiguation semantics, via jiff. "reject" is implemented in
+        // the BAML layer (earlier+later agreement), so it never reaches here.
+        let resolved = match disambiguation.as_str() {
+            "earlier" => ambiguous.earlier(),
+            "later" => ambiguous.later(),
+            _ => ambiguous.compatible(),
+        };
+        match resolved {
+            Ok(ts) => SysOpOutput::ok(Some(Arc::new(num_bigint::BigInt::from(ts.as_nanosecond())))),
+            Err(e) => SysOpOutput::err(VmBamlError::Io {
+                message: format!("cannot resolve civil time in timezone '{timezone}': {e}"),
+            }),
+        }
+    }
+}
 
 // ============================================================================
 // IO (stdin input)
@@ -90,17 +182,20 @@ impl io::IoNamespaceIo for NativeSysOps {
                 stdout
                     .write_all(p.as_bytes())
                     .await
-                    .map_err(|e| OpErrorKind::Other(format!("Failed to write prompt: {e}")))?;
-                stdout
-                    .flush()
-                    .await
-                    .map_err(|e| OpErrorKind::Other(format!("Failed to flush stdout: {e}")))?;
+                    .map_err(|e| VmBamlError::Io {
+                        message: format!("Failed to write prompt: {e}"),
+                    })?;
+                stdout.flush().await.map_err(|e| VmBamlError::Io {
+                    message: format!("Failed to flush stdout: {e}"),
+                })?;
             }
             let mut line = String::new();
             stdin
                 .read_line(&mut line)
                 .await
-                .map_err(|e| OpErrorKind::Other(format!("Failed to read stdin: {e}")))?;
+                .map_err(|e| VmBamlError::Io {
+                    message: format!("Failed to read stdin: {e}"),
+                })?;
             // Trim trailing newline (returns "" on EOF when read_line returns 0 bytes)
             if line.ends_with('\n') {
                 line.pop();
@@ -125,11 +220,12 @@ impl io::IoNamespaceIo for NativeSysOps {
             stdout
                 .write_all(s.as_bytes())
                 .await
-                .map_err(|e| OpErrorKind::Other(format!("Failed to write stdout: {e}")))?;
-            stdout
-                .flush()
-                .await
-                .map_err(|e| OpErrorKind::Other(format!("Failed to flush stdout: {e}")))?;
+                .map_err(|e| VmBamlError::Io {
+                    message: format!("Failed to write stdout: {e}"),
+                })?;
+            stdout.flush().await.map_err(|e| VmBamlError::Io {
+                message: format!("Failed to flush stdout: {e}"),
+            })?;
             Ok(())
         })
     }
@@ -148,14 +244,12 @@ impl io::IoNamespaceIo for NativeSysOps {
             // interleave on a line boundary.
             let mut buf = s.into_bytes();
             buf.push(b'\n');
-            stdout
-                .write_all(&buf)
-                .await
-                .map_err(|e| OpErrorKind::Other(format!("Failed to write stdout: {e}")))?;
-            stdout
-                .flush()
-                .await
-                .map_err(|e| OpErrorKind::Other(format!("Failed to flush stdout: {e}")))?;
+            stdout.write_all(&buf).await.map_err(|e| VmBamlError::Io {
+                message: format!("Failed to write stdout: {e}"),
+            })?;
+            stdout.flush().await.map_err(|e| VmBamlError::Io {
+                message: format!("Failed to flush stdout: {e}"),
+            })?;
             Ok(())
         })
     }
@@ -173,11 +267,12 @@ impl io::IoNamespaceIo for NativeSysOps {
             stderr
                 .write_all(s.as_bytes())
                 .await
-                .map_err(|e| OpErrorKind::Other(format!("Failed to write stderr: {e}")))?;
-            stderr
-                .flush()
-                .await
-                .map_err(|e| OpErrorKind::Other(format!("Failed to flush stderr: {e}")))?;
+                .map_err(|e| VmBamlError::Io {
+                    message: format!("Failed to write stderr: {e}"),
+                })?;
+            stderr.flush().await.map_err(|e| VmBamlError::Io {
+                message: format!("Failed to flush stderr: {e}"),
+            })?;
             Ok(())
         })
     }
@@ -194,14 +289,12 @@ impl io::IoNamespaceIo for NativeSysOps {
             let mut stderr = tokio::io::stderr();
             let mut buf = s.into_bytes();
             buf.push(b'\n');
-            stderr
-                .write_all(&buf)
-                .await
-                .map_err(|e| OpErrorKind::Other(format!("Failed to write stderr: {e}")))?;
-            stderr
-                .flush()
-                .await
-                .map_err(|e| OpErrorKind::Other(format!("Failed to flush stderr: {e}")))?;
+            stderr.write_all(&buf).await.map_err(|e| VmBamlError::Io {
+                message: format!("Failed to write stderr: {e}"),
+            })?;
+            stderr.flush().await.map_err(|e| VmBamlError::Io {
+                message: format!("Failed to flush stderr: {e}"),
+            })?;
             Ok(())
         })
     }
@@ -213,15 +306,19 @@ impl io::IoNamespaceIo for NativeSysOps {
 
 type FsFileHandle = tokio::sync::Mutex<Option<tokio::fs::File>>;
 
-fn downcast_handle(file: &owned::fs::File) -> Result<Arc<FsFileHandle>, OpErrorKind> {
+fn downcast_handle(file: &owned::fs::File) -> Result<Arc<FsFileHandle>, VmBamlError> {
     file._handle
         .clone()
         .downcast::<FsFileHandle>()
-        .map_err(|_| OpErrorKind::Other("Invalid file handle type".into()))
+        .map_err(|_| VmBamlError::DevOther {
+            message: "Invalid file handle type".into(),
+        })
 }
 
-fn closed_err() -> OpErrorKind {
-    OpErrorKind::Other("File is closed".into())
+fn closed_err() -> VmBamlError {
+    VmBamlError::InvalidArgument {
+        message: "File is closed".into(),
+    }
 }
 
 impl io::IoClassFsFile for NativeSysOps {
@@ -241,7 +338,9 @@ impl io::IoClassFsFile for NativeSysOps {
             let mut contents = String::new();
             f.read_to_string(&mut contents)
                 .await
-                .map_err(|e| OpErrorKind::Other(format!("Failed to read file: {e}")))?;
+                .map_err(|e| VmBamlError::Io {
+                    message: format!("Failed to read file: {e}"),
+                })?;
             Ok(contents)
         })
     }
@@ -262,7 +361,9 @@ impl io::IoClassFsFile for NativeSysOps {
             let mut contents = Vec::new();
             f.read_to_end(&mut contents)
                 .await
-                .map_err(|e| OpErrorKind::Other(format!("Failed to read file: {e}")))?;
+                .map_err(|e| VmBamlError::Io {
+                    message: format!("Failed to read file: {e}"),
+                })?;
             Ok(contents)
         })
     }
@@ -278,7 +379,10 @@ impl io::IoClassFsFile for NativeSysOps {
         SysOpOutput::async_op(async move {
             let bytes = read_up_to(&file, n).await?;
             String::from_utf8(bytes)
-                .map_err(|e| OpErrorKind::Other(format!("Invalid UTF-8 in file: {e}")))
+                .map_err(|e| VmBamlError::ParseError {
+                    message: format!("Invalid UTF-8 in file: {e}"),
+                })
+                .map_err(VmRustFnError::from)
         })
     }
 
@@ -290,7 +394,9 @@ impl io::IoClassFsFile for NativeSysOps {
         n: i64,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<Vec<u8>> {
-        SysOpOutput::async_op(async move { read_up_to(&file, n).await })
+        SysOpOutput::async_op(
+            async move { read_up_to(&file, n).await.map_err(VmRustFnError::from) },
+        )
     }
 
     fn close(
@@ -320,34 +426,38 @@ impl io::IoClassFsFile for NativeSysOps {
 
         SysOpOutput::async_op(async move {
             let BexExternalValue::String(whence) = whence else {
-                return Err(OpErrorKind::Other("Invalid whence type".into()));
+                return Err(VmRustFnError::from(VmBamlError::InvalidArgument {
+                    message: "Invalid whence type".into(),
+                }));
             };
             let from = match whence.as_str() {
                 "start" => {
-                    let off = u64::try_from(offset).map_err(|_| {
-                        OpErrorKind::Other(format!(
-                            "Negative offset with whence=\"start\": {offset}"
-                        ))
+                    let off = u64::try_from(offset).map_err(|_| VmBamlError::InvalidArgument {
+                        message: format!("Negative offset with whence=\"start\": {offset}"),
                     })?;
                     std::io::SeekFrom::Start(off)
                 }
                 "current" => std::io::SeekFrom::Current(offset),
                 "end" => std::io::SeekFrom::End(offset),
                 _ => {
-                    return Err(OpErrorKind::Other(format!(
-                        "Unsupported whence '{whence}': expected \"start\", \"current\", or \"end\""
-                    )));
+                    return Err(VmRustFnError::from(VmBamlError::InvalidArgument {
+                        message: format!(
+                            "Unsupported whence '{whence}': expected \"start\", \"current\", or \"end\""
+                        ),
+                    }));
                 }
             };
             let handle = downcast_handle(&file)?;
             let mut guard = handle.lock().await;
             let f = guard.as_mut().ok_or_else(closed_err)?;
-            let pos = f
-                .seek(from)
-                .await
-                .map_err(|e| OpErrorKind::Other(format!("Failed to seek: {e}")))?;
+            let pos = f.seek(from).await.map_err(|e| VmBamlError::Io {
+                message: format!("Failed to seek: {e}"),
+            })?;
             i64::try_from(pos)
-                .map_err(|_| OpErrorKind::Other(format!("Seek position out of range: {pos}")))
+                .map_err(|_| VmBamlError::Io {
+                    message: format!("Seek position out of range: {pos}"),
+                })
+                .map_err(VmRustFnError::from)
         })
     }
 
@@ -359,7 +469,11 @@ impl io::IoClassFsFile for NativeSysOps {
         data: String,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<i64> {
-        SysOpOutput::async_op(async move { write_all_bytes(&file, data.into_bytes()).await })
+        SysOpOutput::async_op(async move {
+            write_all_bytes(&file, data.into_bytes())
+                .await
+                .map_err(VmRustFnError::from)
+        })
     }
 
     fn write_bytes(
@@ -370,15 +484,20 @@ impl io::IoClassFsFile for NativeSysOps {
         data: Vec<u8>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<i64> {
-        SysOpOutput::async_op(async move { write_all_bytes(&file, data).await })
+        SysOpOutput::async_op(async move {
+            write_all_bytes(&file, data)
+                .await
+                .map_err(VmRustFnError::from)
+        })
     }
 }
 
-async fn read_up_to(file: &owned::fs::File, n: i64) -> Result<Vec<u8>, OpErrorKind> {
+async fn read_up_to(file: &owned::fs::File, n: i64) -> Result<Vec<u8>, VmBamlError> {
     use tokio::io::AsyncReadExt;
 
-    let cap =
-        u64::try_from(n).map_err(|_| OpErrorKind::Other(format!("Negative read length: {n}")))?;
+    let cap = u64::try_from(n).map_err(|_| VmBamlError::InvalidArgument {
+        message: format!("Negative read length: {n}"),
+    })?;
     let handle = downcast_handle(file)?;
     let mut guard = handle.lock().await;
     let f = guard.as_mut().ok_or_else(closed_err)?;
@@ -386,11 +505,13 @@ async fn read_up_to(file: &owned::fs::File, n: i64) -> Result<Vec<u8>, OpErrorKi
     f.take(cap)
         .read_to_end(&mut buf)
         .await
-        .map_err(|e| OpErrorKind::Other(format!("Failed to read file: {e}")))?;
+        .map_err(|e| VmBamlError::Io {
+            message: format!("Failed to read file: {e}"),
+        })?;
     Ok(buf)
 }
 
-async fn write_all_bytes(file: &owned::fs::File, data: Vec<u8>) -> Result<i64, OpErrorKind> {
+async fn write_all_bytes(file: &owned::fs::File, data: Vec<u8>) -> Result<i64, VmBamlError> {
     use tokio::io::AsyncWriteExt;
 
     let handle = downcast_handle(file)?;
@@ -398,12 +519,12 @@ async fn write_all_bytes(file: &owned::fs::File, data: Vec<u8>) -> Result<i64, O
     let f = guard.as_mut().ok_or_else(closed_err)?;
     #[allow(clippy::cast_possible_wrap)]
     let len = data.len() as i64;
-    f.write_all(&data)
-        .await
-        .map_err(|e| OpErrorKind::Other(format!("Failed to write: {e}")))?;
-    f.flush()
-        .await
-        .map_err(|e| OpErrorKind::Other(format!("Failed to write: {e}")))?;
+    f.write_all(&data).await.map_err(|e| VmBamlError::Io {
+        message: format!("Failed to write: {e}"),
+    })?;
+    f.flush().await.map_err(|e| VmBamlError::Io {
+        message: format!("Failed to write: {e}"),
+    })?;
     Ok(len)
 }
 
@@ -418,7 +539,9 @@ impl io::IoNamespaceFs for NativeSysOps {
     ) -> SysOpOutput<owned::fs::File> {
         SysOpOutput::async_op(async move {
             let BexExternalValue::String(mode) = mode else {
-                return Err(OpErrorKind::Other("Invalid mode type".into()));
+                return Err(VmRustFnError::from(VmBamlError::InvalidArgument {
+                    message: "Invalid mode type".into(),
+                }));
             };
             // Modes that create the file also auto-create missing parent dirs,
             // matching Bun's `Bun.write` behavior.
@@ -426,11 +549,13 @@ impl io::IoNamespaceFs for NativeSysOps {
             if creates {
                 if let Some(parent) = std::path::Path::new(&path).parent() {
                     if !parent.as_os_str().is_empty() {
-                        tokio::fs::create_dir_all(parent).await.map_err(|e| {
-                            OpErrorKind::Other(format!(
-                                "Failed to create parent directories for '{path}': {e}"
-                            ))
-                        })?;
+                        tokio::fs::create_dir_all(parent)
+                            .await
+                            .map_err(|e| VmBamlError::Io {
+                                message: format!(
+                                    "Failed to create parent directories for '{path}': {e}"
+                                ),
+                            })?;
                     }
                 }
             }
@@ -476,12 +601,16 @@ impl io::IoNamespaceFs for NativeSysOps {
                         .await
                 }
                 _ => {
-                    return Err(OpErrorKind::Other(format!(
-                        "Unsupported file mode '{mode}': expected \"r\", \"r+\", \"w\", \"w+\", \"a\", or \"a+\""
-                    )));
+                    return Err(VmRustFnError::from(VmBamlError::InvalidArgument {
+                        message: format!(
+                            "Unsupported file mode '{mode}': expected \"r\", \"r+\", \"w\", \"w+\", \"a\", or \"a+\""
+                        ),
+                    }));
                 }
             }
-            .map_err(|e| OpErrorKind::Other(format!("Failed to open file '{path}': {e}")))?;
+            .map_err(|e| VmBamlError::Io {
+                message: format!("Failed to open file '{path}': {e}"),
+            })?;
             let handle: Arc<dyn std::any::Any + Send + Sync> =
                 Arc::new(tokio::sync::Mutex::new(Some(file)));
             Ok(owned::fs::File { _handle: handle })
@@ -496,9 +625,12 @@ impl io::IoNamespaceFs for NativeSysOps {
         _ctx: &SysOpContext,
     ) -> SysOpOutput<bool> {
         SysOpOutput::async_op(async move {
-            tokio::fs::try_exists(&path).await.map_err(|e| {
-                OpErrorKind::Other(format!("Failed to check existence of '{path}': {e}"))
-            })
+            tokio::fs::try_exists(&path)
+                .await
+                .map_err(|e| VmBamlError::Io {
+                    message: format!("Failed to check existence of '{path}': {e}"),
+                })
+                .map_err(VmRustFnError::from)
         })
     }
 
@@ -512,7 +644,10 @@ impl io::IoNamespaceFs for NativeSysOps {
         SysOpOutput::async_op(async move {
             tokio::fs::remove_file(&path)
                 .await
-                .map_err(|e| OpErrorKind::Other(format!("Failed to remove file '{path}': {e}")))
+                .map_err(|e| VmBamlError::Io {
+                    message: format!("Failed to remove file '{path}': {e}"),
+                })
+                .map_err(VmRustFnError::from)
         })
     }
 
@@ -526,9 +661,14 @@ impl io::IoNamespaceFs for NativeSysOps {
         SysOpOutput::async_op(async move {
             let metadata = tokio::fs::metadata(&path)
                 .await
-                .map_err(|e| OpErrorKind::Other(format!("Failed to stat '{path}': {e}")))?;
+                .map_err(|e| VmBamlError::Io {
+                    message: format!("Failed to stat '{path}': {e}"),
+                })?;
             i64::try_from(metadata.len())
-                .map_err(|_| OpErrorKind::Other(format!("File '{path}' size exceeds i64::MAX")))
+                .map_err(|_| VmBamlError::Io {
+                    message: format!("File '{path}' size exceeds i64::MAX"),
+                })
+                .map_err(VmRustFnError::from)
         })
     }
 
@@ -542,7 +682,10 @@ impl io::IoNamespaceFs for NativeSysOps {
         SysOpOutput::async_op(async move {
             tokio::fs::read_to_string(&path)
                 .await
-                .map_err(|e| OpErrorKind::Other(format!("Failed to read file '{path}': {e}")))
+                .map_err(|e| VmBamlError::Io {
+                    message: format!("Failed to read file '{path}': {e}"),
+                })
+                .map_err(VmRustFnError::from)
         })
     }
 
@@ -554,7 +697,11 @@ impl io::IoNamespaceFs for NativeSysOps {
         content: String,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<i64> {
-        SysOpOutput::async_op(async move { write_path(&path, content.as_bytes()).await })
+        SysOpOutput::async_op(async move {
+            write_path(&path, content.as_bytes())
+                .await
+                .map_err(VmRustFnError::from)
+        })
     }
 
     fn write_bytes(
@@ -565,7 +712,11 @@ impl io::IoNamespaceFs for NativeSysOps {
         content: Vec<u8>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<i64> {
-        SysOpOutput::async_op(async move { write_path(&path, &content).await })
+        SysOpOutput::async_op(async move {
+            write_path(&path, &content)
+                .await
+                .map_err(VmRustFnError::from)
+        })
     }
 
     fn read_dir(
@@ -576,18 +727,20 @@ impl io::IoNamespaceFs for NativeSysOps {
         _ctx: &SysOpContext,
     ) -> SysOpOutput<Vec<owned::fs::DirEntry>> {
         SysOpOutput::async_op(async move {
-            let mut rd = tokio::fs::read_dir(&path).await.map_err(|e| {
-                OpErrorKind::Other(format!("Failed to read directory '{path}': {e}"))
-            })?;
+            let mut rd = tokio::fs::read_dir(&path)
+                .await
+                .map_err(|e| VmBamlError::Io {
+                    message: format!("Failed to read directory '{path}': {e}"),
+                })?;
             let mut entries = Vec::new();
-            while let Some(entry) = rd.next_entry().await.map_err(|e| {
-                OpErrorKind::Other(format!("Failed to read directory entry in '{path}': {e}"))
+            while let Some(entry) = rd.next_entry().await.map_err(|e| VmBamlError::Io {
+                message: format!("Failed to read directory entry in '{path}': {e}"),
             })? {
-                let ft = entry.file_type().await.map_err(|e| {
-                    OpErrorKind::Other(format!(
+                let ft = entry.file_type().await.map_err(|e| VmBamlError::Io {
+                    message: format!(
                         "Failed to get file type for '{}': {e}",
                         entry.file_name().to_string_lossy()
-                    ))
+                    ),
                 })?;
                 entries.push(owned::fs::DirEntry {
                     name: entry.file_name().to_string_lossy().into_owned(),
@@ -614,27 +767,33 @@ impl io::IoNamespaceFs for NativeSysOps {
             } else {
                 tokio::fs::create_dir(&path).await
             }
-            .map_err(|e| OpErrorKind::Other(format!("Failed to create directory '{path}': {e}")))
+            .map_err(|e| VmBamlError::Io {
+                message: format!("Failed to create directory '{path}': {e}"),
+            })
+            .map_err(VmRustFnError::from)
         })
     }
 }
 
 // Auto-creates missing parent dirs, matching Bun's `Bun.write` behavior.
-async fn write_path(path: &str, data: &[u8]) -> Result<i64, OpErrorKind> {
+async fn write_path(path: &str, data: &[u8]) -> Result<i64, VmBamlError> {
     if let Some(parent) = std::path::Path::new(path).parent() {
         if !parent.as_os_str().is_empty() {
-            tokio::fs::create_dir_all(parent).await.map_err(|e| {
-                OpErrorKind::Other(format!(
-                    "Failed to create parent directories for '{path}': {e}"
-                ))
-            })?;
+            tokio::fs::create_dir_all(parent)
+                .await
+                .map_err(|e| VmBamlError::Io {
+                    message: format!("Failed to create parent directories for '{path}': {e}"),
+                })?;
         }
     }
     tokio::fs::write(path, data)
         .await
-        .map_err(|e| OpErrorKind::Other(format!("Failed to write file '{path}': {e}")))?;
-    i64::try_from(data.len())
-        .map_err(|_| OpErrorKind::Other(format!("Write size {} exceeds i64::MAX", data.len())))
+        .map_err(|e| VmBamlError::Io {
+            message: format!("Failed to write file '{path}': {e}"),
+        })?;
+    i64::try_from(data.len()).map_err(|_| VmBamlError::Io {
+        message: format!("Write size {} exceeds i64::MAX", data.len()),
+    })
 }
 
 // ============================================================================
@@ -645,11 +804,13 @@ use sys_glob::GlobPattern;
 
 type GlobHandle = GlobPattern;
 
-fn downcast_glob_handle(glob: &owned::glob::Glob) -> Result<Arc<GlobHandle>, OpErrorKind> {
+fn downcast_glob_handle(glob: &owned::glob::Glob) -> Result<Arc<GlobHandle>, VmBamlError> {
     glob._handle
         .clone()
         .downcast::<GlobHandle>()
-        .map_err(|_| OpErrorKind::Other("Invalid glob handle type".into()))
+        .map_err(|_| VmBamlError::DevOther {
+            message: "Invalid glob handle type".into(),
+        })
 }
 
 impl io::IoNamespaceGlob for NativeSysOps {
@@ -665,7 +826,7 @@ impl io::IoNamespaceGlob for NativeSysOps {
                 let handle: Arc<dyn std::any::Any + Send + Sync> = Arc::new(gp);
                 SysOpOutput::ok(owned::glob::Glob { _handle: handle })
             }
-            Err(e) => SysOpOutput::err(OpErrorKind::Other(e)),
+            Err(e) => SysOpOutput::err(VmBamlError::ParseError { message: e }),
         }
     }
 }
@@ -714,9 +875,9 @@ impl io::IoClassGlobGlob for NativeSysOps {
                     )
                 }
                 _ => {
-                    return Err(OpErrorKind::Other(
-                        "scan argument must be a string or ScanOptions".into(),
-                    ));
+                    return Err(VmRustFnError::from(VmBamlError::InvalidArgument {
+                        message: "scan argument must be a string or ScanOptions".into(),
+                    }));
                 }
             };
 
@@ -725,7 +886,9 @@ impl io::IoClassGlobGlob for NativeSysOps {
                 cwd_path.to_path_buf()
             } else {
                 std::env::current_dir()
-                    .map_err(|e| OpErrorKind::Other(format!("Failed to get cwd: {e}")))?
+                    .map_err(|e| VmBamlError::Io {
+                        message: format!("Failed to get cwd: {e}"),
+                    })?
                     .join(cwd_path)
             };
 
@@ -765,11 +928,15 @@ impl io::IoClassGlobGlob for NativeSysOps {
 
                         if is_broken_symlink {
                             if throw_on_broken {
-                                return Err(OpErrorKind::Other(format!("Broken symlink: {e}")));
+                                return Err(VmRustFnError::from(VmBamlError::Io {
+                                    message: format!("Broken symlink: {e}"),
+                                }));
                             }
                             continue;
                         }
-                        return Err(OpErrorKind::Other(format!("Walk error: {e}")));
+                        return Err(VmRustFnError::from(VmBamlError::Io {
+                            message: format!("Walk error: {e}"),
+                        }));
                     }
                 };
 
@@ -829,7 +996,7 @@ async fn run_process(
     cmd: &mut tokio::process::Command,
     options: Option<owned::sys::ProcessOptions>,
     label: &str,
-) -> Result<owned::sys::ShellOutput, OpErrorKind> {
+) -> Result<owned::sys::ShellOutput, VmRustFnError> {
     use std::process::Stdio;
 
     use tokio::io::AsyncWriteExt as _;
@@ -850,7 +1017,7 @@ async fn run_process(
     cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
     cmd.kill_on_drop(true);
 
-    let mut child = cmd.spawn().map_err(|e| OpErrorKind::Io {
+    let mut child = cmd.spawn().map_err(|e| VmBamlError::Io {
         message: format!("Failed to spawn '{label}': {e}"),
     })?;
 
@@ -872,28 +1039,28 @@ async fn run_process(
         let task_child = child;
         let mut wait_task = tokio::spawn(async move { task_child.wait_with_output().await });
         match tokio::time::timeout(duration, &mut wait_task).await {
-            Ok(Ok(result)) => result.map_err(|e| OpErrorKind::Io {
+            Ok(Ok(result)) => result.map_err(|e| VmBamlError::Io {
                 message: format!("Failed to wait on '{label}': {e}"),
             })?,
             Ok(Err(join_err)) => {
-                return Err(OpErrorKind::Io {
+                return Err(VmRustFnError::from(VmBamlError::Io {
                     message: format!("Task join error waiting on '{label}': {join_err}"),
-                });
+                }));
             }
             Err(_elapsed) => {
                 // Abort the task so task_child is dropped, triggering kill_on_drop
                 wait_task.abort();
-                return Err(OpErrorKind::Timeout {
+                return Err(VmRustFnError::from(VmBamlError::Timeout {
                     message: format!("Command '{label}' timed out after {ms}ms"),
-                    duration,
-                });
+                    duration_ms: i64::try_from(duration.as_millis()).ok(),
+                }));
             }
         }
     } else {
         child
             .wait_with_output()
             .await
-            .map_err(|e| OpErrorKind::Io {
+            .map_err(|e| VmBamlError::Io {
                 message: format!("Failed to wait on '{label}': {e}"),
             })?
     };
@@ -961,31 +1128,124 @@ impl io::IoNamespaceSys for NativeSysOps {
 // Network
 // ============================================================================
 
-type NetSocketHandle = tokio::sync::Mutex<tokio::net::TcpStream>;
-type NetTcpListenerHandle = tokio::net::TcpListener;
+// Network handles mirror `FsFileHandle`: the socket lives inside a
+// `Mutex<Option<_>>` so `close()` can `take()` it, after which every other
+// reference to the same handle deterministically observes a closed socket.
+//
+// `TcpStream` ops need `&mut` access, so (like `fs::File`) we hold the guard
+// across the await. `TcpListener`/`UdpSocket` ops only need `&self`, so we keep
+// each socket behind an inner `Arc` and clone it out under a brief lock — that
+// way `close()` stays deterministic without serializing concurrent
+// `accept`/`recv_from`/`send_to` on the same socket.
+type NetTcpStreamHandle = tokio::sync::Mutex<Option<tokio::net::TcpStream>>;
+type NetTcpListenerHandle = tokio::sync::Mutex<Option<Arc<tokio::net::TcpListener>>>;
+type NetUdpSocketHandle = tokio::sync::Mutex<Option<Arc<tokio::net::UdpSocket>>>;
 
-impl io::IoClassNetSocket for NativeSysOps {
+// Default connect deadline. Without it, connecting to an unresponsive host
+// (e.g. one behind silent DDoS filtering) blocks forever; this makes the
+// `throws root.errors.Timeout` clause on `connect` actually fire.
+//
+// TODO(net-timeout): make this configurable per call — `connect(addr, timeout)`
+// and `read(timeout)` / `write(..., timeout)` — once we have a datetime/Duration
+// type to pass a timeout through the BAML API. For now it's a fixed default.
+const DEFAULT_CONNECT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
+
+fn downcast_tcpstream(
+    stream: &owned::net::TcpStream,
+) -> Result<Arc<NetTcpStreamHandle>, VmBamlError> {
+    stream
+        ._handle
+        .clone()
+        .downcast::<NetTcpStreamHandle>()
+        .map_err(|_| VmBamlError::DevOther {
+            message: "Invalid TcpStream handle type".to_string(),
+        })
+}
+
+fn downcast_tcplistener(
+    listener: &owned::net::TcpListener,
+) -> Result<Arc<NetTcpListenerHandle>, VmBamlError> {
+    listener
+        ._handle
+        .clone()
+        .downcast::<NetTcpListenerHandle>()
+        .map_err(|_| VmBamlError::DevOther {
+            message: "Invalid TcpListener handle type".to_string(),
+        })
+}
+
+fn downcast_udpsocket(
+    socket: &owned::net::UdpSocket,
+) -> Result<Arc<NetUdpSocketHandle>, VmBamlError> {
+    socket
+        ._handle
+        .clone()
+        .downcast::<NetUdpSocketHandle>()
+        .map_err(|_| VmBamlError::DevOther {
+            message: "Invalid UdpSocket handle type".to_string(),
+        })
+}
+
+impl io::IoClassNetTcpStream for NativeSysOps {
+    fn connect(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        addr: String,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<owned::net::TcpStream> {
+        SysOpOutput::async_op(async move {
+            let stream = match tokio::time::timeout(
+                DEFAULT_CONNECT_TIMEOUT,
+                tokio::net::TcpStream::connect(&addr),
+            )
+            .await
+            {
+                Ok(Ok(stream)) => stream,
+                Ok(Err(e)) => {
+                    return Err(VmBamlError::Io {
+                        message: format!("Failed to connect to '{addr}': {e}"),
+                    }
+                    .into());
+                }
+                Err(_elapsed) => {
+                    return Err(VmBamlError::Timeout {
+                        message: format!("Connecting to '{addr}' timed out"),
+                        duration_ms: i64::try_from(DEFAULT_CONNECT_TIMEOUT.as_millis()).ok(),
+                    }
+                    .into());
+                }
+            };
+            let handle: Arc<dyn std::any::Any + Send + Sync> =
+                Arc::new(tokio::sync::Mutex::new(Some(stream)));
+            Ok(owned::net::TcpStream { _handle: handle })
+        })
+    }
+
     fn read(
         &self,
         _heap: &Arc<BexHeap>,
         _call_id: CallId,
-        socket: owned::net::Socket,
+        stream: owned::net::TcpStream,
         _ctx: &SysOpContext,
-    ) -> SysOpOutput<String> {
+    ) -> SysOpOutput<Vec<u8>> {
         use tokio::io::AsyncReadExt;
 
         SysOpOutput::async_op(async move {
-            let handle: Arc<NetSocketHandle> = socket
-                ._handle
-                .downcast::<NetSocketHandle>()
-                .map_err(|_| OpErrorKind::Other("Invalid socket handle type".into()))?;
-            let mut stream = handle.lock().await;
+            let handle = downcast_tcpstream(&stream)?;
+            let mut guard = handle.lock().await;
+            let stream = guard.as_mut().ok_or_else(|| VmBamlError::Io {
+                message: "TcpStream is closed".to_string(),
+            })?;
             let mut buffer = vec![0u8; 4096];
             let n = stream
                 .read(&mut buffer)
                 .await
-                .map_err(|e| OpErrorKind::Other(format!("Failed to read from socket: {e}")))?;
-            Ok(String::from_utf8_lossy(&buffer[..n]).into_owned())
+                .map_err(|e| VmBamlError::Io {
+                    message: format!("Failed to read from socket: {e}"),
+                })?;
+            buffer.truncate(n);
+            Ok(buffer)
         })
     }
 
@@ -993,26 +1253,24 @@ impl io::IoClassNetSocket for NativeSysOps {
         &self,
         _heap: &Arc<BexHeap>,
         _call_id: CallId,
-        socket: owned::net::Socket,
-        data: String,
+        stream: owned::net::TcpStream,
+        data: Vec<u8>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
         use tokio::io::AsyncWriteExt;
 
         SysOpOutput::async_op(async move {
-            let handle: Arc<NetSocketHandle> = socket
-                ._handle
-                .downcast::<NetSocketHandle>()
-                .map_err(|_| OpErrorKind::Other("Invalid socket handle type".into()))?;
-            let mut stream = handle.lock().await;
-            stream
-                .write_all(data.as_bytes())
-                .await
-                .map_err(|e| OpErrorKind::Other(format!("Failed to write to socket: {e}")))?;
-            stream
-                .flush()
-                .await
-                .map_err(|e| OpErrorKind::Other(format!("Failed to flush socket: {e}")))?;
+            let handle = downcast_tcpstream(&stream)?;
+            let mut guard = handle.lock().await;
+            let stream = guard.as_mut().ok_or_else(|| VmBamlError::Io {
+                message: "TcpStream is closed".to_string(),
+            })?;
+            stream.write_all(&data).await.map_err(|e| VmBamlError::Io {
+                message: format!("Failed to write to socket: {e}"),
+            })?;
+            stream.flush().await.map_err(|e| VmBamlError::Io {
+                message: format!("Failed to flush socket: {e}"),
+            })?;
             Ok(())
         })
     }
@@ -1021,50 +1279,80 @@ impl io::IoClassNetSocket for NativeSysOps {
         &self,
         _heap: &Arc<BexHeap>,
         _call_id: CallId,
-        socket: owned::net::Socket,
+        stream: owned::net::TcpStream,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
         use tokio::io::AsyncWriteExt;
 
         SysOpOutput::async_op(async move {
-            let handle: Arc<NetSocketHandle> = socket
-                ._handle
-                .downcast::<NetSocketHandle>()
-                .map_err(|_| OpErrorKind::Other("Invalid socket handle type".into()))?;
+            let handle = downcast_tcpstream(&stream)?;
+            // Take the stream out of the shared handle so any other reference
+            // observes a closed socket on its next op. Already-closed is a no-op.
+            let Some(mut stream) = handle.lock().await.take() else {
+                return Ok(());
+            };
             // shutdown() flushes pending writes and closes the write half, so
             // peers waiting on EOF (e.g. curl with "Connection: close") stop
             // blocking. We swallow ENOTCONN / NotConnected since the peer may
-            // already have closed.
-            let mut stream = handle.lock().await;
+            // already have closed. Dropping `stream` afterwards fully closes it.
             match stream.shutdown().await {
                 Ok(()) => Ok(()),
                 Err(e) if e.kind() == std::io::ErrorKind::NotConnected => Ok(()),
-                Err(e) => Err(OpErrorKind::Other(format!("Failed to close socket: {e}"))),
+                Err(e) => Err(VmBamlError::Io {
+                    message: format!("Failed to close socket: {e}"),
+                }),
             }
+            .map_err(VmRustFnError::from)
         })
     }
 }
 
 impl io::IoClassNetTcpListener for NativeSysOps {
+    fn bind(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        addr: String,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<owned::net::TcpListener> {
+        SysOpOutput::async_op(async move {
+            let listener =
+                tokio::net::TcpListener::bind(&addr)
+                    .await
+                    .map_err(|e| VmBamlError::Io {
+                        message: format!("Failed to bind '{addr}': {e}"),
+                    })?;
+            let handle: Arc<dyn std::any::Any + Send + Sync> =
+                Arc::new(tokio::sync::Mutex::new(Some(Arc::new(listener))));
+            Ok(owned::net::TcpListener { _handle: handle })
+        })
+    }
+
     fn accept(
         &self,
         _heap: &Arc<BexHeap>,
         _call_id: CallId,
         listener: owned::net::TcpListener,
         _ctx: &SysOpContext,
-    ) -> SysOpOutput<owned::net::Socket> {
+    ) -> SysOpOutput<owned::net::TcpStream> {
         SysOpOutput::async_op(async move {
-            let handle: Arc<NetTcpListenerHandle> = listener
-                ._handle
-                .downcast::<NetTcpListenerHandle>()
-                .map_err(|_| OpErrorKind::Other("Invalid TcpListener handle type".into()))?;
-            let (stream, _peer) = handle
-                .accept()
+            let handle = downcast_tcplistener(&listener)?;
+            // Clone the inner socket out under a brief lock so concurrent
+            // accepts aren't serialized and close() stays deterministic.
+            let inner = handle
+                .lock()
                 .await
-                .map_err(|e| OpErrorKind::Other(format!("Failed to accept connection: {e}")))?;
+                .as_ref()
+                .cloned()
+                .ok_or_else(|| VmBamlError::Io {
+                    message: "TcpListener is closed".to_string(),
+                })?;
+            let (stream, _peer) = inner.accept().await.map_err(|e| VmBamlError::Io {
+                message: format!("Failed to accept connection: {e}"),
+            })?;
             let sock_handle: Arc<dyn std::any::Any + Send + Sync> =
-                Arc::new(tokio::sync::Mutex::new(stream));
-            Ok(owned::net::Socket {
+                Arc::new(tokio::sync::Mutex::new(Some(stream)));
+            Ok(owned::net::TcpStream {
                 _handle: sock_handle,
             })
         })
@@ -1074,50 +1362,121 @@ impl io::IoClassNetTcpListener for NativeSysOps {
         &self,
         _heap: &Arc<BexHeap>,
         _call_id: CallId,
-        _listener: owned::net::TcpListener,
+        listener: owned::net::TcpListener,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
-        // Dropping the Arc<TcpListener> closes the underlying socket once the
-        // last reference goes away. There's no explicit "stop accepting" call
-        // for tokio's listener — moving on is enough.
-        SysOpOutput::ok(())
+        SysOpOutput::async_op(async move {
+            // Drop the listener out of the shared handle; subsequent accepts on
+            // any reference return a closed error. Dropping the last Arc closes
+            // the OS socket.
+            let handle = downcast_tcplistener(&listener)?;
+            handle.lock().await.take();
+            Ok(())
+        })
     }
 }
 
-impl io::IoNamespaceNet for NativeSysOps {
-    fn connect(
+impl io::IoClassNetUdpSocket for NativeSysOps {
+    fn bind(
         &self,
         _heap: &Arc<BexHeap>,
         _call_id: CallId,
         addr: String,
         _ctx: &SysOpContext,
-    ) -> SysOpOutput<owned::net::Socket> {
+    ) -> SysOpOutput<owned::net::UdpSocket> {
         SysOpOutput::async_op(async move {
-            let stream = tokio::net::TcpStream::connect(&addr)
+            let socket = tokio::net::UdpSocket::bind(&addr)
                 .await
-                .map_err(|e| OpErrorKind::Other(format!("Failed to connect to '{addr}': {e}")))?;
+                .map_err(|e| VmBamlError::Io {
+                    message: format!("Failed to bind UDP '{addr}': {e}"),
+                })?;
             let handle: Arc<dyn std::any::Any + Send + Sync> =
-                Arc::new(tokio::sync::Mutex::new(stream));
-            Ok(owned::net::Socket { _handle: handle })
+                Arc::new(tokio::sync::Mutex::new(Some(Arc::new(socket))));
+            Ok(owned::net::UdpSocket { _handle: handle })
         })
     }
 
-    fn listen(
+    fn send_to(
         &self,
         _heap: &Arc<BexHeap>,
         _call_id: CallId,
+        socket: owned::net::UdpSocket,
+        data: Vec<u8>,
         addr: String,
         _ctx: &SysOpContext,
-    ) -> SysOpOutput<owned::net::TcpListener> {
+    ) -> SysOpOutput<i64> {
         SysOpOutput::async_op(async move {
-            let listener = tokio::net::TcpListener::bind(&addr)
+            let handle = downcast_udpsocket(&socket)?;
+            let inner = handle
+                .lock()
                 .await
-                .map_err(|e| OpErrorKind::Other(format!("Failed to bind '{addr}': {e}")))?;
-            let handle: Arc<dyn std::any::Any + Send + Sync> = Arc::new(listener);
-            Ok(owned::net::TcpListener { _handle: handle })
+                .as_ref()
+                .cloned()
+                .ok_or_else(|| VmBamlError::Io {
+                    message: "UdpSocket is closed".to_string(),
+                })?;
+            let n = inner
+                .send_to(&data, &addr)
+                .await
+                .map_err(|e| VmBamlError::Io {
+                    message: format!("Failed to send to '{addr}': {e}"),
+                })?;
+            Ok(i64::try_from(n).unwrap_or(i64::MAX))
+        })
+    }
+
+    fn recv_from(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        socket: owned::net::UdpSocket,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<owned::net::Datagram> {
+        SysOpOutput::async_op(async move {
+            let handle = downcast_udpsocket(&socket)?;
+            let inner = handle
+                .lock()
+                .await
+                .as_ref()
+                .cloned()
+                .ok_or_else(|| VmBamlError::Io {
+                    message: "UdpSocket is closed".to_string(),
+                })?;
+            // A single datagram can be up to 65507 bytes for IPv4; size the
+            // buffer to the max so we never silently truncate a packet.
+            let mut buffer = vec![0u8; 65_536];
+            let (n, peer) = inner
+                .recv_from(&mut buffer)
+                .await
+                .map_err(|e| VmBamlError::Io {
+                    message: format!("Failed to receive datagram: {e}"),
+                })?;
+            buffer.truncate(n);
+            Ok(owned::net::Datagram {
+                data: buffer,
+                addr: peer.to_string(),
+            })
+        })
+    }
+
+    fn close(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        socket: owned::net::UdpSocket,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        SysOpOutput::async_op(async move {
+            // Drop the socket out of the shared handle; subsequent send_to /
+            // recv_from on any reference return a closed error.
+            let handle = downcast_udpsocket(&socket)?;
+            handle.lock().await.take();
+            Ok(())
         })
     }
 }
+
+impl io::IoNamespaceNet for NativeSysOps {}
 
 // ============================================================================
 // HTTP
@@ -1136,14 +1495,19 @@ impl io::IoClassHttpResponse for NativeSysOps {
             let body: Arc<tokio::sync::Mutex<Option<reqwest::Response>>> = response
                 ._body
                 .downcast::<tokio::sync::Mutex<Option<reqwest::Response>>>()
-                .map_err(|_| OpErrorKind::Other("Invalid response body handle".into()))?;
+                .map_err(|_| VmBamlError::DevOther {
+                    message: "Invalid response body handle".into(),
+                })?;
             let mut guard = body.lock().await;
-            let resp = guard.take().ok_or_else(|| {
-                OpErrorKind::Other("Response body has already been consumed".into())
+            let resp = guard.take().ok_or_else(|| VmBamlError::InvalidArgument {
+                message: "Response body has already been consumed".into(),
             })?;
             resp.text()
                 .await
-                .map_err(|e| OpErrorKind::Other(format!("Failed to read response body: {e}")))
+                .map_err(|e| VmBamlError::Io {
+                    message: format!("Failed to read response body: {e}"),
+                })
+                .map_err(VmRustFnError::from)
         })
     }
 
@@ -1155,7 +1519,9 @@ impl io::IoClassHttpResponse for NativeSysOps {
         _response: owned::http::Response,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<String> {
-        SysOpOutput::err(OpErrorKind::Unsupported)
+        SysOpOutput::err(VmBamlError::Unsupported {
+            message: "Operation not supported on this platform".to_string(),
+        })
     }
 
     #[cfg(feature = "bundle-http")]
@@ -1170,15 +1536,20 @@ impl io::IoClassHttpResponse for NativeSysOps {
             let body: Arc<tokio::sync::Mutex<Option<reqwest::Response>>> = response
                 ._body
                 .downcast::<tokio::sync::Mutex<Option<reqwest::Response>>>()
-                .map_err(|_| OpErrorKind::Other("Invalid response body handle".into()))?;
+                .map_err(|_| VmBamlError::DevOther {
+                    message: "Invalid response body handle".into(),
+                })?;
             let mut guard = body.lock().await;
-            let resp = guard.take().ok_or_else(|| {
-                OpErrorKind::Other("Response body has already been consumed".into())
+            let resp = guard.take().ok_or_else(|| VmBamlError::InvalidArgument {
+                message: "Response body has already been consumed".into(),
             })?;
             resp.bytes()
                 .await
                 .map(|b| b.to_vec())
-                .map_err(|e| OpErrorKind::Other(format!("Failed to read response body: {e}")))
+                .map_err(|e| VmBamlError::Io {
+                    message: format!("Failed to read response body: {e}"),
+                })
+                .map_err(VmRustFnError::from)
         })
     }
 
@@ -1190,7 +1561,9 @@ impl io::IoClassHttpResponse for NativeSysOps {
         _response: owned::http::Response,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<Vec<u8>> {
-        SysOpOutput::err(OpErrorKind::Unsupported)
+        SysOpOutput::err(VmBamlError::Unsupported {
+            message: "Operation not supported on this platform".to_string(),
+        })
     }
 }
 
@@ -1227,12 +1600,15 @@ impl io::IoClassHttpSseStream for NativeSysOps {
             let handle = sse_stream
                 ._handle
                 .downcast::<bex_resource_types::ResourceHandle>()
-                .map_err(|_| OpErrorKind::Other("Invalid SSE stream handle type".into()))?;
+                .map_err(|_| VmBamlError::DevOther {
+                    message: "Invalid SSE stream handle type".into(),
+                })?;
 
-            let (buffer, notify, closed) =
-                crate::registry::REGISTRY
-                    .get_sse_stream(handle.key())
-                    .ok_or_else(|| OpErrorKind::Other("SSE stream handle is invalid".into()))?;
+            let (buffer, notify, closed) = crate::registry::REGISTRY
+                .get_sse_stream(handle.key())
+                .ok_or_else(|| VmBamlError::DevOther {
+                message: "SSE stream handle is invalid".into(),
+            })?;
 
             loop {
                 let notified = notify.notified();
@@ -1255,11 +1631,13 @@ impl io::IoClassHttpSseStream for NativeSysOps {
                             })
                             .collect();
                         return Ok(Some(serde_json::to_string(&events).map_err(|e| {
-                            OpErrorKind::Other(format!("Failed to serialize SSE events: {e}"))
+                            VmBamlError::DevOther {
+                                message: format!("Failed to serialize SSE events: {e}"),
+                            }
                         })?));
                     }
                     if let Some(err) = buf.error.take() {
-                        return Err(OpErrorKind::Other(err));
+                        return Err(VmRustFnError::from(VmBamlError::Io { message: err }));
                     }
                     if buf.done {
                         return Ok(None);
@@ -1278,7 +1656,9 @@ impl io::IoClassHttpSseStream for NativeSysOps {
         _sse_stream: owned::http::SseStream,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<Option<String>> {
-        SysOpOutput::err(OpErrorKind::Unsupported)
+        SysOpOutput::err(VmBamlError::Unsupported {
+            message: "Operation not supported on this platform".to_string(),
+        })
     }
 
     fn close(
@@ -1306,11 +1686,9 @@ impl io::IoNamespaceHttp for NativeSysOps {
         SysOpOutput::async_op(async move {
             crate::ensure_rustls_crypto_provider();
             let client = reqwest::Client::new();
-            let response = client
-                .get(&url)
-                .send()
-                .await
-                .map_err(|e| OpErrorKind::Other(format!("HTTP fetch failed: {e}")))?;
+            let response = client.get(&url).send().await.map_err(|e| VmBamlError::Io {
+                message: format!("HTTP fetch failed: {e}"),
+            })?;
             let final_url = response.url().to_string();
             Ok(build_io_http_response(response, final_url))
         })
@@ -1324,7 +1702,9 @@ impl io::IoNamespaceHttp for NativeSysOps {
         _url: String,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<owned::http::Response> {
-        SysOpOutput::err(OpErrorKind::Unsupported)
+        SysOpOutput::err(VmBamlError::Unsupported {
+            message: "Operation not supported on this platform".to_string(),
+        })
     }
 
     #[cfg(feature = "bundle-http")]
@@ -1337,7 +1717,9 @@ impl io::IoNamespaceHttp for NativeSysOps {
     ) -> SysOpOutput<owned::http::Response> {
         SysOpOutput::async_op(async move {
             let method = reqwest::Method::from_bytes(request.method.as_bytes()).map_err(|e| {
-                OpErrorKind::Other(format!("Invalid HTTP method '{}': {e}", request.method))
+                VmBamlError::InvalidArgument {
+                    message: format!("Invalid HTTP method '{}': {e}", request.method),
+                }
             })?;
 
             crate::ensure_rustls_crypto_provider();
@@ -1352,10 +1734,9 @@ impl io::IoNamespaceHttp for NativeSysOps {
                 builder = builder.body(request.body);
             }
 
-            let response = builder
-                .send()
-                .await
-                .map_err(|e| OpErrorKind::Other(format!("HTTP send failed: {e}")))?;
+            let response = builder.send().await.map_err(|e| VmBamlError::Io {
+                message: format!("HTTP send failed: {e}"),
+            })?;
             let final_url = response.url().to_string();
             Ok(build_io_http_response(response, final_url))
         })
@@ -1369,7 +1750,9 @@ impl io::IoNamespaceHttp for NativeSysOps {
         _request: owned::http::Request,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<owned::http::Response> {
-        SysOpOutput::err(OpErrorKind::Unsupported)
+        SysOpOutput::err(VmBamlError::Unsupported {
+            message: "Operation not supported on this platform".to_string(),
+        })
     }
 
     #[cfg(feature = "bundle-http")]
@@ -1390,7 +1773,9 @@ impl io::IoNamespaceHttp for NativeSysOps {
 
         SysOpOutput::async_op(async move {
             let method = reqwest::Method::from_bytes(request.method.as_bytes()).map_err(|e| {
-                OpErrorKind::Other(format!("Invalid HTTP method '{}': {e}", request.method))
+                VmBamlError::InvalidArgument {
+                    message: format!("Invalid HTTP method '{}': {e}", request.method),
+                }
             })?;
 
             crate::ensure_rustls_crypto_provider();
@@ -1405,10 +1790,9 @@ impl io::IoNamespaceHttp for NativeSysOps {
                 builder = builder.body(request.body.clone());
             }
 
-            let response = builder
-                .send()
-                .await
-                .map_err(|e| OpErrorKind::Other(format!("SSE connection failed: {e}")))?;
+            let response = builder.send().await.map_err(|e| VmBamlError::Io {
+                message: format!("SSE connection failed: {e}"),
+            })?;
 
             if !response.status().is_success() {
                 let status = response.status().as_u16();
@@ -1416,9 +1800,9 @@ impl io::IoNamespaceHttp for NativeSysOps {
                     .text()
                     .await
                     .unwrap_or_else(|_| "<could not read body>".to_string());
-                return Err(OpErrorKind::Other(format!(
-                    "SSE request failed with status {status}: {body}"
-                )));
+                return Err(VmRustFnError::from(VmBamlError::Io {
+                    message: format!("SSE request failed with status {status}: {body}"),
+                }));
             }
 
             let url = response.url().to_string();
@@ -1524,7 +1908,9 @@ impl io::IoNamespaceHttp for NativeSysOps {
         _request: owned::http::Request,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<owned::http::SseStream> {
-        SysOpOutput::err(OpErrorKind::Unsupported)
+        SysOpOutput::err(VmBamlError::Unsupported {
+            message: "Operation not supported on this platform".to_string(),
+        })
     }
 }
 

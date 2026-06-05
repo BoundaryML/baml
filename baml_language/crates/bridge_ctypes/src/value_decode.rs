@@ -55,20 +55,25 @@ pub fn inbound_to_external(
             InboundValueVariant::EnumValue(e) => Ok(convert_enum(e)),
             InboundValueVariant::Uint8arrayValue(bytes) => Ok(BexExternalValue::Uint8Array(bytes)),
             InboundValueVariant::Handle(handle) => {
-                // HOST_VALUE_CALLABLE keys do NOT live in HANDLE_TABLE. The
-                // host bridge owns the lookup; we construct the Arc stub here
-                // so last-drop fires the registered HostReleaseFn.
-                if handle.handle_type == BamlHandleType::HostValueCallable as i32 {
+                // HOST_VALUE_* keys do NOT live in HANDLE_TABLE. The host
+                // bridge owns the lookup; we construct the Arc stub here so
+                // last-drop fires the registered HostReleaseFn.
+                let host_value_kind =
+                    if handle.handle_type == BamlHandleType::HostValueCallable as i32 {
+                        Some(bex_project::HostValueKind::Callable)
+                    } else if handle.handle_type == BamlHandleType::HostValueError as i32 {
+                        Some(bex_project::HostValueKind::Error)
+                    } else {
+                        None
+                    };
+                if let Some(kind) = host_value_kind {
                     // Intern by key so repeated decodes of the same wire key
                     // (e.g. BAML returns a host callable, the host passes it
                     // back in) share one Arc identity. Otherwise each decode
                     // would mint an independent Arc with its own refcount and
                     // the first last-drop would fire HostReleaseFn, tearing the
                     // registry entry out from under the still-live other Arc.
-                    let arc = bex_project::HostValueArc::intern(
-                        handle.key,
-                        bex_project::HostValueKind::Callable,
-                    );
+                    let arc = bex_project::HostValueArc::intern(handle.key, kind);
                     return Ok(BexExternalValue::HostValue(arc));
                 }
                 let value = handle_table
@@ -217,6 +222,31 @@ mod tests {
         assert!(
             table.resolve(999).is_none(),
             "HOST_VALUE_CALLABLE must not touch HANDLE_TABLE"
+        );
+    }
+
+    #[test]
+    fn decode_inbound_host_value_error() {
+        let table = CffiHandleTable::new();
+        let handle = BamlHandle {
+            key: 777,
+            handle_type: BamlHandleType::HostValueError as i32,
+        };
+        let inbound = InboundValue {
+            value: Some(InboundValueVariant::Handle(handle)),
+        };
+        let result = inbound_to_external(inbound, &table).expect("decode succeeds");
+        match result {
+            BexExternalValue::HostValue(arc) => {
+                assert_eq!(arc.key, 777);
+                assert_eq!(arc.kind, bex_project::HostValueKind::Error);
+            }
+            other => panic!("unexpected variant: {other:?}"),
+        }
+        // Like callables, opaque error handles bypass the HANDLE_TABLE.
+        assert!(
+            table.resolve(777).is_none(),
+            "HOST_VALUE_ERROR must not touch HANDLE_TABLE"
         );
     }
 

@@ -77,8 +77,9 @@ fn function_hover_shows_defaulted_params_as_optional() {
         .to_hover_markdown();
 
     assert!(
-        markdown
-            .contains("function search(query: string, max_results?: int, filter?: string?) -> int"),
+        markdown.contains(
+            "function search(query: string, max_results?: int, filter?: string | null) -> int"
+        ),
         "expected defaulted params to render with optional markers, got:\n{markdown}"
     );
 }

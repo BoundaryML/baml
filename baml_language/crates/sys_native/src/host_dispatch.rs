@@ -43,7 +43,7 @@ use std::{
 };
 
 use once_cell::sync::{Lazy, OnceCell};
-use sys_types::{BexExternalValue, CompletionHandle, OpError, OpErrorKind, SysOp};
+use sys_types::{BexExternalValue, CompletionHandle, OpError, SysOp, VmBamlError};
 
 /// C-compatible dispatch callback installed by the host bridge.
 ///
@@ -113,6 +113,22 @@ static TABLE: Lazy<RwLock<HashMap<u32, CompletionHandle>>> =
 
 static NEXT_CALL_ID: AtomicU32 = AtomicU32::new(1);
 
+// NOTE: there is no leak detection for hung host callables. A host
+// bridge that never calls `complete_host_call` for a given `call_id`
+// (and whose BAML caller never cancels) leaves a permanent entry in
+// `TABLE`. On a long-running process such entries could accumulate, and
+// after enough inserts the `u32` `call_id` space would wrap — at which
+// point [`insert`] catches the collision and fails the new call (it does
+// NOT corrupt the dead entry), but every subsequent call with the same
+// id would keep failing until the dead entry is somehow evicted.
+//
+// A size-based warning at `insert` time can't distinguish "legitimate
+// burst of concurrent calls" from "slow accumulation of hung calls";
+// the only signal that actually separates them is per-entry age. If
+// this becomes a real concern, add a `created_at: Instant` to
+// `CompletionHandle` and warn on any entry older than some threshold
+// (~5min).
+
 /// Allocate a fresh call id that is unique across the process lifetime.
 ///
 /// Zero is reserved as "invalid"; wrap-around skips 0.
@@ -165,9 +181,9 @@ pub fn insert(call_id: u32, completion: CompletionHandle) -> bool {
         );
         completion.complete(Err(OpError::new(
             SysOp::BamlHostCallHostValue,
-            OpErrorKind::Other(format!(
-                "host-call id {call_id} collided with a live in-flight call"
-            )),
+            VmBamlError::DevOther {
+                message: format!("host-call id {call_id} collided with a live in-flight call"),
+            },
         )));
         return false;
     }
@@ -231,6 +247,27 @@ pub fn complete_with_error(call_id: u32, err: OpError) {
         c.complete(Err(err));
     } else {
         tracing::warn!("complete_host_call(error) for unknown call id {call_id}");
+    }
+}
+
+/// Complete an in-flight host-callable call with a *thrown value* — the
+/// host language invoked the callable and the callable raised the
+/// decoded `BexExternalValue`. The engine will run the declared-throws
+/// contract check against `value` and either inject it as a catchable
+/// throw or as a `baml.panics.HostContractViolation` panic; see
+/// `bex_engine`'s host-throw delivery path.
+///
+/// Unlike [`complete_with_error`] (which delivers an inherent error from
+/// the bridge / infrastructure layer), this carries a host *throw* that
+/// must be checked against `E` before it can become an unwind value.
+pub fn complete_with_throw(call_id: u32, value: BexExternalValue) {
+    if let Some(c) = take(call_id) {
+        c.complete(Err(OpError::host_thrown_value(
+            sys_types::SysOp::BamlHostCallHostValue,
+            value,
+        )));
+    } else {
+        tracing::warn!("complete_host_call(throw) for unknown call id {call_id}");
     }
 }
 
@@ -387,6 +424,11 @@ mod tests {
             SysOpResult::Ready(Ok(_)) => panic!("expected an error for the rejected call"),
             SysOpResult::Ready(Err(e)) => e,
         };
-        assert!(matches!(second_err.kind, OpErrorKind::Other(_)));
+        assert!(matches!(
+            second_err.payload,
+            sys_types::OpErrorPayload::Vm(sys_types::VmRustFnError::BamlError(
+                VmBamlError::DevOther { message: _ }
+            ))
+        ));
     }
 }

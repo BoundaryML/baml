@@ -180,3 +180,26 @@ function nh_run_combined_lhs_null() -> int? {
 test "combined_compound_assign_lhs_null_skips" {
     assert.equal(nh_run_combined_lhs_null(), null)
 }
+
+// Regression (CodeRabbit): optional member access on a MULTI-member nullable
+// union `(A | B)?.field` must strip null from the receiver and route through
+// the union (not a single class).
+class NhCat {
+    sound string
+}
+
+class NhDog {
+    sound string
+}
+
+function nh_multi_union_optional_access(animal: (NhCat | NhDog)?) -> string? {
+    animal?.sound
+}
+
+function nh_run_multi_union_optional_access() -> string? {
+    nh_multi_union_optional_access(NhCat { sound: "meow" })
+}
+
+test "multi_union_optional_access" {
+    assert.equal(nh_run_multi_union_optional_access(), "meow")
+}

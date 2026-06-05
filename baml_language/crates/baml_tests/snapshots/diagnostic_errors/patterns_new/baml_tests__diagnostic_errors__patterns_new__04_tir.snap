@@ -213,10 +213,10 @@ function user.class_field_bool_narrowing_missing_true(f: user.Flagged) -> int th
 }
 class user.Box2 {
   first: bool
-  second: int[]?
+  second: int[] | null
 }
 function user.Box2.to_json(self: user.Box2) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  map { "first": self.first.to_json(), "second": self.second?.to_json() } : map<string, baml.json.json | baml.json.json?>
+  map { "first": self.first.to_json(), "second": self.second?.to_json() } : map<string, baml.json.json | null>
 }
 function user.Box2.from_json(j: baml.json.json) -> user.Box2 throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   Box2 { first: baml.json.from_json<bool>(baml.json.field(j, "first")), second: baml.json.from_json<int[]?>(baml.json.field(j, "second")) } : user.Box2
@@ -259,15 +259,15 @@ function user.or_pattern_two_field_non_exhaustive(p: user.IntPair) -> int throws
   }
   !! 7800..7866: non-exhaustive match on `IntPair`; missing: IntPair { a: 0, b: _ }, IntPair { a: 1, b: _ }, IntPair { a: _, b: _ }
 }
-function user.or_pattern_optional_int_non_exhaustive(x: int?) -> int throws never {
+function user.or_pattern_optional_int_non_exhaustive(x: int | null) -> int throws never {
   { : 0 | 1
-    match (x : int?) : 0 | 1
+    match (x : int | null) : 0 | 1
       null =>
         0 : 0
       0 | 1 =>
         1 : 1
   }
-  !! 8113..8173: non-exhaustive match on `int?`; missing: int
+  !! 8113..8173: non-exhaustive match on `int | null`; missing: int
 }
 function user.slice_prefix_or_suffix_non_exhaustive(xs: bool[]) -> int throws never {
   { : 0 | 1 | 2
@@ -321,24 +321,24 @@ class user.Team$stream {
   scores: int[]
 }
 class user.Bag$stream {
-  contents: null | int
+  contents: int | null
 }
 class user.Mixed$stream {
-  value: null | int | float | bool
+  value: int | float | bool | null
 }
 class user.Pair$stream {
-  kind: null | int | bool
-  payload: null | int | string
+  kind: int | bool | null
+  payload: int | string | null
 }
 class user.Flagged$stream {
-  flag: null | bool
-  note: null | string
+  flag: bool | null
+  note: string | null
 }
 class user.Box2$stream {
-  first: null | bool
-  second: null | int[]
+  first: bool | null
+  second: int[] | null
 }
 class user.IntPair$stream {
-  a: null | int
-  b: null | int
+  a: int | null
+  b: int | null
 }

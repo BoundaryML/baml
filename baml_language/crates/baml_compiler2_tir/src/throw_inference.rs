@@ -483,7 +483,8 @@ fn expr_to_path(expr_id: baml_compiler2_ast::ExprId, body: &ExprBody) -> Option<
 }
 
 /// Flatten a compound `Ty` into its leaf throw facts.
-/// Unions and optionals are decomposed; leaf types are kept as-is.
+/// Unions (including a nullable `T | null`) are decomposed; leaf types are
+/// kept as-is.
 pub fn flatten_ty_to_facts(ty: &Ty) -> BTreeSet<ThrowFact> {
     let mut out = BTreeSet::new();
     collect_leaf_types(ty, &mut out);
@@ -493,10 +494,6 @@ pub fn flatten_ty_to_facts(ty: &Ty) -> BTreeSet<ThrowFact> {
 fn collect_leaf_types(ty: &Ty, out: &mut BTreeSet<Ty>) {
     match ty {
         // Compound types: decompose
-        Ty::Optional(inner, _) => {
-            collect_leaf_types(inner, out);
-            out.insert(Ty::Primitive(PrimitiveType::Null, TyAttr::default()));
-        }
         Ty::Union(members, _) => {
             for member in members {
                 collect_leaf_types(member, out);

@@ -829,12 +829,27 @@ mod tests {
 
         let socket = class_defs
             .iter()
-            .find(|c| c.name == "Socket")
-            .expect("missing Socket");
+            .find(|c| c.name == "TcpStream")
+            .expect("missing TcpStream");
         assert_eq!(socket.namespace_prefix, "baml.net");
         assert_eq!(socket.fields.len(), 1);
         assert_eq!(socket.fields[0].name, "_handle");
         assert!(matches!(socket.fields[0].field_type, BamlType::RustType));
+
+        // UDP datagram is a plain data class (payload + sender address).
+        let datagram = class_defs
+            .iter()
+            .find(|c| c.name == "Datagram")
+            .expect("missing Datagram");
+        assert_eq!(datagram.namespace_prefix, "baml.net");
+        assert_eq!(datagram.fields.len(), 2);
+        assert_eq!(datagram.fields[0].name, "data");
+        assert!(matches!(
+            datagram.fields[0].field_type,
+            BamlType::Uint8Array
+        ));
+        assert_eq!(datagram.fields[1].name, "addr");
+        assert!(matches!(datagram.fields[1].field_type, BamlType::String));
 
         let response = class_defs
             .iter()
@@ -1031,11 +1046,11 @@ mod tests {
             .iter()
             .find(|b| b.path == "baml.fs.open")
             .unwrap();
-        assert_eq!(fs_open.throws, throws(&["Io"]));
+        assert_eq!(fs_open.throws, throws(&["Io", "InvalidArgument"]));
 
         let net_connect = io_builtins
             .iter()
-            .find(|b| b.path == "baml.net.connect")
+            .find(|b| b.path == "baml.net.TcpStream.connect")
             .unwrap();
         assert_eq!(net_connect.throws, throws(&["Io", "Timeout"]));
 

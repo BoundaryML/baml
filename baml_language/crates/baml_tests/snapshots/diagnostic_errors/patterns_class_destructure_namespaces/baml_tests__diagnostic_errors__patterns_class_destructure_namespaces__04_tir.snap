@@ -68,8 +68,8 @@ function user.llm.openai.Response.from_json(j: baml.json.json) -> user.llm.opena
   Response { score: baml.json.from_json<int>(baml.json.field(j, "score")) } : user.llm.openai.Response
 }
 class user.llm.openai.Box$stream {
-  value: null | T
+  value: T | null
 }
 class user.llm.openai.Response$stream {
-  score: null | int
+  score: int | null
 }

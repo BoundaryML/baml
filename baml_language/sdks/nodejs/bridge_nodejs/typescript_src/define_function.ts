@@ -7,8 +7,8 @@
 // and per instance method (inside the class body):
 //   m = defineInstanceFunction("user.ns.C.m", "sync", ["self"]).bind(this) as () => R;
 //
-// The factory captures (fqn, mode, paramNames) by closure; the returned
-// callable zips positional args against paramNames into a kwargs object,
+// The factory captures (fqn, mode, requiredNames, optionalNames) by closure;
+// the returned callable zips positional args against requiredNames into kwargs,
 // encodes it, calls the runtime, and decodes the result.
 
 import { getRuntime } from './native.js';
@@ -21,20 +21,38 @@ export const UNSET: unique symbol = Symbol('baml.UNSET');
 
 function buildKwargs(
     args: unknown[],
-    paramNames: readonly string[],
-    requiredPositionalCount?: number,
+    requiredParamNames: readonly string[],
+    optionalParamNames: readonly string[],
 ): Record<string, unknown> {
-    const positionalLimit = requiredPositionalCount ?? paramNames.length;
-    if (args.length > positionalLimit) {
+    const positionalLimit = requiredParamNames.length;
+    const hasOpts = optionalParamNames.length > 0;
+    if (args.length > positionalLimit + (hasOpts ? 1 : 0)) {
         throw new TypeError(
             `got ${args.length} positional arguments but only ${positionalLimit} positional ` +
-            `parameter names (${JSON.stringify(paramNames.slice(0, positionalLimit))})`,
+            `parameter names (${JSON.stringify(requiredParamNames)})`,
         );
     }
     const built: Record<string, unknown> = {};
-    for (let i = 0; i < args.length && i < paramNames.length; i++) {
+    for (let i = 0; i < args.length && i < positionalLimit; i++) {
         if (args[i] === UNSET) continue;
-        built[paramNames[i]] = args[i];
+        built[requiredParamNames[i]] = args[i];
+    }
+    if (hasOpts && args.length > positionalLimit) {
+        const opts = args[positionalLimit];
+        if (opts === undefined || opts === UNSET) {
+            return built;
+        }
+        if (opts === null || Array.isArray(opts) || typeof opts !== 'object') {
+            throw new TypeError('optional arguments must be passed as an object');
+        }
+        const optionNames = new Set(optionalParamNames);
+        for (const [key, value] of Object.entries(opts as Record<string, unknown>)) {
+            if (!optionNames.has(key)) {
+                throw new TypeError(`unknown optional argument ${JSON.stringify(key)}`);
+            }
+            if (value === undefined || value === UNSET) continue;
+            built[key] = value;
+        }
     }
     return built;
 }
@@ -47,13 +65,14 @@ function buildKwargs(
 export function defineFunction(
     bamlFqn: string,
     mode: Mode,
-    paramNames: readonly string[],
-    requiredPositionalCount?: number,
+    requiredParamNames: readonly string[],
+    optionalParamNames?: readonly string[] | undefined,
 ): (...args: unknown[]) => unknown {
-    const names = [...paramNames];
+    const requiredNames = [...requiredParamNames];
+    const optionNames = [...(optionalParamNames ?? [])];
     if (mode === 'sync') {
         return (...args: unknown[]): unknown => {
-            const merged = buildKwargs(args, names, requiredPositionalCount);
+            const merged = buildKwargs(args, requiredNames, optionNames);
             const rt = getRuntime();
             const argsProto = encodeCallArgs(merged, /* syncMode */ true);
             const resultBytes = rt.callFunctionSync(bamlFqn, argsProto, null, null, null);
@@ -62,7 +81,7 @@ export function defineFunction(
     }
     if (mode === 'async') {
         return async (...args: unknown[]): Promise<unknown> => {
-            const merged = buildKwargs(args, names, requiredPositionalCount);
+            const merged = buildKwargs(args, requiredNames, optionNames);
             const rt = getRuntime();
             const argsProto = encodeCallArgs(merged);
             const resultBytes = await rt.callFunction(bamlFqn, argsProto, null, null, null);
@@ -82,14 +101,16 @@ export function defineFunction(
 export function defineInstanceFunction(
     bamlFqn: string,
     mode: Mode,
-    paramNames: readonly string[],
+    requiredParamNames: readonly string[],
+    optionalParamNames?: readonly string[] | undefined,
 ): { bind(self: unknown): (...args: unknown[]) => unknown } {
-    const names = [...paramNames];
-    const selfName = names[0] ?? 'self';
-    const rest = names.slice(1);
+    const requiredNames = [...requiredParamNames];
+    const optionNames = [...(optionalParamNames ?? [])];
+    const selfName = requiredNames[0] ?? 'self';
+    const rest = requiredNames.slice(1);
 
     const makeKwargs = (self: unknown, args: unknown[]): Record<string, unknown> => {
-        const merged = buildKwargs(args, rest);
+        const merged = buildKwargs(args, rest, optionNames);
         merged[selfName] = self;
         return merged;
     };

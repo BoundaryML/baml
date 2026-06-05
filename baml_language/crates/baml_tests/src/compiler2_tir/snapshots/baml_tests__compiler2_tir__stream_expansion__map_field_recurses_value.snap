@@ -22,7 +22,7 @@ function user.WithMaps.from_json(j: baml.json.json) -> user.WithMaps throws baml
   WithMaps { simple: baml.json.from_json<map<string, int>>(baml.json.field(j, "simple")), complex: baml.json.from_json<map<string, Inner>>(baml.json.field(j, "complex")) } : user.WithMaps
 }
 class user.Inner$stream {
-  value: null | string
+  value: string | null
 }
 class user.WithMaps$stream {
   simple: map<string, int>

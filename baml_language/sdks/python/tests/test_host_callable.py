@@ -178,7 +178,7 @@ def test_callable_returning_unencodable_surfaces_as_error():
     """A callback whose *result* cannot be encoded must surface as a BAML
     error, not hang the engine. `object()` has no inbound encoding, so
     `encode_result_inbound` raises a `TypeError`; the dispatch path turns it
-    into a `HostCallableError` and completes the call."""
+    into a thrown `baml.errors.HostCallable` Instance and completes the call."""
     rt = _make_runtime()
 
     def cb(_x: int):
@@ -240,6 +240,82 @@ def test_encode_error_releases_registered_callables(monkeypatch):
 
     assert len(released) == 1, (
         f"expected exactly one callable to be released on rollback, got {released}"
+    )
+
+
+# ---------------------------------------------------------------------------
+# BridgeFailure routing: bridge-layer faults (missing callable for key,
+# poisoned registry mutex, no tokio runtime, caught Rust panic in dispatch)
+# must surface on the host as `BamlPanic(SdkPanic)`, NOT a catchable
+# `BamlError(HostCallable)`. The engine side is covered by
+# `host_callable_bridge_failure_surfaces_as_internal_error` in
+# `crates/bex_engine/tests/host_value_callable.rs`; these tests pin the
+# Python-side routing.
+# ---------------------------------------------------------------------------
+
+
+def test_normal_user_exception_routes_to_BamlError_not_BamlPanic():
+    """Regression guard for the BamlError vs BamlPanic dichotomy. A
+    *normal* user exception raised by the lambda is a user-level error
+    (catchable), not a bridge-layer fault — it must surface as
+    `BamlError`, never `BamlPanic`. If a future change accidentally
+    routed every host throw through `send_dispatch_bridge_failure`, the
+    test fails because `BamlPanic` subclasses `BaseException` (not
+    `Exception`), so the `pytest.raises(Exception)` check below would
+    miss it.
+    """
+    from baml_core.errors import BamlError, BamlPanic
+
+    rt = _make_runtime()
+
+    def cb(_x: int) -> str:
+        raise ValueError("ordinary user error")
+
+    with pytest.raises(Exception) as exc_info:
+        call_function_sync(rt, "CallCb", {"callback": cb, "x": 1})
+
+    assert isinstance(exc_info.value, BamlError), (
+        f"expected BamlError, got {type(exc_info.value).__name__}"
+    )
+    assert not isinstance(exc_info.value, BamlPanic), (
+        "user exceptions must NOT route as BamlPanic — that's reserved "
+        "for bridge-layer faults like missing-callable-for-key"
+    )
+
+
+def test_sdk_panic_wire_envelope_decodes_to_BamlPanic():
+    """Pins the Python-side panic-arm decode path. An engine that emits
+    `BamlOutboundResult { panic: { value: baml.panics.SdkPanic{...} } }`
+    (which is what `VmInternalError::BridgeFailure` surfaces as) must
+    surface to Python as `BamlPanic`, not `BamlError`. Complements the
+    engine-level test that pins the inverse direction (a host
+    `BridgeFailure` produces this envelope).
+    """
+    from baml_core.errors import BamlError, BamlPanic
+    from baml_core.cffi.v1 import baml_outbound_pb2
+
+    # `decode_call_result` reads the process-wide typemap to materialize the
+    # panic value's class. `baml.panics.SdkPanic` is part of the BAML std
+    # namespace, so any initialized runtime makes it resolvable.
+    _make_runtime()
+
+    # Build the smallest envelope that round-trips: a `panic` arm with a
+    # `baml.panics.SdkPanic` ClassValue holding a single `message` field.
+    envelope = baml_outbound_pb2.BamlOutboundResult()
+    envelope.panic.value.class_value.name.name = "baml.panics.SdkPanic"
+    msg_field = envelope.panic.value.class_value.fields.add()
+    msg_field.key = "message"
+    msg_field.value.string_value = "synthetic bridge failure"
+
+    with pytest.raises(BaseException) as exc_info:
+        _proto.decode_call_result(envelope.SerializeToString())
+
+    assert isinstance(exc_info.value, BamlPanic), (
+        f"expected BamlPanic for a panic-arm envelope, got "
+        f"{type(exc_info.value).__name__}"
+    )
+    assert not isinstance(exc_info.value, BamlError), (
+        "BamlPanic must NOT also be a BamlError — they're disjoint"
     )
 
 

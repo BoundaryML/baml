@@ -13,7 +13,7 @@ export declare const UNSET: unique symbol;
  * that maps positional args to kwargs, encodes, calls the runtime, and decodes.
  * `sync` returns the decoded value; `async` returns a `Promise` of it.
  */
-export declare function defineFunction(bamlFqn: string, mode: Mode, paramNames: readonly string[], requiredPositionalCount?: number): (...args: unknown[]) => unknown;
+export declare function defineFunction(bamlFqn: string, mode: Mode, requiredParamNames: readonly string[], optionalParamNames?: readonly string[] | undefined): (...args: unknown[]) => unknown;
 /**
  * Receiver-binding factory for instance methods. `paramNames[0]` is always
  * `"self"`. Codegen emits the binding as a class-field initializer
@@ -21,7 +21,7 @@ export declare function defineFunction(bamlFqn: string, mode: Mode, paramNames: 
  * captures the instance at construction time; the synthetic `self` param never
  * appears in the surface type.
  */
-export declare function defineInstanceFunction(bamlFqn: string, mode: Mode, paramNames: readonly string[]): {
+export declare function defineInstanceFunction(bamlFqn: string, mode: Mode, requiredParamNames: readonly string[], optionalParamNames?: readonly string[] | undefined): {
     bind(self: unknown): (...args: unknown[]) => unknown;
 };
 //# sourceMappingURL=define_function.d.ts.map

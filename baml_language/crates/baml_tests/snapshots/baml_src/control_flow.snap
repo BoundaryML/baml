@@ -635,7 +635,7 @@ function control_flow.pick_ok_err_empty(r: control_flow.Ok | control_flow.Err | 
     return
 }
 
-function control_flow.pick_optional(item: control_flow.Item?) -> string {
+function control_flow.pick_optional(item: control_flow.Item | null) -> string {
     load_var item
     is_type control_flow.Item
     pop_jump_if_false L0

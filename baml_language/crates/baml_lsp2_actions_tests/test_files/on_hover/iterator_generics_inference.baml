@@ -247,7 +247,7 @@ function hovers() -> void {
 // ```
 // hover at iterator_generics_inference.baml:192:12
 // ```baml
-// found: int?
+// found: int | null
 // ```
 // hover at iterator_generics_inference.baml:194:13
 // ```baml

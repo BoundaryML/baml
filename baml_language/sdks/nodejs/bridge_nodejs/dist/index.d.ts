@@ -8,7 +8,7 @@
 import { BamlRuntime, AbortController, HostSpanManager, Collector as NativeCollector, FunctionLog as NativeFunctionLog, Timing, Usage, LLMCall } from './native.js';
 export { BamlRuntime, AbortController, BamlHandle, HostSpanManager, getRuntime, getVersion, flushEvents } from './native.js';
 export { Timing, Usage, LLMCall } from './native.js';
-export { takeHandleFromTable, putHandleIntoTable, _seedFunctionRefHandle, _seedGenericMediaHandle, } from './native.js';
+export { _seedFunctionRefHandle, _seedGenericMediaHandle } from './native.js';
 export { BamlImage, BamlAudio, BamlVideo, BamlPdf } from './native.js';
 export { BamlStream } from './stream.js';
 export { encodeCallArgs, decodeCallResult } from './proto.js';

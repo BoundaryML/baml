@@ -33,8 +33,8 @@ function user.pkg.inner.AutoBox.from_json(j: baml.json.json) -> user.pkg.inner.A
   AutoBox { value: baml.json.from_json<T>(baml.json.field(j, "value")) } : user.pkg.inner.AutoBox<T>
 }
 class user.pkg.inner.Box$stream {
-  value: null | T
+  value: T | null
 }
 class user.pkg.inner.AutoBox$stream {
-  value: null | T
+  value: T | null
 }

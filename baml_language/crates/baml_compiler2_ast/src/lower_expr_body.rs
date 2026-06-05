@@ -357,6 +357,23 @@ impl LoweringContext {
         ctx
     }
 
+    fn warn_const_introducer(&mut self, span: TextRange) {
+        self.diags
+            .push(LoweringDiagnostic::ConstBindingIntroducer { span });
+    }
+
+    fn warn_direct_const_introducers(&mut self, node: &SyntaxNode) {
+        let spans: Vec<TextRange> = node
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .filter(|token| token.kind() == SyntaxKind::KW_CONST)
+            .map(|token| token.text_range())
+            .collect();
+        for span in spans {
+            self.warn_const_introducer(span);
+        }
+    }
+
     fn alloc_expr(&mut self, expr: Expr, range: TextRange) -> ExprId {
         let id = self.exprs.alloc(expr);
         self.source_map.expr_spans.alloc(range);
@@ -1182,6 +1199,8 @@ impl LoweringContext {
         // The scrutinee can appear as either a wrapper node (PATH_EXPR,
         // BINARY_EXPR, …) or as a bare token (single identifier / literal), so
         // we mirror `lower_if_expr` and walk children-with-tokens.
+        self.warn_direct_const_introducers(node);
+
         let mut pattern = None;
         let mut exprs: Vec<ExprId> = Vec::new();
         for elem in node.children_with_tokens() {
@@ -1230,6 +1249,8 @@ impl LoweringContext {
         // CST shape: `while let PATTERN = SCRUTINEE BODY_BLOCK`.
         // The first PATTERN node is the pattern; remaining children are
         // [0]=scrutinee, [1]=body (mirrors `lower_if_let_expr` minus else).
+        self.warn_direct_const_introducers(node);
+
         let mut pattern = None;
         let mut exprs: Vec<ExprId> = Vec::new();
         for elem in node.children_with_tokens() {
@@ -1499,6 +1520,8 @@ impl LoweringContext {
     /// `DESTRUCTURE_PATTERN`, `ARRAY_PATTERN`, `TYPE_PATTERN`,
     /// `PAREN_PATTERN`). Returns a fresh `PatId`.
     fn lower_pattern_atom_node(&mut self, node: &SyntaxNode) -> PatId {
+        self.warn_direct_const_introducers(node);
+
         match node.kind() {
             SyntaxKind::UNION_PATTERN => self.lower_union_pattern(node),
             SyntaxKind::BINDING_PATTERN => self.lower_binding_pattern(node),
@@ -1535,17 +1558,28 @@ impl LoweringContext {
         }
     }
 
-    /// Lower a `BINDING_PATTERN` (`let WORD`). The parser routes `let _` to
+    /// Lower a `BINDING_PATTERN` (`let WORD` / `const WORD`). The parser routes
+    /// `let _` / `const _` to
     /// `WILDCARD_PATTERN` before it ever reaches here, so the WORD's text is
     /// never `_`. The only defensive case is a malformed `let` without a
     /// following WORD (parse error like `let = 1`), which we recover as
     /// wildcard.
     fn lower_binding_pattern(&mut self, node: &SyntaxNode) -> PatId {
-        let name = node
+        let name_token = node
             .children_with_tokens()
             .filter_map(rowan::NodeOrToken::into_token)
-            .find(|t| t.kind() == SyntaxKind::WORD)
-            .map(|t| Name::new(t.text()));
+            .find(|t| t.kind() == SyntaxKind::WORD);
+
+        if let Some(token) = &name_token
+            && token.text() == "const"
+        {
+            self.diags
+                .push(LoweringDiagnostic::ReservedConstBindingName {
+                    span: token.text_range(),
+                });
+        }
+
+        let name = name_token.map(|t| Name::new(t.text()));
 
         // The parser folds `: <pattern>` into BINDING_PATTERN as a
         // PATTERN child (any pattern).
@@ -1634,9 +1668,10 @@ impl LoweringContext {
         self.alloc_pattern(Pattern::Type(ty), node.text_range())
     }
 
-    /// Lower a `DESTRUCTURE_PATTERN` (`(let)? PATH ('<' types '>')? '{' field_list '}'`).
+    /// Lower a `DESTRUCTURE_PATTERN` (`(let|const)? PATH ('<' types '>')? '{' field_list '}'`).
     fn lower_destructure_pattern(&mut self, node: &SyntaxNode) -> PatId {
-        // Path tokens live between (the optional) `KW_LET` and either
+        // Path tokens live between the optional binding introducer
+        // (`KW_LET`/`KW_CONST`) and either
         // `GENERIC_ARGS`, `TYPE_ARGS`, or `L_BRACE`.
         // Collect WORD tokens in that range, ignoring DOTs.
         let mut class: Vec<Name> = Vec::new();
@@ -3022,7 +3057,7 @@ impl LoweringContext {
 
     fn lower_let_stmt(&mut self, node: &SyntaxNode, is_watched: bool) -> StmtId {
         // LET_STMT shape (post-pattern-rewrite):
-        //   KW_WATCH? KW_LET? PATTERN EQUALS <init-expr> (KW_ELSE BLOCK_EXPR)? SEMICOLON?
+        //   KW_WATCH? (KW_LET|KW_CONST)? PATTERN EQUALS <init-expr> (KW_ELSE BLOCK_EXPR)? SEMICOLON?
         //
         // The pattern carries its own `: T` narrow as a Chain link, so all we
         // do here is locate the PATTERN child, the initialiser child, and an
@@ -3032,6 +3067,7 @@ impl LoweringContext {
         let mut else_branch = None;
         let mut seen_equals = false;
         let mut seen_else = false;
+        self.warn_direct_const_introducers(node);
 
         for elem in node.children_with_tokens() {
             match elem {
@@ -3235,6 +3271,7 @@ impl LoweringContext {
                 },
                 rowan::NodeOrToken::Node(child) => {
                     if !seen_in && binding_id.is_none() && child.kind() == SyntaxKind::LET_STMT {
+                        self.warn_direct_const_introducers(&child);
                         if let Some(pat_node) =
                             child.children().find(|n| n.kind() == SyntaxKind::PATTERN)
                         {

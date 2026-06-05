@@ -241,14 +241,14 @@ source: crates/baml_tests/src/generated_tests.rs
      │     Note: Error code: E0062
 ─────╯
 
-  [type] error: non-exhaustive match on type int?; missing: int
+  [type] error: non-exhaustive match on type int | null; missing: int
      ╭─[ patterns_new.baml:272:66 ]
      │
  272 │ ╭─▶ function or_pattern_optional_int_non_exhaustive(x: int?) -> int {
      ┆ ┆   
  276 │ ├─▶     }
      │ │           
-     │ ╰─────────── non-exhaustive match on type int?; missing: int
+     │ ╰─────────── non-exhaustive match on type int | null; missing: int
      │     
      │     Note: Error code: E0062
 ─────╯

@@ -61,9 +61,7 @@ fn contains_tir_type_var(ty: &baml_compiler2_tir::ty::Ty) -> bool {
                     .iter()
                     .any(|(_, ty)| contains_tir_type_var(ty))
         }
-        Ty::List(inner, _) | Ty::EvolvingList(inner, _) | Ty::Optional(inner, _) => {
-            contains_tir_type_var(inner)
-        }
+        Ty::List(inner, _) | Ty::EvolvingList(inner, _) => contains_tir_type_var(inner),
         Ty::Map(k, v, _) | Ty::EvolvingMap(k, v, _) | Ty::Future(k, v, _) => {
             contains_tir_type_var(k) || contains_tir_type_var(v)
         }
@@ -1137,7 +1135,7 @@ pub fn generate_project_bytecode_with_opt(
             )
         };
         for impls in inverted.values_mut() {
-            impls.sort_by(|(a, _, _), (b, _, _)| impl_sort_key(a).cmp(&impl_sort_key(b)));
+            impls.sort_by_key(|(a, _, _)| impl_sort_key(a));
         }
         program.interface_implementors = inverted;
     }

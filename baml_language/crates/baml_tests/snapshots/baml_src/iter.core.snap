@@ -4547,7 +4547,7 @@ function iter.core.Iterator.filter(self: iter.core.Iterator<unknown, unknown>, p
     return
 }
 
-function iter.core.Iterator.filter_map(self: iter.core.Iterator<unknown, unknown>, fn: (unknown) -> unknown? throws unknown) -> iter.core.Iterator<unknown, unknown | unknown> {
+function iter.core.Iterator.filter_map(self: iter.core.Iterator<unknown, unknown>, fn: (unknown) -> unknown | null throws unknown) -> iter.core.Iterator<unknown, unknown | unknown> {
     load_var2 1 2
     load_type #0
     load_type #2
@@ -4557,7 +4557,7 @@ function iter.core.Iterator.filter_map(self: iter.core.Iterator<unknown, unknown
     return
 }
 
-function iter.core.Iterator.find(self: iter.core.Iterator<unknown, unknown>, predicate: (unknown) -> bool throws unknown) -> unknown? {
+function iter.core.Iterator.find(self: iter.core.Iterator<unknown, unknown>, predicate: (unknown) -> bool throws unknown) -> unknown | null {
   L0:
     load_const true
     pop_jump_if_false L23

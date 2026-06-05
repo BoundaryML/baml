@@ -1,12 +1,17 @@
 /// Internal: invoked only by compiler-synthesized host-callable wrapper
 /// closures. Not directly callable by user code.
 ///
-/// `T` is the expected return type, delivered to the native handler at
-/// runtime via the type-arg channel. The handler validates both the
-/// inbound `args` and the host's returned value against the declared
-/// signature, raising `root.errors.HostCallable` on mismatch.
-function call_host_value<T>(handle: HostValue, args: unknown[])
-    -> T throws root.errors.HostCallable {
+/// `T` is the expected return type and `E` the declared error contract,
+/// both delivered to the native handler at runtime via the type-arg channel
+/// (`type_arg_0` / `type_arg_1`). The completion site validates the host's
+/// returned value against `T` and the thrown value against `E`: a return
+/// that doesn't inhabit `T` and a throw that isn't a subtype of `E` both
+/// become `baml.panics.HostContractViolation` (uncatchable). An on-contract
+/// throw rides the VM's normal exception unwinder. A host value left
+/// untyped at the boundary erases `E` to `unknown`, which accepts any
+/// thrown value — including an opaque `baml.errors.HostCallable`.
+function call_host_value<T, E>(handle: HostValue, args: unknown[])
+    -> T throws E {
   $rust_io_function
 }
 

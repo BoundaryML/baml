@@ -762,7 +762,7 @@ pub(crate) mod support {
                     out.push(s);
                 }
             }
-            Ty::List(inner, _) | Ty::Optional(inner, _) => collect_typevars_inner(inner, out),
+            Ty::List(inner, _) => collect_typevars_inner(inner, out),
             Ty::Map(k, v, _) => {
                 collect_typevars_inner(k, out);
                 collect_typevars_inner(v, out);

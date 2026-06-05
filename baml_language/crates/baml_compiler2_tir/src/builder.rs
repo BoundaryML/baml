@@ -465,6 +465,9 @@ struct CallCheckRequest<'a> {
     /// before method params; for bound methods the receiver seeds owner params,
     /// so this is just the method params.
     runtime_type_arg_params: Vec<Name>,
+    /// Pre-bound runtime type args that were substituted out of the callable
+    /// type before ordinary call inference ran.
+    runtime_type_arg_binding_seed: Vec<(Name, Ty)>,
     /// The rigid `Self` type variable for a Self-pinned interface method call —
     /// argument inference never binds it and the argument is checked against it
     /// by identity (rustc's `ty::Param`). `None` for every ordinary call, which
@@ -590,6 +593,11 @@ pub struct TypeInferenceBuilder<'db> {
     /// required methods do not have a `FunctionLoc`, so this supplements
     /// `resolutions` for explicit call-site type-arg checking.
     interface_method_generic_params: FxHashMap<ExprId, (Name, Vec<Name>)>,
+    /// Concrete owner-interface generic bindings for interface default methods,
+    /// keyed by the callee expression. The callable type substitutes these out
+    /// of its parameter/return types, but the VM frame still expects owner
+    /// params before method params.
+    interface_default_owner_type_arg_bindings: FxHashMap<ExprId, Vec<(Name, Ty)>>,
     /// For a Self-pinned interface method call (resolved through a type-variable
     /// receiver — `self` in a default method, or a generic `T extends I`), the
     /// rigid `Self` type variable, keyed by the callee (member-access) expr.
@@ -815,6 +823,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             path_segment_types: FxHashMap::default(),
             path_member_resolutions: FxHashMap::default(),
             interface_method_generic_params: FxHashMap::default(),
+            interface_default_owner_type_arg_bindings: FxHashMap::default(),
             self_pinned_rigid_var: FxHashMap::default(),
             param_types: Vec::new(),
             call_plans: FxHashMap::default(),
@@ -1011,36 +1020,17 @@ impl<'db> TypeInferenceBuilder<'db> {
     }
 
     /// Pattern-matrix-internal normalization of a scrutinee type.
-    /// Rewrites `Ty::Optional(T)` into `Ty::Union([T, null])` so the
-    /// matrix's `UnionMember` dispatch applies uniformly. Optionals
-    /// embedded as members of an outer Union are flattened in the same
-    /// way (so `int? | string` becomes `int | null | string`), and
-    /// duplicate `null` members get deduplicated.
-    ///
-    /// Only the matrix's column type, dpat scrut tags, and witness
-    /// inputs use this form — `Ty::Optional` remains the canonical
-    /// representation everywhere else (subtyping, codegen, display in
-    /// non-match diagnostics, `pattern_types` map values, `matched_ty`
-    /// flowing into binding inference).
+    /// Flattens a union so the matrix's `UnionMember` dispatch applies
+    /// uniformly (so `int | null | string` keeps a single `null` member),
+    /// deduplicating `null` members.
     fn matrix_normalize_scrut(&self, ty: &Ty) -> Ty {
         let expanded = self.expand_alias_chains(ty.clone());
         match expanded {
-            Ty::Optional(inner, _) => Ty::Union(
-                vec![
-                    *inner,
-                    Ty::Primitive(PrimitiveType::Null, TyAttr::default()),
-                ],
-                TyAttr::default(),
-            ),
             Ty::Union(members, attr) => {
                 let mut flat: Vec<Ty> = Vec::with_capacity(members.len());
                 let mut has_null = false;
                 for m in members {
                     match self.expand_alias_chains(m) {
-                        Ty::Optional(inner, _) => {
-                            flat.push(*inner);
-                            has_null = true;
-                        }
                         Ty::Primitive(PrimitiveType::Null, _) => {
                             has_null = true;
                         }
@@ -1064,7 +1054,6 @@ impl<'db> TypeInferenceBuilder<'db> {
 
             match builder.expand_alias_chains(ty) {
                 fn_ty @ Ty::Function { .. } => Some(fn_ty),
-                Ty::Optional(inner, _) => peel(builder, *inner, depth - 1),
                 Ty::Union(members, _) => {
                     let mut function_member = None;
                     for member in members {
@@ -1108,6 +1097,13 @@ impl<'db> TypeInferenceBuilder<'db> {
         }
         self.validate_type_generic_bounds_at_span(span, &ty);
         ty
+    }
+
+    fn lower_lambda_return_annotation(&mut self, func_def: &ast::FunctionDef) -> Option<Ty> {
+        let te = func_def.return_type.as_ref()?;
+        let mut all_generic_params = self.generic_params.clone();
+        all_generic_params.extend(func_def.generic_params.iter().cloned());
+        Some(self.lower_lambda_type_expr(&te.expr, &all_generic_params, te.span))
     }
 
     fn choose_lambda_throws_surface(
@@ -1229,10 +1225,6 @@ impl<'db> TypeInferenceBuilder<'db> {
                 throws: Box::new(concrete_throws.clone()),
                 attr,
             },
-            Ty::Optional(inner, attr) => Ty::Optional(
-                Box::new(Self::replace_callable_throws(*inner, concrete_throws)),
-                attr,
-            ),
             Ty::Union(members, attr) => Ty::Union(
                 members
                     .into_iter()
@@ -2089,7 +2081,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         &self,
         callee_id: ExprId,
         callee_generic_params: &[Name],
-        is_method_call: bool,
+        _is_method_call: bool,
         is_value_call: bool,
     ) -> Vec<Name> {
         if is_value_call {
@@ -2116,7 +2108,6 @@ impl<'db> TypeInferenceBuilder<'db> {
                 owner_params.into_iter().chain(fn_params).collect()
             }
             MemberResolution::BoundMethod { .. } => fn_params,
-            MemberResolution::InterfaceDefaultMethod { .. } if is_method_call => fn_params,
             MemberResolution::InterfaceDefaultMethod { .. } => {
                 owner_params.into_iter().chain(fn_params).collect()
             }
@@ -2156,6 +2147,8 @@ impl<'db> TypeInferenceBuilder<'db> {
         let saved_path_member_resolutions = std::mem::take(&mut self.path_member_resolutions);
         let saved_interface_method_generic_params =
             std::mem::take(&mut self.interface_method_generic_params);
+        let saved_interface_default_owner_type_arg_bindings =
+            std::mem::take(&mut self.interface_default_owner_type_arg_bindings);
         let saved_self_pinned_rigid_var = std::mem::take(&mut self.self_pinned_rigid_var);
         let saved_call_plans = std::mem::take(&mut self.call_plans);
         let saved_function_coercions = std::mem::take(&mut self.function_coercions);
@@ -2249,6 +2242,8 @@ impl<'db> TypeInferenceBuilder<'db> {
         self.path_segment_types = saved_path_segment_types;
         self.path_member_resolutions = saved_path_member_resolutions;
         self.interface_method_generic_params = saved_interface_method_generic_params;
+        self.interface_default_owner_type_arg_bindings =
+            saved_interface_default_owner_type_arg_bindings;
         self.self_pinned_rigid_var = saved_self_pinned_rigid_var;
         self.call_plans = saved_call_plans;
         self.function_coercions = saved_function_coercions;
@@ -2827,6 +2822,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             is_optional_call,
             explicit_type_arg_bindings,
             runtime_type_arg_params,
+            runtime_type_arg_binding_seed,
             rigid_self_var,
         } = request;
         let explicit_args_used = explicit_type_arg_bindings.is_some();
@@ -2851,9 +2847,14 @@ impl<'db> TypeInferenceBuilder<'db> {
                 // This avoids ambiguity when the user has been explicit about type instantiation.
                 let mut bindings: FxHashMap<Name, Ty> =
                     explicit_type_arg_bindings.unwrap_or_default();
+                for (name, ty) in &runtime_type_arg_binding_seed {
+                    bindings.entry(name.clone()).or_insert_with(|| ty.clone());
+                }
 
-                // Only run Phase 0/1a/1b when we don't have explicit type-arg bindings.
-                let run_inference_phases = bindings.is_empty();
+                // Only explicit call-site type args suppress inference. Owner
+                // interface args seeded for default methods are already known,
+                // but method generics still need normal argument/return inference.
+                let run_inference_phases = !explicit_args_used;
 
                 let phase0_expected = if is_optional_call
                     && !matches!(expected, Ty::Unknown { .. } | Ty::Error { .. })
@@ -2941,6 +2942,19 @@ impl<'db> TypeInferenceBuilder<'db> {
                             &mut bindings,
                             rigid_self_var.as_ref(),
                         );
+                        if let Expr::Lambda(func_def) = &body.exprs[*arg]
+                            && let Some(Ty::Function {
+                                ret: formal_ret, ..
+                            }) = self.expected_lambda_function_ty(param_ty)
+                            && let Some(actual_ret) = self.lower_lambda_return_annotation(func_def)
+                        {
+                            self.infer_call_bindings_rigid_self(
+                                &formal_ret,
+                                &actual_ret,
+                                &mut bindings,
+                                rigid_self_var.as_ref(),
+                            );
+                        }
                     }
                 } else {
                     // Explicit type args: still need to type-check all value arguments.
@@ -2994,6 +3008,9 @@ impl<'db> TypeInferenceBuilder<'db> {
                 // a bound violation.
                 let mut bound_check_bindings = bindings.clone();
                 let mut runtime_type_arg_bindings = bindings.clone();
+                for (name, ty) in runtime_type_arg_binding_seed {
+                    runtime_type_arg_bindings.entry(name).or_insert(ty);
+                }
                 if run_inference_phases {
                     if let Some(phase0_expected) = phase0_expected.as_ref() {
                         if crate::generics::contains_typevar(ret)
@@ -3257,6 +3274,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                         is_optional_call,
                         explicit_type_arg_bindings,
                         runtime_type_arg_params: Vec::new(),
+                        runtime_type_arg_binding_seed: Vec::new(),
                         rigid_self_var,
                     });
                 }
@@ -3354,7 +3372,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         let callee_info = self.analyze_optional_base(callee_ty);
 
         if let Some(result_ty) = self.try_container_method_call(callee_id, args, body) {
-            let final_ty = Self::make_optional(result_ty);
+            let final_ty = Ty::nullable(result_ty);
             self.report_result_type_mismatch(expr_id, &final_ty, expected);
             self.record_expr_type(expr_id, final_ty.clone());
             return final_ty;
@@ -3389,9 +3407,14 @@ impl<'db> TypeInferenceBuilder<'db> {
             is_optional_call: true,
             explicit_type_arg_bindings: None,
             runtime_type_arg_params,
+            runtime_type_arg_binding_seed: self
+                .interface_default_owner_type_arg_bindings
+                .get(&callee_id)
+                .cloned()
+                .unwrap_or_default(),
             rigid_self_var: self.self_pinned_rigid_var.get(&callee_id).cloned(),
         });
-        let final_ty = Self::make_optional(checked.result);
+        let final_ty = Ty::nullable(checked.result);
         self.report_result_type_mismatch(expr_id, &final_ty, expected);
         self.record_expr_type(expr_id, final_ty.clone());
         final_ty
@@ -3695,7 +3718,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 // resolve the member, and re-wrap in Optional.
                 // This allows `a?.b.c` where `a?.b` returns `T?`.
                 let member_ty = self.resolve_member(&inner, member, expr_id, base_is_value);
-                Self::make_optional(member_ty)
+                Ty::nullable(member_ty)
             } else {
                 // Outside any chain: accessing `.member` on a nullable type
                 // is an error (e.g. `(a?.b).c`). Use `?.` instead.
@@ -3710,7 +3733,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 );
                 // Still resolve for downstream inference
                 let member_ty = self.resolve_member(&inner, member, expr_id, base_is_value);
-                Self::make_optional(member_ty)
+                Ty::nullable(member_ty)
             }
         } else {
             self.resolve_member(&base_ty, member, expr_id, base_is_value)
@@ -3846,7 +3869,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         } else {
             // OptionalMemberAccess always has a value base → bound = true.
             let member_ty = self.resolve_member(&base_info.inner, member, expr_id, true);
-            Self::make_optional(member_ty)
+            Ty::nullable(member_ty)
         }
     }
 
@@ -3903,7 +3926,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             }
         };
         if rewrap {
-            Self::make_optional(elem_ty)
+            Ty::nullable(elem_ty)
         } else {
             elem_ty
         }
@@ -3954,7 +3977,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                     }
                 }
             };
-            Self::make_optional(elem_ty)
+            Ty::nullable(elem_ty)
         }
     }
 
@@ -4504,6 +4527,11 @@ impl<'db> TypeInferenceBuilder<'db> {
             is_optional_call: false,
             explicit_type_arg_bindings,
             runtime_type_arg_params,
+            runtime_type_arg_binding_seed: self
+                .interface_default_owner_type_arg_bindings
+                .get(&callee)
+                .cloned()
+                .unwrap_or_default(),
             rigid_self_var: self.self_pinned_rigid_var.get(&callee).cloned(),
         });
 
@@ -6223,7 +6251,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                         .as_ref()
                         .is_some_and(|interface| Self::ty_contains_recovery_unknown(interface))
             }
-            Ty::List(elem, _) | Ty::EvolvingList(elem, _) | Ty::Optional(elem, _) => {
+            Ty::List(elem, _) | Ty::EvolvingList(elem, _) => {
                 Self::ty_contains_recovery_unknown(elem)
             }
             Ty::Map(key, value, _) | Ty::EvolvingMap(key, value, _) => {
@@ -6275,7 +6303,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                     })
             }
             Ty::Union(args, _) => args.iter().any(Self::ty_contains_unfilled_generic_class),
-            Ty::List(elem, _) | Ty::EvolvingList(elem, _) | Ty::Optional(elem, _) => {
+            Ty::List(elem, _) | Ty::EvolvingList(elem, _) => {
                 Self::ty_contains_unfilled_generic_class(elem)
             }
             Ty::Map(key, value, _) | Ty::EvolvingMap(key, value, _) => {
@@ -6611,10 +6639,6 @@ impl<'db> TypeInferenceBuilder<'db> {
                 _ => false,
             },
             Ty::Literal(_, _, _) => false,
-            Ty::Optional(inner, _) => {
-                matches!(fact, Ty::Primitive(PrimitiveType::Null, _))
-                    || Self::ty_covers_fact(inner, fact)
-            }
             Ty::Union(parts, _) => parts.iter().any(|part| Self::ty_covers_fact(part, fact)),
             Ty::Class(qn, type_args, _) => matches!(
                 fact,
@@ -7328,7 +7352,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                         seg_idx,
                         bound,
                     );
-                    current_ty = Self::make_optional(member_ty.clone());
+                    current_ty = Ty::nullable(member_ty.clone());
                 } else {
                     // Outside any chain: null-safety violation — suggest `?.`.
                     let base_text = segments[..seg_idx]
@@ -7357,7 +7381,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                         seg_idx,
                         bound,
                     );
-                    current_ty = Self::make_optional(member_ty.clone());
+                    current_ty = Ty::nullable(member_ty.clone());
                 }
             } else {
                 member_ty =
@@ -8821,6 +8845,25 @@ impl<'db> TypeInferenceBuilder<'db> {
         self.infer_call_bindings_via_matching_shape(formal, actual, bindings, None, true);
     }
 
+    fn nullable_non_null_part(ty: &Ty) -> Option<Ty> {
+        let Ty::Union(members, attr) = ty else {
+            return None;
+        };
+        if !members.iter().any(Ty::is_null) {
+            return None;
+        }
+        let non_null: Vec<Ty> = members
+            .iter()
+            .filter(|member| !member.is_null())
+            .cloned()
+            .collect();
+        match non_null.as_slice() {
+            [] => None,
+            [single] => Some(single.clone()),
+            _ => Some(Ty::Union(non_null, attr.clone())),
+        }
+    }
+
     fn infer_call_bindings_via_matching_shape(
         &self,
         formal: &Ty,
@@ -8830,9 +8873,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         allow_typevar_actuals: bool,
     ) {
         match (formal, actual) {
-            (Ty::List(f, _), Ty::List(a, _))
-            | (Ty::EvolvingList(f, _), Ty::EvolvingList(a, _))
-            | (Ty::Optional(f, _), Ty::Optional(a, _)) => {
+            (Ty::List(f, _), Ty::List(a, _)) | (Ty::EvolvingList(f, _), Ty::EvolvingList(a, _)) => {
                 if allow_typevar_actuals {
                     self.infer_call_bindings_via_interface_views_allow_typevars(f, a, bindings);
                 } else {
@@ -8889,6 +8930,25 @@ impl<'db> TypeInferenceBuilder<'db> {
                 } else {
                     self.infer_call_bindings_via_interface_views_rigid(fr, ar, bindings, rigid);
                     self.infer_call_bindings_via_interface_views_rigid(fth, ath, bindings, rigid);
+                }
+            }
+            (Ty::Union(_, _), _) if Self::nullable_non_null_part(formal).is_some() => {
+                let formal_inner = Self::nullable_non_null_part(formal).expect("checked above");
+                let actual_inner =
+                    Self::nullable_non_null_part(actual).unwrap_or_else(|| actual.clone());
+                if allow_typevar_actuals {
+                    self.infer_call_bindings_via_interface_views_allow_typevars(
+                        &formal_inner,
+                        &actual_inner,
+                        bindings,
+                    );
+                } else {
+                    self.infer_call_bindings_via_interface_views_rigid(
+                        &formal_inner,
+                        &actual_inner,
+                        bindings,
+                        rigid,
+                    );
                 }
             }
             (Ty::Union(f_members, _), Ty::Union(a_members, _))
@@ -9558,10 +9618,6 @@ impl<'db> TypeInferenceBuilder<'db> {
                 throws: Box::new(json_parse_or_serialization_error_ty()),
                 attr: TyAttr::default(),
             }),
-            Ty::Optional(inner, _) => {
-                // Drill through Optional to resolve the member on the inner type
-                self.try_resolve_member_on_ty(inner, member)
-            }
             Ty::TypeAlias(qtn, _) => {
                 if let Some(expanded) = self.aliases.get(qtn) {
                     let expanded = expanded.clone();
@@ -10162,6 +10218,15 @@ impl<'db> TypeInferenceBuilder<'db> {
                 }
                 self.interface_method_generic_params
                     .insert(at, (member.clone(), function_generic_params));
+                let owner_type_arg_bindings = iface_data
+                    .generic_params
+                    .iter()
+                    .filter_map(|param| bindings.get(param).cloned().map(|ty| (param.clone(), ty)))
+                    .collect::<Vec<_>>();
+                if !owner_type_arg_bindings.is_empty() {
+                    self.interface_default_owner_type_arg_bindings
+                        .insert(at, owner_type_arg_bindings);
+                }
                 return Some(fn_ty);
             }
 
@@ -12416,7 +12481,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                     },
                 };
                 let callee_expr_ty = match &body.exprs[callee_id] {
-                    Expr::OptionalMemberAccess { .. } => Self::make_optional(method_ty),
+                    Expr::OptionalMemberAccess { .. } => Ty::nullable(method_ty),
                     _ => method_ty,
                 };
 
@@ -12560,20 +12625,6 @@ impl<'db> TypeInferenceBuilder<'db> {
         }
     }
 
-    fn make_optional(ty: Ty) -> Ty {
-        match &ty {
-            Ty::Optional(..) | Ty::Primitive(PrimitiveType::Null, _) => ty,
-            Ty::Union(members, _)
-                if members
-                    .iter()
-                    .any(|m| matches!(m, Ty::Primitive(PrimitiveType::Null, _))) =>
-            {
-                ty
-            }
-            _ => Ty::Optional(Box::new(ty), TyAttr::default()),
-        }
-    }
-
     fn join_types(a: &Ty, b: &Ty) -> Ty {
         if matches!(a, Ty::Never { .. }) {
             return b.clone();
@@ -12703,7 +12754,6 @@ impl<'db> TypeInferenceBuilder<'db> {
     fn typevar_is_reflexive_subtype(sub_name: &Name, sup: &Ty) -> bool {
         match sup {
             Ty::TypeVar(sup_name, _) => sup_name == sub_name,
-            Ty::Optional(inner, _) => Self::typevar_is_reflexive_subtype(sub_name, inner),
             Ty::Union(members, _) => members
                 .iter()
                 .any(|m| Self::typevar_is_reflexive_subtype(sub_name, m)),
@@ -12823,31 +12873,30 @@ impl<'db> TypeInferenceBuilder<'db> {
             }
         }
         // BEP-044: nominal interface subtyping must also hold when the target
-        // is an *optional* or *union* type. `normalize::is_subtype_of` has no
-        // interface arm, so without this a `Dog` (which implements `Animal`)
-        // would be rejected for `Animal?` or `Animal | string` even though it
-        // is a subtype of the wrapped interface. We only short-circuit on a
-        // positive result here — a negative falls through to the structural
-        // check below, so non-interface optional/union behaviour is unchanged.
-        match sup {
-            Ty::Optional(inner, _) => {
-                // `null <: T?` and other non-interface optional rules are
-                // handled by the structural check below; here we only add the
-                // nominal interface case for the unwrapped payload.
-                let sub_inner = match sub {
-                    Ty::Optional(si, _) => si.as_ref(),
-                    other => other,
-                };
-                if self.is_subtype(sub_inner, inner) {
-                    return true;
-                }
+        // is a *union* type (including a nullable `T | null`).
+        // `normalize::is_subtype_of` has no interface arm, so without this a
+        // `Dog` (which implements `Animal`) would be rejected for `Animal | null`
+        // or `Animal | string` even though it is a subtype of a wrapped
+        // interface. We only short-circuit on a positive result here — a
+        // negative falls through to the structural check below, so non-interface
+        // union behaviour is unchanged.
+        if let Ty::Union(members, _) = sup {
+            // Decompose `sub` into members too — a nullable `T?` is now the
+            // union `T | null` — and require every `sub` member to be a
+            // subtype of some `sup` member, using the recursive (nominal
+            // interface aware) `is_subtype`. This preserves `Dog? <: Animal?`
+            // (and `Dog <: Animal?`), which `normalize::is_subtype_of` cannot
+            // decide because it has no interface arm. Strictly adds positives.
+            let sub_members: Vec<&Ty> = match sub {
+                Ty::Union(sub_members, _) => sub_members.iter().collect(),
+                other => vec![other],
+            };
+            if sub_members
+                .iter()
+                .all(|sm| members.iter().any(|m| self.is_subtype(sm, m)))
+            {
+                return true;
             }
-            Ty::Union(members, _) => {
-                if members.iter().any(|m| self.is_subtype(sub, m)) {
-                    return true;
-                }
-            }
-            _ => {}
         }
         if let Some(result) = self.structural_subtype_with_nominal_interfaces(sub, sup) {
             return result;
@@ -13018,9 +13067,6 @@ impl<'db> TypeInferenceBuilder<'db> {
                 self.collect_interface_generic_bound_errors(qtn, type_args, errors);
             }
             Ty::List(inner, _) | Ty::EvolvingList(inner, _) => {
-                self.collect_type_generic_bound_errors_inner(inner, seen_aliases, errors);
-            }
-            Ty::Optional(inner, _) => {
                 self.collect_type_generic_bound_errors_inner(inner, seen_aliases, errors);
             }
             Ty::Map(key, value, _) | Ty::EvolvingMap(key, value, _) => {
@@ -13562,17 +13608,16 @@ impl<'db> TypeInferenceBuilder<'db> {
     }
 
     /// Returns true if any runtime value of `ty` could be `null` — i.e. the
-    /// type is `Optional<_>`, the bare `null` primitive, or a union that
-    /// contains either.
+    /// type is the bare `null` primitive or a union that contains it (a
+    /// nullable `T?` lowers to `T | null`).
     ///
     /// Used by the ordering arms of [`infer_binary_op`] to reject operands
     /// whose runtime value might be `null`. Arithmetic / bitwise rely on
     /// their respective `base_ty` classifiers (which return `None` for
-    /// `Optional`/`null` and short-circuit via the catch-all to `Unknown`),
+    /// `null` and short-circuit via the catch-all to `Unknown`),
     /// so they do not need this helper.
     fn may_be_null(ty: &Ty) -> bool {
         match ty {
-            Ty::Optional(_, _) => true,
             Ty::Primitive(PrimitiveType::Null, _) => true,
             Ty::Union(members, _) => members.iter().any(Self::may_be_null),
             _ => false,
@@ -13597,12 +13642,13 @@ impl<'db> TypeInferenceBuilder<'db> {
     /// pairing even though any one concrete value is only ever one
     /// representation. Narrow the operand first if you hit this.
     fn is_float_bigint_mix(lhs: &Ty, rhs: &Ty) -> bool {
-        /// `(could_be_float, could_be_bigint)` for a primitive/literal/union/
-        /// optional type — i.e. the set of primitive shapes any runtime branch
-        /// could carry. Optional **is** unwrapped here because this helper
-        /// asks about the *upcast* type, not about whether the operand itself
-        /// is a valid scalar (the latter check belongs at the operator's arm
-        /// entry, e.g. ordering rejecting nullable operands via `may_be_null`).
+        /// `(could_be_float, could_be_bigint)` for a primitive/literal/union
+        /// type — i.e. the set of primitive shapes any runtime branch could
+        /// carry. A nullable `T | null` is unwrapped through its members here
+        /// because this helper asks about the *upcast* type, not about whether
+        /// the operand itself is a valid scalar (the latter check belongs at
+        /// the operator's arm entry, e.g. ordering rejecting nullable operands
+        /// via `may_be_null`).
         fn shape(ty: &Ty) -> (bool, bool) {
             match ty {
                 Ty::Primitive(PrimitiveType::Float, _)
@@ -13613,7 +13659,6 @@ impl<'db> TypeInferenceBuilder<'db> {
                     let (mf, mb) = shape(m);
                     (f || mf, b || mb)
                 }),
-                Ty::Optional(inner, _) => shape(inner),
                 _ => (false, false),
             }
         }
@@ -14165,6 +14210,8 @@ impl<'db> TypeInferenceBuilder<'db> {
         let saved_path_member_resolutions = std::mem::take(&mut self.path_member_resolutions);
         let saved_interface_method_generic_params =
             std::mem::take(&mut self.interface_method_generic_params);
+        let saved_interface_default_owner_type_arg_bindings =
+            std::mem::take(&mut self.interface_default_owner_type_arg_bindings);
         let saved_self_pinned_rigid_var = std::mem::take(&mut self.self_pinned_rigid_var);
         let saved_lambda_effective_throws = std::mem::take(&mut self.lambda_effective_throws);
         let saved_call_plans = std::mem::take(&mut self.call_plans);
@@ -14269,6 +14316,8 @@ impl<'db> TypeInferenceBuilder<'db> {
         self.path_segment_types = saved_path_segment_types;
         self.path_member_resolutions = saved_path_member_resolutions;
         self.interface_method_generic_params = saved_interface_method_generic_params;
+        self.interface_default_owner_type_arg_bindings =
+            saved_interface_default_owner_type_arg_bindings;
         self.self_pinned_rigid_var = saved_self_pinned_rigid_var;
         self.lambda_effective_throws = saved_lambda_effective_throws;
         self.call_plans = saved_call_plans;
@@ -14335,14 +14384,6 @@ impl crate::exhaustiveness::PatCtx for TypeInferenceBuilder<'_> {
             | Ty::TypeVar(_, _)
             | Ty::AssociatedTypeProjection { .. } => vec![Ctor::NonExhaustive],
             Ty::Never { .. } => vec![],
-            Ty::Optional(inner, _) => {
-                let mut out = self.enumerate_ctors(inner);
-                out.push(Ctor::Single(Ty::Primitive(
-                    PrimitiveType::Null,
-                    TyAttr::default(),
-                )));
-                out
-            }
             // Each union member becomes a `UnionMember` tag, mirroring
             // rustc's `Variant` ctor for enums. Specializing on
             // `UnionMember(M)` recurses into a column of type `M`, so
@@ -14625,19 +14666,14 @@ impl TypeInferenceBuilder<'_> {
                 .any(|m| self.is_subtype(pat, m) || self.is_subtype(m, pat))
     }
 
-    /// Flatten a (possibly nested) union/optional type into its leaf members,
-    /// with `null` materialized for each `Optional` layer.
+    /// Flatten a (possibly nested) union type into its leaf members. A nullable
+    /// `T?` lowers to `T | null`, so its `null` member surfaces here too.
     fn flatten_union_optional_members(&self, ty: &Ty) -> Vec<Ty> {
         match self.expand_alias_chains(ty.clone()) {
             Ty::Union(members, _) => members
                 .iter()
                 .flat_map(|m| self.flatten_union_optional_members(m))
                 .collect(),
-            Ty::Optional(inner, _) => {
-                let mut out = self.flatten_union_optional_members(&inner);
-                out.push(Ty::Primitive(PrimitiveType::Null, TyAttr::default()));
-                out
-            }
             other => vec![other],
         }
     }
@@ -14881,9 +14917,9 @@ impl TypeInferenceBuilder<'_> {
     }
 
     /// Two types overlap (for pattern dispatch) iff some atom of `a`
-    /// shares a runtime identity with some atom of `b`. Unions/Optionals
-    /// decompose into atoms; everything else is a single atom matched by
-    /// [`Self::atoms_overlap`].
+    /// shares a runtime identity with some atom of `b`. Unions (including a
+    /// nullable `T | null`) decompose into atoms; everything else is a single
+    /// atom matched by [`Self::atoms_overlap`].
     fn types_overlap(&self, a: &Ty, b: &Ty) -> bool {
         let mut a_atoms: Vec<Ty> = Vec::new();
         self.collect_overlap_atoms(a, &mut a_atoms);
@@ -14901,10 +14937,6 @@ impl TypeInferenceBuilder<'_> {
                 for m in members {
                     self.collect_overlap_atoms(&m, out);
                 }
-            }
-            Ty::Optional(inner, _) => {
-                self.collect_overlap_atoms(&inner, out);
-                out.push(Ty::Primitive(PrimitiveType::Null, TyAttr::default()));
             }
             other => out.push(other),
         }
@@ -15291,14 +15323,6 @@ impl TypeInferenceBuilder<'_> {
                     .map(|v| Ty::EnumVariant(qtn.clone(), v, TyAttr::default()))
                     .collect();
                 Self::or_of_singletons(variants, scrut_ty)
-            }
-            Ty::Optional(inner, _) => {
-                let inner_dpat = self.dpat_for_type(inner, scrut_ty);
-                let null_dpat = DPat::single(
-                    Ty::Primitive(PrimitiveType::Null, TyAttr::default()),
-                    scrut_ty.clone(),
-                );
-                Self::or_combine(vec![inner_dpat, null_dpat], scrut_ty)
             }
             Ty::Union(members, _) => {
                 let alts: Vec<DPat> = members

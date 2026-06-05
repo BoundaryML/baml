@@ -7,12 +7,12 @@ class user.FieldAttributes {
   currency: string @alias("currency_code")
   name: string @skip
   summary: string
-  details: string?
+  details: string | null
   state: string
-  multiple: string? @description("Multiple attributes") @alias("multiple_alias")
+  multiple: string | null @description("Multiple attributes") @alias("multiple_alias")
 }
 function user.FieldAttributes.to_json(self: user.FieldAttributes) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  map { "money": self.money.to_json(), "currency": self.currency.to_json(), "name": self.name.to_json(), "summary": self.summary.to_json(), "details": self.details?.to_json(), "state": self.state.to_json(), "multiple": self.multiple?.to_json() } : map<string, baml.json.json | baml.json.json?>
+  map { "money": self.money.to_json(), "currency": self.currency.to_json(), "name": self.name.to_json(), "summary": self.summary.to_json(), "details": self.details?.to_json(), "state": self.state.to_json(), "multiple": self.multiple?.to_json() } : map<string, baml.json.json | null>
 }
 function user.FieldAttributes.from_json(j: baml.json.json) -> user.FieldAttributes throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   FieldAttributes { money: baml.json.from_json<int>(baml.json.field(j, "money")), currency: baml.json.from_json<string>(baml.json.field(j, "currency")), name: baml.json.from_json<string>(baml.json.field(j, "name")), summary: baml.json.from_json<string>(baml.json.field(j, "summary")), details: baml.json.from_json<string?>(baml.json.field(j, "details")), state: baml.json.from_json<string>(baml.json.field(j, "state")), multiple: baml.json.from_json<string?>(baml.json.field(j, "multiple")) } : user.FieldAttributes
@@ -27,16 +27,16 @@ function user.ClassAttributes.from_json(j: baml.json.json) -> user.ClassAttribut
   ClassAttributes { name: baml.json.from_json<string>(baml.json.field(j, "name")) } : user.ClassAttributes
 }
 class user.FieldAttributes$stream {
-  money: null | int @description("In USD")
-  currency: null | string @alias("currency_code")
-  name: null | string @skip
+  money: int | null @description("In USD")
+  currency: string | null @alias("currency_code")
+  name: string | null @skip
   summary: string
-  details: null | string
-  state: null | string
-  multiple: string? @description("Multiple attributes") @alias("multiple_alias")
+  details: string | null
+  state: string | null
+  multiple: string | null @description("Multiple attributes") @alias("multiple_alias")
 }
 class user.ClassAttributes$stream {
-  name: null | string
+  name: string | null
 }
 function user.GetUser(id: int, client: baml.llm.Client = ...) -> user.User throws never {
   baml.llm.call_llm_function<T>(client, "GetUser", map { "id": id }) : user.User
@@ -113,18 +113,18 @@ function user.GetMixedMap$parse(json: string, client: baml.llm.Client = GPT4) ->
   baml.llm.parse<TFinal>("GetMixedMap", json) : map<string, int | string>
   !! 308..410: unresolved name: GPT4
 }
-function user.GetUser$stream(id: int, client: baml.llm.Client = ...) -> baml.llm.Stream<null | user.User$stream, user.User> throws never {
-  baml.llm.stream_llm_function(client, "GetUser", map { "id": id }) : baml.llm.Stream<null | user.User$stream, user.User>
+function user.GetUser$stream(id: int, client: baml.llm.Client = ...) -> baml.llm.Stream<user.User$stream | null, user.User> throws never {
+  baml.llm.stream_llm_function(client, "GetUser", map { "id": id }) : baml.llm.Stream<user.User$stream | null, user.User>
 }
-function user.GetUser$parse_stream(sse: baml.http.SseStream, client: baml.llm.Client = ...) -> baml.llm.Stream<null | user.User$stream, user.User> throws never {
-  client.__make_stream(sse, "GetUser") : baml.llm.Stream<null | user.User$stream, user.User>
+function user.GetUser$parse_stream(sse: baml.http.SseStream, client: baml.llm.Client = ...) -> baml.llm.Stream<user.User$stream | null, user.User> throws never {
+  client.__make_stream(sse, "GetUser") : baml.llm.Stream<user.User$stream | null, user.User>
 }
-function user.GetStatus$stream(client: baml.llm.Client = GPT4) -> baml.llm.Stream<null | user.Status, user.Status> throws never {
-  baml.llm.stream_llm_function(client, "GetStatus", map {  }) : baml.llm.Stream<null | user.Status, user.Status>
+function user.GetStatus$stream(client: baml.llm.Client = GPT4) -> baml.llm.Stream<user.Status | null, user.Status> throws never {
+  baml.llm.stream_llm_function(client, "GetStatus", map {  }) : baml.llm.Stream<user.Status | null, user.Status>
   !! 95..173: unresolved name: GPT4
 }
-function user.GetStatus$parse_stream(sse: baml.http.SseStream, client: baml.llm.Client = GPT4) -> baml.llm.Stream<null | user.Status, user.Status> throws never {
-  client.__make_stream(sse, "GetStatus") : baml.llm.Stream<null | user.Status, user.Status>
+function user.GetStatus$parse_stream(sse: baml.http.SseStream, client: baml.llm.Client = GPT4) -> baml.llm.Stream<user.Status | null, user.Status> throws never {
+  client.__make_stream(sse, "GetStatus") : baml.llm.Stream<user.Status | null, user.Status>
   !! 95..173: unresolved name: GPT4
 }
 function user.GetMixedList$stream(client: baml.llm.Client = GPT4) -> baml.llm.Stream<(int | string)[], (int | string)[]> throws never {
@@ -156,26 +156,26 @@ function user.User.from_json(j: baml.json.json) -> user.User throws baml.json.Js
 }
 enum user.Status
 type user.Role = "user" | "assistant" | "system"
-type user.OptionalRole = "admin"?
+type user.OptionalRole = "admin" | null
 type user.RoleList = "reader"[]
-type user.OptionalRoleList = "writer"[]?
-type user.OptionalCode = 200?
-type user.OptionalFlag = true?
+type user.OptionalRoleList = "writer"[] | null
+type user.OptionalCode = 200 | null
+type user.OptionalFlag = true | null
 type user.MixedList = (int | string)[]
 type user.MixedMap = map<string, int | string>
 type user.UnionOfArrays = int[] | string[]
 type user.ReallyLongMapType = map<string, "fieopwaiwjepfoiwajpoweijf" | int | string | bool | float | int[] | string[] | map<string, int | string> | map<string, map<string, int | string>> | map<string, map<string, map<string, int | string>>> | map<string, map<string, map<string, map<string, int | string>>>>>
 class user.User$stream {
-  id: null | int
-  name: null | string
-  email: null | string
+  id: int | null
+  name: string | null
+  email: string | null
 }
 type user.Role$stream = "user" | "assistant" | "system"
-type user.OptionalRole$stream = null | "admin"
+type user.OptionalRole$stream = "admin" | null
 type user.RoleList$stream = "reader"[]
-type user.OptionalRoleList$stream = null | "writer"[]
-type user.OptionalCode$stream = null | 200
-type user.OptionalFlag$stream = null | true
+type user.OptionalRoleList$stream = "writer"[] | null
+type user.OptionalCode$stream = 200 | null
+type user.OptionalFlag$stream = true | null
 type user.MixedList$stream = (int | string)[]
 type user.MixedMap$stream = map<string, int | string>
 type user.UnionOfArrays$stream = int[] | string[]

@@ -249,14 +249,14 @@ source: crates/baml_tests/src/generated_tests.rs
      │     Note: Error code: E0062
 ─────╯
 
-  [type] error: non-exhaustive match on type DoubleMaybe; missing: Success { data: _ }, Failure { reason: _ }
+  [type] error: non-exhaustive match on type DoubleMaybe; missing: Success, Failure, null
      ╭─[ match_exhaustiveness.baml:598:60 ]
      │
  598 │ ╭─▶ function ExhaustiveDoubleMaybe(dm: DoubleMaybe) -> string {
      ┆ ┆   
  603 │ ├─▶     }
      │ │           
-     │ ╰─────────── non-exhaustive match on type DoubleMaybe; missing: Success { data: _ }, Failure { reason: _ }
+     │ ╰─────────── non-exhaustive match on type DoubleMaybe; missing: Success, Failure, null
      │     
      │     Note: Error code: E0062
 ─────╯
@@ -281,14 +281,14 @@ source: crates/baml_tests/src/generated_tests.rs
      │ Note: Error code: E0063
 ─────╯
 
-  [type] error: non-exhaustive match on type DoubleMaybe; missing: Success { data: _ }, Failure { reason: _ }, null, null
+  [type] error: non-exhaustive match on type DoubleMaybe; missing: Success, Failure, null, null
      ╭─[ match_exhaustiveness.baml:607:74 ]
      │
  607 │ ╭─▶ function NonExhaustiveDoubleMaybeMissingNull(dm: DoubleMaybe) -> string {
      ┆ ┆   
  611 │ ├─▶     }
      │ │           
-     │ ╰─────────── non-exhaustive match on type DoubleMaybe; missing: Success { data: _ }, Failure { reason: _ }, null, null
+     │ ╰─────────── non-exhaustive match on type DoubleMaybe; missing: Success, Failure, null, null
      │     
      │     Note: Error code: E0062
 ─────╯
@@ -347,26 +347,26 @@ source: crates/baml_tests/src/generated_tests.rs
      │ Note: Error code: E0063
 ─────╯
 
-  [type] error: non-exhaustive match on type Status?; missing: null
+  [type] error: non-exhaustive match on type Status | null; missing: null
      ╭─[ match_exhaustiveness.baml:671:70 ]
      │
  671 │ ╭─▶ function NonExhaustiveNullableEnumMissingNull(s: Status?) -> string {
      ┆ ┆   
  676 │ ├─▶     }
      │ │           
-     │ ╰─────────── non-exhaustive match on type Status?; missing: null
+     │ ╰─────────── non-exhaustive match on type Status | null; missing: null
      │     
      │     Note: Error code: E0062
 ─────╯
 
-  [type] error: non-exhaustive match on type Status?; missing: user.Status.Pending
+  [type] error: non-exhaustive match on type Status | null; missing: user.Status.Pending
      ╭─[ match_exhaustiveness.baml:680:73 ]
      │
  680 │ ╭─▶ function NonExhaustiveNullableEnumMissingVariant(s: Status?) -> string {
      ┆ ┆   
  685 │ ├─▶     }
      │ │           
-     │ ╰─────────── non-exhaustive match on type Status?; missing: user.Status.Pending
+     │ ╰─────────── non-exhaustive match on type Status | null; missing: user.Status.Pending
      │     
      │     Note: Error code: E0062
 ─────╯

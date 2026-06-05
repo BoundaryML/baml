@@ -907,9 +907,7 @@ fn types_equivalent_for_rule_match(
 fn contains_rule_match_symbolic_ty(ty: &Ty) -> bool {
     match ty {
         Ty::TypeVar(..) | Ty::AssociatedTypeProjection { .. } => true,
-        Ty::List(inner, _) | Ty::Optional(inner, _) | Ty::EvolvingList(inner, _) => {
-            contains_rule_match_symbolic_ty(inner)
-        }
+        Ty::List(inner, _) | Ty::EvolvingList(inner, _) => contains_rule_match_symbolic_ty(inner),
         Ty::Map(k, v, _) | Ty::EvolvingMap(k, v, _) => {
             contains_rule_match_symbolic_ty(k) || contains_rule_match_symbolic_ty(v)
         }
@@ -997,14 +995,8 @@ fn match_ty_pattern_into(
             }
             Some(())
         }
-        (Ty::List(p, _), Ty::List(c, _))
-        | (Ty::EvolvingList(p, _), Ty::EvolvingList(c, _))
-        | (Ty::Optional(p, _), Ty::Optional(c, _)) => {
+        (Ty::List(p, _), Ty::List(c, _)) | (Ty::EvolvingList(p, _), Ty::EvolvingList(c, _)) => {
             match_ty_pattern_into(p, c, generic_params, aliases, bindings)
-        }
-        (Ty::Optional(p, _), Ty::Union(c_members, _)) => {
-            let inner = union_members_without_null(c_members)?;
-            match_ty_pattern_into(p, &inner, generic_params, aliases, bindings)
         }
         (Ty::Map(pk, pv, _), Ty::Map(ck, cv, _))
         | (Ty::EvolvingMap(pk, pv, _), Ty::EvolvingMap(ck, cv, _)) => {
@@ -1187,26 +1179,6 @@ fn match_union_members(
     None
 }
 
-fn union_members_without_null(members: &[Ty]) -> Option<Ty> {
-    let mut non_null = Vec::new();
-    let mut saw_null = false;
-    for member in members {
-        if matches!(member, Ty::Primitive(PrimitiveType::Null, _)) {
-            saw_null = true;
-        } else {
-            non_null.push(member.clone());
-        }
-    }
-    if !saw_null || non_null.is_empty() {
-        return None;
-    }
-    if non_null.len() == 1 {
-        non_null.into_iter().next()
-    } else {
-        Some(Ty::Union(non_null, TyAttr::default()))
-    }
-}
-
 fn bind_type_var(
     name: &Name,
     concrete: &Ty,
@@ -1238,7 +1210,7 @@ fn contains_bound_typevar(ty: &Ty, generic_params: &[Name]) -> bool {
                     .iter()
                     .any(|(_, ty)| contains_bound_typevar(ty, generic_params))
         }
-        Ty::List(inner, _) | Ty::EvolvingList(inner, _) | Ty::Optional(inner, _) => {
+        Ty::List(inner, _) | Ty::EvolvingList(inner, _) => {
             contains_bound_typevar(inner, generic_params)
         }
         Ty::Map(k, v, _) | Ty::EvolvingMap(k, v, _) | Ty::Future(k, v, _) => {
@@ -1276,9 +1248,7 @@ fn contains_generic_function_binders(ty: &Ty) -> bool {
                     .iter()
                     .any(|(_, ty)| contains_generic_function_binders(ty))
         }
-        Ty::List(inner, _) | Ty::EvolvingList(inner, _) | Ty::Optional(inner, _) => {
-            contains_generic_function_binders(inner)
-        }
+        Ty::List(inner, _) | Ty::EvolvingList(inner, _) => contains_generic_function_binders(inner),
         Ty::Map(k, v, _) | Ty::EvolvingMap(k, v, _) | Ty::Future(k, v, _) => {
             contains_generic_function_binders(k) || contains_generic_function_binders(v)
         }
@@ -1320,10 +1290,6 @@ pub fn implementation_key_for_ty(ty: &Ty) -> Option<Ty> {
         Ty::Map(key, value, _) => Some(Ty::Map(
             Box::new(implementation_key_for_ty(key)?),
             Box::new(implementation_key_for_ty(value)?),
-            TyAttr::default(),
-        )),
-        Ty::Optional(inner, _) => Some(Ty::Optional(
-            Box::new(implementation_key_for_ty(inner)?),
             TyAttr::default(),
         )),
         Ty::Union(members, _) => {

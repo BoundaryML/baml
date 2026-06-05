@@ -852,17 +852,15 @@ pub fn lower_type_expr_in_ns(
             },
             TyAttr::default(),
         ),
-        TypeExpr::Optional { inner, .. } => Ty::Optional(
-            Box::new(lower_type_expr_in_ns(
-                db,
-                inner,
-                package_items,
-                ns_context,
-                generic_params,
-                diagnostics,
-            )),
-            TyAttr::default(),
-        ),
+        // `T?` is sugar for `T | null` — lower it directly to a nullable union.
+        TypeExpr::Optional { inner, .. } => Ty::nullable(lower_type_expr_in_ns(
+            db,
+            inner,
+            package_items,
+            ns_context,
+            generic_params,
+            diagnostics,
+        )),
         TypeExpr::List { inner, .. } => Ty::List(
             Box::new(lower_type_expr_in_ns(
                 db,

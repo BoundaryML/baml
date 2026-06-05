@@ -3,7 +3,7 @@
 use std::{error::Error, fmt::Write};
 
 use bex_heap::builtin_types;
-use sys_types::OpErrorKind;
+use sys_types::{VmBamlError, VmRustFnError};
 
 use crate::registry::REGISTRY;
 
@@ -38,9 +38,12 @@ pub(crate) fn format_error_chain(mut err: &dyn Error) -> String {
 /// Shared by both `fetch` (which creates a GET request) and `send` (which takes a Request).
 pub(crate) async fn send_async(
     req: builtin_types::owned::HttpRequest,
-) -> Result<builtin_types::owned::HttpResponse, OpErrorKind> {
-    let method = reqwest::Method::from_bytes(req.method.as_bytes())
-        .map_err(|e| OpErrorKind::Other(format!("Invalid HTTP method '{}': {e}", req.method)))?;
+) -> Result<builtin_types::owned::HttpResponse, VmRustFnError> {
+    let method = reqwest::Method::from_bytes(req.method.as_bytes()).map_err(|e| {
+        VmBamlError::InvalidArgument {
+            message: format!("Invalid HTTP method '{}': {e}", req.method),
+        }
+    })?;
 
     let client = new_http_client();
     let mut builder = client.request(method, &req.url);

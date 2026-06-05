@@ -121,9 +121,6 @@ impl<'a, 'db, B: TypeVarBounds + ?Sized> AssociatedProjectionResolver<'a, 'db, B
                     .collect(),
                 attr.clone(),
             ),
-            Ty::Optional(inner, attr) => {
-                Ty::Optional(Box::new(self.resolve_deep(inner)), attr.clone())
-            }
             Ty::List(inner, attr) => Ty::List(Box::new(self.resolve_deep(inner)), attr.clone()),
             Ty::EvolvingList(inner, attr) => {
                 Ty::EvolvingList(Box::new(self.resolve_deep(inner)), attr.clone())
@@ -232,10 +229,14 @@ impl<'a, 'db, B: TypeVarBounds + ?Sized> AssociatedProjectionResolver<'a, 'db, B
     }
 
     pub fn projection_views_equivalent(&self, a: &Ty, b: &Ty) -> bool {
+        if let (Some(a_inner), Some(b_inner)) = (
+            Self::nullable_without_null(a),
+            Self::nullable_without_null(b),
+        ) {
+            return self.projection_views_equivalent(&a_inner, &b_inner);
+        }
+
         match (a, b) {
-            (Ty::Optional(a_inner, _), Ty::Optional(b_inner, _)) => {
-                self.projection_views_equivalent(a_inner, b_inner)
-            }
             (
                 Ty::AssociatedTypeProjection {
                     base: a_base,
@@ -260,6 +261,25 @@ impl<'a, 'db, B: TypeVarBounds + ?Sized> AssociatedProjectionResolver<'a, 'db, B
                 )
             }
             _ => false,
+        }
+    }
+
+    fn nullable_without_null(ty: &Ty) -> Option<Ty> {
+        let Ty::Union(members, _) = ty else {
+            return None;
+        };
+        if !members.iter().any(Ty::is_null) {
+            return None;
+        }
+        let non_null: Vec<Ty> = members
+            .iter()
+            .filter(|member| !member.is_null())
+            .cloned()
+            .collect();
+        match non_null.as_slice() {
+            [] => None,
+            [single] => Some(single.clone()),
+            _ => Some(Ty::Union(non_null, ty.attr().clone())),
         }
     }
 

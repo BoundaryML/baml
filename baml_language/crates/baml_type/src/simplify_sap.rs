@@ -333,19 +333,6 @@ fn simplify_impl(ty: Ty, aliases: &HashMap<TypeName, Ty>, recursive: &HashSet<Ty
         Ty::Union(variants, attr) => simplify_union(variants, attr, aliases, recursive),
 
         // Recurse into compound types.
-        Ty::Optional(inner, attr) => {
-            let inner_ty: Ty = inner.as_ref().clone();
-            let optional_as_union = Ty::Union(
-                vec![
-                    inner_ty,
-                    Ty::Null {
-                        attr: TyAttr::default(),
-                    },
-                ],
-                attr,
-            );
-            simplify_impl(optional_as_union, aliases, recursive)
-        }
         Ty::List(inner, attr) => {
             Ty::List(Box::new(simplify_impl(*inner, aliases, recursive)), attr)
         }

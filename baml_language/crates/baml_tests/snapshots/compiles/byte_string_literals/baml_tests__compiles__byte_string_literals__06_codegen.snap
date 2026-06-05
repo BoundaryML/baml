@@ -59,7 +59,7 @@ function user.ByteStringInCondition() -> int {
     return
 }
 
-function user.ByteStringIndexAccess() -> int? {
+function user.ByteStringIndexAccess() -> int | null {
     load_const b"\x41\x42\x43"
     call baml.deep_copy
     load_const 0
@@ -74,7 +74,7 @@ function user.ByteStringLiteralAsArg() -> int {
     return
 }
 
-function user.ByteStringMutate() -> int? {
+function user.ByteStringMutate() -> int | null {
     load_const b"\x00\x00\x00"
     call baml.deep_copy
     store_var data

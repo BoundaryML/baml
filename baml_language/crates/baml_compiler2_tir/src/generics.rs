@@ -70,9 +70,6 @@ pub fn substitute_ty(ty: &Ty, bindings: &FxHashMap<Name, Ty>) -> Ty {
             Box::new(substitute_ty(v, bindings)),
             attr.clone(),
         ),
-        Ty::Optional(inner, attr) => {
-            Ty::Optional(Box::new(substitute_ty(inner, bindings)), attr.clone())
-        }
         Ty::Future(value, error, attr) => Ty::Future(
             Box::new(substitute_ty(value, bindings)),
             Box::new(substitute_ty(error, bindings)),
@@ -229,17 +226,15 @@ pub fn lower_type_expr_with_generics(
     // rather than lowering first then substituting, so that type-variable references
     // in nested positions are also intercepted before triggering "unresolved type".
     match expr {
-        TypeExpr::Optional { inner, .. } => Ty::Optional(
-            Box::new(lower_type_expr_with_generics(
-                db,
-                inner,
-                package_items,
-                ns_context,
-                bindings,
-                diagnostics,
-            )),
-            TyAttr::default(),
-        ),
+        // `T?` is sugar for `T | null` — lower it directly to a nullable union.
+        TypeExpr::Optional { inner, .. } => Ty::nullable(lower_type_expr_with_generics(
+            db,
+            inner,
+            package_items,
+            ns_context,
+            bindings,
+            diagnostics,
+        )),
         TypeExpr::List { inner, .. } => Ty::List(
             Box::new(lower_type_expr_with_generics(
                 db,
@@ -454,9 +449,7 @@ pub fn contains_typevar(ty: &Ty) -> bool {
                     .as_ref()
                     .is_some_and(|interface| contains_typevar(interface))
         }
-        Ty::List(inner, _) | Ty::Optional(inner, _) | Ty::EvolvingList(inner, _) => {
-            contains_typevar(inner)
-        }
+        Ty::List(inner, _) | Ty::EvolvingList(inner, _) => contains_typevar(inner),
         Ty::Map(k, v, _) | Ty::EvolvingMap(k, v, _) => contains_typevar(k) || contains_typevar(v),
         Ty::Union(tys, _) => tys.iter().any(contains_typevar),
         Ty::Future(value, error, _) => contains_typevar(value) || contains_typevar(error),
@@ -502,9 +495,7 @@ pub fn is_value_call_inferable(name: &Name, generic_params: &[Name]) -> bool {
 pub fn contains_typevar_where(ty: &Ty, pred: &dyn Fn(&Name) -> bool) -> bool {
     match ty {
         Ty::TypeVar(name, _) => pred(name),
-        Ty::List(inner, _) | Ty::Optional(inner, _) | Ty::EvolvingList(inner, _) => {
-            contains_typevar_where(inner, pred)
-        }
+        Ty::List(inner, _) | Ty::EvolvingList(inner, _) => contains_typevar_where(inner, pred),
         Ty::Map(k, v, _) | Ty::EvolvingMap(k, v, _) => {
             contains_typevar_where(k, pred) || contains_typevar_where(v, pred)
         }
@@ -573,6 +564,25 @@ fn infer_bindings_inner(
     // inference is completely unchanged.
     rigid: Option<&Name>,
 ) {
+    fn nullable_non_null_part(ty: &Ty) -> Option<Ty> {
+        let Ty::Union(members, attr) = ty else {
+            return None;
+        };
+        if !members.iter().any(Ty::is_null) {
+            return None;
+        }
+        let non_null: Vec<Ty> = members
+            .iter()
+            .filter(|member| !member.is_null())
+            .cloned()
+            .collect();
+        match non_null.as_slice() {
+            [] => None,
+            [single] => Some(single.clone()),
+            _ => Some(Ty::Union(non_null, attr.clone())),
+        }
+    }
+
     match (formal, actual) {
         (Ty::TypeVar(name, _), actual_ty) => {
             if rigid == Some(name) {
@@ -596,8 +606,29 @@ fn infer_bindings_inner(
             infer_bindings_inner(fk, ak, bindings, allow_typevar_actuals, rigid);
             infer_bindings_inner(fv, av, bindings, allow_typevar_actuals, rigid);
         }
-        (Ty::Optional(f, _), Ty::Optional(a, _)) => {
-            infer_bindings_inner(f, a, bindings, allow_typevar_actuals, rigid);
+        (Ty::Union(_, _), _) if nullable_non_null_part(formal).is_some() => {
+            let formal_inner = nullable_non_null_part(formal).expect("checked above");
+            let actual_inner = nullable_non_null_part(actual).unwrap_or_else(|| actual.clone());
+            infer_bindings_inner(
+                &formal_inner,
+                &actual_inner,
+                bindings,
+                allow_typevar_actuals,
+                rigid,
+            );
+        }
+        (Ty::Union(f_members, _), Ty::Union(a_members, _))
+            if f_members.len() == a_members.len() =>
+        {
+            for (formal_member, actual_member) in f_members.iter().zip(a_members.iter()) {
+                infer_bindings_inner(
+                    formal_member,
+                    actual_member,
+                    bindings,
+                    allow_typevar_actuals,
+                    rigid,
+                );
+            }
         }
         (
             Ty::Function {
@@ -748,10 +779,6 @@ pub fn erase_unresolved_typevars(
             Box::new(erase_unresolved_typevars(v, diagnostics)),
             attr.clone(),
         ),
-        Ty::Optional(inner, attr) => Ty::Optional(
-            Box::new(erase_unresolved_typevars(inner, diagnostics)),
-            attr.clone(),
-        ),
         Ty::AssociatedTypeProjection {
             base,
             interface,
@@ -847,10 +874,6 @@ pub fn erase_typevars_matching(ty: &Ty, should_erase: &impl Fn(&Name) -> bool) -
             attr.clone(),
         ),
         Ty::EvolvingList(inner, attr) => Ty::EvolvingList(
-            Box::new(erase_typevars_matching(inner, should_erase)),
-            attr.clone(),
-        ),
-        Ty::Optional(inner, attr) => Ty::Optional(
             Box::new(erase_typevars_matching(inner, should_erase)),
             attr.clone(),
         ),
