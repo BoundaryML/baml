@@ -191,6 +191,20 @@ pub(crate) fn lower_generic_param_bounds(
 
 /// Format an f64 as a string suitable for a float literal.
 /// Returns `None` for non-finite values (inf, NaN).
+/// True if `ty` is a literal type, or a union whose members are all literals.
+/// Such a type is too narrow to use as a strict contextual expectation when
+/// forward-inferring a type var across multiple arguments (see the Phase-1
+/// inference loop in `check_call_inner`).
+fn is_literal_or_literal_union(ty: &Ty) -> bool {
+    match ty {
+        Ty::Literal(..) => true,
+        Ty::Union(members, _) => {
+            !members.is_empty() && members.iter().all(|m| matches!(m, Ty::Literal(..)))
+        }
+        _ => false,
+    }
+}
+
 fn format_float(v: f64) -> Option<String> {
     if !v.is_finite() {
         return None;
@@ -2712,10 +2726,24 @@ impl<'db> TypeInferenceBuilder<'db> {
                         }
                         let param_ty = &param.ty;
                         let substituted = crate::generics::substitute_ty(param_ty, &bindings);
-                        let arg_ty = if !crate::generics::contains_typevar(&substituted) {
-                            self.check_expr(*arg, body, &substituted)
-                        } else {
+                        // Pick contextual check vs. infer for this argument:
+                        // - Concrete declared param (no type var, including a
+                        //   literal type like `x: 4`): strict contextual check, so
+                        //   a mismatch (`Takes4(3)`) is still reported.
+                        // - Type-var param already bound to a concrete non-literal
+                        //   (`keep(int_arg, 0)` -> T=int): contextual check so a
+                        //   literal arg widens to the binding (avoids `int | 0`).
+                        // - Type-var param unbound, or bound to a LITERAL/literal
+                        //   union (`add(3, 4)` -> T bound to `3`): infer and let
+                        //   `infer_bindings` union the positions (T = `3 | 4`);
+                        //   strict-checking `4` against `3` would wrongly reject.
+                        let infer_and_union = crate::generics::contains_typevar(param_ty)
+                            && (crate::generics::contains_typevar(&substituted)
+                                || is_literal_or_literal_union(&substituted));
+                        let arg_ty = if infer_and_union {
                             self.infer_expr(*arg, body)
+                        } else {
+                            self.check_expr(*arg, body, &substituted)
                         };
                         crate::generics::infer_bindings_rigid_self(
                             param_ty,
