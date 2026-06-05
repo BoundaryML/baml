@@ -1409,7 +1409,9 @@ impl io::IoNamespaceTime for DefaultIoOps {
         _c: CallId,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<String> {
-        SysOpOutput::err(OpErrorKind::Unsupported)
+        SysOpOutput::err(VmBamlError::Unsupported {
+            message: "Operation not supported on this platform".to_string(),
+        })
     }
 
     fn _tz_offset_at(
@@ -1420,7 +1422,9 @@ impl io::IoNamespaceTime for DefaultIoOps {
         _at_ns: Arc<num_bigint::BigInt>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<Option<i64>> {
-        SysOpOutput::err(OpErrorKind::Unsupported)
+        SysOpOutput::err(VmBamlError::Unsupported {
+            message: "Operation not supported on this platform".to_string(),
+        })
     }
 
     fn _tz_to_instant(
@@ -1432,7 +1436,9 @@ impl io::IoNamespaceTime for DefaultIoOps {
         _disambiguation: String,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<Option<Arc<num_bigint::BigInt>>> {
-        SysOpOutput::err(OpErrorKind::Unsupported)
+        SysOpOutput::err(VmBamlError::Unsupported {
+            message: "Operation not supported on this platform".to_string(),
+        })
     }
 }
 

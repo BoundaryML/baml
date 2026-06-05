@@ -15,7 +15,7 @@ use serde::{Deserialize, Serialize};
 
 const CONFIG_FILE: &str = "config.toml";
 const STATE_FILE: &str = "state.toml";
-const CHANNEL_CACHE_TTL: Duration = Duration::from_secs(24 * 60 * 60);
+const CHANNEL_CACHE_TTL: Duration = Duration::from_hours(24);
 const HTTP_TIMEOUT: Duration = Duration::from_secs(30);
 
 #[derive(Debug, Default, Serialize, Deserialize)]

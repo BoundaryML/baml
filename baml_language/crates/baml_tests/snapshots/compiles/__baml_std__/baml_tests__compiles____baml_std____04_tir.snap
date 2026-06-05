@@ -1807,14 +1807,14 @@ function baml.time.PlainDate.to_json(self: baml.time.PlainDate) -> string throws
   }
 }
 class baml.time.PlainDate$stream {
-  _days: null | int
+  _days: int | null
 }
 
 --- <builtin>/baml/ns_time/plaindatetime.baml ---
 class baml.time.PlainDateTime {
   _nanoseconds: bigint
 }
-function baml.time.PlainDateTime.to_zoned(self: baml.time.PlainDateTime, timezone: baml.time.TimeZoneOffset | string, disambiguation: baml.time.Disambiguation?) -> baml.time.ZonedDateTime throws baml.time.UnknownTimezoneError | baml.time.AmbiguousTimeError | baml.errors.Io {
+function baml.time.PlainDateTime.to_zoned(self: baml.time.PlainDateTime, timezone: baml.time.TimeZoneOffset | string, disambiguation: baml.time.Disambiguation | null) -> baml.time.ZonedDateTime throws baml.time.UnknownTimezoneError | baml.time.AmbiguousTimeError | baml.errors.Io {
   { : baml.time.ZonedDateTime
     match (timezone : baml.time.TimeZoneOffset | string) : baml.time.ZonedDateTime
       TimeZoneOffset =>
@@ -1822,11 +1822,11 @@ function baml.time.PlainDateTime.to_zoned(self: baml.time.PlainDateTime, timezon
       string =>
         if (disambiguation ?? "compatible" == "reject" : bool) : baml.time.ZonedDateTime
           { : baml.time.ZonedDateTime
-            match (_tz_to_instant(timezone, self._nanoseconds, "earlier") : bigint?) : baml.time.ZonedDateTime
+            match (_tz_to_instant(timezone, self._nanoseconds, "earlier") : bigint | null) : baml.time.ZonedDateTime
               null =>
                 throw UnknownTimezoneError { timezone: timezone } : never
               earlier =>
-                match (_tz_to_instant(timezone, self._nanoseconds, "later") : bigint?) : baml.time.ZonedDateTime
+                match (_tz_to_instant(timezone, self._nanoseconds, "later") : bigint | null) : baml.time.ZonedDateTime
                   null =>
                     throw UnknownTimezoneError { timezone: timezone } : never
                   later =>
@@ -1841,7 +1841,7 @@ function baml.time.PlainDateTime.to_zoned(self: baml.time.PlainDateTime, timezon
           }
         else
           { : baml.time.ZonedDateTime
-            match (_tz_to_instant(timezone, self._nanoseconds, disambiguation ?? "compatible") : bigint?) : baml.time.ZonedDateTime
+            match (_tz_to_instant(timezone, self._nanoseconds, disambiguation ?? "compatible") : bigint | null) : baml.time.ZonedDateTime
               null =>
                 throw UnknownTimezoneError { timezone: timezone } : never
               resolved =>
@@ -1894,7 +1894,7 @@ function baml.time.PlainDateTime.to_json(self: baml.time.PlainDateTime) -> strin
   }
 }
 class baml.time.PlainDateTime$stream {
-  _nanoseconds: null | bigint
+  _nanoseconds: bigint | null
 }
 
 --- <builtin>/baml/ns_time/plaintime.baml ---
@@ -1944,7 +1944,7 @@ function baml.time.PlainTime.to_json(self: baml.time.PlainTime) -> string throws
   }
 }
 class baml.time.PlainTime$stream {
-  _nanoseconds: null | int
+  _nanoseconds: int | null
 }
 
 --- <builtin>/baml/ns_time/timezone.baml ---
@@ -1977,6 +1977,10 @@ function baml.time.TimeZoneOffset.utc() -> baml.time.TimeZoneOffset throws never
 }
 function baml.time.TimeZoneOffset.new(hours: int, minutes: int) -> baml.time.TimeZoneOffset throws baml.errors.InvalidArgument {
   { : baml.time.TimeZoneOffset
+    if (hours > 0 && minutes < 0 || hours < 0 && minutes > 0 : bool) : void
+      { : never
+        throw root.errors.InvalidArgument { message: "TimeZoneOffset.ne..." } : baml.errors.InvalidArgument
+      }
     let nanoseconds = hours * 60 + minutes * 60 * 1000000000 : int
     if (nanoseconds > 86400000000000 || nanoseconds < Neg 86400000000000 : bool) : void
       { : never
@@ -1987,7 +1991,7 @@ function baml.time.TimeZoneOffset.new(hours: int, minutes: int) -> baml.time.Tim
 }
 function baml.time.TimeZoneOffset.from_timezone(timezone: string, at: baml.time.Instant) -> baml.time.TimeZoneOffset throws baml.time.UnknownTimezoneError | baml.errors.Io {
   { : baml.time.TimeZoneOffset
-    match (_tz_offset_at(timezone, at._nanoseconds) : int?) : baml.time.TimeZoneOffset
+    match (_tz_offset_at(timezone, at._nanoseconds) : int | null) : baml.time.TimeZoneOffset
       null =>
         throw UnknownTimezoneError { timezone: timezone } : never
       offset =>
@@ -2022,20 +2026,20 @@ function baml.time.TimeZoneOffset.from_json(j: baml.json.json) -> baml.time.Time
 }
 type baml.time.Disambiguation$stream = "compatible" | "earlier" | "later" | "reject"
 class baml.time.UnknownTimezoneError$stream {
-  timezone: null | string
+  timezone: string | null
 }
 class baml.time.AmbiguousTimeError$stream {
-  message: null | string
+  message: string | null
 }
 class baml.time.TimeZoneOffset$stream {
-  _nanoseconds: null | int
+  _nanoseconds: int | null
 }
 
 --- <builtin>/baml/ns_time/zoneddatetime.baml ---
 class baml.time.ZonedDateTime {
   _nanoseconds: bigint
-  _offset_ns: int?
-  _iana: string?
+  _offset_ns: int | null
+  _iana: string | null
 }
 function baml.time.ZonedDateTime.now() -> baml.time.ZonedDateTime throws baml.errors.Io {
   { : baml.time.ZonedDateTime
@@ -2061,7 +2065,7 @@ function baml.time.ZonedDateTime.to_instant(self: baml.time.ZonedDateTime) -> ba
     Instant { _nanoseconds: self._nanoseconds } : baml.time.Instant
   }
 }
-function baml.time.ZonedDateTime.from_components(timezone: baml.time.TimeZoneOffset | string, year: int, month: int, day: int, hour: int?, minute: int?, second: int?, millisecond: int?, microsecond: int?, nanosecond: int?, disambiguation: baml.time.Disambiguation?) -> baml.time.ZonedDateTime throws baml.errors.InvalidArgument | baml.time.UnknownTimezoneError | baml.time.AmbiguousTimeError | baml.errors.Io {
+function baml.time.ZonedDateTime.from_components(timezone: baml.time.TimeZoneOffset | string, year: int, month: int, day: int, hour: int | null, minute: int | null, second: int | null, millisecond: int | null, microsecond: int | null, nanosecond: int | null, disambiguation: baml.time.Disambiguation | null) -> baml.time.ZonedDateTime throws baml.errors.InvalidArgument | baml.time.UnknownTimezoneError | baml.time.AmbiguousTimeError | baml.errors.Io {
   { : baml.time.ZonedDateTime
     PlainDateTime.from_components(year, month, day, hour, minute, second, millisecond, microsecond, nanosecond).to_zoned(timezone, disambiguation) : baml.time.ZonedDateTime
   }
@@ -2102,7 +2106,7 @@ function baml.time.ZonedDateTime.with_timezone(self: baml.time.ZonedDateTime, ti
 }
 function baml.time.ZonedDateTime.timezone(self: baml.time.ZonedDateTime) -> baml.time.TimeZoneOffset | string throws never {
   { : baml.time.TimeZoneOffset | string
-    match (self._iana : string?) : baml.time.TimeZoneOffset | string
+    match (self._iana : string | null) : baml.time.TimeZoneOffset | string
       null =>
         TimeZoneOffset { _nanoseconds: self._offset_ns ?? 0 } : baml.time.TimeZoneOffset
       iana =>
@@ -2111,11 +2115,11 @@ function baml.time.ZonedDateTime.timezone(self: baml.time.ZonedDateTime) -> baml
 }
 function baml.time.ZonedDateTime.timezone_offset(self: baml.time.ZonedDateTime) -> baml.time.TimeZoneOffset throws baml.time.UnknownTimezoneError | baml.errors.Io {
   { : baml.time.TimeZoneOffset
-    match (self._iana : string?) : baml.time.TimeZoneOffset
+    match (self._iana : string | null) : baml.time.TimeZoneOffset
       null =>
         TimeZoneOffset { _nanoseconds: self._offset_ns ?? 0 } : baml.time.TimeZoneOffset
       iana =>
-        match (_tz_offset_at(iana ?? "", self._nanoseconds) : int?) : baml.time.TimeZoneOffset
+        match (_tz_offset_at(iana ?? "", self._nanoseconds) : int | null) : baml.time.TimeZoneOffset
           null =>
             throw UnknownTimezoneError { timezone: iana ?? "" } : never
           offset =>
@@ -2187,9 +2191,9 @@ function baml.time.ZonedDateTime.to_json(self: baml.time.ZonedDateTime) -> strin
   }
 }
 class baml.time.ZonedDateTime$stream {
-  _nanoseconds: null | bigint
-  _offset_ns: null | int
-  _iana: null | string
+  _nanoseconds: bigint | null
+  _offset_ns: int | null
+  _iana: string | null
 }
 
 --- <builtin>/baml/ns_toml/toml.baml ---
@@ -2267,7 +2271,7 @@ class baml.toml.Table$stream {
   items: map<string, baml.toml.Item$stream>
 }
 class baml.toml.TomlParseError$stream {
-  message: null | string
+  message: string | null
 }
 
 --- <builtin>/baml/ns_unstable/unstable.baml ---

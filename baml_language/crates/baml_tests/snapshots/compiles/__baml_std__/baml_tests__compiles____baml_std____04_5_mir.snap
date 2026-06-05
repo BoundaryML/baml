@@ -8591,12 +8591,12 @@ fn baml.time.PlainDateTime.to_plain_time = builtin(vm)
 
 fn baml.time.PlainDateTime.to_string = builtin(vm)
 
-fn baml.time.PlainDateTime.to_zoned(self: baml.time.PlainDateTime, timezone: baml.time.TimeZoneOffset | string, disambiguation: ("compatible" | "earlier" | "later" | "reject")?) -> baml.time.ZonedDateTime {
+fn baml.time.PlainDateTime.to_zoned(self: baml.time.PlainDateTime, timezone: baml.time.TimeZoneOffset | string, disambiguation: "compatible" | "earlier" | "later" | "reject" | null) -> baml.time.ZonedDateTime {
     // Locals:
     let _0: baml.time.ZonedDateTime // _0 // return
     let _1: baml.time.PlainDateTime // self // param
     let _2: baml.time.TimeZoneOffset | string // timezone // param
-    let _3: ("compatible" | "earlier" | "later" | "reject")? // disambiguation // param
+    let _3: "compatible" | "earlier" | "later" | "reject" | null // disambiguation // param
     let _4: bool
     let _5: bigint
     let _6: bigint
@@ -8605,33 +8605,33 @@ fn baml.time.PlainDateTime.to_zoned(self: baml.time.PlainDateTime, timezone: bam
     let _9: bool
     let _10: "compatible" | "earlier" | "later" | "reject"
     let _11: bool
-    let _12: bigint?
+    let _12: bigint | null
     let _13: bigint
     let _14: bool
     let _15: baml.time.UnknownTimezoneError
-    let _16: bigint? // earlier
-    let _17: bigint?
+    let _16: bigint | null // earlier
+    let _17: bigint | null
     let _18: bigint
     let _19: bool
     let _20: baml.time.UnknownTimezoneError
-    let _21: bigint? // later
+    let _21: bigint | null // later
     let _22: bool
-    let _23: bigint?
-    let _24: bigint?
+    let _23: bigint | null
+    let _24: bigint | null
     let _25: bigint
-    let _26: bigint?
+    let _26: bigint | null
     let _27: bool
     let _28: baml.time.AmbiguousTimeError
     let _29: string
-    let _30: bigint?
+    let _30: bigint | null
     let _31: bigint
     let _32: "compatible" | "earlier" | "later" | "reject"
     let _33: bool
     let _34: bool
     let _35: baml.time.UnknownTimezoneError
-    let _36: bigint? // resolved
+    let _36: bigint | null // resolved
     let _37: bigint
-    let _38: bigint?
+    let _38: bigint | null
     let _39: bool
 
     bb0: {
@@ -9035,13 +9035,13 @@ fn baml.time.TimeZoneOffset.from_timezone(timezone: string, at: baml.time.Instan
     let _0: baml.time.TimeZoneOffset // _0 // return
     let _1: string // timezone // param
     let _2: baml.time.Instant // at // param
-    let _3: int?
+    let _3: int | null
     let _4: bigint
     let _5: bool
     let _6: baml.time.UnknownTimezoneError
-    let _7: int? // offset
+    let _7: int | null // offset
     let _8: int
-    let _9: int?
+    let _9: int | null
     let _10: bool
 
     bb0: {
@@ -9146,50 +9146,88 @@ fn baml.time.TimeZoneOffset.new(hours: int, minutes: int) -> baml.time.TimeZoneO
     let _0: baml.time.TimeZoneOffset // _0 // return
     let _1: int // hours // param
     let _2: int // minutes // param
-    let _3: int // nanoseconds
-    let _4: int
-    let _5: int
-    let _6: int
-    let _7: bool
-    let _8: bool
+    let _3: bool
+    let _4: bool
+    let _5: bool
+    let _6: bool
+    let _7: baml.errors.InvalidArgument
+    let _8: int // nanoseconds
     let _9: int
     let _10: int
-    let _11: baml.errors.InvalidArgument
-    let _12: int
+    let _11: int
+    let _12: bool
+    let _13: bool
+    let _14: int
+    let _15: int
+    let _16: baml.errors.InvalidArgument
+    let _17: int
 
     bb0: {
-        _6 = copy _1 * const 60_i64;
-        _5 = copy _6 + copy _2;
-        _4 = copy _5 * const 60_i64;
-        _3 = copy _4 * const 1000000000_i64;
-        _9 = copy _3;
-        _8 = copy _9 > const 86400000000000_i64;
-        _7 = short_circuit(||) copy _8 -> [eval: bb1, join: bb2];
+        _5 = copy _1 > const 0_i64;
+        _4 = short_circuit(&&) copy _5 -> [eval: bb1, join: bb2];
     }
 
     bb1: {
-        _10 = copy _3;
-        _7 = copy _10 < const -86400000000000_i64;
+        _4 = copy _2 < const 0_i64;
         goto -> bb2;
     }
 
     bb2: {
-        branch copy _7 -> [bb5, bb3];
+        _3 = short_circuit(||) copy _4 -> [eval: bb3, join: bb5];
     }
 
     bb3: {
-        _12 = copy _3;
-        _0 = baml.time.TimeZoneOffset { copy _12 };
-        goto -> bb4;
+        _6 = copy _1 < const 0_i64;
+        _3 = short_circuit(&&) copy _6 -> [eval: bb4, join: bb5];
     }
 
     bb4: {
-        return;
+        _3 = copy _2 > const 0_i64;
+        goto -> bb5;
     }
 
     bb5: {
-        _11 = baml.errors.InvalidArgument { const "TimeZoneOffset out of range: must be within ±24 hours" };
-        throw copy _11;
+        branch copy _3 -> [bb12, bb6];
+    }
+
+    bb6: {
+        _11 = copy _1 * const 60_i64;
+        _10 = copy _11 + copy _2;
+        _9 = copy _10 * const 60_i64;
+        _8 = copy _9 * const 1000000000_i64;
+        _14 = copy _8;
+        _13 = copy _14 > const 86400000000000_i64;
+        _12 = short_circuit(||) copy _13 -> [eval: bb7, join: bb8];
+    }
+
+    bb7: {
+        _15 = copy _8;
+        _12 = copy _15 < const -86400000000000_i64;
+        goto -> bb8;
+    }
+
+    bb8: {
+        branch copy _12 -> [bb11, bb9];
+    }
+
+    bb9: {
+        _17 = copy _8;
+        _0 = baml.time.TimeZoneOffset { copy _17 };
+        goto -> bb10;
+    }
+
+    bb10: {
+        return;
+    }
+
+    bb11: {
+        _16 = baml.errors.InvalidArgument { const "TimeZoneOffset out of range: must be within ±24 hours" };
+        throw copy _16;
+    }
+
+    bb12: {
+        _7 = baml.errors.InvalidArgument { const "TimeZoneOffset.new: hours and minutes must carry the same sign" };
+        throw copy _7;
     }
 }
 
@@ -9321,20 +9359,20 @@ fn baml.time.ZonedDateTime.day(self: baml.time.ZonedDateTime) -> int {
     }
 }
 
-fn baml.time.ZonedDateTime.from_components(timezone: baml.time.TimeZoneOffset | string, year: int, month: int, day: int, hour: int?, minute: int?, second: int?, millisecond: int?, microsecond: int?, nanosecond: int?, disambiguation: ("compatible" | "earlier" | "later" | "reject")?) -> baml.time.ZonedDateTime {
+fn baml.time.ZonedDateTime.from_components(timezone: baml.time.TimeZoneOffset | string, year: int, month: int, day: int, hour: int | null, minute: int | null, second: int | null, millisecond: int | null, microsecond: int | null, nanosecond: int | null, disambiguation: "compatible" | "earlier" | "later" | "reject" | null) -> baml.time.ZonedDateTime {
     // Locals:
     let _0: baml.time.ZonedDateTime // _0 // return
     let _1: baml.time.TimeZoneOffset | string // timezone // param
     let _2: int // year // param
     let _3: int // month // param
     let _4: int // day // param
-    let _5: int? // hour // param
-    let _6: int? // minute // param
-    let _7: int? // second // param
-    let _8: int? // millisecond // param
-    let _9: int? // microsecond // param
-    let _10: int? // nanosecond // param
-    let _11: ("compatible" | "earlier" | "later" | "reject")? // disambiguation // param
+    let _5: int | null // hour // param
+    let _6: int | null // minute // param
+    let _7: int | null // second // param
+    let _8: int | null // millisecond // param
+    let _9: int | null // microsecond // param
+    let _10: int | null // nanosecond // param
+    let _11: "compatible" | "earlier" | "later" | "reject" | null // disambiguation // param
     let _12: baml.time.PlainDateTime
 
     bb0: {
@@ -9645,13 +9683,13 @@ fn baml.time.ZonedDateTime.timezone(self: baml.time.ZonedDateTime) -> baml.time.
     // Locals:
     let _0: baml.time.TimeZoneOffset | string // _0 // return
     let _1: baml.time.ZonedDateTime // self // param
-    let _2: string?
+    let _2: string | null
     let _3: bool
     let _4: int
-    let _5: int?
+    let _5: int | null
     let _6: bool
-    let _7: string? // iana
-    let _8: string?
+    let _7: string | null // iana
+    let _8: string | null
     let _9: bool
 
     bb0: {
@@ -9699,25 +9737,25 @@ fn baml.time.ZonedDateTime.timezone_offset(self: baml.time.ZonedDateTime) -> bam
     // Locals:
     let _0: baml.time.TimeZoneOffset // _0 // return
     let _1: baml.time.ZonedDateTime // self // param
-    let _2: string?
+    let _2: string | null
     let _3: bool
     let _4: int
-    let _5: int?
+    let _5: int | null
     let _6: bool
-    let _7: string? // iana
-    let _8: int?
+    let _7: string | null // iana
+    let _8: int | null
     let _9: string
-    let _10: string?
+    let _10: string | null
     let _11: bool
     let _12: bigint
     let _13: bool
     let _14: baml.time.UnknownTimezoneError
     let _15: string
-    let _16: string?
+    let _16: string | null
     let _17: bool
-    let _18: int? // offset
+    let _18: int | null // offset
     let _19: int
-    let _20: int?
+    let _20: int | null
     let _21: bool
 
     bb0: {
@@ -9955,7 +9993,7 @@ fn baml.time.ZonedDateTime.to_string(self: baml.time.ZonedDateTime) -> string {
     let _2: bigint
     let _3: int
     let _4: baml.time.TimeZoneOffset
-    let _5: string?
+    let _5: string | null
 
     bb0: {
         _2 = copy _1.0;

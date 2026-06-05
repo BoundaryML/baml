@@ -1,6 +1,173 @@
 ---
 source: crates/baml_tests/tests/baml_src.rs
 ---
+function time.$init_test_ns_time_datetime(registry: testing.TestCollector) -> null {
+    load_var registry
+    load_const "plain_date_parse_round_trip"
+    make_closure .<lambda($init_test_ns_time_datetime, 0)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "plain_date_from_components_matches_parse"
+    make_closure .<lambda($init_test_ns_time_datetime, 1)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "plain_date_components"
+    make_closure .<lambda($init_test_ns_time_datetime, 2)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "plain_date_rejects_invalid"
+    make_closure .<lambda($init_test_ns_time_datetime, 3)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "plain_date_to_plain_datetime_defaults_to_midnight"
+    make_closure .<lambda($init_test_ns_time_datetime, 4)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "plain_time_parse_round_trip_subseconds"
+    make_closure .<lambda($init_test_ns_time_datetime, 5)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "plain_time_from_components_matches_parse"
+    make_closure .<lambda($init_test_ns_time_datetime, 6)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "plain_time_components"
+    make_closure .<lambda($init_test_ns_time_datetime, 7)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "plain_time_rejects_out_of_range"
+    make_closure .<lambda($init_test_ns_time_datetime, 8)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "plain_datetime_parse_round_trip"
+    make_closure .<lambda($init_test_ns_time_datetime, 9)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "plain_datetime_components_and_projections"
+    make_closure .<lambda($init_test_ns_time_datetime, 10)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "plain_datetime_pre_epoch"
+    make_closure .<lambda($init_test_ns_time_datetime, 11)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "plain_datetime_rejects_offset_string"
+    make_closure .<lambda($init_test_ns_time_datetime, 12)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "zoned_parse_fixed_offset_round_trip"
+    make_closure .<lambda($init_test_ns_time_datetime, 13)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "zoned_zero_offset_prints_z"
+    make_closure .<lambda($init_test_ns_time_datetime, 14)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "zoned_rejects_zoneless_string"
+    make_closure .<lambda($init_test_ns_time_datetime, 15)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "zoned_to_plain_and_with_timezone"
+    make_closure .<lambda($init_test_ns_time_datetime, 16)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "plain_to_zoned_fixed_offset"
+    make_closure .<lambda($init_test_ns_time_datetime, 17)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "zoned_from_components_fixed_offset"
+    make_closure .<lambda($init_test_ns_time_datetime, 18)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "timezone_offset_rejects_mixed_signs"
+    make_closure .<lambda($init_test_ns_time_datetime, 19)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "zoned_parse_iana_annotation_resolves_offset"
+    make_closure .<lambda($init_test_ns_time_datetime, 20)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "zoned_iana_offset_is_dst_aware"
+    make_closure .<lambda($init_test_ns_time_datetime, 21)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "unknown_timezone_throws"
+    make_closure .<lambda($init_test_ns_time_datetime, 22)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "to_zoned_dst_gap_disambiguation"
+    make_closure .<lambda($init_test_ns_time_datetime, 23)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "to_zoned_dst_overlap_disambiguation"
+    make_closure .<lambda($init_test_ns_time_datetime, 24)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "to_zoned_reject_throws_on_ambiguity"
+    make_closure .<lambda($init_test_ns_time_datetime, 25)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "to_zoned_reject_accepts_unambiguous"
+    make_closure .<lambda($init_test_ns_time_datetime, 26)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_const null
+    return
+}
+
 function time.$init_test_ns_time_time(registry: testing.TestCollector) -> null {
     load_var registry
     load_const "instant_parse_epoch"

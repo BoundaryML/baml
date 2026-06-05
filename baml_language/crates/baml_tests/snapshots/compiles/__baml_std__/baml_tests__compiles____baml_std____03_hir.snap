@@ -1331,7 +1331,7 @@ function baml.time.minutes(self: ?) -> int  [expr] {
   {  } self._nanoseconds Div 60000000000 Mod 60
 }
 function baml.time.new(hours: int, minutes: int) -> baml.time.TimeZoneOffset  [expr] {
-  { let nanoseconds = hours Mul 60 Add minutes Mul 60 Mul 1000000000; if (nanoseconds Gt 86400000000000 Or nanoseconds Lt Neg 86400000000000) { throw root.errors.InvalidArgument { message: "TimeZoneOffset ou..." } } } baml.time.TimeZoneOffset { _nanoseconds: nanoseconds }
+  { if (hours Gt 0 And minutes Lt 0 Or hours Lt 0 And minutes Gt 0) { throw root.errors.InvalidArgument { message: "TimeZoneOffset.ne..." } }; let nanoseconds = hours Mul 60 Add minutes Mul 60 Mul 1000000000; if (nanoseconds Gt 86400000000000 Or nanoseconds Lt Neg 86400000000000) { throw root.errors.InvalidArgument { message: "TimeZoneOffset ou..." } } } baml.time.TimeZoneOffset { _nanoseconds: nanoseconds }
 }
 function baml.time.system_timezone() -> string  [builtin]
 function baml.time.to_duration(self: ?) -> Duration  [expr] {

@@ -32,11 +32,15 @@ class TimeZoneOffset {
         TimeZoneOffset { _nanoseconds: 0 }
     }
     /// Creates a `TimeZoneOffset` from hours and minutes east of UTC.
-    /// Both components should carry the same sign (e.g. `new(-7, 0)`,
-    /// `new(5, 30)`).
+    /// Both components must carry the same sign (e.g. `new(-7, 0)`,
+    /// `new(5, 30)`, `new(-9, -30)`).
     ///
-    /// Throws `root.errors.InvalidArgument` if the result exceeds ±24 hours.
+    /// Throws `root.errors.InvalidArgument` if the signs differ or the
+    /// result exceeds ±24 hours.
     function new(hours: int, minutes: int) -> TimeZoneOffset throws root.errors.InvalidArgument {
+        if ((hours > 0 && minutes < 0) || (hours < 0 && minutes > 0)) {
+            throw root.errors.InvalidArgument { message: "TimeZoneOffset.new: hours and minutes must carry the same sign" };
+        }
         let nanoseconds = (hours * 60 + minutes) * 60 * 1000000000;
         if (nanoseconds > 86400000000000 || nanoseconds < -86400000000000) {
             throw root.errors.InvalidArgument { message: "TimeZoneOffset out of range: must be within ±24 hours" };

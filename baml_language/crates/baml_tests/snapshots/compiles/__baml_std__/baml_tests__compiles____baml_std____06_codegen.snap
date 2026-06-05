@@ -5202,7 +5202,7 @@ function baml.time.PlainDate.to_json(self: baml.time.PlainDate) -> string {
     return
 }
 
-function baml.time.PlainDate.to_plain_datetime(self: baml.time.PlainDate, time: baml.time.PlainTime?) -> baml.time.PlainDateTime {
+function baml.time.PlainDate.to_plain_datetime(self: baml.time.PlainDate, time: baml.time.PlainTime | null) -> baml.time.PlainDateTime {
 }
 
 function baml.time.PlainDate.to_string(self: baml.time.PlainDate) -> string {
@@ -5214,7 +5214,7 @@ function baml.time.PlainDate.year(self: baml.time.PlainDate) -> int {
 function baml.time.PlainDateTime.day(self: baml.time.PlainDateTime) -> int {
 }
 
-function baml.time.PlainDateTime.from_components(year: int, month: int, day: int, hour: int?, minute: int?, second: int?, millisecond: int?, microsecond: int?, nanosecond: int?) -> baml.time.PlainDateTime {
+function baml.time.PlainDateTime.from_components(year: int, month: int, day: int, hour: int | null, minute: int | null, second: int | null, millisecond: int | null, microsecond: int | null, nanosecond: int | null) -> baml.time.PlainDateTime {
 }
 
 function baml.time.PlainDateTime.from_json(j: baml.json.json) -> baml.time.PlainDateTime {
@@ -5354,7 +5354,7 @@ function baml.time.PlainDateTime.to_plain_time(self: baml.time.PlainDateTime) ->
 function baml.time.PlainDateTime.to_string(self: baml.time.PlainDateTime) -> string {
 }
 
-function baml.time.PlainDateTime.to_zoned(self: baml.time.PlainDateTime, timezone: baml.time.TimeZoneOffset | string, disambiguation: ("compatible" | "earlier" | "later" | "reject")?) -> baml.time.ZonedDateTime {
+function baml.time.PlainDateTime.to_zoned(self: baml.time.PlainDateTime, timezone: baml.time.TimeZoneOffset | string, disambiguation: "compatible" | "earlier" | "later" | "reject" | null) -> baml.time.ZonedDateTime {
     load_var timezone
     is_type baml.time.TimeZoneOffset
     pop_jump_if_false L0
@@ -5511,7 +5511,7 @@ function baml.time.PlainDateTime.to_zoned(self: baml.time.PlainDateTime, timezon
 function baml.time.PlainDateTime.year(self: baml.time.PlainDateTime) -> int {
 }
 
-function baml.time.PlainTime.from_components(hour: int, minute: int?, second: int?, millisecond: int?, microsecond: int?, nanosecond: int?) -> baml.time.PlainTime {
+function baml.time.PlainTime.from_components(hour: int, minute: int | null, second: int | null, millisecond: int | null, microsecond: int | null, nanosecond: int | null) -> baml.time.PlainTime {
 }
 
 function baml.time.PlainTime.from_json(j: baml.json.json) -> baml.time.PlainTime {
@@ -5692,6 +5692,35 @@ function baml.time.TimeZoneOffset.minutes(self: baml.time.TimeZoneOffset) -> int
 
 function baml.time.TimeZoneOffset.new(hours: int, minutes: int) -> baml.time.TimeZoneOffset {
     load_var hours
+    load_const 0
+    cmp_int_op >
+    jump_if_false L0
+    pop 1
+    load_var minutes
+    load_const 0
+    cmp_int_op <
+
+  L0:
+    jump_if_false L1
+    jump L2
+
+  L1:
+    pop 1
+    load_var hours
+    load_const 0
+    cmp_int_op <
+    jump_if_false L2
+    pop 1
+    load_var minutes
+    load_const 0
+    cmp_int_op >
+
+  L2:
+    pop_jump_if_false L3
+    jump L8
+
+  L3:
+    load_var hours
     load_const 60
     mul_int
     load_var minutes
@@ -5703,26 +5732,31 @@ function baml.time.TimeZoneOffset.new(hours: int, minutes: int) -> baml.time.Tim
     store_var_load_var nanoseconds
     load_const 86400000000000
     cmp_int_op >
-    jump_if_false L0
-    jump L1
+    jump_if_false L4
+    jump L5
 
-  L0:
+  L4:
     pop 1
     load_var nanoseconds
     load_const -86400000000000
     cmp_int_op <
 
-  L1:
-    pop_jump_if_false L2
-    jump L3
+  L5:
+    pop_jump_if_false L6
+    jump L7
 
-  L2:
+  L6:
     load_var nanoseconds
     init_instance baml.time.TimeZoneOffset ._nanoseconds
     return
 
-  L3:
+  L7:
     load_const "TimeZoneOffset out of range: must be within ±24 hours"
+    init_instance baml.errors.InvalidArgument .message
+    throw
+
+  L8:
+    load_const "TimeZoneOffset.new: hours and minutes must carry the same sign"
     init_instance baml.errors.InvalidArgument .message
     throw
 }
@@ -5779,7 +5813,7 @@ function baml.time.ZonedDateTime.day(self: baml.time.ZonedDateTime) -> int {
     return
 }
 
-function baml.time.ZonedDateTime.from_components(timezone: baml.time.TimeZoneOffset | string, year: int, month: int, day: int, hour: int?, minute: int?, second: int?, millisecond: int?, microsecond: int?, nanosecond: int?, disambiguation: ("compatible" | "earlier" | "later" | "reject")?) -> baml.time.ZonedDateTime {
+function baml.time.ZonedDateTime.from_components(timezone: baml.time.TimeZoneOffset | string, year: int, month: int, day: int, hour: int | null, minute: int | null, second: int | null, millisecond: int | null, microsecond: int | null, nanosecond: int | null, disambiguation: "compatible" | "earlier" | "later" | "reject" | null) -> baml.time.ZonedDateTime {
     load_const null
     load_var2 2 3
     load_var2 4 5
@@ -6213,13 +6247,13 @@ function baml.time.ZonedDateTime.year(self: baml.time.ZonedDateTime) -> int {
     return
 }
 
-function baml.time._format_zoned(epoch_ns: bigint, offset_ns: int, iana: string?) -> string {
+function baml.time._format_zoned(epoch_ns: bigint, offset_ns: int, iana: string | null) -> string {
 }
 
-function baml.time._tz_offset_at(timezone: string, at_ns: bigint) -> int? {
+function baml.time._tz_offset_at(timezone: string, at_ns: bigint) -> int | null {
 }
 
-function baml.time._tz_to_instant(timezone: string, civil_ns: bigint, disambiguation: string) -> bigint? {
+function baml.time._tz_to_instant(timezone: string, civil_ns: bigint, disambiguation: string) -> bigint | null {
 }
 
 function baml.time.system_timezone() -> string {

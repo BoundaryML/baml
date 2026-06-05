@@ -17,7 +17,7 @@
 use std::sync::Arc;
 
 use js_sys::{Array, BigInt as JsBigInt, Function, Object, Reflect};
-use sys_ops::io::{self, CallId, OpErrorKind, SysOpContext, SysOpOutput, owned};
+use sys_ops::io::{self, CallId, SysOpContext, SysOpOutput, VmBamlError, owned};
 use sys_types::BexHeap;
 use wasm_bindgen::{JsCast, JsValue};
 
@@ -30,20 +30,24 @@ const TEMPORAL_LIMIT_NS: i128 = 8_640_000_000_000_000_000_000;
 
 /// The host's `globalThis.Temporal`, or `Unsupported` if the JS environment
 /// does not provide it.
-fn temporal() -> Result<Object, OpErrorKind> {
+fn temporal() -> Result<Object, VmBamlError> {
     Reflect::get(&js_sys::global(), &"Temporal".into())
         .ok()
         .filter(|v| !v.is_undefined() && !v.is_null())
         .and_then(|v| v.dyn_into::<Object>().ok())
-        .ok_or(OpErrorKind::Unsupported)
+        .ok_or_else(|| VmBamlError::Unsupported {
+            message: "the host JavaScript environment does not provide Temporal".to_string(),
+        })
 }
 
-fn other(context: &str, e: &JsValue) -> OpErrorKind {
-    OpErrorKind::Other(format!("{context}: {e:?}"))
+fn other(context: &str, e: &JsValue) -> VmBamlError {
+    VmBamlError::DevOther {
+        message: format!("{context}: {e:?}"),
+    }
 }
 
 /// Converts an arbitrary-precision nanosecond value to a JS `BigInt`.
-fn js_bigint(ns: &num_bigint::BigInt) -> Result<JsValue, OpErrorKind> {
+fn js_bigint(ns: &num_bigint::BigInt) -> Result<JsValue, VmBamlError> {
     JsBigInt::new(&JsValue::from_str(&ns.to_string()))
         .map(JsValue::from)
         .map_err(|e| other("constructing a JS BigInt", &e.into()))
@@ -56,7 +60,7 @@ fn new_zoned_date_time(
     temporal: &Object,
     epoch_ns: &JsValue,
     timezone: &str,
-) -> Result<Option<Object>, OpErrorKind> {
+) -> Result<Option<Object>, VmBamlError> {
     let ctor: Function = Reflect::get(temporal, &"ZonedDateTime".into())
         .map_err(|e| other("accessing Temporal.ZonedDateTime", &e))?
         .dyn_into()
@@ -94,7 +98,7 @@ impl io::IoNamespaceTime for WasmTime {
         _ctx: &SysOpContext,
     ) -> SysOpOutput<String> {
         // Temporal.Now.timeZoneId()
-        let result = (|| {
+        let result: Result<String, VmBamlError> = (|| {
             let temporal = temporal()?;
             let now = Reflect::get(&temporal, &"Now".into())
                 .map_err(|e| other("accessing Temporal.Now", &e))?;
@@ -105,8 +109,8 @@ impl io::IoNamespaceTime for WasmTime {
             f.call0(&now)
                 .map_err(|e| other("calling Temporal.Now.timeZoneId", &e))?
                 .as_string()
-                .ok_or_else(|| {
-                    OpErrorKind::Other("Temporal.Now.timeZoneId did not return a string".into())
+                .ok_or_else(|| VmBamlError::DevOther {
+                    message: "Temporal.Now.timeZoneId did not return a string".to_string(),
                 })
         })();
         match result {
@@ -123,7 +127,7 @@ impl io::IoNamespaceTime for WasmTime {
         at_ns: Arc<num_bigint::BigInt>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<Option<i64>> {
-        let result = (|| {
+        let result: Result<Option<i64>, VmBamlError> = (|| {
             let temporal = temporal()?;
             // Saturate to Temporal's representable range: a timezone's offset
             // is constant beyond the last tzdb transition, so the boundary
@@ -142,7 +146,9 @@ impl io::IoNamespaceTime for WasmTime {
             let offset = Reflect::get(&zdt, &"offsetNanoseconds".into())
                 .map_err(|e| other("accessing offsetNanoseconds", &e))?
                 .as_f64()
-                .ok_or_else(|| OpErrorKind::Other("offsetNanoseconds is not a number".into()))?;
+                .ok_or_else(|| VmBamlError::DevOther {
+                    message: "offsetNanoseconds is not a number".to_string(),
+                })?;
             #[allow(clippy::cast_possible_truncation)] // offsets are < ±24h in ns
             Ok(Some(offset as i64))
         })();
@@ -161,7 +167,7 @@ impl io::IoNamespaceTime for WasmTime {
         disambiguation: String,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<Option<Arc<num_bigint::BigInt>>> {
-        let result = (|| {
+        let result: Result<Option<Arc<num_bigint::BigInt>>, VmBamlError> = (|| {
             let temporal = temporal()?;
             // Decode the civil reading (ns since 1970-01-01T00:00:00 as if
             // UTC) through a UTC ZonedDateTime, then re-locate the wall-clock
@@ -174,13 +180,16 @@ impl io::IoNamespaceTime for WasmTime {
                 .ok()
                 .filter(|ns| ns.abs() <= TEMPORAL_LIMIT_NS);
             let Some(civil) = in_range else {
-                return Err(OpErrorKind::Io {
+                return Err(VmBamlError::Io {
                     message: "civil time is outside the supported year range".to_string(),
                 });
             };
             let epoch_ns = js_bigint(&num_bigint::BigInt::from(civil))?;
-            let utc = new_zoned_date_time(&temporal, &epoch_ns, "UTC")?
-                .ok_or_else(|| OpErrorKind::Other("Temporal rejected the UTC timezone".into()))?;
+            let utc = new_zoned_date_time(&temporal, &epoch_ns, "UTC")?.ok_or_else(|| {
+                VmBamlError::DevOther {
+                    message: "Temporal rejected the UTC timezone".to_string(),
+                }
+            })?;
             let to_plain: Function = Reflect::get(&utc, &"toPlainDateTime".into())
                 .map_err(|e| other("accessing toPlainDateTime", &e))?
                 .dyn_into()
@@ -213,7 +222,9 @@ impl io::IoNamespaceTime for WasmTime {
                 .to_string(10)
                 .map_err(|e| other("stringifying epochNanoseconds", &e.into()))?;
             let parsed = num_bigint::BigInt::parse_bytes(String::from(decimal).as_bytes(), 10)
-                .ok_or_else(|| OpErrorKind::Other("could not parse epochNanoseconds".into()))?;
+                .ok_or_else(|| VmBamlError::DevOther {
+                    message: "could not parse epochNanoseconds".to_string(),
+                })?;
             Ok(Some(Arc::new(parsed)))
         })();
         match result {

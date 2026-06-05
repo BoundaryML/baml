@@ -95,7 +95,7 @@ impl io::IoNamespaceTime for NativeSysOps {
         // (Deno-style: no tzdata is bundled on platforms that provide one).
         match jiff::tz::TimeZone::system().iana_name() {
             Some(name) => SysOpOutput::ok(name.to_string()),
-            None => SysOpOutput::err(OpErrorKind::Io {
+            None => SysOpOutput::err(VmBamlError::Io {
                 message: "could not determine the system's IANA timezone".to_string(),
             }),
         }
@@ -138,7 +138,7 @@ impl io::IoNamespaceTime for NativeSysOps {
         {
             Some(ts) => ts.to_zoned(jiff::tz::TimeZone::UTC).datetime(),
             None => {
-                return SysOpOutput::err(OpErrorKind::Io {
+                return SysOpOutput::err(VmBamlError::Io {
                     message: "civil time is outside the supported year range".to_string(),
                 });
             }
@@ -153,7 +153,7 @@ impl io::IoNamespaceTime for NativeSysOps {
         };
         match resolved {
             Ok(ts) => SysOpOutput::ok(Some(Arc::new(num_bigint::BigInt::from(ts.as_nanosecond())))),
-            Err(e) => SysOpOutput::err(OpErrorKind::Io {
+            Err(e) => SysOpOutput::err(VmBamlError::Io {
                 message: format!("cannot resolve civil time in timezone '{timezone}': {e}"),
             }),
         }
