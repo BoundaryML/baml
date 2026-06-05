@@ -274,3 +274,69 @@ async fn backtick_and_jinja_prompts_produce_identical_messages() {
         "backtick and Jinja prompts must render byte-identical messages"
     );
 }
+
+/// Streaming golden parity over a CLASS return that renders `ctx.output_format`.
+/// The streaming orchestrator resolves the real return type from the registry
+/// for BOTH the closure (backtick) and Jinja paths, so the class schema reaches
+/// the wire identically. Before the fix the Jinja stream path passed
+/// `BuiltinUnknown` (inferred type-args don't reach MIR), rendering no/wrong
+/// schema — so this also exercises a streaming backtick prompt with a non-string
+/// return end to end.
+#[tokio::test]
+async fn backtick_and_jinja_streaming_render_output_format_identically() {
+    async fn run_stream(server: &MockServer, fn_decl: &str) -> String {
+        Mock::given(method("POST"))
+            .and(path("/chat/completions"))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .insert_header("content-type", "text/event-stream")
+                    .set_body_string(openai_sse_body(&["{\"name\": \"Ada\"}"])),
+            )
+            .mount(server)
+            .await;
+        let src = format!(
+            r#"
+            {client}
+
+            class Person {{ name string }}
+
+            {fn_decl}
+
+            function main() -> Person {{
+                let s = GetPerson$stream();
+                s.final()
+            }}
+        "#,
+            client = client_decl(&server.uri()),
+        );
+        let _ = baml_test!(&src);
+        request_messages(
+            &server
+                .received_requests()
+                .await
+                .expect("stream request recorded"),
+        )
+    }
+
+    let server = MockServer::start().await;
+    let backtick = run_stream(
+        &server,
+        "function GetPerson() -> Person {\n    client TestClient\n    prompt `Make a person.${ctx.output_format}`\n}",
+    )
+    .await;
+    server.reset().await;
+    let jinja = run_stream(
+        &server,
+        "function GetPerson() -> Person {\n    client TestClient\n    prompt #\"Make a person.{{ ctx.output_format }}\"#\n}",
+    )
+    .await;
+
+    assert!(
+        backtick.contains("name"),
+        "backtick streaming should render the Person schema (its `name` field): {backtick:?}"
+    );
+    assert_eq!(
+        backtick, jinja,
+        "backtick and Jinja streaming must render identical output_format"
+    );
+}

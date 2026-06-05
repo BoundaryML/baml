@@ -884,13 +884,13 @@ function baml.llm.Client.execute_once_stream<TStream, TFinal>(self: baml.llm.Cli
       ClientType.Primitive =>
         { : never
           let primitive = self.to_primitive_client() : baml.llm.PrimitiveClient
-          let return_type = reflect.type_of() : type
+          let return_type = get_return_type(context.function_name) : type
           let prompt = : baml.llm.PromptAst
             match (context.prompt_closure : ((baml.llm.Context) -> baml.llm.PromptAst throws never)?) : baml.llm.PromptAst
               null =>
                 primitive.render_prompt(context.jinja_string, context.args, return_type) : baml.llm.PromptAst
               closure: (Context) -> PromptAst =>
-                closure(build_prompt_context(primitive, get_return_type(context.function_name))) : baml.llm.PromptAst
+                closure(build_prompt_context(primitive, return_type)) : baml.llm.PromptAst
           let specialized = primitive.specialize_prompt(prompt) : baml.llm.PromptAst
           let http_request = primitive.build_request_stream(specialized, return_type) : baml.http.Request
           let sse = root.http.fetch_sse(http_request) : baml.http.SseStream

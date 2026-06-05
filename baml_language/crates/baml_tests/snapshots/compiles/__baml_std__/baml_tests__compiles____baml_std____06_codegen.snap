@@ -2738,7 +2738,7 @@ function baml.llm.Client.execute_once_stream(self: baml.llm.Client, context: bam
     load_type #1
     load_var self
     load_field .sub_clients
-    load_var2 14 1
+    load_var2 13 1
     load_field .sub_clients
     container_len
     mod_int
@@ -2760,7 +2760,7 @@ function baml.llm.Client.execute_once_stream(self: baml.llm.Client, context: bam
     store_var __for_idx
 
   L5:
-    load_var2 12 11
+    load_var2 11 10
     container_len
     cmp_int_op <
     pop_jump_if_false L6
@@ -2774,7 +2774,7 @@ function baml.llm.Client.execute_once_stream(self: baml.llm.Client, context: bam
   L7:
     load_type #0
     load_type #1
-    load_var2 11 12
+    load_var2 10 11
     load_array_element
     load_var2 2 3
     call baml.llm.Client.execute_stream
@@ -2794,24 +2794,22 @@ function baml.llm.Client.execute_once_stream(self: baml.llm.Client, context: bam
     load_var self
     call baml.llm.Client.to_primitive_client
     store_var primitive
-    load_type #1
+    load_var context
+    load_field .function_name
+    sys_op baml.llm.get_return_type
     store_var return_type
     load_var context
     load_field .prompt_closure
-    store_var_load_var _9
+    store_var_load_var _10
     load_const null
     cmp_op ==
     pop_jump_if_false L10
     jump L11
 
   L10:
-    load_var context
-    load_field .function_name
-    sys_op baml.llm.get_return_type
-    store_var _18
-    load_var2 4 8
+    load_var2 4 5
     call baml.llm.build_prompt_context
-    load_var _9
+    load_var _10
     call_indirect
     store_var prompt
     jump L12
@@ -2829,12 +2827,12 @@ function baml.llm.Client.execute_once_stream(self: baml.llm.Client, context: bam
     load_var2 4 6
     sys_op baml.llm.PrimitiveClient.specialize_prompt
     store_var specialized
-    load_var2 4 9
+    load_var2 4 8
     load_var return_type
     sys_op baml.llm.PrimitiveClient.build_request_stream
     sys_op baml.http.fetch_sse
     store_var sse
-    load_var2 1 10
+    load_var2 1 9
     load_var context
     load_field .function_name
     call baml.llm.Client.__make_stream

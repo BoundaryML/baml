@@ -92,6 +92,27 @@ fn new_mode_failures_have_good_diagnostics() {
             "prompt `Hi ${name}!`",
             "unresolved name: Nope",
         ),
+        // Block-tag interps (`${for}`, `${role}`) must also report at the user's
+        // source. (A non-bool `${if}` condition is intentionally NOT an error —
+        // it matches plain `if`/`while`, which BAML does not bool-check.)
+        (
+            "for_non_iterable",
+            "client C",
+            "prompt `${for (let x in 5)}${x}${endfor}`",
+            "cannot iterate over type `5`",
+        ),
+        (
+            "for_body_type_err",
+            "client C",
+            r#"prompt `${for (let x in [1, 2])}${x + "a"}${endfor}`"#,
+            "operator `Add`",
+        ),
+        (
+            "role_wrong_arity",
+            "client C",
+            "prompt `${role()}hi`",
+            "expected 1 argument(s), got 0",
+        ),
     ];
     for (label, client, body, expect_substr) in cases {
         let mut db = make_db();

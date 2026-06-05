@@ -247,17 +247,24 @@ class Client {
     match (self.client_type) {
       ClientType.Primitive => {
         let primitive = self.to_primitive_client();
-        let return_type = reflect.type_of<TFinal>();
+        // On the stream path `reflect.type_of<TFinal>()` is `BuiltinUnknown`:
+        // the `$stream` companion calls this without explicit type-args and
+        // inferred type-args don't reach MIR (see `__make_stream`'s registry
+        // fallback). Resolve the real return type from the registry by name and
+        // use it for the whole attempt — the Jinja template may render
+        // `{{ ctx.output_format }}`, the closure's `${ctx.output_format}` needs
+        // it, and `build_request_stream` keys provider config off it. (The
+        // oneshot path instead uses `reflect.type_of<T>()`, which DOES reach
+        // MIR there.) Caveat: for a *generic* streaming function the registry
+        // holds the unspecialized return type, so `${ctx.output_format}` renders
+        // the generic schema — the oneshot path renders the specialized one.
+        let return_type = get_return_type(context.function_name);
 
         // New-mode (BEP-049 M5e): same closure-vs-Jinja branch as oneshot,
         // sharing `build_prompt_context` so the prompt is byte-identical.
-        // `reflect.type_of<TFinal>()` is `BuiltinUnknown` on the stream path
-        // (inferred type-args don't reach MIR — see `__make_stream`'s registry
-        // fallback), and the closure's `${ctx.output_format}` needs a real
-        // type, so resolve the return type from the registry by name here.
         let prompt = match (context.prompt_closure) {
           null => primitive.render_prompt(context.jinja_string, context.args, return_type),
-          let closure: (Context) -> PromptAst => closure(build_prompt_context(primitive, get_return_type(context.function_name))),
+          let closure: (Context) -> PromptAst => closure(build_prompt_context(primitive, return_type)),
         };
         let specialized = primitive.specialize_prompt(prompt);
 
