@@ -269,7 +269,9 @@ function BoolUnionPattern(b: bool) -> string {
 // ============================================================================
 
 type AlwaysTrue = true;
+
 type AlwaysFalse = false;
+
 type CustomBool = true | false;
 
 // Exhaustive: singleton true type
@@ -376,7 +378,9 @@ function StringLiteralUnionPattern(role: Role) -> string {
 // ============================================================================
 
 type HttpOk = 200;
+
 type HttpCreated = 201;
+
 type SuccessCode = 200 | 201 | 204;
 
 // Exhaustive: singleton int type
@@ -572,6 +576,7 @@ function NonExhaustiveMixedLiterals(x: MixedLiterals) -> string {
 // ============================================================================
 
 type OkCode = 200;
+
 type OkOrCreated = OkCode | 201;
 
 // Exhaustive: type alias of literals

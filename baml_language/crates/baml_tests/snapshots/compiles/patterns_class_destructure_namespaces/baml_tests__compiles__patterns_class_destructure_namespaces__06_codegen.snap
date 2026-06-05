@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 24205
 ---
 function user.DeepGenericDestructureNamespaceQualifiedLet() -> int {
     load_const "done"
@@ -180,7 +179,7 @@ function user.TypePatternQualifiedMatch() -> int {
     return
 }
 
-function user.llm.openai.Box.from_json(j: baml.json.json) -> llm.openai.Box<void> {
+function user.llm.openai.Box.from_json(j: baml.json.json) -> llm.openai.Box<unknown> {
     load_var j
     load_const "value"
     call baml.json.field
@@ -193,7 +192,8 @@ function user.llm.openai.Box.from_json(j: baml.json.json) -> llm.openai.Box<void
     return
 }
 
-function user.llm.openai.Box.to_json(self: llm.openai.Box) -> baml.json.json {
+function user.llm.openai.Box.to_json(self: llm.openai.Box<unknown>) -> baml.json.json {
+    load_type #0
     load_var self
     load_field .value
     call baml.json.to_json
@@ -208,7 +208,7 @@ function user.llm.openai.DestructureBareInNamespace(response: llm.openai.Respons
     return
 }
 
-function user.llm.openai.Outer.from_json(j: baml.json.json) -> llm.openai.Outer<void> {
+function user.llm.openai.Outer.from_json(j: baml.json.json) -> llm.openai.Outer<unknown> {
     load_var j
     load_const "inner"
     call baml.json.field
@@ -221,7 +221,7 @@ function user.llm.openai.Outer.from_json(j: baml.json.json) -> llm.openai.Outer<
     return
 }
 
-function user.llm.openai.Outer.to_json(self: llm.openai.Outer) -> baml.json.json {
+function user.llm.openai.Outer.to_json(self: llm.openai.Outer<unknown>) -> baml.json.json {
     load_type #0
     load_var self
     load_field .inner

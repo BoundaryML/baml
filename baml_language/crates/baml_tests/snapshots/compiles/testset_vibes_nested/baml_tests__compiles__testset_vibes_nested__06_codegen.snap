@@ -91,6 +91,8 @@ function user.ClassifySentiment$parse(json: string, client: baml.llm.Client) -> 
     store_var client
 
   L0:
+    load_type unknown
+    load_type Sentiment
     load_const "ClassifySentiment"
     load_var json
     call baml.llm.parse
@@ -106,6 +108,8 @@ function user.ClassifySentiment$parse_stream(sse: baml.http.SseStream, client: b
     store_var client
 
   L0:
+    load_type null | Sentiment$stream
+    load_type Sentiment
     load_var2 2 1
     load_const "ClassifySentiment"
     call baml.llm.Client.__make_stream
@@ -139,6 +143,8 @@ function user.ClassifySentiment$stream(text: string, client: baml.llm.Client) ->
     store_var client
 
   L0:
+    load_type null | Sentiment$stream
+    load_type Sentiment
     load_var client
     load_const "ClassifySentiment"
     load_var text
@@ -212,6 +218,8 @@ function user.ClassifySentiment2$parse(json: string, client: baml.llm.Client) ->
     store_var client
 
   L0:
+    load_type unknown
+    load_type string
     load_const "ClassifySentiment2"
     load_var json
     call baml.llm.parse
@@ -227,6 +235,8 @@ function user.ClassifySentiment2$parse_stream(sse: baml.http.SseStream, client: 
     store_var client
 
   L0:
+    load_type null | string
+    load_type string
     load_var2 2 1
     load_const "ClassifySentiment2"
     call baml.llm.Client.__make_stream
@@ -260,6 +270,8 @@ function user.ClassifySentiment2$stream(text: string, client: baml.llm.Client) -
     store_var client
 
   L0:
+    load_type null | string
+    load_type string
     load_var client
     load_const "ClassifySentiment2"
     load_var text
@@ -391,6 +403,8 @@ function user.GenerateTests$parse(json: string, client: baml.llm.Client) -> stri
     store_var client
 
   L0:
+    load_type unknown
+    load_type string[]
     load_const "GenerateTests"
     load_var json
     call baml.llm.parse
@@ -406,6 +420,8 @@ function user.GenerateTests$parse_stream(sse: baml.http.SseStream, client: baml.
     store_var client
 
   L0:
+    load_type string[]
+    load_type string[]
     load_var2 2 1
     load_const "GenerateTests"
     call baml.llm.Client.__make_stream
@@ -440,6 +456,8 @@ function user.GenerateTests$stream(count: int, topic: string, client: baml.llm.C
     store_var client
 
   L0:
+    load_type string[]
+    load_type string[]
     load_var client
     load_const "GenerateTests"
     load_var2 1 2

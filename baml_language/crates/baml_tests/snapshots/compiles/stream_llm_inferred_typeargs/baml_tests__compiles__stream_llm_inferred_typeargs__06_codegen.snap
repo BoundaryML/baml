@@ -95,6 +95,8 @@ function user.TestFunc$parse(json: string, client: baml.llm.Client) -> string {
     store_var client
 
   L0:
+    load_type unknown
+    load_type string
     load_const "TestFunc"
     load_var json
     call baml.llm.parse
@@ -110,6 +112,8 @@ function user.TestFunc$parse_stream(sse: baml.http.SseStream, client: baml.llm.C
     store_var client
 
   L0:
+    load_type null | string
+    load_type string
     load_var2 2 1
     load_const "TestFunc"
     call baml.llm.Client.__make_stream
@@ -143,6 +147,8 @@ function user.TestFunc$stream(input: string, client: baml.llm.Client) -> baml.ll
     store_var client
 
   L0:
+    load_type null | string
+    load_type string
     load_var client
     load_const "TestFunc"
     load_var input
@@ -153,6 +159,8 @@ function user.TestFunc$stream(input: string, client: baml.llm.Client) -> baml.ll
 }
 
 function user.call_stream_inferred() -> baml.llm.Stream<null | string, string> {
+    load_type null | string
+    load_type string
     load_global user.TestClient
     load_const "TestFunc"
     load_const "world"

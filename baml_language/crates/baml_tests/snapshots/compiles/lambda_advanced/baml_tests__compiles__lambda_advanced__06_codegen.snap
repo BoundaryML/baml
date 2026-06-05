@@ -15,6 +15,8 @@ function user.test_capture_in_map_inferred() -> int[] {
     store_var ?1
     load_const 10
     store_deref ?1
+    load_type int
+    load_type unknown
     load_const 1
     load_const 2
     load_const 3
@@ -39,24 +41,36 @@ function user.test_capture_lambda_inferred() -> int {
 }
 
 function user.test_chained_map() -> int[] {
+    load_type int
+    load_type unknown
     load_const 1
     load_const 2
     load_const 3
     alloc_array 3
     make_closure .<lambda(test_chained_map, 0)>, 0
     call baml.Array.map
+    store_var step1
+    load_type int
+    load_type unknown
+    load_var step1
     make_closure .<lambda(test_chained_map, 1)>, 0
     call baml.Array.map
     return
 }
 
 function user.test_compose_inferred() -> int[] {
+    load_type int
+    load_type unknown
     load_const 1
     load_const 2
     load_const 3
     alloc_array 3
     make_closure .<lambda(test_compose_inferred, 0)>, 0
     call baml.Array.map
+    store_var step1
+    load_type int
+    load_type unknown
+    load_var step1
     make_closure .<lambda(test_compose_inferred, 1)>, 0
     call baml.Array.map
     return
@@ -89,6 +103,8 @@ function user.test_deep_capture_inferred() -> int {
 }
 
 function user.test_fully_inferred_map() -> int[] {
+    load_type int
+    load_type unknown
     load_const 1
     load_const 2
     load_const 3
@@ -99,6 +115,8 @@ function user.test_fully_inferred_map() -> int[] {
 }
 
 function user.test_generic_apply_inferred() -> int {
+    load_type 21
+    load_type int
     make_closure .<lambda(test_generic_apply_inferred, 1)>, 0
     load_const 21
     make_closure .<lambda(test_generic_apply_inferred, 0)>, 0
@@ -109,10 +127,12 @@ function user.test_generic_apply_inferred() -> int {
 function user.test_generic_multi_instantiation() -> int {
     make_closure .<lambda(test_generic_multi_instantiation, 0)>, 0
     store_var id
+    load_type int | 42
     load_const 42
     load_var id
     call_indirect
     store_var a
+    load_type string | "hello"
     load_const "hello"
     load_var id
     call_indirect
@@ -201,6 +221,8 @@ function user.test_lambda_in_match_inferred() -> int {
 }
 
 function user.test_lambda_variable_then_pass() -> int[] {
+    load_type int
+    load_type void
     load_const 10
     load_const 20
     load_const 30
@@ -225,6 +247,8 @@ function user.test_lambda_with_match() -> string {
 }
 
 function user.test_literal_return_inference() -> int[] {
+    load_type int
+    load_type unknown
     load_const 1
     load_const 2
     load_const 3
@@ -235,6 +259,8 @@ function user.test_literal_return_inference() -> int[] {
 }
 
 function user.test_map_multi_statement() -> int[] {
+    load_type int
+    load_type unknown
     load_const 1
     load_const 2
     load_const 3
@@ -245,6 +271,8 @@ function user.test_map_multi_statement() -> int[] {
 }
 
 function user.test_map_optional_inferred() -> int[] {
+    load_type int
+    load_type unknown
     load_const 1
     load_const null
     load_const 3
@@ -255,6 +283,8 @@ function user.test_map_optional_inferred() -> int[] {
 }
 
 function user.test_map_string_to_int() -> int[] {
+    load_type int
+    load_type unknown
     load_const "hello"
     load_const "world"
     alloc_array 2
@@ -264,6 +294,8 @@ function user.test_map_string_to_int() -> int[] {
 }
 
 function user.test_map_type_change_inferred() -> string[] {
+    load_type string
+    load_type unknown
     load_const 1
     load_const 2
     load_const 3
@@ -279,6 +311,8 @@ function user.test_map_with_capture() -> int[] {
     store_var ?1
     load_const 10
     store_deref ?1
+    load_type int
+    load_type unknown
     load_const 1
     load_const 2
     load_const 3
@@ -290,6 +324,8 @@ function user.test_map_with_capture() -> int[] {
 }
 
 function user.test_nested_map() -> int[][] {
+    load_type int[]
+    load_type unknown
     load_const 1
     load_const 2
     alloc_array 2
@@ -312,13 +348,15 @@ function user.test_optional_return() -> int? {
 function user.test_shadowing() -> string {
     load_const "999"
     store_var x
+    load_type int
+    load_type unknown
     load_const 1
     load_const 2
     load_const 3
     alloc_array 3
     make_closure .<lambda(test_shadowing, 0)>, 0
     call baml.Array.map
-    store_var _5
+    store_var _7
     load_const 0
     store_var __for_idx
 
@@ -366,6 +404,8 @@ function user.test_shadowing() -> string {
 }
 
 function user.test_shadowing_inferred() -> int[] {
+    load_type int
+    load_type unknown
     load_const 1
     load_const 2
     load_const 3

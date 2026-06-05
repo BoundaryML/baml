@@ -83,6 +83,8 @@ function user.Fn$parse(json: string, client: baml.llm.Client) -> string {
     store_var client
 
   L0:
+    load_type unknown
+    load_type string
     load_const "Fn"
     load_var json
     call baml.llm.parse
@@ -104,6 +106,8 @@ function user.Fn$parse_stream(sse: baml.http.SseStream, client: baml.llm.Client)
     store_var client
 
   L0:
+    load_type null | string
+    load_type string
     load_var2 2 1
     load_const "Fn"
     call baml.llm.Client.__make_stream
@@ -147,6 +151,8 @@ function user.Fn$stream(client: baml.llm.Client) -> baml.llm.Stream<null | strin
     store_var client
 
   L0:
+    load_type null | string
+    load_type string
     load_var client
     load_const "Fn"
     alloc_map 0

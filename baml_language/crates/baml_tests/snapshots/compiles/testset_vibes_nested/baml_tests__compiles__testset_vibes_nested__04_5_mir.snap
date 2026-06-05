@@ -413,6 +413,8 @@ fn user.ClassifySentiment$parse(json: string, client: baml.llm.Client) -> Sentim
     let _1: string // json // param
     let _2: baml.llm.Client // client // param
     let _3: bool
+    let _4: type
+    let _5: type
 
     bb0: {
         _3 = copy _2 == const <omitted>;
@@ -425,7 +427,9 @@ fn user.ClassifySentiment$parse(json: string, client: baml.llm.Client) -> Sentim
     }
 
     bb2: {
-        _0 = call const fn baml.llm.parse(const "ClassifySentiment", copy _1) -> [bb3];
+        _4 = load_type(unknown);
+        _5 = load_type(Sentiment);
+        _0 = call const fn baml.llm.parse<copy _4, copy _5>(const "ClassifySentiment", copy _1) -> [bb3];
     }
 
     bb3: {
@@ -553,6 +557,8 @@ fn user.ClassifySentiment2$parse(json: string, client: baml.llm.Client) -> strin
     let _1: string // json // param
     let _2: baml.llm.Client // client // param
     let _3: bool
+    let _4: type
+    let _5: type
 
     bb0: {
         _3 = copy _2 == const <omitted>;
@@ -565,7 +571,9 @@ fn user.ClassifySentiment2$parse(json: string, client: baml.llm.Client) -> strin
     }
 
     bb2: {
-        _0 = call const fn baml.llm.parse(const "ClassifySentiment2", copy _1) -> [bb3];
+        _4 = load_type(unknown);
+        _5 = load_type(string);
+        _0 = call const fn baml.llm.parse<copy _4, copy _5>(const "ClassifySentiment2", copy _1) -> [bb3];
     }
 
     bb3: {
@@ -769,6 +777,8 @@ fn user.GenerateTests$parse(json: string, client: baml.llm.Client) -> string[] {
     let _1: string // json // param
     let _2: baml.llm.Client // client // param
     let _3: bool
+    let _4: type
+    let _5: type
 
     bb0: {
         _3 = copy _2 == const <omitted>;
@@ -781,7 +791,9 @@ fn user.GenerateTests$parse(json: string, client: baml.llm.Client) -> string[] {
     }
 
     bb2: {
-        _0 = call const fn baml.llm.parse(const "GenerateTests", copy _1) -> [bb3];
+        _4 = load_type(unknown);
+        _5 = load_type(string[]);
+        _0 = call const fn baml.llm.parse<copy _4, copy _5>(const "GenerateTests", copy _1) -> [bb3];
     }
 
     bb3: {

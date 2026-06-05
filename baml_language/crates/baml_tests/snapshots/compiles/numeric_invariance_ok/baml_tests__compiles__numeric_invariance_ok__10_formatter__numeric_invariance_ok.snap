@@ -39,6 +39,7 @@ function BigintMapLiteral() -> map<string, bigint> {
 class BigintCounter {
     count: bigint,
 }
+
 function BigintFieldOk() -> BigintCounter {
     BigintCounter {
         count: 1n,

@@ -75,13 +75,15 @@ fn .<lambda(test_capture, 0)>(x: int) -> null {
 fn user.test_generic_lambda() -> int {
     // Locals:
     let _0: int // _0 // return
-    let _1: (void) -> void throws never // identity
-    let _2: (void) -> void throws never
+    let _1: (unknown) -> unknown throws never // identity
+    let _2: (unknown) -> unknown throws never
+    let _3: type
 
     bb0: {
         _1 = make_closure lambda[0]();
         _2 = copy _1;
-        _0 = call copy _2(const 42_i64) -> [bb1];
+        _3 = load_type(int | 42);
+        _0 = call copy _2<copy _3>(const 42_i64) -> [bb1];
     }
 
     bb1: {
@@ -142,12 +144,16 @@ fn user.test_map_inferred() -> int[] {
     // Locals:
     let _0: int[] // _0 // return
     let _1: int[] // items
-    let _2: (int) -> int throws never
+    let _2: (int) -> int throws unknown
+    let _3: type
+    let _4: type
 
     bb0: {
         _1 = [const 1_i64, const 2_i64, const 3_i64];
         _2 = make_closure lambda[0]();
-        _0 = call const fn baml.Array.map(copy _1, copy _2) -> [bb1];
+        _3 = load_type(int);
+        _4 = load_type(unknown);
+        _0 = call const fn baml.Array.map<copy _3, copy _4>(copy _1, copy _2) -> [bb1];
     }
 
     bb1: {
