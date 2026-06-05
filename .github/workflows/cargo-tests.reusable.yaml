@@ -56,6 +56,15 @@ env:
   CARGO_NET_RETRY: 10
   CARGO_TERM_COLOR: always
   RUSTUP_MAX_RETRIES: 10
+  # Curated feature set replacing `--all-features` for the whole-workspace native
+  # test builds: switches the crypto provider to ring (drops aws-lc-sys + its
+  # cmake/C/NASM cold-build cost — build-caching/04 Exp 10), while re-adding every
+  # functional feature `--all-features` provided (validated by cargo tree + a full
+  # build). Shipping crates keep `default = ["aws-crypto"]`, so release artifacts
+  # are unchanged — this only affects test builds. Paired with the 4 source edits
+  # (baml/baml_release reqwest -> rustls-no-provider; baml_tests/bex_engine
+  # sys_native -> ring-crypto).
+  RING_FEATURES: "--no-default-features --features baml_cli/ring-crypto,baml_cli/internal,baml_cli/skip-integ-tests,baml_project/testing,bex_sap/manual_db,bex_vm/kperf,bex_engine/heap_debug,baml_tests/heap_debug,tools_onionskin/heap_debug,bridge_python/extension-module,bridge_cffi/ring-crypto,bridge_nodejs/ring-crypto,bridge_python/ring-crypto,bridge_wasm/ring-crypto,baml_pack_host/native-tls"
 
 jobs:
 
@@ -103,14 +112,14 @@ jobs:
         working-directory: baml_language
 
       - name: "Build tests with --timings"
-        run: cargo test --no-run --all-features --timings
+        run: cargo test --no-run ${{ env.RING_FEATURES }} --timings
         working-directory: baml_language
 
       # Snapshot tests live in `baml_tests` and are exercised end-to-end by
       # the dedicated `snapshot-tests` job. The `sdk_test_*` crates need uv
       # and run in the dedicated `sdk-tests` matrix below. Skip both here.
       - name: "Run tests with nextest"
-        run: cargo nextest run --all-features -E 'not package(baml_tests) and not package(/^sdk_test_/)'
+        run: cargo nextest run ${{ env.RING_FEATURES }} -E 'not package(baml_tests) and not package(/^sdk_test_/)'
         working-directory: baml_language
 
       - name: "Upload test results on failure"
@@ -195,14 +204,14 @@ jobs:
         working-directory: baml_language
 
       - name: "Build tests with --timings"
-        run: cargo test --no-run --all-features --timings
+        run: cargo test --no-run ${{ env.RING_FEATURES }} --timings
         working-directory: baml_language
 
       # Snapshot tests live in `baml_tests` and are exercised end-to-end by
       # the dedicated `snapshot-tests` job. The `sdk_test_*` crates need uv
       # and run in the dedicated `sdk-tests` matrix below. Skip both here.
       - name: "Run tests with nextest"
-        run: cargo nextest run --all-features -E 'not package(baml_tests) and not package(/^sdk_test_/)'
+        run: cargo nextest run ${{ env.RING_FEATURES }} -E 'not package(baml_tests) and not package(/^sdk_test_/)'
         working-directory: baml_language
 
       - name: "Show sccache stats"
@@ -299,14 +308,14 @@ jobs:
         working-directory: baml_language
 
       - name: "Build tests with --timings"
-        run: cargo test --no-run --all-features --timings
+        run: cargo test --no-run ${{ env.RING_FEATURES }} --timings
         working-directory: baml_language
 
       # Snapshot tests live in `baml_tests` and are covered by the dedicated
       # `snapshot-tests` job. The `sdk_test_*` crates need uv and run in the
       # dedicated `sdk-tests` matrix below. Skip both here.
       - name: "Run tests"
-        run: cargo nextest run --all-features -E 'not package(baml_tests) and not package(/^sdk_test_/)'
+        run: cargo nextest run ${{ env.RING_FEATURES }} -E 'not package(baml_tests) and not package(/^sdk_test_/)'
         working-directory: baml_language
 
       - name: "Show sccache stats"
