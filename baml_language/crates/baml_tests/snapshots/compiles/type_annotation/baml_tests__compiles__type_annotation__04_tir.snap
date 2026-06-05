@@ -35,8 +35,8 @@ function user.MetaField.from_json(j: baml.json.json) -> user.MetaField throws ba
 }
 enum user.Kind
 class user.RiskFactor$stream {
-  type: null | string
-  severity: null | float
+  type: string | null
+  severity: float | null
 }
 class user.MetaField$stream {
   type: unknown

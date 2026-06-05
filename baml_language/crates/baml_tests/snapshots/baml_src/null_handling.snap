@@ -62,11 +62,17 @@ function null_handling.$init_test_ns_null_handling_null_handling(registry: testi
     load_const null
     call testing.TestCollector.register_test
     pop 1
+    load_var registry
+    load_const "multi_union_optional_access"
+    make_closure .<lambda($init_test_ns_null_handling_null_handling, 10)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
     load_const null
     return
 }
 
-function null_handling.nh_combined_lhs_null(node: null_handling.NhNode?, items: int[]?) -> int? {
+function null_handling.nh_combined_lhs_null(node: null_handling.NhNode | null, items: int[] | null) -> int | null {
     load_var node
     load_const null
     cmp_op ==
@@ -128,7 +134,7 @@ function null_handling.nh_combined_lhs_null(node: null_handling.NhNode?, items: 
     return
 }
 
-function null_handling.nh_combined_rhs_null(node: null_handling.NhNode?, items: int[]?) -> int? {
+function null_handling.nh_combined_rhs_null(node: null_handling.NhNode | null, items: int[] | null) -> int | null {
     load_var node
     load_const null
     cmp_op ==
@@ -190,7 +196,7 @@ function null_handling.nh_combined_rhs_null(node: null_handling.NhNode?, items: 
     return
 }
 
-function null_handling.nh_compound_assign_non_null(user: null_handling.NhUser?) -> int? {
+function null_handling.nh_compound_assign_non_null(user: null_handling.NhUser | null) -> int | null {
     load_var user
     load_const null
     cmp_op ==
@@ -224,7 +230,7 @@ function null_handling.nh_compound_assign_non_null(user: null_handling.NhUser?) 
     return
 }
 
-function null_handling.nh_compound_assign_null(user: null_handling.NhUser?) -> int? {
+function null_handling.nh_compound_assign_null(user: null_handling.NhUser | null) -> int | null {
     load_var user
     load_const null
     cmp_op ==
@@ -258,7 +264,39 @@ function null_handling.nh_compound_assign_null(user: null_handling.NhUser?) -> i
     return
 }
 
-function null_handling.nh_null_coalesce_lazy_non_null(value: int?) -> int {
+function null_handling.nh_multi_union_optional_access(animal: null_handling.NhCat | null_handling.NhDog | null) -> string | null {
+    load_var animal
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L0
+    jump L3
+
+  L0:
+    load_var animal
+    type_tag
+    load_const NhCat
+    cmp_int_op ==
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var animal
+    load_field .0
+    jump L4
+
+  L2:
+    load_var animal
+    load_field .0
+    jump L4
+
+  L3:
+    load_const null
+
+  L4:
+    return
+}
+
+function null_handling.nh_null_coalesce_lazy_non_null(value: int | null) -> int {
     load_var ?2
     make_cell
     store_var ?2
@@ -280,7 +318,7 @@ function null_handling.nh_null_coalesce_lazy_non_null(value: int?) -> int {
     return
 }
 
-function null_handling.nh_null_coalesce_null_lhs(value: int?) -> int {
+function null_handling.nh_null_coalesce_null_lhs(value: int | null) -> int {
     load_var ?2
     make_cell
     store_var ?2
@@ -302,7 +340,7 @@ function null_handling.nh_null_coalesce_null_lhs(value: int?) -> int {
     return
 }
 
-function null_handling.nh_run_combined_lhs_null() -> int? {
+function null_handling.nh_run_combined_lhs_null() -> int | null {
     load_const null
     load_const 5
     alloc_array 1
@@ -310,7 +348,7 @@ function null_handling.nh_run_combined_lhs_null() -> int? {
     return
 }
 
-function null_handling.nh_run_combined_rhs_null() -> int? {
+function null_handling.nh_run_combined_rhs_null() -> int | null {
     load_const 10
     load_const null
     load_const null
@@ -321,7 +359,7 @@ function null_handling.nh_run_combined_rhs_null() -> int? {
     return
 }
 
-function null_handling.nh_run_compound_assign_non_null() -> int? {
+function null_handling.nh_run_compound_assign_non_null() -> int | null {
     load_const 10
     load_const null
     init_instance user.null_handling.NhUser .id, .profile
@@ -329,9 +367,16 @@ function null_handling.nh_run_compound_assign_non_null() -> int? {
     return
 }
 
-function null_handling.nh_run_compound_assign_null() -> int? {
+function null_handling.nh_run_compound_assign_null() -> int | null {
     load_const null
     call user.null_handling.nh_compound_assign_null
+    return
+}
+
+function null_handling.nh_run_multi_union_optional_access() -> string | null {
+    load_const "meow"
+    init_instance user.null_handling.NhCat .sound
+    call user.null_handling.nh_multi_union_optional_access
     return
 }
 
@@ -347,7 +392,7 @@ function null_handling.nh_run_null_coalesce_null_lhs() -> int {
     return
 }
 
-function null_handling.nh_run_safe_assign_index_non_null() -> int? {
+function null_handling.nh_run_safe_assign_index_non_null() -> int | null {
     load_const 0
     load_const 1
     load_const 2
@@ -356,13 +401,13 @@ function null_handling.nh_run_safe_assign_index_non_null() -> int? {
     return
 }
 
-function null_handling.nh_run_safe_assign_index_null() -> int? {
+function null_handling.nh_run_safe_assign_index_null() -> int | null {
     load_const null
     call user.null_handling.nh_safe_assign_index_null
     return
 }
 
-function null_handling.nh_run_safe_assign_non_null() -> string? {
+function null_handling.nh_run_safe_assign_non_null() -> string | null {
     load_const 1
     load_const "old"
     load_const null
@@ -374,13 +419,13 @@ function null_handling.nh_run_safe_assign_non_null() -> string? {
     return
 }
 
-function null_handling.nh_run_safe_assign_null() -> string? {
+function null_handling.nh_run_safe_assign_null() -> string | null {
     load_const null
     call user.null_handling.nh_safe_assign_null
     return
 }
 
-function null_handling.nh_safe_assign_index_non_null(items: int[]?) -> int? {
+function null_handling.nh_safe_assign_index_non_null(items: int[] | null) -> int | null {
     load_var items
     load_const null
     cmp_op ==
@@ -413,7 +458,7 @@ function null_handling.nh_safe_assign_index_non_null(items: int[]?) -> int? {
     return
 }
 
-function null_handling.nh_safe_assign_index_null(items: int[]?) -> int? {
+function null_handling.nh_safe_assign_index_null(items: int[] | null) -> int | null {
     load_var items
     load_const null
     cmp_op ==
@@ -446,7 +491,7 @@ function null_handling.nh_safe_assign_index_null(items: int[]?) -> int? {
     return
 }
 
-function null_handling.nh_safe_assign_non_null(user: null_handling.NhUser?) -> string? {
+function null_handling.nh_safe_assign_non_null(user: null_handling.NhUser | null) -> string | null {
     load_var user
     load_const null
     cmp_op ==
@@ -502,7 +547,7 @@ function null_handling.nh_safe_assign_non_null(user: null_handling.NhUser?) -> s
     return
 }
 
-function null_handling.nh_safe_assign_null(user: null_handling.NhUser?) -> string? {
+function null_handling.nh_safe_assign_null(user: null_handling.NhUser | null) -> string | null {
     load_var user
     load_const null
     cmp_op ==

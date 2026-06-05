@@ -11,13 +11,13 @@ function user.User.to_json(self: user.User) -> baml.json.json throws baml.json.J
 function user.User.from_json(j: baml.json.json) -> user.User throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   User { name: baml.json.from_json<string>(baml.json.field(j, "name")) } : user.User
 }
-type user.MaybeUser = user.User?
-function user.f(u: user.MaybeUser) -> string? throws never {
-  { : string?
-    u?.name : string?
+type user.MaybeUser = user.User | null
+function user.f(u: user.MaybeUser) -> string | null throws never {
+  { : string | null
+    u?.name : string | null
   }
 }
 class user.User$stream {
-  name: null | string
+  name: string | null
 }
-type user.MaybeUser$stream = null | user.User$stream
+type user.MaybeUser$stream = user.User$stream | null

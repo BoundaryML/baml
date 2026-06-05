@@ -21,16 +21,16 @@ function user.Response.from_json(j: baml.json.json) -> user.Response throws baml
   Response { text: baml.json.from_json<string>(baml.json.field(j, "text")) } : user.Response
 }
 function user.RootUsesOwnStream(c: user.Config$stream) -> string throws never {
-  { : null | string
-    c.key : null | string
+  { : string | null
+    c.key : string | null
   }
-  !! 637..647: type mismatch: expected string, got null | string
+  !! 637..647: type mismatch: expected string, got string | null
 }
 function user.RootUsesLlmStream(r: user.llm.Response$stream) -> string throws never {
-  { : null | string
-    r.text : null | string
+  { : string | null
+    r.text : string | null
   }
-  !! 758..769: type mismatch: expected string, got null | string
+  !! 758..769: type mismatch: expected string, got string | null
 }
 class user.RootWithStreamFields {
   own_stream: user.Config$stream
@@ -43,14 +43,14 @@ function user.RootWithStreamFields.from_json(j: baml.json.json) -> user.RootWith
   RootWithStreamFields { own_stream: baml.json.from_json<Config$stream>(baml.json.field(j, "own_stream")), llm_stream: baml.json.from_json<root.llm.Config$stream>(baml.json.field(j, "llm_stream")) } : user.RootWithStreamFields
 }
 class user.Config$stream {
-  key: null | string
+  key: string | null
 }
 class user.Response$stream {
-  text: null | string
+  text: string | null
 }
 class user.RootWithStreamFields$stream {
-  own_stream: null | user.Config$stream
-  llm_stream: null | user.llm.Config$stream
+  own_stream: user.Config$stream | null
+  llm_stream: user.llm.Config$stream | null
 }
 class user.llm.Config {
   model: string
@@ -71,16 +71,16 @@ function user.llm.Response.from_json(j: baml.json.json) -> user.llm.Response thr
   Response { text: baml.json.from_json<string>(baml.json.field(j, "text")) } : user.llm.Response
 }
 function user.llm.LlmUsesOwnStream(r: user.llm.Response$stream) -> string throws never {
-  { : null | string
-    r.text : null | string
+  { : string | null
+    r.text : string | null
   }
-  !! 228..239: type mismatch: expected string, got null | string
+  !! 228..239: type mismatch: expected string, got string | null
 }
 function user.llm.LlmUsesRootStream(c: user.Config$stream) -> string throws never {
-  { : null | string
-    c.key : null | string
+  { : string | null
+    c.key : string | null
   }
-  !! 345..355: type mismatch: expected string, got null | string
+  !! 345..355: type mismatch: expected string, got string | null
 }
 class user.llm.LlmWithStreamFields {
   own_stream: user.llm.Response$stream
@@ -93,12 +93,12 @@ function user.llm.LlmWithStreamFields.from_json(j: baml.json.json) -> user.llm.L
   LlmWithStreamFields { own_stream: baml.json.from_json<Response$stream>(baml.json.field(j, "own_stream")), root_stream: baml.json.from_json<root.Config$stream>(baml.json.field(j, "root_stream")) } : user.llm.LlmWithStreamFields
 }
 class user.llm.Config$stream {
-  model: null | string
+  model: string | null
 }
 class user.llm.Response$stream {
-  text: null | string
+  text: string | null
 }
 class user.llm.LlmWithStreamFields$stream {
-  own_stream: null | user.llm.Response$stream
-  root_stream: null | user.Config$stream
+  own_stream: user.llm.Response$stream | null
+  root_stream: user.Config$stream | null
 }

@@ -8,7 +8,7 @@ type user.UnnamedParams = (int, int) -> int throws never
 type user.MixedParams = (x: int, int, z: string) -> bool throws never
 type user.Producer = () -> string throws never
 type user.Curried = (x: int) -> ((y: int) -> int throws never) throws never
-type user.Complex = (items: int[], lookup: map<string, int>) -> string? throws never
+type user.Complex = (items: int[], lookup: map<string, int>) -> string | null throws never
 function user.GetTransform() -> (x: int) -> int throws never throws never {
   { : 1
     1 : 1

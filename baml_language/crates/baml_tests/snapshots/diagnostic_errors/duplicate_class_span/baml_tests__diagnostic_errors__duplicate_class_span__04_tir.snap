@@ -22,6 +22,6 @@ function user.A.from_json(j: baml.json.json) -> user.A throws baml.json.JsonPars
 }
 type user.A = int
 class user.A$stream {
-  field: null | string
+  field: string | null
 }
 type user.A$stream = int

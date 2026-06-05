@@ -18,7 +18,7 @@ function assert.is_true(condition: bool) -> null throws never {
       }
   }
 }
-function assert.not_null(value: unknown?) -> null throws never {
+function assert.not_null(value: unknown | null) -> null throws never {
   { : null
     if (value == null : bool) : null
       { : never

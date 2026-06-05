@@ -41,7 +41,7 @@ async fn env_get_existing_var() {
     );
 
     insta::assert_snapshot!(output.bytecode, @r#"
-    function main() -> string? {
+    function main() -> string | null {
         load_const "BAML_TEST_ENV_GET"
         sys_op baml.env.get
         return

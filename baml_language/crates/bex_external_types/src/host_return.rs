@@ -102,11 +102,6 @@ fn value_satisfies_ty(value: &BexExternalValue, ty: &Ty) -> bool {
         // return type is concrete, so this is defensive.
         Ty::BuiltinUnknown { .. } => true,
 
-        // Optional: null or inner-valid.
-        Ty::Optional(inner, _) => {
-            matches!(value, BexExternalValue::Null) || value_satisfies_ty(value, inner)
-        }
-
         // Union: matches at least one member. A `Union`-wrapped value is
         // unwrapped and checked against the arms.
         Ty::Union(members, _) => match value {

@@ -298,10 +298,6 @@ fn write_ty_identity(out: &mut String, ty: &Ty) {
         Ty::Primitive(p, _) => {
             let _ = write!(out, "P:{p:?}");
         }
-        Ty::Optional(inner, _) => {
-            out.push_str("O:");
-            write_ty_identity(out, inner);
-        }
         Ty::Union(members, _) => {
             out.push_str("U:[");
             for (i, m) in members.iter().enumerate() {
@@ -726,9 +722,7 @@ fn is_inhabited_default<C: PatCtx + ?Sized>(
             r
         }
         Ty::Union(members, _) => members.iter().any(|m| is_inhabited_default(m, cx, seen)),
-        // `T?` always inhabits null. `T[]` always inhabits `[]`. So both
-        // are inhabited regardless of T.
-        Ty::Optional(_, _) => true,
+        // `T[]` always inhabits `[]`, so it is inhabited regardless of T.
         Ty::List(_, _) | Ty::EvolvingList(_, _) => true,
         _ => true,
     }
@@ -1431,14 +1425,6 @@ mod tests {
                 | Ty::Primitive(PrimitiveType::Float, _)
                 | Ty::Primitive(PrimitiveType::String, _) => vec![Ctor::NonExhaustive],
                 Ty::Primitive(PrimitiveType::Null, _) => vec![Ctor::Single(ty.clone())],
-                Ty::Optional(inner, _) => {
-                    let mut out = self.enumerate_ctors(inner);
-                    out.push(Ctor::Single(Ty::Primitive(
-                        PrimitiveType::Null,
-                        Default::default(),
-                    )));
-                    out
-                }
                 Ty::Union(members, _) => members
                     .iter()
                     .flat_map(|m| self.enumerate_ctors(m))
@@ -1784,14 +1770,6 @@ mod tests {
                 | Ty::Primitive(PrimitiveType::Float, _)
                 | Ty::Primitive(PrimitiveType::String, _) => vec![Ctor::NonExhaustive],
                 Ty::Primitive(PrimitiveType::Null, _) => vec![Ctor::Single(ty.clone())],
-                Ty::Optional(inner, _) => {
-                    let mut out = self.enumerate_ctors(inner);
-                    out.push(Ctor::Single(Ty::Primitive(
-                        PrimitiveType::Null,
-                        Default::default(),
-                    )));
-                    out
-                }
                 Ty::Union(members, _) => members
                     .iter()
                     .flat_map(|m| self.enumerate_ctors(m))
@@ -1830,7 +1808,7 @@ mod tests {
         Ty::List(Box::new(elem), Default::default())
     }
     fn opt_of(t: Ty) -> Ty {
-        Ty::Optional(Box::new(t), Default::default())
+        Ty::nullable(t)
     }
     fn union_of(ts: Vec<Ty>) -> Ty {
         Ty::Union(ts, Default::default())
@@ -4036,14 +4014,6 @@ mod tests {
                 | Ty::Primitive(PrimitiveType::Float, _)
                 | Ty::Primitive(PrimitiveType::String, _) => vec![Ctor::NonExhaustive],
                 Ty::Primitive(PrimitiveType::Null, _) => vec![Ctor::Single(ty.clone())],
-                Ty::Optional(inner, _) => {
-                    let mut out = self.enumerate_ctors(inner);
-                    out.push(Ctor::Single(Ty::Primitive(
-                        PrimitiveType::Null,
-                        Default::default(),
-                    )));
-                    out
-                }
                 // Key change: each union member becomes a UnionMember ctor.
                 Ty::Union(members, _) => members
                     .iter()

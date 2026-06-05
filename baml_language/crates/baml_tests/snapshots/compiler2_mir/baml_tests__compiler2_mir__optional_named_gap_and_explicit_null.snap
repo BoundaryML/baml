@@ -27,12 +27,12 @@ fn user.omitted_middle() -> int {
     }
 }
 
-fn user.score(query: string, max_results: int, filter: string?) -> int {
+fn user.score(query: string, max_results: int, filter: string | null) -> int {
     // Locals:
     let _0: int // _0 // return
     let _1: string // query // param
     let _2: int // max_results // param
-    let _3: string? // filter // param
+    let _3: string | null // filter // param
     let _4: bool
     let _5: bool
     let _6: bool
@@ -77,10 +77,10 @@ fn user.score(query: string, max_results: int, filter: string?) -> int {
     }
 }
 
-fn user.is_null(value: int?) -> bool {
+fn user.is_null(value: int | null) -> bool {
     // Locals:
     let _0: bool // _0 // return
-    let _1: int? // value // param
+    let _1: int | null // value // param
     let _2: bool
 
     bb0: {

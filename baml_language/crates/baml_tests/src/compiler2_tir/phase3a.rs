@@ -414,7 +414,7 @@ fn calling_class_as_function() {
       !! 55..61: `Foo` is not a function — it cannot be called
     }
     class user.Foo$stream {
-      name: null | string
+      name: string | null
     }
     "#);
 }
@@ -644,7 +644,7 @@ fn if_without_else_optional() {
         "function f(x: bool) -> int? { return if (x) { 5 }; }",
     );
     insta::assert_snapshot!(render_tir(&db, file), @"
-    function user.f(x: bool) -> int? throws never {
+    function user.f(x: bool) -> int | null throws never {
       { : never
         return : void
           if (x : bool) : void
@@ -779,12 +779,12 @@ function f(x: Cat | Dog) -> string { return x.name; }"#,
       }
     }
     class user.Cat$stream {
-      name: null | string
-      legs: null | int
+      name: string | null
+      legs: int | null
     }
     class user.Dog$stream {
-      name: null | string
-      legs: null | int
+      name: string | null
+      legs: int | null
     }
     "#);
 }
@@ -828,12 +828,12 @@ function f(x: Cat | Dog) -> int { return x.whiskers; }"#,
       !! 118..126: type `Dog` has no member `whiskers`
     }
     class user.Cat$stream {
-      name: null | string
-      whiskers: null | int
+      name: string | null
+      whiskers: int | null
     }
     class user.Dog$stream {
-      name: null | string
-      tail: null | bool
+      name: string | null
+      tail: bool | null
     }
     "#);
 }
@@ -884,13 +884,13 @@ function f(x: A | B | C) -> string { return x.name; }"#,
       !! 114..118: type `C` has no member `name`
     }
     class user.A$stream {
-      name: null | string
+      name: string | null
     }
     class user.B$stream {
-      name: null | string
+      name: string | null
     }
     class user.C$stream {
-      age: null | int
+      age: int | null
     }
     "#);
 }
@@ -942,13 +942,13 @@ function f(x: A | B | C) -> string { return x.name; }"#,
       !! 113..117: type `C` has no member `name`
     }
     class user.A$stream {
-      name: null | string
+      name: string | null
     }
     class user.B$stream {
-      age: null | string
+      age: string | null
     }
     class user.C$stream {
-      age: null | int
+      age: int | null
     }
     "#);
 }
@@ -989,10 +989,10 @@ function f(x: A | B) -> string { return x.value; }"#,
       !! 86..94: type mismatch: expected string, got int | string
     }
     class user.A$stream {
-      value: null | int
+      value: int | null
     }
     class user.B$stream {
-      value: null | string
+      value: string | null
     }
     "#);
 }
@@ -1028,16 +1028,16 @@ function f(x: A | B | null) -> string { return x.name; }"#,
     }
     function user.f(x: user.A | user.B | null) -> string throws never {
       { : never
-        return x.name : (string | string)?
+        return x.name : string | string | null
       }
       !! 94..101: did you mean `x?.name`? `x.name` does not handle the case when `x` is null
-      !! 94..101: type mismatch: expected string, got (string | string)?
+      !! 94..101: type mismatch: expected string, got string | string | null
     }
     class user.A$stream {
-      name: null | string
+      name: string | null
     }
     class user.B$stream {
-      name: null | string
+      name: string | null
     }
     "#);
 }
@@ -1049,7 +1049,7 @@ fn null_coalesce_unwraps_optional() {
     let mut db = make_db();
     let file = db.add_file("test.baml", "function f(x: int?) -> int { x ?? 0 }");
     insta::assert_snapshot!(render_tir(&db, file), @"
-    function user.f(x: int?) -> int throws never {
+    function user.f(x: int | null) -> int throws never {
       { : int
         x ?? 0 : int
       }
@@ -1062,7 +1062,7 @@ fn null_coalesce_with_variable_default() {
     let mut db = make_db();
     let file = db.add_file("test.baml", "function f(x: int?, y: int) -> int { x ?? y }");
     insta::assert_snapshot!(render_tir(&db, file), @"
-    function user.f(x: int?, y: int) -> int throws never {
+    function user.f(x: int | null, y: int) -> int throws never {
       { : int
         x ?? y : int
       }
@@ -1078,7 +1078,7 @@ fn null_coalesce_with_string() {
         r#"function f(name: string?) -> string { let x = "Anonymous"; name ?? x }"#,
     );
     insta::assert_snapshot!(render_tir(&db, file), @r#"
-    function user.f(name: string?) -> string throws never {
+    function user.f(name: string | null) -> string throws never {
       { : string
         let x = "Anonymous" : "Anonymous" -> string
         name ?? x : string

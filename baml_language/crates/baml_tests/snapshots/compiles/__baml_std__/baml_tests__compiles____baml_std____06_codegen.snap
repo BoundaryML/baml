@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
 ---
-function baml.Array.at(self: baml.Array, index: int) -> void? {
+function baml.Array.at(self: baml.Array, index: int) -> void | null {
 }
 
 function baml.Array.clear(self: baml.Array) -> null {
@@ -13,16 +13,16 @@ function baml.Array.concat(self: baml.Array, other: void[]) -> void[] {
 function baml.Array.every(self: baml.Array, predicate: (void) -> bool throws never) -> bool {
 }
 
-function baml.Array.find(self: baml.Array, predicate: (void) -> bool throws never) -> void? {
+function baml.Array.find(self: baml.Array, predicate: (void) -> bool throws never) -> void | null {
 }
 
-function baml.Array.find_index(self: baml.Array, predicate: (void) -> bool throws never) -> int? {
+function baml.Array.find_index(self: baml.Array, predicate: (void) -> bool throws never) -> int | null {
 }
 
-function baml.Array.find_last(self: baml.Array, predicate: (void) -> bool throws never) -> void? {
+function baml.Array.find_last(self: baml.Array, predicate: (void) -> bool throws never) -> void | null {
 }
 
-function baml.Array.find_last_index(self: baml.Array, predicate: (void) -> bool throws never) -> int? {
+function baml.Array.find_last_index(self: baml.Array, predicate: (void) -> bool throws never) -> int | null {
 }
 
 function baml.Array.flat_map(self: baml.Array, f: (void) -> void[] throws never) -> void[] {
@@ -37,7 +37,7 @@ function baml.Array.from_json(j: baml.json.json) -> baml.Array<void> {
 function baml.Array.includes(self: baml.Array, item: void) -> bool {
 }
 
-function baml.Array.index_of(self: baml.Array, item: void) -> int? {
+function baml.Array.index_of(self: baml.Array, item: void) -> int | null {
 }
 
 function baml.Array.insert(self: baml.Array, item: void, idx: int) -> int {
@@ -46,7 +46,7 @@ function baml.Array.insert(self: baml.Array, item: void, idx: int) -> int {
 function baml.Array.join(self: baml.Array, separator: string) -> string {
 }
 
-function baml.Array.last_index_of(self: baml.Array, item: void) -> int? {
+function baml.Array.last_index_of(self: baml.Array, item: void) -> int | null {
 }
 
 function baml.Array.length(self: baml.Array) -> int {
@@ -55,7 +55,7 @@ function baml.Array.length(self: baml.Array) -> int {
 function baml.Array.map(self: baml.Array, f: (void) -> void throws never) -> void[] {
 }
 
-function baml.Array.pop(self: baml.Array) -> void? {
+function baml.Array.pop(self: baml.Array) -> void | null {
 }
 
 function baml.Array.push(self: baml.Array, item: void) -> int {
@@ -67,7 +67,7 @@ function baml.Array.reduce(self: baml.Array, reducer: (void, void) -> void throw
 function baml.Array.reverse(self: baml.Array) -> void[] {
 }
 
-function baml.Array.shift(self: baml.Array) -> void? {
+function baml.Array.shift(self: baml.Array) -> void | null {
 }
 
 function baml.Array.slice(self: baml.Array, start: int, end: int) -> void[] {
@@ -354,7 +354,7 @@ function baml.Int.trailing_zeros(self: baml.Int) -> int {
 function baml.Map.clear(self: baml.Map) -> null {
 }
 
-function baml.Map.delete(self: baml.Map, key: void) -> void? {
+function baml.Map.delete(self: baml.Map, key: void) -> void | null {
 }
 
 function baml.Map.from_json(j: baml.json.json) -> baml.Map<void, void> {
@@ -364,7 +364,7 @@ function baml.Map.from_json(j: baml.json.json) -> baml.Map<void, void> {
     return
 }
 
-function baml.Map.get(self: baml.Map, key: void) -> void? {
+function baml.Map.get(self: baml.Map, key: void) -> void | null {
 }
 
 function baml.Map.get_or_insert(self: baml.Map, key: void, default: void) -> void {
@@ -379,7 +379,7 @@ function baml.Map.keys(self: baml.Map) -> void[] {
 function baml.Map.length(self: baml.Map) -> int {
 }
 
-function baml.Map.set(self: baml.Map, key: void, value: void) -> void? {
+function baml.Map.set(self: baml.Map, key: void, value: void) -> void | null {
 }
 
 function baml.Map.to_json(self: baml.Map) -> baml.json.json {
@@ -549,7 +549,7 @@ function baml.TypeValue.to_json(self: baml.TypeValue) -> baml.json.json {
 function baml.TypeValue.to_string(self: baml.TypeValue) -> string {
 }
 
-function baml.Uint8Array.at(self: baml.Uint8Array, index: int) -> int? {
+function baml.Uint8Array.at(self: baml.Uint8Array, index: int) -> int | null {
 }
 
 function baml.Uint8Array.concat(self: baml.Uint8Array, other: uint8array) -> uint8array {
@@ -575,7 +575,7 @@ function baml.Uint8Array.includes(self: baml.Uint8Array, item: int) -> bool {
 function baml.Uint8Array.length(self: baml.Uint8Array) -> int {
 }
 
-function baml.Uint8Array.pop(self: baml.Uint8Array) -> int? {
+function baml.Uint8Array.pop(self: baml.Uint8Array) -> int | null {
 }
 
 function baml.Uint8Array.push(self: baml.Uint8Array, item: int) -> int {
@@ -614,7 +614,7 @@ function baml.deep_copy(value: void) -> void {
 function baml.deep_equals(a: void, b: void) -> bool {
 }
 
-function baml.env.get(key: string) -> string? {
+function baml.env.get(key: string) -> string | null {
 }
 
 function baml.env.get_or_panic(key: string) -> string {
@@ -744,7 +744,7 @@ function baml.errors.HostCallable.from_json(j: baml.json.json) -> baml.errors.Ho
     load_const "traceback"
     call baml.json.field
     store_var _12
-    load_type string?
+    load_type string | null
     load_var _12
     call baml.json.from_json
     load_var j
@@ -1033,7 +1033,7 @@ function baml.errors.Timeout.from_json(j: baml.json.json) -> baml.errors.Timeout
     load_const "duration_ms"
     call baml.json.field
     store_var _6
-    load_type int?
+    load_type int | null
     load_var _6
     call baml.json.from_json
     init_instance baml.errors.Timeout .message, .duration_ms
@@ -1294,42 +1294,42 @@ function baml.glob.ScanOptions.from_json(j: baml.json.json) -> baml.glob.ScanOpt
     load_const "cwd"
     call baml.json.field
     store_var _3
-    load_type string?
+    load_type string | null
     load_var _3
     call baml.json.from_json
     load_var j
     load_const "dot"
     call baml.json.field
     store_var _6
-    load_type bool?
+    load_type bool | null
     load_var _6
     call baml.json.from_json
     load_var j
     load_const "absolute"
     call baml.json.field
     store_var _9
-    load_type bool?
+    load_type bool | null
     load_var _9
     call baml.json.from_json
     load_var j
     load_const "follow_symlinks"
     call baml.json.field
     store_var _12
-    load_type bool?
+    load_type bool | null
     load_var _12
     call baml.json.from_json
     load_var j
     load_const "throw_error_on_broken_symlink"
     call baml.json.field
     store_var _15
-    load_type bool?
+    load_type bool | null
     load_var _15
     call baml.json.from_json
     load_var j
     load_const "only_files"
     call baml.json.field
     store_var _18
-    load_type bool?
+    load_type bool | null
     load_var _18
     call baml.json.from_json
     init_instance baml.glob.ScanOptions .cwd, .dot, .absolute, .follow_symlinks, .throw_error_on_broken_symlink, .only_files
@@ -1593,7 +1593,7 @@ function baml.http.SseStream.from_json(j: baml.json.json) -> baml.http.SseStream
     return
 }
 
-function baml.http.SseStream.next(self: baml.http.SseStream) -> string? {
+function baml.http.SseStream.next(self: baml.http.SseStream) -> string | null {
 }
 
 function baml.http.SseStream.to_json(self: baml.http.SseStream) -> baml.json.json {
@@ -1619,7 +1619,7 @@ function baml.io.eprint(s: string) -> null {
 function baml.io.eprintln(s: string) -> null {
 }
 
-function baml.io.input(prompt: string?) -> string {
+function baml.io.input(prompt: string | null) -> string {
 }
 
 function baml.io.print(s: string) -> null {
@@ -2993,7 +2993,7 @@ function baml.llm.Client.from_json(j: baml.json.json) -> baml.llm.Client {
     load_const "retry"
     call baml.json.field
     store_var _12
-    load_type baml.llm.RetryPolicy?
+    load_type baml.llm.RetryPolicy | null
     load_var _12
     call baml.json.from_json
     load_var j
@@ -3686,7 +3686,7 @@ function baml.llm.StreamAccumulator.add_events(self: baml.llm.StreamAccumulator,
 function baml.llm.StreamAccumulator.content(self: baml.llm.StreamAccumulator) -> string {
 }
 
-function baml.llm.StreamAccumulator.finish_reason(self: baml.llm.StreamAccumulator) -> string? {
+function baml.llm.StreamAccumulator.finish_reason(self: baml.llm.StreamAccumulator) -> string | null {
 }
 
 function baml.llm.StreamAccumulator.from_json(j: baml.json.json) -> baml.llm.StreamAccumulator {
@@ -3699,16 +3699,16 @@ function baml.llm.StreamAccumulator.from_json(j: baml.json.json) -> baml.llm.Str
     return
 }
 
-function baml.llm.StreamAccumulator.input_tokens(self: baml.llm.StreamAccumulator) -> int? {
+function baml.llm.StreamAccumulator.input_tokens(self: baml.llm.StreamAccumulator) -> int | null {
 }
 
 function baml.llm.StreamAccumulator.is_done(self: baml.llm.StreamAccumulator) -> bool {
 }
 
-function baml.llm.StreamAccumulator.model(self: baml.llm.StreamAccumulator) -> string? {
+function baml.llm.StreamAccumulator.model(self: baml.llm.StreamAccumulator) -> string | null {
 }
 
-function baml.llm.StreamAccumulator.output_tokens(self: baml.llm.StreamAccumulator) -> int? {
+function baml.llm.StreamAccumulator.output_tokens(self: baml.llm.StreamAccumulator) -> int | null {
 }
 
 function baml.llm.StreamAccumulator.to_json(self: baml.llm.StreamAccumulator) -> baml.json.json {
@@ -3986,13 +3986,13 @@ function baml.math.trunc(value: float) -> int {
 function baml.media.Audio.base64(self: baml.media.Audio) -> string {
 }
 
-function baml.media.Audio.file(self: baml.media.Audio) -> string? {
+function baml.media.Audio.file(self: baml.media.Audio) -> string | null {
 }
 
-function baml.media.Audio.from_base64(base64: string, mime_type: string?) -> audio {
+function baml.media.Audio.from_base64(base64: string, mime_type: string | null) -> audio {
 }
 
-function baml.media.Audio.from_file(file: string, mime_type: string?) -> audio {
+function baml.media.Audio.from_file(file: string, mime_type: string | null) -> audio {
 }
 
 function baml.media.Audio.from_json(j: baml.json.json) -> baml.media.Audio {
@@ -4005,28 +4005,28 @@ function baml.media.Audio.from_json(j: baml.json.json) -> baml.media.Audio {
     return
 }
 
-function baml.media.Audio.from_url(url: string, mime_type: string?) -> audio {
+function baml.media.Audio.from_url(url: string, mime_type: string | null) -> audio {
 }
 
-function baml.media.Audio.mime_type(self: baml.media.Audio) -> string? {
+function baml.media.Audio.mime_type(self: baml.media.Audio) -> string | null {
 }
 
 function baml.media.Audio.to_json(self: baml.media.Audio) -> baml.json.json {
 }
 
-function baml.media.Audio.url(self: baml.media.Audio) -> string? {
+function baml.media.Audio.url(self: baml.media.Audio) -> string | null {
 }
 
 function baml.media.Image.base64(self: baml.media.Image) -> string {
 }
 
-function baml.media.Image.file(self: baml.media.Image) -> string? {
+function baml.media.Image.file(self: baml.media.Image) -> string | null {
 }
 
-function baml.media.Image.from_base64(base64: string, mime_type: string?) -> image {
+function baml.media.Image.from_base64(base64: string, mime_type: string | null) -> image {
 }
 
-function baml.media.Image.from_file(file: string, mime_type: string?) -> image {
+function baml.media.Image.from_file(file: string, mime_type: string | null) -> image {
 }
 
 function baml.media.Image.from_json(j: baml.json.json) -> baml.media.Image {
@@ -4039,28 +4039,28 @@ function baml.media.Image.from_json(j: baml.json.json) -> baml.media.Image {
     return
 }
 
-function baml.media.Image.from_url(url: string, mime_type: string?) -> image {
+function baml.media.Image.from_url(url: string, mime_type: string | null) -> image {
 }
 
-function baml.media.Image.mime_type(self: baml.media.Image) -> string? {
+function baml.media.Image.mime_type(self: baml.media.Image) -> string | null {
 }
 
 function baml.media.Image.to_json(self: baml.media.Image) -> baml.json.json {
 }
 
-function baml.media.Image.url(self: baml.media.Image) -> string? {
+function baml.media.Image.url(self: baml.media.Image) -> string | null {
 }
 
 function baml.media.Pdf.base64(self: baml.media.Pdf) -> string {
 }
 
-function baml.media.Pdf.file(self: baml.media.Pdf) -> string? {
+function baml.media.Pdf.file(self: baml.media.Pdf) -> string | null {
 }
 
-function baml.media.Pdf.from_base64(base64: string, mime_type: string?) -> pdf {
+function baml.media.Pdf.from_base64(base64: string, mime_type: string | null) -> pdf {
 }
 
-function baml.media.Pdf.from_file(file: string, mime_type: string?) -> pdf {
+function baml.media.Pdf.from_file(file: string, mime_type: string | null) -> pdf {
 }
 
 function baml.media.Pdf.from_json(j: baml.json.json) -> baml.media.Pdf {
@@ -4073,28 +4073,28 @@ function baml.media.Pdf.from_json(j: baml.json.json) -> baml.media.Pdf {
     return
 }
 
-function baml.media.Pdf.from_url(url: string, mime_type: string?) -> pdf {
+function baml.media.Pdf.from_url(url: string, mime_type: string | null) -> pdf {
 }
 
-function baml.media.Pdf.mime_type(self: baml.media.Pdf) -> string? {
+function baml.media.Pdf.mime_type(self: baml.media.Pdf) -> string | null {
 }
 
 function baml.media.Pdf.to_json(self: baml.media.Pdf) -> baml.json.json {
 }
 
-function baml.media.Pdf.url(self: baml.media.Pdf) -> string? {
+function baml.media.Pdf.url(self: baml.media.Pdf) -> string | null {
 }
 
 function baml.media.Video.base64(self: baml.media.Video) -> string {
 }
 
-function baml.media.Video.file(self: baml.media.Video) -> string? {
+function baml.media.Video.file(self: baml.media.Video) -> string | null {
 }
 
-function baml.media.Video.from_base64(base64: string, mime_type: string?) -> video {
+function baml.media.Video.from_base64(base64: string, mime_type: string | null) -> video {
 }
 
-function baml.media.Video.from_file(file: string, mime_type: string?) -> video {
+function baml.media.Video.from_file(file: string, mime_type: string | null) -> video {
 }
 
 function baml.media.Video.from_json(j: baml.json.json) -> baml.media.Video {
@@ -4107,16 +4107,16 @@ function baml.media.Video.from_json(j: baml.json.json) -> baml.media.Video {
     return
 }
 
-function baml.media.Video.from_url(url: string, mime_type: string?) -> video {
+function baml.media.Video.from_url(url: string, mime_type: string | null) -> video {
 }
 
-function baml.media.Video.mime_type(self: baml.media.Video) -> string? {
+function baml.media.Video.mime_type(self: baml.media.Video) -> string | null {
 }
 
 function baml.media.Video.to_json(self: baml.media.Video) -> baml.json.json {
 }
 
-function baml.media.Video.url(self: baml.media.Video) -> string? {
+function baml.media.Video.url(self: baml.media.Video) -> string | null {
 }
 
 function baml.net.Datagram.from_json(j: baml.json.json) -> baml.net.Datagram {
@@ -4590,28 +4590,28 @@ function baml.sys.ProcessOptions.from_json(j: baml.json.json) -> baml.sys.Proces
     load_const "cwd"
     call baml.json.field
     store_var _3
-    load_type string?
+    load_type string | null
     load_var _3
     call baml.json.from_json
     load_var j
     load_const "env"
     call baml.json.field
     store_var _6
-    load_type map<string, string>?
+    load_type map<string, string> | null
     load_var _6
     call baml.json.from_json
     load_var j
     load_const "timeout_ms"
     call baml.json.field
     store_var _9
-    load_type int?
+    load_type int | null
     load_var _9
     call baml.json.from_json
     load_var j
     load_const "stdin"
     call baml.json.field
     store_var _12
-    load_type string?
+    load_type string | null
     load_var _12
     call baml.json.from_json
     init_instance baml.sys.ProcessOptions .cwd, .env, .timeout_ms, .stdin
@@ -4763,7 +4763,7 @@ function baml.sys.ShellOutput.to_json(self: baml.sys.ShellOutput) -> baml.json.j
 function baml.sys.argv() -> string[] {
 }
 
-function baml.sys.exec(program: string, args: string[]?, options: baml.sys.ProcessOptions?) -> baml.sys.ShellOutput {
+function baml.sys.exec(program: string, args: string[] | null, options: baml.sys.ProcessOptions | null) -> baml.sys.ShellOutput {
 }
 
 function baml.sys.exit(code: int) -> void {
@@ -4775,7 +4775,7 @@ function baml.sys.now_ms() -> int {
 function baml.sys.panic(message: string) -> void {
 }
 
-function baml.sys.shell(command: string, options: baml.sys.ProcessOptions?) -> baml.sys.ShellOutput {
+function baml.sys.shell(command: string, options: baml.sys.ProcessOptions | null) -> baml.sys.ShellOutput {
 }
 
 function baml.sys.sleep(ms: int) -> null {

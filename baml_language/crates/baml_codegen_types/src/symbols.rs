@@ -225,7 +225,7 @@ impl super::Ty {
                     unions.extend(a.walk_all_unions());
                 }
             }
-            Ty::Optional(ty) | Ty::List(ty) | Ty::Map { key: _, value: ty } => {
+            Ty::List(ty) | Ty::Map { key: _, value: ty } => {
                 unions.extend(ty.walk_all_unions());
             }
             Ty::Callable { params, ret } => {

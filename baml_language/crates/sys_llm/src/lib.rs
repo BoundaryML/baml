@@ -282,7 +282,7 @@ fn walk_ty(
                 walk_ty(target_ty, ctx, content, visited, ancestry);
             }
         }
-        Ty::Optional(inner, _) | Ty::List(inner, _) => {
+        Ty::List(inner, _) => {
             walk_ty(inner, ctx, content, visited, ancestry);
         }
         Ty::Map { key, value, .. } => {
@@ -459,12 +459,6 @@ fn image_generation_mode(target: &baml_type::Ty) -> ImageGenerationMode {
             ImageGenerationMode::Available => ImageGenerationMode::Available,
             ImageGenerationMode::Disabled => ImageGenerationMode::Disabled,
         },
-        baml_type::Ty::Optional(inner, _) => match image_generation_mode(inner) {
-            ImageGenerationMode::Disabled => ImageGenerationMode::Disabled,
-            ImageGenerationMode::Required | ImageGenerationMode::Available => {
-                ImageGenerationMode::Available
-            }
-        },
         baml_type::Ty::Union(_, _) if types::is_text_or_image_union(target) => {
             ImageGenerationMode::Available
         }
@@ -626,13 +620,13 @@ fn parse_llm_output_for_target(
         target if nullable_list_inner(target).is_some() => {
             parse_nullable_list_output(target, output)
         }
-        baml_type::Ty::Optional(inner, _) if types::is_text_or_image_union(inner) => {
-            let items = mixed_text_image_parts(output, inner);
-            single_text_or_image_union_output(inner, items)
-        }
         baml_type::Ty::Union(_, _) if types::is_text_or_image_union(target) => {
-            let items = mixed_text_image_parts(output, target);
-            single_text_or_image_union_output(target, items)
+            // A nullable `(string | image)?` records its non-null members as the
+            // union's declared type (optionality is tracked separately), matching
+            // the former `Optional` path.
+            let effective = target.strip_null();
+            let items = mixed_text_image_parts(output, &effective);
+            single_text_or_image_union_output(&effective, items)
         }
         _ => Ok(None),
     }
@@ -659,10 +653,6 @@ fn parse_nullable_media_output(
 
     let value = media_to_external(media[0].clone());
     match target {
-        baml_type::Ty::Optional(inner, _) => Ok(Some(BexExternalValue::optional(
-            value,
-            inner.as_ref().clone(),
-        ))),
         baml_type::Ty::Union(members, _) => {
             let selected = members
                 .iter()
@@ -714,10 +704,6 @@ fn parse_nullable_list_output(
     };
 
     match target {
-        baml_type::Ty::Optional(inner, _) => Ok(Some(BexExternalValue::optional(
-            array,
-            inner.as_ref().clone(),
-        ))),
         baml_type::Ty::Union(members, _) => Ok(Some(BexExternalValue::union(
             array,
             members.clone(),
@@ -872,10 +858,6 @@ fn is_media_type(target: &baml_type::Ty, kind: baml_base::MediaKind) -> bool {
 
 fn nullable_media_kind(target: &baml_type::Ty) -> Option<baml_base::MediaKind> {
     match target {
-        baml_type::Ty::Optional(inner, _) => match inner.as_ref() {
-            baml_type::Ty::Media(kind, _) => Some(*kind),
-            _ => None,
-        },
         baml_type::Ty::Union(members, _) => {
             let mut kind = None;
             let mut has_null = false;
@@ -902,11 +884,6 @@ fn nullable_media_kind(target: &baml_type::Ty) -> Option<baml_base::MediaKind> {
 
 fn nullable_list_inner(target: &baml_type::Ty) -> Option<&baml_type::Ty> {
     match target {
-        baml_type::Ty::Optional(inner, _)
-            if matches!(inner.as_ref(), baml_type::Ty::List(_, _)) =>
-        {
-            Some(inner.as_ref())
-        }
         baml_type::Ty::Union(members, _) => {
             let mut list = None;
             let mut has_null = false;
@@ -1619,7 +1596,7 @@ mod tests {
         baml_type::Ty::Union(vec![ty_string(), ty_image()], TyAttr::default())
     }
     fn ty_optional(inner: baml_type::Ty) -> baml_type::Ty {
-        baml_type::Ty::Optional(Box::new(inner), TyAttr::default())
+        baml_type::Ty::optional(inner)
     }
     fn tn(name: &str) -> baml_type::TypeName {
         baml_type::TypeName::local(name.into())

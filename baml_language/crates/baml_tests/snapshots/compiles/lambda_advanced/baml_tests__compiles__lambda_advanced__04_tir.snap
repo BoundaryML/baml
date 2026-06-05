@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 13112
 ---
 === TIR2 ===
 function user.test_chained_map() -> int[] throws never {
@@ -220,10 +219,10 @@ function user.test_iife() -> int throws never {
 }
 lambda user.test_iife {
 }
-function user.test_optional_return() -> int? throws never {
-  { : int?
-    let maybe = : (x: int) -> int? throws never
-      (x: int) -> int? { ... } : (x: int) -> int? throws never
+function user.test_optional_return() -> int | null throws never {
+  { : int | null
+    let maybe = : (x: int) -> int | null throws never
+      (x: int) -> int? { ... } : (x: int) -> int | null throws never
         {
           if (x > 0)
             {
@@ -234,7 +233,7 @@ function user.test_optional_return() -> int? throws never {
               null
             }
         }
-    maybe(Neg 1) : int?
+    maybe(Neg 1) : int | null
   }
 }
 lambda user.test_optional_return {
@@ -481,9 +480,9 @@ lambda user.test_capture_lambda_inferred {
 }
 function user.test_map_optional_inferred() -> int[] throws never {
   { : int[]
-    let items: int?[] = [1, null, 3] : int?[]
+    let items: int?[] = [1, null, 3] : (int | null)[]
     items.map<U, E>((x) -> { ... }) : int[]
-      (x) -> { ... } : (x: int?) -> int throws E
+      (x) -> { ... } : (x: int | null) -> int throws E
         {
           match (x) { null => 0, _ => 1 }
         }
