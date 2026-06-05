@@ -117,8 +117,8 @@ interface Iterator requires Iterable<Item = Self.Item, Error = Self.Error> {
   }
 }
 
-function flatten<R, E, E3>(src: Iterator<Item = Iterable<Item = R, Error = E3>, Error = E>) -> Iterator<Item = R, Error = E | E3> throws never {
-  Flatten<R, E, E3> { iter: src, inner: Done {} }
+function flatten<R, E, E3, I extends Iterable<Item = R, Error = E3>>(src: Iterator<Item = I, Error = E>) -> Iterator<Item = R, Error = E | E3> throws never {
+  Flatten<I, R, E, E3> { iter: src, inner: Done {} }
 }
 
 class ArrayIterator<T> {
@@ -344,8 +344,8 @@ class FlatMap<T, R, E, E2, E3> {
   }
 }
 
-class Flatten<R, E, E3> {
-  iter: Iterator<Item = Iterable<Item = R, Error = E3>, Error = E>
+class Flatten<I extends Iterable<Item = R, Error = E3>, R, E, E3> {
+  iter: Iterator<Item = I, Error = E>
   inner: Iterator<Item = R, Error = E3> | Done
 
   implements Iterable {
@@ -371,7 +371,7 @@ class Flatten<R, E, E3> {
           Done => {
             match (self.iter.next()) {
               Done => { return Done {}; },
-              let x: Iterable<Item = R, Error = E3> => {
+              let x: I => {
                 let it = x.iter();
                 self.inner = it;
               },

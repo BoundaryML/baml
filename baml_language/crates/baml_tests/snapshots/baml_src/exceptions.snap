@@ -2650,14 +2650,14 @@ function exceptions.s16_risky_jump2(mode: int) -> int {
     throw
 }
 
-function exceptions.s17_direct_cb(cb: (int) -> int throws never) -> int {
+function exceptions.s17_direct_cb(cb: (int) -> string throws never) -> string {
     load_const 1
     load_var cb
     call_indirect
     return
 }
 
-function exceptions.s17_forward_cb(cb: (int) -> int throws never) -> int {
+function exceptions.s17_forward_cb(cb: (int) -> string throws never) -> string {
     load_var cb
     call user.exceptions.s17_direct_cb
     return
@@ -2668,7 +2668,7 @@ function exceptions.s17_inner_st() -> string {
     throw
 }
 
-function exceptions.s17_risky_cb(value: int) -> int {
+function exceptions.s17_risky_cb(value: int) -> string {
     load_const "boom"
     throw
 }

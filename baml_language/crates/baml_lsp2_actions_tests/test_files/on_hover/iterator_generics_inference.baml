@@ -205,7 +205,7 @@ function hovers() -> void {
   })
 
   let stepped<[CURSOR] = ArrayIterator.new([1, 2, 3, 4]).step_by(2)
-  let arrayIter<[CURSOR] = [1, 2, 3].iter()
+  let arrayIter<[CURSOR] = [1, 2, 3].as<Iterable<int, never>>.iter()
   let collected<[CURSOR] = arrayIter.collect()
 
   let explicitMap<[CURSOR] : Iterator<int, never> = Map<int, int, never, never> {

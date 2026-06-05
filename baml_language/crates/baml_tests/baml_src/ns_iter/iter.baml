@@ -209,7 +209,7 @@ test "iter_step_by" {
 }
 
 function iter_array_iter() -> int[] throws unknown {
-  [1, 2, 3].iter().collect()
+  [1, 2, 3].as<baml.iter.Iterable<Item = int, Error = never>>.iter().collect()
 }
 
 test "iter_array_iter" {

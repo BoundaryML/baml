@@ -650,12 +650,31 @@ fn infer_bindings_inner(
             infer_bindings_inner(fr, ar, bindings, allow_typevar_actuals, rigid);
             infer_bindings_inner(fth, ath, bindings, allow_typevar_actuals, rigid);
         }
-        (Ty::Class(fn_name, f_args, _), Ty::Class(an_name, a_args, _))
-        | (Ty::Interface(fn_name, f_args, _, _), Ty::Interface(an_name, a_args, _, _))
-            if fn_name == an_name =>
-        {
+        (Ty::Class(fn_name, f_args, _), Ty::Class(an_name, a_args, _)) if fn_name == an_name => {
             for (ft, at) in f_args.iter().zip(a_args.iter()) {
                 infer_bindings_inner(ft, at, bindings, allow_typevar_actuals, rigid);
+            }
+        }
+        (
+            Ty::Interface(fn_name, f_args, f_assoc, _),
+            Ty::Interface(an_name, a_args, a_assoc, _),
+        ) if fn_name == an_name => {
+            for (ft, at) in f_args.iter().zip(a_args.iter()) {
+                infer_bindings_inner(ft, at, bindings, allow_typevar_actuals, rigid);
+            }
+            for (formal_name, formal_ty) in f_assoc {
+                if let Some((_, actual_ty)) = a_assoc
+                    .iter()
+                    .find(|(actual_name, _)| actual_name == formal_name)
+                {
+                    infer_bindings_inner(
+                        formal_ty,
+                        actual_ty,
+                        bindings,
+                        allow_typevar_actuals,
+                        rigid,
+                    );
+                }
             }
         }
         // Builtin container bridging: Array<T> ↔ List(T), Map<K,V> ↔ Map(K,V)

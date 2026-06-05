@@ -211,7 +211,7 @@ test "iter_step_by" {
 }
 
 function iter_array_iter() -> int[] throws unknown {
-  [1, 2, 3].iter().collect()
+  [1, 2, 3].as<user.iter_impl_generics_only.core.Iterable<int, never>>.iter().collect()
 }
 
 test "iter_array_iter" {
@@ -219,7 +219,8 @@ test "iter_array_iter" {
 }
 
 function out_of_body_inferred_ctor_dispatch() -> int throws unknown {
-  let value: user.iter_impl_generics_only.core.OutOfBodyValue<int> = user.iter_impl_generics_only.core.OutOfBodyBox.new(11);
+  let n: int = 11;
+  let value: user.iter_impl_generics_only.core.OutOfBodyValue<int> = user.iter_impl_generics_only.core.OutOfBodyBox.new(n);
   value.get()
 }
 

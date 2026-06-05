@@ -2925,15 +2925,15 @@ fn baml.iter.Iterator.flat_map(self: baml.iter.Iterator, fn: (void) -> baml.iter
     }
 }
 
-fn baml.iter.flatten(src: baml.iter.Iterator<Item = baml.iter.Iterable<Item = unknown, Error = unknown>, Error = unknown>) -> baml.iter.Iterator<Item = void, Error = void | void> {
+fn baml.iter.flatten(src: baml.iter.Iterator<Item = unknown, Error = unknown>) -> baml.iter.Iterator<Item = void, Error = void | void> {
     // Locals:
     let _0: baml.iter.Iterator<Item = void, Error = void | void> // _0 // return
-    let _1: baml.iter.Iterator<Item = baml.iter.Iterable<Item = unknown, Error = unknown>, Error = unknown> // src // param
+    let _1: baml.iter.Iterator<Item = unknown, Error = unknown> // src // param
     let _2: baml.iter.Done
 
     bb0: {
         _2 = baml.iter.Done {  };
-        _0 = baml.iter.Flatten<#0, #1, #2> { copy _1, copy _2 };
+        _0 = baml.iter.Flatten<#3, #0, #1, #2> { copy _1, copy _2 };
         goto -> bb1;
     }
 
@@ -3206,11 +3206,11 @@ fn baml.iter.Range.from_json(j: baml.json.json) -> baml.iter.Range {
     }
 }
 
-fn baml.iter.Flatten.from_json(j: baml.json.json) -> baml.iter.Flatten<void, void, void> {
+fn baml.iter.Flatten.from_json(j: baml.json.json) -> baml.iter.Flatten<void, void, void, void> {
     // Locals:
-    let _0: baml.iter.Flatten<void, void, void> // _0 // return
+    let _0: baml.iter.Flatten<void, void, void, void> // _0 // return
     let _1: baml.json.json // j // param
-    let _2: baml.iter.Iterator<Item = baml.iter.Iterable<Item = unknown, Error = unknown>, Error = unknown>
+    let _2: baml.iter.Iterator<Item = unknown, Error = unknown>
     let _3: baml.json.json
     let _4: type
     let _5: baml.iter.Iterator<Item = unknown, Error = unknown> | baml.iter.Done
@@ -3222,7 +3222,7 @@ fn baml.iter.Flatten.from_json(j: baml.json.json) -> baml.iter.Flatten<void, voi
     }
 
     bb1: {
-        _4 = load_type(baml.iter.Iterator<Item = baml.iter.Iterable<Item = #0, Error = #2>, Error = #1>);
+        _4 = load_type(baml.iter.Iterator<Item = #0, Error = #2>);
         _2 = call const fn baml.json.from_json<copy _4>(copy _3) -> [bb2];
     }
 
@@ -3231,12 +3231,12 @@ fn baml.iter.Flatten.from_json(j: baml.json.json) -> baml.iter.Flatten<void, voi
     }
 
     bb3: {
-        _7 = load_type(baml.iter.Iterator<Item = #0, Error = #2> | baml.iter.Done);
+        _7 = load_type(baml.iter.Iterator<Item = #1, Error = #3> | baml.iter.Done);
         _5 = call const fn baml.json.from_json<copy _7>(copy _6) -> [bb4];
     }
 
     bb4: {
-        _0 = baml.iter.Flatten<#0, #1, #2> { copy _2, copy _5 };
+        _0 = baml.iter.Flatten<#0, #1, #2, #3> { copy _2, copy _5 };
         goto -> bb5;
     }
 
@@ -3691,7 +3691,7 @@ fn baml.iter.Filter.Iterator.next(self: null) -> void | baml.iter.Done {
 
     bb3: {
         _3 = copy _1.0;
-        _4 = is_type(copy _3, baml.iter.Flatten<#0?, _, _>);
+        _4 = is_type(copy _3, baml.iter.Flatten<_, #0?, _, _>);
         branch copy _4 -> [bb25, bb4];
     }
 
@@ -3905,7 +3905,7 @@ fn baml.iter.Chain.Iterator.next(self: null) -> void | baml.iter.Done {
 
     bb1: {
         _5 = copy _1.0;
-        _6 = is_type(copy _5, baml.iter.Flatten<#0?, _, _>);
+        _6 = is_type(copy _5, baml.iter.Flatten<_, #0?, _, _>);
         branch copy _6 -> [bb23, bb2];
     }
 
@@ -4038,7 +4038,7 @@ fn baml.iter.Chain.Iterator.next(self: null) -> void | baml.iter.Done {
 
     bb27: {
         _32 = copy _1.1;
-        _33 = is_type(copy _32, baml.iter.Flatten<#0?, _, _>);
+        _33 = is_type(copy _32, baml.iter.Flatten<_, #0?, _, _>);
         branch copy _33 -> [bb49, bb28];
     }
 
@@ -4195,7 +4195,7 @@ fn baml.iter.Map.Iterator.next(self: null) -> void | baml.iter.Done {
 
     bb0: {
         _3 = copy _1.0;
-        _4 = is_type(copy _3, baml.iter.Flatten<#0?, _, _>);
+        _4 = is_type(copy _3, baml.iter.Flatten<_, #0?, _, _>);
         branch copy _4 -> [bb22, bb1];
     }
 
@@ -4440,7 +4440,7 @@ fn baml.iter.StepBy.Iterator.next(self: null) -> void | baml.iter.Done {
 
     bb3: {
         _60 = copy _1.0;
-        _61 = is_type(copy _60, baml.iter.Flatten<#0?, _, _>);
+        _61 = is_type(copy _60, baml.iter.Flatten<_, #0?, _, _>);
         branch copy _61 -> [bb25, bb4];
     }
 
@@ -4557,7 +4557,7 @@ fn baml.iter.StepBy.Iterator.next(self: null) -> void | baml.iter.Done {
 
     bb26: {
         _34 = copy _1.0;
-        _35 = is_type(copy _34, baml.iter.Flatten<#0?, _, _>);
+        _35 = is_type(copy _34, baml.iter.Flatten<_, #0?, _, _>);
         branch copy _35 -> [bb48, bb27];
     }
 
@@ -4690,7 +4690,7 @@ fn baml.iter.StepBy.Iterator.next(self: null) -> void | baml.iter.Done {
     bb52: {
         _1.2 = const false;
         _3 = copy _1.0;
-        _4 = is_type(copy _3, baml.iter.Flatten<#0?, _, _>);
+        _4 = is_type(copy _3, baml.iter.Flatten<_, #0?, _, _>);
         branch copy _4 -> [bb74, bb53];
     }
 
@@ -4891,7 +4891,7 @@ fn baml.iter.Peekable.Iterator.next(self: null) -> void | baml.iter.Done {
 
     bb1: {
         _4 = copy _1.0;
-        _5 = is_type(copy _4, baml.iter.Flatten<#0?, _, _>);
+        _5 = is_type(copy _4, baml.iter.Flatten<_, #0?, _, _>);
         branch copy _5 -> [bb23, bb2];
     }
 
@@ -5120,58 +5120,59 @@ fn baml.iter.Flatten.Iterator.next(self: null) -> void | baml.iter.Done {
     let _61: type
     let _62: bool
     let _63: void // y
-    let _64: baml.iter.Iterable<Item = unknown, Error = unknown> | baml.iter.Done
-    let _65: baml.iter.Iterator<Item = baml.iter.Iterable<Item = unknown, Error = unknown>, Error = unknown>
+    let _64: unknown | baml.iter.Done
+    let _65: baml.iter.Iterator<Item = unknown, Error = unknown>
     let _66: bool
     let _67: unknown
     let _68: bool
-    let _69: type
-    let _70: bool
-    let _71: type
+    let _69: bool
+    let _70: type
+    let _71: bool
     let _72: type
-    let _73: bool
-    let _74: type
+    let _73: type
+    let _74: bool
     let _75: type
-    let _76: bool
-    let _77: type
-    let _78: bool
-    let _79: unknown
-    let _80: bool
-    let _81: unknown
-    let _82: bool
-    let _83: unknown
-    let _84: bool
-    let _85: unknown
-    let _86: bool
-    let _87: type
+    let _76: type
+    let _77: bool
+    let _78: type
+    let _79: bool
+    let _80: unknown
+    let _81: bool
+    let _82: unknown
+    let _83: bool
+    let _84: unknown
+    let _85: bool
+    let _86: unknown
+    let _87: bool
     let _88: type
-    let _89: bool
-    let _90: baml.iter.Iterable<Item = void, Error = void> // x
-    let _91: baml.iter.Iterator<Item = unknown, Error = unknown> // it
-    let _92: bool
-    let _93: unknown
-    let _94: bool
+    let _89: type
+    let _90: bool
+    let _91: void // x
+    let _92: baml.iter.Iterator<Item = unknown, Error = unknown> // it
+    let _93: bool
+    let _94: unknown
     let _95: bool
-    let _96: type
-    let _97: bool
-    let _98: type
+    let _96: bool
+    let _97: type
+    let _98: bool
     let _99: type
-    let _100: bool
-    let _101: type
+    let _100: type
+    let _101: bool
     let _102: type
-    let _103: bool
-    let _104: type
-    let _105: bool
-    let _106: unknown
-    let _107: bool
-    let _108: unknown
-    let _109: bool
-    let _110: unknown
-    let _111: bool
-    let _112: unknown
-    let _113: bool
-    let _114: type
+    let _103: type
+    let _104: bool
+    let _105: type
+    let _106: bool
+    let _107: unknown
+    let _108: bool
+    let _109: unknown
+    let _110: bool
+    let _111: unknown
+    let _112: bool
+    let _113: unknown
+    let _114: bool
     let _115: type
+    let _116: type
 
     bb0: {
         goto -> bb1;
@@ -5183,548 +5184,557 @@ fn baml.iter.Flatten.Iterator.next(self: null) -> void | baml.iter.Done {
 
     bb2: {
         _0 = baml.iter.Done {  };
-        goto -> bb108;
+        goto -> bb110;
     }
 
     bb3: {
         _2 = copy _1.1;
-        _3 = is_type(copy _2, baml.iter.Flatten<#0?, _, _>);
-        branch copy _3 -> [bb83, bb4];
+        _3 = is_type(copy _2, baml.iter.Flatten<_, #1?, _, _>);
+        branch copy _3 -> [bb85, bb4];
     }
 
     bb4: {
-        _4 = is_type(copy _2, baml.iter.Flatten<#0?, _, _>);
-        branch copy _4 -> [bb83, bb5];
+        _4 = is_type(copy _2, baml.iter.Flatten<_, #1?, _, _>);
+        branch copy _4 -> [bb85, bb5];
     }
 
     bb5: {
-        _5 = is_type(copy _2, baml.iter.Flatten<#0?, _, _>);
-        branch copy _5 -> [bb83, bb6];
+        _5 = is_type(copy _2, baml.iter.Flatten<_, #1?, _, _>);
+        branch copy _5 -> [bb85, bb6];
     }
 
     bb6: {
         _6 = is_type(copy _2, baml.iter.Range);
-        branch copy _6 -> [bb83, bb7];
+        branch copy _6 -> [bb85, bb7];
     }
 
     bb7: {
         _7 = is_type(copy _2, baml.iter.Range);
-        branch copy _7 -> [bb83, bb8];
+        branch copy _7 -> [bb85, bb8];
     }
 
     bb8: {
         _8 = is_type(copy _2, baml.iter.Range);
-        branch copy _8 -> [bb83, bb9];
+        branch copy _8 -> [bb85, bb9];
     }
 
     bb9: {
-        _9 = is_type(copy _2, baml.iter.ArrayIterator<#0?>);
-        branch copy _9 -> [bb83, bb10];
+        _9 = is_type(copy _2, baml.iter.ArrayIterator<#1?>);
+        branch copy _9 -> [bb85, bb10];
     }
 
     bb10: {
-        _10 = is_type(copy _2, baml.iter.ArrayIterator<#0?>);
-        branch copy _10 -> [bb83, bb11];
+        _10 = is_type(copy _2, baml.iter.ArrayIterator<#1?>);
+        branch copy _10 -> [bb85, bb11];
     }
 
     bb11: {
-        _11 = is_type(copy _2, baml.iter.ArrayIterator<#0?>);
-        branch copy _11 -> [bb83, bb12];
+        _11 = is_type(copy _2, baml.iter.ArrayIterator<#1?>);
+        branch copy _11 -> [bb85, bb12];
     }
 
     bb12: {
-        _12 = is_type(copy _2, baml.iter.StepBy<#0?, #2?>);
-        branch copy _12 -> [bb83, bb13];
+        _12 = is_type(copy _2, baml.iter.StepBy<#1?, #3?>);
+        branch copy _12 -> [bb85, bb13];
     }
 
     bb13: {
-        _13 = is_type(copy _2, baml.iter.StepBy<#0?, #2?>);
-        branch copy _13 -> [bb83, bb14];
+        _13 = is_type(copy _2, baml.iter.StepBy<#1?, #3?>);
+        branch copy _13 -> [bb85, bb14];
     }
 
     bb14: {
-        _14 = is_type(copy _2, baml.iter.StepBy<#0?, #2?>);
-        branch copy _14 -> [bb83, bb15];
+        _14 = is_type(copy _2, baml.iter.StepBy<#1?, #3?>);
+        branch copy _14 -> [bb85, bb15];
     }
 
     bb15: {
-        _15 = is_type(copy _2, baml.iter.Chain<#0?, #2?>);
-        branch copy _15 -> [bb83, bb16];
+        _15 = is_type(copy _2, baml.iter.Chain<#1?, #3?>);
+        branch copy _15 -> [bb85, bb16];
     }
 
     bb16: {
-        _16 = is_type(copy _2, baml.iter.Chain<#0?, #2?>);
-        branch copy _16 -> [bb83, bb17];
+        _16 = is_type(copy _2, baml.iter.Chain<#1?, #3?>);
+        branch copy _16 -> [bb85, bb17];
     }
 
     bb17: {
-        _17 = is_type(copy _2, baml.iter.Chain<#0?, #2?>);
-        branch copy _17 -> [bb83, bb18];
+        _17 = is_type(copy _2, baml.iter.Chain<#1?, #3?>);
+        branch copy _17 -> [bb85, bb18];
     }
 
     bb18: {
-        _18 = is_type(copy _2, baml.iter.Repeat<#0?>);
-        branch copy _18 -> [bb83, bb19];
+        _18 = is_type(copy _2, baml.iter.Repeat<#1?>);
+        branch copy _18 -> [bb85, bb19];
     }
 
     bb19: {
-        _19 = is_type(copy _2, baml.iter.Repeat<#0?>);
-        branch copy _19 -> [bb83, bb20];
+        _19 = is_type(copy _2, baml.iter.Repeat<#1?>);
+        branch copy _19 -> [bb85, bb20];
     }
 
     bb20: {
-        _20 = is_type(copy _2, baml.iter.Repeat<#0?>);
-        branch copy _20 -> [bb83, bb21];
+        _20 = is_type(copy _2, baml.iter.Repeat<#1?>);
+        branch copy _20 -> [bb85, bb21];
     }
 
     bb21: {
-        _21 = is_type(copy _2, baml.iter.Map<_, #0?, _, _>);
-        branch copy _21 -> [bb83, bb22];
+        _21 = is_type(copy _2, baml.iter.Map<_, #1?, _, _>);
+        branch copy _21 -> [bb85, bb22];
     }
 
     bb22: {
-        _22 = is_type(copy _2, baml.iter.Map<_, #0?, _, _>);
-        branch copy _22 -> [bb83, bb23];
+        _22 = is_type(copy _2, baml.iter.Map<_, #1?, _, _>);
+        branch copy _22 -> [bb85, bb23];
     }
 
     bb23: {
-        _23 = is_type(copy _2, baml.iter.Map<_, #0?, _, _>);
-        branch copy _23 -> [bb83, bb24];
+        _23 = is_type(copy _2, baml.iter.Map<_, #1?, _, _>);
+        branch copy _23 -> [bb85, bb24];
     }
 
     bb24: {
-        _24 = is_type(copy _2, baml.iter.Filter<#0?, _, _>);
-        branch copy _24 -> [bb83, bb25];
+        _24 = is_type(copy _2, baml.iter.Filter<#1?, _, _>);
+        branch copy _24 -> [bb85, bb25];
     }
 
     bb25: {
-        _25 = is_type(copy _2, baml.iter.Filter<#0?, _, _>);
-        branch copy _25 -> [bb83, bb26];
+        _25 = is_type(copy _2, baml.iter.Filter<#1?, _, _>);
+        branch copy _25 -> [bb85, bb26];
     }
 
     bb26: {
-        _26 = is_type(copy _2, baml.iter.Filter<#0?, _, _>);
-        branch copy _26 -> [bb83, bb27];
+        _26 = is_type(copy _2, baml.iter.Filter<#1?, _, _>);
+        branch copy _26 -> [bb85, bb27];
     }
 
     bb27: {
-        _27 = is_type(copy _2, baml.iter.FilterMap<_, #0?, _, _>);
-        branch copy _27 -> [bb83, bb28];
+        _27 = is_type(copy _2, baml.iter.FilterMap<_, #1?, _, _>);
+        branch copy _27 -> [bb85, bb28];
     }
 
     bb28: {
-        _28 = is_type(copy _2, baml.iter.FilterMap<_, #0?, _, _>);
-        branch copy _28 -> [bb83, bb29];
+        _28 = is_type(copy _2, baml.iter.FilterMap<_, #1?, _, _>);
+        branch copy _28 -> [bb85, bb29];
     }
 
     bb29: {
-        _29 = is_type(copy _2, baml.iter.FilterMap<_, #0?, _, _>);
-        branch copy _29 -> [bb83, bb30];
+        _29 = is_type(copy _2, baml.iter.FilterMap<_, #1?, _, _>);
+        branch copy _29 -> [bb85, bb30];
     }
 
     bb30: {
-        _30 = is_type(copy _2, baml.iter.FlatMap<_, #0?, _, _, _>);
-        branch copy _30 -> [bb83, bb31];
+        _30 = is_type(copy _2, baml.iter.FlatMap<_, #1?, _, _, _>);
+        branch copy _30 -> [bb85, bb31];
     }
 
     bb31: {
-        _31 = is_type(copy _2, baml.iter.FlatMap<_, #0?, _, _, _>);
-        branch copy _31 -> [bb83, bb32];
+        _31 = is_type(copy _2, baml.iter.FlatMap<_, #1?, _, _, _>);
+        branch copy _31 -> [bb85, bb32];
     }
 
     bb32: {
-        _32 = is_type(copy _2, baml.iter.FlatMap<_, #0?, _, _, _>);
-        branch copy _32 -> [bb83, bb33];
+        _32 = is_type(copy _2, baml.iter.FlatMap<_, #1?, _, _, _>);
+        branch copy _32 -> [bb85, bb33];
     }
 
     bb33: {
-        _33 = is_type(copy _2, baml.iter.Peekable<#0?, #2?>);
-        branch copy _33 -> [bb83, bb34];
+        _33 = is_type(copy _2, baml.iter.Peekable<#1?, #3?>);
+        branch copy _33 -> [bb85, bb34];
     }
 
     bb34: {
-        _34 = is_type(copy _2, baml.iter.Peekable<#0?, #2?>);
-        branch copy _34 -> [bb83, bb35];
+        _34 = is_type(copy _2, baml.iter.Peekable<#1?, #3?>);
+        branch copy _34 -> [bb85, bb35];
     }
 
     bb35: {
-        _35 = is_type(copy _2, baml.iter.Peekable<#0?, #2?>);
-        branch copy _35 -> [bb83, bb36];
+        _35 = is_type(copy _2, baml.iter.Peekable<#1?, #3?>);
+        branch copy _35 -> [bb85, bb36];
     }
 
     bb36: {
         _65 = copy _1.0;
-        _66 = is_type(copy _65, baml.iter.Flatten<baml.iter.Iterable<Item = #0?, Error = #2?>, _, _>);
-        branch copy _66 -> [bb56, bb37];
+        _66 = is_type(copy _65, baml.iter.Flatten<_, #0?, _, _>);
+        branch copy _66 -> [bb58, bb37];
     }
 
     bb37: {
-        _68 = is_type(copy _65, baml.iter.ArrayIterator<baml.iter.Iterable<Item = #0?, Error = #2?>>);
-        branch copy _68 -> [bb55, bb38];
+        _68 = is_type(copy _65, baml.iter.Range);
+        branch copy _68 -> [bb57, bb38];
     }
 
     bb38: {
-        _70 = is_type(copy _65, baml.iter.StepBy<baml.iter.Iterable<Item = #0?, Error = #2?>, #1?>);
-        branch copy _70 -> [bb54, bb39];
+        _69 = is_type(copy _65, baml.iter.ArrayIterator<#0?>);
+        branch copy _69 -> [bb56, bb39];
     }
 
     bb39: {
-        _73 = is_type(copy _65, baml.iter.Chain<baml.iter.Iterable<Item = #0?, Error = #2?>, #1?>);
-        branch copy _73 -> [bb53, bb40];
+        _71 = is_type(copy _65, baml.iter.StepBy<#0?, #2?>);
+        branch copy _71 -> [bb55, bb40];
     }
 
     bb40: {
-        _76 = is_type(copy _65, baml.iter.Repeat<baml.iter.Iterable<Item = #0?, Error = #2?>>);
-        branch copy _76 -> [bb52, bb41];
+        _74 = is_type(copy _65, baml.iter.Chain<#0?, #2?>);
+        branch copy _74 -> [bb54, bb41];
     }
 
     bb41: {
-        _78 = is_type(copy _65, baml.iter.Map<_, baml.iter.Iterable<Item = #0?, Error = #2?>, _, _>);
-        branch copy _78 -> [bb51, bb42];
+        _77 = is_type(copy _65, baml.iter.Repeat<#0?>);
+        branch copy _77 -> [bb53, bb42];
     }
 
     bb42: {
-        _80 = is_type(copy _65, baml.iter.Filter<baml.iter.Iterable<Item = #0?, Error = #2?>, _, _>);
-        branch copy _80 -> [bb50, bb43];
+        _79 = is_type(copy _65, baml.iter.Map<_, #0?, _, _>);
+        branch copy _79 -> [bb52, bb43];
     }
 
     bb43: {
-        _82 = is_type(copy _65, baml.iter.FilterMap<_, baml.iter.Iterable<Item = #0?, Error = #2?>, _, _>);
-        branch copy _82 -> [bb49, bb44];
+        _81 = is_type(copy _65, baml.iter.Filter<#0?, _, _>);
+        branch copy _81 -> [bb51, bb44];
     }
 
     bb44: {
-        _84 = is_type(copy _65, baml.iter.FlatMap<_, baml.iter.Iterable<Item = #0?, Error = #2?>, _, _, _>);
-        branch copy _84 -> [bb48, bb45];
+        _83 = is_type(copy _65, baml.iter.FilterMap<_, #0?, _, _>);
+        branch copy _83 -> [bb50, bb45];
     }
 
     bb45: {
-        _86 = is_type(copy _65, baml.iter.Peekable<baml.iter.Iterable<Item = #0?, Error = #2?>, #1?>);
-        branch copy _86 -> [bb47, bb46];
+        _85 = is_type(copy _65, baml.iter.FlatMap<_, #0?, _, _, _>);
+        branch copy _85 -> [bb49, bb46];
     }
 
     bb46: {
-        unreachable;
+        _87 = is_type(copy _65, baml.iter.Peekable<#0?, #2?>);
+        branch copy _87 -> [bb48, bb47];
     }
 
     bb47: {
-        _87 = load_type(baml.iter.Iterable<Item = #0, Error = #2>);
-        _88 = load_type(#1);
-        _64 = call const fn baml.iter.Peekable.Iterator.next<copy _87, copy _88>(copy _65) -> [bb57];
+        unreachable;
     }
 
     bb48: {
-        _85 = make_bound_method baml.iter.FlatMap.Iterator.next(copy _65);
-        _64 = call copy _85() -> [bb57];
+        _88 = load_type(#0);
+        _89 = load_type(#2);
+        _64 = call const fn baml.iter.Peekable.Iterator.next<copy _88, copy _89>(copy _65) -> [bb59];
     }
 
     bb49: {
-        _83 = make_bound_method baml.iter.FilterMap.Iterator.next(copy _65);
-        _64 = call copy _83() -> [bb57];
+        _86 = make_bound_method baml.iter.FlatMap.Iterator.next(copy _65);
+        _64 = call copy _86() -> [bb59];
     }
 
     bb50: {
-        _81 = make_bound_method baml.iter.Filter.Iterator.next(copy _65);
-        _64 = call copy _81() -> [bb57];
+        _84 = make_bound_method baml.iter.FilterMap.Iterator.next(copy _65);
+        _64 = call copy _84() -> [bb59];
     }
 
     bb51: {
-        _79 = make_bound_method baml.iter.Map.Iterator.next(copy _65);
-        _64 = call copy _79() -> [bb57];
+        _82 = make_bound_method baml.iter.Filter.Iterator.next(copy _65);
+        _64 = call copy _82() -> [bb59];
     }
 
     bb52: {
-        _77 = load_type(baml.iter.Iterable<Item = #0, Error = #2>);
-        _64 = call const fn baml.iter.Repeat.Iterator.next<copy _77>(copy _65) -> [bb57];
+        _80 = make_bound_method baml.iter.Map.Iterator.next(copy _65);
+        _64 = call copy _80() -> [bb59];
     }
 
     bb53: {
-        _74 = load_type(baml.iter.Iterable<Item = #0, Error = #2>);
-        _75 = load_type(#1);
-        _64 = call const fn baml.iter.Chain.Iterator.next<copy _74, copy _75>(copy _65) -> [bb57];
+        _78 = load_type(#0);
+        _64 = call const fn baml.iter.Repeat.Iterator.next<copy _78>(copy _65) -> [bb59];
     }
 
     bb54: {
-        _71 = load_type(baml.iter.Iterable<Item = #0, Error = #2>);
-        _72 = load_type(#1);
-        _64 = call const fn baml.iter.StepBy.Iterator.next<copy _71, copy _72>(copy _65) -> [bb57];
+        _75 = load_type(#0);
+        _76 = load_type(#2);
+        _64 = call const fn baml.iter.Chain.Iterator.next<copy _75, copy _76>(copy _65) -> [bb59];
     }
 
     bb55: {
-        _69 = load_type(baml.iter.Iterable<Item = #0, Error = #2>);
-        _64 = call const fn baml.iter.ArrayIterator.Iterator.next<copy _69>(copy _65) -> [bb57];
+        _72 = load_type(#0);
+        _73 = load_type(#2);
+        _64 = call const fn baml.iter.StepBy.Iterator.next<copy _72, copy _73>(copy _65) -> [bb59];
     }
 
     bb56: {
-        _67 = make_bound_method baml.iter.Flatten.Iterator.next(copy _65);
-        _64 = call copy _67() -> [bb57];
+        _70 = load_type(#0);
+        _64 = call const fn baml.iter.ArrayIterator.Iterator.next<copy _70>(copy _65) -> [bb59];
     }
 
     bb57: {
-        _89 = is_type(copy _64, baml.iter.Done);
-        branch copy _89 -> [bb82, bb58];
+        _64 = call const fn baml.iter.Range.Iterator.next(copy _65) -> [bb59];
     }
 
     bb58: {
-        _90 = copy _64;
-        _92 = is_type(copy _90, baml.iter.Flatten<#0?, _, _>);
-        branch copy _92 -> [bb80, bb59];
+        _67 = make_bound_method baml.iter.Flatten.Iterator.next(copy _65);
+        _64 = call copy _67() -> [bb59];
     }
 
     bb59: {
-        _94 = is_type(copy _90, baml.iter.Range);
-        branch copy _94 -> [bb79, bb60];
+        _90 = is_type(copy _64, baml.iter.Done);
+        branch copy _90 -> [bb84, bb60];
     }
 
     bb60: {
-        _95 = is_type(copy _90, baml.iter.ArrayIterator<#0?>);
-        branch copy _95 -> [bb78, bb61];
+        _91 = copy _64;
+        _93 = is_type(copy _91, baml.iter.Flatten<_, #1?, _, _>);
+        branch copy _93 -> [bb82, bb61];
     }
 
     bb61: {
-        _97 = is_type(copy _90, baml.iter.StepBy<#0?, #2?>);
-        branch copy _97 -> [bb77, bb62];
+        _95 = is_type(copy _91, baml.iter.Range);
+        branch copy _95 -> [bb81, bb62];
     }
 
     bb62: {
-        _100 = is_type(copy _90, baml.iter.Chain<#0?, #2?>);
-        branch copy _100 -> [bb76, bb63];
+        _96 = is_type(copy _91, baml.iter.ArrayIterator<#1?>);
+        branch copy _96 -> [bb80, bb63];
     }
 
     bb63: {
-        _103 = is_type(copy _90, baml.iter.Repeat<#0?>);
-        branch copy _103 -> [bb75, bb64];
+        _98 = is_type(copy _91, baml.iter.StepBy<#1?, #3?>);
+        branch copy _98 -> [bb79, bb64];
     }
 
     bb64: {
-        _105 = is_type(copy _90, baml.iter.Map<_, #0?, _, _>);
-        branch copy _105 -> [bb74, bb65];
+        _101 = is_type(copy _91, baml.iter.Chain<#1?, #3?>);
+        branch copy _101 -> [bb78, bb65];
     }
 
     bb65: {
-        _107 = is_type(copy _90, baml.iter.Filter<#0?, _, _>);
-        branch copy _107 -> [bb73, bb66];
+        _104 = is_type(copy _91, baml.iter.Repeat<#1?>);
+        branch copy _104 -> [bb77, bb66];
     }
 
     bb66: {
-        _109 = is_type(copy _90, baml.iter.FilterMap<_, #0?, _, _>);
-        branch copy _109 -> [bb72, bb67];
+        _106 = is_type(copy _91, baml.iter.Map<_, #1?, _, _>);
+        branch copy _106 -> [bb76, bb67];
     }
 
     bb67: {
-        _111 = is_type(copy _90, baml.iter.FlatMap<_, #0?, _, _, _>);
-        branch copy _111 -> [bb71, bb68];
+        _108 = is_type(copy _91, baml.iter.Filter<#1?, _, _>);
+        branch copy _108 -> [bb75, bb68];
     }
 
     bb68: {
-        _113 = is_type(copy _90, baml.iter.Peekable<#0?, #2?>);
-        branch copy _113 -> [bb70, bb69];
+        _110 = is_type(copy _91, baml.iter.FilterMap<_, #1?, _, _>);
+        branch copy _110 -> [bb74, bb69];
     }
 
     bb69: {
-        unreachable;
+        _112 = is_type(copy _91, baml.iter.FlatMap<_, #1?, _, _, _>);
+        branch copy _112 -> [bb73, bb70];
     }
 
     bb70: {
-        _114 = load_type(#0);
-        _115 = load_type(#2);
-        _91 = call const fn baml.iter.Peekable.Iterable.iter<copy _114, copy _115>(copy _90) -> [bb81];
+        _114 = is_type(copy _91, baml.iter.Peekable<#1?, #3?>);
+        branch copy _114 -> [bb72, bb71];
     }
 
     bb71: {
-        _112 = make_bound_method baml.iter.FlatMap.Iterable.iter(copy _90);
-        _91 = call copy _112() -> [bb81];
-    }
-
-    bb72: {
-        _110 = make_bound_method baml.iter.FilterMap.Iterable.iter(copy _90);
-        _91 = call copy _110() -> [bb81];
-    }
-
-    bb73: {
-        _108 = make_bound_method baml.iter.Filter.Iterable.iter(copy _90);
-        _91 = call copy _108() -> [bb81];
-    }
-
-    bb74: {
-        _106 = make_bound_method baml.iter.Map.Iterable.iter(copy _90);
-        _91 = call copy _106() -> [bb81];
-    }
-
-    bb75: {
-        _104 = load_type(#0);
-        _91 = call const fn baml.iter.Repeat.Iterable.iter<copy _104>(copy _90) -> [bb81];
-    }
-
-    bb76: {
-        _101 = load_type(#0);
-        _102 = load_type(#2);
-        _91 = call const fn baml.iter.Chain.Iterable.iter<copy _101, copy _102>(copy _90) -> [bb81];
-    }
-
-    bb77: {
-        _98 = load_type(#0);
-        _99 = load_type(#2);
-        _91 = call const fn baml.iter.StepBy.Iterable.iter<copy _98, copy _99>(copy _90) -> [bb81];
-    }
-
-    bb78: {
-        _96 = load_type(#0);
-        _91 = call const fn baml.iter.ArrayIterator.Iterable.iter<copy _96>(copy _90) -> [bb81];
-    }
-
-    bb79: {
-        _91 = call const fn baml.iter.Range.Iterable.iter(copy _90) -> [bb81];
-    }
-
-    bb80: {
-        _93 = make_bound_method baml.iter.Flatten.Iterable.iter(copy _90);
-        _91 = call copy _93() -> [bb81];
-    }
-
-    bb81: {
-        _1.1 = copy _91;
-        goto -> bb1;
-    }
-
-    bb82: {
-        _0 = baml.iter.Done {  };
-        goto -> bb108;
-    }
-
-    bb83: {
-        _36 = copy _2;
-        _38 = is_type(copy _36, baml.iter.Flatten<#0?, _, _>);
-        branch copy _38 -> [bb105, bb84];
-    }
-
-    bb84: {
-        _40 = is_type(copy _36, baml.iter.Range);
-        branch copy _40 -> [bb104, bb85];
-    }
-
-    bb85: {
-        _41 = is_type(copy _36, baml.iter.ArrayIterator<#0?>);
-        branch copy _41 -> [bb103, bb86];
-    }
-
-    bb86: {
-        _43 = is_type(copy _36, baml.iter.StepBy<#0?, #2?>);
-        branch copy _43 -> [bb102, bb87];
-    }
-
-    bb87: {
-        _46 = is_type(copy _36, baml.iter.Chain<#0?, #2?>);
-        branch copy _46 -> [bb101, bb88];
-    }
-
-    bb88: {
-        _49 = is_type(copy _36, baml.iter.Repeat<#0?>);
-        branch copy _49 -> [bb100, bb89];
-    }
-
-    bb89: {
-        _51 = is_type(copy _36, baml.iter.Map<_, #0?, _, _>);
-        branch copy _51 -> [bb99, bb90];
-    }
-
-    bb90: {
-        _53 = is_type(copy _36, baml.iter.Filter<#0?, _, _>);
-        branch copy _53 -> [bb98, bb91];
-    }
-
-    bb91: {
-        _55 = is_type(copy _36, baml.iter.FilterMap<_, #0?, _, _>);
-        branch copy _55 -> [bb97, bb92];
-    }
-
-    bb92: {
-        _57 = is_type(copy _36, baml.iter.FlatMap<_, #0?, _, _, _>);
-        branch copy _57 -> [bb96, bb93];
-    }
-
-    bb93: {
-        _59 = is_type(copy _36, baml.iter.Peekable<#0?, #2?>);
-        branch copy _59 -> [bb95, bb94];
-    }
-
-    bb94: {
         unreachable;
     }
 
+    bb72: {
+        _115 = load_type(#1);
+        _116 = load_type(#3);
+        _92 = call const fn baml.iter.Peekable.Iterable.iter<copy _115, copy _116>(copy _91) -> [bb83];
+    }
+
+    bb73: {
+        _113 = make_bound_method baml.iter.FlatMap.Iterable.iter(copy _91);
+        _92 = call copy _113() -> [bb83];
+    }
+
+    bb74: {
+        _111 = make_bound_method baml.iter.FilterMap.Iterable.iter(copy _91);
+        _92 = call copy _111() -> [bb83];
+    }
+
+    bb75: {
+        _109 = make_bound_method baml.iter.Filter.Iterable.iter(copy _91);
+        _92 = call copy _109() -> [bb83];
+    }
+
+    bb76: {
+        _107 = make_bound_method baml.iter.Map.Iterable.iter(copy _91);
+        _92 = call copy _107() -> [bb83];
+    }
+
+    bb77: {
+        _105 = load_type(#1);
+        _92 = call const fn baml.iter.Repeat.Iterable.iter<copy _105>(copy _91) -> [bb83];
+    }
+
+    bb78: {
+        _102 = load_type(#1);
+        _103 = load_type(#3);
+        _92 = call const fn baml.iter.Chain.Iterable.iter<copy _102, copy _103>(copy _91) -> [bb83];
+    }
+
+    bb79: {
+        _99 = load_type(#1);
+        _100 = load_type(#3);
+        _92 = call const fn baml.iter.StepBy.Iterable.iter<copy _99, copy _100>(copy _91) -> [bb83];
+    }
+
+    bb80: {
+        _97 = load_type(#1);
+        _92 = call const fn baml.iter.ArrayIterator.Iterable.iter<copy _97>(copy _91) -> [bb83];
+    }
+
+    bb81: {
+        _92 = call const fn baml.iter.Range.Iterable.iter(copy _91) -> [bb83];
+    }
+
+    bb82: {
+        _94 = make_bound_method baml.iter.Flatten.Iterable.iter(copy _91);
+        _92 = call copy _94() -> [bb83];
+    }
+
+    bb83: {
+        _1.1 = copy _92;
+        goto -> bb1;
+    }
+
+    bb84: {
+        _0 = baml.iter.Done {  };
+        goto -> bb110;
+    }
+
+    bb85: {
+        _36 = copy _2;
+        _38 = is_type(copy _36, baml.iter.Flatten<_, #1?, _, _>);
+        branch copy _38 -> [bb107, bb86];
+    }
+
+    bb86: {
+        _40 = is_type(copy _36, baml.iter.Range);
+        branch copy _40 -> [bb106, bb87];
+    }
+
+    bb87: {
+        _41 = is_type(copy _36, baml.iter.ArrayIterator<#1?>);
+        branch copy _41 -> [bb105, bb88];
+    }
+
+    bb88: {
+        _43 = is_type(copy _36, baml.iter.StepBy<#1?, #3?>);
+        branch copy _43 -> [bb104, bb89];
+    }
+
+    bb89: {
+        _46 = is_type(copy _36, baml.iter.Chain<#1?, #3?>);
+        branch copy _46 -> [bb103, bb90];
+    }
+
+    bb90: {
+        _49 = is_type(copy _36, baml.iter.Repeat<#1?>);
+        branch copy _49 -> [bb102, bb91];
+    }
+
+    bb91: {
+        _51 = is_type(copy _36, baml.iter.Map<_, #1?, _, _>);
+        branch copy _51 -> [bb101, bb92];
+    }
+
+    bb92: {
+        _53 = is_type(copy _36, baml.iter.Filter<#1?, _, _>);
+        branch copy _53 -> [bb100, bb93];
+    }
+
+    bb93: {
+        _55 = is_type(copy _36, baml.iter.FilterMap<_, #1?, _, _>);
+        branch copy _55 -> [bb99, bb94];
+    }
+
+    bb94: {
+        _57 = is_type(copy _36, baml.iter.FlatMap<_, #1?, _, _, _>);
+        branch copy _57 -> [bb98, bb95];
+    }
+
     bb95: {
-        _60 = load_type(#0);
-        _61 = load_type(#2);
-        _37 = call const fn baml.iter.Peekable.Iterator.next<copy _60, copy _61>(copy _36) -> [bb106];
+        _59 = is_type(copy _36, baml.iter.Peekable<#1?, #3?>);
+        branch copy _59 -> [bb97, bb96];
     }
 
     bb96: {
-        _58 = make_bound_method baml.iter.FlatMap.Iterator.next(copy _36);
-        _37 = call copy _58() -> [bb106];
+        unreachable;
     }
 
     bb97: {
-        _56 = make_bound_method baml.iter.FilterMap.Iterator.next(copy _36);
-        _37 = call copy _56() -> [bb106];
+        _60 = load_type(#1);
+        _61 = load_type(#3);
+        _37 = call const fn baml.iter.Peekable.Iterator.next<copy _60, copy _61>(copy _36) -> [bb108];
     }
 
     bb98: {
-        _54 = make_bound_method baml.iter.Filter.Iterator.next(copy _36);
-        _37 = call copy _54() -> [bb106];
+        _58 = make_bound_method baml.iter.FlatMap.Iterator.next(copy _36);
+        _37 = call copy _58() -> [bb108];
     }
 
     bb99: {
-        _52 = make_bound_method baml.iter.Map.Iterator.next(copy _36);
-        _37 = call copy _52() -> [bb106];
+        _56 = make_bound_method baml.iter.FilterMap.Iterator.next(copy _36);
+        _37 = call copy _56() -> [bb108];
     }
 
     bb100: {
-        _50 = load_type(#0);
-        _37 = call const fn baml.iter.Repeat.Iterator.next<copy _50>(copy _36) -> [bb106];
+        _54 = make_bound_method baml.iter.Filter.Iterator.next(copy _36);
+        _37 = call copy _54() -> [bb108];
     }
 
     bb101: {
-        _47 = load_type(#0);
-        _48 = load_type(#2);
-        _37 = call const fn baml.iter.Chain.Iterator.next<copy _47, copy _48>(copy _36) -> [bb106];
+        _52 = make_bound_method baml.iter.Map.Iterator.next(copy _36);
+        _37 = call copy _52() -> [bb108];
     }
 
     bb102: {
-        _44 = load_type(#0);
-        _45 = load_type(#2);
-        _37 = call const fn baml.iter.StepBy.Iterator.next<copy _44, copy _45>(copy _36) -> [bb106];
+        _50 = load_type(#1);
+        _37 = call const fn baml.iter.Repeat.Iterator.next<copy _50>(copy _36) -> [bb108];
     }
 
     bb103: {
-        _42 = load_type(#0);
-        _37 = call const fn baml.iter.ArrayIterator.Iterator.next<copy _42>(copy _36) -> [bb106];
+        _47 = load_type(#1);
+        _48 = load_type(#3);
+        _37 = call const fn baml.iter.Chain.Iterator.next<copy _47, copy _48>(copy _36) -> [bb108];
     }
 
     bb104: {
-        _37 = call const fn baml.iter.Range.Iterator.next(copy _36) -> [bb106];
+        _44 = load_type(#1);
+        _45 = load_type(#3);
+        _37 = call const fn baml.iter.StepBy.Iterator.next<copy _44, copy _45>(copy _36) -> [bb108];
     }
 
     bb105: {
-        _39 = make_bound_method baml.iter.Flatten.Iterator.next(copy _36);
-        _37 = call copy _39() -> [bb106];
+        _42 = load_type(#1);
+        _37 = call const fn baml.iter.ArrayIterator.Iterator.next<copy _42>(copy _36) -> [bb108];
     }
 
     bb106: {
-        _62 = is_type(copy _37, baml.iter.Done);
-        branch copy _62 -> [bb109, bb107];
+        _37 = call const fn baml.iter.Range.Iterator.next(copy _36) -> [bb108];
     }
 
     bb107: {
-        _63 = copy _37;
-        _0 = copy _63;
-        goto -> bb108;
+        _39 = make_bound_method baml.iter.Flatten.Iterator.next(copy _36);
+        _37 = call copy _39() -> [bb108];
     }
 
     bb108: {
-        return;
+        _62 = is_type(copy _37, baml.iter.Done);
+        branch copy _62 -> [bb111, bb109];
     }
 
     bb109: {
+        _63 = copy _37;
+        _0 = copy _63;
+        goto -> bb110;
+    }
+
+    bb110: {
+        return;
+    }
+
+    bb111: {
         _1.1 = baml.iter.Done {  };
         goto -> bb1;
     }
@@ -5906,17 +5916,17 @@ fn baml.iter.FlatMap.Iterator.next(self: null) -> void | baml.iter.Done {
 
     bb3: {
         _2 = copy _1.2;
-        _3 = is_type(copy _2, baml.iter.Flatten<#1?, _, _>);
+        _3 = is_type(copy _2, baml.iter.Flatten<_, #1?, _, _>);
         branch copy _3 -> [bb86, bb4];
     }
 
     bb4: {
-        _4 = is_type(copy _2, baml.iter.Flatten<#1?, _, _>);
+        _4 = is_type(copy _2, baml.iter.Flatten<_, #1?, _, _>);
         branch copy _4 -> [bb86, bb5];
     }
 
     bb5: {
-        _5 = is_type(copy _2, baml.iter.Flatten<#1?, _, _>);
+        _5 = is_type(copy _2, baml.iter.Flatten<_, #1?, _, _>);
         branch copy _5 -> [bb86, bb6];
     }
 
@@ -6072,7 +6082,7 @@ fn baml.iter.FlatMap.Iterator.next(self: null) -> void | baml.iter.Done {
 
     bb36: {
         _65 = copy _1.0;
-        _66 = is_type(copy _65, baml.iter.Flatten<#0?, _, _>);
+        _66 = is_type(copy _65, baml.iter.Flatten<_, #0?, _, _>);
         branch copy _66 -> [bb58, bb37];
     }
 
@@ -6200,7 +6210,7 @@ fn baml.iter.FlatMap.Iterator.next(self: null) -> void | baml.iter.Done {
     }
 
     bb61: {
-        _96 = is_type(copy _93, baml.iter.Flatten<#1?, _, _>);
+        _96 = is_type(copy _93, baml.iter.Flatten<_, #1?, _, _>);
         branch copy _96 -> [bb83, bb62];
     }
 
@@ -6327,7 +6337,7 @@ fn baml.iter.FlatMap.Iterator.next(self: null) -> void | baml.iter.Done {
 
     bb86: {
         _36 = copy _2;
-        _38 = is_type(copy _36, baml.iter.Flatten<#1?, _, _>);
+        _38 = is_type(copy _36, baml.iter.Flatten<_, #1?, _, _>);
         branch copy _38 -> [bb108, bb87];
     }
 
@@ -6516,7 +6526,7 @@ fn baml.iter.FilterMap.Iterator.next(self: null) -> void | baml.iter.Done {
 
     bb3: {
         _3 = copy _1.0;
-        _4 = is_type(copy _3, baml.iter.Flatten<#0?, _, _>);
+        _4 = is_type(copy _3, baml.iter.Flatten<_, #0?, _, _>);
         branch copy _4 -> [bb25, bb4];
     }
 
@@ -6703,7 +6713,7 @@ fn baml.iter.Peekable.peek(self: baml.iter.Peekable) -> void | baml.iter.Done {
 
     bb1: {
         _4 = copy _1.0;
-        _5 = is_type(copy _4, baml.iter.Flatten<#0?, _, _>);
+        _5 = is_type(copy _4, baml.iter.Flatten<_, #0?, _, _>);
         branch copy _5 -> [bb23, bb2];
     }
 
@@ -7352,7 +7362,7 @@ fn baml.iter.Chain.to_json(self: baml.iter.Chain) -> baml.json.json {
 
     bb0: {
         _4 = copy _1;
-        _5 = is_type(copy _4, baml.iter.Flatten<#0?, _, _>);
+        _5 = is_type(copy _4, baml.iter.Flatten<_, #0?, _, _>);
         branch copy _5 -> [bb22, bb1];
     }
 
@@ -7466,12 +7476,12 @@ fn baml.iter.Chain.to_json(self: baml.iter.Chain) -> baml.json.json {
     }
 
     bb23: {
-        _16 = is_type(copy _3, baml.iter.Flatten<#0?, _, _>);
+        _16 = is_type(copy _3, baml.iter.Flatten<_, #0?, _, _>);
         branch copy _16 -> [bb67, bb24];
     }
 
     bb24: {
-        _18 = is_type(copy _3, baml.iter.Flatten<#0?, _, _>);
+        _18 = is_type(copy _3, baml.iter.Flatten<_, #0?, _, _>);
         branch copy _18 -> [bb66, bb25];
     }
 
@@ -7696,12 +7706,12 @@ fn baml.iter.Chain.to_json(self: baml.iter.Chain) -> baml.json.json {
     bb68: {
         _66 = copy _1;
         _65 = copy _66.1;
-        _67 = is_type(copy _65, baml.iter.Flatten<#0?, _, _>);
+        _67 = is_type(copy _65, baml.iter.Flatten<_, #0?, _, _>);
         branch copy _67 -> [bb112, bb69];
     }
 
     bb69: {
-        _69 = is_type(copy _65, baml.iter.Flatten<#0?, _, _>);
+        _69 = is_type(copy _65, baml.iter.Flatten<_, #0?, _, _>);
         branch copy _69 -> [bb111, bb70];
     }
 
@@ -8035,7 +8045,7 @@ fn baml.iter.StepBy.to_json(self: baml.iter.StepBy) -> baml.json.json {
 
     bb0: {
         _4 = copy _1;
-        _5 = is_type(copy _4, baml.iter.Flatten<#0?, _, _>);
+        _5 = is_type(copy _4, baml.iter.Flatten<_, #0?, _, _>);
         branch copy _5 -> [bb22, bb1];
     }
 
@@ -8149,12 +8159,12 @@ fn baml.iter.StepBy.to_json(self: baml.iter.StepBy) -> baml.json.json {
     }
 
     bb23: {
-        _16 = is_type(copy _3, baml.iter.Flatten<#0?, _, _>);
+        _16 = is_type(copy _3, baml.iter.Flatten<_, #0?, _, _>);
         branch copy _16 -> [bb67, bb24];
     }
 
     bb24: {
-        _18 = is_type(copy _3, baml.iter.Flatten<#0?, _, _>);
+        _18 = is_type(copy _3, baml.iter.Flatten<_, #0?, _, _>);
         branch copy _18 -> [bb66, bb25];
     }
 
@@ -8430,7 +8440,7 @@ fn baml.iter.Repeat.to_json(self: baml.iter.Repeat) -> baml.json.json {
 
     bb1: {
         _8 = copy _1;
-        _9 = is_type(copy _8, baml.iter.Flatten<#0?, void, void>);
+        _9 = is_type(copy _8, baml.iter.Flatten<_, #0?, void, void>);
         branch copy _9 -> [bb23, bb2];
     }
 
@@ -8633,7 +8643,7 @@ fn baml.iter.Peekable.to_json(self: baml.iter.Peekable) -> baml.json.json {
 
     bb0: {
         _4 = copy _1;
-        _5 = is_type(copy _4, baml.iter.Flatten<#0?, _, _>);
+        _5 = is_type(copy _4, baml.iter.Flatten<_, #0?, _, _>);
         branch copy _5 -> [bb22, bb1];
     }
 
@@ -8747,12 +8757,12 @@ fn baml.iter.Peekable.to_json(self: baml.iter.Peekable) -> baml.json.json {
     }
 
     bb23: {
-        _16 = is_type(copy _3, baml.iter.Flatten<#0?, _, _>);
+        _16 = is_type(copy _3, baml.iter.Flatten<_, #0?, _, _>);
         branch copy _16 -> [bb67, bb24];
     }
 
     bb24: {
-        _18 = is_type(copy _3, baml.iter.Flatten<#0?, _, _>);
+        _18 = is_type(copy _3, baml.iter.Flatten<_, #0?, _, _>);
         branch copy _18 -> [bb66, bb25];
     }
 
@@ -9044,8 +9054,8 @@ fn baml.iter.Flatten.to_json(self: baml.iter.Flatten) -> baml.json.json {
     let _0: baml.json.json // _0 // return
     let _1: baml.iter.Flatten // self // param
     let _2: void
-    let _3: baml.iter.Iterator<Item = baml.iter.Iterable<Item = unknown, Error = unknown>, Error = unknown>
-    let _4: baml.iter.Flatten<unknown, unknown, unknown>
+    let _3: baml.iter.Iterator<Item = unknown, Error = unknown>
+    let _4: baml.iter.Flatten<unknown, unknown, unknown, unknown>
     let _5: bool
     let _6: bool
     let _7: bool
@@ -9058,27 +9068,27 @@ fn baml.iter.Flatten.to_json(self: baml.iter.Flatten) -> baml.json.json {
     let _14: bool
     let _15: unknown
     let _16: bool
-    let _17: type
+    let _17: bool
     let _18: bool
     let _19: type
     let _20: bool
     let _21: type
-    let _22: type
-    let _23: bool
+    let _22: bool
+    let _23: type
     let _24: type
-    let _25: type
-    let _26: bool
+    let _25: bool
+    let _26: type
     let _27: type
-    let _28: type
-    let _29: bool
+    let _28: bool
+    let _29: type
     let _30: type
-    let _31: type
-    let _32: bool
+    let _31: bool
+    let _32: type
     let _33: type
     let _34: bool
     let _35: type
     let _36: bool
-    let _37: unknown
+    let _37: type
     let _38: bool
     let _39: unknown
     let _40: bool
@@ -9094,43 +9104,43 @@ fn baml.iter.Flatten.to_json(self: baml.iter.Flatten) -> baml.json.json {
     let _50: bool
     let _51: unknown
     let _52: bool
-    let _53: type
-    let _54: type
-    let _55: bool
+    let _53: unknown
+    let _54: bool
+    let _55: type
     let _56: type
-    let _57: type
-    let _58: void
-    let _59: baml.iter.Flatten<unknown, unknown, unknown>
-    let _60: baml.iter.Iterator<Item = unknown, Error = unknown> | baml.iter.Done
-    let _61: baml.iter.Flatten<unknown, unknown, unknown>
-    let _62: bool
-    let _63: unknown
+    let _57: bool
+    let _58: type
+    let _59: type
+    let _60: void
+    let _61: baml.iter.Flatten<unknown, unknown, unknown, unknown>
+    let _62: baml.iter.Iterator<Item = unknown, Error = unknown> | baml.iter.Done
+    let _63: baml.iter.Flatten<unknown, unknown, unknown, unknown>
     let _64: bool
     let _65: unknown
     let _66: bool
-    let _67: bool
+    let _67: unknown
     let _68: bool
-    let _69: type
+    let _69: bool
     let _70: bool
     let _71: type
     let _72: bool
     let _73: type
-    let _74: type
-    let _75: bool
+    let _74: bool
+    let _75: type
     let _76: type
-    let _77: type
-    let _78: bool
+    let _77: bool
+    let _78: type
     let _79: type
-    let _80: type
-    let _81: bool
+    let _80: bool
+    let _81: type
     let _82: type
-    let _83: type
-    let _84: bool
+    let _83: bool
+    let _84: type
     let _85: type
     let _86: bool
     let _87: type
     let _88: bool
-    let _89: unknown
+    let _89: type
     let _90: bool
     let _91: unknown
     let _92: bool
@@ -9146,46 +9156,48 @@ fn baml.iter.Flatten.to_json(self: baml.iter.Flatten) -> baml.json.json {
     let _102: bool
     let _103: unknown
     let _104: bool
-    let _105: type
-    let _106: type
-    let _107: bool
+    let _105: unknown
+    let _106: bool
+    let _107: type
     let _108: type
-    let _109: type
-    let _110: bool
+    let _109: bool
+    let _110: type
+    let _111: type
+    let _112: bool
 
     bb0: {
         _4 = copy _1;
-        _5 = is_type(copy _4, baml.iter.Flatten<#0?, #1?, #2?>);
+        _5 = is_type(copy _4, baml.iter.Flatten<_, #1?, #2?, #3?>);
         branch copy _5 -> [bb14, bb1];
     }
 
     bb1: {
-        _6 = is_type(copy _4, baml.iter.StepBy<#0?, #1? | #2?>);
+        _6 = is_type(copy _4, baml.iter.StepBy<#1?, #2? | #3?>);
         branch copy _6 -> [bb13, bb2];
     }
 
     bb2: {
-        _7 = is_type(copy _4, baml.iter.Chain<#0?, #1? | #2?>);
+        _7 = is_type(copy _4, baml.iter.Chain<#1?, #2? | #3?>);
         branch copy _7 -> [bb12, bb3];
     }
 
     bb3: {
-        _8 = is_type(copy _4, baml.iter.Map<_, #0?, #1?, #2?>);
+        _8 = is_type(copy _4, baml.iter.Map<_, #1?, #2?, #3?>);
         branch copy _8 -> [bb11, bb4];
     }
 
     bb4: {
-        _9 = is_type(copy _4, baml.iter.Filter<#0?, #1?, #2?>);
+        _9 = is_type(copy _4, baml.iter.Filter<#1?, #2?, #3?>);
         branch copy _9 -> [bb10, bb5];
     }
 
     bb5: {
-        _10 = is_type(copy _4, baml.iter.FilterMap<_, #0?, #1?, #2?>);
+        _10 = is_type(copy _4, baml.iter.FilterMap<_, #1?, #2?, #3?>);
         branch copy _10 -> [bb9, bb6];
     }
 
     bb6: {
-        _11 = is_type(copy _4, baml.iter.Peekable<#0?, #1? | #2?>);
+        _11 = is_type(copy _4, baml.iter.Peekable<#1?, #2? | #3?>);
         branch copy _11 -> [bb8, bb7];
     }
 
@@ -9229,461 +9241,479 @@ fn baml.iter.Flatten.to_json(self: baml.iter.Flatten) -> baml.json.json {
     }
 
     bb15: {
-        _12 = is_type(copy _3, baml.iter.Flatten<baml.iter.Iterable<Item = #0?, Error = #2?>, _, _>);
-        branch copy _12 -> [bb55, bb16];
+        _12 = is_type(copy _3, baml.iter.Flatten<_, #0?, _, _>);
+        branch copy _12 -> [bb59, bb16];
     }
 
     bb16: {
-        _14 = is_type(copy _3, baml.iter.Flatten<baml.iter.Iterable<Item = #0?, Error = #2?>, _, _>);
-        branch copy _14 -> [bb54, bb17];
+        _14 = is_type(copy _3, baml.iter.Flatten<_, #0?, _, _>);
+        branch copy _14 -> [bb58, bb17];
     }
 
     bb17: {
-        _16 = is_type(copy _3, baml.iter.ArrayIterator<baml.iter.Iterable<Item = #0?, Error = #2?>>);
-        branch copy _16 -> [bb53, bb18];
+        _16 = is_type(copy _3, baml.iter.Range);
+        branch copy _16 -> [bb57, bb18];
     }
 
     bb18: {
-        _18 = is_type(copy _3, baml.iter.ArrayIterator<baml.iter.Iterable<Item = #0?, Error = #2?>>);
-        branch copy _18 -> [bb52, bb19];
+        _17 = is_type(copy _3, baml.iter.Range);
+        branch copy _17 -> [bb56, bb19];
     }
 
     bb19: {
-        _20 = is_type(copy _3, baml.iter.StepBy<baml.iter.Iterable<Item = #0?, Error = #2?>, #1?>);
-        branch copy _20 -> [bb51, bb20];
+        _18 = is_type(copy _3, baml.iter.ArrayIterator<#0?>);
+        branch copy _18 -> [bb55, bb20];
     }
 
     bb20: {
-        _23 = is_type(copy _3, baml.iter.StepBy<baml.iter.Iterable<Item = #0?, Error = #2?>, #1?>);
-        branch copy _23 -> [bb50, bb21];
+        _20 = is_type(copy _3, baml.iter.ArrayIterator<#0?>);
+        branch copy _20 -> [bb54, bb21];
     }
 
     bb21: {
-        _26 = is_type(copy _3, baml.iter.Chain<baml.iter.Iterable<Item = #0?, Error = #2?>, #1?>);
-        branch copy _26 -> [bb49, bb22];
+        _22 = is_type(copy _3, baml.iter.StepBy<#0?, #2?>);
+        branch copy _22 -> [bb53, bb22];
     }
 
     bb22: {
-        _29 = is_type(copy _3, baml.iter.Chain<baml.iter.Iterable<Item = #0?, Error = #2?>, #1?>);
-        branch copy _29 -> [bb48, bb23];
+        _25 = is_type(copy _3, baml.iter.StepBy<#0?, #2?>);
+        branch copy _25 -> [bb52, bb23];
     }
 
     bb23: {
-        _32 = is_type(copy _3, baml.iter.Repeat<baml.iter.Iterable<Item = #0?, Error = #2?>>);
-        branch copy _32 -> [bb47, bb24];
+        _28 = is_type(copy _3, baml.iter.Chain<#0?, #2?>);
+        branch copy _28 -> [bb51, bb24];
     }
 
     bb24: {
-        _34 = is_type(copy _3, baml.iter.Repeat<baml.iter.Iterable<Item = #0?, Error = #2?>>);
-        branch copy _34 -> [bb46, bb25];
+        _31 = is_type(copy _3, baml.iter.Chain<#0?, #2?>);
+        branch copy _31 -> [bb50, bb25];
     }
 
     bb25: {
-        _36 = is_type(copy _3, baml.iter.Map<_, baml.iter.Iterable<Item = #0?, Error = #2?>, _, _>);
-        branch copy _36 -> [bb45, bb26];
+        _34 = is_type(copy _3, baml.iter.Repeat<#0?>);
+        branch copy _34 -> [bb49, bb26];
     }
 
     bb26: {
-        _38 = is_type(copy _3, baml.iter.Map<_, baml.iter.Iterable<Item = #0?, Error = #2?>, _, _>);
-        branch copy _38 -> [bb44, bb27];
+        _36 = is_type(copy _3, baml.iter.Repeat<#0?>);
+        branch copy _36 -> [bb48, bb27];
     }
 
     bb27: {
-        _40 = is_type(copy _3, baml.iter.Filter<baml.iter.Iterable<Item = #0?, Error = #2?>, _, _>);
-        branch copy _40 -> [bb43, bb28];
+        _38 = is_type(copy _3, baml.iter.Map<_, #0?, _, _>);
+        branch copy _38 -> [bb47, bb28];
     }
 
     bb28: {
-        _42 = is_type(copy _3, baml.iter.Filter<baml.iter.Iterable<Item = #0?, Error = #2?>, _, _>);
-        branch copy _42 -> [bb42, bb29];
+        _40 = is_type(copy _3, baml.iter.Map<_, #0?, _, _>);
+        branch copy _40 -> [bb46, bb29];
     }
 
     bb29: {
-        _44 = is_type(copy _3, baml.iter.FilterMap<_, baml.iter.Iterable<Item = #0?, Error = #2?>, _, _>);
-        branch copy _44 -> [bb41, bb30];
+        _42 = is_type(copy _3, baml.iter.Filter<#0?, _, _>);
+        branch copy _42 -> [bb45, bb30];
     }
 
     bb30: {
-        _46 = is_type(copy _3, baml.iter.FilterMap<_, baml.iter.Iterable<Item = #0?, Error = #2?>, _, _>);
-        branch copy _46 -> [bb40, bb31];
+        _44 = is_type(copy _3, baml.iter.Filter<#0?, _, _>);
+        branch copy _44 -> [bb44, bb31];
     }
 
     bb31: {
-        _48 = is_type(copy _3, baml.iter.FlatMap<_, baml.iter.Iterable<Item = #0?, Error = #2?>, _, _, _>);
-        branch copy _48 -> [bb39, bb32];
+        _46 = is_type(copy _3, baml.iter.FilterMap<_, #0?, _, _>);
+        branch copy _46 -> [bb43, bb32];
     }
 
     bb32: {
-        _50 = is_type(copy _3, baml.iter.FlatMap<_, baml.iter.Iterable<Item = #0?, Error = #2?>, _, _, _>);
-        branch copy _50 -> [bb38, bb33];
+        _48 = is_type(copy _3, baml.iter.FilterMap<_, #0?, _, _>);
+        branch copy _48 -> [bb42, bb33];
     }
 
     bb33: {
-        _52 = is_type(copy _3, baml.iter.Peekable<baml.iter.Iterable<Item = #0?, Error = #2?>, #1?>);
-        branch copy _52 -> [bb37, bb34];
+        _50 = is_type(copy _3, baml.iter.FlatMap<_, #0?, _, _, _>);
+        branch copy _50 -> [bb41, bb34];
     }
 
     bb34: {
-        _55 = is_type(copy _3, baml.iter.Peekable<baml.iter.Iterable<Item = #0?, Error = #2?>, #1?>);
-        branch copy _55 -> [bb36, bb35];
+        _52 = is_type(copy _3, baml.iter.FlatMap<_, #0?, _, _, _>);
+        branch copy _52 -> [bb40, bb35];
     }
 
     bb35: {
-        unreachable;
+        _54 = is_type(copy _3, baml.iter.Peekable<#0?, #2?>);
+        branch copy _54 -> [bb39, bb36];
     }
 
     bb36: {
-        _56 = load_type(baml.iter.Iterable<Item = #0, Error = #2>);
-        _57 = load_type(#1);
-        _2 = call const fn baml.iter.Peekable.to_json<copy _56, copy _57>(copy _3) -> [bb56];
+        _57 = is_type(copy _3, baml.iter.Peekable<#0?, #2?>);
+        branch copy _57 -> [bb38, bb37];
     }
 
     bb37: {
-        _53 = load_type(baml.iter.Iterable<Item = #0, Error = #2>);
-        _54 = load_type(#1);
-        _2 = call const fn baml.iter.Peekable.to_json<copy _53, copy _54>(copy _3) -> [bb56];
-    }
-
-    bb38: {
-        _51 = make_bound_method baml.iter.FlatMap.to_json(copy _3);
-        _2 = call copy _51() -> [bb56];
-    }
-
-    bb39: {
-        _49 = make_bound_method baml.iter.FlatMap.to_json(copy _3);
-        _2 = call copy _49() -> [bb56];
-    }
-
-    bb40: {
-        _47 = make_bound_method baml.iter.FilterMap.to_json(copy _3);
-        _2 = call copy _47() -> [bb56];
-    }
-
-    bb41: {
-        _45 = make_bound_method baml.iter.FilterMap.to_json(copy _3);
-        _2 = call copy _45() -> [bb56];
-    }
-
-    bb42: {
-        _43 = make_bound_method baml.iter.Filter.to_json(copy _3);
-        _2 = call copy _43() -> [bb56];
-    }
-
-    bb43: {
-        _41 = make_bound_method baml.iter.Filter.to_json(copy _3);
-        _2 = call copy _41() -> [bb56];
-    }
-
-    bb44: {
-        _39 = make_bound_method baml.iter.Map.to_json(copy _3);
-        _2 = call copy _39() -> [bb56];
-    }
-
-    bb45: {
-        _37 = make_bound_method baml.iter.Map.to_json(copy _3);
-        _2 = call copy _37() -> [bb56];
-    }
-
-    bb46: {
-        _35 = load_type(baml.iter.Iterable<Item = #0, Error = #2>);
-        _2 = call const fn baml.iter.Repeat.to_json<copy _35>(copy _3) -> [bb56];
-    }
-
-    bb47: {
-        _33 = load_type(baml.iter.Iterable<Item = #0, Error = #2>);
-        _2 = call const fn baml.iter.Repeat.to_json<copy _33>(copy _3) -> [bb56];
-    }
-
-    bb48: {
-        _30 = load_type(baml.iter.Iterable<Item = #0, Error = #2>);
-        _31 = load_type(#1);
-        _2 = call const fn baml.iter.Chain.to_json<copy _30, copy _31>(copy _3) -> [bb56];
-    }
-
-    bb49: {
-        _27 = load_type(baml.iter.Iterable<Item = #0, Error = #2>);
-        _28 = load_type(#1);
-        _2 = call const fn baml.iter.Chain.to_json<copy _27, copy _28>(copy _3) -> [bb56];
-    }
-
-    bb50: {
-        _24 = load_type(baml.iter.Iterable<Item = #0, Error = #2>);
-        _25 = load_type(#1);
-        _2 = call const fn baml.iter.StepBy.to_json<copy _24, copy _25>(copy _3) -> [bb56];
-    }
-
-    bb51: {
-        _21 = load_type(baml.iter.Iterable<Item = #0, Error = #2>);
-        _22 = load_type(#1);
-        _2 = call const fn baml.iter.StepBy.to_json<copy _21, copy _22>(copy _3) -> [bb56];
-    }
-
-    bb52: {
-        _19 = load_type(baml.iter.Iterable<Item = #0, Error = #2>);
-        _2 = call const fn baml.iter.ArrayIterator.to_json<copy _19>(copy _3) -> [bb56];
-    }
-
-    bb53: {
-        _17 = load_type(baml.iter.Iterable<Item = #0, Error = #2>);
-        _2 = call const fn baml.iter.ArrayIterator.to_json<copy _17>(copy _3) -> [bb56];
-    }
-
-    bb54: {
-        _15 = make_bound_method baml.iter.Flatten.to_json(copy _3);
-        _2 = call copy _15() -> [bb56];
-    }
-
-    bb55: {
-        _13 = make_bound_method baml.iter.Flatten.to_json(copy _3);
-        _2 = call copy _13() -> [bb56];
-    }
-
-    bb56: {
-        _59 = copy _1;
-        _61 = copy _1;
-        _60 = copy _61.1;
-        _62 = is_type(copy _60, baml.iter.Flatten<#0?, _, _>);
-        branch copy _62 -> [bb102, bb57];
-    }
-
-    bb57: {
-        _64 = is_type(copy _60, baml.iter.Flatten<#0?, _, _>);
-        branch copy _64 -> [bb101, bb58];
-    }
-
-    bb58: {
-        _66 = is_type(copy _60, baml.iter.Range);
-        branch copy _66 -> [bb100, bb59];
-    }
-
-    bb59: {
-        _67 = is_type(copy _60, baml.iter.Range);
-        branch copy _67 -> [bb99, bb60];
-    }
-
-    bb60: {
-        _68 = is_type(copy _60, baml.iter.ArrayIterator<#0?>);
-        branch copy _68 -> [bb98, bb61];
-    }
-
-    bb61: {
-        _70 = is_type(copy _60, baml.iter.ArrayIterator<#0?>);
-        branch copy _70 -> [bb97, bb62];
-    }
-
-    bb62: {
-        _72 = is_type(copy _60, baml.iter.StepBy<#0?, #2?>);
-        branch copy _72 -> [bb96, bb63];
-    }
-
-    bb63: {
-        _75 = is_type(copy _60, baml.iter.StepBy<#0?, #2?>);
-        branch copy _75 -> [bb95, bb64];
-    }
-
-    bb64: {
-        _78 = is_type(copy _60, baml.iter.Chain<#0?, #2?>);
-        branch copy _78 -> [bb94, bb65];
-    }
-
-    bb65: {
-        _81 = is_type(copy _60, baml.iter.Chain<#0?, #2?>);
-        branch copy _81 -> [bb93, bb66];
-    }
-
-    bb66: {
-        _84 = is_type(copy _60, baml.iter.Repeat<#0?>);
-        branch copy _84 -> [bb92, bb67];
-    }
-
-    bb67: {
-        _86 = is_type(copy _60, baml.iter.Repeat<#0?>);
-        branch copy _86 -> [bb91, bb68];
-    }
-
-    bb68: {
-        _88 = is_type(copy _60, baml.iter.Map<_, #0?, _, _>);
-        branch copy _88 -> [bb90, bb69];
-    }
-
-    bb69: {
-        _90 = is_type(copy _60, baml.iter.Map<_, #0?, _, _>);
-        branch copy _90 -> [bb89, bb70];
-    }
-
-    bb70: {
-        _92 = is_type(copy _60, baml.iter.Filter<#0?, _, _>);
-        branch copy _92 -> [bb88, bb71];
-    }
-
-    bb71: {
-        _94 = is_type(copy _60, baml.iter.Filter<#0?, _, _>);
-        branch copy _94 -> [bb87, bb72];
-    }
-
-    bb72: {
-        _96 = is_type(copy _60, baml.iter.FilterMap<_, #0?, _, _>);
-        branch copy _96 -> [bb86, bb73];
-    }
-
-    bb73: {
-        _98 = is_type(copy _60, baml.iter.FilterMap<_, #0?, _, _>);
-        branch copy _98 -> [bb85, bb74];
-    }
-
-    bb74: {
-        _100 = is_type(copy _60, baml.iter.FlatMap<_, #0?, _, _, _>);
-        branch copy _100 -> [bb84, bb75];
-    }
-
-    bb75: {
-        _102 = is_type(copy _60, baml.iter.FlatMap<_, #0?, _, _, _>);
-        branch copy _102 -> [bb83, bb76];
-    }
-
-    bb76: {
-        _104 = is_type(copy _60, baml.iter.Peekable<#0?, #2?>);
-        branch copy _104 -> [bb82, bb77];
-    }
-
-    bb77: {
-        _107 = is_type(copy _60, baml.iter.Peekable<#0?, #2?>);
-        branch copy _107 -> [bb81, bb78];
-    }
-
-    bb78: {
-        _110 = is_type(copy _60, baml.iter.Done);
-        branch copy _110 -> [bb80, bb79];
-    }
-
-    bb79: {
         unreachable;
     }
 
+    bb38: {
+        _58 = load_type(#0);
+        _59 = load_type(#2);
+        _2 = call const fn baml.iter.Peekable.to_json<copy _58, copy _59>(copy _3) -> [bb60];
+    }
+
+    bb39: {
+        _55 = load_type(#0);
+        _56 = load_type(#2);
+        _2 = call const fn baml.iter.Peekable.to_json<copy _55, copy _56>(copy _3) -> [bb60];
+    }
+
+    bb40: {
+        _53 = make_bound_method baml.iter.FlatMap.to_json(copy _3);
+        _2 = call copy _53() -> [bb60];
+    }
+
+    bb41: {
+        _51 = make_bound_method baml.iter.FlatMap.to_json(copy _3);
+        _2 = call copy _51() -> [bb60];
+    }
+
+    bb42: {
+        _49 = make_bound_method baml.iter.FilterMap.to_json(copy _3);
+        _2 = call copy _49() -> [bb60];
+    }
+
+    bb43: {
+        _47 = make_bound_method baml.iter.FilterMap.to_json(copy _3);
+        _2 = call copy _47() -> [bb60];
+    }
+
+    bb44: {
+        _45 = make_bound_method baml.iter.Filter.to_json(copy _3);
+        _2 = call copy _45() -> [bb60];
+    }
+
+    bb45: {
+        _43 = make_bound_method baml.iter.Filter.to_json(copy _3);
+        _2 = call copy _43() -> [bb60];
+    }
+
+    bb46: {
+        _41 = make_bound_method baml.iter.Map.to_json(copy _3);
+        _2 = call copy _41() -> [bb60];
+    }
+
+    bb47: {
+        _39 = make_bound_method baml.iter.Map.to_json(copy _3);
+        _2 = call copy _39() -> [bb60];
+    }
+
+    bb48: {
+        _37 = load_type(#0);
+        _2 = call const fn baml.iter.Repeat.to_json<copy _37>(copy _3) -> [bb60];
+    }
+
+    bb49: {
+        _35 = load_type(#0);
+        _2 = call const fn baml.iter.Repeat.to_json<copy _35>(copy _3) -> [bb60];
+    }
+
+    bb50: {
+        _32 = load_type(#0);
+        _33 = load_type(#2);
+        _2 = call const fn baml.iter.Chain.to_json<copy _32, copy _33>(copy _3) -> [bb60];
+    }
+
+    bb51: {
+        _29 = load_type(#0);
+        _30 = load_type(#2);
+        _2 = call const fn baml.iter.Chain.to_json<copy _29, copy _30>(copy _3) -> [bb60];
+    }
+
+    bb52: {
+        _26 = load_type(#0);
+        _27 = load_type(#2);
+        _2 = call const fn baml.iter.StepBy.to_json<copy _26, copy _27>(copy _3) -> [bb60];
+    }
+
+    bb53: {
+        _23 = load_type(#0);
+        _24 = load_type(#2);
+        _2 = call const fn baml.iter.StepBy.to_json<copy _23, copy _24>(copy _3) -> [bb60];
+    }
+
+    bb54: {
+        _21 = load_type(#0);
+        _2 = call const fn baml.iter.ArrayIterator.to_json<copy _21>(copy _3) -> [bb60];
+    }
+
+    bb55: {
+        _19 = load_type(#0);
+        _2 = call const fn baml.iter.ArrayIterator.to_json<copy _19>(copy _3) -> [bb60];
+    }
+
+    bb56: {
+        _2 = call const fn baml.iter.Range.to_json(copy _3) -> [bb60];
+    }
+
+    bb57: {
+        _2 = call const fn baml.iter.Range.to_json(copy _3) -> [bb60];
+    }
+
+    bb58: {
+        _15 = make_bound_method baml.iter.Flatten.to_json(copy _3);
+        _2 = call copy _15() -> [bb60];
+    }
+
+    bb59: {
+        _13 = make_bound_method baml.iter.Flatten.to_json(copy _3);
+        _2 = call copy _13() -> [bb60];
+    }
+
+    bb60: {
+        _61 = copy _1;
+        _63 = copy _1;
+        _62 = copy _63.1;
+        _64 = is_type(copy _62, baml.iter.Flatten<_, #1?, _, _>);
+        branch copy _64 -> [bb106, bb61];
+    }
+
+    bb61: {
+        _66 = is_type(copy _62, baml.iter.Flatten<_, #1?, _, _>);
+        branch copy _66 -> [bb105, bb62];
+    }
+
+    bb62: {
+        _68 = is_type(copy _62, baml.iter.Range);
+        branch copy _68 -> [bb104, bb63];
+    }
+
+    bb63: {
+        _69 = is_type(copy _62, baml.iter.Range);
+        branch copy _69 -> [bb103, bb64];
+    }
+
+    bb64: {
+        _70 = is_type(copy _62, baml.iter.ArrayIterator<#1?>);
+        branch copy _70 -> [bb102, bb65];
+    }
+
+    bb65: {
+        _72 = is_type(copy _62, baml.iter.ArrayIterator<#1?>);
+        branch copy _72 -> [bb101, bb66];
+    }
+
+    bb66: {
+        _74 = is_type(copy _62, baml.iter.StepBy<#1?, #3?>);
+        branch copy _74 -> [bb100, bb67];
+    }
+
+    bb67: {
+        _77 = is_type(copy _62, baml.iter.StepBy<#1?, #3?>);
+        branch copy _77 -> [bb99, bb68];
+    }
+
+    bb68: {
+        _80 = is_type(copy _62, baml.iter.Chain<#1?, #3?>);
+        branch copy _80 -> [bb98, bb69];
+    }
+
+    bb69: {
+        _83 = is_type(copy _62, baml.iter.Chain<#1?, #3?>);
+        branch copy _83 -> [bb97, bb70];
+    }
+
+    bb70: {
+        _86 = is_type(copy _62, baml.iter.Repeat<#1?>);
+        branch copy _86 -> [bb96, bb71];
+    }
+
+    bb71: {
+        _88 = is_type(copy _62, baml.iter.Repeat<#1?>);
+        branch copy _88 -> [bb95, bb72];
+    }
+
+    bb72: {
+        _90 = is_type(copy _62, baml.iter.Map<_, #1?, _, _>);
+        branch copy _90 -> [bb94, bb73];
+    }
+
+    bb73: {
+        _92 = is_type(copy _62, baml.iter.Map<_, #1?, _, _>);
+        branch copy _92 -> [bb93, bb74];
+    }
+
+    bb74: {
+        _94 = is_type(copy _62, baml.iter.Filter<#1?, _, _>);
+        branch copy _94 -> [bb92, bb75];
+    }
+
+    bb75: {
+        _96 = is_type(copy _62, baml.iter.Filter<#1?, _, _>);
+        branch copy _96 -> [bb91, bb76];
+    }
+
+    bb76: {
+        _98 = is_type(copy _62, baml.iter.FilterMap<_, #1?, _, _>);
+        branch copy _98 -> [bb90, bb77];
+    }
+
+    bb77: {
+        _100 = is_type(copy _62, baml.iter.FilterMap<_, #1?, _, _>);
+        branch copy _100 -> [bb89, bb78];
+    }
+
+    bb78: {
+        _102 = is_type(copy _62, baml.iter.FlatMap<_, #1?, _, _, _>);
+        branch copy _102 -> [bb88, bb79];
+    }
+
+    bb79: {
+        _104 = is_type(copy _62, baml.iter.FlatMap<_, #1?, _, _, _>);
+        branch copy _104 -> [bb87, bb80];
+    }
+
     bb80: {
-        _58 = call const fn baml.iter.Done.to_json(copy _60) -> [bb103];
+        _106 = is_type(copy _62, baml.iter.Peekable<#1?, #3?>);
+        branch copy _106 -> [bb86, bb81];
     }
 
     bb81: {
-        _108 = load_type(#0);
-        _109 = load_type(#2);
-        _58 = call const fn baml.iter.Peekable.to_json<copy _108, copy _109>(copy _60) -> [bb103];
+        _109 = is_type(copy _62, baml.iter.Peekable<#1?, #3?>);
+        branch copy _109 -> [bb85, bb82];
     }
 
     bb82: {
-        _105 = load_type(#0);
-        _106 = load_type(#2);
-        _58 = call const fn baml.iter.Peekable.to_json<copy _105, copy _106>(copy _60) -> [bb103];
+        _112 = is_type(copy _62, baml.iter.Done);
+        branch copy _112 -> [bb84, bb83];
     }
 
     bb83: {
-        _103 = make_bound_method baml.iter.FlatMap.to_json(copy _60);
-        _58 = call copy _103() -> [bb103];
+        unreachable;
     }
 
     bb84: {
-        _101 = make_bound_method baml.iter.FlatMap.to_json(copy _60);
-        _58 = call copy _101() -> [bb103];
+        _60 = call const fn baml.iter.Done.to_json(copy _62) -> [bb107];
     }
 
     bb85: {
-        _99 = make_bound_method baml.iter.FilterMap.to_json(copy _60);
-        _58 = call copy _99() -> [bb103];
+        _110 = load_type(#1);
+        _111 = load_type(#3);
+        _60 = call const fn baml.iter.Peekable.to_json<copy _110, copy _111>(copy _62) -> [bb107];
     }
 
     bb86: {
-        _97 = make_bound_method baml.iter.FilterMap.to_json(copy _60);
-        _58 = call copy _97() -> [bb103];
+        _107 = load_type(#1);
+        _108 = load_type(#3);
+        _60 = call const fn baml.iter.Peekable.to_json<copy _107, copy _108>(copy _62) -> [bb107];
     }
 
     bb87: {
-        _95 = make_bound_method baml.iter.Filter.to_json(copy _60);
-        _58 = call copy _95() -> [bb103];
+        _105 = make_bound_method baml.iter.FlatMap.to_json(copy _62);
+        _60 = call copy _105() -> [bb107];
     }
 
     bb88: {
-        _93 = make_bound_method baml.iter.Filter.to_json(copy _60);
-        _58 = call copy _93() -> [bb103];
+        _103 = make_bound_method baml.iter.FlatMap.to_json(copy _62);
+        _60 = call copy _103() -> [bb107];
     }
 
     bb89: {
-        _91 = make_bound_method baml.iter.Map.to_json(copy _60);
-        _58 = call copy _91() -> [bb103];
+        _101 = make_bound_method baml.iter.FilterMap.to_json(copy _62);
+        _60 = call copy _101() -> [bb107];
     }
 
     bb90: {
-        _89 = make_bound_method baml.iter.Map.to_json(copy _60);
-        _58 = call copy _89() -> [bb103];
+        _99 = make_bound_method baml.iter.FilterMap.to_json(copy _62);
+        _60 = call copy _99() -> [bb107];
     }
 
     bb91: {
-        _87 = load_type(#0);
-        _58 = call const fn baml.iter.Repeat.to_json<copy _87>(copy _60) -> [bb103];
+        _97 = make_bound_method baml.iter.Filter.to_json(copy _62);
+        _60 = call copy _97() -> [bb107];
     }
 
     bb92: {
-        _85 = load_type(#0);
-        _58 = call const fn baml.iter.Repeat.to_json<copy _85>(copy _60) -> [bb103];
+        _95 = make_bound_method baml.iter.Filter.to_json(copy _62);
+        _60 = call copy _95() -> [bb107];
     }
 
     bb93: {
-        _82 = load_type(#0);
-        _83 = load_type(#2);
-        _58 = call const fn baml.iter.Chain.to_json<copy _82, copy _83>(copy _60) -> [bb103];
+        _93 = make_bound_method baml.iter.Map.to_json(copy _62);
+        _60 = call copy _93() -> [bb107];
     }
 
     bb94: {
-        _79 = load_type(#0);
-        _80 = load_type(#2);
-        _58 = call const fn baml.iter.Chain.to_json<copy _79, copy _80>(copy _60) -> [bb103];
+        _91 = make_bound_method baml.iter.Map.to_json(copy _62);
+        _60 = call copy _91() -> [bb107];
     }
 
     bb95: {
-        _76 = load_type(#0);
-        _77 = load_type(#2);
-        _58 = call const fn baml.iter.StepBy.to_json<copy _76, copy _77>(copy _60) -> [bb103];
+        _89 = load_type(#1);
+        _60 = call const fn baml.iter.Repeat.to_json<copy _89>(copy _62) -> [bb107];
     }
 
     bb96: {
-        _73 = load_type(#0);
-        _74 = load_type(#2);
-        _58 = call const fn baml.iter.StepBy.to_json<copy _73, copy _74>(copy _60) -> [bb103];
+        _87 = load_type(#1);
+        _60 = call const fn baml.iter.Repeat.to_json<copy _87>(copy _62) -> [bb107];
     }
 
     bb97: {
-        _71 = load_type(#0);
-        _58 = call const fn baml.iter.ArrayIterator.to_json<copy _71>(copy _60) -> [bb103];
+        _84 = load_type(#1);
+        _85 = load_type(#3);
+        _60 = call const fn baml.iter.Chain.to_json<copy _84, copy _85>(copy _62) -> [bb107];
     }
 
     bb98: {
-        _69 = load_type(#0);
-        _58 = call const fn baml.iter.ArrayIterator.to_json<copy _69>(copy _60) -> [bb103];
+        _81 = load_type(#1);
+        _82 = load_type(#3);
+        _60 = call const fn baml.iter.Chain.to_json<copy _81, copy _82>(copy _62) -> [bb107];
     }
 
     bb99: {
-        _58 = call const fn baml.iter.Range.to_json(copy _60) -> [bb103];
+        _78 = load_type(#1);
+        _79 = load_type(#3);
+        _60 = call const fn baml.iter.StepBy.to_json<copy _78, copy _79>(copy _62) -> [bb107];
     }
 
     bb100: {
-        _58 = call const fn baml.iter.Range.to_json(copy _60) -> [bb103];
+        _75 = load_type(#1);
+        _76 = load_type(#3);
+        _60 = call const fn baml.iter.StepBy.to_json<copy _75, copy _76>(copy _62) -> [bb107];
     }
 
     bb101: {
-        _65 = make_bound_method baml.iter.Flatten.to_json(copy _60);
-        _58 = call copy _65() -> [bb103];
+        _73 = load_type(#1);
+        _60 = call const fn baml.iter.ArrayIterator.to_json<copy _73>(copy _62) -> [bb107];
     }
 
     bb102: {
-        _63 = make_bound_method baml.iter.Flatten.to_json(copy _60);
-        _58 = call copy _63() -> [bb103];
+        _71 = load_type(#1);
+        _60 = call const fn baml.iter.ArrayIterator.to_json<copy _71>(copy _62) -> [bb107];
     }
 
     bb103: {
-        _0 = { const "iter": copy _2, const "inner": copy _58 };
-        goto -> bb104;
+        _60 = call const fn baml.iter.Range.to_json(copy _62) -> [bb107];
     }
 
     bb104: {
+        _60 = call const fn baml.iter.Range.to_json(copy _62) -> [bb107];
+    }
+
+    bb105: {
+        _67 = make_bound_method baml.iter.Flatten.to_json(copy _62);
+        _60 = call copy _67() -> [bb107];
+    }
+
+    bb106: {
+        _65 = make_bound_method baml.iter.Flatten.to_json(copy _62);
+        _60 = call copy _65() -> [bb107];
+    }
+
+    bb107: {
+        _0 = { const "iter": copy _2, const "inner": copy _60 };
+        goto -> bb108;
+    }
+
+    bb108: {
         return;
     }
 }

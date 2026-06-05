@@ -141,12 +141,14 @@ impl<'a, 'db, B: TypeVarBounds + ?Sized> AssociatedProjectionResolver<'a, 'db, B
                     .collect(),
                 attr.clone(),
             ),
-            Ty::List(inner, attr) => {
-                Ty::List(Box::new(self.resolve_deep_inner(inner, resolving)), attr.clone())
-            }
-            Ty::EvolvingList(inner, attr) => {
-                Ty::EvolvingList(Box::new(self.resolve_deep_inner(inner, resolving)), attr.clone())
-            }
+            Ty::List(inner, attr) => Ty::List(
+                Box::new(self.resolve_deep_inner(inner, resolving)),
+                attr.clone(),
+            ),
+            Ty::EvolvingList(inner, attr) => Ty::EvolvingList(
+                Box::new(self.resolve_deep_inner(inner, resolving)),
+                attr.clone(),
+            ),
             Ty::Map(key, value, attr) => Ty::Map(
                 Box::new(self.resolve_deep_inner(key, resolving)),
                 Box::new(self.resolve_deep_inner(value, resolving)),

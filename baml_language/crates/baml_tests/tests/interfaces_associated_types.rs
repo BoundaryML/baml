@@ -863,6 +863,48 @@ fn concrete_class_must_match_interface_associated_type_binding() {
 }
 
 #[test]
+fn generic_constructor_result_checked_against_interface_associated_binding() {
+    let errors = collect_compile_errors(
+        r#"
+        interface Value {
+            type Item
+
+            function get(self) -> Item
+        }
+
+        class Box<T> {
+            value: T
+
+            function new(value: T) -> Box<T> {
+                return Box<T> { value: value }
+            }
+
+            implements Value {
+                type Item = T
+
+                function get(self) -> T {
+                    return self.value
+                }
+            }
+        }
+
+        function bad() -> string {
+            let n: int = 1
+            let value: Value<Item = string> = Box.new(n)
+            return value.get()
+        }
+        "#,
+    );
+    assert!(
+        errors
+            .iter()
+            .any(|error| { error.contains("Value<Item = string>") && error.contains("Box<int>") }),
+        "expected concrete associated-binding mismatch, got:\n  {}",
+        errors.join("\n  ")
+    );
+}
+
+#[test]
 fn generic_bound_enforces_associated_type_binding() {
     assert_compile_error_code(
         r#"

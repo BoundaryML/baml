@@ -5652,7 +5652,7 @@ function iter_impl_generics_only.iter_step_by() -> int[] {
 }
 
 function iter_impl_generics_only.out_of_body_inferred_ctor_dispatch() -> int {
-    load_type 11
+    load_type int
     load_const 11
     call user.iter_impl_generics_only.core.OutOfBodyBox.new
     store_var value

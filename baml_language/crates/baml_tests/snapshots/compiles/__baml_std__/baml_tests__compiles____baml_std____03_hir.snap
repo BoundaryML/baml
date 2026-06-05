@@ -507,7 +507,7 @@ class baml.iter.FlatMap {
   inner: Iterator<Item = R, Error = E3> | baml.iter.Done
 }
 class baml.iter.Flatten {
-  iter: Iterator<Item = Iterable<Item = R, Error = E3>, Error = E>
+  iter: Iterator<Item = I, Error = E>
   inner: Iterator<Item = R, Error = E3> | baml.iter.Done
 }
 class baml.iter.Map {
@@ -557,7 +557,7 @@ function baml.iter.find(self: ?, predicate: (Item) -> bool throws E2) -> Item?  
 function baml.iter.flat_map(self: ?, fn: (Item) -> Iterable<Item = R, Error = E3> throws E2) -> Iterator<Item = R, Error = Error | E2 | E3>  [expr] {
   {  } baml.iter.FlatMap { iter: self, func: fn, inner: baml.iter.Done {  } }
 }
-function baml.iter.flatten(src: Iterator<Item = Iterable<Item = R, Error = E3>, Error = E>) -> Iterator<Item = R, Error = E | E3>  [expr] {
+function baml.iter.flatten(src: Iterator<Item = I, Error = E>) -> Iterator<Item = R, Error = E | E3>  [expr] {
   {  } baml.iter.Flatten { iter: src, inner: baml.iter.Done {  } }
 }
 function baml.iter.from_json(j: baml.json.json) -> baml.iter.Chain<T, E>  [expr] {
@@ -578,7 +578,7 @@ function baml.iter.from_json(j: baml.json.json) -> baml.iter.Peekable<T, E>  [ex
 function baml.iter.from_json(j: baml.json.json) -> baml.iter.Range  [expr] {
   baml.iter.Range { i: baml.json.from_json(baml.json.field(j, "i")), max: baml.json.from_json(baml.json.field(j, "max")), step: baml.json.from_json(baml.json.field(j, "step")) }
 }
-function baml.iter.from_json(j: baml.json.json) -> baml.iter.Flatten<R, E, E3>  [expr] {
+function baml.iter.from_json(j: baml.json.json) -> baml.iter.Flatten<I, R, E, E3>  [expr] {
   baml.iter.Flatten { iter: baml.json.from_json(baml.json.field(j, "iter")), inner: baml.json.from_json(baml.json.field(j, "inner")) }
 }
 function baml.iter.from_json(j: baml.json.json) -> baml.iter.ArrayIterator<T>  [expr] {
@@ -666,7 +666,7 @@ function baml.iter.next(self: ?) -> int | baml.iter.Done  [expr] {
   {  } if (self.i Lt self.max) { let cur = self.i; self.i Add= self.step } cur else {  } baml.iter.Done {  }
 }
 function baml.iter.next(self: ?) -> R | baml.iter.Done  [expr] {
-  { while true {  } match (self.inner) { cur: Iterator<Item = R, Error = E3> => {  } match (cur.next()) { baml.iter.Done => { self.inner = baml.iter.Done {  } }, y: R => { return y } }, baml.iter.Done => {  } match (self.iter.next()) { baml.iter.Done => { return baml.iter.Done {  } }, x: Iterable<Item = R, Error = E3> => { let it = x.iter(); self.inner = it } } } } baml.iter.Done {  }
+  { while true {  } match (self.inner) { cur: Iterator<Item = R, Error = E3> => {  } match (cur.next()) { baml.iter.Done => { self.inner = baml.iter.Done {  } }, y: R => { return y } }, baml.iter.Done => {  } match (self.iter.next()) { baml.iter.Done => { return baml.iter.Done {  } }, x: I => { let it = x.iter(); self.inner = it } } } } baml.iter.Done {  }
 }
 function baml.iter.next(self: ?) -> T | baml.iter.Done  [expr] {
   {  } match (self.arr.at(self.idx)) { null => baml.iter.Done {  }, item: T => { self.idx Add= 1 } item }
