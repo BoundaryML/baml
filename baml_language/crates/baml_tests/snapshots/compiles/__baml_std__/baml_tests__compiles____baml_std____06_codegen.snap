@@ -17427,6 +17427,441 @@ function baml.net._timeout_nanos(timeout: baml.time.Duration | null) -> bigint {
     return
 }
 
+function baml.ops.Compare$for$bigint.lt(self: bigint, other: bigint) -> bool {
+}
+
+function baml.ops.Compare$for$bool.ge(self: bool, other: bool) -> bool {
+    load_var self
+    return
+}
+
+function baml.ops.Compare$for$bool.gt(self: bool, other: bool) -> bool {
+    load_var self
+    jump_if_false L0
+    pop 1
+    load_var other
+    unary_op !
+
+  L0:
+    return
+}
+
+function baml.ops.Compare$for$bool.le(self: bool, other: bool) -> bool {
+    load_var self
+    unary_op !
+    return
+}
+
+function baml.ops.Compare$for$bool.lt(self: bool, other: bool) -> bool {
+    load_var self
+    unary_op !
+    jump_if_false L0
+    pop 1
+    load_var other
+
+  L0:
+    return
+}
+
+function baml.ops.Compare$for$float.ge(self: float, other: float) -> bool {
+}
+
+function baml.ops.Compare$for$float.gt(self: float, other: float) -> bool {
+}
+
+function baml.ops.Compare$for$float.le(self: float, other: float) -> bool {
+}
+
+function baml.ops.Compare$for$float.lt(self: float, other: float) -> bool {
+}
+
+function baml.ops.Compare$for$int.lt(self: int, other: int) -> bool {
+}
+
+function baml.ops.Compare$for$string.ge(self: string, other: string) -> bool {
+}
+
+function baml.ops.Compare$for$string.gt(self: string, other: string) -> bool {
+}
+
+function baml.ops.Compare$for$string.le(self: string, other: string) -> bool {
+}
+
+function baml.ops.Compare$for$string.lt(self: string, other: string) -> bool {
+}
+
+function baml.ops.Compare.ge(self: baml.ops.Compare, other: Self) -> bool {
+    load_var self
+    is_type int
+    pop_jump_if_false L0
+    jump L7
+
+  L0:
+    load_var self
+    is_type bigint
+    pop_jump_if_false L1
+    jump L6
+
+  L1:
+    load_var self
+    is_type float
+    pop_jump_if_false L2
+    jump L5
+
+  L2:
+    load_var self
+    is_type bool
+    pop_jump_if_false L3
+    jump L4
+
+  L3:
+    load_var self
+    is_type string
+    pop_jump_if_false L9
+    load_var2 1 2
+    call baml.ops.Compare$for$string.lt
+    jump L8
+
+  L4:
+    load_var2 1 2
+    call baml.ops.Compare$for$bool.lt
+    jump L8
+
+  L5:
+    load_var2 1 2
+    call baml.ops.Compare$for$float.lt
+    jump L8
+
+  L6:
+    load_var2 1 2
+    call baml.ops.Compare$for$bigint.lt
+    jump L8
+
+  L7:
+    load_var2 1 2
+    call baml.ops.Compare$for$int.lt
+
+  L8:
+    unary_op !
+    return
+
+  L9:
+    unreachable
+}
+
+function baml.ops.Compare.gt(self: baml.ops.Compare, other: Self) -> bool {
+    load_var self
+    is_type int
+    pop_jump_if_false L0
+    jump L7
+
+  L0:
+    load_var self
+    is_type bigint
+    pop_jump_if_false L1
+    jump L6
+
+  L1:
+    load_var self
+    is_type float
+    pop_jump_if_false L2
+    jump L5
+
+  L2:
+    load_var self
+    is_type bool
+    pop_jump_if_false L3
+    jump L4
+
+  L3:
+    load_var self
+    is_type string
+    pop_jump_if_false L9
+    load_var2 1 2
+    call baml.ops.Compare$for$string.le
+    jump L8
+
+  L4:
+    load_var2 1 2
+    call baml.ops.Compare$for$bool.le
+    jump L8
+
+  L5:
+    load_var2 1 2
+    call baml.ops.Compare$for$float.le
+    jump L8
+
+  L6:
+    load_var2 1 2
+    call baml.ops.Compare.le
+    jump L8
+
+  L7:
+    load_var2 1 2
+    call baml.ops.Compare.le
+
+  L8:
+    unary_op !
+    return
+
+  L9:
+    unreachable
+}
+
+function baml.ops.Compare.le(self: baml.ops.Compare, other: Self) -> bool {
+    load_var self
+    is_type int
+    pop_jump_if_false L0
+    jump L7
+
+  L0:
+    load_var self
+    is_type bigint
+    pop_jump_if_false L1
+    jump L6
+
+  L1:
+    load_var self
+    is_type float
+    pop_jump_if_false L2
+    jump L5
+
+  L2:
+    load_var self
+    is_type bool
+    pop_jump_if_false L3
+    jump L4
+
+  L3:
+    load_var self
+    is_type string
+    pop_jump_if_false L19
+    load_var2 1 2
+    call baml.ops.Compare$for$string.lt
+    jump L8
+
+  L4:
+    load_var2 1 2
+    call baml.ops.Compare$for$bool.lt
+    jump L8
+
+  L5:
+    load_var2 1 2
+    call baml.ops.Compare$for$float.lt
+    jump L8
+
+  L6:
+    load_var2 1 2
+    call baml.ops.Compare$for$bigint.lt
+    jump L8
+
+  L7:
+    load_var2 1 2
+    call baml.ops.Compare$for$int.lt
+
+  L8:
+    jump_if_false L9
+    jump L18
+
+  L9:
+    pop 1
+    load_var self
+    is_type int
+    pop_jump_if_false L10
+    jump L17
+
+  L10:
+    load_var self
+    is_type bigint
+    pop_jump_if_false L11
+    jump L16
+
+  L11:
+    load_var self
+    is_type float
+    pop_jump_if_false L12
+    jump L15
+
+  L12:
+    load_var self
+    is_type bool
+    pop_jump_if_false L13
+    jump L14
+
+  L13:
+    load_var self
+    is_type string
+    pop_jump_if_false L19
+    load_var2 1 2
+    call baml.ops.Equals$for$string.eq
+    jump L18
+
+  L14:
+    load_var2 1 2
+    call baml.ops.Equals$for$bool.eq
+    jump L18
+
+  L15:
+    load_var2 1 2
+    call baml.ops.Equals$for$float.eq
+    jump L18
+
+  L16:
+    load_var2 1 2
+    call baml.ops.Equals$for$bigint.eq
+    jump L18
+
+  L17:
+    load_var2 1 2
+    call baml.ops.Equals$for$int.eq
+
+  L18:
+    return
+
+  L19:
+    unreachable
+}
+
+function baml.ops.Equals$for$T[].eq(self: T[], other: T[]) -> bool {
+}
+
+function baml.ops.Equals$for$bigint.eq(self: bigint, other: bigint) -> bool {
+}
+
+function baml.ops.Equals$for$bool.eq(self: bool, other: bool) -> bool {
+}
+
+function baml.ops.Equals$for$float.eq(self: float, other: float) -> bool {
+}
+
+function baml.ops.Equals$for$int.eq(self: int, other: int) -> bool {
+}
+
+function baml.ops.Equals$for$map<K, V>.eq(self: map<K, V>, other: map<K, V>) -> bool {
+}
+
+function baml.ops.Equals$for$null.eq(self: null, other: null) -> bool {
+    load_const true
+    return
+}
+
+function baml.ops.Equals$for$null.neq(self: null, other: null) -> bool {
+    load_const false
+    return
+}
+
+function baml.ops.Equals$for$string.eq(self: string, other: string) -> bool {
+}
+
+function baml.ops.Equals$for$uint8array.eq(self: uint8array, other: uint8array) -> bool {
+}
+
+function baml.ops.Equals.neq(self: baml.ops.Equals, other: Self) -> bool {
+    load_var self
+    is_type int
+    pop_jump_if_false L0
+    jump L15
+
+  L0:
+    load_var self
+    is_type bigint
+    pop_jump_if_false L1
+    jump L14
+
+  L1:
+    load_var self
+    is_type float
+    pop_jump_if_false L2
+    jump L13
+
+  L2:
+    load_var self
+    is_type bool
+    pop_jump_if_false L3
+    jump L12
+
+  L3:
+    load_var self
+    is_type null
+    pop_jump_if_false L4
+    jump L11
+
+  L4:
+    load_var self
+    is_type string
+    pop_jump_if_false L5
+    jump L10
+
+  L5:
+    load_var self
+    is_type uint8array
+    pop_jump_if_false L6
+    jump L9
+
+  L6:
+    load_var self
+    is_type T[]
+    pop_jump_if_false L7
+    jump L8
+
+  L7:
+    load_var self
+    is_type map<K, V>
+    pop_jump_if_false L17
+    load_type unknown
+    load_type unknown
+    load_var2 1 2
+    call baml.ops.Equals$for$map<K, V>.eq
+    jump L16
+
+  L8:
+    load_type unknown
+    load_var2 1 2
+    call baml.ops.Equals$for$T[].eq
+    jump L16
+
+  L9:
+    load_var2 1 2
+    call baml.ops.Equals$for$uint8array.eq
+    jump L16
+
+  L10:
+    load_var2 1 2
+    call baml.ops.Equals$for$string.eq
+    jump L16
+
+  L11:
+    load_var2 1 2
+    call baml.ops.Equals$for$null.eq
+    jump L16
+
+  L12:
+    load_var2 1 2
+    call baml.ops.Equals$for$bool.eq
+    jump L16
+
+  L13:
+    load_var2 1 2
+    call baml.ops.Equals$for$float.eq
+    jump L16
+
+  L14:
+    load_var2 1 2
+    call baml.ops.Equals$for$bigint.eq
+    jump L16
+
+  L15:
+    load_var2 1 2
+    call baml.ops.Equals$for$int.eq
+
+  L16:
+    unary_op !
+    return
+
+  L17:
+    unreachable
+}
+
 function baml.panics.AllocFailure.from_json(j: baml.json.json) -> baml.panics.AllocFailure {
     load_var j
     load_const "message"

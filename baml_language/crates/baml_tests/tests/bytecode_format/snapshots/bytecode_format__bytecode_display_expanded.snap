@@ -917,7 +917,7 @@ function testing.TestRegistry.expand_set(self: testing.TestRegistry, name: strin
         135   pop 1                    
 
   169   136   load_var 1               (self)
-        137   call 855 ntypeargs=0     (testing.TestRegistry.serialize)
+        137   call 883 ntypeargs=0     (testing.TestRegistry.serialize)
         138   jump +123                (to 261)
 
   173   139   load_type 13             
@@ -1045,7 +1045,7 @@ function testing.TestRegistry.expand_set(self: testing.TestRegistry, name: strin
         258   pop_jump_if_false -109   (to 149)
 
   176   259   load_var2 14 2           
-        260   call 860 ntypeargs=0     (testing.TestRegistry.expand_set)
+        260   call 888 ntypeargs=0     (testing.TestRegistry.expand_set)
         261   return                   
 
   179   262   load_const 26            ("TestSet not found for expansion: ")
@@ -1210,7 +1210,7 @@ function testing.TestRegistry.run_test(self: testing.TestRegistry, name: string)
         113   load_field 1             (body)
         114   load_var 6               (t)
         115   load_field 2             (runner)
-        116   call 866 ntypeargs=0     (testing.run_test)
+        116   call 894 ntypeargs=0     (testing.run_test)
         117   jump +123                (to 240)
 
   143   118   load_type 13             
@@ -1339,7 +1339,7 @@ function testing.TestRegistry.run_test(self: testing.TestRegistry, name: string)
   145   237   pop_jump_if_false -109   (to 128)
 
   147   238   load_var2 11 2           
-        239   call 859 ntypeargs=0     (testing.TestRegistry.run_test)
+        239   call 887 ntypeargs=0     (testing.TestRegistry.run_test)
         240   return                   
 
   150   241   load_const 26            ("Test not found: ")
@@ -1610,7 +1610,7 @@ function testing.TestRegistry.serialize(self: testing.TestRegistry) -> (testing.
         248   store_var 12             (_81)
 
   122   249   load_var 11              (sub)
-        250   call 855 ntypeargs=0     (testing.TestRegistry.serialize)
+        250   call 883 ntypeargs=0     (testing.TestRegistry.serialize)
         251   store_var 13             (_82)
 
   120   252   load_var2 2 12           
@@ -1791,7 +1791,7 @@ function testing.run_test(body: () -> void throws unknown, runner: ((() -> testi
         2    store_var 1            
 
   185   3    load_var 1             (body)
-        4    make_closure 1604 1    
+        4    make_closure 1632 1    
         5    store_var 3            (base_run)
 
   200   6    load_var 2             (runner)

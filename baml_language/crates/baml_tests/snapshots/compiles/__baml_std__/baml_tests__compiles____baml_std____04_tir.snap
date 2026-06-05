@@ -3258,6 +3258,58 @@ class baml.net.Datagram$stream {
   addr: string | null
 }
 
+--- <builtin>/baml/ns_ops/comparison.baml ---
+function baml.ops.Equals.neq(self: baml.ops.Equals, other: unknown) -> bool throws never {
+  { : bool
+    Not self.eq(other) : bool
+  }
+}
+function baml.ops.Compare.le(self: baml.ops.Compare, other: unknown) -> bool throws never {
+  { : bool
+    self.lt(other) || self.eq(other) : bool
+  }
+}
+function baml.ops.Compare.gt(self: baml.ops.Compare, other: unknown) -> bool throws never {
+  { : bool
+    Not self.le(other) : bool
+  }
+}
+function baml.ops.Compare.ge(self: baml.ops.Compare, other: unknown) -> bool throws never {
+  { : bool
+    Not self.lt(other) : bool
+  }
+}
+function baml.ops.lt(self: unknown, other: unknown) -> bool throws never {
+  { : bool
+    Not self && other : bool
+  }
+}
+function baml.ops.gt(self: unknown, other: unknown) -> bool throws never {
+  { : bool
+    self && Not other : bool
+  }
+}
+function baml.ops.ge(self: unknown, other: unknown) -> bool throws never {
+  { : bool
+    self : bool
+  }
+}
+function baml.ops.le(self: unknown, other: unknown) -> bool throws never {
+  { : bool
+    Not self : bool
+  }
+}
+function baml.ops.eq(self: unknown, other: unknown) -> bool throws never {
+  { : true
+    true : true
+  }
+}
+function baml.ops.neq(self: unknown, other: unknown) -> bool throws never {
+  { : false
+    false : false
+  }
+}
+
 --- <builtin>/baml/ns_panics/panics.baml ---
 class baml.panics.DivisionByZero {
   dividend: int

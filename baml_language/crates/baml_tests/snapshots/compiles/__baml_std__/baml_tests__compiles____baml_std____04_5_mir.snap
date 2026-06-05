@@ -19125,6 +19125,531 @@ fn baml.net.TcpStream.write(self: baml.net.TcpStream, data: uint8array, timeout:
     }
 }
 
+fn baml.ops.Equals$for$bigint.eq = builtin(vm)
+
+fn baml.ops.Equals$for$null.eq(self: null, other: Self) -> bool {
+    // Locals:
+    let _0: bool // _0 // return
+    let _1: null // self // param
+    let _2: Self // other // param
+
+    bb0: {
+        _0 = const true;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn baml.ops.Equals$for$T[].eq = builtin(vm)
+
+fn baml.ops.Equals$for$float.eq = builtin(vm)
+
+fn baml.ops.Equals$for$string.eq = builtin(vm)
+
+fn baml.ops.Equals$for$map<K, V>.eq = builtin(vm)
+
+fn baml.ops.Equals$for$int.eq = builtin(vm)
+
+fn baml.ops.Equals$for$bool.eq = builtin(vm)
+
+fn baml.ops.Equals$for$uint8array.eq = builtin(vm)
+
+fn baml.ops.Compare.ge(self: baml.ops.Compare, other: Self) -> bool {
+    // Locals:
+    let _0: bool // _0 // return
+    let _1: baml.ops.Compare // self // param
+    let _2: Self // other // param
+    let _3: bool
+    let _4: bool
+    let _5: bool
+    let _6: bool
+    let _7: bool
+    let _8: bool
+
+    bb0: {
+        _4 = is_type(copy _1, int);
+        branch copy _4 -> [bb10, bb1];
+    }
+
+    bb1: {
+        _5 = is_type(copy _1, bigint);
+        branch copy _5 -> [bb9, bb2];
+    }
+
+    bb2: {
+        _6 = is_type(copy _1, float);
+        branch copy _6 -> [bb8, bb3];
+    }
+
+    bb3: {
+        _7 = is_type(copy _1, bool);
+        branch copy _7 -> [bb7, bb4];
+    }
+
+    bb4: {
+        _8 = is_type(copy _1, string);
+        branch copy _8 -> [bb6, bb5];
+    }
+
+    bb5: {
+        unreachable;
+    }
+
+    bb6: {
+        _3 = call const fn baml.ops.Compare$for$string.lt(copy _1, copy _2) -> [bb11];
+    }
+
+    bb7: {
+        _3 = call const fn baml.ops.Compare$for$bool.lt(copy _1, copy _2) -> [bb11];
+    }
+
+    bb8: {
+        _3 = call const fn baml.ops.Compare$for$float.lt(copy _1, copy _2) -> [bb11];
+    }
+
+    bb9: {
+        _3 = call const fn baml.ops.Compare$for$bigint.lt(copy _1, copy _2) -> [bb11];
+    }
+
+    bb10: {
+        _3 = call const fn baml.ops.Compare$for$int.lt(copy _1, copy _2) -> [bb11];
+    }
+
+    bb11: {
+        _0 = !copy _3;
+        goto -> bb12;
+    }
+
+    bb12: {
+        return;
+    }
+}
+
+fn baml.ops.Compare$for$string.ge = builtin(vm)
+
+fn baml.ops.Compare$for$float.ge = builtin(vm)
+
+fn baml.ops.Compare$for$bool.ge(self: bool, other: Self) -> bool {
+    // Locals:
+    let _0: bool // _0 // return
+    let _1: bool // self // param
+    let _2: Self // other // param
+
+    bb0: {
+        _0 = copy _1;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn baml.ops.Compare$for$float.gt = builtin(vm)
+
+fn baml.ops.Compare$for$bool.gt(self: bool, other: Self) -> bool {
+    // Locals:
+    let _0: bool // _0 // return
+    let _1: bool // self // param
+    let _2: Self // other // param
+
+    bb0: {
+        _0 = short_circuit(&&) copy _1 -> [eval: bb1, join: bb2];
+    }
+
+    bb1: {
+        _0 = !copy _2;
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn baml.ops.Compare.gt(self: baml.ops.Compare, other: Self) -> bool {
+    // Locals:
+    let _0: bool // _0 // return
+    let _1: baml.ops.Compare // self // param
+    let _2: Self // other // param
+    let _3: bool
+    let _4: bool
+    let _5: bool
+    let _6: bool
+    let _7: bool
+    let _8: bool
+
+    bb0: {
+        _4 = is_type(copy _1, int);
+        branch copy _4 -> [bb10, bb1];
+    }
+
+    bb1: {
+        _5 = is_type(copy _1, bigint);
+        branch copy _5 -> [bb9, bb2];
+    }
+
+    bb2: {
+        _6 = is_type(copy _1, float);
+        branch copy _6 -> [bb8, bb3];
+    }
+
+    bb3: {
+        _7 = is_type(copy _1, bool);
+        branch copy _7 -> [bb7, bb4];
+    }
+
+    bb4: {
+        _8 = is_type(copy _1, string);
+        branch copy _8 -> [bb6, bb5];
+    }
+
+    bb5: {
+        unreachable;
+    }
+
+    bb6: {
+        _3 = call const fn baml.ops.Compare$for$string.le(copy _1, copy _2) -> [bb11];
+    }
+
+    bb7: {
+        _3 = call const fn baml.ops.Compare$for$bool.le(copy _1, copy _2) -> [bb11];
+    }
+
+    bb8: {
+        _3 = call const fn baml.ops.Compare$for$float.le(copy _1, copy _2) -> [bb11];
+    }
+
+    bb9: {
+        _3 = call const fn baml.ops.Compare.le(copy _1, copy _2) -> [bb11];
+    }
+
+    bb10: {
+        _3 = call const fn baml.ops.Compare.le(copy _1, copy _2) -> [bb11];
+    }
+
+    bb11: {
+        _0 = !copy _3;
+        goto -> bb12;
+    }
+
+    bb12: {
+        return;
+    }
+}
+
+fn baml.ops.Compare$for$string.gt = builtin(vm)
+
+fn baml.ops.Compare$for$float.le = builtin(vm)
+
+fn baml.ops.Compare$for$bool.le(self: bool, other: Self) -> bool {
+    // Locals:
+    let _0: bool // _0 // return
+    let _1: bool // self // param
+    let _2: Self // other // param
+
+    bb0: {
+        _0 = !copy _1;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn baml.ops.Compare.le(self: baml.ops.Compare, other: Self) -> bool {
+    // Locals:
+    let _0: bool // _0 // return
+    let _1: baml.ops.Compare // self // param
+    let _2: Self // other // param
+    let _3: bool
+    let _4: bool
+    let _5: bool
+    let _6: bool
+    let _7: bool
+    let _8: bool
+    let _9: bool
+    let _10: bool
+    let _11: bool
+    let _12: bool
+    let _13: bool
+
+    bb0: {
+        _4 = is_type(copy _1, int);
+        branch copy _4 -> [bb10, bb1];
+    }
+
+    bb1: {
+        _5 = is_type(copy _1, bigint);
+        branch copy _5 -> [bb9, bb2];
+    }
+
+    bb2: {
+        _6 = is_type(copy _1, float);
+        branch copy _6 -> [bb8, bb3];
+    }
+
+    bb3: {
+        _7 = is_type(copy _1, bool);
+        branch copy _7 -> [bb7, bb4];
+    }
+
+    bb4: {
+        _8 = is_type(copy _1, string);
+        branch copy _8 -> [bb6, bb5];
+    }
+
+    bb5: {
+        unreachable;
+    }
+
+    bb6: {
+        _3 = call const fn baml.ops.Compare$for$string.lt(copy _1, copy _2) -> [bb11];
+    }
+
+    bb7: {
+        _3 = call const fn baml.ops.Compare$for$bool.lt(copy _1, copy _2) -> [bb11];
+    }
+
+    bb8: {
+        _3 = call const fn baml.ops.Compare$for$float.lt(copy _1, copy _2) -> [bb11];
+    }
+
+    bb9: {
+        _3 = call const fn baml.ops.Compare$for$bigint.lt(copy _1, copy _2) -> [bb11];
+    }
+
+    bb10: {
+        _3 = call const fn baml.ops.Compare$for$int.lt(copy _1, copy _2) -> [bb11];
+    }
+
+    bb11: {
+        _0 = short_circuit(||) copy _3 -> [eval: bb12, join: bb23];
+    }
+
+    bb12: {
+        _9 = is_type(copy _1, int);
+        branch copy _9 -> [bb22, bb13];
+    }
+
+    bb13: {
+        _10 = is_type(copy _1, bigint);
+        branch copy _10 -> [bb21, bb14];
+    }
+
+    bb14: {
+        _11 = is_type(copy _1, float);
+        branch copy _11 -> [bb20, bb15];
+    }
+
+    bb15: {
+        _12 = is_type(copy _1, bool);
+        branch copy _12 -> [bb19, bb16];
+    }
+
+    bb16: {
+        _13 = is_type(copy _1, string);
+        branch copy _13 -> [bb18, bb17];
+    }
+
+    bb17: {
+        unreachable;
+    }
+
+    bb18: {
+        _0 = call const fn baml.ops.Equals$for$string.eq(copy _1, copy _2) -> [bb23];
+    }
+
+    bb19: {
+        _0 = call const fn baml.ops.Equals$for$bool.eq(copy _1, copy _2) -> [bb23];
+    }
+
+    bb20: {
+        _0 = call const fn baml.ops.Equals$for$float.eq(copy _1, copy _2) -> [bb23];
+    }
+
+    bb21: {
+        _0 = call const fn baml.ops.Equals$for$bigint.eq(copy _1, copy _2) -> [bb23];
+    }
+
+    bb22: {
+        _0 = call const fn baml.ops.Equals$for$int.eq(copy _1, copy _2) -> [bb23];
+    }
+
+    bb23: {
+        return;
+    }
+}
+
+fn baml.ops.Compare$for$string.le = builtin(vm)
+
+fn baml.ops.Compare$for$int.lt = builtin(vm)
+
+fn baml.ops.Compare$for$bool.lt(self: bool, other: Self) -> bool {
+    // Locals:
+    let _0: bool // _0 // return
+    let _1: bool // self // param
+    let _2: Self // other // param
+    let _3: bool
+
+    bb0: {
+        _3 = !copy _1;
+        _0 = short_circuit(&&) copy _3 -> [eval: bb1, join: bb2];
+    }
+
+    bb1: {
+        _0 = copy _2;
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn baml.ops.Compare$for$bigint.lt = builtin(vm)
+
+fn baml.ops.Compare$for$string.lt = builtin(vm)
+
+fn baml.ops.Compare$for$float.lt = builtin(vm)
+
+fn baml.ops.Equals.neq(self: baml.ops.Equals, other: Self) -> bool {
+    // Locals:
+    let _0: bool // _0 // return
+    let _1: baml.ops.Equals // self // param
+    let _2: Self // other // param
+    let _3: bool
+    let _4: bool
+    let _5: bool
+    let _6: bool
+    let _7: bool
+    let _8: bool
+    let _9: bool
+    let _10: bool
+    let _11: bool
+    let _12: type
+    let _13: bool
+    let _14: type
+    let _15: type
+
+    bb0: {
+        _4 = is_type(copy _1, int);
+        branch copy _4 -> [bb18, bb1];
+    }
+
+    bb1: {
+        _5 = is_type(copy _1, bigint);
+        branch copy _5 -> [bb17, bb2];
+    }
+
+    bb2: {
+        _6 = is_type(copy _1, float);
+        branch copy _6 -> [bb16, bb3];
+    }
+
+    bb3: {
+        _7 = is_type(copy _1, bool);
+        branch copy _7 -> [bb15, bb4];
+    }
+
+    bb4: {
+        _8 = is_type(copy _1, null);
+        branch copy _8 -> [bb14, bb5];
+    }
+
+    bb5: {
+        _9 = is_type(copy _1, string);
+        branch copy _9 -> [bb13, bb6];
+    }
+
+    bb6: {
+        _10 = is_type(copy _1, uint8array);
+        branch copy _10 -> [bb12, bb7];
+    }
+
+    bb7: {
+        _11 = is_type(copy _1, T[]);
+        branch copy _11 -> [bb11, bb8];
+    }
+
+    bb8: {
+        _13 = is_type(copy _1, map<K, V>);
+        branch copy _13 -> [bb10, bb9];
+    }
+
+    bb9: {
+        unreachable;
+    }
+
+    bb10: {
+        _14 = load_type(unknown);
+        _15 = load_type(unknown);
+        _3 = call const fn baml.ops.Equals$for$map<K, V>.eq<copy _14, copy _15>(copy _1, copy _2) -> [bb19];
+    }
+
+    bb11: {
+        _12 = load_type(unknown);
+        _3 = call const fn baml.ops.Equals$for$T[].eq<copy _12>(copy _1, copy _2) -> [bb19];
+    }
+
+    bb12: {
+        _3 = call const fn baml.ops.Equals$for$uint8array.eq(copy _1, copy _2) -> [bb19];
+    }
+
+    bb13: {
+        _3 = call const fn baml.ops.Equals$for$string.eq(copy _1, copy _2) -> [bb19];
+    }
+
+    bb14: {
+        _3 = call const fn baml.ops.Equals$for$null.eq(copy _1, copy _2) -> [bb19];
+    }
+
+    bb15: {
+        _3 = call const fn baml.ops.Equals$for$bool.eq(copy _1, copy _2) -> [bb19];
+    }
+
+    bb16: {
+        _3 = call const fn baml.ops.Equals$for$float.eq(copy _1, copy _2) -> [bb19];
+    }
+
+    bb17: {
+        _3 = call const fn baml.ops.Equals$for$bigint.eq(copy _1, copy _2) -> [bb19];
+    }
+
+    bb18: {
+        _3 = call const fn baml.ops.Equals$for$int.eq(copy _1, copy _2) -> [bb19];
+    }
+
+    bb19: {
+        _0 = !copy _3;
+        goto -> bb20;
+    }
+
+    bb20: {
+        return;
+    }
+}
+
+fn baml.ops.Equals$for$null.neq(self: null, other: Self) -> bool {
+    // Locals:
+    let _0: bool // _0 // return
+    let _1: null // self // param
+    let _2: Self // other // param
+
+    bb0: {
+        _0 = const false;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
 fn baml.panics.HostUnavailable.from_json(j: baml.json.json) -> baml.panics.HostUnavailable {
     // Locals:
     let _0: baml.panics.HostUnavailable // _0 // return
