@@ -553,6 +553,12 @@ impl AsBexExternalValue for bool {
     }
 }
 
+impl AsBexExternalValue for std::sync::Arc<num_bigint::BigInt> {
+    fn into_bex_external_value(self) -> BexExternalValue {
+        BexExternalValue::Bigint(std::sync::Arc::unwrap_or_clone(self))
+    }
+}
+
 impl AsBexExternalValue for baml_type::Ty {
     fn into_bex_external_value(self) -> BexExternalValue {
         BexExternalValue::Adt(BexExternalAdt::Type(self))

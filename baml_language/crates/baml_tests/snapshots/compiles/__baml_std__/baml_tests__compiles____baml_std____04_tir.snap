@@ -1888,6 +1888,513 @@ class baml.time.Instant$stream {
   _nanoseconds: bigint | null
 }
 
+--- <builtin>/baml/ns_time/plaindate.baml ---
+class baml.time.PlainDate {
+  _days: int
+}
+function baml.time.PlainDate.to_plain_datetime(self: baml.time.PlainDate, time: baml.time.PlainTime | null = null) -> baml.time.PlainDateTime throws never {
+  { : baml.time.PlainDateTime
+    self._to_plain_datetime(time) : baml.time.PlainDateTime
+  }
+}
+function baml.time.PlainDate.from_json(j: baml.json.json) -> baml.time.PlainDate throws baml.json.JsonDecodeError {
+  { : baml.time.PlainDate
+    match (j : baml.json.json) : baml.time.PlainDate
+      string =>
+        catch (PlainDate.parse(j) : baml.time.PlainDate) : baml.time.PlainDate
+          catch (_)
+            root.errors.ParseError { message: message } =>
+              throw root.json.JsonDecodeError { message: message, path: "" } : never
+      _ =>
+        throw root.json.JsonDecodeError { message: "Expected ISO 8601..." } : never
+  }
+}
+function baml.time.PlainDate.to_json(self: baml.time.PlainDate) -> string throws baml.json.JsonSerializationError {
+  { : string
+    catch (self.to_string() : string) : unknown
+      catch (_)
+        root.errors.InvalidArgument { message: message } =>
+          throw root.json.JsonSerializationError { message: message, path: "" } : never
+  }
+}
+class baml.time.PlainDate$stream {
+  _days: int | null
+}
+
+--- <builtin>/baml/ns_time/plaindatetime.baml ---
+class baml.time.PlainDateTime {
+  _nanoseconds: bigint
+}
+function baml.time.PlainDateTime.from_components(year: int, month: int, day: int, hour: int = 0, minute: int = 0, second: int = 0, millisecond: int = 0, microsecond: int = 0, nanosecond: int = 0) -> baml.time.PlainDateTime throws baml.errors.InvalidArgument {
+  { : baml.time.PlainDateTime
+    PlainDateTime._from_components(year, month, day, hour, minute, second, millisecond, microsecond, nanosecond) : baml.time.PlainDateTime
+  }
+}
+function baml.time.PlainDateTime.to_zoned(self: baml.time.PlainDateTime, timezone: baml.time.TimeZoneOffset | string, disambiguation: baml.time.Disambiguation = "compatible") -> baml.time.ZonedDateTime throws baml.time.UnknownTimezoneError | baml.time.AmbiguousTimeError | baml.errors.Io {
+  { : baml.time.ZonedDateTime
+    match (timezone : baml.time.TimeZoneOffset | string) : baml.time.ZonedDateTime
+      TimeZoneOffset =>
+        ZonedDateTime { _nanoseconds: self._nanoseconds - timezone._nanoseconds, _offset_ns: timezone._nanoseconds, _iana: null } : baml.time.ZonedDateTime
+      string =>
+        if (disambiguation == "reject" : bool) : baml.time.ZonedDateTime
+          { : baml.time.ZonedDateTime
+            match (_tz_to_instant(timezone, self._nanoseconds, "earlier") : bigint | null) : baml.time.ZonedDateTime
+              null =>
+                throw UnknownTimezoneError { timezone: timezone } : never
+              earlier =>
+                match (_tz_to_instant(timezone, self._nanoseconds, "later") : bigint | null) : baml.time.ZonedDateTime
+                  null =>
+                    throw UnknownTimezoneError { timezone: timezone } : never
+                  later =>
+                    if (earlier == later : bool) : baml.time.ZonedDateTime
+                      { : baml.time.ZonedDateTime
+                        ZonedDateTime { _nanoseconds: earlier ?? 0n, _offset_ns: null, _iana: timezone } : baml.time.ZonedDateTime
+                      }
+                    else
+                      { : never
+                        throw AmbiguousTimeError { message: "wall-clock time i..." + timezone } : baml.time.AmbiguousTimeError
+                      }
+          }
+        else
+          { : baml.time.ZonedDateTime
+            match (_tz_to_instant(timezone, self._nanoseconds, disambiguation) : bigint | null) : baml.time.ZonedDateTime
+              null =>
+                throw UnknownTimezoneError { timezone: timezone } : never
+              resolved =>
+                ZonedDateTime { _nanoseconds: resolved ?? 0n, _offset_ns: null, _iana: timezone } : baml.time.ZonedDateTime
+          }
+  }
+}
+function baml.time.PlainDateTime.max(self: baml.time.PlainDateTime, other: baml.time.PlainDateTime) -> baml.time.PlainDateTime throws never {
+  { : baml.time.PlainDateTime
+    if (other._nanoseconds > self._nanoseconds : bool) : baml.time.PlainDateTime
+      { : baml.time.PlainDateTime
+        other : baml.time.PlainDateTime
+      }
+    else
+      { : baml.time.PlainDateTime
+        self : baml.time.PlainDateTime
+      }
+  }
+}
+function baml.time.PlainDateTime.min(self: baml.time.PlainDateTime, other: baml.time.PlainDateTime) -> baml.time.PlainDateTime throws never {
+  { : baml.time.PlainDateTime
+    if (other._nanoseconds < self._nanoseconds : bool) : baml.time.PlainDateTime
+      { : baml.time.PlainDateTime
+        other : baml.time.PlainDateTime
+      }
+    else
+      { : baml.time.PlainDateTime
+        self : baml.time.PlainDateTime
+      }
+  }
+}
+function baml.time.PlainDateTime.from_json(j: baml.json.json) -> baml.time.PlainDateTime throws baml.json.JsonDecodeError {
+  { : baml.time.PlainDateTime
+    match (j : baml.json.json) : baml.time.PlainDateTime
+      string =>
+        catch (PlainDateTime.parse(j) : baml.time.PlainDateTime) : baml.time.PlainDateTime
+          catch (_)
+            root.errors.ParseError { message: message } =>
+              throw root.json.JsonDecodeError { message: message, path: "" } : never
+      _ =>
+        throw root.json.JsonDecodeError { message: "Expected zoneless..." } : never
+  }
+}
+function baml.time.PlainDateTime.to_json(self: baml.time.PlainDateTime) -> string throws baml.json.JsonSerializationError {
+  { : string
+    catch (self.to_string() : string) : unknown
+      catch (_)
+        root.errors.InvalidArgument { message: message } =>
+          throw root.json.JsonSerializationError { message: message, path: "" } : never
+  }
+}
+class baml.time.PlainDateTime$stream {
+  _nanoseconds: bigint | null
+}
+
+--- <builtin>/baml/ns_time/plaintime.baml ---
+class baml.time.PlainTime {
+  _nanoseconds: int
+}
+function baml.time.PlainTime.from_components(hour: int, minute: int = 0, second: int = 0, millisecond: int = 0, microsecond: int = 0, nanosecond: int = 0) -> baml.time.PlainTime throws baml.errors.InvalidArgument {
+  { : baml.time.PlainTime
+    PlainTime._from_components(hour, minute, second, millisecond, microsecond, nanosecond) : baml.time.PlainTime
+  }
+}
+function baml.time.PlainTime.to_plain_datetime(self: baml.time.PlainTime, date: baml.time.PlainDate) -> baml.time.PlainDateTime throws never {
+  { : baml.time.PlainDateTime
+    date.to_plain_datetime(time = self) : baml.time.PlainDateTime
+  }
+}
+function baml.time.PlainTime.hour(self: baml.time.PlainTime) -> int throws never {
+  { : int
+    self._nanoseconds / 3600000000000 : int
+  }
+}
+function baml.time.PlainTime.minute(self: baml.time.PlainTime) -> int throws never {
+  { : int
+    self._nanoseconds / 60000000000 % 60 : int
+  }
+}
+function baml.time.PlainTime.second(self: baml.time.PlainTime) -> int throws never {
+  { : int
+    self._nanoseconds / 1000000000 % 60 : int
+  }
+}
+function baml.time.PlainTime.millisecond(self: baml.time.PlainTime) -> int throws never {
+  { : int
+    self._nanoseconds / 1000000 % 1000 : int
+  }
+}
+function baml.time.PlainTime.from_json(j: baml.json.json) -> baml.time.PlainTime throws baml.json.JsonDecodeError {
+  { : baml.time.PlainTime
+    match (j : baml.json.json) : baml.time.PlainTime
+      string =>
+        catch (PlainTime.parse(j) : baml.time.PlainTime) : baml.time.PlainTime
+          catch (_)
+            root.errors.ParseError { message: message } =>
+              throw root.json.JsonDecodeError { message: message, path: "" } : never
+      _ =>
+        throw root.json.JsonDecodeError { message: "Expected ISO 8601..." } : never
+  }
+}
+function baml.time.PlainTime.to_json(self: baml.time.PlainTime) -> string throws never {
+  { : string
+    self.to_string() : string
+  }
+}
+class baml.time.PlainTime$stream {
+  _nanoseconds: int | null
+}
+
+--- <builtin>/baml/ns_time/timezone.baml ---
+type baml.time.Disambiguation = "compatible" | "earlier" | "later" | "reject"
+class baml.time.UnknownTimezoneError {
+  timezone: string
+}
+function baml.time.UnknownTimezoneError.to_json(self: baml.time.UnknownTimezoneError) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  map { "timezone": self.timezone.to_json() } : map<string, baml.json.json>
+}
+function baml.time.UnknownTimezoneError.from_json(j: baml.json.json) -> baml.time.UnknownTimezoneError throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  UnknownTimezoneError { timezone: baml.json.from_json<string>(baml.json.field(j, "timezone")) } : baml.time.UnknownTimezoneError
+}
+class baml.time.AmbiguousTimeError {
+  message: string
+}
+function baml.time.AmbiguousTimeError.to_json(self: baml.time.AmbiguousTimeError) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  map { "message": self.message.to_json() } : map<string, baml.json.json>
+}
+function baml.time.AmbiguousTimeError.from_json(j: baml.json.json) -> baml.time.AmbiguousTimeError throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  AmbiguousTimeError { message: baml.json.from_json<string>(baml.json.field(j, "message")) } : baml.time.AmbiguousTimeError
+}
+class baml.time.TimeZoneOffset {
+  _nanoseconds: int
+}
+function baml.time.TimeZoneOffset.utc() -> baml.time.TimeZoneOffset throws never {
+  { : baml.time.TimeZoneOffset
+    TimeZoneOffset { _nanoseconds: 0 } : baml.time.TimeZoneOffset
+  }
+}
+function baml.time.TimeZoneOffset.new(hours: int, minutes: int) -> baml.time.TimeZoneOffset throws baml.errors.InvalidArgument {
+  { : baml.time.TimeZoneOffset
+    if (hours > 0 && minutes < 0 || hours < 0 && minutes > 0 : bool) : void
+      { : never
+        throw root.errors.InvalidArgument { message: "TimeZoneOffset.ne..." } : baml.errors.InvalidArgument
+      }
+    let nanoseconds = hours * 60 + minutes * 60 * 1000000000 : int
+    if (nanoseconds > 86400000000000 || nanoseconds < Neg 86400000000000 : bool) : void
+      { : never
+        throw root.errors.InvalidArgument { message: "TimeZoneOffset ou..." } : baml.errors.InvalidArgument
+      }
+    TimeZoneOffset { _nanoseconds: nanoseconds } : baml.time.TimeZoneOffset
+  }
+}
+function baml.time.TimeZoneOffset.from_timezone(timezone: string, at: baml.time.Instant) -> baml.time.TimeZoneOffset throws baml.time.UnknownTimezoneError | baml.errors.Io {
+  { : baml.time.TimeZoneOffset
+    match (_tz_offset_at(timezone, at._nanoseconds) : int | null) : baml.time.TimeZoneOffset
+      null =>
+        throw UnknownTimezoneError { timezone: timezone } : never
+      offset =>
+        TimeZoneOffset { _nanoseconds: offset ?? 0 } : baml.time.TimeZoneOffset
+  }
+}
+function baml.time.TimeZoneOffset.local() -> baml.time.TimeZoneOffset throws baml.time.UnknownTimezoneError | baml.errors.Io {
+  { : baml.time.TimeZoneOffset
+    TimeZoneOffset.from_timezone(system_timezone(), Instant.now()) : baml.time.TimeZoneOffset
+  }
+}
+function baml.time.TimeZoneOffset.to_duration(self: baml.time.TimeZoneOffset) -> baml.time.Duration throws never {
+  { : baml.time.Duration
+    Duration { _nanoseconds: 0n + self._nanoseconds } : baml.time.Duration
+  }
+}
+function baml.time.TimeZoneOffset.hours(self: baml.time.TimeZoneOffset) -> int throws never {
+  { : int
+    self._nanoseconds / 3600000000000 : int
+  }
+}
+function baml.time.TimeZoneOffset.minutes(self: baml.time.TimeZoneOffset) -> int throws never {
+  { : int
+    self._nanoseconds / 60000000000 % 60 : int
+  }
+}
+function baml.time.TimeZoneOffset.to_json(self: baml.time.TimeZoneOffset) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  map { "_nanoseconds": self._nanoseconds.to_json() } : map<string, baml.json.json>
+}
+function baml.time.TimeZoneOffset.from_json(j: baml.json.json) -> baml.time.TimeZoneOffset throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  TimeZoneOffset { _nanoseconds: baml.json.from_json<int>(baml.json.field(j, "_nanoseconds")) } : baml.time.TimeZoneOffset
+}
+type baml.time.Disambiguation$stream = "compatible" | "earlier" | "later" | "reject"
+class baml.time.UnknownTimezoneError$stream {
+  timezone: string | null
+}
+class baml.time.AmbiguousTimeError$stream {
+  message: string | null
+}
+class baml.time.TimeZoneOffset$stream {
+  _nanoseconds: int | null
+}
+
+--- <builtin>/baml/ns_time/zoneddatetime.baml ---
+class baml.time.ZonedDateTime {
+  _nanoseconds: bigint
+  _offset_ns: int | null
+  _iana: string | null
+}
+function baml.time.ZonedDateTime.now() -> baml.time.ZonedDateTime throws baml.errors.Io {
+  { : baml.time.ZonedDateTime
+    ZonedDateTime.from_instant(Instant.now(), system_timezone()) : baml.time.ZonedDateTime
+  }
+}
+function baml.time.ZonedDateTime.now_in(timezone: baml.time.TimeZoneOffset | string) -> baml.time.ZonedDateTime throws never {
+  { : baml.time.ZonedDateTime
+    ZonedDateTime.from_instant(Instant.now(), timezone) : baml.time.ZonedDateTime
+  }
+}
+function baml.time.ZonedDateTime.from_instant(instant: baml.time.Instant, timezone: baml.time.TimeZoneOffset | string) -> baml.time.ZonedDateTime throws never {
+  { : baml.time.ZonedDateTime
+    match (timezone : baml.time.TimeZoneOffset | string) : baml.time.ZonedDateTime
+      TimeZoneOffset =>
+        ZonedDateTime { _nanoseconds: instant._nanoseconds, _offset_ns: timezone._nanoseconds, _iana: null } : baml.time.ZonedDateTime
+      string =>
+        ZonedDateTime { _nanoseconds: instant._nanoseconds, _offset_ns: null, _iana: timezone } : baml.time.ZonedDateTime
+  }
+}
+function baml.time.ZonedDateTime.to_instant(self: baml.time.ZonedDateTime) -> baml.time.Instant throws never {
+  { : baml.time.Instant
+    Instant { _nanoseconds: self._nanoseconds } : baml.time.Instant
+  }
+}
+function baml.time.ZonedDateTime.from_components(timezone: baml.time.TimeZoneOffset | string, year: int, month: int, day: int, hour: int = 0, minute: int = 0, second: int = 0, millisecond: int = 0, microsecond: int = 0, nanosecond: int = 0, disambiguation: baml.time.Disambiguation = "compatible") -> baml.time.ZonedDateTime throws baml.errors.InvalidArgument | baml.time.UnknownTimezoneError | baml.time.AmbiguousTimeError | baml.errors.Io {
+  { : baml.time.ZonedDateTime
+    PlainDateTime.from_components(year, month, day, hour = hour, minute = minute, second = second, millisecond = millisecond, microsecond = microsecond, nanosecond = nanosecond).to_zoned(timezone, disambiguation = disambiguation) : baml.time.ZonedDateTime
+  }
+}
+function baml.time.ZonedDateTime.to_string(self: baml.time.ZonedDateTime) -> string throws baml.errors.InvalidArgument | baml.time.UnknownTimezoneError | baml.errors.Io {
+  { : string
+    _format_zoned(self._nanoseconds, self.timezone_offset()._nanoseconds, self._iana) : string
+  }
+}
+function baml.time.ZonedDateTime.max(self: baml.time.ZonedDateTime, other: baml.time.ZonedDateTime) -> baml.time.ZonedDateTime throws never {
+  { : baml.time.ZonedDateTime
+    if (other._nanoseconds > self._nanoseconds : bool) : baml.time.ZonedDateTime
+      { : baml.time.ZonedDateTime
+        other : baml.time.ZonedDateTime
+      }
+    else
+      { : baml.time.ZonedDateTime
+        self : baml.time.ZonedDateTime
+      }
+  }
+}
+function baml.time.ZonedDateTime.min(self: baml.time.ZonedDateTime, other: baml.time.ZonedDateTime) -> baml.time.ZonedDateTime throws never {
+  { : baml.time.ZonedDateTime
+    if (other._nanoseconds < self._nanoseconds : bool) : baml.time.ZonedDateTime
+      { : baml.time.ZonedDateTime
+        other : baml.time.ZonedDateTime
+      }
+    else
+      { : baml.time.ZonedDateTime
+        self : baml.time.ZonedDateTime
+      }
+  }
+}
+function baml.time.ZonedDateTime.with_timezone(self: baml.time.ZonedDateTime, timezone: baml.time.TimeZoneOffset | string) -> baml.time.ZonedDateTime throws never {
+  { : baml.time.ZonedDateTime
+    ZonedDateTime.from_instant(self.to_instant(), timezone) : baml.time.ZonedDateTime
+  }
+}
+function baml.time.ZonedDateTime.timezone(self: baml.time.ZonedDateTime) -> baml.time.TimeZoneOffset | string throws never {
+  { : baml.time.TimeZoneOffset | string
+    match (self._iana : string | null) : baml.time.TimeZoneOffset | string
+      null =>
+        TimeZoneOffset { _nanoseconds: self._offset_ns ?? 0 } : baml.time.TimeZoneOffset
+      iana =>
+        iana ?? "" : string
+  }
+}
+function baml.time.ZonedDateTime.timezone_offset(self: baml.time.ZonedDateTime) -> baml.time.TimeZoneOffset throws baml.time.UnknownTimezoneError | baml.errors.Io {
+  { : baml.time.TimeZoneOffset
+    match (self._iana : string | null) : baml.time.TimeZoneOffset
+      null =>
+        TimeZoneOffset { _nanoseconds: self._offset_ns ?? 0 } : baml.time.TimeZoneOffset
+      iana =>
+        match (_tz_offset_at(iana ?? "", self._nanoseconds) : int | null) : baml.time.TimeZoneOffset
+          null =>
+            throw UnknownTimezoneError { timezone: iana ?? "" } : never
+          offset =>
+            TimeZoneOffset { _nanoseconds: offset ?? 0 } : baml.time.TimeZoneOffset
+  }
+}
+function baml.time.ZonedDateTime.to_plain(self: baml.time.ZonedDateTime) -> baml.time.PlainDateTime throws baml.time.UnknownTimezoneError | baml.errors.Io {
+  { : baml.time.PlainDateTime
+    PlainDateTime { _nanoseconds: self._nanoseconds + self.timezone_offset()._nanoseconds } : baml.time.PlainDateTime
+  }
+}
+function baml.time.ZonedDateTime.year(self: baml.time.ZonedDateTime) -> int throws baml.errors.InvalidArgument | baml.time.UnknownTimezoneError | baml.errors.Io {
+  { : int
+    self.to_plain().year() : int
+  }
+}
+function baml.time.ZonedDateTime.month(self: baml.time.ZonedDateTime) -> int throws baml.errors.InvalidArgument | baml.time.UnknownTimezoneError | baml.errors.Io {
+  { : int
+    self.to_plain().month() : int
+  }
+}
+function baml.time.ZonedDateTime.day(self: baml.time.ZonedDateTime) -> int throws baml.errors.InvalidArgument | baml.time.UnknownTimezoneError | baml.errors.Io {
+  { : int
+    self.to_plain().day() : int
+  }
+}
+function baml.time.ZonedDateTime.hour(self: baml.time.ZonedDateTime) -> int throws baml.errors.InvalidArgument | baml.time.UnknownTimezoneError | baml.errors.Io {
+  { : int
+    self.to_plain().hour() : int
+  }
+}
+function baml.time.ZonedDateTime.minute(self: baml.time.ZonedDateTime) -> int throws baml.errors.InvalidArgument | baml.time.UnknownTimezoneError | baml.errors.Io {
+  { : int
+    self.to_plain().minute() : int
+  }
+}
+function baml.time.ZonedDateTime.second(self: baml.time.ZonedDateTime) -> int throws baml.errors.InvalidArgument | baml.time.UnknownTimezoneError | baml.errors.Io {
+  { : int
+    self.to_plain().second() : int
+  }
+}
+function baml.time.ZonedDateTime.millisecond(self: baml.time.ZonedDateTime) -> int throws baml.errors.InvalidArgument | baml.time.UnknownTimezoneError | baml.errors.Io {
+  { : int
+    self.to_plain().millisecond() : int
+  }
+}
+function baml.time.ZonedDateTime.from_json(j: baml.json.json) -> baml.time.ZonedDateTime throws baml.json.JsonDecodeError {
+  { : baml.time.ZonedDateTime
+    match (j : baml.json.json) : baml.time.ZonedDateTime
+      string =>
+        catch (ZonedDateTime.parse(j) : baml.time.ZonedDateTime) : baml.time.ZonedDateTime
+          catch (_)
+            root.errors.ParseError { message: message } =>
+              throw root.json.JsonDecodeError { message: message, path: "" } : never
+      _ =>
+        throw root.json.JsonDecodeError { message: "Expected RFC 3339..." } : never
+  }
+}
+function baml.time.ZonedDateTime.to_json(self: baml.time.ZonedDateTime) -> string throws baml.json.JsonSerializationError {
+  { : string
+    catch (self.to_string() : string) : unknown
+      catch (_)
+        root.errors.InvalidArgument { message: message } =>
+          throw root.json.JsonSerializationError { message: message, path: "" } : never
+        UnknownTimezoneError { timezone: timezone } =>
+          throw root.json.JsonSerializationError { message: "unknown timezone: " + timezone, path: "" } : never
+        root.errors.Io { message: message } =>
+          throw root.json.JsonSerializationError { message: message, path: "" } : never
+  }
+}
+class baml.time.ZonedDateTime$stream {
+  _nanoseconds: bigint | null
+  _offset_ns: int | null
+  _iana: string | null
+}
+
+--- <builtin>/baml/ns_toml/toml.baml ---
+type baml.toml.Item = baml.toml.Table | baml.toml.Item[] | bool | int | float | string | baml.time.ZonedDateTime | baml.time.PlainDateTime | baml.time.PlainDate | baml.time.PlainTime
+class baml.toml.Table {
+  items: map<string, baml.toml.Item>
+}
+function baml.toml.Table.to_json(self: baml.toml.Table) -> baml.json.json throws baml.json.JsonSerializationError {
+  { : baml.json.json
+    catch (self.items.to_json() : baml.json.json) : unknown
+      catch (_)
+        root.json.JsonParseError { message: message } =>
+          throw root.json.JsonSerializationError { message: message, path: "" } : never
+  }
+}
+function baml.toml.Table.from_json(json: baml.json.json) -> baml.toml.Table throws baml.json.JsonDecodeError {
+  { : baml.toml.Table
+    match (json : baml.json.json) : baml.toml.Table
+      map<string, baml.json.json> =>
+        { : baml.toml.Table
+          let items: map<string, Item> = map {  } : unknown -> map<string, baml.toml.Item>
+          for key in json.keys()
+            { : void
+              items[key] = match (json[key]) { null => { 1 stmts }, item => item_from_json(item) } : baml.toml.Item
+            }
+          Table { items: items } : baml.toml.Table
+        }
+      _ =>
+        throw baml.json.JsonDecodeError { message: "expected map", path: "" } : never
+  }
+}
+function baml.toml.item_to_json(item: baml.toml.Item) -> baml.json.json throws baml.json.JsonSerializationError {
+  { : bool | int | float | string | baml.json.json | baml.json.json[]
+    match (item : baml.toml.Item) : bool | int | float | string | baml.json.json | baml.json.json[]
+      bool | int | float | string =>
+        item : bool | int | float | string
+      Table =>
+        item.to_json() : baml.json.json
+      Item[] =>
+        item.map<U, E>(item_to_json) : baml.json.json[]
+      baml.time.ZonedDateTime =>
+        item.to_json() : string
+      baml.time.PlainDateTime =>
+        item.to_json() : string
+      baml.time.PlainDate =>
+        item.to_json() : string
+      baml.time.PlainTime =>
+        item.to_json() : string
+  }
+}
+function baml.toml.item_from_json(json: baml.json.json) -> baml.toml.Item throws baml.json.JsonDecodeError {
+  { : bool | int | float | string | baml.toml.Table | baml.toml.Item[]
+    match (json : baml.json.json) : bool | int | float | string | baml.toml.Table | baml.toml.Item[]
+      bool | int | float | string =>
+        json : bool | int | float | string
+      null =>
+        throw baml.json.JsonDecodeError { message: "TOML does not sup...", path: "" } : never
+      map<string, baml.json.json> =>
+        Table.from_json(json) : baml.toml.Table
+      baml.json.json[] =>
+        json.map<U, E>(item_from_json) : baml.toml.Item[]
+  }
+}
+class baml.toml.TomlParseError {
+  message: string
+}
+function baml.toml.TomlParseError.to_json(self: baml.toml.TomlParseError) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  map { "message": self.message.to_json() } : map<string, baml.json.json>
+}
+function baml.toml.TomlParseError.from_json(j: baml.json.json) -> baml.toml.TomlParseError throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  TomlParseError { message: baml.json.from_json<string>(baml.json.field(j, "message")) } : baml.toml.TomlParseError
+}
+type baml.toml.Item$stream = baml.toml.Table$stream | baml.toml.Item$stream[] | bool | int | float | string | baml.time.ZonedDateTime$stream | baml.time.PlainDateTime$stream | baml.time.PlainDate$stream | baml.time.PlainTime$stream
+class baml.toml.Table$stream {
+  items: map<string, baml.toml.Item$stream>
+}
+class baml.toml.TomlParseError$stream {
+  message: string | null
+}
+
 --- <builtin>/baml/ns_unstable/unstable.baml ---
 
 --- <builtin>/baml/null.baml ---

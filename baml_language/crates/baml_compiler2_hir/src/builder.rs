@@ -1670,6 +1670,7 @@ impl<'db> SemanticIndexBuilder<'db> {
                         span: attr.span,
                     });
                 }
+                "skip" => {}
                 _ => {
                     // Unknown attributes passed through silently (e.g. @stream.*)
                 }

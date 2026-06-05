@@ -495,10 +495,8 @@ impl<'s> JsonParseState<'s> {
                     // We'll close the string the next time around.
                     false
                 }
-                '{' | '"' | '\'' | '[' if !has_some_object => {
-                    // We're in a string
-                    true
-                }
+                // If there's no object yet, we're in a string.
+                '{' | '"' | '\'' | '[' => !has_some_object,
                 _ => {
                     // Almost every other character should not close the string
                     false

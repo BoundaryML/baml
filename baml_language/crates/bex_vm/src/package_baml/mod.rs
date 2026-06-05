@@ -33,6 +33,7 @@ mod stack_trace;
 mod string;
 mod sys;
 mod time;
+mod toml;
 mod type_class;
 mod uint8array;
 mod unstable;
@@ -123,7 +124,9 @@ pub trait Continuation: Send {
     // Static builtin constructors (e.g. `baml.spawn.CancelToken.new`) are
     // generated as trait methods returning `Value` (the heap instance), not
     // `Self` — that is the codegen contract, not a smell.
-    clippy::new_ret_no_self
+    clippy::new_ret_no_self,
+    clippy::too_many_arguments,
+    non_snake_case
 )]
 mod generated {
     use super::*;
