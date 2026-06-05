@@ -110,3 +110,49 @@ ${ctx.output_format}`
         "rendered output_format should list the Person fields: {dbg}"
     );
 }
+
+#[tokio::test]
+async fn prompt_interpolates_ctx_output_format_with() {
+    // BEP-049 M5b.2: `${ctx.output_format_with(prefix=..., ...)}` re-renders the
+    // return type's schema with caller options. `Context._output_format` carries
+    // the prebuilt schema handle; a non-default `prefix` must appear in the
+    // assembled prompt, proving the option took effect. Exercises two infra
+    // paths: a method call on a body-param inside a template, and an io-function
+    // with optional params called with most omitted.
+    let output = baml_test!(
+        r#"
+class Person {
+  name string
+  age int
+}
+
+function main() -> baml.llm.PromptAst {
+  let cc = baml.llm.ContextClient { name: "c", provider: "openai", default_role: "user", allowed_roles: ["user"] }
+  let rt = reflect.type_of<Person>()
+  let ctx = baml.llm.Context { client: cc, tags: {}, output_format: baml.llm.render_output_format(rt), _output_format: baml.llm.build_output_format(rt) }
+  let render = baml.llm.prompt`${ctx.output_format_with(prefix = "Use this exact schema:")}`
+  render(ctx)
+}
+"#
+    );
+    let ast = match &output.result {
+        Ok(BexExternalValue::Instance { class_name, fields })
+            if class_name == "baml.llm.PromptAst" =>
+        {
+            match fields.get("_data") {
+                Some(BexExternalValue::Adt(BexExternalAdt::PromptAst(ast))) => ast.clone(),
+                other => panic!("expected `_data` to hold a PromptAst ADT, got {other:?}"),
+            }
+        }
+        other => panic!("expected a baml.llm.PromptAst instance, got {other:?}"),
+    };
+    let dbg = format!("{ast:?}");
+    assert!(
+        dbg.contains("Use this exact schema:"),
+        "the custom `prefix` option should be applied: {dbg}"
+    );
+    assert!(
+        dbg.contains("name") && dbg.contains("age"),
+        "rendered schema should list the Person fields: {dbg}"
+    );
+}

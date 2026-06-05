@@ -3752,12 +3752,22 @@ impl LoweringContext<'_> {
                 self.builder
                     .assign(Place::local(parts_local), Rvalue::Array(parts_ops));
 
-                // Interps lower in the closure scope: body-param refs resolve to
-                // Place::Local, enclosing-local refs to Place::Capture.
+                // Interps lower in the closure scope (body-param refs →
+                // Place::Local, enclosing-local refs → Place::Capture), but
+                // their TIR types/resolutions were inferred INLINE in the
+                // enclosing body — keyed under the enclosing `MetadataScope`,
+                // not this synthetic lambda scope. Restore it so member/method
+                // resolution lookups hit the recorded entries (otherwise a
+                // method call `${ctx.m()}` misses its resolution and falls back
+                // to a map-element access → runtime `expected Map, got Instance`).
+                // Mirrors the `None` (dynamic-layout) arm below.
+                let prev_metadata_scope = self.current_metadata_scope;
+                self.current_metadata_scope = saved_metadata_scope;
                 let value_ops: Vec<Operand> = value_exprs
                     .iter()
                     .map(|&e| self.lower_to_operand(e))
                     .collect();
+                self.current_metadata_scope = prev_metadata_scope;
                 let values_local = self.builder.declare_local(
                     Some(Name::new("__tt_values")),
                     Ty::List(
@@ -5321,7 +5331,7 @@ impl LoweringContext<'_> {
 
 // ─── 3.5: Call lowering with builtin detection ────────────────────────────────
 
-impl LoweringContext<'_> {
+impl<'db> LoweringContext<'db> {
     fn lower_call_arg_operands(&mut self, expr_id: AstExprId, args: &[AstExprId]) -> Vec<Operand> {
         let Some(plan) = self
             .call_plans
@@ -5332,6 +5342,17 @@ impl LoweringContext<'_> {
             // have already flagged any mismatch).
             return args.iter().map(|&a| self.lower_to_operand(a)).collect();
         };
+
+        // If this call targets a sys_op (`$rust_io_function`), an omitted
+        // defaulted param must be materialized to its declared default HERE:
+        // sys_ops have no bytecode body, so they never run the default-parameter
+        // prologue that a regular callee would. Leaving `OmittedArg` for a
+        // sys_op would reach the engine and panic in `vm_arg_to_bex_value`.
+        let sysop_callee = match &self.body.exprs[expr_id] {
+            AstExpr::Call { callee, .. } => Some(*callee),
+            _ => None,
+        }
+        .and_then(|callee| self.sys_op_callee(callee));
 
         // Pre-lower each provided arg in source order (the order `args` appear
         // in the call expression). This preserves the original evaluation
@@ -5350,11 +5371,35 @@ impl LoweringContext<'_> {
                 baml_compiler2_tir::inference::ParamBinding::Provided { arg, .. } => lowered_args
                     .remove(&arg)
                     .expect("call plan referenced an argument outside the call expression"),
-                baml_compiler2_tir::inference::ParamBinding::OmittedDefault { .. } => {
-                    Operand::Constant(Constant::OmittedArg)
-                }
+                baml_compiler2_tir::inference::ParamBinding::OmittedDefault {
+                    param_index, ..
+                } => match sysop_callee {
+                    Some(callee_loc) => self.sysop_default_operand(callee_loc, param_index),
+                    None => Operand::Constant(Constant::OmittedArg),
+                },
             })
             .collect()
+    }
+
+    /// Materialize a sys-op parameter's omitted default as a constant operand.
+    /// `$rust_io_function` callees have no bytecode body — and thus no
+    /// default-parameter prologue — so their omitted defaults must be folded at
+    /// the call site. The default is read from the CALLEE's own defaults arena
+    /// (correct cross-file/cross-package, where the caller's TIR tables don't
+    /// cover the callee). Sys-op defaults are constant literals today; a
+    /// non-constant default falls back to `OmittedArg` rather than mis-evaluate.
+    fn sysop_default_operand(&self, callee_loc: FunctionLoc<'db>, param_index: usize) -> Operand {
+        let defaults = baml_compiler2_ppir::function_parameter_defaults(self.db, callee_loc);
+        let constant = defaults
+            .param_default(param_index)
+            .map(|d| d.expr.expr())
+            .map(|id| match &defaults.defaults.exprs.exprs[id] {
+                AstExpr::Null => Constant::Null,
+                AstExpr::Literal(lit) => Self::lower_literal(lit),
+                _ => Constant::OmittedArg,
+            })
+            .unwrap_or(Constant::OmittedArg);
+        Operand::Constant(constant)
     }
 
     fn lower_call(
@@ -6039,6 +6084,15 @@ impl LoweringContext<'_> {
     }
 
     fn check_sys_op(&self, callee: AstExprId) -> bool {
+        self.sys_op_callee(callee).is_some()
+    }
+
+    /// If `callee` resolves to a `$rust_io_function` (a sys-op), return its
+    /// `FunctionLoc`. Covers single/multi-segment path and member-access
+    /// callees (same resolution as the `bool` form). Used to materialize a
+    /// sys-op's omitted optional-parameter defaults at the call site (sys-ops
+    /// have no bytecode body, hence no default-parameter prologue).
+    fn sys_op_callee(&self, callee: AstExprId) -> Option<FunctionLoc<'db>> {
         use baml_compiler2_ast::BuiltinKind;
 
         // ── Path callee (single- or multi-segment) ─────────────────────────────
@@ -6100,7 +6154,7 @@ impl LoweringContext<'_> {
             if let Some(fl) = func_loc {
                 let body = baml_compiler2_ppir::function_body(self.db, fl);
                 if let FunctionBody::Builtin(BuiltinKind::Io) = body.as_ref() {
-                    return true;
+                    return Some(fl);
                 }
             }
         }
@@ -6119,13 +6173,13 @@ impl LoweringContext<'_> {
                 if let Some(fl) = func_loc {
                     let body = baml_compiler2_ppir::function_body(self.db, fl);
                     if let FunctionBody::Builtin(BuiltinKind::Io) = body.as_ref() {
-                        return true;
+                        return Some(fl);
                     }
                 }
             }
         }
 
-        false
+        None
     }
 
     /// Check if the callee resolves to a `$compiler_intrinsic` function and return the

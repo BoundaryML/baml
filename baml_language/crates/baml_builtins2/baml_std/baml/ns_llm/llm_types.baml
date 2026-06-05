@@ -2,6 +2,14 @@ class PromptAst {
   _data $rust_type
 }
 
+/// BEP-049 §10 (M5b.2). Opaque handle to a prebuilt output-format schema (the
+/// rust `OutputFormatContent` for a return type). Carried on `Context` so
+/// `ctx.output_format_with(...)` can re-render the schema with caller options
+/// without rebuilding it. Built by `build_output_format(return_type)`.
+class OutputFormat {
+  _data $rust_type
+}
+
 /// BEP-049 §10. A typed chat-role marker produced by the in-template `role(...)`
 /// constructor (e.g. `${role("system")}`). When a `prompt` tag assembles a
 /// `PromptAst`, each `Role` value in the template's `values` array starts a new
@@ -32,10 +40,10 @@ class ContextClient {
 ///
 /// `output_format` is the default-rendered schema string for the call's return
 /// type — the dominant `${ctx.output_format}` usage, byte-equivalent to Jinja's
-/// `{{ ctx.output_format }}`. The orchestrator populates it (via
-/// `render_output_format`) once the client is chosen. The parameterized
-/// `output_format_with(...)` accessor (the rare `{{ ctx.output_format(...) }}`
-/// case) lands in a later slice.
+/// `{{ ctx.output_format }}`. `output_format_with(...)` re-renders the schema
+/// with caller options (the rare `{{ ctx.output_format(...) }}` form), backed by
+/// the opaque `_output_format` handle. The orchestrator populates both once the
+/// client is chosen.
 class Context {
   /// The client chosen for this attempt.
   client ContextClient
@@ -43,6 +51,26 @@ class Context {
   tags map<string, unknown>
   /// The return type's schema, rendered with default options.
   output_format string
+  /// Opaque handle to the return type's prebuilt output-format schema, backing
+  /// `output_format_with(...)`.
+  _output_format OutputFormat
+
+  /// BEP-049 §10 (M5b.2). Render the return type's schema with custom options —
+  /// the parameterized form of `output_format`. Each option defaults to `null`
+  /// (auto); a supplied value overrides that aspect of the rendering.
+  function output_format_with(
+    self,
+    prefix: string? = null,
+    or_splitter: string? = null,
+    enum_value_prefix: string? = null,
+    hoisted_class_prefix: string? = null,
+    always_hoist_enums: bool? = null,
+    quote_class_fields: bool? = null,
+    hoist_classes: string[]? = null,
+    map_style: string? = null,
+  ) -> string throws never {
+    $rust_io_function
+  }
 }
 
 /// The routing strategy of an LLM client.
@@ -670,6 +698,13 @@ function assemble_prompt_ast(parts: string[], values: unknown[]) -> PromptAst th
 /// calls this with the call's return type to populate `Context.output_format`,
 /// producing output byte-equivalent to the legacy Jinja `{{ ctx.output_format }}`.
 function render_output_format(return_type: type) -> string throws never {
+  $rust_io_function
+}
+
+/// BEP-049 §10 (M5b.2). Build the opaque output-format schema handle for
+/// `return_type`, for `Context._output_format`. The orchestrator builds this
+/// once per attempt; `ctx.output_format_with(...)` renders it with options.
+function build_output_format(return_type: type) -> OutputFormat throws never {
   $rust_io_function
 }
 

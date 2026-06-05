@@ -660,6 +660,15 @@ function baml.llm.PromptAst.to_json(self: baml.llm.PromptAst) -> baml.json.json 
 function baml.llm.PromptAst.from_json(j: baml.json.json) -> baml.llm.PromptAst throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   baml.json.from_string<T>(baml.json.stringify(j)) : baml.llm.PromptAst
 }
+class baml.llm.OutputFormat {
+  _data: $rust_type
+}
+function baml.llm.OutputFormat.to_json(self: baml.llm.OutputFormat) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  baml.json.parse(baml.json.to_string<OutputFormat>(self)) : baml.json.json
+}
+function baml.llm.OutputFormat.from_json(j: baml.json.json) -> baml.llm.OutputFormat throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  baml.json.from_string<T>(baml.json.stringify(j)) : baml.llm.OutputFormat
+}
 class baml.llm.Role {
   name: string
   metadata: map<string, unknown>
@@ -686,6 +695,7 @@ class baml.llm.Context {
   client: baml.llm.ContextClient
   tags: map<string, unknown>
   output_format: string
+  _output_format: baml.llm.OutputFormat
 }
 function baml.llm.Context.to_json(self: baml.llm.Context) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
   baml.json.parse(baml.json.to_string<Context>(self)) : baml.json.json
@@ -1243,6 +1253,9 @@ lambda baml.llm.prompt {
 class baml.llm.PromptAst$stream {
   _data: $rust_type
 }
+class baml.llm.OutputFormat$stream {
+  _data: $rust_type
+}
 class baml.llm.Role$stream {
   name: null | string
   metadata: map<string, unknown>
@@ -1257,6 +1270,7 @@ class baml.llm.Context$stream {
   client: null | baml.llm.ContextClient$stream
   tags: map<string, unknown>
   output_format: null | string
+  _output_format: null | baml.llm.OutputFormat$stream
 }
 class baml.llm.RetryPolicy$stream {
   max_retries: null | int

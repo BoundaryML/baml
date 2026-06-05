@@ -3124,6 +3124,9 @@ function baml.llm.Context.from_json(j: baml.json.json) -> baml.llm.Context {
     return
 }
 
+function baml.llm.Context.output_format_with(self: baml.llm.Context, prefix: string?, or_splitter: string?, enum_value_prefix: string?, hoisted_class_prefix: string?, always_hoist_enums: bool?, quote_class_fields: bool?, hoist_classes: string[]?, map_style: string?) -> string {
+}
+
 function baml.llm.Context.to_json(self: baml.llm.Context) -> baml.json.json {
     load_type baml.llm.Context
     load_var self
@@ -3357,6 +3360,24 @@ function baml.llm.OrchestrationStep.to_json(self: baml.llm.OrchestrationStep) ->
     load_const "primitive_client"
     load_const "delay_ms"
     alloc_map 2
+    return
+}
+
+function baml.llm.OutputFormat.from_json(j: baml.json.json) -> baml.llm.OutputFormat {
+    load_var j
+    call baml.json.stringify
+    store_var _2
+    load_type baml.llm.OutputFormat
+    load_var _2
+    call baml.json.from_string
+    return
+}
+
+function baml.llm.OutputFormat.to_json(self: baml.llm.OutputFormat) -> baml.json.json {
+    load_type baml.llm.OutputFormat
+    load_var self
+    call baml.json.to_string
+    call baml.json.parse
     return
 }
 
@@ -3991,6 +4012,9 @@ function baml.llm.__sap_parse_partial(json: string, cache: baml.llm.StreamCache<
 }
 
 function baml.llm.assemble_prompt_ast(parts: string[], values: unknown[]) -> baml.llm.PromptAst {
+}
+
+function baml.llm.build_output_format(return_type: type) -> baml.llm.OutputFormat {
 }
 
 function baml.llm.build_request(client: baml.llm.Client, function_name: string, args: map<string, unknown>) -> baml.http.Request {

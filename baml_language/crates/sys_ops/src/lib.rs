@@ -526,6 +526,44 @@ impl<T> io::IoClassLlmStreamCache for T {
     }
 }
 
+/// Blanket impl — `Context.output_format_with(...)` re-renders the return
+/// type's schema with caller options (BEP-049 §10 / M5b.2). `Context._output_format`
+/// carries the prebuilt schema as an opaque handle, so this only re-renders it.
+impl<T> io::IoClassLlmContext for T {
+    #[allow(clippy::too_many_arguments)]
+    fn output_format_with(
+        &self,
+        _heap: &std::sync::Arc<BexHeap>,
+        _call_id: CallId,
+        context: io::owned::llm::Context,
+        prefix: Option<String>,
+        or_splitter: Option<String>,
+        enum_value_prefix: Option<String>,
+        hoisted_class_prefix: Option<String>,
+        always_hoist_enums: Option<bool>,
+        quote_class_fields: Option<bool>,
+        hoist_classes: Option<Vec<String>>,
+        map_style: Option<String>,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<String> {
+        // Render the prebuilt schema handle with the caller's options. The
+        // `Option → RenderOptions` mapping lives inside sys_llm (those option
+        // types are crate-internal there).
+        let content = unwrap_output_format(&context._output_format);
+        SysOpOutput::ok(sys_llm::render_output_format_content(
+            &content,
+            prefix,
+            or_splitter,
+            enum_value_prefix,
+            hoisted_class_prefix,
+            always_hoist_enums,
+            quote_class_fields,
+            hoist_classes,
+            map_style,
+        ))
+    }
+}
+
 impl<T> io::IoNamespaceLlm for T {
     fn get_jinja_template(
         &self,
@@ -570,6 +608,19 @@ impl<T> io::IoNamespaceLlm for T {
     ) -> SysOpOutput<String> {
         // BEP-049 §10 (M5b): the `ctx.output_format` schema string.
         SysOpOutput::ok(sys_llm::render_output_format(&return_type, ctx))
+    }
+
+    fn build_output_format(
+        &self,
+        _heap: &std::sync::Arc<BexHeap>,
+        _call_id: CallId,
+        return_type: baml_type::Ty,
+        ctx: &SysOpContext,
+    ) -> SysOpOutput<io::owned::llm::OutputFormat> {
+        // BEP-049 §10 (M5b.2): build the opaque schema handle `Context._output_format`
+        // carries; `output_format_with(...)` renders it with caller options.
+        let content = sys_llm::build_output_format_content(&return_type, ctx);
+        SysOpOutput::ok(wrap_output_format(std::sync::Arc::new(content)))
     }
 
     fn get_return_type(
@@ -777,6 +828,27 @@ fn unwrap_prompt_ast(owned: &io::owned::llm::PromptAst) -> bex_vm_types::PromptA
         .clone()
         .downcast::<baml_builtins2::PromptAst>()
         .expect("PromptAst._data downcast failed: expected Arc<baml_builtins2::PromptAst>. This indicates a bug in wrap_prompt_ast or a type mismatch.")
+}
+
+/// Wrap an `OutputFormatContent` into the generated `owned::llm::OutputFormat` handle.
+fn wrap_output_format(
+    content: std::sync::Arc<sys_llm::OutputFormatContent>,
+) -> io::owned::llm::OutputFormat {
+    io::owned::llm::OutputFormat {
+        _data: content as std::sync::Arc<dyn std::any::Any + Send + Sync>,
+    }
+}
+
+/// Unwrap a generated `owned::llm::OutputFormat` handle back to its `OutputFormatContent`.
+#[allow(clippy::used_underscore_binding)]
+fn unwrap_output_format(
+    owned: &io::owned::llm::OutputFormat,
+) -> std::sync::Arc<sys_llm::OutputFormatContent> {
+    owned
+        ._data
+        .clone()
+        .downcast::<sys_llm::OutputFormatContent>()
+        .expect("OutputFormat._data downcast failed: expected Arc<OutputFormatContent>. This indicates a bug in wrap_output_format or a type mismatch.")
 }
 
 /// Convert the generated IO `PrimitiveClient` to the `sys_llm::baml_std::PrimitiveClient`.

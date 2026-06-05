@@ -95,11 +95,12 @@ namespace baml.llm:
   class BedrockOptions { methods: [to_json, from_json] }
   class Client { methods: [to_primitive_client, get_constructor, build_attempt, build_attempt_with_state, build_plan, build_plan_with_state, execute_stream, execute_once_stream, __make_stream, execute_oneshot, execute_once_oneshot, to_json, from_json] }
   enum ClientType
-  class Context { methods: [to_json, from_json] }
+  class Context { methods: [output_format_with, to_json, from_json] }
   class ContextClient { methods: [to_json, from_json] }
   class ExecutionContext { methods: [to_json, from_json] }
   class MediaUrlHandler { methods: [to_json, from_json] }
   class OrchestrationStep { methods: [to_json, from_json] }
+  class OutputFormat { methods: [to_json, from_json] }
   class PlannerState { methods: [rr_local_offset, rr_pick_index, to_json, from_json] }
   class PrimitiveClient { methods: [render_prompt, specialize_prompt, build_request, build_request_stream, new_stream_accumulator, validate_finish_reason, parse, to_json, from_json] }
   class PrimitiveClientOptions { methods: [to_json, from_json] }
@@ -113,6 +114,7 @@ namespace baml.llm:
   function __sap_parse_final<TStream, TFinal>
   function __sap_parse_partial<TStream, TFinal>
   function assemble_prompt_ast
+  function build_output_format
   function build_request
   function build_request_stream
   function call_llm_function<T>

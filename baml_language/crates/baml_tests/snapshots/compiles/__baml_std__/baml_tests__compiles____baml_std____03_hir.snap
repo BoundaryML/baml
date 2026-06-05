@@ -639,6 +639,7 @@ class baml.llm.Context {
   client: baml.llm.ContextClient
   tags: map<string, unknown>
   output_format: string
+  _output_format: baml.llm.OutputFormat
 }
 class baml.llm.ContextClient {
   name: string
@@ -651,6 +652,9 @@ class baml.llm.MediaUrlHandler {
   audio: string | null
   video: string | null
   pdf: string | null
+}
+class baml.llm.OutputFormat {
+  _data: $rust_type
 }
 class baml.llm.PrimitiveClient {
   name: string
@@ -719,6 +723,7 @@ function baml.llm.build_attempt(self: ?) -> OrchestrationStep[]  [expr] {
 function baml.llm.build_attempt_with_state(self: ?, planner_state: PlannerState) -> OrchestrationStep[]  [expr] {
   {  } match (self.client_type) { baml.llm.ClientType.Primitive => { let primitive = self.to_primitive_client() } [OrchestrationStep { primitive_client: primitive, delay_ms: 0 }], baml.llm.ClientType.Fallback => { let steps: OrchestrationStep[] = []; for sub in self.sub_clients { for step in sub.build_plan_with_state(planner_state) {  } steps.push(step) } } steps, baml.llm.ClientType.RoundRobin => {  } if (self.sub_clients.length() Eq 0) {  } [] else { let idx = planner_state.rr_pick_index(self.name, self.counter, self.sub_clients.length()) } self.sub_clients[idx].build_plan_with_state(planner_state) }
 }
+function baml.llm.build_output_format(return_type: type) -> baml.llm.OutputFormat  [builtin]
 function baml.llm.build_plan(self: ?) -> OrchestrationStep[]  [expr] {
   { let planner_state = PlannerState { rr_client_names: [] } } self.build_plan_with_state(planner_state)
 }
@@ -744,12 +749,6 @@ function baml.llm.final(self: ?) -> TFinal  [expr] {
   { while Not self._acc.is_done() { let next = match (self._sse.next()) { null => { break }, next: string => next }; self._acc.add_events(next) } if (self._acc.is_done()) { self._sse.close(); break }; match (self._acc.finish_reason()) { null => { throw root.errors.LlmClientError { message: "Streaming finishe..." } }, reason: string => self._client.validate_finish_reason(reason) }; let content = self._acc.content() } __sap_parse_final(content, self._cache)
 }
 function baml.llm.finish_reason(self: ?) -> string?  [builtin]
-function baml.llm.from_json(j: baml.json.json) -> baml.llm.BedrockOptions  [expr] {
-  baml.llm.BedrockOptions { region: baml.json.from_json(baml.json.field(j, "region")), endpoint_url: baml.json.from_json(baml.json.field(j, "endpoint_url")), access_key_id: baml.json.from_json(baml.json.field(j, "access_key_id")), secret_access_key: baml.json.from_json(baml.json.field(j, "secret_access_key")), session_token: baml.json.from_json(baml.json.field(j, "session_token")), profile: baml.json.from_json(baml.json.field(j, "profile")), stop_sequences: baml.json.from_json(baml.json.field(j, "stop_sequences")), max_tokens: baml.json.from_json(baml.json.field(j, "max_tokens")), temperature: baml.json.from_json(baml.json.field(j, "temperature")), top_p: baml.json.from_json(baml.json.field(j, "top_p")) }
-}
-function baml.llm.from_json(j: baml.json.json) -> baml.llm.RetryPolicy  [expr] {
-  baml.llm.RetryPolicy { max_retries: baml.json.from_json(baml.json.field(j, "max_retries")), initial_delay_ms: baml.json.from_json(baml.json.field(j, "initial_delay_ms")), multiplier: baml.json.from_json(baml.json.field(j, "multiplier")), max_delay_ms: baml.json.from_json(baml.json.field(j, "max_delay_ms")) }
-}
 function baml.llm.from_json(j: baml.json.json) -> baml.llm.VertexAiOptions  [expr] {
   baml.llm.VertexAiOptions { credentials: baml.json.from_json(baml.json.field(j, "credentials")), credentials_content: baml.json.from_json(baml.json.field(j, "credentials_content")), location: baml.json.from_json(baml.json.field(j, "location")), project_id: baml.json.from_json(baml.json.field(j, "project_id")) }
 }
@@ -780,7 +779,7 @@ function baml.llm.from_json(j: baml.json.json) -> baml.llm.PrimitiveClientOption
 function baml.llm.from_json(j: baml.json.json) -> baml.llm.StreamCache<TStream, TFinal>  [expr] {
   baml.json.from_string(baml.json.stringify(j))
 }
-function baml.llm.from_json(j: baml.json.json) -> baml.llm.PromptAst  [expr] {
+function baml.llm.from_json(j: baml.json.json) -> baml.llm.OutputFormat  [expr] {
   baml.json.from_string(baml.json.stringify(j))
 }
 function baml.llm.from_json(j: baml.json.json) -> baml.llm.MediaUrlHandler  [expr] {
@@ -789,8 +788,17 @@ function baml.llm.from_json(j: baml.json.json) -> baml.llm.MediaUrlHandler  [exp
 function baml.llm.from_json(j: baml.json.json) -> baml.llm.StreamAccumulator  [expr] {
   baml.json.from_string(baml.json.stringify(j))
 }
+function baml.llm.from_json(j: baml.json.json) -> baml.llm.PromptAst  [expr] {
+  baml.json.from_string(baml.json.stringify(j))
+}
 function baml.llm.from_json(j: baml.json.json) -> baml.llm.Client  [expr] {
   baml.llm.Client { name: baml.json.from_json(baml.json.field(j, "name")), client_type: baml.json.from_json(baml.json.field(j, "client_type")), sub_clients: baml.json.from_json(baml.json.field(j, "sub_clients")), retry: baml.json.from_json(baml.json.field(j, "retry")), counter: baml.json.from_json(baml.json.field(j, "counter")) }
+}
+function baml.llm.from_json(j: baml.json.json) -> baml.llm.BedrockOptions  [expr] {
+  baml.llm.BedrockOptions { region: baml.json.from_json(baml.json.field(j, "region")), endpoint_url: baml.json.from_json(baml.json.field(j, "endpoint_url")), access_key_id: baml.json.from_json(baml.json.field(j, "access_key_id")), secret_access_key: baml.json.from_json(baml.json.field(j, "secret_access_key")), session_token: baml.json.from_json(baml.json.field(j, "session_token")), profile: baml.json.from_json(baml.json.field(j, "profile")), stop_sequences: baml.json.from_json(baml.json.field(j, "stop_sequences")), max_tokens: baml.json.from_json(baml.json.field(j, "max_tokens")), temperature: baml.json.from_json(baml.json.field(j, "temperature")), top_p: baml.json.from_json(baml.json.field(j, "top_p")) }
+}
+function baml.llm.from_json(j: baml.json.json) -> baml.llm.RetryPolicy  [expr] {
+  baml.llm.RetryPolicy { max_retries: baml.json.from_json(baml.json.field(j, "max_retries")), initial_delay_ms: baml.json.from_json(baml.json.field(j, "initial_delay_ms")), multiplier: baml.json.from_json(baml.json.field(j, "multiplier")), max_delay_ms: baml.json.from_json(baml.json.field(j, "max_delay_ms")) }
 }
 function baml.llm.from_shorthand(shorthand: string) -> baml.llm.PrimitiveClient  [builtin]
 function baml.llm.get_constructor(self: ?) -> () -> baml.llm.PrimitiveClient throws root.errors.InvalidArgument  [builtin]
@@ -808,6 +816,7 @@ function baml.llm.new_stream_accumulator(self: ?) -> baml.llm.StreamAccumulator 
 function baml.llm.next(self: ?) -> TStream | root.stream.StreamFinished  [expr] {
   { while true { let next = match (self._sse.next()) { null => { return root.stream.StreamFinished {  } }, next: string => next }; self._acc.add_events(next); if (self._acc.is_done()) { self._sse.close(); return root.stream.StreamFinished {  } }; let content = self._acc.content(); let parsed: TStream | root.stream.StreamNoYield = __sap_parse_partial(content, self._cache) } match (parsed) { root.stream.StreamNoYield => { continue }, parsed: TStream => { return parsed } } } root.sys.panic("Unreachable")
 }
+function baml.llm.output_format_with(self: ?, prefix: string? = null, or_splitter: string? = null, enum_value_prefix: string? = null, hoisted_class_prefix: string? = null, always_hoist_enums: bool? = null, quote_class_fields: bool? = null, hoist_classes: string[]? = null, map_style: string? = null) -> string  [builtin]
 function baml.llm.output_tokens(self: ?) -> int?  [builtin]
 function baml.llm.parse(self: ?, http_response_body: string) -> T  [builtin]
 function baml.llm.prompt(body: (role: (string) -> baml.llm.Role, ctx: baml.llm.Context) -> baml.TaggedString throws never) -> (baml.llm.Context) -> baml.llm.PromptAst throws never  [expr] {
@@ -816,12 +825,6 @@ function baml.llm.prompt(body: (role: (string) -> baml.llm.Role, ctx: baml.llm.C
 function baml.llm.render_output_format(return_type: type) -> string  [builtin]
 function baml.llm.render_prompt(self: ?, template: string, args: map<string, unknown>, return_type: type) -> baml.llm.PromptAst  [builtin]
 function baml.llm.specialize_prompt(self: ?, prompt: baml.llm.PromptAst) -> baml.llm.PromptAst  [builtin]
-function baml.llm.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "region": self.region?.to_json(), "endpoint_url": self.endpoint_url?.to_json(), "access_key_id": self.access_key_id?.to_json(), "secret_access_key": self.secret_access_key?.to_json(), "session_token": self.session_token?.to_json(), "profile": self.profile?.to_json(), "stop_sequences": self.stop_sequences?.to_json(), "max_tokens": self.max_tokens?.to_json(), "temperature": self.temperature?.to_json(), "top_p": self.top_p?.to_json() }
-}
-function baml.llm.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "max_retries": self.max_retries.to_json(), "initial_delay_ms": self.initial_delay_ms.to_json(), "multiplier": self.multiplier.to_json(), "max_delay_ms": self.max_delay_ms.to_json() }
-}
 function baml.llm.to_json(self: ?) -> baml.json.json  [expr] {
   map { "credentials": self.credentials?.to_json(), "credentials_content": self.credentials_content?.to_json(), "location": self.location?.to_json(), "project_id": self.project_id?.to_json() }
 }
@@ -862,7 +865,16 @@ function baml.llm.to_json(self: ?) -> baml.json.json  [expr] {
   baml.json.parse(baml.json.to_string(self))
 }
 function baml.llm.to_json(self: ?) -> baml.json.json  [expr] {
+  baml.json.parse(baml.json.to_string(self))
+}
+function baml.llm.to_json(self: ?) -> baml.json.json  [expr] {
   map { "name": self.name.to_json(), "client_type": self.client_type.to_json(), "sub_clients": self.sub_clients.to_json(), "retry": self.retry?.to_json(), "counter": self.counter.to_json() }
+}
+function baml.llm.to_json(self: ?) -> baml.json.json  [expr] {
+  map { "region": self.region?.to_json(), "endpoint_url": self.endpoint_url?.to_json(), "access_key_id": self.access_key_id?.to_json(), "secret_access_key": self.secret_access_key?.to_json(), "session_token": self.session_token?.to_json(), "profile": self.profile?.to_json(), "stop_sequences": self.stop_sequences?.to_json(), "max_tokens": self.max_tokens?.to_json(), "temperature": self.temperature?.to_json(), "top_p": self.top_p?.to_json() }
+}
+function baml.llm.to_json(self: ?) -> baml.json.json  [expr] {
+  map { "max_retries": self.max_retries.to_json(), "initial_delay_ms": self.initial_delay_ms.to_json(), "multiplier": self.multiplier.to_json(), "max_delay_ms": self.max_delay_ms.to_json() }
 }
 function baml.llm.to_primitive_client(self: ?) -> baml.llm.PrimitiveClient  [expr] {
   {  } if (self.name.includes("/")) {  } from_shorthand(self.name) else {  } self.get_constructor()()
