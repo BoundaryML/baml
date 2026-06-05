@@ -59,7 +59,7 @@ export default function GlobalNotFound() {
               margin: '0 0 32px',
             }}
           >
-            Uh oh! Looks like your sheep wandered too far from the pasture!
+            Uh oh! Looks like you wandered from the flock.
           </h1>
           <a
             href="/"

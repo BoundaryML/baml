@@ -63,6 +63,7 @@
     "cobe": "0.6.4",
     "codemirror-copilot": "0.0.7",
     "color-bits": "1.1.0",
+    "convex": "^1.40.0",
     "cytoscape": "^3.33.4",
     "date-fns": "4.1.0",
     "dedent-js": "1.0.1",
