@@ -1233,9 +1233,25 @@ impl BacktickStringLiteral {
     /// BEP §12 (interpolations do not affect the min-indent calculation per
     /// §12 rule 8 — "Whitespace inside `${...}` is preserved verbatim").
     pub fn segments(&self) -> Vec<BacktickSegment> {
-        // Two-pass build: (1) walk CST → flat `FlatPart` stream (text +
-        // interp + block-tag opens/closes) with whole-literal dedent;
-        // (2) lift matched open/close pairs into nested For / If segments.
+        build_segment_tree(&mut self.flat_parts().into_iter().peekable())
+    }
+
+    /// Like [`segments`](Self::segments), but also returns structural
+    /// diagnostics for unclosed / mismatched / stray `${for}`/`${if}` block
+    /// tags. Lowering uses this so a malformed template is reported instead of
+    /// silently miscompiling.
+    pub fn segments_with_errors(&self) -> (Vec<BacktickSegment>, Vec<BacktickStructuralError>) {
+        let parts = self.flat_parts();
+        let errors = validate_block_structure(&parts);
+        let segs = build_segment_tree(&mut parts.into_iter().peekable());
+        (segs, errors)
+    }
+
+    /// Pass (1) of the two-pass build: walk the CST into a flat `FlatPart`
+    /// stream (text + interp + block-tag opens/closes) with whole-literal
+    /// dedent and §13 whitespace control. Pass (2) — lifting matched
+    /// open/close pairs into nested For / If segments — is `build_segment_tree`.
+    fn flat_parts(&self) -> Vec<FlatPart> {
         let n = self.delimiter_count();
         if n == 0 {
             return Vec::new();
@@ -1284,7 +1300,7 @@ impl BacktickStringLiteral {
                     }
                     SyntaxKind::BACKTICK_ENDFOR => {
                         flush_text(&mut current_text, &mut parts);
-                        parts.push(FlatPart::Endfor);
+                        parts.push(FlatPart::Endfor(child.clone()));
                     }
                     SyntaxKind::BACKTICK_IF_OPEN => {
                         flush_text(&mut current_text, &mut parts);
@@ -1296,11 +1312,11 @@ impl BacktickStringLiteral {
                     }
                     SyntaxKind::BACKTICK_ELSE => {
                         flush_text(&mut current_text, &mut parts);
-                        parts.push(FlatPart::Else);
+                        parts.push(FlatPart::Else(child.clone()));
                     }
                     SyntaxKind::BACKTICK_ENDIF => {
                         flush_text(&mut current_text, &mut parts);
-                        parts.push(FlatPart::Endif);
+                        parts.push(FlatPart::Endif(child.clone()));
                     }
                     _ => {
                         if bt_seen >= n && bt_seen <= closing_start_index {
@@ -1389,11 +1405,7 @@ impl BacktickStringLiteral {
         // block tags consume nothing. Applied to the flat sequence before
         // hierarchical lifting so it works uniformly across nested blocks.
         apply_block_tag_whitespace_rule(&mut parts);
-
-        // Lift matched open/close pairs into hierarchical For / If segments.
-        // Returns the segments consumed for the current frame; the caller
-        // decides what kind of close terminated it (or EOF).
-        build_segment_tree(&mut parts.into_iter().peekable())
+        parts
     }
 }
 
@@ -1408,9 +1420,9 @@ fn apply_block_tag_whitespace_rule(parts: &mut Vec<FlatPart>) {
             FlatPart::ForOpen(_)
                 | FlatPart::IfOpen(_)
                 | FlatPart::ElseIf(_)
-                | FlatPart::Else
-                | FlatPart::Endfor
-                | FlatPart::Endif
+                | FlatPart::Else(_)
+                | FlatPart::Endfor(_)
+                | FlatPart::Endif(_)
         )
     }
 
@@ -1579,7 +1591,7 @@ fn build_segment_tree_until<I: Iterator<Item = FlatPart>>(
                             current_header = h;
                             continue;
                         }
-                        Some(FlatPart::Else) => {
+                        Some(FlatPart::Else(_)) => {
                             let (eb, _) = build_segment_tree_until(iter, false);
                             else_body = Some(eb);
                             break;
@@ -1594,11 +1606,11 @@ fn build_segment_tree_until<I: Iterator<Item = FlatPart>>(
             }
             // Closing tokens at this level terminate the current frame and
             // bubble up to the caller for matching.
-            FlatPart::Endfor | FlatPart::Endif => return (out, Some(part)),
-            FlatPart::Else | FlatPart::ElseIf(_) if stop_on_else => return (out, Some(part)),
-            // Stray else/else-if outside an if-chain: treat as no-op for now.
-            // (Parse-time validation lives elsewhere.)
-            FlatPart::Else | FlatPart::ElseIf(_) => {}
+            FlatPart::Endfor(_) | FlatPart::Endif(_) => return (out, Some(part)),
+            FlatPart::Else(_) | FlatPart::ElseIf(_) if stop_on_else => return (out, Some(part)),
+            // Stray else/else-if outside an if-chain: tree-building treats it as
+            // a no-op; `validate_block_structure` reports the diagnostic.
+            FlatPart::Else(_) | FlatPart::ElseIf(_) => {}
         }
     }
     (out, None)
@@ -1613,11 +1625,104 @@ enum FlatPart {
     Text(String),
     Interp(SyntaxNode),
     ForOpen(SyntaxNode),
-    Endfor,
+    Endfor(SyntaxNode),
     IfOpen(SyntaxNode),
     ElseIf(SyntaxNode),
-    Else,
-    Endif,
+    Else(SyntaxNode),
+    Endif(SyntaxNode),
+}
+
+/// A structural problem in a backtick template's block tags — an unclosed,
+/// mismatched, or stray `${for}`/`${if}` open/close — detected by
+/// [`BacktickStringLiteral::segments_with_errors`]. The `span` points at the
+/// offending tag (the unmatched open, or the stray/mismatched close).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BacktickStructuralError {
+    pub kind: BacktickStructuralErrorKind,
+    pub span: rowan::TextRange,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BacktickStructuralErrorKind {
+    /// `${for}` with no matching `${endfor}` (span = the `${for}` open).
+    UnclosedFor,
+    /// `${if}` with no matching `${endif}` (span = the `${if}` open).
+    UnclosedIf,
+    /// A `${for}` block closed by `${endif}` (span = the `${endif}`).
+    MismatchedForClose,
+    /// An `${if}` block closed by `${endfor}` (span = the `${endfor}`).
+    MismatchedIfClose,
+    /// `${endfor}` with no matching `${for}`.
+    StrayEndfor,
+    /// `${endif}` with no matching `${if}`.
+    StrayEndif,
+    /// `${else}` outside an `${if}` block.
+    StrayElse,
+    /// `${else if}` outside an `${if}` block.
+    StrayElseIf,
+}
+
+/// Stack-based block-tag matcher over the flat part stream — reports unclosed,
+/// mismatched, and stray `${for}`/`${if}` tags. Runs alongside (not inside)
+/// [`build_segment_tree`], which still builds a best-effort tree for lowering.
+fn validate_block_structure(parts: &[FlatPart]) -> Vec<BacktickStructuralError> {
+    use BacktickStructuralErrorKind as K;
+    #[derive(Clone, Copy, PartialEq)]
+    enum Open {
+        For,
+        If,
+    }
+    let push = |errors: &mut Vec<BacktickStructuralError>, kind: K, span: rowan::TextRange| {
+        errors.push(BacktickStructuralError { kind, span });
+    };
+    let mut stack: Vec<(Open, rowan::TextRange)> = Vec::new();
+    let mut errors: Vec<BacktickStructuralError> = Vec::new();
+    for part in parts {
+        match part {
+            FlatPart::ForOpen(n) => stack.push((Open::For, n.text_range())),
+            FlatPart::IfOpen(n) => stack.push((Open::If, n.text_range())),
+            FlatPart::Endfor(n) => match stack.last() {
+                Some((Open::For, _)) => {
+                    stack.pop();
+                }
+                Some((Open::If, _)) => {
+                    stack.pop();
+                    push(&mut errors, K::MismatchedIfClose, n.text_range());
+                }
+                None => push(&mut errors, K::StrayEndfor, n.text_range()),
+            },
+            FlatPart::Endif(n) => match stack.last() {
+                Some((Open::If, _)) => {
+                    stack.pop();
+                }
+                Some((Open::For, _)) => {
+                    stack.pop();
+                    push(&mut errors, K::MismatchedForClose, n.text_range());
+                }
+                None => push(&mut errors, K::StrayEndif, n.text_range()),
+            },
+            FlatPart::Else(n) => {
+                if !matches!(stack.last(), Some((Open::If, _))) {
+                    push(&mut errors, K::StrayElse, n.text_range());
+                }
+            }
+            FlatPart::ElseIf(n) => {
+                if !matches!(stack.last(), Some((Open::If, _))) {
+                    push(&mut errors, K::StrayElseIf, n.text_range());
+                }
+            }
+            FlatPart::Text(_) | FlatPart::Interp(_) => {}
+        }
+    }
+    // Anything still open at EOF was never closed.
+    for (open, span) in stack {
+        let kind = match open {
+            Open::For => K::UnclosedFor,
+            Open::If => K::UnclosedIf,
+        };
+        push(&mut errors, kind, span);
+    }
+    errors
 }
 
 /// A piece of a [`BacktickStringLiteral`] after splitting on interpolations

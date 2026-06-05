@@ -2742,7 +2742,7 @@ impl LoweringContext {
         let Some(lit) = BacktickStringLiteral::cast(node.clone()) else {
             return self.alloc_expr(Expr::Missing, span);
         };
-        let segments = self.lower_template_segments(lit.segments());
+        let segments = self.lower_template_segments_checked(&lit);
         // Build the desugared realization (a `+` concat with implicit
         // `.to_string()`) from the *same* segment `ExprId`s. HIR/MIR/codegen
         // consume `elaborated`; TIR types it (quietly) and uses `segments`
@@ -2980,7 +2980,7 @@ impl LoweringContext {
 
         let segments = backtick_node
             .and_then(BacktickStringLiteral::cast)
-            .map(|lit| self.lower_template_segments(lit.segments()))
+            .map(|lit| self.lower_template_segments_checked(&lit))
             .unwrap_or_default();
 
         // Desugared closure body: flatten segments into a `baml.TaggedString`.
@@ -3016,7 +3016,7 @@ impl LoweringContext {
             ]),
             span,
         );
-        let segments = self.lower_template_segments(backtick.segments());
+        let segments = self.lower_template_segments_checked(backtick);
         let body = self.elaborate_tagged_body(&segments, span);
         self.alloc_expr(
             Expr::Template {
@@ -3298,6 +3298,24 @@ impl LoweringContext {
     /// `${if}` structure (no desugaring). Shared by both the untagged
     /// (`Default`) and tagged (`Custom`) paths — the tag, not the segments,
     /// drives the divergent downstream handling.
+    /// Lower a backtick literal's segments, first reporting structural
+    /// block-tag diagnostics (unclosed / mismatched / stray `${for}`/`${if}`)
+    /// so a malformed template surfaces an error instead of silently
+    /// miscompiling. Use this at every top-level `segments()` call site.
+    fn lower_template_segments_checked(
+        &mut self,
+        lit: &baml_compiler_syntax::BacktickStringLiteral,
+    ) -> Vec<TemplateSegment> {
+        let (segs, errors) = lit.segments_with_errors();
+        for e in errors {
+            self.diags.push(LoweringDiagnostic::MalformedTemplateBlock {
+                kind: e.kind,
+                span: e.span,
+            });
+        }
+        self.lower_template_segments(segs)
+    }
+
     fn lower_template_segments(
         &mut self,
         segments: Vec<baml_compiler_syntax::BacktickSegment>,
@@ -3332,6 +3350,18 @@ impl LoweringContext {
     /// `Custom` form the tag's body decides how each value is rendered, so it
     /// receives the unmodified inner expression (values stay typed, §10/§11).
     fn lower_template_interp(&mut self, interp_node: &SyntaxNode) -> ExprId {
+        // Detect an empty `${}` / `${ }` (no expression) from the node text —
+        // robust to whether it parses to a missing or an empty block.
+        let raw = interp_node.text().to_string();
+        let inner_empty = raw
+            .strip_prefix("${")
+            .and_then(|s| s.strip_suffix('}'))
+            .is_some_and(|inner| inner.trim().is_empty());
+        if inner_empty {
+            self.diags.push(LoweringDiagnostic::EmptyInterpolation {
+                span: interp_node.text_range(),
+            });
+        }
         match interp_node
             .children()
             .find(|c| c.kind() == SyntaxKind::BLOCK_EXPR)
