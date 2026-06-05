@@ -6799,13 +6799,7 @@ impl<'db> LoweringContext<'db> {
                     _ => None,
                 })
                 .collect(),
-            Ty::Class(class_name, _, _) => {
-                if let Some(impls) = self.interface_implementors.get(class_name) {
-                    impls.clone()
-                } else {
-                    return None;
-                }
-            }
+            Ty::Class(class_name, _, _) => self.interface_implementors.get(class_name)?.clone(),
             _ => return None,
         };
         if class_names.is_empty() {

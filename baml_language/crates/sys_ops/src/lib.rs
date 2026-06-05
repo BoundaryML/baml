@@ -1402,7 +1402,45 @@ impl io::IoClassTimeInstant for DefaultIoOps {
     }
 }
 
-impl io::IoNamespaceTime for DefaultIoOps {}
+impl io::IoNamespaceTime for DefaultIoOps {
+    fn system_timezone(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<String> {
+        SysOpOutput::err(VmBamlError::Unsupported {
+            message: "Operation not supported on this platform".to_string(),
+        })
+    }
+
+    fn _tz_offset_at(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _timezone: String,
+        _at_ns: Arc<num_bigint::BigInt>,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<Option<i64>> {
+        SysOpOutput::err(VmBamlError::Unsupported {
+            message: "Operation not supported on this platform".to_string(),
+        })
+    }
+
+    fn _tz_to_instant(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _timezone: String,
+        _civil_ns: Arc<num_bigint::BigInt>,
+        _disambiguation: String,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<Option<Arc<num_bigint::BigInt>>> {
+        SysOpOutput::err(VmBamlError::Unsupported {
+            message: "Operation not supported on this platform".to_string(),
+        })
+    }
+}
 
 impl io::IoPackageBaml for DefaultIoOps {}
 
