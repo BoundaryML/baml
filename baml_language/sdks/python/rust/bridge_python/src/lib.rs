@@ -52,6 +52,7 @@ fn baml_py(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_wrapped(wrap_pyfunction!(runtime::get_runtime))?;
     m.add_wrapped(wrap_pyfunction!(host_value::register_host_callable))?;
     m.add_wrapped(wrap_pyfunction!(host_value::release_host_callable))?;
+    m.add_wrapped(wrap_pyfunction!(host_value::lookup_host_value))?;
 
     // Wire the bridge_cffi C entry points to this bridge's per-process
     // Python host-value registry. First-call-wins inside bridge_cffi, so

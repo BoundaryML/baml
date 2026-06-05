@@ -1458,6 +1458,7 @@ dependencies = [
  "codspeed-divan-compat",
  "indexmap",
  "num-bigint",
+ "thiserror 2.0.18",
  "tokio",
  "tokio-util",
 ]
@@ -1665,6 +1666,7 @@ dependencies = [
  "log",
  "lsp-server",
  "num-bigint",
+ "num-traits",
  "prost",
  "reqwest",
  "serde",

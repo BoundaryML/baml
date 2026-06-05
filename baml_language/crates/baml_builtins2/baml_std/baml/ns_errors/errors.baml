@@ -50,17 +50,22 @@ class DevOther {
   message string
 }
 
-/// The host runtime panicked.
-class HostPanic {
-  message string
-}
-
 class HostCallable {
   message string
   class_name string
   language string
   traceback string?
-  category int
+  // Opaque slot carrying the bridge SDK's same-host rehydration handle.
+  // Always populated on the wire by the originating bridge — a `HostCallable`
+  // with no `_handle` is not a valid BAML value. The originating bridge
+  // can resolve the handle back to the original native exception object
+  // (same-process round-trip → `raised === caught` identity); foreign
+  // runtimes receive the same handle on the wire but their local lookup
+  // misses, at which point the host SDK degrades to constructing an
+  // exception from the metadata fields above. The fallback is a
+  // *lookup-result* concern on the host side, not a wire shape — the
+  // field itself is required.
+  _handle $rust_type
 }
 
 /// A catch-all SDK-boundary failure with no more specific class. Synthesized

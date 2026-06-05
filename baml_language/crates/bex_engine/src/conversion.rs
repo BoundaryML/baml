@@ -397,7 +397,12 @@ impl BexEngine {
                     }
                 };
 
-                // Build field values in the order defined by the class
+                // Build field values in the order defined by the class.
+                // Each field's declared `Ty` is passed as the conversion
+                // context so type-polymorphic external values (notably
+                // `BexExternalValue::HostValue`, which can land in either a
+                // function-typed slot as a callable or a `$rust_type` slot
+                // as an opaque handle) can branch on the declared shape.
                 let mut values = Vec::with_capacity(class_fields.len());
                 for class_field in class_fields {
                     let ext = fields.get(&class_field.name).ok_or_else(|| {
@@ -408,7 +413,11 @@ impl BexEngine {
                             ),
                         }
                     })?;
-                    values.push(self.convert_external_to_vm_value(holder, ext.clone())?);
+                    values.push(self.convert_external_to_vm_value_with_ty(
+                        holder,
+                        ext.clone(),
+                        Some(&class_field.field_type),
+                    )?);
                 }
                 Value::object(
                     holder
@@ -491,26 +500,40 @@ impl BexEngine {
                 slice[global_index]
             }
             BexExternalValue::HostValue(arc) => {
-                // A `HostValue` argument materializes a callable
-                // `Object::HostClosure` bound to the declared parameter's
-                // function signature. The declared `Ty::Function` must be
-                // available at this site so the closure carries the arity
-                // (drained from the stack on `CallIndirect`) and the return
-                // type (handed to `SysOp::BamlHostCallHostValue` as
-                // `type_arg_0`).
+                // A `HostValue` lands in one of two declared shapes:
+                //
+                // - `Ty::RustType` (opaque `$rust_type` field, e.g. the
+                //   `_handle` slot on `baml.errors.HostCallable`): wrap the
+                //   arc in `Object::RustData` so the BAML→host decoder can
+                //   later downcast it back to a `HostValueArc`. No
+                //   function signature involved.
+                // - `Ty::Function` (host callable passed as a function
+                //   argument): build a `HostClosure` bound to the declared
+                //   signature so the call site can invoke it.
                 let ty = expected_ty.ok_or_else(|| EngineError::CannotConvert {
-                    type_name: "host_value (no declared function type in context)".to_string(),
+                    type_name: "host_value (no declared type in context)".to_string(),
                 })?;
+                if matches!(peel_to_rust_type(ty), Some(())) {
+                    let dyn_arc: std::sync::Arc<dyn std::any::Any + Send + Sync> = arc;
+                    return Ok(Value::object(
+                        holder.holder_mut().tlab_mut().alloc_rust_data(dyn_arc),
+                    ));
+                }
                 // Peel through Optional / Union to land on the function type.
                 let function_ty =
                     peel_function_ty(ty).ok_or_else(|| EngineError::TypeMismatch {
                         message: format!(
                             "host callable cannot be passed where the declared type \
-                             is `{ty}`; expected a function type",
+                             is `{ty}`; expected a function type or `$rust_type`",
                         ),
                     })?;
-                let (params, ret) = match function_ty {
-                    Ty::Function { params, ret, .. } => (params, ret.as_ref().clone()),
+                let (params, ret, throws) = match function_ty {
+                    Ty::Function {
+                        params,
+                        ret,
+                        throws,
+                        ..
+                    } => (params, ret.as_ref().clone(), throws.as_ref().clone()),
                     other => {
                         return Err(EngineError::TypeMismatch {
                             message: format!(
@@ -520,16 +543,19 @@ impl BexEngine {
                         });
                     }
                 };
-                // The host's returned value is validated against `ret` when the
-                // call completes. A generic return type erases to `Ty::Void`
-                // (or `BuiltinUnknown`) at runtime, which the return validator
-                // treats as "accept anything" — letting the host inject a value
-                // of any type into a position BAML treats as the instantiated
-                // type variable. Reject such a callable at bind time rather than
-                // admit an unvalidatable return. (This also rejects a genuine
-                // bare `-> void` host callable, which is indistinguishable from
-                // an erased generic at runtime; such a callable must declare a
-                // concrete return type.)
+                // The host's returned value is validated against `ret` when
+                // the call completes. A generic return type erases to
+                // `Ty::Void` at MIR lowering (the post-erasure form of an
+                // unbounded TypeVar; see [convert_tir2_ty]); a return type
+                // explicitly declared `unknown` reaches here as
+                // `Ty::BuiltinUnknown`. The return validator treats both as
+                // "accept anything" — letting the host inject a value of any
+                // type into a position BAML treats as the instantiated type
+                // variable. Reject such a callable at bind time rather than
+                // admit an unvalidatable return. (This also rejects a
+                // genuine bare `-> void` host callable, which is
+                // indistinguishable from an erased generic at runtime; such a
+                // callable must declare a concrete return type.)
                 if ret_ty_has_unvalidatable_position(&ret) {
                     return Err(EngineError::TypeMismatch {
                         message: format!(
@@ -539,9 +565,26 @@ impl BexEngine {
                         ),
                     });
                 }
+                // `throws` is the callable's declared error contract `E`
+                // (`call_host_value<T, E>`). An omitted throws on the
+                // parameter is a synthesized generic effect param. By MIR
+                // lowering ([baml_compiler2_mir::lower::convert_tir2_ty]
+                // around the unbounded-TypeVar arm), such a generic erases
+                // to `Ty::Void` at runtime — but `Void` is also a valid
+                // declared type (a bare `-> void` throws contract, however
+                // unusual). To keep the FFI boundary's intent explicit and
+                // forward-compatible with a future FFI mechanism that
+                // supplies a real host-reported error type, normalize the
+                // erased-generic shape to `BuiltinUnknown` here. Concrete
+                // throws (e.g. `throws ParseError`) pass through unchanged.
+                let normalized_throws = match throws {
+                    Ty::Void { attr } => Ty::BuiltinUnknown { attr },
+                    other => other,
+                };
                 let host_closure = bex_vm_types::HostClosure {
                     handle: arc,
                     ret_ty: Box::new(ret),
+                    throws_ty: Box::new(normalized_throws),
                     arity: params.len(),
                 };
                 Value::object(
@@ -700,6 +743,33 @@ pub(crate) fn maybe_wrap_union(
 /// signature behind, e.g., `(int) -> int` and `((int) -> int)?` so that an
 /// inbound `BexExternalValue::HostValue` can be bound to it as an
 /// `Object::HostClosure`.
+/// Returns `Some(())` if `ty` is the runtime representation of
+/// `$rust_type` — i.e. `Ty::Opaque("baml.rust.RustType", _)` — possibly
+/// wrapped in a `Union` (the post-`Ty::Optional`-removal encoding of
+/// `T?` is `Ty::Union([T, Null], _)`, so nullable forms flow through
+/// the union arm). Mirrors [`peel_function_ty`] for the `$rust_type`
+/// field shape that a `HostValue` argument can land in.
+pub(crate) fn peel_to_rust_type(ty: &Ty) -> Option<()> {
+    if ty.is_opaque("baml.rust.RustType") {
+        return Some(());
+    }
+    match ty {
+        Ty::Union(members, _) => {
+            let mut found = false;
+            for m in members {
+                if peel_to_rust_type(m).is_some() {
+                    if found {
+                        return None;
+                    }
+                    found = true;
+                }
+            }
+            if found { Some(()) } else { None }
+        }
+        _ => None,
+    }
+}
+
 pub(crate) fn peel_function_ty(ty: &Ty) -> Option<&Ty> {
     match ty {
         Ty::Function { .. } => Some(ty),
@@ -878,7 +948,7 @@ impl BexEngine {
     /// field's value against its instantiated field type.
     ///
     /// Returns `Err(message)` describing the first mismatch; the caller maps
-    /// it to an `OpErrorKind::HostCallable` so it surfaces as a catchable
+    /// it to a `VmBamlError::HostCallable` so it surfaces as a catchable
     /// `root.errors.HostCallable`.
     pub(crate) fn validate_host_return_schema(
         &self,
@@ -1463,5 +1533,270 @@ pub fn test_arg_to_external(v: &bex_vm_types::TestArgValue) -> BexExternalValue 
                 .map(|(k, v)| (k.clone(), test_arg_to_external(v)))
                 .collect(),
         },
+    }
+}
+
+#[cfg(test)]
+mod peel_to_rust_type_tests {
+    use baml_type::{TyAttr, TypeName};
+
+    use super::*;
+
+    /// `Ty::Opaque("baml.rust.RustType", _)` — the canonical shape.
+    fn rust_type() -> Ty {
+        Ty::Opaque(
+            TypeName::from_dotted_path("baml.rust.RustType"),
+            TyAttr::default(),
+        )
+    }
+
+    #[test]
+    fn direct_rust_type_matches() {
+        assert_eq!(peel_to_rust_type(&rust_type()), Some(()));
+    }
+
+    #[test]
+    fn optional_rust_type_peels_through() {
+        // `Ty::optional(RustType)` lowers to `Ty::Union([RustType, Null])`
+        // post-`Ty::Optional`-removal; the union arm in `peel_to_rust_type`
+        // picks the single RustType member.
+        let ty = Ty::optional(rust_type());
+        assert_eq!(peel_to_rust_type(&ty), Some(()));
+    }
+
+    #[test]
+    fn nested_optional_rust_type_peels_through() {
+        // `T??` collapses to `T?` per `Ty::optional`'s idempotence rule
+        // (a union already containing `null` is returned unchanged), so
+        // this is effectively the same shape as the single-optional case
+        // — still a single non-null member that peels.
+        let ty = Ty::optional(Ty::optional(rust_type()));
+        assert_eq!(peel_to_rust_type(&ty), Some(()));
+    }
+
+    #[test]
+    fn singleton_union_with_rust_type_and_null_matches() {
+        // `RustType | null` — only one non-null arm so the peel
+        // unambiguously picks `RustType`.
+        let ty = Ty::Union(
+            vec![
+                rust_type(),
+                Ty::Null {
+                    attr: TyAttr::default(),
+                },
+            ],
+            TyAttr::default(),
+        );
+        assert_eq!(peel_to_rust_type(&ty), Some(()));
+    }
+
+    #[test]
+    fn union_with_rust_type_plus_non_rust_arm_still_unique_matches() {
+        // `RustType | string` — there's still exactly one `RustType` arm,
+        // and `peel_to_rust_type` only cares about uniqueness of *that*
+        // shape (non-`RustType` arms count as "doesn't match" and don't
+        // contribute to the duplicate-count).
+        let ty = Ty::Union(
+            vec![
+                rust_type(),
+                Ty::String {
+                    attr: TyAttr::default(),
+                },
+            ],
+            TyAttr::default(),
+        );
+        assert_eq!(peel_to_rust_type(&ty), Some(()));
+    }
+
+    #[test]
+    fn union_with_two_rust_type_arms_is_ambiguous() {
+        // `RustType | RustType` — two arms peel to the target. The
+        // function rejects to avoid silently picking one.
+        let ty = Ty::Union(vec![rust_type(), rust_type()], TyAttr::default());
+        assert_eq!(peel_to_rust_type(&ty), None);
+    }
+
+    #[test]
+    fn plain_string_does_not_match() {
+        assert_eq!(
+            peel_to_rust_type(&Ty::String {
+                attr: TyAttr::default()
+            }),
+            None,
+        );
+    }
+
+    #[test]
+    fn unrelated_opaque_does_not_match() {
+        // A different opaque type — e.g. `baml.llm.PromptAst` — must
+        // not be confused with `baml.rust.RustType`.
+        let ty = Ty::Opaque(
+            TypeName::from_dotted_path("baml.llm.PromptAst"),
+            TyAttr::default(),
+        );
+        assert_eq!(peel_to_rust_type(&ty), None);
+    }
+
+    #[test]
+    fn optional_of_unrelated_type_does_not_match() {
+        let ty = Ty::optional(Ty::String {
+            attr: TyAttr::default(),
+        });
+        assert_eq!(peel_to_rust_type(&ty), None);
+    }
+
+    #[test]
+    fn union_with_no_rust_type_arm_does_not_match() {
+        let ty = Ty::Union(
+            vec![
+                Ty::String {
+                    attr: TyAttr::default(),
+                },
+                Ty::Int {
+                    attr: TyAttr::default(),
+                },
+            ],
+            TyAttr::default(),
+        );
+        assert_eq!(peel_to_rust_type(&ty), None);
+    }
+}
+
+#[cfg(test)]
+mod peel_function_ty_tests {
+    use baml_type::TyAttr;
+
+    use super::*;
+
+    /// `(int) -> string` — the canonical concrete function shape.
+    fn fn_ty() -> Ty {
+        Ty::Function {
+            params: vec![Ty::Int {
+                attr: TyAttr::default(),
+            }],
+            ret: Box::new(Ty::String {
+                attr: TyAttr::default(),
+            }),
+            throws: Box::new(Ty::Void {
+                attr: TyAttr::default(),
+            }),
+            attr: TyAttr::default(),
+        }
+    }
+
+    /// A second, distinct function shape — `() -> int` — used to verify the
+    /// uniqueness rule rejects two function members in a union.
+    fn other_fn_ty() -> Ty {
+        Ty::Function {
+            params: vec![],
+            ret: Box::new(Ty::Int {
+                attr: TyAttr::default(),
+            }),
+            throws: Box::new(Ty::Void {
+                attr: TyAttr::default(),
+            }),
+            attr: TyAttr::default(),
+        }
+    }
+
+    #[test]
+    fn direct_function_returns_itself() {
+        let ty = fn_ty();
+        let peeled = peel_function_ty(&ty).expect("must peel a direct Function");
+        assert!(matches!(peeled, Ty::Function { .. }));
+    }
+
+    #[test]
+    fn optional_function_peels_through() {
+        // `Ty::optional(fn)` lowers to `Ty::Union([fn, Null])`; the union
+        // arm in `peel_function_ty` picks the single function member.
+        let ty = Ty::optional(fn_ty());
+        let peeled = peel_function_ty(&ty).expect("Union<fn, Null> must peel");
+        assert!(matches!(peeled, Ty::Function { .. }));
+    }
+
+    #[test]
+    fn nested_optional_function_peels_through() {
+        // `Ty::optional` is idempotent — `T??` collapses to `T?` — so this
+        // is effectively the same shape as the single-optional case.
+        let ty = Ty::optional(Ty::optional(fn_ty()));
+        assert!(peel_function_ty(&ty).is_some());
+    }
+
+    #[test]
+    fn union_with_single_function_arm_peels_through() {
+        // `((int) -> string) | null` — only one function member.
+        let ty = Ty::Union(
+            vec![
+                fn_ty(),
+                Ty::Null {
+                    attr: TyAttr::default(),
+                },
+            ],
+            TyAttr::default(),
+        );
+        assert!(peel_function_ty(&ty).is_some());
+    }
+
+    #[test]
+    fn union_with_function_plus_non_function_arm_peels_through() {
+        // `((int) -> string) | string` — exactly one function member.
+        let ty = Ty::Union(
+            vec![
+                fn_ty(),
+                Ty::String {
+                    attr: TyAttr::default(),
+                },
+            ],
+            TyAttr::default(),
+        );
+        assert!(peel_function_ty(&ty).is_some());
+    }
+
+    #[test]
+    fn union_with_two_distinct_function_arms_is_ambiguous() {
+        // `((int) -> string) | (() -> int)` — two function members.
+        // The peel rejects to avoid silently picking one. Pins the
+        // determinism contract of the helper.
+        let ty = Ty::Union(vec![fn_ty(), other_fn_ty()], TyAttr::default());
+        assert!(peel_function_ty(&ty).is_none());
+    }
+
+    #[test]
+    fn plain_string_does_not_match() {
+        let ty = Ty::String {
+            attr: TyAttr::default(),
+        };
+        assert!(peel_function_ty(&ty).is_none());
+    }
+
+    #[test]
+    fn optional_of_non_function_does_not_match() {
+        let ty = Ty::optional(Ty::String {
+            attr: TyAttr::default(),
+        });
+        assert!(peel_function_ty(&ty).is_none());
+    }
+
+    #[test]
+    fn union_with_no_function_arm_does_not_match() {
+        let ty = Ty::Union(
+            vec![
+                Ty::String {
+                    attr: TyAttr::default(),
+                },
+                Ty::Int {
+                    attr: TyAttr::default(),
+                },
+            ],
+            TyAttr::default(),
+        );
+        assert!(peel_function_ty(&ty).is_none());
+    }
+
+    #[test]
+    fn empty_union_does_not_match() {
+        let ty = Ty::Union(vec![], TyAttr::default());
+        assert!(peel_function_ty(&ty).is_none());
     }
 }

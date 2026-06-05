@@ -198,8 +198,9 @@ export declare function _seedGenericMediaHandle(): [HandleKey, number]
  *
  * Exposed to JS as `completeHostCall(callId, isError, content)`. The JS
  * dispatch wrapper invokes this after it has decoded `argsBytes`, called
- * the user function, and encoded the result (success) or constructed a
- * `HostCallableError` (failure).
+ * the user function, and encoded the result as an `InboundValue` (success
+ * is the value itself; an error is an `Instance` of
+ * `baml.errors.HostCallable` carrying the four metadata fields).
  *
  * Forwards directly to the `bridge_cffi::complete_host_call` C entry point
  * the engine uses for cross-language completion.
@@ -235,6 +236,46 @@ export interface HandleKey {
   low: number
   high: number
 }
+
+/**
+ * Mint a fresh host-value key, drawing from the shared callable+error
+ * counter so the engine sees one globally-unique keyspace. Returned to
+ * TS by `registerHostError` (the TS-side function in
+ * `host_error_registry.ts`).
+ *
+ * Exposed to JS as `mintHostErrorKey() -> HandleKey`. The TS-side error
+ * registry calls this once per `registerHostError(err)` before inserting
+ * the error into its `Map<bigint, unknown>`.
+ */
+export declare function mintHostErrorKey(): HandleKey
+
+/**
+ * Install the TS-side release callback. First-call-wins; subsequent
+ * calls are a no-op (matching the bridge_cffi dispatch-registration
+ * semantics). The callback fires for *every* `HostValueArc` release —
+ * for callable keys it's a TS-side no-op (`Map.delete(key)` on an absent
+ * key), so Rust doesn't need to distinguish kinds here.
+ *
+ * The tsfn is built with `weak::<true>()` (i.e. `napi_unref_threadsafe_
+ * function`). Holding it strong would pin the libuv loop for the
+ * lifetime of the process (the tsfn is parked in a `OnceLock` and never
+ * dropped), preventing the Node process from exiting even after all
+ * host work is done. Weak is correct here: the callback is a *release*
+ * notification — purely informational from the engine's side. Pending
+ * notifications that never deliver because the loop has already exited
+ * are harmless; the engine has already dropped its `Arc<HostValueArc>`,
+ * and the TS-side map entry would be torn down with the process
+ * anyway.
+ *
+ * Note this is the inverse of `register_host_callable`'s dispatch tsfn,
+ * which is `weak::<false>()` — that one pins the loop because a hung
+ * host callback awaiting completion *must* keep the loop alive so the
+ * JS callback can actually run.
+ *
+ * Exposed to JS as `registerErrorReleaseCallback(cb)`. Must be called
+ * exactly once at SDK module init, before any host call is dispatched.
+ */
+export declare function registerErrorReleaseCallback(callback: (key: HandleKey) => void): void
 
 /**
  * Register a JS dispatch wrapper in the host-value table and return its key.

@@ -11,6 +11,7 @@
 //! The instructions that the VM runs are defined in [`Instruction`] enum.
 
 pub mod bytecode;
+pub mod errors;
 pub mod heap_ptr;
 pub mod indexable;
 pub mod lazy_biased_mutex;

@@ -97,7 +97,24 @@ impl BamlPyHandle {
 
 impl Drop for BamlPyHandle {
     fn drop(&mut self) {
-        let _ = unsafe { baml_handle_release(self.handle_key) };
+        // Host-owned handles (`HostValueCallable`, `HostValueError`) are
+        // *not* tracked in `HANDLE_TABLE` — their lifetime is managed
+        // per-bridge via the host-value registry (see
+        // [`crate::host_value::lookup_host_value`]). Releasing them here
+        // would call `baml_handle_release` with a key that may
+        // numerically collide with an unrelated engine-side entry (the
+        // two keyspaces are disjoint by design but share the `u64` value
+        // space), evicting it. Skip the table release for those
+        // variants; the owners drop them through their own release path.
+        // Mirrors `bridge_wasm/src/handle.rs`'s `Drop` for the same
+        // reason.
+        use bridge_ctypes::baml_core::cffi::BamlHandleType;
+        let ht_i32 = i32::try_from(self.handle_type).unwrap_or(-1);
+        let is_host_value = ht_i32 == BamlHandleType::HostValueCallable as i32
+            || ht_i32 == BamlHandleType::HostValueError as i32;
+        if !is_host_value {
+            let _ = unsafe { baml_handle_release(self.handle_key) };
+        }
     }
 }
 

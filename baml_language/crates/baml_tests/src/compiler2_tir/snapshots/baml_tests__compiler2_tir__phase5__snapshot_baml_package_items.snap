@@ -24,7 +24,6 @@ namespace baml.errors:
   class DevOther { methods: [to_json, from_json] }
   class GenericSdkError { methods: [to_json, from_json] }
   class HostCallable { methods: [to_json, from_json] }
-  class HostPanic { methods: [to_json, from_json] }
   class InvalidArgument { methods: [to_json, from_json] }
   class Io { methods: [to_json, from_json] }
   class LlmClient { methods: [to_json, from_json] }
@@ -59,7 +58,7 @@ namespace baml.glob:
   function new
 namespace baml.host:
   class HostValue { methods: [to_json, from_json] }
-  function call_host_value<T>
+  function call_host_value<T, E>
 namespace baml.http:
   class Request { methods: [to_json, from_json] }
   class Response { methods: [text, bytes, ok, to_json, from_json] }
@@ -136,6 +135,7 @@ namespace baml.panics:
   class Cancelled { methods: [to_json, from_json] }
   class DivisionByZero { methods: [to_json, from_json] }
   class Exit { methods: [to_json, from_json] }
+  class HostContractViolation { methods: [to_json, from_json] }
   class HostUnavailable { methods: [to_json, from_json] }
   class IndexOutOfBounds { methods: [to_json, from_json] }
   class InvalidFieldAccess { methods: [to_json, from_json] }

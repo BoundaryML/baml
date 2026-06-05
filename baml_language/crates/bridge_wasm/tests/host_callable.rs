@@ -17,12 +17,20 @@
 use bridge_wasm::{
     BamlWasmRuntime, LspNotification,
     baml_core::cffi::{
-        BamlHandle, BamlHandleType, BamlOutboundValue, CallFunctionArgs, HostCallableError,
-        HostCallableErrorCategory, InboundMapEntry, InboundValue,
-        baml_outbound_value::Value as OutboundValue, inbound_map_entry::Key as MapKeyVariant,
-        inbound_value::Value as InboundVariant,
+        BamlHandle, BamlHandleType, BamlOutboundValue, CallFunctionArgs, InboundClassValue,
+        InboundMapEntry, InboundValue, baml_outbound_value::Value as OutboundValue,
+        inbound_map_entry::Key as MapKeyVariant, inbound_value::Value as InboundVariant,
     },
 };
+
+// Sentinel `_handle` key used in test fixtures that synthesize a
+// `baml.errors.HostCallable` Instance without an actual JS exception
+// object registered in any host-value table. The engine's structural
+// check requires `_handle` to be present; same-host decoders look up
+// `0`, find nothing, and fall back to metadata. `next_key()` mints
+// from `1` upward (skipping `0`), so a real registered key can never
+// collide with this sentinel.
+const UNRESOLVED_HOST_ERROR_KEY: u64 = 0;
 use prost::Message;
 use wasm_bindgen::{JsCast, prelude::*};
 use wasm_bindgen_test::*;
@@ -346,18 +354,39 @@ fn make_dispatch_multiply_to_string(factor: i64) -> js_sys::Function {
 }
 
 /// Build a `host_dispatch` JS function that always completes with a
-/// `HostCallableError`.
+/// thrown `baml.errors.HostCallable` Instance.
 fn make_dispatch_error() -> js_sys::Function {
     let closure = Closure::wrap(Box::new(
         move |_key: JsValue, call_id: f64, _args: js_sys::Uint8Array| {
-            let err = HostCallableError {
-                class_name: "RuntimeError".to_string(),
-                message: "test boom".to_string(),
-                traceback: None,
-                language: Some("javascript".to_string()),
-                category: HostCallableErrorCategory::HostCallableHostError as i32,
+            fn field(key: &str, value: &str) -> InboundMapEntry {
+                InboundMapEntry {
+                    key: Some(MapKeyVariant::StringKey(key.to_string())),
+                    value: Some(InboundValue {
+                        value: Some(InboundVariant::StringValue(value.to_string())),
+                    }),
+                }
+            }
+            let handle_field = InboundMapEntry {
+                key: Some(MapKeyVariant::StringKey("_handle".to_string())),
+                value: Some(InboundValue {
+                    value: Some(InboundVariant::Handle(BamlHandle {
+                        key: UNRESOLVED_HOST_ERROR_KEY,
+                        handle_type: BamlHandleType::HostValueError as i32,
+                    })),
+                }),
             };
-            let payload = err.encode_to_vec();
+            let inbound = InboundValue {
+                value: Some(InboundVariant::ClassValue(InboundClassValue {
+                    name: "baml.errors.HostCallable".to_string(),
+                    fields: vec![
+                        field("message", "test boom"),
+                        field("class_name", "RuntimeError"),
+                        field("language", "javascript"),
+                        handle_field,
+                    ],
+                })),
+            };
+            let payload = inbound.encode_to_vec();
             #[expect(
                 clippy::cast_possible_truncation,
                 clippy::cast_sign_loss,

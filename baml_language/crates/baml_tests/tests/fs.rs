@@ -70,16 +70,24 @@ async fn fs_file_write_on_readonly_errors() {
         return
     }
     "#);
-    let Err(bex_engine::EngineError::ExternalOpFailed(op_err)) = &output.result else {
-        panic!("expected ExternalOpFailed, got: {:?}", output.result);
+    // Sysop errors unwind through the VM exception machinery (same path a
+    // `throw` opcode takes), so an uncaught one surfaces as `UnhandledThrow`
+    // carrying the `baml.errors.*` instance the kind maps to — the write
+    // failure is a `VmBamlError::Io`, rendering as `baml.errors.Io`.
+    let Err(bex_engine::EngineError::UnhandledThrow { value, .. }) = &output.result else {
+        panic!("expected UnhandledThrow, got: {:?}", output.result);
     };
-    assert_eq!(op_err.fn_name, sys_types::SysOp::BamlFsFileWrite);
-    let sys_types::OpErrorKind::Other(msg) = &op_err.kind else {
-        panic!("expected OpErrorKind::Other, got: {:?}", op_err.kind);
+    let bex_external_types::BexExternalValue::Instance { class_name, fields } = value.as_ref()
+    else {
+        panic!("expected exception Instance, got: {value:?}");
+    };
+    assert_eq!(class_name, "baml.errors.Io");
+    let Some(BexExternalValue::String(message)) = fields.get("message") else {
+        panic!("expected `message` String field, got: {fields:?}");
     };
     assert!(
-        msg.starts_with("Failed to write:"),
-        "unexpected error message: {msg}"
+        message.starts_with("Failed to write:"),
+        "unexpected error message: {message}"
     );
 }
 

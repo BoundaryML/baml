@@ -8,9 +8,14 @@
 //! 3. Fires the registered `HostDispatchFn` (bridge-installed) with the
 //!    host-value key, call id, and encoded args bytes.
 //! 4. Returns `SysOpResult::Async` — the result is resolved when the host
-//!    calls `complete_host_call(call_id, ...)`. On completion the host's
-//!    returned value is validated against the expected return type
-//!    (`type_arg_0`), raising `OpErrorKind::HostCallable` on mismatch.
+//!    calls `complete_host_call(call_id, ...)`. On completion:
+//!    * a successful return value is validated against the declared return
+//!      type `T` (`type_arg_0`); mismatches surface as
+//!      `baml.panics.HostContractViolation`.
+//!    * a host throw is checked against the declared throws contract `E`
+//!      (`type_arg_1`); on-contract throws propagate as catchable
+//!      `baml.errors.HostCallable`, off-contract throws surface as
+//!      `baml.panics.HostContractViolation`.
 //!
 //! ## In-flight lifetime / no timeout
 //!
@@ -32,12 +37,12 @@ use std::sync::Arc;
 use baml_type::Ty;
 use bex_external_types::validate_host_return;
 use bex_heap::BexHeap;
-use bridge_ctypes::{
-    CffiHandleTableOptions, baml_core::cffi::HostCallableErrorCategory, external_to_outbound,
-};
+use bridge_ctypes::{CffiHandleTableOptions, external_to_outbound};
 use prost::Message as _;
-use sys_ops::io::{self, BexExternalValue, CallId, OpErrorKind, SysOpContext, SysOpOutput};
-use sys_types::{OpError, SysOp, SysOpResult};
+use sys_ops::io::{
+    self, BexExternalValue, CallId, SysOpContext, SysOpOutput, VmBamlError, VmRustFnError,
+};
+use sys_types::{OpError, SysOp, SysOpResult, VmPanic};
 
 use crate::{NativeSysOps, host_dispatch};
 
@@ -49,15 +54,42 @@ impl io::IoNamespaceHost for NativeSysOps {
         handle: BexExternalValue,
         args: Vec<BexExternalValue>,
         type_arg_0: Ty,
+        // `type_arg_1` is the declared throws contract `E`. The contract
+        // check itself lives engine-side (in `BexEngine::materialize_host_throw`)
+        // because it needs heap access to convert the thrown
+        // `BexExternalValue` into a `Value` and inject a
+        // `HostContractViolation` panic on mismatch. This impl just
+        // forwards the throw via `OpError.host_thrown` (set by
+        // `host_dispatch::complete_with_throw` on the bridge side).
+        _type_arg_1: Ty,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<BexExternalValue> {
-        // Extract the HostValueArc from the incoming handle.
+        // Extract the HostValueArc from the incoming handle and confirm
+        // it's a callable. Only `HostValueKind::Callable` is dispatchable —
+        // the bridge's dispatcher invokes a host *function* through this
+        // path. An `HostValueKind::Error` arc represents an opaque
+        // host-thrown exception and has no callable identity; dispatching
+        // it would either find no entry in the bridge's callable registry
+        // (returning a confusing "no callable for key" error) or, worse,
+        // collide with a callable that happens to share its key. Reject
+        // up front with a clear `InvalidArgument`.
         let host_arc = match handle {
-            BexExternalValue::HostValue(arc) => arc,
+            BexExternalValue::HostValue(arc)
+                if arc.kind == bex_external_types::HostValueKind::Callable =>
+            {
+                arc
+            }
+            BexExternalValue::HostValue(arc) => {
+                return SysOpOutput::err(VmBamlError::InvalidArgument {
+                    message: format!(
+                        "expected a host callable, got a HostValue of kind {:?}",
+                        arc.kind,
+                    ),
+                });
+            }
             other => {
-                return SysOpOutput::err(OpErrorKind::TypeError {
-                    expected: "HostValue",
-                    actual: format!("{other:?}"),
+                return SysOpOutput::err(VmBamlError::InvalidArgument {
+                    message: format!("expected HostValue, got {other:?}"),
                 });
             }
         };
@@ -74,12 +106,13 @@ impl io::IoNamespaceHost for NativeSysOps {
         let encoded: Vec<u8> = match external_to_outbound(&arg_values, &options) {
             Ok(value) => value.encode_to_vec(),
             Err(e) => {
-                return SysOpOutput::err(OpErrorKind::HostCallable {
-                    class_name: String::new(),
+                // Arg encoding is bridge-side serialization, not a
+                // host-language error. A failure here means the engine
+                // had a `BexExternalValue` it could not put on the wire
+                // — an engine/bridge bug. Surface as a fatal internal
+                // error rather than a catchable `VmBamlError`.
+                return SysOpOutput::err(sys_types::VmInternalError::BridgeFailure {
                     message: format!("failed to encode host-call arguments: {e}"),
-                    traceback: None,
-                    language: None,
-                    category: HostCallableErrorCategory::HostCallableInvalidArgument as i32,
                 });
             }
         };
@@ -108,12 +141,20 @@ impl io::IoNamespaceHost for NativeSysOps {
             let guard = host_dispatch::InflightGuard::new(call_id);
 
             // Fire the dispatch callback. If no bridge has registered, fail
-            // synchronously so the engine does not hang waiting on the oneshot.
+            // synchronously so the engine does not hang waiting on the
+            // oneshot. A missing dispatcher is an SDK / infrastructure
+            // fault, not a user-callable error — route as `BridgeFailure`
+            // so the host SDK surfaces it as `baml.panics.SdkPanic`
+            // (fatal), not a catchable error class. (In practice the
+            // working bridges register a dispatcher at module init *and*
+            // fast-fail missing-callable cases before this point — but the
+            // engine-side contract has to be self-enforcing for any new
+            // bridge that doesn't pre-check.)
             if !host_dispatch::fire_dispatch(host_arc.key, call_id, &encoded) {
                 if let Some(c) = host_dispatch::take(call_id) {
                     c.complete(Err(OpError::new(
                         SysOp::BamlHostCallHostValue,
-                        OpErrorKind::NotImplemented {
+                        sys_types::VmInternalError::BridgeFailure {
                             message: "no host bridge registered for host-value dispatch"
                                 .to_string(),
                         },
@@ -126,10 +167,12 @@ impl io::IoNamespaceHost for NativeSysOps {
         };
 
         // The completion already yields a typed `BexExternalValue` (decoded
-        // from the inbound payload by `complete_host_call`). Validate the
-        // host's returned value against the expected return type `type_arg_0`
-        // before handing it back to the VM; on mismatch surface a catchable
-        // `root.errors.HostCallable`.
+        // from the inbound payload by `complete_host_call`). The async-body
+        // arm validates the host's returned value against `type_arg_0` (T)
+        // — mismatch is a `HostContractViolation` panic — and the host
+        // throw, if any, against `type_arg_1` (E) — off-contract throws
+        // are also `HostContractViolation` panics; on-contract throws
+        // propagate as catchable.
         //
         // `SysOpResult::pending` always yields `Async`, so the `Ready` arms are
         // not reached in practice; the guard is moved into the async future to
@@ -140,14 +183,41 @@ impl io::IoNamespaceHost for NativeSysOps {
                 Ok(()) => SysOpOutput::ok(value),
                 Err(err) => SysOpOutput::err(err),
             },
-            SysOpResult::Ready(Err(err)) => SysOpOutput::err(err.kind),
-            SysOpResult::Async(fut) => SysOpOutput::async_op(async move {
+            // `Ready(Err)` is unreachable in practice because
+            // `SysOpResult::pending` always yields `Async`. Surface a
+            // VM-side payload conservatively — a host-throw can never
+            // reach here, so collapsing to a generic Vm payload is safe.
+            SysOpResult::Ready(Err(err)) => match err.payload {
+                sys_types::OpErrorPayload::Vm(kind) => SysOpOutput::err(kind),
+                sys_types::OpErrorPayload::HostThrown(_) => {
+                    unreachable!("Ready(Err) is never produced for the host-callable sysop")
+                }
+            },
+            // Use `async_op_with_throw` (not `async_op`) so the future
+            // yields the full [`OpErrorBody`] (preserving a `HostThrown`
+            // payload through to the engine).
+            // host-throw path sets `host_thrown` to the decoded thrown
+            // `BexExternalValue` (via `host_dispatch::complete_with_throw`);
+            // the engine reads that field to run the unified contract
+            // check + `Value` materialisation. Routing through `async_op`
+            // (which threads through `OpErrorBody::from(VmRustFnError)`,
+            // defaulting `host_thrown` to `None`) would drop the thrown
+            // payload before the engine ever sees it.
+            SysOpResult::Async(fut) => SysOpOutput::async_op_with_throw(async move {
                 // Move the guard into the future so it is dropped — and the
                 // in-flight entry evicted — if this future is cancelled. It is
                 // `None` on the collision path (no entry of ours to evict); the
                 // awaited `fut` then resolves to the collision error.
                 let _guard = guard;
-                let value = fut.await.map_err(|op_err| op_err.kind)?;
+                // A host *throw* arrives as `Err(op_err)` with
+                // `op_err.host_thrown = Some(...)`; `?` widens it to
+                // `OpErrorBody` (preserving `host_thrown`) so
+                // `materialize_host_throw` can run the throws-contract
+                // check against `E`.
+                let value = fut.await?;
+                // Return-type validation stays at the FFI guard (class-name
+                // identity + scalar discrimination); a mismatch is a
+                // `HostContractViolation` panic.
                 validate_return_value(&value, &type_arg_0)?;
                 Ok(value)
             }),
@@ -156,7 +226,9 @@ impl io::IoNamespaceHost for NativeSysOps {
 }
 
 /// Validate a host-returned value against the wrapper's declared return
-/// type, producing an `OpErrorKind::HostCallable` on mismatch.
+/// type. A mismatch becomes a `baml.panics.HostContractViolation` panic —
+/// the host has violated its typed contract, so the call cannot be
+/// reasonably continued.
 ///
 /// Delegates to the shared, strict [`validate_host_return`] guard (shared
 /// with the WASM bridge) so the native and WASM bridges enforce an identical
@@ -164,13 +236,16 @@ impl io::IoNamespaceHost for NativeSysOps {
 /// recursion, enum identity, and class-name identity. Class *field types* are
 /// validated engine-side at the result-push site, where the resolved class
 /// schema is available.
-fn validate_return_value(value: &BexExternalValue, expected: &Ty) -> Result<(), OpErrorKind> {
-    validate_host_return(value, expected).map_err(|err| OpErrorKind::HostCallable {
-        class_name: "TypeError".to_string(),
-        message: err.to_string(),
-        traceback: None,
-        language: None,
-        category: HostCallableErrorCategory::HostCallableInvalidArgument as i32,
+fn validate_return_value(value: &BexExternalValue, expected: &Ty) -> Result<(), VmRustFnError> {
+    validate_host_return(value, expected).map_err(|err| {
+        VmPanic::HostContractViolation {
+            message: format!(
+                "host callable returned a value of the wrong type: {err} (expected {expected})"
+            ),
+            class_name: None,
+            language: None,
+        }
+        .into()
     })
 }
 
@@ -178,7 +253,7 @@ fn validate_return_value(value: &BexExternalValue, expected: &Ty) -> Result<(), 
 mod tests {
     use baml_type::{Ty, TyAttr};
     use sys_ops::io::{BexExternalValue, CallId, IoNamespaceHost as _, SysOpContext, SysOpOutput};
-    use sys_types::{OpError, OpErrorKind, SysOp, SysOpResult};
+    use sys_types::{OpError, SysOp, SysOpResult, VmBamlError, VmRustFnError};
 
     use super::*;
     use crate::host_dispatch;
@@ -208,16 +283,28 @@ mod tests {
             BexExternalValue::String("not a host value".to_string().into()),
             vec![],
             int_ty(),
+            Ty::unknown(),
             &ctx,
         );
         let result = match output {
             SysOpOutput::Ready(r) => r,
-            SysOpOutput::Async(fut) => fut.await,
+            SysOpOutput::Async(fut) => fut.await.map_err(|body| match body.payload {
+                sys_types::OpErrorPayload::Vm(kind) => kind,
+                sys_types::OpErrorPayload::HostThrown(_) => {
+                    panic!("expected a Vm payload, got a host-thrown value")
+                }
+            }),
         };
         let err = result.expect_err("expected type error");
+        // The wrong-handle-type arg surfaces as a `VmBamlError::InvalidArgument`
+        // (which the host SDK sees as `baml.errors.InvalidArgument`), wrapped
+        // in the canonical `VmRustFnError::BamlError`.
         assert!(
-            matches!(err, OpErrorKind::TypeError { .. }),
-            "expected TypeError, got {err:?}"
+            matches!(
+                err,
+                VmRustFnError::BamlError(VmBamlError::InvalidArgument { .. })
+            ),
+            "expected InvalidArgument, got {err:?}"
         );
     }
 
@@ -264,12 +351,15 @@ mod tests {
             call_id,
             OpError::new(
                 SysOp::BamlHostCallHostValue,
-                OpErrorKind::HostCallable {
+                VmBamlError::HostCallable {
                     class_name: "RuntimeError".to_string(),
                     message: "host raised".to_string(),
                     traceback: Some("at line 1".to_string()),
                     language: Some("python".to_string()),
-                    category: 2,
+                    handle: bex_resource_types::HostValueArc::new(
+                        42,
+                        bex_resource_types::HostValueKind::Error,
+                    ),
                 },
             ),
         );
@@ -279,16 +369,16 @@ mod tests {
             SysOpResult::Ready(Err(e)) => e,
             SysOpResult::Ready(Ok(_)) => panic!("expected error"),
         };
-        match &err.kind {
-            OpErrorKind::HostCallable {
-                class_name,
-                language,
-                category,
-                ..
-            } => {
+        match &err.payload {
+            sys_types::OpErrorPayload::Vm(VmRustFnError::BamlError(
+                VmBamlError::HostCallable {
+                    class_name,
+                    language,
+                    ..
+                },
+            )) => {
                 assert_eq!(class_name, "RuntimeError");
                 assert_eq!(language.as_deref(), Some("python"));
-                assert_eq!(*category, 2);
             }
             other => panic!("expected HostCallable, got {other:?}"),
         }
@@ -304,7 +394,7 @@ mod tests {
             u32::MAX - 3,
             OpError::new(
                 SysOp::BamlHostCallHostValue,
-                OpErrorKind::NotImplemented {
+                VmBamlError::NotImplemented {
                     message: "unknown id".to_string(),
                 },
             ),
@@ -330,14 +420,23 @@ mod tests {
             &int_ty(),
         )
         .expect_err("a String should not match the `int` return type");
+        // Wrong-type return is a contract violation, not a catchable
+        // error — must panic with `HostContractViolation`.
         match err {
-            OpErrorKind::HostCallable { category, .. } => {
-                assert_eq!(
-                    category,
-                    HostCallableErrorCategory::HostCallableInvalidArgument as i32
+            VmRustFnError::Panic(VmPanic::HostContractViolation {
+                class_name,
+                language,
+                ..
+            }) => {
+                // Return-type mismatches have no offending host exception,
+                // so class_name / language stay `None`.
+                assert!(
+                    class_name.is_none(),
+                    "expected no class_name, got {class_name:?}"
                 );
+                assert!(language.is_none(), "expected no language, got {language:?}");
             }
-            other => panic!("expected HostCallable, got {other:?}"),
+            other => panic!("expected Panic(HostContractViolation), got {other:?}"),
         }
     }
 
