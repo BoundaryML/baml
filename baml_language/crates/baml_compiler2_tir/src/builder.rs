@@ -430,6 +430,8 @@ struct CheckedCallInner {
     recovered_unresolved_generics: bool,
 }
 
+type RegistryInterfaceMethodSource = (crate::ty::QualifiedTypeName, Vec<Ty>, Vec<(Name, Ty)>);
+
 #[derive(Clone, Copy)]
 struct CallContext<'a> {
     expr_id: ExprId,
@@ -8765,7 +8767,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         let Some(iface_data) = iface_tree.interfaces.get(&iface_loc.id(db)) else {
             return Some(bound.clone());
         };
-        let mut completed = associated_bindings.to_vec();
+        let mut completed = associated_bindings.clone();
         for assoc in &iface_data.associated_types {
             if completed.iter().any(|(name, _)| name == &assoc.name) {
                 continue;
@@ -11824,7 +11826,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             }
         };
 
-        push_name(self.package_id.name(db).clone());
+        push_name(self.package_id.name(db));
         for (dep_name, _) in &self.res_ctx.dep_interfaces {
             push_name(dep_name.clone());
         }
@@ -11850,10 +11852,10 @@ impl<'db> TypeInferenceBuilder<'db> {
         &self,
         base_ty: &Ty,
         member: &Name,
-    ) -> Vec<(crate::ty::QualifiedTypeName, Vec<Ty>, Vec<(Name, Ty)>)> {
+    ) -> Vec<RegistryInterfaceMethodSource> {
         let db = self.context.db();
         let mut seen = FxHashSet::default();
-        let mut out: Vec<(crate::ty::QualifiedTypeName, Vec<Ty>, Vec<(Name, Ty)>)> = Vec::new();
+        let mut out: Vec<RegistryInterfaceMethodSource> = Vec::new();
         for pkg_id in self.registry_packages_for_interface_lookup(Some(base_ty), None) {
             let registry = crate::interfaces::package_implements_registry(db, pkg_id);
             for rule in &registry.interface_impl_rules {

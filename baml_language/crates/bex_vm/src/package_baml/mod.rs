@@ -118,6 +118,7 @@ pub trait Continuation: Send {
     clippy::pub_underscore_fields,
     clippy::used_underscore_binding,
     clippy::elidable_lifetime_names,
+    clippy::iter_not_returning_iterator,
     clippy::needless_lifetimes,
     clippy::redundant_closure_call,
     clippy::too_many_arguments,

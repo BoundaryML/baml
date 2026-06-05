@@ -7792,9 +7792,9 @@ impl<'db> LoweringContext<'db> {
                         let method_arg_count = self
                             .interface_method_generic_count(iface_tn, method)
                             .unwrap_or(0);
-                        if has_explicit_type_args {
-                            owner_ops.extend(type_arg_ops.iter().cloned());
-                        } else if method_arg_count > 0 && type_arg_ops.len() == method_arg_count {
+                        if has_explicit_type_args
+                            || (method_arg_count > 0 && type_arg_ops.len() == method_arg_count)
+                        {
                             owner_ops.extend(type_arg_ops.iter().cloned());
                         } else if type_arg_ops.len() == owner_arg_count + method_arg_count {
                             owner_ops.extend(type_arg_ops[owner_arg_count..].iter().cloned());
