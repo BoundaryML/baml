@@ -10,6 +10,20 @@ import { EpisodesCarousel } from '../_components/episodes-carousel';
 import { fetchPodcastEpisodes } from '../podcast-data';
 import type { Metadata } from 'next';
 
+// Pre-render every episode page at build time so each is served as static HTML
+// from the CDN, never as a serverless function. Dynamic rendering hit this
+// monorepo's file-tracing bug ("Cannot find module
+// next/dist/compiled/source-map"), 500ing every episode page. force-static also
+// makes the README fetches below cacheable, which is what was forcing this route
+// dynamic in the first place.
+export const dynamic = 'force-static';
+export const dynamicParams = false;
+
+export async function generateStaticParams(): Promise<{ slug: string }[]> {
+  const episodes = await fetchPodcastEpisodes();
+  return episodes.map((ep) => ({ slug: ep.slug }));
+}
+
 // Helper function to extract YouTube video ID from URL
 const getYouTubeVideoId = (url: string) => {
   const match = url.match(
@@ -27,15 +41,17 @@ async function fetchReadmeFromGitHub(codeUrl: string, episodeTitle: string): Pro
       .replace('/tree/', '/')
       + '/README.md';
     
-    const response = await fetch(rawUrl);
+    const response = await fetch(rawUrl, { signal: AbortSignal.timeout(8000) });
     if (!response.ok) {
       // Try README.md with different casing
       const altUrl = codeUrl
         .replace('github.com', 'raw.githubusercontent.com')
         .replace('/tree/', '/')
         + '/readme.md';
-      
-      const altResponse = await fetch(altUrl);
+
+      const altResponse = await fetch(altUrl, {
+        signal: AbortSignal.timeout(8000),
+      });
       if (!altResponse.ok) {
         throw new Error('README not found');
       }

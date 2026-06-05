@@ -322,7 +322,12 @@ function mapExternalEpisodes(externalEpisodes: ExternalEpisode[]): PodcastEpisod
 
 export async function fetchPodcastEpisodes(): Promise<PodcastEpisode[]> {
   try {
-    const res = await fetch(PODCAST_DATA_URL, { next: { revalidate: 600 } });
+    // Hard timeout so a stalled connection (e.g. rate-limited from a CI/build
+    // egress IP) falls back to bundled data instead of hanging the build.
+    const res = await fetch(PODCAST_DATA_URL, {
+      next: { revalidate: 600 },
+      signal: AbortSignal.timeout(8000),
+    });
     if (!res.ok) {
       console.warn(
         `Podcast feed responded with ${res.status} (${res.statusText}), using fallback data.`,

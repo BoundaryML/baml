@@ -1,0 +1,37 @@
+# Vercel direct deploy uploads from the monorepo root so the project's
+# configured Root Directory (`typescript2/app-website`) is applied once.
+# Keep the upload to source files only; dependencies and generated artifacts
+# are rebuilt or restored from Vercel's build cache.
+
+.git
+.github
+.vercel
+
+**/node_modules
+**/.next
+**/.turbo
+**/.cache
+**/dist
+**/build
+**/coverage
+**/.DS_Store
+
+# Rust build output can be very large locally.
+**/target
+# NOTE: typescript2/pkg-playground/wasm is intentionally NOT ignored here. It is
+# gitignored (so it never reaches GitHub), but we DO want the locally-prebuilt
+# bridge_wasm uploaded with `vercel deploy` so the build skips the ~15 min
+# rustup/cargo recompile (vercel-build.sh detects it and skips). This only
+# affects CLI deploys; GitHub-triggered builds don't use .vercelignore and still
+# compile the wasm from source.
+
+# Local/editor state and secrets.
+**/.env
+**/.env.*
+!.env.example
+**/*.log
+**/tsconfig.tsbuildinfo
+
+# Tooling caches.
+**/.claude
+**/.codeboarding
