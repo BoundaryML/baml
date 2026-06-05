@@ -2195,7 +2195,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 self.emit_operand_pull(closure);
                 self.emit_operand_pull(name);
                 let null_config = Operand::Constant(Constant::Null);
-                self.emit_operand_pull(config.as_ref().unwrap_or(&null_config));
+                self.emit_operand_pull(config.as_deref().unwrap_or(&null_config));
                 self.emit(Instruction::Spawn);
                 self.emit_store_place(future);
                 self.emit_jump_unless_fallthrough(*resume);

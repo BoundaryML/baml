@@ -328,7 +328,6 @@ fn collect_from_expr<C: ThrowsAnalysisContext>(
             let _ = spawn_body;
         }
         Expr::Await { future } => {
-            collect_from_expr(context, *future, body, out);
             // `await f` re-throws the awaited future's error: `f: Future<T, E>`
             // contributes `E` to the body's escaping throws — and `await`
             // distributes over a UNION of futures (BEP-034), contributing
@@ -342,6 +341,7 @@ fn collect_from_expr<C: ThrowsAnalysisContext>(
                     e => out.extend(flatten_ty_to_facts(e)),
                 }
             }
+            collect_from_expr(context, *future, body, out);
             match context.expression_type(*future) {
                 Some(Ty::Future(_, error, _)) => add_error_facts(&error, out),
                 Some(Ty::Union(members, _)) => {

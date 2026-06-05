@@ -412,7 +412,9 @@ pub enum Terminator {
         /// clause (BEP-034 spawn options). `None` when there is no `with`
         /// clause; the engine reads the config's `cancel` (and later
         /// `group`/`detach`) to derive the spawn's effective cancel token.
-        config: Option<Operand>,
+        /// Boxed to keep `Terminator`'s footprint down (clippy
+        /// `large_enum_variant`): `Spawn` is rare relative to `Call`/`Goto`.
+        config: Option<Box<Operand>>,
         /// Where to store the resulting Future handle.
         future: Place,
         /// Block to resume after the spawn schedules.

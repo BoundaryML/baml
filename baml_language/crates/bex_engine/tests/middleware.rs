@@ -1,4 +1,4 @@
-//! BEP-034 `with` middleware: SpawnParams transformer pipelines.
+//! BEP-034 `with` middleware: `SpawnParams` transformer pipelines.
 
 mod common;
 
@@ -30,7 +30,7 @@ async fn run_main(source: &str) -> Result<BexExternalValue, EngineError> {
 }
 
 /// The simplest transformer: identity. Exercises the chain plumbing
-/// (SpawnParams construction, transformer application, engine dispatch
+/// (`SpawnParams` construction, transformer application, engine dispatch
 /// from the final params).
 #[tokio::test]
 async fn identity_transformer() {

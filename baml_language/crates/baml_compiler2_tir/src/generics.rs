@@ -751,7 +751,7 @@ pub fn union_ty(a: &Ty, b: &Ty) -> Ty {
 /// `Ty::Never`, recursing structurally. Used to drop UNBOUND callee generics
 /// from an instantiated throws type: an unconstrained type variable there
 /// means "nothing nameable is thrown", and `Never` vanishes from throw-fact
-/// sets (`flatten_ty_to_facts` skips it), while a raw TypeVar fact would
+/// sets (`flatten_ty_to_facts` skips it), while a raw `TypeVar` fact would
 /// poison the enclosing effective-throws surface.
 pub fn erase_typevars_where(ty: &Ty, pred: &dyn Fn(&Name) -> bool) -> Ty {
     match ty {
@@ -859,6 +859,7 @@ pub fn erase_typevars_where(ty: &Ty, pred: &dyn Fn(&Name) -> bool) -> Ty {
     }
 }
 
+#[allow(clippy::only_used_in_recursion)]
 pub fn erase_unresolved_typevars(
     ty: &Ty,
     diagnostics: &mut Vec<crate::infer_context::TirTypeError>,

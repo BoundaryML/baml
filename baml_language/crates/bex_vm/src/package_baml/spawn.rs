@@ -14,7 +14,7 @@ use std::sync::Arc;
 use bex_heap::TlabHolder;
 use bex_vm_types::{
     TaskGroupInner,
-    types::{CancellationToken, Object, Value},
+    types::{CancellationToken, Value},
 };
 
 use super::{
@@ -37,19 +37,6 @@ fn alloc_cancel_token(vm: &mut BexVm, token: CancellationToken) -> Value {
     let class = vm.resolve_class("baml.spawn.CancelToken");
     let handle = Value::object(vm.alloc_rust_data(Arc::new(token)));
     Value::object(vm.alloc_instance(class, vec![handle]))
-}
-
-/// Clone the `Arc<TaskGroupInner>` behind a `baml.spawn.TaskGroup` value, so it
-/// can be shared into a `SpawnConfig` (and onward to the engine's admission).
-fn as_task_group_arc(vm: &BexVm, value: Value) -> Option<Arc<TaskGroupInner>> {
-    let handle = vm.as_instance(&value).ok()?.load_field(0);
-    let ptr = handle.as_object_ptr()?;
-    // SAFETY: native functions run inline on the VM thread with the heap
-    // permit held, so the pointed-to object is not concurrently moved by GC.
-    match unsafe { ptr.get() } {
-        Object::RustData(data) => data.clone().downcast::<TaskGroupInner>().ok(),
-        _ => None,
-    }
 }
 
 /// Allocate a fresh `baml.spawn.TaskGroup` instance wrapping `inner`.

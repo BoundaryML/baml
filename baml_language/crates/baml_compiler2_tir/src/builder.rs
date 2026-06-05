@@ -6701,7 +6701,7 @@ impl<'db> TypeInferenceBuilder<'db> {
     /// body was checked), override the recorded surface throws with it: an
     /// omitted-throws lambda's surface is open (`Unknown`), which would leave
     /// the callee's throws generic unbound — `map`'s `E` would then leak as a
-    /// raw TypeVar (a non-throwing callback) or stay symbolic where the body
+    /// raw `TypeVar` (a non-throwing callback) or stay symbolic where the body
     /// demonstrably throws. The effective value gives the truth either way:
     /// `Never` for a non-throwing callback, the thrown type otherwise.
     fn callee_throws_arg_ty(&self, arg_expr_id: ExprId) -> Ty {

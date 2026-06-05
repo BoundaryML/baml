@@ -2198,6 +2198,17 @@ impl BexEngine {
     /// Safe to deref the pointers because the caller holds the active heap
     /// permit and `params` is rooted by the `UnscheduledFuture` being handled.
     fn read_spawn_params(params: HeapPtr) -> Option<SpawnParamsData> {
+        // Fields 2/3 helper: `group` / `cancel` are `TaskGroup` / `CancelToken`
+        // instances whose `_handle` field (index 0) is `Object::RustData`.
+        fn handle_object(value: Value) -> Option<&'static Object> {
+            let inst_ptr = value.as_object_ptr()?;
+            let Object::Instance(inst) = (unsafe { inst_ptr.get() }) else {
+                return None;
+            };
+            let handle_ptr = inst.load_field(0).as_object_ptr()?;
+            Some(unsafe { handle_ptr.get() })
+        }
+
         let Object::Instance(instance) = (unsafe { params.get() }) else {
             return None;
         };
@@ -2215,16 +2226,6 @@ impl BexEngine {
                     _ => None,
                 });
 
-        // Fields 2/3: `group` / `cancel` — `TaskGroup` / `CancelToken`
-        // instances whose `_handle` field (index 0) is `Object::RustData`.
-        fn handle_object(value: Value) -> Option<&'static Object> {
-            let inst_ptr = value.as_object_ptr()?;
-            let Object::Instance(inst) = (unsafe { inst_ptr.get() }) else {
-                return None;
-            };
-            let handle_ptr = inst.load_field(0).as_object_ptr()?;
-            Some(unsafe { handle_ptr.get() })
-        }
         let group = handle_object(instance.load_field(2)).and_then(|obj| match obj {
             Object::RustData(data) => data.clone().downcast::<TaskGroupInner>().ok(),
             _ => None,

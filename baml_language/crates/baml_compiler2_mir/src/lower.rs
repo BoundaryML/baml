@@ -3811,7 +3811,7 @@ impl LoweringContext<'_> {
                 self.builder.set_current_block(resume);
                 cur = next;
             }
-            Some(Operand::Copy(Place::Local(cur)))
+            Some(Box::new(Operand::Copy(Place::Local(cur))))
         };
 
         // Allocate the future temp. Phase C uses a defaulted `Null` type
@@ -11311,7 +11311,7 @@ impl LoweringContext<'_> {
                         return;
                     }
                     // Other patterns keep the erased fast path (unchanged codegen).
-                    let annotation_ty = convert_tir2_ty(&pat_tir_ty, &self.resolved_aliases);
+                    let annotation_ty = convert_tir2_ty(&pat_tir_ty, self.resolved_aliases);
                     self.emit_is_type_branch(scrutinee, annotation_ty, success, failure);
                 }
             },

@@ -439,7 +439,7 @@ impl MirBuilder {
         &mut self,
         closure: Operand,
         name: Operand,
-        config: Option<Operand>,
+        config: Option<Box<Operand>>,
         future: Place,
         resume: BlockId,
     ) {

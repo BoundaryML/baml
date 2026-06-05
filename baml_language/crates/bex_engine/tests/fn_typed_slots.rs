@@ -1,9 +1,10 @@
 //! Function-typed parameters and class fields accepting lambdas.
 
 mod common;
+use std::sync::Arc;
+
 use bex_engine::{BexEngine, BexExternalValue, FunctionCallContextBuilder};
 use common::compile_for_engine;
-use std::sync::Arc;
 use sys_native::SysOpsExt;
 
 async fn run(source: &str) -> BexExternalValue {
