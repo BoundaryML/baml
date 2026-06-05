@@ -49,11 +49,19 @@
     },
 
     "class-block": {
-      "begin": "\\b(class)\\s+([A-Za-z_][A-Za-z0-9_-]*)\\s*(\\{)",
+      "begin": "\\b(class)\\s+([A-Za-z_][A-Za-z0-9_-]*)\\s*(<[^{}]*>)?\\s*(\\{)",
       "beginCaptures": {
         "1": { "name": "keyword.declaration.class.baml" },
         "2": { "name": "entity.name.type.class.baml" },
-        "3": { "name": "punctuation.definition.block.begin.baml" }
+        "3": {
+          "patterns": [
+            { "match": "[<>]", "name": "punctuation.definition.typeparameters.baml" },
+            { "match": "[|:,]", "name": "punctuation.separator.baml" },
+            { "match": "\\b(int|string|float|bool|bytes|null|true|false|image|audio|map|set)\\b", "name": "support.type.primitive.baml" },
+            { "match": "[A-Za-z_][A-Za-z0-9_]*", "name": "entity.name.type.baml" }
+          ]
+        },
+        "4": { "name": "punctuation.definition.block.begin.baml" }
       },
       "end": "\\}",
       "endCaptures": {

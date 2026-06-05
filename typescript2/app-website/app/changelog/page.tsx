@@ -1,21 +1,16 @@
 import type { Metadata } from 'next';
-import rehypeShiki from '@shikijs/rehype';
-import rehypeStringify from 'rehype-stringify';
-import remarkGfm from 'remark-gfm';
-import remarkParse from 'remark-parse';
-import remarkRehype from 'remark-rehype';
-import { bundledLanguages } from 'shiki';
-import { unified } from 'unified';
 
 import { FooterSection } from '@/components/footer-section';
 import { Navbar } from '@/components/navbar';
-import {
-  bamlJinjaTextmate,
-  bamlTextmate,
-} from '@/lib/mdx/shiki-grammars';
+import { ChangelogList } from './changelog-list';
 
-// Always render fresh so newly-generated entries show up immediately.
-export const dynamic = 'force-dynamic';
+// This page is intentionally STATIC (no `force-dynamic`, no server-side data
+// fetch). It is prerendered to plain HTML and served from the CDN, so it can
+// never invoke a serverless function and therefore can never 500. The entries
+// are loaded client-side from `/api/changelog-feed/*` (a Vercel edge rewrite to
+// the changelog service — see next.config.mjs), and code blocks are syntax-
+// highlighted client-side with shiki (incl. the BAML grammar). Clicking a
+// release opens its article via a `?v=` query param, handled fully client-side.
 
 const baseUrl =
   process.env.NEXT_PUBLIC_BASE_URL ??
@@ -23,18 +18,13 @@ const baseUrl =
     ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
     : 'https://boundaryml.com');
 
-// The microservice owns the database. Set CHANGELOG_API in the environment
-// (e.g. the Vercel project env) to the service base URL. Server-only — it is
-// read in this server component and never exposed to the client.
-const CHANGELOG_API = process.env.CHANGELOG_API;
-
 export const metadata: Metadata = {
   alternates: { canonical: `${baseUrl}/changelog` },
   description:
-    'The latest releases of BAML, a typed language for reliable LLM functions.',
+    'The latest releases of BAML.',
   openGraph: {
     description:
-      'The latest releases of BAML, a typed language for reliable LLM functions.',
+      'The latest releases of BAML.',
     siteName: 'BAML',
     title: 'BAML Changelog',
     type: 'website',
@@ -43,137 +33,91 @@ export const metadata: Metadata = {
   title: 'Changelog | BAML',
 };
 
-interface Entry {
-  authors: string[];
-  body: string;
-  date: string;
-  title: string;
-  version: string;
-}
+const CSS = `
+.chlog-wrap { margin: 0 auto; max-width: 760px; padding: 96px 24px 128px; }
 
-// One pipeline reused across all entries. rehype-shiki is ASYNC (lazy-loads
-// grammars on first use), which is why we cannot route this through
-// react-markdown (which calls `runSync`).
-const md = unified()
-  .use(remarkParse)
-  .use(remarkGfm)
-  .use(remarkRehype)
-  .use(rehypeShiki, {
-    defaultColor: 'dark',
-    langs: [
-      ...Object.values(bundledLanguages),
-      bamlTextmate,
-      bamlJinjaTextmate,
-    ],
-    themes: { dark: 'github-dark', light: 'github-light' },
-  })
-  .use(rehypeStringify);
+/* list header */
+.chlog-header { margin-bottom: 48px; }
+.chlog-h1 { font-size: clamp(40px, 6vw, 60px); font-weight: 600; letter-spacing: -0.02em; line-height: 1; margin: 0; }
+.chlog-sub { color: #6b6456; font-size: 18px; margin: 20px 0 0; max-width: 460px; }
 
-async function renderBody(body: string): Promise<string> {
-  const file = await md.process(body);
-  return String(file);
-}
+/* channel filter bar */
+.chlog-filters { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 28px; }
+.chlog-filter { border: 1px solid #e0dac9; background: transparent; border-radius: 999px;
+  padding: 5px 14px; font-size: 13px; font-weight: 500; color: #6b6456; cursor: pointer;
+  transition: border-color 0.12s ease, color 0.12s ease, background 0.12s ease; }
+.chlog-filter:hover { border-color: #c9c2af; color: #1a1a1a; }
+.chlog-filter.is-active { background: #1a1a1a; border-color: #1a1a1a; color: #fff; }
 
-function formatDate(iso: string): string {
-  const [y, m, d] = iso.split('-').map(Number);
-  const date = new Date(Date.UTC(y, m - 1, d));
-  return date.toLocaleDateString('en-US', {
-    day: 'numeric',
-    month: 'short',
-    timeZone: 'UTC',
-    year: 'numeric',
-  });
-}
+/* channel tags */
+.chlog-tag { display: inline-block; border-radius: 999px; font-size: 11px; font-weight: 600;
+  letter-spacing: 0.02em; line-height: 1.5; padding: 1px 8px; white-space: nowrap; }
+.chlog-tag--stable { color: #1a7f37; background: rgba(26,127,55,0.12); }
+.chlog-tag--nightly { color: #4338ca; background: rgba(67,56,202,0.12); }
+.chlog-tag--canary { color: #b45309; background: rgba(180,83,9,0.12); }
+.chlog-tag--alpha { color: #7c3aed; background: rgba(124,58,237,0.12); }
+.chlog-tag--prerelease { color: #6b6456; background: rgba(0,0,0,0.07); }
 
-async function loadEntries(): Promise<Entry[]> {
-  if (!CHANGELOG_API) return [];
-  try {
-    const res = await fetch(`${CHANGELOG_API}/entries`, {
-      cache: 'no-store',
-      signal: AbortSignal.timeout(8000),
-    });
-    if (!res.ok) return [];
-    const data = (await res.json()) as { entries: Entry[] };
-    return data.entries ?? [];
-  } catch {
-    return [];
-  }
-}
+/* timeline of releases */
+.chlog-timeline { list-style: none; margin: 0; padding: 0; position: relative; }
+.chlog-rail { position: absolute; top: 8px; bottom: 8px; left: 140px; width: 1px; background: #e7e2d6; }
+.chlog-tl-item { position: relative; display: grid; grid-template-columns: 120px 40px 1fr;
+  align-items: start; padding: 36px 0; }
+.chlog-tl-item:first-child { padding-top: 4px; }
+.chlog-tl-date { grid-column-start: 1; text-align: right; padding-top: 4px; white-space: nowrap;
+  color: #8a8372; font-size: 12px; font-weight: 500; }
+.chlog-tl-dot { grid-column-start: 2; justify-self: center; margin-top: 6px; position: relative; z-index: 1;
+  display: flex; align-items: center; justify-content: center; width: 12px; height: 12px;
+  border: 1px solid #d4cebd; border-radius: 50%; background: #FBF7ED; }
+.chlog-tl-dot > span { width: 4px; height: 4px; border-radius: 50%; background: #1a1a1a; }
+.chlog-tl-content { grid-column-start: 3; min-width: 0; }
+.chlog-tl-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.chlog-tl-title { text-align: left; background: none; border: 0; padding: 0; cursor: pointer;
+  color: #1a1a1a; font-size: 20px; font-weight: 600; letter-spacing: -0.01em; line-height: 1.25; }
+.chlog-tl-title:hover { text-decoration: underline; }
+.chlog-tl-lede { color: #6b6456; font-size: 15px; line-height: 1.6; margin: 8px 0 0;
+  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.chlog-tl-read { background: none; border: 0; padding: 0; margin: 12px 0 0; cursor: pointer;
+  color: #2563eb; font-size: 13px; font-weight: 500; }
+.chlog-tl-read:hover { text-decoration: underline; }
 
-export default async function ChangelogPage() {
-  const entries = await loadEntries();
-  // Pre-render all bodies in parallel so each <article> has its HTML ready.
-  const rendered = await Promise.all(
-    entries.map(async (e) => ({ ...e, html: await renderBody(e.body) })),
-  );
+/* article view */
+.chlog-back { background: none; border: 0; color: #6b6456; cursor: pointer; font-size: 13px;
+  margin: 0 0 32px; padding: 0; }
+.chlog-back:hover { color: #1a1a1a; }
+.chlog-meta { align-items: center; color: #8a8372; display: flex; font-size: 12px; gap: 12px; margin: 0 0 10px; }
+.chlog-ver { background: rgba(0,0,0,0.05); border-radius: 4px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; padding: 2px 7px; }
+.chlog-article-title { font-size: clamp(28px, 5vw, 40px); font-weight: 600; letter-spacing: -0.02em; line-height: 1.1; margin: 0 0 32px; }
+.chlog-authors { color: #8a8372; font-size: 13px; margin-top: 40px; border-top: 1px solid #e7e2d6; padding-top: 20px; }
 
+/* markdown body */
+.chlog-md { color: #1a1a1a; font-size: 16px; line-height: 1.7; }
+.chlog-md > :first-child { margin-top: 0; }
+.chlog-md p { margin: 16px 0; }
+.chlog-md h2 { font-size: 22px; font-weight: 600; margin: 36px 0 12px; letter-spacing: -0.01em; }
+.chlog-md h3 { font-size: 17px; font-weight: 600; margin: 28px 0 10px; }
+.chlog-md ul, .chlog-md ol { margin: 16px 0; padding-left: 1.4em; }
+.chlog-md li { margin: 8px 0; }
+.chlog-md a { color: #2563eb; text-decoration: none; }
+.chlog-md a:hover { text-decoration: underline; }
+.chlog-md :not(pre) > code { background: rgba(0,0,0,0.06); border-radius: 4px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.86em; padding: 2px 5px; }
+.chlog-md pre { border: 1px solid #e7e2d6; border-radius: 10px; font-size: 13.5px; line-height: 1.6;
+  margin: 20px 0; overflow-x: auto; padding: 16px 18px; }
+.chlog-md pre code { background: none; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; padding: 0; }
+.chlog-md blockquote { border-left: 3px solid #e7e2d6; color: #6b6456; margin: 16px 0; padding-left: 16px; }
+.chlog-md table { border-collapse: collapse; font-size: 14px; margin: 20px 0; width: 100%; }
+.chlog-md th, .chlog-md td { border: 1px solid #e7e2d6; padding: 8px 12px; text-align: left; }
+`;
+
+export default function ChangelogPage() {
   return (
     <>
+      {/* eslint-disable-next-line react/no-danger */}
+      <style dangerouslySetInnerHTML={{ __html: CSS }} />
       <Navbar />
-      <main className="mx-auto max-w-4xl px-6 pt-24 pb-32">
-        <header className="mb-16">
-          <h1 className="text-6xl font-semibold leading-none tracking-tight">
-            Changelog
-          </h1>
-          <p className="text-muted-foreground mt-5 max-w-xl text-lg">
-            The latest releases of BAML, a typed language for reliable LLM
-            functions.
-          </p>
-        </header>
-
-        {rendered.length === 0 ? (
-          <p className="text-muted-foreground">No entries yet.</p>
-        ) : (
-          <ol className="relative">
-            {/* the continuous vertical rail running through every circle */}
-            <div
-              aria-hidden
-              className="bg-border absolute top-2 bottom-2 left-[140px] w-px"
-            />
-
-            {rendered.map((e) => (
-              <li
-                key={e.version}
-                id={e.version}
-                className="relative grid grid-cols-[120px_40px_1fr] items-start py-10 first:pt-0 last:pb-0 scroll-mt-24"
-              >
-                <time
-                  dateTime={e.date}
-                  className="text-muted-foreground col-start-1 pt-2 text-right text-xs font-medium whitespace-nowrap"
-                >
-                  {formatDate(e.date)}
-                </time>
-
-                <span
-                  aria-hidden
-                  className="border-border bg-background relative z-10 col-start-2 mt-[7px] flex h-3 w-3 items-center justify-center justify-self-center rounded-full border"
-                >
-                  <span className="bg-foreground h-1 w-1 rounded-full" />
-                </span>
-
-                <div className="col-start-3 min-w-0">
-                  <h2 className="text-foreground mb-4 text-2xl font-semibold leading-tight tracking-tight">
-                    <a href={`#${e.version}`} className="hover:underline">
-                      {e.title}
-                    </a>
-                  </h2>
-
-                  <div
-                    className="prose prose-neutral dark:prose-invert max-w-none prose-p:my-3 prose-li:my-1.5 prose-headings:font-semibold prose-h3:text-base prose-h3:mt-5 prose-h3:mb-2 prose-code:rounded prose-code:bg-muted prose-code:px-1.5 prose-code:py-0.5 prose-code:font-medium prose-code:text-foreground prose-code:before:content-none prose-code:after:content-none prose-pre:rounded-lg prose-pre:border prose-pre:border-zinc-800 [&_pre_code]:bg-transparent [&_pre_code]:p-0 [&_pre_code]:rounded-none [&_pre_code]:font-normal [&_pre_code]:text-current [&_pre]:overflow-x-auto"
-                    // eslint-disable-next-line react/no-danger
-                    dangerouslySetInnerHTML={{ __html: e.html }}
-                  />
-
-                  {e.authors.length > 0 && (
-                    <p className="text-muted-foreground mt-7 text-xs">
-                      By {e.authors.join(', ')}
-                    </p>
-                  )}
-                </div>
-              </li>
-            ))}
-          </ol>
-        )}
+      <main className="chlog-wrap">
+        <ChangelogList />
       </main>
       <FooterSection />
     </>
