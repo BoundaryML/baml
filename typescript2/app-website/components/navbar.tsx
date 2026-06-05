@@ -187,6 +187,8 @@ export function Navbar() {
             className="nav-mobile-link"
             href="https://bench3-ui.fly.dev/"
             onClick={() => setOpen(false)}
+            rel="noopener noreferrer"
+            target="_blank"
           >
             agent tries baml
           </Link>
