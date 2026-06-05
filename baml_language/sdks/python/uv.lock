@@ -47,7 +47,7 @@ requires-dist = [{ name = "protobuf", specifier = ">=6.31.1" }]
 [package.metadata.requires-dev]
 dev = [
     { name = "grpcio-tools", specifier = ">=1.50" },
-    { name = "maturin", specifier = ">=1.0,<2.0" },
+    { name = "maturin", specifier = ">=1.9.4,<2.0" },
     { name = "pydantic", specifier = ">=2" },
     { name = "pyright", specifier = ">=1.1.409" },
     { name = "pytest", specifier = ">=7" },

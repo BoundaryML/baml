@@ -920,7 +920,7 @@ function iter.iter_explicit_map_coerces_to_iterator() -> int[] {
     load_type int
     load_type void
     load_type void
-    init_instance<4> baml.iter.Map .iter, .func
+    init_instance<4> baml.iter.Map .source, .func
     store_var_load_var mapped
     is_type baml.iter.Flatten<...>
     pop_jump_if_false L0

@@ -14,31 +14,31 @@ interface Iterator requires Iterable<Item = Self.Item, Error = Self.Error> {
   function next(self) -> Item | Done throws Error
 
   function map<R, E2>(self, fn: (Item) -> R throws E2) -> Iterator<Item = R, Error = Error | E2> throws never {
-    Map<Item, R, Error, E2> { iter: self, func: fn }
+    Map<Item, R, Error, E2> { source: self, func: fn }
   }
 
   function filter<E2>(self, predicate: (Item) -> bool throws E2) -> Iterator<Item = Item, Error = Error | E2> throws never {
-    Filter<Item, Error, E2> { iter: self, predicate: predicate }
+    Filter<Item, Error, E2> { source: self, predicate: predicate }
   }
 
   function filter_map<R, E2>(self, fn: (Item) -> R? throws E2) -> Iterator<Item = R, Error = Error | E2> throws never {
-    FilterMap<Item, R, Error, E2> { iter: self, func: fn }
+    FilterMap<Item, R, Error, E2> { source: self, func: fn }
   }
 
   function flat_map<R, E2, E3>(self, fn: (Item) -> Iterable<Item = R, Error = E3> throws E2) -> Iterator<Item = R, Error = Error | E2 | E3> throws never {
-    FlatMap<Item, R, Error, E2, E3> { iter: self, func: fn, inner: Done {} }
+    FlatMap<Item, R, Error, E2, E3> { source: self, func: fn, inner: Done {} }
   }
 
   function step_by(self, n: int) -> Iterator<Item = Item, Error = Error> throws never {
-    StepBy<Item, Error> { iter: self, n: n, first: true }
+    StepBy<Item, Error> { source: self, n: n, first: true }
   }
 
   function chain(self, other: Iterator<Item = Item, Error = Error>) -> Iterator<Item = Item, Error = Error> throws never {
-    Chain<Item, Error> { iter: self, other: other, first_done: false }
+    Chain<Item, Error> { first: self, other: other, first_done: false }
   }
 
   function peekable(self) -> Peekable<Item, Error> throws never {
-    Peekable<Item, Error> { iter: self, buffer: Done {}, has_buffer: false }
+    Peekable<Item, Error> { source: self, buffer: Done {}, has_buffer: false }
   }
 
   function collect(self) -> Item[] throws Error {
@@ -118,7 +118,7 @@ interface Iterator requires Iterable<Item = Self.Item, Error = Self.Error> {
 }
 
 function flatten<R, E, E3, I extends Iterable<Item = R, Error = E3>>(src: Iterator<Item = I, Error = E>) -> Iterator<Item = R, Error = E | E3> throws never {
-  Flatten<I, R, E, E3> { iter: src, inner: Done {} }
+  Flatten<I, R, E, E3> { source: src, inner: Done {} }
 }
 
 class ArrayIterator<T> {
@@ -217,7 +217,7 @@ class Repeat<T> {
 }
 
 class Map<T, R, E, E2> {
-  iter: Iterator<Item = T, Error = E>
+  source: Iterator<Item = T, Error = E>
   func: (T) -> R throws E2
 
   implements Iterable {
@@ -232,7 +232,7 @@ class Map<T, R, E, E2> {
     type Error = E | E2
 
     function next(self) -> R | Done throws E | E2 {
-      match (self.iter.next()) {
+      match (self.source.next()) {
         Done => Done {},
         let x: T => self.func(x),
       }
@@ -241,7 +241,7 @@ class Map<T, R, E, E2> {
 }
 
 class Filter<T, E, E2> {
-  iter: Iterator<Item = T, Error = E>
+  source: Iterator<Item = T, Error = E>
   predicate: (T) -> bool throws E2
 
   implements Iterable {
@@ -257,7 +257,7 @@ class Filter<T, E, E2> {
 
     function next(self) -> T | Done throws E | E2 {
       while (true) {
-        match (self.iter.next()) {
+        match (self.source.next()) {
           Done => { return Done {}; },
           let x: T => {
             if (self.predicate(x)) {
@@ -272,7 +272,7 @@ class Filter<T, E, E2> {
 }
 
 class FilterMap<T, R, E, E2> {
-  iter: Iterator<Item = T, Error = E>
+  source: Iterator<Item = T, Error = E>
   func: (T) -> R? throws E2
 
   implements Iterable {
@@ -288,7 +288,7 @@ class FilterMap<T, R, E, E2> {
 
     function next(self) -> R | Done throws E | E2 {
       while (true) {
-        match (self.iter.next()) {
+        match (self.source.next()) {
           Done => { return Done {}; },
           let x: T => {
             match (self.func(x)) {
@@ -304,7 +304,7 @@ class FilterMap<T, R, E, E2> {
 }
 
 class FlatMap<T, R, E, E2, E3> {
-  iter: Iterator<Item = T, Error = E>
+  source: Iterator<Item = T, Error = E>
   func: (T) -> Iterable<Item = R, Error = E3> throws E2
   inner: Iterator<Item = R, Error = E3> | Done
 
@@ -329,7 +329,7 @@ class FlatMap<T, R, E, E2, E3> {
             }
           },
           Done => {
-            match (self.iter.next()) {
+            match (self.source.next()) {
               Done => { return Done {}; },
               let x: T => {
                 let it = self.func(x).iter();
@@ -345,7 +345,7 @@ class FlatMap<T, R, E, E2, E3> {
 }
 
 class Flatten<I extends Iterable<Item = R, Error = E3>, R, E, E3> {
-  iter: Iterator<Item = I, Error = E>
+  source: Iterator<Item = I, Error = E>
   inner: Iterator<Item = R, Error = E3> | Done
 
   implements Iterable {
@@ -369,7 +369,7 @@ class Flatten<I extends Iterable<Item = R, Error = E3>, R, E, E3> {
             }
           },
           Done => {
-            match (self.iter.next()) {
+            match (self.source.next()) {
               Done => { return Done {}; },
               let x: I => {
                 let it = x.iter();
@@ -385,7 +385,7 @@ class Flatten<I extends Iterable<Item = R, Error = E3>, R, E, E3> {
 }
 
 class Peekable<T, E> {
-  iter: Iterator<Item = T, Error = E>
+  source: Iterator<Item = T, Error = E>
   buffer: T | Done
   has_buffer: bool
 
@@ -393,7 +393,7 @@ class Peekable<T, E> {
     if (self.has_buffer) {
       return self.buffer;
     }
-    let v = self.iter.next();
+    let v = self.source.next();
     self.buffer = v;
     self.has_buffer = true;
     v
@@ -417,13 +417,13 @@ class Peekable<T, E> {
         self.has_buffer = false;
         return v;
       }
-      self.iter.next()
+      self.source.next()
     }
   }
 }
 
 class StepBy<T, E> {
-  iter: Iterator<Item = T, Error = E>
+  source: Iterator<Item = T, Error = E>
   n: int
   first: bool
 
@@ -441,21 +441,21 @@ class StepBy<T, E> {
     function next(self) -> T | Done throws E {
       if (self.first) {
         self.first = false;
-        return self.iter.next();
+        return self.source.next();
       }
       for (let i = 0; i < self.n - 1; i += 1) {
-        match (self.iter.next()) {
+        match (self.source.next()) {
           Done => { return Done {}; },
           let x: T => {},
         }
       }
-      self.iter.next()
+      self.source.next()
     }
   }
 }
 
 class Chain<T, E> {
-  iter: Iterator<Item = T, Error = E>
+  first: Iterator<Item = T, Error = E>
   other: Iterator<Item = T, Error = E>
   first_done: bool
 
@@ -472,7 +472,7 @@ class Chain<T, E> {
 
     function next(self) -> T | Done throws E {
       if (!self.first_done) {
-        match (self.iter.next()) {
+        match (self.first.next()) {
           Done => { self.first_done = true; },
           let x: T => { return x; },
         }

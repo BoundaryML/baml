@@ -84,7 +84,7 @@ test "iter_map_implicit_source" {
 function iter_explicit_map_coerces_to_iterator() -> int[] throws unknown {
   let it: baml.iter.Iterator<Item = int, Error = never> = baml.iter.ArrayIterator.new([1, 2, 3]);
   let mapped: baml.iter.Iterator<Item = int, Error = never> = baml.iter.Map<int, int, never, never> {
-    iter: it,
+    source: it,
     func: (x: int) -> int { x * 3 },
   };
   mapped.collect()
