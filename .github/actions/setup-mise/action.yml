@@ -55,7 +55,7 @@ runs:
         # Our own prefix (not the upstream default), shared across every
         # baml_language workflow. Bump the trailing number to invalidate
         # every consumer's cache at once.
-        cache_key_prefix: mise-baml1
+        cache_key_prefix: mise-baml2
         install_args: ${{ inputs.install_args }}
         # Keep mise's shims OFF $PATH. mise-action exports the concrete
         # installed-tool bin dirs into PATH directly, so the narrow set we
