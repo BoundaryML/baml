@@ -14,7 +14,7 @@ use std::{
     mem::MaybeUninit,
     sync::{
         Arc,
-        atomic::{AtomicU8, AtomicU64, Ordering},
+        atomic::{AtomicI64, AtomicU8, AtomicU64, Ordering},
     },
 };
 
@@ -1595,6 +1595,111 @@ impl From<IndexMap<bex_str::BexStr, Value>>
 /// into the `Vm::objects` pool.
 ///
 /// Read `Vm::objects` for more information.
+/// Identity of a mocked callable (BEP-058). Keyed so the call-site dispatch hook
+/// can recover the same key it was created with. Interface/generic keys are
+/// added in later slices.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub enum FunctionKey {
+    /// A free function or class method, keyed by its fully-qualified name. Every
+    /// instance of a class shares its method's name, so this also covers
+    /// "all instances" class mocks.
+    Free(String),
+    /// A method bound to one specific receiver instance, keyed by the receiver
+    /// object pointer plus the method's fully-qualified name. More specific than
+    /// `Free`.
+    Instance(HeapPtr, String),
+    /// One generic specialization (`f<int>`), keyed by the base function's
+    /// fully-qualified name plus its concrete type arguments. More specific than
+    /// the bare `Free` mock (`f`), which covers every instantiation.
+    Generic(String, Vec<baml_type::Ty>),
+}
+
+/// A function mock (BEP-058). Wraps a target callable's identity plus a
+/// replacement and an atomic call counter. Created by the `baml.mock.new`
+/// intrinsic and activated by `baml.mock.scope`. Runtime-only (never serialized).
+#[derive(Debug)]
+pub struct Mock {
+    /// Identity of the mocked target (which `Call`s this mock intercepts).
+    pub function_key: FunctionKey,
+    /// The replacement callable run in place of the original while active.
+    /// `Value::NULL` when no replacement is set (pure spy).
+    pub replacement: AtomicValueSlot,
+    /// Number of times the mock fired within the current scope.
+    pub call_count: AtomicI64,
+}
+
+impl Mock {
+    pub fn new(function_key: FunctionKey) -> Self {
+        Self {
+            function_key,
+            replacement: AtomicValueSlot::new(Value::NULL),
+            call_count: AtomicI64::new(0),
+        }
+    }
+
+    #[inline]
+    pub fn set_replacement(&self, replacement: Value) {
+        self.replacement.store(replacement);
+    }
+
+    #[inline]
+    pub fn replacement(&self) -> Value {
+        self.replacement.load()
+    }
+
+    /// Atomically increment the call counter (per-call, on the dispatch hot path).
+    #[inline]
+    pub fn increment_call_count(&self) {
+        self.call_count.fetch_add(1, Ordering::Relaxed);
+    }
+
+    #[inline]
+    pub fn call_count(&self) -> i64 {
+        self.call_count.load(Ordering::Relaxed)
+    }
+
+    /// Reset the call counter (on scope entry).
+    #[inline]
+    pub fn reset_call_count(&self) {
+        self.call_count.store(0, Ordering::Relaxed);
+    }
+}
+
+impl Clone for Mock {
+    fn clone(&self) -> Self {
+        Self {
+            function_key: self.function_key.clone(),
+            replacement: self.replacement.clone(),
+            call_count: AtomicI64::new(self.call_count()),
+        }
+    }
+}
+
+impl std::fmt::Display for Mock {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "<mock call_count={}>", self.call_count())
+    }
+}
+
+// Mocks are runtime-only; they never appear in a compiled Program.
+impl BorshSerialize for Mock {
+    fn serialize<W: std::io::Write>(&self, _writer: &mut W) -> std::io::Result<()> {
+        Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            "Mock cannot be serialized",
+        ))
+    }
+}
+
+impl BorshDeserialize for Mock {
+    fn deserialize_reader<R: std::io::Read>(_reader: &mut R) -> std::io::Result<Self> {
+        Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            "Mock cannot be deserialized",
+        ))
+    }
+}
+
 #[derive(Clone, Debug)]
 pub enum Object {
     /// Function object.
@@ -1688,6 +1793,9 @@ pub enum Object {
     /// A type descriptor value — wraps a `baml_type::Ty`.
     Type(Box<baml_type::Ty>),
 
+    /// A function mock (BEP-058). Runtime-only; created by `baml.mock.new`.
+    Mock(Box<Mock>),
+
     #[cfg(feature = "heap_debug")]
     Sentinel(SentinelKind),
 }
@@ -1773,6 +1881,12 @@ impl BorshSerialize for Object {
                 return Err(std::io::Error::new(
                     std::io::ErrorKind::InvalidData,
                     "HostClosure cannot be serialized",
+                ));
+            }
+            Self::Mock(_) => {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    "Mock cannot be serialized",
                 ));
             }
             #[cfg(feature = "heap_debug")]
@@ -1957,6 +2071,7 @@ impl std::fmt::Display for Object {
             },
             Object::UnscheduledFuture(_) => write!(f, "<unscheduled: spawn>"),
             Object::Float(v) => write!(f, "{v}"),
+            Object::Mock(mock) => mock.fmt(f),
             #[cfg(feature = "heap_debug")]
             Object::Sentinel(kind) => write!(f, "<sentinel {kind:?}>"),
             // Object::BamlType(type_ir) => write!(f, "<baml type: {type_ir}>"),
@@ -2577,6 +2692,7 @@ impl ObjectType {
             Object::Future(fut) => Self::Future(fut.into()),
             Object::UnscheduledFuture(_) => Self::UnscheduledFuture,
             Object::Float(_) => Self::Float,
+            Object::Mock(_) => Self::Any,
             #[cfg(feature = "heap_debug")]
             Object::Sentinel(_) => Self::Any,
             // Object::BamlType(_) => Self::Any, // TODO

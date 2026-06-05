@@ -129,6 +129,11 @@ fn deep_copy_value_recursive(
                 // the closure semantics (shared handle).
                 Object::HostClosure(hc) => vm.tlab.alloc(Object::HostClosure(hc)),
                 Object::Cell(cell) => vm.tlab.alloc(Object::Cell(cell)),
+                // A mock is a runtime testing handle. `m` here is an owned clone
+                // (see the `.clone()` at the top of this match), and `Mock`'s
+                // Clone copies the atomics, so the copy is an independent Mock
+                // with its own replacement slot and counter — not shared state.
+                Object::Mock(m) => vm.tlab.alloc(Object::Mock(m)),
                 #[cfg(feature = "heap_debug")]
                 Object::Sentinel(kind) => vm.tlab.alloc(Object::Sentinel(kind)),
             };

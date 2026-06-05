@@ -6318,6 +6318,120 @@ fn baml.media.Video.url = builtin(vm)
 
 fn baml.media.Audio.url = builtin(vm)
 
+fn baml.mock.__enter = builtin(vm)
+
+fn baml.mock.__exit = builtin(vm)
+
+fn baml.mock.__new = builtin(vm)
+
+fn baml.mock.Mock.from_json(j: baml.json.json) -> baml.mock.Mock<void> {
+    // Locals:
+    let _0: baml.mock.Mock<void> // _0 // return
+    let _1: baml.json.json // j // param
+    let _2: int
+    let _3: baml.json.json
+    let _4: type
+
+    bb0: {
+        _3 = call const fn baml.json.field(copy _1, const "call_count") -> [bb1];
+    }
+
+    bb1: {
+        _4 = load_type(int);
+        _2 = call const fn baml.json.from_json<copy _4>(copy _3) -> [bb2];
+    }
+
+    bb2: {
+        _0 = baml.mock.Mock<#0> { copy _2 };
+        goto -> bb3;
+    }
+
+    bb3: {
+        return;
+    }
+}
+
+fn baml.mock.new(original: void) -> baml.mock.Mock<void> {
+    // Locals:
+    let _0: baml.mock.Mock<void> // _0 // return
+    let _1: void // original // param
+
+    bb0: {
+        _0 = call const fn baml.mock.__new(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn baml.mock.Mock.replace = builtin(vm)
+
+fn baml.mock.scope(mock: baml.mock.Mock<void>, body: () -> void throws never) -> void {
+    // Locals:
+    let _0: void // _0 // return
+    let _1: baml.mock.Mock<void> // mock // param
+    let _2: () -> void throws never // body // param
+    let _3: void
+    let _4: void
+    let _5: unknown // e
+    let _6: void
+    let _7: void
+
+    bb0: {
+        _3 = call const fn baml.mock.__enter(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _4 = call copy _2() -> [bb2, unwind: bb4];
+    }
+
+    bb2: {
+        _0 = call const fn baml.mock.__exit(copy _1) -> [bb3];
+    }
+
+    bb3: {
+        return;
+    }
+
+    bb4: {
+        throw_if_panic copy _5 -> bb5;
+    }
+
+    bb5: {
+        _6 = call const fn baml.mock.__exit(copy _1) -> [bb6];
+    }
+
+    bb6: {
+        _7 = copy _5;
+        throw copy _7;
+    }
+}
+
+fn baml.mock.Mock.to_json(self: baml.mock.Mock) -> baml.json.json {
+    // Locals:
+    let _0: baml.json.json // _0 // return
+    let _1: baml.mock.Mock // self // param
+    let _2: baml.json.json
+    let _3: int
+    let _4: baml.mock.Mock<void>
+
+    bb0: {
+        _4 = copy _1;
+        _3 = copy _4.0;
+        _2 = call const fn baml.Int.to_json(copy _3) -> [bb1];
+    }
+
+    bb1: {
+        _0 = { const "call_count": copy _2 };
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
 fn baml.net.TcpListener.accept = builtin(io)
 
 fn baml.net.TcpListener.bind = builtin(io)

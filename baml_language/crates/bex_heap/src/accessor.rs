@@ -724,6 +724,7 @@ fn convert_object(
         Object::Enum(..) => unconvertible("enum"),
         Object::Future(..) => unconvertible("future"),
         Object::UnscheduledFuture(..) => unconvertible("unscheduled_future"),
+        Object::Mock(..) => unconvertible("mock"),
 
         Object::String(s) => Ok(BexExternalValue::String(s.clone())),
         // Deep-copy path for trace payloads: no declared type is available here,

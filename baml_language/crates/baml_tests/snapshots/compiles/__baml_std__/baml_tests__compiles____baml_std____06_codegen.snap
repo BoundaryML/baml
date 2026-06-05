@@ -4119,6 +4119,68 @@ function baml.media.Video.to_json(self: baml.media.Video) -> baml.json.json {
 function baml.media.Video.url(self: baml.media.Video) -> string? {
 }
 
+function baml.mock.Mock.from_json(j: baml.json.json) -> baml.mock.Mock<void> {
+    load_var j
+    load_const "call_count"
+    call baml.json.field
+    store_var _3
+    load_type int
+    load_var _3
+    call baml.json.from_json
+    load_type #0
+    init_instance<1> baml.mock.Mock .call_count
+    return
+}
+
+function baml.mock.Mock.replace(self: baml.mock.Mock, replacement: void) -> void {
+}
+
+function baml.mock.Mock.to_json(self: baml.mock.Mock) -> baml.json.json {
+    load_var self
+    load_field .call_count
+    call baml.Int.to_json
+    load_const "call_count"
+    alloc_map 1
+    return
+}
+
+function baml.mock.__enter(mock: baml.mock.Mock<void>) -> void {
+}
+
+function baml.mock.__exit(mock: baml.mock.Mock<void>) -> void {
+}
+
+function baml.mock.__new(original: void) -> baml.mock.Mock<void> {
+}
+
+function baml.mock.new(original: void) -> baml.mock.Mock<void> {
+    load_var original
+    call baml.mock.__new
+    return
+}
+
+function baml.mock.scope(mock: baml.mock.Mock<void>, body: () -> void throws never) -> void {
+    load_var mock
+    call baml.mock.__enter
+    pop 1
+    load_var body
+    call_indirect
+    pop 1
+    jump L0
+    load_var e
+    throw_if_panic
+    load_var mock
+    call baml.mock.__exit
+    pop 1
+    load_var e
+    throw
+
+  L0:
+    load_var mock
+    call baml.mock.__exit
+    return
+}
+
 function baml.net.Datagram.from_json(j: baml.json.json) -> baml.net.Datagram {
     load_var j
     load_const "data"

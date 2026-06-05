@@ -876,6 +876,27 @@ function baml.media.url(self: ?) -> string?  [builtin]
 function baml.media.url(self: ?) -> string?  [builtin]
 function baml.media.url(self: ?) -> string?  [builtin]
 
+--- <builtin>/baml/ns_mock/mock.baml ---
+class baml.mock.Mock {
+  call_count: int
+}
+function baml.mock.__enter(mock: baml.mock.Mock<T>) -> void  [builtin]
+function baml.mock.__exit(mock: baml.mock.Mock<T>) -> void  [builtin]
+function baml.mock.__new(original: T) -> baml.mock.Mock<T>  [builtin]
+function baml.mock.from_json(j: baml.json.json) -> baml.mock.Mock<T>  [expr] {
+  baml.mock.Mock { call_count: baml.json.from_json(baml.json.field(j, "call_count")) }
+}
+function baml.mock.new(original: T) -> baml.mock.Mock<T>  [expr] {
+  {  } baml.mock.__new(original)
+}
+function baml.mock.replace(self: ?, replacement: T) -> void  [builtin]
+function baml.mock.scope(mock: baml.mock.Mock<T>, body: () -> void throws E) -> void  [expr] {
+  { baml.mock.__enter(mock); body() catch (e) { _ => { baml.mock.__exit(mock); throw e } } } baml.mock.__exit(mock)
+}
+function baml.mock.to_json(self: ?) -> baml.json.json  [expr] {
+  map { "call_count": self.call_count.to_json() }
+}
+
 --- <builtin>/baml/ns_net/net.baml ---
 class baml.net.Datagram {
   data: uint8array

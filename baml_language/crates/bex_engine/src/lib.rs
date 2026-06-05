@@ -1944,6 +1944,7 @@ impl BexEngine {
     ///
     /// Returns the heap pointer to the allocated future so the spawning
     /// thread can push it onto its stack as the result of `spawn { ... }`.
+    #[allow(clippy::too_many_arguments)]
     fn spawn_thread(
         self: Arc<Self>,
         child_cancel: CancellationToken,
@@ -1952,6 +1953,10 @@ impl BexEngine {
         name: Option<String>,
         call_id: CallId,
         future_id: FutureId,
+        parent_mock_table: std::collections::HashMap<
+            bex_vm_types::FunctionKey,
+            Vec<bex_vm_types::HeapPtr>,
+        >,
     ) -> std::pin::Pin<
         Box<dyn std::future::Future<Output = Result<(), EngineError>> + Send + 'static>,
     > {
@@ -1962,6 +1967,7 @@ impl BexEngine {
             name,
             call_id,
             future_id,
+            parent_mock_table,
         ))
     }
 
@@ -1974,6 +1980,7 @@ impl BexEngine {
     /// acquires **no** heap permit on the calling task — the child's permit is
     /// acquired on the spawned task — so the parent never holds two permits at
     /// once (which would deadlock GC's `acquire_many`).
+    #[allow(clippy::too_many_arguments)]
     async fn spawn_thread_inner(
         self: Arc<Self>,
         child_cancel: CancellationToken,
@@ -1982,6 +1989,10 @@ impl BexEngine {
         name: Option<String>,
         call_id: CallId,
         future_id: FutureId,
+        parent_mock_table: std::collections::HashMap<
+            bex_vm_types::FunctionKey,
+            Vec<bex_vm_types::HeapPtr>,
+        >,
     ) -> Result<(), EngineError> {
         // Build the child VM up-front (synchronously) so the await on the
         // permit only holds Send values across yield points.
@@ -1999,6 +2010,15 @@ impl BexEngine {
             Arc::clone(&self.interface_implementors),
         );
         child_vm.set_entry_point(closure, &[]);
+        // BEP-058: a spawn launched inside an active mock scope references the
+        // same mocks. Seed the child with a snapshot of the parent's active
+        // table — the Mock heap objects (and their atomic call_count) are
+        // shared via the heap, while the child's own copy keeps the mocks
+        // active for the spawn's lifetime independent of the parent's __exit.
+        // The child starts with an empty mock_suppress: suppression is keyed to
+        // the parent's frame depths and does not carry into the child's fresh
+        // call chain.
+        child_vm.mock_table = parent_mock_table;
 
         // Register a new (inactive) permit for the child. `new_permit` only
         // takes the holders mutex — it does NOT acquire a semaphore permit —
@@ -2483,6 +2503,9 @@ impl BexEngine {
                             _ => None,
                         });
                     let parent_errors_arc = thread.vm_thread_pending_errors_arc();
+                    // BEP-058: snapshot the parent's active mocks under the held
+                    // permit (no GC can intervene before the child roots them).
+                    let parent_mock_table = thread.vm.mock_table.clone();
 
                     // Allocate the child's future under the parent's
                     // already-held permit, then hand the id to `spawn_thread`.
@@ -2512,6 +2535,7 @@ impl BexEngine {
                                 spawn_name,
                                 call_id,
                                 future_id,
+                                parent_mock_table,
                             )
                             .await?;
                         future_ptr

@@ -978,6 +978,11 @@ fn emit_glue_method(out: &mut String, method_name: &str, b: &NativeBuiltin) {
     // shape).
     let arraymap_needs_owned = needs_owned || return_type_needs_alloc(&b.return_type);
 
+    // `glue_name` is `__glue_<fn>`; a `_`-prefixed builtin (e.g. `__new`) yields
+    // consecutive underscores that the `non_snake_case` lint rejects. The glue
+    // name is codegen-controlled, so silence it here rather than constraining
+    // builtin names.
+    out.push_str("    #[allow(non_snake_case)]\n");
     writeln!(
         out,
         "    fn {glue_name}(vm: &mut BexVm, args: &[Value]) -> NativeCallResult {{"

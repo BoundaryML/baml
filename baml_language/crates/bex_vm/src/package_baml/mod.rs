@@ -26,6 +26,7 @@ pub mod json;
 mod map;
 mod math;
 mod media;
+mod mock;
 mod primitives;
 mod root;
 mod stack_trace;

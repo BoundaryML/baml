@@ -125,6 +125,13 @@ namespace baml.media:
   class Image { methods: [to_json, url, file, base64, mime_type, from_url, from_file, from_base64, from_json] }
   class Pdf { methods: [to_json, url, file, base64, mime_type, from_url, from_file, from_base64, from_json] }
   class Video { methods: [to_json, url, file, base64, mime_type, from_url, from_file, from_base64, from_json] }
+namespace baml.mock:
+  class Mock<T> { methods: [replace, to_json, from_json] }
+  function __enter<T>
+  function __exit<T>
+  function __new<T>
+  function new<T>
+  function scope<T, E>
 namespace baml.net:
   class Datagram { methods: [to_json, from_json] }
   class TcpListener { methods: [bind, accept, close, to_json, from_json] }

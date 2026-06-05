@@ -373,6 +373,11 @@ impl BexHeap {
                     worklist.push(ptr);
                 }
             }
+            Object::Mock(mock) => {
+                if let Some(ptr) = mock.replacement().as_object_ptr() {
+                    worklist.push(ptr);
+                }
+            }
             Object::Variant(var) => {
                 worklist.push(var.enm);
             }
@@ -504,6 +509,19 @@ impl BexHeap {
                 let mut value = cell.load();
                 self.fixup_value(&mut value, forwarding);
                 cell.store(value);
+            }
+            Object::Mock(mock) => {
+                let mut value = mock.replacement();
+                self.fixup_value(&mut value, forwarding);
+                mock.set_replacement(value);
+                // Keep the receiver baked into a `FunctionKey::Instance` key in
+                // lockstep with the VM-side `mock_table` re-keying (BEP-058), so
+                // `__exit` can still find this mock's table entry after a move.
+                if let bex_vm_types::FunctionKey::Instance(receiver, _) = &mut mock.function_key
+                    && let Some(&new_ptr) = forwarding.get(receiver)
+                {
+                    *receiver = new_ptr;
+                }
             }
             Object::Variant(var) => {
                 // Update enum pointer
@@ -765,6 +783,13 @@ impl BexHeap {
             }
             Object::Cell(cell) => {
                 if let Some(ptr) = cell.load().as_object_ptr()
+                    && self.generation_of(ptr).is_young()
+                {
+                    worklist.push(ptr);
+                }
+            }
+            Object::Mock(mock) => {
+                if let Some(ptr) = mock.replacement().as_object_ptr()
                     && self.generation_of(ptr).is_young()
                 {
                     worklist.push(ptr);

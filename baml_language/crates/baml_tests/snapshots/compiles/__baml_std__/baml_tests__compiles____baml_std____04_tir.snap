@@ -1299,6 +1299,38 @@ class baml.media.Image$stream {
   _data: $rust_type
 }
 
+--- <builtin>/baml/ns_mock/mock.baml ---
+function baml.mock.new<T>(original: T) -> baml.mock.Mock<T> throws never {
+  { : baml.mock.Mock<T>
+    baml.mock.__new<T>(original) : baml.mock.Mock<T>
+  }
+}
+function baml.mock.scope<T, E>(mock: baml.mock.Mock<T>, body: () -> void throws E) -> void throws E {
+  { : void
+    baml.mock.__enter(mock) : void
+    catch (body<E>() : void) : void
+      catch (e)
+        _ =>
+          { : never
+            baml.mock.__exit(mock) : void
+            throw e : E
+          }
+    baml.mock.__exit(mock) : void
+  }
+}
+class baml.mock.Mock {
+  call_count: int
+}
+function baml.mock.Mock.to_json(self: baml.mock.Mock) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  map { "call_count": self.call_count.to_json() } : map<string, baml.json.json>
+}
+function baml.mock.Mock.from_json(j: baml.json.json) -> baml.mock.Mock<unknown> throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  Mock { call_count: baml.json.from_json<int>(baml.json.field(j, "call_count")) } : baml.mock.Mock<T>
+}
+class baml.mock.Mock$stream {
+  call_count: null | int
+}
+
 --- <builtin>/baml/ns_net/net.baml ---
 class baml.net.TcpStream {
   _handle: $rust_type

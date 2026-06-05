@@ -244,6 +244,8 @@ mod tests {
             argv: Arc::from([]),
             pending_call_type_args: Vec::new(),
             interface_implementors: Arc::new(indexmap::IndexMap::new()),
+            mock_table: std::collections::HashMap::new(),
+            mock_suppress: Vec::new(),
         }
     }
 
@@ -440,6 +442,159 @@ mod tests {
             "unrooted trampoline function must not be forwarded after return"
         );
     }
+
+    /// BEP-058: an active mock referenced from `mock_table` / `mock_suppress`
+    /// (and the receiver embedded in its `FunctionKey::Instance`) must be a GC
+    /// root and must be forwarded after a moving collection, otherwise a Mock
+    /// relocated mid-scope leaves stale pointers in the dispatch tables
+    /// (use-after-move) and instance-mock lookups silently miss.
+    #[test]
+    fn active_mocks_are_gc_roots_and_forwarded() {
+        use bex_vm_types::{FunctionKey, Mock};
+
+        let mut vm = test_vm(vec![test_class(1)]);
+        let class_ptr = vm.idx_to_ptr(ObjectIndex::from_raw(0));
+
+        // Receiver instance (embedded in the Instance key) and a replacement
+        // callable stand-in, both reachable only through the mock state.
+        let recv = vm.tlab.alloc(Object::Instance(Instance::new(
+            class_ptr,
+            Vec::new(),
+            vec![Value::int(0)],
+        )));
+        let repl = vm.tlab.alloc(Object::Instance(Instance::new(
+            class_ptr,
+            Vec::new(),
+            vec![Value::int(7)],
+        )));
+        let key = FunctionKey::Instance(recv, "bump".to_string());
+        let mock = vm.tlab.alloc_mock(Mock::new(key.clone()));
+        if let Object::Mock(m) = vm.get_object(mock) {
+            m.set_replacement(Value::object(repl));
+        }
+
+        // Activate: the dispatch tables now hold raw pointers to the mock.
+        vm.mock_table.entry(key).or_default().push(mock);
+        vm.mock_suppress.push((mock, 0));
+
+        // collect_roots must surface the mock object and its key receiver.
+        let mut roots = Vec::new();
+        vm.collect_roots(&mut roots);
+        assert!(roots.contains(&mock), "active mock must be a GC root");
+        assert!(
+            roots.contains(&recv),
+            "instance-key receiver must be a GC root"
+        );
+        // `repl` is not a direct root; it survives transitively as the Mock's
+        // replacement (traced via the Object::Mock GC arm) and is checked below.
+
+        let (_stats, _remapped, forwarding) = unsafe {
+            vm.heap
+                .collect_garbage_generational(&roots, CollectionLevel::Major)
+        };
+        let new_mock = *forwarding
+            .get(&mock)
+            .expect("active mock must be forwarded by GC");
+        let new_recv = *forwarding
+            .get(&recv)
+            .expect("instance-key receiver must be forwarded by GC");
+        let new_repl = *forwarding
+            .get(&repl)
+            .expect("mock replacement must be forwarded by GC");
+
+        vm.forward_roots(&forwarding);
+
+        // mock_table is re-keyed on the forwarded receiver and its value points
+        // at the moved mock.
+        assert_eq!(
+            vm.mock_table
+                .get(&FunctionKey::Instance(new_recv, "bump".to_string())),
+            Some(&vec![new_mock]),
+            "mock_table value + Instance-key receiver must be forwarded"
+        );
+        assert_eq!(
+            vm.mock_suppress,
+            vec![(new_mock, 0)],
+            "mock_suppress pointer must be forwarded"
+        );
+
+        // The moved Mock object's own state is intact and forwarded.
+        let Object::Mock(m) = vm.get_object(new_mock) else {
+            panic!("relocated mock must still be a Mock");
+        };
+        assert!(
+            matches!(&m.function_key, FunctionKey::Instance(r, name) if *r == new_recv && name == "bump"),
+            "Mock.function_key receiver must be forwarded"
+        );
+        assert_eq!(
+            m.replacement().as_object_ptr(),
+            Some(new_repl),
+            "Mock.replacement must be forwarded"
+        );
+    }
+
+    /// BEP-058: `Mock.replace` storing a young replacement into a Mock that has
+    /// been promoted to an older generation must run the GC write barrier, so a
+    /// later minor collection traces the replacement out of the old-gen Mock via
+    /// its (now dirty) card. Without the barrier the young replacement is
+    /// reclaimed and the next Redirect dispatch runs a dangling callable.
+    #[test]
+    fn replace_write_barrier_keeps_young_replacement_across_minor_gc() {
+        use bex_heap::Generation;
+        use bex_vm_types::{FunctionKey, Mock};
+
+        use crate::package_baml::{BamlClassMockMock, PackageBamlImpl};
+
+        let mut vm = test_vm(vec![]);
+
+        // Settle the Mock into Gen2 with a clean card: a Major collection fully
+        // traces Gen2 and resets the card table, modelling a long-lived mock
+        // that has aged before being re-stubbed.
+        let mock = vm
+            .tlab
+            .alloc_mock(Mock::new(FunctionKey::Free("f".to_string())));
+        let (_stats, remapped, _fwd) = unsafe {
+            vm.heap
+                .collect_garbage_generational(&[mock], CollectionLevel::Major)
+        };
+        vm.tlab.invalidate();
+        let mock = remapped[0];
+        assert_eq!(
+            vm.heap.generation_of(mock),
+            Generation::Gen2,
+            "mock must be settled in Gen2 for the barrier to matter"
+        );
+        assert_eq!(
+            vm.heap.gen2_dirty_card_count(),
+            0,
+            "a Major collection must leave the settled mock's card clean"
+        );
+
+        // A freshly-allocated (young) replacement callable stand-in, stored into
+        // the aged Gen2 mock via the real `replace` native.
+        let repl = vm.tlab.alloc_string("replacement".to_string());
+        assert_eq!(vm.heap.generation_of(repl), Generation::Gen0);
+        <PackageBamlImpl as BamlClassMockMock>::replace(
+            &mut vm,
+            &Value::object(mock),
+            &Value::object(repl),
+        );
+
+        // The write barrier must have dirtied the mock's card so a minor GC
+        // discovers and traces (preserves) the young replacement. Survival is
+        // observed via the forwarding map: without the barrier the Gen2 mock is
+        // not scanned, `repl` is unreachable, and it is reclaimed (absent from
+        // `forwarding`).
+        let (_stats, _remapped, forwarding) = unsafe {
+            vm.heap
+                .collect_garbage_generational(&[mock], CollectionLevel::Minor)
+        };
+        vm.tlab.invalidate();
+        assert!(
+            forwarding.contains_key(&repl),
+            "replace's write barrier must keep the young replacement alive across a minor GC"
+        );
+    }
 }
 
 impl RootHaver for Frame {
@@ -564,6 +719,20 @@ impl RootHaver for Frame {
 /// Other than that, pretty much everything is better in a stack VM, especially
 /// simplicity (we don't even need to figure out which registers to use and when
 /// to use them).
+/// BEP-058: how the dispatch hook should handle a call that matched an active
+/// mock.
+enum MockDispatch {
+    /// Run `replacement` in place of the original. `strip_self` drops the bound
+    /// receiver (first arg) first, for instance mocks whose replacement is
+    /// receiver-less.
+    Redirect {
+        replacement: Value,
+        strip_self: bool,
+    },
+    /// Pure spy: the original runs; the call was already counted.
+    Spy,
+}
+
 pub struct BexVm {
     /// Call stack.
     ///
@@ -662,6 +831,20 @@ pub struct BexVm {
     /// reflection methods. Shared `Arc` so spawned VMs (lambdas, futures)
     /// don't duplicate the map.
     pub interface_implementors: Arc<InterfaceImplementors>,
+
+    /// BEP-058 function mocking: per-VM (task-local) table of active mocks,
+    /// keyed by the mocked callable's identity. `baml.mock.scope` pushes/pops
+    /// entries; the `Call` dispatch hook probes it (gated on non-empty). Each
+    /// entry is a `HeapPtr` to an `Object::Mock`.
+    pub mock_table: std::collections::HashMap<bex_vm_types::FunctionKey, Vec<HeapPtr>>,
+
+    /// BEP-058 recursion guard: mocks whose replacement is currently running,
+    /// paired with the frame depth at which each became active. While a mock's
+    /// replacement runs, the mock is suppressed, so a re-entrant call to the
+    /// same target dispatches one step down the chain (next mock, else the
+    /// original) instead of re-triggering the same replacement. Entries are
+    /// pruned when their frame returns.
+    pub mock_suppress: Vec<(HeapPtr, usize)>,
 }
 
 /// VM execution state.
@@ -938,6 +1121,7 @@ fn value_type_tag(value: Value) -> i64 {
                 Object::Collector(_) => type_tags::COLLECTOR,
                 Object::Type(_) => type_tags::TYPE,
                 Object::Class(_) => type_tags::UNKNOWN,
+                Object::Mock(_) => type_tags::UNKNOWN,
                 #[cfg(feature = "heap_debug")]
                 Object::Sentinel(_) => type_tags::UNKNOWN,
                 Object::Instance(instance) => {
@@ -1066,6 +1250,8 @@ impl BexVm {
             argv,
             pending_call_type_args: Vec::new(),
             interface_implementors,
+            mock_table: std::collections::HashMap::new(),
+            mock_suppress: Vec::new(),
         }
     }
 
@@ -2623,6 +2809,100 @@ impl BexVm {
             {
                 self.interrupt_frame = None;
             }
+        }
+    }
+
+    /// BEP-058: resolve a call against the active-mock table.
+    ///
+    /// Walks every active, non-suppressed mock on the called target, most
+    /// specific key first (a generic specialization, then an instance mock on
+    /// the receiver, then a free/class mock on the name) and top of each key's
+    /// stack first. Each mock the walk reaches observes the call (its
+    /// `call_count` is bumped). The first mock with a replacement claims the
+    /// call and is redirected to; a pure spy is transparent — it is counted and
+    /// the walk continues one step down. Suppressed mocks (whose replacement is
+    /// currently running) are skipped, so a re-entrant call resolves one step
+    /// down (recursion guard / super delegation). If only spies match, the
+    /// original runs (the last spy is returned so the caller knows the call was
+    /// observed). `strip_self` is set for instance mocks, whose replacements are
+    /// receiver-less, so the bound receiver is dropped before the redirect.
+    fn mock_dispatch(
+        &self,
+        callee_ptr: HeapPtr,
+        receiver: Option<HeapPtr>,
+        type_args: &[baml_type::Ty],
+    ) -> Option<(MockDispatch, HeapPtr)> {
+        let name = match self.get_object(callee_ptr) {
+            Object::Function(f) => f.name.clone(),
+            _ => return None,
+        };
+        // Candidate keys, most specific first. `strip_self` marks instance keys.
+        let mut candidates: Vec<(bex_vm_types::FunctionKey, bool)> = Vec::with_capacity(3);
+        if !type_args.is_empty() {
+            candidates.push((
+                bex_vm_types::FunctionKey::Generic(name.clone(), type_args.to_vec()),
+                false,
+            ));
+        }
+        if let Some(recv) = receiver {
+            candidates.push((
+                bex_vm_types::FunctionKey::Instance(recv, name.clone()),
+                true,
+            ));
+        }
+        candidates.push((bex_vm_types::FunctionKey::Free(name), false));
+
+        let mut spy: Option<HeapPtr> = None;
+        let mut seen: Vec<HeapPtr> = Vec::new();
+        for (key, strip_self) in &candidates {
+            let Some(stack) = self.mock_table.get(key) else {
+                continue;
+            };
+            for mock_ptr in stack.iter().rev().copied() {
+                if self.mock_suppress.iter().any(|(s, _)| *s == mock_ptr) {
+                    continue;
+                }
+                // A mock nested inside its own scope appears twice in the stack;
+                // it must observe the call only once.
+                if seen.contains(&mock_ptr) {
+                    continue;
+                }
+                seen.push(mock_ptr);
+                let Object::Mock(mock) = self.get_object(mock_ptr) else {
+                    continue;
+                };
+                mock.increment_call_count();
+                let replacement = mock.replacement();
+                if replacement.as_object_ptr().is_some() {
+                    return Some((
+                        MockDispatch::Redirect {
+                            replacement,
+                            strip_self: *strip_self,
+                        },
+                        mock_ptr,
+                    ));
+                }
+                // Pure spy: counted, but transparent — keep delegating down.
+                spy = Some(mock_ptr);
+            }
+        }
+        spy.map(|p| (MockDispatch::Spy, p))
+    }
+
+    /// BEP-058: for an indirect (value) call, resolve the callee value's
+    /// underlying function identity — the `Object::Function` pointer whose name
+    /// keys the mock table, plus any baked-in generic type arguments. Returns
+    /// `None` for callees with no stable function identity (e.g. a host
+    /// closure). The returned pointer is suitable to pass to `mock_dispatch`.
+    fn mock_value_identity(&self, callee_ptr: HeapPtr) -> Option<(HeapPtr, Vec<baml_type::Ty>)> {
+        match self.get_object(callee_ptr) {
+            Object::Function(_) => Some((callee_ptr, Vec::new())),
+            Object::Closure(c) => Some((c.function, Vec::new())),
+            Object::GenericFunction(gf) => {
+                let inner = self.globals.get(self.proof(), gf.function);
+                Some((inner.as_object_ptr()?, gf.type_args.to_vec()))
+            }
+            _ => None,
         }
     }
 
@@ -4184,25 +4464,33 @@ impl BexVm {
                     let idx = { read_u32_unchecked(code, pc) as usize };
                     let top = self.stack.ensure_pop();
                     let obj_ptr = self.as_object_ptr(top, ObjectType::Instance)?;
-                    let load_result = {
-                        let Object::Instance(instance) = self.get_object(obj_ptr) else {
-                            return Err(VmInternalError::TypeError {
-                                expected: ObjectType::Instance.into(),
-                                got: ObjectType::of(self.get_object(obj_ptr)).into(),
-                            }
-                            .into());
+                    // BEP-058: a `Mock` exposes its `call_count` field (the only
+                    // field) backed by the heap object's atomic counter.
+                    if let Object::Mock(mock) = self.get_object(obj_ptr) {
+                        let count = mock.call_count();
+                        self.stack
+                            .push(Value::try_int(count).unwrap_or(Value::NULL));
+                    } else {
+                        let load_result = {
+                            let Object::Instance(instance) = self.get_object(obj_ptr) else {
+                                return Err(VmInternalError::TypeError {
+                                    expected: ObjectType::Instance.into(),
+                                    got: ObjectType::of(self.get_object(obj_ptr)).into(),
+                                }
+                                .into());
+                            };
+                            instance
+                                .try_load_field(idx)
+                                .ok_or_else(|| instance.field_len())
                         };
-                        instance
-                            .try_load_field(idx)
-                            .ok_or_else(|| instance.field_len())
-                    };
-                    let value = match load_result {
-                        Ok(value) => value,
-                        Err(length) => {
-                            return Err(self.invalid_field_access_error(idx, length));
-                        }
-                    };
-                    self.stack.push(value);
+                        let value = match load_result {
+                            Ok(value) => value,
+                            Err(length) => {
+                                return Err(self.invalid_field_access_error(idx, length));
+                            }
+                        };
+                        self.stack.push(value);
+                    }
                 }
 
                 OpCode::StoreField => {
@@ -4641,7 +4929,8 @@ impl BexVm {
                     let ntypeargs = read_u16_unchecked(code, pc) as usize;
                     let callee_global = bex_vm_types::GlobalIndex::from_raw(raw as usize);
                     let callee_value = self.globals.get(self.proof(), callee_global);
-                    let (callee_ptr, arg_count) = self.resolve_callable_target(callee_value)?;
+                    let (mut callee_ptr, mut arg_count) =
+                        self.resolve_callable_target(callee_value)?;
 
                     // Pop `ntypeargs` Object::Type values from the stack into a Vec<Ty>.
                     // These sit below the regular value args on the stack.
@@ -4668,6 +4957,46 @@ impl BexVm {
                     } else {
                         vec![]
                     };
+
+                    // BEP-058 mock dispatch: if this callee is mocked, count the
+                    // call and (if a replacement is set) redirect to it. Gated on
+                    // a non-empty table so unmocked workloads pay only one branch.
+                    // Runs after type_args are collected so generic-specialization
+                    // keys can match on them, and with the value args on top so the
+                    // receiver (a method's first arg) is reachable.
+                    if !self.mock_table.is_empty() {
+                        // Drop suppression entries whose replacement frame has
+                        // already returned (we are back at or above its depth).
+                        let depth = self.frames.len();
+                        self.mock_suppress.retain(|(_, d)| depth > *d);
+
+                        let receiver = (arg_count > 0)
+                            .then(|| self.stack[StackIndex::from_raw(self.stack.len() - arg_count)])
+                            .and_then(|v| v.as_object_ptr());
+                        if let Some((
+                            MockDispatch::Redirect {
+                                replacement,
+                                strip_self,
+                            },
+                            mock_ptr,
+                        )) = self.mock_dispatch(callee_ptr, receiver, &type_args)
+                        {
+                            let (repl_ptr, repl_arity) =
+                                self.resolve_callable_target(replacement)?;
+                            // Bound replacements (instance mocks) take no `self`;
+                            // drop the receiver slot before invoking them.
+                            if strip_self && arg_count > 0 {
+                                let self_slot = self.stack.len() - arg_count;
+                                self.stack.remove(self_slot);
+                            }
+                            callee_ptr = repl_ptr;
+                            arg_count = repl_arity;
+                            // Suppress this mock while its replacement runs so a
+                            // re-entrant call to the same target resolves one step
+                            // down (recursion guard / super delegation).
+                            self.mock_suppress.push((mock_ptr, depth));
+                        }
+                    }
 
                     let args_offset = self
                         .stack
@@ -4763,32 +5092,111 @@ impl BexVm {
                         );
                         let visible_arity = full_arity.saturating_sub(1);
                         let receiver = bm.receiver;
+                        let bm_function = bm.function;
                         let _popped = self.stack.ensure_pop();
-                        let args_offset = self
-                            .stack
-                            .len()
-                            .checked_sub(visible_arity)
-                            .ok_or(VmInternalError::NotEnoughItemsOnStack(visible_arity))?;
-                        self.stack.insert(args_offset, receiver);
-                        let locals_offset = StackIndex::from_raw(args_offset);
-                        // Pass the BoundMethod pointer (not its inner function) so
-                        // `execute_call_from_locals_offset` seeds the receiver's
-                        // `class_type_args` into the new frame — generic instance
-                        // methods invoked through a bound-method value would
-                        // otherwise start with an empty class-type-arg prefix. The
-                        // receiver is already on the stack, and the helper resolves
-                        // the inner function itself without re-inserting it.
+
+                        // BEP-058 mock dispatch for an indirect call through a
+                        // bound-method value (e.g. a method reference stored in a
+                        // variable or array element). Probes the receiver's
+                        // instance mock then the class-wide mock, mirroring a
+                        // direct method call.
+                        let redirect = if !self.mock_table.is_empty() {
+                            let depth = self.frames.len();
+                            self.mock_suppress.retain(|(_, d)| depth > *d);
+                            match self.mock_dispatch(bm_function, receiver.as_object_ptr(), &[]) {
+                                Some((
+                                    MockDispatch::Redirect {
+                                        replacement,
+                                        strip_self,
+                                    },
+                                    mock_ptr,
+                                )) => {
+                                    self.mock_suppress.push((mock_ptr, depth));
+                                    Some((replacement, strip_self))
+                                }
+                                // Spy or no match: run the original (already counted).
+                                _ => None,
+                            }
+                        } else {
+                            None
+                        };
+
+                        let (call_callee, call_arity, locals_offset) =
+                            if let Some((replacement, strip_self)) = redirect {
+                                let (repl_ptr, repl_arity) =
+                                    self.resolve_callable_target(replacement)?;
+                                if strip_self {
+                                    // Receiver-less replacement (instance mock): leave
+                                    // the visible args in place, no `self` slot.
+                                    let off = self.stack.len().checked_sub(repl_arity).ok_or(
+                                        VmInternalError::NotEnoughItemsOnStack(repl_arity),
+                                    )?;
+                                    (repl_ptr, repl_arity, StackIndex::from_raw(off))
+                                } else {
+                                    // Class-wide replacement keeps `self`: insert the
+                                    // receiver like the original call.
+                                    let off = self.stack.len().checked_sub(visible_arity).ok_or(
+                                        VmInternalError::NotEnoughItemsOnStack(visible_arity),
+                                    )?;
+                                    self.stack.insert(off, receiver);
+                                    (repl_ptr, repl_arity, StackIndex::from_raw(off))
+                                }
+                            } else {
+                                // No mock: the original bound-method call. Insert the
+                                // receiver and pass the BoundMethod pointer (not its
+                                // inner function) so `execute_call_from_locals_offset`
+                                // seeds the receiver's `class_type_args` into the new
+                                // frame — generic instance methods invoked through a
+                                // bound-method value would otherwise start with an
+                                // empty class-type-arg prefix.
+                                let off =
+                                    self.stack.len().checked_sub(visible_arity).ok_or(
+                                        VmInternalError::NotEnoughItemsOnStack(visible_arity),
+                                    )?;
+                                self.stack.insert(off, receiver);
+                                (callee_ptr, full_arity, StackIndex::from_raw(off))
+                            };
+
                         if let Some(state) = self.execute_call_from_locals_offset(
-                            callee_ptr,
+                            call_callee,
                             locals_offset,
-                            full_arity,
+                            call_arity,
                             frame_idx,
                             function,
                         )? {
                             return Ok(Some(state));
                         }
                     } else {
-                        let (callee_ptr, arg_count) = self.resolve_callable_target(callee_value)?;
+                        let (mut callee_ptr, mut arg_count) =
+                            self.resolve_callable_target(callee_value)?;
+
+                        // BEP-058 mock dispatch for indirect (value) calls to a
+                        // free callable (function / lambda / generic value). The
+                        // callee value is still on the stack top; its args sit
+                        // below it, and there is no bound receiver here (bound
+                        // methods take the dedicated branch above), so we probe
+                        // with `receiver = None`.
+                        if !self.mock_table.is_empty() {
+                            let depth = self.frames.len();
+                            self.mock_suppress.retain(|(_, d)| depth > *d);
+                            if let Some((ident_ptr, type_args)) =
+                                self.mock_value_identity(callee_ptr)
+                                && let Some((
+                                    MockDispatch::Redirect {
+                                        replacement,
+                                        strip_self: _,
+                                    },
+                                    mock_ptr,
+                                )) = self.mock_dispatch(ident_ptr, None, &type_args)
+                            {
+                                let (repl_ptr, repl_arity) =
+                                    self.resolve_callable_target(replacement)?;
+                                callee_ptr = repl_ptr;
+                                arg_count = repl_arity;
+                                self.mock_suppress.push((mock_ptr, depth));
+                            }
+                        }
+
                         let args_offset = self
                             .stack
                             .len()
@@ -6067,6 +6475,19 @@ impl ::bex_vm_types::RootHaver for BexVm {
 
         // Note: Frame locals are stored in the stack at the locals_offset position,
         // so they're already included in the stack iteration above.
+
+        // BEP-058 active mocks: the dispatch tables hold raw pointers to live
+        // `Object::Mock`s, and `FunctionKey::Instance` keys embed a receiver
+        // pointer. Root all of them so a mock (or its receiver) relocated while
+        // a scope is open survives the collection and is forwarded — otherwise
+        // the next dispatch reads a stale pointer (use-after-move).
+        for (key, mocks) in &self.mock_table {
+            if let bex_vm_types::FunctionKey::Instance(receiver, _) = key {
+                roots.push(*receiver);
+            }
+            roots.extend(mocks.iter().copied());
+        }
+        roots.extend(self.mock_suppress.iter().map(|(ptr, _)| *ptr));
     }
 
     fn forward_roots(&mut self, roots: &HashMap<HeapPtr, HeapPtr>) {
@@ -6092,6 +6513,34 @@ impl ::bex_vm_types::RootHaver for BexVm {
         // Frame function pointers (needed once closures are heap-allocated)
         for frame in &mut self.frames {
             frame.forward_roots(roots);
+        }
+
+        // BEP-058 active mocks: forward the suppressed-mock pointers in place,
+        // and rebuild the mock table so both the mock pointers (values) and the
+        // receiver pointers embedded in `FunctionKey::Instance` keys are
+        // forwarded. The keys are address-hashed, so a moved receiver must be
+        // re-inserted under its new key (the Mock object's own `function_key`
+        // is fixed up in lockstep by the GC, keeping the two consistent).
+        for (ptr, _) in &mut self.mock_suppress {
+            if let Some(&new_ptr) = roots.get(ptr) {
+                *ptr = new_ptr;
+            }
+        }
+        if !self.mock_table.is_empty() {
+            let old_table = std::mem::take(&mut self.mock_table);
+            for (mut key, mut mocks) in old_table {
+                if let bex_vm_types::FunctionKey::Instance(receiver, _) = &mut key {
+                    if let Some(&new_ptr) = roots.get(receiver) {
+                        *receiver = new_ptr;
+                    }
+                }
+                for ptr in &mut mocks {
+                    if let Some(&new_ptr) = roots.get(ptr) {
+                        *ptr = new_ptr;
+                    }
+                }
+                self.mock_table.insert(key, mocks);
+            }
         }
     }
 }

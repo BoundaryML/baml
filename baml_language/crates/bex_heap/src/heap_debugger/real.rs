@@ -361,6 +361,12 @@ impl BexHeap {
             Object::Cell(cell) => {
                 self.debug_assert_valid_value(&cell.load());
             }
+            Object::Mock(mock) => {
+                self.debug_assert_valid_value(&mock.replacement());
+                if let bex_vm_types::FunctionKey::Instance(receiver, _) = &mock.function_key {
+                    self.debug_assert_valid_index(*receiver);
+                }
+            }
             Object::Function(_)
             | Object::GenericFunction(_)
             | Object::Class(_)

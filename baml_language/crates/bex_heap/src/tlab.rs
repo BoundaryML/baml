@@ -238,6 +238,12 @@ impl Tlab {
         self.alloc(Object::BoundMethod(method))
     }
 
+    /// Allocate a mock object on the heap (BEP-058).
+    #[inline]
+    pub fn alloc_mock(&mut self, mock: bex_vm_types::Mock) -> HeapPtr {
+        self.alloc(Object::Mock(Box::new(mock)))
+    }
+
     /// Get a new chunk from the heap (cold path).
     #[cold]
     fn refill(&mut self) {
