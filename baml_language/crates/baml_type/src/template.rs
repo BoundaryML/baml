@@ -34,9 +34,7 @@ pub enum TyTemplate {
     TypeArgRef(u32),
     /// `T[]`
     Array(Box<TyTemplate>),
-    /// `T?`
-    Optional(Box<TyTemplate>),
-    /// `T1 | T2 | ...`
+    /// `T1 | T2 | ...` (a member being `Concrete(null)` encodes optionality)
     Union(Vec<TyTemplate>),
     /// `map<K, V>`
     Map(Box<TyTemplate>, Box<TyTemplate>),
@@ -71,7 +69,6 @@ impl TyTemplate {
                 .cloned()
                 .unwrap_or_else(Ty::unknown),
             Self::Array(inner) => Ty::list(inner.substitute(type_args)),
-            Self::Optional(inner) => Ty::optional(inner.substitute(type_args)),
             Self::Union(parts) => Ty::union(parts.iter().map(|p| p.substitute(type_args))),
             Self::Map(k, v) => Ty::Map {
                 key: Box::new(k.substitute(type_args)),
@@ -106,7 +103,7 @@ impl TyTemplate {
         match self {
             Self::Concrete(_) => true,
             Self::TypeArgRef(_) => false,
-            Self::Array(inner) | Self::Optional(inner) => inner.is_fully_concrete(),
+            Self::Array(inner) => inner.is_fully_concrete(),
             Self::Union(parts) => parts.iter().all(TyTemplate::is_fully_concrete),
             Self::Map(k, v) => k.is_fully_concrete() && v.is_fully_concrete(),
             Self::Class(_, args) => args.iter().all(TyTemplate::is_fully_concrete),
@@ -128,9 +125,22 @@ impl fmt::Display for TyTemplate {
             Self::Concrete(ty) => write!(f, "{ty}"),
             Self::TypeArgRef(n) => write!(f, "#{n}"),
             Self::Array(inner) => write!(f, "{inner}[]"),
-            Self::Optional(inner) => write!(f, "{inner}?"),
             Self::Union(parts) => {
-                let strs: Vec<String> = parts.iter().map(ToString::to_string).collect();
+                // `?` is sugar that exists only in source/lowering; after that a
+                // nullable type is a plain union. Concrete function members are
+                // parenthesized so a nullable callback stays unambiguous.
+                let strs: Vec<String> = parts
+                    .iter()
+                    .map(|p| {
+                        let rendered = p.to_string();
+                        if matches!(p, TyTemplate::Concrete(ty) if matches!(ty, Ty::Function { .. }))
+                        {
+                            format!("({rendered})")
+                        } else {
+                            rendered
+                        }
+                    })
+                    .collect();
                 write!(f, "{}", strs.join(" | "))
             }
             Self::Map(k, v) => write!(f, "map<{k}, {v}>"),
@@ -206,8 +216,11 @@ mod tests {
 
     #[test]
     fn optional_of_type_arg_ref() {
-        // Optional(TypeArgRef(0)) with type_args=[string] → string?
-        let tmpl = TyTemplate::Optional(Box::new(TyTemplate::TypeArgRef(0)));
+        // (TypeArgRef(0) | null) with type_args=[string] → string?
+        let tmpl = TyTemplate::Union(vec![
+            TyTemplate::TypeArgRef(0),
+            TyTemplate::Concrete(Ty::null()),
+        ]);
         let ty = tmpl.substitute(&[Ty::string()]);
         assert_eq!(ty, Ty::optional(Ty::string()));
         assert!(!tmpl.is_fully_concrete());

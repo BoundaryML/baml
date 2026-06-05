@@ -210,33 +210,33 @@ function user.ChainExprs(user: user.ChainUser, items: user.ChainItem[], m: map<s
   !! 6513..6516: type `string` has no member `len`
 }
 class user.ChainUser$stream {
-  name: null | string
-  profile: null | user.ChainProfile$stream
+  name: string | null
+  profile: user.ChainProfile$stream | null
   tags: string[]
   scores: int[][]
 }
 class user.ChainProfile$stream {
-  bio: null | string
-  settings: null | user.ChainSettings$stream
+  bio: string | null
+  settings: user.ChainSettings$stream | null
   items: user.ChainItem$stream[]
 }
 class user.ChainSettings$stream {
-  theme: null | string
-  notifications: null | bool
-  preferences: null | user.ChainPreferences$stream
+  theme: string | null
+  notifications: bool | null
+  preferences: user.ChainPreferences$stream | null
 }
 class user.ChainPreferences$stream {
-  color: null | string
-  font: null | string
-  size: null | int
+  color: string | null
+  font: string | null
+  size: int | null
 }
 class user.ChainItem$stream {
-  label: null | string
-  value: null | int
-  metadata: null | user.ChainMetadata$stream
+  label: string | null
+  value: int | null
+  metadata: user.ChainMetadata$stream | null
 }
 class user.ChainMetadata$stream {
-  created_at: null | string
+  created_at: string | null
   tags: string[]
 }
 class user.EmptyClass {
@@ -288,10 +288,10 @@ function user.SingleAttrField.from_json(j: baml.json.json) -> user.SingleAttrFie
 }
 class user.MultiAttrField {
   name: string @description("The user's name") @alias("user_name")
-  summary: string? @description("A summary") @alias("sum")
+  summary: string | null @description("A summary") @alias("sum")
 }
 function user.MultiAttrField.to_json(self: user.MultiAttrField) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  map { "name": self.name.to_json(), "summary": self.summary?.to_json() } : map<string, baml.json.json | baml.json.json?>
+  map { "name": self.name.to_json(), "summary": self.summary?.to_json() } : map<string, baml.json.json | null>
 }
 function user.MultiAttrField.from_json(j: baml.json.json) -> user.MultiAttrField throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   MultiAttrField { name: baml.json.from_json<string>(baml.json.field(j, "name")), summary: baml.json.from_json<string?>(baml.json.field(j, "summary")) } : user.MultiAttrField
@@ -311,7 +311,7 @@ class user.LongFieldTypes {
   very_long_field_name_that_takes_up_space: int | string | bool | float | null | int[] | string[]
   another_long_field: map<string, map<string, map<string, int | string | bool | float | null>>>
   callback_field: (first_param: int, second_param: string, third_param: bool) -> map<string, int> throws never
-  deeply_nested: (int | string | bool | float | null)[]?
+  deeply_nested: (int | string | bool | float | null)[] | null
 }
 function user.LongFieldTypes.to_json(self: user.LongFieldTypes) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
   baml.json.parse(baml.json.to_string<LongFieldTypes>(self)) : baml.json.json
@@ -321,11 +321,11 @@ function user.LongFieldTypes.from_json(j: baml.json.json) -> user.LongFieldTypes
 }
 class user.TypeVariety {
   simple: string
-  optional: string?
+  optional: string | null
   array: int[]
   nested_array: int[][]
   union_type: int | string
-  optional_union: (int | string)?
+  optional_union: int | string | null
   union_array: (int | string)[]
   generic: map<string, int>
   complex_generic: map<string, int | string | bool>
@@ -493,11 +493,11 @@ function user.ManyFields.from_json(j: baml.json.json) -> user.ManyFields throws 
 class user.Outer {
   inner: user.InnerNested
   list: user.InnerNested[]
-  optional: user.InnerNested?
+  optional: user.InnerNested | null
   mapping: map<string, user.InnerNested>
 }
 function user.Outer.to_json(self: user.Outer) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  map { "inner": self.inner.to_json(), "list": self.list.to_json(), "optional": self.optional?.to_json(), "mapping": self.mapping.to_json() } : map<string, baml.json.json | baml.json.json?>
+  map { "inner": self.inner.to_json(), "list": self.list.to_json(), "optional": self.optional?.to_json(), "mapping": self.mapping.to_json() } : map<string, baml.json.json | null>
 }
 function user.Outer.from_json(j: baml.json.json) -> user.Outer throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   Outer { inner: baml.json.from_json<InnerNested>(baml.json.field(j, "inner")), list: baml.json.from_json<InnerNested[]>(baml.json.field(j, "list")), optional: baml.json.from_json<InnerNested?>(baml.json.field(j, "optional")), mapping: baml.json.from_json<map<string, InnerNested>>(baml.json.field(j, "mapping")) } : user.Outer
@@ -564,7 +564,7 @@ class user.DeepLevel2 {
   value: int | string | bool | float | null
 }
 function user.DeepLevel2.to_json(self: user.DeepLevel2) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  map { "level3": self.level3.to_json(), "value": self.value?.to_json() } : map<string, baml.json.json | baml.json.json?>
+  map { "level3": self.level3.to_json(), "value": self.value?.to_json() } : map<string, baml.json.json | null>
 }
 function user.DeepLevel2.from_json(j: baml.json.json) -> user.DeepLevel2 throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   DeepLevel2 { level3: baml.json.from_json<DeepLevel3>(baml.json.field(j, "level3")), value: baml.json.from_json<int | string | bool | float | null>(baml.json.field(j, "value")) } : user.DeepLevel2
@@ -682,26 +682,26 @@ function user.SemicolonTrivia.from_json(j: baml.json.json) -> user.SemicolonTriv
 class user.EmptyClass$stream {
 }
 class user.SingleField$stream {
-  name: null | string
+  name: string | null
 }
 class user.MultiField$stream {
-  name: null | string
-  age: null | int
-  active: null | bool
+  name: string | null
+  age: int | null
+  active: bool | null
 }
 class user.ColonFields$stream {
-  name: null | string
-  age: null | int
+  name: string | null
+  age: int | null
 }
 class user.SingleAttrField$stream {
-  name: null | string @description("The user's name")
+  name: string | null @description("The user's name")
 }
 class user.MultiAttrField$stream {
-  name: null | string @description("The user's name") @alias("user_name")
-  summary: string? @description("A summary") @alias("sum")
+  name: string | null @description("The user's name") @alias("user_name")
+  summary: string | null @description("A summary") @alias("sum")
 }
 class user.LongAttrField$stream {
-  name: null | string @description("This is an extremely long description attribute value that should push the field definition well past the default line width limit of one hundred columns")
+  name: string | null @description("This is an extremely long description attribute value that should push the field definition well past the default line width limit of one hundred columns")
   data: map<string, int | string | bool> @description("complex data") @alias("payload")
   config: map<string, map<string, int | string | bool | null>> @description("deeply nested config structure for testing wrapping")
 }
@@ -709,15 +709,15 @@ class user.LongFieldTypes$stream {
   very_long_field_name_that_takes_up_space: int | string | bool | float | null | int[] | string[]
   another_long_field: map<string, map<string, map<string, int | string | bool | float | null>>>
   callback_field: unknown
-  deeply_nested: null | (int | string | bool | float | null)[]
+  deeply_nested: (int | string | bool | float | null)[] | null
 }
 class user.TypeVariety$stream {
-  simple: null | string
-  optional: null | string
+  simple: string | null
+  optional: string | null
   array: int[]
   nested_array: int[][]
-  union_type: null | int | string
-  optional_union: null | int | string
+  union_type: int | string | null
+  optional_union: int | string | null
   union_array: (int | string)[]
   generic: map<string, int>
   complex_generic: map<string, int | string | bool>
@@ -727,22 +727,22 @@ class user.TypeVariety$stream {
   triple_nested: map<string, map<string, map<string, int>>>
 }
 class user.DynamicClass$stream {
-  name: null | string
+  name: string | null
 }
 class user.MultiBlockAttr$stream {
-  name: null | string
+  name: string | null
 }
 class user.TriviaClass$stream {
-  name: null | string
+  name: string | null
 }
 class user.TriviaClassBlock$stream {
-  name: null | string
+  name: string | null
 }
 class user.TriviaFieldAttrs$stream {
-  name: null | string @description("the name")
+  name: string | null @description("the name")
 }
 class user.TriviaFieldAttrsBlock$stream {
-  name: null | string @description("the name")
+  name: string | null @description("the name")
 }
 class user.TriviaLongFieldType$stream {
   data: map<string, int | string | bool | float | null> @description("a long description")
@@ -757,106 +757,106 @@ class user.TriviaMultiAttrBlock$stream {
   name: string @description("name") @alias("user_name")
 }
 class user.A$stream {
-  x: null | int
+  x: int | null
 }
 class user.ThisIsAnExtremelyLongClassNameThatDefinitelyExceedsTheOneHundredCharacterLineLimitAllByItself$stream {
-  x: null | int
+  x: int | null
 }
 class user.AttributeVariety$stream {
-  a: null | string @skip
-  b: null | string @alias("alt_name")
-  c: null | string @description("desc")
+  a: string | null @skip
+  b: string | null @alias("alt_name")
+  c: string | null @description("desc")
   d: string
-  e: null | string
-  f: null | string
+  e: string | null
+  f: string | null
 }
 class user.ExtraWhitespace$stream {
-  name: null | string @description("name") @alias("n")
-  age: null | int
+  name: string | null @description("name") @alias("n")
+  age: int | null
 }
 class user.ManyFields$stream {
-  field1: null | int
-  field2: null | int
-  field3: null | int
-  field4: null | int
-  field5: null | int
-  field6: null | int
-  field7: null | int
-  field8: null | int
-  field9: null | int
-  field10: null | int
+  field1: int | null
+  field2: int | null
+  field3: int | null
+  field4: int | null
+  field5: int | null
+  field6: int | null
+  field7: int | null
+  field8: int | null
+  field9: int | null
+  field10: int | null
 }
 class user.Outer$stream {
-  inner: null | user.InnerNested$stream
+  inner: user.InnerNested$stream | null
   list: user.InnerNested$stream[]
-  optional: null | user.InnerNested$stream
+  optional: user.InnerNested$stream | null
   mapping: map<string, user.InnerNested$stream>
 }
 class user.InnerNested$stream {
-  value: null | int
+  value: int | null
 }
 class user.WithMethod$stream {
-  name: null | string
+  name: string | null
 }
 class user.WithLongMethod$stream {
-  name: null | string
+  name: string | null
 }
 class user.DeepOuter$stream {
-  level1: null | user.DeepLevel1$stream
+  level1: user.DeepLevel1$stream | null
 }
 class user.DeepLevel1$stream {
-  level2: null | user.DeepLevel2$stream
+  level2: user.DeepLevel2$stream | null
   items: user.DeepLevel2$stream[]
   mapping: map<string, user.DeepLevel2$stream>
 }
 class user.DeepLevel2$stream {
-  level3: null | user.DeepLevel3$stream
+  level3: user.DeepLevel3$stream | null
   value: int | string | bool | float | null
 }
 class user.DeepLevel3$stream {
-  data: null | string
+  data: string | null
   nested: map<string, map<string, int>>
 }
 class user.TrailingCommas$stream {
-  name: null | string
-  age: null | int
-  active: null | bool
+  name: string | null
+  age: int | null
+  active: bool | null
 }
 class user.TrailingSemicolons$stream {
-  name: null | string
-  age: null | int
-  active: null | bool
+  name: string | null
+  age: int | null
+  active: bool | null
 }
 class user.MixedDelimiters$stream {
-  a: null | string
-  b: null | int
-  c: null | bool
-  d: null | float
+  a: string | null
+  b: int | null
+  c: bool | null
+  d: float | null
 }
 class user.FieldsAndMethods$stream {
-  name: null | string
-  age: null | int
-  active: null | bool
+  name: string | null
+  age: int | null
+  active: bool | null
 }
 class user.SingleFieldComma$stream {
-  name: null | string
+  name: string | null
 }
 class user.SingleFieldSemicolon$stream {
-  name: null | string
+  name: string | null
 }
 class user.NoColonDelimiters$stream {
-  name: null | string
-  age: null | int
-  active: null | bool
+  name: string | null
+  age: int | null
+  active: bool | null
 }
 class user.AttrsWithDelimiters$stream {
-  name: null | string @description("name")
-  age: null | int @alias("user_age")
+  name: string | null @description("name")
+  age: int | null @alias("user_age")
   active: bool
 }
 class user.SemicolonTrivia$stream {
-  name: null | string
-  age: null | int
+  name: string | null
+  age: int | null
 }
 function user.BasicClient$new() -> ? throws never {
   baml.llm.PrimitiveClient { name: "BasicClient", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "gpt-4", base_url: null, allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: null, provider_options: null, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map {  } } } : baml.llm.PrimitiveClient
@@ -954,11 +954,11 @@ function user.CommaClient$new() -> ? throws never {
 function user.SameLineClient$new() -> ? throws never {
   baml.llm.PrimitiveClient { name: "SameLineClient", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "gpt-4", base_url: null, allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: null, provider_options: null, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map {  } } } : baml.llm.PrimitiveClient
 }
-function user.TestTarget$stream(client: baml.llm.Client = BasicClient) -> baml.llm.Stream<null | string, string> throws never {
-  baml.llm.stream_llm_function(client, "TestTarget", map {  }) : baml.llm.Stream<null | string, string>
+function user.TestTarget$stream(client: baml.llm.Client = BasicClient) -> baml.llm.Stream<string | null, string> throws never {
+  baml.llm.stream_llm_function(client, "TestTarget", map {  }) : baml.llm.Stream<string | null, string>
 }
-function user.TestTarget$parse_stream(sse: baml.http.SseStream, client: baml.llm.Client = BasicClient) -> baml.llm.Stream<null | string, string> throws never {
-  client.__make_stream(sse, "TestTarget") : baml.llm.Stream<null | string, string>
+function user.TestTarget$parse_stream(sse: baml.http.SseStream, client: baml.llm.Client = BasicClient) -> baml.llm.Stream<string | null, string> throws never {
+  client.__make_stream(sse, "TestTarget") : baml.llm.Stream<string | null, string>
 }
 enum user.Minimal
 enum user.TwoVariants
@@ -1367,42 +1367,42 @@ function user.NoColonComplexTypes(items: int[], mapping: map<string, int>) -> st
     "done" : "done"
   }
 }
-function user.LlmBasic$stream(name: string, client: baml.llm.Client = GPT4) -> baml.llm.Stream<null | string, string> throws never {
-  baml.llm.stream_llm_function(client, "LlmBasic", map { "name": name }) : baml.llm.Stream<null | string, string>
+function user.LlmBasic$stream(name: string, client: baml.llm.Client = GPT4) -> baml.llm.Stream<string | null, string> throws never {
+  baml.llm.stream_llm_function(client, "LlmBasic", map { "name": name }) : baml.llm.Stream<string | null, string>
   !! 11069..11203: unresolved name: GPT4
 }
-function user.LlmBasic$parse_stream(sse: baml.http.SseStream, client: baml.llm.Client = GPT4) -> baml.llm.Stream<null | string, string> throws never {
-  client.__make_stream(sse, "LlmBasic") : baml.llm.Stream<null | string, string>
+function user.LlmBasic$parse_stream(sse: baml.http.SseStream, client: baml.llm.Client = GPT4) -> baml.llm.Stream<string | null, string> throws never {
+  client.__make_stream(sse, "LlmBasic") : baml.llm.Stream<string | null, string>
   !! 11069..11203: unresolved name: GPT4
 }
-function user.LlmMultiLine$stream(text: string, client: baml.llm.Client = GPT4) -> baml.llm.Stream<null | string, string> throws never {
-  baml.llm.stream_llm_function(client, "LlmMultiLine", map { "text": text }) : baml.llm.Stream<null | string, string>
+function user.LlmMultiLine$stream(text: string, client: baml.llm.Client = GPT4) -> baml.llm.Stream<string | null, string> throws never {
+  baml.llm.stream_llm_function(client, "LlmMultiLine", map { "text": text }) : baml.llm.Stream<string | null, string>
   !! 11203..11428: unresolved name: GPT4
 }
-function user.LlmMultiLine$parse_stream(sse: baml.http.SseStream, client: baml.llm.Client = GPT4) -> baml.llm.Stream<null | string, string> throws never {
-  client.__make_stream(sse, "LlmMultiLine") : baml.llm.Stream<null | string, string>
+function user.LlmMultiLine$parse_stream(sse: baml.http.SseStream, client: baml.llm.Client = GPT4) -> baml.llm.Stream<string | null, string> throws never {
+  client.__make_stream(sse, "LlmMultiLine") : baml.llm.Stream<string | null, string>
   !! 11203..11428: unresolved name: GPT4
 }
-function user.LlmStringClient$stream(text: string, client: baml.llm.Client = ...) -> baml.llm.Stream<null | string, string> throws never {
-  baml.llm.stream_llm_function(client, "LlmStringClient", map { "text": text }) : baml.llm.Stream<null | string, string>
+function user.LlmStringClient$stream(text: string, client: baml.llm.Client = ...) -> baml.llm.Stream<string | null, string> throws never {
+  baml.llm.stream_llm_function(client, "LlmStringClient", map { "text": text }) : baml.llm.Stream<string | null, string>
 }
-function user.LlmStringClient$parse_stream(sse: baml.http.SseStream, client: baml.llm.Client = ...) -> baml.llm.Stream<null | string, string> throws never {
-  client.__make_stream(sse, "LlmStringClient") : baml.llm.Stream<null | string, string>
+function user.LlmStringClient$parse_stream(sse: baml.http.SseStream, client: baml.llm.Client = ...) -> baml.llm.Stream<string | null, string> throws never {
+  client.__make_stream(sse, "LlmStringClient") : baml.llm.Stream<string | null, string>
 }
-function user.LlmReversedOrder$stream(text: string, client: baml.llm.Client = GPT4) -> baml.llm.Stream<null | string, string> throws never {
-  baml.llm.stream_llm_function(client, "LlmReversedOrder", map { "text": text }) : baml.llm.Stream<null | string, string>
+function user.LlmReversedOrder$stream(text: string, client: baml.llm.Client = GPT4) -> baml.llm.Stream<string | null, string> throws never {
+  baml.llm.stream_llm_function(client, "LlmReversedOrder", map { "text": text }) : baml.llm.Stream<string | null, string>
   !! 11593..11763: unresolved name: GPT4
 }
-function user.LlmReversedOrder$parse_stream(sse: baml.http.SseStream, client: baml.llm.Client = GPT4) -> baml.llm.Stream<null | string, string> throws never {
-  client.__make_stream(sse, "LlmReversedOrder") : baml.llm.Stream<null | string, string>
+function user.LlmReversedOrder$parse_stream(sse: baml.http.SseStream, client: baml.llm.Client = GPT4) -> baml.llm.Stream<string | null, string> throws never {
+  client.__make_stream(sse, "LlmReversedOrder") : baml.llm.Stream<string | null, string>
   !! 11593..11763: unresolved name: GPT4
 }
-function user.LlmWithLongSignature$stream(first_context: string, second_context: string, third_context: string, user_query: string, client: baml.llm.Client = GPT4) -> baml.llm.Stream<null | string, string> throws never {
-  baml.llm.stream_llm_function(client, "LlmWithLongSignature", map { "first_context": first_context, "second_context": second_context, "third_context": third_context, "user_query": user_query }) : baml.llm.Stream<null | string, string>
+function user.LlmWithLongSignature$stream(first_context: string, second_context: string, third_context: string, user_query: string, client: baml.llm.Client = GPT4) -> baml.llm.Stream<string | null, string> throws never {
+  baml.llm.stream_llm_function(client, "LlmWithLongSignature", map { "first_context": first_context, "second_context": second_context, "third_context": third_context, "user_query": user_query }) : baml.llm.Stream<string | null, string>
   !! 11763..12099: unresolved name: GPT4
 }
-function user.LlmWithLongSignature$parse_stream(sse: baml.http.SseStream, client: baml.llm.Client = GPT4) -> baml.llm.Stream<null | string, string> throws never {
-  client.__make_stream(sse, "LlmWithLongSignature") : baml.llm.Stream<null | string, string>
+function user.LlmWithLongSignature$parse_stream(sse: baml.http.SseStream, client: baml.llm.Client = GPT4) -> baml.llm.Stream<string | null, string> throws never {
+  client.__make_stream(sse, "LlmWithLongSignature") : baml.llm.Stream<string | null, string>
   !! 11763..12099: unresolved name: GPT4
 }
 function user.MyFunction(a: int, b: int) -> int throws never {
@@ -2058,10 +2058,10 @@ function user.MatchExprs(x: int, s: user.MatchStatus, r: user.MatchResult, b: bo
   !! 11575..11739: type mismatch: expected string, got 0
 }
 class user.MatchSuccess$stream {
-  data: null | string
+  data: string | null
 }
 class user.MatchFailure$stream {
-  reason: null | string
+  reason: string | null
 }
 class user.ArrayPatternTriviaBox$stream {
   values: int[]
@@ -2205,17 +2205,17 @@ function user.OtherExprs(a: int, b: int) -> int throws never {
   }
 }
 class user.OtherPoint$stream {
-  x: null | int
-  y: null | int
+  x: int | null
+  y: int | null
 }
 class user.OtherVec$stream {
-  p: null | user.OtherPoint$stream
-  q: null | user.OtherPoint$stream
+  p: user.OtherPoint$stream | null
+  q: user.OtherPoint$stream | null
 }
 class user.OtherTriple$stream {
-  a: null | user.OtherVec$stream
-  b: null | user.OtherVec$stream
-  c: null | user.OtherVec$stream
+  a: user.OtherVec$stream | null
+  b: user.OtherVec$stream | null
+  c: user.OtherVec$stream | null
 }
 type user.SimpleAlias = int
 type user.AliasChain = user.SimpleAlias
@@ -2225,21 +2225,21 @@ type user.HttpOk = 200
 type user.AlwaysTrue = true
 type user.SuccessCode = 200 | 201 | 204
 type user.MixedLiterals = 200 | "success" | true
-type user.MaybeInt = int?
+type user.MaybeInt = int | null
 type user.IntList = int[]
 type user.Matrix = int[][]
 type user.StringMap = map<string, int>
 type user.ComplexMap = map<string, int | string | bool>
 type user.NestedMap = map<string, map<string, int[]>>
 type user.ParenUnion = (int | string)[]
-type user.OptionalUnion = (int | string)?
+type user.OptionalUnion = int | string | null
 type user.Json = int | float | string | bool | null | user.Json[] | map<string, user.Json>
 type user.IntToInt = (x: int) -> int throws never
 type user.BinaryOp = (a: int, b: int) -> int throws never
 type user.UnnamedParams = (int, int) -> int throws never
 type user.Producer = () -> string throws never
 type user.Curried = (x: int) -> ((y: int) -> int throws never) throws never
-type user.ComplexFn = (items: int[], lookup: map<string, int>) -> string? throws never
+type user.ComplexFn = (items: int[], lookup: map<string, int>) -> string | null throws never
 type user.UnionParamFn = (value: int | string) -> bool throws never
 type user.FnFactory = (config: string) -> ((int) -> int throws never) throws never
 type user.LongUnion = "alpha" | "bravo" | "charlie" | "delta" | "echo" | "foxtrot" | "golf" | "hotel" | "india" | "juliet" | "kilo" | "lima"
@@ -2250,14 +2250,14 @@ type user.DeepGeneric = map<string, map<string, map<string, map<string, int | st
 type user.DeepFnType = (x: int) -> ((y: int) -> ((z: int) -> ((w: int) -> map<string, int | string | bool> throws never) throws never) throws never) throws never
 type user.LongParamFn = (first_parameter: map<string, int>, second_parameter: (int | string)[], third_parameter: map<string, bool>) -> string throws never
 type user.NestedParenUnion = (int | string | bool | float)[]
-type user.DeepParenUnion = (int | string | bool | float | null | int[])[]?
+type user.DeepParenUnion = (int | string | bool | float | null | int[])[] | null
 type user.Tree = string | map<string, user.Tree> | user.Tree[] | map<string, map<string, user.Tree | string | int | null>>
-type user.OptionalArray = int?[]
-type user.ArrayOptional = int[]?
-type user.DoubleOptional = int??
+type user.OptionalArray = (int | null)[]
+type user.ArrayOptional = int[] | null
+type user.DoubleOptional = int | null
 type user.DoubleArray = int[][]
-type user.ComplexPostfix = (int | string)?[][]
-type user.DeepPostfix = (int | string | bool | float)?[][]?
+type user.ComplexPostfix = (int | string | null)[][]
+type user.DeepPostfix = (int | string | bool | float | null)[][] | null
 class user.TypeAliasSuccess {
   data: string
 }
@@ -2277,7 +2277,7 @@ function user.TypeAliasFailure.from_json(j: baml.json.json) -> user.TypeAliasFai
   TypeAliasFailure { reason: baml.json.from_json<string>(baml.json.field(j, "reason")) } : user.TypeAliasFailure
 }
 type user.Result = user.TypeAliasSuccess | user.TypeAliasFailure
-type user.MaybeResult = user.Result?
+type user.MaybeResult = user.Result | null
 type user.TriviaAlias = int
 type user.TriviaAliasBlock = int
 type user.TriviaUnion = int | string | bool
@@ -2290,7 +2290,7 @@ type user.TriviaDeepGeneric = map<string, map<string, map<string, int | string>>
 type user.TriviaFnType = (x: int) -> string throws never
 type user.TriviaFnTypeBlock = (x: int) -> string throws never
 type user.TriviaLongFnType = (first_parameter: map<string, int>, second_parameter: (int | string)[], third_parameter: map<string, bool>) -> string throws never
-type user.TriviaOptional = int?
+type user.TriviaOptional = int | null
 type user.TriviaArray = int[]
 type user.TriviaParen = (int | string)[]
 type user.T = int
@@ -2303,14 +2303,14 @@ type user.HttpOk$stream = 200
 type user.AlwaysTrue$stream = true
 type user.SuccessCode$stream = 200 | 201 | 204
 type user.MixedLiterals$stream = 200 | "success" | true
-type user.MaybeInt$stream = null | int
+type user.MaybeInt$stream = int | null
 type user.IntList$stream = int[]
 type user.Matrix$stream = int[][]
 type user.StringMap$stream = map<string, int>
 type user.ComplexMap$stream = map<string, int | string | bool>
 type user.NestedMap$stream = map<string, map<string, int[]>>
 type user.ParenUnion$stream = (int | string)[]
-type user.OptionalUnion$stream = null | int | string
+type user.OptionalUnion$stream = int | string | null
 type user.Json$stream = int | float | string | bool | null | user.Json$stream[] | map<string, user.Json$stream>
 type user.IntToInt$stream = unknown
 type user.BinaryOp$stream = unknown
@@ -2328,22 +2328,22 @@ type user.DeepGeneric$stream = map<string, map<string, map<string, map<string, i
 type user.DeepFnType$stream = unknown
 type user.LongParamFn$stream = unknown
 type user.NestedParenUnion$stream = (int | string | bool | float)[]
-type user.DeepParenUnion$stream = null | (int | string | bool | float | null | int[])[]
+type user.DeepParenUnion$stream = (int | string | bool | float | null | int[])[] | null
 type user.Tree$stream = string | map<string, user.Tree$stream> | user.Tree$stream[] | map<string, map<string, user.Tree$stream | string | int | null>>
-type user.OptionalArray$stream = (null | int)[]
-type user.ArrayOptional$stream = null | int[]
-type user.DoubleOptional$stream = null | null | int
+type user.OptionalArray$stream = (int | null)[]
+type user.ArrayOptional$stream = int[] | null
+type user.DoubleOptional$stream = int | null | null
 type user.DoubleArray$stream = int[][]
-type user.ComplexPostfix$stream = (null | int | string)[][]
-type user.DeepPostfix$stream = null | (null | int | string | bool | float)[][]
+type user.ComplexPostfix$stream = (int | string | null)[][]
+type user.DeepPostfix$stream = (int | string | bool | float | null)[][] | null
 class user.TypeAliasSuccess$stream {
-  data: null | string
+  data: string | null
 }
 class user.TypeAliasFailure$stream {
-  reason: null | string
+  reason: string | null
 }
 type user.Result$stream = user.TypeAliasSuccess$stream | user.TypeAliasFailure$stream
-type user.MaybeResult$stream = null | user.Result$stream
+type user.MaybeResult$stream = user.Result$stream | null
 type user.TriviaAlias$stream = int
 type user.TriviaAliasBlock$stream = int
 type user.TriviaUnion$stream = int | string | bool
@@ -2356,7 +2356,7 @@ type user.TriviaDeepGeneric$stream = map<string, map<string, map<string, int | s
 type user.TriviaFnType$stream = unknown
 type user.TriviaFnTypeBlock$stream = unknown
 type user.TriviaLongFnType$stream = unknown
-type user.TriviaOptional$stream = null | int
+type user.TriviaOptional$stream = int | null
 type user.TriviaArray$stream = int[]
 type user.TriviaParen$stream = (int | string)[]
 type user.T$stream = int

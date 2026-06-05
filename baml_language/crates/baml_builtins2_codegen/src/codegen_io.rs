@@ -593,12 +593,33 @@ pub fn generate_sys_op_enum(io_builtins: &[NativeBuiltin]) -> String {
             let variant = format_ident!("{}", b.sys_op_variant_name());
             // `None` (no clause) is rejected during extraction; `Some([])`
             // (`throws never`) and `None` both map to no error categories.
+            // A `throws` entry that names one of the builtin's generic params
+            // (e.g. `call_host_value<T, E> ... throws E`) is a *dynamic* error
+            // contract, not a fixed `SysOpErrorCategory`. The static category
+            // list cannot represent a mix of "concrete X" + "dynamic E" — the
+            // dynamic component would be silently dropped, leaving
+            // `validate_sys_op_error` to wrongly reject any `E`-shaped throw
+            // as off-contract. Apply an all-or-nothing rule: if *any* throws
+            // entry is generic, emit an empty list ("accept any category")
+            // and defer the entire contract check to runtime. Concrete-only
+            // contracts still emit a precise category list. (The `throws`
+            // clause stays non-empty either way, so the builtin remains
+            // `is_fallible`.)
             match &b.throws {
-                Some(cats) if !cats.is_empty() => {
-                    let cats: Vec<_> = cats.iter().map(|t| format_ident!("{}", t)).collect();
-                    quote! { SysOp::#variant => &[#(SysOpErrorCategory::#cats),*] }
+                Some(cats) => {
+                    let has_generic_throw = cats.iter().any(|t| b.generics.iter().any(|g| g == t));
+                    if has_generic_throw {
+                        quote! { SysOp::#variant => &[] }
+                    } else {
+                        let cats: Vec<_> = cats.iter().map(|t| format_ident!("{}", t)).collect();
+                        if cats.is_empty() {
+                            quote! { SysOp::#variant => &[] }
+                        } else {
+                            quote! { SysOp::#variant => &[#(SysOpErrorCategory::#cats),*] }
+                        }
+                    }
                 }
-                _ => quote! { SysOp::#variant => &[] },
+                None => quote! { SysOp::#variant => &[] },
             }
         })
         .collect();
@@ -1383,7 +1404,7 @@ fn emit_glue_method(
                 }
                 Err(e) => SysOpResult::Ready(Err(OpError::new(
                     SysOp::#variant_ident,
-                    OpErrorKind::AccessError(e),
+                    bex_vm_types::errors::VmBamlError::AccessError { message: e.to_string() },
                 ))),
             }
         }
@@ -1739,7 +1760,7 @@ fn emit_free_fn_glue(
                 }
                 Err(e) => SysOpResult::Ready(Err(OpError::new(
                     SysOp::#variant_ident,
-                    OpErrorKind::AccessError(e),
+                    bex_vm_types::errors::VmBamlError::AccessError { message: e.to_string() },
                 ))),
             }
         }
@@ -1816,7 +1837,9 @@ fn emit_sys_ops_struct(io_builtins: &[NativeBuiltin]) -> TokenStream {
                         t.get_sys_op_fn(#path_str, heap, permit, args, ctx, call_id)
                             .unwrap_or_else(|| SysOpResult::Ready(Err(OpError::new(
                                 SysOp::#variant_ident,
-                                OpErrorKind::Unsupported,
+                                bex_vm_types::errors::VmBamlError::Unsupported {
+                                    message: "Operation not supported on this platform".to_string(),
+                                },
                             ))))
                     })
                 }
@@ -1841,7 +1864,9 @@ fn emit_sys_ops_struct(io_builtins: &[NativeBuiltin]) -> TokenStream {
                 std::sync::Arc::new(move |_, _, _, _, _| {
                     SysOpResult::Ready(Err(OpError::new(
                         operation,
-                        OpErrorKind::Unsupported,
+                        bex_vm_types::errors::VmBamlError::Unsupported {
+                            message: "Operation not supported on this platform".to_string(),
+                        },
                     )))
                 })
             }

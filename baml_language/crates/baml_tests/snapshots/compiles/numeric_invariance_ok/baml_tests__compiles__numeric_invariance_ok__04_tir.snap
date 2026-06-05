@@ -44,5 +44,5 @@ function user.BigintFieldOk() -> user.BigintCounter throws never {
   }
 }
 class user.BigintCounter$stream {
-  count: null | bigint
+  count: bigint | null
 }

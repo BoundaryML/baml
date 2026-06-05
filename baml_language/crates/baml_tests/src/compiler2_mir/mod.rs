@@ -22,7 +22,7 @@ fn render_mir(db: &ProjectDatabase, file: baml_base::SourceFile) -> String {
     let item_tree = file_item_tree(db, file);
     let mut output = String::new();
 
-    for (local_id, _func_data) in item_tree.functions.iter() {
+    for local_id in item_tree.functions.keys() {
         let func_loc = FunctionLoc::new(db, file, *local_id);
         let mir = lower_function(db, func_loc, OptLevel::Two);
         writeln!(output, "{}", display_function(&mir)).unwrap();

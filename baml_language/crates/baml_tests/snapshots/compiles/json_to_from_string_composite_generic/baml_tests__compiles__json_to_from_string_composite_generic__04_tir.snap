@@ -26,8 +26,8 @@ function user.decode_container(s: string) -> user.Container<user.User> throws ba
   }
 }
 class user.User$stream {
-  name: null | string
+  name: string | null
 }
 class user.Container$stream {
-  item: null | T
+  item: T | null
 }

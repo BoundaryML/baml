@@ -177,14 +177,20 @@ impl Program {
 /// Contract-level error categories for `sys_op` throw contracts.
 ///
 /// These are the finite set of categories that `#[throws(...)]` annotations
-/// reference. Each `OpErrorKind` variant maps to exactly one category via
-/// `OpErrorKind::category()`. Rich detail stays in `OpErrorKind`; this enum
-/// is purely for contract enforcement and compiler analysis.
+/// reference. Each [`VmBamlError`](crate::errors::VmBamlError) variant maps
+/// to exactly one category via `VmBamlError::category()`. Rich detail stays
+/// in `VmBamlError`; this enum is purely for contract enforcement and
+/// compiler analysis.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, BorshSerialize, BorshDeserialize)]
 pub enum SysOpErrorCategory {
     Io,
     Timeout,
     InvalidArgument,
+    /// A parser surfaced a structurally-bad input (e.g. UTF-8 decode, JSON
+    /// parse, base64 decode). Distinct from `InvalidArgument` so callers
+    /// can distinguish "your argument shape was wrong" from "the bytes/
+    /// stream we tried to parse are malformed".
+    ParseError,
     Unsupported,
     NotImplemented,
     AccessError,
@@ -203,6 +209,7 @@ impl std::fmt::Display for SysOpErrorCategory {
             Self::Io => write!(f, "Io"),
             Self::Timeout => write!(f, "Timeout"),
             Self::InvalidArgument => write!(f, "InvalidArgument"),
+            Self::ParseError => write!(f, "ParseError"),
             Self::Unsupported => write!(f, "Unsupported"),
             Self::NotImplemented => write!(f, "NotImplemented"),
             Self::AccessError => write!(f, "AccessError"),
@@ -2007,6 +2014,16 @@ pub struct HostClosure {
     /// `SysOp::BamlHostCallHostValue` as `type_arg_0` so the sysop impl
     /// can validate the host's returned value against the BAML signature.
     pub ret_ty: Box<baml_type::Ty>,
+    /// The declared error/throws contract of the host-callable (`E` in
+    /// `call_host_value<T, E>`), threaded through
+    /// `SysOp::BamlHostCallHostValue` as `type_arg_1`. A host throw is
+    /// checked against this contract. The FFI entry boundary (see
+    /// `bex_engine::conversion`'s `HostValue` arm) normalizes an
+    /// unbounded/undeclared generic throws to `Ty::BuiltinUnknown`, which
+    /// accepts any thrown value — the "unknown" fallback. Concrete throws
+    /// (e.g. `throws ParseError`) pass through unchanged so the contract
+    /// check can reject off-type throws as `HostContractViolation`.
+    pub throws_ty: Box<baml_type::Ty>,
     /// Number of value arguments the host callable expects.
     ///
     /// `CallIndirect` reads this to drain the right number of operand slots

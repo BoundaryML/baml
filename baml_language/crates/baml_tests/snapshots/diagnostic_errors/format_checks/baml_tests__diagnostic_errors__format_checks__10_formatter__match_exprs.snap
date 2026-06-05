@@ -354,8 +354,8 @@ function MatchExprs(x: int, s: MatchStatus, r: MatchResult, b: bool) -> string {
     // ===== Trivia between Or-pattern alternatives (block comments around `|`) =====
     match (x) {
         /* 1 arm leading */
-        (let x /* 2b name trailing */: /* 2c colon trailing */ int) /* 3 first trailing */
-            |/* 4 pipe trailing *//* 5 second leading */(let x /* 6b name trailing */: /* 6c colon trailing */ int) =>
+        (let /* 2a paren leading */ x /* 2b name trailing */: /* 2c colon trailing */ int) /* 3 first trailing */
+            |/* 4 pipe trailing *//* 5 second leading */(let /* 6a paren leading */ x /* 6b name trailing */: /* 6c colon trailing */ int) =>
         {
             x
         },

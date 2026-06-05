@@ -12,7 +12,7 @@ function user.foo.from_json(j: baml.json.json) -> user.foo throws baml.json.Json
   foo { x: baml.json.from_json<int>(baml.json.field(j, "x")) } : user.foo
 }
 class user.foo$stream {
-  x: null | int
+  x: int | null
 }
 class user.foo.Bar {
   y: string
@@ -24,5 +24,5 @@ function user.foo.Bar.from_json(j: baml.json.json) -> user.foo.Bar throws baml.j
   Bar { y: baml.json.from_json<string>(baml.json.field(j, "y")) } : user.foo.Bar
 }
 class user.foo.Bar$stream {
-  y: null | string
+  y: string | null
 }

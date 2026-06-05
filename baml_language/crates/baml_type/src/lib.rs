@@ -163,7 +163,6 @@ pub enum Ty {
     /// A specific enum variant — `Status.HttpError`.
     /// Compiler-only: should not reach runtime.
     EnumVariant(TypeName, Name, TyAttr),
-    Optional(Box<Ty>, TyAttr),
     List(Box<Ty>, TyAttr),
     Map {
         key: Box<Ty>,
@@ -264,7 +263,6 @@ impl Ty {
             }
             Ty::Enum(tn, _) => Ty::Enum(tn, attr),
             Ty::EnumVariant(tn, v, _) => Ty::EnumVariant(tn, v, attr),
-            Ty::Optional(inner, _) => Ty::Optional(inner, attr),
             Ty::List(inner, _) => Ty::List(inner, attr),
             Ty::Map { key, value, .. } => Ty::Map { key, value, attr },
             Ty::Union(members, _) => Ty::Union(members, attr),
@@ -306,7 +304,6 @@ impl Ty {
             | Ty::Interface(_, _, _, attr)
             | Ty::Enum(_, attr)
             | Ty::EnumVariant(_, _, attr)
-            | Ty::Optional(_, attr)
             | Ty::List(_, attr)
             | Ty::Union(_, attr)
             | Ty::Opaque(_, attr)
@@ -369,9 +366,52 @@ impl Ty {
 
     // --- Compound constructors (default TyAttr) ---
 
-    /// `T?` (optional) with default attributes.
+    /// `T?` (optional) — sugar for `T | null`.
+    ///
+    /// `?` is not its own type: it lowers to a union that includes `null`.
+    /// The result is flattened and idempotent — `(A | B)?` becomes a flat
+    /// `A | B | null`, `T??` stays `T?`, and `null?` is just `null`.
     pub fn optional(inner: Ty) -> Self {
-        Ty::Optional(Box::new(inner), TyAttr::default())
+        match inner {
+            Ty::Union(mut members, attr) => {
+                if !members.iter().any(Ty::is_null) {
+                    members.push(Ty::null());
+                }
+                Ty::Union(members, attr)
+            }
+            n @ Ty::Null { .. } => n,
+            other => Ty::Union(vec![other, Ty::null()], TyAttr::default()),
+        }
+    }
+
+    /// True if this is exactly the `null` type.
+    pub fn is_null(&self) -> bool {
+        matches!(self, Ty::Null { .. })
+    }
+
+    /// True if this is a union that includes `null` — i.e. an optional type
+    /// after `?` lowering. This is the canonical "is this nullable" predicate;
+    /// it replaces matching on the old `Ty::Optional` variant.
+    pub fn is_nullable_union(&self) -> bool {
+        matches!(self, Ty::Union(members, _) if members.iter().any(Ty::is_null))
+    }
+
+    /// Remove `null` from a nullable union, collapsing the result: `T | null`
+    /// → `T`, `A | B | null` → `A | B`, a non-nullable type → unchanged. The
+    /// inverse direction of [`Ty::optional`]; used where the non-null payload
+    /// of an optional is needed (e.g. union-member metadata).
+    pub fn strip_null(&self) -> Ty {
+        match self {
+            Ty::Union(members, attr) => {
+                let non_null: Vec<Ty> = members.iter().filter(|m| !m.is_null()).cloned().collect();
+                match non_null.len() {
+                    0 => self.clone(),
+                    1 => non_null.into_iter().next().expect("len checked"),
+                    _ => Ty::Union(non_null, attr.clone()),
+                }
+            }
+            _ => self.clone(),
+        }
     }
 
     /// `T[]` (list) with default attributes.
@@ -561,13 +601,9 @@ impl Ty {
             (Ty::Literal(Literal::Bool(_), _), Ty::Bool { .. }) => true,
             (Ty::Literal(Literal::Bigint(_), _), Ty::Bigint { .. }) => true,
 
-            // Null is a subtype of Optional<T>
-            (Ty::Null { .. }, Ty::Optional(..)) => true,
-
-            // T is a subtype of Optional<T>
-            (inner, Ty::Optional(opt_inner, _)) => inner.is_subtype_of(opt_inner),
-
-            // T is a subtype of T | U (union containing T)
+            // T is a subtype of T | U (union containing T). Subsumes the former
+            // `Optional` rules: `?` is now `T | null`, so `null <: T | null` and
+            // `T <: T | null` both fall out of union membership.
             (inner, Ty::Union(types, _)) => types.iter().any(|t| inner.is_subtype_of(t)),
 
             // Union<T1, T2> is a subtype of U if all Ti are subtypes of U
@@ -621,7 +657,6 @@ impl Ty {
             Ty::WatchAccessor(inner, _) => inner.validate_runtime(),
             Ty::BuiltinUnknown { .. } => Ok(()),
             // Recurse into containers
-            Ty::Optional(inner, _) => inner.validate_runtime(),
             Ty::List(inner, _) => inner.validate_runtime(),
             Ty::Map { key, value, .. } => {
                 key.validate_runtime()?;
@@ -768,18 +803,27 @@ impl fmt::Display for Ty {
             Ty::EnumVariant(tn, variant, _) => write!(f, "{tn}.{variant}"),
             Ty::Opaque(tn, _) => write!(f, "{tn}"),
             Ty::TypeAlias(tn, _) => write!(f, "{tn}"),
-            Ty::Optional(inner, _) => {
-                inner.fmt_as_postfix_base(f)?;
-                write!(f, "?")
-            }
             Ty::List(inner, _) => {
                 inner.fmt_as_postfix_base(f)?;
                 write!(f, "[]")
             }
             Ty::Map { key, value, .. } => write!(f, "map<{key}, {value}>"),
             Ty::Union(types, _) => {
-                let parts: Vec<std::string::String> =
-                    types.iter().map(std::string::ToString::to_string).collect();
+                // `?` is sugar that exists only in source/lowering; after that a
+                // nullable type is a plain union and renders as `T | null`.
+                // Function members are parenthesized so a nullable callback reads
+                // as `((..) -> ..) | null`, not a function with `throws .. | null`.
+                let parts: Vec<std::string::String> = types
+                    .iter()
+                    .map(|ty| {
+                        let rendered = ty.to_string();
+                        if matches!(ty, Ty::Function { .. }) {
+                            format!("({rendered})")
+                        } else {
+                            rendered
+                        }
+                    })
+                    .collect();
                 write!(f, "{}", parts.join(" | "))
             }
             Ty::Function {
@@ -891,13 +935,13 @@ mod tests {
     #[test]
     fn test_literal_in_optional() {
         let lit_42 = Ty::Literal(Literal::Int(42), TyAttr::default());
-        let opt_int = Ty::Optional(Box::new(ty_int()), TyAttr::default());
+        let opt_int = Ty::optional(ty_int());
         assert!(lit_42.is_subtype_of(&opt_int));
     }
 
     #[test]
     fn test_null_subtype_of_optional() {
-        let opt_string = Ty::Optional(Box::new(ty_string()), TyAttr::default());
+        let opt_string = Ty::optional(ty_string());
         assert!(ty_null().is_subtype_of(&opt_string));
     }
 
@@ -980,9 +1024,10 @@ mod tests {
     }
 
     #[test]
-    fn test_display_optional_union_parenthesized() {
+    fn test_display_nullable_union_is_plain_union() {
+        // `?` does not survive lowering; a nullable type displays as a union.
         let ty = Ty::optional(Ty::union([ty_int(), ty_string()]));
-        assert_eq!(ty.to_string(), "(int | string)?");
+        assert_eq!(ty.to_string(), "int | string | null");
     }
 
     #[test]
@@ -1060,7 +1105,7 @@ mod tests {
 
         assert_eq!(
             Ty::optional(callback.clone()).to_string(),
-            "((int) -> string throws never)?"
+            "((int) -> string throws never) | null"
         );
         assert_eq!(
             Ty::list(callback).to_string(),

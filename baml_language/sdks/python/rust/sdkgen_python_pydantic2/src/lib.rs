@@ -823,7 +823,7 @@ mod tests {
                     ClassProperty {
                         name: BaseName::new("body"),
                         docstring: Some("Free-form body text.".to_string()),
-                        ty: Ty::Optional(Box::new(Ty::String)),
+                        ty: Ty::Union(vec![Ty::String, Ty::Null]),
                     },
                 ],
             ),
@@ -1467,7 +1467,7 @@ mod tests {
                 n,
                 vec![
                     ("name", Ty::String),
-                    ("email", Ty::Optional(Box::new(Ty::String))),
+                    ("email", Ty::Union(vec![Ty::String, Ty::Null])),
                     ("tags", Ty::List(Box::new(Ty::String))),
                 ],
                 "x.baml",
@@ -1660,7 +1660,7 @@ mod tests {
             class_with_props(
                 stream,
                 vec![
-                    ("summary", Ty::Optional(Box::new(Ty::String))),
+                    ("summary", Ty::Union(vec![Ty::String, Ty::Null])),
                     // Non-stream FQN -> resolves to baml_sdk.lorem.Resume
                     ("origin", Ty::Class(non_stream, vec![])),
                 ],
@@ -2415,7 +2415,7 @@ mod tests {
                 n,
                 vec![
                     ("name", Ty::String),
-                    ("email", Ty::Optional(Box::new(Ty::String))),
+                    ("email", Ty::Union(vec![Ty::String, Ty::Null])),
                 ],
                 "x.baml",
                 0,

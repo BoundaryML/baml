@@ -167,7 +167,6 @@ fn infer_interface_class_bindings(
         (_, Tir2Ty::TypeVar(name, _)) if !class_params.contains(name) => true,
         (Tir2Ty::List(f, _), Tir2Ty::List(a, _))
         | (Tir2Ty::EvolvingList(f, _), Tir2Ty::EvolvingList(a, _))
-        | (Tir2Ty::Optional(f, _), Tir2Ty::Optional(a, _))
         | (Tir2Ty::Future(f, _, _), Tir2Ty::Future(a, _, _)) => {
             infer_interface_class_bindings(f, a, class_params, aliases, bindings)
         }
@@ -443,9 +442,6 @@ pub fn convert_tir2_ty(ty: &Tir2Ty, resolved: &ResolvedAliases) -> Ty {
                 .collect(),
             attr.clone(),
         ),
-        Tir2Ty::Optional(inner, attr) => {
-            Ty::Optional(Box::new(convert_tir2_ty(inner, resolved)), attr.clone())
-        }
         Tir2Ty::Literal(lit, _freshness, attr) => Ty::Literal(lit.clone(), attr.clone()),
 
         // Evolving containers → freeze to regular containers
@@ -613,9 +609,6 @@ pub fn tir2_to_template(
         }
         Tir2Ty::List(inner, _) => {
             TyTemplate::Array(Box::new(tir2_to_template(inner, resolved, generic_params)))
-        }
-        Tir2Ty::Optional(inner, _) => {
-            TyTemplate::Optional(Box::new(tir2_to_template(inner, resolved, generic_params)))
         }
         Tir2Ty::Map(k, v, _) => TyTemplate::Map(
             Box::new(tir2_to_template(k, resolved, generic_params)),
@@ -6653,13 +6646,10 @@ impl<'db> LoweringContext<'db> {
 
         // Unwrap Optional — when called from lower_optional_member_access,
         // the base type is T? but we've already null-checked, so use the inner type.
-        let unwrapped_ty = match &base_ty {
-            Ty::Optional(inner, _) => inner.as_ref(),
-            _ => &base_ty,
-        };
+        let unwrapped_ty = base_ty.strip_null();
 
         // Look up field index from class_fields
-        let field_idx = if let Ty::Class(tn, _, _) = unwrapped_ty {
+        let field_idx = if let Ty::Class(tn, _, _) = &unwrapped_ty {
             self.class_fields
                 .get(tn)
                 .and_then(|fields| fields.get(&field_str))
@@ -6668,7 +6658,7 @@ impl<'db> LoweringContext<'db> {
             None
         };
 
-        let base_local = self.operand_to_local(base_op, base_ty.clone());
+        let base_local = self.operand_to_local(base_op, base_ty);
 
         if let Some(idx) = field_idx {
             self.builder.assign(
@@ -6680,7 +6670,7 @@ impl<'db> LoweringContext<'db> {
             );
         } else {
             let handled_interface_field = self
-                .interface_receiver_for_field_access(base, unwrapped_ty)
+                .interface_receiver_for_field_access(base, &unwrapped_ty)
                 .is_some_and(|(iface_tn, iface_type_args, iface_assoc)| {
                     self.try_lower_interface_field_access(
                         base_local,
@@ -6695,7 +6685,7 @@ impl<'db> LoweringContext<'db> {
                 || self.lower_union_class_field_access(
                     expr_id,
                     base_local,
-                    unwrapped_ty,
+                    &unwrapped_ty,
                     field,
                     &dest,
                 )
@@ -6709,7 +6699,7 @@ impl<'db> LoweringContext<'db> {
             if handled_union_field {
                 return;
             }
-            if let Ty::Class(tn, _, _) = unwrapped_ty {
+            if let Ty::Class(tn, _, _) = &unwrapped_ty {
                 self.emit_panic_call(
                     &format!(
                         "internal compiler error: MIR failed to resolve field access \
@@ -6871,13 +6861,7 @@ impl<'db> LoweringContext<'db> {
                     _ => None,
                 })
                 .collect(),
-            Ty::Class(class_name, _, _) => {
-                if let Some(impls) = self.interface_implementors.get(class_name) {
-                    impls.clone()
-                } else {
-                    return None;
-                }
-            }
+            Ty::Class(class_name, _, _) => self.interface_implementors.get(class_name)?.clone(),
             _ => return None,
         };
         if class_names.is_empty() {
@@ -6914,12 +6898,9 @@ impl<'db> LoweringContext<'db> {
 
         // Unwrap Optional — when called from lower_optional_index,
         // the base type is T? but we've already null-checked.
-        let unwrapped_ty = match &base_ty {
-            Ty::Optional(inner, _) => inner.as_ref(),
-            _ => &base_ty,
-        };
+        let unwrapped_ty = base_ty.strip_null();
 
-        let kind = if matches!(unwrapped_ty, Ty::List(..) | Ty::Uint8Array { .. }) {
+        let kind = if matches!(&unwrapped_ty, Ty::List(..) | Ty::Uint8Array { .. }) {
             IndexKind::Array
         } else {
             IndexKind::Map
@@ -9660,11 +9641,8 @@ impl LoweringContext<'_> {
                 let base_ty = self.expr_ty(base_id);
                 let index_ty = self.expr_ty(index_id);
                 let index_local = self.operand_to_local(index_op, index_ty);
-                let unwrapped_ty = match &base_ty {
-                    Ty::Optional(inner, _) => inner.as_ref(),
-                    _ => &base_ty,
-                };
-                let kind = if matches!(unwrapped_ty, Ty::List(..) | Ty::Uint8Array { .. }) {
+                let unwrapped_ty = base_ty.strip_null();
+                let kind = if matches!(&unwrapped_ty, Ty::List(..) | Ty::Uint8Array { .. }) {
                     IndexKind::Array
                 } else {
                     IndexKind::Map
@@ -9711,11 +9689,8 @@ impl LoweringContext<'_> {
                 // Project member from the same temp local — no second evaluation
                 let base_place = Place::Local(base_local);
                 // Unwrap Optional — we've already null-checked, so use the inner type.
-                let unwrapped_ty = match &base_ty {
-                    Ty::Optional(inner, _) => inner.as_ref(),
-                    _ => &base_ty,
-                };
-                if let Ty::Class(tn, _, _) = unwrapped_ty {
+                let unwrapped_ty = base_ty.strip_null();
+                if let Ty::Class(tn, _, _) = &unwrapped_ty {
                     if let Some(fields) = self.class_fields.get(tn) {
                         if let Some(&idx) = fields.get(member_name.as_str()) {
                             return Place::Field {
@@ -9776,11 +9751,8 @@ impl LoweringContext<'_> {
                 let index_op = self.lower_to_operand(index_id);
                 let index_ty = self.expr_ty(index_id);
                 let index_local = self.operand_to_local(index_op, index_ty);
-                let unwrapped_ty = match &base_ty {
-                    Ty::Optional(inner, _) => inner.as_ref(),
-                    _ => &base_ty,
-                };
-                let kind = if matches!(unwrapped_ty, Ty::List(..)) {
+                let unwrapped_ty = base_ty.strip_null();
+                let kind = if matches!(&unwrapped_ty, Ty::List(..) | Ty::Uint8Array { .. }) {
                     IndexKind::Array
                 } else {
                     IndexKind::Map
@@ -10480,7 +10452,6 @@ impl LoweringContext<'_> {
     fn tir_union_members(ty: &Tir2Ty) -> Option<Vec<Tir2Ty>> {
         match ty {
             Tir2Ty::Union(members, _) => Some(members.clone()),
-            Tir2Ty::Optional(inner, _) => Self::tir_union_members(inner),
             _ => None,
         }
     }
@@ -10497,7 +10468,6 @@ impl LoweringContext<'_> {
             Tir2Ty::Union(members, _) => {
                 members.iter().any(Self::tir_ty_needs_interface_shape_test)
             }
-            Tir2Ty::Optional(inner, _) => Self::tir_ty_needs_interface_shape_test(inner),
             _ => false,
         }
     }
@@ -10526,23 +10496,6 @@ impl LoweringContext<'_> {
                         self.builder.set_current_block(next_check);
                     }
                 }
-            }
-            Tir2Ty::Optional(inner, _) => {
-                let test = Rvalue::BinaryOp {
-                    op: BinOp::Eq,
-                    left: Operand::Copy(Place::Local(scrutinee)),
-                    right: Operand::Constant(Constant::Null),
-                };
-                let test_local = self.builder.temp(Ty::Bool {
-                    attr: TyAttr::default(),
-                });
-                self.builder.assign(Place::local(test_local), test);
-
-                let bb_inner = self.builder.create_block();
-                self.builder
-                    .branch(Operand::Copy(Place::Local(test_local)), success, bb_inner);
-                self.builder.set_current_block(bb_inner);
-                self.emit_is_tir_type_branch_inner(scrutinee, inner, success, failure, visited);
             }
             Tir2Ty::Class(qtn, type_args, _) if !type_args.is_empty() => {
                 let erased = self.resolved_aliases.convert(ty);

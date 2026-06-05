@@ -135,7 +135,7 @@ function user.AskDocs$parse(json: string, client: baml.llm.Client) -> string {
     return
 }
 
-function user.AskDocs$parse_stream(sse: baml.http.SseStream, client: baml.llm.Client) -> baml.llm.Stream<null | string, string> {
+function user.AskDocs$parse_stream(sse: baml.http.SseStream, client: baml.llm.Client) -> baml.llm.Stream<string | null, string> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -187,7 +187,7 @@ function user.AskDocs$render_prompt(query: string, max_results: int, filter: str
     return
 }
 
-function user.AskDocs$stream(query: string, max_results: int, filter: string, client: baml.llm.Client) -> baml.llm.Stream<null | string, string> {
+function user.AskDocs$stream(query: string, max_results: int, filter: string, client: baml.llm.Client) -> baml.llm.Stream<string | null, string> {
     load_var max_results
     load_const <omitted>
     cmp_op ==
@@ -229,7 +229,7 @@ function user.DefaultFilter() -> string {
     return
 }
 
-function user.HostEntry(query: string, max_results: int, filter: string?) -> int {
+function user.HostEntry(query: string, max_results: int, filter: string | null) -> int {
     load_var max_results
     load_const <omitted>
     cmp_op ==
@@ -286,7 +286,7 @@ function user.Search(query: string, max_results: int, filter: string) -> int {
     return
 }
 
-function user.SearchDocs(query: string, max_results: int, filter: string?, chunk_size: int) -> string[] {
+function user.SearchDocs(query: string, max_results: int, filter: string | null, chunk_size: int) -> string[] {
     load_var max_results
     load_const <omitted>
     cmp_op ==
@@ -317,7 +317,7 @@ function user.SearchDocs(query: string, max_results: int, filter: string?, chunk
     return
 }
 
-function user.SearchService.Docs(self: SearchService, query: string, filter: string?) -> string[] {
+function user.SearchService.Docs(self: SearchService, query: string, filter: string | null) -> string[] {
     load_var filter
     load_const <omitted>
     cmp_op ==

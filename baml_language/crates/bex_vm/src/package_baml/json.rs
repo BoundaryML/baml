@@ -442,14 +442,6 @@ fn ty_value_to_serde(
         Ty::Bigint { .. } => Ok(value_to_serde(vm, value)),
         Ty::Literal(_, _) => Ok(value_to_serde(vm, value)),
 
-        Ty::Optional(inner, _) => {
-            if value.is_null() {
-                Ok(serde_json::Value::Null)
-            } else {
-                ty_value_to_serde(vm, value, inner, path)
-            }
-        }
-
         Ty::List(elem, _) => {
             let items = match value.as_object_ptr() {
                 Some(ptr) => match vm.get_object(ptr) {
@@ -799,11 +791,6 @@ fn ty_serde_to_value(
             _ => Err(raise_decode(vm, "expected string", path)),
         },
 
-        Ty::Optional(inner, _) => match json {
-            serde_json::Value::Null => Ok(Value::NULL),
-            _ => ty_serde_to_value(vm, json, inner, path),
-        },
-
         Ty::List(elem, _) => match json {
             serde_json::Value::Array(arr) => {
                 let mut items = Vec::with_capacity(arr.len());
@@ -985,7 +972,8 @@ fn deserialize_class_instance(
             let field_json_owned;
             let field_json: &serde_json::Value = if let Some(v) = map.get(cf.name.as_str()) {
                 v
-            } else if matches!(field_ty, Ty::Optional(_, _)) {
+            } else if field_ty.is_nullable_union() {
+                // Optional (`T?` == `T | null`) fields may be absent → null.
                 field_json_owned = serde_json::Value::Null;
                 &field_json_owned
             } else {
@@ -1124,11 +1112,14 @@ fn deserialize_media(
 /// sees `T` substituted to the concrete type at runtime.
 pub fn json_from_json_dispatch(vm: &mut BexVm, j: Value, ty: &Ty) -> NativeCallResult {
     match ty {
-        Ty::Optional(inner, _) => {
+        // A nullable union (`T?` == `T | null`): null short-circuits, otherwise
+        // dispatch into the non-null payload so a class's `from_json` override
+        // is still honored for optional fields.
+        Ty::Union(members, _) if members.iter().any(Ty::is_null) => {
             if j.is_null() {
                 NativeCallResult::Done(Value::NULL)
             } else {
-                json_from_json_dispatch(vm, j, inner)
+                json_from_json_dispatch(vm, j, &ty.strip_null())
             }
         }
         Ty::List(elem, _) => list_from_json_start(vm, j, elem),
@@ -1428,22 +1419,31 @@ impl Continuation for MapFromJsonCont {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-/// If `ty` is `Optional<_>` and `v` is `Value::Null`, returns `Some(Null)`.
-/// Otherwise `None` — caller should dispatch on the inner (non-optional) type.
+/// If `ty` is a nullable union (`T | null`) and `v` is `Value::Null`, returns
+/// `Some(Null)`. Otherwise `None` — caller should dispatch on the inner
+/// (non-null) type.
 fn optional_null_short_circuit(v: Value, ty: &Ty) -> Option<Value> {
-    match ty {
-        Ty::Optional(_, _) if v.is_null() => Some(Value::NULL),
-        _ => None,
+    if ty.is_nullable_union() && v.is_null() {
+        Some(Value::NULL)
+    } else {
+        None
     }
 }
 
-/// Strip the outer `Optional` wrapper, if any. Used by the list/map walker so
-/// that `Optional<C>` element types still dispatch through `C.from_json`.
+/// Strip the outer nullable-union wrapper, if any. Used by the list/map walker
+/// so that `T | null` element types still dispatch through `C.from_json` for
+/// the non-null member.
 fn peel_optional(ty: &Ty) -> &Ty {
-    match ty {
-        Ty::Optional(inner, _) => inner,
-        other => other,
+    if let Ty::Union(members, _) = ty {
+        if members.iter().any(Ty::is_null) {
+            if let Some(inner) = members.iter().find(|m| !m.is_null()) {
+                if members.iter().filter(|m| !m.is_null()).count() == 1 {
+                    return inner;
+                }
+            }
+        }
     }
+    ty
 }
 
 /// Synchronous (no-yield) decode of `v` as `ty`. For class-with-override

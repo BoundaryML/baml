@@ -84,4 +84,13 @@ class SdkPanic {
   message string
 }
 
-type Panic = DivisionByZero | IndexOutOfBounds | InvalidFieldAccess | MapKeyNotFound | StackOverflow | AssertionFailed | Unreachable | Cancelled | UserPanic | Exit | AllocFailure | HostUnavailable | NegativeBitShift | SdkPanic
+/// A host callable violated its typed contract: it returned a value of the
+/// wrong type, or threw a value that does not match its declared error
+/// contract. Catchable like any other panic.
+class HostContractViolation {
+  message string
+  class_name string?
+  language string?
+}
+
+type Panic = DivisionByZero | IndexOutOfBounds | InvalidFieldAccess | MapKeyNotFound | StackOverflow | AssertionFailed | Unreachable | Cancelled | UserPanic | Exit | AllocFailure | HostUnavailable | NegativeBitShift | SdkPanic | HostContractViolation

@@ -25,9 +25,12 @@
 // runner from exiting on its own. Vitest terminates once the tests
 // themselves have completed.
 
+import { vi } from 'vitest';
+
 import { BamlRuntime } from '../dist/native.js';
 import { callFunction, callFunctionSync } from '../dist/index.js';
 import { encodeCallArgs } from '../dist/proto.js';
+import * as hostErrorRegistry from '../dist/host_error_registry.js';
 
 const CALLBACK_BAML = `
 function CallCb(callback: (int) -> string, x: int) -> string {
@@ -106,6 +109,71 @@ describe('host-callable error surfacing', () => {
             callFunction(rt, 'CallCb', { callback: cb, x: 2 })
         ).rejects.toThrow(/bad|TypeError/);
     });
+
+    test('native error round-trips with `raised === caught` identity', async () => {
+        // Same-host rehydration: a native JS exception raised inside a host
+        // callable comes back out as the *same* `Error` object (not flattened
+        // into a metadata-only `BamlError(HostCallable(...))` wrapper). The
+        // bridge registers the error in its host-error registry on the
+        // inbound throw; BAML transports the `baml.errors.HostCallable`
+        // Instance with the handle in `_handle`; the outbound decoder looks
+        // the handle up and re-throws the original.
+        //
+        // The spy on `tryRehydrateFromHandle` is defense-in-depth: identity
+        // (`===`) alone could in principle be satisfied by a future fast-path
+        // that bypasses the registry (e.g. a closure-captured shortcut).
+        // The spy pins the actual flow — proto.ts's outbound decoder MUST
+        // consult the host-error registry on every host-callable throw.
+        const spy = vi.spyOn(hostErrorRegistry, 'tryRehydrateFromHandle');
+        try {
+            const rt = makeRuntime();
+            const raised = new Error('identity-check');
+            const cb = (_x: number): string => {
+                throw raised;
+            };
+            await expect(callFunction(rt, 'CallCb', { callback: cb, x: 1 })).rejects.toBe(raised);
+            expect(spy).toHaveBeenCalled();
+        } finally {
+            spy.mockRestore();
+        }
+    });
+
+    test('custom Error subclass round-trips with identity + extra fields preserved', async () => {
+        class MyDomainError extends Error {
+            readonly code: number;
+            constructor(message: string, code: number) {
+                super(message);
+                this.name = 'MyDomainError';
+                this.code = code;
+            }
+        }
+        const rt = makeRuntime();
+        const raised = new MyDomainError('domain failure', 42);
+        const cb = (_x: number): string => {
+            throw raised;
+        };
+        const caught = await callFunction(rt, 'CallCb', { callback: cb, x: 1 }).catch(e => e);
+        expect(caught).toBe(raised);
+        expect(caught).toBeInstanceOf(MyDomainError);
+        expect((caught as MyDomainError).code).toBe(42);
+    });
+
+    test('two errors raised in quick succession do not collide in the registry', async () => {
+        const rt = makeRuntime();
+        const raisedFirst = new Error('first');
+        const raisedSecond = new Error('second');
+        const caughtFirst = await callFunction(rt, 'CallCb', {
+            callback: (_x: number): string => { throw raisedFirst; },
+            x: 1,
+        }).catch(e => e);
+        const caughtSecond = await callFunction(rt, 'CallCb', {
+            callback: (_x: number): string => { throw raisedSecond; },
+            x: 2,
+        }).catch(e => e);
+        expect(caughtFirst).toBe(raisedFirst);
+        expect(caughtSecond).toBe(raisedSecond);
+        expect(caughtFirst).not.toBe(caughtSecond);
+    });
 });
 
 describe('host-callable async (Promise) callbacks', () => {
@@ -134,6 +202,42 @@ describe('host-callable async (Promise) callbacks', () => {
         await expect(
             callFunction(rt, 'CallCb', { callback: cb, x: 9 })
         ).rejects.toThrow(/out of range|RangeError/);
+    });
+
+    test('rejected Promise round-trips with `raised === caught` identity', async () => {
+        // Async parity of the sync identity test: the rejection reason must
+        // survive the dispatch → tsfn → completion round-trip and re-emerge
+        // as the *same* Error object. If the bridge's promise-rejection arm
+        // diverged from the sync-throw arm and skipped the host-error
+        // registry, the rehydration lookup would miss and the caller would
+        // see a flattened `BamlError(HostCallable(...))` instead.
+        const rt = makeRuntime();
+        const raised = new Error('async-identity-check');
+        const cb = (_x: number): Promise<string> => Promise.reject(raised);
+        await expect(
+            callFunction(rt, 'CallCb', { callback: cb, x: 1 })
+        ).rejects.toBe(raised);
+    });
+
+    test('async custom Error subclass round-trips with identity + extra fields preserved', async () => {
+        class AsyncDomainError extends Error {
+            readonly code: number;
+            constructor(message: string, code: number) {
+                super(message);
+                this.name = 'AsyncDomainError';
+                this.code = code;
+            }
+        }
+        const rt = makeRuntime();
+        const raised = new AsyncDomainError('async domain failure', 7);
+        const cb = async (_x: number): Promise<string> => {
+            await new Promise<void>((resolve) => setImmediate(resolve));
+            throw raised;
+        };
+        const caught = await callFunction(rt, 'CallCb', { callback: cb, x: 1 }).catch(e => e);
+        expect(caught).toBe(raised);
+        expect(caught).toBeInstanceOf(AsyncDomainError);
+        expect((caught as AsyncDomainError).code).toBe(7);
     });
 });
 

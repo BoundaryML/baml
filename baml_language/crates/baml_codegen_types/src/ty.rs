@@ -112,7 +112,6 @@ pub enum Ty {
     TypeVar(baml_base::Name),
 
     // Type constructors
-    Optional(Box<Ty>),
     List(Box<Ty>),
     Map {
         key: Box<Ty>,
@@ -165,14 +164,6 @@ impl Ty {
                 ret.validate()
             }
             Ty::Null => Ok(()),
-            Ty::Optional(ty) => {
-                ty.validate()?;
-                if matches!(ty.as_ref(), Ty::Optional(_) | Ty::Null | Ty::Unit) {
-                    Err(super::CodegenTypeError::InvalidOptionalUsage(self.clone()))
-                } else {
-                    Ok(())
-                }
-            }
             Ty::Literal(_) => Ok(()),
             Ty::List(ty) => {
                 if matches!(ty.as_ref(), Ty::Unit) {
@@ -203,11 +194,11 @@ impl Ty {
                     })
                     .expect("Union is guaranteed to have atleast 1 item")?;
 
-                // Check if any inner type is a union or a null, if so, nope
-                if items
-                    .iter()
-                    .any(|ty| matches!(ty, Ty::Union(_) | Ty::Optional(_) | Ty::Null | Ty::Unit))
-                {
+                // A single `null` member encodes optionality (`T | null` ==
+                // `T?`) and is allowed. Nested unions/optionals, `Unit`, and
+                // more than one `null` are still rejected.
+                let null_count = items.iter().filter(|ty| matches!(ty, Ty::Null)).count();
+                if null_count > 1 || items.iter().any(|ty| matches!(ty, Ty::Union(_) | Ty::Unit)) {
                     Err(super::CodegenTypeError::InvalidUnionUsage(self.clone()))
                 } else {
                     Ok(())
@@ -241,10 +232,11 @@ impl fmt::Display for Ty {
             }
             Ty::Enum(name) | Ty::TypeAlias(name) => write!(f, "{name}"),
             Ty::TypeVar(name) => write!(f, "{name}"),
-            Ty::Optional(inner) => write!(f, "{inner}?"),
             Ty::List(inner) => write!(f, "{inner}[]"),
             Ty::Map { key, value } => write!(f, "map<{key}, {value}>"),
             Ty::Union(types) => {
+                // `?` is sugar that exists only in source/lowering; after that a
+                // nullable type is a plain union.
                 let parts: Vec<std::string::String> =
                     types.iter().map(std::string::ToString::to_string).collect();
                 write!(f, "({})", parts.join(" | "))

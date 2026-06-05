@@ -1540,7 +1540,7 @@ fn collect_ty_deps(
         Ty::Enum(qtn, _) | Ty::TypeAlias(qtn, _) => {
             collect_qtn_dep(db, files, qtn, deps, seen);
         }
-        Ty::Optional(inner, _) | Ty::List(inner, _) | Ty::EvolvingList(inner, _) => {
+        Ty::List(inner, _) | Ty::EvolvingList(inner, _) => {
             collect_ty_deps(db, files, inner, deps, seen);
         }
         Ty::Map(k, v, _) | Ty::EvolvingMap(k, v, _) => {

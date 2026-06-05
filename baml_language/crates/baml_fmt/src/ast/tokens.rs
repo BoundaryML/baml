@@ -73,6 +73,7 @@ define_keyword_tokens! {
     "for" => SyntaxKind::KW_FOR => For;
     "while" => SyntaxKind::KW_WHILE => While;
     "let" => SyntaxKind::KW_LET => Let;
+    "const" => SyntaxKind::KW_CONST => Const;
     "in" => SyntaxKind::KW_IN => In;
     "break" => SyntaxKind::KW_BREAK => Break;
     "continue" => SyntaxKind::KW_CONTINUE => Continue;
@@ -84,6 +85,44 @@ define_keyword_tokens! {
     "dynamic" => SyntaxKind::KW_DYNAMIC => Dynamic;
     "with" => SyntaxKind::KW_WITH => With;
     "throws" => SyntaxKind::KW_THROWS => Throws;
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum BindingKeyword {
+    Let(Let),
+    Const(Const),
+}
+
+impl Token for BindingKeyword {
+    fn span(&self) -> TextRange {
+        match self {
+            Self::Let(token) => token.span(),
+            Self::Const(token) => token.span(),
+        }
+    }
+}
+
+impl FromCST for BindingKeyword {
+    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
+        match elem.kind() {
+            SyntaxKind::KW_LET => Ok(Self::Let(Let::from_cst(elem)?)),
+            SyntaxKind::KW_CONST => Ok(Self::Const(Const::from_cst(elem)?)),
+            found => Err(StrongAstError::UnexpectedKindDesc {
+                expected_desc: "KW_LET or KW_CONST".into(),
+                found,
+                at: elem.text_range(),
+            }),
+        }
+    }
+}
+
+impl std::fmt::Display for BindingKeyword {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Let(token) => token.fmt(f),
+            Self::Const(token) => token.fmt(f),
+        }
+    }
 }
 
 pub trait PunctuationToken: Token {}

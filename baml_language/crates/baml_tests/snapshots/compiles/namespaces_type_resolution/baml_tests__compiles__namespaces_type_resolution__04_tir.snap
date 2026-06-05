@@ -134,26 +134,26 @@ function user.RootWithCrossNsAlias.from_json(j: baml.json.json) -> user.RootWith
   RootWithCrossNsAlias { llm_alias: baml.json.from_json<root.llm.ResponseAlias>(baml.json.field(j, "llm_alias")), own_alias: baml.json.from_json<ConfigAlias>(baml.json.field(j, "own_alias")) } : user.RootWithCrossNsAlias
 }
 class user.Config$stream {
-  key: null | string
-  env: null | string
+  key: string | null
+  env: string | null
 }
 class user.Error$stream {
-  code: null | int
-  message: null | string
+  code: int | null
+  message: string | null
 }
 type user.ConfigAlias$stream = user.Config$stream
 class user.RootWithCrossNsFields$stream {
-  own_config: null | user.Config$stream
-  llm_config: null | user.llm.Config$stream
-  auth_config: null | user.auth.Config$stream
-  llm_response: null | user.llm.Response$stream
-  nested_client: null | user.llm.openai.Client$stream
-  own_status: null | user.Status
-  own_alias: null | user.Config$stream
+  own_config: user.Config$stream | null
+  llm_config: user.llm.Config$stream | null
+  auth_config: user.auth.Config$stream | null
+  llm_response: user.llm.Response$stream | null
+  nested_client: user.llm.openai.Client$stream | null
+  own_status: user.Status | null
+  own_alias: user.Config$stream | null
 }
 class user.RootWithCrossNsAlias$stream {
-  llm_alias: null | user.llm.Response$stream
-  own_alias: null | user.Config$stream
+  llm_alias: user.llm.Response$stream | null
+  own_alias: user.Config$stream | null
 }
 class user.auth.Config {
   provider: string
@@ -313,16 +313,16 @@ function user.auth.AuthMixedErrors(auth_err: user.auth.Error, root_err: user.Err
   }
 }
 class user.auth.Config$stream {
-  provider: null | string
-  secret: null | string
+  provider: string | null
+  secret: string | null
 }
 class user.auth.Error$stream {
-  realm: null | string
-  expired: null | bool
+  realm: string | null
+  expired: bool | null
 }
 class user.auth.Token$stream {
-  value: null | string
-  role: null | user.auth.Role
+  value: string | null
+  role: user.auth.Role | null
 }
 type user.auth.TokenAlias$stream = user.auth.Token$stream
 class user.llm.Config {
@@ -515,33 +515,33 @@ function user.llm.LlmWithRootAlias.from_json(j: baml.json.json) -> user.llm.LlmW
   LlmWithRootAlias { root_alias: baml.json.from_json<root.ConfigAlias>(baml.json.field(j, "root_alias")), own_alias: baml.json.from_json<ResponseAlias>(baml.json.field(j, "own_alias")) } : user.llm.LlmWithRootAlias
 }
 class user.llm.Config$stream {
-  model: null | string
-  temperature: null | float
+  model: string | null
+  temperature: float | null
 }
 class user.llm.Error$stream {
-  reason: null | string
-  retryable: null | bool
+  reason: string | null
+  retryable: bool | null
 }
 class user.llm.Response$stream {
-  text: null | string
-  tokens: null | int
+  text: string | null
+  tokens: int | null
 }
 type user.llm.ConfigAlias$stream = user.llm.Config$stream
 type user.llm.ResponseAlias$stream = user.llm.Response$stream
 class user.llm.LlmWithCrossNsFields$stream {
-  own_config: null | user.llm.Config$stream
-  own_response: null | user.llm.Response$stream
-  root_config: null | user.Config$stream
-  root_error: null | user.Error$stream
-  auth_config: null | user.auth.Config$stream
-  nested_client: null | user.llm.openai.Client$stream
-  own_status: null | user.llm.Status
-  own_alias: null | user.Config$stream
-  root_alias: null | user.Config$stream
+  own_config: user.llm.Config$stream | null
+  own_response: user.llm.Response$stream | null
+  root_config: user.Config$stream | null
+  root_error: user.Error$stream | null
+  auth_config: user.auth.Config$stream | null
+  nested_client: user.llm.openai.Client$stream | null
+  own_status: user.llm.Status | null
+  own_alias: user.Config$stream | null
+  root_alias: user.Config$stream | null
 }
 class user.llm.LlmWithRootAlias$stream {
-  root_alias: null | user.Config$stream
-  own_alias: null | user.llm.Response$stream
+  root_alias: user.Config$stream | null
+  own_alias: user.llm.Response$stream | null
 }
 class user.llm.openai.Client {
   api_key: string
@@ -693,10 +693,10 @@ function user.llm.openai.OpenAIMixedModels(openai_model: user.llm.openai.Model, 
   }
 }
 class user.llm.openai.Client$stream {
-  api_key: null | string
-  org_id: null | string
+  api_key: string | null
+  org_id: string | null
 }
 class user.llm.openai.Error$stream {
-  status_code: null | int
-  body: null | string
+  status_code: int | null
+  body: string | null
 }

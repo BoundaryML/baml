@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 24012
 ---
 === TIR2 ===
 function user.DestructureQualifiedLet() -> int throws never {
@@ -148,12 +147,12 @@ function user.llm.openai.DestructureBareInNamespace(response: user.llm.openai.Re
   }
 }
 class user.llm.openai.Response$stream {
-  text: null | string
-  score: null | int
+  text: string | null
+  score: int | null
 }
 class user.llm.openai.Box$stream {
-  value: null | T
+  value: T | null
 }
 class user.llm.openai.Outer$stream {
-  inner: null | user.llm.openai.Box$stream<T>
+  inner: user.llm.openai.Box$stream<T> | null
 }

@@ -47,7 +47,7 @@ function assert.is_true(condition: bool) -> null {
       8   return                 
 }
 
-function assert.not_null(value: unknown?) -> null {
+function assert.not_null(value: unknown | null) -> null {
   14   0   load_var 1             (value)
        1   load_const 0           (null)
        2   cmp_op ==              
@@ -267,7 +267,7 @@ function testing.TestCollector.new(prefix: string) -> testing.TestCollector {
        6   return            
 }
 
-function testing.TestCollector.register_test(self: testing.TestCollector, name: string, body: () -> void throws unknown, runner: ((() -> testing.TestReport throws never) -> (() -> testing.TestReport throws never) throws never)?) -> void {
+function testing.TestCollector.register_test(self: testing.TestCollector, name: string, body: () -> void throws unknown, runner: ((() -> testing.TestReport throws never) -> (() -> testing.TestReport throws never) throws never) | null) -> void {
   39   0    load_var 1              (self)
        1    load_field 0            (prefix)
        2    load_const 0            ("")
@@ -319,7 +319,7 @@ function testing.TestCollector.register_test(self: testing.TestCollector, name: 
        44   load_var 7              (count)
        45   load_const 5            (1)
        46   add_int                 
-       47   call 391 ntypeargs=0    (baml.unstable.string)
+       47   call 398 ntypeargs=0    (baml.unstable.string)
        48   store_var 14            (_30)
        49   load_var2 13 14         
        50   bin_op +                
@@ -365,7 +365,7 @@ function testing.TestCollector.register_test(self: testing.TestCollector, name: 
        85   jump -58                (to 27)
 }
 
-function testing.TestCollector.register_test_set(self: testing.TestCollector, name: string, collector: (testing.TestCollector) -> void throws unknown, runner: ((() -> testing.TestSetReport throws never) -> (() -> testing.TestSetReport throws never) throws never)?) -> void {
+function testing.TestCollector.register_test_set(self: testing.TestCollector, name: string, collector: (testing.TestCollector) -> void throws unknown, runner: ((() -> testing.TestSetReport throws never) -> (() -> testing.TestSetReport throws never) throws never) | null) -> void {
   50   0    load_var 1              (self)
        1    load_field 0            (prefix)
        2    load_const 0            ("")
@@ -417,7 +417,7 @@ function testing.TestCollector.register_test_set(self: testing.TestCollector, na
        44   load_var 7              (count)
        45   load_const 5            (1)
        46   add_int                 
-       47   call 391 ntypeargs=0    (baml.unstable.string)
+       47   call 398 ntypeargs=0    (baml.unstable.string)
        48   store_var 14            (_30)
        49   load_var2 13 14         
        50   bin_op +                
@@ -574,7 +574,7 @@ function testing.TestRegistry.expand_set(self: testing.TestRegistry, name: strin
         44   jump -27               (to 17)
 
   176   45   load_var2 13 2         
-        46   call 536 ntypeargs=0   (testing.TestRegistry.expand_set)
+        46   call 622 ntypeargs=0   (testing.TestRegistry.expand_set)
         47   jump +41               (to 88)
 
   156   48   load_var2 3 4          
@@ -627,7 +627,7 @@ function testing.TestRegistry.expand_set(self: testing.TestRegistry, name: strin
         85   pop 1                  
 
   169   86   load_var 1             (self)
-        87   call 531 ntypeargs=0   (testing.TestRegistry.serialize)
+        87   call 617 ntypeargs=0   (testing.TestRegistry.serialize)
         88   return                 
 }
 
@@ -727,7 +727,7 @@ function testing.TestRegistry.run_test(self: testing.TestRegistry, name: string)
         44   jump -27               (to 17)
 
   147   45   load_var2 9 2          
-        46   call 535 ntypeargs=0   (testing.TestRegistry.run_test)
+        46   call 621 ntypeargs=0   (testing.TestRegistry.run_test)
         47   jump +19               (to 66)
 
   136   48   load_var2 3 4          
@@ -750,7 +750,7 @@ function testing.TestRegistry.run_test(self: testing.TestRegistry, name: string)
         62   load_field 1           (body)
         63   load_var 5             (t)
         64   load_field 2           (runner)
-        65   call 542 ntypeargs=0   (testing.run_test)
+        65   call 628 ntypeargs=0   (testing.run_test)
         66   return                 
 }
 
@@ -820,7 +820,7 @@ function testing.TestRegistry.serialize(self: testing.TestRegistry) -> (testing.
         53   store_var 12           (_25)
 
   122   54   load_var 11            (sub)
-        55   call 531 ntypeargs=0   (testing.TestRegistry.serialize)
+        55   call 617 ntypeargs=0   (testing.TestRegistry.serialize)
         56   store_var 13           (_26)
 
   120   57   load_var2 3 12         
@@ -859,7 +859,7 @@ function testing.TestRegistry.serialize(self: testing.TestRegistry) -> (testing.
 function testing.TestRegistry.to_json(self: testing.TestRegistry) -> baml.json.json {
   93   0    load_var 1             (self)
        1    load_field 0           (collector)
-       2    call 543 ntypeargs=0   (testing.TestCollector.to_json)
+       2    call 629 ntypeargs=0   (testing.TestCollector.to_json)
        3    load_var 1             (self)
        4    load_field 1           (expansions)
        5    call 19 ntypeargs=0    (baml.Map.to_json)
@@ -1020,13 +1020,13 @@ function testing.TestSetReport.to_json(self: testing.TestSetReport) -> baml.json
        25   return                
 }
 
-function testing.run_test(body: () -> void throws unknown, runner: ((() -> testing.TestReport throws never) -> (() -> testing.TestReport throws never) throws never)?) -> testing.TestReport {
+function testing.run_test(body: () -> void throws unknown, runner: ((() -> testing.TestReport throws never) -> (() -> testing.TestReport throws never) throws never) | null) -> testing.TestReport {
         0    load_var 1             
         1    make_cell              
         2    store_var 1            
 
   185   3    load_var 1             (body)
-        4    make_closure 1050 1    
+        4    make_closure 1189 1    
         5    store_var 3            (base_run)
 
   200   6    load_var 2             (runner)
@@ -1048,7 +1048,7 @@ function testing.run_test(body: () -> void throws unknown, runner: ((() -> testi
         19   return                 
 }
 
-function testing.run_testset(run_children: () -> testing.TestSetReport throws never, runner: ((() -> testing.TestSetReport throws never) -> (() -> testing.TestSetReport throws never) throws never)?) -> testing.TestSetReport {
+function testing.run_testset(run_children: () -> testing.TestSetReport throws never, runner: ((() -> testing.TestSetReport throws never) -> (() -> testing.TestSetReport throws never) throws never) | null) -> testing.TestSetReport {
   211   0    load_var 2             (runner)
         1    load_const 0           (null)
         2    cmp_op ==              

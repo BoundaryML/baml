@@ -972,7 +972,7 @@ impl super::BexLsp for BexMulitProject {
     fn all_env_var_names(&self) -> Vec<String> {
         let projects = self.projects.lock().unwrap();
         let mut names = std::collections::BTreeSet::new();
-        for (_path, project) in projects.iter() {
+        for project in projects.values() {
             let db_guard = project.project.db.lock().unwrap();
             let db = db_guard.db();
             for name in baml_lsp2_actions::all_env_var_names(db) {

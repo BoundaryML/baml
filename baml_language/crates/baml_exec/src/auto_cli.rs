@@ -25,7 +25,9 @@ pub fn is_auto_cli_primitive(ty: &Ty) -> bool {
         | Ty::Bool { .. }
         | Ty::Null { .. }
         | Ty::Enum(..) => true,
-        Ty::Optional(inner, _) => is_auto_cli_primitive(inner),
+        // `T?` is `T | null`: a nullable wrapper around a primitive is still
+        // CLI-passable; a genuine multi-member union is not.
+        Ty::Union(..) if ty.is_nullable_union() => is_auto_cli_primitive(&ty.strip_null()),
         _ => false,
     }
 }
@@ -70,11 +72,13 @@ pub fn parse_cli_value(raw: &str, ty: &Ty) -> Result<BexExternalValue> {
             }
         }
 
-        Ty::Optional(inner, _) => {
+        // `T?` is `T | null`: accept the literal `null`, else parse the value
+        // against the non-null inner type.
+        Ty::Union(..) if ty.is_nullable_union() => {
             if raw == "null" {
                 Ok(BexExternalValue::Null)
             } else {
-                parse_cli_value(raw, inner)
+                parse_cli_value(raw, &ty.strip_null())
             }
         }
 
@@ -133,7 +137,7 @@ mod tests {
         }
     }
     fn ty_optional(inner: Ty) -> Ty {
-        Ty::Optional(Box::new(inner), TyAttr::default())
+        Ty::optional(inner)
     }
     fn ty_enum(name: &str) -> Ty {
         Ty::Enum(

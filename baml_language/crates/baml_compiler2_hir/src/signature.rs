@@ -375,7 +375,7 @@ pub fn elaborate_function_signature_parts(
             let elaborated = match param.ty {
                 TypeExpr::Function {
                     generic_params,
-                    generic_param_bounds,
+                    generic_param_bounds: _,
                     params,
                     ret,
                     throws: None,
@@ -412,7 +412,7 @@ pub fn elaborate_function_signature_parts(
     let return_type = return_type.map(|return_type| match return_type {
         TypeExpr::Function {
             generic_params,
-            generic_param_bounds,
+            generic_param_bounds: _,
             params,
             ret,
             throws: None,

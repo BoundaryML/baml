@@ -72,7 +72,7 @@ function user.ExtractAny$parse(json: string, client: baml.llm.Client) -> baml.js
     return
 }
 
-function user.ExtractAny$parse_stream(sse: baml.http.SseStream, client: baml.llm.Client) -> baml.llm.Stream<null | baml.json.json$stream, baml.json.json> {
+function user.ExtractAny$parse_stream(sse: baml.http.SseStream, client: baml.llm.Client) -> baml.llm.Stream<baml.json.json$stream | null, baml.json.json> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -103,7 +103,7 @@ function user.ExtractAny$render_prompt(client: baml.llm.Client) -> baml.llm.Prom
     return
 }
 
-function user.ExtractAny$stream(client: baml.llm.Client) -> baml.llm.Stream<null | baml.json.json$stream, baml.json.json> {
+function user.ExtractAny$stream(client: baml.llm.Client) -> baml.llm.Stream<baml.json.json$stream | null, baml.json.json> {
     load_var client
     load_const <omitted>
     cmp_op ==
