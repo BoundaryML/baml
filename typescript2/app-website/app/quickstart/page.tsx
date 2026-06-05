@@ -127,15 +127,12 @@ yay -S baml`}</Code>
           the current project for Claude Code, Codex, and OpenCode.
         </p>
 
-        <h2>Installing Code/Cursor Extensions</h2>
+        <h2>Installing the VS Code Extension</h2>
         <p>
-          BAML has a great DX. You can see and test your code through our VSCode
-          / Cursor extension, and installing it couldn&rsquo;t be simpler:
+          BAML has a great DX. You can see and test your code through our VS
+          Code extension, and installing it couldn&rsquo;t be simpler:
         </p>
-        <p>Cursor:</p>
-        <Code>baml ide install --cursor</Code>
-        <p>VS Code:</p>
-        <Code>baml ide install --vscode</Code>
+        <Code>baml ide install --code</Code>
 
         <h2>Useful Links to Keep Handy</h2>
         <ul className="qs-links">
