@@ -3646,14 +3646,40 @@ impl LoweringContext<'_> {
         let lambda_scope_id: FileScopeId = if let Some(ref sm) = self.source_map {
             let span = sm.expr_span(expr_id);
             let index = file_semantic_index(self.db, self.file);
-            let mut found = None;
+            // Two functions can carry a tagged template at the *same* source
+            // span — notably a new-mode LLM function and its `$stream`
+            // companion, both synthesized from the one `prompt`…`` at
+            // `llm_body_def.span`. A bare range match would pick whichever
+            // lambda scope appears first in the file (the oneshot body's),
+            // binding the companion's `${param}` interps to the *other*
+            // function's captures. Disambiguate by preferring the lambda scope
+            // nested within the function currently being lowered; fall back to
+            // the first range match.
+            let current_descendants = index
+                .scopes
+                .get(self.current_scope.index() as usize)
+                .map(|s| s.descendants.clone());
+            let is_in_current_fn = |id: FileScopeId| {
+                current_descendants
+                    .as_ref()
+                    .is_some_and(|d| id.index() >= d.start.index() && id.index() < d.end.index())
+            };
+            let mut first = None;
+            let mut scoped = None;
             for (i, scope) in index.scopes.iter().enumerate() {
                 if scope.kind == baml_compiler2_hir::scope::ScopeKind::Lambda && scope.range == span
                 {
-                    found = Some(FileScopeId::new(i as u32));
-                    break;
+                    let id = FileScopeId::new(i as u32);
+                    if first.is_none() {
+                        first = Some(id);
+                    }
+                    if is_in_current_fn(id) {
+                        scoped = Some(id);
+                        break;
+                    }
                 }
             }
+            let found = scoped.or(first);
             debug_assert!(
                 found.is_some(),
                 "no HIR Lambda scope for tagged template at {span:?}"

@@ -26,7 +26,7 @@ fn user.TypeBuilderFn(from_text: string, client: baml.llm.Client) -> Resume {
     bb2: {
         _5 = { const "from_text": copy _1 };
         _6 = load_type(Resume);
-        _0 = call const fn baml.llm.call_llm_function<copy _6>(copy _2, const "TypeBuilderFn", copy _5) -> [bb3];
+        _0 = call const fn baml.llm.call_llm_function<copy _6>(copy _2, const "TypeBuilderFn", copy _5, const <omitted>) -> [bb3];
     }
 
     bb3: {

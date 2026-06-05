@@ -343,7 +343,7 @@ fn user.ClassifySentiment(text: string, client: baml.llm.Client) -> Sentiment {
     bb2: {
         _4 = { const "text": copy _1 };
         _5 = load_type(Sentiment);
-        _0 = call const fn baml.llm.call_llm_function<copy _5>(copy _2, const "ClassifySentiment", copy _4) -> [bb3];
+        _0 = call const fn baml.llm.call_llm_function<copy _5>(copy _2, const "ClassifySentiment", copy _4, const <omitted>) -> [bb3];
     }
 
     bb3: {
@@ -483,7 +483,7 @@ fn user.ClassifySentiment2(text: string, client: baml.llm.Client) -> string {
     bb2: {
         _4 = { const "text": copy _1 };
         _5 = load_type(string);
-        _0 = call const fn baml.llm.call_llm_function<copy _5>(copy _2, const "ClassifySentiment2", copy _4) -> [bb3];
+        _0 = call const fn baml.llm.call_llm_function<copy _5>(copy _2, const "ClassifySentiment2", copy _4, const <omitted>) -> [bb3];
     }
 
     bb3: {
@@ -697,7 +697,7 @@ fn user.GenerateTests(count: int, topic: string, client: baml.llm.Client) -> str
     bb2: {
         _5 = { const "count": copy _1, const "topic": copy _2 };
         _6 = load_type(string[]);
-        _0 = call const fn baml.llm.call_llm_function<copy _6>(copy _3, const "GenerateTests", copy _5) -> [bb3];
+        _0 = call const fn baml.llm.call_llm_function<copy _6>(copy _3, const "GenerateTests", copy _5, const <omitted>) -> [bb3];
     }
 
     bb3: {

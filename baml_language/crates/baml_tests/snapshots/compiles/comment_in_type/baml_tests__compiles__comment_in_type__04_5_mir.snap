@@ -23,7 +23,7 @@ fn user.CommentAfterArrow(client: baml.llm.Client) -> string {
     bb2: {
         _3 = {  };
         _4 = load_type(string);
-        _0 = call const fn baml.llm.call_llm_function<copy _4>(copy _1, const "CommentAfterArrow", copy _3) -> [bb3];
+        _0 = call const fn baml.llm.call_llm_function<copy _4>(copy _1, const "CommentAfterArrow", copy _3, const <omitted>) -> [bb3];
     }
 
     bb3: {
@@ -161,7 +161,7 @@ fn user.FunctionWithComments(a: string, b: int, client: baml.llm.Client) -> stri
     bb2: {
         _5 = { const "a": copy _1, const "b": copy _2 };
         _6 = load_type(string);
-        _0 = call const fn baml.llm.call_llm_function<copy _6>(copy _3, const "FunctionWithComments", copy _5) -> [bb3];
+        _0 = call const fn baml.llm.call_llm_function<copy _6>(copy _3, const "FunctionWithComments", copy _5, const <omitted>) -> [bb3];
     }
 
     bb3: {

@@ -552,6 +552,7 @@ class baml.llm.ExecutionContext {
   jinja_string: string
   args: map<string, unknown>
   function_name: string
+  prompt_closure: ((baml.llm.Context) -> baml.llm.PromptAst throws never)?
 }
 function baml.llm.ExecutionContext.to_json(self: baml.llm.ExecutionContext) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
   baml.json.parse(baml.json.to_string<ExecutionContext>(self)) : baml.json.json
@@ -621,18 +622,28 @@ function baml.llm.parse<TStream, TFinal>(function_name: string, json: string) ->
     __sap_parse_final<TFinal>(json, cache) : TFinal
   }
 }
-function baml.llm.call_llm_function<T>(client: baml.llm.Client, function_name: string, args: map<string, unknown>) -> T throws never {
+function baml.llm.call_llm_function<T>(client: baml.llm.Client, function_name: string, args: map<string, unknown>, prompt_closure: ((baml.llm.Context) -> baml.llm.PromptAst throws never)? = null) -> T throws never {
   { : T
-    let jinja_string = get_jinja_template(function_name) : string
-    let context = ExecutionContext { jinja_string: jinja_string, args: args, function_name: function_name } : baml.llm.ExecutionContext
+    let jinja_string = : string | "" -> string
+      match (prompt_closure : ((baml.llm.Context) -> baml.llm.PromptAst throws never)?) : string | ""
+        null =>
+          get_jinja_template(function_name) : string
+        _ =>
+          "" : ""
+    let context = ExecutionContext { jinja_string: jinja_string, args: args, function_name: function_name, prompt_closure: prompt_closure } : baml.llm.ExecutionContext
     let result: T = client.execute_oneshot<T>(context, 0) : T
     result : T
   }
 }
-function baml.llm.stream_llm_function<TStream, TFinal>(client: baml.llm.Client, function_name: string, args: map<string, unknown>) -> baml.llm.Stream<TStream, TFinal> throws never {
+function baml.llm.stream_llm_function<TStream, TFinal>(client: baml.llm.Client, function_name: string, args: map<string, unknown>, prompt_closure: ((baml.llm.Context) -> baml.llm.PromptAst throws never)? = null) -> baml.llm.Stream<TStream, TFinal> throws never {
   { : baml.llm.Stream<TStream, TFinal>
-    let jinja_string = get_jinja_template(function_name) : string
-    let context = ExecutionContext { jinja_string: jinja_string, args: args, function_name: function_name } : baml.llm.ExecutionContext
+    let jinja_string = : string | "" -> string
+      match (prompt_closure : ((baml.llm.Context) -> baml.llm.PromptAst throws never)?) : string | ""
+        null =>
+          get_jinja_template(function_name) : string
+        _ =>
+          "" : ""
+    let context = ExecutionContext { jinja_string: jinja_string, args: args, function_name: function_name, prompt_closure: prompt_closure } : baml.llm.ExecutionContext
     let result: Stream<TStream, TFinal> = client.execute_stream(context, 0) : baml.llm.Stream<TStream, TFinal>
     result : baml.llm.Stream<TStream, TFinal>
   }
@@ -645,6 +656,7 @@ class baml.llm.ExecutionContext$stream {
   jinja_string: null | string
   args: map<string, unknown>
   function_name: null | string
+  prompt_closure: null | unknown
 }
 class baml.llm.PlannerState$stream {
   rr_client_names: string[]
@@ -873,7 +885,12 @@ function baml.llm.Client.execute_once_stream<TStream, TFinal>(self: baml.llm.Cli
         { : never
           let primitive = self.to_primitive_client() : baml.llm.PrimitiveClient
           let return_type = reflect.type_of() : type
-          let prompt = primitive.render_prompt(context.jinja_string, context.args, return_type) : baml.llm.PromptAst
+          let prompt = : baml.llm.PromptAst
+            match (context.prompt_closure : ((baml.llm.Context) -> baml.llm.PromptAst throws never)?) : baml.llm.PromptAst
+              null =>
+                primitive.render_prompt(context.jinja_string, context.args, return_type) : baml.llm.PromptAst
+              closure: (Context) -> PromptAst =>
+                closure(build_prompt_context(primitive, get_return_type(context.function_name))) : baml.llm.PromptAst
           let specialized = primitive.specialize_prompt(prompt) : baml.llm.PromptAst
           let http_request = primitive.build_request_stream(specialized, return_type) : baml.http.Request
           let sse = root.http.fetch_sse(http_request) : baml.http.SseStream
@@ -972,7 +989,12 @@ function baml.llm.Client.execute_once_oneshot<T>(self: baml.llm.Client, context:
         { : T
           let primitive = self.to_primitive_client() : baml.llm.PrimitiveClient
           let return_type = reflect.type_of() : type
-          let prompt = primitive.render_prompt(context.jinja_string, context.args, return_type) : baml.llm.PromptAst
+          let prompt = : baml.llm.PromptAst
+            match (context.prompt_closure : ((baml.llm.Context) -> baml.llm.PromptAst throws never)?) : baml.llm.PromptAst
+              null =>
+                primitive.render_prompt(context.jinja_string, context.args, return_type) : baml.llm.PromptAst
+              closure: (Context) -> PromptAst =>
+                closure(build_prompt_context(primitive, return_type)) : baml.llm.PromptAst
           let specialized = primitive.specialize_prompt(prompt) : baml.llm.PromptAst
           let http_request = primitive.build_request(specialized, return_type) : baml.http.Request
           let http_response = root.http.send(http_request) : baml.http.Response
@@ -1231,6 +1253,11 @@ function baml.llm.PrimitiveClient.to_json(self: baml.llm.PrimitiveClient) -> bam
 }
 function baml.llm.PrimitiveClient.from_json(j: baml.json.json) -> baml.llm.PrimitiveClient throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   PrimitiveClient { name: baml.json.from_json<string>(baml.json.field(j, "name")), provider: baml.json.from_json<string>(baml.json.field(j, "provider")), options: baml.json.from_json<PrimitiveClientOptions>(baml.json.field(j, "options")) } : baml.llm.PrimitiveClient
+}
+function baml.llm.build_prompt_context(primitive: baml.llm.PrimitiveClient, return_type: type) -> baml.llm.Context throws never {
+  { : baml.llm.Context
+    Context { client: ContextClient { name: primitive.name, provider: primitive.provider, default_role: primitive.options.default_role ?? "system", allowed_roles: primitive.options.allowed_roles ?? [] }, tags: map {  }, output_format: render_output_format(return_type), _output_format: build_output_format(return_type) } : baml.llm.Context
+  }
 }
 function baml.llm.make_role(name: string) -> baml.llm.Role throws never {
   { : baml.llm.Role

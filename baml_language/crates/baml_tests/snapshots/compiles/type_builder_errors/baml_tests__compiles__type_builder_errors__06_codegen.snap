@@ -43,6 +43,7 @@ function user.TypeBuilderFn(from_text: string, client: baml.llm.Client) -> Resum
     load_var from_text
     load_const "from_text"
     alloc_map 1
+    load_const <omitted>
     call baml.llm.call_llm_function
     return
 }
@@ -181,6 +182,7 @@ function user.TypeBuilderFn$stream(from_text: string, client: baml.llm.Client) -
     load_var from_text
     load_const "from_text"
     alloc_map 1
+    load_const <omitted>
     call baml.llm.stream_llm_function
     return
 }

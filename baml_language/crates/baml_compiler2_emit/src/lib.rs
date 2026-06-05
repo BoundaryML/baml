@@ -682,9 +682,21 @@ pub fn generate_project_bytecode_with_opt(
                     }
                 }
 
-                if let (Some(client), Some(prompt)) = (&llm_meta.client, &llm_meta.prompt) {
+                if let Some(client) = &llm_meta.client {
+                    // New-mode (BEP-049 M5) functions have no Jinja `prompt`
+                    // text — the compiled closure renders it — but they still
+                    // need a registry entry so `get_return_type` /
+                    // `get_stream_return_type` (used by `__make_stream` and the
+                    // streaming `Context`) resolve by name. The empty template
+                    // is never read for them (their `prompt_closure` is non-null,
+                    // so the Jinja `get_jinja_template` branch is skipped).
+                    let prompt_template = llm_meta
+                        .prompt
+                        .as_ref()
+                        .map(|p| p.text.clone())
+                        .unwrap_or_default();
                     compiled_fn.body_meta = Some(FunctionMeta::Llm {
-                        prompt_template: prompt.text.clone(),
+                        prompt_template,
                         client: client.to_string(),
                     });
                     compiled_fn.trace = true;

@@ -46,7 +46,7 @@ fn user.TestFunc(input: string, client: baml.llm.Client) -> string {
     bb2: {
         _4 = { const "input": copy _1 };
         _5 = load_type(string);
-        _0 = call const fn baml.llm.call_llm_function<copy _5>(copy _2, const "TestFunc", copy _4) -> [bb3];
+        _0 = call const fn baml.llm.call_llm_function<copy _5>(copy _2, const "TestFunc", copy _4, const <omitted>) -> [bb3];
     }
 
     bb3: {
@@ -171,7 +171,7 @@ fn user.call_stream_inferred() -> baml.llm.Stream<null | string, string> {
 
     bb0: {
         _1 = { const "input": const "world" };
-        _0 = call const fn baml.llm.stream_llm_function(const fn user.TestClient, const "TestFunc", copy _1) -> [bb1];
+        _0 = call const fn baml.llm.stream_llm_function(const fn user.TestClient, const "TestFunc", copy _1, const <omitted>) -> [bb1];
     }
 
     bb1: {

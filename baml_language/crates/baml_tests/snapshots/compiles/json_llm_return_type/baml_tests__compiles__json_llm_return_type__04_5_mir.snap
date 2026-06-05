@@ -23,7 +23,7 @@ fn user.ExtractAny(client: baml.llm.Client) -> baml.json.json {
     bb2: {
         _3 = {  };
         _4 = load_type(baml.json.json);
-        _0 = call const fn baml.llm.call_llm_function<copy _4>(copy _1, const "ExtractAny", copy _3) -> [bb3];
+        _0 = call const fn baml.llm.call_llm_function<copy _4>(copy _1, const "ExtractAny", copy _3, const <omitted>) -> [bb3];
     }
 
     bb3: {

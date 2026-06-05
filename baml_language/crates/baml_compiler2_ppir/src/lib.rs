@@ -470,14 +470,28 @@ pub fn ppir_expansion_items(db: &dyn Db, file: SourceFile) -> PpirExpansionItems
                     } else {
                         client_name.as_deref()
                     };
-                    let (body, source_map) = ast::synthesize_llm_builtin_call(
-                        "stream_llm_function",
-                        func.name.as_str(),
-                        &param_names,
-                        client_arg_name,
-                        Vec::new(),
-                        span,
-                    );
+                    // BEP-049 M5e: a new-mode (backtick) function threads the
+                    // same `prompt`…`` closure into `stream_llm_function` that
+                    // the oneshot path threads into `call_llm_function`, so the
+                    // orchestrator renders via the closure instead of looking up
+                    // a (nonexistent) Jinja template. `lower_cst` pre-built this
+                    // body while the CST was still in hand (the closure captures
+                    // this function's params, hence a dedicated arena); reuse it.
+                    // Legacy Jinja prompts keep the 3-arg path.
+                    let stream_body = match &func.declarative_meta {
+                        Some(ast::DeclarativeMeta::Llm(llm)) => llm.stream_body.clone(),
+                        _ => None,
+                    };
+                    let (body, source_map) = stream_body.unwrap_or_else(|| {
+                        ast::synthesize_llm_builtin_call(
+                            "stream_llm_function",
+                            func.name.as_str(),
+                            &param_names,
+                            client_arg_name,
+                            Vec::new(),
+                            span,
+                        )
+                    });
                     let companion = ast::FunctionDef {
                         name: SmolStr::new(format!("{}$stream", func.name)),
                         generic_params: func.generic_params.clone(),

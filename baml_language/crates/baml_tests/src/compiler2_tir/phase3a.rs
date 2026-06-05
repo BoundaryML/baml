@@ -7,6 +7,122 @@
 use super::support::{make_db, render_tir};
 
 #[test]
+fn backtick_llm_function_compiles_to_prompt_closure() {
+    // BEP-049 M5f: a backtick prompt in an LLM function compiles to a
+    // `call_llm_function(client, "Fn", args, prompt`…`)` body — the 4th arg is
+    // the synthesized `(Context) -> PromptAst` closure (legacy Jinja prompts
+    // keep the 3-arg form). The `${name}` interp captures the function param.
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+client<llm> MyClient {
+  provider "openai"
+  options {
+    model "gpt-4o-mini"
+    api_key "k"
+  }
+}
+
+function Greet(name: string) -> string {
+  client MyClient
+  prompt `Hello ${name}!`
+}
+"#,
+    );
+    let tir = render_tir(&db, file);
+    assert!(
+        !tir.contains("!!"),
+        "backtick LLM function should compile clean, got:\n{tir}"
+    );
+    assert!(
+        tir.contains("call_llm_function") && tir.contains("prompt`"),
+        "body should call call_llm_function with a `prompt`…`` closure, got:\n{tir}"
+    );
+}
+
+#[test]
+fn new_mode_failures_have_good_diagnostics() {
+    // BEP-049 M5: every way a new-mode (backtick) `prompt` can go wrong must
+    // surface a diagnostic that points at the user's `${…}` source with a
+    // user-facing message — never a `0..0` span and never a leaked internal
+    // desugaring type. The prompt body is lowered into a synthesized
+    // `(ctx: baml.llm.Context) -> PromptAst` closure, so the risk is that
+    // errors land on compiler-generated nodes. These cases pin that they don't.
+    //
+    // `expect_substr` is asserted; the span column is checked to be non-`0..0`
+    // for every emitted diagnostic.
+    let cases = [
+        // (label, client clause, prompt body, a phrase the diagnostic must contain)
+        (
+            "undef_var",
+            "client C",
+            "prompt `Hi ${nobody}!`",
+            "unresolved name: nobody",
+        ),
+        (
+            "role_bad_arg",
+            "client C",
+            "prompt `${role(5)}hi`",
+            "expected string, got 5",
+        ),
+        // The member error must name the *user-facing* `baml.llm.Context`, not
+        // an internal closure/accumulator type — proves nothing leaks.
+        (
+            "ctx_bad_field",
+            "client C",
+            "prompt `${ctx.nope}`",
+            "`baml.llm.Context` has no member `nope`",
+        ),
+        (
+            "arith_type_err",
+            "client C",
+            r#"prompt `${1 + "a"}`"#,
+            "operator `Add`",
+        ),
+        (
+            "undef_ctx_method",
+            "client C",
+            "prompt `${ctx.output_format_with(5)}`",
+            "expected string?, got 5",
+        ),
+        (
+            "bad_client",
+            "client Nope",
+            "prompt `Hi ${name}!`",
+            "unresolved name: Nope",
+        ),
+    ];
+    for (label, client, body, expect_substr) in cases {
+        let mut db = make_db();
+        let src = format!(
+            "client<llm> C {{\n  provider \"openai\"\n  options {{ model \"m\" api_key \"k\" }}\n}}\n\nfunction Greet(name: string) -> string {{\n  {client}\n  {body}\n}}\n"
+        );
+        let file = db.add_file("test.baml", &src);
+        let tir = render_tir(&db, file);
+        let diags: Vec<&str> = tir
+            .lines()
+            .map(str::trim_start)
+            .filter(|l| l.starts_with("!!"))
+            .collect();
+        assert!(
+            !diags.is_empty(),
+            "[{label}] expected a diagnostic, got clean TIR:\n{tir}"
+        );
+        assert!(
+            diags.iter().any(|d| d.contains(expect_substr)),
+            "[{label}] expected a diagnostic containing {expect_substr:?}, got:\n{}",
+            diags.join("\n")
+        );
+        assert!(
+            !diags.iter().any(|d| d.starts_with("!! 0..0:")),
+            "[{label}] a diagnostic collapsed to a 0..0 span (internal node leaked):\n{}",
+            diags.join("\n")
+        );
+    }
+}
+
+#[test]
 fn nested_lambda_diagnostic_has_real_span() {
     // Regression: a type error inside a nested lambda body must point at the
     // offending expression, not collapse to a `0..0` span. The lambda body is

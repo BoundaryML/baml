@@ -25,7 +25,7 @@ fn user.Fn(client: baml.llm.Client) -> string {
     bb2: {
         _4 = {  };
         _5 = load_type(string);
-        _0 = call const fn baml.llm.call_llm_function<copy _5>(copy _1, const "Fn", copy _4) -> [bb3];
+        _0 = call const fn baml.llm.call_llm_function<copy _5>(copy _1, const "Fn", copy _4, const <omitted>) -> [bb3];
     }
 
     bb3: {

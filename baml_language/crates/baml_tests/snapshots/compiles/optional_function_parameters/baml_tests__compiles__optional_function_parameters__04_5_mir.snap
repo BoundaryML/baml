@@ -47,7 +47,7 @@ fn user.AskDocs(query: string, max_results: int, filter: string, client: baml.ll
     bb6: {
         _8 = { const "query": copy _1, const "max_results": copy _2, const "filter": copy _3 };
         _9 = load_type(string);
-        _0 = call const fn baml.llm.call_llm_function<copy _9>(copy _4, const "AskDocs", copy _8) -> [bb7];
+        _0 = call const fn baml.llm.call_llm_function<copy _9>(copy _4, const "AskDocs", copy _8, const <omitted>) -> [bb7];
     }
 
     bb7: {

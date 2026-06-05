@@ -1125,9 +1125,19 @@ impl ClientField {
 impl PromptField {
     /// Get the raw string literal node containing the prompt.
     ///
-    /// For `prompt #"Hello {{ name }}"#`, returns the `#"Hello {{ name }}"#` node.
+    /// For `prompt #"Hello {{ name }}"#`, returns the `#"Hello {{ name }}"#` node
+    /// (the legacy Jinja form). Returns `None` for a new-mode backtick prompt.
     pub fn raw_string(&self) -> Option<RawStringLiteral> {
         self.syntax.children().find_map(RawStringLiteral::cast)
+    }
+
+    /// Get the backtick string literal node containing a new-mode prompt.
+    ///
+    /// For `` prompt `Hello ${name}` ``, returns the `` `Hello ${name}` `` node.
+    /// BEP-049 (M5f): a backtick prompt compiles to a prompt-tag closure instead
+    /// of a stored Jinja template. Returns `None` for a `#"..."#` prompt.
+    pub fn backtick_string(&self) -> Option<BacktickStringLiteral> {
+        self.syntax.children().find_map(BacktickStringLiteral::cast)
     }
 }
 

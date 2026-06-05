@@ -55,6 +55,7 @@ function type_reflection.GetBar(client: baml.llm.Client) -> type_reflection.Bar 
     load_var client
     load_const "GetBar"
     alloc_map 0
+    load_const <omitted>
     call baml.llm.call_llm_function
     return
 }
@@ -149,6 +150,7 @@ function type_reflection.GetBar$stream(client: baml.llm.Client) -> baml.llm.Stre
     load_var client
     load_const "GetBar"
     alloc_map 0
+    load_const <omitted>
     call baml.llm.stream_llm_function
     return
 }
@@ -166,6 +168,7 @@ function type_reflection.GetFoo(client: baml.llm.Client) -> type_reflection.Foo 
     load_var client
     load_const "GetFoo"
     alloc_map 0
+    load_const <omitted>
     call baml.llm.call_llm_function
     return
 }
@@ -260,6 +263,7 @@ function type_reflection.GetFoo$stream(client: baml.llm.Client) -> baml.llm.Stre
     load_var client
     load_const "GetFoo"
     alloc_map 0
+    load_const <omitted>
     call baml.llm.stream_llm_function
     return
 }

@@ -23,6 +23,7 @@ function user.GenerateImage(prompt: string, client: baml.llm.Client) -> image {
     load_var prompt
     load_const "prompt"
     alloc_map 1
+    load_const <omitted>
     call baml.llm.call_llm_function
     return
 }
@@ -125,6 +126,7 @@ function user.GenerateImage$stream(prompt: string, client: baml.llm.Client) -> b
     load_var prompt
     load_const "prompt"
     alloc_map 1
+    load_const <omitted>
     call baml.llm.stream_llm_function
     return
 }
@@ -144,6 +146,7 @@ function user.GenerateImageSet(prompt: string, client: baml.llm.Client) -> image
     load_var prompt
     load_const "prompt"
     alloc_map 1
+    load_const <omitted>
     call baml.llm.call_llm_function
     return
 }
@@ -246,6 +249,7 @@ function user.GenerateImageSet$stream(prompt: string, client: baml.llm.Client) -
     load_var prompt
     load_const "prompt"
     alloc_map 1
+    load_const <omitted>
     call baml.llm.stream_llm_function
     return
 }
@@ -265,6 +269,7 @@ function user.GenerateMixedImageNarrative(prompt: string, client: baml.llm.Clien
     load_var prompt
     load_const "prompt"
     alloc_map 1
+    load_const <omitted>
     call baml.llm.call_llm_function
     return
 }
@@ -367,6 +372,7 @@ function user.GenerateMixedImageNarrative$stream(prompt: string, client: baml.ll
     load_var prompt
     load_const "prompt"
     alloc_map 1
+    load_const <omitted>
     call baml.llm.stream_llm_function
     return
 }

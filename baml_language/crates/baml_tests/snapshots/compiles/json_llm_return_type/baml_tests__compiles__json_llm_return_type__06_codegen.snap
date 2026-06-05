@@ -21,6 +21,7 @@ function user.ExtractAny(client: baml.llm.Client) -> baml.json.json {
     load_var client
     load_const "ExtractAny"
     alloc_map 0
+    load_const <omitted>
     call baml.llm.call_llm_function
     return
 }
@@ -115,6 +116,7 @@ function user.ExtractAny$stream(client: baml.llm.Client) -> baml.llm.Stream<null
     load_var client
     load_const "ExtractAny"
     alloc_map 0
+    load_const <omitted>
     call baml.llm.stream_llm_function
     return
 }

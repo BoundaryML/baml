@@ -249,7 +249,16 @@ class Client {
         let primitive = self.to_primitive_client();
         let return_type = reflect.type_of<TFinal>();
 
-        let prompt = primitive.render_prompt(context.jinja_string, context.args, return_type);
+        // New-mode (BEP-049 M5e): same closure-vs-Jinja branch as oneshot,
+        // sharing `build_prompt_context` so the prompt is byte-identical.
+        // `reflect.type_of<TFinal>()` is `BuiltinUnknown` on the stream path
+        // (inferred type-args don't reach MIR — see `__make_stream`'s registry
+        // fallback), and the closure's `${ctx.output_format}` needs a real
+        // type, so resolve the return type from the registry by name here.
+        let prompt = match (context.prompt_closure) {
+          null => primitive.render_prompt(context.jinja_string, context.args, return_type),
+          let closure: (Context) -> PromptAst => closure(build_prompt_context(primitive, get_return_type(context.function_name))),
+        };
         let specialized = primitive.specialize_prompt(prompt);
 
         let http_request = primitive.build_request_stream(specialized, return_type);
@@ -353,7 +362,13 @@ class Client {
         let primitive = self.to_primitive_client()
         let return_type = reflect.type_of<T>()
 
-        let prompt = primitive.render_prompt(context.jinja_string, context.args, return_type)
+        // New-mode (BEP-049 M5e): invoke the compiled prompt closure with a
+        // per-attempt Context; legacy Jinja functions (null closure) render the
+        // stored template. The result feeds the same specialize → request path.
+        let prompt = match (context.prompt_closure) {
+          null => primitive.render_prompt(context.jinja_string, context.args, return_type),
+          let closure: (Context) -> PromptAst => closure(build_prompt_context(primitive, return_type)),
+        }
         let specialized = primitive.specialize_prompt(prompt)
         let http_request = primitive.build_request(specialized, return_type)
         let http_response = root.http.send(http_request)
@@ -706,6 +721,25 @@ function render_output_format(return_type: type) -> string throws never {
 /// once per attempt; `ctx.output_format_with(...)` renders it with options.
 function build_output_format(return_type: type) -> OutputFormat throws never {
   $rust_io_function
+}
+
+/// BEP-049 §10 (M5e). Assemble the per-attempt `Context` a `prompt`…`` closure
+/// is invoked with: the chosen primitive client's view (`ctx.client.*`) plus the
+/// return type's output-format schema. Built AFTER the orchestrator picks the
+/// client for this attempt, so `${if (ctx.client.provider == ...)}` and
+/// `${ctx.output_format}` see the live client/type. Shared by oneshot + stream.
+function build_prompt_context(primitive: PrimitiveClient, return_type: type) -> Context throws never {
+  Context {
+    client: ContextClient {
+      name: primitive.name,
+      provider: primitive.provider,
+      default_role: primitive.options.default_role ?? "system",
+      allowed_roles: primitive.options.allowed_roles ?? [],
+    },
+    tags: {},
+    output_format: render_output_format(return_type),
+    _output_format: build_output_format(return_type),
+  }
 }
 
 /// The `role(...)` constructor passed into a `prompt` body lambda. Builds a

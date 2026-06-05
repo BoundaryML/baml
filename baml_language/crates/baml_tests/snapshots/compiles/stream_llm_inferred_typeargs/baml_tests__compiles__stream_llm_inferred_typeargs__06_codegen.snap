@@ -46,6 +46,7 @@ function user.TestFunc(input: string, client: baml.llm.Client) -> string {
     load_var input
     load_const "input"
     alloc_map 1
+    load_const <omitted>
     call baml.llm.call_llm_function
     return
 }
@@ -148,6 +149,7 @@ function user.TestFunc$stream(input: string, client: baml.llm.Client) -> baml.ll
     load_var input
     load_const "input"
     alloc_map 1
+    load_const <omitted>
     call baml.llm.stream_llm_function
     return
 }
@@ -158,6 +160,7 @@ function user.call_stream_inferred() -> baml.llm.Stream<null | string, string> {
     load_const "world"
     load_const "input"
     alloc_map 1
+    load_const <omitted>
     call baml.llm.stream_llm_function
     return
 }

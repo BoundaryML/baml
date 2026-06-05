@@ -20,6 +20,7 @@ function user.Fn(client: baml.llm.Client) -> string {
     load_var client
     load_const "Fn"
     alloc_map 0
+    load_const <omitted>
     call baml.llm.call_llm_function
     return
 }
@@ -150,6 +151,7 @@ function user.Fn$stream(client: baml.llm.Client) -> baml.llm.Stream<null | strin
     load_var client
     load_const "Fn"
     alloc_map 0
+    load_const <omitted>
     call baml.llm.stream_llm_function
     return
 }

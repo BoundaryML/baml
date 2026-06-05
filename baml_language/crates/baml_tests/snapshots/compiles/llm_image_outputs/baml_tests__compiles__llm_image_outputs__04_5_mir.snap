@@ -24,7 +24,7 @@ fn user.GenerateImage(prompt: string, client: baml.llm.Client) -> image {
     bb2: {
         _4 = { const "prompt": copy _1 };
         _5 = load_type(image);
-        _0 = call const fn baml.llm.call_llm_function<copy _5>(copy _2, const "GenerateImage", copy _4) -> [bb3];
+        _0 = call const fn baml.llm.call_llm_function<copy _5>(copy _2, const "GenerateImage", copy _4, const <omitted>) -> [bb3];
     }
 
     bb3: {
@@ -164,7 +164,7 @@ fn user.GenerateImageSet(prompt: string, client: baml.llm.Client) -> image[] {
     bb2: {
         _4 = { const "prompt": copy _1 };
         _5 = load_type(image[]);
-        _0 = call const fn baml.llm.call_llm_function<copy _5>(copy _2, const "GenerateImageSet", copy _4) -> [bb3];
+        _0 = call const fn baml.llm.call_llm_function<copy _5>(copy _2, const "GenerateImageSet", copy _4, const <omitted>) -> [bb3];
     }
 
     bb3: {
@@ -304,7 +304,7 @@ fn user.GenerateMixedImageNarrative(prompt: string, client: baml.llm.Client) -> 
     bb2: {
         _4 = { const "prompt": copy _1 };
         _5 = load_type(image | string[]);
-        _0 = call const fn baml.llm.call_llm_function<copy _5>(copy _2, const "GenerateMixedImageNarrative", copy _4) -> [bb3];
+        _0 = call const fn baml.llm.call_llm_function<copy _5>(copy _2, const "GenerateMixedImageNarrative", copy _4, const <omitted>) -> [bb3];
     }
 
     bb3: {

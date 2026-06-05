@@ -42,6 +42,7 @@ function user.AskDocs(query: string, max_results: int, filter: string, client: b
     load_const "max_results"
     load_const "filter"
     alloc_map 3
+    load_const <omitted>
     call baml.llm.call_llm_function
     return
 }
@@ -220,6 +221,7 @@ function user.AskDocs$stream(query: string, max_results: int, filter: string, cl
     load_const "max_results"
     load_const "filter"
     alloc_map 3
+    load_const <omitted>
     call baml.llm.stream_llm_function
     return
 }

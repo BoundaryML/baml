@@ -1399,6 +1399,16 @@ pub enum BuiltinKind {
 pub struct LlmBodyDef {
     pub client: Option<Name>,
     pub prompt: Option<RawPrompt>,
+    /// BEP-049 M5e: for a new-mode (backtick) prompt, the pre-lowered body of
+    /// the `$stream` companion — a `stream_llm_function(...)` call whose 4th
+    /// argument is the synthesized prompt closure. Built in `lower_cst` while
+    /// the CST backtick literal is still in hand (the AST must stay CST-free for
+    /// Salsa: a rowan node is `!Send`), and consumed by PPIR when it
+    /// materializes the `$stream` companion. The closure must capture the
+    /// companion's params, so it can't be shared with the oneshot body by
+    /// `ExprId` — it's a fully independent arena. `None` for legacy Jinja
+    /// `#"..."#` prompts (their `$stream` companion uses the 3-arg Jinja path).
+    pub stream_body: Option<(ExprBody, AstSourceMap)>,
     pub span: TextRange,
 }
 
