@@ -31,6 +31,7 @@ use crate::{
     infer_context::{
         InferContext, RelatedLocation, RelatedNote, TirTypeError, TypeCheckDiagnostics,
     },
+    inference::MemberResolution,
     package_interface::PackageResolutionContext,
     throws_analysis::ThrowsAnalysisContext,
     ty::{Freshness, FunctionParamMode, FunctionParamTy, PrimitiveType, Ty, TyAttr},
@@ -459,6 +460,11 @@ struct CallCheckRequest<'a> {
     /// site. `Some(map)` means the caller already validated arity and resolved each `TypeExpr`;
     /// `None` means use the existing forward/reverse inference paths.
     explicit_type_arg_bindings: Option<FxHashMap<Name, Ty>>,
+    /// Generic params in the order the callee's runtime frame expects them.
+    /// For static methods on generic classes this includes owner class params
+    /// before method params; for bound methods the receiver seeds owner params,
+    /// so this is just the method params.
+    runtime_type_arg_params: Vec<Name>,
     /// The rigid `Self` type variable for a Self-pinned interface method call —
     /// argument inference never binds it and the argument is checked against it
     /// by identity (rustc's `ty::Param`). `None` for every ordinary call, which
@@ -1971,11 +1977,102 @@ impl<'db> TypeInferenceBuilder<'db> {
                         attr: TyAttr::default(),
                     });
                 let resolved = self.resolve_associated_projections_deep(&ty);
-                crate::generics::erase_typevars_matching(&resolved, &|name| {
+                if crate::generics::contains_typevar_where(&resolved, &|name| {
                     !self.generic_params.iter().any(|param| param == name)
-                })
+                }) {
+                    Ty::BuiltinUnknown {
+                        attr: TyAttr::default(),
+                    }
+                } else {
+                    resolved
+                }
             })
             .collect()
+    }
+
+    fn callee_member_resolution(
+        &self,
+        callee_id: ExprId,
+    ) -> Option<crate::inference::MemberResolution<'db>> {
+        self.resolutions.get(&callee_id).cloned().or_else(|| {
+            self.path_member_resolutions
+                .get(&callee_id)
+                .and_then(|resolutions| resolutions.last().cloned())
+        })
+    }
+
+    fn callee_frame_generic_params(
+        &self,
+        func_loc: baml_compiler2_hir::loc::FunctionLoc<'db>,
+    ) -> (Vec<Name>, Vec<Name>) {
+        let db = self.context.db();
+        let item_tree = baml_compiler2_ppir::file_item_tree(db, func_loc.file(db));
+        let func_id = func_loc.id(db);
+        if let Some(imp) = item_tree
+            .implements_for
+            .iter()
+            .find(|imp| imp.methods.contains(&func_id))
+        {
+            return (imp.generic_params.clone(), Vec::new());
+        }
+
+        let fn_params = item_tree[func_id].generic_params.clone();
+        if let Some(iface_data) = item_tree
+            .interfaces
+            .values()
+            .find(|iface_data| iface_data.default_methods.contains(&func_id))
+        {
+            return (iface_data.generic_params.clone(), fn_params);
+        }
+
+        let owner_params = item_tree
+            .classes
+            .values()
+            .find(|class_data| class_data.methods.contains(&func_id))
+            .map(|class_data| class_data.generic_params.clone())
+            .unwrap_or_default();
+        (owner_params, fn_params)
+    }
+
+    fn runtime_type_arg_params_for_call(
+        &self,
+        callee_id: ExprId,
+        callee_generic_params: &[Name],
+        is_method_call: bool,
+        is_value_call: bool,
+    ) -> Vec<Name> {
+        if is_value_call {
+            return callee_generic_params.to_vec();
+        }
+
+        let Some(resolution) = self.callee_member_resolution(callee_id) else {
+            return callee_generic_params.to_vec();
+        };
+
+        let func_loc = match resolution {
+            MemberResolution::Free { func_loc }
+            | MemberResolution::BoundMethod { func_loc, .. }
+            | MemberResolution::UnboundMethod { func_loc, .. }
+            | MemberResolution::InterfaceDefaultMethod { func_loc, .. } => func_loc,
+            MemberResolution::Field { .. } | MemberResolution::Variant { .. } => {
+                return callee_generic_params.to_vec();
+            }
+        };
+
+        let (owner_params, fn_params) = self.callee_frame_generic_params(func_loc);
+        match resolution {
+            MemberResolution::Free { .. } | MemberResolution::UnboundMethod { .. } => {
+                owner_params.into_iter().chain(fn_params).collect()
+            }
+            MemberResolution::BoundMethod { .. } => fn_params,
+            MemberResolution::InterfaceDefaultMethod { .. } if is_method_call => fn_params,
+            MemberResolution::InterfaceDefaultMethod { .. } => {
+                owner_params.into_iter().chain(fn_params).collect()
+            }
+            MemberResolution::Field { .. } | MemberResolution::Variant { .. } => {
+                callee_generic_params.to_vec()
+            }
+        }
     }
 
     fn record_call_type_args(&mut self, expr_id: ExprId, type_args: Vec<Ty>) {
@@ -2678,6 +2775,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             is_value_call,
             is_optional_call,
             explicit_type_arg_bindings,
+            runtime_type_arg_params,
             rigid_self_var,
         } = request;
         let explicit_args_used = explicit_type_arg_bindings.is_some();
@@ -2879,9 +2977,16 @@ impl<'db> TypeInferenceBuilder<'db> {
                     generic_param_bounds,
                     &bound_check_bindings,
                 );
-                if !explicit_args_used && !generic_params.is_empty() {
-                    let type_args =
-                        self.runtime_call_type_args(generic_params, &runtime_type_arg_bindings);
+                let runtime_type_arg_params = if runtime_type_arg_params.is_empty() {
+                    generic_params.as_slice()
+                } else {
+                    runtime_type_arg_params.as_slice()
+                };
+                if !explicit_args_used && !runtime_type_arg_params.is_empty() {
+                    let type_args = self.runtime_call_type_args(
+                        runtime_type_arg_params,
+                        &runtime_type_arg_bindings,
+                    );
                     self.record_call_type_args(expr_id, type_args);
                 }
 
@@ -3097,6 +3202,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                         is_value_call,
                         is_optional_call,
                         explicit_type_arg_bindings,
+                        runtime_type_arg_params: Vec::new(),
                         rigid_self_var,
                     });
                 }
@@ -3208,6 +3314,17 @@ impl<'db> TypeInferenceBuilder<'db> {
             return ty;
         }
 
+        let callee_generic_params = match &callee_info.inner {
+            Ty::Function { generic_params, .. } => generic_params.clone(),
+            _ => Vec::new(),
+        };
+        let runtime_type_arg_params = self.runtime_type_arg_params_for_call(
+            callee_id,
+            &callee_generic_params,
+            is_method_call,
+            false,
+        );
+
         let checked = self.check_call_inner(CallCheckRequest {
             context: call,
             callee_ty: callee_info.inner,
@@ -3217,6 +3334,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             is_value_call: false,
             is_optional_call: true,
             explicit_type_arg_bindings: None,
+            runtime_type_arg_params,
             rigid_self_var: self.self_pinned_rigid_var.get(&callee_id).cloned(),
         });
         let final_ty = Self::make_optional(checked.result);
@@ -4307,6 +4425,16 @@ impl<'db> TypeInferenceBuilder<'db> {
         } else {
             None
         };
+        let callee_generic_params = match &callee_ty {
+            Ty::Function { generic_params, .. } => generic_params.clone(),
+            _ => Vec::new(),
+        };
+        let runtime_type_arg_params = self.runtime_type_arg_params_for_call(
+            callee,
+            &callee_generic_params,
+            is_method_call,
+            is_value_call,
+        );
 
         let checked = self.check_call_inner(CallCheckRequest {
             context: CallContext {
@@ -4321,6 +4449,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             is_value_call,
             is_optional_call: false,
             explicit_type_arg_bindings,
+            runtime_type_arg_params,
             rigid_self_var: self.self_pinned_rigid_var.get(&callee).cloned(),
         });
 

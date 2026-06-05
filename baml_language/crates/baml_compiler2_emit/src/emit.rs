@@ -2226,12 +2226,29 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             Terminator::ShortCircuit {
                 operand,
                 is_and,
-                destination: _,
+                destination,
                 eval_rhs,
                 join,
             } => {
-                // Legacy-style short-circuit using JumpIfFalse (peek, no pop).
-                // The destination local is PhiLike — value stays on TOS, no store/load.
+                // Short-circuit lowering using JumpIfFalse (peek, no pop).
+                //
+                // The short-circuit (taken) path leaves the operand value on TOS
+                // and jumps to the join. The `eval_rhs` block computes and stores
+                // the result via its own trailing `destination = <rhs>` statement.
+                // Both paths must agree on where the result lives at the join:
+                //
+                // * When `destination` is stack-carried, the join consumes the
+                //   value straight off TOS, and the `eval_rhs` store is also
+                //   elided. The taken path should leave the value on TOS.
+                // * Otherwise `destination` is a real slot: the `eval_rhs` store
+                //   writes the slot and pops, so the taken path must also store
+                //   its TOS value into the slot before the join.
+                let store_on_taken_path = !matches!(destination, Place::Local(l)
+                    if matches!(
+                        pull_semantics::local_store_behavior(self.analysis.classifications[l]),
+                        pull_semantics::LocalStoreBehavior::KeepOnStack
+                    )
+                );
                 self.emit_operand_pull(operand);
 
                 if *is_and {
@@ -2239,14 +2256,27 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                     //     true → pop, evaluate rhs.
                     let sc_jump = self.emit(Instruction::JumpIfFalse(0));
                     let resolved_join = self.resolve_pending_target(*join);
-                    self.pending_jumps.push((sc_jump, resolved_join));
-                    self.emit(Instruction::Pop(1));
-                    self.emit_jump_unless_fallthrough(*eval_rhs);
+                    if store_on_taken_path {
+                        self.emit(Instruction::Pop(1));
+                        self.emit_jump_always(*eval_rhs);
+                        let taken_pc = self.bytecode.instructions.len();
+                        self.patch_jump_to(sc_jump, taken_pc);
+                        self.emit_store_place(destination);
+                        let join_jump = self.emit(Instruction::Jump(0));
+                        self.pending_jumps.push((join_jump, resolved_join));
+                    } else {
+                        self.pending_jumps.push((sc_jump, resolved_join));
+                        self.emit(Instruction::Pop(1));
+                        self.emit_jump_unless_fallthrough(*eval_rhs);
+                    }
                 } else {
                     // ||: false → pop, evaluate rhs.
                     //     true → value stays on TOS, jump to join.
                     let false_jump = self.emit(Instruction::JumpIfFalse(0));
                     let resolved_join = self.resolve_pending_target(*join);
+                    if store_on_taken_path {
+                        self.emit_store_place(destination);
+                    }
                     let true_jump = self.emit(Instruction::Jump(0));
                     self.pending_jumps.push((true_jump, resolved_join));
                     // False landing: patch JumpIfFalse to here, pop, fall to eval_rhs.

@@ -5192,9 +5192,131 @@ impl LoweringContext<'_> {
         // If the base is a real value (not a package namespace), prepend it as self.
         let mut receiver_base_for_class_type_args: Option<AstExprId> = None;
         let mut receiver_path_tir_ty: Option<Tir2Ty> = None;
-        let (callee_operand, arg_operands) =
-            if let AstExpr::MemberAccess { base, .. } = &callee_expr {
-                if self
+        let (callee_operand, arg_operands) = if let AstExpr::MemberAccess { base, .. } =
+            &callee_expr
+        {
+            if self
+                .resolutions
+                .get(&self.expr_metadata_key(callee))
+                .is_some_and(|r| {
+                    use baml_compiler2_tir::inference::MemberResolution;
+                    matches!(
+                        r,
+                        MemberResolution::BoundMethod { .. }
+                            | MemberResolution::UnboundMethod { .. }
+                            | MemberResolution::Free { .. }
+                            | MemberResolution::InterfaceDefaultMethod { .. }
+                    )
+                })
+            {
+                // Check if base is a value receiver or a bare type/package path.
+                // Type-name bases like `Label<int>.method` can have concrete
+                // TIR types (`Interface`, `Class`) but are not runtime values.
+                let base_is_value = match &self.body.exprs[*base] {
+                    AstExpr::Path(segments) if !segments.is_empty() => {
+                        self.locals.contains_key(&segments[0])
+                            || self
+                                .capture_index_for_name_at(*base, &segments[0])
+                                .is_some()
+                    }
+                    _ => self
+                        .expr_types
+                        .get(&self.expr_metadata_key(*base))
+                        .map(|ty| !matches!(ty, Tir2Ty::Unknown { .. }))
+                        .unwrap_or(false),
+                };
+                // Check if the resolved method expects a `self` receiver.
+                // Static methods (e.g. StreamCache.new) have no `self` param
+                // and must not get the class reference prepended as an argument.
+                let method_takes_self = {
+                    use baml_compiler2_tir::inference::MemberResolution;
+                    self.resolutions
+                        .get(&self.expr_metadata_key(callee))
+                        .is_some_and(|r| match r {
+                            MemberResolution::BoundMethod { func_loc, .. }
+                            | MemberResolution::UnboundMethod { func_loc, .. }
+                            | MemberResolution::Free { func_loc }
+                            | MemberResolution::InterfaceDefaultMethod { func_loc, .. } => {
+                                let sig =
+                                    baml_compiler2_ppir::function_signature(self.db, *func_loc);
+                                sig.params
+                                    .first()
+                                    .is_some_and(|param| param.name.as_str() == "self")
+                            }
+                            _ => false,
+                        })
+                };
+                if base_is_value && method_takes_self {
+                    // Instance method call: arr.length() — prepend receiver as self.
+                    // For immediate calls, emit the callee as a plain function constant
+                    // (not MakeBoundMethod) since the receiver is passed explicitly as self.
+                    let receiver_op = self.lower_to_operand(*base);
+                    receiver_base_for_class_type_args = Some(*base);
+                    let callee_op = {
+                        let resolution = self
+                            .resolutions
+                            .get(&self.expr_metadata_key(callee))
+                            .cloned();
+                        match resolution
+                            .as_ref()
+                            .and_then(|r| resolution_to_item_ref(self.db, r))
+                        {
+                            Some(item) => Operand::Constant(Constant::Function(item)),
+                            None => self.lower_to_operand(callee),
+                        }
+                    };
+                    let mut all_args = vec![receiver_op];
+                    all_args.extend(self.lower_call_arg_operands(expr_id, args));
+                    (callee_op, all_args)
+                } else {
+                    // Non-self method or package function reference:
+                    // e.g. Factory<int>.create(42), baml.Array.length(array).
+                    // Resolve the callee as a plain function constant using
+                    // resolution_to_item_ref to avoid lower_member_access emitting
+                    // MakeBoundMethod (which would try to load the base type as a
+                    // runtime value).
+                    let callee_op = {
+                        let resolution = self
+                            .resolutions
+                            .get(&self.expr_metadata_key(callee))
+                            .cloned();
+                        match resolution
+                            .as_ref()
+                            .and_then(|r| resolution_to_item_ref(self.db, r))
+                        {
+                            Some(item) => Operand::Constant(Constant::Function(item)),
+                            None => self.lower_to_operand(callee),
+                        }
+                    };
+                    (callee_op, self.lower_call_arg_operands(expr_id, args))
+                }
+            } else {
+                let callee_op = self.lower_to_operand(callee);
+                (callee_op, self.lower_call_arg_operands(expr_id, args))
+            }
+        } else if let AstExpr::Path(segments) = &callee_expr {
+            // Check path_member_resolutions first (local-rooted paths like `self.method()`
+            // or `obj.field.method()`). The last resolution determines if the final segment
+            // is a method call (e.g. for `user.profile.items.slice`, resolutions are
+            // [Field{profile}, Field{items}, Method{slice}] — last() is Method).
+            let is_local_method = segments.len() >= 2
+                && self
+                    .path_member_resolutions
+                    .get(&self.expr_metadata_key(callee))
+                    .and_then(|resolutions| resolutions.last())
+                    .is_some_and(|r| {
+                        use baml_compiler2_tir::inference::MemberResolution;
+                        matches!(
+                            r,
+                            MemberResolution::BoundMethod { .. }
+                                | MemberResolution::UnboundMethod { .. }
+                                | MemberResolution::InterfaceDefaultMethod { .. }
+                        )
+                    });
+            // Also check flat resolutions (package-path method call, kept for compatibility).
+            let is_pkg_method = !is_local_method
+                && segments.len() >= 2
+                && self
                     .resolutions
                     .get(&self.expr_metadata_key(callee))
                     .is_some_and(|r| {
@@ -5203,151 +5325,47 @@ impl LoweringContext<'_> {
                             r,
                             MemberResolution::BoundMethod { .. }
                                 | MemberResolution::UnboundMethod { .. }
-                                | MemberResolution::Free { .. }
                                 | MemberResolution::InterfaceDefaultMethod { .. }
                         )
-                    })
-                {
-                    // Check if base is a value receiver or a bare type/package path.
-                    // Type-name bases like `Label<int>.method` can have concrete
-                    // TIR types (`Interface`, `Class`) but are not runtime values.
-                    let base_is_value = match &self.body.exprs[*base] {
-                        AstExpr::Path(segments) if !segments.is_empty() => {
-                            self.locals.contains_key(&segments[0])
-                                || self
-                                    .capture_index_for_name_at(*base, &segments[0])
-                                    .is_some()
-                        }
-                        _ => self
-                            .expr_types
-                            .get(&self.expr_metadata_key(*base))
-                            .map(|ty| !matches!(ty, Tir2Ty::Unknown { .. }))
-                            .unwrap_or(false),
-                    };
-                    // Check if the resolved method expects a `self` receiver.
-                    // Static methods (e.g. StreamCache.new) have no `self` param
-                    // and must not get the class reference prepended as an argument.
-                    let method_takes_self = {
-                        use baml_compiler2_tir::inference::MemberResolution;
-                        self.resolutions
-                            .get(&self.expr_metadata_key(callee))
-                            .is_some_and(|r| match r {
-                                MemberResolution::BoundMethod { func_loc, .. }
-                                | MemberResolution::UnboundMethod { func_loc, .. }
-                                | MemberResolution::Free { func_loc }
-                                | MemberResolution::InterfaceDefaultMethod { func_loc, .. } => {
-                                    let sig =
-                                        baml_compiler2_ppir::function_signature(self.db, *func_loc);
-                                    sig.params
-                                        .first()
-                                        .is_some_and(|param| param.name.as_str() == "self")
-                                }
-                                _ => false,
-                            })
-                    };
-                    if base_is_value && method_takes_self {
-                        // Instance method call: arr.length() — prepend receiver as self.
-                        // For immediate calls, emit the callee as a plain function constant
-                        // (not MakeBoundMethod) since the receiver is passed explicitly as self.
-                        let receiver_op = self.lower_to_operand(*base);
-                        receiver_base_for_class_type_args = Some(*base);
-                        let callee_op = {
-                            let resolution = self
-                                .resolutions
-                                .get(&self.expr_metadata_key(callee))
-                                .cloned();
-                            match resolution
-                                .as_ref()
-                                .and_then(|r| resolution_to_item_ref(self.db, r))
-                            {
-                                Some(item) => Operand::Constant(Constant::Function(item)),
-                                None => self.lower_to_operand(callee),
-                            }
-                        };
-                        let mut all_args = vec![receiver_op];
-                        all_args.extend(self.lower_call_arg_operands(expr_id, args));
-                        (callee_op, all_args)
-                    } else {
-                        // Non-self method or package function reference:
-                        // e.g. Factory<int>.create(42), baml.Array.length(array).
-                        // Resolve the callee as a plain function constant using
-                        // resolution_to_item_ref to avoid lower_member_access emitting
-                        // MakeBoundMethod (which would try to load the base type as a
-                        // runtime value).
-                        let callee_op = {
-                            let resolution = self
-                                .resolutions
-                                .get(&self.expr_metadata_key(callee))
-                                .cloned();
-                            match resolution
-                                .as_ref()
-                                .and_then(|r| resolution_to_item_ref(self.db, r))
-                            {
-                                Some(item) => Operand::Constant(Constant::Function(item)),
-                                None => self.lower_to_operand(callee),
-                            }
-                        };
-                        (callee_op, self.lower_call_arg_operands(expr_id, args))
-                    }
-                } else {
-                    let callee_op = self.lower_to_operand(callee);
-                    (callee_op, self.lower_call_arg_operands(expr_id, args))
-                }
-            } else if let AstExpr::Path(segments) = &callee_expr {
-                // Check path_member_resolutions first (local-rooted paths like `self.method()`
-                // or `obj.field.method()`). The last resolution determines if the final segment
-                // is a method call (e.g. for `user.profile.items.slice`, resolutions are
-                // [Field{profile}, Field{items}, Method{slice}] — last() is Method).
-                let is_local_method = segments.len() >= 2
-                    && self
-                        .path_member_resolutions
-                        .get(&self.expr_metadata_key(callee))
-                        .and_then(|resolutions| resolutions.last())
-                        .is_some_and(|r| {
-                            use baml_compiler2_tir::inference::MemberResolution;
-                            matches!(
-                                r,
-                                MemberResolution::BoundMethod { .. }
-                                    | MemberResolution::UnboundMethod { .. }
-                                    | MemberResolution::InterfaceDefaultMethod { .. }
-                            )
-                        });
-                // Also check flat resolutions (package-path method call, kept for compatibility).
-                let is_pkg_method = !is_local_method
-                    && segments.len() >= 2
-                    && self
-                        .resolutions
-                        .get(&self.expr_metadata_key(callee))
-                        .is_some_and(|r| {
-                            use baml_compiler2_tir::inference::MemberResolution;
-                            matches!(
-                                r,
-                                MemberResolution::BoundMethod { .. }
-                                    | MemberResolution::UnboundMethod { .. }
-                                    | MemberResolution::InterfaceDefaultMethod { .. }
-                            )
-                        });
+                    });
 
-                if is_local_method {
-                    // Multi-segment path callee with a local-rooted Method resolution.
-                    // The last segment is the method; segments[0..n-1] form the receiver.
-                    // e.g. `self.method()` → receiver=self, `user.profile.items.slice()` → receiver=user.profile.items.
-                    //
-                    // For immediate calls we emit the callee as a plain function constant
-                    // (not MakeBoundMethod) since the receiver is passed explicitly as self.
-                    let receiver_segments = &segments[..segments.len() - 1];
-                    let method_resolution = self
-                        .path_member_resolutions
-                        .get(&self.expr_metadata_key(callee))
-                        .and_then(|resolutions| resolutions.last())
-                        .cloned();
-                    let callee_op = match method_resolution
-                        .as_ref()
-                        .and_then(|r| resolution_to_item_ref(self.db, r))
-                    {
-                        Some(item) => Operand::Constant(Constant::Function(item)),
-                        None => self.lower_to_operand(callee),
-                    };
+            if is_local_method {
+                // Multi-segment path callee with a local-rooted Method resolution.
+                // The last segment is the method; segments[0..n-1] form the receiver.
+                // e.g. `self.method()` → receiver=self, `user.profile.items.slice()` → receiver=user.profile.items.
+                //
+                // For immediate calls we emit the callee as a plain function constant
+                // (not MakeBoundMethod) since the receiver is passed explicitly as self.
+                let receiver_segments = &segments[..segments.len() - 1];
+                let method_resolution = self
+                    .path_member_resolutions
+                    .get(&self.expr_metadata_key(callee))
+                    .and_then(|resolutions| resolutions.last())
+                    .cloned();
+                let callee_op = match method_resolution
+                    .as_ref()
+                    .and_then(|r| resolution_to_item_ref(self.db, r))
+                {
+                    Some(item) => Operand::Constant(Constant::Function(item)),
+                    None => self.lower_to_operand(callee),
+                };
+                let method_takes_self = method_resolution.as_ref().is_some_and(|r| {
+                    use baml_compiler2_tir::inference::MemberResolution;
+                    match r {
+                        MemberResolution::BoundMethod { func_loc, .. }
+                        | MemberResolution::UnboundMethod { func_loc, .. }
+                        | MemberResolution::InterfaceDefaultMethod { func_loc, .. } => {
+                            let sig = baml_compiler2_ppir::function_signature(self.db, *func_loc);
+                            sig.params
+                                .first()
+                                .is_some_and(|param| param.name.as_str() == "self")
+                        }
+                        _ => false,
+                    }
+                });
+                if !method_takes_self {
+                    (callee_op, self.lower_call_arg_operands(expr_id, args))
+                } else {
                     let receiver_op = if receiver_segments.len() == 1 {
                         // Simple local variable receiver (e.g. `self`).
                         if let Some(&recv_local) = self.locals.get(&receiver_segments[0]) {
@@ -5378,48 +5396,49 @@ impl LoweringContext<'_> {
                     let mut all_args = vec![receiver_op];
                     all_args.extend(self.lower_call_arg_operands(expr_id, args));
                     (callee_op, all_args)
-                } else if is_pkg_method {
-                    // Package-path method call (via flat resolutions): same treatment.
-                    // For immediate calls, emit the callee as a plain function constant
-                    // (not MakeBoundMethod) since the receiver is passed explicitly as self.
-                    let flat_resolution = self
-                        .resolutions
-                        .get(&self.expr_metadata_key(callee))
-                        .cloned();
-                    let callee_op = match flat_resolution
-                        .as_ref()
-                        .and_then(|r| resolution_to_item_ref(self.db, r))
-                    {
-                        Some(item) => Operand::Constant(Constant::Function(item)),
-                        None => self.lower_to_operand(callee),
-                    };
-                    let first_seg = &segments[0];
-                    let receiver_op = if let Some(&receiver_local) = self.locals.get(first_seg) {
-                        Some(Operand::Copy(Place::Local(receiver_local)))
-                    } else {
-                        self.capture_index_for_name_at(callee, first_seg)
-                            .map(|cap_idx| Operand::Copy(Place::Capture(cap_idx)))
-                    };
-                    if let Some(receiver_op) = receiver_op {
-                        let prefix_idx = segments.len() - 2;
-                        receiver_path_tir_ty = self
-                            .path_segment_types
-                            .get(&(self.current_metadata_scope, callee, prefix_idx))
-                            .cloned();
-                        let mut all_args = vec![receiver_op];
-                        all_args.extend(self.lower_call_arg_operands(expr_id, args));
-                        (callee_op, all_args)
-                    } else {
-                        (callee_op, self.lower_call_arg_operands(expr_id, args))
-                    }
+                }
+            } else if is_pkg_method {
+                // Package-path method call (via flat resolutions): same treatment.
+                // For immediate calls, emit the callee as a plain function constant
+                // (not MakeBoundMethod) since the receiver is passed explicitly as self.
+                let flat_resolution = self
+                    .resolutions
+                    .get(&self.expr_metadata_key(callee))
+                    .cloned();
+                let callee_op = match flat_resolution
+                    .as_ref()
+                    .and_then(|r| resolution_to_item_ref(self.db, r))
+                {
+                    Some(item) => Operand::Constant(Constant::Function(item)),
+                    None => self.lower_to_operand(callee),
+                };
+                let first_seg = &segments[0];
+                let receiver_op = if let Some(&receiver_local) = self.locals.get(first_seg) {
+                    Some(Operand::Copy(Place::Local(receiver_local)))
                 } else {
-                    let callee_op = self.lower_to_operand(callee);
+                    self.capture_index_for_name_at(callee, first_seg)
+                        .map(|cap_idx| Operand::Copy(Place::Capture(cap_idx)))
+                };
+                if let Some(receiver_op) = receiver_op {
+                    let prefix_idx = segments.len() - 2;
+                    receiver_path_tir_ty = self
+                        .path_segment_types
+                        .get(&(self.current_metadata_scope, callee, prefix_idx))
+                        .cloned();
+                    let mut all_args = vec![receiver_op];
+                    all_args.extend(self.lower_call_arg_operands(expr_id, args));
+                    (callee_op, all_args)
+                } else {
                     (callee_op, self.lower_call_arg_operands(expr_id, args))
                 }
             } else {
                 let callee_op = self.lower_to_operand(callee);
                 (callee_op, self.lower_call_arg_operands(expr_id, args))
-            };
+            }
+        } else {
+            let callee_op = self.lower_to_operand(callee);
+            (callee_op, self.lower_call_arg_operands(expr_id, args))
+        };
 
         let target = self.builder.create_block();
         let unwind = self.catch_context.as_ref().map(|c| c.unwind_target);
@@ -5482,7 +5501,12 @@ impl LoweringContext<'_> {
         // The VM pops these `ntypeargs` Object::Type values into the new frame's
         // `type_args` vec so that inner `reflect.type_of<T>()` calls can
         // substitute them at runtime.
-        let call_type_arg_operands = self.lower_call_type_args(expr_id);
+        // Check if callee resolves to a builtin IO function (sys-op). Sys-ops
+        // read type args positionally in Rust glue; explicit call-site type
+        // args are still passed, but TIR-inferred frame seeds are for regular
+        // BAML callee frames.
+        let is_sys_op = self.check_sys_op(callee);
+        let call_type_arg_operands = self.lower_call_type_args(expr_id, !is_sys_op);
 
         // ── Prepend receiver's class-level type args ─────────────────────────
         // For `b.describe()` where `b: Box<int>`, the method `describe` is compiled
@@ -5541,9 +5565,6 @@ impl LoweringContext<'_> {
         } else {
             arg_operands.clone()
         };
-
-        // Check if callee resolves to a builtin IO function (sys-op)
-        let is_sys_op = self.check_sys_op(callee);
 
         if is_sys_op {
             // BEP-034 phase D′: sys-ops now lower to a single
@@ -6017,7 +6038,11 @@ impl LoweringContext<'_> {
             .collect()
     }
 
-    fn lower_call_type_args(&mut self, call_expr_id: AstExprId) -> Vec<Operand> {
+    fn lower_call_type_args(
+        &mut self,
+        call_expr_id: AstExprId,
+        include_inferred: bool,
+    ) -> Vec<Operand> {
         let ast_type_args: Vec<AstTypeExpr> =
             if let AstExpr::Call { type_args, .. } = &self.body.exprs[call_expr_id] {
                 type_args.clone()
@@ -6027,12 +6052,31 @@ impl LoweringContext<'_> {
         if !ast_type_args.is_empty() {
             return self.lower_explicit_type_args(&ast_type_args);
         }
+        if !include_inferred {
+            return Vec::new();
+        }
 
-        let inferred_type_args = self
+        let mut inferred_type_args = self
             .call_plans
             .get(&self.expr_metadata_key(call_expr_id))
             .map(|plan| plan.type_args.clone())
             .unwrap_or_default();
+        let caller_generic_params = self.enclosing_generic_params();
+        for ty in &mut inferred_type_args {
+            if baml_compiler2_tir::generics::contains_typevar_where(ty, &|name| {
+                !caller_generic_params.iter().any(|param| param == name)
+            }) {
+                *ty = Tir2Ty::BuiltinUnknown {
+                    attr: TyAttr::default(),
+                };
+            }
+        }
+        if inferred_type_args
+            .iter()
+            .all(|ty| matches!(ty, Tir2Ty::BuiltinUnknown { .. } | Tir2Ty::Unknown { .. }))
+        {
+            return Vec::new();
+        }
         self.emit_frame_type_arg_ops(&inferred_type_args)
     }
 
@@ -7477,7 +7521,7 @@ impl<'db> LoweringContext<'db> {
 
         // Lower args once; same operands used in every arm.
         let arg_ops = self.lower_call_arg_operands(expr_id, args);
-        let type_arg_ops = self.lower_call_type_args(expr_id);
+        let type_arg_ops = self.lower_call_type_args(expr_id, true);
         let ntypeargs = type_arg_ops.len();
         let unwind = self.catch_context.as_ref().map(|c| c.unwind_target);
 
