@@ -36,8 +36,6 @@ fn flush_events() {
 fn baml_py(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<abort_controller::AbortController>()?;
     m.add_class::<py_handle::BamlPyHandle>()?;
-    m.add_wrapped(wrap_pyfunction!(py_handle::take_pyhandle_from_table))?;
-    m.add_wrapped(wrap_pyfunction!(py_handle::put_pyhandle_into_table))?;
     m.add_wrapped(wrap_pyfunction!(py_handle::_seed_function_ref_handle))?;
     m.add_wrapped(wrap_pyfunction!(py_handle::_seed_generic_media_handle))?;
     m.add_class::<runtime::BamlRuntime>()?;

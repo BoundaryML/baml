@@ -596,7 +596,7 @@ if (!nativeBinding) {
   throw new Error(`Failed to load native binding`)
 }
 
-const { AbortController, BamlAudio, BamlHandle, BamlImage, BamlPdf, BamlRuntime, BamlVideo, Collector, FunctionLog, HostSpanManager, LlmCall, LLMCall, Timing, Usage, _seedFunctionRefHandle, _seedGenericMediaHandle, completeHostCall, flushEvents, getRuntime, getVersion, putHandleIntoTable, registerHostCallable, releaseHostCallable, takeHandleFromTable } = nativeBinding
+const { AbortController, BamlAudio, BamlHandle, BamlImage, BamlPdf, BamlRuntime, BamlVideo, Collector, FunctionLog, HostSpanManager, LlmCall, LLMCall, Timing, Usage, _seedFunctionRefHandle, _seedGenericMediaHandle, completeHostCall, flushEvents, getRuntime, getVersion, registerHostCallable, releaseHostCallable } = nativeBinding
 export { AbortController }
 export { BamlAudio }
 export { BamlHandle }
@@ -617,7 +617,5 @@ export { completeHostCall }
 export { flushEvents }
 export { getRuntime }
 export { getVersion }
-export { putHandleIntoTable }
 export { registerHostCallable }
 export { releaseHostCallable }
-export { takeHandleFromTable }

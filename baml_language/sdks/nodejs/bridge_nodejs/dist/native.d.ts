@@ -47,6 +47,7 @@ export declare class BamlHandle {
   get key(): HandleKey
   get handleType(): number
   clone(): BamlHandle
+  _cloneKeyForWire(): HandleKey
 }
 
 export declare class BamlImage {
@@ -236,14 +237,6 @@ export interface HandleKey {
 }
 
 /**
- * Allocate a fresh `HANDLE_TABLE` row sharing the same `Arc` as `handle`,
- * returning the new key so the caller can stage a wire `BamlHandle`. The
- * original `handle` keeps its key and stays usable. Mirrors
- * `bridge_python::py_handle::put_pyhandle_into_table`.
- */
-export declare function putHandleIntoTable(handle: BamlHandle): HandleKey
-
-/**
  * Register a JS dispatch wrapper in the host-value table and return its key.
  *
  * Exposed to JS as `registerHostCallable(fn) -> HandleKey`. Called from
@@ -270,11 +263,3 @@ export declare function registerHostCallable(callable: (callId: number, argsByte
  * key it registered during a failed encode.
  */
 export declare function releaseHostCallable(key: HandleKey): void
-
-/**
- * Validate that `key` exists in `HANDLE_TABLE`, then wrap as a `BamlHandle`.
- * Used by the proto decoder's handle path. Does **not** drain — the entry
- * stays in the table and is owned by the returned `BamlHandle`. Mirrors
- * `bridge_python::py_handle::take_pyhandle_from_table`.
- */
-export declare function takeHandleFromTable(key: HandleKey, handleType: number): BamlHandle

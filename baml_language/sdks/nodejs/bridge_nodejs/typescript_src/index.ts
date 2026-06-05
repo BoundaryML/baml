@@ -16,13 +16,7 @@ import { installFlushOnExit } from './exit_hook.js';
 
 export { BamlRuntime, AbortController, BamlHandle, HostSpanManager, getRuntime, getVersion, flushEvents } from './native.js';
 export { Timing, Usage, LLMCall } from './native.js';
-// Handle-table helpers (decode validate-on-take / encode clone-on-put + test seeds).
-export {
-    takeHandleFromTable,
-    putHandleIntoTable,
-    _seedFunctionRefHandle,
-    _seedGenericMediaHandle,
-} from './native.js';
+export { _seedFunctionRefHandle, _seedGenericMediaHandle } from './native.js';
 // Runtime-owned stdlib value classes. Exported under their `Baml*` names only;
 // codegen aliases them as Image/Audio/Video/Pdf on re-export.
 export { BamlImage, BamlAudio, BamlVideo, BamlPdf } from './native.js';

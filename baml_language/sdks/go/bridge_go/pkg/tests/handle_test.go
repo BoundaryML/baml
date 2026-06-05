@@ -3,23 +3,41 @@ package tests
 import (
 	"testing"
 
+	"bridge_go/cffi"
 	"bridge_go/pkg"
 )
 
 func TestCloneAndReleaseHandle(t *testing.T) {
-	// Call a function that returns a value containing a handle.
-	// For basic types, there's no handle to clone, so we test the
-	// clone_handle/release_handle paths with a synthetic key.
-	// Key 0 means "invalid" — clone should return 0.
-	h := pkg.BamlHandle{Key: 0, HandleType: 0}
-	cloned := h.Clone()
-	if cloned.Key != 0 {
-		t.Fatalf("expected clone of invalid handle to return 0, got %d", cloned.Key)
+	key, handleType, err := cffi.TestonlySeedFunctionRef(42)
+	if err != nil {
+		t.Fatalf("seed function ref: %v", err)
 	}
 
-	// Release should not panic even for invalid keys.
-	h.Release()
-	cloned.Release()
+	h := pkg.BamlHandle{Key: key, HandleType: handleType}
+	cloned, err := h.Clone()
+	if err != nil {
+		t.Fatalf("clone handle: %v", err)
+	}
+	if cloned.Key == 0 || cloned.Key == h.Key {
+		t.Fatalf("expected clone to produce a fresh non-zero key, got %d from %d", cloned.Key, h.Key)
+	}
+
+	if err := h.Release(); err != nil {
+		t.Fatalf("release original: %v", err)
+	}
+	if err := cloned.Release(); err != nil {
+		t.Fatalf("release clone: %v", err)
+	}
+}
+
+func TestInvalidHandleErrors(t *testing.T) {
+	h := pkg.BamlHandle{Key: 0, HandleType: 0}
+	if _, err := h.Clone(); err == nil {
+		t.Fatal("expected clone of invalid handle to return an error")
+	}
+	if err := h.Release(); err == nil {
+		t.Fatal("expected release of invalid handle to return an error")
+	}
 }
 
 func TestFlushEvents(t *testing.T) {
