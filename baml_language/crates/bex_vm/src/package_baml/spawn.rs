@@ -14,7 +14,7 @@ use std::sync::Arc;
 use bex_heap::TlabHolder;
 use bex_vm_types::{
     TaskGroupInner,
-    types::{CancellationToken, Object, SpawnConfigData, Value},
+    types::{CancellationToken, Object, Value},
 };
 
 use super::{
@@ -167,23 +167,6 @@ impl BamlClassSpawnTaskGroup for PackageBamlImpl {
     }
 }
 
-impl BamlNamespaceSpawn for PackageBamlImpl {
-    fn options(
-        vm: &mut BexVm,
-        group: Option<&Value>,
-        cancel: Option<&Value>,
-        detach: Option<bool>,
-    ) -> Value {
-        // Omitted optional arguments arrive as `None` here.
-        let cancel = cancel.and_then(|value| as_cancellation_token(vm, *value));
-        let group = group.and_then(|value| as_task_group_arc(vm, *value));
-        let detach = detach.unwrap_or(false);
-        let class = vm.resolve_class("baml.spawn.SpawnConfig");
-        let handle = Value::object(vm.alloc_rust_data(Arc::new(SpawnConfigData {
-            cancel,
-            detach,
-            group,
-        })));
-        Value::object(vm.alloc_instance(class, vec![handle]))
-    }
-}
+// The namespace trait is dispatch-only since `options` moved to pure BAML
+// (it returns a `SpawnParams` transformer; see ns_spawn/spawn.baml).
+impl BamlNamespaceSpawn for PackageBamlImpl {}

@@ -3769,12 +3769,57 @@ impl LoweringContext<'_> {
             None => Operand::Constant(Constant::Null),
         };
 
-        // Lower the optional `with` config (BEP-034 spawn options). In v1
-        // the only useful form is a single `baml.spawn.options(...)` call,
-        // which yields a `SpawnConfig` value; lower the first one into the
-        // config operand. (Additional `with` expressions are type-checked in
-        // TIR but ignored at runtime until the full middleware design lands.)
-        let config_op = with_exprs.first().map(|&cfg| self.lower_to_operand(cfg));
+        // BEP-034 middleware: with transformers present, package the body
+        // closure + name into a `baml.spawn.SpawnParams` instance, apply each
+        // `with` expression to it left-to-right (each is a function
+        // `(SpawnParams<T, E>) -> SpawnParams<U, F>`), and hand the FINAL
+        // params to the spawn as the config operand. The engine reads
+        // body/name/group/cancel/detach from its fields — a transformer may
+        // have replaced any of them, including the body. Fields are built in
+        // declaration order (the engine reads them BY INDEX; see
+        // ns_spawn/spawn.baml).
+        let config_op = if with_exprs.is_empty() {
+            None
+        } else {
+            let params_local = self.builder.temp(Ty::Null {
+                attr: TyAttr::default(),
+            });
+            self.builder.assign(
+                Place::Local(params_local),
+                Rvalue::Aggregate {
+                    kind: AggregateKind::Class {
+                        name: "baml.spawn.SpawnParams".to_string(),
+                        type_arg_templates: Vec::new(),
+                    },
+                    fields: vec![
+                        closure_op.clone(),
+                        name_op.clone(),
+                        Operand::Constant(Constant::Null),
+                        Operand::Constant(Constant::Null),
+                        Operand::Constant(Constant::Bool(false)),
+                    ],
+                },
+            );
+            let unwind = self.catch_context.as_ref().map(|c| c.unwind_target);
+            let mut cur = params_local;
+            for &with_id in with_exprs {
+                let transformer_op = self.lower_to_operand(with_id);
+                let next = self.builder.temp(Ty::Null {
+                    attr: TyAttr::default(),
+                });
+                let resume = self.builder.create_block();
+                self.builder.call(
+                    transformer_op,
+                    vec![Operand::Copy(Place::Local(cur))],
+                    Place::Local(next),
+                    resume,
+                    unwind,
+                );
+                self.builder.set_current_block(resume);
+                cur = next;
+            }
+            Some(Operand::Copy(Place::Local(cur)))
+        };
 
         // Allocate the future temp. Phase C uses a defaulted `Null` type
         // for the future local; the TIR-tracked value/error types flow

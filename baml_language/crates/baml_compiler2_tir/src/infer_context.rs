@@ -50,12 +50,10 @@ pub enum TirTypeError {
     /// The return value of a void-returning function was used where a value
     /// is required — assigned to a variable, passed as an argument, etc.
     VoidFunctionResultUsed,
-    /// A `spawn ... with` clause expression is not a `baml.spawn.options(...)`
-    /// config (BEP-034 spawn options; v1 accepts only that).
-    SpawnWithMustBeSpawnConfig,
-    /// A `spawn ... with` clause had more than one config expression (v1
-    /// accepts a single `baml.spawn.options(...)`).
-    SpawnWithTooManyConfigs,
+    /// A `spawn ... with` clause expression is not a middleware transformer
+    /// (BEP-034: each `with` expression must be a function
+    /// `(baml.spawn.SpawnParams<T, E>) -> baml.spawn.SpawnParams<U, F>`).
+    SpawnWithNotATransformer { got: Ty },
     /// Expression is not callable (e.g. `42(1)` or `Foo(1)` where Foo is a class).
     NotCallable { ty: Ty },
     /// Expression is not iterable (e.g. `for let i in 42 { ... }` where 42 is an int).
@@ -357,16 +355,10 @@ impl fmt::Display for TirTypeError {
             TirTypeError::VoidFunctionResultUsed => {
                 write!(f, "cannot use return value of a void function")
             }
-            TirTypeError::SpawnWithMustBeSpawnConfig => {
+            TirTypeError::SpawnWithNotATransformer { got } => {
                 write!(
                     f,
-                    "`spawn ... with` accepts only a `baml.spawn.options(...)` configuration"
-                )
-            }
-            TirTypeError::SpawnWithTooManyConfigs => {
-                write!(
-                    f,
-                    "`spawn ... with` accepts a single `baml.spawn.options(...)` configuration"
+                    "`spawn ... with` takes middleware transformers `(baml.spawn.SpawnParams<T, E>) -> baml.spawn.SpawnParams<U, F>`, got `{got}`"
                 )
             }
             TirTypeError::NotCallable { ty } => {

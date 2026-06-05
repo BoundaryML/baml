@@ -82,6 +82,28 @@ struct InterfaceMemberLookup<'a> {
     self_recv: SelfReceiver<'a>,
 }
 
+/// Construct `Ty::Class` for `baml.spawn.SpawnParams<value, error>` (BEP-034
+/// middleware: the value a `spawn ... with` pipeline transforms).
+fn spawn_params_ty(value: Ty, error: Ty) -> Ty {
+    Ty::Class(
+        crate::ty::QualifiedTypeName::new(
+            Name::new("baml"),
+            vec![Name::new("spawn")],
+            Name::new("SpawnParams"),
+        ),
+        vec![value, error],
+        TyAttr::default(),
+    )
+}
+
+/// `true` when `qn` names `baml.spawn.SpawnParams`.
+fn is_spawn_params_qtn(qn: &crate::ty::QualifiedTypeName) -> bool {
+    qn.package().as_str() == "baml"
+        && qn.namespace().len() == 1
+        && qn.namespace()[0].as_str() == "spawn"
+        && qn.name().as_str() == "SpawnParams"
+}
+
 fn json_alias_ty() -> Ty {
     Ty::TypeAlias(
         crate::ty::QualifiedTypeName::new(
@@ -3866,33 +3888,6 @@ impl<'db> TypeInferenceBuilder<'db> {
         if let Some(name_id) = name {
             let _ = self.infer_expr(name_id, body);
         }
-        // Spawn options: type-check each `with` expression — it is
-        // evaluated eagerly in the spawning function. v1 accepts a
-        // single config producing a `baml.spawn.SpawnConfig` (i.e. a
-        // `baml.spawn.options(...)` call, or a variable bound to one).
-        for (idx, with_id) in with_exprs.iter().enumerate() {
-            let cfg_ty = self.infer_expr(*with_id, body);
-            if idx >= 1 {
-                self.context
-                    .report_simple(TirTypeError::SpawnWithTooManyConfigs, *with_id);
-                continue;
-            }
-            let is_spawn_config = matches!(
-                &cfg_ty,
-                Ty::Class(qn, _, _)
-                    if qn.package().as_str() == "baml"
-                        && qn.namespace().len() == 1
-                        && qn.namespace()[0].as_str() == "spawn"
-                        && qn.name().as_str() == "SpawnConfig"
-            );
-            // Don't double-report on an expression that already failed
-            // to type-check.
-            let unresolved = matches!(cfg_ty, Ty::Unknown { .. } | Ty::Error { .. });
-            if !is_spawn_config && !unresolved {
-                self.context
-                    .report_simple(TirTypeError::SpawnWithMustBeSpawnConfig, *with_id);
-            }
-        }
         let lambda_ty = self.infer_expr(spawn_body, body);
         let value_ty = match &lambda_ty {
             Ty::Function { ret, .. } => ret.as_ref().clone(),
@@ -3917,7 +3912,65 @@ impl<'db> TypeInferenceBuilder<'db> {
                     }
                 },
             );
-        Ty::Future(Box::new(value_ty), Box::new(throws_ty), TyAttr::default())
+
+        // BEP-034 middleware: fold the `with` transformers left-to-right.
+        // The body seeds an implicit `SpawnParams<T0, E0>`; each transformer
+        // must check against `(SpawnParams<cur>) -> SpawnParams<?, ?>` —
+        // checking with that expected type lets phase-0 reverse inference
+        // bind a generic transformer's own type params from the parameter
+        // position (e.g. `withRetry(3)` whose declared type is
+        // `(SpawnParams<T, E>) -> SpawnParams<T, E>`). The transformer's
+        // OUTPUT type args feed the next link; the final pair types the
+        // spawn's `Future`. Type-changing transformers (e.g. a fallback
+        // erasing the error type) fall out naturally.
+        let mut cur_value = value_ty;
+        let mut cur_error = throws_ty;
+        for with_id in with_exprs {
+            let params_in = spawn_params_ty(cur_value.clone(), cur_error.clone());
+            let expected = Ty::Function {
+                generic_params: Vec::new(),
+                generic_param_bounds: Vec::new(),
+                params: vec![FunctionParamTy {
+                    name: None,
+                    ty: params_in,
+                    mode: FunctionParamMode::Required,
+                }],
+                ret: Box::new(Ty::Unknown {
+                    attr: TyAttr::default(),
+                }),
+                throws: Box::new(Ty::Unknown {
+                    attr: TyAttr::default(),
+                }),
+                attr: TyAttr::default(),
+            };
+            let got = self.check_expr(*with_id, body, &expected);
+            match &got {
+                Ty::Function { params, ret, .. } if params.len() == 1 => {
+                    if let Ty::Class(qn, args, _) = ret.as_ref()
+                        && is_spawn_params_qtn(qn)
+                        && args.len() == 2
+                    {
+                        cur_value = args[0].clone();
+                        cur_error = args[1].clone();
+                    } else if !matches!(ret.as_ref(), Ty::Unknown { .. } | Ty::Error { .. }) {
+                        self.context.report_simple(
+                            TirTypeError::SpawnWithNotATransformer { got: got.clone() },
+                            *with_id,
+                        );
+                    }
+                }
+                // Already diagnosed (unresolved name, failed call, ...).
+                Ty::Unknown { .. } | Ty::Error { .. } => {}
+                other => {
+                    self.context.report_simple(
+                        TirTypeError::SpawnWithNotATransformer { got: other.clone() },
+                        *with_id,
+                    );
+                }
+            }
+        }
+
+        Ty::Future(Box::new(cur_value), Box::new(cur_error), TyAttr::default())
     }
 
     #[inline(never)]
@@ -3995,6 +4048,22 @@ impl<'db> TypeInferenceBuilder<'db> {
             .map(|te| self.lower_lambda_type_expr(&te.expr, &all_generic_params, te.span));
         let (throws_ty, throws_span, warn_extraneous_throws) =
             self.choose_lambda_throws_surface(func_def, &all_generic_params, None);
+        // An UNANNOTATED lambda in synthesis mode (no contextual throws)
+        // INFERS its throws surface from the body — a lambda throws what it
+        // throws. Pass `Unknown` to the declared-vs-effective check (open
+        // slot → skipped; there is nothing declared to violate) and take the
+        // effective set as the function type's throws below. E.g. a
+        // middleware body wrap `() -> { original() * 2 }` where `original:
+        // () -> T throws E` types as `() -> T throws E`, not `throws never`.
+        let infer_throws_from_body =
+            func_def.throws.is_none() && !Self::is_spawn_body_lambda(func_def);
+        let throws_ty = if infer_throws_from_body {
+            Ty::Unknown {
+                attr: TyAttr::default(),
+            }
+        } else {
+            throws_ty
+        };
 
         // Infer the lambda body using save/restore approach
         let (ret_ty, _lambda_expressions, lambda_fsi, lambda_effective_throws) = self
@@ -4008,12 +4077,17 @@ impl<'db> TypeInferenceBuilder<'db> {
             );
         let surface_ret_ty = return_annotation.unwrap_or(ret_ty);
 
+        let surface_throws = if infer_throws_from_body {
+            lambda_effective_throws.clone()
+        } else {
+            throws_ty
+        };
         let result = Ty::Function {
             generic_params: func_def.generic_params.clone(),
             generic_param_bounds: Vec::new(),
             params: param_tys,
             ret: Box::new(surface_ret_ty),
-            throws: Box::new(throws_ty),
+            throws: Box::new(surface_throws),
             attr: TyAttr::default(),
         };
         self.lambda_effective_throws

@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/tests/baml_src.rs
+assertion_line: 140
 ---
 function cancel_token.$init_test_ns_cancel_token_cancel_token(registry: testing.TestCollector) -> null {
     load_var registry
@@ -33,20 +34,33 @@ function cancel_token.$init_test_ns_cancel_token_cancel_token(registry: testing.
 function cancel_token.await_token_cancelled_catches() -> int {
     call baml.spawn.CancelToken.new
     store_var tok
+    make_closure .<lambda(await_token_cancelled_catches, 0)>, 0
+    store_var _3
+    load_type int
+    load_type baml.errors.Io
     load_const <omitted>
     load_var tok
     load_const <omitted>
     call baml.spawn.options
-    store_var _4
-    make_closure .<lambda(await_token_cancelled_catches, 0)>, 0
+    store_var _5
+    load_var _3
     load_const null
-    load_var _4
+    load_const null
+    load_const null
+    load_const false
+    init_instance baml.spawn.SpawnParams .body, .name, .group, .cancel, .detach
+    load_var _5
+    call_indirect
+    store_var _9
+    load_var _3
+    load_const null
+    load_var _9
     spawn
-    store_var _6
+    store_var _10
     load_var tok
     call baml.spawn.CancelToken.cancel
     pop 1
-    load_var _6
+    load_var _10
     await
     jump L2
     load_var e
@@ -66,17 +80,30 @@ function cancel_token.await_token_cancelled_catches() -> int {
 }
 
 function cancel_token.detached_spawn_completes() -> int {
+    make_closure .<lambda(detached_spawn_completes, 0)>, 0
+    store_var _2
+    load_type int
+    load_type null
     load_const <omitted>
     load_const <omitted>
     load_const true
     call baml.spawn.options
-    store_var _3
-    make_closure .<lambda(detached_spawn_completes, 0)>, 0
-    load_const null
-    load_var _3
-    spawn
     store_var _4
+    load_var _2
+    load_const null
+    load_const null
+    load_const null
+    load_const false
+    init_instance baml.spawn.SpawnParams .body, .name, .group, .cancel, .detach
     load_var _4
+    call_indirect
+    store_var _7
+    load_var _2
+    load_const null
+    load_var _7
+    spawn
+    store_var _8
+    load_var _8
     await
     return
 }
@@ -101,17 +128,30 @@ function cancel_token.token_is_cancelled_reflects_cancel() -> bool[] {
 function cancel_token.uncancelled_token_completes() -> int {
     call baml.spawn.CancelToken.new
     store_var tok
+    make_closure .<lambda(uncancelled_token_completes, 0)>, 0
+    store_var _3
+    load_type int
+    load_type null
     load_const <omitted>
     load_var tok
     load_const <omitted>
     call baml.spawn.options
-    store_var _4
-    make_closure .<lambda(uncancelled_token_completes, 0)>, 0
+    store_var _5
+    load_var _3
     load_const null
-    load_var _4
+    load_const null
+    load_const null
+    load_const false
+    init_instance baml.spawn.SpawnParams .body, .name, .group, .cancel, .detach
+    load_var _5
+    call_indirect
+    store_var _9
+    load_var _3
+    load_const null
+    load_var _9
     spawn
-    store_var _6
-    load_var _6
+    store_var _10
+    load_var _10
     await
     return
 }

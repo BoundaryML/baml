@@ -759,7 +759,7 @@ fn function_type_throws_builtin_map_propagates_callback_surface() {
 }
 
 #[test]
-fn stored_lambda_with_omitted_throws_reports_local_violation() {
+fn stored_lambda_with_omitted_throws_is_inferred_not_violation() {
     let mut db = make_db();
     let file = db.add_file(
         "test.baml",
@@ -773,11 +773,12 @@ fn stored_lambda_with_omitted_throws_reports_local_violation() {
     );
 
     let output = render_tir(&db, file);
-    assert_declared_throws_violation(
-        &output,
-        "never",
-        "string",
-        "expected local closed-lambda violation to report the concrete escaping throw",
+    // The unannotated lambda's surface is INFERRED (`throws string`), so the
+    // throw inside it is not a local violation — it becomes part of the
+    // lambda's type and is checked wherever the lambda is invoked.
+    assert!(
+        !output.contains("declared throws"),
+        "expected no local violation for an unannotated lambda (throws are inferred), got:\n{output}"
     );
 }
 

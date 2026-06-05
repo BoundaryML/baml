@@ -4619,18 +4619,18 @@ function baml.spawn.CancelToken.to_json(self: baml.spawn.CancelToken) -> baml.js
     return
 }
 
-function baml.spawn.SpawnConfig.from_json(j: baml.json.json) -> baml.spawn.SpawnConfig {
+function baml.spawn.SpawnParams.from_json(j: baml.json.json) -> baml.spawn.SpawnParams<void, void> {
     load_var j
     call baml.json.stringify
     store_var _2
-    load_type baml.spawn.SpawnConfig
+    load_type baml.spawn.SpawnParams<#0, #1>
     load_var _2
     call baml.json.from_string
     return
 }
 
-function baml.spawn.SpawnConfig.to_json(self: baml.spawn.SpawnConfig) -> baml.json.json {
-    load_type baml.spawn.SpawnConfig
+function baml.spawn.SpawnParams.to_json(self: baml.spawn.SpawnParams) -> baml.json.json {
+    load_type baml.spawn.SpawnParams<#0, #1>
     load_var self
     call baml.json.to_string
     call baml.json.parse
@@ -4676,7 +4676,46 @@ function baml.spawn.TaskGroup.to_json(self: baml.spawn.TaskGroup) -> baml.json.j
     return
 }
 
-function baml.spawn.options(group: baml.spawn.TaskGroup?, cancel: baml.spawn.CancelToken?, detach: bool?) -> baml.spawn.SpawnConfig {
+function baml.spawn.options(group: baml.spawn.TaskGroup?, cancel: baml.spawn.CancelToken?, detach: bool?) -> (baml.spawn.SpawnParams<void, void>) -> baml.spawn.SpawnParams<void, void> throws never {
+    load_var ?1
+    make_cell
+    store_var ?1
+    load_var ?2
+    make_cell
+    store_var ?2
+    load_var ?3
+    make_cell
+    store_var ?3
+    load_deref ?1
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const null
+    store_deref ?1
+
+  L0:
+    load_deref ?2
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L1
+    load_const null
+    store_deref ?2
+
+  L1:
+    load_deref ?3
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L2
+    load_const null
+    store_deref ?3
+
+  L2:
+    load_type #0
+    load_type #1
+    load_var2 1 2
+    load_var detach
+    make_closure .<lambda(options, 0)>, captures=3, ntypeargs=2
+    return
 }
 
 function baml.stream.StreamFinished.from_json(j: baml.json.json) -> baml.stream.StreamFinished {

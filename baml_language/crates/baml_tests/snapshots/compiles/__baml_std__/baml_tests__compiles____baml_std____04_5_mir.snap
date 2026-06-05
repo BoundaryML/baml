@@ -7692,9 +7692,9 @@ fn baml.spawn.TaskGroup.cancel = builtin(vm)
 
 fn baml.spawn.CancelToken.cancel = builtin(vm)
 
-fn baml.spawn.SpawnConfig.from_json(j: baml.json.json) -> baml.spawn.SpawnConfig {
+fn baml.spawn.SpawnParams.from_json(j: baml.json.json) -> baml.spawn.SpawnParams<void, void> {
     // Locals:
-    let _0: baml.spawn.SpawnConfig // _0 // return
+    let _0: baml.spawn.SpawnParams<void, void> // _0 // return
     let _1: baml.json.json // j // param
     let _2: string
     let _3: type
@@ -7704,7 +7704,7 @@ fn baml.spawn.SpawnConfig.from_json(j: baml.json.json) -> baml.spawn.SpawnConfig
     }
 
     bb1: {
-        _3 = load_type(baml.spawn.SpawnConfig);
+        _3 = load_type(baml.spawn.SpawnParams<#0, #1>);
         _0 = call const fn baml.json.from_string<copy _3>(copy _2) -> [bb2];
     }
 
@@ -7765,21 +7765,134 @@ fn baml.spawn.CancelToken.new = builtin(vm)
 
 fn baml.spawn.TaskGroup.new = builtin(vm)
 
-fn baml.spawn.options = builtin(vm)
+fn baml.spawn.options(group: baml.spawn.TaskGroup?, cancel: baml.spawn.CancelToken?, detach: bool?) -> (baml.spawn.SpawnParams<void, void>) -> baml.spawn.SpawnParams<void, void> throws never {
+    // Locals:
+    let _0: (baml.spawn.SpawnParams<void, void>) -> baml.spawn.SpawnParams<void, void> throws never // _0 // return
+    let _1: baml.spawn.TaskGroup? // group // param [captured]
+    let _2: baml.spawn.CancelToken? // cancel // param [captured]
+    let _3: bool? // detach // param [captured]
+    let _4: bool
+    let _5: bool
+    let _6: bool
+
+    bb0: {
+        _4 = copy _1 == const <omitted>;
+        branch copy _4 -> [bb1, bb2];
+    }
+
+    bb1: {
+        _1 = const null;
+        goto -> bb2;
+    }
+
+    bb2: {
+        _5 = copy _2 == const <omitted>;
+        branch copy _5 -> [bb3, bb4];
+    }
+
+    bb3: {
+        _2 = const null;
+        goto -> bb4;
+    }
+
+    bb4: {
+        _6 = copy _3 == const <omitted>;
+        branch copy _6 -> [bb5, bb6];
+    }
+
+    bb5: {
+        _3 = const null;
+        goto -> bb6;
+    }
+
+    bb6: {
+        _0 = make_closure lambda[0]<2 type_args>(copy _1, copy _2, copy _3);
+        goto -> bb7;
+    }
+
+    bb7: {
+        return;
+    }
+}
+
+// lambda[0]
+fn .<lambda(options, 0)>(params: baml.spawn.SpawnParams<void, void>) -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: baml.spawn.SpawnParams<void, void> // params // param
+    let _2: () -> void throws never
+    let _3: string?
+    let _4: baml.spawn.TaskGroup?
+    let _5: baml.spawn.TaskGroup?
+    let _6: bool
+    let _7: baml.spawn.CancelToken?
+    let _8: baml.spawn.CancelToken?
+    let _9: bool
+    let _10: bool
+    let _11: bool?
+    let _12: bool
+
+    bb0: {
+        _2 = copy _1.0;
+        _3 = copy _1.1;
+        _5 = copy capture[0];
+        _4 = copy _5;
+        _6 = copy _5 == const null;
+        branch copy _6 -> [bb1, bb2];
+    }
+
+    bb1: {
+        _4 = copy _1.2;
+        goto -> bb2;
+    }
+
+    bb2: {
+        _8 = copy capture[1];
+        _7 = copy _8;
+        _9 = copy _8 == const null;
+        branch copy _9 -> [bb3, bb4];
+    }
+
+    bb3: {
+        _7 = copy _1.3;
+        goto -> bb4;
+    }
+
+    bb4: {
+        _11 = copy capture[2];
+        _10 = copy _11;
+        _12 = copy _11 == const null;
+        branch copy _12 -> [bb5, bb6];
+    }
+
+    bb5: {
+        _10 = copy _1.4;
+        goto -> bb6;
+    }
+
+    bb6: {
+        _0 = baml.spawn.SpawnParams { copy _2, copy _3, copy _4, copy _7, copy _10 };
+        goto -> bb7;
+    }
+
+    bb7: {
+        return;
+    }
+}
 
 fn baml.spawn.TaskGroup.queued_count = builtin(vm)
 
 fn baml.spawn.TaskGroup.set_limit = builtin(vm)
 
-fn baml.spawn.SpawnConfig.to_json(self: baml.spawn.SpawnConfig) -> baml.json.json {
+fn baml.spawn.SpawnParams.to_json(self: baml.spawn.SpawnParams) -> baml.json.json {
     // Locals:
     let _0: baml.json.json // _0 // return
-    let _1: baml.spawn.SpawnConfig // self // param
+    let _1: baml.spawn.SpawnParams // self // param
     let _2: string
     let _3: type
 
     bb0: {
-        _3 = load_type(baml.spawn.SpawnConfig);
+        _3 = load_type(baml.spawn.SpawnParams<#0, #1>);
         _2 = call const fn baml.json.to_string<copy _3>(copy _1) -> [bb1];
     }
 

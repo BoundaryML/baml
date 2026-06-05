@@ -1,15 +1,27 @@
-/// BEP-034 — spawn options (`spawn ... with baml.spawn.options(...)`).
+/// BEP-034 — spawn options and `with` middleware.
 ///
 /// This namespace holds the values a `spawn` can be configured with: a
 /// `CancelToken` for cooperative cancellation, a `TaskGroup` for rate
-/// limiting, and the `detach` flag. They are assembled by `options(...)`
-/// into an opaque `SpawnConfig` that the `with` clause hands to the runtime.
+/// limiting, and the `detach` flag — plus `SpawnParams`, the value a
+/// `spawn ... with` middleware pipeline transforms before the runtime
+/// creates the future.
 
-/// Opaque configuration produced by `baml.spawn.options(...)` and consumed by
-/// a `spawn ... with` clause. Carries the (optional) cancel token, group, and
-/// detach flag. Not meaningfully constructible any other way.
-class SpawnConfig {
-  _handle $rust_type
+/// Every `spawn` implicitly constructs a `SpawnParams` from its name and
+/// body; the `with` pipeline transforms it left-to-right before the runtime
+/// creates the future. Each transformer is an ordinary function
+/// `(SpawnParams<T, E>) -> SpawnParams<U, F>` — it may set config fields,
+/// wrap `body` (retry, timing), or replace it entirely (type-changing
+/// transformers like a fallback that erases the error type).
+///
+/// NOTE for the runtime: the engine reads these fields BY INDEX at the spawn
+/// dispatch site (body=0, name=1, group=2, cancel=3, detach=4) — keep the
+/// declaration order in sync with `bex_engine`'s `read_spawn_params`.
+class SpawnParams<T, E> {
+  body () -> T throws E
+  name string?
+  group TaskGroup?
+  cancel CancelToken?
+  detach bool
 }
 
 /// Caps how many spawns referencing it run concurrently. Excess spawns queue
@@ -101,12 +113,21 @@ class CancelToken {
   }
 }
 
-/// Assemble a `SpawnConfig` for a `spawn ... with` clause. `cancel` links a
-/// cancel token into the spawn's effective token; `detach = true` opts the
-/// spawn out of the parent→child cancel cascade and routes its unhandled
-/// errors to the root task instead of the spawner; `group` enrolls the spawn
-/// in a `TaskGroup`, so it parks until the group admits it (FIFO).
-//baml:mut_vm
-function options(group: TaskGroup? = null, cancel: CancelToken? = null, detach: bool? = null) -> SpawnConfig throws never {
-  $rust_function
+/// The built-in config transformer for a `spawn ... with` clause: sets the
+/// provided fields, leaves everything else (including `body`) untouched, so
+/// types are unchanged. `cancel` links a cancel token into the spawn's
+/// effective token; `detach = true` opts the spawn out of the parent→child
+/// cancel cascade and routes its unhandled errors to the root task instead
+/// of the spawner; `group` enrolls the spawn in a `TaskGroup`, so it parks
+/// until the group admits it (FIFO).
+function options<T, E>(group: TaskGroup? = null, cancel: CancelToken? = null, detach: bool? = null) -> (SpawnParams<T, E>) -> SpawnParams<T, E> throws never {
+  (params: SpawnParams<T, E>) -> SpawnParams<T, E> {
+    SpawnParams {
+      body: params.body,
+      name: params.name,
+      group: group ?? params.group,
+      cancel: cancel ?? params.cancel,
+      detach: detach ?? params.detach,
+    }
+  }
 }

@@ -95,7 +95,7 @@ use bex_heap::{BexHeap, TlabHolder};
 use bex_vm::{BexVm, SpanNotification, VmExecState};
 use bex_vm_types::{
     FunctionMeta, FunctionOrigin, GlobalPool, HeapPtr, Object, SharedGlobals, SysOp,
-    TaskGroupInner, Value, ValueKind, VmGlobals, types::SpawnConfigData,
+    TaskGroupInner, Value, ValueKind, VmGlobals,
 };
 pub use conversion::test_arg_to_external;
 // Re-export CancellationToken for callers.
@@ -624,6 +624,16 @@ pub(crate) fn op_error_to_catchable_throw(op_err: &OpError) -> Option<BexExterna
     } else {
         None
     }
+}
+
+/// Decoded `baml.spawn.SpawnParams` fields (BEP-034 middleware) — see
+/// [`BexEngine::read_spawn_params`].
+struct SpawnParamsData {
+    body: HeapPtr,
+    name: Option<String>,
+    group: Option<Arc<TaskGroupInner>>,
+    cancel: Option<CancellationToken>,
+    detach: bool,
 }
 
 impl BexEngine {
@@ -1937,24 +1947,62 @@ impl BexEngine {
         }
     }
 
-    /// Read the `SpawnConfigData` (cancel token + detach flag) out of a
-    /// `baml.spawn.SpawnConfig` instance (BEP-034 spawn options). `config`
-    /// points at the `SpawnConfig` heap instance produced by
-    /// `baml.spawn.options(...)`; its field 0 (`_handle`) is an
-    /// `Object::RustData(Arc<SpawnConfigData>)`. Returns `None` when the value
-    /// is not a well-formed `SpawnConfig` (caller defaults it).
+    /// Read the spawn parameters out of a `baml.spawn.SpawnParams` instance
+    /// (BEP-034 middleware: the value a `spawn ... with` transformer pipeline
+    /// produced). Fields are read BY INDEX in declaration order — body=0,
+    /// name=1, group=2, cancel=3, detach=4 — keep in sync with
+    /// `ns_spawn/spawn.baml`. Returns `None` when the value is not a
+    /// well-formed `SpawnParams` (caller falls back to the spawn operands).
     ///
     /// Safe to deref the pointers because the caller holds the active heap
-    /// permit and `config` is rooted by the `UnscheduledFuture` being handled.
-    fn read_spawn_config(config: HeapPtr) -> Option<SpawnConfigData> {
-        let Object::Instance(instance) = (unsafe { config.get() }) else {
+    /// permit and `params` is rooted by the `UnscheduledFuture` being handled.
+    fn read_spawn_params(params: HeapPtr) -> Option<SpawnParamsData> {
+        let Object::Instance(instance) = (unsafe { params.get() }) else {
             return None;
         };
-        let handle_ptr = instance.load_field(0).as_object_ptr()?;
-        match unsafe { handle_ptr.get() } {
-            Object::RustData(data) => data.downcast_ref::<SpawnConfigData>().cloned(),
-            _ => None,
+        // Field 0: `body` — the closure the spawned thread runs. A middleware
+        // transformer may have wrapped or replaced the original spawn body.
+        let body = instance.load_field(0).as_object_ptr()?;
+
+        // Field 1: `name` — optional human-readable label.
+        let name =
+            instance
+                .load_field(1)
+                .as_object_ptr()
+                .and_then(|ptr| match unsafe { ptr.get() } {
+                    Object::String(s) => Some(s.to_string()),
+                    _ => None,
+                });
+
+        // Fields 2/3: `group` / `cancel` — `TaskGroup` / `CancelToken`
+        // instances whose `_handle` field (index 0) is `Object::RustData`.
+        fn handle_object(value: Value) -> Option<&'static Object> {
+            let inst_ptr = value.as_object_ptr()?;
+            let Object::Instance(inst) = (unsafe { inst_ptr.get() }) else {
+                return None;
+            };
+            let handle_ptr = inst.load_field(0).as_object_ptr()?;
+            Some(unsafe { handle_ptr.get() })
         }
+        let group = handle_object(instance.load_field(2)).and_then(|obj| match obj {
+            Object::RustData(data) => data.clone().downcast::<TaskGroupInner>().ok(),
+            _ => None,
+        });
+        let cancel = handle_object(instance.load_field(3)).and_then(|obj| match obj {
+            Object::RustData(data) => data.downcast_ref::<CancellationToken>().cloned(),
+            _ => None,
+        });
+
+        // Field 4: `detach`.
+        let detach = instance.load_field(4).as_bool().unwrap_or(false);
+
+        Some(SpawnParamsData {
+            body,
+            name,
+            group,
+            cancel,
+            detach,
+        })
     }
 
     /// Spawn a fresh `BexThread` that runs the body packaged in `closure`
@@ -2564,18 +2612,23 @@ impl BexEngine {
                             Object::String(s) => Some(s.to_string()),
                             _ => None,
                         });
-                    // BEP-034 spawn options: read the `SpawnConfig` (cancel
-                    // token, detach flag, task group) from a
-                    // `with baml.spawn.options(...)` clause. `cancel` links into
-                    // the child's effective token; `detach` decouples it from
-                    // the parent and routes its unhandled errors to the root
-                    // task instead of this spawner; `group` rate-limits it.
-                    let config = config_ptr
-                        .and_then(Self::read_spawn_config)
-                        .unwrap_or_default();
-                    let detach = config.detach;
-                    let user_cancel = config.cancel;
-                    let group = config.group;
+                    // BEP-034 middleware: a `spawn ... with` lowers its final
+                    // transformed `baml.spawn.SpawnParams` into the config
+                    // operand. The params override the spawn operands — a
+                    // transformer may have wrapped/replaced the body or set a
+                    // name — and carry the options: `cancel` links into the
+                    // child's effective token; `detach` decouples it from the
+                    // parent and routes its unhandled errors to the root task
+                    // instead of this spawner; `group` rate-limits it.
+                    let params = config_ptr.and_then(Self::read_spawn_params);
+                    let (closure, spawn_name) = match &params {
+                        Some(p) => (p.body, p.name.clone().or(spawn_name)),
+                        None => (closure, spawn_name),
+                    };
+                    let (user_cancel, group, detach) = match params {
+                        Some(p) => (p.cancel, p.group, p.detach),
+                        None => (None, None, false),
+                    };
                     let parent_errors_arc = if detach {
                         thread.vm_thread_root_errors_arc()
                     } else {

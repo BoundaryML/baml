@@ -2233,10 +2233,16 @@ impl<'a> Parser<'a> {
             // Note: true/false are Word tokens, and they become BoolLiteral types
             self.bump();
 
-            // Consume dot-separated path segments (e.g., baml.http.Request)
+            // Consume dot-separated path segments (e.g., baml.http.Request).
+            // `spawn`/`await` are reserved keywords but valid as namespace
+            // segments after a `.` (e.g. `baml.spawn.SpawnParams` in a type
+            // annotation), mirroring `parse_path_or_ident`'s segment set.
             while self.at(TokenKind::Dot) {
                 self.bump(); // dot
-                if self.at(TokenKind::Word) {
+                if self.at(TokenKind::Word)
+                    || self.at(TokenKind::Spawn)
+                    || self.at(TokenKind::Await)
+                {
                     self.bump(); // next segment
                 } else {
                     self.error_unexpected_token("type name segment after '.'".to_string());

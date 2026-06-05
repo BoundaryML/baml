@@ -1068,8 +1068,12 @@ function baml.panics.to_json(self: ?) -> baml.json.json  [expr] {
 class baml.spawn.CancelToken {
   _handle: $rust_type
 }
-class baml.spawn.SpawnConfig {
-  _handle: $rust_type
+class baml.spawn.SpawnParams {
+  body: () -> T throws E
+  name: string?
+  group: baml.spawn.TaskGroup?
+  cancel: baml.spawn.CancelToken?
+  detach: bool
 }
 class baml.spawn.TaskGroup {
   _handle: $rust_type
@@ -1078,7 +1082,7 @@ function baml.spawn.active_count(self: ?) -> int  [builtin]
 function baml.spawn.any(tokens: baml.spawn.CancelToken[]) -> baml.spawn.CancelToken  [builtin]
 function baml.spawn.cancel(self: ?, pending: bool? = true, active: bool? = true) -> int  [builtin]
 function baml.spawn.cancel(self: ?) -> int  [builtin]
-function baml.spawn.from_json(j: baml.json.json) -> baml.spawn.SpawnConfig  [expr] {
+function baml.spawn.from_json(j: baml.json.json) -> baml.spawn.SpawnParams<T, E>  [expr] {
   baml.json.from_string(baml.json.stringify(j))
 }
 function baml.spawn.from_json(j: baml.json.json) -> baml.spawn.TaskGroup  [expr] {
@@ -1092,7 +1096,9 @@ function baml.spawn.limit(self: ?) -> int  [builtin]
 function baml.spawn.name(self: ?) -> string?  [builtin]
 function baml.spawn.new() -> baml.spawn.CancelToken  [builtin]
 function baml.spawn.new(limit: int, name: string? = null) -> baml.spawn.TaskGroup  [builtin]
-function baml.spawn.options(group: baml.spawn.TaskGroup? = null, cancel: baml.spawn.CancelToken? = null, detach: bool? = null) -> baml.spawn.SpawnConfig  [builtin]
+function baml.spawn.options(group: baml.spawn.TaskGroup? = null, cancel: baml.spawn.CancelToken? = null, detach: bool? = null) -> (baml.spawn.SpawnParams<T, E>) -> baml.spawn.SpawnParams<T, E> throws never  [expr] {
+  {  } (params: SpawnParams<T, E>) -> SpawnParams<T, E> { {  } baml.spawn.SpawnParams { body: params.body, name: params.name, group: group NullCoalesce params.group, cancel: cancel NullCoalesce params.cancel, detach: detach NullCoalesce params.detach } }
+}
 function baml.spawn.queued_count(self: ?) -> int  [builtin]
 function baml.spawn.set_limit(self: ?, limit: int) -> void  [builtin]
 function baml.spawn.to_json(self: ?) -> baml.json.json  [expr] {
@@ -1104,6 +1110,9 @@ function baml.spawn.to_json(self: ?) -> baml.json.json  [expr] {
 function baml.spawn.to_json(self: ?) -> baml.json.json  [expr] {
   baml.json.parse(baml.json.to_string(self))
 }
+
+--- captures ---
+lambda (params) in options: captures [group, cancel, detach]
 
 --- <builtin>/baml/ns_stream/stream.baml ---
 class baml.stream.StreamFinished {
