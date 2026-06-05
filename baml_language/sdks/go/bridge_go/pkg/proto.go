@@ -115,10 +115,14 @@ func goToInboundValueTracking(v any, registered *[]uint64) (*pb.InboundValue, er
 			MapValue: &pb.InboundMapValue{Entries: entries},
 		}}, nil
 	case BamlHandle:
+		cloned, err := val.Clone()
+		if err != nil {
+			return nil, err
+		}
 		return &pb.InboundValue{Value: &pb.InboundValue_Handle{
 			Handle: &pb.BamlHandle{
-				Key:        val.Key,
-				HandleType: pb.BamlHandleType(val.HandleType),
+				Key:        cloned.Key,
+				HandleType: pb.BamlHandleType(cloned.HandleType),
 			},
 		}}, nil
 	default:

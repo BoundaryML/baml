@@ -220,8 +220,7 @@ def _set_inbound_value(
     # precede the media-class branch since the media types compose a
     # `BamlPyHandle` internally and recurse here on `_to_pyhandle()`.
     if isinstance(value, BamlPyHandle):
-        from .baml_py import put_pyhandle_into_table
-        key, ht = put_pyhandle_into_table(value)
+        key, ht = value._clone_key_for_wire()
         inbound_value.handle.key = key
         # Wire field stays populated for cross-bridge compat. The proto
         # field is typed as the enum class, but `BamlHandleType` is an
@@ -565,10 +564,9 @@ def _decode_handle(handle, type_map: BamlTypeMap) -> Any:
     directly; the production path goes through `_decode_value_holder`,
     which hands us the outbound shape.
     """
-    from .baml_py import take_pyhandle_from_table
     HT = baml_inbound_pb2.BamlHandleType
     ht = handle.handle_type
-    pyhandle = take_pyhandle_from_table(handle.key, int(ht))
+    pyhandle = BamlPyHandle(handle.key, int(ht))
 
     if ht == HT.ADT_MEDIA_IMAGE:
         return BamlImage._from_pyhandle(pyhandle)

@@ -35,9 +35,12 @@ func Init(libraryPath string) error {
 		"call_function":        func(p unsafe.Pointer) { C.setCallFunctionFn(p) },
 		"register_callback":    func(p unsafe.Pointer) { C.setRegisterCallbackFn(p) },
 		"cancel_function_call": func(p unsafe.Pointer) { C.setCancelFunctionCallFn(p) },
-		"clone_handle":         func(p unsafe.Pointer) { C.setCloneHandleFn(p) },
-		"release_handle":       func(p unsafe.Pointer) { C.setReleaseHandleFn(p) },
-		"flush_events":         func(p unsafe.Pointer) { C.setFlushEventsFn(p) },
+		"baml_handle_clone":    func(p unsafe.Pointer) { C.setBamlHandleCloneFn(p) },
+		"baml_handle_release":  func(p unsafe.Pointer) { C.setBamlHandleReleaseFn(p) },
+		"__testonly_seed_function_ref": func(p unsafe.Pointer) {
+			C.setTestonlySeedFunctionRefFn(p)
+		},
+		"flush_events": func(p unsafe.Pointer) { C.setFlushEventsFn(p) },
 		// Host-value callable C symbols.
 		"register_host_dispatch_callback": func(p unsafe.Pointer) { C.setRegisterHostDispatchCallbackFn(p) },
 		"register_host_release_callback":  func(p unsafe.Pointer) { C.setRegisterHostReleaseCallbackFn(p) },
@@ -164,14 +167,62 @@ func CancelFunctionCall(id uint32) {
 	}
 }
 
+type BamlCffiStatus uint32
+
+const (
+	BamlCffiStatusOK                    BamlCffiStatus = 0
+	BamlCffiStatusInvalidHandle         BamlCffiStatus = 1
+	BamlCffiStatusTypeMismatch          BamlCffiStatus = 2
+	BamlCffiStatusUnsupportedHandleType BamlCffiStatus = 3
+	BamlCffiStatusInternalError         BamlCffiStatus = 4
+	BamlCffiStatusUnexpectedNullptr     BamlCffiStatus = 5
+)
+
+func statusError(op string, status BamlCffiStatus) error {
+	if status == BamlCffiStatusOK {
+		return nil
+	}
+	switch status {
+	case BamlCffiStatusInvalidHandle:
+		return fmt.Errorf("%s: invalid handle", op)
+	case BamlCffiStatusTypeMismatch:
+		return fmt.Errorf("%s: handle type mismatch", op)
+	case BamlCffiStatusUnsupportedHandleType:
+		return fmt.Errorf("%s: unsupported handle type", op)
+	case BamlCffiStatusInternalError:
+		return fmt.Errorf("%s: internal error", op)
+	case BamlCffiStatusUnexpectedNullptr:
+		return fmt.Errorf("%s: unexpected null pointer", op)
+	default:
+		return fmt.Errorf("%s: unknown CFFI status %d", op, status)
+	}
+}
+
 // CloneHandle clones an opaque handle, returning a new key.
-func CloneHandle(key uint64) uint64 {
-	return uint64(C.wrapCloneHandle(C.uint64_t(key)))
+func CloneHandle(key uint64) (uint64, error) {
+	var out C.uint64_t
+	status := BamlCffiStatus(C.wrapBamlHandleClone(C.uint64_t(key), &out))
+	if err := statusError("baml_handle_clone", status); err != nil {
+		return 0, err
+	}
+	return uint64(out), nil
 }
 
 // ReleaseHandle releases an opaque handle.
-func ReleaseHandle(key uint64) {
-	C.wrapReleaseHandle(C.uint64_t(key))
+func ReleaseHandle(key uint64) error {
+	status := BamlCffiStatus(C.wrapBamlHandleRelease(C.uint64_t(key)))
+	return statusError("baml_handle_release", status)
+}
+
+// TestonlySeedFunctionRef creates a real FunctionRef handle for bridge tests.
+func TestonlySeedFunctionRef(globalIndex uint64) (uint64, int32, error) {
+	var key C.uint64_t
+	var handleType C.int32_t
+	status := BamlCffiStatus(C.wrapTestonlySeedFunctionRef(C.uint64_t(globalIndex), &key, &handleType))
+	if err := statusError("__testonly_seed_function_ref", status); err != nil {
+		return 0, 0, err
+	}
+	return uint64(key), int32(handleType), nil
 }
 
 // FlushEvents flushes the event sink.

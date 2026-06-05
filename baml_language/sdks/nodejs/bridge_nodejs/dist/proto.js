@@ -11,7 +11,7 @@
 // Decodes the BamlOutboundResult envelope → TS objects (call results), and
 // bare BamlOutboundValue bytes → TS objects (host-callable args).
 import { baml_core } from './proto/baml_cffi.js';
-import { BamlHandle, putHandleIntoTable, BamlImage, BamlAudio, BamlVideo, BamlPdf, registerHostCallable, releaseHostCallable, completeHostCall, } from './native.js';
+import { BamlHandle, BamlImage, BamlAudio, BamlVideo, BamlPdf, registerHostCallable, releaseHostCallable, completeHostCall, } from './native.js';
 import { BamlStream } from './stream.js';
 import { BamlError, BamlPanic } from './errors.js';
 import { getTypeMap } from './typemap.js';
@@ -75,7 +75,7 @@ function setInboundValue(iv, value, ctx) {
         }
         // The Rust inbound decoder drains handle-table entries. Send a fresh
         // cloned key so the JS-owned handle remains valid for later calls.
-        iv.handle = { key: putHandleIntoTable(value), handleType: value.handleType };
+        iv.handle = { key: value._cloneKeyForWire(), handleType: value.handleType };
     }
     else if (value instanceof BamlStream) {
         // Stream wrapper → its inner TaggedHeapHandle. Mirrors the BamlHandle
