@@ -86,8 +86,17 @@ test "toml_item_from_json_rejects_null" {
     }
 }
 
-// `item_to_json` over a heterogeneous array lives in
-// crates/baml_tests/tests/toml.rs: under the CLI pipeline, a class element
-// retrieved from a union-typed array currently fails the class match arms
-// (canary regression from the `Ty::Optional` removal). Move it here once
-// that is fixed.
+// `item_to_json` is a public helper that `Table.to_json` does not reach (the
+// latter uses the auto-derived map projection), so it is otherwise untested.
+// One call hits its array-recursion, `ZonedDateTime`, and scalar arms
+// together. Hoisted into a function: locals inside `test` blocks are boxed
+// by the closure capture (known VM bug, see the ns_closures/closures.baml
+// header), and a boxed local passed to the union-typed `Item` parameter
+// fails the match arms.
+function toml_item_to_json_array() -> string {
+    let item: baml.toml.Item = [baml.time.ZonedDateTime.parse("2020-01-01T00:00:00Z"), 7];
+    baml.json.stringify(baml.toml.item_to_json(item))
+}
+test "toml_item_to_json_array_with_datetime" {
+    assert.equal(toml_item_to_json_array(), "[\"2020-01-01T00:00:00Z\",7]")
+}

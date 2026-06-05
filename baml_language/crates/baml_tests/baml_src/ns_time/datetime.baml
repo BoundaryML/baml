@@ -47,14 +47,22 @@ test "plain_date_rejects_invalid" {
     }
 }
 
-// The with-time variant of `to_plain_datetime` lives in
-// crates/baml_tests/tests/datetime.rs: under the CLI pipeline, optional
-// class-typed arguments to native functions are currently dropped (canary
-// regression from the `Ty::Optional` removal — also reproducible with
-// `baml.sys.exec`'s `ProcessOptions?`). Move it here once that is fixed.
-test "plain_date_to_plain_datetime_defaults_to_midnight" {
+// Hoisted into a function: locals inside `test` blocks are boxed by the
+// closure capture (known VM bug, see the ns_closures/closures.baml header),
+// and a boxed local passed to a union-typed parameter (here `PlainTime?`)
+// currently arrives as null.
+function plain_date_to_plain_datetime_with_time() -> string {
     let d = baml.time.PlainDate.parse("1979-05-27");
-    assert.equal(d.to_plain_datetime(null).to_string(), "1979-05-27T00:00:00")
+    let t = baml.time.PlainTime.parse("07:32:00");
+    d.to_plain_datetime(t).to_string()
+}
+test "plain_date_to_plain_datetime" {
+    assert.equal(plain_date_to_plain_datetime_with_time(), "1979-05-27T07:32:00");
+    // Omitted time defaults to midnight.
+    assert.equal(
+        baml.time.PlainDate.parse("1979-05-27").to_plain_datetime(null).to_string(),
+        "1979-05-27T00:00:00",
+    )
 }
 
 // ─── PlainTime ───────────────────────────────────────────────────────────────

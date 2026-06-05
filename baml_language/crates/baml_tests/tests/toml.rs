@@ -1,7 +1,7 @@
 //! Runtime tests for the `baml.toml` standard-library namespace live in
 //! `baml_src/ns_toml/toml.baml` as pure-BAML tests. This file holds only the
-//! one test that cannot move there: it needs `#[ignore]` (pending a VM bug),
-//! and BAML test blocks have no ignore mechanism.
+//! one test that cannot move there: it needs `#[ignore]` (pending the VM
+//! `continue`/`break` bug), and BAML test blocks have no ignore mechanism.
 
 use baml_tests::baml_test;
 use bex_engine::BexExternalValue;
@@ -30,29 +30,6 @@ async fn from_json_skips_null() {
         output.result,
         Ok(BexExternalValue::String(
             r#"{"a":1,"c":{"d":"x"}}"#.to_string().into()
-        ))
-    );
-}
-
-/// `item_to_json` over a heterogeneous `Item[]` (array-recursion +
-/// `ZonedDateTime` + scalar arms together). Kept in the engine-API harness:
-/// under the CLI pipeline, a class element retrieved from a union-typed
-/// array currently fails the class match arms (canary regression from the
-/// `Ty::Optional` removal). Move to `baml_src/ns_toml/toml.baml` once fixed.
-#[tokio::test]
-async fn item_to_json_array_with_datetime() {
-    let output = baml_test!(
-        r#"
-        function main() -> string {
-            let item: baml.toml.Item = [baml.time.ZonedDateTime.parse("2020-01-01T00:00:00Z"), 7];
-            baml.json.stringify(baml.toml.item_to_json(item))
-        }
-    "#
-    );
-    assert_eq!(
-        output.result,
-        Ok(BexExternalValue::String(
-            r#"["2020-01-01T00:00:00Z",7]"#.to_string().into()
         ))
     );
 }
