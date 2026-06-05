@@ -3073,11 +3073,9 @@ fn baml.llm.Client.__make_stream(self: baml.llm.Client, sse: baml.http.SseStream
     let _8: baml.llm.StreamCache<unknown, unknown> // cache
     let _9: type
     let _10: type
-    let _11: type
-    let _12: type
-    let _13: baml.llm.PrimitiveClient
-    let _14: baml.llm.StreamAccumulator
-    let _15: baml.llm.StreamCache<unknown, unknown>
+    let _11: baml.llm.PrimitiveClient
+    let _12: baml.llm.StreamAccumulator
+    let _13: baml.llm.StreamCache<unknown, unknown>
 
     bb0: {
         _4 = call const fn baml.llm.Client.to_primitive_client(copy _1) -> [bb1];
@@ -3098,16 +3096,14 @@ fn baml.llm.Client.__make_stream(self: baml.llm.Client, sse: baml.http.SseStream
     bb4: {
         _9 = copy _5;
         _10 = copy _6;
-        _11 = load_type(#0);
-        _12 = load_type(#1);
-        _8 = sys_op const fn baml.llm.StreamCache.new(copy _9, copy _10, copy _11, copy _12) -> bb5;
+        _8 = sys_op const fn baml.llm.StreamCache.new(copy _9, copy _10) -> bb5;
     }
 
     bb5: {
-        _13 = copy _4;
-        _14 = copy _7;
-        _15 = copy _8;
-        _0 = baml.llm.Stream<#0, #1> { copy _13, copy _14, copy _2, copy _15 };
+        _11 = copy _4;
+        _12 = copy _7;
+        _13 = copy _8;
+        _0 = baml.llm.Stream<#0, #1> { copy _11, copy _12, copy _2, copy _13 };
         goto -> bb6;
     }
 

@@ -5510,12 +5510,14 @@ impl LoweringContext<'_> {
         // The VM pops these `ntypeargs` Object::Type values into the new frame's
         // `type_args` vec so that inner `reflect.type_of<T>()` calls can
         // substitute them at runtime.
-        // Check if callee resolves to a builtin IO function (sys-op). Sys-ops
-        // read type args positionally in Rust glue; explicit call-site type
-        // args are still passed, but TIR-inferred frame seeds are for regular
-        // BAML callee frames.
-        let is_sys_op = self.check_sys_op(callee);
-        let call_type_arg_operands = self.lower_call_type_args(expr_id, true);
+        // Check if callee resolves to a builtin IO function (sys-op). Sys-op
+        // glue reads only its declared value args plus any synthetic trailing
+        // `type` operands needed for generic params that are not already
+        // represented by ordinary `type` value params.
+        let sys_op_type_arg_count = self.sys_op_synthetic_type_arg_count(callee);
+        let is_sys_op = sys_op_type_arg_count.is_some();
+        let call_type_arg_operands =
+            self.lower_call_type_args(expr_id, true, sys_op_type_arg_count);
 
         // ── Prepend receiver's class-level type args ─────────────────────────
         // For `b.describe()` where `b: Box<int>`, the method `describe` is compiled
@@ -5592,13 +5594,11 @@ impl LoweringContext<'_> {
                     attr: TyAttr::default(),
                 }),
             };
-            // For generic IO builtins (`$rust_io_function` with type
-            // params), the compiler injects synthetic trailing
-            // value-arg slots — one `baml_type::Ty` per type
-            // parameter.  The Rust glue reads them positionally after
-            // the regular value args.  We therefore append type-arg
-            // operands AFTER the value args here (unlike regular BAML
-            // calls where they are prepended as leading args).
+            // For generic IO builtins (`$rust_io_function` with type params),
+            // the compiler may inject synthetic trailing value-arg slots for
+            // runtime `baml_type::Ty` descriptors. The Rust glue reads them
+            // positionally after the regular value args, so append them here
+            // instead of prepending them like regular BAML frame type args.
             let sys_op_arg_operands = if ntypeargs > 0 {
                 let mut combined = arg_operands;
                 combined.extend(type_arg_operands);
@@ -5653,7 +5653,7 @@ impl LoweringContext<'_> {
         self.builder.set_current_block(target);
     }
 
-    fn check_sys_op(&self, callee: AstExprId) -> bool {
+    fn sys_op_synthetic_type_arg_count(&self, callee: AstExprId) -> Option<usize> {
         use baml_compiler2_ast::BuiltinKind;
 
         // ── Path callee (single- or multi-segment) ─────────────────────────────
@@ -5715,7 +5715,7 @@ impl LoweringContext<'_> {
             if let Some(fl) = func_loc {
                 let body = baml_compiler2_ppir::function_body(self.db, fl);
                 if let FunctionBody::Builtin(BuiltinKind::Io) = body.as_ref() {
-                    return true;
+                    return Some(self.synthetic_type_arg_count_for_sys_op(fl));
                 }
             }
         }
@@ -5734,17 +5734,39 @@ impl LoweringContext<'_> {
                 if let Some(fl) = func_loc {
                     let body = baml_compiler2_ppir::function_body(self.db, fl);
                     if let FunctionBody::Builtin(BuiltinKind::Io) = body.as_ref() {
-                        return true;
+                        return Some(self.synthetic_type_arg_count_for_sys_op(fl));
                     }
                 }
             }
         }
 
-        false
+        None
+    }
+
+    fn synthetic_type_arg_count_for_sys_op(
+        &self,
+        func_loc: baml_compiler2_hir::loc::FunctionLoc<'_>,
+    ) -> usize {
+        let item_tree = baml_compiler2_ppir::file_item_tree(self.db, func_loc.file(self.db));
+        let func = &item_tree[func_loc.id(self.db)];
+        let declared_type_value_params = func
+            .params
+            .iter()
+            .filter(|param| {
+                matches!(
+                    param.type_expr.as_ref().map(|ty| &ty.expr),
+                    Some(baml_compiler2_ast::TypeExpr::Type { .. })
+                )
+            })
+            .count();
+        func.generic_params
+            .len()
+            .saturating_sub(declared_type_value_params)
     }
 
     /// Check if the callee resolves to a `$compiler_intrinsic` function and return the
-    /// corresponding `IntrinsicOp`. Follows the same resolution pattern as `check_sys_op`.
+    /// corresponding `IntrinsicOp`. Follows the same resolution pattern as
+    /// `sys_op_synthetic_type_arg_count`.
     fn check_intrinsic(&self, callee: AstExprId) -> Option<IntrinsicOp> {
         use baml_compiler2_ast::BuiltinKind;
 
@@ -6053,7 +6075,11 @@ impl LoweringContext<'_> {
         &mut self,
         call_expr_id: AstExprId,
         include_inferred: bool,
+        max_count: Option<usize>,
     ) -> Vec<Operand> {
+        if max_count == Some(0) {
+            return Vec::new();
+        }
         let ast_type_args: Vec<AstTypeExpr> =
             if let AstExpr::Call { type_args, .. } = &self.body.exprs[call_expr_id] {
                 type_args.clone()
@@ -6061,6 +6087,10 @@ impl LoweringContext<'_> {
                 Vec::new()
             };
         if !ast_type_args.is_empty() {
+            let ast_type_args = match max_count {
+                Some(max_count) => ast_type_args.into_iter().take(max_count).collect(),
+                None => ast_type_args,
+            };
             return self.lower_explicit_type_args(&ast_type_args);
         }
         if !include_inferred {
@@ -6081,6 +6111,9 @@ impl LoweringContext<'_> {
                     attr: TyAttr::default(),
                 };
             }
+        }
+        if let Some(max_count) = max_count {
+            inferred_type_args.truncate(max_count);
         }
         if inferred_type_args
             .iter()
@@ -7555,7 +7588,7 @@ impl<'db> LoweringContext<'db> {
 
         // Lower args once; same operands used in every arm.
         let arg_ops = self.lower_call_arg_operands(expr_id, args);
-        let type_arg_ops = self.lower_call_type_args(expr_id, true);
+        let type_arg_ops = self.lower_call_type_args(expr_id, true, None);
         let ntypeargs = type_arg_ops.len();
         let unwind = self.catch_context.as_ref().map(|c| c.unwind_target);
 
@@ -8665,7 +8698,13 @@ impl<'db> LoweringContext<'db> {
                         let frame_type_args = imp
                             .generic_params
                             .iter()
-                            .filter_map(|param| bindings.get(param).cloned())
+                            .map(|param| {
+                                bindings.get(param).cloned().unwrap_or_else(|| {
+                                    Tir2Ty::BuiltinUnknown {
+                                        attr: TyAttr::default(),
+                                    }
+                                })
+                            })
                             .collect();
                         return Some((
                             def_to_item_ref(self.db, Definition::Function(func_loc)),
