@@ -40,12 +40,12 @@ wasm_files=(
 wasm_cache_dir=".next/cache/bridge_wasm"
 proto_cache_dir=".next/cache/pkg_proto_generated"
 wasm_cache_key="$(
-  git -C ../.. ls-files -s baml_language typescript2/package.json typescript2/pnpm-lock.yaml 2>/dev/null \
+  { git -C ../.. ls-files -s baml_language typescript2/package.json typescript2/pnpm-lock.yaml 2>/dev/null || true; } \
     | cksum \
     | awk '{print $1 "-" $2}'
 )"
 proto_cache_key="$(
-  git -C ../.. ls-files -s baml_language/crates/bridge_ctypes/types typescript2/pkg-proto 2>/dev/null \
+  { git -C ../.. ls-files -s baml_language/crates/bridge_ctypes/types typescript2/pkg-proto 2>/dev/null || true; } \
     | cksum \
     | awk '{print $1 "-" $2}'
 )"

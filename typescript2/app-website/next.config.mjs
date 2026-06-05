@@ -13,6 +13,11 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   eslint: { ignoreDuringBuilds: true },
+  // Trace root stays at __dirname (app-website/) — the only value that builds
+  // on Vercel. NFT drops some lazily-required Next runtime files from this
+  // monorepo, which 500s force-dynamic routes; rather than chase those files,
+  // pages that would be force-dynamic (e.g. /changelog) are kept STATIC and
+  // fetch their data client-side through an edge rewrite (see rewrites()).
   outputFileTracingRoot: __dirname,
   reactStrictMode: true,
   typescript: { ignoreBuildErrors: true },
@@ -54,6 +59,13 @@ const nextConfig = {
       {
         source: '/relay-JkOu/flags',
         destination: 'https://us.i.posthog.com/flags',
+      },
+      // Edge-proxied so the static /changelog page can fetch entries from the
+      // changelog service same-origin (no CORS) without invoking a serverless
+      // function. Vercel handles this rewrite at the edge.
+      {
+        source: '/api/changelog-feed/:path*',
+        destination: 'https://baml-changelog2.fly.dev/:path*',
       },
     ];
   },
