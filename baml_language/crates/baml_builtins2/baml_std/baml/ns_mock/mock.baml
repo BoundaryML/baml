@@ -22,8 +22,10 @@ function scope<T, E>(mock: Mock<T>, body: () -> void throws E) -> void throws E 
   baml.mock.__exit(mock)
 }
 
-/// Internal: build a `Mock<T>` from the target's runtime identity.
+/// Internal: build a `Mock<T>` from the target's runtime identity. Rejects
+/// (panics on) a non-mockable runtime internal — see the Rust impl.
 //baml:mut_vm
+//baml:fallible
 function __new<T>(original: T) -> Mock<T> throws never {
   $rust_function
 }

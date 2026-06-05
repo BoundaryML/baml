@@ -532,6 +532,27 @@ async fn mock_precedence_instance_beats_class() {
     assert_eq!(output.result, Ok(BexExternalValue::Int(1)));
 }
 
+// ─── Slice 10: non-mockable internals ─────────────────────────────────────────
+
+/// Mocking the mock machinery itself (a `baml.mock.*` internal) is rejected
+/// rather than producing a broken mock that would corrupt the mock system.
+#[tokio::test]
+async fn mock_rejects_mocking_mock_internals() {
+    let output = baml_test!(
+        r#"
+        function main() -> int {
+            let m = baml.mock.new(baml.mock.scope);   // mocking the mock system
+            0
+        }
+        "#
+    );
+    assert!(
+        output.result.is_err(),
+        "mocking a baml.mock internal must be rejected, got {:?}",
+        output.result
+    );
+}
+
 // ─── Slice 9: spawn propagation ───────────────────────────────────────────────
 
 /// A `spawn` launched inside an active scope sees the same mocks (BEP

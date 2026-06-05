@@ -13,7 +13,10 @@ use bex_vm_types::{
 };
 
 use super::{BamlClassMockMock, BamlNamespaceMock, PackageBamlImpl};
-use crate::BexVm;
+use crate::{
+    BexVm,
+    errors::{VmPanic, VmRustFnError},
+};
 
 /// Reach into a value to get `&Mock`. `None` if it isn't an `Object::Mock`.
 fn as_mock(value: &Value) -> Option<&bex_vm_types::Mock> {
@@ -85,9 +88,25 @@ impl BamlClassMockMock for PackageBamlImpl {
 }
 
 impl BamlNamespaceMock for PackageBamlImpl {
-    fn __new(vm: &mut BexVm, original: &Value) -> Value {
+    fn __new(vm: &mut BexVm, original: &Value) -> Result<Value, VmRustFnError> {
         let key = key_for(vm, *original);
-        Value::object(vm.tlab.alloc_mock(bex_vm_types::Mock::new(key)))
+        // BEP-058 slice 10: the mock machinery itself is a non-mockable runtime
+        // internal — intercepting it would corrupt the mock system or recurse.
+        let name = match &key {
+            FunctionKey::Free(n) | FunctionKey::Instance(_, n) | FunctionKey::Generic(n, _) => {
+                n.as_str()
+            }
+        };
+        if name.starts_with("baml.mock.") {
+            return Err(VmRustFnError::Panic(VmPanic::UserPanic {
+                message: format!(
+                    "cannot mock `{name}`: the mock machinery is a non-mockable runtime internal"
+                ),
+            }));
+        }
+        Ok(Value::object(
+            vm.tlab.alloc_mock(bex_vm_types::Mock::new(key)),
+        ))
     }
 
     fn __enter(vm: &mut BexVm, mock: &Value) {
