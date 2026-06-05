@@ -703,7 +703,7 @@ function patterns_new_runtime.describe_direction(d: patterns_new_runtime.Directi
     unreachable
 }
 
-function patterns_new_runtime.dispatch_int_cb(cb: (int) -> int throws never | (string) -> int throws never) -> int {
+function patterns_new_runtime.dispatch_int_cb(cb: ((int) -> int throws never) | ((string) -> int throws never)) -> int {
     load_var cb
     is_type (int) -> int throws never
     pop_jump_if_false L0
@@ -724,7 +724,7 @@ function patterns_new_runtime.dispatch_int_cb(cb: (int) -> int throws never | (s
     return
 }
 
-function patterns_new_runtime.dispatch_union_cb(cb: (int) -> int throws never | (string) -> int throws never) -> int {
+function patterns_new_runtime.dispatch_union_cb(cb: ((int) -> int throws never) | ((string) -> int throws never)) -> int {
     load_var cb
     is_type (int) -> int throws never
     pop_jump_if_false L0

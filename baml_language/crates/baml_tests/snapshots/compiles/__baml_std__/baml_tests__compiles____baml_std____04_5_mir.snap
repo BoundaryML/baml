@@ -937,7 +937,7 @@ fn baml.errors.HostCallable.to_json(self: baml.errors.HostCallable) -> baml.json
     let _9: string
     let _10: baml.errors.HostCallable
     let _11: baml.json.json | null
-    let _12: (baml.String) -> baml.json.json throws never | null
+    let _12: ((baml.String) -> baml.json.json throws never) | null
     let _13: string | null
     let _14: baml.errors.HostCallable
     let _15: bool
@@ -1008,7 +1008,7 @@ fn baml.errors.Timeout.to_json(self: baml.errors.Timeout) -> baml.json.json {
     let _3: string
     let _4: baml.errors.Timeout
     let _5: baml.json.json | null
-    let _6: (baml.Int) -> baml.json.json throws never | null
+    let _6: ((baml.Int) -> baml.json.json throws never) | null
     let _7: int | null
     let _8: baml.errors.Timeout
     let _9: bool
@@ -1861,42 +1861,42 @@ fn baml.glob.ScanOptions.to_json(self: baml.glob.ScanOptions) -> baml.json.json 
     let _0: baml.json.json // _0 // return
     let _1: baml.glob.ScanOptions // self // param
     let _2: baml.json.json | null
-    let _3: (baml.String) -> baml.json.json throws never | null
+    let _3: ((baml.String) -> baml.json.json throws never) | null
     let _4: string | null
     let _5: baml.glob.ScanOptions
     let _6: bool
     let _7: string | null
     let _8: baml.glob.ScanOptions
     let _9: baml.json.json | null
-    let _10: (baml.Bool) -> baml.json.json throws never | null
+    let _10: ((baml.Bool) -> baml.json.json throws never) | null
     let _11: bool | null
     let _12: baml.glob.ScanOptions
     let _13: bool
     let _14: bool | null
     let _15: baml.glob.ScanOptions
     let _16: baml.json.json | null
-    let _17: (baml.Bool) -> baml.json.json throws never | null
+    let _17: ((baml.Bool) -> baml.json.json throws never) | null
     let _18: bool | null
     let _19: baml.glob.ScanOptions
     let _20: bool
     let _21: bool | null
     let _22: baml.glob.ScanOptions
     let _23: baml.json.json | null
-    let _24: (baml.Bool) -> baml.json.json throws never | null
+    let _24: ((baml.Bool) -> baml.json.json throws never) | null
     let _25: bool | null
     let _26: baml.glob.ScanOptions
     let _27: bool
     let _28: bool | null
     let _29: baml.glob.ScanOptions
     let _30: baml.json.json | null
-    let _31: (baml.Bool) -> baml.json.json throws never | null
+    let _31: ((baml.Bool) -> baml.json.json throws never) | null
     let _32: bool | null
     let _33: baml.glob.ScanOptions
     let _34: bool
     let _35: bool | null
     let _36: baml.glob.ScanOptions
     let _37: baml.json.json | null
-    let _38: (baml.Bool) -> baml.json.json throws never | null
+    let _38: ((baml.Bool) -> baml.json.json throws never) | null
     let _39: bool | null
     let _40: baml.glob.ScanOptions
     let _41: bool
@@ -5263,28 +5263,28 @@ fn baml.llm.MediaUrlHandler.to_json(self: baml.llm.MediaUrlHandler) -> baml.json
     let _0: baml.json.json // _0 // return
     let _1: baml.llm.MediaUrlHandler // self // param
     let _2: baml.json.json | null
-    let _3: (baml.String) -> baml.json.json throws never | null
+    let _3: ((baml.String) -> baml.json.json throws never) | null
     let _4: string | null
     let _5: baml.llm.MediaUrlHandler
     let _6: bool
     let _7: string | null
     let _8: baml.llm.MediaUrlHandler
     let _9: baml.json.json | null
-    let _10: (baml.String) -> baml.json.json throws never | null
+    let _10: ((baml.String) -> baml.json.json throws never) | null
     let _11: string | null
     let _12: baml.llm.MediaUrlHandler
     let _13: bool
     let _14: string | null
     let _15: baml.llm.MediaUrlHandler
     let _16: baml.json.json | null
-    let _17: (baml.String) -> baml.json.json throws never | null
+    let _17: ((baml.String) -> baml.json.json throws never) | null
     let _18: string | null
     let _19: baml.llm.MediaUrlHandler
     let _20: bool
     let _21: string | null
     let _22: baml.llm.MediaUrlHandler
     let _23: baml.json.json | null
-    let _24: (baml.String) -> baml.json.json throws never | null
+    let _24: ((baml.String) -> baml.json.json throws never) | null
     let _25: string | null
     let _26: baml.llm.MediaUrlHandler
     let _27: bool
@@ -5414,7 +5414,7 @@ fn baml.llm.Client.to_json(self: baml.llm.Client) -> baml.json.json {
     let _11: baml.llm.Client[]
     let _12: baml.llm.Client
     let _13: baml.json.json | null
-    let _14: () -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError | null
+    let _14: (() -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError) | null
     let _15: baml.llm.RetryPolicy | null
     let _16: baml.llm.Client
     let _17: bool
@@ -5484,70 +5484,70 @@ fn baml.llm.BedrockOptions.to_json(self: baml.llm.BedrockOptions) -> baml.json.j
     let _0: baml.json.json // _0 // return
     let _1: baml.llm.BedrockOptions // self // param
     let _2: baml.json.json | null
-    let _3: (baml.String) -> baml.json.json throws never | null
+    let _3: ((baml.String) -> baml.json.json throws never) | null
     let _4: string | null
     let _5: baml.llm.BedrockOptions
     let _6: bool
     let _7: string | null
     let _8: baml.llm.BedrockOptions
     let _9: baml.json.json | null
-    let _10: (baml.String) -> baml.json.json throws never | null
+    let _10: ((baml.String) -> baml.json.json throws never) | null
     let _11: string | null
     let _12: baml.llm.BedrockOptions
     let _13: bool
     let _14: string | null
     let _15: baml.llm.BedrockOptions
     let _16: baml.json.json | null
-    let _17: (baml.String) -> baml.json.json throws never | null
+    let _17: ((baml.String) -> baml.json.json throws never) | null
     let _18: string | null
     let _19: baml.llm.BedrockOptions
     let _20: bool
     let _21: string | null
     let _22: baml.llm.BedrockOptions
     let _23: baml.json.json | null
-    let _24: (baml.String) -> baml.json.json throws never | null
+    let _24: ((baml.String) -> baml.json.json throws never) | null
     let _25: string | null
     let _26: baml.llm.BedrockOptions
     let _27: bool
     let _28: string | null
     let _29: baml.llm.BedrockOptions
     let _30: baml.json.json | null
-    let _31: (baml.String) -> baml.json.json throws never | null
+    let _31: ((baml.String) -> baml.json.json throws never) | null
     let _32: string | null
     let _33: baml.llm.BedrockOptions
     let _34: bool
     let _35: string | null
     let _36: baml.llm.BedrockOptions
     let _37: baml.json.json | null
-    let _38: (baml.String) -> baml.json.json throws never | null
+    let _38: ((baml.String) -> baml.json.json throws never) | null
     let _39: string | null
     let _40: baml.llm.BedrockOptions
     let _41: bool
     let _42: string | null
     let _43: baml.llm.BedrockOptions
     let _44: baml.json.json | null
-    let _45: (string[]) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError | null
+    let _45: ((string[]) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError) | null
     let _46: string[] | null
     let _47: baml.llm.BedrockOptions
     let _48: bool
     let _49: string[] | null
     let _50: baml.llm.BedrockOptions
     let _51: baml.json.json | null
-    let _52: (baml.Int) -> baml.json.json throws never | null
+    let _52: ((baml.Int) -> baml.json.json throws never) | null
     let _53: int | null
     let _54: baml.llm.BedrockOptions
     let _55: bool
     let _56: int | null
     let _57: baml.llm.BedrockOptions
     let _58: baml.json.json | null
-    let _59: (baml.Float) -> baml.json.json throws never | null
+    let _59: ((baml.Float) -> baml.json.json throws never) | null
     let _60: float | null
     let _61: baml.llm.BedrockOptions
     let _62: bool
     let _63: float | null
     let _64: baml.llm.BedrockOptions
     let _65: baml.json.json | null
-    let _66: (baml.Float) -> baml.json.json throws never | null
+    let _66: ((baml.Float) -> baml.json.json throws never) | null
     let _67: float | null
     let _68: baml.llm.BedrockOptions
     let _69: bool
@@ -5810,28 +5810,28 @@ fn baml.llm.VertexAiOptions.to_json(self: baml.llm.VertexAiOptions) -> baml.json
     let _0: baml.json.json // _0 // return
     let _1: baml.llm.VertexAiOptions // self // param
     let _2: baml.json.json | null
-    let _3: (baml.String) -> baml.json.json throws never | null
+    let _3: ((baml.String) -> baml.json.json throws never) | null
     let _4: string | null
     let _5: baml.llm.VertexAiOptions
     let _6: bool
     let _7: string | null
     let _8: baml.llm.VertexAiOptions
     let _9: baml.json.json | null
-    let _10: (baml.String) -> baml.json.json throws never | null
+    let _10: ((baml.String) -> baml.json.json throws never) | null
     let _11: string | null
     let _12: baml.llm.VertexAiOptions
     let _13: bool
     let _14: string | null
     let _15: baml.llm.VertexAiOptions
     let _16: baml.json.json | null
-    let _17: (baml.String) -> baml.json.json throws never | null
+    let _17: ((baml.String) -> baml.json.json throws never) | null
     let _18: string | null
     let _19: baml.llm.VertexAiOptions
     let _20: bool
     let _21: string | null
     let _22: baml.llm.VertexAiOptions
     let _23: baml.json.json | null
-    let _24: (baml.String) -> baml.json.json throws never | null
+    let _24: ((baml.String) -> baml.json.json throws never) | null
     let _25: string | null
     let _26: baml.llm.VertexAiOptions
     let _27: bool
@@ -5950,7 +5950,7 @@ fn baml.llm.AnthropicOptions.to_json(self: baml.llm.AnthropicOptions) -> baml.js
     let _0: baml.json.json // _0 // return
     let _1: baml.llm.AnthropicOptions // self // param
     let _2: baml.json.json | null
-    let _3: (baml.Int) -> baml.json.json throws never | null
+    let _3: ((baml.Int) -> baml.json.json throws never) | null
     let _4: int | null
     let _5: baml.llm.AnthropicOptions
     let _6: bool
@@ -6033,14 +6033,14 @@ fn baml.llm.AzureOpenAiOptions.to_json(self: baml.llm.AzureOpenAiOptions) -> bam
     let _0: baml.json.json // _0 // return
     let _1: baml.llm.AzureOpenAiOptions // self // param
     let _2: baml.json.json | null
-    let _3: (baml.String) -> baml.json.json throws never | null
+    let _3: ((baml.String) -> baml.json.json throws never) | null
     let _4: string | null
     let _5: baml.llm.AzureOpenAiOptions
     let _6: bool
     let _7: string | null
     let _8: baml.llm.AzureOpenAiOptions
     let _9: baml.json.json | null
-    let _10: (baml.String) -> baml.json.json throws never | null
+    let _10: ((baml.String) -> baml.json.json throws never) | null
     let _11: string | null
     let _12: baml.llm.AzureOpenAiOptions
     let _13: bool
@@ -6050,7 +6050,7 @@ fn baml.llm.AzureOpenAiOptions.to_json(self: baml.llm.AzureOpenAiOptions) -> bam
     let _17: string
     let _18: baml.llm.AzureOpenAiOptions
     let _19: baml.json.json | null
-    let _20: (baml.Int) -> baml.json.json throws never | null
+    let _20: ((baml.Int) -> baml.json.json throws never) | null
     let _21: int | null
     let _22: baml.llm.AzureOpenAiOptions
     let _23: bool
@@ -7567,28 +7567,28 @@ fn baml.sys.ProcessOptions.to_json(self: baml.sys.ProcessOptions) -> baml.json.j
     let _0: baml.json.json // _0 // return
     let _1: baml.sys.ProcessOptions // self // param
     let _2: baml.json.json | null
-    let _3: (baml.String) -> baml.json.json throws never | null
+    let _3: ((baml.String) -> baml.json.json throws never) | null
     let _4: string | null
     let _5: baml.sys.ProcessOptions
     let _6: bool
     let _7: string | null
     let _8: baml.sys.ProcessOptions
     let _9: baml.json.json | null
-    let _10: (map<string, string>) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError | null
+    let _10: ((map<string, string>) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError) | null
     let _11: map<string, string> | null
     let _12: baml.sys.ProcessOptions
     let _13: bool
     let _14: map<string, string> | null
     let _15: baml.sys.ProcessOptions
     let _16: baml.json.json | null
-    let _17: (baml.Int) -> baml.json.json throws never | null
+    let _17: ((baml.Int) -> baml.json.json throws never) | null
     let _18: int | null
     let _19: baml.sys.ProcessOptions
     let _20: bool
     let _21: int | null
     let _22: baml.sys.ProcessOptions
     let _23: baml.json.json | null
-    let _24: (baml.String) -> baml.json.json throws never | null
+    let _24: ((baml.String) -> baml.json.json throws never) | null
     let _25: string | null
     let _26: baml.sys.ProcessOptions
     let _27: bool

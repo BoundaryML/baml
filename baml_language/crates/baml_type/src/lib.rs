@@ -414,21 +414,6 @@ impl Ty {
         }
     }
 
-    /// Peel a single-member nullable wrapper, by reference: `T?`
-    /// (`Union([T, null])`) yields `&T`; anything else — including non-nullable
-    /// types and multi-member nullable unions — yields `self`. Used at MIR
-    /// receiver-resolution sites that previously matched `Ty::Optional(inner)`
-    /// to recover the inner type after a null check.
-    pub fn peel_optional(&self) -> &Ty {
-        if let Ty::Union(members, _) = self {
-            let non_null: Vec<&Ty> = members.iter().filter(|m| !m.is_null()).collect();
-            if non_null.len() == 1 && non_null.len() < members.len() {
-                return non_null[0];
-            }
-        }
-        self
-    }
-
     /// `T[]` (list) with default attributes.
     pub fn list(inner: Ty) -> Self {
         Ty::List(Box::new(inner), TyAttr::default())
@@ -826,8 +811,19 @@ impl fmt::Display for Ty {
             Ty::Union(types, _) => {
                 // `?` is sugar that exists only in source/lowering; after that a
                 // nullable type is a plain union and renders as `T | null`.
-                let parts: Vec<std::string::String> =
-                    types.iter().map(std::string::ToString::to_string).collect();
+                // Function members are parenthesized so a nullable callback reads
+                // as `((..) -> ..) | null`, not a function with `throws .. | null`.
+                let parts: Vec<std::string::String> = types
+                    .iter()
+                    .map(|ty| {
+                        let rendered = ty.to_string();
+                        if matches!(ty, Ty::Function { .. }) {
+                            format!("({rendered})")
+                        } else {
+                            rendered
+                        }
+                    })
+                    .collect();
                 write!(f, "{}", parts.join(" | "))
             }
             Ty::Function {
@@ -1109,7 +1105,7 @@ mod tests {
 
         assert_eq!(
             Ty::optional(callback.clone()).to_string(),
-            "(int) -> string throws never | null"
+            "((int) -> string throws never) | null"
         );
         assert_eq!(
             Ty::list(callback).to_string(),

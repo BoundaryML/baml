@@ -192,7 +192,7 @@ function testing.TestCollector.new(prefix: string) -> testing.TestCollector {
     return
 }
 
-function testing.TestCollector.register_test(self: testing.TestCollector, name: string, body: () -> void throws unknown, runner: (() -> testing.TestReport throws never) -> (() -> testing.TestReport throws never) throws never | null) -> void {
+function testing.TestCollector.register_test(self: testing.TestCollector, name: string, body: () -> void throws unknown, runner: ((() -> testing.TestReport throws never) -> (() -> testing.TestReport throws never) throws never) | null) -> void {
     load_var self
     load_field .prefix
     load_const ""
@@ -303,7 +303,7 @@ function testing.TestCollector.register_test(self: testing.TestCollector, name: 
     jump L3
 }
 
-function testing.TestCollector.register_test_set(self: testing.TestCollector, name: string, collector: (testing.TestCollector) -> void throws unknown, runner: (() -> testing.TestSetReport throws never) -> (() -> testing.TestSetReport throws never) throws never | null) -> void {
+function testing.TestCollector.register_test_set(self: testing.TestCollector, name: string, collector: (testing.TestCollector) -> void throws unknown, runner: ((() -> testing.TestSetReport throws never) -> (() -> testing.TestSetReport throws never) throws never) | null) -> void {
     load_var self
     load_field .prefix
     load_const ""
@@ -450,7 +450,7 @@ function testing.TestRegistration.from_json(j: baml.json.json) -> testing.TestRe
     load_const "runner"
     call baml.json.field
     store_var _9
-    load_type (() -> testing.TestReport throws never) -> (() -> testing.TestReport throws never) throws never | null
+    load_type ((() -> testing.TestReport throws never) -> (() -> testing.TestReport throws never) throws never) | null
     load_var _9
     call baml.json.from_json
     init_instance testing.TestRegistration .name, .body, .runner
@@ -872,7 +872,7 @@ function testing.TestSetRegistration.from_json(j: baml.json.json) -> testing.Tes
     load_const "runner"
     call baml.json.field
     store_var _9
-    load_type (() -> testing.TestSetReport throws never) -> (() -> testing.TestSetReport throws never) throws never | null
+    load_type ((() -> testing.TestSetReport throws never) -> (() -> testing.TestSetReport throws never) throws never) | null
     load_var _9
     call baml.json.from_json
     init_instance testing.TestSetRegistration .name, .collector, .runner
@@ -954,7 +954,7 @@ function testing.TestSetReport.to_json(self: testing.TestSetReport) -> baml.json
     return
 }
 
-function testing.run_test(body: () -> void throws unknown, runner: (() -> testing.TestReport throws never) -> (() -> testing.TestReport throws never) throws never | null) -> testing.TestReport {
+function testing.run_test(body: () -> void throws unknown, runner: ((() -> testing.TestReport throws never) -> (() -> testing.TestReport throws never) throws never) | null) -> testing.TestReport {
     load_var ?1
     make_cell
     store_var ?1
@@ -981,7 +981,7 @@ function testing.run_test(body: () -> void throws unknown, runner: (() -> testin
     return
 }
 
-function testing.run_testset(run_children: () -> testing.TestSetReport throws never, runner: (() -> testing.TestSetReport throws never) -> (() -> testing.TestSetReport throws never) throws never | null) -> testing.TestSetReport {
+function testing.run_testset(run_children: () -> testing.TestSetReport throws never, runner: ((() -> testing.TestSetReport throws never) -> (() -> testing.TestSetReport throws never) throws never) | null) -> testing.TestSetReport {
     load_var runner
     load_const null
     cmp_op ==

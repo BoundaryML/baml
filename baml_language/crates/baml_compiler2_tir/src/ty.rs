@@ -864,9 +864,18 @@ impl Ty {
             Ty::Union(members, _) => {
                 // `?` is sugar that exists only in source/lowering; after that a
                 // nullable type is a plain union and renders as `T | null`.
+                // Function members are parenthesized so a nullable callback reads
+                // as `((..) -> ..) | null`, not a function with `throws .. | null`.
                 members
                     .iter()
-                    .map(|m| m.render_with(s))
+                    .map(|m| {
+                        let rendered = m.render_with(s);
+                        if matches!(m, Ty::Function { .. }) {
+                            format!("({rendered})")
+                        } else {
+                            rendered
+                        }
+                    })
                     .collect::<Vec<_>>()
                     .join(" | ")
             }

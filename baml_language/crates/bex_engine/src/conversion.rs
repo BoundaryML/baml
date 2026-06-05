@@ -666,7 +666,18 @@ pub(crate) fn maybe_wrap_union(
             match non_null.len() {
                 0 => Ok(value),
                 1 => maybe_wrap_union(value, &non_null[0]),
-                _ => maybe_wrap_union(value, &Ty::Union(non_null, attr.clone())),
+                _ => {
+                    // Keep `null` in the recorded union type so the value stays
+                    // marked optional (preserving the nullable FFI wire shape);
+                    // select the matching non-null arm.
+                    let selected = find_matching_member(&value, &non_null)?;
+                    let metadata =
+                        UnionMetadata::new(Ty::Union(members.clone(), attr.clone()), selected);
+                    Ok(BexExternalValue::Union {
+                        value: Box::new(value),
+                        metadata,
+                    })
+                }
             }
         }
         Ty::Union(members, _) => {

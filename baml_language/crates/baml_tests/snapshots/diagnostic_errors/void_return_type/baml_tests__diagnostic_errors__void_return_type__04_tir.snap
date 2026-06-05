@@ -20,7 +20,7 @@ function user.forward_direct(handler: (value: int) -> string throws never, value
     handler<__effect_param_0>(value) : string
   }
 }
-function user.forward_optional(handler: (value: int) -> string throws never | null, value: int) -> string | null throws never {
+function user.forward_optional(handler: ((value: int) -> string throws never) | null, value: int) -> string | null throws never {
   { : string | null
     handler?.(value) : string | null
   }

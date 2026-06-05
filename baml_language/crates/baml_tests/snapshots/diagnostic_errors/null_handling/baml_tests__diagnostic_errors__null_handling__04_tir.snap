@@ -99,8 +99,8 @@ function user.OptionalIndex(node: user.Node | null, items: int[] | null, lookup:
 function user.OptionalCall(callback: (int) -> string | null throws never, nonNullCb: (int) -> string throws never, name: string | null) -> string throws never {
   { : never
     let c1 = callback?.(42) : string | null
-    let c2 = callback?.(42).length : (self: baml.String) -> int throws never | null
-    let c3 = callback?.(42).length : (self: baml.String) -> int throws never | null
+    let c2 = callback?.(42).length : ((self: baml.String) -> int throws never) | null
+    let c3 = callback?.(42).length : ((self: baml.String) -> int throws never) | null
     let c4 = name?.(42) : unknown | null
     let c5 = nonNullCb?.(42) : string | null
     return c1 ?? "default" : string

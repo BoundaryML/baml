@@ -127,8 +127,20 @@ impl fmt::Display for TyTemplate {
             Self::Array(inner) => write!(f, "{inner}[]"),
             Self::Union(parts) => {
                 // `?` is sugar that exists only in source/lowering; after that a
-                // nullable type is a plain union.
-                let strs: Vec<String> = parts.iter().map(ToString::to_string).collect();
+                // nullable type is a plain union. Concrete function members are
+                // parenthesized so a nullable callback stays unambiguous.
+                let strs: Vec<String> = parts
+                    .iter()
+                    .map(|p| {
+                        let rendered = p.to_string();
+                        if matches!(p, TyTemplate::Concrete(ty) if matches!(ty, Ty::Function { .. }))
+                        {
+                            format!("({rendered})")
+                        } else {
+                            rendered
+                        }
+                    })
+                    .collect();
                 write!(f, "{}", strs.join(" | "))
             }
             Self::Map(k, v) => write!(f, "map<{k}, {v}>"),

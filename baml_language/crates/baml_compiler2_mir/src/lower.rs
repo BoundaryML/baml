@@ -6584,10 +6584,10 @@ impl<'db> LoweringContext<'db> {
 
         // Unwrap Optional — when called from lower_optional_member_access,
         // the base type is T? but we've already null-checked, so use the inner type.
-        let unwrapped_ty = base_ty.peel_optional();
+        let unwrapped_ty = base_ty.strip_null();
 
         // Look up field index from class_fields
-        let field_idx = if let Ty::Class(tn, _, _) = unwrapped_ty {
+        let field_idx = if let Ty::Class(tn, _, _) = &unwrapped_ty {
             self.class_fields
                 .get(tn)
                 .and_then(|fields| fields.get(&field_str))
@@ -6596,7 +6596,7 @@ impl<'db> LoweringContext<'db> {
             None
         };
 
-        let base_local = self.operand_to_local(base_op, base_ty.clone());
+        let base_local = self.operand_to_local(base_op, base_ty);
 
         if let Some(idx) = field_idx {
             self.builder.assign(
@@ -6608,7 +6608,7 @@ impl<'db> LoweringContext<'db> {
             );
         } else {
             let handled_interface_field = self
-                .interface_receiver_for_field_access(base, unwrapped_ty)
+                .interface_receiver_for_field_access(base, &unwrapped_ty)
                 .is_some_and(|(iface_tn, iface_type_args, iface_assoc)| {
                     self.try_lower_interface_field_access(
                         base_local,
@@ -6623,7 +6623,7 @@ impl<'db> LoweringContext<'db> {
                 || self.lower_union_class_field_access(
                     expr_id,
                     base_local,
-                    unwrapped_ty,
+                    &unwrapped_ty,
                     field,
                     &dest,
                 )
@@ -6637,7 +6637,7 @@ impl<'db> LoweringContext<'db> {
             if handled_union_field {
                 return;
             }
-            if let Ty::Class(tn, _, _) = unwrapped_ty {
+            if let Ty::Class(tn, _, _) = &unwrapped_ty {
                 self.emit_panic_call(
                     &format!(
                         "internal compiler error: MIR failed to resolve field access \
@@ -6842,9 +6842,9 @@ impl<'db> LoweringContext<'db> {
 
         // Unwrap Optional — when called from lower_optional_index,
         // the base type is T? but we've already null-checked.
-        let unwrapped_ty = base_ty.peel_optional();
+        let unwrapped_ty = base_ty.strip_null();
 
-        let kind = if matches!(unwrapped_ty, Ty::List(..) | Ty::Uint8Array { .. }) {
+        let kind = if matches!(&unwrapped_ty, Ty::List(..) | Ty::Uint8Array { .. }) {
             IndexKind::Array
         } else {
             IndexKind::Map
@@ -9585,8 +9585,8 @@ impl LoweringContext<'_> {
                 let base_ty = self.expr_ty(base_id);
                 let index_ty = self.expr_ty(index_id);
                 let index_local = self.operand_to_local(index_op, index_ty);
-                let unwrapped_ty = base_ty.peel_optional();
-                let kind = if matches!(unwrapped_ty, Ty::List(..) | Ty::Uint8Array { .. }) {
+                let unwrapped_ty = base_ty.strip_null();
+                let kind = if matches!(&unwrapped_ty, Ty::List(..) | Ty::Uint8Array { .. }) {
                     IndexKind::Array
                 } else {
                     IndexKind::Map
@@ -9633,8 +9633,8 @@ impl LoweringContext<'_> {
                 // Project member from the same temp local — no second evaluation
                 let base_place = Place::Local(base_local);
                 // Unwrap Optional — we've already null-checked, so use the inner type.
-                let unwrapped_ty = base_ty.peel_optional();
-                if let Ty::Class(tn, _, _) = unwrapped_ty {
+                let unwrapped_ty = base_ty.strip_null();
+                if let Ty::Class(tn, _, _) = &unwrapped_ty {
                     if let Some(fields) = self.class_fields.get(tn) {
                         if let Some(&idx) = fields.get(member_name.as_str()) {
                             return Place::Field {
@@ -9695,8 +9695,8 @@ impl LoweringContext<'_> {
                 let index_op = self.lower_to_operand(index_id);
                 let index_ty = self.expr_ty(index_id);
                 let index_local = self.operand_to_local(index_op, index_ty);
-                let unwrapped_ty = base_ty.peel_optional();
-                let kind = if matches!(unwrapped_ty, Ty::List(..)) {
+                let unwrapped_ty = base_ty.strip_null();
+                let kind = if matches!(&unwrapped_ty, Ty::List(..)) {
                     IndexKind::Array
                 } else {
                     IndexKind::Map

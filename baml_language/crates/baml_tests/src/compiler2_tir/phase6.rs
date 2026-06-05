@@ -536,7 +536,7 @@ function f(callback: ((x: int) -> int)?) -> int? {
 "#,
     );
     insta::assert_snapshot!(render_tir(&db, file), @"
-    function user.f(callback: (x: int) -> int throws never | null) -> int | null throws never {
+    function user.f(callback: ((x: int) -> int throws never) | null) -> int | null throws never {
       { : never
         return callback?.(42) : int | null
       }
@@ -600,7 +600,7 @@ function f(callback: ((x: int) -> int)?) -> int? {
 "#,
     );
     insta::assert_snapshot!(render_tir(&db, file), @r#"
-    function user.f(callback: (x: int) -> int throws never | null) -> int | null throws never {
+    function user.f(callback: ((x: int) -> int throws never) | null) -> int | null throws never {
       { : never
         return callback?.("wrong") : int | null
       }
@@ -625,7 +625,7 @@ function demo(cb: (((x: int) -> int) -> int)?) -> int? throws never {
 "#,
     );
     insta::assert_snapshot!(render_tir(&db, file), @r#"
-    function user.demo(cb: ((x: int) -> int throws never) -> int throws never | null) -> int | null throws never {
+    function user.demo(cb: (((x: int) -> int throws never) -> int throws never) | null) -> int | null throws never {
       { : int | null
         let risky = : (x: int) -> int throws string
           (x: int) -> int throws string { ... } : (x: int) -> int throws string
@@ -654,7 +654,7 @@ function f(callback: MaybeFn) -> int? {
 "#,
     );
     insta::assert_snapshot!(render_tir(&db, file), @"
-    type user.MaybeFn = (x: int) -> int throws never | null
+    type user.MaybeFn = ((x: int) -> int throws never) | null
     function user.f(callback: user.MaybeFn) -> int | null throws never {
       { : never
         return callback?.(42) : int | null
@@ -735,7 +735,7 @@ function f(cb: ((x: int) -> int)?) -> int {
 "#,
     );
     insta::assert_snapshot!(render_tir(&db, file), @"
-    function user.f(cb: (x: int) -> int throws never | null) -> int throws never {
+    function user.f(cb: ((x: int) -> int throws never) | null) -> int throws never {
       { : never
         return cb?.(1) : int | null
       }
@@ -756,7 +756,7 @@ function f(cb: ((x: int) -> string?)?) -> string? {
 "#,
     );
     insta::assert_snapshot!(render_tir(&db, file), @"
-    function user.f(cb: (x: int) -> string | null throws never | null) -> string | null throws never {
+    function user.f(cb: ((x: int) -> string | null throws never) | null) -> string | null throws never {
       { : never
         return cb?.(1) : string | null
       }
@@ -947,7 +947,7 @@ function f(xs: int[]?) -> int? {
     );
     assert_eq!(
         expr_type_in_function(&db, file, "f", "xs?.push"),
-        "(self: int[], item: int) -> int throws never | null"
+        "((self: int[], item: int) -> int throws never) | null"
     );
 }
 
@@ -1490,7 +1490,7 @@ function f(callback: ((x: int) -> int)?) -> int? {
 "#,
     );
     insta::assert_snapshot!(render_tir(&db, file), @"
-    function user.f(callback: (x: int) -> int throws never | null) -> int | null throws never {
+    function user.f(callback: ((x: int) -> int throws never) | null) -> int | null throws never {
       { : never
         return callback?.(1, 2) : int | null
       }
