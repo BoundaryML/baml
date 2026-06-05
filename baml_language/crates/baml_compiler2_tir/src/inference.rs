@@ -535,6 +535,13 @@ pub enum MemberResolution<'db> {
         iface_loc: InterfaceLoc<'db>,
         func_loc: FunctionLoc<'db>,
     },
+    /// An interface *required* (abstract) method referenced as a value, e.g.
+    /// `Animal.speak`. It has no implementation function, so this carries the
+    /// interface location plus the method name for mock identity (BEP-058).
+    InterfaceRequiredMethod {
+        iface_loc: InterfaceLoc<'db>,
+        method_name: Name,
+    },
 }
 
 // ── Per-Scope Inference Result ─────────────────────────────────────────────

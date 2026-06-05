@@ -140,6 +140,7 @@ fn format_value_recursive(vm: &BexVm, value: Value, depth: usize) -> Result<Stri
             Object::HostClosure(_) => Ok("<host_closure>".to_string()),
             Object::Cell(cell) => Ok(format!("<cell {}>", cell.load())),
             Object::Mock(m) => Ok(format!("<mock call_count={}>", m.call_count())),
+            Object::InterfaceMethodRef(s) => Ok(format!("<interface_method {s}>")),
             #[cfg(feature = "heap_debug")]
             Object::Sentinel(_) => Ok("<sentinel>".to_string()),
         },

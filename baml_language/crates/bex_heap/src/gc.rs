@@ -378,6 +378,8 @@ impl BexHeap {
                     worklist.push(ptr);
                 }
             }
+            // Leaf: carries only an interned identity string, no heap references.
+            Object::InterfaceMethodRef(_) => {}
             Object::Variant(var) => {
                 worklist.push(var.enm);
             }
@@ -523,6 +525,8 @@ impl BexHeap {
                     *receiver = new_ptr;
                 }
             }
+            // Leaf: no heap references to fix up.
+            Object::InterfaceMethodRef(_) => {}
             Object::Variant(var) => {
                 // Update enum pointer
                 if let Some(&new_ptr) = forwarding.get(&var.enm) {
@@ -795,6 +799,8 @@ impl BexHeap {
                     worklist.push(ptr);
                 }
             }
+            // Leaf: no heap references.
+            Object::InterfaceMethodRef(_) => {}
             Object::Variant(var) => {
                 if self.generation_of(var.enm).is_young() {
                     worklist.push(var.enm);

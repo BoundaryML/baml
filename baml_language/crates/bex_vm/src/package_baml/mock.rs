@@ -61,6 +61,9 @@ fn key_for(vm: &BexVm, value: Value) -> FunctionKey {
                 .unwrap_or_default();
             FunctionKey::Generic(name, gf.type_args.to_vec())
         }
+        // An interface method value (`Animal.speak`) carries the interface
+        // method's FQ identity; key the mock on it (BEP-058 slice 3).
+        Object::InterfaceMethodRef(s) => FunctionKey::Free(s.to_string()),
         _ => FunctionKey::Free(String::new()),
     }
 }

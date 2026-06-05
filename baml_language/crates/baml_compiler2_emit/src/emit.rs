@@ -1865,6 +1865,16 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 let inst = self.emit(Instruction::LoadConst(idx));
                 self.set_operand(inst, OperandMeta::Const(display));
             }
+            Constant::InterfaceMethodRef(name) => {
+                // BEP-058: pool an `Object::InterfaceMethodRef` carrying the
+                // interface method's FQ identity (like a string constant).
+                let obj_idx = self.objects.len();
+                self.objects
+                    .push(Object::InterfaceMethodRef(name.as_str().into()));
+                let idx = self.add_constant(ConstValue::Object(ObjectIndex::from_raw(obj_idx)));
+                let inst = self.emit(Instruction::LoadConst(idx));
+                self.set_operand(inst, OperandMeta::Const(format!("<iface method {name}>")));
+            }
             Constant::Bool(v) => {
                 let idx = self.add_constant(ConstValue::Bool(*v));
                 let inst = self.emit(Instruction::LoadConst(idx));

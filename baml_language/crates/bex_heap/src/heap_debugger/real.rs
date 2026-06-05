@@ -367,7 +367,9 @@ impl BexHeap {
                     self.debug_assert_valid_index(*receiver);
                 }
             }
-            Object::Function(_)
+            // `InterfaceMethodRef` carries only an interned identity string.
+            Object::InterfaceMethodRef(_)
+            | Object::Function(_)
             | Object::GenericFunction(_)
             | Object::Class(_)
             | Object::Enum(_)

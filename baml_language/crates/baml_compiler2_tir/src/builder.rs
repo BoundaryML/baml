@@ -9835,6 +9835,20 @@ impl<'db> TypeInferenceBuilder<'db> {
                 }
                 self.interface_method_generic_params
                     .insert(at, (member.clone(), function_generic_params));
+                // BEP-058: an unbound interface method value (`Animal.speak`) has
+                // no implementation function, but record its identity so MIR can
+                // lower it to an `InterfaceMethodRef` value (instead of Null) that
+                // `baml.mock.new` can key on. Bound calls (`d.speak()`) take the
+                // interface-dispatch path and do not consult this resolution.
+                if !bound {
+                    self.resolutions.insert(
+                        at,
+                        crate::inference::MemberResolution::InterfaceRequiredMethod {
+                            iface_loc,
+                            method_name: member.clone(),
+                        },
+                    );
+                }
                 return Some(fn_ty);
             }
         }

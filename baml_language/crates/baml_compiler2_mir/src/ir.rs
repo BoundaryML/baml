@@ -802,6 +802,11 @@ pub enum Constant {
     /// Carried from TIR resolution through lowering. Converted to a
     /// runtime string only in the emit phase.
     Function(ItemRef),
+    /// An interface method referenced as a value (`Animal.speak`), BEP-058.
+    /// An abstract interface method has no callable function, so this carries
+    /// only the method's fully-qualified identity (`user.Animal.speak`) for
+    /// `baml.mock.new` to key on. Emitted as a pooled `Object::InterfaceMethodRef`.
+    InterfaceMethodRef(String),
     /// A generic function instantiated with concrete type arguments
     /// (`foo<int>` referenced as a value). Emitted as a pooled, interned
     /// `Object::GenericFunction` so identical instantiations share one object

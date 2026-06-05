@@ -208,15 +208,12 @@ async fn mock_instance_method_affects_only_that_instance() {
 
 // ─── Slice 3: interface method mocks (all implementors) ───────────────────────
 
-/// Mocking via the interface name affects every implementor.
+/// Mocking via the interface name affects every implementor (BEP-058 slice 3).
 ///
-/// Ignored pending the compiler intercept for interface targets: an interface
-/// method referenced as a value lowers to `Null` (BEP-044 "interface method
-/// values are limited"), so `new(Animal.speak)` cannot recover the target
-/// identity at runtime. It must be extracted at compile time and the dispatch
-/// hook must map the concrete callee (`user.Dog.Animal.speak`) back to the
-/// interface via the implementor registry. Tracked as the interface slice.
-#[ignore = "interface mocking needs the compile-time identity intercept (BEP-044 method values are Null)"]
+/// `new(Animal.speak)` lowers the interface method value to a pooled
+/// `Object::InterfaceMethodRef` carrying `user.Animal.speak`, and the dispatch
+/// hook maps the concrete callee (`user.Dog.Animal.speak`) back to that key via
+/// the implementor registry, so the mock fires for every implementor.
 #[tokio::test]
 async fn mock_interface_method_affects_all_implementors() {
     let output = baml_test!(

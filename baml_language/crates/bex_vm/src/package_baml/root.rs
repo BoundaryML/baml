@@ -134,6 +134,7 @@ fn deep_copy_value_recursive(
                 // Clone copies the atomics, so the copy is an independent Mock
                 // with its own replacement slot and counter — not shared state.
                 Object::Mock(m) => vm.tlab.alloc(Object::Mock(m)),
+                Object::InterfaceMethodRef(s) => vm.tlab.alloc(Object::InterfaceMethodRef(s)),
                 #[cfg(feature = "heap_debug")]
                 Object::Sentinel(kind) => vm.tlab.alloc(Object::Sentinel(kind)),
             };

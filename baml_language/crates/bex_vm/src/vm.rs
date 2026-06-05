@@ -1122,6 +1122,7 @@ fn value_type_tag(value: Value) -> i64 {
                 Object::Type(_) => type_tags::TYPE,
                 Object::Class(_) => type_tags::UNKNOWN,
                 Object::Mock(_) => type_tags::UNKNOWN,
+                Object::InterfaceMethodRef(_) => type_tags::UNKNOWN,
                 #[cfg(feature = "heap_debug")]
                 Object::Sentinel(_) => type_tags::UNKNOWN,
                 Object::Instance(instance) => {
@@ -2850,7 +2851,15 @@ impl BexVm {
                 true,
             ));
         }
+        // BEP-058 slice 3: if the concrete callee is an interface implementation
+        // (`pkg.Class.Interface.method`), also probe the interface method key
+        // (`pkg.Interface.method`, least specific) so an interface-wide mock
+        // (`new(Animal.speak)`) fires for every implementor.
+        let interface_key = self.interface_method_key(&name);
         candidates.push((bex_vm_types::FunctionKey::Free(name), false));
+        if let Some(ik) = interface_key {
+            candidates.push((bex_vm_types::FunctionKey::Free(ik), false));
+        }
 
         let mut spy: Option<HeapPtr> = None;
         let mut seen: Vec<HeapPtr> = Vec::new();
@@ -2904,6 +2913,38 @@ impl BexVm {
             }
             _ => None,
         }
+    }
+
+    /// BEP-058 slice 3: if `name` is an interface-implementation method, whose
+    /// fully-qualified form is `<prefix>.<Class>.<Interface>.<method>`, return
+    /// the interface method key `<prefix>.<Interface>.<method>` so an
+    /// interface-wide mock can be probed. The candidate `<Interface>` component
+    /// must be a known interface implemented by `<Class>` (checked against the
+    /// implementor registry), which rules out false matches from namespaced
+    /// regular methods. (Same-namespace interface impls only; a cross-namespace
+    /// `implements` would not round-trip through this name derivation.)
+    fn interface_method_key(&self, name: &str) -> Option<String> {
+        let comps: Vec<&str> = name.split('.').collect();
+        let n = comps.len();
+        if n < 3 {
+            return None;
+        }
+        let candidate_interface = comps[n - 2];
+        let candidate_class = comps[n - 3];
+        let implements = self.interface_implementors.iter().any(|(iface, impls)| {
+            iface.name.as_str() == candidate_interface
+                && impls
+                    .iter()
+                    .any(|(class_tn, _, _)| class_tn.name.as_str() == candidate_class)
+        });
+        if !implements {
+            return None;
+        }
+        // Drop the `<Class>` component: `<prefix>.<Interface>.<method>`.
+        let mut parts: Vec<&str> = comps[..n - 3].to_vec();
+        parts.push(candidate_interface);
+        parts.push(comps[n - 1]);
+        Some(parts.join("."))
     }
 
     fn resolve_callable_target(

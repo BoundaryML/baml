@@ -423,6 +423,9 @@ fn resolve_field_access_at(
                 range: *name_range,
             })
         }
+        // BEP-058: an abstract interface method value has no implementation to
+        // navigate to.
+        MemberResolution::InterfaceRequiredMethod { .. } => None,
     }
 }
 

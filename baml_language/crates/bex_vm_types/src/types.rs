@@ -1796,6 +1796,13 @@ pub enum Object {
     /// A function mock (BEP-058). Runtime-only; created by `baml.mock.new`.
     Mock(Box<Mock>),
 
+    /// A reference to an interface method (BEP-058), e.g. the value `Animal.speak`.
+    /// Carries the interface method's fully-qualified identity (`user.Animal.speak`)
+    /// so `baml.mock.new` can key a mock on the interface. An abstract interface
+    /// method has no callable function, so this value only carries identity. Like
+    /// `String`, it is a pooled constant object (serialized via `ObjectWire`).
+    InterfaceMethodRef(bex_str::BexStr),
+
     #[cfg(feature = "heap_debug")]
     Sentinel(SentinelKind),
 }
@@ -1819,6 +1826,7 @@ enum ObjectWire {
     GenericFunction(GenericFunction),
     Cell(Cell),
     String(String),
+    InterfaceMethodRef(String),
     // `Arc<BigInt>` isn't directly Borsh-derivable (and we want the same
     // wire form `ConstValue::Bigint` uses), so the proxy holds the inner
     // `BigInt` by value. `num_bigint::BigInt` has no native borsh impl, so
@@ -1889,6 +1897,7 @@ impl BorshSerialize for Object {
                     "Mock cannot be serialized",
                 ));
             }
+            Self::InterfaceMethodRef(v) => ObjectWire::InterfaceMethodRef(v.to_string()),
             #[cfg(feature = "heap_debug")]
             Self::Sentinel(_) => {
                 return Err(std::io::Error::new(
@@ -1915,6 +1924,7 @@ impl BorshDeserialize for Object {
             ObjectWire::GenericFunction(v) => Self::GenericFunction(v),
             ObjectWire::Cell(v) => Self::Cell(v),
             ObjectWire::String(v) => Self::String(bex_str::BexStr::from(v)),
+            ObjectWire::InterfaceMethodRef(v) => Self::InterfaceMethodRef(bex_str::BexStr::from(v)),
             ObjectWire::Bigint(v) => Self::Bigint(std::sync::Arc::new(v)),
             ObjectWire::Uint8Array(v) => Self::Uint8Array(Uint8ArrayContainer::new(v)),
             ObjectWire::Array(v) => Self::Array(ArrayContainer::new(v)),
@@ -2072,6 +2082,7 @@ impl std::fmt::Display for Object {
             Object::UnscheduledFuture(_) => write!(f, "<unscheduled: spawn>"),
             Object::Float(v) => write!(f, "{v}"),
             Object::Mock(mock) => mock.fmt(f),
+            Object::InterfaceMethodRef(name) => write!(f, "<interface method {name}>"),
             #[cfg(feature = "heap_debug")]
             Object::Sentinel(kind) => write!(f, "<sentinel {kind:?}>"),
             // Object::BamlType(type_ir) => write!(f, "<baml type: {type_ir}>"),
@@ -2693,6 +2704,7 @@ impl ObjectType {
             Object::UnscheduledFuture(_) => Self::UnscheduledFuture,
             Object::Float(_) => Self::Float,
             Object::Mock(_) => Self::Any,
+            Object::InterfaceMethodRef(_) => Self::Any,
             #[cfg(feature = "heap_debug")]
             Object::Sentinel(_) => Self::Any,
             // Object::BamlType(_) => Self::Any, // TODO

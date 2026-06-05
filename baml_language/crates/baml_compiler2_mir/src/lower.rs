@@ -860,6 +860,21 @@ fn resolution_to_item_ref(
                 name: func_data.name.clone(),
             })
         }
+        // BEP-058: a required interface method's identity, e.g. `user.Animal.speak`.
+        MemberResolution::InterfaceRequiredMethod {
+            iface_loc,
+            method_name,
+        } => {
+            let pkg_info = file_package(db, iface_loc.file(db));
+            let item_tree = file_item_tree(db, iface_loc.file(db));
+            let iface_data = &item_tree[iface_loc.id(db)];
+            Some(ItemRef::Method {
+                package: pkg_info.package,
+                namespace: pkg_info.namespace_path,
+                class: iface_data.name.clone(),
+                name: method_name.clone(),
+            })
+        }
         MemberResolution::Field { .. } | MemberResolution::Variant { .. } => None,
     }
 }
@@ -3870,6 +3885,21 @@ impl<'db> LoweringContext<'db> {
                             return;
                         }
                     }
+                    Some(MemberResolution::InterfaceRequiredMethod { .. }) => {
+                        // BEP-058: an abstract interface method value (`Animal.speak`)
+                        // has no function; emit its identity as an InterfaceMethodRef
+                        // (instead of falling through to Null) so it is mockable.
+                        let resolution = member_resolutions.into_iter().last().unwrap();
+                        if let Some(item) = resolution_to_item_ref(self.db, &resolution) {
+                            self.builder.assign(
+                                dest,
+                                Rvalue::Use(Operand::Constant(Constant::InterfaceMethodRef(
+                                    item.to_string(),
+                                ))),
+                            );
+                            return;
+                        }
+                    }
                     Some(MemberResolution::Field { .. }) => {
                         // Local-rooted field access — chain field projections.
                         self.lower_multi_segment_path_as_field_chain(expr_id, segments, dest);
@@ -3933,6 +3963,18 @@ impl<'db> LoweringContext<'db> {
                             self.builder.assign(
                                 dest,
                                 Rvalue::Use(Operand::Constant(Constant::Function(item))),
+                            );
+                            return;
+                        }
+                    }
+                    MemberResolution::InterfaceRequiredMethod { .. } => {
+                        // BEP-058: interface method value identity (mockable).
+                        if let Some(item) = resolution_to_item_ref(self.db, &resolution) {
+                            self.builder.assign(
+                                dest,
+                                Rvalue::Use(Operand::Constant(Constant::InterfaceMethodRef(
+                                    item.to_string(),
+                                ))),
                             );
                             return;
                         }
@@ -5577,7 +5619,9 @@ impl LoweringContext<'_> {
                         | MemberResolution::InterfaceDefaultMethod { func_loc, .. } => {
                             Some(*func_loc)
                         }
-                        MemberResolution::Field { .. } | MemberResolution::Variant { .. } => None,
+                        MemberResolution::Field { .. }
+                        | MemberResolution::Variant { .. }
+                        | MemberResolution::InterfaceRequiredMethod { .. } => None,
                     });
                 if from_pmr.is_some() {
                     from_pmr
@@ -5591,9 +5635,9 @@ impl LoweringContext<'_> {
                             | MemberResolution::InterfaceDefaultMethod { func_loc, .. } => {
                                 Some(*func_loc)
                             }
-                            MemberResolution::Field { .. } | MemberResolution::Variant { .. } => {
-                                None
-                            }
+                            MemberResolution::Field { .. }
+                            | MemberResolution::Variant { .. }
+                            | MemberResolution::InterfaceRequiredMethod { .. } => None,
                         })
                 }
             };
@@ -5614,7 +5658,9 @@ impl LoweringContext<'_> {
                     | MemberResolution::UnboundMethod { func_loc, .. }
                     | MemberResolution::InterfaceDefaultMethod { func_loc, .. } => Some(*func_loc),
                     MemberResolution::Free { func_loc } => Some(*func_loc),
-                    MemberResolution::Field { .. } | MemberResolution::Variant { .. } => None,
+                    MemberResolution::Field { .. }
+                    | MemberResolution::Variant { .. }
+                    | MemberResolution::InterfaceRequiredMethod { .. } => None,
                 };
                 if let Some(fl) = func_loc {
                     let body = baml_compiler2_ppir::function_body(self.db, fl);
@@ -5666,7 +5712,9 @@ impl LoweringContext<'_> {
                         | MemberResolution::InterfaceDefaultMethod { func_loc, .. } => {
                             Some(*func_loc)
                         }
-                        MemberResolution::Field { .. } | MemberResolution::Variant { .. } => None,
+                        MemberResolution::Field { .. }
+                        | MemberResolution::Variant { .. }
+                        | MemberResolution::InterfaceRequiredMethod { .. } => None,
                     });
                 if from_pmr.is_some() {
                     from_pmr
@@ -5680,9 +5728,9 @@ impl LoweringContext<'_> {
                             | MemberResolution::InterfaceDefaultMethod { func_loc, .. } => {
                                 Some(*func_loc)
                             }
-                            MemberResolution::Field { .. } | MemberResolution::Variant { .. } => {
-                                None
-                            }
+                            MemberResolution::Field { .. }
+                            | MemberResolution::Variant { .. }
+                            | MemberResolution::InterfaceRequiredMethod { .. } => None,
                         })
                 }
             };
@@ -5767,7 +5815,9 @@ impl LoweringContext<'_> {
                         | MemberResolution::InterfaceDefaultMethod { func_loc, .. } => {
                             Some(*func_loc)
                         }
-                        MemberResolution::Field { .. } | MemberResolution::Variant { .. } => None,
+                        MemberResolution::Field { .. }
+                        | MemberResolution::Variant { .. }
+                        | MemberResolution::InterfaceRequiredMethod { .. } => None,
                     });
                 if from_pmr.is_some() {
                     from_pmr
@@ -5781,9 +5831,9 @@ impl LoweringContext<'_> {
                             | MemberResolution::InterfaceDefaultMethod { func_loc, .. } => {
                                 Some(*func_loc)
                             }
-                            MemberResolution::Field { .. } | MemberResolution::Variant { .. } => {
-                                None
-                            }
+                            MemberResolution::Field { .. }
+                            | MemberResolution::Variant { .. }
+                            | MemberResolution::InterfaceRequiredMethod { .. } => None,
                         })
                 }
             }
@@ -6503,6 +6553,18 @@ impl<'db> LoweringContext<'db> {
                         self.builder.assign(
                             dest,
                             Rvalue::Use(Operand::Constant(Constant::Function(item))),
+                        );
+                        return;
+                    }
+                }
+                MemberResolution::InterfaceRequiredMethod { .. } => {
+                    // BEP-058: interface method value identity (mockable).
+                    if let Some(item) = resolution_to_item_ref(self.db, &resolution) {
+                        self.builder.assign(
+                            dest,
+                            Rvalue::Use(Operand::Constant(Constant::InterfaceMethodRef(
+                                item.to_string(),
+                            ))),
                         );
                         return;
                     }
