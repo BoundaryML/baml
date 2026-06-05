@@ -2247,7 +2247,7 @@ function baml.iter.Chain.Iterator.next(self: baml.iter.Chain<unknown, unknown>) 
 
 function baml.iter.Chain.from_json(j: baml.json.json) -> baml.iter.Chain<unknown, unknown> {
     load_var j
-    load_const "iter"
+    load_const "first"
     call baml.json.field
     store_var _3
     load_type baml.iter.Iterator<Item = #0, Error = #1>
@@ -2269,711 +2269,588 @@ function baml.iter.Chain.from_json(j: baml.json.json) -> baml.iter.Chain<unknown
     call baml.json.from_json
     load_type #0
     load_type #1
-    init_instance<2> baml.iter.Chain .iter, .other, .first_done
+    init_instance<2> baml.iter.Chain .first, .other, .first_done
     return
 }
 
 function baml.iter.Chain.to_json(self: baml.iter.Chain<unknown, unknown>) -> baml.json.json {
     load_var self
+    load_field .first
+    store_var_load_var _3
     is_type baml.iter.Flatten<...>
     pop_jump_if_false L0
-    jump L19
+    jump L41
 
   L0:
-    load_var self
-    is_type baml.iter.Range
+    load_var _3
+    is_type baml.iter.Flatten<...>
     pop_jump_if_false L1
-    jump L18
+    jump L40
 
   L1:
-    load_var self
-    is_type baml.iter.ArrayIterator<...>
+    load_var _3
+    is_type baml.iter.Range
     pop_jump_if_false L2
-    jump L17
+    jump L39
 
   L2:
-    load_var self
-    is_type baml.iter.StepBy<...>
+    load_var _3
+    is_type baml.iter.Range
     pop_jump_if_false L3
-    jump L16
+    jump L38
 
   L3:
-    load_var self
-    is_type baml.iter.Chain<...>
+    load_var _3
+    is_type baml.iter.ArrayIterator<...>
     pop_jump_if_false L4
-    jump L15
+    jump L37
 
   L4:
-    load_var self
-    is_type baml.iter.Repeat<...>
+    load_var _3
+    is_type baml.iter.ArrayIterator<...>
     pop_jump_if_false L5
-    jump L14
+    jump L36
 
   L5:
-    load_var self
-    is_type baml.iter.Map<...>
+    load_var _3
+    is_type baml.iter.StepBy<...>
     pop_jump_if_false L6
-    jump L13
+    jump L35
 
   L6:
-    load_var self
-    is_type baml.iter.Filter<...>
+    load_var _3
+    is_type baml.iter.StepBy<...>
     pop_jump_if_false L7
-    jump L12
+    jump L34
 
   L7:
-    load_var self
-    is_type baml.iter.FilterMap<...>
+    load_var _3
+    is_type baml.iter.Chain<...>
     pop_jump_if_false L8
-    jump L11
+    jump L33
 
   L8:
-    load_var self
-    is_type baml.iter.FlatMap<...>
+    load_var _3
+    is_type baml.iter.Chain<...>
     pop_jump_if_false L9
-    jump L10
+    jump L32
 
   L9:
-    load_var self
-    make_bound_method baml.iter.Peekable.Iterable.iter
-    store_var _3
-    jump L20
+    load_var _3
+    is_type baml.iter.Repeat<...>
+    pop_jump_if_false L10
+    jump L31
 
   L10:
-    load_var self
-    make_bound_method baml.iter.FlatMap.Iterable.iter
-    store_var _3
-    jump L20
+    load_var _3
+    is_type baml.iter.Repeat<...>
+    pop_jump_if_false L11
+    jump L30
 
   L11:
-    load_var self
-    make_bound_method baml.iter.FilterMap.Iterable.iter
-    store_var _3
-    jump L20
+    load_var _3
+    is_type baml.iter.Map<...>
+    pop_jump_if_false L12
+    jump L29
 
   L12:
-    load_var self
-    make_bound_method baml.iter.Filter.Iterable.iter
-    store_var _3
-    jump L20
+    load_var _3
+    is_type baml.iter.Map<...>
+    pop_jump_if_false L13
+    jump L28
 
   L13:
-    load_var self
-    make_bound_method baml.iter.Map.Iterable.iter
-    store_var _3
-    jump L20
+    load_var _3
+    is_type baml.iter.Filter<...>
+    pop_jump_if_false L14
+    jump L27
 
   L14:
-    load_var self
-    make_bound_method baml.iter.Repeat.Iterable.iter
-    store_var _3
-    jump L20
+    load_var _3
+    is_type baml.iter.Filter<...>
+    pop_jump_if_false L15
+    jump L26
 
   L15:
-    load_var self
-    make_bound_method baml.iter.Chain.Iterable.iter
-    store_var _3
-    jump L20
+    load_var _3
+    is_type baml.iter.FilterMap<...>
+    pop_jump_if_false L16
+    jump L25
 
   L16:
-    load_var self
-    make_bound_method baml.iter.StepBy.Iterable.iter
-    store_var _3
-    jump L20
+    load_var _3
+    is_type baml.iter.FilterMap<...>
+    pop_jump_if_false L17
+    jump L24
 
   L17:
-    load_var self
-    make_bound_method baml.iter.ArrayIterator.Iterable.iter
-    store_var _3
-    jump L20
+    load_var _3
+    is_type baml.iter.FlatMap<...>
+    pop_jump_if_false L18
+    jump L23
 
   L18:
-    load_var self
-    make_bound_method baml.iter.Range.Iterable.iter
-    store_var _3
-    jump L20
+    load_var _3
+    is_type baml.iter.FlatMap<...>
+    pop_jump_if_false L19
+    jump L22
 
   L19:
-    load_var self
-    make_bound_method baml.iter.Flatten.Iterable.iter
-    store_var _3
+    load_var _3
+    is_type baml.iter.Peekable<...>
+    pop_jump_if_false L20
+    jump L21
 
   L20:
+    load_type #0
+    load_type #1
     load_var _3
-    is_type baml.iter.Flatten<...>
-    pop_jump_if_false L21
-    jump L62
+    call baml.iter.Peekable.to_json
+    store_var _2
+    jump L42
 
   L21:
+    load_type #0
+    load_type #1
     load_var _3
-    is_type baml.iter.Flatten<...>
-    pop_jump_if_false L22
-    jump L61
+    call baml.iter.Peekable.to_json
+    store_var _2
+    jump L42
 
   L22:
     load_var _3
-    is_type baml.iter.Range
-    pop_jump_if_false L23
-    jump L60
+    make_bound_method baml.iter.FlatMap.to_json
+    call_indirect
+    store_var _2
+    jump L42
 
   L23:
     load_var _3
-    is_type baml.iter.Range
-    pop_jump_if_false L24
-    jump L59
+    make_bound_method baml.iter.FlatMap.to_json
+    call_indirect
+    store_var _2
+    jump L42
 
   L24:
     load_var _3
-    is_type baml.iter.ArrayIterator<...>
-    pop_jump_if_false L25
-    jump L58
+    make_bound_method baml.iter.FilterMap.to_json
+    call_indirect
+    store_var _2
+    jump L42
 
   L25:
     load_var _3
-    is_type baml.iter.ArrayIterator<...>
-    pop_jump_if_false L26
-    jump L57
+    make_bound_method baml.iter.FilterMap.to_json
+    call_indirect
+    store_var _2
+    jump L42
 
   L26:
     load_var _3
-    is_type baml.iter.StepBy<...>
-    pop_jump_if_false L27
-    jump L56
+    make_bound_method baml.iter.Filter.to_json
+    call_indirect
+    store_var _2
+    jump L42
 
   L27:
     load_var _3
-    is_type baml.iter.StepBy<...>
-    pop_jump_if_false L28
-    jump L55
+    make_bound_method baml.iter.Filter.to_json
+    call_indirect
+    store_var _2
+    jump L42
 
   L28:
     load_var _3
-    is_type baml.iter.Chain<...>
-    pop_jump_if_false L29
-    jump L54
+    make_bound_method baml.iter.Map.to_json
+    call_indirect
+    store_var _2
+    jump L42
 
   L29:
     load_var _3
-    is_type baml.iter.Chain<...>
-    pop_jump_if_false L30
-    jump L53
+    make_bound_method baml.iter.Map.to_json
+    call_indirect
+    store_var _2
+    jump L42
 
   L30:
+    load_type #0
     load_var _3
-    is_type baml.iter.Repeat<...>
-    pop_jump_if_false L31
-    jump L52
+    call baml.iter.Repeat.to_json
+    store_var _2
+    jump L42
 
   L31:
+    load_type #0
     load_var _3
-    is_type baml.iter.Repeat<...>
-    pop_jump_if_false L32
-    jump L51
+    call baml.iter.Repeat.to_json
+    store_var _2
+    jump L42
 
   L32:
+    load_type #0
+    load_type #1
     load_var _3
-    is_type baml.iter.Map<...>
-    pop_jump_if_false L33
-    jump L50
+    call baml.iter.Chain.to_json
+    store_var _2
+    jump L42
 
   L33:
+    load_type #0
+    load_type #1
     load_var _3
-    is_type baml.iter.Map<...>
-    pop_jump_if_false L34
-    jump L49
+    call baml.iter.Chain.to_json
+    store_var _2
+    jump L42
 
   L34:
+    load_type #0
+    load_type #1
     load_var _3
-    is_type baml.iter.Filter<...>
-    pop_jump_if_false L35
-    jump L48
+    call baml.iter.StepBy.to_json
+    store_var _2
+    jump L42
 
   L35:
+    load_type #0
+    load_type #1
     load_var _3
-    is_type baml.iter.Filter<...>
-    pop_jump_if_false L36
-    jump L47
+    call baml.iter.StepBy.to_json
+    store_var _2
+    jump L42
 
   L36:
+    load_type #0
     load_var _3
-    is_type baml.iter.FilterMap<...>
-    pop_jump_if_false L37
-    jump L46
+    call baml.iter.ArrayIterator.to_json
+    store_var _2
+    jump L42
 
   L37:
+    load_type #0
     load_var _3
-    is_type baml.iter.FilterMap<...>
-    pop_jump_if_false L38
-    jump L45
+    call baml.iter.ArrayIterator.to_json
+    store_var _2
+    jump L42
 
   L38:
     load_var _3
-    is_type baml.iter.FlatMap<...>
-    pop_jump_if_false L39
-    jump L44
+    call baml.iter.Range.to_json
+    store_var _2
+    jump L42
 
   L39:
     load_var _3
-    is_type baml.iter.FlatMap<...>
-    pop_jump_if_false L40
-    jump L43
+    call baml.iter.Range.to_json
+    store_var _2
+    jump L42
 
   L40:
     load_var _3
-    is_type baml.iter.Peekable<...>
-    pop_jump_if_false L41
+    make_bound_method baml.iter.Flatten.to_json
+    call_indirect
+    store_var _2
     jump L42
 
   L41:
-    load_type #0
-    load_type #1
     load_var _3
-    call baml.iter.Peekable.to_json
+    make_bound_method baml.iter.Flatten.to_json
+    call_indirect
     store_var _2
-    jump L63
 
   L42:
-    load_type #0
-    load_type #1
-    load_var _3
-    call baml.iter.Peekable.to_json
-    store_var _2
-    jump L63
-
-  L43:
-    load_var _3
-    make_bound_method baml.iter.FlatMap.to_json
-    call_indirect
-    store_var _2
-    jump L63
-
-  L44:
-    load_var _3
-    make_bound_method baml.iter.FlatMap.to_json
-    call_indirect
-    store_var _2
-    jump L63
-
-  L45:
-    load_var _3
-    make_bound_method baml.iter.FilterMap.to_json
-    call_indirect
-    store_var _2
-    jump L63
-
-  L46:
-    load_var _3
-    make_bound_method baml.iter.FilterMap.to_json
-    call_indirect
-    store_var _2
-    jump L63
-
-  L47:
-    load_var _3
-    make_bound_method baml.iter.Filter.to_json
-    call_indirect
-    store_var _2
-    jump L63
-
-  L48:
-    load_var _3
-    make_bound_method baml.iter.Filter.to_json
-    call_indirect
-    store_var _2
-    jump L63
-
-  L49:
-    load_var _3
-    make_bound_method baml.iter.Map.to_json
-    call_indirect
-    store_var _2
-    jump L63
-
-  L50:
-    load_var _3
-    make_bound_method baml.iter.Map.to_json
-    call_indirect
-    store_var _2
-    jump L63
-
-  L51:
-    load_type #0
-    load_var _3
-    call baml.iter.Repeat.to_json
-    store_var _2
-    jump L63
-
-  L52:
-    load_type #0
-    load_var _3
-    call baml.iter.Repeat.to_json
-    store_var _2
-    jump L63
-
-  L53:
-    load_type #0
-    load_type #1
-    load_var _3
-    call baml.iter.Chain.to_json
-    store_var _2
-    jump L63
-
-  L54:
-    load_type #0
-    load_type #1
-    load_var _3
-    call baml.iter.Chain.to_json
-    store_var _2
-    jump L63
-
-  L55:
-    load_type #0
-    load_type #1
-    load_var _3
-    call baml.iter.StepBy.to_json
-    store_var _2
-    jump L63
-
-  L56:
-    load_type #0
-    load_type #1
-    load_var _3
-    call baml.iter.StepBy.to_json
-    store_var _2
-    jump L63
-
-  L57:
-    load_type #0
-    load_var _3
-    call baml.iter.ArrayIterator.to_json
-    store_var _2
-    jump L63
-
-  L58:
-    load_type #0
-    load_var _3
-    call baml.iter.ArrayIterator.to_json
-    store_var _2
-    jump L63
-
-  L59:
-    load_var _3
-    call baml.iter.Range.to_json
-    store_var _2
-    jump L63
-
-  L60:
-    load_var _3
-    call baml.iter.Range.to_json
-    store_var _2
-    jump L63
-
-  L61:
-    load_var _3
-    make_bound_method baml.iter.Flatten.to_json
-    call_indirect
-    store_var _2
-    jump L63
-
-  L62:
-    load_var _3
-    make_bound_method baml.iter.Flatten.to_json
-    call_indirect
-    store_var _2
-
-  L63:
     load_var self
     load_field .other
-    store_var_load_var _65
+    store_var_load_var _54
     is_type baml.iter.Flatten<...>
-    pop_jump_if_false L64
-    jump L105
+    pop_jump_if_false L43
+    jump L84
+
+  L43:
+    load_var _54
+    is_type baml.iter.Flatten<...>
+    pop_jump_if_false L44
+    jump L83
+
+  L44:
+    load_var _54
+    is_type baml.iter.Range
+    pop_jump_if_false L45
+    jump L82
+
+  L45:
+    load_var _54
+    is_type baml.iter.Range
+    pop_jump_if_false L46
+    jump L81
+
+  L46:
+    load_var _54
+    is_type baml.iter.ArrayIterator<...>
+    pop_jump_if_false L47
+    jump L80
+
+  L47:
+    load_var _54
+    is_type baml.iter.ArrayIterator<...>
+    pop_jump_if_false L48
+    jump L79
+
+  L48:
+    load_var _54
+    is_type baml.iter.StepBy<...>
+    pop_jump_if_false L49
+    jump L78
+
+  L49:
+    load_var _54
+    is_type baml.iter.StepBy<...>
+    pop_jump_if_false L50
+    jump L77
+
+  L50:
+    load_var _54
+    is_type baml.iter.Chain<...>
+    pop_jump_if_false L51
+    jump L76
+
+  L51:
+    load_var _54
+    is_type baml.iter.Chain<...>
+    pop_jump_if_false L52
+    jump L75
+
+  L52:
+    load_var _54
+    is_type baml.iter.Repeat<...>
+    pop_jump_if_false L53
+    jump L74
+
+  L53:
+    load_var _54
+    is_type baml.iter.Repeat<...>
+    pop_jump_if_false L54
+    jump L73
+
+  L54:
+    load_var _54
+    is_type baml.iter.Map<...>
+    pop_jump_if_false L55
+    jump L72
+
+  L55:
+    load_var _54
+    is_type baml.iter.Map<...>
+    pop_jump_if_false L56
+    jump L71
+
+  L56:
+    load_var _54
+    is_type baml.iter.Filter<...>
+    pop_jump_if_false L57
+    jump L70
+
+  L57:
+    load_var _54
+    is_type baml.iter.Filter<...>
+    pop_jump_if_false L58
+    jump L69
+
+  L58:
+    load_var _54
+    is_type baml.iter.FilterMap<...>
+    pop_jump_if_false L59
+    jump L68
+
+  L59:
+    load_var _54
+    is_type baml.iter.FilterMap<...>
+    pop_jump_if_false L60
+    jump L67
+
+  L60:
+    load_var _54
+    is_type baml.iter.FlatMap<...>
+    pop_jump_if_false L61
+    jump L66
+
+  L61:
+    load_var _54
+    is_type baml.iter.FlatMap<...>
+    pop_jump_if_false L62
+    jump L65
+
+  L62:
+    load_var _54
+    is_type baml.iter.Peekable<...>
+    pop_jump_if_false L63
+    jump L64
+
+  L63:
+    load_type #0
+    load_type #1
+    load_var _54
+    call baml.iter.Peekable.to_json
+    store_var _53
+    jump L85
 
   L64:
-    load_var _65
-    is_type baml.iter.Flatten<...>
-    pop_jump_if_false L65
-    jump L104
+    load_type #0
+    load_type #1
+    load_var _54
+    call baml.iter.Peekable.to_json
+    store_var _53
+    jump L85
 
   L65:
-    load_var _65
-    is_type baml.iter.Range
-    pop_jump_if_false L66
-    jump L103
+    load_var _54
+    make_bound_method baml.iter.FlatMap.to_json
+    call_indirect
+    store_var _53
+    jump L85
 
   L66:
-    load_var _65
-    is_type baml.iter.Range
-    pop_jump_if_false L67
-    jump L102
+    load_var _54
+    make_bound_method baml.iter.FlatMap.to_json
+    call_indirect
+    store_var _53
+    jump L85
 
   L67:
-    load_var _65
-    is_type baml.iter.ArrayIterator<...>
-    pop_jump_if_false L68
-    jump L101
+    load_var _54
+    make_bound_method baml.iter.FilterMap.to_json
+    call_indirect
+    store_var _53
+    jump L85
 
   L68:
-    load_var _65
-    is_type baml.iter.ArrayIterator<...>
-    pop_jump_if_false L69
-    jump L100
+    load_var _54
+    make_bound_method baml.iter.FilterMap.to_json
+    call_indirect
+    store_var _53
+    jump L85
 
   L69:
-    load_var _65
-    is_type baml.iter.StepBy<...>
-    pop_jump_if_false L70
-    jump L99
+    load_var _54
+    make_bound_method baml.iter.Filter.to_json
+    call_indirect
+    store_var _53
+    jump L85
 
   L70:
-    load_var _65
-    is_type baml.iter.StepBy<...>
-    pop_jump_if_false L71
-    jump L98
+    load_var _54
+    make_bound_method baml.iter.Filter.to_json
+    call_indirect
+    store_var _53
+    jump L85
 
   L71:
-    load_var _65
-    is_type baml.iter.Chain<...>
-    pop_jump_if_false L72
-    jump L97
+    load_var _54
+    make_bound_method baml.iter.Map.to_json
+    call_indirect
+    store_var _53
+    jump L85
 
   L72:
-    load_var _65
-    is_type baml.iter.Chain<...>
-    pop_jump_if_false L73
-    jump L96
+    load_var _54
+    make_bound_method baml.iter.Map.to_json
+    call_indirect
+    store_var _53
+    jump L85
 
   L73:
-    load_var _65
-    is_type baml.iter.Repeat<...>
-    pop_jump_if_false L74
-    jump L95
+    load_type #0
+    load_var _54
+    call baml.iter.Repeat.to_json
+    store_var _53
+    jump L85
 
   L74:
-    load_var _65
-    is_type baml.iter.Repeat<...>
-    pop_jump_if_false L75
-    jump L94
+    load_type #0
+    load_var _54
+    call baml.iter.Repeat.to_json
+    store_var _53
+    jump L85
 
   L75:
-    load_var _65
-    is_type baml.iter.Map<...>
-    pop_jump_if_false L76
-    jump L93
+    load_type #0
+    load_type #1
+    load_var _54
+    call baml.iter.Chain.to_json
+    store_var _53
+    jump L85
 
   L76:
-    load_var _65
-    is_type baml.iter.Map<...>
-    pop_jump_if_false L77
-    jump L92
+    load_type #0
+    load_type #1
+    load_var _54
+    call baml.iter.Chain.to_json
+    store_var _53
+    jump L85
 
   L77:
-    load_var _65
-    is_type baml.iter.Filter<...>
-    pop_jump_if_false L78
-    jump L91
+    load_type #0
+    load_type #1
+    load_var _54
+    call baml.iter.StepBy.to_json
+    store_var _53
+    jump L85
 
   L78:
-    load_var _65
-    is_type baml.iter.Filter<...>
-    pop_jump_if_false L79
-    jump L90
+    load_type #0
+    load_type #1
+    load_var _54
+    call baml.iter.StepBy.to_json
+    store_var _53
+    jump L85
 
   L79:
-    load_var _65
-    is_type baml.iter.FilterMap<...>
-    pop_jump_if_false L80
-    jump L89
+    load_type #0
+    load_var _54
+    call baml.iter.ArrayIterator.to_json
+    store_var _53
+    jump L85
 
   L80:
-    load_var _65
-    is_type baml.iter.FilterMap<...>
-    pop_jump_if_false L81
-    jump L88
+    load_type #0
+    load_var _54
+    call baml.iter.ArrayIterator.to_json
+    store_var _53
+    jump L85
 
   L81:
-    load_var _65
-    is_type baml.iter.FlatMap<...>
-    pop_jump_if_false L82
-    jump L87
+    load_var _54
+    call baml.iter.Range.to_json
+    store_var _53
+    jump L85
 
   L82:
-    load_var _65
-    is_type baml.iter.FlatMap<...>
-    pop_jump_if_false L83
-    jump L86
+    load_var _54
+    call baml.iter.Range.to_json
+    store_var _53
+    jump L85
 
   L83:
-    load_var _65
-    is_type baml.iter.Peekable<...>
-    pop_jump_if_false L84
+    load_var _54
+    make_bound_method baml.iter.Flatten.to_json
+    call_indirect
+    store_var _53
     jump L85
 
   L84:
-    load_type #0
-    load_type #1
-    load_var _65
-    call baml.iter.Peekable.to_json
-    store_var _64
-    jump L106
+    load_var _54
+    make_bound_method baml.iter.Flatten.to_json
+    call_indirect
+    store_var _53
 
   L85:
-    load_type #0
-    load_type #1
-    load_var _65
-    call baml.iter.Peekable.to_json
-    store_var _64
-    jump L106
-
-  L86:
-    load_var _65
-    make_bound_method baml.iter.FlatMap.to_json
-    call_indirect
-    store_var _64
-    jump L106
-
-  L87:
-    load_var _65
-    make_bound_method baml.iter.FlatMap.to_json
-    call_indirect
-    store_var _64
-    jump L106
-
-  L88:
-    load_var _65
-    make_bound_method baml.iter.FilterMap.to_json
-    call_indirect
-    store_var _64
-    jump L106
-
-  L89:
-    load_var _65
-    make_bound_method baml.iter.FilterMap.to_json
-    call_indirect
-    store_var _64
-    jump L106
-
-  L90:
-    load_var _65
-    make_bound_method baml.iter.Filter.to_json
-    call_indirect
-    store_var _64
-    jump L106
-
-  L91:
-    load_var _65
-    make_bound_method baml.iter.Filter.to_json
-    call_indirect
-    store_var _64
-    jump L106
-
-  L92:
-    load_var _65
-    make_bound_method baml.iter.Map.to_json
-    call_indirect
-    store_var _64
-    jump L106
-
-  L93:
-    load_var _65
-    make_bound_method baml.iter.Map.to_json
-    call_indirect
-    store_var _64
-    jump L106
-
-  L94:
-    load_type #0
-    load_var _65
-    call baml.iter.Repeat.to_json
-    store_var _64
-    jump L106
-
-  L95:
-    load_type #0
-    load_var _65
-    call baml.iter.Repeat.to_json
-    store_var _64
-    jump L106
-
-  L96:
-    load_type #0
-    load_type #1
-    load_var _65
-    call baml.iter.Chain.to_json
-    store_var _64
-    jump L106
-
-  L97:
-    load_type #0
-    load_type #1
-    load_var _65
-    call baml.iter.Chain.to_json
-    store_var _64
-    jump L106
-
-  L98:
-    load_type #0
-    load_type #1
-    load_var _65
-    call baml.iter.StepBy.to_json
-    store_var _64
-    jump L106
-
-  L99:
-    load_type #0
-    load_type #1
-    load_var _65
-    call baml.iter.StepBy.to_json
-    store_var _64
-    jump L106
-
-  L100:
-    load_type #0
-    load_var _65
-    call baml.iter.ArrayIterator.to_json
-    store_var _64
-    jump L106
-
-  L101:
-    load_type #0
-    load_var _65
-    call baml.iter.ArrayIterator.to_json
-    store_var _64
-    jump L106
-
-  L102:
-    load_var _65
-    call baml.iter.Range.to_json
-    store_var _64
-    jump L106
-
-  L103:
-    load_var _65
-    call baml.iter.Range.to_json
-    store_var _64
-    jump L106
-
-  L104:
-    load_var _65
-    make_bound_method baml.iter.Flatten.to_json
-    call_indirect
-    store_var _64
-    jump L106
-
-  L105:
-    load_var _65
-    make_bound_method baml.iter.Flatten.to_json
-    call_indirect
-    store_var _64
-
-  L106:
     load_var self
     load_field .first_done
     call baml.Bool.to_json
-    store_var _115
+    store_var _104
     load_var2 2 4
-    load_var _115
-    load_const "iter"
+    load_var _104
+    load_const "first"
     load_const "other"
     load_const "first_done"
     alloc_map 3
@@ -6442,7 +6319,7 @@ function baml.iter.Flatten.Iterator.next(self: baml.iter.Flatten<unknown, unknow
 
 function baml.iter.Flatten.from_json(j: baml.json.json) -> baml.iter.Flatten<unknown, unknown, unknown, unknown> {
     load_var j
-    load_const "iter"
+    load_const "source"
     call baml.json.field
     store_var _3
     load_type baml.iter.Iterator<Item = #0, Error = #2>
@@ -6459,670 +6336,595 @@ function baml.iter.Flatten.from_json(j: baml.json.json) -> baml.iter.Flatten<unk
     load_type #1
     load_type #2
     load_type #3
-    init_instance<4> baml.iter.Flatten .iter, .inner
+    init_instance<4> baml.iter.Flatten .source, .inner
     return
 }
 
 function baml.iter.Flatten.to_json(self: baml.iter.Flatten<unknown, unknown, unknown, unknown>) -> baml.json.json {
     load_var self
+    load_field .source
+    store_var_load_var _3
     is_type baml.iter.Flatten<...>
     pop_jump_if_false L0
-    jump L11
+    jump L41
 
   L0:
-    load_var self
-    is_type baml.iter.StepBy<...>
+    load_var _3
+    is_type baml.iter.Flatten<...>
     pop_jump_if_false L1
-    jump L10
+    jump L40
 
   L1:
-    load_var self
-    is_type baml.iter.Chain<...>
+    load_var _3
+    is_type baml.iter.Range
     pop_jump_if_false L2
-    jump L9
+    jump L39
 
   L2:
-    load_var self
-    is_type baml.iter.Map<...>
+    load_var _3
+    is_type baml.iter.Range
     pop_jump_if_false L3
-    jump L8
+    jump L38
 
   L3:
-    load_var self
-    is_type baml.iter.Filter<...>
+    load_var _3
+    is_type baml.iter.ArrayIterator<...>
     pop_jump_if_false L4
-    jump L7
+    jump L37
 
   L4:
-    load_var self
-    is_type baml.iter.FilterMap<...>
+    load_var _3
+    is_type baml.iter.ArrayIterator<...>
     pop_jump_if_false L5
-    jump L6
+    jump L36
 
   L5:
-    load_var self
-    make_bound_method baml.iter.Peekable.Iterable.iter
-    store_var _3
-    jump L12
+    load_var _3
+    is_type baml.iter.StepBy<...>
+    pop_jump_if_false L6
+    jump L35
 
   L6:
-    load_var self
-    make_bound_method baml.iter.FilterMap.Iterable.iter
-    store_var _3
-    jump L12
+    load_var _3
+    is_type baml.iter.StepBy<...>
+    pop_jump_if_false L7
+    jump L34
 
   L7:
-    load_var self
-    make_bound_method baml.iter.Filter.Iterable.iter
-    store_var _3
-    jump L12
+    load_var _3
+    is_type baml.iter.Chain<...>
+    pop_jump_if_false L8
+    jump L33
 
   L8:
-    load_var self
-    make_bound_method baml.iter.Map.Iterable.iter
-    store_var _3
-    jump L12
+    load_var _3
+    is_type baml.iter.Chain<...>
+    pop_jump_if_false L9
+    jump L32
 
   L9:
-    load_var self
-    make_bound_method baml.iter.Chain.Iterable.iter
-    store_var _3
-    jump L12
+    load_var _3
+    is_type baml.iter.Repeat<...>
+    pop_jump_if_false L10
+    jump L31
 
   L10:
-    load_var self
-    make_bound_method baml.iter.StepBy.Iterable.iter
-    store_var _3
-    jump L12
+    load_var _3
+    is_type baml.iter.Repeat<...>
+    pop_jump_if_false L11
+    jump L30
 
   L11:
-    load_var self
-    make_bound_method baml.iter.Flatten.Iterable.iter
-    store_var _3
+    load_var _3
+    is_type baml.iter.Map<...>
+    pop_jump_if_false L12
+    jump L29
 
   L12:
     load_var _3
-    is_type baml.iter.Flatten<...>
+    is_type baml.iter.Map<...>
     pop_jump_if_false L13
-    jump L54
+    jump L28
 
   L13:
     load_var _3
-    is_type baml.iter.Flatten<...>
+    is_type baml.iter.Filter<...>
     pop_jump_if_false L14
-    jump L53
+    jump L27
 
   L14:
     load_var _3
-    is_type baml.iter.Range
+    is_type baml.iter.Filter<...>
     pop_jump_if_false L15
-    jump L52
+    jump L26
 
   L15:
     load_var _3
-    is_type baml.iter.Range
+    is_type baml.iter.FilterMap<...>
     pop_jump_if_false L16
-    jump L51
+    jump L25
 
   L16:
     load_var _3
-    is_type baml.iter.ArrayIterator<...>
+    is_type baml.iter.FilterMap<...>
     pop_jump_if_false L17
-    jump L50
+    jump L24
 
   L17:
     load_var _3
-    is_type baml.iter.ArrayIterator<...>
+    is_type baml.iter.FlatMap<...>
     pop_jump_if_false L18
-    jump L49
+    jump L23
 
   L18:
     load_var _3
-    is_type baml.iter.StepBy<...>
+    is_type baml.iter.FlatMap<...>
     pop_jump_if_false L19
-    jump L48
+    jump L22
 
   L19:
     load_var _3
-    is_type baml.iter.StepBy<...>
+    is_type baml.iter.Peekable<...>
     pop_jump_if_false L20
-    jump L47
+    jump L21
 
   L20:
+    load_type #0
+    load_type #2
     load_var _3
-    is_type baml.iter.Chain<...>
-    pop_jump_if_false L21
-    jump L46
+    call baml.iter.Peekable.to_json
+    store_var _2
+    jump L42
 
   L21:
+    load_type #0
+    load_type #2
     load_var _3
-    is_type baml.iter.Chain<...>
-    pop_jump_if_false L22
-    jump L45
+    call baml.iter.Peekable.to_json
+    store_var _2
+    jump L42
 
   L22:
     load_var _3
-    is_type baml.iter.Repeat<...>
-    pop_jump_if_false L23
-    jump L44
+    make_bound_method baml.iter.FlatMap.to_json
+    call_indirect
+    store_var _2
+    jump L42
 
   L23:
     load_var _3
-    is_type baml.iter.Repeat<...>
-    pop_jump_if_false L24
-    jump L43
+    make_bound_method baml.iter.FlatMap.to_json
+    call_indirect
+    store_var _2
+    jump L42
 
   L24:
     load_var _3
-    is_type baml.iter.Map<...>
-    pop_jump_if_false L25
+    make_bound_method baml.iter.FilterMap.to_json
+    call_indirect
+    store_var _2
     jump L42
 
   L25:
     load_var _3
-    is_type baml.iter.Map<...>
-    pop_jump_if_false L26
-    jump L41
+    make_bound_method baml.iter.FilterMap.to_json
+    call_indirect
+    store_var _2
+    jump L42
 
   L26:
     load_var _3
-    is_type baml.iter.Filter<...>
-    pop_jump_if_false L27
-    jump L40
+    make_bound_method baml.iter.Filter.to_json
+    call_indirect
+    store_var _2
+    jump L42
 
   L27:
     load_var _3
-    is_type baml.iter.Filter<...>
-    pop_jump_if_false L28
-    jump L39
+    make_bound_method baml.iter.Filter.to_json
+    call_indirect
+    store_var _2
+    jump L42
 
   L28:
     load_var _3
-    is_type baml.iter.FilterMap<...>
-    pop_jump_if_false L29
-    jump L38
+    make_bound_method baml.iter.Map.to_json
+    call_indirect
+    store_var _2
+    jump L42
 
   L29:
     load_var _3
-    is_type baml.iter.FilterMap<...>
-    pop_jump_if_false L30
-    jump L37
+    make_bound_method baml.iter.Map.to_json
+    call_indirect
+    store_var _2
+    jump L42
 
   L30:
+    load_type #0
     load_var _3
-    is_type baml.iter.FlatMap<...>
-    pop_jump_if_false L31
-    jump L36
+    call baml.iter.Repeat.to_json
+    store_var _2
+    jump L42
 
   L31:
+    load_type #0
     load_var _3
-    is_type baml.iter.FlatMap<...>
-    pop_jump_if_false L32
-    jump L35
+    call baml.iter.Repeat.to_json
+    store_var _2
+    jump L42
 
   L32:
+    load_type #0
+    load_type #2
     load_var _3
-    is_type baml.iter.Peekable<...>
-    pop_jump_if_false L33
-    jump L34
+    call baml.iter.Chain.to_json
+    store_var _2
+    jump L42
 
   L33:
     load_type #0
     load_type #2
     load_var _3
-    call baml.iter.Peekable.to_json
+    call baml.iter.Chain.to_json
     store_var _2
-    jump L55
+    jump L42
 
   L34:
     load_type #0
     load_type #2
     load_var _3
-    call baml.iter.Peekable.to_json
+    call baml.iter.StepBy.to_json
     store_var _2
-    jump L55
+    jump L42
 
   L35:
+    load_type #0
+    load_type #2
     load_var _3
-    make_bound_method baml.iter.FlatMap.to_json
-    call_indirect
+    call baml.iter.StepBy.to_json
     store_var _2
-    jump L55
+    jump L42
 
   L36:
+    load_type #0
     load_var _3
-    make_bound_method baml.iter.FlatMap.to_json
-    call_indirect
+    call baml.iter.ArrayIterator.to_json
     store_var _2
-    jump L55
+    jump L42
 
   L37:
+    load_type #0
     load_var _3
-    make_bound_method baml.iter.FilterMap.to_json
-    call_indirect
+    call baml.iter.ArrayIterator.to_json
     store_var _2
-    jump L55
+    jump L42
 
   L38:
     load_var _3
-    make_bound_method baml.iter.FilterMap.to_json
-    call_indirect
+    call baml.iter.Range.to_json
     store_var _2
-    jump L55
+    jump L42
 
   L39:
     load_var _3
-    make_bound_method baml.iter.Filter.to_json
-    call_indirect
+    call baml.iter.Range.to_json
     store_var _2
-    jump L55
+    jump L42
 
   L40:
     load_var _3
-    make_bound_method baml.iter.Filter.to_json
+    make_bound_method baml.iter.Flatten.to_json
     call_indirect
     store_var _2
-    jump L55
+    jump L42
 
   L41:
     load_var _3
-    make_bound_method baml.iter.Map.to_json
+    make_bound_method baml.iter.Flatten.to_json
     call_indirect
     store_var _2
-    jump L55
 
   L42:
-    load_var _3
-    make_bound_method baml.iter.Map.to_json
-    call_indirect
-    store_var _2
-    jump L55
-
-  L43:
-    load_type #0
-    load_var _3
-    call baml.iter.Repeat.to_json
-    store_var _2
-    jump L55
-
-  L44:
-    load_type #0
-    load_var _3
-    call baml.iter.Repeat.to_json
-    store_var _2
-    jump L55
-
-  L45:
-    load_type #0
-    load_type #2
-    load_var _3
-    call baml.iter.Chain.to_json
-    store_var _2
-    jump L55
-
-  L46:
-    load_type #0
-    load_type #2
-    load_var _3
-    call baml.iter.Chain.to_json
-    store_var _2
-    jump L55
-
-  L47:
-    load_type #0
-    load_type #2
-    load_var _3
-    call baml.iter.StepBy.to_json
-    store_var _2
-    jump L55
-
-  L48:
-    load_type #0
-    load_type #2
-    load_var _3
-    call baml.iter.StepBy.to_json
-    store_var _2
-    jump L55
-
-  L49:
-    load_type #0
-    load_var _3
-    call baml.iter.ArrayIterator.to_json
-    store_var _2
-    jump L55
-
-  L50:
-    load_type #0
-    load_var _3
-    call baml.iter.ArrayIterator.to_json
-    store_var _2
-    jump L55
-
-  L51:
-    load_var _3
-    call baml.iter.Range.to_json
-    store_var _2
-    jump L55
-
-  L52:
-    load_var _3
-    call baml.iter.Range.to_json
-    store_var _2
-    jump L55
-
-  L53:
-    load_var _3
-    make_bound_method baml.iter.Flatten.to_json
-    call_indirect
-    store_var _2
-    jump L55
-
-  L54:
-    load_var _3
-    make_bound_method baml.iter.Flatten.to_json
-    call_indirect
-    store_var _2
-
-  L55:
     load_var self
     load_field .inner
-    store_var_load_var _62
+    store_var_load_var _55
     is_type baml.iter.Flatten<...>
+    pop_jump_if_false L43
+    jump L86
+
+  L43:
+    load_var _55
+    is_type baml.iter.Flatten<...>
+    pop_jump_if_false L44
+    jump L85
+
+  L44:
+    load_var _55
+    is_type baml.iter.Range
+    pop_jump_if_false L45
+    jump L84
+
+  L45:
+    load_var _55
+    is_type baml.iter.Range
+    pop_jump_if_false L46
+    jump L83
+
+  L46:
+    load_var _55
+    is_type baml.iter.ArrayIterator<...>
+    pop_jump_if_false L47
+    jump L82
+
+  L47:
+    load_var _55
+    is_type baml.iter.ArrayIterator<...>
+    pop_jump_if_false L48
+    jump L81
+
+  L48:
+    load_var _55
+    is_type baml.iter.StepBy<...>
+    pop_jump_if_false L49
+    jump L80
+
+  L49:
+    load_var _55
+    is_type baml.iter.StepBy<...>
+    pop_jump_if_false L50
+    jump L79
+
+  L50:
+    load_var _55
+    is_type baml.iter.Chain<...>
+    pop_jump_if_false L51
+    jump L78
+
+  L51:
+    load_var _55
+    is_type baml.iter.Chain<...>
+    pop_jump_if_false L52
+    jump L77
+
+  L52:
+    load_var _55
+    is_type baml.iter.Repeat<...>
+    pop_jump_if_false L53
+    jump L76
+
+  L53:
+    load_var _55
+    is_type baml.iter.Repeat<...>
+    pop_jump_if_false L54
+    jump L75
+
+  L54:
+    load_var _55
+    is_type baml.iter.Map<...>
+    pop_jump_if_false L55
+    jump L74
+
+  L55:
+    load_var _55
+    is_type baml.iter.Map<...>
     pop_jump_if_false L56
-    jump L99
+    jump L73
 
   L56:
-    load_var _62
-    is_type baml.iter.Flatten<...>
+    load_var _55
+    is_type baml.iter.Filter<...>
     pop_jump_if_false L57
-    jump L98
+    jump L72
 
   L57:
-    load_var _62
-    is_type baml.iter.Range
+    load_var _55
+    is_type baml.iter.Filter<...>
     pop_jump_if_false L58
-    jump L97
+    jump L71
 
   L58:
-    load_var _62
-    is_type baml.iter.Range
+    load_var _55
+    is_type baml.iter.FilterMap<...>
     pop_jump_if_false L59
-    jump L96
+    jump L70
 
   L59:
-    load_var _62
-    is_type baml.iter.ArrayIterator<...>
+    load_var _55
+    is_type baml.iter.FilterMap<...>
     pop_jump_if_false L60
-    jump L95
+    jump L69
 
   L60:
-    load_var _62
-    is_type baml.iter.ArrayIterator<...>
+    load_var _55
+    is_type baml.iter.FlatMap<...>
     pop_jump_if_false L61
-    jump L94
+    jump L68
 
   L61:
-    load_var _62
-    is_type baml.iter.StepBy<...>
+    load_var _55
+    is_type baml.iter.FlatMap<...>
     pop_jump_if_false L62
-    jump L93
+    jump L67
 
   L62:
-    load_var _62
-    is_type baml.iter.StepBy<...>
+    load_var _55
+    is_type baml.iter.Peekable<...>
     pop_jump_if_false L63
-    jump L92
+    jump L66
 
   L63:
-    load_var _62
-    is_type baml.iter.Chain<...>
+    load_var _55
+    is_type baml.iter.Peekable<...>
     pop_jump_if_false L64
-    jump L91
+    jump L65
 
   L64:
-    load_var _62
-    is_type baml.iter.Chain<...>
-    pop_jump_if_false L65
-    jump L90
+    load_var _55
+    call baml.iter.Done.to_json
+    store_var _53
+    jump L87
 
   L65:
-    load_var _62
-    is_type baml.iter.Repeat<...>
-    pop_jump_if_false L66
-    jump L89
+    load_type #1
+    load_type #3
+    load_var _55
+    call baml.iter.Peekable.to_json
+    store_var _53
+    jump L87
 
   L66:
-    load_var _62
-    is_type baml.iter.Repeat<...>
-    pop_jump_if_false L67
-    jump L88
+    load_type #1
+    load_type #3
+    load_var _55
+    call baml.iter.Peekable.to_json
+    store_var _53
+    jump L87
 
   L67:
-    load_var _62
-    is_type baml.iter.Map<...>
-    pop_jump_if_false L68
+    load_var _55
+    make_bound_method baml.iter.FlatMap.to_json
+    call_indirect
+    store_var _53
     jump L87
 
   L68:
-    load_var _62
-    is_type baml.iter.Map<...>
-    pop_jump_if_false L69
-    jump L86
+    load_var _55
+    make_bound_method baml.iter.FlatMap.to_json
+    call_indirect
+    store_var _53
+    jump L87
 
   L69:
-    load_var _62
-    is_type baml.iter.Filter<...>
-    pop_jump_if_false L70
-    jump L85
+    load_var _55
+    make_bound_method baml.iter.FilterMap.to_json
+    call_indirect
+    store_var _53
+    jump L87
 
   L70:
-    load_var _62
-    is_type baml.iter.Filter<...>
-    pop_jump_if_false L71
-    jump L84
+    load_var _55
+    make_bound_method baml.iter.FilterMap.to_json
+    call_indirect
+    store_var _53
+    jump L87
 
   L71:
-    load_var _62
-    is_type baml.iter.FilterMap<...>
-    pop_jump_if_false L72
-    jump L83
+    load_var _55
+    make_bound_method baml.iter.Filter.to_json
+    call_indirect
+    store_var _53
+    jump L87
 
   L72:
-    load_var _62
-    is_type baml.iter.FilterMap<...>
-    pop_jump_if_false L73
-    jump L82
+    load_var _55
+    make_bound_method baml.iter.Filter.to_json
+    call_indirect
+    store_var _53
+    jump L87
 
   L73:
-    load_var _62
-    is_type baml.iter.FlatMap<...>
-    pop_jump_if_false L74
-    jump L81
+    load_var _55
+    make_bound_method baml.iter.Map.to_json
+    call_indirect
+    store_var _53
+    jump L87
 
   L74:
-    load_var _62
-    is_type baml.iter.FlatMap<...>
-    pop_jump_if_false L75
-    jump L80
+    load_var _55
+    make_bound_method baml.iter.Map.to_json
+    call_indirect
+    store_var _53
+    jump L87
 
   L75:
-    load_var _62
-    is_type baml.iter.Peekable<...>
-    pop_jump_if_false L76
-    jump L79
+    load_type #1
+    load_var _55
+    call baml.iter.Repeat.to_json
+    store_var _53
+    jump L87
 
   L76:
-    load_var _62
-    is_type baml.iter.Peekable<...>
-    pop_jump_if_false L77
-    jump L78
+    load_type #1
+    load_var _55
+    call baml.iter.Repeat.to_json
+    store_var _53
+    jump L87
 
   L77:
-    load_var _62
-    call baml.iter.Done.to_json
-    store_var _60
-    jump L100
+    load_type #1
+    load_type #3
+    load_var _55
+    call baml.iter.Chain.to_json
+    store_var _53
+    jump L87
 
   L78:
     load_type #1
     load_type #3
-    load_var _62
-    call baml.iter.Peekable.to_json
-    store_var _60
-    jump L100
+    load_var _55
+    call baml.iter.Chain.to_json
+    store_var _53
+    jump L87
 
   L79:
     load_type #1
     load_type #3
-    load_var _62
-    call baml.iter.Peekable.to_json
-    store_var _60
-    jump L100
+    load_var _55
+    call baml.iter.StepBy.to_json
+    store_var _53
+    jump L87
 
   L80:
-    load_var _62
-    make_bound_method baml.iter.FlatMap.to_json
-    call_indirect
-    store_var _60
-    jump L100
+    load_type #1
+    load_type #3
+    load_var _55
+    call baml.iter.StepBy.to_json
+    store_var _53
+    jump L87
 
   L81:
-    load_var _62
-    make_bound_method baml.iter.FlatMap.to_json
-    call_indirect
-    store_var _60
-    jump L100
+    load_type #1
+    load_var _55
+    call baml.iter.ArrayIterator.to_json
+    store_var _53
+    jump L87
 
   L82:
-    load_var _62
-    make_bound_method baml.iter.FilterMap.to_json
-    call_indirect
-    store_var _60
-    jump L100
+    load_type #1
+    load_var _55
+    call baml.iter.ArrayIterator.to_json
+    store_var _53
+    jump L87
 
   L83:
-    load_var _62
-    make_bound_method baml.iter.FilterMap.to_json
-    call_indirect
-    store_var _60
-    jump L100
+    load_var _55
+    call baml.iter.Range.to_json
+    store_var _53
+    jump L87
 
   L84:
-    load_var _62
-    make_bound_method baml.iter.Filter.to_json
-    call_indirect
-    store_var _60
-    jump L100
+    load_var _55
+    call baml.iter.Range.to_json
+    store_var _53
+    jump L87
 
   L85:
-    load_var _62
-    make_bound_method baml.iter.Filter.to_json
+    load_var _55
+    make_bound_method baml.iter.Flatten.to_json
     call_indirect
-    store_var _60
-    jump L100
+    store_var _53
+    jump L87
 
   L86:
-    load_var _62
-    make_bound_method baml.iter.Map.to_json
+    load_var _55
+    make_bound_method baml.iter.Flatten.to_json
     call_indirect
-    store_var _60
-    jump L100
+    store_var _53
 
   L87:
-    load_var _62
-    make_bound_method baml.iter.Map.to_json
-    call_indirect
-    store_var _60
-    jump L100
-
-  L88:
-    load_type #1
-    load_var _62
-    call baml.iter.Repeat.to_json
-    store_var _60
-    jump L100
-
-  L89:
-    load_type #1
-    load_var _62
-    call baml.iter.Repeat.to_json
-    store_var _60
-    jump L100
-
-  L90:
-    load_type #1
-    load_type #3
-    load_var _62
-    call baml.iter.Chain.to_json
-    store_var _60
-    jump L100
-
-  L91:
-    load_type #1
-    load_type #3
-    load_var _62
-    call baml.iter.Chain.to_json
-    store_var _60
-    jump L100
-
-  L92:
-    load_type #1
-    load_type #3
-    load_var _62
-    call baml.iter.StepBy.to_json
-    store_var _60
-    jump L100
-
-  L93:
-    load_type #1
-    load_type #3
-    load_var _62
-    call baml.iter.StepBy.to_json
-    store_var _60
-    jump L100
-
-  L94:
-    load_type #1
-    load_var _62
-    call baml.iter.ArrayIterator.to_json
-    store_var _60
-    jump L100
-
-  L95:
-    load_type #1
-    load_var _62
-    call baml.iter.ArrayIterator.to_json
-    store_var _60
-    jump L100
-
-  L96:
-    load_var _62
-    call baml.iter.Range.to_json
-    store_var _60
-    jump L100
-
-  L97:
-    load_var _62
-    call baml.iter.Range.to_json
-    store_var _60
-    jump L100
-
-  L98:
-    load_var _62
-    make_bound_method baml.iter.Flatten.to_json
-    call_indirect
-    store_var _60
-    jump L100
-
-  L99:
-    load_var _62
-    make_bound_method baml.iter.Flatten.to_json
-    call_indirect
-    store_var _60
-
-  L100:
     load_var2 2 4
-    load_const "iter"
+    load_const "source"
     load_const "inner"
     alloc_map 2
     return
@@ -7140,7 +6942,7 @@ function baml.iter.Iterator.chain(self: baml.iter.Iterator, other: baml.iter.Ite
     load_const false
     load_type unknown
     load_type unknown
-    init_instance<2> baml.iter.Chain .iter, .other, .first_done
+    init_instance<2> baml.iter.Chain .first, .other, .first_done
     return
 }
 
@@ -7613,7 +7415,7 @@ function baml.iter.Iterator.filter(self: baml.iter.Iterator, predicate: (void) -
     load_type unknown
     load_type unknown
     load_type #0
-    init_instance<3> baml.iter.Filter .iter, .predicate
+    init_instance<3> baml.iter.Filter .source, .predicate
     return
 }
 
@@ -7623,7 +7425,7 @@ function baml.iter.Iterator.filter_map(self: baml.iter.Iterator, fn: (void) -> u
     load_type #0
     load_type unknown
     load_type #1
-    init_instance<4> baml.iter.FilterMap .iter, .func
+    init_instance<4> baml.iter.FilterMap .source, .func
     return
 }
 
@@ -7795,7 +7597,7 @@ function baml.iter.Iterator.flat_map(self: baml.iter.Iterator, fn: (void) -> bam
     load_type unknown
     load_type #1
     load_type #2
-    init_instance<5> baml.iter.FlatMap .iter, .func, .inner
+    init_instance<5> baml.iter.FlatMap .source, .func, .inner
     return
 }
 
@@ -7805,7 +7607,7 @@ function baml.iter.Iterator.map(self: baml.iter.Iterator, fn: (void) -> unknown 
     load_type #0
     load_type unknown
     load_type #1
-    init_instance<4> baml.iter.Map .iter, .func
+    init_instance<4> baml.iter.Map .source, .func
     return
 }
 
@@ -7815,7 +7617,7 @@ function baml.iter.Iterator.peekable(self: baml.iter.Iterator) -> baml.iter.Peek
     load_const false
     load_type unknown
     load_type unknown
-    init_instance<2> baml.iter.Peekable .iter, .buffer, .has_buffer
+    init_instance<2> baml.iter.Peekable .source, .buffer, .has_buffer
     return
 }
 
@@ -8141,7 +7943,7 @@ function baml.iter.Iterator.step_by(self: baml.iter.Iterator, n: int) -> baml.it
     load_const true
     load_type unknown
     load_type unknown
-    init_instance<2> baml.iter.StepBy .iter, .n, .first
+    init_instance<2> baml.iter.StepBy .source, .n, .first
     return
 }
 
@@ -8807,7 +8609,7 @@ function baml.iter.Peekable.Iterator.next(self: baml.iter.Peekable<unknown, unkn
 
 function baml.iter.Peekable.from_json(j: baml.json.json) -> baml.iter.Peekable<unknown, unknown> {
     load_var j
-    load_const "iter"
+    load_const "source"
     call baml.json.field
     store_var _3
     load_type baml.iter.Iterator<Item = #0, Error = #1>
@@ -8829,7 +8631,7 @@ function baml.iter.Peekable.from_json(j: baml.json.json) -> baml.iter.Peekable<u
     call baml.json.from_json
     load_type #0
     load_type #1
-    init_instance<2> baml.iter.Peekable .iter, .buffer, .has_buffer
+    init_instance<2> baml.iter.Peekable .source, .buffer, .has_buffer
     return
 }
 
@@ -8841,7 +8643,7 @@ function baml.iter.Peekable.peek(self: baml.iter.Peekable<unknown, unknown>) -> 
 
   L0:
     load_var self
-    load_field .iter
+    load_field .source
     store_var_load_var _4
     is_type baml.iter.Flatten<...>
     pop_jump_if_false L1
@@ -8998,391 +8800,268 @@ function baml.iter.Peekable.peek(self: baml.iter.Peekable<unknown, unknown>) -> 
 
 function baml.iter.Peekable.to_json(self: baml.iter.Peekable<unknown, unknown>) -> baml.json.json {
     load_var self
+    load_field .source
+    store_var_load_var _3
     is_type baml.iter.Flatten<...>
     pop_jump_if_false L0
-    jump L19
+    jump L41
 
   L0:
-    load_var self
-    is_type baml.iter.Range
+    load_var _3
+    is_type baml.iter.Flatten<...>
     pop_jump_if_false L1
-    jump L18
+    jump L40
 
   L1:
-    load_var self
-    is_type baml.iter.ArrayIterator<...>
+    load_var _3
+    is_type baml.iter.Range
     pop_jump_if_false L2
-    jump L17
+    jump L39
 
   L2:
-    load_var self
-    is_type baml.iter.StepBy<...>
+    load_var _3
+    is_type baml.iter.Range
     pop_jump_if_false L3
-    jump L16
+    jump L38
 
   L3:
-    load_var self
-    is_type baml.iter.Chain<...>
+    load_var _3
+    is_type baml.iter.ArrayIterator<...>
     pop_jump_if_false L4
-    jump L15
+    jump L37
 
   L4:
-    load_var self
-    is_type baml.iter.Repeat<...>
+    load_var _3
+    is_type baml.iter.ArrayIterator<...>
     pop_jump_if_false L5
-    jump L14
+    jump L36
 
   L5:
-    load_var self
-    is_type baml.iter.Map<...>
+    load_var _3
+    is_type baml.iter.StepBy<...>
     pop_jump_if_false L6
-    jump L13
+    jump L35
 
   L6:
-    load_var self
-    is_type baml.iter.Filter<...>
+    load_var _3
+    is_type baml.iter.StepBy<...>
     pop_jump_if_false L7
-    jump L12
+    jump L34
 
   L7:
-    load_var self
-    is_type baml.iter.FilterMap<...>
+    load_var _3
+    is_type baml.iter.Chain<...>
     pop_jump_if_false L8
-    jump L11
+    jump L33
 
   L8:
-    load_var self
-    is_type baml.iter.FlatMap<...>
+    load_var _3
+    is_type baml.iter.Chain<...>
     pop_jump_if_false L9
-    jump L10
+    jump L32
 
   L9:
-    load_var self
-    make_bound_method baml.iter.Peekable.Iterable.iter
-    store_var _3
-    jump L20
+    load_var _3
+    is_type baml.iter.Repeat<...>
+    pop_jump_if_false L10
+    jump L31
 
   L10:
-    load_var self
-    make_bound_method baml.iter.FlatMap.Iterable.iter
-    store_var _3
-    jump L20
+    load_var _3
+    is_type baml.iter.Repeat<...>
+    pop_jump_if_false L11
+    jump L30
 
   L11:
-    load_var self
-    make_bound_method baml.iter.FilterMap.Iterable.iter
-    store_var _3
-    jump L20
+    load_var _3
+    is_type baml.iter.Map<...>
+    pop_jump_if_false L12
+    jump L29
 
   L12:
-    load_var self
-    make_bound_method baml.iter.Filter.Iterable.iter
-    store_var _3
-    jump L20
+    load_var _3
+    is_type baml.iter.Map<...>
+    pop_jump_if_false L13
+    jump L28
 
   L13:
-    load_var self
-    make_bound_method baml.iter.Map.Iterable.iter
-    store_var _3
-    jump L20
+    load_var _3
+    is_type baml.iter.Filter<...>
+    pop_jump_if_false L14
+    jump L27
 
   L14:
-    load_var self
-    make_bound_method baml.iter.Repeat.Iterable.iter
-    store_var _3
-    jump L20
+    load_var _3
+    is_type baml.iter.Filter<...>
+    pop_jump_if_false L15
+    jump L26
 
   L15:
-    load_var self
-    make_bound_method baml.iter.Chain.Iterable.iter
-    store_var _3
-    jump L20
+    load_var _3
+    is_type baml.iter.FilterMap<...>
+    pop_jump_if_false L16
+    jump L25
 
   L16:
-    load_var self
-    make_bound_method baml.iter.StepBy.Iterable.iter
-    store_var _3
-    jump L20
+    load_var _3
+    is_type baml.iter.FilterMap<...>
+    pop_jump_if_false L17
+    jump L24
 
   L17:
-    load_var self
-    make_bound_method baml.iter.ArrayIterator.Iterable.iter
-    store_var _3
-    jump L20
+    load_var _3
+    is_type baml.iter.FlatMap<...>
+    pop_jump_if_false L18
+    jump L23
 
   L18:
-    load_var self
-    make_bound_method baml.iter.Range.Iterable.iter
-    store_var _3
-    jump L20
+    load_var _3
+    is_type baml.iter.FlatMap<...>
+    pop_jump_if_false L19
+    jump L22
 
   L19:
-    load_var self
-    make_bound_method baml.iter.Flatten.Iterable.iter
-    store_var _3
+    load_var _3
+    is_type baml.iter.Peekable<...>
+    pop_jump_if_false L20
+    jump L21
 
   L20:
+    load_type #0
+    load_type #1
     load_var _3
-    is_type baml.iter.Flatten<...>
-    pop_jump_if_false L21
-    jump L62
+    call baml.iter.Peekable.to_json
+    jump L42
 
   L21:
+    load_type #0
+    load_type #1
     load_var _3
-    is_type baml.iter.Flatten<...>
-    pop_jump_if_false L22
-    jump L61
+    call baml.iter.Peekable.to_json
+    jump L42
 
   L22:
     load_var _3
-    is_type baml.iter.Range
-    pop_jump_if_false L23
-    jump L60
+    make_bound_method baml.iter.FlatMap.to_json
+    call_indirect
+    jump L42
 
   L23:
     load_var _3
-    is_type baml.iter.Range
-    pop_jump_if_false L24
-    jump L59
+    make_bound_method baml.iter.FlatMap.to_json
+    call_indirect
+    jump L42
 
   L24:
     load_var _3
-    is_type baml.iter.ArrayIterator<...>
-    pop_jump_if_false L25
-    jump L58
+    make_bound_method baml.iter.FilterMap.to_json
+    call_indirect
+    jump L42
 
   L25:
     load_var _3
-    is_type baml.iter.ArrayIterator<...>
-    pop_jump_if_false L26
-    jump L57
+    make_bound_method baml.iter.FilterMap.to_json
+    call_indirect
+    jump L42
 
   L26:
     load_var _3
-    is_type baml.iter.StepBy<...>
-    pop_jump_if_false L27
-    jump L56
+    make_bound_method baml.iter.Filter.to_json
+    call_indirect
+    jump L42
 
   L27:
     load_var _3
-    is_type baml.iter.StepBy<...>
-    pop_jump_if_false L28
-    jump L55
+    make_bound_method baml.iter.Filter.to_json
+    call_indirect
+    jump L42
 
   L28:
     load_var _3
-    is_type baml.iter.Chain<...>
-    pop_jump_if_false L29
-    jump L54
+    make_bound_method baml.iter.Map.to_json
+    call_indirect
+    jump L42
 
   L29:
     load_var _3
-    is_type baml.iter.Chain<...>
-    pop_jump_if_false L30
-    jump L53
+    make_bound_method baml.iter.Map.to_json
+    call_indirect
+    jump L42
 
   L30:
+    load_type #0
     load_var _3
-    is_type baml.iter.Repeat<...>
-    pop_jump_if_false L31
-    jump L52
+    call baml.iter.Repeat.to_json
+    jump L42
 
   L31:
+    load_type #0
     load_var _3
-    is_type baml.iter.Repeat<...>
-    pop_jump_if_false L32
-    jump L51
+    call baml.iter.Repeat.to_json
+    jump L42
 
   L32:
+    load_type #0
+    load_type #1
     load_var _3
-    is_type baml.iter.Map<...>
-    pop_jump_if_false L33
-    jump L50
+    call baml.iter.Chain.to_json
+    jump L42
 
   L33:
+    load_type #0
+    load_type #1
     load_var _3
-    is_type baml.iter.Map<...>
-    pop_jump_if_false L34
-    jump L49
+    call baml.iter.Chain.to_json
+    jump L42
 
   L34:
+    load_type #0
+    load_type #1
     load_var _3
-    is_type baml.iter.Filter<...>
-    pop_jump_if_false L35
-    jump L48
+    call baml.iter.StepBy.to_json
+    jump L42
 
   L35:
+    load_type #0
+    load_type #1
     load_var _3
-    is_type baml.iter.Filter<...>
-    pop_jump_if_false L36
-    jump L47
+    call baml.iter.StepBy.to_json
+    jump L42
 
   L36:
+    load_type #0
     load_var _3
-    is_type baml.iter.FilterMap<...>
-    pop_jump_if_false L37
-    jump L46
+    call baml.iter.ArrayIterator.to_json
+    jump L42
 
   L37:
+    load_type #0
     load_var _3
-    is_type baml.iter.FilterMap<...>
-    pop_jump_if_false L38
-    jump L45
+    call baml.iter.ArrayIterator.to_json
+    jump L42
 
   L38:
     load_var _3
-    is_type baml.iter.FlatMap<...>
-    pop_jump_if_false L39
-    jump L44
+    call baml.iter.Range.to_json
+    jump L42
 
   L39:
     load_var _3
-    is_type baml.iter.FlatMap<...>
-    pop_jump_if_false L40
-    jump L43
+    call baml.iter.Range.to_json
+    jump L42
 
   L40:
     load_var _3
-    is_type baml.iter.Peekable<...>
-    pop_jump_if_false L41
+    make_bound_method baml.iter.Flatten.to_json
+    call_indirect
     jump L42
 
   L41:
-    load_type #0
-    load_type #1
     load_var _3
-    call baml.iter.Peekable.to_json
-    jump L63
+    make_bound_method baml.iter.Flatten.to_json
+    call_indirect
 
   L42:
-    load_type #0
-    load_type #1
-    load_var _3
-    call baml.iter.Peekable.to_json
-    jump L63
-
-  L43:
-    load_var _3
-    make_bound_method baml.iter.FlatMap.to_json
-    call_indirect
-    jump L63
-
-  L44:
-    load_var _3
-    make_bound_method baml.iter.FlatMap.to_json
-    call_indirect
-    jump L63
-
-  L45:
-    load_var _3
-    make_bound_method baml.iter.FilterMap.to_json
-    call_indirect
-    jump L63
-
-  L46:
-    load_var _3
-    make_bound_method baml.iter.FilterMap.to_json
-    call_indirect
-    jump L63
-
-  L47:
-    load_var _3
-    make_bound_method baml.iter.Filter.to_json
-    call_indirect
-    jump L63
-
-  L48:
-    load_var _3
-    make_bound_method baml.iter.Filter.to_json
-    call_indirect
-    jump L63
-
-  L49:
-    load_var _3
-    make_bound_method baml.iter.Map.to_json
-    call_indirect
-    jump L63
-
-  L50:
-    load_var _3
-    make_bound_method baml.iter.Map.to_json
-    call_indirect
-    jump L63
-
-  L51:
-    load_type #0
-    load_var _3
-    call baml.iter.Repeat.to_json
-    jump L63
-
-  L52:
-    load_type #0
-    load_var _3
-    call baml.iter.Repeat.to_json
-    jump L63
-
-  L53:
-    load_type #0
-    load_type #1
-    load_var _3
-    call baml.iter.Chain.to_json
-    jump L63
-
-  L54:
-    load_type #0
-    load_type #1
-    load_var _3
-    call baml.iter.Chain.to_json
-    jump L63
-
-  L55:
-    load_type #0
-    load_type #1
-    load_var _3
-    call baml.iter.StepBy.to_json
-    jump L63
-
-  L56:
-    load_type #0
-    load_type #1
-    load_var _3
-    call baml.iter.StepBy.to_json
-    jump L63
-
-  L57:
-    load_type #0
-    load_var _3
-    call baml.iter.ArrayIterator.to_json
-    jump L63
-
-  L58:
-    load_type #0
-    load_var _3
-    call baml.iter.ArrayIterator.to_json
-    jump L63
-
-  L59:
-    load_var _3
-    call baml.iter.Range.to_json
-    jump L63
-
-  L60:
-    load_var _3
-    call baml.iter.Range.to_json
-    jump L63
-
-  L61:
-    load_var _3
-    make_bound_method baml.iter.Flatten.to_json
-    call_indirect
-    jump L63
-
-  L62:
-    load_var _3
-    make_bound_method baml.iter.Flatten.to_json
-    call_indirect
-
-  L63:
     load_type #0 | baml.iter.Done
     load_var self
     load_field .buffer
@@ -9390,7 +9069,7 @@ function baml.iter.Peekable.to_json(self: baml.iter.Peekable<unknown, unknown>) 
     load_var self
     load_field .has_buffer
     call baml.Bool.to_json
-    load_const "iter"
+    load_const "source"
     load_const "buffer"
     load_const "has_buffer"
     alloc_map 3
@@ -10649,7 +10328,7 @@ function baml.iter.StepBy.Iterator.next(self: baml.iter.StepBy<unknown, unknown>
 
 function baml.iter.StepBy.from_json(j: baml.json.json) -> baml.iter.StepBy<unknown, unknown> {
     load_var j
-    load_const "iter"
+    load_const "source"
     call baml.json.field
     store_var _3
     load_type baml.iter.Iterator<Item = #0, Error = #1>
@@ -10671,404 +10350,281 @@ function baml.iter.StepBy.from_json(j: baml.json.json) -> baml.iter.StepBy<unkno
     call baml.json.from_json
     load_type #0
     load_type #1
-    init_instance<2> baml.iter.StepBy .iter, .n, .first
+    init_instance<2> baml.iter.StepBy .source, .n, .first
     return
 }
 
 function baml.iter.StepBy.to_json(self: baml.iter.StepBy<unknown, unknown>) -> baml.json.json {
     load_var self
+    load_field .source
+    store_var_load_var _3
     is_type baml.iter.Flatten<...>
     pop_jump_if_false L0
-    jump L19
+    jump L41
 
   L0:
-    load_var self
-    is_type baml.iter.Range
+    load_var _3
+    is_type baml.iter.Flatten<...>
     pop_jump_if_false L1
-    jump L18
+    jump L40
 
   L1:
-    load_var self
-    is_type baml.iter.ArrayIterator<...>
+    load_var _3
+    is_type baml.iter.Range
     pop_jump_if_false L2
-    jump L17
+    jump L39
 
   L2:
-    load_var self
-    is_type baml.iter.StepBy<...>
+    load_var _3
+    is_type baml.iter.Range
     pop_jump_if_false L3
-    jump L16
+    jump L38
 
   L3:
-    load_var self
-    is_type baml.iter.Chain<...>
+    load_var _3
+    is_type baml.iter.ArrayIterator<...>
     pop_jump_if_false L4
-    jump L15
+    jump L37
 
   L4:
-    load_var self
-    is_type baml.iter.Repeat<...>
+    load_var _3
+    is_type baml.iter.ArrayIterator<...>
     pop_jump_if_false L5
-    jump L14
+    jump L36
 
   L5:
-    load_var self
-    is_type baml.iter.Map<...>
+    load_var _3
+    is_type baml.iter.StepBy<...>
     pop_jump_if_false L6
-    jump L13
+    jump L35
 
   L6:
-    load_var self
-    is_type baml.iter.Filter<...>
+    load_var _3
+    is_type baml.iter.StepBy<...>
     pop_jump_if_false L7
-    jump L12
+    jump L34
 
   L7:
-    load_var self
-    is_type baml.iter.FilterMap<...>
+    load_var _3
+    is_type baml.iter.Chain<...>
     pop_jump_if_false L8
-    jump L11
+    jump L33
 
   L8:
-    load_var self
-    is_type baml.iter.FlatMap<...>
+    load_var _3
+    is_type baml.iter.Chain<...>
     pop_jump_if_false L9
-    jump L10
+    jump L32
 
   L9:
-    load_var self
-    make_bound_method baml.iter.Peekable.Iterable.iter
-    store_var _3
-    jump L20
+    load_var _3
+    is_type baml.iter.Repeat<...>
+    pop_jump_if_false L10
+    jump L31
 
   L10:
-    load_var self
-    make_bound_method baml.iter.FlatMap.Iterable.iter
-    store_var _3
-    jump L20
+    load_var _3
+    is_type baml.iter.Repeat<...>
+    pop_jump_if_false L11
+    jump L30
 
   L11:
-    load_var self
-    make_bound_method baml.iter.FilterMap.Iterable.iter
-    store_var _3
-    jump L20
+    load_var _3
+    is_type baml.iter.Map<...>
+    pop_jump_if_false L12
+    jump L29
 
   L12:
-    load_var self
-    make_bound_method baml.iter.Filter.Iterable.iter
-    store_var _3
-    jump L20
+    load_var _3
+    is_type baml.iter.Map<...>
+    pop_jump_if_false L13
+    jump L28
 
   L13:
-    load_var self
-    make_bound_method baml.iter.Map.Iterable.iter
-    store_var _3
-    jump L20
+    load_var _3
+    is_type baml.iter.Filter<...>
+    pop_jump_if_false L14
+    jump L27
 
   L14:
-    load_var self
-    make_bound_method baml.iter.Repeat.Iterable.iter
-    store_var _3
-    jump L20
+    load_var _3
+    is_type baml.iter.Filter<...>
+    pop_jump_if_false L15
+    jump L26
 
   L15:
-    load_var self
-    make_bound_method baml.iter.Chain.Iterable.iter
-    store_var _3
-    jump L20
+    load_var _3
+    is_type baml.iter.FilterMap<...>
+    pop_jump_if_false L16
+    jump L25
 
   L16:
-    load_var self
-    make_bound_method baml.iter.StepBy.Iterable.iter
-    store_var _3
-    jump L20
+    load_var _3
+    is_type baml.iter.FilterMap<...>
+    pop_jump_if_false L17
+    jump L24
 
   L17:
-    load_var self
-    make_bound_method baml.iter.ArrayIterator.Iterable.iter
-    store_var _3
-    jump L20
+    load_var _3
+    is_type baml.iter.FlatMap<...>
+    pop_jump_if_false L18
+    jump L23
 
   L18:
-    load_var self
-    make_bound_method baml.iter.Range.Iterable.iter
-    store_var _3
-    jump L20
+    load_var _3
+    is_type baml.iter.FlatMap<...>
+    pop_jump_if_false L19
+    jump L22
 
   L19:
-    load_var self
-    make_bound_method baml.iter.Flatten.Iterable.iter
-    store_var _3
+    load_var _3
+    is_type baml.iter.Peekable<...>
+    pop_jump_if_false L20
+    jump L21
 
   L20:
+    load_type #0
+    load_type #1
     load_var _3
-    is_type baml.iter.Flatten<...>
-    pop_jump_if_false L21
-    jump L62
+    call baml.iter.Peekable.to_json
+    jump L42
 
   L21:
+    load_type #0
+    load_type #1
     load_var _3
-    is_type baml.iter.Flatten<...>
-    pop_jump_if_false L22
-    jump L61
+    call baml.iter.Peekable.to_json
+    jump L42
 
   L22:
     load_var _3
-    is_type baml.iter.Range
-    pop_jump_if_false L23
-    jump L60
+    make_bound_method baml.iter.FlatMap.to_json
+    call_indirect
+    jump L42
 
   L23:
     load_var _3
-    is_type baml.iter.Range
-    pop_jump_if_false L24
-    jump L59
+    make_bound_method baml.iter.FlatMap.to_json
+    call_indirect
+    jump L42
 
   L24:
     load_var _3
-    is_type baml.iter.ArrayIterator<...>
-    pop_jump_if_false L25
-    jump L58
+    make_bound_method baml.iter.FilterMap.to_json
+    call_indirect
+    jump L42
 
   L25:
     load_var _3
-    is_type baml.iter.ArrayIterator<...>
-    pop_jump_if_false L26
-    jump L57
+    make_bound_method baml.iter.FilterMap.to_json
+    call_indirect
+    jump L42
 
   L26:
     load_var _3
-    is_type baml.iter.StepBy<...>
-    pop_jump_if_false L27
-    jump L56
+    make_bound_method baml.iter.Filter.to_json
+    call_indirect
+    jump L42
 
   L27:
     load_var _3
-    is_type baml.iter.StepBy<...>
-    pop_jump_if_false L28
-    jump L55
+    make_bound_method baml.iter.Filter.to_json
+    call_indirect
+    jump L42
 
   L28:
     load_var _3
-    is_type baml.iter.Chain<...>
-    pop_jump_if_false L29
-    jump L54
+    make_bound_method baml.iter.Map.to_json
+    call_indirect
+    jump L42
 
   L29:
     load_var _3
-    is_type baml.iter.Chain<...>
-    pop_jump_if_false L30
-    jump L53
+    make_bound_method baml.iter.Map.to_json
+    call_indirect
+    jump L42
 
   L30:
+    load_type #0
     load_var _3
-    is_type baml.iter.Repeat<...>
-    pop_jump_if_false L31
-    jump L52
+    call baml.iter.Repeat.to_json
+    jump L42
 
   L31:
+    load_type #0
     load_var _3
-    is_type baml.iter.Repeat<...>
-    pop_jump_if_false L32
-    jump L51
+    call baml.iter.Repeat.to_json
+    jump L42
 
   L32:
+    load_type #0
+    load_type #1
     load_var _3
-    is_type baml.iter.Map<...>
-    pop_jump_if_false L33
-    jump L50
+    call baml.iter.Chain.to_json
+    jump L42
 
   L33:
+    load_type #0
+    load_type #1
     load_var _3
-    is_type baml.iter.Map<...>
-    pop_jump_if_false L34
-    jump L49
+    call baml.iter.Chain.to_json
+    jump L42
 
   L34:
+    load_type #0
+    load_type #1
     load_var _3
-    is_type baml.iter.Filter<...>
-    pop_jump_if_false L35
-    jump L48
+    call baml.iter.StepBy.to_json
+    jump L42
 
   L35:
+    load_type #0
+    load_type #1
     load_var _3
-    is_type baml.iter.Filter<...>
-    pop_jump_if_false L36
-    jump L47
+    call baml.iter.StepBy.to_json
+    jump L42
 
   L36:
+    load_type #0
     load_var _3
-    is_type baml.iter.FilterMap<...>
-    pop_jump_if_false L37
-    jump L46
+    call baml.iter.ArrayIterator.to_json
+    jump L42
 
   L37:
+    load_type #0
     load_var _3
-    is_type baml.iter.FilterMap<...>
-    pop_jump_if_false L38
-    jump L45
+    call baml.iter.ArrayIterator.to_json
+    jump L42
 
   L38:
     load_var _3
-    is_type baml.iter.FlatMap<...>
-    pop_jump_if_false L39
-    jump L44
+    call baml.iter.Range.to_json
+    jump L42
 
   L39:
     load_var _3
-    is_type baml.iter.FlatMap<...>
-    pop_jump_if_false L40
-    jump L43
+    call baml.iter.Range.to_json
+    jump L42
 
   L40:
     load_var _3
-    is_type baml.iter.Peekable<...>
-    pop_jump_if_false L41
+    make_bound_method baml.iter.Flatten.to_json
+    call_indirect
     jump L42
 
   L41:
-    load_type #0
-    load_type #1
     load_var _3
-    call baml.iter.Peekable.to_json
-    jump L63
+    make_bound_method baml.iter.Flatten.to_json
+    call_indirect
 
   L42:
-    load_type #0
-    load_type #1
-    load_var _3
-    call baml.iter.Peekable.to_json
-    jump L63
-
-  L43:
-    load_var _3
-    make_bound_method baml.iter.FlatMap.to_json
-    call_indirect
-    jump L63
-
-  L44:
-    load_var _3
-    make_bound_method baml.iter.FlatMap.to_json
-    call_indirect
-    jump L63
-
-  L45:
-    load_var _3
-    make_bound_method baml.iter.FilterMap.to_json
-    call_indirect
-    jump L63
-
-  L46:
-    load_var _3
-    make_bound_method baml.iter.FilterMap.to_json
-    call_indirect
-    jump L63
-
-  L47:
-    load_var _3
-    make_bound_method baml.iter.Filter.to_json
-    call_indirect
-    jump L63
-
-  L48:
-    load_var _3
-    make_bound_method baml.iter.Filter.to_json
-    call_indirect
-    jump L63
-
-  L49:
-    load_var _3
-    make_bound_method baml.iter.Map.to_json
-    call_indirect
-    jump L63
-
-  L50:
-    load_var _3
-    make_bound_method baml.iter.Map.to_json
-    call_indirect
-    jump L63
-
-  L51:
-    load_type #0
-    load_var _3
-    call baml.iter.Repeat.to_json
-    jump L63
-
-  L52:
-    load_type #0
-    load_var _3
-    call baml.iter.Repeat.to_json
-    jump L63
-
-  L53:
-    load_type #0
-    load_type #1
-    load_var _3
-    call baml.iter.Chain.to_json
-    jump L63
-
-  L54:
-    load_type #0
-    load_type #1
-    load_var _3
-    call baml.iter.Chain.to_json
-    jump L63
-
-  L55:
-    load_type #0
-    load_type #1
-    load_var _3
-    call baml.iter.StepBy.to_json
-    jump L63
-
-  L56:
-    load_type #0
-    load_type #1
-    load_var _3
-    call baml.iter.StepBy.to_json
-    jump L63
-
-  L57:
-    load_type #0
-    load_var _3
-    call baml.iter.ArrayIterator.to_json
-    jump L63
-
-  L58:
-    load_type #0
-    load_var _3
-    call baml.iter.ArrayIterator.to_json
-    jump L63
-
-  L59:
-    load_var _3
-    call baml.iter.Range.to_json
-    jump L63
-
-  L60:
-    load_var _3
-    call baml.iter.Range.to_json
-    jump L63
-
-  L61:
-    load_var _3
-    make_bound_method baml.iter.Flatten.to_json
-    call_indirect
-    jump L63
-
-  L62:
-    load_var _3
-    make_bound_method baml.iter.Flatten.to_json
-    call_indirect
-
-  L63:
     load_var self
     load_field .n
     call baml.Int.to_json
     load_var self
     load_field .first
     call baml.Bool.to_json
-    load_const "iter"
+    load_const "source"
     load_const "n"
     load_const "first"
     alloc_map 3
@@ -11082,7 +10638,7 @@ function baml.iter.flatten(src: baml.iter.Iterator<Item = unknown, Error = unkno
     load_type #0
     load_type #1
     load_type #2
-    init_instance<4> baml.iter.Flatten .iter, .inner
+    init_instance<4> baml.iter.Flatten .source, .inner
     return
 }
 
