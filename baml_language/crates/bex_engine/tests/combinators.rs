@@ -252,3 +252,32 @@ async fn any_all_success_returns_a_value() {
     let r = run_main(source).await.unwrap();
     assert!(matches!(r, BexExternalValue::Int(5 | 6)), "got {r:?}");
 }
+
+/// `AllFailed.errors` is in INPUT order even when failures settle out of
+/// order: the first input fails slowly, the second fast — the aggregate must
+/// still read `["a", "b"]`.
+#[tokio::test]
+async fn any_all_fail_errors_in_input_order() {
+    let source = r#"
+        function bad_slow() -> int throws string {
+            // sleep's own `throws baml.errors.Io` is swallowed so the declared
+            // surface stays exactly `string`.
+            baml.sys.sleep(120) catch (e) { let e => null };
+            throw "a"
+        }
+        function bad_fast() -> int throws string { throw "b" }
+        function main() -> int {
+            let fs = [spawn { bad_slow() }, spawn { bad_fast() }];
+            await baml.future.any(fs) catch (e) {
+                let e: baml.future.AllFailed<string> => {
+                    if (e.errors.length() == 2 && e.errors[0] == "a" && e.errors[1] == "b") {
+                        1
+                    } else {
+                        0
+                    }
+                }
+            }
+        }
+    "#;
+    assert_eq!(run_main(source).await.unwrap(), BexExternalValue::Int(1));
+}

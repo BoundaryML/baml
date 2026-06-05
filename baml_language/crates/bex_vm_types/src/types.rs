@@ -1691,7 +1691,10 @@ pub enum Object {
 
     Future(Future),
     /// Only used for requesting scheduling of a future, passed from VM to engine.
-    UnscheduledFuture(UnscheduledFuture),
+    /// Boxed: under `heap_debug` the instrumented `HeapPtr` makes the inline
+    /// payload (closure + name + config pointers) push `Object` past its
+    /// 64-byte interpreter-hot-loop budget.
+    UnscheduledFuture(Box<UnscheduledFuture>),
 
     /// Opaque Rust-managed data, accessed via `Arc<dyn Any>` downcast.
     /// Used for `$rust_type` fields in builtin classes (including media classes Pdf, Audio, Video, Image).
@@ -1770,7 +1773,7 @@ impl BorshSerialize for Object {
             ),
             Self::Float(v) => ObjectWire::Float(*v),
             Self::Future(v) => ObjectWire::Future(v.clone()),
-            Self::UnscheduledFuture(v) => ObjectWire::UnscheduledFuture(v.clone()),
+            Self::UnscheduledFuture(v) => ObjectWire::UnscheduledFuture((**v).clone()),
             Self::Type(v) => ObjectWire::Type(v.clone()),
             Self::RustData(_) => {
                 return Err(std::io::Error::new(
@@ -1827,7 +1830,7 @@ impl BorshDeserialize for Object {
             ),
             ObjectWire::Float(v) => Self::Float(v),
             ObjectWire::Future(v) => Self::Future(v),
-            ObjectWire::UnscheduledFuture(v) => Self::UnscheduledFuture(v),
+            ObjectWire::UnscheduledFuture(v) => Self::UnscheduledFuture(Box::new(v)),
             ObjectWire::Type(v) => Self::Type(v),
         })
     }

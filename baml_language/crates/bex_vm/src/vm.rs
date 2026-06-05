@@ -4630,7 +4630,12 @@ impl BexVm {
                     };
                     let config_ptr = if config_value.is_null() {
                         None
-                    } else if let Some(ptr) = config_value.as_object_ptr() {
+                    } else if let Some(ptr) = config_value.as_object_ptr()
+                        && matches!(unsafe { ptr.get() }, Object::Instance(_))
+                    {
+                        // Must be an instance (`baml.spawn.SpawnParams`) — an
+                        // arbitrary heap object here would turn a local type
+                        // error into a VM→engine contract break downstream.
                         Some(ptr)
                     } else {
                         return Err(VmInternalError::TypeError {
@@ -4644,7 +4649,9 @@ impl BexVm {
                         name: name_ptr,
                         config: config_ptr,
                     };
-                    let object_index = self.tlab.alloc(Object::UnscheduledFuture(pending_future));
+                    let object_index = self
+                        .tlab
+                        .alloc(Object::UnscheduledFuture(Box::new(pending_future)));
                     return Ok(Some(VmExecState::Spawn(object_index)));
                 }
 

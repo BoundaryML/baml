@@ -5356,10 +5356,6 @@ function baml.time.PlainDate.from_json(j: baml.json.json) -> baml.time.PlainDate
     load_var _
     is_type baml.errors.ParseError
     pop_jump_if_false L2
-    load_var _
-    load_field .0
-    is_type string
-    pop_jump_if_false L2
     jump L3
 
   L2:
@@ -5389,10 +5385,6 @@ function baml.time.PlainDate.to_json(self: baml.time.PlainDate) -> string {
     jump L2
     load_var _
     is_type baml.errors.InvalidArgument
-    pop_jump_if_false L0
-    load_var _
-    load_field .0
-    is_type string
     pop_jump_if_false L0
     jump L1
 
@@ -5517,10 +5509,6 @@ function baml.time.PlainDateTime.from_json(j: baml.json.json) -> baml.time.Plain
     load_var _
     is_type baml.errors.ParseError
     pop_jump_if_false L2
-    load_var _
-    load_field .0
-    is_type string
-    pop_jump_if_false L2
     jump L3
 
   L2:
@@ -5602,10 +5590,6 @@ function baml.time.PlainDateTime.to_json(self: baml.time.PlainDateTime) -> strin
     jump L2
     load_var _
     is_type baml.errors.InvalidArgument
-    pop_jump_if_false L0
-    load_var _
-    load_field .0
-    is_type string
     pop_jump_if_false L0
     jump L1
 
@@ -5848,10 +5832,6 @@ function baml.time.PlainTime.from_json(j: baml.json.json) -> baml.time.PlainTime
     jump L4
     load_var _
     is_type baml.errors.ParseError
-    pop_jump_if_false L2
-    load_var _
-    load_field .0
-    is_type string
     pop_jump_if_false L2
     jump L3
 
@@ -6243,10 +6223,6 @@ function baml.time.ZonedDateTime.from_json(j: baml.json.json) -> baml.time.Zoned
     load_var _
     is_type baml.errors.ParseError
     pop_jump_if_false L2
-    load_var _
-    load_field .0
-    is_type string
-    pop_jump_if_false L2
     jump L3
 
   L2:
@@ -6512,29 +6488,17 @@ function baml.time.ZonedDateTime.to_json(self: baml.time.ZonedDateTime) -> strin
     load_var _
     is_type baml.errors.InvalidArgument
     pop_jump_if_false L0
-    load_var _
-    load_field .0
-    is_type string
-    pop_jump_if_false L0
     jump L5
 
   L0:
     load_var _
     is_type baml.time.UnknownTimezoneError
     pop_jump_if_false L1
-    load_var _
-    load_field .0
-    is_type string
-    pop_jump_if_false L1
     jump L4
 
   L1:
     load_var _
     is_type baml.errors.Io
-    pop_jump_if_false L2
-    load_var _
-    load_field .0
-    is_type string
     pop_jump_if_false L2
     jump L3
 
@@ -6703,10 +6667,6 @@ function baml.toml.Table.to_json(self: baml.toml.Table) -> baml.json.json {
     jump L2
     load_var _
     is_type baml.json.JsonParseError
-    pop_jump_if_false L0
-    load_var _
-    load_field .0
-    is_type string
     pop_jump_if_false L0
     jump L1
 

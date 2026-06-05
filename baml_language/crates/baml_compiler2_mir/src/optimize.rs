@@ -457,7 +457,17 @@ fn collect_place_index_locals(body: &MirFunctionBody) -> HashSet<Local> {
                 Terminator::Throw { value } | Terminator::ThrowIfPanic { value, .. } => {
                     scan_operand(value, &mut set);
                 }
-                Terminator::Await { destination, .. } => scan_place(destination, &mut set),
+                Terminator::Await {
+                    future,
+                    destination,
+                    ..
+                } => {
+                    // The awaited place can be a `Place::Index` (e.g.
+                    // `await xs[_i]`): its index local is typed `Local` in the
+                    // bytecode and cannot be rewritten to a constant.
+                    scan_place(future, &mut set);
+                    scan_place(destination, &mut set);
+                }
                 Terminator::AwaitAny {
                     futures,
                     destination,

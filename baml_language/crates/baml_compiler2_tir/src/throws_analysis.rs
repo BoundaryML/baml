@@ -312,21 +312,46 @@ fn collect_from_expr<C: ThrowsAnalysisContext>(
             }
             for with_id in with_exprs {
                 collect_from_expr(context, *with_id, body, out);
+                // The middleware pipeline INVOKES each transformer eagerly at
+                // the spawn site (`b(a(SpawnParams { ... }))`), so a
+                // transformer's own callable `throws` escapes the spawning
+                // function — not just whatever evaluating the expression
+                // throws.
+                if let Some(Ty::Function { throws, .. }) = context.expression_type(*with_id) {
+                    match throws.as_ref() {
+                        Ty::Never { .. } | Ty::Unknown { .. } | Ty::Error { .. } => {}
+                        Ty::Primitive(PrimitiveType::Null, _) => {}
+                        t => out.extend(flatten_ty_to_facts(t)),
+                    }
+                }
             }
             let _ = spawn_body;
         }
         Expr::Await { future } => {
             collect_from_expr(context, *future, body, out);
             // `await f` re-throws the awaited future's error: `f: Future<T, E>`
-            // contributes `E` to the body's escaping throws. `null`/`never`
-            // mark a future that cannot fail (BEP-034 v1 spells `never` as
-            // `null`); `Unknown`/`Error` add no information — skip those.
-            if let Some(Ty::Future(_, error, _)) = context.expression_type(*future) {
-                match error.as_ref() {
+            // contributes `E` to the body's escaping throws — and `await`
+            // distributes over a UNION of futures (BEP-034), contributing
+            // every member's error type. `null`/`never` mark a future that
+            // cannot fail (BEP-034 v1 spells `never` as `null`);
+            // `Unknown`/`Error` add no information — skip those.
+            fn add_error_facts(error: &Ty, out: &mut BTreeSet<Ty>) {
+                match error {
                     Ty::Never { .. } | Ty::Unknown { .. } | Ty::Error { .. } => {}
                     Ty::Primitive(PrimitiveType::Null, _) => {}
                     e => out.extend(flatten_ty_to_facts(e)),
                 }
+            }
+            match context.expression_type(*future) {
+                Some(Ty::Future(_, error, _)) => add_error_facts(&error, out),
+                Some(Ty::Union(members, _)) => {
+                    for member in &members {
+                        if let Ty::Future(_, error, _) = member {
+                            add_error_facts(error, out);
+                        }
+                    }
+                }
+                _ => {}
             }
         }
         Expr::GenericApply { base, .. } => {

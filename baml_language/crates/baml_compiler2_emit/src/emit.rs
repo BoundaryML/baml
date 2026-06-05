@@ -2263,9 +2263,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
 
                 let dest_on_stack = match destination {
                     Place::Local(local) => matches!(
-                        pull_semantics::local_store_behavior(
-                            self.analysis.classifications[local]
-                        ),
+                        pull_semantics::local_store_behavior(self.analysis.classifications[local]),
                         LocalStoreBehavior::KeepOnStack
                     ),
                     _ => unreachable!(

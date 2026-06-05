@@ -497,33 +497,7 @@ pub fn is_value_call_inferable(name: &Name, generic_params: &[Name]) -> bool {
 /// param). A typevar that is NOT rigid is one the callee must still infer, so a
 /// param mentioning it genuinely cannot give the lambda a concrete shape.
 pub fn contains_non_rigid_typevar(ty: &Ty, rigid: &[Name]) -> bool {
-    match ty {
-        Ty::TypeVar(name, _) => !rigid.iter().any(|r| r == name),
-        Ty::List(inner, _) | Ty::EvolvingList(inner, _) => contains_non_rigid_typevar(inner, rigid),
-        Ty::Map(k, v, _) | Ty::EvolvingMap(k, v, _) => {
-            contains_non_rigid_typevar(k, rigid) || contains_non_rigid_typevar(v, rigid)
-        }
-        Ty::Union(tys, _) => tys.iter().any(|t| contains_non_rigid_typevar(t, rigid)),
-        Ty::Function {
-            params,
-            ret,
-            throws,
-            ..
-        } => {
-            params
-                .iter()
-                .any(|param| contains_non_rigid_typevar(&param.ty, rigid))
-                || contains_non_rigid_typevar(ret, rigid)
-                || contains_non_rigid_typevar(throws, rigid)
-        }
-        Ty::Class(_, type_args, _) => type_args
-            .iter()
-            .any(|t| contains_non_rigid_typevar(t, rigid)),
-        Ty::Future(value, error, _) => {
-            contains_non_rigid_typevar(value, rigid) || contains_non_rigid_typevar(error, rigid)
-        }
-        _ => false,
-    }
+    contains_typevar_where(ty, &|name| !rigid.iter().any(|r| r == name))
 }
 
 /// Returns `true` if `ty` contains any type variable for which `pred` returns
@@ -803,6 +777,14 @@ pub fn erase_typevars_where(ty: &Ty, pred: &dyn Fn(&Name) -> bool) -> Ty {
                 .collect(),
             attr.clone(),
         ),
+        Ty::EvolvingList(inner, attr) => {
+            Ty::EvolvingList(Box::new(erase_typevars_where(inner, pred)), attr.clone())
+        }
+        Ty::EvolvingMap(k, v, attr) => Ty::EvolvingMap(
+            Box::new(erase_typevars_where(k, pred)),
+            Box::new(erase_typevars_where(v, pred)),
+            attr.clone(),
+        ),
         Ty::Class(name, type_args, attr) => Ty::Class(
             name.clone(),
             type_args
@@ -811,12 +793,68 @@ pub fn erase_typevars_where(ty: &Ty, pred: &dyn Fn(&Name) -> bool) -> Ty {
                 .collect(),
             attr.clone(),
         ),
+        Ty::Interface(name, type_args, associated_bindings, attr) => Ty::Interface(
+            name.clone(),
+            type_args
+                .iter()
+                .map(|t| erase_typevars_where(t, pred))
+                .collect(),
+            associated_bindings
+                .iter()
+                .map(|(n, t)| (n.clone(), erase_typevars_where(t, pred)))
+                .collect(),
+            attr.clone(),
+        ),
+        Ty::AssociatedTypeProjection {
+            base,
+            interface,
+            member,
+            attr,
+        } => Ty::AssociatedTypeProjection {
+            base: Box::new(erase_typevars_where(base, pred)),
+            interface: interface
+                .as_ref()
+                .map(|interface| Box::new(erase_typevars_where(interface, pred))),
+            member: member.clone(),
+            attr: attr.clone(),
+        },
         Ty::Future(value, error, attr) => Ty::Future(
             Box::new(erase_typevars_where(value, pred)),
             Box::new(erase_typevars_where(error, pred)),
             attr.clone(),
         ),
-        // Leaves and shapes throws types don't carry in practice.
+        Ty::Function {
+            generic_params,
+            generic_param_bounds,
+            params,
+            ret,
+            throws,
+            attr,
+        } => {
+            // A function type's own generic params are local binders —
+            // shadow them out of the predicate before recursing.
+            let shadowed = |name: &Name| !generic_params.iter().any(|g| g == name) && pred(name);
+            let shadowed: &dyn Fn(&Name) -> bool = &shadowed;
+            Ty::Function {
+                generic_params: generic_params.clone(),
+                generic_param_bounds: generic_param_bounds
+                    .iter()
+                    .map(|b| b.as_ref().map(|t| erase_typevars_where(t, shadowed)))
+                    .collect(),
+                params: params
+                    .iter()
+                    .map(|p| FunctionParamTy {
+                        name: p.name.clone(),
+                        ty: erase_typevars_where(&p.ty, shadowed),
+                        mode: p.mode,
+                    })
+                    .collect(),
+                ret: Box::new(erase_typevars_where(ret, shadowed)),
+                throws: Box::new(erase_typevars_where(throws, shadowed)),
+                attr: attr.clone(),
+            }
+        }
+        // Leaves (primitives, enums, etc.) — pass through.
         _ => ty.clone(),
     }
 }

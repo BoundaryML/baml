@@ -1687,188 +1687,242 @@ fn baml.future.any(futures: future<void, void>[]) -> future<void, baml.future.Al
 fn .<lambda(any, 0)>() -> null {
     // Locals:
     let _0: null // _0 // return
-    let _1: void[] // errors
-    let _2: void[] // winners
-    let _3: future<void, void>[] // remaining
-    let _4: bool
-    let _5: int
-    let _6: int // i
-    let _7: future<void, void>[]
-    let _8: future<void, void> // f
-    let _9: future<void, void>[]
-    let _10: int
-    let _11: bool
-    let _12: int
-    let _13: void
-    let _14: unknown // e
-    let _15: null
-    let _16: void // e
-    let _17: baml.future.AllFailed<void> // failure
-    let _18: void[]
-    let _19: void[]
-    let _20: void
-    let _21: baml.future.AllFailed<void>
-    let _22: bool
-    let _23: void | 0
-    let _24: unknown // e
-    let _25: null
-    let _26: void // e
+    let _1: void[] // winners
+    let _2: future<void, void>[] // remaining
+    let _3: bool
+    let _4: int
+    let _5: int // i
+    let _6: future<void, void>[]
+    let _7: future<void, void> // f
+    let _8: future<void, void>[]
+    let _9: int
+    let _10: bool
+    let _11: int
+    let _12: void
+    let _13: unknown // e
+    let _14: null
+    let _15: void // e
+    let _16: baml.future.AllFailed<void> // failure
+    let _17: void[]
+    let _18: void
+    let _19: baml.future.AllFailed<void>
+    let _20: bool
+    let _21: void | null
+    let _22: unknown // e
+    let _23: null
+    let _24: future<void, void>[]
+    let _25: int
+    let _26: future<void, void>[]
     let _27: int
-    let _28: void
-    let _29: future<void, void>[]
-    let _30: int
-    let _31: future<void, void>[]
-    let _32: int
-    let _33: int
-    let _34: int
-    let _35: bool
+    let _28: int
+    let _29: int
+    let _30: bool
+    let _31: int
+    let _32: void[] // errors
+    let _33: int // j
+    let _34: bool
+    let _35: int
     let _36: int
-    let _37: baml.future.AllFailed<void> // failure
-    let _38: void[]
-    let _39: baml.future.AllFailed<void>
-    let _40: bool[]
-    let _41: (future<void, void>) -> bool throws never
-    let _42: void[]
-    let _43: 0
+    let _37: future<void, void> // g
+    let _38: future<void, void>[]
+    let _39: int
+    let _40: bool
+    let _41: void | null
+    let _42: unknown // e
+    let _43: null
+    let _44: void // e
+    let _45: int
+    let _46: void
+    let _47: int
+    let _48: baml.future.AllFailed<void> // failure
+    let _49: void[]
+    let _50: baml.future.AllFailed<void>
+    let _51: bool[]
+    let _52: (future<void, void>) -> bool throws never
+    let _53: void[]
+    let _54: 0
 
     bb0: {
         _1 = [];
-        _2 = [];
-        _3 = copy capture[0];
-        goto -> bb8;
+        _2 = copy capture[0];
+        goto -> bb7;
     }
 
     bb1: {
-        throw_if_panic copy _24 -> bb2;
+        throw_if_panic copy _22 -> bb2;
     }
 
     bb2: {
-        _26 = copy _24;
-        _28 = copy _26;
-        _27 = call const fn baml.Array.push(copy _1, copy _28) -> [bb3];
+        _21 = const null;
+        goto -> bb3;
     }
 
     bb3: {
-        _23 = const 0_i64;
-        goto -> bb4;
+        _25 = copy _5;
+        _24 = call const fn baml.Array.slice(copy _2, const 0_i64, copy _25) -> [bb4];
     }
 
     bb4: {
-        _30 = copy _6;
-        _29 = call const fn baml.Array.slice(copy _3, const 0_i64, copy _30) -> [bb5];
+        _28 = copy _5;
+        _27 = copy _28 + const 1_i64;
+        _29 = len(_2);
+        goto -> bb5;
     }
 
     bb5: {
-        _33 = copy _6;
-        _32 = copy _33 + const 1_i64;
-        _34 = len(_3);
-        goto -> bb6;
+        _26 = call const fn baml.Array.slice(copy _2, copy _27, copy _29) -> [bb6];
     }
 
     bb6: {
-        _31 = call const fn baml.Array.slice(copy _3, copy _32, copy _34) -> [bb7];
+        _2 = call const fn baml.Array.concat(copy _24, copy _26) -> [bb7];
     }
 
     bb7: {
-        _3 = call const fn baml.Array.concat(copy _29, copy _31) -> [bb8];
+        _4 = len(_2);
+        goto -> bb8;
     }
 
     bb8: {
-        _5 = len(_3);
-        goto -> bb9;
+        _3 = copy _4 > const 0_i64;
+        branch copy _3 -> [bb9, bb19];
     }
 
     bb9: {
-        _4 = copy _5 > const 0_i64;
-        branch copy _4 -> [bb10, bb21];
+        _6 = copy _2;
+        _5 = await_any copy _6 -> [bb10];
     }
 
     bb10: {
-        _7 = copy _3;
-        _6 = await_any copy _7 -> [bb11];
+        _8 = copy _2;
+        _9 = copy _5;
+        _7 = copy _8[_9];
+        _10 = call const fn baml.future.Future.is_result(copy _7) -> [bb11];
     }
 
     bb11: {
-        _9 = copy _3;
-        _10 = copy _6;
-        _8 = copy _9[_10];
-        _11 = call const fn baml.future.Future.is_result(copy _8) -> [bb12];
+        branch copy _10 -> [bb15, bb12];
     }
 
     bb12: {
-        branch copy _11 -> [bb16, bb13];
+        _20 = call const fn baml.future.Future.is_error(copy _7) -> [bb13];
     }
 
     bb13: {
-        _22 = call const fn baml.future.Future.is_error(copy _8) -> [bb14];
+        branch copy _20 -> [bb14, bb3];
     }
 
     bb14: {
-        branch copy _22 -> [bb15, bb4];
+        _23 = copy _7;
+        _21 = await _23 -> [bb3, unwind: bb1];
     }
 
     bb15: {
-        _25 = copy _8;
-        _23 = await _25 -> [bb4, unwind: bb1];
+        _14 = copy _7;
+        _12 = await _14 -> [bb18, unwind: bb16];
     }
 
     bb16: {
-        _15 = copy _8;
-        _13 = await _15 -> [bb20, unwind: bb17];
+        throw_if_panic copy _13 -> bb17;
     }
 
     bb17: {
-        throw_if_panic copy _14 -> bb18;
+        _15 = copy _13;
+        _18 = copy _15;
+        _17 = [copy _18];
+        _16 = baml.future.AllFailed<#1> { copy _17 };
+        _19 = copy _16;
+        throw copy _19;
     }
 
     bb18: {
-        _16 = copy _14;
-        _20 = copy _16;
-        _19 = [copy _20];
-        _18 = call const fn baml.Array.concat(copy _1, copy _19) -> [bb19];
+        _11 = call const fn baml.Array.push(copy _1, copy _12) -> [bb19];
     }
 
     bb19: {
-        _17 = baml.future.AllFailed<#1> { copy _18 };
-        _21 = copy _17;
-        throw copy _21;
+        _31 = len(_1);
+        goto -> bb20;
     }
 
     bb20: {
-        _12 = call const fn baml.Array.push(copy _2, copy _13) -> [bb21];
+        _30 = copy _31 == const 0_i64;
+        branch copy _30 -> [bb24, bb21];
     }
 
     bb21: {
-        _36 = len(_2);
-        goto -> bb22;
+        _52 = make_closure lambda[0]<2 type_args>();
+        _51 = call const fn baml.Array.map(copy capture[0], copy _52) -> [bb22];
     }
 
     bb22: {
-        _35 = copy _36 == const 0_i64;
-        branch copy _35 -> [bb26, bb23];
+        _53 = copy _1;
+        _54 = const 0_i64;
+        _0 = copy _53[_54];
+        goto -> bb23;
     }
 
     bb23: {
-        _41 = make_closure lambda[0]<2 type_args>();
-        _40 = call const fn baml.Array.map(copy capture[0], copy _41) -> [bb24];
-    }
-
-    bb24: {
-        _42 = copy _2;
-        _43 = const 0_i64;
-        _0 = copy _42[_43];
-        goto -> bb25;
-    }
-
-    bb25: {
         return;
     }
 
+    bb24: {
+        _32 = [];
+        _33 = const 0_i64;
+        goto -> bb29;
+    }
+
+    bb25: {
+        throw_if_panic copy _42 -> bb26;
+    }
+
     bb26: {
-        _38 = copy _1;
-        _37 = baml.future.AllFailed<#1> { copy _38 };
-        _39 = copy _37;
-        throw copy _39;
+        _44 = copy _42;
+        _46 = copy _44;
+        _45 = call const fn baml.Array.push(copy _32, copy _46) -> [bb27];
+    }
+
+    bb27: {
+        _41 = const null;
+        goto -> bb28;
+    }
+
+    bb28: {
+        _47 = copy _33;
+        _33 = copy _47 + const 1_i64;
+        goto -> bb29;
+    }
+
+    bb29: {
+        _35 = copy _33;
+        _36 = len(capture[0]);
+        goto -> bb30;
+    }
+
+    bb30: {
+        _34 = copy _35 < copy _36;
+        branch copy _34 -> [bb32, bb31];
+    }
+
+    bb31: {
+        _49 = copy _32;
+        _48 = baml.future.AllFailed<#1> { copy _49 };
+        _50 = copy _48;
+        throw copy _50;
+    }
+
+    bb32: {
+        _38 = copy capture[0];
+        _39 = copy _33;
+        _37 = copy _38[_39];
+        _40 = call const fn baml.future.Future.is_error(copy _37) -> [bb33];
+    }
+
+    bb33: {
+        branch copy _40 -> [bb34, bb28];
+    }
+
+    bb34: {
+        _43 = copy _37;
+        _41 = await _43 -> [bb28, unwind: bb25];
     }
 }
 
@@ -9041,12 +9095,10 @@ fn baml.time.PlainDate.from_json(j: baml.json.json) -> baml.time.PlainDate {
     let _3: unknown // _
     let _4: bool
     let _5: string
-    let _6: bool
-    let _7: string
-    let _8: string // message
+    let _6: string // message
+    let _7: baml.json.JsonDecodeError
+    let _8: string
     let _9: baml.json.JsonDecodeError
-    let _10: string
-    let _11: baml.json.JsonDecodeError
 
     bb0: {
         _2 = is_type(copy _1, string);
@@ -9054,8 +9106,8 @@ fn baml.time.PlainDate.from_json(j: baml.json.json) -> baml.time.PlainDate {
     }
 
     bb1: {
-        _11 = baml.json.JsonDecodeError { const "Expected ISO 8601 date string", const null };
-        throw copy _11;
+        _9 = baml.json.JsonDecodeError { const "Expected ISO 8601 date string", const null };
+        throw copy _9;
     }
 
     bb2: {
@@ -9068,25 +9120,19 @@ fn baml.time.PlainDate.from_json(j: baml.json.json) -> baml.time.PlainDate {
 
     bb4: {
         _4 = is_type(copy _3, baml.errors.ParseError);
-        branch copy _4 -> [bb5, bb6];
+        branch copy _4 -> [bb6, bb5];
     }
 
     bb5: {
-        _5 = copy _3.0;
-        _6 = is_type(copy _5, string);
-        branch copy _6 -> [bb7, bb6];
-    }
-
-    bb6: {
         throw copy _3;
     }
 
-    bb7: {
-        _7 = copy _3.0;
-        _8 = copy _7;
-        _10 = copy _8;
-        _9 = baml.json.JsonDecodeError { copy _10, const "" };
-        throw copy _9;
+    bb6: {
+        _5 = copy _3.0;
+        _6 = copy _5;
+        _8 = copy _6;
+        _7 = baml.json.JsonDecodeError { copy _8, const "" };
+        throw copy _7;
     }
 }
 
@@ -9101,11 +9147,9 @@ fn baml.time.PlainDate.to_json(self: baml.time.PlainDate) -> string {
     let _2: unknown // _
     let _3: bool
     let _4: string
-    let _5: bool
-    let _6: string
-    let _7: string // message
-    let _8: baml.json.JsonSerializationError
-    let _9: string
+    let _5: string // message
+    let _6: baml.json.JsonSerializationError
+    let _7: string
 
     bb0: {
         _0 = call const fn baml.time.PlainDate.to_string(copy _1) -> [bb1, unwind: bb2];
@@ -9117,25 +9161,19 @@ fn baml.time.PlainDate.to_json(self: baml.time.PlainDate) -> string {
 
     bb2: {
         _3 = is_type(copy _2, baml.errors.InvalidArgument);
-        branch copy _3 -> [bb3, bb4];
+        branch copy _3 -> [bb4, bb3];
     }
 
     bb3: {
-        _4 = copy _2.0;
-        _5 = is_type(copy _4, string);
-        branch copy _5 -> [bb5, bb4];
-    }
-
-    bb4: {
         throw copy _2;
     }
 
-    bb5: {
-        _6 = copy _2.0;
-        _7 = copy _6;
-        _9 = copy _7;
-        _8 = baml.json.JsonSerializationError { copy _9, const "", const null };
-        throw copy _8;
+    bb4: {
+        _4 = copy _2.0;
+        _5 = copy _4;
+        _7 = copy _5;
+        _6 = baml.json.JsonSerializationError { copy _7, const "", const null };
+        throw copy _6;
     }
 }
 
@@ -9269,12 +9307,10 @@ fn baml.time.PlainDateTime.from_json(j: baml.json.json) -> baml.time.PlainDateTi
     let _3: unknown // _
     let _4: bool
     let _5: string
-    let _6: bool
-    let _7: string
-    let _8: string // message
+    let _6: string // message
+    let _7: baml.json.JsonDecodeError
+    let _8: string
     let _9: baml.json.JsonDecodeError
-    let _10: string
-    let _11: baml.json.JsonDecodeError
 
     bb0: {
         _2 = is_type(copy _1, string);
@@ -9282,8 +9318,8 @@ fn baml.time.PlainDateTime.from_json(j: baml.json.json) -> baml.time.PlainDateTi
     }
 
     bb1: {
-        _11 = baml.json.JsonDecodeError { const "Expected zoneless ISO 8601 string", const null };
-        throw copy _11;
+        _9 = baml.json.JsonDecodeError { const "Expected zoneless ISO 8601 string", const null };
+        throw copy _9;
     }
 
     bb2: {
@@ -9296,25 +9332,19 @@ fn baml.time.PlainDateTime.from_json(j: baml.json.json) -> baml.time.PlainDateTi
 
     bb4: {
         _4 = is_type(copy _3, baml.errors.ParseError);
-        branch copy _4 -> [bb5, bb6];
+        branch copy _4 -> [bb6, bb5];
     }
 
     bb5: {
-        _5 = copy _3.0;
-        _6 = is_type(copy _5, string);
-        branch copy _6 -> [bb7, bb6];
-    }
-
-    bb6: {
         throw copy _3;
     }
 
-    bb7: {
-        _7 = copy _3.0;
-        _8 = copy _7;
-        _10 = copy _8;
-        _9 = baml.json.JsonDecodeError { copy _10, const "" };
-        throw copy _9;
+    bb6: {
+        _5 = copy _3.0;
+        _6 = copy _5;
+        _8 = copy _6;
+        _7 = baml.json.JsonDecodeError { copy _8, const "" };
+        throw copy _7;
     }
 }
 
@@ -9399,11 +9429,9 @@ fn baml.time.PlainDateTime.to_json(self: baml.time.PlainDateTime) -> string {
     let _2: unknown // _
     let _3: bool
     let _4: string
-    let _5: bool
-    let _6: string
-    let _7: string // message
-    let _8: baml.json.JsonSerializationError
-    let _9: string
+    let _5: string // message
+    let _6: baml.json.JsonSerializationError
+    let _7: string
 
     bb0: {
         _0 = call const fn baml.time.PlainDateTime.to_string(copy _1) -> [bb1, unwind: bb2];
@@ -9415,25 +9443,19 @@ fn baml.time.PlainDateTime.to_json(self: baml.time.PlainDateTime) -> string {
 
     bb2: {
         _3 = is_type(copy _2, baml.errors.InvalidArgument);
-        branch copy _3 -> [bb3, bb4];
+        branch copy _3 -> [bb4, bb3];
     }
 
     bb3: {
-        _4 = copy _2.0;
-        _5 = is_type(copy _4, string);
-        branch copy _5 -> [bb5, bb4];
-    }
-
-    bb4: {
         throw copy _2;
     }
 
-    bb5: {
-        _6 = copy _2.0;
-        _7 = copy _6;
-        _9 = copy _7;
-        _8 = baml.json.JsonSerializationError { copy _9, const "", const null };
-        throw copy _8;
+    bb4: {
+        _4 = copy _2.0;
+        _5 = copy _4;
+        _7 = copy _5;
+        _6 = baml.json.JsonSerializationError { copy _7, const "", const null };
+        throw copy _6;
     }
 }
 
@@ -9698,12 +9720,10 @@ fn baml.time.PlainTime.from_json(j: baml.json.json) -> baml.time.PlainTime {
     let _3: unknown // _
     let _4: bool
     let _5: string
-    let _6: bool
-    let _7: string
-    let _8: string // message
+    let _6: string // message
+    let _7: baml.json.JsonDecodeError
+    let _8: string
     let _9: baml.json.JsonDecodeError
-    let _10: string
-    let _11: baml.json.JsonDecodeError
 
     bb0: {
         _2 = is_type(copy _1, string);
@@ -9711,8 +9731,8 @@ fn baml.time.PlainTime.from_json(j: baml.json.json) -> baml.time.PlainTime {
     }
 
     bb1: {
-        _11 = baml.json.JsonDecodeError { const "Expected ISO 8601 time string", const null };
-        throw copy _11;
+        _9 = baml.json.JsonDecodeError { const "Expected ISO 8601 time string", const null };
+        throw copy _9;
     }
 
     bb2: {
@@ -9725,25 +9745,19 @@ fn baml.time.PlainTime.from_json(j: baml.json.json) -> baml.time.PlainTime {
 
     bb4: {
         _4 = is_type(copy _3, baml.errors.ParseError);
-        branch copy _4 -> [bb5, bb6];
+        branch copy _4 -> [bb6, bb5];
     }
 
     bb5: {
-        _5 = copy _3.0;
-        _6 = is_type(copy _5, string);
-        branch copy _6 -> [bb7, bb6];
-    }
-
-    bb6: {
         throw copy _3;
     }
 
-    bb7: {
-        _7 = copy _3.0;
-        _8 = copy _7;
-        _10 = copy _8;
-        _9 = baml.json.JsonDecodeError { copy _10, const "" };
-        throw copy _9;
+    bb6: {
+        _5 = copy _3.0;
+        _6 = copy _5;
+        _8 = copy _6;
+        _7 = baml.json.JsonDecodeError { copy _8, const "" };
+        throw copy _7;
     }
 }
 
@@ -10417,12 +10431,10 @@ fn baml.time.ZonedDateTime.from_json(j: baml.json.json) -> baml.time.ZonedDateTi
     let _3: unknown // _
     let _4: bool
     let _5: string
-    let _6: bool
-    let _7: string
-    let _8: string // message
+    let _6: string // message
+    let _7: baml.json.JsonDecodeError
+    let _8: string
     let _9: baml.json.JsonDecodeError
-    let _10: string
-    let _11: baml.json.JsonDecodeError
 
     bb0: {
         _2 = is_type(copy _1, string);
@@ -10430,8 +10442,8 @@ fn baml.time.ZonedDateTime.from_json(j: baml.json.json) -> baml.time.ZonedDateTi
     }
 
     bb1: {
-        _11 = baml.json.JsonDecodeError { const "Expected RFC 3339 / RFC 9557 timestamp string", const null };
-        throw copy _11;
+        _9 = baml.json.JsonDecodeError { const "Expected RFC 3339 / RFC 9557 timestamp string", const null };
+        throw copy _9;
     }
 
     bb2: {
@@ -10444,25 +10456,19 @@ fn baml.time.ZonedDateTime.from_json(j: baml.json.json) -> baml.time.ZonedDateTi
 
     bb4: {
         _4 = is_type(copy _3, baml.errors.ParseError);
-        branch copy _4 -> [bb5, bb6];
+        branch copy _4 -> [bb6, bb5];
     }
 
     bb5: {
-        _5 = copy _3.0;
-        _6 = is_type(copy _5, string);
-        branch copy _6 -> [bb7, bb6];
-    }
-
-    bb6: {
         throw copy _3;
     }
 
-    bb7: {
-        _7 = copy _3.0;
-        _8 = copy _7;
-        _10 = copy _8;
-        _9 = baml.json.JsonDecodeError { copy _10, const "" };
-        throw copy _9;
+    bb6: {
+        _5 = copy _3.0;
+        _6 = copy _5;
+        _8 = copy _6;
+        _7 = baml.json.JsonDecodeError { copy _8, const "" };
+        throw copy _7;
     }
 }
 
@@ -10855,27 +10861,21 @@ fn baml.time.ZonedDateTime.to_json(self: baml.time.ZonedDateTime) -> string {
     let _1: baml.time.ZonedDateTime // self // param
     let _2: unknown // _
     let _3: bool
-    let _4: string
+    let _4: bool
     let _5: bool
-    let _6: bool
-    let _7: string
-    let _8: bool
-    let _9: bool
+    let _6: string
+    let _7: string // message
+    let _8: baml.json.JsonSerializationError
+    let _9: string
     let _10: string
-    let _11: bool
-    let _12: string
-    let _13: string // message
-    let _14: baml.json.JsonSerializationError
+    let _11: string // timezone
+    let _12: baml.json.JsonSerializationError
+    let _13: string
+    let _14: string
     let _15: string
-    let _16: string
-    let _17: string // timezone
-    let _18: baml.json.JsonSerializationError
-    let _19: string
-    let _20: string
-    let _21: string
-    let _22: string // message
-    let _23: baml.json.JsonSerializationError
-    let _24: string
+    let _16: string // message
+    let _17: baml.json.JsonSerializationError
+    let _18: string
 
     bb0: {
         _0 = call const fn baml.time.ZonedDateTime.to_string(copy _1) -> [bb1, unwind: bb2];
@@ -10887,64 +10887,46 @@ fn baml.time.ZonedDateTime.to_json(self: baml.time.ZonedDateTime) -> string {
 
     bb2: {
         _3 = is_type(copy _2, baml.errors.InvalidArgument);
-        branch copy _3 -> [bb3, bb4];
+        branch copy _3 -> [bb8, bb3];
     }
 
     bb3: {
-        _4 = copy _2.0;
-        _5 = is_type(copy _4, string);
-        branch copy _5 -> [bb11, bb4];
+        _4 = is_type(copy _2, baml.time.UnknownTimezoneError);
+        branch copy _4 -> [bb7, bb4];
     }
 
     bb4: {
-        _6 = is_type(copy _2, baml.time.UnknownTimezoneError);
-        branch copy _6 -> [bb5, bb6];
+        _5 = is_type(copy _2, baml.errors.Io);
+        branch copy _5 -> [bb6, bb5];
     }
 
     bb5: {
-        _7 = copy _2.0;
-        _8 = is_type(copy _7, string);
-        branch copy _8 -> [bb10, bb6];
+        throw copy _2;
     }
 
     bb6: {
-        _9 = is_type(copy _2, baml.errors.Io);
-        branch copy _9 -> [bb7, bb8];
+        _15 = copy _2.0;
+        _16 = copy _15;
+        _18 = copy _16;
+        _17 = baml.json.JsonSerializationError { copy _18, const "", const null };
+        throw copy _17;
     }
 
     bb7: {
         _10 = copy _2.0;
-        _11 = is_type(copy _10, string);
-        branch copy _11 -> [bb9, bb8];
+        _11 = copy _10;
+        _14 = copy _11;
+        _13 = const "unknown timezone: " + copy _14;
+        _12 = baml.json.JsonSerializationError { copy _13, const "", const null };
+        throw copy _12;
     }
 
     bb8: {
-        throw copy _2;
-    }
-
-    bb9: {
-        _21 = copy _2.0;
-        _22 = copy _21;
-        _24 = copy _22;
-        _23 = baml.json.JsonSerializationError { copy _24, const "", const null };
-        throw copy _23;
-    }
-
-    bb10: {
-        _16 = copy _2.0;
-        _17 = copy _16;
-        _20 = copy _17;
-        _19 = const "unknown timezone: " + copy _20;
-        _18 = baml.json.JsonSerializationError { copy _19, const "", const null };
-        throw copy _18;
-    }
-
-    bb11: {
-        _12 = copy _2.0;
-        _13 = copy _12;
-        _15 = copy _13;
-        _14 = baml.json.JsonSerializationError { copy _15, const "", const null };
-        throw copy _14;
+        _6 = copy _2.0;
+        _7 = copy _6;
+        _9 = copy _7;
+        _8 = baml.json.JsonSerializationError { copy _9, const "", const null };
+        throw copy _8;
     }
 }
 
@@ -11275,11 +11257,9 @@ fn baml.toml.Table.to_json(self: baml.toml.Table) -> baml.json.json {
     let _3: (map<string, baml.toml.Item>) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError
     let _4: bool
     let _5: string
-    let _6: bool
-    let _7: string
-    let _8: string // message
-    let _9: baml.json.JsonSerializationError
-    let _10: string
+    let _6: string // message
+    let _7: baml.json.JsonSerializationError
+    let _8: string
 
     bb0: {
         _3 = copy _1.0;
@@ -11292,25 +11272,19 @@ fn baml.toml.Table.to_json(self: baml.toml.Table) -> baml.json.json {
 
     bb2: {
         _4 = is_type(copy _2, baml.json.JsonParseError);
-        branch copy _4 -> [bb3, bb4];
+        branch copy _4 -> [bb4, bb3];
     }
 
     bb3: {
-        _5 = copy _2.0;
-        _6 = is_type(copy _5, string);
-        branch copy _6 -> [bb5, bb4];
-    }
-
-    bb4: {
         throw copy _2;
     }
 
-    bb5: {
-        _7 = copy _2.0;
-        _8 = copy _7;
-        _10 = copy _8;
-        _9 = baml.json.JsonSerializationError { copy _10, const "", const null };
-        throw copy _9;
+    bb4: {
+        _5 = copy _2.0;
+        _6 = copy _5;
+        _8 = copy _6;
+        _7 = baml.json.JsonSerializationError { copy _8, const "", const null };
+        throw copy _7;
     }
 }
 

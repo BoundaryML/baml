@@ -4427,7 +4427,12 @@ impl<'a> Parser<'a> {
                 | TokenKind::Quote
                 | TokenKind::Hash
                 | TokenKind::LParen
-                | TokenKind::RParen => {}
+                | TokenKind::RParen
+                // `spawn`/`await` are valid namespace segments inside type
+                // args (`foo<baml.spawn.SpawnParams<T, E>>(x)`), mirroring
+                // the type-path parser's segment set.
+                | TokenKind::Spawn
+                | TokenKind::Await => {}
                 _ => return None,
             }
             i = self.skip_trivia_and_comments_from(i + 1);
@@ -5691,7 +5696,12 @@ impl<'a> Parser<'a> {
                 | TokenKind::Quote
                 | TokenKind::Hash
                 | TokenKind::LParen
-                | TokenKind::RParen => {}
+                | TokenKind::RParen
+                // `spawn`/`await` are valid namespace segments inside type
+                // args (`foo<baml.spawn.SpawnParams<T, E>>(x)`), mirroring
+                // the type-path parser's segment set.
+                | TokenKind::Spawn
+                | TokenKind::Await => {}
                 // Anything else — operators, braces, EOF-ish tokens — can't
                 // appear in a type, so this `<` is a comparison.
                 _ => return false,

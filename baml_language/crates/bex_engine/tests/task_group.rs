@@ -253,3 +253,25 @@ async fn task_group_limit_one_serializes() {
         "limit=1 should serialize the three sleeps (~600ms); got {elapsed:?}"
     );
 }
+
+/// Raising the cap admits queued members up to the NEW cap immediately (per
+/// the `set_limit` docstring) — not just the first parked waiter.
+#[tokio::test]
+async fn set_limit_increase_admits_multiple_queued() {
+    let source = r#"
+        function work() -> int { baml.sys.sleep(500); 1 }
+        function main() -> int {
+            let g = baml.spawn.TaskGroup.new(0);
+            let a = spawn with baml.spawn.options(group = g) { work() };
+            let b = spawn with baml.spawn.options(group = g) { work() };
+            let c = spawn with baml.spawn.options(group = g) { work() };
+            baml.sys.sleep(50);
+            g.set_limit(3);
+            baml.sys.sleep(100);
+            let active = g.active_count();
+            g.cancel();
+            active
+        }
+    "#;
+    assert_eq!(run_main(source).await.unwrap(), BexExternalValue::Int(3));
+}

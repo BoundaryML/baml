@@ -1906,11 +1906,11 @@ mod tests {
         // purposes — the GC only needs a valid HeapPtr to walk.
         let closure = tlab.alloc_string("closure-stand-in".to_string());
         let name = tlab.alloc_string("spawn-name".to_string());
-        let future_ptr = tlab.alloc(Object::UnscheduledFuture(UnscheduledFuture {
+        let future_ptr = tlab.alloc(Object::UnscheduledFuture(Box::new(UnscheduledFuture {
             closure,
             name: Some(name),
             config: None,
-        }));
+        })));
 
         let roots = vec![future_ptr];
         let (stats, _new_roots, _) = unsafe { heap.collect_garbage(&roots) };
@@ -2423,11 +2423,11 @@ mod tests {
         // --- Container: Object::UnscheduledFuture ---
         // After BEP-034 phase D′ the spawn case is all that's left;
         // the closure pointer stands in as the traced HeapPtr.
-        let future_container = tlab.alloc(Object::UnscheduledFuture(UnscheduledFuture {
+        let future_container = tlab.alloc(Object::UnscheduledFuture(Box::new(UnscheduledFuture {
             closure: leaf_for_future,
             name: None,
             config: None,
-        }));
+        })));
 
         // --- Container: Object::Instance ---
         // Instance requires a class pointer.

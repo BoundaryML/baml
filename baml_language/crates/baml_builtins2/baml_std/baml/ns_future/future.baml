@@ -145,11 +145,10 @@ function race<T, E>(futures: baml.future.Future<T, E>[]) -> baml.future.Future<T
 /// neither win nor contribute an error).
 function any<T, Err>(futures: baml.future.Future<T, Err>[]) -> baml.future.Future<T, baml.future.AllFailed<Err>> {
   spawn {
-    // `errors` accumulates failures in input order; `winners` holds the first
-    // success (0 or 1 element — an array stands in for an optional so we avoid
-    // a nullable local). `remaining` shrinks as settled losers are dropped so
-    // the next `__await_any` doesn't keep re-reporting the same one.
-    let errors: Err[] = [];
+    // `winners` holds the first success (0 or 1 element — an array stands in
+    // for an optional so we avoid a nullable local). `remaining` shrinks as
+    // settled losers are dropped so the next `__await_any` doesn't keep
+    // re-reporting the same one.
     let winners: T[] = [];
     let remaining = futures;
     while (remaining.length() > 0) {
@@ -160,22 +159,40 @@ function any<T, Err>(futures: baml.future.Future<T, Err>[]) -> baml.future.Futur
         // and only there to keep the throws type `AllFailed<Err>` (not `Err`).
         winners.push((await f) catch (e) {
           let e => {
-            let failure: baml.future.AllFailed<Err> = baml.future.AllFailed { errors: errors.concat([e]) };
+            let failure: baml.future.AllFailed<Err> = baml.future.AllFailed { errors: [e] };
             throw failure
           }
         });
         break;
       }
       if (f.is_error()) {
-        // Settled error: drain it into `errors` (returns immediately).
+        // Drain the settled error (returns immediately). This CONSUMES the
+        // child's deferred fire-and-forget error so it cannot resurface at
+        // the spawner; the value itself is re-read in INPUT order below —
+        // a settled Error future rethrows on every await.
         (await f) catch (e) {
-          let e => { errors.push(e); 0 }
+          let e => null
         };
       }
       // Drop `f` (failed or cancelled) and keep going.
       remaining = remaining.slice(0, i).concat(remaining.slice(i + 1, remaining.length()));
     }
     if (winners.length() == 0) {
+      // Everything settled without a success: collect the errors by walking
+      // the ORIGINAL futures so `AllFailed.errors` is in INPUT order (the
+      // main loop observes settlement order). Cancelled inputs are skipped —
+      // they neither win nor contribute an error.
+      let errors: Err[] = [];
+      let j = 0;
+      while (j < futures.length()) {
+        let g = futures[j];
+        if (g.is_error()) {
+          (await g) catch (e) {
+            let e => { errors.push(e); null }
+          };
+        }
+        j = j + 1;
+      }
       // The typed let drives bidirectional checking: a BARE generic literal
       // records no class type args (TIR does not infer literal type args from
       // fields), but checking it against the annotation records

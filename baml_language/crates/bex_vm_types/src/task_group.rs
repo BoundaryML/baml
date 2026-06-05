@@ -8,7 +8,7 @@
 //! registry.
 //!
 //! Admission is the engine's responsibility: a spawned body task calls
-//! [`TaskGroupInner::acquire`] *before* running its body (and without holding
+//! [`TaskGroupTicket::acquire`] *before* running its body (and without holding
 //! the heap permit, so a parked task doesn't block GC). The returned
 //! [`TaskGroupPermit`] releases the slot on drop and wakes the next waiter.
 
@@ -268,9 +268,12 @@ impl TaskGroupInner {
                 // popped and the grant. Undo and try the next waiter.
                 st.active -= 1;
                 st.members.remove(&id);
-                continue;
             }
-            break;
+            // Keep promoting while there is spare capacity: a `set_limit`
+            // raising the cap by N must admit up to N parked waiters
+            // immediately (per its docstring), not just the first; the
+            // `while` condition already stops a single-slot release (permit
+            // drop / cancel) after one admission.
         }
     }
 }

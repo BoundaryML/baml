@@ -3086,11 +3086,14 @@ impl BexEngine {
                     let inactive = thread.release();
                     self.maybe_collect_garbage().await;
                     let outcome = if waiters.is_empty() {
-                        // No pending inputs to wake us — only cancellation can.
-                        // `race`/`any` guard against empty arrays in the stdlib,
-                        // so reaching here means every named future vanished;
-                        // wait for cancel rather than busy-spin or panic in
-                        // `select_all` (which rejects an empty iterator).
+                        // Empty INPUT array: `future_ready` returns a waiter
+                        // for every id — already-settled inputs yield
+                        // immediately-ready waiters — so empty waiters ⟺
+                        // empty `future_ids`. Per BEP-034 (matching JS
+                        // `Promise.race([])`), racing an empty array never
+                        // settles: park on cancellation rather than busy-spin
+                        // or panic in `select_all` (which rejects an empty
+                        // iterator).
                         cancel.cancelled().await;
                         AwaitAnyOutcome::Cancelled
                     } else {

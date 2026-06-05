@@ -149,6 +149,12 @@ impl FutureManagerGuard<'_> {
     }
 
     pub fn fulfill_future(&mut self, id: FutureId, value: Value) -> Result<(), EngineError> {
+        // A competing terminal transition (cancel/fulfill) invalidates any
+        // parked fire-and-forget error for this id: the heap future is about
+        // to settle to a different terminal state, so the stash entry would
+        // otherwise outlive it — a stale "unhandled" error at the spawner's
+        // drain and a GC root held longer than needed.
+        self.holder_mut().deferred_errors.remove(&id);
         // Snapshot the heap Arc before borrowing self mutably for take_pending;
         // settle_ready needs it to fire the generational write barrier.
         let heap = ::std::sync::Arc::clone(self.tlab().heap());
@@ -222,6 +228,12 @@ impl FutureManagerGuard<'_> {
     }
 
     pub fn cancel_future(&mut self, id: FutureId) -> Result<(), EngineError> {
+        // A competing terminal transition (cancel/fulfill) invalidates any
+        // parked fire-and-forget error for this id: the heap future is about
+        // to settle to a different terminal state, so the stash entry would
+        // otherwise outlive it — a stale "unhandled" error at the spawner's
+        // drain and a GC root held longer than needed.
+        self.holder_mut().deferred_errors.remove(&id);
         if let Some((fut, _self_ptr)) = self.take_pending(id)? {
             // `settle_cancelled` fires the cancel token and the wake signal
             // internally. CAS-based, so this races safely with the producer's

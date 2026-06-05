@@ -2464,13 +2464,11 @@ impl<'db> TypeInferenceBuilder<'db> {
                         refs,
                     );
                 }
-                Self::collect_default_expr_forward_references(
-                    *spawn_body,
-                    body,
-                    later_params,
-                    shadowed,
-                    refs,
-                );
+                // The spawn BODY is deferred (wrapped in a synthetic lambda
+                // and evaluated on the spawned task) — only `name` and the
+                // `with` transformers are evaluated eagerly, so a default
+                // capturing a later parameter inside `spawn { ... }` is fine.
+                let _ = spawn_body;
             }
             Expr::Await { future } => {
                 Self::collect_default_expr_forward_references(
@@ -3969,6 +3967,21 @@ impl<'db> TypeInferenceBuilder<'db> {
         let fut_ty = self.infer_expr(future, body);
         match fut_ty {
             Ty::Future(value, _error, _) => *value,
+            // `await` DISTRIBUTES over a union of futures (BEP-034): `Future`
+            // is invariant, so combining differently-typed futures (if/else,
+            // array elements) yields `Future<A, E1> | Future<B, E2>` — not a
+            // future of a union. Awaiting it gives value `A | B`; the error
+            // side (`E1 | E2`) is contributed by the throws analysis.
+            Ty::Union(ref members, _)
+                if !members.is_empty() && members.iter().all(|m| matches!(m, Ty::Future(..))) =>
+            {
+                let mut values = members.iter().filter_map(|m| match m {
+                    Ty::Future(value, _, _) => Some(value.as_ref().clone()),
+                    _ => None,
+                });
+                let first = values.next().expect("non-empty checked above");
+                values.fold(first, |acc, v| crate::generics::union_ty(&acc, &v))
+            }
             Ty::Unknown { .. } | Ty::Error { .. } => fut_ty,
             other => {
                 // `await` requires a Future operand. Emit a
@@ -6704,10 +6717,19 @@ impl<'db> TypeInferenceBuilder<'db> {
             generic_param_bounds,
             params,
             ret,
+            throws,
             attr,
-            ..
         } = &arg_ty
             && let Some(effective) = self.lambda_effective_throws.get(&arg_expr_id)
+            // Only an OPEN surface is replaced: an omitted-throws lambda's
+            // surface is `Unknown`, and a lambda checked against an
+            // effect-polymorphic callback param carries the unbound effect
+            // TypeVar. An EXPLICIT (or contextual-concrete) `throws Foo | Bar`
+            // is a deliberate contract wider than the current body facts —
+            // narrowing it to today's effective set would instantiate a
+            // higher-order `E` too tightly.
+            && (matches!(throws.as_ref(), Ty::Unknown { .. })
+                || crate::generics::contains_typevar(throws))
         {
             return Ty::Function {
                 generic_params: generic_params.clone(),
