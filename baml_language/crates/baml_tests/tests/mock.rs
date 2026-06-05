@@ -579,6 +579,203 @@ async fn mock_spawn_inside_scope_sees_the_mock() {
     assert_eq!(output.result, Ok(BexExternalValue::Int(991)));
 }
 
+/// Nested spawns: a spawn created inside another spawn also inherits the mock
+/// (the snapshot propagates down the spawn chain), and both calls bump the
+/// shared call_count.
+#[tokio::test]
+async fn mock_nested_spawns_inherit_the_mock() {
+    let output = baml_test!(
+        r#"
+        function target() -> int { 1 }
+
+        function main() -> int {
+            let m = baml.mock.new(target);
+            m.replace(() -> int { 99 });
+            let r = 0;
+            baml.mock.scope(m, () -> void {
+                let outer = spawn {
+                    let inner = spawn { target() };   // nested spawn sees the mock
+                    let i = await inner;              // 99
+                    target() + i                      // 99 + 99 = 198
+                };
+                r = await outer;
+            });
+            r + m.call_count                          // 198 + 2 (shared) = 200
+        }
+        "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Int(200)));
+}
+
+/// Nested mocks + nested spawns: a nested spawn under two stacked mocks sees the
+/// innermost (most-recently-activated) mock.
+#[tokio::test]
+async fn mock_nested_mocks_with_nested_spawns_pick_innermost() {
+    let output = baml_test!(
+        r#"
+        function greeting() -> string { "real" }
+
+        function main() -> string {
+            let a = baml.mock.new(greeting);
+            a.replace(() -> string { "A" });
+            let b = baml.mock.new(greeting);
+            b.replace(() -> string { "B" });
+            let r = "";
+            baml.mock.scope(a, () -> void {
+                baml.mock.scope(b, () -> void {
+                    let f = spawn {
+                        let g = spawn { greeting() };   // nested spawn under a+b
+                        await g
+                    };
+                    r = await f;
+                });
+            });
+            r                                           // innermost b wins -> "B"
+        }
+        "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::String("B".into())));
+}
+
+/// Snapshot-at-creation: spawns capture the active mocks at the moment they are
+/// created, so spawns launched at different scope depths see different mock
+/// state — even when awaited later.
+#[tokio::test]
+async fn mock_spawn_snapshots_active_mocks_at_creation() {
+    let output = baml_test!(
+        r#"
+        function greeting() -> string { "real" }
+
+        function main() -> string {
+            let a = baml.mock.new(greeting);
+            a.replace(() -> string { "A" });
+            let b = baml.mock.new(greeting);
+            b.replace(() -> string { "B" });
+            let outer_r = "";
+            let inner_r = "";
+            baml.mock.scope(a, () -> void {
+                let fa = spawn { greeting() };          // snapshot = [a]
+                baml.mock.scope(b, () -> void {
+                    let fb = spawn { greeting() };      // snapshot = [a, b], b wins
+                    inner_r = await fb;                 // "B"
+                });
+                outer_r = await fa;                     // still "A" (its own snapshot)
+            });
+            outer_r + inner_r                           // "AB"
+        }
+        "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::String("AB".into())));
+}
+
+/// Isolation: a spawn created OUTSIDE the scope (not descended from it) never
+/// sees the mock, even though the mock object exists.
+#[tokio::test]
+async fn mock_spawn_outside_scope_does_not_see_mock() {
+    let output = baml_test!(
+        r#"
+        function target() -> int { 1 }
+
+        function main() -> int {
+            let m = baml.mock.new(target);
+            m.replace(() -> int { 99 });
+            let outside = spawn { target() };   // created before the scope is active
+            let ro = await outside;             // real -> 1
+            let ri = 0;
+            baml.mock.scope(m, () -> void {
+                let inside = spawn { target() };
+                ri = await inside;              // mocked -> 99
+            });
+            ro * 100 + ri                       // 100 + 99 = 199
+        }
+        "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Int(199)));
+}
+
+/// Multiple concurrent spawns under one mock all see it, and the shared
+/// call_count aggregates every spawned call (after they are awaited).
+#[tokio::test]
+async fn mock_multiple_concurrent_spawns_aggregate_call_count() {
+    let output = baml_test!(
+        r#"
+        function target() -> int { 1 }
+
+        function main() -> int {
+            let m = baml.mock.new(target);
+            m.replace(() -> int { 7 });
+            let total = 0;
+            baml.mock.scope(m, () -> void {
+                let f1 = spawn { target() };
+                let f2 = spawn { target() };
+                let f3 = spawn { target() };
+                total = (await f1) + (await f2) + (await f3);   // 7+7+7 = 21
+            });
+            total + m.call_count                                // 21 + 3 = 24
+        }
+        "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Int(24)));
+}
+
+/// Detached: a spawn created inside the scope keeps the mock active for the
+/// spawn's lifetime even after the originating scope has returned (its snapshot
+/// is independent of the parent's deactivation), so awaiting it afterward still
+/// hits the replacement.
+#[tokio::test]
+async fn mock_detached_spawn_outlives_scope() {
+    let output = baml_test!(
+        r#"
+        function target() -> int { 1 }
+
+        function main() -> int {
+            let m = baml.mock.new(target);
+            m.replace(() -> int { 99 });
+            let held = spawn { 0 };                 // placeholder future, replaced below
+            baml.mock.scope(m, () -> void {
+                held = spawn { target() };          // snapshot includes m
+            });
+            // The scope (and its deactivation) has now run; the detached spawn
+            // still sees the mock through its own snapshot.
+            await held                              // 99
+        }
+        "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Int(99)));
+}
+
+/// An instance mock (keyed on a receiver pointer) is honoured inside a spawn:
+/// the receiver crosses the parent->child VM boundary via the snapshot and still
+/// matches, while a different instance is unaffected.
+#[tokio::test]
+async fn mock_instance_mock_seen_in_spawn() {
+    let output = baml_test!(
+        r#"
+        class Counter {
+          count int
+          function bump(self) -> int { self.count + 1 }
+        }
+
+        function main() -> int {
+            let a = Counter { count: 0 };
+            let b = Counter { count: 10 };
+            let m = baml.mock.new(a.bump);   // instance mock on `a` only
+            m.replace(() -> int { -1 });
+            let ra = 0;
+            let rb = 0;
+            baml.mock.scope(m, () -> void {
+                let fa = spawn { a.bump() };   // mocked instance -> -1
+                let fb = spawn { b.bump() };   // different instance -> real 11
+                ra = await fa;
+                rb = await fb;
+            });
+            ra * 100 + rb                      // -1*100 + 11 = -89
+        }
+        "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Int(-89)));
+}
+
 // ─── Slice 8: recursion guard ─────────────────────────────────────────────────
 
 /// A replacement that calls the original by name resolves to the original (one

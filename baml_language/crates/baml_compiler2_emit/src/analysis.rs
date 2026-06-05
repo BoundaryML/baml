@@ -1558,8 +1558,13 @@ fn has_side_effect(kind: &StatementKind, rvalue_reads: &HashSet<Local>) -> bool 
     match kind {
         StatementKind::Assign { destination, value } => {
             // Check if this assignment modifies a variable (or field/index of a variable)
-            // that the rvalue reads from.
-            let base_local = get_base_local(destination);
+            // that the rvalue reads from. An assignment into a captured variable
+            // (e.g. a spawn/closure writing a result back to an outer local) has
+            // no base local; treat it conservatively as side-effecting so it is
+            // never inlined away.
+            let Some(base_local) = get_base_local(destination) else {
+                return true;
+            };
             if rvalue_reads.contains(&base_local) {
                 return true;
             }
@@ -1581,11 +1586,12 @@ fn has_side_effect(kind: &StatementKind, rvalue_reads: &HashSet<Local>) -> bool 
 
 /// Get the base local from a place, following field/index projections.
 ///
-/// Panics for `Place::Capture` — captures have no base local.
-fn get_base_local(place: &Place) -> Local {
+/// Returns `None` for `Place::Capture` (and projections rooted at a capture) —
+/// captures have no base local, so callers must handle that case conservatively.
+fn get_base_local(place: &Place) -> Option<Local> {
     match place {
-        Place::Local(local) => *local,
-        Place::Capture(_) => panic!("Place::Capture has no base local"),
+        Place::Local(local) => Some(*local),
+        Place::Capture(_) => None,
         Place::Field { base, .. } => get_base_local(base),
         Place::Index { base, .. } => get_base_local(base),
     }
