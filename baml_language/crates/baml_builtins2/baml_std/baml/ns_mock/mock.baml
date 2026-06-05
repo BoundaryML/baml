@@ -11,15 +11,16 @@ function new<T>(original: T) -> Mock<T> throws never {
   baml.mock.__new(original)
 }
 
-/// Activate `mock` for the dynamic extent of `body`, then deactivate it. If
-/// `body` throws, the mock is still deactivated as the error unwinds, then the
-/// error is re-raised (finally-style pop).
-function scope<T, E>(mock: Mock<T>, body: () -> void throws E) -> void throws E {
-  baml.mock.__enter(mock);
+/// Activate `mocks` for the dynamic extent of `body`, then deactivate them.
+/// `mocks` is a single `Mock` or an array of `Mock`s (applied in order, so later
+/// entries sit innermost). If `body` throws, the mocks are still deactivated as
+/// the error unwinds, then the error is re-raised (finally-style pop).
+function scope<T, E>(mocks: Mock<T>, body: () -> void throws E) -> void throws E {
+  baml.mock.__enter(mocks);
   body() catch (e) {
-    _ => { baml.mock.__exit(mock); throw e }
+    _ => { baml.mock.__exit(mocks); throw e }
   };
-  baml.mock.__exit(mock)
+  baml.mock.__exit(mocks)
 }
 
 /// Internal: build a `Mock<T>` from the target's runtime identity. Rejects
@@ -30,15 +31,16 @@ function __new<T>(original: T) -> Mock<T> throws never {
   $rust_function
 }
 
-/// Internal: push `mock` onto the active-mock table and reset its counter.
+/// Internal: push `mocks` (a single mock or an array) onto the active-mock
+/// table and reset their counters.
 //baml:mut_vm
-function __enter<T>(mock: Mock<T>) -> void throws never {
+function __enter<T>(mocks: Mock<T>) -> void throws never {
   $rust_function
 }
 
-/// Internal: pop `mock` off the active-mock table.
+/// Internal: pop `mocks` off the active-mock table.
 //baml:mut_vm
-function __exit<T>(mock: Mock<T>) -> void throws never {
+function __exit<T>(mocks: Mock<T>) -> void throws never {
   $rust_function
 }
 

@@ -6367,10 +6367,10 @@ fn baml.mock.new(original: void) -> baml.mock.Mock<void> {
 
 fn baml.mock.Mock.replace = builtin(vm)
 
-fn baml.mock.scope(mock: baml.mock.Mock<void>, body: () -> void throws never) -> void {
+fn baml.mock.scope(mocks: baml.mock.Mock<void>, body: () -> void throws never) -> void {
     // Locals:
     let _0: void // _0 // return
-    let _1: baml.mock.Mock<void> // mock // param
+    let _1: baml.mock.Mock<void> // mocks // param
     let _2: () -> void throws never // body // param
     let _3: void
     let _4: void

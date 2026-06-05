@@ -109,41 +109,62 @@ impl BamlNamespaceMock for PackageBamlImpl {
         ))
     }
 
-    fn __enter(vm: &mut BexVm, mock: &Value) {
-        let Some(ptr) = mock.as_object_ptr() else {
-            return;
-        };
-        let key = match vm.get_object(ptr) {
-            Object::Mock(m) => m.function_key.clone(),
-            _ => return,
-        };
-        // Reset the counter only on the first activation. Re-entering an
-        // already-active mock (a nested scope of the same mock) must keep the
-        // count accumulating across the nesting; it is reset again only once the
-        // mock fully leaves scope and is re-entered fresh.
-        let already_active = vm
-            .mock_table
-            .get(&key)
-            .is_some_and(|stack| stack.contains(&ptr));
-        if !already_active && let Object::Mock(m) = vm.get_object(ptr) {
-            m.reset_call_count();
+    fn __enter(vm: &mut BexVm, mocks: &Value) {
+        // BEP-058: `scope` accepts a single `Mock` or an array of `Mock`s; an
+        // array activates each in order, so later elements sit innermost.
+        for ptr in scope_mock_ptrs(vm, *mocks) {
+            let key = match vm.get_object(ptr) {
+                Object::Mock(m) => m.function_key.clone(),
+                _ => continue,
+            };
+            // Reset the counter only on the first activation. Re-entering an
+            // already-active mock (a nested scope of the same mock) must keep the
+            // count accumulating across the nesting; it is reset again only once
+            // the mock fully leaves scope and is re-entered fresh.
+            let already_active = vm
+                .mock_table
+                .get(&key)
+                .is_some_and(|stack| stack.contains(&ptr));
+            if !already_active && let Object::Mock(m) = vm.get_object(ptr) {
+                m.reset_call_count();
+            }
+            vm.mock_table.entry(key).or_default().push(ptr);
         }
-        vm.mock_table.entry(key).or_default().push(ptr);
     }
 
-    fn __exit(vm: &mut BexVm, mock: &Value) {
-        let Some(ptr) = mock.as_object_ptr() else {
-            return;
-        };
-        let key = match vm.get_object(ptr) {
-            Object::Mock(m) => m.function_key.clone(),
-            _ => return,
-        };
-        if let Some(stack) = vm.mock_table.get_mut(&key) {
-            stack.pop();
-            if stack.is_empty() {
-                vm.mock_table.remove(&key);
+    fn __exit(vm: &mut BexVm, mocks: &Value) {
+        // Deactivate in reverse activation order so the stack unwinds LIFO.
+        for ptr in scope_mock_ptrs(vm, *mocks).into_iter().rev() {
+            let key = match vm.get_object(ptr) {
+                Object::Mock(m) => m.function_key.clone(),
+                _ => continue,
+            };
+            if let Some(stack) = vm.mock_table.get_mut(&key) {
+                stack.pop();
+                if stack.is_empty() {
+                    vm.mock_table.remove(&key);
+                }
             }
         }
+    }
+}
+
+/// The mock pointers a `scope` argument activates: a single `Object::Mock`, or
+/// every `Object::Mock` element of an `Object::Array` (in array order).
+fn scope_mock_ptrs(vm: &BexVm, value: Value) -> Vec<bex_vm_types::HeapPtr> {
+    let Some(ptr) = value.as_object_ptr() else {
+        return Vec::new();
+    };
+    match vm.get_object(ptr) {
+        Object::Mock(_) => vec![ptr],
+        Object::Array(arr) => arr
+            .lock()
+            .iter()
+            .filter_map(|v| {
+                let p = v.as_object_ptr()?;
+                matches!(vm.get_object(p), Object::Mock(_)).then_some(p)
+            })
+            .collect(),
+        _ => Vec::new(),
     }
 }

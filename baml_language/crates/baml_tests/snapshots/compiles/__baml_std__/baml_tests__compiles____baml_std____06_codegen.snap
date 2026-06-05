@@ -4144,10 +4144,10 @@ function baml.mock.Mock.to_json(self: baml.mock.Mock) -> baml.json.json {
     return
 }
 
-function baml.mock.__enter(mock: baml.mock.Mock<void>) -> void {
+function baml.mock.__enter(mocks: baml.mock.Mock<void>) -> void {
 }
 
-function baml.mock.__exit(mock: baml.mock.Mock<void>) -> void {
+function baml.mock.__exit(mocks: baml.mock.Mock<void>) -> void {
 }
 
 function baml.mock.__new(original: void) -> baml.mock.Mock<void> {
@@ -4159,8 +4159,8 @@ function baml.mock.new(original: void) -> baml.mock.Mock<void> {
     return
 }
 
-function baml.mock.scope(mock: baml.mock.Mock<void>, body: () -> void throws never) -> void {
-    load_var mock
+function baml.mock.scope(mocks: baml.mock.Mock<void>, body: () -> void throws never) -> void {
+    load_var mocks
     call baml.mock.__enter
     pop 1
     load_var body
@@ -4169,14 +4169,14 @@ function baml.mock.scope(mock: baml.mock.Mock<void>, body: () -> void throws nev
     jump L0
     load_var e
     throw_if_panic
-    load_var mock
+    load_var mocks
     call baml.mock.__exit
     pop 1
     load_var e
     throw
 
   L0:
-    load_var mock
+    load_var mocks
     call baml.mock.__exit
     return
 }

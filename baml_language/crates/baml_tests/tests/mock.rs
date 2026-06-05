@@ -532,6 +532,137 @@ async fn mock_precedence_instance_beats_class() {
     assert_eq!(output.result, Ok(BexExternalValue::Int(1)));
 }
 
+/// Deep same-key nesting: four mocks stacked on one target, each scope's
+/// innermost mock wins, and every exit restores the next one down — the full
+/// push/pop of the per-key stack, verified at every level.
+#[tokio::test]
+async fn mock_deep_nesting_restores_each_level() {
+    let output = baml_test!(
+        r#"
+        function greeting() -> string { "real" }
+
+        function main() -> string {
+            let a = baml.mock.new(greeting); a.replace(() -> string { "a" });
+            let b = baml.mock.new(greeting); b.replace(() -> string { "b" });
+            let c = baml.mock.new(greeting); c.replace(() -> string { "c" });
+            let d = baml.mock.new(greeting); d.replace(() -> string { "d" });
+            let log = "";
+            baml.mock.scope(a, () -> void {
+                log = log + greeting();              // a
+                baml.mock.scope(b, () -> void {
+                    log = log + greeting();          // b
+                    baml.mock.scope(c, () -> void {
+                        log = log + greeting();      // c
+                        baml.mock.scope(d, () -> void {
+                            log = log + greeting();  // d
+                        });
+                        log = log + greeting();      // c (d popped)
+                    });
+                    log = log + greeting();          // b (c popped)
+                });
+                log = log + greeting();              // a (b popped)
+            });
+            log = log + greeting();                  // real (all popped)
+            log                                      // "abcdcbareal"
+        }
+        "#
+    );
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("abcdcbareal".into()))
+    );
+}
+
+/// Cross-key precedence with re-restoration: a class (Free) mock and an instance
+/// mock on the same call. Instance wins only while its scope is active; exiting
+/// it falls back to the class mock, then to the real method.
+#[tokio::test]
+async fn mock_precedence_chain_instance_over_class_with_restore() {
+    let output = baml_test!(
+        r#"
+        class Counter {
+          count int
+          function bump(self) -> int { self.count + 1 }
+        }
+
+        function main() -> int {
+            let a = Counter { count: 0 };
+            let cls = baml.mock.new(Counter.bump);   // Free key (class-wide)
+            cls.replace((self: Counter) -> int { 5 });
+            let inst = baml.mock.new(a.bump);        // Instance key (a only)
+            inst.replace(() -> int { 7 });
+            let log = 0;
+            baml.mock.scope(cls, () -> void {
+                log = log * 10 + a.bump();           // class -> 5
+                baml.mock.scope(inst, () -> void {
+                    log = log * 10 + a.bump();       // instance more specific -> 7
+                });
+                log = log * 10 + a.bump();           // instance popped -> class 5
+            });
+            log = log * 10 + a.bump();               // all popped -> real 1
+            log                                      // 5,7,5,1 -> 5751
+        }
+        "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Int(5751)));
+}
+
+/// Cross-key precedence on the generic axis: a generic-specialization mock
+/// (`identity<int>`) and a bare-generic mock (`identity`) active together. The
+/// specialization wins for `identity<int>`; other instantiations fall through to
+/// the bare mock. Verified via call_count attribution.
+#[tokio::test]
+async fn mock_precedence_chain_generic_over_bare() {
+    let output = baml_test!(
+        r#"
+        function identity<T>(x: T) -> T { x }
+
+        function main() -> int {
+            let spec = baml.mock.new(identity<int>);   // Generic key
+            spec.replace((x: int) -> int { x });
+            let bare = baml.mock.new(identity);        // Free key (all instantiations)
+            bare.replace(<T>(x: T) -> T { x });
+            baml.mock.scope(bare, () -> void {
+                let _ = identity<int>(5);              // only bare active -> bare
+                baml.mock.scope(spec, () -> void {
+                    let _ = identity<int>(5);          // specialization wins -> spec
+                    let _ = identity<string>("x");     // no <string> spec -> bare
+                });
+            });
+            spec.call_count * 10 + bare.call_count     // spec=1, bare=2 -> 12
+        }
+        "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Int(12)));
+}
+
+/// Array form `scope([a, b], body)` (BEP: `scope(mocks: Mock | Mock[])`):
+/// activates every mock in one call, applied in order so later entries sit
+/// innermost. Here `b` (innermost) is a pure spy, so it is counted and delegates
+/// down to `a`'s replacement — proving BOTH were activated, in order.
+#[tokio::test]
+async fn mock_scope_array_activates_all_in_order() {
+    let output = baml_test!(
+        r#"
+        function greeting() -> string { "real" }
+
+        function main() -> int {
+            let a = baml.mock.new(greeting);
+            a.replace(() -> string { "A" });
+            let b = baml.mock.new(greeting);     // pure spy, innermost
+            let r = "";
+            baml.mock.scope([a, b], () -> void {
+                r = greeting();                  // b (spy) counted, delegates to a -> "A"
+            });
+            let after = greeting();              // both popped -> real (len 4)
+            r.length() * 1000 + after.length() * 100 + b.call_count * 10 + a.call_count
+            // "A"(1)*1000 + "real"(4)*100 + b=1*10 + a=1 = 1411
+        }
+        "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Int(1411)));
+}
+
 // ─── Slice 10: non-mockable internals ─────────────────────────────────────────
 
 /// Mocking the mock machinery itself (a `baml.mock.*` internal) is rejected

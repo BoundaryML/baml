@@ -1305,17 +1305,17 @@ function baml.mock.new<T>(original: T) -> baml.mock.Mock<T> throws never {
     baml.mock.__new<T>(original) : baml.mock.Mock<T>
   }
 }
-function baml.mock.scope<T, E>(mock: baml.mock.Mock<T>, body: () -> void throws E) -> void throws E {
+function baml.mock.scope<T, E>(mocks: baml.mock.Mock<T>, body: () -> void throws E) -> void throws E {
   { : void
-    baml.mock.__enter(mock) : void
+    baml.mock.__enter(mocks) : void
     catch (body<E>() : void) : void
       catch (e)
         _ =>
           { : never
-            baml.mock.__exit(mock) : void
+            baml.mock.__exit(mocks) : void
             throw e : E
           }
-    baml.mock.__exit(mock) : void
+    baml.mock.__exit(mocks) : void
   }
 }
 class baml.mock.Mock {
