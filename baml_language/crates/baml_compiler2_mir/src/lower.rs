@@ -9696,7 +9696,7 @@ impl LoweringContext<'_> {
                 let index_ty = self.expr_ty(index_id);
                 let index_local = self.operand_to_local(index_op, index_ty);
                 let unwrapped_ty = base_ty.strip_null();
-                let kind = if matches!(&unwrapped_ty, Ty::List(..)) {
+                let kind = if matches!(&unwrapped_ty, Ty::List(..) | Ty::Uint8Array { .. }) {
                     IndexKind::Array
                 } else {
                     IndexKind::Map
