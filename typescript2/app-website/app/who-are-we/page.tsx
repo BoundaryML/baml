@@ -51,13 +51,6 @@ const teamMembers: TeamMember[] = [
     bio: 'Antonio builds the language internals — type checker, codegen, the bits nobody sees but everyone relies on. He believes a language is judged by how forgiving it is at 2am.',
   },
   {
-    name: 'Greg Hale',
-    role: 'Engineer',
-    image: '/greg.jpg',
-    linkedin: 'https://www.linkedin.com/in/greg-hale-5684b1bb/',
-    bio: 'Greg works at the seam between product and compiler — translating things developers want to do into things the compiler can guarantee. He cares deeply about the path from "I have an idea" to "it just works".',
-  },
-  {
     bio: 'Paulo works with teams building production AI systems, turning hard-won implementation feedback into sharper workflows for BAML users.',
     image: '/testimonials/people/paulo.png',
     name: 'Paulo Rossi',
@@ -65,6 +58,7 @@ const teamMembers: TeamMember[] = [
   },
   {
     bio: 'Kai works across the product surface and developer experience, helping BAML feel direct, legible, and fast to adopt in real codebases.',
+    image: '/kai.png',
     name: 'Kai',
     role: 'Engineer',
   },

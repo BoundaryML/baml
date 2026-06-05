@@ -1,8 +1,8 @@
 'use client';
 
-import { AnimatePresence, motion, useInView } from 'motion/react';
+import { motion, useInView } from 'motion/react';
 import Image from 'next/image';
-import { useEffect, useRef, useState } from 'react';
+import { useRef } from 'react';
 import { SiGo, SiRuby, SiRust, SiTypescript, SiOpenjdk } from 'react-icons/si';
 import type { IconType } from 'react-icons';
 
@@ -37,142 +37,6 @@ const LANGS: Lang[] = [
   { name: 'and more', glyph: '+' },
 ];
 
-type Snippet = { filename: string; code: string; lang: string };
-
-const BAML_SNIPPET: Snippet = {
-  filename: 'extract.baml',
-  lang: 'baml',
-  code: `function ExtractInvoice(text: string) -> Invoice {
-  client "openai/gpt-4o"
-  prompt #"
-    Extract the invoice from:
-    {{ text }}
-    {{ ctx.output_format }}
-  "#
-}`,
-};
-
-const LANG_SNIPPETS: Record<string, Snippet> = {
-  Python: {
-    filename: 'main.py',
-    lang: 'python',
-    code: `from baml_client import b
-
-invoice = b.ExtractInvoice(text)
-print(invoice.total)`,
-  },
-  TypeScript: {
-    filename: 'main.ts',
-    lang: 'typescript',
-    code: `import { b } from "baml_client";
-
-const invoice = await b.ExtractInvoice(text);
-console.log(invoice.total);`,
-  },
-  Ruby: {
-    filename: 'main.rb',
-    lang: 'ruby',
-    code: `require "baml_client"
-
-invoice = Baml::Client.new.extract_invoice(text: text)
-puts invoice.total`,
-  },
-  Go: {
-    filename: 'main.go',
-    lang: 'go',
-    code: `import baml "example.com/app/baml_client"
-
-invoice, _ := baml.ExtractInvoice(ctx, text)
-fmt.Println(invoice.Total)`,
-  },
-  Rust: {
-    filename: 'main.rs',
-    lang: 'rust',
-    code: `use baml_client::b;
-
-let invoice = b::extract_invoice(&ctx, text).await?;
-println!("{}", invoice.total);`,
-  },
-  Java: {
-    filename: 'Main.java',
-    lang: 'java',
-    code: `import com.boundaryml.baml_client.B;
-
-Invoice invoice = B.extractInvoice(text);
-System.out.println(invoice.total);`,
-  },
-  'and more': {
-    filename: 'any.lang',
-    lang: 'plaintext',
-    code: `// BAML generates a typed SDK for every language
-// your stack speaks. One source. Every client.`,
-  },
-};
-
-type ShikiToken = { content: string; color?: string };
-type ShikiTokens = ShikiToken[][];
-
-function useTokenizedSnippets(
-  snippets: { key: string; lang: string; code: string }[],
-): Record<string, ShikiTokens> {
-  const [tokens, setTokens] = useState<Record<string, ShikiTokens>>(() =>
-    Object.fromEntries(
-      snippets.map((s) => [
-        s.key,
-        s.code.split('\n').map((line) => [{ content: line }]),
-      ]),
-    ),
-  );
-
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const { createHighlighter } = await import('shiki');
-        const { bamlTextmate, bamlJinjaTextmate } = await import(
-          '@/lib/mdx/shiki-grammars'
-        );
-        const builtinLangs = Array.from(
-          new Set(
-            snippets
-              .map((s) => s.lang)
-              .filter((l) => l !== 'baml' && l !== 'plaintext'),
-          ),
-        );
-        const highlighter = await createHighlighter({
-          langs: [...builtinLangs, bamlJinjaTextmate, bamlTextmate],
-          themes: ['github-light'],
-        });
-        const out: Record<string, ShikiTokens> = {};
-        for (const s of snippets) {
-          if (s.lang === 'plaintext') {
-            out[s.key] = s.code
-              .split('\n')
-              .map((line) => [{ content: line, color: '#6E7781' }]);
-            continue;
-          }
-          const r = highlighter.codeToTokens(s.code, {
-            lang: s.lang as any,
-            theme: 'github-light',
-          });
-          out[s.key] = r.tokens.map((line) =>
-            line.map((t) => ({ content: t.content, color: t.color })),
-          );
-        }
-        if (!cancelled) setTokens(out);
-      } catch {
-        /* fall back to plain text */
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  return tokens;
-}
-
 // Geometry — keep SVG and tile layout in lockstep.
 const SVG_WIDTH = 880;
 const SVG_HEIGHT = 240;
@@ -181,23 +45,6 @@ const TILE_COUNT = LANGS.length;
 export function LanguageFanout() {
   const ref = useRef<HTMLDivElement>(null);
   const inView = useInView(ref, { amount: 0.3, once: true });
-  const [hovered, setHovered] = useState<string | null>(null);
-
-  const activeSnippet =
-    hovered === null || hovered === 'BAML'
-      ? { ...BAML_SNIPPET, name: 'BAML' }
-      : { ...(LANG_SNIPPETS[hovered] ?? BAML_SNIPPET), name: hovered };
-
-  const tokenizedSnippets = useTokenizedSnippets([
-    { key: 'BAML', lang: BAML_SNIPPET.lang, code: BAML_SNIPPET.code },
-    ...Object.entries(LANG_SNIPPETS).map(([k, s]) => ({
-      key: k,
-      lang: s.lang,
-      code: s.code,
-    })),
-  ]);
-  const activeTokens = tokenizedSnippets[activeSnippet.name] ?? [];
-
   // End-point x positions (each tile center, in viewBox coords).
   const slotWidth = SVG_WIDTH / TILE_COUNT;
   const tileXs = Array.from(
@@ -311,8 +158,6 @@ export function LanguageFanout() {
               initial={{ opacity: 0, y: -16, scale: 0.92 }}
               animate={inView ? { opacity: 1, y: 0, scale: 1 } : {}}
               transition={{ duration: 0.6, ease: [0.22, 0.61, 0.36, 1] }}
-              onPointerEnter={() => setHovered('BAML')}
-              onPointerLeave={() => setHovered(null)}
               style={{
                 position: 'relative',
                 display: 'inline-flex',
@@ -551,8 +396,6 @@ export function LanguageFanout() {
                   delay: 0.7 + i * 0.06,
                   ease: 'easeOut',
                 }}
-                onPointerEnter={() => setHovered(lang.name)}
-                onPointerLeave={() => setHovered(null)}
                 style={{
                   display: 'flex',
                   flexDirection: 'column',
@@ -635,160 +478,6 @@ export function LanguageFanout() {
               </motion.div>
             ))}
           </div>
-
-          {/* Hover-driven floating snippet popover */}
-          <AnimatePresence>
-            {hovered !== null && (
-              <motion.div
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: hovered === 'BAML' ? -6 : 6 }}
-                initial={{ opacity: 0, y: hovered === 'BAML' ? -6 : 6 }}
-                key={hovered}
-                style={{
-                  background: '#F8F5FF',
-                  border: '1px solid rgba(109,40,217,0.22)',
-                  borderRadius: 8,
-                  boxShadow:
-                    '0 0 0 1px rgba(109,40,217,0.06), 0 14px 32px -22px rgba(109,40,217,0.45)',
-                  left:
-                    hovered === 'BAML'
-                      ? '50%'
-                      : `${(((LANGS.findIndex((l) => l.name === hovered) + 0.5) / TILE_COUNT) * 100).toFixed(2)}%`,
-                  maxWidth: 480,
-                  minWidth: 320,
-                  overflow: 'hidden',
-                  pointerEvents: 'none',
-                  position: 'absolute',
-                  top: hovered === 'BAML' ? 152 : undefined,
-                  bottom: hovered === 'BAML' ? undefined : 132,
-                  transform: 'translateX(-50%)',
-                  width: 'max-content',
-                  zIndex: 5,
-                }}
-                transition={{ duration: 0.2, ease: [0.22, 0.61, 0.36, 1] }}
-              >
-                <div
-                  style={{
-                    alignItems: 'center',
-                    background: 'rgba(109,40,217,0.06)',
-                    borderBottom: '1px solid rgba(109,40,217,0.16)',
-                    color: MUTED,
-                    display: 'grid',
-                    gridTemplateColumns: '46px 1fr 60px',
-                    fontFamily: MONO,
-                    fontSize: 10.5,
-                    height: 26,
-                    letterSpacing: '0.04em',
-                    padding: '0 10px',
-                  }}
-                >
-                  <div style={{ display: 'flex', gap: 4 }}>
-                    <span
-                      style={{
-                        background: '#E5A8A8',
-                        borderRadius: '50%',
-                        height: 8,
-                        width: 8,
-                      }}
-                    />
-                    <span
-                      style={{
-                        background: '#E5C58A',
-                        borderRadius: '50%',
-                        height: 8,
-                        width: 8,
-                      }}
-                    />
-                    <span
-                      style={{
-                        background: '#A8D0A0',
-                        borderRadius: '50%',
-                        height: 8,
-                        width: 8,
-                      }}
-                    />
-                  </div>
-                  <span style={{ textAlign: 'center' }}>
-                    {activeSnippet.filename}
-                  </span>
-                  <span
-                    style={{
-                      color: ACCENT,
-                      fontSize: 9.5,
-                      fontWeight: 600,
-                      letterSpacing: '0.12em',
-                      textAlign: 'right',
-                      textTransform: 'uppercase',
-                    }}
-                  >
-                    {activeSnippet.name}
-                  </span>
-                </div>
-                <div
-                  style={{
-                    background: '#FCFAFF',
-                    display: 'flex',
-                    overflow: 'auto',
-                  }}
-                >
-                  <div
-                    aria-hidden
-                    style={{
-                      background: 'rgba(109,40,217,0.05)',
-                      borderRight: '1px solid rgba(109,40,217,0.12)',
-                      color: 'rgba(109,40,217,0.45)',
-                      flexShrink: 0,
-                      fontFamily: MONO,
-                      fontSize: 10.5,
-                      fontVariantNumeric: 'tabular-nums',
-                      lineHeight: '1.45em',
-                      padding: '10px 6px',
-                      textAlign: 'right',
-                      userSelect: 'none',
-                      width: 28,
-                    }}
-                  >
-                    {activeTokens.map((_, i) => (
-                      <div key={`ln-${i}`}>{i + 1}</div>
-                    ))}
-                  </div>
-                  <pre
-                    style={{
-                      color: INK,
-                      flex: 1,
-                      fontFamily: MONO,
-                      fontSize: 11.5,
-                      lineHeight: 1.45,
-                      margin: 0,
-                      minWidth: 0,
-                      padding: '10px 14px',
-                      tabSize: 2,
-                      whiteSpace: 'pre',
-                    }}
-                  >
-                    <code style={{ fontFamily: MONO }}>
-                      {activeTokens.map((line, i) => (
-                        <div key={`l-${i}`} style={{ minHeight: '1.45em' }}>
-                          {line.length === 0 ? (
-                            <span>&#8203;</span>
-                          ) : (
-                            line.map((tok, j) => (
-                              <span
-                                key={`t-${i}-${j}`}
-                                style={{ color: tok.color || INK }}
-                              >
-                                {tok.content}
-                              </span>
-                            ))
-                          )}
-                        </div>
-                      ))}
-                    </code>
-                  </pre>
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
         </div>
       </div>
 

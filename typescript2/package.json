@@ -18,6 +18,9 @@
     "clean": "pnpm -r clean"
   },
   "packageManager": "pnpm@9.12.0",
+  "pnpm": {
+    "neverBuiltDependencies": ["node-liblzma"]
+  },
   "devDependencies": {
     "turbo": "^2.8.9",
     "typescript": "^5.7.0",

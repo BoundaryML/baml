@@ -102,6 +102,10 @@ export interface ExecutionPanelProps {
   initialFunctionName?: string;
   /** Optional allow-list for functions shown in the left sidebar. */
   visibleFunctionNames?: string[];
+  /** Optional per-function example args JSON. When the user selects a function
+   *  from the sidebar and an entry exists here, the args input is pre-filled
+   *  (only when the args field is empty / `{}` so we don't clobber edits). */
+  argsByFunction?: Record<string, string>;
 }
 
 // ---------------------------------------------------------------------------
@@ -251,7 +255,7 @@ const CollectionRunView: FC<CollectionRunViewProps> = ({ run, expandedLogId, set
 // Component
 // ---------------------------------------------------------------------------
 
-export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersion, resultRenderers, onReload, onNavigateToSource, initialArgsJson, initialFunctionName, visibleFunctionNames }) => {
+export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersion, resultRenderers, onReload, onNavigateToSource, initialArgsJson, initialFunctionName, visibleFunctionNames, argsByFunction }) => {
   const [projectRoots, setProjectRoots] = useState<string[]>([]);
   const [projectUpdates, setProjectUpdates] = useState<Record<string, ProjectUpdate>>({});
   const [testTree, setTestTree] = useState<any>(null);
@@ -319,6 +323,19 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
   // Ref mirrors for cursor context handler (avoids stale closures in port.onMessage).
   const selectedFnRef = useRef(selectedFn);
   useEffect(() => { selectedFnRef.current = selectedFn; }, [selectedFn]);
+
+  // When the user switches function in the sidebar, fill args from the example
+  // map if the host provided one. Skips the very first run so initialArgsJson
+  // wins on mount.
+  const prevSelectedFnRef = useRef<string | null>(selectedFn);
+  useEffect(() => {
+    const prev = prevSelectedFnRef.current;
+    prevSelectedFnRef.current = selectedFn;
+    if (prev === selectedFn) return;
+    if (!selectedFn || !argsByFunction) return;
+    const example = argsByFunction[selectedFn];
+    if (example != null) setArgsJson(example);
+  }, [selectedFn, argsByFunction]);
   const controlFlowGraphRef = useRef(controlFlowGraph);
   useEffect(() => { controlFlowGraphRef.current = controlFlowGraph; }, [controlFlowGraph]);
 

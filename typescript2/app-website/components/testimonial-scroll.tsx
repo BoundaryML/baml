@@ -77,7 +77,7 @@ export function SocialProofTestimonials({
     <div className="h-full">
       <div className="px-10">
         <div className="relative max-h-[750px] overflow-hidden">
-          <div className="gap-0 md:columns-2 xl:columns-3">
+          <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
             {columns.map((col, i) => (
               <Marquee
                 className={cn({
