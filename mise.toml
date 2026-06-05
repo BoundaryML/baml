@@ -20,6 +20,8 @@ sccache = "0.10.0"
 "cargo:ripgrep" = "latest"
 "cargo:just" = "latest"
 "cargo:prek" = "0.3.13"
+"cargo:cargo-nextest" = "latest"
+"cargo:cargo-insta" = "latest"
 
 # Go tools
 # locked to match the version in .github/actions/setup-go/action.yml
