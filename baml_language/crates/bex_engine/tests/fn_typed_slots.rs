@@ -33,3 +33,20 @@ async fn clean_lambda_into_class_field() {
     "#).await;
     assert_eq!(r, BexExternalValue::Int(42));
 }
+
+/// Throws semantics around fn-typed slots: an omitted `throws` on a callback
+/// PARAM is effect-polymorphic (the callee forwards whatever the callback
+/// throws — it does NOT mean `throws never`), and a function without a
+/// `throws` clause infers its surface. Enforcement happens where a contract
+/// is EXPLICIT: a `throws never` caller passing a throwing lambda through a
+/// forwarding callee is rejected at compile time (E0096).
+#[tokio::test]
+#[should_panic(expected = "declared throws is `never`")]
+async fn throwing_lambda_violates_explicit_never_contract() {
+    run(r#"
+        function take_f(f: (int) -> int) -> int { f(20) }
+        function main() -> int throws never {
+            take_f((x: int) -> int { throw "boom" })
+        }
+    "#).await;
+}
