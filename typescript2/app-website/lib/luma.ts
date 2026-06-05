@@ -53,6 +53,8 @@ export async function getNextEvent(): Promise<LumaEvent | null> {
         method: 'GET',
         // Cache for 60 minutes
         next: { revalidate: 3600 },
+        // Hard timeout so a stalled connection can't hang a build/render.
+        signal: AbortSignal.timeout(8000),
       },
     );
 

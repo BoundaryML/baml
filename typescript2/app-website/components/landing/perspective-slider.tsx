@@ -1087,7 +1087,16 @@ export function CompactPerspectivePanel() {
     if (!el) return;
     const rect = el.getBoundingClientRect();
     const next = ((clientX - rect.left) / rect.width) * 100;
-    setPos(Math.max(0, Math.min(100, next)));
+    const clamped = Math.max(0, Math.min(100, next));
+    if (clamped < 18) {
+      setPos(0);
+      return;
+    }
+    if (clamped > 82) {
+      setPos(100);
+      return;
+    }
+    setPos(clamped);
   }, []);
 
   const onPointerDown = (e: ReactPointerEvent<HTMLDivElement>) => {
@@ -1300,7 +1309,16 @@ export function PerspectiveSlider() {
     if (!el) return;
     const rect = el.getBoundingClientRect();
     const next = ((clientX - rect.left) / rect.width) * 100;
-    setPos(Math.max(0, Math.min(100, next)));
+    const clamped = Math.max(0, Math.min(100, next));
+    if (clamped < 18) {
+      setPos(0);
+      return;
+    }
+    if (clamped > 82) {
+      setPos(100);
+      return;
+    }
+    setPos(clamped);
   }, []);
 
   const onPointerDown = (e: ReactPointerEvent<HTMLDivElement>) => {
