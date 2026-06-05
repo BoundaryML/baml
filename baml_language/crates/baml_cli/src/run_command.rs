@@ -1385,7 +1385,7 @@ impl RunArgs {
                 let params: Vec<String> = func
                     .param_names
                     .iter()
-                    .zip(func.param_types.iter())
+                    .zip(func.display_param_types.iter())
                     .enumerate()
                     .map(|(idx, (name, ty))| {
                         let opt = if func.param_has_default.get(idx).copied().unwrap_or(false) {
@@ -1396,16 +1396,22 @@ impl RunArgs {
                         format!("{name}: {ty}{opt}")
                     })
                     .collect();
+                let generic_suffix = if func.display_type_params.is_empty() {
+                    String::new()
+                } else {
+                    format!("<{}>", func.display_type_params.join(", "))
+                };
                 let suffix = if func.is_llm {
                     format!("  {}", dim.apply_to("[llm]"))
                 } else {
                     String::new()
                 };
                 println!(
-                    "  {}({}) -> {}{suffix}",
+                    "  {}{}({}) -> {}{suffix}",
                     func.display_name,
+                    generic_suffix,
                     params.join(", "),
-                    func.return_type,
+                    func.display_return_type,
                 );
             }
             println!();
@@ -1454,11 +1460,11 @@ impl RunArgs {
                 let params: Vec<serde_json::Value> = f
                     .param_names
                     .iter()
-                    .zip(f.param_types.iter())
+                    .zip(f.display_param_types.iter())
                     .map(|(name, ty)| {
                         serde_json::json!({
                             "name": name,
-                            "type": ty.to_string(),
+                            "type": ty,
                         })
                     })
                     .collect();
@@ -1466,8 +1472,9 @@ impl RunArgs {
                 serde_json::json!({
                     "name": f.display_name,
                     "qualified_name": f.qualified_name,
+                    "generic_params": &f.display_type_params,
                     "params": params,
-                    "return_type": f.return_type.to_string(),
+                    "return_type": &f.display_return_type,
                 })
             })
             .collect();

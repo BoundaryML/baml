@@ -66,6 +66,8 @@ function user.ExtractAny$parse(json: string, client: baml.llm.Client) -> baml.js
     store_var client
 
   L0:
+    load_type unknown
+    load_type baml.json.json
     load_const "ExtractAny"
     load_var json
     call baml.llm.parse
@@ -81,6 +83,8 @@ function user.ExtractAny$parse_stream(sse: baml.http.SseStream, client: baml.llm
     store_var client
 
   L0:
+    load_type baml.json.json$stream | null
+    load_type baml.json.json
     load_var2 2 1
     load_const "ExtractAny"
     call baml.llm.Client.__make_stream
@@ -112,6 +116,8 @@ function user.ExtractAny$stream(client: baml.llm.Client) -> baml.llm.Stream<baml
     store_var client
 
   L0:
+    load_type baml.json.json$stream | null
+    load_type baml.json.json
     load_var client
     load_const "ExtractAny"
     alloc_map 0

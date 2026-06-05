@@ -112,6 +112,30 @@ async fn class_generic_bound_member_access_runs_in_class_method() {
     );
 }
 
+#[tokio::test]
+async fn function_class_generic_bound_member_access_runs() {
+    let output = baml_test!(
+        r#"
+        class Named {
+            name: string
+        }
+
+        function get_name<T extends Named>(value: T) -> string {
+            return value.name
+        }
+
+        function main() -> string {
+            return get_name(Named { name: "Ada" })
+        }
+        "#
+    );
+
+    assert_eq!(
+        output.result.unwrap(),
+        BexExternalValue::String("Ada".into())
+    );
+}
+
 #[test]
 fn class_generic_bound_accepts_implementing_class() {
     assert_no_compile_errors(

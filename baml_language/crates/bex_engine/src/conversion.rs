@@ -543,19 +543,15 @@ impl BexEngine {
                         });
                     }
                 };
-                // The host's returned value is validated against `ret` when
-                // the call completes. A generic return type erases to
-                // `Ty::Void` at MIR lowering (the post-erasure form of an
-                // unbounded TypeVar; see [convert_tir2_ty]); a return type
-                // explicitly declared `unknown` reaches here as
-                // `Ty::BuiltinUnknown`. The return validator treats both as
-                // "accept anything" — letting the host inject a value of any
+                // The host's returned value is validated against `ret` when the
+                // call completes. A generic return type erases to
+                // `BuiltinUnknown` at runtime, which the return validator treats
+                // as "accept anything" — letting the host inject a value of any
                 // type into a position BAML treats as the instantiated type
                 // variable. Reject such a callable at bind time rather than
-                // admit an unvalidatable return. (This also rejects a
-                // genuine bare `-> void` host callable, which is
-                // indistinguishable from an erased generic at runtime; such a
-                // callable must declare a concrete return type.)
+                // admit an unvalidatable return. (This also rejects a genuine
+                // bare `-> void` host callable; such a callable must declare a
+                // concrete return type.)
                 if ret_ty_has_unvalidatable_position(&ret) {
                     return Err(EngineError::TypeMismatch {
                         message: format!(

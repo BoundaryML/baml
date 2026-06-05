@@ -1,7 +1,3 @@
-interface:
-  message: "BAML uses `class` for structured types."
-  see: "class"
-
 const:
   message: "BAML uses `let` for variable bindings."
   see: "let"
@@ -27,8 +23,8 @@ async:
   see: "spawn"
 
 new:
-  message: "BAML constructors are regular functions (e.g. `ClassName.new()`)."
-  see: "function"
+  message: "BAML does not use `new` or `ClassName.new()`. Construct class values with object literals such as `User { name: \"Ada\" }`."
+  see: "class"
 
 this:
   message: "BAML uses `self` as the receiver in class methods."
@@ -41,12 +37,6 @@ export:
 
 require:
   message: "BAML auto-discovers all `.baml` files in your project — no imports needed."
-
-extends:
-  message: "BAML does not have inheritance. Use composition with nested classes."
-
-implements:
-  message: "BAML does not have inheritance. Use composition with nested classes."
 
 try:
   message: "BAML uses postfix `catch` / `catch_all` on expressions."

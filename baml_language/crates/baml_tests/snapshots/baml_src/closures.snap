@@ -66,7 +66,7 @@ function closures.$init_test_ns_closures_closures(registry: testing.TestCollecto
     return
 }
 
-function closures.ClsBox.unwrap(self: closures.ClsBox) -> void {
+function closures.ClsBox.unwrap(self: closures.ClsBox<unknown>) -> unknown {
     load_var self
     load_field .value
     return
@@ -187,6 +187,8 @@ function closures.closures_apply(f: (int, int) -> int throws never, a: int, b: i
 }
 
 function closures.closures_bound_formatter_mapper() -> string[] {
+    load_type string
+    load_type void
     load_const "a"
     load_const "b"
     alloc_array 2
@@ -245,6 +247,8 @@ function closures.closures_bound_throwing_method_reference_catches_error() -> in
 }
 
 function closures.closures_bound_validator_mapped() -> bool[] {
+    load_type bool
+    load_type void
     load_const 5
     load_const 15
     load_const 25
@@ -329,6 +333,8 @@ function closures.closures_strategy_swap() -> int[] {
 }
 
 function closures.closures_unbound_in_map() -> string[] {
+    load_type string
+    load_type void
     load_const "Alice"
     load_const "Smith"
     init_instance user.closures.ClsEmployee .first, .last

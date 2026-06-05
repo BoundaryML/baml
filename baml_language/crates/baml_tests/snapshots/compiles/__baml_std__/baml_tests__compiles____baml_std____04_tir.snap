@@ -455,6 +455,967 @@ class baml.http.SseStream$stream {
 
 --- <builtin>/baml/ns_io/io.baml ---
 
+--- <builtin>/baml/ns_iter/iter.baml ---
+class baml.iter.Done {
+}
+function baml.iter.Done.to_json(self: baml.iter.Done) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  map {  } : map<never, never>
+}
+function baml.iter.Done.from_json(j: baml.json.json) -> baml.iter.Done throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  Done {  } : baml.iter.Done
+}
+function baml.iter.Iterator.map<R, E2>(self: baml.iter.Iterator, fn: (unknown) -> R throws E2) -> baml.iter.Iterator<Item = R, Error = unknown | E2> throws never {
+  { : baml.iter.Map<Self.Item, R, Self.Error, E2>
+    Map { source: self, func: fn } : baml.iter.Map<Self.Item, R, Self.Error, E2>
+  }
+}
+function baml.iter.Iterator.filter<E2>(self: baml.iter.Iterator, predicate: (unknown) -> bool throws E2) -> baml.iter.Iterator<Item = unknown, Error = unknown | E2> throws never {
+  { : baml.iter.Filter<Self.Item, Self.Error, E2>
+    Filter { source: self, predicate: predicate } : baml.iter.Filter<Self.Item, Self.Error, E2>
+  }
+}
+function baml.iter.Iterator.filter_map<R, E2>(self: baml.iter.Iterator, fn: (unknown) -> R | null throws E2) -> baml.iter.Iterator<Item = R, Error = unknown | E2> throws never {
+  { : baml.iter.FilterMap<Self.Item, R, Self.Error, E2>
+    FilterMap { source: self, func: fn } : baml.iter.FilterMap<Self.Item, R, Self.Error, E2>
+  }
+}
+function baml.iter.Iterator.flat_map<R, E2, E3>(self: baml.iter.Iterator, fn: (unknown) -> baml.iter.Iterable<Item = R, Error = E3> throws E2) -> baml.iter.Iterator<Item = R, Error = unknown | E2 | E3> throws never {
+  { : baml.iter.FlatMap<Self.Item, R, Self.Error, E2, E3>
+    FlatMap { source: self, func: fn, inner: Done {  } } : baml.iter.FlatMap<Self.Item, R, Self.Error, E2, E3>
+  }
+}
+function baml.iter.Iterator.step_by(self: baml.iter.Iterator, n: int) -> baml.iter.Iterator<Item = unknown, Error = unknown> throws never {
+  { : baml.iter.StepBy<Self.Item, Self.Error>
+    StepBy { source: self, n: n, first: true } : baml.iter.StepBy<Self.Item, Self.Error>
+  }
+}
+function baml.iter.Iterator.chain(self: baml.iter.Iterator, other: baml.iter.Iterator<Item = unknown, Error = unknown>) -> baml.iter.Iterator<Item = unknown, Error = unknown> throws never {
+  { : baml.iter.Chain<Self.Item, Self.Error>
+    Chain { first: self, other: other, first_done: false } : baml.iter.Chain<Self.Item, Self.Error>
+  }
+}
+function baml.iter.Iterator.peekable(self: baml.iter.Iterator) -> baml.iter.Peekable<unknown, unknown> throws never {
+  { : baml.iter.Peekable<Self.Item, Self.Error>
+    Peekable { source: self, buffer: Done {  }, has_buffer: false } : baml.iter.Peekable<Self.Item, Self.Error>
+  }
+}
+function baml.iter.Iterator.collect(self: baml.iter.Iterator) -> unknown[] throws unknown {
+  { : Self.Item[]
+    let r: Item[] = [] : Self.Item[] -> never
+    while true
+      { : int
+        match (self.next() : Self.Item | baml.iter.Done) : int
+          Done =>
+            { : never
+              break
+            }
+          x: Item =>
+            r.push(x) : int
+      }
+    r : Self.Item[]
+  }
+}
+function baml.iter.Iterator.reduce<A, E2>(self: baml.iter.Iterator, fn: (A, unknown) -> A throws E2, initial: A) -> A throws unknown | E2 {
+  { : A
+    let acc: A = initial : A
+    while true
+      { : void
+        match (self.next() : Self.Item | baml.iter.Done) : void
+          Done =>
+            { : never
+              break
+            }
+          x: Item =>
+            { : void
+              acc = fn(acc, x) : A
+            }
+      }
+    acc : A
+  }
+}
+function baml.iter.Iterator.count(self: baml.iter.Iterator) -> int throws unknown {
+  { : int
+    let n: int = 0 : 0 -> int
+    while true
+      { : void
+        match (self.next() : Self.Item | baml.iter.Done) : void
+          Done =>
+            { : never
+              break
+            }
+          x: Item =>
+            { : void
+              n Add= 1 : int
+            }
+      }
+    n : int
+  }
+}
+function baml.iter.Iterator.some<E2>(self: baml.iter.Iterator, predicate: (unknown) -> bool throws E2) -> bool throws unknown | E2 {
+  { : false
+    while true
+      { : void
+        match (self.next() : Self.Item | baml.iter.Done) : void
+          Done =>
+            { : never
+              break
+            }
+          x: Item =>
+            { : void
+              if (predicate(x) : bool) : void
+                { : never
+                  return true : true
+                }
+            }
+      }
+    false : false
+  }
+}
+function baml.iter.Iterator.every<E2>(self: baml.iter.Iterator, predicate: (unknown) -> bool throws E2) -> bool throws unknown | E2 {
+  { : true
+    while true
+      { : void
+        match (self.next() : Self.Item | baml.iter.Done) : void
+          Done =>
+            { : never
+              break
+            }
+          x: Item =>
+            { : void
+              if (Not predicate(x) : bool) : void
+                { : never
+                  return false : false
+                }
+            }
+      }
+    true : true
+  }
+}
+function baml.iter.Iterator.find<E2>(self: baml.iter.Iterator, predicate: (unknown) -> bool throws E2) -> unknown | null throws unknown | E2 {
+  { : null
+    while true
+      { : void
+        match (self.next() : Self.Item | baml.iter.Done) : void
+          Done =>
+            { : never
+              break
+            }
+          x: Item =>
+            { : void
+              if (predicate(x) : bool) : void
+                { : never
+                  return x : never
+                }
+            }
+      }
+    null : null
+  }
+}
+function baml.iter.flatten<R, E, E3, I>(src: baml.iter.Iterator<Item = I, Error = E>) -> baml.iter.Iterator<Item = R, Error = E | E3> throws never {
+  { : baml.iter.Flatten<I, R, E, E3>
+    Flatten { source: src, inner: Done {  } } : baml.iter.Flatten<I, R, E, E3>
+  }
+}
+class baml.iter.ArrayIterator {
+  arr: T[]
+  idx: int
+}
+function baml.iter.ArrayIterator.new(arr: unknown[]) -> baml.iter.ArrayIterator<unknown> throws never {
+  { : baml.iter.ArrayIterator<T>
+    ArrayIterator { arr: arr.slice(0, arr.length()), idx: 0 } : baml.iter.ArrayIterator<T>
+  }
+}
+function baml.iter.ArrayIterator.to_json(self: baml.iter.ArrayIterator) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  map { "arr": self.arr.to_json(), "idx": self.idx.to_json() } : map<string, baml.json.json>
+}
+function baml.iter.ArrayIterator.from_json(j: baml.json.json) -> baml.iter.ArrayIterator<unknown> throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  ArrayIterator { arr: baml.json.from_json<T[]>(baml.json.field(j, "arr")), idx: baml.json.from_json<int>(baml.json.field(j, "idx")) } : baml.iter.ArrayIterator<T>
+}
+function baml.iter.ArrayIterator.iter(self: baml.iter.ArrayIterator) -> baml.iter.Iterator<Item = unknown, Error = never> throws never {
+  { : baml.iter.ArrayIterator<T>
+    self : baml.iter.ArrayIterator<T>
+  }
+}
+function baml.iter.ArrayIterator.next(self: baml.iter.ArrayIterator) -> unknown | baml.iter.Done throws never {
+  { : baml.iter.Done | T
+    match (self.arr.at(self.idx) : T | null) : baml.iter.Done | T
+      null =>
+        Done {  } : baml.iter.Done
+      item: T =>
+        { : T
+          self.idx Add= 1 : int
+          item : T
+        }
+  }
+}
+class baml.iter.Range {
+  i: int
+  max: int
+  step: int
+}
+function baml.iter.Range.new(min: int, max: int, step: int = 1) -> baml.iter.Range throws never {
+  { : baml.iter.Range
+    Range { i: min, max: max, step: step } : baml.iter.Range
+  }
+}
+function baml.iter.Range.to_json(self: baml.iter.Range) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  map { "i": self.i.to_json(), "max": self.max.to_json(), "step": self.step.to_json() } : map<string, baml.json.json>
+}
+function baml.iter.Range.from_json(j: baml.json.json) -> baml.iter.Range throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  Range { i: baml.json.from_json<int>(baml.json.field(j, "i")), max: baml.json.from_json<int>(baml.json.field(j, "max")), step: baml.json.from_json<int>(baml.json.field(j, "step")) } : baml.iter.Range
+}
+function baml.iter.Range.iter(self: baml.iter.Range) -> baml.iter.Iterator<Item = int, Error = never> throws never {
+  { : baml.iter.Range
+    self : baml.iter.Range
+  }
+}
+function baml.iter.Range.next(self: baml.iter.Range) -> int | baml.iter.Done throws never {
+  { : int | baml.iter.Done
+    if (self.i < self.max : bool) : int | baml.iter.Done
+      { : int
+        let cur = self.i : int
+        self.i Add= self.step : int
+        cur : int
+      }
+    else
+      { : baml.iter.Done
+        Done {  } : baml.iter.Done
+      }
+  }
+}
+class baml.iter.Repeat {
+  value: T
+  count: int
+}
+function baml.iter.Repeat.new(value: unknown, count: int = ...) -> baml.iter.Repeat<unknown> throws never {
+  { : baml.iter.Repeat<T>
+    Repeat { value: value, count: count } : baml.iter.Repeat<T>
+  }
+}
+function baml.iter.Repeat.to_json(self: baml.iter.Repeat) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  map { "value": baml.json.to_json(self.value), "count": self.count.to_json() } : map<string, baml.json.json>
+}
+function baml.iter.Repeat.from_json(j: baml.json.json) -> baml.iter.Repeat<unknown> throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  Repeat { value: baml.json.from_json<T>(baml.json.field(j, "value")), count: baml.json.from_json<int>(baml.json.field(j, "count")) } : baml.iter.Repeat<T>
+}
+function baml.iter.Repeat.iter(self: baml.iter.Repeat) -> baml.iter.Iterator<Item = unknown, Error = never> throws never {
+  { : baml.iter.Repeat<T>
+    self : baml.iter.Repeat<T>
+  }
+}
+function baml.iter.Repeat.next(self: baml.iter.Repeat) -> unknown | baml.iter.Done throws never {
+  { : T | baml.iter.Done
+    if (self.count < 0 : bool) : T | baml.iter.Done
+      { : T
+        self.value : T
+      }
+    else
+      if (self.count > 0 : bool) : T | baml.iter.Done
+        { : T
+          self.count Sub= 1 : int
+          self.value : T
+        }
+      else
+        { : baml.iter.Done
+          Done {  } : baml.iter.Done
+        }
+  }
+}
+class baml.iter.Map {
+  source: baml.iter.Iterator<Item = T, Error = E>
+  func: (T) -> R throws E2
+}
+function baml.iter.Map.to_json(self: baml.iter.Map) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  baml.json.parse(baml.json.to_string<Map<T, R, E, E2>>(self)) : baml.json.json
+}
+function baml.iter.Map.from_json(j: baml.json.json) -> baml.iter.Map<unknown, unknown, unknown, unknown> throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  baml.json.from_string<T>(baml.json.stringify(j)) : baml.iter.Map<T, R, E, E2>
+}
+function baml.iter.Map.iter(self: baml.iter.Map) -> baml.iter.Iterator<Item = unknown, Error = unknown | unknown> throws never {
+  { : baml.iter.Map<T, R, E, E2>
+    self : baml.iter.Map<T, R, E, E2>
+  }
+}
+function baml.iter.Map.next(self: baml.iter.Map) -> unknown | baml.iter.Done throws unknown | unknown {
+  { : baml.iter.Done | R
+    match (self.source.next() : T | baml.iter.Done) : baml.iter.Done | R
+      Done =>
+        Done {  } : baml.iter.Done
+      x: T =>
+        self.func<T, R, E2>(x) : R
+  }
+}
+class baml.iter.Filter {
+  source: baml.iter.Iterator<Item = T, Error = E>
+  predicate: (T) -> bool throws E2
+}
+function baml.iter.Filter.to_json(self: baml.iter.Filter) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  baml.json.parse(baml.json.to_string<Filter<T, E, E2>>(self)) : baml.json.json
+}
+function baml.iter.Filter.from_json(j: baml.json.json) -> baml.iter.Filter<unknown, unknown, unknown> throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  baml.json.from_string<T>(baml.json.stringify(j)) : baml.iter.Filter<T, E, E2>
+}
+function baml.iter.Filter.iter(self: baml.iter.Filter) -> baml.iter.Iterator<Item = unknown, Error = unknown | unknown> throws never {
+  { : baml.iter.Filter<T, E, E2>
+    self : baml.iter.Filter<T, E, E2>
+  }
+}
+function baml.iter.Filter.next(self: baml.iter.Filter) -> unknown | baml.iter.Done throws unknown | unknown {
+  { : baml.iter.Done
+    while true
+      { : void
+        match (self.source.next() : T | baml.iter.Done) : void
+          Done =>
+            { : never
+              return Done {  } : baml.iter.Done
+            }
+          x: T =>
+            { : void
+              if (self.predicate(x) : bool) : void
+                { : never
+                  return x : T
+                }
+            }
+      }
+    Done {  } : baml.iter.Done
+  }
+}
+class baml.iter.FilterMap {
+  source: baml.iter.Iterator<Item = T, Error = E>
+  func: (T) -> R | null throws E2
+}
+function baml.iter.FilterMap.to_json(self: baml.iter.FilterMap) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  baml.json.parse(baml.json.to_string<FilterMap<T, R, E, E2>>(self)) : baml.json.json
+}
+function baml.iter.FilterMap.from_json(j: baml.json.json) -> baml.iter.FilterMap<unknown, unknown, unknown, unknown> throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  baml.json.from_string<T>(baml.json.stringify(j)) : baml.iter.FilterMap<T, R, E, E2>
+}
+function baml.iter.FilterMap.iter(self: baml.iter.FilterMap) -> baml.iter.Iterator<Item = unknown, Error = unknown | unknown> throws never {
+  { : baml.iter.FilterMap<T, R, E, E2>
+    self : baml.iter.FilterMap<T, R, E, E2>
+  }
+}
+function baml.iter.FilterMap.next(self: baml.iter.FilterMap) -> unknown | baml.iter.Done throws unknown | unknown {
+  { : baml.iter.Done
+    while true
+      { : void
+        match (self.source.next() : T | baml.iter.Done) : void
+          Done =>
+            { : never
+              return Done {  } : baml.iter.Done
+            }
+          x: T =>
+            { : void
+              match (self.func(x) : R | null) : void
+                null =>
+                  { : void
+                  }
+                y: R =>
+                  { : never
+                    return y : R
+                  }
+            }
+      }
+    Done {  } : baml.iter.Done
+  }
+}
+class baml.iter.FlatMap {
+  source: baml.iter.Iterator<Item = T, Error = E>
+  func: (T) -> baml.iter.Iterable<Item = R, Error = E3> throws E2
+  inner: baml.iter.Iterator<Item = R, Error = E3> | baml.iter.Done
+}
+function baml.iter.FlatMap.to_json(self: baml.iter.FlatMap) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  baml.json.parse(baml.json.to_string<FlatMap<T, R, E, E2, E3>>(self)) : baml.json.json
+}
+function baml.iter.FlatMap.from_json(j: baml.json.json) -> baml.iter.FlatMap<unknown, unknown, unknown, unknown, unknown> throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  baml.json.from_string<T>(baml.json.stringify(j)) : baml.iter.FlatMap<T, R, E, E2, E3>
+}
+function baml.iter.FlatMap.iter(self: baml.iter.FlatMap) -> baml.iter.Iterator<Item = unknown, Error = unknown | unknown | unknown> throws never {
+  { : baml.iter.FlatMap<T, R, E, E2, E3>
+    self : baml.iter.FlatMap<T, R, E, E2, E3>
+  }
+}
+function baml.iter.FlatMap.next(self: baml.iter.FlatMap) -> unknown | baml.iter.Done throws unknown | unknown | unknown {
+  { : baml.iter.Done
+    while true
+      { : void
+        match (self.inner : baml.iter.Iterator<Item = R, Error = E3> | baml.iter.Done) : void
+          cur: Iterator<Item = R, Error = E3> =>
+            { : void
+              match (cur.next() : R | baml.iter.Done) : void
+                Done =>
+                  { : void
+                    self.inner = Done {  } : baml.iter.Done
+                  }
+                y: R =>
+                  { : never
+                    return y : R
+                  }
+            }
+          Done =>
+            { : void
+              match (self.source.next() : T | baml.iter.Done) : void
+                Done =>
+                  { : never
+                    return Done {  } : baml.iter.Done
+                  }
+                x: T =>
+                  { : void
+                    let it = self.func(x).iter() : baml.iter.Iterator<Item = R, Error = E3>
+                    self.inner = it : baml.iter.Iterator<Item = R, Error = E3>
+                  }
+            }
+      }
+    Done {  } : baml.iter.Done
+  }
+}
+class baml.iter.Flatten {
+  source: baml.iter.Iterator<Item = I, Error = E>
+  inner: baml.iter.Iterator<Item = R, Error = E3> | baml.iter.Done
+}
+function baml.iter.Flatten.to_json(self: baml.iter.Flatten) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  map { "source": self.source.to_json(), "inner": self.inner.to_json() } : map<string, unknown>
+}
+function baml.iter.Flatten.from_json(j: baml.json.json) -> baml.iter.Flatten<unknown, unknown, unknown, unknown> throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  Flatten { source: baml.json.from_json<Iterator<Item = I, Error = E>>(baml.json.field(j, "source")), inner: baml.json.from_json<Iterator<Item = R, Error = E3> | Done>(baml.json.field(j, "inner")) } : baml.iter.Flatten<I, R, E, E3>
+}
+function baml.iter.Flatten.iter(self: baml.iter.Flatten) -> baml.iter.Iterator<Item = unknown, Error = unknown | unknown> throws never {
+  { : baml.iter.Flatten<I, R, E, E3>
+    self : baml.iter.Flatten<I, R, E, E3>
+  }
+}
+function baml.iter.Flatten.next(self: baml.iter.Flatten) -> unknown | baml.iter.Done throws unknown | unknown {
+  { : baml.iter.Done
+    while true
+      { : void
+        match (self.inner : baml.iter.Iterator<Item = R, Error = E3> | baml.iter.Done) : void
+          cur: Iterator<Item = R, Error = E3> =>
+            { : void
+              match (cur.next() : R | baml.iter.Done) : void
+                Done =>
+                  { : void
+                    self.inner = Done {  } : baml.iter.Done
+                  }
+                y: R =>
+                  { : never
+                    return y : R
+                  }
+            }
+          Done =>
+            { : void
+              match (self.source.next() : I | baml.iter.Done) : void
+                Done =>
+                  { : never
+                    return Done {  } : baml.iter.Done
+                  }
+                x: I =>
+                  { : void
+                    let it = x.iter() : baml.iter.Iterator<Item = R, Error = E3>
+                    self.inner = it : baml.iter.Iterator<Item = R, Error = E3>
+                  }
+            }
+      }
+    Done {  } : baml.iter.Done
+  }
+}
+class baml.iter.Peekable {
+  source: baml.iter.Iterator<Item = T, Error = E>
+  buffer: T | baml.iter.Done
+  has_buffer: bool
+}
+function baml.iter.Peekable.peek(self: baml.iter.Peekable) -> unknown | baml.iter.Done throws unknown {
+  { : T | baml.iter.Done
+    if (self.has_buffer : bool) : void
+      { : never
+        return self.buffer : T | baml.iter.Done
+      }
+    let v = self.source.next<T, E>() : T | baml.iter.Done
+    self.buffer = v : T | baml.iter.Done
+    self.has_buffer = true : true
+    v : T | baml.iter.Done
+  }
+}
+function baml.iter.Peekable.to_json(self: baml.iter.Peekable) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  map { "source": self.source.to_json(), "buffer": baml.json.to_json(self.buffer), "has_buffer": self.has_buffer.to_json() } : map<string, unknown | baml.json.json>
+}
+function baml.iter.Peekable.from_json(j: baml.json.json) -> baml.iter.Peekable<unknown, unknown> throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  Peekable { source: baml.json.from_json<Iterator<Item = T, Error = E>>(baml.json.field(j, "source")), buffer: baml.json.from_json<T | Done>(baml.json.field(j, "buffer")), has_buffer: baml.json.from_json<bool>(baml.json.field(j, "has_buffer")) } : baml.iter.Peekable<T, E>
+}
+function baml.iter.Peekable.iter(self: baml.iter.Peekable) -> baml.iter.Iterator<Item = unknown, Error = unknown> throws never {
+  { : baml.iter.Peekable<T, E>
+    self : baml.iter.Peekable<T, E>
+  }
+}
+function baml.iter.Peekable.next(self: baml.iter.Peekable) -> unknown | baml.iter.Done throws unknown {
+  { : T | baml.iter.Done
+    if (self.has_buffer : bool) : void
+      { : never
+        let v = self.buffer : T | baml.iter.Done
+        self.buffer = Done {  } : baml.iter.Done
+        self.has_buffer = false : false
+        return v : T | baml.iter.Done
+      }
+    self.source.next<T, E>() : T | baml.iter.Done
+  }
+}
+class baml.iter.StepBy {
+  source: baml.iter.Iterator<Item = T, Error = E>
+  n: int
+  first: bool
+}
+function baml.iter.StepBy.to_json(self: baml.iter.StepBy) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  map { "source": self.source.to_json(), "n": self.n.to_json(), "first": self.first.to_json() } : map<string, unknown | baml.json.json>
+}
+function baml.iter.StepBy.from_json(j: baml.json.json) -> baml.iter.StepBy<unknown, unknown> throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  StepBy { source: baml.json.from_json<Iterator<Item = T, Error = E>>(baml.json.field(j, "source")), n: baml.json.from_json<int>(baml.json.field(j, "n")), first: baml.json.from_json<bool>(baml.json.field(j, "first")) } : baml.iter.StepBy<T, E>
+}
+function baml.iter.StepBy.iter(self: baml.iter.StepBy) -> baml.iter.Iterator<Item = unknown, Error = unknown> throws never {
+  { : baml.iter.StepBy<T, E>
+    self : baml.iter.StepBy<T, E>
+  }
+}
+function baml.iter.StepBy.next(self: baml.iter.StepBy) -> unknown | baml.iter.Done throws unknown {
+  { : T | baml.iter.Done
+    if (self.first : bool) : void
+      { : never
+        self.first = false : false
+        return self.source.next<T, E>() : T | baml.iter.Done
+      }
+    { : void
+      let i = 0 : 0 -> int
+      while i < self.n - 1
+        { : void
+          match (self.source.next() : T | baml.iter.Done) : void
+            Done =>
+              { : never
+                return Done {  } : baml.iter.Done
+              }
+            x: T =>
+              { : void
+              }
+        }
+    }
+    self.source.next<T, E>() : T | baml.iter.Done
+  }
+}
+class baml.iter.Chain {
+  first: baml.iter.Iterator<Item = T, Error = E>
+  other: baml.iter.Iterator<Item = T, Error = E>
+  first_done: bool
+}
+function baml.iter.Chain.to_json(self: baml.iter.Chain) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  map { "first": self.first.to_json(), "other": self.other.to_json(), "first_done": self.first_done.to_json() } : map<string, unknown | baml.json.json>
+}
+function baml.iter.Chain.from_json(j: baml.json.json) -> baml.iter.Chain<unknown, unknown> throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  Chain { first: baml.json.from_json<Iterator<Item = T, Error = E>>(baml.json.field(j, "first")), other: baml.json.from_json<Iterator<Item = T, Error = E>>(baml.json.field(j, "other")), first_done: baml.json.from_json<bool>(baml.json.field(j, "first_done")) } : baml.iter.Chain<T, E>
+}
+function baml.iter.Chain.iter(self: baml.iter.Chain) -> baml.iter.Iterator<Item = unknown, Error = unknown> throws never {
+  { : baml.iter.Chain<T, E>
+    self : baml.iter.Chain<T, E>
+  }
+}
+function baml.iter.Chain.next(self: baml.iter.Chain) -> unknown | baml.iter.Done throws unknown {
+  { : T | baml.iter.Done
+    if (Not self.first_done : bool) : void
+      { : void
+        match (self.first.next() : T | baml.iter.Done) : void
+          Done =>
+            { : void
+              self.first_done = true : true
+            }
+          x: T =>
+            { : never
+              return x : T
+            }
+      }
+    self.other.next<T, E>() : T | baml.iter.Done
+  }
+}
+function baml.iter.iter(self: unknown) -> baml.iter.Iterator<Item = unknown, Error = never> throws never {
+  { : baml.iter.ArrayIterator<T>
+    ArrayIterator.new<T>(self) : baml.iter.ArrayIterator<T>
+  }
+}
+class baml.iter.Done$stream {
+}
+class baml.iter.ArrayIterator$stream {
+  arr: T[]
+  idx: int | null
+}
+function baml.iter.ArrayIterator$stream.iter(self: baml.iter.ArrayIterator$stream) -> baml.iter.Iterator<Item = unknown, Error = never> throws never {
+  { : baml.iter.ArrayIterator$stream<T>
+    self : baml.iter.ArrayIterator$stream<T>
+  }
+  !! 3719..3723: type mismatch: expected baml.iter.Iterator<Item = T, Error = never>, got baml.iter.ArrayIterator$stream<T>
+}
+function baml.iter.ArrayIterator$stream.next(self: baml.iter.ArrayIterator$stream) -> unknown | baml.iter.Done throws never {
+  { : baml.iter.Done | T
+    match (self.arr.at(self.idx) : T | null) : baml.iter.Done | T
+      null =>
+        Done {  } : baml.iter.Done
+      item: T =>
+        { : T
+          self.idx Add= 1 : unknown
+          item : T
+        }
+  }
+  !! 3873..3881: type mismatch: expected int, got int | null
+  !! 3935..3954: operator `Add` cannot be applied to `int | null` and `1`
+}
+class baml.iter.Range$stream {
+  i: int | null
+  max: int | null
+  step: int | null
+}
+function baml.iter.Range$stream.iter(self: baml.iter.Range$stream) -> baml.iter.Iterator<Item = int, Error = never> throws never {
+  { : baml.iter.Range$stream
+    self : baml.iter.Range$stream
+  }
+  !! 4323..4327: type mismatch: expected baml.iter.Iterator<Item = int, Error = never>, got baml.iter.Range$stream
+}
+function baml.iter.Range$stream.next(self: baml.iter.Range$stream) -> int | baml.iter.Done throws never {
+  { : int | null | baml.iter.Done
+    if (self.i < self.max : bool) : int | null | baml.iter.Done
+      { : int | null
+        let cur = self.i : int | null
+        self.i Add= self.step : unknown
+        cur : int | null
+      }
+    else
+      { : baml.iter.Done
+        Done {  } : baml.iter.Done
+      }
+  }
+  !! 4466..4483: operator `Lt` cannot be applied to `int | null` and `int | null`
+  !! 4512..4527: operator `Add` cannot be applied to `int | null` and `int | null`
+  !! 4550..4553: type mismatch: expected int | baml.iter.Done, got int | null
+}
+class baml.iter.Repeat$stream {
+  value: T | null
+  count: int | null
+}
+function baml.iter.Repeat$stream.iter(self: baml.iter.Repeat$stream) -> baml.iter.Iterator<Item = unknown, Error = never> throws never {
+  { : baml.iter.Repeat$stream<T>
+    self : baml.iter.Repeat$stream<T>
+  }
+  !! 4911..4915: type mismatch: expected baml.iter.Iterator<Item = T, Error = never>, got baml.iter.Repeat$stream<T>
+}
+function baml.iter.Repeat$stream.next(self: baml.iter.Repeat$stream) -> unknown | baml.iter.Done throws never {
+  { : T | null | baml.iter.Done
+    if (self.count < 0 : bool) : T | null | baml.iter.Done
+      { : T | null
+        self.value : T | null
+      }
+    else
+      if (self.count > 0 : bool) : T | null | baml.iter.Done
+        { : T | null
+          self.count Sub= 1 : unknown
+          self.value : T | null
+        }
+      else
+        { : baml.iter.Done
+          Done {  } : baml.iter.Done
+        }
+  }
+  !! 5050..5064: operator `Lt` cannot be applied to `int | null` and `0`
+  !! 5067..5086: type mismatch: expected T | baml.iter.Done, got T | null
+  !! 5104..5118: operator `Gt` cannot be applied to `int | null` and `0`
+  !! 5121..5140: operator `Sub` cannot be applied to `int | null` and `1`
+  !! 5146..5165: type mismatch: expected T | baml.iter.Done, got T | null
+}
+class baml.iter.Map$stream {
+  source: baml.iter.Iterator | null
+  func: unknown
+}
+function baml.iter.Map$stream.iter(self: baml.iter.Map$stream) -> baml.iter.Iterator<Item = unknown, Error = unknown | unknown> throws never {
+  { : baml.iter.Map$stream<T, R, E, E2>
+    self : baml.iter.Map$stream<T, R, E, E2>
+  }
+  !! 5455..5459: type mismatch: expected baml.iter.Iterator<Item = R, Error = E | E2>, got baml.iter.Map$stream<T, R, E, E2>
+}
+function baml.iter.Map$stream.next(self: baml.iter.Map$stream) -> unknown | baml.iter.Done throws unknown | unknown {
+  { : baml.iter.Done | unknown
+    match (self.source.next() : unknown) : baml.iter.Done | unknown
+      Done =>
+        Done {  } : baml.iter.Done
+      x: T =>
+        self.func(x) : unknown
+  }
+  !! 5599..5615: did you mean `self.source?.next`? `self.source.next` does not handle the case when `self.source` is null
+  !! 5599..5617: `(() -> unknown | baml.iter.Done throws never) | null` is not a function — it cannot be called
+}
+class baml.iter.Filter$stream {
+  source: baml.iter.Iterator | null
+  predicate: unknown
+}
+function baml.iter.Filter$stream.iter(self: baml.iter.Filter$stream) -> baml.iter.Iterator<Item = unknown, Error = unknown | unknown> throws never {
+  { : baml.iter.Filter$stream<T, E, E2>
+    self : baml.iter.Filter$stream<T, E, E2>
+  }
+  !! 5946..5950: type mismatch: expected baml.iter.Iterator<Item = T, Error = E | E2>, got baml.iter.Filter$stream<T, E, E2>
+}
+function baml.iter.Filter$stream.next(self: baml.iter.Filter$stream) -> unknown | baml.iter.Done throws unknown | unknown {
+  { : baml.iter.Done
+    while true
+      { : void
+        match (self.source.next() : unknown) : void
+          Done =>
+            { : never
+              return Done {  } : baml.iter.Done
+            }
+          x: T =>
+            { : void
+              if (self.predicate(x) : unknown) : void
+                { : never
+                  return x : T
+                }
+            }
+      }
+    Done {  } : baml.iter.Done
+  }
+  !! 6113..6129: did you mean `self.source?.next`? `self.source.next` does not handle the case when `self.source` is null
+  !! 6113..6131: `(() -> unknown | baml.iter.Done throws never) | null` is not a function — it cannot be called
+}
+class baml.iter.FilterMap$stream {
+  source: baml.iter.Iterator | null
+  func: unknown
+}
+function baml.iter.FilterMap$stream.iter(self: baml.iter.FilterMap$stream) -> baml.iter.Iterator<Item = unknown, Error = unknown | unknown> throws never {
+  { : baml.iter.FilterMap$stream<T, R, E, E2>
+    self : baml.iter.FilterMap$stream<T, R, E, E2>
+  }
+  !! 6575..6579: type mismatch: expected baml.iter.Iterator<Item = R, Error = E | E2>, got baml.iter.FilterMap$stream<T, R, E, E2>
+}
+function baml.iter.FilterMap$stream.next(self: baml.iter.FilterMap$stream) -> unknown | baml.iter.Done throws unknown | unknown {
+  { : baml.iter.Done
+    while true
+      { : void
+        match (self.source.next() : unknown) : void
+          Done =>
+            { : never
+              return Done {  } : baml.iter.Done
+            }
+          x: T =>
+            { : void
+              match (self.func(x) : unknown) : void
+                null =>
+                  { : void
+                  }
+                y: R =>
+                  { : never
+                    return y : R
+                  }
+            }
+      }
+    Done {  } : baml.iter.Done
+  }
+  !! 6742..6758: did you mean `self.source?.next`? `self.source.next` does not handle the case when `self.source` is null
+  !! 6742..6760: `(() -> unknown | baml.iter.Done throws never) | null` is not a function — it cannot be called
+}
+class baml.iter.FlatMap$stream {
+  source: baml.iter.Iterator | null
+  func: unknown
+  inner: baml.iter.Iterator | baml.iter.Done$stream | null
+}
+function baml.iter.FlatMap$stream.iter(self: baml.iter.FlatMap$stream) -> baml.iter.Iterator<Item = unknown, Error = unknown | unknown | unknown> throws never {
+  { : baml.iter.FlatMap$stream<T, R, E, E2, E3>
+    self : baml.iter.FlatMap$stream<T, R, E, E2, E3>
+  }
+  !! 7332..7336: type mismatch: expected baml.iter.Iterator<Item = R, Error = E | E2 | E3>, got baml.iter.FlatMap$stream<T, R, E, E2, E3>
+}
+function baml.iter.FlatMap$stream.next(self: baml.iter.FlatMap$stream) -> unknown | baml.iter.Done throws unknown | unknown | unknown {
+  { : baml.iter.Done
+    while true
+      { : void
+        match (self.inner : baml.iter.Iterator | baml.iter.Done$stream | null) : void
+          cur: Iterator<Item = R, Error = E3> =>
+            { : void
+              match (cur.next() : unknown) : void
+                Done =>
+                  { : void
+                    self.inner = Done {  } : baml.iter.Done
+                  }
+                y: R =>
+                  { : never
+                    return y : R
+                  }
+            }
+          Done =>
+            { : void
+              match (self.source.next() : unknown) : void
+                Done =>
+                  { : never
+                    return Done {  } : baml.iter.Done
+                  }
+                x: T =>
+                  { : void
+                    let it = self.func(x).iter() : unknown
+                    self.inner = it : unknown
+                  }
+            }
+      }
+    Done {  } : baml.iter.Done
+  }
+  !! 7597..7605: type `never` has no member `next`
+  !! 7727..7742: type mismatch: expected baml.iter.Iterator | baml.iter.Done$stream | null, got baml.iter.Done
+  !! 7767..7783: did you mean `self.source?.next`? `self.source.next` does not handle the case when `self.source` is null
+  !! 7767..7785: `(() -> unknown | baml.iter.Done throws never) | null` is not a function — it cannot be called
+  !! 7493..7992: non-exhaustive match on `baml.iter.Iterator | baml.iter.Done$stream | null`; missing: baml.iter.Iterator, baml.iter.Done$stream {}, null
+  !! 7575..7726: unreachable arm
+  !! 7745..7981: unreachable arm
+}
+class baml.iter.Flatten$stream {
+  source: baml.iter.Iterator | null
+  inner: baml.iter.Iterator | baml.iter.Done$stream | null
+}
+function baml.iter.Flatten$stream.iter(self: baml.iter.Flatten$stream) -> baml.iter.Iterator<Item = unknown, Error = unknown | unknown> throws never {
+  { : baml.iter.Flatten$stream<I, R, E, E3>
+    self : baml.iter.Flatten$stream<I, R, E, E3>
+  }
+  !! 8328..8332: type mismatch: expected baml.iter.Iterator<Item = R, Error = E | E3>, got baml.iter.Flatten$stream<I, R, E, E3>
+}
+function baml.iter.Flatten$stream.next(self: baml.iter.Flatten$stream) -> unknown | baml.iter.Done throws unknown | unknown {
+  { : baml.iter.Done
+    while true
+      { : void
+        match (self.inner : baml.iter.Iterator | baml.iter.Done$stream | null) : void
+          cur: Iterator<Item = R, Error = E3> =>
+            { : void
+              match (cur.next() : unknown) : void
+                Done =>
+                  { : void
+                    self.inner = Done {  } : baml.iter.Done
+                  }
+                y: R =>
+                  { : never
+                    return y : R
+                  }
+            }
+          Done =>
+            { : void
+              match (self.source.next() : unknown) : void
+                Done =>
+                  { : never
+                    return Done {  } : baml.iter.Done
+                  }
+                x: I =>
+                  { : void
+                    let it = x.iter() : baml.iter.Iterator<Item = R, Error = E3>
+                    self.inner = it : baml.iter.Iterator<Item = R, Error = E3>
+                  }
+            }
+      }
+    Done {  } : baml.iter.Done
+  }
+  !! 8583..8591: type `never` has no member `next`
+  !! 8713..8728: type mismatch: expected baml.iter.Iterator | baml.iter.Done$stream | null, got baml.iter.Done
+  !! 8753..8769: did you mean `self.source?.next`? `self.source.next` does not handle the case when `self.source` is null
+  !! 8753..8771: `(() -> unknown | baml.iter.Done throws never) | null` is not a function — it cannot be called
+  !! 8479..8967: non-exhaustive match on `baml.iter.Iterator | baml.iter.Done$stream | null`; missing: baml.iter.Iterator, baml.iter.Done$stream {}, null
+  !! 8561..8712: unreachable arm
+  !! 8731..8956: unreachable arm
+}
+class baml.iter.Peekable$stream {
+  source: baml.iter.Iterator | null
+  buffer: T | baml.iter.Done$stream | null
+  has_buffer: bool | null
+}
+function baml.iter.Peekable$stream.iter(self: baml.iter.Peekable$stream) -> baml.iter.Iterator<Item = unknown, Error = unknown> throws never {
+  { : baml.iter.Peekable$stream<T, E>
+    self : baml.iter.Peekable$stream<T, E>
+  }
+  !! 9435..9439: type mismatch: expected baml.iter.Iterator<Item = T, Error = E>, got baml.iter.Peekable$stream<T, E>
+}
+function baml.iter.Peekable$stream.next(self: baml.iter.Peekable$stream) -> unknown | baml.iter.Done throws unknown {
+  { : unknown
+    if (self.has_buffer : bool | null) : void
+      { : never
+        let v = self.buffer : T | baml.iter.Done$stream | null
+        self.buffer = Done {  } : baml.iter.Done
+        self.has_buffer = false : false
+        return v : T | baml.iter.Done$stream | null
+      }
+    self.source.next() : unknown
+  }
+  !! 9693..9694: type mismatch: expected T | baml.iter.Done, got T | baml.iter.Done$stream | null
+  !! 9703..9726: did you mean `self.source?.next`? `self.source.next` does not handle the case when `self.source` is null
+  !! 9703..9728: `(() -> unknown | baml.iter.Done throws never) | null` is not a function — it cannot be called
+}
+class baml.iter.StepBy$stream {
+  source: baml.iter.Iterator | null
+  n: int | null
+  first: bool | null
+}
+function baml.iter.StepBy$stream.iter(self: baml.iter.StepBy$stream) -> baml.iter.Iterator<Item = unknown, Error = unknown> throws never {
+  { : baml.iter.StepBy$stream<T, E>
+    self : baml.iter.StepBy$stream<T, E>
+  }
+  !! 9961..9965: type mismatch: expected baml.iter.Iterator<Item = T, Error = E>, got baml.iter.StepBy$stream<T, E>
+}
+function baml.iter.StepBy$stream.next(self: baml.iter.StepBy$stream) -> unknown | baml.iter.Done throws unknown {
+  { : unknown
+    if (self.first : bool | null) : void
+      { : never
+        self.first = false : false
+        return self.source.next() : unknown
+      }
+    { : void
+      let i = 0 : 0 -> int
+      while i < self.n - 1
+        { : void
+          match (self.source.next() : unknown) : void
+            Done =>
+              { : never
+                return Done {  } : baml.iter.Done
+              }
+            x: T =>
+              { : void
+              }
+        }
+    }
+    self.source.next() : unknown
+  }
+  !! 10148..10165: did you mean `self.source?.next`? `self.source.next` does not handle the case when `self.source` is null
+  !! 10148..10167: `(() -> unknown | baml.iter.Done throws never) | null` is not a function — it cannot be called
+  !! 10202..10213: operator `Sub` cannot be applied to `int | null` and `1`
+  !! 10240..10256: did you mean `self.source?.next`? `self.source.next` does not handle the case when `self.source` is null
+  !! 10240..10258: `(() -> unknown | baml.iter.Done throws never) | null` is not a function — it cannot be called
+  !! 10344..10367: did you mean `self.source?.next`? `self.source.next` does not handle the case when `self.source` is null
+  !! 10344..10369: `(() -> unknown | baml.iter.Done throws never) | null` is not a function — it cannot be called
+}
+class baml.iter.Chain$stream {
+  first: baml.iter.Iterator | null
+  other: baml.iter.Iterator | null
+  first_done: bool | null
+}
+function baml.iter.Chain$stream.iter(self: baml.iter.Chain$stream) -> baml.iter.Iterator<Item = unknown, Error = unknown> throws never {
+  { : baml.iter.Chain$stream<T, E>
+    self : baml.iter.Chain$stream<T, E>
+  }
+  !! 10635..10639: type mismatch: expected baml.iter.Iterator<Item = T, Error = E>, got baml.iter.Chain$stream<T, E>
+}
+function baml.iter.Chain$stream.next(self: baml.iter.Chain$stream) -> unknown | baml.iter.Done throws unknown {
+  { : unknown
+    if (Not self.first_done : bool) : void
+      { : void
+        match (self.first.next() : unknown) : void
+          Done =>
+            { : void
+              self.first_done = true : true
+            }
+          x: T =>
+            { : never
+              return x : T
+            }
+      }
+    self.other.next() : unknown
+  }
+  !! 10801..10816: did you mean `self.first?.next`? `self.first.next` does not handle the case when `self.first` is null
+  !! 10801..10818: `(() -> unknown | baml.iter.Done throws never) | null` is not a function — it cannot be called
+  !! 10923..10945: did you mean `self.other?.next`? `self.other.next` does not handle the case when `self.other` is null
+  !! 10923..10947: `(() -> unknown | baml.iter.Done throws never) | null` is not a function — it cannot be called
+}
+
 --- <builtin>/baml/ns_json/json.baml ---
 type baml.json.json = null | bool | int | float | string | baml.json.json[] | map<string, baml.json.json>
 class baml.json.JsonParseError {

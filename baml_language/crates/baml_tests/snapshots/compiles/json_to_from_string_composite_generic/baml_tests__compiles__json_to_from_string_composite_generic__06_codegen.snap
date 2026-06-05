@@ -1,8 +1,7 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 11855
 ---
-function user.Container.from_json(j: baml.json.json) -> Container<void> {
+function user.Container.from_json(j: baml.json.json) -> Container<unknown> {
     load_var j
     load_const "item"
     call baml.json.field
@@ -15,7 +14,8 @@ function user.Container.from_json(j: baml.json.json) -> Container<void> {
     return
 }
 
-function user.Container.to_json(self: Container) -> baml.json.json {
+function user.Container.to_json(self: Container<unknown>) -> baml.json.json {
+    load_type #0
     load_var self
     load_field .item
     call baml.json.to_json

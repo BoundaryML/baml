@@ -138,6 +138,7 @@ function fn_return_widens(cb: (int) -> int | string) -> int {
 }
 
 type Number = int | float;
+
 function int_widens_to_alias(v: Number) -> int {
     match (v) {
         let n: Number => 1,

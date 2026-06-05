@@ -444,6 +444,20 @@ pub struct Function {
     /// Whether each parameter has a BAML default expression.
     pub param_has_default: Vec<bool>,
 
+    /// Source/TIR-rendered generic parameters for documentation surfaces.
+    ///
+    /// Runtime metadata in `param_types` and `return_type` may erase generic
+    /// type variables to `unknown`; surfaces like `baml run --list` should use
+    /// these display fields to preserve signatures such as
+    /// `<T extends BoxLike>(box: T) -> T.Item`.
+    pub display_type_params: Vec<String>,
+
+    /// Source/TIR-rendered parameter types in declaration order.
+    pub display_param_types: Vec<String>,
+
+    /// Source/TIR-rendered return type.
+    pub display_return_type: String,
+
     /// Inferred throws type — the union of all types this function (and its callees)
     /// may throw. `None` if the function never throws. Used by the engine to convert
     /// uncaught throw values to `BexExternalValue`.
@@ -493,7 +507,7 @@ impl Function {
 #[derive(Clone, Debug, BorshSerialize, BorshDeserialize)]
 pub struct ClassField {
     pub name: String,
-    /// Resolved field type with `TypeVar`s erased to `Ty::Void`.
+    /// Resolved field type with `TypeVar`s erased to `Ty::BuiltinUnknown`.
     ///
     /// Used by paths that don't care about parametric class type-args
     /// (codegen, `sys_ops` walking, output-format rendering).  For typed

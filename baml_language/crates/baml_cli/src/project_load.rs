@@ -61,13 +61,13 @@ pub(crate) fn load_project_from_reporting(
 /// work with.
 ///
 /// 1. Walk the ancestors of `from` (Cargo-style, stopping at the
-///    filesystem root) for the nearest directory containing a `baml.toml`.
-///    If one is found, load that project exactly as [`load_project_from`]
-///    would — so running `baml describe` from a subdirectory resolves the
-///    enclosing project. Manifest validation is intentionally skipped:
-///    introspection doesn't need a valid `[package].name`, and a malformed
-///    manifest shouldn't block it.
-/// 2. If no `baml.toml` exists anywhere up the tree, return a **default
+///    filesystem root) for the nearest directory containing a `baml.toml`
+///    or `baml_src/`. If one is found, load that project exactly as
+///    [`load_project_from`] would — so running `baml describe` from a
+///    subdirectory resolves the enclosing project. Manifest validation is
+///    intentionally skipped: introspection doesn't need a valid
+///    `[package].name`, and a malformed manifest shouldn't block it.
+/// 2. If no project marker exists anywhere up the tree, return a **default
 ///    state**: a [`ProjectDatabase`] holding only the BAML stdlib
 ///    (`baml.*`, loaded by `set_project_root` regardless of user files)
 ///    and **zero user files**. This is what makes `baml describe
@@ -81,13 +81,13 @@ pub(crate) fn load_project_from_reporting(
 ///   guards against.
 /// - The **walk-up** branch (1) loads the ancestor project exactly as
 ///   [`load_project_from`] would — including the "no `baml_src/` → walk the
-///   whole root" fallback in [`build_project_db`]. So if an ancestor
+///   whole root" path in [`build_project_db`]. So if an ancestor
 ///   `baml.toml` sits at a workspace root with hundreds of loose `.baml`
 ///   files and no `baml_src/`, this *can* reintroduce that hang. That's a
 ///   deliberate trade-off: a directory with a `baml.toml` is a declared
 ///   project, and loading it is the same thing `run`/`test` already do from
 ///   that root. The slurp guard exists to reject *unmarked* directories, not
-///   marked ones. In practice projects use `baml_src/`, which scopes the
+///   marked ones. Manifest-less projects use `baml_src/`, which scopes the
 ///   walk. (See the `walk_up_*` tests.)
 pub(crate) fn load_project_or_default(
     from: &Path,
@@ -110,12 +110,12 @@ pub(crate) fn load_project_or_default(
 }
 
 /// Walk `start` and its ancestors looking for the nearest directory that
-/// contains a `baml.toml`, stopping at the filesystem root. Returns the
-/// directory (not the manifest path). Cargo-style project discovery.
+/// contains a BAML project marker, stopping at the filesystem root. Returns the
+/// project directory, not the marker path. Cargo-style project discovery.
 fn find_project_root(start: &Path) -> Option<PathBuf> {
     start
         .ancestors()
-        .find(|dir| dir.join("baml.toml").is_file())
+        .find(|dir| dir.join("baml.toml").is_file() || dir.join("baml_src").is_dir())
         .map(Path::to_path_buf)
 }
 
@@ -419,8 +419,23 @@ mod tests {
         );
     }
 
-    /// `load_project_or_default` walks up to find an ancestor `baml.toml`,
-    /// so introspection from a subdirectory resolves the enclosing project.
+    /// A manifest-less `baml_src/` project is a real project for introspection,
+    /// matching `run`/`pack` discovery.
+    #[test]
+    fn introspection_loads_baml_src_only_project() {
+        let tmp = TempDir::new().unwrap();
+        let src = tmp.path().join("baml_src");
+        fs::create_dir(&src).unwrap();
+        fs::write(src.join("main.baml"), "function main() -> int { 1 }").unwrap();
+
+        let (_db, root, files) = load_project_or_default(tmp.path()).unwrap();
+        assert_eq!(root, std::fs::canonicalize(tmp.path()).unwrap());
+        assert_eq!(files.len(), 1, "got files: {files:?}");
+        assert!(files[0].ends_with("main.baml"));
+    }
+
+    /// `load_project_or_default` walks up to find an ancestor marker, so
+    /// introspection from a subdirectory resolves the enclosing project.
     #[test]
     fn walk_up_finds_ancestor_project() {
         let tmp = TempDir::new().unwrap();
@@ -429,6 +444,22 @@ mod tests {
         fs::create_dir(&src).unwrap();
         fs::write(src.join("main.baml"), "function main() -> int { 1 }").unwrap();
         // A nested directory we invoke from.
+        let nested = src.join("nested");
+        fs::create_dir(&nested).unwrap();
+
+        let (_db, root, files) = load_project_or_default(&nested).unwrap();
+        assert_eq!(root, std::fs::canonicalize(tmp.path()).unwrap());
+        assert_eq!(files.len(), 1, "got files: {files:?}");
+        assert!(files[0].ends_with("main.baml"));
+    }
+
+    /// The same walk-up works for manifest-less `baml_src/` projects.
+    #[test]
+    fn walk_up_finds_ancestor_baml_src_only_project() {
+        let tmp = TempDir::new().unwrap();
+        let src = tmp.path().join("baml_src");
+        fs::create_dir(&src).unwrap();
+        fs::write(src.join("main.baml"), "function main() -> int { 1 }").unwrap();
         let nested = src.join("nested");
         fs::create_dir(&nested).unwrap();
 

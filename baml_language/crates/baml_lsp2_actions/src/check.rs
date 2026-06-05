@@ -777,6 +777,13 @@ struct MethodSignature {
     throws_te: Option<baml_compiler2_ast::TypeExpr>,
 }
 
+struct ClassMethodSignatureSource<'db> {
+    name: Name,
+    signature: MethodSignature,
+    pkg_items: baml_compiler2_hir::package::PackageItems<'db>,
+    namespace_path: Vec<Name>,
+}
+
 #[derive(Clone, Copy)]
 struct SignatureMatchContext<'a, 'db> {
     db: &'a dyn Db,
@@ -785,6 +792,7 @@ struct SignatureMatchContext<'a, 'db> {
     actual_pkg_items: &'a baml_compiler2_hir::package::PackageItems<'db>,
     actual_namespace_path: &'a [Name],
     aliases: &'a std::collections::HashMap<QualifiedTypeName, Ty>,
+    ignore_param_names: bool,
 }
 
 #[derive(Clone, Copy)]
@@ -872,6 +880,80 @@ impl MethodSignature {
         }
     }
 
+    fn from_hir_function_with_subst(
+        function: &baml_compiler2_hir::item_tree::Function,
+        subst: &std::collections::HashMap<Name, baml_compiler2_ast::TypeExpr>,
+    ) -> Self {
+        let scoped_subst = if function.generic_params.is_empty() {
+            subst.clone()
+        } else {
+            let mut scoped = subst.clone();
+            for param in &function.generic_params {
+                scoped.remove(param);
+            }
+            scoped
+        };
+        let generic_param_bounds = function
+            .generic_param_bounds
+            .iter()
+            .map(|bound| {
+                bound
+                    .as_ref()
+                    .map(|bound| substitute_type_vars(bound, &scoped_subst).to_string())
+            })
+            .collect();
+        let params = function
+            .params
+            .iter()
+            .filter(|p| p.name.as_str() != "self")
+            .map(|p| {
+                let ty_str = p
+                    .type_expr
+                    .as_ref()
+                    .map(|te| substitute_type_vars(&te.expr, &scoped_subst).to_string())
+                    .unwrap_or_else(|| "<unknown>".to_string());
+                (p.name.clone(), ty_str)
+            })
+            .collect();
+        let return_type = function
+            .return_type
+            .as_ref()
+            .map(|te| substitute_type_vars(&te.expr, &scoped_subst).to_string())
+            .unwrap_or_else(|| "<unspecified>".to_string());
+        let throws = function
+            .throws
+            .as_ref()
+            .map(|te| substitute_type_vars(&te.expr, &scoped_subst).to_string());
+        let param_types = function
+            .params
+            .iter()
+            .filter(|p| p.name.as_str() != "self")
+            .map(|p| {
+                p.type_expr
+                    .as_ref()
+                    .map(|te| substitute_type_vars(&te.expr, &scoped_subst))
+            })
+            .collect();
+        let return_te = function
+            .return_type
+            .as_ref()
+            .map(|te| substitute_type_vars(&te.expr, &scoped_subst));
+        let throws_te = function
+            .throws
+            .as_ref()
+            .map(|te| substitute_type_vars(&te.expr, &scoped_subst));
+        Self {
+            generic_params: function.generic_params.clone(),
+            generic_param_bounds,
+            params,
+            return_type,
+            throws,
+            param_types,
+            return_te,
+            throws_te,
+        }
+    }
+
     fn render(&self) -> String {
         let generic_params: Vec<String> = self
             .generic_params
@@ -932,7 +1014,7 @@ impl MethodSignature {
             )
         };
         for (i, ((an, at), (bn, bt))) in self.params.iter().zip(&other.params).enumerate() {
-            if an != bn {
+            if !ctx.ignore_param_names && an != bn {
                 return false;
             }
             match (
@@ -1233,6 +1315,7 @@ fn validate_associated_type_binding_defs(
     iface_namespace_path: &[Name],
     binding_namespace_path: &[Name],
     generic_params: &[Name],
+    generic_bounds: &GenericBoundExprMap,
     generic_subst: &std::collections::HashMap<Name, baml_compiler2_ast::TypeExpr>,
     bindings: &[baml_compiler2_ast::AssociatedTypeBindingDef],
     aliases: &std::collections::HashMap<QualifiedTypeName, Ty>,
@@ -1346,7 +1429,16 @@ fn validate_associated_type_binding_defs(
         );
         if binding_diags.is_empty()
             && bound_diags.is_empty()
-            && !ty_nominal_subtype(db, &binding_ty, &bound_ty, aliases)
+            && !ty_nominal_subtype_with_generic_bounds(
+                db,
+                &binding_ty,
+                &bound_ty,
+                binding_pkg_items,
+                binding_namespace_path,
+                generic_params,
+                generic_bounds,
+                aliases,
+            )
         {
             diagnostics.push(
                 Diagnostic::error(
@@ -1401,6 +1493,7 @@ fn validate_associated_type_default_bounds(
 ) {
     let mut associated_subst: std::collections::HashMap<Name, baml_compiler2_ast::TypeExpr> =
         std::collections::HashMap::new();
+    let generic_bounds = generic_bound_expr_map(&iface.generic_params, &iface.generic_param_bounds);
     for assoc in &iface.associated_types {
         let (Some(bound), Some(default)) = (&assoc.bound, &assoc.default) else {
             if let Some(default) = &assoc.default {
@@ -1433,7 +1526,16 @@ fn validate_associated_type_default_bounds(
         );
         if bound_diags.is_empty()
             && default_diags.is_empty()
-            && !ty_nominal_subtype(db, &default_ty, &bound_ty, aliases)
+            && !ty_nominal_subtype_with_generic_bounds(
+                db,
+                &default_ty,
+                &bound_ty,
+                pkg_items,
+                namespace_path,
+                &iface.generic_params,
+                &generic_bounds,
+                aliases,
+            )
         {
             diagnostics.push(
                 Diagnostic::error(
@@ -1455,6 +1557,52 @@ fn validate_associated_type_default_bounds(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
+fn ty_nominal_subtype_with_generic_bounds(
+    db: &dyn Db,
+    sub: &Ty,
+    sup: &Ty,
+    pkg_items: &baml_compiler2_hir::package::PackageItems<'_>,
+    namespace_path: &[Name],
+    generic_params: &[Name],
+    generic_bounds: &GenericBoundExprMap,
+    aliases: &std::collections::HashMap<QualifiedTypeName, Ty>,
+) -> bool {
+    match sub {
+        Ty::Unknown { .. } | Ty::Error { .. } => true,
+        Ty::TypeVar(name, _) => {
+            baml_compiler2_tir::normalize::is_same_normalized_type(sub, sup, aliases)
+                || typevar_bound_nominal_subtype(
+                    db,
+                    name,
+                    sup,
+                    pkg_items,
+                    namespace_path,
+                    generic_params,
+                    generic_bounds,
+                    aliases,
+                    &mut HashSet::new(),
+                )
+        }
+        Ty::Union(members, _) => {
+            !members.is_empty()
+                && members.iter().all(|member| {
+                    ty_nominal_subtype_with_generic_bounds(
+                        db,
+                        member,
+                        sup,
+                        pkg_items,
+                        namespace_path,
+                        generic_params,
+                        generic_bounds,
+                        aliases,
+                    )
+                })
+        }
+        _ => ty_nominal_subtype(db, sub, sup, aliases),
+    }
+}
+
 fn validate_associated_type_bindings_in_items(
     db: &dyn Db,
     file_id: FileId,
@@ -1468,11 +1616,13 @@ fn validate_associated_type_bindings_in_items(
     for item in items {
         match item {
             baml_compiler2_ast::Item::Function(function) => {
+                let empty_bounds = GenericBoundExprMap::new();
                 validate_associated_type_bindings_in_function(
                     db,
                     file_id,
                     function,
                     &[],
+                    &empty_bounds,
                     pkg_items,
                     namespace_path,
                     aliases,
@@ -1481,6 +1631,8 @@ fn validate_associated_type_bindings_in_items(
             }
             baml_compiler2_ast::Item::Class(class) => {
                 let outer_generics = class.generic_params.clone();
+                let outer_bounds =
+                    generic_bound_expr_map(&class.generic_params, &class.generic_param_bounds);
                 for field in &class.fields {
                     if let Some(te) = &field.type_expr {
                         validate_associated_type_bindings_in_type_expr(
@@ -1491,6 +1643,7 @@ fn validate_associated_type_bindings_in_items(
                             pkg_items,
                             namespace_path,
                             &outer_generics,
+                            &outer_bounds,
                             aliases,
                             &mut diagnostics,
                         );
@@ -1502,6 +1655,7 @@ fn validate_associated_type_bindings_in_items(
                         file_id,
                         method,
                         &outer_generics,
+                        &outer_bounds,
                         pkg_items,
                         namespace_path,
                         aliases,
@@ -1517,6 +1671,7 @@ fn validate_associated_type_bindings_in_items(
                         pkg_items,
                         namespace_path,
                         &outer_generics,
+                        &outer_bounds,
                         aliases,
                         &mut diagnostics,
                     );
@@ -1530,6 +1685,7 @@ fn validate_associated_type_bindings_in_items(
                                 pkg_items,
                                 namespace_path,
                                 &outer_generics,
+                                &outer_bounds,
                                 aliases,
                                 &mut diagnostics,
                             );
@@ -1541,6 +1697,7 @@ fn validate_associated_type_bindings_in_items(
                             file_id,
                             method,
                             &outer_generics,
+                            &outer_bounds,
                             pkg_items,
                             namespace_path,
                             aliases,
@@ -1551,6 +1708,8 @@ fn validate_associated_type_bindings_in_items(
             }
             baml_compiler2_ast::Item::Interface(iface) => {
                 validate_associated_type_declaration_names(file_id, iface, &mut diagnostics);
+                let iface_bounds =
+                    generic_bound_expr_map(&iface.generic_params, &iface.generic_param_bounds);
                 for bound in iface.generic_param_bounds.iter().flatten() {
                     validate_associated_type_bindings_in_type_expr(
                         db,
@@ -1560,6 +1719,7 @@ fn validate_associated_type_bindings_in_items(
                         pkg_items,
                         namespace_path,
                         &iface.generic_params,
+                        &iface_bounds,
                         aliases,
                         &mut diagnostics,
                     );
@@ -1573,6 +1733,7 @@ fn validate_associated_type_bindings_in_items(
                         pkg_items,
                         namespace_path,
                         &iface.generic_params,
+                        &iface_bounds,
                         aliases,
                         &mut diagnostics,
                     );
@@ -1587,6 +1748,7 @@ fn validate_associated_type_bindings_in_items(
                             pkg_items,
                             namespace_path,
                             &iface.generic_params,
+                            &iface_bounds,
                             aliases,
                             &mut diagnostics,
                         );
@@ -1602,6 +1764,7 @@ fn validate_associated_type_bindings_in_items(
                             pkg_items,
                             namespace_path,
                             &iface.generic_params,
+                            &iface_bounds,
                             aliases,
                             &mut diagnostics,
                         );
@@ -1615,6 +1778,7 @@ fn validate_associated_type_bindings_in_items(
                             pkg_items,
                             namespace_path,
                             &iface.generic_params,
+                            &iface_bounds,
                             aliases,
                             &mut diagnostics,
                         );
@@ -1626,6 +1790,7 @@ fn validate_associated_type_bindings_in_items(
                         file_id,
                         method,
                         &iface.generic_params,
+                        &iface_bounds,
                         pkg_items,
                         namespace_path,
                         aliases,
@@ -1638,6 +1803,7 @@ fn validate_associated_type_bindings_in_items(
                         file_id,
                         method,
                         &iface.generic_params,
+                        &iface_bounds,
                         pkg_items,
                         namespace_path,
                         aliases,
@@ -1647,6 +1813,7 @@ fn validate_associated_type_bindings_in_items(
             }
             baml_compiler2_ast::Item::TypeAlias(alias) => {
                 if let Some(te) = &alias.type_expr {
+                    let empty_bounds = GenericBoundExprMap::new();
                     validate_associated_type_bindings_in_type_expr(
                         db,
                         file_id,
@@ -1655,6 +1822,7 @@ fn validate_associated_type_bindings_in_items(
                         pkg_items,
                         namespace_path,
                         &[],
+                        &empty_bounds,
                         aliases,
                         &mut diagnostics,
                     );
@@ -1666,6 +1834,12 @@ fn validate_associated_type_bindings_in_items(
                     .iter()
                     .map(|(name, _)| name.clone())
                     .collect();
+                let impl_bound_exprs: Vec<Option<baml_compiler2_ast::TypeExpr>> = imp
+                    .generic_params
+                    .iter()
+                    .map(|(_, bound)| bound.clone())
+                    .collect();
+                let impl_bounds = generic_bound_expr_map(&impl_generics, &impl_bound_exprs);
                 for (_, bound) in &imp.generic_params {
                     if let Some(bound) = bound {
                         validate_associated_type_bindings_in_type_expr(
@@ -1676,6 +1850,7 @@ fn validate_associated_type_bindings_in_items(
                             pkg_items,
                             namespace_path,
                             &impl_generics,
+                            &impl_bounds,
                             aliases,
                             &mut diagnostics,
                         );
@@ -1689,6 +1864,7 @@ fn validate_associated_type_bindings_in_items(
                     pkg_items,
                     namespace_path,
                     &impl_generics,
+                    &impl_bounds,
                     aliases,
                     &mut diagnostics,
                 );
@@ -1700,6 +1876,7 @@ fn validate_associated_type_bindings_in_items(
                     pkg_items,
                     namespace_path,
                     &impl_generics,
+                    &impl_bounds,
                     aliases,
                     &mut diagnostics,
                 );
@@ -1713,6 +1890,7 @@ fn validate_associated_type_bindings_in_items(
                             pkg_items,
                             namespace_path,
                             &impl_generics,
+                            &impl_bounds,
                             aliases,
                             &mut diagnostics,
                         );
@@ -1724,6 +1902,7 @@ fn validate_associated_type_bindings_in_items(
                         file_id,
                         method,
                         &impl_generics,
+                        &impl_bounds,
                         pkg_items,
                         namespace_path,
                         aliases,
@@ -1767,12 +1946,36 @@ fn validate_associated_type_declaration_names(
     }
 }
 
+type GenericBoundExprMap = std::collections::HashMap<Name, baml_compiler2_ast::TypeExpr>;
+
+fn generic_bound_expr_map(
+    params: &[Name],
+    bounds: &[Option<baml_compiler2_ast::TypeExpr>],
+) -> GenericBoundExprMap {
+    params
+        .iter()
+        .zip(bounds.iter())
+        .filter_map(|(name, bound)| bound.as_ref().map(|bound| (name.clone(), bound.clone())))
+        .collect()
+}
+
+fn extend_generic_bound_expr_map(
+    outer: &GenericBoundExprMap,
+    params: &[Name],
+    bounds: &[Option<baml_compiler2_ast::TypeExpr>],
+) -> GenericBoundExprMap {
+    let mut merged = outer.clone();
+    merged.extend(generic_bound_expr_map(params, bounds));
+    merged
+}
+
 #[allow(clippy::too_many_arguments)]
 fn validate_associated_type_bindings_in_function(
     db: &dyn Db,
     file_id: FileId,
     function: &baml_compiler2_ast::FunctionDef,
     outer_generic_params: &[Name],
+    outer_generic_bounds: &GenericBoundExprMap,
     pkg_items: &baml_compiler2_hir::package::PackageItems<'_>,
     namespace_path: &[Name],
     aliases: &std::collections::HashMap<QualifiedTypeName, Ty>,
@@ -1780,12 +1983,11 @@ fn validate_associated_type_bindings_in_function(
 ) {
     let mut generic_params = outer_generic_params.to_vec();
     generic_params.extend(function.generic_params.iter().cloned());
-    let generic_bounds: std::collections::HashMap<Name, baml_compiler2_ast::TypeExpr> = function
-        .generic_params
-        .iter()
-        .zip(function.generic_param_bounds.iter())
-        .filter_map(|(name, bound)| bound.as_ref().map(|bound| (name.clone(), bound.clone())))
-        .collect();
+    let generic_bounds = extend_generic_bound_expr_map(
+        outer_generic_bounds,
+        &function.generic_params,
+        &function.generic_param_bounds,
+    );
     for bound in function.generic_param_bounds.iter().flatten() {
         validate_associated_type_bindings_in_type_expr(
             db,
@@ -1795,6 +1997,7 @@ fn validate_associated_type_bindings_in_function(
             pkg_items,
             namespace_path,
             &generic_params,
+            &generic_bounds,
             aliases,
             diagnostics,
         );
@@ -1819,6 +2022,7 @@ fn validate_associated_type_bindings_in_function(
                 pkg_items,
                 namespace_path,
                 &generic_params,
+                &generic_bounds,
                 aliases,
                 diagnostics,
             );
@@ -1843,6 +2047,7 @@ fn validate_associated_type_bindings_in_function(
             pkg_items,
             namespace_path,
             &generic_params,
+            &generic_bounds,
             aliases,
             diagnostics,
         );
@@ -1866,6 +2071,7 @@ fn validate_associated_type_bindings_in_function(
             pkg_items,
             namespace_path,
             &generic_params,
+            &generic_bounds,
             aliases,
             diagnostics,
         );
@@ -1878,6 +2084,7 @@ fn validate_associated_type_bindings_in_method_sig(
     file_id: FileId,
     method: &baml_compiler2_ast::MethodSigDef,
     outer_generic_params: &[Name],
+    outer_generic_bounds: &GenericBoundExprMap,
     pkg_items: &baml_compiler2_hir::package::PackageItems<'_>,
     namespace_path: &[Name],
     aliases: &std::collections::HashMap<QualifiedTypeName, Ty>,
@@ -1885,12 +2092,11 @@ fn validate_associated_type_bindings_in_method_sig(
 ) {
     let mut generic_params = outer_generic_params.to_vec();
     generic_params.extend(method.generic_params.iter().cloned());
-    let generic_bounds: std::collections::HashMap<Name, baml_compiler2_ast::TypeExpr> = method
-        .generic_params
-        .iter()
-        .zip(method.generic_param_bounds.iter())
-        .filter_map(|(name, bound)| bound.as_ref().map(|bound| (name.clone(), bound.clone())))
-        .collect();
+    let generic_bounds = extend_generic_bound_expr_map(
+        outer_generic_bounds,
+        &method.generic_params,
+        &method.generic_param_bounds,
+    );
     for bound in method.generic_param_bounds.iter().flatten() {
         validate_associated_type_bindings_in_type_expr(
             db,
@@ -1900,6 +2106,7 @@ fn validate_associated_type_bindings_in_method_sig(
             pkg_items,
             namespace_path,
             &generic_params,
+            &generic_bounds,
             aliases,
             diagnostics,
         );
@@ -1924,6 +2131,7 @@ fn validate_associated_type_bindings_in_method_sig(
                 pkg_items,
                 namespace_path,
                 &generic_params,
+                &generic_bounds,
                 aliases,
                 diagnostics,
             );
@@ -1948,6 +2156,7 @@ fn validate_associated_type_bindings_in_method_sig(
             pkg_items,
             namespace_path,
             &generic_params,
+            &generic_bounds,
             aliases,
             diagnostics,
         );
@@ -1971,6 +2180,7 @@ fn validate_associated_type_bindings_in_method_sig(
             pkg_items,
             namespace_path,
             &generic_params,
+            &generic_bounds,
             aliases,
             diagnostics,
         );
@@ -1986,6 +2196,7 @@ fn validate_associated_type_bindings_in_type_expr(
     pkg_items: &baml_compiler2_hir::package::PackageItems<'_>,
     namespace_path: &[Name],
     generic_params: &[Name],
+    generic_bounds: &GenericBoundExprMap,
     aliases: &std::collections::HashMap<QualifiedTypeName, Ty>,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
@@ -2007,6 +2218,7 @@ fn validate_associated_type_bindings_in_type_expr(
                     pkg_items,
                     namespace_path,
                     generic_params,
+                    generic_bounds,
                     aliases,
                     diagnostics,
                 );
@@ -2020,6 +2232,7 @@ fn validate_associated_type_bindings_in_type_expr(
                     pkg_items,
                     namespace_path,
                     generic_params,
+                    generic_bounds,
                     aliases,
                     diagnostics,
                 );
@@ -2032,6 +2245,7 @@ fn validate_associated_type_bindings_in_type_expr(
                 pkg_items,
                 namespace_path,
                 generic_params,
+                generic_bounds,
                 aliases,
                 diagnostics,
             );
@@ -2046,6 +2260,7 @@ fn validate_associated_type_bindings_in_type_expr(
                     pkg_items,
                     namespace_path,
                     generic_params,
+                    generic_bounds,
                     aliases,
                     diagnostics,
                 );
@@ -2062,6 +2277,7 @@ fn validate_associated_type_bindings_in_type_expr(
                 pkg_items,
                 namespace_path,
                 generic_params,
+                generic_bounds,
                 aliases,
                 diagnostics,
             );
@@ -2074,6 +2290,7 @@ fn validate_associated_type_bindings_in_type_expr(
                     pkg_items,
                     namespace_path,
                     generic_params,
+                    generic_bounds,
                     aliases,
                     diagnostics,
                 );
@@ -2086,6 +2303,7 @@ fn validate_associated_type_bindings_in_type_expr(
                 pkg_items,
                 namespace_path,
                 generic_params,
+                generic_bounds,
                 aliases,
                 diagnostics,
             );
@@ -2099,6 +2317,7 @@ fn validate_associated_type_bindings_in_type_expr(
                 pkg_items,
                 namespace_path,
                 generic_params,
+                generic_bounds,
                 aliases,
                 diagnostics,
             );
@@ -2112,6 +2331,7 @@ fn validate_associated_type_bindings_in_type_expr(
                 pkg_items,
                 namespace_path,
                 generic_params,
+                generic_bounds,
                 aliases,
                 diagnostics,
             );
@@ -2123,6 +2343,7 @@ fn validate_associated_type_bindings_in_type_expr(
                 pkg_items,
                 namespace_path,
                 generic_params,
+                generic_bounds,
                 aliases,
                 diagnostics,
             );
@@ -2137,6 +2358,7 @@ fn validate_associated_type_bindings_in_type_expr(
                     pkg_items,
                     namespace_path,
                     generic_params,
+                    generic_bounds,
                     aliases,
                     diagnostics,
                 );
@@ -2152,6 +2374,11 @@ fn validate_associated_type_bindings_in_type_expr(
         } => {
             let mut nested_generic_params = generic_params.to_vec();
             nested_generic_params.extend(function_generic_params.iter().cloned());
+            let nested_generic_bounds = extend_generic_bound_expr_map(
+                generic_bounds,
+                function_generic_params,
+                generic_param_bounds,
+            );
             for bound in generic_param_bounds.iter().flatten() {
                 validate_associated_type_bindings_in_type_expr(
                     db,
@@ -2161,6 +2388,7 @@ fn validate_associated_type_bindings_in_type_expr(
                     pkg_items,
                     namespace_path,
                     &nested_generic_params,
+                    &nested_generic_bounds,
                     aliases,
                     diagnostics,
                 );
@@ -2174,6 +2402,7 @@ fn validate_associated_type_bindings_in_type_expr(
                     pkg_items,
                     namespace_path,
                     &nested_generic_params,
+                    &nested_generic_bounds,
                     aliases,
                     diagnostics,
                 );
@@ -2186,6 +2415,7 @@ fn validate_associated_type_bindings_in_type_expr(
                 pkg_items,
                 namespace_path,
                 &nested_generic_params,
+                &nested_generic_bounds,
                 aliases,
                 diagnostics,
             );
@@ -2198,6 +2428,7 @@ fn validate_associated_type_bindings_in_type_expr(
                     pkg_items,
                     namespace_path,
                     &nested_generic_params,
+                    &nested_generic_bounds,
                     aliases,
                     diagnostics,
                 );
@@ -2217,6 +2448,7 @@ fn validate_unqualified_associated_type_projection(
     pkg_items: &baml_compiler2_hir::package::PackageItems<'_>,
     namespace_path: &[Name],
     generic_params: &[Name],
+    _generic_bounds: &GenericBoundExprMap,
     aliases: &std::collections::HashMap<QualifiedTypeName, Ty>,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
@@ -2311,6 +2543,7 @@ fn validate_qualified_associated_type_projection(
     pkg_items: &baml_compiler2_hir::package::PackageItems<'_>,
     namespace_path: &[Name],
     generic_params: &[Name],
+    generic_bounds: &GenericBoundExprMap,
     aliases: &std::collections::HashMap<QualifiedTypeName, Ty>,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
@@ -2377,13 +2610,6 @@ fn validate_qualified_associated_type_projection(
     if !base_diags.is_empty() {
         return;
     }
-    let base_ty = expand_alias_chain(base_ty, aliases);
-    if matches!(
-        base_ty,
-        Ty::TypeVar(..) | Ty::Unknown { .. } | Ty::Error { .. }
-    ) {
-        return;
-    }
 
     let mut interface_diags = Vec::new();
     let interface_ty = baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns(
@@ -2401,7 +2627,24 @@ fn validate_qualified_associated_type_projection(
         return;
     }
 
-    if !ty_nominal_subtype(db, &base_ty, &interface_ty, aliases) {
+    let base_ty = expand_alias_chain(base_ty, aliases);
+    let base_implements_interface = match &base_ty {
+        Ty::Unknown { .. } | Ty::Error { .. } => return,
+        Ty::TypeVar(name, _) => typevar_bound_nominal_subtype(
+            db,
+            name,
+            &interface_ty,
+            pkg_items,
+            namespace_path,
+            generic_params,
+            generic_bounds,
+            aliases,
+            &mut HashSet::new(),
+        ),
+        _ => ty_nominal_subtype(db, &base_ty, &interface_ty, aliases),
+    };
+
+    if !base_implements_interface {
         diagnostics.push(
             Diagnostic::error(
                 DiagnosticId::TypeMismatch,
@@ -2417,6 +2660,59 @@ fn validate_qualified_associated_type_projection(
             })
             .with_phase(DiagnosticPhase::Type),
         );
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn typevar_bound_nominal_subtype(
+    db: &dyn Db,
+    name: &Name,
+    sup: &Ty,
+    pkg_items: &baml_compiler2_hir::package::PackageItems<'_>,
+    namespace_path: &[Name],
+    generic_params: &[Name],
+    generic_bounds: &GenericBoundExprMap,
+    aliases: &std::collections::HashMap<QualifiedTypeName, Ty>,
+    visited: &mut HashSet<Name>,
+) -> bool {
+    if !visited.insert(name.clone()) {
+        return false;
+    }
+
+    let Some(bound) = generic_bounds.get(name) else {
+        return false;
+    };
+    let mut bound_diags = Vec::new();
+    let bound_ty = baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns(
+        db,
+        bound,
+        pkg_items,
+        namespace_path,
+        generic_params,
+        &mut bound_diags,
+    );
+    if !bound_diags.is_empty() {
+        return false;
+    }
+
+    let bound_ty = expand_alias_chain(bound_ty, aliases);
+    if ty_nominal_subtype(db, &bound_ty, sup, aliases) {
+        return true;
+    }
+
+    match bound_ty {
+        Ty::TypeVar(next, _) => typevar_bound_nominal_subtype(
+            db,
+            &next,
+            sup,
+            pkg_items,
+            namespace_path,
+            generic_params,
+            generic_bounds,
+            aliases,
+            visited,
+        ),
+        _ => false,
     }
 }
 
@@ -2811,6 +3107,7 @@ fn validate_associated_type_bindings_on_interface_type(
     pkg_items: &baml_compiler2_hir::package::PackageItems<'_>,
     namespace_path: &[Name],
     generic_params: &[Name],
+    generic_bounds: &GenericBoundExprMap,
     aliases: &std::collections::HashMap<QualifiedTypeName, Ty>,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
@@ -2922,7 +3219,16 @@ fn validate_associated_type_bindings_on_interface_type(
         );
         if binding_diags.is_empty()
             && bound_diags.is_empty()
-            && !ty_nominal_subtype(db, &binding_ty, &bound_ty, aliases)
+            && !ty_nominal_subtype_with_generic_bounds(
+                db,
+                &binding_ty,
+                &bound_ty,
+                pkg_items,
+                namespace_path,
+                generic_params,
+                generic_bounds,
+                aliases,
+            )
         {
             diagnostics.push(
                 Diagnostic::error(
@@ -3571,11 +3877,11 @@ fn implements_for_target_matches_class(
             .is_some())
 }
 
-fn class_method_names_for_implements_target(
-    ctx: &InterfaceValidationCtx<'_, '_>,
+fn class_method_signatures_for_implements_target<'db>(
+    ctx: &InterfaceValidationCtx<'db, '_>,
     target: &baml_compiler2_ast::TypeExpr,
     target_generic_params: &[Name],
-) -> HashSet<Name> {
+) -> Vec<ClassMethodSignatureSource<'db>> {
     use baml_compiler2_hir::contributions::Definition;
 
     let mut target_diags = Vec::new();
@@ -3588,26 +3894,40 @@ fn class_method_names_for_implements_target(
         &mut target_diags,
     );
     let Ty::Class(class_qtn, _, _) = target_ty else {
-        return HashSet::new();
+        return Vec::new();
     };
     let pkg_id = baml_compiler2_hir::package::PackageId::new(ctx.db, class_qtn.package().clone());
     let pkg_items = baml_compiler2_ppir::package_items(ctx.db, pkg_id);
     let Some(Definition::Class(class_loc)) =
         pkg_items.lookup_type(class_qtn.namespace(), class_qtn.name())
     else {
-        return HashSet::new();
+        return Vec::new();
     };
     let item_tree = baml_compiler2_hir::file_item_tree(ctx.db, class_loc.file(ctx.db));
     let Some(class_data) = item_tree.classes.get(&class_loc.id(ctx.db)) else {
-        return HashSet::new();
+        return Vec::new();
     };
+    let class_pkg_info =
+        baml_compiler2_hir::file_package::file_package(ctx.db, class_loc.file(ctx.db));
+    let mut subst: std::collections::HashMap<Name, baml_compiler2_ast::TypeExpr> =
+        std::collections::HashMap::new();
+    if let baml_compiler2_ast::TypeExpr::Path { generic_args, .. } = target {
+        for (param, arg) in class_data.generic_params.iter().zip(generic_args.iter()) {
+            subst.insert(param.clone(), arg.clone());
+        }
+    }
 
     class_data
         .methods
         .iter()
         .filter(|method_id| !item_tree.method_to_iface_target.contains_key(method_id))
         .filter_map(|method_id| item_tree.functions.get(method_id))
-        .map(|method| method.name.clone())
+        .map(|method| ClassMethodSignatureSource {
+            name: method.name.clone(),
+            signature: MethodSignature::from_hir_function_with_subst(method, &subst),
+            pkg_items: pkg_items.clone(),
+            namespace_path: class_pkg_info.namespace_path.clone(),
+        })
         .collect()
 }
 
@@ -4066,6 +4386,12 @@ fn validate_implements_for<'db>(
     let target_name = Name::new(format!("{}", imp.for_target.expr));
     let generic_param_names: Vec<Name> =
         imp.generic_params.iter().map(|(n, _)| n.clone()).collect();
+    let generic_param_bounds: Vec<Option<baml_compiler2_ast::TypeExpr>> = imp
+        .generic_params
+        .iter()
+        .map(|(_, bound)| bound.clone())
+        .collect();
+    let generic_bounds = generic_bound_expr_map(&generic_param_names, &generic_param_bounds);
     let ctx = InterfaceValidationCtx {
         db,
         pkg_items,
@@ -4237,6 +4563,7 @@ fn validate_implements_for<'db>(
         &iface_namespace_path,
         namespace_path,
         &generic_param_names,
+        &generic_bounds,
         &generic_subst,
         &imp.associated_type_bindings,
         aliases,
@@ -4315,6 +4642,7 @@ fn validate_implements_for<'db>(
                         actual_pkg_items: pkg_items,
                         actual_namespace_path: namespace_path,
                         aliases,
+                        ignore_param_names: false,
                     },
                 ) {
                     diagnostics.push(
@@ -4334,8 +4662,65 @@ fn validate_implements_for<'db>(
         provided_method_names.insert(method.name.clone());
     }
 
-    let target_class_method_names =
-        class_method_names_for_implements_target(&ctx, &imp.for_target.expr, &generic_param_names);
+    let target_class_methods = class_method_signatures_for_implements_target(
+        &ctx,
+        &imp.for_target.expr,
+        &generic_param_names,
+    );
+    for source in &target_class_methods {
+        if provided_method_names.contains(&source.name) {
+            continue;
+        }
+        let expected_sig = members
+            .required_methods
+            .iter()
+            .find_map(|(_, name, sig)| {
+                if *name == source.name {
+                    Some(sig.clone())
+                } else {
+                    None
+                }
+            })
+            .or_else(|| {
+                members.default_methods.iter().find_map(|(_, name, sig)| {
+                    if *name == source.name {
+                        Some(sig.clone())
+                    } else {
+                        None
+                    }
+                })
+            });
+        if let Some(expected) = expected_sig
+            && !expected.matches(
+                &source.signature,
+                SignatureMatchContext {
+                    db,
+                    expected_pkg_items: iface_pkg_items,
+                    expected_namespace_path: &iface_namespace_path,
+                    actual_pkg_items: &source.pkg_items,
+                    actual_namespace_path: &source.namespace_path,
+                    aliases,
+                    ignore_param_names: true,
+                },
+            )
+        {
+            diagnostics.push(
+                Hir2Diagnostic::InterfaceMethodSignatureMismatch {
+                    class_name: target_name.clone(),
+                    interface_name: iface_display_name.clone(),
+                    method_name: source.name.clone(),
+                    actual: source.signature.render(),
+                    expected: expected.render(),
+                    span: imp.span,
+                }
+                .to_diagnostic(file_id),
+            );
+        }
+    }
+    let target_class_method_names: HashSet<Name> = target_class_methods
+        .iter()
+        .map(|source| source.name.clone())
+        .collect();
     for (origin, req_name, _sig) in &members.required_methods {
         if provided_method_names.contains(req_name) || target_class_method_names.contains(req_name)
         {
@@ -4571,6 +4956,7 @@ fn validate_class_implements<'db>(
             &iface_namespace_path,
             namespace_path,
             &class.generic_params,
+            &generic_bound_expr_map(&class.generic_params, &class.generic_param_bounds),
             &generic_subst,
             &block.associated_type_bindings,
             aliases,
@@ -4652,6 +5038,7 @@ fn validate_class_implements<'db>(
                             actual_pkg_items: pkg_items,
                             actual_namespace_path: namespace_path,
                             aliases,
+                            ignore_param_names: false,
                         },
                     ) {
                         diagnostics.push(
@@ -4669,6 +5056,56 @@ fn validate_class_implements<'db>(
                 }
             }
             provided_method_names.insert(m.name.clone());
+        }
+
+        for m in &class.methods {
+            if provided_method_names.contains(&m.name) {
+                continue;
+            }
+            let expected_sig = members
+                .required_methods
+                .iter()
+                .find_map(|(_, n, s)| if *n == m.name { Some(s.clone()) } else { None })
+                .or_else(|| {
+                    members.default_methods.iter().find_map(|(_, n, s)| {
+                        if *n == m.name { Some(s.clone()) } else { None }
+                    })
+                });
+            if let Some(expected) = expected_sig {
+                let actual_subst = subst_without_names(&subst, &class.generic_params);
+                let actual = MethodSignature::from_params_and_return_with_subst(
+                    &m.generic_params,
+                    &m.generic_param_bounds,
+                    &m.params,
+                    m.return_type.as_ref(),
+                    m.throws.as_ref(),
+                    &actual_subst,
+                );
+                if !expected.matches(
+                    &actual,
+                    SignatureMatchContext {
+                        db,
+                        expected_pkg_items: iface_pkg_items,
+                        expected_namespace_path: &iface_namespace_path,
+                        actual_pkg_items: pkg_items,
+                        actual_namespace_path: namespace_path,
+                        aliases,
+                        ignore_param_names: true,
+                    },
+                ) {
+                    diagnostics.push(
+                        Hir2Diagnostic::InterfaceMethodSignatureMismatch {
+                            class_name: class.name.clone(),
+                            interface_name: iface_display_name.clone(),
+                            method_name: m.name.clone(),
+                            actual: actual.render(),
+                            expected: expected.render(),
+                            span: m.name_span,
+                        }
+                        .to_diagnostic(file_id),
+                    );
+                }
+            }
         }
 
         // Check that every required method has a body — either provided here,

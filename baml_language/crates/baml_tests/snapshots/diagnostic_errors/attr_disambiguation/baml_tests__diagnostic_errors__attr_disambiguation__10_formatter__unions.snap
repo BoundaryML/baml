@@ -7,9 +7,11 @@ source: crates/baml_tests/src/generated_tests.rs
 class UA {
     x: int,
 }
+
 class UB {
     x: int,
 }
+
 class UC {
     x: int,
 }

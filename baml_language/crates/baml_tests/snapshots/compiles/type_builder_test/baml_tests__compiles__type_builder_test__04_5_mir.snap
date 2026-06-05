@@ -98,6 +98,8 @@ fn user.Fn$parse(json: string, client: baml.llm.Client) -> string {
     let _2: baml.llm.Client // client // param
     let _3: bool
     let _4: baml.llm.Client[]
+    let _5: type
+    let _6: type
 
     bb0: {
         _3 = copy _2 == const <omitted>;
@@ -111,7 +113,9 @@ fn user.Fn$parse(json: string, client: baml.llm.Client) -> string {
     }
 
     bb2: {
-        _0 = call const fn baml.llm.parse(const "Fn", copy _1) -> [bb3];
+        _5 = load_type(unknown);
+        _6 = load_type(string);
+        _0 = call const fn baml.llm.parse<copy _5, copy _6>(const "Fn", copy _1) -> [bb3];
     }
 
     bb3: {

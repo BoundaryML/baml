@@ -151,6 +151,34 @@ fn describe_enum() {
 }
 
 #[test]
+fn describe_interface() {
+    let mut builder = ProjectTest::builder();
+    builder.source(
+        "interfaces.baml",
+        r#"
+interface Named {
+    name: string
+    function label(self) -> string
+}
+
+class Person {
+    name: string
+    implements Named {
+        function label(self) -> string {
+            return self.name
+        }
+    }
+}
+"#,
+    );
+    let project = builder.build();
+
+    let descs = project.describe("Named");
+    assert_eq!(descs.len(), 1);
+    insta::assert_snapshot!(project.format_description(&descs[0]));
+}
+
+#[test]
 fn describe_function() {
     let project = make_project();
     let descs = project.describe("ExtractPoint");

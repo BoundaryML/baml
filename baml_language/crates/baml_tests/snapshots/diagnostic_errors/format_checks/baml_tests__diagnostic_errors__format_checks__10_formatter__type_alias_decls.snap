@@ -141,6 +141,7 @@ type LongParamFn = (
 
 // ===== Nested paren unions =====
 type NestedParenUnion = ((int | string) | (bool | float))[];
+
 type DeepParenUnion = (((int | string) | (bool | float)) | (null | int[]))[]?;
 
 // ===== Complex recursive type exceeding limit =====
@@ -151,10 +152,15 @@ type Tree = string
 
 // ===== Postfix operators chained =====
 type OptionalArray = int?[];
+
 type ArrayOptional = int[]?;
+
 type DoubleOptional = int??;
+
 type DoubleArray = int[][];
+
 type ComplexPostfix = (int | string)?[][];
+
 type DeepPostfix = ((int | string | bool | float)?[])[]?;
 
 // ===== Union of classes =====

@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
 ---
-function user.fetch_as(s: string) -> void {
+function user.fetch_as(s: string) -> unknown {
     load_type #0
     load_var s
     call baml.json.from_string

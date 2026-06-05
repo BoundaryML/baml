@@ -14,7 +14,7 @@ use baml_compiler2_mir::{
     BasicBlock, BinOp, BlockId, Constant, IndexKind, IntrinsicOp, Local, LogLevel, MirFunctionBody,
     Operand, Place, Rvalue, StatementKind, Terminator, UnaryOp,
 };
-use baml_type::{Ty, TyTemplate};
+use baml_type::{Ty, TyTemplate, TypeName};
 use bex_vm_types::{
     BinOp as VmBinOp, Bytecode, CmpOp, ConstValue, Function, FunctionKind, FunctionOrigin,
     GlobalIndex, Instruction, Object, ObjectIndex, ObjectPool, UnaryOp as VmUnaryOp,
@@ -434,6 +434,29 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
         }
     }
 
+    fn class_object_index_for_type_name(&self, tn: &TypeName) -> Option<usize> {
+        let full_name = if tn.module_path.is_empty() {
+            tn.name.to_string()
+        } else {
+            let module = tn
+                .module_path
+                .iter()
+                .map(baml_base::Name::as_str)
+                .collect::<Vec<_>>()
+                .join(".");
+            format!("{module}.{}", tn.name)
+        };
+        self.class_object_indices
+            .get(&full_name)
+            .copied()
+            .or_else(|| {
+                self.class_object_indices
+                    .get(tn.display_name.as_str())
+                    .copied()
+            })
+            .or_else(|| self.class_object_indices.get(tn.name.as_str()).copied())
+    }
+
     /// Resolve the type of a MIR Place by walking from the root local through projections.
     fn resolve_place_type(&self, place: &Place) -> Option<Ty> {
         match place {
@@ -443,9 +466,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 let base_ty = self.resolve_place_type(base)?;
                 match &base_ty {
                     Ty::Class(type_name, _, _) => {
-                        let &obj_idx = self
-                            .class_object_indices
-                            .get(type_name.display_name.as_str())?;
+                        let obj_idx = self.class_object_index_for_type_name(type_name)?;
                         match self.objects.get(obj_idx)? {
                             Object::Class(class) => {
                                 class.fields.get(*field).map(|f| f.field_type.clone())
@@ -982,6 +1003,9 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             param_names: Vec::new(),
             param_types: Vec::new(),
             param_has_default: Vec::new(),
+            display_type_params: Vec::new(),
+            display_param_types: Vec::new(),
+            display_return_type: "null".to_string(),
             throws_type: None,
             origin: FunctionOrigin::Internal,
             body_meta: None,
@@ -2223,12 +2247,29 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             Terminator::ShortCircuit {
                 operand,
                 is_and,
-                destination: _,
+                destination,
                 eval_rhs,
                 join,
             } => {
-                // Legacy-style short-circuit using JumpIfFalse (peek, no pop).
-                // The destination local is PhiLike — value stays on TOS, no store/load.
+                // Short-circuit lowering using JumpIfFalse (peek, no pop).
+                //
+                // The short-circuit (taken) path leaves the operand value on TOS
+                // and jumps to the join. The `eval_rhs` block computes and stores
+                // the result via its own trailing `destination = <rhs>` statement.
+                // Both paths must agree on where the result lives at the join:
+                //
+                // * When `destination` is stack-carried, the join consumes the
+                //   value straight off TOS, and the `eval_rhs` store is also
+                //   elided. The taken path should leave the value on TOS.
+                // * Otherwise `destination` is a real slot: the `eval_rhs` store
+                //   writes the slot and pops, so the taken path must also store
+                //   its TOS value into the slot before the join.
+                let store_on_taken_path = !matches!(destination, Place::Local(l)
+                    if matches!(
+                        pull_semantics::local_store_behavior(self.analysis.classifications[l]),
+                        pull_semantics::LocalStoreBehavior::KeepOnStack
+                    )
+                );
                 self.emit_operand_pull(operand);
 
                 if *is_and {
@@ -2236,14 +2277,27 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                     //     true → pop, evaluate rhs.
                     let sc_jump = self.emit(Instruction::JumpIfFalse(0));
                     let resolved_join = self.resolve_pending_target(*join);
-                    self.pending_jumps.push((sc_jump, resolved_join));
-                    self.emit(Instruction::Pop(1));
-                    self.emit_jump_unless_fallthrough(*eval_rhs);
+                    if store_on_taken_path {
+                        self.emit(Instruction::Pop(1));
+                        self.emit_jump_always(*eval_rhs);
+                        let taken_pc = self.bytecode.instructions.len();
+                        self.patch_jump_to(sc_jump, taken_pc);
+                        self.emit_store_place(destination);
+                        let join_jump = self.emit(Instruction::Jump(0));
+                        self.pending_jumps.push((join_jump, resolved_join));
+                    } else {
+                        self.pending_jumps.push((sc_jump, resolved_join));
+                        self.emit(Instruction::Pop(1));
+                        self.emit_jump_unless_fallthrough(*eval_rhs);
+                    }
                 } else {
                     // ||: false → pop, evaluate rhs.
                     //     true → value stays on TOS, jump to join.
                     let false_jump = self.emit(Instruction::JumpIfFalse(0));
                     let resolved_join = self.resolve_pending_target(*join);
+                    if store_on_taken_path {
+                        self.emit_store_place(destination);
+                    }
                     let true_jump = self.emit(Instruction::Jump(0));
                     self.pending_jumps.push((true_jump, resolved_join));
                     // False landing: patch JumpIfFalse to here, pop, fall to eval_rhs.
@@ -3068,7 +3122,7 @@ impl PullSink for StackifyCodegen<'_, '_> {
                 // concrete-but-parametric (e.g. Foo<int>).  Use the
                 // ClassWithTypeArgs constant so the VM can compare args.
                 let class_name_str = tn.display_name.as_str();
-                if let Some(&class_obj_idx) = self.class_object_indices.get(class_name_str) {
+                if let Some(class_obj_idx) = self.class_object_index_for_type_name(tn) {
                     let c = self.add_constant(ConstValue::ClassWithTypeArgs {
                         class_obj: ObjectIndex::from_raw(class_obj_idx),
                         type_args_templates: type_args_templates.clone(),
@@ -3092,7 +3146,7 @@ impl PullSink for StackifyCodegen<'_, '_> {
                 };
                 if let Some((tn, ty_args_opt)) = maybe_class {
                     let class_name_str = tn.display_name.as_str();
-                    if let Some(&class_obj_idx) = self.class_object_indices.get(class_name_str) {
+                    if let Some(class_obj_idx) = self.class_object_index_for_type_name(tn) {
                         match ty_args_opt {
                             Some(ty_args) if !ty_args.is_empty() => {
                                 // Concrete generic class, e.g. Foo<int>: emit
