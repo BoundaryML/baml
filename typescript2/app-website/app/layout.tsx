@@ -1,5 +1,4 @@
 import type { Metadata } from 'next';
-import { AsciiBootLoader } from '@/components/ascii-boot-loader';
 import { SiteBanner } from '@/components/site-banner';
 import { ThemeProvider } from '@/components/theme-provider';
 import { cn } from '@/lib/utils';
@@ -93,7 +92,6 @@ export default function RootLayout(props: { children: React.ReactNode }) {
               defaultTheme="light"
               enableSystem={false}
             >
-              <AsciiBootLoader />
               <SiteBanner />
               {props.children}
             </ThemeProvider>
