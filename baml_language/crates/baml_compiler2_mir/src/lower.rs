@@ -51,7 +51,10 @@ struct CatchContext {
 
 // ─── Type conversion: TIR Ty → baml_type::Ty ────────────────────────────────
 
-use baml_compiler2_tir::ty::{FunctionParamMode, PrimitiveType, QualifiedTypeName, Ty as Tir2Ty};
+use baml_compiler2_tir::ty::{
+    FunctionParamMode, FunctionParamTy as Tir2FunctionParamTy, PrimitiveType, QualifiedTypeName,
+    Ty as Tir2Ty,
+};
 
 pub fn qtn_to_type_name(qtn: &QualifiedTypeName) -> TypeName {
     let module_path = std::iter::once(qtn.package().clone())
@@ -130,6 +133,251 @@ fn interface_tir_type_args_match_preserving_typevars(
                         impl_arg, iface_arg, aliases,
                     )
             })
+}
+
+fn tir_type_satisfies_dispatch_request(
+    actual: &Tir2Ty,
+    requested: &Tir2Ty,
+    aliases: &HashMap<QualifiedTypeName, Tir2Ty>,
+) -> bool {
+    if baml_compiler2_tir::normalize::is_same_normalized_type(actual, requested, aliases) {
+        return true;
+    }
+
+    match (actual, requested) {
+        (_, Tir2Ty::TypeVar(_, _) | Tir2Ty::AssociatedTypeProjection { .. }) => true,
+        (Tir2Ty::List(actual, _), Tir2Ty::List(requested, _))
+        | (Tir2Ty::EvolvingList(actual, _), Tir2Ty::EvolvingList(requested, _)) => {
+            tir_type_satisfies_dispatch_request(actual, requested, aliases)
+        }
+        (
+            Tir2Ty::Map(actual_key, actual_value, _),
+            Tir2Ty::Map(requested_key, requested_value, _),
+        )
+        | (
+            Tir2Ty::EvolvingMap(actual_key, actual_value, _),
+            Tir2Ty::EvolvingMap(requested_key, requested_value, _),
+        ) => {
+            tir_type_satisfies_dispatch_request(actual_key, requested_key, aliases)
+                && tir_type_satisfies_dispatch_request(actual_value, requested_value, aliases)
+        }
+        (
+            Tir2Ty::Future(actual_value, actual_error, _),
+            Tir2Ty::Future(requested_value, requested_error, _),
+        ) => {
+            tir_type_satisfies_dispatch_request(actual_value, requested_value, aliases)
+                && tir_type_satisfies_dispatch_request(actual_error, requested_error, aliases)
+        }
+        (Tir2Ty::Union(actual, _), Tir2Ty::Union(requested, _))
+            if actual.len() == requested.len() =>
+        {
+            actual
+                .iter()
+                .zip(requested.iter())
+                .all(|(actual, requested)| {
+                    tir_type_satisfies_dispatch_request(actual, requested, aliases)
+                })
+        }
+        (
+            Tir2Ty::Class(actual_qtn, actual_args, _),
+            Tir2Ty::Class(requested_qtn, requested_args, _),
+        ) if actual_qtn == requested_qtn && actual_args.len() == requested_args.len() => {
+            actual_args
+                .iter()
+                .zip(requested_args.iter())
+                .all(|(actual, requested)| {
+                    tir_type_satisfies_dispatch_request(actual, requested, aliases)
+                })
+        }
+        (
+            Tir2Ty::Interface(actual_qtn, actual_args, actual_assoc, _),
+            Tir2Ty::Interface(requested_qtn, requested_args, requested_assoc, _),
+        ) if actual_qtn == requested_qtn && actual_args.len() == requested_args.len() => {
+            actual_args
+                .iter()
+                .zip(requested_args.iter())
+                .all(|(actual, requested)| {
+                    tir_type_satisfies_dispatch_request(actual, requested, aliases)
+                })
+                && requested_assoc
+                    .iter()
+                    .all(|(requested_name, requested_ty)| {
+                        actual_assoc
+                            .iter()
+                            .find(|(actual_name, _)| actual_name == requested_name)
+                            .is_some_and(|(_, actual_ty)| {
+                                tir_type_satisfies_dispatch_request(
+                                    actual_ty,
+                                    requested_ty,
+                                    aliases,
+                                )
+                            })
+                    })
+        }
+        (
+            Tir2Ty::Function {
+                params: actual_params,
+                ret: actual_ret,
+                throws: actual_throws,
+                ..
+            },
+            Tir2Ty::Function {
+                params: requested_params,
+                ret: requested_ret,
+                throws: requested_throws,
+                ..
+            },
+        ) if actual_params.len() == requested_params.len()
+            && actual_params
+                .iter()
+                .zip(requested_params.iter())
+                .all(|(actual, requested)| actual.mode == requested.mode) =>
+        {
+            actual_params
+                .iter()
+                .zip(requested_params.iter())
+                .all(|(actual, requested)| {
+                    tir_type_satisfies_dispatch_request(&actual.ty, &requested.ty, aliases)
+                })
+                && tir_type_satisfies_dispatch_request(actual_ret, requested_ret, aliases)
+                && tir_type_satisfies_dispatch_request(actual_throws, requested_throws, aliases)
+        }
+        _ => false,
+    }
+}
+
+fn rewrite_dispatch_request_ty(actual: &Tir2Ty, requested: &Tir2Ty) -> Tir2Ty {
+    match (actual, requested) {
+        (_, Tir2Ty::TypeVar(_, _) | Tir2Ty::AssociatedTypeProjection { .. }) => actual.clone(),
+        (Tir2Ty::List(actual, _), Tir2Ty::List(requested, attr)) => Tir2Ty::List(
+            Box::new(rewrite_dispatch_request_ty(actual, requested)),
+            attr.clone(),
+        ),
+        (Tir2Ty::EvolvingList(actual, _), Tir2Ty::EvolvingList(requested, attr)) => {
+            Tir2Ty::EvolvingList(
+                Box::new(rewrite_dispatch_request_ty(actual, requested)),
+                attr.clone(),
+            )
+        }
+        (
+            Tir2Ty::Map(actual_key, actual_value, _),
+            Tir2Ty::Map(requested_key, requested_value, attr),
+        ) => Tir2Ty::Map(
+            Box::new(rewrite_dispatch_request_ty(actual_key, requested_key)),
+            Box::new(rewrite_dispatch_request_ty(actual_value, requested_value)),
+            attr.clone(),
+        ),
+        (
+            Tir2Ty::EvolvingMap(actual_key, actual_value, _),
+            Tir2Ty::EvolvingMap(requested_key, requested_value, attr),
+        ) => Tir2Ty::EvolvingMap(
+            Box::new(rewrite_dispatch_request_ty(actual_key, requested_key)),
+            Box::new(rewrite_dispatch_request_ty(actual_value, requested_value)),
+            attr.clone(),
+        ),
+        (
+            Tir2Ty::Future(actual_value, actual_error, _),
+            Tir2Ty::Future(requested_value, requested_error, attr),
+        ) => Tir2Ty::Future(
+            Box::new(rewrite_dispatch_request_ty(actual_value, requested_value)),
+            Box::new(rewrite_dispatch_request_ty(actual_error, requested_error)),
+            attr.clone(),
+        ),
+        (Tir2Ty::Union(actual, _), Tir2Ty::Union(requested, attr))
+            if actual.len() == requested.len() =>
+        {
+            Tir2Ty::Union(
+                actual
+                    .iter()
+                    .zip(requested.iter())
+                    .map(|(actual, requested)| rewrite_dispatch_request_ty(actual, requested))
+                    .collect(),
+                attr.clone(),
+            )
+        }
+        (
+            Tir2Ty::Class(actual_qtn, actual_args, _),
+            Tir2Ty::Class(requested_qtn, requested_args, attr),
+        ) if actual_qtn == requested_qtn && actual_args.len() == requested_args.len() => {
+            Tir2Ty::Class(
+                requested_qtn.clone(),
+                actual_args
+                    .iter()
+                    .zip(requested_args.iter())
+                    .map(|(actual, requested)| rewrite_dispatch_request_ty(actual, requested))
+                    .collect(),
+                attr.clone(),
+            )
+        }
+        (
+            Tir2Ty::Interface(actual_qtn, actual_args, actual_assoc, _),
+            Tir2Ty::Interface(requested_qtn, requested_args, requested_assoc, attr),
+        ) if actual_qtn == requested_qtn && actual_args.len() == requested_args.len() => {
+            Tir2Ty::Interface(
+                requested_qtn.clone(),
+                actual_args
+                    .iter()
+                    .zip(requested_args.iter())
+                    .map(|(actual, requested)| rewrite_dispatch_request_ty(actual, requested))
+                    .collect(),
+                requested_assoc
+                    .iter()
+                    .map(|(requested_name, requested_ty)| {
+                        let rewritten = actual_assoc
+                            .iter()
+                            .find(|(actual_name, _)| actual_name == requested_name)
+                            .map_or_else(
+                                || requested_ty.clone(),
+                                |(_, actual_ty)| {
+                                    rewrite_dispatch_request_ty(actual_ty, requested_ty)
+                                },
+                            );
+                        (requested_name.clone(), rewritten)
+                    })
+                    .collect(),
+                attr.clone(),
+            )
+        }
+        (
+            Tir2Ty::Function {
+                params: actual_params,
+                ret: actual_ret,
+                throws: actual_throws,
+                ..
+            },
+            Tir2Ty::Function {
+                generic_params,
+                generic_param_bounds,
+                params: requested_params,
+                ret: requested_ret,
+                throws: requested_throws,
+                attr,
+            },
+        ) if actual_params.len() == requested_params.len()
+            && actual_params
+                .iter()
+                .zip(requested_params.iter())
+                .all(|(actual, requested)| actual.mode == requested.mode) =>
+        {
+            Tir2Ty::Function {
+                generic_params: generic_params.clone(),
+                generic_param_bounds: generic_param_bounds.clone(),
+                params: actual_params
+                    .iter()
+                    .zip(requested_params.iter())
+                    .map(|(actual, requested)| Tir2FunctionParamTy {
+                        name: requested.name.clone(),
+                        ty: rewrite_dispatch_request_ty(&actual.ty, &requested.ty),
+                        mode: requested.mode,
+                    })
+                    .collect(),
+                ret: Box::new(rewrite_dispatch_request_ty(actual_ret, requested_ret)),
+                throws: Box::new(rewrite_dispatch_request_ty(actual_throws, requested_throws)),
+                attr: attr.clone(),
+            }
+        }
+        _ => requested.clone(),
+    }
 }
 
 fn bind_interface_class_type_arg(
@@ -328,11 +576,7 @@ fn interface_class_guard_for_args(
         let (_, impl_ty) = substituted_assoc
             .iter()
             .find(|(impl_name, _)| impl_name == requested_name)?;
-        if matches!(requested_ty, Tir2Ty::TypeVar(_, _)) || contains_assoc_projection(requested_ty)
-        {
-            continue;
-        }
-        if !baml_compiler2_tir::normalize::is_same_normalized_type(impl_ty, requested_ty, aliases) {
+        if !tir_type_satisfies_dispatch_request(impl_ty, requested_ty, aliases) {
             return None;
         }
     }
@@ -1281,6 +1525,14 @@ struct InterfaceDispatchCall<'a> {
     args: &'a [AstExprId],
 }
 
+#[derive(Clone, Copy)]
+struct InterfaceDefaultCallContext<'a> {
+    iface_tn: &'a TypeName,
+    iface_type_args: &'a [Tir2Ty],
+    iface_assoc: &'a [(Name, Tir2Ty)],
+    method: &'a Name,
+}
+
 #[derive(Clone)]
 enum InterfaceClassGuard {
     Any,
@@ -1571,22 +1823,8 @@ impl<'db> LoweringContext<'db> {
         target_tn: &TypeName,
     ) -> Option<InterfaceTypeView> {
         let target_qtn = Self::baml_iter_qtn(target_tn.name.as_str());
-        let mut packages = vec![
-            baml_compiler2_hir::file_package::file_package(self.db, self.file).package,
-            target_qtn.package().clone(),
-        ];
-        match actual_ty {
-            Tir2Ty::Class(qtn, _, _) | Tir2Ty::Interface(qtn, _, _, _) | Tir2Ty::Enum(qtn, _) => {
-                packages.push(qtn.package().clone());
-            }
-            Tir2Ty::TypeAlias(qtn, _) => packages.push(qtn.package().clone()),
-            _ => {}
-        }
-        packages.sort();
-        packages.dedup();
-
-        for package in packages {
-            let pkg_id = PackageId::new(self.db, package);
+        for pkg_id in self.registry_package_ids_for_interface_lookup(actual_ty, &target_qtn) {
+            let default_pkg = pkg_id.name(self.db).clone();
             let registry =
                 baml_compiler2_tir::interfaces::package_implements_registry(self.db, pkg_id);
             for rule in &registry.interface_impl_rules {
@@ -1600,6 +1838,23 @@ impl<'db> LoweringContext<'db> {
                 };
                 let iface_ty =
                     baml_compiler2_tir::generics::substitute_ty(&rule.interface_ty, &bindings);
+                if !registry.type_implements_interface_via_rule(
+                    actual_ty,
+                    &iface_ty,
+                    &self.resolved_aliases.aliases,
+                    |actual, bound| {
+                        type_satisfies_bound(
+                            self.db,
+                            actual,
+                            bound,
+                            &self.resolved_aliases.aliases,
+                            &default_pkg,
+                            BLANKET_BOUND_DEPTH,
+                        )
+                    },
+                ) {
+                    continue;
+                }
                 let Tir2Ty::Interface(iface_qtn, iface_args, iface_assoc, _) = iface_ty else {
                     continue;
                 };
@@ -1615,6 +1870,77 @@ impl<'db> LoweringContext<'db> {
             }
         }
         None
+    }
+
+    fn registry_package_ids_for_interface_lookup(
+        &self,
+        actual_ty: &Tir2Ty,
+        target_qtn: &QualifiedTypeName,
+    ) -> Vec<PackageId<'_>> {
+        let mut names = Vec::new();
+        let mut seen = HashSet::new();
+        let mut push_name = |name: Name| {
+            if seen.insert(name.clone()) {
+                names.push(name);
+            }
+        };
+
+        let current_pkg =
+            baml_compiler2_hir::file_package::file_package(self.db, self.file).package;
+        push_name(current_pkg.clone());
+        for &dep in baml_compiler2_hir::package::package_dependencies(
+            self.db,
+            PackageId::new(self.db, current_pkg),
+        ) {
+            push_name(dep.name(self.db).clone());
+        }
+
+        if let Some(actual_pkg) = Self::tir_type_package_name(actual_ty) {
+            push_name(actual_pkg.clone());
+            for &dep in baml_compiler2_hir::package::package_dependencies(
+                self.db,
+                PackageId::new(self.db, actual_pkg),
+            ) {
+                push_name(dep.name(self.db).clone());
+            }
+        }
+
+        let target_pkg = target_qtn.package().clone();
+        push_name(target_pkg.clone());
+        for &dep in baml_compiler2_hir::package::package_dependencies(
+            self.db,
+            PackageId::new(self.db, target_pkg),
+        ) {
+            push_name(dep.name(self.db).clone());
+        }
+
+        names
+            .into_iter()
+            .map(|name| PackageId::new(self.db, name))
+            .collect()
+    }
+
+    fn tir_type_package_name(ty: &Tir2Ty) -> Option<Name> {
+        match ty {
+            Tir2Ty::Class(qtn, _, _)
+            | Tir2Ty::Interface(qtn, _, _, _)
+            | Tir2Ty::Enum(qtn, _)
+            | Tir2Ty::EnumVariant(qtn, _, _)
+            | Tir2Ty::TypeAlias(qtn, _) => Some(qtn.package().clone()),
+            Tir2Ty::Union(members, _) => {
+                let mut out = None;
+                for member in members {
+                    let pkg = Self::tir_type_package_name(member)?;
+                    match &out {
+                        Some(existing) if existing != &pkg => return None,
+                        None => out = Some(pkg),
+                        _ => {}
+                    }
+                }
+                out
+            }
+            _ => None,
+        }
     }
 
     fn interface_view_for_tir_ty(
@@ -2357,6 +2683,18 @@ impl<'db> LoweringContext<'db> {
                 {
                     bound_param_names.extend(iface_data.generic_params.iter().cloned());
                     bound_exprs.extend(iface_data.generic_param_bounds.iter().cloned());
+                    bound_param_names.extend(
+                        iface_data
+                            .associated_types
+                            .iter()
+                            .map(|assoc| assoc.name.clone()),
+                    );
+                    bound_exprs.extend(
+                        iface_data
+                            .associated_types
+                            .iter()
+                            .map(|assoc| assoc.bound.as_ref().map(|bound| bound.expr.clone())),
+                    );
                 }
             }
         }
@@ -2404,15 +2742,10 @@ impl<'db> LoweringContext<'db> {
                     .map(|assoc| {
                         (
                             assoc.name.clone(),
-                            Tir2Ty::AssociatedTypeProjection {
-                                base: Box::new(Tir2Ty::TypeVar(
-                                    Name::new("Self"),
-                                    baml_compiler2_tir::ty::TyAttr::default(),
-                                )),
-                                interface: None,
-                                member: assoc.name.clone(),
-                                attr: baml_compiler2_tir::ty::TyAttr::default(),
-                            },
+                            Tir2Ty::TypeVar(
+                                assoc.name.clone(),
+                                baml_compiler2_tir::ty::TyAttr::default(),
+                            ),
                         )
                     })
                     .collect();
@@ -6491,6 +6824,12 @@ impl LoweringContext<'_> {
             .find(|iface_data| iface_data.default_methods.contains(&func_id))
         {
             let mut params = iface_data.generic_params.clone();
+            params.extend(
+                iface_data
+                    .associated_types
+                    .iter()
+                    .map(|assoc| assoc.name.clone()),
+            );
             params.extend(item_tree[func_id].generic_params.iter().cloned());
             return params;
         }
@@ -7933,7 +8272,12 @@ impl<'db> LoweringContext<'db> {
             expr_id,
             args,
             dest,
-            Some((iface_tn, iface_type_args, method)),
+            Some(InterfaceDefaultCallContext {
+                iface_tn,
+                iface_type_args,
+                iface_assoc,
+                method,
+            }),
         )
     }
 
@@ -8036,7 +8380,7 @@ impl<'db> LoweringContext<'db> {
         expr_id: AstExprId,
         args: &[AstExprId],
         dest: &Place,
-        interface_default_context: Option<(&TypeName, &[Tir2Ty], &Name)>,
+        interface_default_context: Option<InterfaceDefaultCallContext<'_>>,
     ) -> bool {
         if resolved.is_empty() {
             return false;
@@ -8105,14 +8449,22 @@ impl<'db> LoweringContext<'db> {
                 CalleeFrameSeed::Static(tys) => {
                     let callee_op =
                         Operand::Constant(Constant::Function(candidate.item_ref.clone()));
-                    let call_type_arg_ops = if let Some((iface_tn, iface_type_args, method)) =
-                        interface_default_context
-                        && Self::item_ref_is_interface_method(&candidate.item_ref, iface_tn, method)
-                    {
-                        let mut owner_ops = self.emit_frame_type_arg_ops(iface_type_args);
-                        let owner_arg_count = iface_type_args.len();
+                    let call_type_arg_ops = if let Some(context) = interface_default_context
+                        && Self::item_ref_is_interface_method(
+                            &candidate.item_ref,
+                            context.iface_tn,
+                            context.method,
+                        ) {
+                        let mut owner_tys = context.iface_type_args.to_vec();
+                        owner_tys.extend(self.interface_assoc_frame_tys(
+                            context.iface_tn,
+                            context.iface_type_args,
+                            context.iface_assoc,
+                        ));
+                        let mut owner_ops = self.emit_frame_type_arg_ops(&owner_tys);
+                        let owner_arg_count = owner_tys.len();
                         let method_arg_count = self
-                            .interface_method_generic_count(iface_tn, method)
+                            .interface_method_generic_count(context.iface_tn, context.method)
                             .unwrap_or(0);
                         if has_explicit_type_args
                             || (method_arg_count > 0 && type_arg_ops.len() == method_arg_count)
@@ -8154,6 +8506,70 @@ impl<'db> LoweringContext<'db> {
 
         self.builder.set_current_block(bb_join);
         true
+    }
+
+    fn interface_assoc_frame_tys(
+        &self,
+        iface_tn: &TypeName,
+        iface_type_args: &[Tir2Ty],
+        iface_assoc: &[(Name, Tir2Ty)],
+    ) -> Vec<Tir2Ty> {
+        let Some((iface_loc, iface_names)) = self.interface_associated_type_names(iface_tn) else {
+            return Vec::new();
+        };
+        let pkg_info =
+            baml_compiler2_hir::file_package::file_package(self.db, iface_loc.file(self.db));
+        let pkg_items = self.resolve_class_pkg_items_by_name(&pkg_info.package);
+        let completed_assoc =
+            baml_compiler2_tir::interfaces::interface_closure_locs_with_args_and_assoc(
+                self.db,
+                iface_loc,
+                iface_type_args,
+                iface_assoc,
+                pkg_items,
+                &pkg_info.namespace_path,
+            )
+            .into_iter()
+            .next()
+            .map(|(_, _, assoc)| assoc)
+            .unwrap_or_else(|| iface_assoc.to_vec());
+
+        iface_names
+            .into_iter()
+            .map(|name| {
+                completed_assoc
+                    .iter()
+                    .find(|(assoc_name, _)| assoc_name == &name)
+                    .map(|(_, ty)| ty.clone())
+                    .unwrap_or_else(|| Tir2Ty::BuiltinUnknown {
+                        attr: TyAttr::default(),
+                    })
+            })
+            .collect()
+    }
+
+    fn interface_associated_type_names(
+        &self,
+        iface_tn: &TypeName,
+    ) -> Option<(baml_compiler2_hir::loc::InterfaceLoc<'db>, Vec<Name>)> {
+        let iface_pkg_name = iface_tn.module_path.first()?;
+        let iface_pkg_items = self.resolve_class_pkg_items_by_name(iface_pkg_name);
+        let iface_ns: Vec<Name> = iface_tn.module_path.iter().skip(1).cloned().collect();
+        let Definition::Interface(iface_loc) =
+            iface_pkg_items.lookup_type(&iface_ns, &iface_tn.name)?
+        else {
+            return None;
+        };
+        let iface_tree = baml_compiler2_hir::file_item_tree(self.db, iface_loc.file(self.db));
+        let iface_data = iface_tree.interfaces.get(&iface_loc.id(self.db))?;
+        Some((
+            iface_loc,
+            iface_data
+                .associated_types
+                .iter()
+                .map(|assoc| assoc.name.clone())
+                .collect(),
+        ))
     }
 
     fn item_ref_is_interface_method(
@@ -8937,15 +9353,16 @@ impl<'db> LoweringContext<'db> {
         iface_assoc: &[(Name, Tir2Ty)],
     ) -> bool {
         iface_assoc.iter().all(|(requested_name, requested_ty)| {
-            if matches!(requested_ty, Tir2Ty::TypeVar(_, _))
-                || contains_assoc_projection(requested_ty)
-            {
-                return true;
-            }
             impl_iface_assoc
                 .iter()
                 .find(|(impl_name, _)| impl_name == requested_name)
-                .is_some_and(|(_, impl_ty)| self.tir_types_equivalent(impl_ty, requested_ty))
+                .is_some_and(|(_, impl_ty)| {
+                    tir_type_satisfies_dispatch_request(
+                        impl_ty,
+                        requested_ty,
+                        &self.resolved_aliases.aliases,
+                    ) || self.tir_types_equivalent(impl_ty, requested_ty)
+                })
         })
     }
 
@@ -9052,34 +9469,23 @@ impl<'db> LoweringContext<'db> {
         let args = requested_args
             .iter()
             .zip(actual_args.iter())
-            .map(|(requested, actual)| {
-                if Self::is_dispatch_open_ty(requested) {
-                    actual.clone()
-                } else {
-                    requested.clone()
-                }
-            })
+            .map(|(requested, actual)| rewrite_dispatch_request_ty(actual, requested))
             .collect();
         let assoc = requested_assoc
             .iter()
             .map(|(name, requested)| {
-                if Self::is_dispatch_open_ty(requested)
-                    && let Some((_, actual)) = actual_assoc
-                        .iter()
-                        .find(|(actual_name, _)| actual_name == name)
-                {
-                    (name.clone(), actual.clone())
-                } else {
-                    (name.clone(), requested.clone())
-                }
+                let rewritten = actual_assoc
+                    .iter()
+                    .find(|(actual_name, _)| actual_name == name)
+                    .map_or_else(
+                        || requested.clone(),
+                        |(_, actual)| rewrite_dispatch_request_ty(actual, requested),
+                    );
+                (name.clone(), rewritten)
             })
             .collect();
 
         Tir2Ty::Interface(requested_qtn.clone(), args, assoc, requested_attr.clone())
-    }
-
-    fn is_dispatch_open_ty(ty: &Tir2Ty) -> bool {
-        matches!(ty, Tir2Ty::TypeVar(_, _)) || contains_assoc_projection(ty)
     }
 
     fn resolve_type_implementor_method(

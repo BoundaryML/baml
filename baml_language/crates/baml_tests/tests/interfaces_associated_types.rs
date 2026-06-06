@@ -4,17 +4,21 @@
 //! disambiguation, required-interface propagation, unions, destructuring, and
 //! runtime dispatch through associated interface views.
 
-use std::collections::HashSet;
+use std::{collections::HashSet, sync::Arc};
 
 use baml_compiler_diagnostics::Severity;
 use baml_fmt::FormatOptions;
-use baml_project::{ProjectDatabase, collect_diagnostics, testing::setup_test_db};
+use baml_project::{
+    ProjectDatabase, collect_diagnostics,
+    testing::{compile_multi_file, setup_test_db},
+};
 use baml_tests::{
     baml_test,
     engine::{OptLevel, compile_source_with_opt},
 };
-use bex_engine::BexExternalValue;
+use bex_engine::{BexEngine, BexExternalValue, FunctionCallContextBuilder};
 use bex_vm_types::Object;
+use sys_native::SysOpsExt;
 
 fn collect_compile_errors(source: &str) -> Vec<String> {
     let db = setup_test_db(source);
@@ -121,6 +125,38 @@ fn compiled_function_metadata(source: &str, display_name_suffix: &str) -> (Vec<S
             .collect(),
         function.return_type.to_string(),
     )
+}
+
+async fn run_multi_file_no_args(files: &[(&str, &str)], entry_suffix: &str) -> BexExternalValue {
+    let program = compile_multi_file(files);
+    let entry = program
+        .function_indices
+        .keys()
+        .find_map(|name| {
+            let display_name = name.strip_prefix("user.").unwrap_or(name.as_str());
+            display_name
+                .ends_with(entry_suffix)
+                .then(|| name.to_string())
+        })
+        .unwrap_or_else(|| panic!("function ending with `{entry_suffix}` not found"));
+    let engine = Arc::new(
+        BexEngine::new(
+            program,
+            Arc::new(sys_ops::SysOps::native()),
+            None,
+            Vec::new(),
+        )
+        .expect("engine"),
+    );
+    engine
+        .call_function_bound_args(
+            &entry,
+            Vec::new(),
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+            true,
+        )
+        .await
+        .expect("multi-file function should execute")
 }
 
 fn compiled_function_display_metadata(
@@ -4441,6 +4477,132 @@ async fn runtime_destructure_filters_by_associated_type_binding() {
         "#
     );
     assert_eq!(output.result.unwrap(), BexExternalValue::Int(9));
+}
+
+#[tokio::test]
+async fn runtime_dispatch_matches_partially_open_associated_binding_across_namespaces() {
+    let output = run_multi_file_no_args(
+        &[
+            (
+                "ns_contracts/contracts.baml",
+                r#"
+                interface Bucket<T> {
+                    type Shape
+
+                    function get(self) -> string
+                }
+
+                interface Routed requires Bucket<Self.Item, Shape = map<Self.Item, int>> {
+                    type Item
+
+                    function chosen(self) -> string {
+                        return self.get()
+                    }
+                }
+                "#,
+            ),
+            (
+                "ns_models/pair.baml",
+                r#"
+                class Pair<L, R> {
+                    left: L
+                    right: R
+
+                    implements root.contracts.Bucket<L> {
+                        type Shape = map<L, int>
+
+                        function get(self) -> string {
+                            return "left"
+                        }
+                    }
+
+                    implements root.contracts.Bucket<R> {
+                        type Shape = map<R, int>
+
+                        function get(self) -> string {
+                            return "right"
+                        }
+                    }
+
+                    implements root.contracts.Routed {
+                        type Item = R
+                    }
+                }
+                "#,
+            ),
+            (
+                "ns_app/main.baml",
+                r#"
+                function main() -> string {
+                    let p: root.models.Pair<int, string> = root.models.Pair { left: 1, right: "two" }
+                    let routed: root.contracts.Routed<Item = string> = p
+                    return routed.chosen()
+                }
+                "#,
+            ),
+        ],
+        "app.main",
+    )
+    .await;
+
+    assert_eq!(output, BexExternalValue::String("right".into()));
+}
+
+#[tokio::test]
+async fn runtime_dispatch_matches_partially_open_associated_binding_structurally() {
+    let output = baml_test!(
+        r#"
+        interface Bucket<T> {
+            type Shape
+
+            function get(self) -> string
+        }
+
+        interface Routed requires Bucket<Self.Item, Shape = map<Self.Item, int>> {
+            type Item
+
+            function chosen(self) -> string {
+                return self.get()
+            }
+        }
+
+        class Pair<L, R> {
+            left: L
+            right: R
+
+            implements Bucket<L> {
+                type Shape = map<L, int>
+
+                function get(self) -> string {
+                    return "left"
+                }
+            }
+
+            implements Bucket<R> {
+                type Shape = map<R, int>
+
+                function get(self) -> string {
+                    return "right"
+                }
+            }
+
+            implements Routed {
+                type Item = R
+            }
+        }
+
+        function main() -> string {
+            let p: Pair<int, string> = Pair { left: 1, right: "two" }
+            let routed: Routed<Item = string> = p
+            return routed.chosen()
+        }
+        "#
+    );
+
+    assert_eq!(
+        output.result.unwrap(),
+        BexExternalValue::String("right".into())
+    );
 }
 
 #[tokio::test]
