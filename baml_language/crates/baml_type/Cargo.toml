@@ -7,4 +7,3 @@ rust-version.workspace = true
 [dependencies]
 baml_base = { workspace = true }
 borsh = { workspace = true }
-num-bigint = { workspace = true }

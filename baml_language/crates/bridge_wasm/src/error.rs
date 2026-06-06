@@ -12,21 +12,6 @@ pub enum BridgeError {
     #[error("Protobuf decode error: {0}")]
     ProtobufDecode(#[from] prost::DecodeError),
 
-    #[error("Null buffer pointer")]
-    NullBuffer,
-
-    #[error("Handle values not supported")]
-    HandleNotSupported,
-
-    #[error("Map entry missing key")]
-    MapEntryMissingKey,
-
-    #[error("Function not found: {name}")]
-    FunctionNotFound { name: String },
-
-    #[error("Missing argument '{parameter}' for function '{function}'")]
-    MissingArgument { function: String, parameter: String },
-
     #[error("JSON error: {0}")]
     Json(#[from] serde_json::Error),
 

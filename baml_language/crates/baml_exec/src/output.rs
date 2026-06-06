@@ -131,16 +131,3 @@ pub fn format_value(value: &BexExternalValue) -> String {
         _ => format!("{value:?}"),
     }
 }
-
-/// Generate a placeholder example value for a type (used in `--help` output).
-pub fn example_value(ty: &Ty) -> &'static str {
-    match ty {
-        Ty::String { .. } => "\"value\"",
-        Ty::Int { .. } => "42",
-        Ty::Float { .. } => "3.14",
-        Ty::Bool { .. } => "true",
-        Ty::Null { .. } => "null",
-        Ty::Enum(..) => "VariantName",
-        _ => "...",
-    }
-}

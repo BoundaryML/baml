@@ -168,27 +168,6 @@ impl<'s> JsonParseState<'s> {
         Ok(0)
     }
 
-    /// Returns `true` if the current unquoted string on the stack represents a
-    /// complete JSON literal (`true`, `false`, `null`, or a valid number).
-    #[allow(dead_code)]
-    fn is_string_complete(&self) -> bool {
-        let Some((JsonCollection::UnquotedString(v, _), _)) = self.collection_stack.last() else {
-            return false;
-        };
-
-        // Check if the token is a valid json character
-        match &**v {
-            "true" | "false" | "null" => true,
-            _ => {
-                // Check if the token parses as a number
-                if v.parse::<f64>().is_ok() {
-                    return true;
-                }
-                false
-            }
-        }
-    }
-
     /// Determines whether the current unquoted string should be closed based on
     /// upcoming characters. Consumes characters from `next` looking for a
     /// structural delimiter appropriate to the string's context (`:` for object
