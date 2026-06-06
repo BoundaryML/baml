@@ -12,6 +12,7 @@ use std::{
 };
 
 use bex_heap::BexHeap;
+use parking_lot::Mutex;
 use sys_ops::io::{self, owned};
 use sys_types::{CallId, SysOpContext, SysOpOutput};
 use tokio::sync::broadcast;
@@ -23,7 +24,7 @@ pub struct PlaygroundHttpState {
     broadcast_tx: broadcast::Sender<WsOutMessage>,
     next_fetch_id: AtomicU64,
     /// Maps response body pointer → (call_id, fetch_id) for response_text tracking.
-    response_to_fetch: std::sync::Mutex<HashMap<usize, (u64, u64)>>,
+    response_to_fetch: Mutex<HashMap<usize, (u64, u64)>>,
 }
 
 impl PlaygroundHttpState {
@@ -31,7 +32,7 @@ impl PlaygroundHttpState {
         Self {
             broadcast_tx,
             next_fetch_id: AtomicU64::new(1),
-            response_to_fetch: std::sync::Mutex::new(HashMap::new()),
+            response_to_fetch: Mutex::new(HashMap::new()),
         }
     }
 }
@@ -61,7 +62,7 @@ impl io::IoClassHttpResponse for PlaygroundHttp {
     ) -> SysOpOutput<String> {
         let state = self.0.clone();
         let key = response_body_key(&response);
-        let fetch_info = state.response_to_fetch.lock().unwrap().remove(&key);
+        let fetch_info = state.response_to_fetch.lock().remove(&key);
 
         let native_result = <sys_native::NativeSysOps as io::IoClassHttpResponse>::text(
             &sys_native::NativeSysOps,
@@ -101,7 +102,7 @@ impl io::IoClassHttpResponse for PlaygroundHttp {
     ) -> SysOpOutput<Vec<u8>> {
         let state = self.0.clone();
         let key = response_body_key(&response);
-        let fetch_info = state.response_to_fetch.lock().unwrap().remove(&key);
+        let fetch_info = state.response_to_fetch.lock().remove(&key);
 
         let native_result = <sys_native::NativeSysOps as io::IoClassHttpResponse>::bytes(
             &sys_native::NativeSysOps,
@@ -206,7 +207,6 @@ impl io::IoNamespaceHttp for PlaygroundHttp {
                         state
                             .response_to_fetch
                             .lock()
-                            .unwrap()
                             .insert(response_body_key(resp), (cid, fetch_id));
                         let headers: HashMap<String, String> = resp
                             .headers
@@ -244,7 +244,6 @@ impl io::IoNamespaceHttp for PlaygroundHttp {
                         state
                             .response_to_fetch
                             .lock()
-                            .unwrap()
                             .insert(response_body_key(resp), (cid, fetch_id));
                         let headers: HashMap<String, String> = resp
                             .headers

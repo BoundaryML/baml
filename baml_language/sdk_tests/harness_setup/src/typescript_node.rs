@@ -148,7 +148,18 @@ fn codegen_fixture(
     let baml_sdk = generated.join("baml_sdk");
 
     if generated.exists() {
-        fs::remove_dir_all(&generated).unwrap();
+        for entry in fs::read_dir(&generated).unwrap() {
+            let entry = entry.unwrap();
+            let path = entry.path();
+            if path.file_name().and_then(|name| name.to_str()) == Some("node_modules") {
+                continue;
+            }
+            if path.is_dir() {
+                fs::remove_dir_all(&path).unwrap();
+            } else {
+                fs::remove_file(&path).unwrap();
+            }
+        }
     }
     fs::create_dir_all(&baml_sdk).unwrap();
 

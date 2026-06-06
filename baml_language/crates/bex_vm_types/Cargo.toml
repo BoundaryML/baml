@@ -35,8 +35,6 @@ tokio = { workspace = true, features = [ "rt", "macros", "sync" ] }
 tokio-util = { workspace = true }
 
 [dev-dependencies]
-anyhow = { workspace = true }
-divan = { workspace = true }
 indexmap = { workspace = true }
 
 [features]

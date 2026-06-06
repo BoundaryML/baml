@@ -23,6 +23,7 @@ clang = "22.1.7" # LLVM tools for CI, including llvm-strip
 "cargo:prek" = "0.3.13"
 "cargo:cargo-nextest" = "latest"
 "cargo:cargo-insta" = "latest"
+"cargo:cargo-shear" = "latest"
 
 # Go tools
 # locked to match the version in .github/actions/setup-go/action.yml

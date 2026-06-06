@@ -36,11 +36,7 @@ prost = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = [ "rt", "rt-multi-thread" ] }
-tokio-util = { workspace = true }
 vfs = { workspace = true }
-
-[build-dependencies]
-cbindgen = { workspace = true }
 
 [package.metadata.ci]
 wasm_support = false

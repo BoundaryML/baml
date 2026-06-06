@@ -33,7 +33,6 @@ napi = { workspace = true, features = [ "anyhow", "async", "napi5", "serde-json"
 napi-derive = { workspace = true }
 prost = { workspace = true }
 serde_json = { workspace = true }
-tokio = { workspace = true, features = [ "rt", "rt-multi-thread" ] }
 
 [build-dependencies]
 napi-build = { workspace = true }

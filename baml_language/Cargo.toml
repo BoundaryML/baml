@@ -48,12 +48,10 @@ version = "0.0.0-beta"
 [workspace.dependencies]
 #  Internal dependencies (baml_*)
 bex_str = { path = "crates/bex_str" }
-ahash = "0.8"
 baml_base = { path = "crates/baml_base" }
 baml_type = { path = "crates/baml_type" }
 baml_builtins2 = { path = "crates/baml_builtins2" }
 baml_builtins2_codegen = { path = "crates/baml_builtins2_codegen" }
-sdkgen_go = { path = "sdks/go/sdkgen_go" }
 sdkgen_typescript_node = { path = "sdks/nodejs/sdkgen_typescript_node" }
 sdkgen_python_pydantic2 = { path = "sdks/python/rust/sdkgen_python_pydantic2" }
 baml_codegen_types = { path = "crates/baml_codegen_types" }
@@ -85,7 +83,6 @@ baml_project = { path = "crates/baml_project" }
 baml_release = { path = "crates/baml_release" }
 baml_tests = { path = "crates/baml_tests" }
 baml_version = { path = "crates/baml_version" }
-tools_onionskin = { path = "crates/tools_onionskin" }
 bex_vm = { path = "crates/bex_vm" }
 bex_vm_types = { path = "crates/bex_vm_types" }
 bex_external_types = { path = "crates/bex_external_types" }
@@ -93,10 +90,7 @@ bex_heap = { path = "crates/bex_heap" }
 bex_sap = { path = "crates/bex_sap" }
 bridge_ctypes = { path = "crates/bridge_ctypes", default-features = false }
 bridge_cffi = { path = "crates/bridge_cffi", default-features = false }
-bridge_python = { path = "sdks/python/rust/bridge_python" }
-bridge_wasm = { path = "crates/bridge_wasm" }
 baml_exec = { path = "crates/baml_exec" }
-baml_pack_host = { path = "crates/baml_pack_host" }
 bex_events = { path = "crates/bex_events" }
 bex_events_native = { path = "crates/bex_events_native" }
 bex_resource_types = { path = "crates/bex_resource_types" }
@@ -142,7 +136,6 @@ axum = { version = "0.8.4", default-features = false, features = [ "http1", "mat
 borsh = { version = "1.5", features = [ "derive", "indexmap" ] }
 bytes = "1"
 cargo_metadata = { version = "0.23.1" }
-cbindgen = "0.28.0"
 clap = { version = "4.4.6", features = [ "cargo", "derive" ] }
 console = "0.16"
 console_error_panic_hook = "0.1"
@@ -154,7 +147,6 @@ divan = { package = "codspeed-divan-compat", version = "*" }
 eframe = "0.33.3"
 flate2 = { version = "1" }
 futures = { version = "0.3.30", features = [ "executor" ] }
-futures-timer = { version = "3.0.3", features = [ "wasm-bindgen" ] }
 graphviz-rust = { version = "0.9" }
 hex = "0.4"
 hmac = "0.12"
@@ -223,7 +215,6 @@ tokio-tungstenite = { version = "0.29.0" }
 tokio-util = { version = "0.7" }
 tower-http = { version = "0.6.6", features = [ "fs" ] }
 tracing = { version = "0.1.40" }
-tracing-log = "0.2.0"
 tracing-subscriber = { version = "0.3.18", default-features = false, features = [
   "env-filter",
   "fmt",

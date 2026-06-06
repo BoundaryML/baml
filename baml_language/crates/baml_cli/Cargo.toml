@@ -41,7 +41,6 @@ clap = { workspace = true, features = [ "color" ] }
 console = { workspace = true }
 ctrlc = { workspace = true }
 flate2 = { workspace = true }
-indexmap = { workspace = true }
 indicatif = { workspace = true }
 libsui = { workspace = true }
 regex = { workspace = true }
@@ -54,7 +53,6 @@ tar = { workspace = true }
 text-size = { workspace = true }
 tokio = { workspace = true }
 toml = { workspace = true }
-zip = { workspace = true }
 
 [features]
 default = [ "aws-crypto" ]

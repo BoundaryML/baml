@@ -32,6 +32,7 @@
 //! **TLS:** Enable exactly one of `native-tls` or `rustls`. CI may build with
 //! `--all-features` (both enabled); prefer one when building the LSP binary.
 
+mod deadlock_watchdog;
 mod native_lsp_sender;
 mod native_vfs;
 pub mod playground_env;
@@ -95,6 +96,7 @@ pub fn run_server(playground_via_browser: bool) -> anyhow::Result<()> {
         .init();
 
     tracing::info!("baml-lsp v{} starting", version());
+    deadlock_watchdog::spawn();
 
     let tokio_runtime = tokio::runtime::Runtime::new()?;
 
