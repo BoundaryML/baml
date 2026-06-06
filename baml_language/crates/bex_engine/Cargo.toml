@@ -41,7 +41,7 @@ baml_project = { workspace = true, features = [ "testing" ] }
 bex_resource_types = { workspace = true }
 bridge_ctypes = { workspace = true }
 sys_llm = { workspace = true }
-sys_native = { workspace = true, features = [ "bundle-http", "aws-crypto" ] }
+sys_native = { workspace = true, features = [ "bundle-http", "ring-crypto" ] }
 anyhow = { workspace = true }
 indexmap = { workspace = true }
 insta = { workspace = true }
@@ -55,7 +55,7 @@ wiremock = { workspace = true }
 workspace = true
 
 [features]
-default = [ "aws-crypto" ]
+default = [ "ring-crypto" ]
 # `sys_native` is a dev-dependency only, so feature propagation here would
 # be a no-op for downstream consumers; its crypto feature is set directly
 # on the `[dev-dependencies]` entry above.

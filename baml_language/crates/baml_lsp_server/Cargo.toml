@@ -5,7 +5,7 @@ edition.workspace = true
 description = "Native LSP server for BAML using bex_project"
 
 [features]
-default = [ "aws-crypto" ]
+default = [ "ring-crypto" ]
 aws-crypto = [
   "dep:rustls",
   "reqwest/rustls",
@@ -25,7 +25,7 @@ ring-crypto = [
   "sys_native/ring-crypto",
 ]
 native-tls = [ "reqwest/native-tls", "sys_native/native-tls" ]
-rustls = [ "aws-crypto" ]
+rustls = [ "ring-crypto" ]
 
 [dependencies]
 baml_compiler2_visualization = { workspace = true }

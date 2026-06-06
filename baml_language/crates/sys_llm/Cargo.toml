@@ -7,7 +7,7 @@ authors.workspace = true
 license.workspace = true
 
 [features]
-default = [ "aws-crypto" ]
+default = [ "ring-crypto" ]
 aws-crypto = [
   "dep:rustls",
   "rustls?/aws_lc_rs",

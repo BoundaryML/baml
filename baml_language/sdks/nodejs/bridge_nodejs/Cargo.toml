@@ -16,7 +16,7 @@ test = false
 doctest = false
 
 [features]
-default = [ "bundle-http", "aws-crypto" ]
+default = [ "bundle-http", "ring-crypto" ]
 bundle-http = [ "bridge_cffi/bundle-http" ]
 aws-crypto = [ "bex_project/aws-crypto", "bridge_cffi/aws-crypto" ]
 ring-crypto = [ "bex_project/ring-crypto", "bridge_cffi/ring-crypto" ]

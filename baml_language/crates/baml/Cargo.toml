@@ -16,7 +16,8 @@ workspace = true
 [dependencies]
 baml_release = { workspace = true }
 anyhow = { workspace = true }
-reqwest = { workspace = true, features = [ "blocking", "rustls" ] }
+reqwest = { workspace = true, features = [ "blocking", "rustls-no-provider" ] }
+rustls = { workspace = true, features = [ "ring", "std" ] }
 serde = { workspace = true, features = [ "derive" ] }
 serde_json = { workspace = true }
 toml = { workspace = true }

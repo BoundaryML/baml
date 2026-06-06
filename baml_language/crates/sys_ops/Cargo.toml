@@ -8,7 +8,7 @@ license.workspace = true
 description = "Includes definitions and some blanket impls for sys ops"
 
 [features]
-default = [ "aws-crypto" ]
+default = [ "ring-crypto" ]
 aws-crypto = [ "sys_llm/aws-crypto" ]
 ring-crypto = [ "sys_llm/ring-crypto" ]
 

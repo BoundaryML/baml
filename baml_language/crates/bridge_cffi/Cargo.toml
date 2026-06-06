@@ -13,7 +13,7 @@ name = "bridge_cffi"
 crate-type = [ "cdylib", "lib" ]
 
 [features]
-default = [ "bundle-http", "aws-crypto" ]
+default = [ "bundle-http", "ring-crypto" ]
 aws-crypto = [ "bex_project/aws-crypto", "bridge_ctypes/aws-crypto", "sys_native/aws-crypto" ]
 ring-crypto = [ "bex_project/ring-crypto", "bridge_ctypes/ring-crypto", "sys_native/ring-crypto" ]
 native-tls = [ "sys_native/native-tls" ]

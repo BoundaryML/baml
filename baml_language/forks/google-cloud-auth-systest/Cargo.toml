@@ -8,7 +8,8 @@ edition = "2021"
 
 [dependencies]
 google-cloud-auth = { path = "../google-cloud-auth", package = "forked_google_cloud_auth" }
-reqwest = { version = "0.13.1", default-features = false, features = ["stream", "rustls", "json"] }
+reqwest = { version = "0.13.1", default-features = false, features = ["stream", "rustls-no-provider", "json"] }
+rustls = { version = "0.23.37", default-features = false, features = ["ring", "std"] }
 tokio = { version = "1.36", features = ["rt", "rt-multi-thread", "macros", "time", "fs"] }
 async-trait = "0.1"
 serde_json = { version = "1.0.113", features = ["arbitrary_precision", "preserve_order"] }

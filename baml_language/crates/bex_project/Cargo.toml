@@ -61,6 +61,6 @@ tokio = { workspace = true, features = [ "sync", "rt" ] }
 wasm-bindgen-futures = { workspace = true }
 
 [features]
-default = [ "aws-crypto" ]
+default = [ "ring-crypto" ]
 aws-crypto = [ "bex_engine/aws-crypto" ]
 ring-crypto = [ "bex_engine/ring-crypto" ]

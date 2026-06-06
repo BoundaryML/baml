@@ -24,7 +24,7 @@ prost-build = { workspace = true }
 protoc-bin-vendored = { workspace = true }
 
 [features]
-default = [ "aws-crypto" ]
+default = [ "ring-crypto" ]
 aws-crypto = [ "bex_project/aws-crypto" ]
 ring-crypto = [ "bex_project/ring-crypto" ]
 
