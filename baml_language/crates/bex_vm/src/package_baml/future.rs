@@ -75,7 +75,7 @@ impl BamlClassFutureFuture for PackageBamlImpl {
         // `FutureState` has no separate `InternalError` variant.
         matches!(
             fut.read(),
-            FutureRead::Error(_) | FutureRead::InternalError(_)
+            FutureRead::Error(_) | FutureRead::InternalError(_) | FutureRead::ErrorPending(_)
         )
     }
 
@@ -87,7 +87,9 @@ impl BamlClassFutureFuture for PackageBamlImpl {
             FutureRead::Pending(_) => "Pending",
             FutureRead::Ready(_) => "Ready",
             // Surface InternalError as Error — see is_error.
-            FutureRead::Error(_) | FutureRead::InternalError(_) => "Error",
+            FutureRead::Error(_) | FutureRead::InternalError(_) | FutureRead::ErrorPending(_) => {
+                "Error"
+            }
             FutureRead::Cancelled => "Cancelled",
         };
         let Some(enm_ptr) = vm

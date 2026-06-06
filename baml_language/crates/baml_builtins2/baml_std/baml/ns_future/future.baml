@@ -102,6 +102,21 @@ function all<T, E>(futures: baml.future.Future<T, E>[]) -> baml.future.Future<T[
           // already-settled future is a no-op, so cancelling `f` itself is
           // harmless.
           futures.map((g) -> { g.cancel() });
+          // Drain inputs that ALREADY failed (settlement can outrun the
+          // in-order awaits): their errors are parked fire-and-forget and
+          // would otherwise bypass this rethrow and resurface at the
+          // spawner's own await. An unobserved failure reads `is_error()`
+          // (ErrorPending), and awaiting it consumes the parked error. The
+          // drained values are discarded — `all` reports the FIRST failure
+          // in input order, which is `e`.
+          let j = 0;
+          while (j < futures.length()) {
+            let g = futures[j];
+            if (g.is_error()) {
+              (await g) catch (drained) { let drained => null };
+            }
+            j = j + 1;
+          }
           throw e
         }
       }

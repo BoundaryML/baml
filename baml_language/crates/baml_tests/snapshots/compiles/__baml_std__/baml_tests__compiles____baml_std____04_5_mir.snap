@@ -1567,7 +1567,19 @@ fn .<lambda(<lambda(all, 0)>, 1)>(f: null) -> null {
     let _3: void // e
     let _4: bool[]
     let _5: (future<void, void>) -> bool throws never
-    let _6: void
+    let _6: int // j
+    let _7: bool
+    let _8: int
+    let _9: int
+    let _10: future<void, void> // g
+    let _11: future<void, void>[]
+    let _12: int
+    let _13: bool
+    let _14: void | null
+    let _15: unknown // drained
+    let _16: null
+    let _17: int
+    let _18: void
 
     bb0: {
         _0 = await _1 -> [bb1, unwind: bb2];
@@ -1588,8 +1600,55 @@ fn .<lambda(<lambda(all, 0)>, 1)>(f: null) -> null {
     }
 
     bb4: {
-        _6 = copy _3;
-        throw copy _6;
+        _6 = const 0_i64;
+        goto -> bb8;
+    }
+
+    bb5: {
+        throw_if_panic copy _15 -> bb6;
+    }
+
+    bb6: {
+        _14 = const null;
+        goto -> bb7;
+    }
+
+    bb7: {
+        _17 = copy _6;
+        _6 = copy _17 + const 1_i64;
+        goto -> bb8;
+    }
+
+    bb8: {
+        _8 = copy _6;
+        _9 = len(capture[0]);
+        goto -> bb9;
+    }
+
+    bb9: {
+        _7 = copy _8 < copy _9;
+        branch copy _7 -> [bb11, bb10];
+    }
+
+    bb10: {
+        _18 = copy _3;
+        throw copy _18;
+    }
+
+    bb11: {
+        _11 = copy capture[0];
+        _12 = copy _6;
+        _10 = copy _11[_12];
+        _13 = call const fn baml.future.Future.is_error(copy _10) -> [bb12];
+    }
+
+    bb12: {
+        branch copy _13 -> [bb13, bb7];
+    }
+
+    bb13: {
+        _16 = copy _10;
+        _14 = await _16 -> [bb7, unwind: bb5];
     }
 }
 

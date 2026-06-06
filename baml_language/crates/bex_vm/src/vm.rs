@@ -5030,7 +5030,13 @@ impl BexVm {
                             .into());
                         };
                         match awaiting.read() {
-                            FutureRead::Pending(future_id) => {
+                            // ErrorPending: the future HAS failed but its error
+                            // value is parked engine-side — yield exactly like
+                            // Pending so the engine's `future_ready` consumes
+                            // the parked error (settling the real `Error`) and
+                            // this Await re-executes against it.
+                            FutureRead::Pending(future_id)
+                            | FutureRead::ErrorPending(future_id) => {
                                 // Rewind pc to the Await opcode so the outer loop
                                 // saves a position that re-executes Await once the
                                 // future completes.

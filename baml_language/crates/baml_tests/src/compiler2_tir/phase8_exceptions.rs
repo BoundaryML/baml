@@ -971,3 +971,108 @@ function f() -> int {
         "typed Status arm after Status.Active arm should NOT be unreachable, got:\n{output}"
     );
 }
+
+// ── BEP-034 `spawn ... with` middleware diagnostics ──────────────────────
+// Every wrong shape must produce a CONCRETE, actionable message (the chain's
+// actual input type, never `T, E` placeholders or silence).
+
+#[test]
+fn spawn_with_non_callable_reports_concrete_mismatch() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"function f() -> int { let x = spawn with 42 { 1 }; await x }"#,
+    );
+    let output = render_tir(&db, file);
+    assert!(
+        output.contains(
+            "expected (baml.spawn.SpawnParams<int, null>) -> baml.spawn.SpawnParams<unknown, unknown> throws unknown, got 42"
+        ),
+        "non-callable `with` must report the concrete transformer shape, got:\n{output}"
+    );
+}
+
+#[test]
+fn spawn_with_wrong_shape_fn_names_the_contract() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"function g(n: int) -> int { n }
+function f() -> int { let x = spawn with g { 1 }; await x }"#,
+    );
+    let output = render_tir(&db, file);
+    assert!(
+        output.contains("must return a `baml.spawn.SpawnParams`")
+            && output.contains("got `(n: int) -> int throws never`"),
+        "wrong-shape `with` must name the middleware contract, got:\n{output}"
+    );
+}
+
+#[test]
+fn spawn_with_wrong_return_reports_link_input() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"function h<T, E>() -> (baml.spawn.SpawnParams<T, E>) -> int throws never { (p) -> { 7 } }
+function f() -> int { let x = spawn with h() { 1 }; await x }"#,
+    );
+    let output = render_tir(&db, file);
+    assert!(
+        output.contains("this link receives `baml.spawn.SpawnParams<int, null>`")
+            && output.contains("must return a `baml.spawn.SpawnParams`"),
+        "wrong-return transformer must report the link's concrete input, got:\n{output}"
+    );
+}
+
+#[test]
+fn spawn_with_chain_input_mismatch_is_concrete() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"function fix() -> (baml.spawn.SpawnParams<string, null>) -> baml.spawn.SpawnParams<string, null> throws never { (p) -> { p } }
+function f() -> int { let x = spawn with fix() { 1 }; await x }"#,
+    );
+    let output = render_tir(&db, file);
+    assert!(
+        output.contains("got (baml.spawn.SpawnParams<string, null>)")
+            && output.contains("expected (baml.spawn.SpawnParams<int, null>)"),
+        "chain input mismatch must show both concrete SpawnParams types, got:\n{output}"
+    );
+}
+
+#[test]
+fn spawn_with_non_fn_variable_reports() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"function f() -> int {
+  let nope = 7;
+  let x = spawn with nope { 1 };
+  await x
+}"#,
+    );
+    let output = render_tir(&db, file);
+    assert!(
+        output.contains("takes middleware transformer functions") && output.contains("got `int`"),
+        "non-function variable in `with` must report, got:\n{output}"
+    );
+}
+
+#[test]
+fn spawn_with_wrong_param_variable_reports() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"function g(n: int) -> int { n }
+function f() -> int {
+  let t = g;
+  let x = spawn with t { 1 };
+  await x
+}"#,
+    );
+    let output = render_tir(&db, file);
+    assert!(
+        output.contains("this link receives `baml.spawn.SpawnParams<int, null>`"),
+        "wrong-param variable transformer must report the link input, got:\n{output}"
+    );
+}

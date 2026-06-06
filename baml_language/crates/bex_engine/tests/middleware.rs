@@ -169,3 +169,94 @@ async fn custom_with_retry() {
     "#;
     assert_eq!(run_main(source).await.unwrap(), BexExternalValue::Int(42));
 }
+
+/// A TYPE-CHANGING transformer (the BEP's `withFallback`): wraps the body
+/// with a catch-all, so the error type is erased — the spawn types
+/// `Future<int, never≈null>` and the failing body resolves to the default.
+#[tokio::test]
+async fn type_changing_fallback_transformer() {
+    let source = r#"
+        function withFallback<T, E>(default_value: T) -> (baml.spawn.SpawnParams<T, E>) -> baml.spawn.SpawnParams<T, null> throws never {
+            (params) -> {
+                let original = params.body;
+                baml.spawn.SpawnParams {
+                    body: () -> {
+                        (original()) catch (e) {
+                            let e => default_value
+                        }
+                    },
+                    name: params.name,
+                    group: params.group,
+                    cancel: params.cancel,
+                    detach: params.detach,
+                }
+            }
+        }
+        function flaky(n: int) -> int throws string {
+            if (n > 0) {
+                throw "boom"
+            }
+            n
+        }
+        function main() -> int {
+            let f = spawn with withFallback(99) { flaky(1) };
+            // `f: Future<int, null>` — awaiting needs no catch.
+            await f
+        }
+    "#;
+    assert_eq!(run_main(source).await.unwrap(), BexExternalValue::Int(99));
+}
+
+/// The pipeline runs transformers EAGERLY in the spawner, so a transformer
+/// that throws does so at the spawn site — catchable there, and part of the
+/// CALLER's throws surface (an explicit `throws never` caller is rejected;
+/// see the TIR throws contribution).
+#[tokio::test]
+async fn throwing_transformer_throws_at_spawn_site() {
+    let source = r#"
+        function withBomb<T, E>() -> (baml.spawn.SpawnParams<T, E>) -> baml.spawn.SpawnParams<T, E> throws string throws never {
+            (params) -> { throw "cfg-exploded" }
+        }
+        function main() -> string {
+            let r = (spawn with withBomb() { 1 }) catch (e) {
+                let s: string => s
+            };
+            // The body never ran; the transformer's throw surfaced at spawn.
+            match (r) {
+                let s: string => s,
+                _ => "wrong"
+            }
+        }
+    "#;
+    assert_eq!(
+        run_main(source).await.unwrap(),
+        BexExternalValue::String("cfg-exploded".into())
+    );
+}
+
+/// A transformer bound to a VARIABLE first (not called inline). Generic
+/// inference at the `let` has nothing to bind, so typing degrades to
+/// `SpawnParams<unknown, unknown>` — but the pipeline still runs.
+#[tokio::test]
+async fn variable_bound_transformer_still_applies() {
+    let source = r#"
+        function withDouble<E>() -> (baml.spawn.SpawnParams<int, E>) -> baml.spawn.SpawnParams<int, E> throws never {
+            (params) -> {
+                let original = params.body;
+                baml.spawn.SpawnParams {
+                    body: () -> { original() * 2 },
+                    name: params.name,
+                    group: params.group,
+                    cancel: params.cancel,
+                    detach: params.detach,
+                }
+            }
+        }
+        function main() -> int {
+            let t = withDouble();
+            let f = spawn with t { 21 };
+            await f
+        }
+    "#;
+    assert_eq!(run_main(source).await.unwrap(), BexExternalValue::Int(42));
+}

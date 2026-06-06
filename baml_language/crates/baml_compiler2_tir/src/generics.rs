@@ -591,6 +591,14 @@ fn infer_bindings_inner(
             if !allow_typevar_actuals && matches!(actual_ty, Ty::TypeVar(_, _)) {
                 return;
             }
+            // An `Unknown` actual carries NO information: binding it (or
+            // unioning it into an existing binding) only poisons the result —
+            // e.g. an expected return of `SpawnParams<unknown, unknown>`
+            // driving phase-0 must not turn a param-bound `T = int` into
+            // `int | unknown`.
+            if matches!(actual_ty, Ty::Unknown { .. }) {
+                return;
+            }
             bindings
                 .entry(name.clone())
                 .and_modify(|existing| *existing = union_ty(existing, actual_ty))

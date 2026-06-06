@@ -149,16 +149,10 @@ impl FutureManagerGuard<'_> {
     }
 
     pub fn fulfill_future(&mut self, id: FutureId, value: Value) -> Result<(), EngineError> {
-        // A competing terminal transition (cancel/fulfill) invalidates any
-        // parked fire-and-forget error for this id: the heap future is about
-        // to settle to a different terminal state, so the stash entry would
-        // otherwise outlive it — a stale "unhandled" error at the spawner's
-        // drain and a GC root held longer than needed.
-        self.holder_mut().deferred_errors.remove(&id);
         // Snapshot the heap Arc before borrowing self mutably for take_pending;
         // settle_ready needs it to fire the generational write barrier.
         let heap = ::std::sync::Arc::clone(self.tlab().heap());
-        if let Some((fut, self_ptr)) = self.take_pending(id)? {
+        if let Some((fut, self_ptr)) = self.take_pending(id, false)? {
             // SAFETY: caller holds the heap permit (witnessed by `self.proof`).
             // `settle_ready` CAS-transitions Pending → Ready; the producer is
             // the unique writer reaching this path (cancel uses its own CAS).
@@ -173,7 +167,9 @@ impl FutureManagerGuard<'_> {
     /// error/panic value.
     pub fn err_future(&mut self, id: FutureId, err: Value) -> Result<(), EngineError> {
         let heap = ::std::sync::Arc::clone(self.tlab().heap());
-        if let Some((fut, self_ptr)) = self.take_pending(id)? {
+        // `true`: this is the single path allowed to claim an ErrorPending
+        // future (consuming its parked fire-and-forget error).
+        if let Some((fut, self_ptr)) = self.take_pending(id, true)? {
             // SAFETY: see `fulfill_future`.
             let _ = unsafe { fut.settle_error(heap.as_ref(), self_ptr, err) };
         }
@@ -201,14 +197,13 @@ impl FutureManagerGuard<'_> {
             };
             // SAFETY: caller holds the heap permit via `self.proof`.
             let fut = unsafe { entry.future_ref() }?;
-            if matches!(fut.read(), FutureRead::Pending(_)) {
-                // Wake parked awaiters WITHOUT settling; they re-yield and
-                // observe via `future_ready`.
-                let _ = fut.ready.set(Ok(()));
-                true
-            } else {
-                false // lost to a concurrent terminal transition
-            }
+            // `Pending → ErrorPending`: the heap future now READS as failed
+            // (`is_error()`, `state()`) while the error value stays parked
+            // here until first observed — `await` routes ErrorPending through
+            // the engine exactly like Pending, and `future_ready` consumes
+            // the stash. Also fires the wake signal so parked awaiters
+            // re-yield and observe.
+            fut.mark_error_pending()
         };
         if still_pending {
             self.holder_mut().deferred_errors.insert(id, err);
@@ -228,13 +223,7 @@ impl FutureManagerGuard<'_> {
     }
 
     pub fn cancel_future(&mut self, id: FutureId) -> Result<(), EngineError> {
-        // A competing terminal transition (cancel/fulfill) invalidates any
-        // parked fire-and-forget error for this id: the heap future is about
-        // to settle to a different terminal state, so the stash entry would
-        // otherwise outlive it — a stale "unhandled" error at the spawner's
-        // drain and a GC root held longer than needed.
-        self.holder_mut().deferred_errors.remove(&id);
-        if let Some((fut, _self_ptr)) = self.take_pending(id)? {
+        if let Some((fut, _self_ptr)) = self.take_pending(id, false)? {
             // `settle_cancelled` fires the cancel token and the wake signal
             // internally. CAS-based, so this races safely with the producer's
             // settle_ready/settle_error. No value payload → no write barrier.
@@ -317,6 +306,7 @@ impl FutureManagerGuard<'_> {
     fn take_pending(
         &mut self,
         id: FutureId,
+        claim_error_pending: bool,
     ) -> Result<Option<(&'static bex_vm_types::Future, HeapPtr)>, EngineError> {
         // Phase 1: peek. Already-removed entries → Ok(None).
         let already_settled = {
@@ -325,7 +315,17 @@ impl FutureManagerGuard<'_> {
             };
             // SAFETY: caller holds the heap permit via `self.proof`.
             let fut = unsafe { entry_ref.future_ref() }?;
-            !matches!(fut.read(), FutureRead::Pending(_))
+            // ErrorPending is claimable ONLY by the error-consumption path
+            // (`err_future` → `settle_error`, which accepts the
+            // `ErrorPending → Error` transition). For fulfill/cancel it is a
+            // SETTLED-failed future: treating it as claimable would drop the
+            // bookkeeping while the heap future never advances (awaiter
+            // livelock) or orphan the parked error.
+            match fut.read() {
+                FutureRead::Pending(_) => false,
+                FutureRead::ErrorPending(_) => !claim_error_pending,
+                _ => true,
+            }
         };
         if already_settled {
             // Heap state moved on without us — drop the bookkeeping entry

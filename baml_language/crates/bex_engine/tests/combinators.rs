@@ -281,3 +281,31 @@ async fn any_all_fail_errors_in_input_order() {
     "#;
     assert_eq!(run_main(source).await.unwrap(), BexExternalValue::Int(1));
 }
+
+/// `all` observes failures in INPUT order: the first input failing slowly
+/// must still be the error `all` rethrows, even though the second failed
+/// first in wall-clock time.
+#[tokio::test]
+async fn all_rethrows_first_input_failure_not_first_settled() {
+    let source = r#"
+        function bad_slow() -> int throws string {
+            baml.sys.sleep(120) catch (e) { let e => null };
+            throw "first"
+        }
+        function bad_fast() -> int throws string { throw "second" }
+        function helper(fs: baml.future.Future<int, string>[]) -> string throws string {
+            let r = await baml.future.all(fs);
+            "no-throw"
+        }
+        function main() -> string {
+            let fs = [spawn { bad_slow() }, spawn { bad_fast() }];
+            helper(fs) catch (e) {
+                let s: string => s
+            }
+        }
+    "#;
+    assert_eq!(
+        run_main(source).await.unwrap(),
+        BexExternalValue::String("first".into())
+    );
+}

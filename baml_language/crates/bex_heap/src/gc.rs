@@ -47,7 +47,12 @@ fn future_object_ref(fut: &Future) -> Option<HeapPtr> {
     use bex_vm_types::FutureRead;
     match fut.read() {
         FutureRead::Ready(v) | FutureRead::Error(v) => v.as_object_ptr(),
-        FutureRead::Pending(_) | FutureRead::Cancelled | FutureRead::InternalError(_) => None,
+        // ErrorPending's value lives in the ENGINE's GC-rooted stash, not in
+        // the heap future — nothing reachable from here.
+        FutureRead::Pending(_)
+        | FutureRead::Cancelled
+        | FutureRead::InternalError(_)
+        | FutureRead::ErrorPending(_) => None,
     }
 }
 

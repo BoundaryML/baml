@@ -739,11 +739,49 @@ impl LoweringContext {
                 seen_with = true;
                 continue;
             }
-            // Only expression nodes matter past here; skip `KW_SPAWN`, commas,
-            // and trivia tokens.
-            let Some(child) = child.as_node() else {
-                continue;
+            // Expression NODES and bare expression TOKENS both matter past
+            // here (a literal like `spawn with 42 { .. }` arrives as a plain
+            // token); skip `KW_SPAWN`, commas, and trivia. Dropping tokens
+            // here would silently swallow the expression — the type checker
+            // must see it to reject it with a real diagnostic.
+            let child = match child {
+                rowan::NodeOrToken::Node(n) => n,
+                rowan::NodeOrToken::Token(t) => {
+                    let span = t.text_range();
+                    let expr = match t.kind() {
+                        SyntaxKind::INTEGER_LITERAL => Some(Expr::Literal(Literal::Int(
+                            t.text().parse::<i64>().unwrap_or(0),
+                        ))),
+                        SyntaxKind::FLOAT_LITERAL => {
+                            Some(Expr::Literal(Literal::Float(t.text().to_string())))
+                        }
+                        SyntaxKind::STRING_LITERAL | SyntaxKind::RAW_STRING_LITERAL => Some(
+                            Expr::Literal(Literal::String(strip_string_delimiters(t.text()))),
+                        ),
+                        // `spawn`/`await` pass `is_ident_token` (they're
+                        // valid path SEGMENTS) but here they're the keywords
+                        // themselves — never a name/with expression.
+                        SyntaxKind::KW_SPAWN | SyntaxKind::KW_AWAIT => None,
+                        k if is_ident_token(k) => Some(match t.text() {
+                            "true" => Expr::Literal(Literal::Bool(true)),
+                            "false" => Expr::Literal(Literal::Bool(false)),
+                            "null" => Expr::Null,
+                            other => Expr::Path(vec![Name::new(other)]),
+                        }),
+                        _ => None,
+                    };
+                    if let Some(expr) = expr {
+                        let id = self.alloc_expr(expr, span);
+                        if seen_with {
+                            with_exprs.push(id);
+                        } else if name.is_none() {
+                            name = Some(id);
+                        }
+                    }
+                    continue;
+                }
             };
+            let child = &child;
             if kind == SyntaxKind::BLOCK_EXPR {
                 // Synthesize a 0-arg lambda whose body is this block —
                 // mirroring `lower_lambda_expr` so the existing

@@ -381,7 +381,7 @@ class baml.future.Future {
 enum baml.future.FutureState {Pending, Ready, Error, Cancelled}
 function baml.future.__await_any(futures: baml.future.Future<T, E>[]) -> int  [builtin]
 function baml.future.all(futures: baml.future.Future<T, E>[]) -> baml.future.Future<T[], E>  [expr] {
-  {  } spawn { () -> { {  } futures.map((f) -> { {  } await f catch (e) { e => { futures.map((g) -> { {  } g.cancel() }); throw e } } }) } }
+  {  } spawn { () -> { {  } futures.map((f) -> { {  } await f catch (e) { e => { futures.map((g) -> { {  } g.cancel() }); let j = 0; while j Lt futures.length() { let g = futures[j]; if (g.is_error()) { await g catch (drained) { drained => null } }; j = j Add 1 }; throw e } } }) } }
 }
 function baml.future.all_complete(futures: baml.future.Future<T, E>[]) -> baml.future.Future<T[], E>  [expr] {
   {  } spawn { () -> { {  } futures.map((f) -> { {  } await f }) } }

@@ -3911,10 +3911,17 @@ impl<'db> TypeInferenceBuilder<'db> {
         // OUTPUT type args feed the next link; the final pair types the
         // spawn's `Future`. Type-changing transformers (e.g. a fallback
         // erasing the error type) fall out naturally.
-        let mut cur_value = value_ty;
-        let mut cur_error = throws_ty;
+        // Widen fresh literal types out of the seed (`spawn with t { 1 }`
+        // must read `SpawnParams<int, null>` in diagnostics and bindings,
+        // not `SpawnParams<1, null>`).
+        let mut cur_value = value_ty.widen_fresh();
+        let mut cur_error = throws_ty.widen_fresh();
         for with_id in with_exprs {
             let params_in = spawn_params_ty(cur_value.clone(), cur_error.clone());
+            // The expected RETURN is `SpawnParams<unknown, unknown>` (not a
+            // bare `Unknown`): a non-transformer return type then fails the
+            // check with a readable mismatch instead of coercing into the
+            // open slot.
             let expected = Ty::Function {
                 generic_params: Vec::new(),
                 generic_param_bounds: Vec::new(),
@@ -3923,18 +3930,60 @@ impl<'db> TypeInferenceBuilder<'db> {
                     ty: params_in,
                     mode: FunctionParamMode::Required,
                 }],
-                ret: Box::new(Ty::Unknown {
-                    attr: TyAttr::default(),
-                }),
+                ret: Box::new(spawn_params_ty(
+                    Ty::Unknown {
+                        attr: TyAttr::default(),
+                    },
+                    Ty::Unknown {
+                        attr: TyAttr::default(),
+                    },
+                )),
                 throws: Box::new(Ty::Unknown {
                     attr: TyAttr::default(),
                 }),
                 attr: TyAttr::default(),
             };
-            let got = self.check_expr(*with_id, body, &expected);
+            // A VARIABLE-BOUND transformer (`let t = withRetry(3); spawn
+            // with t { .. }`) is a bare path whose type still carries the
+            // transformer's unbound generics — `check_expr` would reject
+            // `SpawnParams<int, E>` against the link's concrete input. Infer
+            // it instead and instantiate its generics from the input, the
+            // same binding a direct call gets from phase-0.
+            let is_value_ref = matches!(
+                &body.exprs[*with_id],
+                Expr::Path(_) | Expr::MemberAccess { .. }
+            );
+            let got = if is_value_ref {
+                let inferred = self.infer_expr(*with_id, body);
+                if let Ty::Function { params, .. } = &inferred
+                    && params.len() == 1
+                    && crate::generics::contains_typevar(&inferred)
+                {
+                    let mut bindings = FxHashMap::default();
+                    crate::generics::infer_bindings(
+                        &params[0].ty,
+                        &spawn_params_ty(cur_value.clone(), cur_error.clone()),
+                        &mut bindings,
+                    );
+                    crate::generics::substitute_ty(&inferred, &bindings)
+                } else {
+                    inferred
+                }
+            } else {
+                self.check_expr(*with_id, body, &expected)
+            };
             match &got {
                 Ty::Function { params, ret, .. } if params.len() == 1 => {
+                    // Value-refs skipped `check_expr`, so validate the input
+                    // side here: the transformer's parameter must accept the
+                    // link's `SpawnParams`.
+                    let input_ok = !is_value_ref
+                        || self.is_subtype(
+                            &spawn_params_ty(cur_value.clone(), cur_error.clone()),
+                            &params[0].ty,
+                        );
                     if let Ty::Class(qn, args, _) = ret.as_ref()
+                        && input_ok
                         && is_spawn_params_qtn(qn)
                         && args.len() == 2
                     {
@@ -3942,7 +3991,13 @@ impl<'db> TypeInferenceBuilder<'db> {
                         cur_error = args[1].clone();
                     } else if !matches!(ret.as_ref(), Ty::Unknown { .. } | Ty::Error { .. }) {
                         self.context.report_simple(
-                            TirTypeError::SpawnWithNotATransformer { got: got.clone() },
+                            TirTypeError::SpawnWithNotATransformer {
+                                expected_input: spawn_params_ty(
+                                    cur_value.clone(),
+                                    cur_error.clone(),
+                                ),
+                                got: got.clone(),
+                            },
                             *with_id,
                         );
                     }
@@ -3950,10 +4005,20 @@ impl<'db> TypeInferenceBuilder<'db> {
                 // Already diagnosed (unresolved name, failed call, ...).
                 Ty::Unknown { .. } | Ty::Error { .. } => {}
                 other => {
-                    self.context.report_simple(
-                        TirTypeError::SpawnWithNotATransformer { got: other.clone() },
-                        *with_id,
-                    );
+                    // Checked routes already got `check_expr`'s concrete
+                    // mismatch; value-refs skipped it and must report here.
+                    if is_value_ref {
+                        self.context.report_simple(
+                            TirTypeError::SpawnWithNotATransformer {
+                                expected_input: spawn_params_ty(
+                                    cur_value.clone(),
+                                    cur_error.clone(),
+                                ),
+                                got: other.clone(),
+                            },
+                            *with_id,
+                        );
+                    }
                 }
             }
         }
