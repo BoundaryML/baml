@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 20190
 ---
 function user.Calculate() -> int {
     load_const 3
@@ -68,6 +67,7 @@ function user.IndexUser.to_json(self: IndexUser) -> baml.json.json {
     load_var self
     load_field .age
     call baml.Int.to_json
+    load_type string
     load_var self
     load_field .tags
     call baml.Array.to_json
@@ -180,6 +180,7 @@ function user.User.to_json(self: User) -> baml.json.json {
     load_var self
     load_field .profile
     call user.Profile.to_json
+    load_type string
     load_var self
     load_field .tags
     call baml.Array.to_json

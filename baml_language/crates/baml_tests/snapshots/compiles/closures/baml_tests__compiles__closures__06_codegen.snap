@@ -295,6 +295,7 @@ function user.apply(f: (int, int) -> int throws never, a: int, b: int) -> int {
 }
 
 function user.apply_to_each(items: Employee[], f: (Employee) -> string throws never) -> string[] {
+    load_type Employee
     load_type string
     load_type unknown
     load_var2 1 2
@@ -322,6 +323,7 @@ function user.test_bound_in_lambda() -> string {
 
 function user.test_bound_mapper() -> string[] {
     load_type string
+    load_type string
     load_type void
     load_const "hello"
     load_const "world"
@@ -334,6 +336,7 @@ function user.test_bound_mapper() -> string[] {
 }
 
 function user.test_bound_validator() -> bool[] {
+    load_type int
     load_type bool
     load_type void
     load_const 5
@@ -428,6 +431,7 @@ function user.test_unbound_higher_order() -> string[] {
 }
 
 function user.test_unbound_in_map() -> string[] {
+    load_type Employee
     load_type string
     load_type void
     load_const "Alice"
