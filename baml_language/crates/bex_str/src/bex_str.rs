@@ -319,30 +319,6 @@ impl BexStr {
         };
         if h != 0 { Some(h) } else { None }
     }
-
-    /// Compute and cache the ahash of this string's bytes.
-    /// Used for BexStr-internal equality short-circuits only.
-    #[allow(dead_code)]
-    fn compute_cached_hash(&self) -> u64 {
-        let hash_val = ahash::RandomState::with_seeds(0, 0, 0, 0).hash_one(self.as_bytes());
-        // Ensure non-zero (0 means "not computed")
-        let hash_val = if hash_val == 0 { 1 } else { hash_val };
-
-        match self {
-            BexStr::Inline { .. } => {} // No cache slot
-            BexStr::Flat(f) => {
-                f.hash
-                    .compare_exchange(0, hash_val, Ordering::Relaxed, Ordering::Relaxed)
-                    .ok();
-            }
-            BexStr::Slice { hash, .. } => {
-                hash.compare_exchange(0, hash_val, Ordering::Relaxed, Ordering::Relaxed)
-                    .ok();
-            }
-            BexStr::Concat(_) => {} // Flattened FlatStr caches its own
-        }
-        hash_val
-    }
 }
 
 // ── ConcatNode ─────────────────────────────────────────────────────

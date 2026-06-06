@@ -51,9 +51,8 @@ external_deps = ["serde_json", "tokio", "clap", "anyhow", "salsa", "rowan", "req
 # Implied dependencies: if a crate depends on both the key and a value,
 # the edge to the value is hidden (it's visually implied by the key).
 [graph.implied_deps]
-baml_builtins = ["baml_builtins_macros"]
 baml_project = ["baml_db"]
-baml_type = ["baml_base", "baml_builtins"]
+baml_type = ["baml_base"]
 bex_heap = ["bex_external_types"]
 bex_external_types = ["bex_vm_types"]
 bex_vm_types = ["bex_resource_types"]
@@ -94,7 +93,7 @@ embed_crates = ["tools_onionskin", "bex_project"]
 [[namespaces.dependency_rules]]
 pattern = "baml_compiler*"
 allowed_prefixes = ["compiler", "compiler2"]
-allowed_crates = ["baml_db", "baml_project", "bridge_cffi", "baml_type", "baml_lsp2_actions", "baml_builtins_codegen", "baml_builtins2_codegen"]
+allowed_crates = ["baml_db", "baml_project", "bridge_cffi", "baml_type", "baml_lsp2_actions", "baml_builtins2_codegen"]
 reason = "Use baml_db or baml_project to access compiler interfaces."
 
 [[namespaces.dependency_rules]]
@@ -136,7 +135,7 @@ name_exceptions = { "google-cloud-auth" = "forked_google_cloud_auth" }
 [[namespaces]]
 name = "bex"
 approved_prefixes = ["events"]
-link_crates = ["baml_builtins", "baml_type", "sys_types"]
+link_crates = ["baml_type", "sys_types"]
 
 # lsp namespace configuration
 [[namespaces]]

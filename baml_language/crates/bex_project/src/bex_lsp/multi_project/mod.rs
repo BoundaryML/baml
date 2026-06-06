@@ -38,8 +38,6 @@ struct BexMulitProject {
         std::sync::Arc<std::sync::Mutex<HashMap<crate::fs::FsPath, std::sync::Arc<LiveProject>>>>,
     sys_op_factory: SysOpFactory,
     event_sink: Option<std::sync::Arc<dyn bex_events::EventSink>>,
-    #[allow(dead_code)] // TODO: reserved for upcoming playground integration
-    playground_state: std::sync::Arc<std::sync::Mutex<PlaygroundState>>,
     sender: std::sync::Arc<dyn LspClientSenderTrait + Send + Sync>,
     playground_sender: std::sync::Arc<dyn crate::bex_lsp::PlaygroundSender>,
 
@@ -85,84 +83,6 @@ pub trait LspClientSenderTrait {
     fn make_request(&self, msg: lsp_server::Request) -> Result<(), LspError>;
 }
 
-// #[derive(Clone, Debug)]
-// struct LspClientSender {
-//     weak_sender: std::sync::Weak<crossbeam::channel::Sender<lsp_server::Message>>,
-// }
-
-// impl LspClientSenderTrait for LspClientSender {
-//     fn send_notification(&self, msg: lsp_server::Notification) -> Result<(), LspError> {
-//         let Some(sender) = self.weak_sender.upgrade() else {
-//             return Err(LspError::ClientClosed);
-//         };
-//         sender
-//             .send(lsp_server::Message::Notification(msg))
-//             .map_err(|_| LspError::ClientClosed)
-//     }
-
-//     #[allow(dead_code)]
-//     fn make_request(&self, msg: lsp_server::Request) -> Result<(), LspError> {
-//         let Some(sender) = self.weak_sender.upgrade() else {
-//             return Err(LspError::ClientClosed);
-//         };
-//         sender
-//             .send(lsp_server::Message::Request(msg))
-//             .map_err(|_| LspError::ClientClosed)
-//     }
-
-//     fn send_response_impl(&self, response: lsp_server::Response) -> Result<(), LspError> {
-//         let Some(sender) = self.weak_sender.upgrade() else {
-//             return Err(LspError::ClientClosed);
-//         };
-
-//         sender
-//             .send(lsp_server::Message::Response(response))
-//             .map_err(|_| LspError::ClientClosed)
-//     }
-// }
-
-#[allow(dead_code)]
-enum SelectionReason {
-    UserSelection,
-    AutomaticSelection,
-}
-
-#[allow(dead_code)]
-struct Selection<T> {
-    value: Option<T>,
-    reason: SelectionReason,
-}
-
-impl<T> Default for Selection<T> {
-    fn default() -> Self {
-        Self {
-            value: None,
-            reason: SelectionReason::AutomaticSelection,
-        }
-    }
-}
-
-#[allow(dead_code)]
-impl<T> Selection<T> {
-    fn set_user_selection(&mut self, value: T) {
-        self.value = Some(value);
-        self.reason = SelectionReason::UserSelection;
-    }
-
-    fn set_automatic_selection(&mut self, value: T) {
-        self.value = Some(value);
-        self.reason = SelectionReason::AutomaticSelection;
-    }
-}
-
-#[allow(dead_code, clippy::struct_field_names)]
-#[derive(Default)]
-struct PlaygroundState {
-    last_selected_project: Selection<vfs::VfsPath>,
-    last_selected_function: Selection<String>,
-    last_selected_test: Selection<String>,
-}
-
 enum ProjectRefreshMode {
     Full,
     InMemoryChangesOnly,
@@ -182,9 +102,6 @@ impl BexMulitProject {
             projects: std::sync::Arc::new(std::sync::Mutex::new(HashMap::new())),
             sys_op_factory,
             event_sink,
-            playground_state: std::sync::Arc::new(
-                std::sync::Mutex::new(PlaygroundState::default()),
-            ),
             sender,
             playground_sender,
             position_encoding: PositionEncoding::UTF8,

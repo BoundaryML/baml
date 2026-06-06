@@ -3,11 +3,6 @@
 // lsp_types::Url::from_file_path is not available in WASM bindings, so we need to implement it manually.
 // This is a workaround to get the file path as a string.
 
-#[allow(dead_code)]
-pub(super) fn from_vfs_file_path(path: &vfs::VfsPath) -> Result<lsp_types::Url, ()> {
-    from_file_path(std::path::Path::new(path.as_str()))
-}
-
 #[cfg(not(target_arch = "wasm32"))]
 pub(super) fn from_file_path(path: &std::path::Path) -> Result<lsp_types::Url, ()> {
     let url = lsp_types::Url::from_file_path(path)?;

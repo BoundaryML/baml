@@ -55,7 +55,7 @@ Snapshots are created in `crates/baml_tests/snapshots/my_repro/`:
 
 ### 5. Fix the issue
 
-Edit the relevant crate (`baml_compiler_parser`, `baml_compiler_syntax`, `baml_compiler_hir`, etc.).
+Edit the relevant crate (`baml_compiler_parser`, `baml_compiler_syntax`, `baml_compiler2_hir`, etc.).
 
 ### 6. Re-run and update snapshots
 
@@ -104,8 +104,8 @@ cargo insta review
 - **Parser**: `crates/baml_compiler_parser/src/parser.rs`
 - **Syntax kinds**: `crates/baml_compiler_syntax/src/syntax_kind.rs`
 - **AST helpers**: `crates/baml_compiler_syntax/src/ast.rs`
-- **HIR lowering**: `crates/baml_compiler_hir/src/body.rs`
-- **Type checking**: `crates/baml_thir/src/lower.rs`
+- **HIR lowering**: `crates/baml_compiler2_hir/src/body.rs`
+- **Type checking**: `crates/baml_compiler2_tir/src/builder.rs`
 
 
 DO NOT EDIT the diagnostics manually in lsp_actions_tests. Use update_expect=1
