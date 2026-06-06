@@ -345,7 +345,7 @@ jobs:
     steps:
       - name: "Build matrix"
         id: matrix
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         with:
           script: |
             const baseMatrix = [
@@ -911,7 +911,7 @@ jobs:
       - snapshot-tests
     steps:
       - name: "Merge cargo timings artifacts"
-        uses: actions/upload-artifact/merge@v4
+        uses: actions/upload-artifact/merge@v7
         with:
           name: cargo-timings
           pattern: cargo-timings-*
@@ -930,7 +930,7 @@ jobs:
       - snapshot-tests
     steps:
       - name: "Merge sccache stats artifacts"
-        uses: actions/upload-artifact/merge@v4
+        uses: actions/upload-artifact/merge@v7
         with:
           name: sccache-stats
           pattern: sccache-stats-*

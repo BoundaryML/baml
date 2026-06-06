@@ -65,7 +65,7 @@ jobs:
       wrapper_changed: ${{ steps.wrapper.outputs.wrapper_changed }}
       dispatch_nightly_after_canary: ${{ steps.plan.outputs.dispatch_nightly_after_canary }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
           fetch-depth: 2
@@ -135,7 +135,7 @@ jobs:
             echo "wrapper_changed=$changed"
           } >> "$GITHUB_OUTPUT"
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: release-plan
           path: release-plan.json
@@ -175,14 +175,14 @@ jobs:
           - target: aarch64-pc-windows-msvc
             os: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           ref: ${{ needs.plan.outputs.source_sha }}
           persist-credentials: false
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: release-plan
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: baml-vscode-vsix
           path: vsix
@@ -225,7 +225,7 @@ jobs:
           else
             tar -C staging -czf "baml-language-$version-$target.tar.gz" .
           fi
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: toolchain-${{ matrix.target }}
           path: baml-language-${{ needs.plan.outputs.version }}-${{ matrix.target }}.*
@@ -235,11 +235,11 @@ jobs:
     needs: [plan]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           ref: ${{ needs.plan.outputs.source_sha }}
           persist-credentials: false
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: release-plan
       - run: scripts/baml-language-version stamp --plan release-plan.json
@@ -279,7 +279,7 @@ jobs:
           vsix="typescript2/app-vscode-ext/baml-language-${{ needs.plan.outputs.version }}.vsix"
           unzip -l "$vsix" | tee vsix-list.txt
           ! grep -E 'dist/baml-cli|baml-cli|baml-pack-host' vsix-list.txt
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: baml-vscode-vsix
           path: typescript2/app-vscode-ext/*.vsix
@@ -319,7 +319,7 @@ jobs:
           - target: aarch64-pc-windows-msvc
             os: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           ref: ${{ needs.plan.outputs.source_sha }}
           persist-credentials: false
@@ -354,7 +354,7 @@ jobs:
           else
             tar -C staging -czf "baml-wrapper-$version-$target.tar.gz" .
           fi
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: wrapper-${{ matrix.target }}
           path: baml-wrapper-${{ needs.plan.outputs.wrapper_version }}-${{ matrix.target }}.*
@@ -403,7 +403,7 @@ jobs:
       id-token: write
       contents: read
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           pattern: python-sdk-*
           path: dist
@@ -451,17 +451,17 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           pattern: toolchain-*
           path: dist/toolchain
           merge-multiple: true
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           pattern: wrapper-*
           path: dist/wrapper
           merge-multiple: true
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: baml-vscode-vsix
           path: dist/vsix
@@ -508,28 +508,28 @@ jobs:
     if: ${{ always() && needs.plan.outputs.dry_run == 'false' && needs.plan.outputs.source_branch == 'canary' && needs.publish-pypi.result == 'success' && needs.publish-nodejs-sdk.result == 'success' && needs.publish-github-release.result == 'success' && (needs.plan.outputs.wrapper_changed != 'true' || (needs.publish-homebrew.result == 'success' && needs.publish-aur.result == 'success')) }}
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           ref: ${{ needs.plan.outputs.source_sha }}
           persist-credentials: false
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: release-plan
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           pattern: toolchain-*
           path: dist/toolchain
           merge-multiple: true
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           pattern: wrapper-*
           path: dist/wrapper
           merge-multiple: true
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: baml-vscode-vsix
           path: dist/vsix
-      - uses: aws-actions/configure-aws-credentials@v4
+      - uses: aws-actions/configure-aws-credentials@v6
         with:
           role-to-assume: ${{ env.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
@@ -628,11 +628,11 @@ jobs:
     if: ${{ needs.plan.outputs.wrapper_changed == 'true' && needs.plan.outputs.dry_run == 'false' && needs.plan.outputs.source_branch == 'canary' }}
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           ref: ${{ needs.plan.outputs.source_sha }}
           persist-credentials: false
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           pattern: wrapper-*
           path: dist/wrapper
@@ -666,11 +666,11 @@ jobs:
     if: ${{ needs.plan.outputs.wrapper_changed == 'true' && needs.plan.outputs.dry_run == 'false' && needs.plan.outputs.source_branch == 'canary' }}
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           ref: ${{ needs.plan.outputs.source_sha }}
           persist-credentials: false
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           pattern: wrapper-*
           path: dist/wrapper
@@ -719,21 +719,21 @@ jobs:
     if: ${{ needs.plan.outputs.dry_run == 'true' }}
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           ref: ${{ needs.plan.outputs.source_sha }}
           persist-credentials: false
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           pattern: toolchain-*
           path: dist/toolchain
           merge-multiple: true
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           pattern: wrapper-*
           path: dist/wrapper
           merge-multiple: true
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: baml-vscode-vsix
           path: dist/vsix
@@ -758,11 +758,11 @@ jobs:
             --wrapper-dir dist/wrapper \
             --version "${{ needs.plan.outputs.wrapper_version }}" \
             --out dry-run/package-manager
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: dry-run-release-files
           path: dry-run
-      - uses: aws-actions/configure-aws-credentials@v4
+      - uses: aws-actions/configure-aws-credentials@v6
         if: ${{ needs.plan.outputs.source_branch == 'canary' }}
         with:
           role-to-assume: ${{ env.AWS_ROLE_ARN }}
