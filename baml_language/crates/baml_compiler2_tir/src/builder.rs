@@ -5424,10 +5424,8 @@ impl<'db> TypeInferenceBuilder<'db> {
                 let elem_ty = if let Some(item_ty) = self.iterable_associated_ty(&coll_ty, "Item") {
                     item_ty
                 } else {
-                    self.context.report_simple(
-                        TirTypeError::NotIterable { ty: coll_ty },
-                        *collection,
-                    );
+                    self.context
+                        .report_simple(TirTypeError::NotIterable { ty: coll_ty }, *collection);
                     Ty::Unknown {
                         attr: TyAttr::default(),
                     }

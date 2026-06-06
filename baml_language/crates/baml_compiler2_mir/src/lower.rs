@@ -1500,7 +1500,6 @@ impl<'db> LoweringContext<'db> {
     }
 
     fn substitute_class_params_in_interface_view(
-        &self,
         view: InterfaceTypeView,
         class_params: &[Name],
         class_args: &[Tir2Ty],
@@ -1555,7 +1554,7 @@ impl<'db> LoweringContext<'db> {
             let views = self.interface_closure_type_name_views(&view.0, &view.1, &view.2)?;
             for candidate in views {
                 if candidate.0 == *target_tn {
-                    return Some(self.substitute_class_params_in_interface_view(
+                    return Some(Self::substitute_class_params_in_interface_view(
                         candidate,
                         &class_data.generic_params,
                         class_args,
@@ -1578,7 +1577,7 @@ impl<'db> LoweringContext<'db> {
         ];
         match actual_ty {
             Tir2Ty::Class(qtn, _, _) | Tir2Ty::Interface(qtn, _, _, _) | Tir2Ty::Enum(qtn, _) => {
-                packages.push(qtn.package().clone())
+                packages.push(qtn.package().clone());
             }
             Tir2Ty::TypeAlias(qtn, _) => packages.push(qtn.package().clone()),
             _ => {}
@@ -3085,7 +3084,7 @@ impl<'db> LoweringContext<'db> {
         let pkg = baml_compiler2_hir::file_package::file_package(self.db, self.file).package;
         let pkg_id = baml_compiler2_hir::package::PackageId::new(self.db, pkg);
         let mut package_ids: Vec<_> =
-            baml_compiler2_hir::package::package_dependencies(self.db, pkg_id).to_vec();
+            baml_compiler2_hir::package::package_dependencies(self.db, pkg_id).clone();
         package_ids.push(pkg_id);
         for package_id in package_ids {
             let registry =
@@ -6000,22 +5999,22 @@ impl LoweringContext<'_> {
                 }
                 _ => Vec::new(),
             };
-        let receiver_class_type_arg_operands: Vec<Operand> =
-            if !receiver_class_type_args.is_empty() {
-                let generic_params = self.enclosing_generic_params();
-                receiver_class_type_args
-                    .iter()
-                    .map(|ty_arg| {
-                        let template = self.ty_to_template(ty_arg, &generic_params);
-                        let temp = self.builder.temp(Ty::type_type());
-                        self.builder
-                            .assign(Place::local(temp), Rvalue::LoadType(template));
-                        Operand::Copy(Place::local(temp))
-                    })
-                    .collect()
-            } else {
-                vec![]
-            };
+        let receiver_class_type_arg_operands: Vec<Operand> = if !receiver_class_type_args.is_empty()
+        {
+            let generic_params = self.enclosing_generic_params();
+            receiver_class_type_args
+                .iter()
+                .map(|ty_arg| {
+                    let template = self.ty_to_template(ty_arg, &generic_params);
+                    let temp = self.builder.temp(Ty::type_type());
+                    self.builder
+                        .assign(Place::local(temp), Rvalue::LoadType(template));
+                    Operand::Copy(Place::local(temp))
+                })
+                .collect()
+        } else {
+            vec![]
+        };
 
         let type_arg_operands: Vec<Operand> = if !receiver_class_type_arg_operands.is_empty() {
             let mut combined = receiver_class_type_arg_operands;
@@ -9036,7 +9035,6 @@ impl<'db> LoweringContext<'db> {
     }
 
     fn interface_dispatch_instantiation_request(
-        &self,
         actual_iface_ty: &Tir2Ty,
         requested_iface_ty: &Tir2Ty,
     ) -> Tir2Ty {
@@ -9066,8 +9064,9 @@ impl<'db> LoweringContext<'db> {
             .iter()
             .map(|(name, requested)| {
                 if Self::is_dispatch_open_ty(requested)
-                    && let Some((_, actual)) =
-                        actual_assoc.iter().find(|(actual_name, _)| actual_name == name)
+                    && let Some((_, actual)) = actual_assoc
+                        .iter()
+                        .find(|(actual_name, _)| actual_name == name)
                 {
                     (name.clone(), actual.clone())
                 } else {
@@ -9076,12 +9075,7 @@ impl<'db> LoweringContext<'db> {
             })
             .collect();
 
-        Tir2Ty::Interface(
-            requested_qtn.clone(),
-            args,
-            assoc,
-            requested_attr.clone(),
-        )
+        Tir2Ty::Interface(requested_qtn.clone(), args, assoc, requested_attr.clone())
     }
 
     fn is_dispatch_open_ty(ty: &Tir2Ty) -> bool {
@@ -9145,9 +9139,8 @@ impl<'db> LoweringContext<'db> {
                 };
                 let root_iface_tree =
                     baml_compiler2_hir::file_item_tree(self.db, root_iface_loc.file(self.db));
-                let Some(root_iface_data) = root_iface_tree
-                    .interfaces
-                    .get(&root_iface_loc.id(self.db))
+                let Some(root_iface_data) =
+                    root_iface_tree.interfaces.get(&root_iface_loc.id(self.db))
                 else {
                     continue;
                 };
@@ -9243,11 +9236,10 @@ impl<'db> LoweringContext<'db> {
                             },
                         )
                         .or_else(|| {
-                            let dispatch_iface_ty = self
-                                .interface_dispatch_instantiation_request(
-                                    &rule.interface_ty,
-                                    &requested_iface_ty,
-                                );
+                            let dispatch_iface_ty = Self::interface_dispatch_instantiation_request(
+                                &rule.interface_ty,
+                                &requested_iface_ty,
+                            );
                             registry.instantiate_rule_for_requested_interface(
                                 &rule,
                                 &dispatch_iface_ty,
@@ -9290,14 +9282,10 @@ impl<'db> LoweringContext<'db> {
                             continue;
                         };
                         if current_iface_tn != *requested_tn
-                            || !self.interface_tir_type_args_match(
-                                &current_iface_args,
-                                requested_args,
-                            )
-                            || !self.interface_tir_assoc_match(
-                                &current_iface_assoc,
-                                requested_assoc,
-                            )
+                            || !self
+                                .interface_tir_type_args_match(&current_iface_args, requested_args)
+                            || !self
+                                .interface_tir_assoc_match(&current_iface_assoc, requested_assoc)
                         {
                             continue;
                         }
