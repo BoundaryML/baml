@@ -144,7 +144,6 @@ bytes = "1"
 cargo_metadata = { version = "0.23.1" }
 cbindgen = "0.28.0"
 clap = { version = "4.4.6", features = [ "cargo", "derive" ] }
-clap-cargo = "0.14.1"
 console = "0.16"
 console_error_panic_hook = "0.1"
 crossbeam-channel = { version = "0.5" }
