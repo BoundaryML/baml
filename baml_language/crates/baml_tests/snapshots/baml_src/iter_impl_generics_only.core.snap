@@ -7,6 +7,7 @@ function iter_impl_generics_only.core.ArrayIterator$stream.Iterable<T, never>.it
 }
 
 function iter_impl_generics_only.core.ArrayIterator$stream.Iterator<T, never>.next(self: iter_impl_generics_only.core.ArrayIterator$stream<unknown>) -> unknown | iter_impl_generics_only.core.Done {
+    load_type #0
     load_var self
     load_field .0
     load_var self
@@ -42,6 +43,7 @@ function iter_impl_generics_only.core.ArrayIterator.Iterable<T, never>.iter(self
 }
 
 function iter_impl_generics_only.core.ArrayIterator.Iterator<T, never>.next(self: iter_impl_generics_only.core.ArrayIterator<unknown>) -> unknown | iter_impl_generics_only.core.Done {
+    load_type #0
     load_var self
     load_field .0
     load_var self
@@ -72,6 +74,7 @@ function iter_impl_generics_only.core.ArrayIterator.Iterator<T, never>.next(self
 }
 
 function iter_impl_generics_only.core.ArrayIterator.new(arr: unknown[]) -> iter_impl_generics_only.core.ArrayIterator<unknown> {
+    load_type #0
     load_var arr
     load_const 0
     load_var arr

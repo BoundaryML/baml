@@ -36,6 +36,52 @@ class Array<T> {
     $rust_function
   }
 
+  /// Calls `fn` once for each element in the array.
+  function for_each<E>(self, fn: (T) -> void throws E) -> void throws E {
+    for (let x in self.slice(0, self.length())) {
+      fn(x);
+    }
+  }
+
+  /// Returns an iterator over the elements matching `predicate`.
+  function filter<E>(self, predicate: (T) -> bool throws E) -> baml.iter.Iterator<Item = T, Error = never | E> throws never {
+    baml.iter.ArrayIterator.new(self.slice(0, self.length())).filter(predicate)
+  }
+
+  /// Returns an iterator over non-null results produced by `fn`.
+  function filter_map<U, E>(self, fn: (T) -> U? throws E) -> baml.iter.Iterator<Item = U, Error = never | E> throws never {
+    baml.iter.ArrayIterator.new(self.slice(0, self.length())).filter_map(fn)
+  }
+
+  /// Returns an iterator over every `n`th element.
+  function step_by(self, n: int) -> baml.iter.Iterator<Item = T, Error = never> throws never {
+    baml.iter.ArrayIterator.new(self.slice(0, self.length())).step_by(n)
+  }
+
+  /// Returns an iterator over `self` followed by `other`.
+  function chain<E>(self, other: baml.iter.Iterable<Item = T, Error = E>) -> baml.iter.Iterator<Item = T, Error = never | E> throws never {
+    baml.iter.ArrayIterator.new(self.slice(0, self.length())).chain(other)
+  }
+
+  /// Returns an iterator that supports peeking at the next element.
+  function peekable(self) -> baml.iter.Peekable<T, never> throws never {
+    baml.iter.Peekable<T, never> {
+      source: baml.iter.ArrayIterator.new(self.slice(0, self.length())),
+      buffer: baml.iter.Done {},
+      has_buffer: false,
+    }
+  }
+
+  /// Returns a shallow copy of the array.
+  function collect(self) -> T[] throws never {
+    self.slice(0, self.length())
+  }
+
+  /// Returns the number of elements in the array.
+  function count(self) -> int throws never {
+    self.length()
+  }
+
   /// Returns a new array with the elements in reverse order. Does not mutate `self`.
   function reverse(self) -> T[] throws never {
     $rust_function

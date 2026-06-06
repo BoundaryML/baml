@@ -121,6 +121,10 @@ fn json_parse_error_ty() -> Ty {
     )
 }
 
+fn baml_iter_interface_qtn(name: &str) -> crate::ty::QualifiedTypeName {
+    crate::ty::QualifiedTypeName::new(Name::new("baml"), vec![Name::new("iter")], Name::new(name))
+}
+
 /// Construct the throws type `JsonSerializationError | JsonParseError`.
 ///
 /// Used as the conservative throws clause for the universal `to_json` method on
@@ -639,6 +643,29 @@ pub struct TypeInferenceBuilder<'db> {
 }
 
 impl<'db> TypeInferenceBuilder<'db> {
+    fn baml_iter_iterable_ty() -> Ty {
+        Ty::Interface(
+            baml_iter_interface_qtn("Iterable"),
+            vec![],
+            vec![],
+            TyAttr::default(),
+        )
+    }
+
+    fn iterable_view_for_ty(&self, ty: &Ty) -> Option<Ty> {
+        self.actual_interface_view_for_formal(&Self::baml_iter_iterable_ty(), ty)
+    }
+
+    fn iterable_associated_ty(&self, ty: &Ty, name: &str) -> Option<Ty> {
+        let Ty::Interface(_, _, associated_bindings, _) = self.iterable_view_for_ty(ty)? else {
+            return None;
+        };
+        associated_bindings
+            .into_iter()
+            .find(|(binding_name, _)| binding_name.as_str() == name)
+            .map(|(_, ty)| ty)
+    }
+
     fn snapshot_scoped_locals(&self) -> ScopedLocalsSnapshot {
         ScopedLocalsSnapshot {
             locals: self.locals.clone(),
@@ -5384,8 +5411,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             }
             // Design note: Stmt::For is kept as a first-class construct (not desugared
             // to While) so we can produce for-loop-specific diagnostics ("cannot iterate
-            // over type X") and preserve iteration semantics for downstream codegen.
-            // Desugaring to index-based basic blocks happens at MIR lowering time.
+            // over type X") and lower through the Iterable interface in MIR.
             Stmt::For {
                 binding,
                 collection,
@@ -5394,16 +5420,16 @@ impl<'db> TypeInferenceBuilder<'db> {
                 // 1. Infer the collection type
                 let coll_ty = self.infer_expr(*collection, body);
 
-                // 2. Derive the element type from the collection
-                let elem_ty = match &coll_ty {
-                    Ty::List(elem, _) => *elem.clone(),
-                    Ty::EvolvingList(elem, _) => *elem.clone(),
-                    _ => {
-                        self.context
-                            .report_simple(TirTypeError::NotIterable { ty: coll_ty }, *collection);
-                        Ty::Unknown {
-                            attr: TyAttr::default(),
-                        }
+                // 2. Derive the element type through Iterable.Item.
+                let elem_ty = if let Some(item_ty) = self.iterable_associated_ty(&coll_ty, "Item") {
+                    item_ty
+                } else {
+                    self.context.report_simple(
+                        TirTypeError::NotIterable { ty: coll_ty },
+                        *collection,
+                    );
+                    Ty::Unknown {
+                        attr: TyAttr::default(),
                     }
                 };
 
@@ -7147,6 +7173,14 @@ impl<'db> TypeInferenceBuilder<'db> {
                 ..
             } => {
                 self.collect_throw_facts_from_expr(*collection, body, out);
+                if let Some(error_ty) = self
+                    .expressions
+                    .get(collection)
+                    .and_then(|ty| self.iterable_associated_ty(ty, "Error"))
+                    && !matches!(error_ty, Ty::Never { .. })
+                {
+                    out.insert(error_ty);
+                }
                 self.collect_throw_facts_from_expr(*for_body, body, out);
             }
             Stmt::Return(expr) => {

@@ -140,150 +140,163 @@ function iter_impl_generics_only.iter_array_iter() -> int[] {
     store_var_load_var _2
     is_type iter_impl_generics_only.core.Flatten<...>
     pop_jump_if_false L0
-    jump L21
+    jump L23
 
   L0:
     load_var _2
     is_type iter_impl_generics_only.core.StepBy<...>
     pop_jump_if_false L1
-    jump L20
+    jump L22
 
   L1:
     load_var _2
     is_type iter_impl_generics_only.core.Repeat<...>
     pop_jump_if_false L2
-    jump L19
+    jump L21
 
   L2:
     load_var _2
     is_type iter_impl_generics_only.core.FlatMap<...>
     pop_jump_if_false L3
-    jump L18
+    jump L20
 
   L3:
     load_var _2
     is_type iter_impl_generics_only.core.FilterMap<...>
     pop_jump_if_false L4
-    jump L17
+    jump L19
 
   L4:
     load_var _2
     is_type iter_impl_generics_only.core.Range
     pop_jump_if_false L5
-    jump L16
+    jump L18
 
   L5:
     load_var _2
     is_type iter_impl_generics_only.core.ArrayIterator<...>
     pop_jump_if_false L6
-    jump L15
+    jump L17
 
   L6:
     load_var _2
     is_type iter_impl_generics_only.core.Map<...>
     pop_jump_if_false L7
-    jump L14
+    jump L16
 
   L7:
     load_var _2
     is_type iter_impl_generics_only.core.Chain<...>
     pop_jump_if_false L8
-    jump L13
+    jump L15
 
   L8:
     load_var _2
     is_type iter_impl_generics_only.core.Filter<...>
     pop_jump_if_false L9
-    jump L12
+    jump L14
 
   L9:
     load_var _2
     is_type iter_impl_generics_only.core.Peekable<...>
     pop_jump_if_false L10
-    jump L11
+    jump L13
 
   L10:
+    load_var _2
+    is_type unknown[]
+    pop_jump_if_false L11
+    jump L12
+
+  L11:
     load_type int
     load_var _2
     call user.iter_impl_generics_only.core.Iterable<T, never>$for$T[].iter
     store_var _1
-    jump L22
+    jump L24
 
-  L11:
+  L12:
+    load_type int
+    load_var _2
+    call user.iter_impl_generics_only.core.Iterable<T, never>$for$T[].iter
+    store_var _1
+    jump L24
+
+  L13:
     load_type int
     load_type void
     load_var _2
     call user.iter_impl_generics_only.core.Peekable.Iterable<T, E>.iter
     store_var _1
-    jump L22
+    jump L24
 
-  L12:
+  L14:
     load_type int
     load_type void
     load_type void
     load_var _2
     call user.iter_impl_generics_only.core.Filter.Iterable<T, E | E2>.iter
     store_var _1
-    jump L22
+    jump L24
 
-  L13:
+  L15:
     load_type int
     load_type void
     load_var _2
     call user.iter_impl_generics_only.core.Chain.Iterable<T, E>.iter
     store_var _1
-    jump L22
+    jump L24
 
-  L14:
+  L16:
     load_var _2
     make_bound_method user.iter_impl_generics_only.core.Map.Iterable<R, E | E2>.iter
     call_indirect
     store_var _1
-    jump L22
+    jump L24
 
-  L15:
+  L17:
     load_type int
     load_var _2
     call user.iter_impl_generics_only.core.ArrayIterator.Iterable<T, never>.iter
     store_var _1
-    jump L22
+    jump L24
 
-  L16:
+  L18:
     load_var _2
     call user.iter_impl_generics_only.core.Range.Iterable<int, never>.iter
     store_var _1
-    jump L22
+    jump L24
 
-  L17:
+  L19:
     load_var _2
     make_bound_method user.iter_impl_generics_only.core.FilterMap.Iterable<R, E | E2>.iter
     call_indirect
     store_var _1
-    jump L22
+    jump L24
 
-  L18:
+  L20:
     load_var _2
     make_bound_method user.iter_impl_generics_only.core.FlatMap.Iterable<R, E | E2 | E3>.iter
     call_indirect
     store_var _1
-    jump L22
+    jump L24
 
-  L19:
+  L21:
     load_type int
     load_var _2
     call user.iter_impl_generics_only.core.Repeat.Iterable<T, never>.iter
     store_var _1
-    jump L22
+    jump L24
 
-  L20:
+  L22:
     load_type int
     load_type void
     load_var _2
     call user.iter_impl_generics_only.core.StepBy.Iterable<T, E>.iter
     store_var _1
-    jump L22
+    jump L24
 
-  L21:
+  L23:
     load_type int
     load_type void
     load_type void
@@ -291,143 +304,143 @@ function iter_impl_generics_only.iter_array_iter() -> int[] {
     call user.iter_impl_generics_only.core.Flatten.Iterable<R, E | E3>.iter
     store_var _1
 
-  L22:
-    load_var _1
-    is_type iter_impl_generics_only.core.Flatten<...>
-    pop_jump_if_false L23
-    jump L42
-
-  L23:
-    load_var _1
-    is_type iter_impl_generics_only.core.StepBy<...>
-    pop_jump_if_false L24
-    jump L41
-
   L24:
     load_var _1
-    is_type iter_impl_generics_only.core.Repeat<...>
+    is_type iter_impl_generics_only.core.Flatten<...>
     pop_jump_if_false L25
-    jump L40
+    jump L44
 
   L25:
     load_var _1
-    is_type iter_impl_generics_only.core.FlatMap<...>
+    is_type iter_impl_generics_only.core.StepBy<...>
     pop_jump_if_false L26
-    jump L39
+    jump L43
 
   L26:
     load_var _1
-    is_type iter_impl_generics_only.core.FilterMap<...>
+    is_type iter_impl_generics_only.core.Repeat<...>
     pop_jump_if_false L27
-    jump L38
+    jump L42
 
   L27:
     load_var _1
-    is_type iter_impl_generics_only.core.Range
+    is_type iter_impl_generics_only.core.FlatMap<...>
     pop_jump_if_false L28
-    jump L37
+    jump L41
 
   L28:
     load_var _1
-    is_type iter_impl_generics_only.core.ArrayIterator<...>
+    is_type iter_impl_generics_only.core.FilterMap<...>
     pop_jump_if_false L29
-    jump L36
+    jump L40
 
   L29:
     load_var _1
-    is_type iter_impl_generics_only.core.Map<...>
+    is_type iter_impl_generics_only.core.Range
     pop_jump_if_false L30
-    jump L35
+    jump L39
 
   L30:
     load_var _1
-    is_type iter_impl_generics_only.core.Chain<...>
+    is_type iter_impl_generics_only.core.ArrayIterator<...>
     pop_jump_if_false L31
-    jump L34
+    jump L38
 
   L31:
     load_var _1
-    is_type iter_impl_generics_only.core.Filter<...>
+    is_type iter_impl_generics_only.core.Map<...>
     pop_jump_if_false L32
-    jump L33
+    jump L37
 
   L32:
-    load_type int
-    load_type void
     load_var _1
-    call user.iter_impl_generics_only.core.Iterator.collect
-    jump L43
+    is_type iter_impl_generics_only.core.Chain<...>
+    pop_jump_if_false L33
+    jump L36
 
   L33:
-    load_type int
-    load_type void
     load_var _1
-    call user.iter_impl_generics_only.core.Iterator.collect
-    jump L43
+    is_type iter_impl_generics_only.core.Filter<...>
+    pop_jump_if_false L34
+    jump L35
 
   L34:
     load_type int
     load_type void
     load_var _1
     call user.iter_impl_generics_only.core.Iterator.collect
-    jump L43
+    jump L45
 
   L35:
     load_type int
     load_type void
     load_var _1
     call user.iter_impl_generics_only.core.Iterator.collect
-    jump L43
+    jump L45
 
   L36:
     load_type int
     load_type void
     load_var _1
     call user.iter_impl_generics_only.core.Iterator.collect
-    jump L43
+    jump L45
 
   L37:
     load_type int
     load_type void
     load_var _1
     call user.iter_impl_generics_only.core.Iterator.collect
-    jump L43
+    jump L45
 
   L38:
     load_type int
     load_type void
     load_var _1
     call user.iter_impl_generics_only.core.Iterator.collect
-    jump L43
+    jump L45
 
   L39:
     load_type int
     load_type void
     load_var _1
     call user.iter_impl_generics_only.core.Iterator.collect
-    jump L43
+    jump L45
 
   L40:
     load_type int
     load_type void
     load_var _1
     call user.iter_impl_generics_only.core.Iterator.collect
-    jump L43
+    jump L45
 
   L41:
     load_type int
     load_type void
     load_var _1
     call user.iter_impl_generics_only.core.Iterator.collect
-    jump L43
+    jump L45
 
   L42:
     load_type int
     load_type void
     load_var _1
     call user.iter_impl_generics_only.core.Iterator.collect
+    jump L45
 
   L43:
+    load_type int
+    load_type void
+    load_var _1
+    call user.iter_impl_generics_only.core.Iterator.collect
+    jump L45
+
+  L44:
+    load_type int
+    load_type void
+    load_var _1
+    call user.iter_impl_generics_only.core.Iterator.collect
+
+  L45:
     return
 }
 

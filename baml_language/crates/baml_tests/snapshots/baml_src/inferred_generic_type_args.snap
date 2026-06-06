@@ -103,6 +103,7 @@ function inferred_generic_type_args.ArrBag.make(a: unknown[]) -> inferred_generi
 }
 
 function inferred_generic_type_args.ArrIter$stream.NextIter<T, never>.next2(self: inferred_generic_type_args.ArrIter$stream<unknown>) -> unknown | inferred_generic_type_args.IterDone {
+    load_type #0
     load_var self
     load_field .0
     load_var self
@@ -133,6 +134,7 @@ function inferred_generic_type_args.ArrIter$stream.NextIter<T, never>.next2(self
 }
 
 function inferred_generic_type_args.ArrIter.NextIter<T, never>.next2(self: inferred_generic_type_args.ArrIter<unknown>) -> unknown | inferred_generic_type_args.IterDone {
+    load_type #0
     load_var self
     load_field .0
     load_var self
