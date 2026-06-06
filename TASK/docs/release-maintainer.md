@@ -34,7 +34,7 @@ group: baml-language-release-canary
 cancel-in-progress: false
 ```
 
-Build jobs download the single `release-plan.json` artifact and run `scripts/baml-language-version stamp --plan release-plan.json` before compiling.
+Build jobs download the single `release-plan.json` artifact and run `scripts/baml-language-version stamp --plan release-plan.json` before compiling. The Python and Node.js SDK native builds are wired in as reusable workflow jobs from `.github/workflows/release-baml-language.yml`, so dry runs exercise both SDK matrices with the same frozen plan and source SHA as the toolchain builds.
 
 Dry-run dispatch:
 
@@ -58,7 +58,7 @@ Production publishes are guarded to `refs/heads/canary`. Mutable pointers (`cana
 
 Automatic canary branch releases publish nightly by default. If the source commit advances `baml_language/release.toml` and `baml-language-<canary_version>` does not already exist, the workflow publishes canary first and queues a serialized nightly run after the canary manifest is live.
 
-The Python wheel build is reusable, but the PyPI upload is a top-level `publish-pypi` job in `.github/workflows/release-baml-language.yml`. Registry publish jobs stay top-level whenever OIDC/trusted publishing is bound to the workflow identity that performs the upload. Before production PyPI publishing, update or validate the PyPI trusted-publisher binding for project `baml-core` so it authorizes `release-baml-language.yml`; leave the PyPI environment blank unless the job declares a matching GitHub Actions `environment`.
+The Python wheel build and Node.js native addon build are reusable, but the PyPI upload is a top-level `publish-pypi` job in `.github/workflows/release-baml-language.yml`. Registry publish jobs stay top-level whenever OIDC/trusted publishing is bound to the workflow identity that performs the upload. Before production PyPI publishing, update or validate the PyPI trusted-publisher binding for project `baml-core` so it authorizes `release-baml-language.yml`; leave the PyPI environment blank unless the job declares a matching GitHub Actions `environment`. If npm publishing is added, keep that publish job top-level in `release-baml-language.yml` for the same trusted-publishing reason, and have it consume the `nodejs-sdk-*` artifacts from the reusable build.
 
 Homebrew and AUR publish only wrapper packages when `wrapper_changed == true`. Toolchain releases never dispatch package-manager updates. `scripts/baml-package-manager-artifacts` generates the formula and AUR files from wrapper archive checksums; publish jobs refuse to run unless the Homebrew token or AUR SSH key is configured.
 
