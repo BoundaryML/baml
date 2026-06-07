@@ -50,6 +50,7 @@ env:
   # Inputs read by .envrc; everything else (RUSTC_WRAPPER, SCCACHE_*) is set by
   # .envrc itself so it stays the single source of truth across CI and local.
   # The R2 credentials .envrc maps to AWS_* for sccache (mapped to AWS_*).
+  # Native Cargo linker overrides live in baml_language/.cargo/config.toml.
   BAML_SCCACHE_R2_ACCESS_KEY_ID: ${{ secrets.BAML_SCCACHE_R2_ACCESS_KEY_ID }}
   BAML_SCCACHE_R2_SECRET_ACCESS_KEY: ${{ secrets.BAML_SCCACHE_R2_SECRET_ACCESS_KEY }}
   CARGO_INCREMENTAL: 0
