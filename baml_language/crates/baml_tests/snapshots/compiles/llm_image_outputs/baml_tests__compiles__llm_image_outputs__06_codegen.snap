@@ -72,7 +72,7 @@ function user.GenerateImage$parse(json: string, client: baml.llm.Client) -> imag
     store_var client
 
   L0:
-    load_type void
+    load_type unknown
     load_type image
     load_const "GenerateImage"
     load_var json
@@ -199,7 +199,7 @@ function user.GenerateImageSet$parse(json: string, client: baml.llm.Client) -> i
     store_var client
 
   L0:
-    load_type void
+    load_type unknown
     load_type image[]
     load_const "GenerateImageSet"
     load_var json
@@ -326,7 +326,7 @@ function user.GenerateMixedImageNarrative$parse(json: string, client: baml.llm.C
     store_var client
 
   L0:
-    load_type void
+    load_type unknown
     load_type image | string[]
     load_const "GenerateMixedImageNarrative"
     load_var json

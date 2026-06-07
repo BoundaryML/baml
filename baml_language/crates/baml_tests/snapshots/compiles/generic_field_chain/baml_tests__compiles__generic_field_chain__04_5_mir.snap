@@ -6,7 +6,7 @@ fn user.Box.from_json(j: baml.json.json) -> Box<void> {
     // Locals:
     let _0: Box<void> // _0 // return
     let _1: baml.json.json // j // param
-    let _2: void
+    let _2: unknown
     let _3: baml.json.json
     let _4: type
 
@@ -169,8 +169,8 @@ fn user.Box.to_json(self: Box) -> baml.json.json {
     let _0: baml.json.json // _0 // return
     let _1: Box // self // param
     let _2: baml.json.json
-    let _3: void
-    let _4: Box<void>
+    let _3: unknown
+    let _4: Box<unknown>
     let _5: type
 
     bb0: {

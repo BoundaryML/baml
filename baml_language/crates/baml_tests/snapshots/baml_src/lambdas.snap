@@ -268,6 +268,8 @@ function lambdas.lambdas_closure_in_map_with_captured_offset() -> int[] {
     store_var ?1
     load_const 10
     store_deref ?1
+    load_type int
+    load_type void
     load_const 1
     load_const 2
     load_const 3

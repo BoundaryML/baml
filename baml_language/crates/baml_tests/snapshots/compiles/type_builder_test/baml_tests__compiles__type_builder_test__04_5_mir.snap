@@ -113,7 +113,7 @@ fn user.Fn$parse(json: string, client: baml.llm.Client) -> string {
     }
 
     bb2: {
-        _5 = load_type(void);
+        _5 = load_type(unknown);
         _6 = load_type(string);
         _0 = call const fn baml.llm.parse<copy _5, copy _6>(const "Fn", copy _1) -> [bb3];
     }

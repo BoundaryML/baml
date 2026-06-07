@@ -1,0 +1,20 @@
+---
+source: crates/baml_cli/src/describe_command_tests.rs
+expression: output
+---
+bounds — Explains type bounds written with `extends`.
+
+Syntax:
+  class Box<T extends Named> {
+    value: T
+  }
+  
+  class PairBox<T extends int | string> {
+    value: T
+  }
+  
+  function read<I extends Iterator<Item = string>>(it: I) -> I.Item? {
+    return it.next()
+  }
+
+A bound constrains what type arguments are allowed and exposes members from the bound inside the generic body. Use `requires` for interface-to-interface prerequisites; use `extends` for generic parameter bounds and associated type bounds.

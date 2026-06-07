@@ -15,7 +15,7 @@ function user.decode_root(j: baml.json.json) -> pkg.inner.Box<int> {
     return
 }
 
-function user.pkg.inner.AutoBox.from_json(j: baml.json.json) -> pkg.inner.AutoBox<void> {
+function user.pkg.inner.AutoBox.from_json(j: baml.json.json) -> pkg.inner.AutoBox<unknown> {
     load_var j
     load_const "value"
     call baml.json.field
@@ -28,7 +28,7 @@ function user.pkg.inner.AutoBox.from_json(j: baml.json.json) -> pkg.inner.AutoBo
     return
 }
 
-function user.pkg.inner.AutoBox.to_json(self: pkg.inner.AutoBox) -> baml.json.json {
+function user.pkg.inner.AutoBox.to_json(self: pkg.inner.AutoBox<unknown>) -> baml.json.json {
     load_type #0
     load_var self
     load_field .value
@@ -38,7 +38,7 @@ function user.pkg.inner.AutoBox.to_json(self: pkg.inner.AutoBox) -> baml.json.js
     return
 }
 
-function user.pkg.inner.Box.from_json(j: baml.json.json) -> pkg.inner.Box<void> {
+function user.pkg.inner.Box.from_json(j: baml.json.json) -> pkg.inner.Box<unknown> {
     load_var j
     load_const "value"
     call baml.json.field
@@ -51,7 +51,7 @@ function user.pkg.inner.Box.from_json(j: baml.json.json) -> pkg.inner.Box<void> 
     return
 }
 
-function user.pkg.inner.Box.to_json(self: pkg.inner.Box) -> baml.json.json {
+function user.pkg.inner.Box.to_json(self: pkg.inner.Box<unknown>) -> baml.json.json {
     load_type #0
     load_var self
     load_field .value

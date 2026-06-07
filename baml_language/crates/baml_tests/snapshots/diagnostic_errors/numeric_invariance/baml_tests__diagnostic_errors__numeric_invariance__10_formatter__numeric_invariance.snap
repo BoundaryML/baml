@@ -100,6 +100,7 @@ function OptionalFloatLtBigint(x: float?, y: bigint) -> bool {
 class BigintHolder {
     count: bigint,
 }
+
 function IntFieldIntoBigintClass() -> BigintHolder {
     BigintHolder { count: 1 }
 }

@@ -280,11 +280,11 @@ fn class_is_safe_for_per_field_synthesis(class: &ClassDef) -> bool {
 /// Returns `true` if `ty` is a bare reference to one of the class's generic
 /// parameters (e.g., `T` in `class Box<T> { value T }`).
 ///
-/// At MIR lowering, `Tir2Ty::TypeVar` is erased to `Ty::Void`, so MIR cannot
-/// route a `MemberAccess` on a `TypeVar`-typed receiver to a concrete `to_json`
-/// method — it falls through to a generic map-element load that panics at
-/// runtime. The auto-derive synthesizer detects this case at AST time and
-/// emits `baml.json.to_json(self.<f>)` instead, which dispatches via the
+/// At MIR lowering, `Tir2Ty::TypeVar` is erased to `Ty::BuiltinUnknown`, so MIR
+/// cannot route a `MemberAccess` on a `TypeVar`-typed receiver to a concrete
+/// `to_json` method — it falls through to a generic map-element load that
+/// panics at runtime. The auto-derive synthesizer detects this case at AST time
+/// and emits `baml.json.to_json(self.<f>)` instead, which dispatches via the
 /// runtime value's actual type (`make_to_json_callee` in `bex_vm`).
 fn type_expr_is_typevar_reference(
     ty: &TypeExpr,
@@ -302,7 +302,7 @@ fn type_expr_is_typevar_reference(
 /// Returns `true` if `ty` is a `TypeVar` reference, possibly wrapped in
 /// `Optional` or a nullable `Union`. Once null is short-circuited away by
 /// `?.` or narrowing, the live receiver still has `TypeVar` type — so a
-/// `.to_json()` call would hit the same MIR `Ty::Void` erasure described
+/// `.to_json()` call would hit the same MIR generic-erasure path described
 /// on `type_expr_is_typevar_reference`. Detect those cases up front and
 /// route them through `baml.json.to_json(self.<f>)` instead.
 fn type_expr_resolves_to_typevar(
@@ -447,14 +447,14 @@ fn build_to_json_body(class: &ClassDef, span: TextRange) -> (ExprBody, AstSource
         // Detect whether the field type is (or unwraps to) a class generic
         // parameter — bare `T`, `T?`, or `T | null`. MIR's
         // `lower_member_access` cannot dispatch a method through a TypeVar
-        // receiver (the receiver type is erased to `Ty::Void` before reaching
-        // MIR, so `field_idx` is `None` and the lowering falls through to a
-        // dynamic-map load that panics on primitive/instance values). The
-        // `T?` / `T | null` cases hit the same panic after `?.` short-circuits
-        // away null. Route these through `baml.json.to_json(self.<f>)` so the
-        // free function dispatches on the runtime value's actual type via
-        // `make_to_json_callee`, preserving user `to_json` overrides through
-        // the generic boundary.
+        // receiver (the receiver type is erased to `Ty::BuiltinUnknown` before
+        // reaching MIR, so there is no concrete `field_idx` and the lowering
+        // falls through to a dynamic-map load that panics on primitive/instance
+        // values). The `T?` / `T | null` cases hit the same panic after `?.`
+        // short-circuits away null. Route these through
+        // `baml.json.to_json(self.<f>)` so the free function dispatches on the
+        // runtime value's actual type via `make_to_json_callee`, preserving user
+        // `to_json` overrides through the generic boundary.
         let is_typevar = field
             .type_expr
             .as_ref()

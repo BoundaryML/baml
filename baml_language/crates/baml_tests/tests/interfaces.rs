@@ -3178,6 +3178,59 @@ async fn class_own_method_callable_from_implements_block() {
 }
 
 #[tokio::test]
+async fn class_own_method_overrides_default_for_interface_dispatch() {
+    let output = baml_test!(
+        r#"
+        interface Greeter {
+            function greet(self) -> string {
+                return "default"
+            }
+        }
+
+        class Person {
+            name: string
+
+            implements Greeter {}
+
+            function greet(self) -> string {
+                return self.name
+            }
+        }
+
+        function main() -> string {
+            let greeter: Greeter = Person { name: "Ada" }
+            return greeter.greet()
+        }
+        "#
+    );
+
+    assert_eq!(
+        output.result.unwrap(),
+        BexExternalValue::String("Ada".into())
+    );
+}
+
+#[test]
+fn class_own_method_satisfying_interface_must_match_signature() {
+    assert_compile_error_contains(
+        r#"
+        interface Greeter {
+            function greet(self) -> string
+        }
+
+        class Person {
+            implements Greeter {}
+
+            function greet(self) -> int {
+                return 1
+            }
+        }
+        "#,
+        "does not match interface",
+    );
+}
+
+#[tokio::test]
 async fn _unused_imports_compile() {
     // Silence dead-code warnings for `Ty` if all runtime tests above eventually
     // get gated/removed. Touching it here keeps the import live.
@@ -3383,6 +3436,170 @@ fn generic_interface_method_explicit_type_args_are_checked() {
         }
         "#,
         "type mismatch",
+    );
+}
+
+#[test]
+fn class_type_reference_rejects_wrong_generic_arg_count() {
+    assert_compile_error_contains(
+        r#"
+        class Box<T> {
+            value: T
+        }
+        function bad(value: Box<int, string>) -> int {
+            return 1
+        }
+        "#,
+        "expects 1 type argument(s), got 2",
+    );
+}
+
+#[test]
+fn class_type_reference_rejects_too_few_explicit_generic_arg_count() {
+    assert_compile_error_contains(
+        r#"
+        class Pair<L, R> {
+            left: L
+            right: R
+        }
+        function bad(value: Pair<int>) -> int {
+            return 1
+        }
+        "#,
+        "expects 2 type argument(s), got 1",
+    );
+}
+
+#[test]
+fn function_call_rejects_wrong_explicit_generic_arg_count() {
+    assert_compile_error_contains(
+        r#"
+        function id<T>(value: T) -> T {
+            return value
+        }
+        function bad() -> int {
+            return id<int, string>(1)
+        }
+        "#,
+        "function `id` expects 1 type argument(s), got 2",
+    );
+}
+
+#[test]
+fn function_call_rejects_too_few_explicit_generic_arg_count() {
+    assert_compile_error_contains(
+        r#"
+        function pair<L, R>(left: L, right: R) -> L {
+            return left
+        }
+        function bad() -> int {
+            return pair<int>(1, "nope")
+        }
+        "#,
+        "function `pair` expects 2 type argument(s), got 1",
+    );
+}
+
+#[test]
+fn in_body_implements_rejects_wrong_interface_generic_arg_count() {
+    assert_compile_error_contains(
+        r#"
+        interface Label<T> {
+            function label(self) -> T
+        }
+        class Thing {
+            implements Label<int, string> {
+                function label(self) -> int {
+                    return 1
+                }
+            }
+        }
+        "#,
+        "expects 1 type argument(s), got 2",
+    );
+}
+
+#[test]
+fn in_body_implements_rejects_too_few_explicit_interface_generic_arg_count() {
+    assert_compile_error_contains(
+        r#"
+        interface PairLabel<L, R> {
+            function label(self) -> L
+        }
+        class Thing {
+            implements PairLabel<int> {
+                function label(self) -> int {
+                    return 1
+                }
+            }
+        }
+        "#,
+        "expects 2 type argument(s), got 1",
+    );
+}
+
+#[test]
+fn out_of_body_implements_rejects_wrong_interface_generic_arg_count() {
+    assert_compile_error_contains(
+        r#"
+        interface Label<T> {
+            function label(self) -> T
+        }
+        class Thing {}
+        implements Label<int, string> for Thing {
+            function label(self) -> int {
+                return 1
+            }
+        }
+        "#,
+        "expects 1 type argument(s), got 2",
+    );
+}
+
+#[test]
+fn out_of_body_implements_rejects_too_few_explicit_interface_generic_arg_count() {
+    assert_compile_error_contains(
+        r#"
+        interface PairLabel<L, R> {
+            function label(self) -> L
+        }
+        class Thing {}
+        implements PairLabel<int> for Thing {
+            function label(self) -> int {
+                return 1
+            }
+        }
+        "#,
+        "expects 2 type argument(s), got 1",
+    );
+}
+
+#[test]
+fn out_of_body_implements_rejects_wrong_target_class_generic_arg_count() {
+    assert_compile_error_contains(
+        r#"
+        interface Marker {}
+        class Box<T> {
+            value: T
+        }
+        implements Marker for Box<int, string> {}
+        "#,
+        "expects 1 type argument(s), got 2",
+    );
+}
+
+#[test]
+fn out_of_body_implements_rejects_too_few_explicit_target_class_generic_arg_count() {
+    assert_compile_error_contains(
+        r#"
+        interface Marker {}
+        class Pair<L, R> {
+            left: L
+            right: R
+        }
+        implements Marker for Pair<int> {}
+        "#,
+        "expects 2 type argument(s), got 1",
     );
 }
 
@@ -4937,6 +5154,44 @@ fn all_required_parents_satisfied_is_ok() {
 }
 
 #[test]
+fn in_body_implicit_method_match_ignores_param_names() {
+    assert_zero_compile_errors(
+        r#"
+        interface Label {
+            function label(self, name: string) -> string
+        }
+
+        class Thing {
+            function label(self, value: string) -> string {
+                return value
+            }
+
+            implements Label {}
+        }
+        "#,
+    );
+}
+
+#[test]
+fn out_of_body_implicit_method_match_ignores_param_names() {
+    assert_zero_compile_errors(
+        r#"
+        interface Label {
+            function label(self, name: string) -> string
+        }
+
+        class Thing {
+            function label(self, value: string) -> string {
+                return value
+            }
+        }
+
+        implements Label for Thing {}
+        "#,
+    );
+}
+
+#[test]
 fn required_parent_lookup_uses_declaring_interface_namespace() {
     let files = &[
         (
@@ -5105,6 +5360,57 @@ fn out_of_body_implements_for_qualified_generic_class_uses_class_methods() {
         ),
     ];
     assert_no_compile_errors_multi(files);
+}
+
+#[tokio::test]
+async fn out_of_body_empty_implements_uses_class_method_runtime() {
+    let output = baml_test!(
+        r#"
+        interface Printable {
+            function label(self) -> string
+        }
+
+        class Box {
+            value: string
+
+            function label(self) -> string {
+                return self.value
+            }
+        }
+
+        implements Printable for Box {}
+
+        function main() -> string {
+            let printable: Printable = Box { value: "boxed" }
+            return printable.label()
+        }
+        "#
+    );
+
+    assert_eq!(
+        output.result.unwrap(),
+        BexExternalValue::String("boxed".into())
+    );
+}
+
+#[test]
+fn out_of_body_empty_implements_class_method_must_match_signature() {
+    assert_compile_error_contains(
+        r#"
+        interface Printable {
+            function label(self) -> string
+        }
+
+        class Box {
+            function label(self) -> int {
+                return 1
+            }
+        }
+
+        implements Printable for Box {}
+        "#,
+        "does not match interface",
+    );
 }
 
 #[test]
@@ -5407,6 +5713,36 @@ async fn default_call_from_generic_out_of_body_override_runtime() {
     assert_eq!(
         output.result.unwrap(),
         BexExternalValue::String("P:[L] hi".into())
+    );
+}
+
+#[tokio::test]
+async fn generic_out_of_body_override_preserves_method_type_args_runtime() {
+    let output = baml_test!(
+        r#"
+        interface Describer<T> {
+            function describe<U>(self, value: U) -> string
+        }
+
+        class Box<T> {
+            value: T
+        }
+
+        implements<T> Describer<T> for Box<T> {
+            function describe<U>(self, value: U) -> string {
+                return reflect.type_of<T>().to_string() + ":" + reflect.type_of<U>().to_string()
+            }
+        }
+
+        function main() -> string {
+            let d: Describer<int> = Box<int> { value: 1 }
+            return d.describe<string>("ok")
+        }
+        "#
+    );
+    assert_eq!(
+        output.result.unwrap(),
+        BexExternalValue::String("int:string".into())
     );
 }
 

@@ -108,7 +108,7 @@ fn user.GenerateImage$parse(json: string, client: baml.llm.Client) -> image {
     }
 
     bb2: {
-        _4 = load_type(void);
+        _4 = load_type(unknown);
         _5 = load_type(image);
         _0 = call const fn baml.llm.parse<copy _4, copy _5>(const "GenerateImage", copy _1) -> [bb3];
     }
@@ -252,7 +252,7 @@ fn user.GenerateImageSet$parse(json: string, client: baml.llm.Client) -> image[]
     }
 
     bb2: {
-        _4 = load_type(void);
+        _4 = load_type(unknown);
         _5 = load_type(image[]);
         _0 = call const fn baml.llm.parse<copy _4, copy _5>(const "GenerateImageSet", copy _1) -> [bb3];
     }
@@ -396,7 +396,7 @@ fn user.GenerateMixedImageNarrative$parse(json: string, client: baml.llm.Client)
     }
 
     bb2: {
-        _4 = load_type(void);
+        _4 = load_type(unknown);
         _5 = load_type(image | string[]);
         _0 = call const fn baml.llm.parse<copy _4, copy _5>(const "GenerateMixedImageNarrative", copy _1) -> [bb3];
     }

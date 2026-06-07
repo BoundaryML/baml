@@ -400,7 +400,7 @@ fn user.llm.openai.Box.from_json(j: baml.json.json) -> llm.openai.Box<void> {
     // Locals:
     let _0: llm.openai.Box<void> // _0 // return
     let _1: baml.json.json // j // param
-    let _2: void
+    let _2: unknown
     let _3: baml.json.json
     let _4: type
 
@@ -427,7 +427,7 @@ fn user.llm.openai.Outer.from_json(j: baml.json.json) -> llm.openai.Outer<void> 
     // Locals:
     let _0: llm.openai.Outer<void> // _0 // return
     let _1: baml.json.json // j // param
-    let _2: llm.openai.Box<void>
+    let _2: llm.openai.Box<unknown>
     let _3: baml.json.json
     let _4: type
 
@@ -455,8 +455,8 @@ fn user.llm.openai.Box.to_json(self: llm.openai.Box) -> baml.json.json {
     let _0: baml.json.json // _0 // return
     let _1: llm.openai.Box // self // param
     let _2: baml.json.json
-    let _3: void
-    let _4: llm.openai.Box<void>
+    let _3: unknown
+    let _4: llm.openai.Box<unknown>
     let _5: type
 
     bb0: {
@@ -514,8 +514,8 @@ fn user.llm.openai.Outer.to_json(self: llm.openai.Outer) -> baml.json.json {
     let _0: baml.json.json // _0 // return
     let _1: llm.openai.Outer // self // param
     let _2: baml.json.json
-    let _3: llm.openai.Box<void>
-    let _4: llm.openai.Outer<void>
+    let _3: llm.openai.Box<unknown>
+    let _4: llm.openai.Outer<unknown>
     let _5: type
 
     bb0: {

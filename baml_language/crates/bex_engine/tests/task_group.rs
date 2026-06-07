@@ -105,8 +105,11 @@ async fn task_group_cancel_cancels_members() {
     let start = std::time::Instant::now();
     let result = run_main(source).await.expect("call should succeed");
     assert_eq!(result, BexExternalValue::Int(0));
+    // The bound must stay well under the member's 10s sleep (that's what it
+    // guards), but `run_main` times COMPILATION too — the stdlib keeps
+    // growing, so leave headroom above the ~2-3s a debug-build compile takes.
     assert!(
-        start.elapsed() < std::time::Duration::from_secs(2),
+        start.elapsed() < std::time::Duration::from_secs(5),
         "group.cancel() should be prompt: {:?}",
         start.elapsed()
     );

@@ -95,7 +95,7 @@ function user.TestFunc$parse(json: string, client: baml.llm.Client) -> string {
     store_var client
 
   L0:
-    load_type void
+    load_type unknown
     load_type string
     load_const "TestFunc"
     load_var json

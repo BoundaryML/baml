@@ -38,7 +38,6 @@ sys_native = { workspace = true }
 anyhow = { workspace = true }
 borsh = { workspace = true }
 clap = { workspace = true, features = [ "color" ] }
-clap-cargo = { workspace = true }
 console = { workspace = true }
 ctrlc = { workspace = true }
 flate2 = { workspace = true }
@@ -50,7 +49,6 @@ reqwest = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 serde_yaml = { workspace = true }
-sha2 = { workspace = true }
 strsim = { workspace = true }
 tar = { workspace = true }
 text-size = { workspace = true }
@@ -72,16 +70,6 @@ skip-integ-tests = [  ]
 baml_tests = { workspace = true }
 insta = { workspace = true }
 tempfile = { workspace = true }
-
-# assert_cmd = "2"
-# console_log = "1"
-# dissimilar = "1.0.4"
-# expect-test = "1.1.0"
-# indoc.workspace = true
-# either = "1.8.1"
-# rstest = "0.22.0"
-# walkdir = "2.5.0"
-# wasm-logger = "0.2.0"
 
 [[bin]]
 name = "baml-cli"

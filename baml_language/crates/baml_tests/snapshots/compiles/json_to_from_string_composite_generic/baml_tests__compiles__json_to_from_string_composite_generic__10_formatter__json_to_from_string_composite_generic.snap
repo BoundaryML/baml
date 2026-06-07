@@ -8,6 +8,7 @@ source: crates/baml_tests/src/generated_tests.rs
 class User {
     name: string,
 }
+
 class Container<T> {
     item: T,
 }

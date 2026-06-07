@@ -148,11 +148,13 @@ function user.wrong_arity_extra() -> user.Box<int, string> throws never {
   { : user.Box<int, string>
     Box { value: 42 } : user.Box<int, string>
   }
+  !! 3129..3146: type `Box` expects 1 type argument(s), got 2
 }
 function user.wrong_arity_partial() -> user.Pair<int> throws never {
   { : user.Pair<int>
     Pair { first: 1, second: "two" } : user.Pair<int>
   }
+  !! 3256..3266: type `Pair` expects 2 type argument(s), got 1
   !! 3303..3308: type mismatch: expected B, got "two"
 }
 class user.Plain {
@@ -168,6 +170,7 @@ function user.wrong_arity_on_non_generic() -> user.Plain<int> throws never {
   { : user.Plain<int>
     Plain { name: "hello" } : user.Plain<int>
   }
+  !! 3570..3581: type `Plain` expects 0 type argument(s), got 1
 }
 class user.Container {
   inner: user.Box<T>

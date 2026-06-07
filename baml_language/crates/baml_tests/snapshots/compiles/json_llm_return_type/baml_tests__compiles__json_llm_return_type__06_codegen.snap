@@ -66,7 +66,7 @@ function user.ExtractAny$parse(json: string, client: baml.llm.Client) -> baml.js
     store_var client
 
   L0:
-    load_type void
+    load_type unknown
     load_type baml.json.json
     load_const "ExtractAny"
     load_var json

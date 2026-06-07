@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
 ---
-function user.Box.from_json(j: baml.json.json) -> Box<void> {
+function user.Box.from_json(j: baml.json.json) -> Box<unknown> {
     load_var j
     load_const "value"
     call baml.json.field
@@ -14,7 +14,7 @@ function user.Box.from_json(j: baml.json.json) -> Box<void> {
     return
 }
 
-function user.Box.to_json(self: Box) -> baml.json.json {
+function user.Box.to_json(self: Box<unknown>) -> baml.json.json {
     load_type #0
     load_var self
     load_field .value
@@ -24,7 +24,7 @@ function user.Box.to_json(self: Box) -> baml.json.json {
     return
 }
 
-function user.Box.unwrap(self: Box) -> void {
+function user.Box.unwrap(self: Box<unknown>) -> unknown {
     load_var self
     load_field .value
     return
@@ -295,6 +295,8 @@ function user.apply(f: (int, int) -> int throws never, a: int, b: int) -> int {
 }
 
 function user.apply_to_each(items: Employee[], f: (Employee) -> string throws never) -> string[] {
+    load_type string
+    load_type unknown
     load_var2 1 2
     call baml.Array.map
     return
@@ -426,6 +428,8 @@ function user.test_unbound_higher_order() -> string[] {
 }
 
 function user.test_unbound_in_map() -> string[] {
+    load_type string
+    load_type void
     load_const "Alice"
     load_const "Smith"
     init_instance user.Employee .first, .last

@@ -141,21 +141,12 @@ fn rewrite_block_ids_in_terminator(term: &mut Terminator, map: &[Option<BlockId>
             remap(otherwise);
         }
         Terminator::Return => {}
-        Terminator::Call { target, unwind, .. } => {
-            remap(target);
-            if let Some(u) = unwind {
-                remap(u);
-            }
-        }
         Terminator::Unreachable => {}
         Terminator::Spawn { resume, .. } => remap(resume),
-        Terminator::SysOp { target, unwind, .. } => {
-            remap(target);
-            if let Some(u) = unwind {
-                remap(u);
-            }
-        }
-        Terminator::Await { target, unwind, .. } | Terminator::AwaitAny { target, unwind, .. } => {
+        Terminator::Call { target, unwind, .. }
+        | Terminator::SysOp { target, unwind, .. }
+        | Terminator::Await { target, unwind, .. }
+        | Terminator::AwaitAny { target, unwind, .. } => {
             remap(target);
             if let Some(u) = unwind {
                 remap(u);
@@ -219,21 +210,12 @@ fn rewrite_block_ids_in_terminator_with_map(
             remap(otherwise);
         }
         Terminator::Return => {}
-        Terminator::Call { target, unwind, .. } => {
-            remap(target);
-            if let Some(u) = unwind {
-                remap(u);
-            }
-        }
         Terminator::Unreachable => {}
         Terminator::Spawn { resume, .. } => remap(resume),
-        Terminator::SysOp { target, unwind, .. } => {
-            remap(target);
-            if let Some(u) = unwind {
-                remap(u);
-            }
-        }
-        Terminator::Await { target, unwind, .. } | Terminator::AwaitAny { target, unwind, .. } => {
+        Terminator::Call { target, unwind, .. }
+        | Terminator::SysOp { target, unwind, .. }
+        | Terminator::Await { target, unwind, .. }
+        | Terminator::AwaitAny { target, unwind, .. } => {
             remap(target);
             if let Some(u) = unwind {
                 remap(u);
@@ -982,13 +964,7 @@ fn apply_subst_to_terminator(term: &mut Terminator, subst: &HashMap<Local, Opera
     match term {
         Terminator::Branch { condition, .. } => apply_subst_to_operand(condition, subst),
         Terminator::Switch { discriminant, .. } => apply_subst_to_operand(discriminant, subst),
-        Terminator::Call { callee, args, .. } => {
-            apply_subst_to_operand(callee, subst);
-            for arg in args {
-                apply_subst_to_operand(arg, subst);
-            }
-        }
-        Terminator::SysOp { callee, args, .. } => {
+        Terminator::Call { callee, args, .. } | Terminator::SysOp { callee, args, .. } => {
             apply_subst_to_operand(callee, subst);
             for arg in args {
                 apply_subst_to_operand(arg, subst);
@@ -1241,14 +1217,8 @@ fn rewrite_locals_in_terminator(term: &mut Terminator, map: &[Option<Local>]) {
             args,
             destination,
             ..
-        } => {
-            remap_operand(callee, map);
-            for arg in args {
-                remap_operand(arg, map);
-            }
-            remap_place(destination, map);
         }
-        Terminator::SysOp {
+        | Terminator::SysOp {
             callee,
             args,
             destination,

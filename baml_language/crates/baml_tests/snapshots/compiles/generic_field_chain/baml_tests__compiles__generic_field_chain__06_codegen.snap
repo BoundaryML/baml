@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
 ---
-function user.Box.from_json(j: baml.json.json) -> Box<void> {
+function user.Box.from_json(j: baml.json.json) -> Box<unknown> {
     load_var j
     load_const "value"
     call baml.json.field
@@ -14,7 +14,7 @@ function user.Box.from_json(j: baml.json.json) -> Box<void> {
     return
 }
 
-function user.Box.to_json(self: Box) -> baml.json.json {
+function user.Box.to_json(self: Box<unknown>) -> baml.json.json {
     load_type #0
     load_var self
     load_field .value

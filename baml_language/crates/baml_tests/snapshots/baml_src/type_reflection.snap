@@ -100,7 +100,7 @@ function type_reflection.GetBar$parse(json: string, client: baml.llm.Client) -> 
     store_var client
 
   L0:
-    load_type void
+    load_type unknown
     load_type type_reflection.Bar
     load_const "GetBar"
     load_var json
@@ -217,7 +217,7 @@ function type_reflection.GetFoo$parse(json: string, client: baml.llm.Client) -> 
     store_var client
 
   L0:
-    load_type void
+    load_type unknown
     load_type type_reflection.Foo
     load_const "GetFoo"
     load_var json

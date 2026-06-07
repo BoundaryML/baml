@@ -2,6 +2,7 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 type Searcher = (query: string, max_results?: int) -> int;
+
 type NarrowSearcher = (query: string, filter?: string?) -> string[];
 
 client<llm> TestClient {

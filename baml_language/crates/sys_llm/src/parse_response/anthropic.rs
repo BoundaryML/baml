@@ -179,9 +179,7 @@ fn image_mime_type_from_filename(filename: Option<&str>) -> Option<String> {
 }
 
 fn is_image_mime_type(mime_type: Option<&str>) -> bool {
-    mime_type
-        .map(|mime_type| mime_type.starts_with("image/"))
-        .unwrap_or(false)
+    mime_type.is_some_and(|mime_type| mime_type.starts_with("image/"))
 }
 
 #[cfg(test)]

@@ -2,6 +2,7 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 type foo = bar;
+
 type bar = int;
 
 // Should pass.

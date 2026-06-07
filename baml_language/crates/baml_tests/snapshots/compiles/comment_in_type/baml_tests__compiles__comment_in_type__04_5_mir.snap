@@ -105,7 +105,7 @@ fn user.CommentAfterArrow$parse(json: string, client: baml.llm.Client) -> string
     }
 
     bb2: {
-        _4 = load_type(void);
+        _4 = load_type(unknown);
         _5 = load_type(string);
         _0 = call const fn baml.llm.parse<copy _4, copy _5>(const "CommentAfterArrow", copy _1) -> [bb3];
     }
@@ -251,7 +251,7 @@ fn user.FunctionWithComments$parse(json: string, client: baml.llm.Client) -> str
     }
 
     bb2: {
-        _4 = load_type(void);
+        _4 = load_type(unknown);
         _5 = load_type(string);
         _0 = call const fn baml.llm.parse<copy _4, copy _5>(const "FunctionWithComments", copy _1) -> [bb3];
     }

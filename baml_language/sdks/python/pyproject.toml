@@ -28,7 +28,7 @@ dev = [
     "pytest>=7",
     "pytest-asyncio>=0.21",
     "pytest-xdist>=3",
-    "maturin>=1.0,<2.0",
+    "maturin>=1.9.4,<2.0",
     "grpcio-tools>=1.50",
     "pydantic>=2",
     "pyright>=1.1.409",
@@ -37,7 +37,7 @@ dev = [
 ]
 
 [build-system]
-requires = ["maturin>=1.0,<2.0"]
+requires = ["maturin>=1.9.4,<2.0"]
 build-backend = "maturin"
 
 
@@ -45,7 +45,6 @@ build-backend = "maturin"
 python-source = "src"
 manifest-path = "rust/bridge_python/Cargo.toml"
 module-name = "baml_core.baml_py"
-features = ["extension-module"]
 include = [{ path = "src/baml_core/py.typed", format = ["sdist", "wheel"] }]
 
 [tool.pytest.ini_options]

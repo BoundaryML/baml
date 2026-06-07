@@ -66,7 +66,7 @@ function user.CommentAfterArrow$parse(json: string, client: baml.llm.Client) -> 
     store_var client
 
   L0:
-    load_type void
+    load_type unknown
     load_type string
     load_const "CommentAfterArrow"
     load_var json
@@ -192,7 +192,7 @@ function user.FunctionWithComments$parse(json: string, client: baml.llm.Client) 
     store_var client
 
   L0:
-    load_type void
+    load_type unknown
     load_type string
     load_const "FunctionWithComments"
     load_var json

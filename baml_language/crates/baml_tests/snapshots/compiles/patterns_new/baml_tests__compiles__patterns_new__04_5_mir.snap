@@ -954,18 +954,18 @@ fn user.unwrap_curried(f: ((int) -> ((int) -> ((int) -> int throws never) throws
     }
 }
 
-fn user.unwrap_typed(cb: ((int) -> void throws never) | ((string) -> void throws never)) -> void {
+fn user.unwrap_typed(cb: ((int) -> unknown throws never) | ((string) -> unknown throws never)) -> void {
     // Locals:
     let _0: void // _0 // return
-    let _1: ((int) -> void throws never) | ((string) -> void throws never) // cb // param
+    let _1: ((int) -> unknown throws never) | ((string) -> unknown throws never) // cb // param
     let _2: bool
     let _3: (int) -> void throws never // f
-    let _4: (int) -> void throws never
+    let _4: (int) -> unknown throws never
     let _5: (string) -> void throws never // f
-    let _6: (string) -> void throws never
+    let _6: (string) -> unknown throws never
 
     bb0: {
-        _2 = is_type(copy _1, (int) -> void throws never);
+        _2 = is_type(copy _1, (int) -> unknown throws never);
         branch copy _2 -> [bb2, bb1];
     }
 

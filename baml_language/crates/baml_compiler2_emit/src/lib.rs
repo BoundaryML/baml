@@ -399,7 +399,7 @@ pub fn generate_project_bytecode_with_opt(
                         // `T`-references inside `class Container<T> { item: T }`
                         // lower to `Tir2Ty::TypeVar("T")` rather than
                         // `Tir2Ty::Unknown`.  This is the input both to the
-                        // erased-`Ty` (TypeVar→Void) used by codegen and to
+                        // erased-`Ty` (TypeVar→BuiltinUnknown) used by codegen and to
                         // the `TyTemplate` (TypeVar→TypeArgRef(N)) used by
                         // typed runtime walking.
                         let tir_ty = baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns(
@@ -627,6 +627,9 @@ pub fn generate_project_bytecode_with_opt(
                         param_names: Vec::new(),
                         param_types: Vec::new(),
                         param_has_default: Vec::new(),
+                        display_type_params: Vec::new(),
+                        display_param_types: Vec::new(),
+                        display_return_type: "null".to_string(),
                         throws_type: None,
                         origin: FunctionOrigin::Builtin,
                         body_meta: None,
@@ -654,6 +657,9 @@ pub fn generate_project_bytecode_with_opt(
                     param_names: Vec::new(),
                     param_types: Vec::new(),
                     param_has_default: Vec::new(),
+                    display_type_params: Vec::new(),
+                    display_param_types: Vec::new(),
+                    display_return_type: "null".to_string(),
                     throws_type: None,
                     origin: FunctionOrigin::Builtin,
                     body_meta: None,
@@ -663,19 +669,21 @@ pub fn generate_project_bytecode_with_opt(
 
             // Set function metadata from signature
             let parameter_defaults = baml_compiler2_ppir::function_parameter_defaults(db, func_loc);
-            let (param_names, param_types, param_has_default, return_type) =
-                compute_function_metadata_from_item_tree(
-                    db,
-                    *file,
-                    *local_id,
-                    func_data,
-                    &parameter_defaults,
-                    cache_pass4,
-                );
-            compiled_fn.return_type = return_type;
-            compiled_fn.param_names = param_names;
-            compiled_fn.param_types = param_types;
-            compiled_fn.param_has_default = param_has_default;
+            let signature_metadata = compute_function_metadata_from_item_tree(
+                db,
+                *file,
+                *local_id,
+                func_data,
+                &parameter_defaults,
+                cache_pass4,
+            );
+            compiled_fn.return_type = signature_metadata.return_type;
+            compiled_fn.param_names = signature_metadata.param_names;
+            compiled_fn.param_types = signature_metadata.param_types;
+            compiled_fn.param_has_default = signature_metadata.param_has_default;
+            compiled_fn.display_type_params = signature_metadata.display_type_params;
+            compiled_fn.display_param_types = signature_metadata.display_param_types;
+            compiled_fn.display_return_type = signature_metadata.display_return_type;
 
             // Set inferred throws type from TIR throw inference
             compiled_fn.throws_type = compute_throws_type(db, *file, &func_data.name, cache_pass4);
@@ -890,6 +898,9 @@ pub fn generate_project_bytecode_with_opt(
                 param_names: vec!["registry".to_string()],
                 param_types: vec![baml_type::Ty::unknown()], // type not needed for chainer dispatch
                 param_has_default: vec![false],
+                display_type_params: Vec::new(),
+                display_param_types: vec!["unknown".to_string()],
+                display_return_type: "null".to_string(),
                 throws_type: None,
                 origin: FunctionOrigin::Internal,
                 body_meta: None,
@@ -1241,10 +1252,36 @@ fn compute_throws_type(
     }
 }
 
-/// Extract param names, param types, and return type from an `item_tree` Function.
+#[derive(Debug, Clone)]
+struct FunctionSignatureMetadata {
+    param_names: Vec<String>,
+    param_types: Vec<baml_type::Ty>,
+    param_has_default: Vec<bool>,
+    return_type: baml_type::Ty,
+    display_type_params: Vec<String>,
+    display_param_types: Vec<String>,
+    display_return_type: String,
+}
+
+fn type_expr_for_name_with_generic_args(name: Name, generic_params: &[Name]) -> TypeExpr {
+    TypeExpr::Path {
+        segments: vec![name],
+        generic_args: generic_params
+            .iter()
+            .cloned()
+            .map(baml_compiler2_tir::lower_type_expr::type_expr_for_name)
+            .collect(),
+        associated_type_bindings: Vec::new(),
+        attrs: Vec::new(),
+    }
+}
+
+/// Extract runtime and display signature metadata from an `item_tree` Function.
 ///
 /// Type resolution delegates to TIR's `lower_type_expr` (single source of truth)
-/// then converts via MIR's `convert_tir2_ty` to produce `baml_type::Ty`.
+/// then converts via MIR's `convert_tir2_ty` to produce runtime `baml_type::Ty`.
+/// The display fields keep generic type variables and unresolved projections
+/// intact for self-documenting surfaces like `baml run --list`.
 fn compute_function_metadata_from_item_tree(
     db: &dyn baml_compiler2_mir::Db,
     file: baml_base::SourceFile,
@@ -1252,11 +1289,16 @@ fn compute_function_metadata_from_item_tree(
     func_data: &baml_compiler2_hir::item_tree::Function,
     parameter_defaults: &baml_compiler2_hir::signature::FunctionParameterDefaults,
     cache: &ResolvedAliases,
-) -> (Vec<String>, Vec<baml_type::Ty>, Vec<bool>, baml_type::Ty) {
+) -> FunctionSignatureMetadata {
     let param_names: Vec<String> = func_data
         .params
         .iter()
         .map(|p| p.name.to_string())
+        .collect();
+    let param_has_default: Vec<bool> = parameter_defaults
+        .params
+        .iter()
+        .map(Option::is_some)
         .collect();
 
     let pkg_info = file_package(db, file);
@@ -1271,129 +1313,185 @@ fn compute_function_metadata_from_item_tree(
         .implements_for
         .iter()
         .find(|imp| imp.methods.contains(&func_id));
-    let enclosing_class_self = item_tree
+    let enclosing_class = item_tree
         .classes
         .values()
-        .find(|class_data| class_data.methods.contains(&func_id))
-        .map(|class_data| class_data.name.clone());
+        .find(|class_data| class_data.methods.contains(&func_id));
+    let enclosing_interface = item_tree
+        .interfaces
+        .values()
+        .find(|iface_data| iface_data.default_methods.contains(&func_id));
     let self_replacement = enclosing_impl
         .map(|imp| imp.for_target.expr.clone())
         .or_else(|| {
-            enclosing_class_self
-                .clone()
-                .map(baml_compiler2_tir::lower_type_expr::type_expr_for_name)
+            enclosing_class.map(|class_data| {
+                type_expr_for_name_with_generic_args(
+                    class_data.name.clone(),
+                    &class_data.generic_params,
+                )
+            })
+        })
+        .or_else(|| {
+            enclosing_interface.map(|iface_data| {
+                type_expr_for_name_with_generic_args(
+                    iface_data.name.clone(),
+                    &iface_data.generic_params,
+                )
+            })
         });
 
-    // For methods on generic classes, the class-level generic params are in
-    // scope inside the method signature.  Without them, type references like
-    // `S` in `Stream<T, S>.next(self) -> S | StreamFinished` route through
-    // `route_name_to_unknown` and erase to `Ty::Void`, breaking the runtime's
-    // FFI-boundary return-type check.  Mirror
-    // `MirLowerer::enclosing_generic_params`: class params come first, then
+    // For methods on generic classes/interfaces/impls, the enclosing generic
+    // params are in scope inside the method signature. Mirror
+    // `MirLowerer::enclosing_generic_params`: enclosing params come first, then
     // function-level params.
-    let enclosing_generics: Vec<baml_base::Name> = {
-        if let Some(imp) = enclosing_impl {
-            let mut params = imp.generic_params.clone();
-            params.extend(func_data.generic_params.iter().cloned());
-            params
-        } else {
-            let mut params: Vec<baml_base::Name> = item_tree
-                .classes
-                .values()
-                .find(|class_data| class_data.methods.contains(&func_id))
-                .map(|class_data| class_data.generic_params.clone())
-                .unwrap_or_default();
-            params.extend(func_data.generic_params.iter().cloned());
-            params
-        }
-    };
-    let (bound_param_names, bound_exprs) = if let Some(imp) = enclosing_impl {
+    let (scoped_generic_param_names, scoped_generic_bound_exprs) = if let Some(imp) = enclosing_impl
+    {
         let mut names = imp.generic_params.clone();
         names.extend(func_data.generic_params.iter().cloned());
         let mut bounds = imp.generic_param_bounds.clone();
         bounds.extend(func_data.generic_param_bounds.iter().cloned());
         (names, bounds)
+    } else if let Some(iface_data) = enclosing_interface {
+        let mut names = iface_data.generic_params.clone();
+        names.extend(func_data.generic_params.iter().cloned());
+        let mut bounds = iface_data.generic_param_bounds.clone();
+        bounds.extend(func_data.generic_param_bounds.iter().cloned());
+        (names, bounds)
     } else {
-        (
-            func_data.generic_params.clone(),
-            func_data.generic_param_bounds.clone(),
-        )
+        let mut names = enclosing_class
+            .map(|class_data| class_data.generic_params.clone())
+            .unwrap_or_default();
+        names.extend(func_data.generic_params.iter().cloned());
+        let mut bounds = enclosing_class
+            .map(|class_data| class_data.generic_param_bounds.clone())
+            .unwrap_or_default();
+        bounds.extend(func_data.generic_param_bounds.iter().cloned());
+        (names, bounds)
     };
-    let generic_param_bounds: HashMap<Name, baml_compiler2_tir::ty::Ty> = bound_param_names
-        .iter()
-        .enumerate()
-        .filter_map(|(idx, name)| {
-            let bound_te = bound_exprs.get(idx)?.as_ref()?;
-            let mut diags = Vec::new();
-            let bound_ty = baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns(
-                db,
-                bound_te,
-                pkg_items,
-                &pkg_info.namespace_path,
-                &enclosing_generics,
-                &mut diags,
-            );
-            diags.is_empty().then(|| (name.clone(), bound_ty))
-        })
-        .collect();
+    let enclosing_generics = scoped_generic_param_names.clone();
 
-    let resolve = |te: &TypeExpr| -> baml_type::Ty {
+    let lower_tir_type = |te: &TypeExpr| -> baml_compiler2_tir::ty::Ty {
         let mut diags = Vec::new();
         // Use `lower_type_expr_in_ns` so unqualified references (e.g. `MyLorem`
         // in a function signature under `ns_lorem/`) resolve against the
         // defining file's namespace before falling back to the package root.
         // `lower_type_expr` passes `&[]` as the ns context, which would lose
-        // parameter types to `Ty::Unknown` → `Ty::Void` for any non-root-ns
-        // class — surfacing as "expected instance, got map" in the runtime
-        // because the coercion layer can't see the declared type.
+        // parameter types to `Ty::Unknown` → runtime `unknown` for any
+        // non-root-ns class — surfacing as "expected instance, got map" in the
+        // runtime because the coercion layer can't see the declared type.
         let resolved_te = if let Some(replacement) = &self_replacement {
             baml_compiler2_tir::lower_type_expr::substitute_self_in(te, replacement)
         } else {
             te.clone()
         };
-        let tir_ty = baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns(
+        baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns(
             db,
             &resolved_te,
             pkg_items,
             &pkg_info.namespace_path,
             &enclosing_generics,
             &mut diags,
+        )
+    };
+
+    let raw_generic_param_bounds: HashMap<Name, baml_compiler2_tir::ty::Ty> =
+        scoped_generic_param_names
+            .iter()
+            .enumerate()
+            .filter_map(|(idx, name)| {
+                let bound_te = scoped_generic_bound_exprs.get(idx)?.as_ref()?;
+                let mut diags = Vec::new();
+                let bound_ty = baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns(
+                    db,
+                    bound_te,
+                    pkg_items,
+                    &pkg_info.namespace_path,
+                    &enclosing_generics,
+                    &mut diags,
+                );
+                diags.is_empty().then(|| (name.clone(), bound_ty))
+            })
+            .collect();
+    let raw_bound_resolver =
+        baml_compiler2_tir::associated_projection::AssociatedProjectionResolver::new(
+            db,
+            &cache.aliases,
+            &raw_generic_param_bounds,
         );
-        let runtime_ty = baml_compiler2_tir::generics::erase_typevars_matching(&tir_ty, &|name| {
+    let generic_param_bounds: HashMap<Name, baml_compiler2_tir::ty::Ty> = raw_generic_param_bounds
+        .iter()
+        .map(|(name, bound)| (name.clone(), raw_bound_resolver.resolve_deep(bound)))
+        .collect();
+
+    let resolve_display_tir = |te: &TypeExpr| -> baml_compiler2_tir::ty::Ty {
+        let tir_ty = lower_tir_type(te);
+        baml_compiler2_tir::associated_projection::AssociatedProjectionResolver::new(
+            db,
+            &cache.aliases,
+            &generic_param_bounds,
+        )
+        .resolve_deep(&tir_ty)
+    };
+
+    let runtime_from_display_tir = |tir_ty: &baml_compiler2_tir::ty::Ty| -> baml_type::Ty {
+        let runtime_ty = baml_compiler2_tir::generics::erase_typevars_matching(tir_ty, &|name| {
             generic_param_bounds.contains_key(name)
         });
         cache.convert(&runtime_ty)
     };
 
-    let param_types: Vec<baml_type::Ty> = func_data
-        .params
+    let display_type_params: Vec<String> = scoped_generic_param_names
         .iter()
-        .map(|p| {
-            p.type_expr
-                .as_ref()
-                .map(|te| resolve(&te.expr))
-                .or_else(|| {
-                    (p.name.as_str() == "self")
-                        .then(|| self_replacement.as_ref().map(&resolve))
-                        .flatten()
-                })
-                .unwrap_or_else(null_ty)
+        .map(|name| {
+            if let Some(bound) = generic_param_bounds.get(name) {
+                format!("{} extends {}", name.as_str(), bound.render_user_facing())
+            } else {
+                name.to_string()
+            }
         })
         .collect();
 
-    let param_has_default: Vec<bool> = parameter_defaults
-        .params
-        .iter()
-        .map(Option::is_some)
-        .collect();
+    let mut param_types = Vec::with_capacity(func_data.params.len());
+    let mut display_param_types = Vec::with_capacity(func_data.params.len());
+    for param in &func_data.params {
+        let resolved = if let Some(te) = &param.type_expr {
+            Some(resolve_display_tir(&te.expr))
+        } else if param.name.as_str() == "self" {
+            self_replacement.as_ref().map(&resolve_display_tir)
+        } else {
+            None
+        };
+        if let Some(tir_ty) = resolved {
+            display_param_types.push(tir_ty.render_user_facing());
+            param_types.push(runtime_from_display_tir(&tir_ty));
+        } else {
+            display_param_types.push("null".to_string());
+            param_types.push(null_ty());
+        }
+    }
 
-    let return_type = func_data
+    let resolved_return_type = func_data
         .return_type
         .as_ref()
-        .map(|te| resolve(&te.expr))
-        .unwrap_or_else(null_ty);
+        .map(|te| resolve_display_tir(&te.expr));
+    let (return_type, display_return_type) = if let Some(tir_ty) = resolved_return_type {
+        (
+            runtime_from_display_tir(&tir_ty),
+            tir_ty.render_user_facing(),
+        )
+    } else {
+        (null_ty(), "null".to_string())
+    };
 
-    (param_names, param_types, param_has_default, return_type)
+    FunctionSignatureMetadata {
+        param_names,
+        param_types,
+        param_has_default,
+        return_type,
+        display_type_params,
+        display_param_types,
+        display_return_type,
+    }
 }
 
 /// Lower a PPIR-computed stream-expanded `TypeExpr` to `baml_type::Ty`.
@@ -1424,7 +1522,15 @@ fn compute_stream_return_type(
     // compute_function_metadata_from_item_tree. Type errors in stream-expanded
     // types are reported upstream by TIR's infer_scope_types via
     // builder.report_at_span().
-    baml_compiler2_mir::convert_tir2_ty(&tir_ty, cache)
+    let generic_param_bounds = HashMap::new();
+    let resolved_tir_ty =
+        baml_compiler2_tir::associated_projection::AssociatedProjectionResolver::new(
+            db,
+            &cache.aliases,
+            &generic_param_bounds,
+        )
+        .resolve_deep(&tir_ty);
+    baml_compiler2_mir::convert_tir2_ty(&resolved_tir_ty, cache)
 }
 
 /// Build a table of byte offsets where each line starts in the source text.
@@ -1983,6 +2089,9 @@ fn compile_init_function<'db>(
                     param_names: Vec::new(),
                     param_types: Vec::new(),
                     param_has_default: Vec::new(),
+                    display_type_params: Vec::new(),
+                    display_param_types: Vec::new(),
+                    display_return_type: "null".to_string(),
                     throws_type: None,
                     origin: FunctionOrigin::Internal,
                     body_meta: None,
@@ -2057,6 +2166,9 @@ fn compile_init_function<'db>(
         param_names: Vec::new(),
         param_types: Vec::new(),
         param_has_default: Vec::new(),
+        display_type_params: Vec::new(),
+        display_param_types: Vec::new(),
+        display_return_type: "null".to_string(),
         throws_type: None,
         origin: FunctionOrigin::Internal,
         body_meta: None,
@@ -2284,7 +2396,7 @@ mod tests {
             recursive: HashSet::new(),
         };
 
-        let (_, _, param_has_default, _) = compute_function_metadata_from_item_tree(
+        let metadata = compute_function_metadata_from_item_tree(
             &db,
             file,
             function_id,
@@ -2293,7 +2405,7 @@ mod tests {
             &cache,
         );
 
-        assert_eq!(param_has_default, vec![false, true, false]);
+        assert_eq!(metadata.param_has_default, vec![false, true, false]);
     }
 
     // ── extract_schema_attrs ────────────────────────────────────────────

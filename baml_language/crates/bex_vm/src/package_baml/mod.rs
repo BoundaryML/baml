@@ -119,6 +119,7 @@ pub trait Continuation: Send {
     clippy::pub_underscore_fields,
     clippy::used_underscore_binding,
     clippy::elidable_lifetime_names,
+    clippy::iter_not_returning_iterator,
     clippy::needless_lifetimes,
     clippy::redundant_closure_call,
     // Static builtin constructors (e.g. `baml.spawn.CancelToken.new`) are
@@ -257,6 +258,9 @@ pub fn attach_builtins(object: Object) -> Result<Object, VmInternalError> {
                 param_names: function.param_names,
                 param_types: function.param_types,
                 param_has_default: function.param_has_default,
+                display_type_params: function.display_type_params,
+                display_param_types: function.display_param_types,
+                display_return_type: function.display_return_type,
                 throws_type: function.throws_type,
                 origin: function.origin,
                 body_meta: function.body_meta,

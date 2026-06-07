@@ -23,9 +23,13 @@ fn user.apply_to_each(items: Employee[], f: (Employee) -> string throws never) -
     let _0: string[] // _0 // return
     let _1: Employee[] // items // param
     let _2: (Employee) -> string throws never // f // param
+    let _3: type
+    let _4: type
 
     bb0: {
-        _0 = call const fn baml.Array.map(copy _1, copy _2) -> [bb1];
+        _3 = load_type(string);
+        _4 = load_type(unknown);
+        _0 = call const fn baml.Array.map<copy _3, copy _4>(copy _1, copy _2) -> [bb1];
     }
 
     bb1: {
@@ -266,7 +270,7 @@ fn user.Box.from_json(j: baml.json.json) -> Box<void> {
     // Locals:
     let _0: Box<void> // _0 // return
     let _1: baml.json.json // j // param
-    let _2: void
+    let _2: unknown
     let _3: baml.json.json
     let _4: type
 
@@ -670,12 +674,16 @@ fn user.test_unbound_in_map() -> string[] {
     let _1: Employee[] // employees
     let _2: Employee
     let _3: Employee
+    let _4: type
+    let _5: type
 
     bb0: {
         _2 = user.Employee { const "Alice", const "Smith" };
         _3 = user.Employee { const "Bob", const "Jones" };
         _1 = [copy _2, copy _3];
-        _0 = call const fn baml.Array.map(copy _1, const fn user.Employee.full_name) -> [bb1];
+        _4 = load_type(string);
+        _5 = load_type(void);
+        _0 = call const fn baml.Array.map<copy _4, copy _5>(copy _1, const fn user.Employee.full_name) -> [bb1];
     }
 
     bb1: {
@@ -826,8 +834,8 @@ fn user.Box.to_json(self: Box) -> baml.json.json {
     let _0: baml.json.json // _0 // return
     let _1: Box // self // param
     let _2: baml.json.json
-    let _3: void
-    let _4: Box<void>
+    let _3: unknown
+    let _4: Box<unknown>
     let _5: type
 
     bb0: {

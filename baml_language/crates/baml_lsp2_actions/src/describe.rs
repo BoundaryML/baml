@@ -748,6 +748,7 @@ fn is_item_node(kind: SyntaxKind) -> bool {
     matches!(
         kind,
         SyntaxKind::CLASS_DEF
+            | SyntaxKind::INTERFACE_DEF
             | SyntaxKind::FUNCTION_DEF
             | SyntaxKind::ENUM_DEF
             | SyntaxKind::CLIENT_DEF

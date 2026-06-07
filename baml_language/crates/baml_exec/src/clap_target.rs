@@ -479,6 +479,8 @@ mod tests {
     }
 
     fn func_info(names: &[&str], types: Vec<Ty>, defaults: Vec<bool>, ret: Ty) -> UserFunctionInfo {
+        let display_param_types = types.iter().map(ToString::to_string).collect();
+        let display_return_type = ret.to_string();
         UserFunctionInfo {
             qualified_name: "user.Test".into(),
             display_name: "Test".into(),
@@ -487,6 +489,9 @@ mod tests {
             param_types: types,
             param_has_default: defaults,
             return_type: ret,
+            display_type_params: Vec::new(),
+            display_param_types,
+            display_return_type,
             source_file: String::new(),
             is_llm: false,
         }

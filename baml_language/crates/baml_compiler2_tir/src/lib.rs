@@ -17,6 +17,7 @@
 //! recomputes that lambda's `ScopeInference`, not the enclosing function's.
 
 pub mod analysis;
+pub mod associated_projection;
 pub mod builder;
 pub mod callable;
 pub mod cycle_detector;

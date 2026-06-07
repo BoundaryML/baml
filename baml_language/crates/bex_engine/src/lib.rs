@@ -139,6 +139,9 @@ pub struct UserFunctionInfo {
     pub param_types: Vec<Ty>,
     pub param_has_default: Vec<bool>,
     pub return_type: Ty,
+    pub display_type_params: Vec<String>,
+    pub display_param_types: Vec<String>,
+    pub display_return_type: String,
     /// Filesystem path of the source file containing the function.
     /// Empty string for builtins and synthesized functions.
     /// Exposed for BEP-027 §"`baml.argv`": `argv[1]` under root-main `baml run`
@@ -1840,6 +1843,17 @@ impl BexEngine {
                         let display_name = name.strip_prefix("user.").unwrap_or(name).to_string();
                         let is_llm =
                             matches!(func.body_meta, Some(bex_vm_types::FunctionMeta::Llm { .. }));
+                        let display_param_types =
+                            if func.display_param_types.len() == func.param_names.len() {
+                                func.display_param_types.clone()
+                            } else {
+                                func.param_types.iter().map(ToString::to_string).collect()
+                            };
+                        let display_return_type = if func.display_return_type.is_empty() {
+                            func.return_type.to_string()
+                        } else {
+                            func.display_return_type.clone()
+                        };
                         Some(UserFunctionInfo {
                             qualified_name: name.clone(),
                             display_name,
@@ -1848,6 +1862,9 @@ impl BexEngine {
                             param_types: func.param_types.clone(),
                             param_has_default: func.param_has_default.clone(),
                             return_type: func.return_type.clone(),
+                            display_type_params: func.display_type_params.clone(),
+                            display_param_types,
+                            display_return_type,
                             source_file: func.source_file.clone(),
                             is_llm,
                         })

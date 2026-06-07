@@ -88,8 +88,8 @@ pub fn substitute_ty(ty: &Ty, bindings: &FxHashMap<Name, Ty>) -> Ty {
             member: member.clone(),
             attr: attr.clone(),
         },
-        Ty::Union(members, attr) => Ty::Union(
-            members.iter().map(|m| substitute_ty(m, bindings)).collect(),
+        Ty::Union(members, attr) => normalize_union_members(
+            members.iter().map(|m| substitute_ty(m, bindings)),
             attr.clone(),
         ),
         Ty::Function {
@@ -580,6 +580,25 @@ fn infer_bindings_inner(
     // inference is completely unchanged.
     rigid: Option<&Name>,
 ) {
+    fn nullable_non_null_part(ty: &Ty) -> Option<Ty> {
+        let Ty::Union(members, attr) = ty else {
+            return None;
+        };
+        if !members.iter().any(Ty::is_null) {
+            return None;
+        }
+        let non_null: Vec<Ty> = members
+            .iter()
+            .filter(|member| !member.is_null())
+            .cloned()
+            .collect();
+        match non_null.as_slice() {
+            [] => None,
+            [single] => Some(single.clone()),
+            _ => Some(Ty::Union(non_null, attr.clone())),
+        }
+    }
+
     match (formal, actual) {
         (Ty::TypeVar(name, _), actual_ty) => {
             if rigid == Some(name) {
@@ -611,6 +630,30 @@ fn infer_bindings_inner(
             infer_bindings_inner(fk, ak, bindings, allow_typevar_actuals, rigid);
             infer_bindings_inner(fv, av, bindings, allow_typevar_actuals, rigid);
         }
+        (Ty::Union(_, _), _) if nullable_non_null_part(formal).is_some() => {
+            let formal_inner = nullable_non_null_part(formal).expect("checked above");
+            let actual_inner = nullable_non_null_part(actual).unwrap_or_else(|| actual.clone());
+            infer_bindings_inner(
+                &formal_inner,
+                &actual_inner,
+                bindings,
+                allow_typevar_actuals,
+                rigid,
+            );
+        }
+        (Ty::Union(f_members, _), Ty::Union(a_members, _))
+            if f_members.len() == a_members.len() =>
+        {
+            for (formal_member, actual_member) in f_members.iter().zip(a_members.iter()) {
+                infer_bindings_inner(
+                    formal_member,
+                    actual_member,
+                    bindings,
+                    allow_typevar_actuals,
+                    rigid,
+                );
+            }
+        }
         (
             Ty::Function {
                 params: fp,
@@ -631,10 +674,7 @@ fn infer_bindings_inner(
             infer_bindings_inner(fr, ar, bindings, allow_typevar_actuals, rigid);
             infer_bindings_inner(fth, ath, bindings, allow_typevar_actuals, rigid);
         }
-        (Ty::Class(fn_name, f_args, _), Ty::Class(an_name, a_args, _))
-        | (Ty::Interface(fn_name, f_args, _, _), Ty::Interface(an_name, a_args, _, _))
-            if fn_name == an_name =>
-        {
+        (Ty::Class(fn_name, f_args, _), Ty::Class(an_name, a_args, _)) if fn_name == an_name => {
             for (ft, at) in f_args.iter().zip(a_args.iter()) {
                 infer_bindings_inner(ft, at, bindings, allow_typevar_actuals, rigid);
             }
@@ -653,6 +693,28 @@ fn infer_bindings_inner(
         (Ty::Future(_, _, _), Ty::Union(members, _)) => {
             for member in members {
                 infer_bindings_inner(formal, member, bindings, allow_typevar_actuals, rigid);
+            }
+        }
+        (
+            Ty::Interface(fn_name, f_args, f_assoc, _),
+            Ty::Interface(an_name, a_args, a_assoc, _),
+        ) if fn_name == an_name => {
+            for (ft, at) in f_args.iter().zip(a_args.iter()) {
+                infer_bindings_inner(ft, at, bindings, allow_typevar_actuals, rigid);
+            }
+            for (formal_name, formal_ty) in f_assoc {
+                if let Some((_, actual_ty)) = a_assoc
+                    .iter()
+                    .find(|(actual_name, _)| actual_name == formal_name)
+                {
+                    infer_bindings_inner(
+                        formal_ty,
+                        actual_ty,
+                        bindings,
+                        allow_typevar_actuals,
+                        rigid,
+                    );
+                }
             }
         }
         // Builtin container bridging: Array<T> ↔ List(T), Map<K,V> ↔ Map(K,V)
@@ -716,36 +778,38 @@ pub fn infer_bindings_rigid_self(
 /// Used when the same type variable is inferred from multiple arguments
 /// (e.g., `deep_equals(myInt, myString)` → `T` gets `int` then `string`).
 pub fn union_ty(a: &Ty, b: &Ty) -> Ty {
-    if a == b {
-        return a.clone();
-    }
-    let mut members = Vec::new();
-    match a {
-        Ty::Union(tys, _) => members.extend(tys.iter().cloned()),
-        other => members.push(other.clone()),
-    }
-    match b {
-        Ty::Union(tys, _) => {
-            for t in tys {
-                if !members.contains(t) {
-                    members.push(t.clone());
+    normalize_union_members([a.clone(), b.clone()], TyAttr::default())
+}
+
+fn normalize_union_members(members: impl IntoIterator<Item = Ty>, attr: TyAttr) -> Ty {
+    let mut normalized = Vec::new();
+    for member in members {
+        match member {
+            Ty::Never { .. } => {}
+            Ty::Union(inner, _) => {
+                for inner_member in inner {
+                    if !matches!(inner_member, Ty::Never { .. })
+                        && !normalized.contains(&inner_member)
+                    {
+                        normalized.push(inner_member);
+                    }
                 }
             }
-        }
-        other => {
-            if !members.contains(other) {
-                members.push(other.clone());
-            }
+            other if !normalized.contains(&other) => normalized.push(other),
+            _ => {}
         }
     }
-    if members.len() == 1 {
-        members.pop().unwrap()
-    } else {
-        // TODO(TyAttr): This union is synthesized from two input types — there's no single
-        // "original attr" to preserve. If both inputs are unions with different attrs, which
-        // one wins? May need a merge/lattice operation on TyAttr, or TyAttr::default() may
-        // be correct if attrs describe declaration sites rather than computed types.
-        Ty::Union(members, TyAttr::default())
+
+    match normalized.len() {
+        0 => Ty::Never { attr },
+        1 => normalized.pop().expect("length checked"),
+        _ => {
+            // TODO(TyAttr): This union is synthesized from multiple input types — there's no
+            // single "original attr" to preserve. If inputs carry different attrs, which one
+            // wins? May need a merge/lattice operation on TyAttr, or default may be correct if
+            // attrs describe declaration sites rather than computed types.
+            Ty::Union(normalized, attr)
+        }
     }
 }
 

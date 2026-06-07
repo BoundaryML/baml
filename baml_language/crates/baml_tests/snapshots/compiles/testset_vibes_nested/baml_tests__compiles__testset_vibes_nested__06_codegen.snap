@@ -91,7 +91,7 @@ function user.ClassifySentiment$parse(json: string, client: baml.llm.Client) -> 
     store_var client
 
   L0:
-    load_type void
+    load_type unknown
     load_type Sentiment
     load_const "ClassifySentiment"
     load_var json
@@ -218,7 +218,7 @@ function user.ClassifySentiment2$parse(json: string, client: baml.llm.Client) ->
     store_var client
 
   L0:
-    load_type void
+    load_type unknown
     load_type string
     load_const "ClassifySentiment2"
     load_var json
@@ -403,7 +403,7 @@ function user.GenerateTests$parse(json: string, client: baml.llm.Client) -> stri
     store_var client
 
   L0:
-    load_type void
+    load_type unknown
     load_type string[]
     load_const "GenerateTests"
     load_var json

@@ -349,8 +349,8 @@ pub fn serde_to_value(vm: &mut BexVm, v: &serde_json::Value) -> Value {
 
 /// Convert a VM `Value` into a `serde_json::Value`, ignoring declared types.
 ///
-/// Used for `Ty::TypeAlias(BAML_JSON_JSON)` and as a fallback for class fields
-/// whose runtime `field_type` was erased (generic params lower to `Ty::Void`).
+/// Used for `Ty::TypeAlias(BAML_JSON_JSON)` and for class fields whose runtime
+/// field type is intentionally untyped or unavailable.
 pub fn value_to_serde(vm: &BexVm, v: Value) -> serde_json::Value {
     use bex_vm_types::ValueKind;
     match v.kind() {
@@ -562,10 +562,10 @@ fn ty_value_to_serde(
             "unknown",
         )),
         Ty::Void { .. } => {
-            // `Ty::Void` shows up at runtime for class fields whose declared
-            // type was a generic param (TypeVar erased to Void).  Fall back to
-            // untyped serialization so generic class fields still round-trip
-            // when the value's shape is JSON-representable.
+            // `void` has no declared JSON shape to validate against here.
+            // Use structural serialization of the produced value.
+            // Instantiated generic class fields normally use `field_template`
+            // substitution before reaching this point.
             Ok(value_to_serde(vm, value))
         }
     }
@@ -916,10 +916,9 @@ fn ty_serde_to_value(
         | Ty::WatchAccessor(_, _)
         | Ty::BuiltinUnknown { .. }
         | Ty::Void { .. } => {
-            // `Ty::Void` reaches here for generic class fields whose
-            // declared type was a TypeVar.  Fall back to untyped conversion
-            // so generic-position fields still round-trip when the JSON is
-            // a `json`-shaped value.
+            // These variants do not provide a concrete JSON schema to validate
+            // against here. Preserve structural JSON conversion for values
+            // whose shape is already JSON-representable.
             Ok(serde_to_value(vm, json))
         }
     }
@@ -964,7 +963,7 @@ fn deserialize_class_instance(
     for cf in &class_fields {
         // Substitute class-level type-args into the field's template so a
         // `Container<User>::item` field decodes against `User` rather than
-        // the erased `Ty::Void`.
+        // erased runtime metadata.
         let field_ty = cf.field_template.substitute(type_args);
         let v = with_path_segment(path, format_args!(".{}", cf.name), |p| {
             let field_json_owned;

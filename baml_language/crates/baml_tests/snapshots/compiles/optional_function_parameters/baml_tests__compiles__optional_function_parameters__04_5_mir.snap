@@ -177,7 +177,7 @@ fn user.AskDocs$parse(json: string, client: baml.llm.Client) -> string {
     }
 
     bb2: {
-        _4 = load_type(void);
+        _4 = load_type(unknown);
         _5 = load_type(string);
         _0 = call const fn baml.llm.parse<copy _4, copy _5>(const "AskDocs", copy _1) -> [bb3];
     }

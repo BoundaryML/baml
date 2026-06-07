@@ -168,9 +168,9 @@ pub enum TirTypeError {
     CannotInferTypeParameter { name: Name },
     /// A method's generic type parameter shadows a class-level type parameter.
     TypeParamShadowed { param_name: Name, class_name: Name },
-    /// Wrong number of type arguments for a generic class.
+    /// Wrong number of type arguments for a generic class or interface.
     WrongNumberOfTypeArgs {
-        class_name: Name,
+        type_name: Name,
         expected: usize,
         got: usize,
     },
@@ -560,13 +560,13 @@ impl fmt::Display for TirTypeError {
                 write!(f, "cannot infer type parameter `{name}`")
             }
             TirTypeError::WrongNumberOfTypeArgs {
-                class_name,
+                type_name,
                 expected,
                 got,
             } => {
                 write!(
                     f,
-                    "class `{class_name}` expects {expected} type argument(s), got {got}"
+                    "type `{type_name}` expects {expected} type argument(s), got {got}"
                 )
             }
             TirTypeError::WrongTypeArgArity {

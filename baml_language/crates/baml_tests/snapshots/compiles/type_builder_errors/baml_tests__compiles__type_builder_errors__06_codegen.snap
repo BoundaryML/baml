@@ -110,7 +110,7 @@ function user.TypeBuilderFn$parse(json: string, client: baml.llm.Client) -> Resu
     store_var client
 
   L0:
-    load_type void
+    load_type unknown
     load_type Resume
     load_const "TypeBuilderFn"
     load_var json
