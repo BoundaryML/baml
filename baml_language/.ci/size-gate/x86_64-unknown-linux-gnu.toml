@@ -1,12 +1,12 @@
 version = 1
-recorded_at = "2026-06-02T00:00:00Z"
-git_sha = "465d9d13e"
+recorded_at = "2026-06-07T10:13:16Z"
+git_sha = "804a81718d4d05b66acff771321c571c7513fdc9"
 
 [artifacts.baml-cli]
-file_bytes = 24077012
-stripped_bytes = 24077002
-gzip_bytes = 10058180
+file_bytes = 18403800
+stripped_bytes = 18403792
+gzip_bytes = 7840060
 
 [artifacts.packed-program]
-file_bytes = 15115000
-gzip_bytes = 6341353
+file_bytes = 13813336
+gzip_bytes = 5761245
