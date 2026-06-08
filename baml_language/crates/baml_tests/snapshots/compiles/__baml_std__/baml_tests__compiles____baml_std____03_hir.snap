@@ -36,16 +36,34 @@ class baml.Array {
 class baml.Map {
 }
 function baml.at(self: ?, index: int) -> T?  [builtin]
+function baml.chain(self: ?, other: baml.iter.Iterable<Item = T, Error = E>) -> baml.iter.Iterator<Item = T, Error = never | E>  [expr] {
+  {  } baml.iter.ArrayIterator.new(self.slice(0, self.length())).chain(other)
+}
 function baml.clear(self: ?) -> null  [builtin]
 function baml.clear(self: ?) -> null  [builtin]
+function baml.collect(self: ?) -> T[]  [expr] {
+  {  } self.slice(0, self.length())
+}
 function baml.concat(self: ?, other: T[]) -> T[]  [builtin]
+function baml.count(self: ?) -> int  [expr] {
+  {  } self.length()
+}
 function baml.delete(self: ?, key: K) -> V?  [builtin]
 function baml.every(self: ?, predicate: (T) -> bool throws E) -> bool  [builtin]
+function baml.filter(self: ?, predicate: (T) -> bool throws E) -> baml.iter.Iterator<Item = T, Error = never | E>  [expr] {
+  {  } baml.iter.ArrayIterator.new(self.slice(0, self.length())).filter(predicate)
+}
+function baml.filter_map(self: ?, fn: (T) -> U? throws E) -> baml.iter.Iterator<Item = U, Error = never | E>  [expr] {
+  {  } baml.iter.ArrayIterator.new(self.slice(0, self.length())).filter_map(fn)
+}
 function baml.find(self: ?, predicate: (T) -> bool throws E) -> T?  [builtin]
 function baml.find_index(self: ?, predicate: (T) -> bool throws E) -> int?  [builtin]
 function baml.find_last(self: ?, predicate: (T) -> bool throws E) -> T?  [builtin]
 function baml.find_last_index(self: ?, predicate: (T) -> bool throws E) -> int?  [builtin]
 function baml.flat_map(self: ?, f: (T) -> U[] throws E) -> U[]  [builtin]
+function baml.for_each(self: ?, fn: (T) -> void throws E) -> void  [expr] {
+  { for x in self.slice(0, self.length()) { fn(x) } }
+}
 function baml.from_json(j: baml.json.json) -> baml.Map<K, V>  [expr] {
   baml.Map {  }
 }
@@ -64,6 +82,9 @@ function baml.last_index_of(self: ?, item: T) -> int?  [builtin]
 function baml.length(self: ?) -> int  [builtin]
 function baml.length(self: ?) -> int  [builtin]
 function baml.map(self: ?, f: (T) -> U throws E) -> U[]  [builtin]
+function baml.peekable(self: ?) -> baml.iter.Peekable<T, never>  [expr] {
+  {  } baml.iter.Peekable { source: baml.iter.ArrayIterator.new(self.slice(0, self.length())), buffer: baml.iter.Done {  }, has_buffer: false }
+}
 function baml.pop(self: ?) -> T?  [builtin]
 function baml.push(self: ?, item: T) -> int  [builtin]
 function baml.reduce(self: ?, reducer: (A, T) -> A throws E, initial: A) -> A  [builtin]
@@ -73,6 +94,9 @@ function baml.shift(self: ?) -> T?  [builtin]
 function baml.slice(self: ?, start: int, end: int) -> T[]  [builtin]
 function baml.some(self: ?, predicate: (T) -> bool throws E) -> bool  [builtin]
 function baml.splice(self: ?, start: int, count: int, replace: T[]) -> null  [builtin]
+function baml.step_by(self: ?, n: int) -> baml.iter.Iterator<Item = T, Error = never>  [expr] {
+  {  } baml.iter.ArrayIterator.new(self.slice(0, self.length())).step_by(n)
+}
 function baml.to_json(self: ?) -> baml.json.json  [builtin]
 function baml.to_json(self: ?) -> baml.json.json  [builtin]
 function baml.unshift(self: ?, item: T) -> int  [builtin]
@@ -488,7 +512,7 @@ class baml.iter.ArrayIterator {
 }
 class baml.iter.Chain {
   first: Iterator<Item = T, Error = E>
-  other: Iterator<Item = T, Error = E>
+  other: Iterator<Item = T, Error = E2>
   first_done: bool
 }
 class baml.iter.Done {
@@ -533,8 +557,8 @@ class baml.iter.StepBy {
   n: int
   first: bool
 }
-function baml.iter.chain(self: ?, other: Iterator<Item = Item, Error = Error>) -> Iterator<Item = Item, Error = Error>  [expr] {
-  {  } baml.iter.Chain { first: self, other: other, first_done: false }
+function baml.iter.chain(self: ?, other: Iterable<Item = Item, Error = E2>) -> Iterator<Item = Item, Error = Error | E2>  [expr] {
+  {  } baml.iter.Chain { first: self, other: other.iter(), first_done: false }
 }
 function baml.iter.collect(self: ?) -> Item[]  [expr] {
   { let r: Item[] = []; while true {  } match (self.next()) { baml.iter.Done => { break }, x: Item => r.push(x) } } r
@@ -560,7 +584,10 @@ function baml.iter.flat_map(self: ?, fn: (Item) -> Iterable<Item = R, Error = E3
 function baml.iter.flatten(src: Iterator<Item = I, Error = E>) -> Iterator<Item = R, Error = E | E3>  [expr] {
   {  } baml.iter.Flatten { source: src, inner: baml.iter.Done {  } }
 }
-function baml.iter.from_json(j: baml.json.json) -> baml.iter.Chain<T, E>  [expr] {
+function baml.iter.for_each(self: ?, fn: (Item) -> void throws E2) -> void  [expr] {
+  { while true {  } match (self.next()) { baml.iter.Done => { break }, x: Item => { fn(x) } } }
+}
+function baml.iter.from_json(j: baml.json.json) -> baml.iter.Chain<T, E, E2>  [expr] {
   baml.iter.Chain { first: baml.json.from_json(baml.json.field(j, "first")), other: baml.json.from_json(baml.json.field(j, "other")), first_done: baml.json.from_json(baml.json.field(j, "first_done")) }
 }
 function baml.iter.from_json(j: baml.json.json) -> baml.iter.Map<T, R, E, E2>  [expr] {
@@ -611,7 +638,7 @@ function baml.iter.iter(self: ?) -> Iterator<Item = T, Error = never>  [expr] {
 function baml.iter.iter(self: ?) -> Iterator<Item = T, Error = E | E2>  [expr] {
   {  } self
 }
-function baml.iter.iter(self: ?) -> Iterator<Item = T, Error = E>  [expr] {
+function baml.iter.iter(self: ?) -> Iterator<Item = T, Error = E | E2>  [expr] {
   {  } self
 }
 function baml.iter.iter(self: ?) -> Iterator<Item = R, Error = E | E2>  [expr] {

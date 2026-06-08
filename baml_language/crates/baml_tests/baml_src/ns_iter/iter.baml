@@ -1,5 +1,13 @@
 // Native coverage for the associated-type `baml.iter` stdlib.
 
+class IterLoopBox { value int }
+
+class IterShadow {
+  function iter(self) -> string {
+    "shadow"
+  }
+}
+
 function iter_collect() -> int[] throws unknown {
   let it: baml.iter.Iterator<Item = int, Error = never> = baml.iter.ArrayIterator.new([5, 6, 7]);
   it.collect()
@@ -44,6 +52,244 @@ function iter_range() -> int[] throws unknown {
 
 test "iter_range" {
   assert.is_true(baml.deep_equals(iter_range(), [0, 1, 2, 3, 4]))
+}
+
+function iter_for_in_range() -> int[] {
+  let out: int[] = [];
+  for (let x in baml.iter.Range.new(1, 4)) {
+    out.push(x);
+  }
+  out
+}
+
+test "iter_for_in_range" {
+  assert.is_true(baml.deep_equals(iter_for_in_range(), [1, 2, 3]))
+}
+
+function iter_for_in_array_iterator() -> int[] {
+  let out: int[] = [];
+  for (let x in baml.iter.ArrayIterator.new([2, 4, 6])) {
+    out.push(x);
+  }
+  out
+}
+
+test "iter_for_in_array_iterator" {
+  assert.is_true(baml.deep_equals(iter_for_in_array_iterator(), [2, 4, 6]))
+}
+
+function iter_for_in_array_literal() -> int[] {
+  let out: int[] = [];
+  for (let x in [10, 12]) {
+    out.push(x);
+  }
+  out
+}
+
+test "iter_for_in_array_literal" {
+  assert.is_true(baml.deep_equals(iter_for_in_array_literal(), [10, 12]))
+}
+
+function iter_for_in_array_of_classes() -> int {
+  let total = 0;
+  for (let x in [IterLoopBox { value: 3 }, IterLoopBox { value: 8 }]) {
+    total += x.value;
+  }
+  total
+}
+
+test "iter_for_in_array_of_classes" {
+  assert.equal(iter_for_in_array_of_classes(), 11)
+}
+
+function iter_for_in_array_of_unions() -> int {
+  let xs: (int | string)[] = [1, "two", 3];
+  let total = 0;
+  for (let x in xs) {
+    match (x) {
+      let n: int => { total += n; },
+      let s: string => {
+        if (s == "two") {
+          total += 20;
+        }
+      },
+    }
+  }
+  total
+}
+
+test "iter_for_in_array_of_unions" {
+  assert.equal(iter_for_in_array_of_unions(), 24)
+}
+
+function iter_array_for_each() -> int[] {
+  let out: int[] = [];
+  [3, 6, 9].for_each((x: int) -> void {
+    out.push(x);
+  });
+  out
+}
+
+test "iter_array_for_each" {
+  assert.is_true(baml.deep_equals(iter_array_for_each(), [3, 6, 9]))
+}
+
+function iter_array_first_native_methods() -> bool throws unknown {
+  let mapped = [1, 2, 3].map((x: int) -> int { x * 2 });
+  let flat_mapped = [1, 2].flat_map((x: int) -> int[] { [x, x + 10] });
+  let reduced = [1, 2, 3, 4].reduce((acc: int, x: int) -> int { acc + x }, 0);
+
+  baml.deep_equals(mapped, [2, 4, 6]) &&
+    baml.deep_equals(flat_mapped, [1, 11, 2, 12]) &&
+    reduced == 10
+}
+
+test "iter_array_first_native_methods" {
+  assert.is_true(iter_array_first_native_methods())
+}
+
+function iter_array_first_adapter_defaults() -> bool throws unknown {
+  let mapped = [1, 2, 3, 4].filter((x: int) -> bool {
+    x % 2 == 0
+  }).map((x: int) -> int {
+    x * 10
+  }).collect();
+
+  let flattened = [1, 2, 3].filter((x: int) -> bool {
+    x < 3
+  }).flat_map((x: int) -> baml.iter.Iterable<Item = int, Error = never> {
+    [x, x + 10]
+  }).collect();
+
+  let reduced = [1, 2, 3, 4].filter((x: int) -> bool {
+    x >= 2
+  }).reduce((acc: int, x: int) -> int {
+    acc + x
+  }, 0);
+
+  let visited: int[] = [];
+  [1, 2, 3].filter((x: int) -> bool {
+    x != 2
+  }).for_each((x: int) -> void {
+    visited.push(x * 3);
+  });
+
+  baml.deep_equals(mapped, [20, 40]) &&
+    baml.deep_equals(flattened, [1, 11, 2, 12]) &&
+    reduced == 9 &&
+    baml.deep_equals(visited, [3, 9])
+}
+
+test "iter_array_first_adapter_defaults" {
+  assert.is_true(iter_array_first_adapter_defaults())
+}
+
+function iter_array_collect_count() -> bool {
+  baml.deep_equals([4, 5, 6].collect(), [4, 5, 6]) && [4, 5, 6].count() == 3
+}
+
+test "iter_array_collect_count" {
+  assert.is_true(iter_array_collect_count())
+}
+
+function iter_array_filter_step_by() -> int[] throws unknown {
+  [1, 2, 3, 4, 5, 6].filter((x: int) -> bool {
+    x % 2 == 0
+  }).step_by(2).collect()
+}
+
+test "iter_array_filter_step_by" {
+  assert.is_true(baml.deep_equals(iter_array_filter_step_by(), [2, 6]))
+}
+
+function iter_array_filter_map_fluent() -> int[] throws unknown {
+  [1, 2, 3, 4].filter_map((x: int) -> int? {
+    if (x % 2 == 0) {
+      x * 10
+    } else {
+      null
+    }
+  }).collect()
+}
+
+test "iter_array_filter_map_fluent" {
+  assert.is_true(baml.deep_equals(iter_array_filter_map_fluent(), [20, 40]))
+}
+
+function iter_array_chain_fluent() -> int[] throws unknown {
+  [1, 2].chain([3, 4]).collect()
+}
+
+test "iter_array_chain_fluent" {
+  assert.is_true(baml.deep_equals(iter_array_chain_fluent(), [1, 2, 3, 4]))
+}
+
+function iter_array_peekable_fluent() -> int[] throws unknown {
+  let p = [8, 9].peekable();
+  let out: int[] = [];
+  match (p.peek()) {
+    baml.iter.Done => {},
+    let x: int => out.push(x),
+  }
+  match (p.next()) {
+    baml.iter.Done => {},
+    let x: int => out.push(x),
+  }
+  match (p.next()) {
+    baml.iter.Done => {},
+    let x: int => out.push(x),
+  }
+  out
+}
+
+test "iter_array_peekable_fluent" {
+  assert.is_true(baml.deep_equals(iter_array_peekable_fluent(), [8, 8, 9]))
+}
+
+function iter_array_as_iterable_param_inner(xs: baml.iter.Iterable<Item = int, Error = never>) -> int[] throws never {
+  xs.iter().collect()
+}
+
+function iter_array_as_iterable_param() -> int[] throws never {
+  iter_array_as_iterable_param_inner([10, 20, 30])
+}
+
+test "iter_array_as_iterable_param" {
+  assert.is_true(baml.deep_equals(iter_array_as_iterable_param(), [10, 20, 30]))
+}
+
+function iter_shadowed_param_method(source: baml.iter.Iterable<Item = int, Error = never>) -> string {
+  let source = IterShadow {};
+  source.iter()
+}
+
+test "iter_shadowed_param_method" {
+  assert.equal(iter_shadowed_param_method([1, 2, 3]), "shadow")
+}
+
+function iter_shadowed_param_for_in(source: baml.iter.Iterable<Item = int, Error = never>) -> string[] {
+  let source = ["a", "b"];
+  let out: string[] = [];
+  for (let x in source) {
+    out.push(x);
+  }
+  out
+}
+
+test "iter_shadowed_param_for_in" {
+  assert.is_true(baml.deep_equals(iter_shadowed_param_for_in([1, 2, 3]), ["a", "b"]))
+}
+
+function iter_for_in_repeat() -> int[] {
+  let out: int[] = [];
+  for (let x in baml.iter.Repeat<int> { value: 7, count: 2 }) {
+    out.push(x);
+  }
+  out
+}
+
+test "iter_for_in_repeat" {
+  assert.is_true(baml.deep_equals(iter_for_in_repeat(), [7, 7]))
 }
 
 function iter_chain() -> int[] throws unknown {

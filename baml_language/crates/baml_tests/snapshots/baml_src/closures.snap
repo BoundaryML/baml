@@ -188,6 +188,7 @@ function closures.closures_apply(f: (int, int) -> int throws never, a: int, b: i
 
 function closures.closures_bound_formatter_mapper() -> string[] {
     load_type string
+    load_type string
     load_type void
     load_const "a"
     load_const "b"
@@ -247,6 +248,7 @@ function closures.closures_bound_throwing_method_reference_catches_error() -> in
 }
 
 function closures.closures_bound_validator_mapped() -> bool[] {
+    load_type int
     load_type bool
     load_type void
     load_const 5
@@ -333,6 +335,7 @@ function closures.closures_strategy_swap() -> int[] {
 }
 
 function closures.closures_unbound_in_map() -> string[] {
+    load_type closures.ClsEmployee
     load_type string
     load_type void
     load_const "Alice"

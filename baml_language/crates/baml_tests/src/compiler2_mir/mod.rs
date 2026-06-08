@@ -325,6 +325,40 @@ fn match_or_class_union_field_access_uses_runtime_dispatch() {
     assert!(output.contains("C:") && output.contains("D:"), "{output}");
 }
 
+#[test]
+fn source_param_interface_dispatch_respects_shadowed_local_binding() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+        class Shadow {
+            function iter(self) -> string {
+                "shadow"
+            }
+        }
+
+        function f(source: baml.iter.Iterable<Item = int, Error = never>) -> string {
+            let source = Shadow {};
+            source.iter()
+        }
+        "#,
+    );
+    let output = render_mir(&db, file);
+    let f_body = output
+        .split("fn user.f(")
+        .nth(1)
+        .and_then(|tail| tail.split("\nfn ").next())
+        .unwrap_or(&output);
+    assert!(
+        f_body.contains("call const fn user.Shadow.iter"),
+        "shadowed source parameter should dispatch to the local class method:\n{output}"
+    );
+    assert!(
+        !f_body.contains("call copy"),
+        "shadowed source parameter should not lower through interface dispatch:\n{output}"
+    );
+}
+
 // ─── Phase 4: reflect.type_of concrete types ─────────────────────────────────
 
 /// `reflect.type_of<User>()` should lower to `_N = load_type(Concrete(User))`.

@@ -35,11 +35,13 @@ fn user.NumberBag.to_json(self: NumberBag) -> baml.json.json {
     let _2: baml.json.json
     let _3: int[]
     let _4: NumberBag
+    let _5: type
 
     bb0: {
         _4 = copy _1;
         _3 = copy _4.0;
-        _2 = call const fn baml.Array.to_json(copy _3) -> [bb1];
+        _5 = load_type(int);
+        _2 = call const fn baml.Array.to_json<copy _5>(copy _3) -> [bb1];
     }
 
     bb1: {

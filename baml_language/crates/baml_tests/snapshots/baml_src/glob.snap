@@ -452,6 +452,7 @@ function glob.scan_follows_symlinked_directory_checks() -> bool[] {
     init_instance baml.glob.ScanOptions .cwd, .dot, .absolute, .follow_symlinks, .throw_error_on_broken_symlink, .only_files
     sys_op baml.glob.Glob.scan
     store_var result
+    load_type string
     load_var result
     load_const "link_dir/hidden_via_link.txt"
     call baml.Array.includes
@@ -507,6 +508,7 @@ function glob.scan_matches_absolute_pattern_checks() -> bool[] {
     init_instance baml.glob.ScanOptions .cwd, .dot, .absolute, .follow_symlinks, .throw_error_on_broken_symlink, .only_files
     sys_op baml.glob.Glob.scan
     store_var result
+    load_type string
     load_var2 4 1
     load_const "/file.txt"
     bin_op +
@@ -643,21 +645,24 @@ function glob.scan_opts_include_dot_absolute_and_dirs_checks() -> bool[] {
     init_instance baml.glob.ScanOptions .cwd, .dot, .absolute, .follow_symlinks, .throw_error_on_broken_symlink, .only_files
     sys_op baml.glob.Glob.scan
     store_var result
+    load_type string
     load_var2 4 1
     load_const "/.hidden.txt"
     bin_op +
     call baml.Array.includes
     store_var _24
+    load_type string
     load_var2 4 1
     load_const "/dir.txt"
     bin_op +
     call baml.Array.includes
-    store_var _27
+    store_var _28
+    load_type string
     load_var2 4 1
     load_const "/file.txt"
     bin_op +
     call baml.Array.includes
-    store_var _30
+    store_var _32
     load_const "rm -rf "
     load_var root
     bin_op +
@@ -669,7 +674,7 @@ function glob.scan_opts_include_dot_absolute_and_dirs_checks() -> bool[] {
     load_const 3
     cmp_int_op ==
     load_var2 5 6
-    load_var _30
+    load_var _32
     alloc_array 4
     return
 }

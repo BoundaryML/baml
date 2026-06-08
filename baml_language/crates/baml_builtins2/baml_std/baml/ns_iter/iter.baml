@@ -33,8 +33,8 @@ interface Iterator requires Iterable<Item = Self.Item, Error = Self.Error> {
     StepBy<Item, Error> { source: self, n: n, first: true }
   }
 
-  function chain(self, other: Iterator<Item = Item, Error = Error>) -> Iterator<Item = Item, Error = Error> throws never {
-    Chain<Item, Error> { first: self, other: other, first_done: false }
+  function chain<E2>(self, other: Iterable<Item = Item, Error = E2>) -> Iterator<Item = Item, Error = Error | E2> throws never {
+    Chain<Item, Error, E2> { first: self, other: other.iter(), first_done: false }
   }
 
   function peekable(self) -> Peekable<Item, Error> throws never {
@@ -72,6 +72,15 @@ interface Iterator requires Iterable<Item = Self.Item, Error = Self.Error> {
       }
     }
     n
+  }
+
+  function for_each<E2>(self, fn: (Item) -> void throws E2) -> void throws Error | E2 {
+    while (true) {
+      match (self.next()) {
+        Done => { break; },
+        let x: Item => { fn(x); },
+      }
+    }
   }
 
   function some<E2>(self, predicate: (Item) -> bool throws E2) -> bool throws Error | E2 {
@@ -454,23 +463,23 @@ class StepBy<T, E> {
   }
 }
 
-class Chain<T, E> {
+class Chain<T, E, E2> {
   first: Iterator<Item = T, Error = E>
-  other: Iterator<Item = T, Error = E>
+  other: Iterator<Item = T, Error = E2>
   first_done: bool
 
   implements Iterable {
     type Item = T
-    type Error = E
+    type Error = E | E2
 
-    function iter(self) -> Iterator<Item = T, Error = E> throws never { self }
+    function iter(self) -> Iterator<Item = T, Error = E | E2> throws never { self }
   }
 
   implements Iterator {
     type Item = T
-    type Error = E
+    type Error = E | E2
 
-    function next(self) -> T | Done throws E {
+    function next(self) -> T | Done throws E | E2 {
       if (!self.first_done) {
         match (self.first.next()) {
           Done => { self.first_done = true; },
