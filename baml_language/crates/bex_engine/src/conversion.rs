@@ -1645,16 +1645,21 @@ mod peel_to_rust_type_tests {
 
 #[cfg(test)]
 mod peel_function_ty_tests {
-    use baml_type::TyAttr;
+    use baml_type::{FunctionParamTy, TyAttr};
 
     use super::*;
 
     /// `(int) -> string` — the canonical concrete function shape.
     fn fn_ty() -> Ty {
         Ty::Function {
-            params: vec![Ty::Int {
-                attr: TyAttr::default(),
-            }],
+            generic_params: vec![],
+            generic_param_bounds: vec![],
+            params: vec![FunctionParamTy::required(
+                None,
+                Ty::Int {
+                    attr: TyAttr::default(),
+                },
+            )],
             ret: Box::new(Ty::String {
                 attr: TyAttr::default(),
             }),
@@ -1669,6 +1674,8 @@ mod peel_function_ty_tests {
     /// uniqueness rule rejects two function members in a union.
     fn other_fn_ty() -> Ty {
         Ty::Function {
+            generic_params: vec![],
+            generic_param_bounds: vec![],
             params: vec![],
             ret: Box::new(Ty::Int {
                 attr: TyAttr::default(),

@@ -72,6 +72,50 @@ pub enum Freshness {
     Regular,
 }
 
+/// A single parameter of a [`Ty::Function`] — its (optional) name, type, and
+/// whether it is required or optional (has a default).
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, BorshSerialize, BorshDeserialize)]
+pub struct FunctionParamTy {
+    pub name: Option<Name>,
+    pub ty: Ty,
+    pub mode: FunctionParamMode,
+}
+
+impl FunctionParamTy {
+    pub fn required(name: Option<Name>, ty: Ty) -> Self {
+        Self {
+            name,
+            ty,
+            mode: FunctionParamMode::Required,
+        }
+    }
+
+    pub fn optional(name: Option<Name>, ty: Ty) -> Self {
+        Self {
+            name,
+            ty,
+            mode: FunctionParamMode::Optional,
+        }
+    }
+
+    pub fn is_required(&self) -> bool {
+        matches!(self.mode, FunctionParamMode::Required)
+    }
+
+    pub fn is_optional(&self) -> bool {
+        matches!(self.mode, FunctionParamMode::Optional)
+    }
+}
+
+/// Whether a [`FunctionParamTy`] is required or optional (has a default value).
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, BorshSerialize, BorshDeserialize,
+)]
+pub enum FunctionParamMode {
+    Required,
+    Optional,
+}
+
 /// The unified type representation for BAML, used from VIR through runtime.
 ///
 /// Contains both core runtime variants and compiler-only variants.
@@ -148,10 +192,16 @@ pub enum Ty {
     // --- Compiler-specific: present in VIR/MIR, absent at runtime ---
     /// Only recursive aliases survive lower_ty; non-recursive are expanded.
     TypeAlias(TypeName, TyAttr),
-    /// Function/arrow type: `(T1, T2, ...) -> R`
+    /// Function/arrow type: `<G…>(T1, T2, ...) -> R throws E`.
+    ///
+    /// `generic_params`/`generic_param_bounds` carry the function's declared
+    /// type parameters and their bounds (kept at runtime for reflection, even
+    /// though body `TypeVar`s are erased at the runtime boundary).
     #[subenum(ConcreteTy, RuntimeTy)]
     Function {
-        params: Vec<Ty>,
+        generic_params: Vec<Name>,
+        generic_param_bounds: Vec<Option<Ty>>,
+        params: Vec<FunctionParamTy>,
         ret: Box<Ty>,
         throws: Box<Ty>,
         attr: TyAttr,
@@ -259,11 +309,15 @@ impl Ty {
             Ty::Opaque(tn, _) => Ty::Opaque(tn, attr),
             Ty::TypeAlias(tn, _) => Ty::TypeAlias(tn, attr),
             Ty::Function {
+                generic_params,
+                generic_param_bounds,
                 params,
                 ret,
                 throws,
                 ..
             } => Ty::Function {
+                generic_params,
+                generic_param_bounds,
                 params,
                 ret,
                 throws,
@@ -659,7 +713,7 @@ impl Ty {
                 ..
             } => {
                 for p in params {
-                    p.validate_runtime()?;
+                    p.ty.validate_runtime()?;
                 }
                 ret.validate_runtime()?;
                 if matches!(throws.as_ref(), Ty::Void { .. }) {
@@ -833,10 +887,8 @@ impl fmt::Display for Ty {
                 throws,
                 ..
             } => {
-                let param_strs: Vec<std::string::String> = params
-                    .iter()
-                    .map(std::string::ToString::to_string)
-                    .collect();
+                let param_strs: Vec<std::string::String> =
+                    params.iter().map(|p| p.ty.to_string()).collect();
                 let throws_display = if matches!(throws.as_ref(), Ty::Void { .. }) {
                     "never".to_string()
                 } else {
@@ -1094,7 +1146,9 @@ mod tests {
     #[test]
     fn test_function_display_uses_never_for_void_throws_sentinel() {
         let ty = Ty::Function {
-            params: vec![ty_int()],
+            generic_params: vec![],
+            generic_param_bounds: vec![],
+            params: vec![FunctionParamTy::required(None, ty_int())],
             ret: Box::new(ty_string()),
             throws: Box::new(Ty::Void {
                 attr: TyAttr::default(),
@@ -1109,9 +1163,13 @@ mod tests {
     #[test]
     fn test_function_display_parenthesizes_nested_function_returns() {
         let ty = Ty::Function {
+            generic_params: vec![],
+            generic_param_bounds: vec![],
             params: vec![],
             ret: Box::new(Ty::Function {
-                params: vec![ty_int()],
+                generic_params: vec![],
+                generic_param_bounds: vec![],
+                params: vec![FunctionParamTy::required(None, ty_int())],
                 ret: Box::new(ty_string()),
                 throws: Box::new(Ty::Void {
                     attr: TyAttr::default(),
@@ -1133,7 +1191,9 @@ mod tests {
     #[test]
     fn test_function_display_parenthesizes_function_postfix_types() {
         let callback = Ty::Function {
-            params: vec![ty_int()],
+            generic_params: vec![],
+            generic_param_bounds: vec![],
+            params: vec![FunctionParamTy::required(None, ty_int())],
             ret: Box::new(ty_string()),
             throws: Box::new(Ty::Void {
                 attr: TyAttr::default(),

@@ -733,18 +733,32 @@ pub fn convert_tir2_ty(ty: &Tir2Ty, resolved: &ResolvedAliases) -> Ty {
             attr: attr.clone(),
         },
 
-        // Functions — drop param names
+        // Functions — preserve the declared generics + param metadata (kept at
+        // runtime for reflection); body type-vars are still erased by the
+        // recursive `convert_tir2_ty` calls.
         Tir2Ty::Function {
-            generic_params: _,
-            generic_param_bounds: _,
+            generic_params,
+            generic_param_bounds,
             params,
             ret,
             throws,
             attr,
         } => Ty::Function {
+            generic_params: generic_params.clone(),
+            generic_param_bounds: generic_param_bounds
+                .iter()
+                .map(|b| b.as_ref().map(|t| convert_tir2_ty(t, resolved)))
+                .collect(),
             params: params
                 .iter()
-                .map(|param| convert_tir2_ty(&param.ty, resolved))
+                .map(|param| baml_type::FunctionParamTy {
+                    name: param.name.clone(),
+                    ty: convert_tir2_ty(&param.ty, resolved),
+                    mode: match param.mode {
+                        FunctionParamMode::Required => baml_type::FunctionParamMode::Required,
+                        FunctionParamMode::Optional => baml_type::FunctionParamMode::Optional,
+                    },
+                })
                 .collect(),
             ret: Box::new(convert_tir2_ty(ret, resolved)),
             throws: Box::new(convert_tir2_ty(throws, resolved)),

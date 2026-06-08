@@ -214,7 +214,7 @@ fn type_name_matches_external_name(external_name: &str, type_name: &TypeName) ->
 
 #[cfg(test)]
 mod tests {
-    use baml_type::{Freshness, Literal, Name, Ty, TyAttr, TypeName};
+    use baml_type::{Freshness, FunctionParamTy, Literal, Name, Ty, TyAttr, TypeName};
     use indexmap::IndexMap;
 
     use super::*;
@@ -384,7 +384,9 @@ mod tests {
     #[test]
     fn function_type_accepts_only_callables() {
         let fn_ty = Ty::Function {
-            params: vec![Ty::int()],
+            generic_params: vec![],
+            generic_param_bounds: vec![],
+            params: vec![FunctionParamTy::required(None, Ty::int())],
             ret: Box::new(Ty::string()),
             throws: Box::new(Ty::null()),
             attr: TyAttr::default(),
