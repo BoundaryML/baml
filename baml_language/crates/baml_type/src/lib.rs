@@ -16,11 +16,16 @@ use borsh::{BorshDeserialize, BorshSerialize};
 
 mod attr;
 mod defs;
+mod names;
+mod primitive;
 pub mod simplify_sap;
 pub mod template;
 pub mod typetag;
 pub use attr::*;
 pub use defs::*;
+pub use names::*;
+pub use primitive::*;
+use subenum::subenum;
 pub use template::TyTemplate;
 
 /// Upper bound on the bit-length of a `bigint` value we are willing to
@@ -121,6 +126,24 @@ impl fmt::Display for TypeName {
     }
 }
 
+/// Freshness flag for literal types.
+///
+/// Modeled after TypeScript's fresh/regular literal type distinction.
+/// - **Fresh**: produced by literal expressions (`1`, `"hello"`). Widens to
+///   the base primitive at mutable binding sites (`let x = 1` → `int`).
+/// - **Regular**: produced by type annotations (`let x: 1 = 1`) or contextual
+///   typing. Preserved through mutable bindings.
+///
+/// Freshness is **ignored** by the subtype checker — `Literal(1, Fresh)` and
+/// `Literal(1, Regular)` are structurally identical for assignability.
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, BorshSerialize, BorshDeserialize,
+)]
+pub enum Freshness {
+    Fresh,
+    Regular,
+}
+
 /// The unified type representation for BAML, used from VIR through runtime.
 ///
 /// Contains both core runtime variants and compiler-only variants.
@@ -131,44 +154,47 @@ impl fmt::Display for TypeName {
 /// variants) that holds SAP streaming annotations. All existing code uses
 /// `TyAttr::default()` — only stream type generation (HIR lowering) will populate
 /// non-default values.
+#[subenum(ConcreteTy, RuntimeTy)]
 #[derive(Debug, Clone, PartialEq, Eq, Hash, BorshSerialize, BorshDeserialize)]
 pub enum Ty {
     // --- Core: used by all VIR+ stages ---
-    Int {
-        attr: TyAttr,
-    },
-    Bigint {
-        attr: TyAttr,
-    },
-    Float {
-        attr: TyAttr,
-    },
-    String {
-        attr: TyAttr,
-    },
-    Bool {
-        attr: TyAttr,
-    },
-    Null {
-        attr: TyAttr,
-    },
-    Uint8Array {
-        attr: TyAttr,
-    },
+    #[subenum(ConcreteTy, RuntimeTy)]
+    Int { attr: TyAttr },
+    #[subenum(ConcreteTy, RuntimeTy)]
+    Bigint { attr: TyAttr },
+    #[subenum(ConcreteTy, RuntimeTy)]
+    Float { attr: TyAttr },
+    #[subenum(ConcreteTy, RuntimeTy)]
+    String { attr: TyAttr },
+    #[subenum(ConcreteTy, RuntimeTy)]
+    Bool { attr: TyAttr },
+    #[subenum(ConcreteTy, RuntimeTy)]
+    Null { attr: TyAttr },
+    #[subenum(ConcreteTy, RuntimeTy)]
+    Uint8Array { attr: TyAttr },
+    #[subenum(ConcreteTy, RuntimeTy)]
     Media(MediaKind, TyAttr),
+    #[subenum(RuntimeTy)]
     Literal(Literal, TyAttr),
+    #[subenum(ConcreteTy, RuntimeTy)]
     Class(TypeName, Vec<Ty>, TyAttr),
+    #[subenum(RuntimeTy)]
     Interface(TypeName, Vec<Ty>, Vec<(Name, Ty)>, TyAttr),
+    #[subenum(ConcreteTy, RuntimeTy)]
     Enum(TypeName, TyAttr),
     /// A specific enum variant — `Status.HttpError`.
     /// Compiler-only: should not reach runtime.
+    #[subenum(RuntimeTy)]
     EnumVariant(TypeName, Name, TyAttr),
+    #[subenum(ConcreteTy, RuntimeTy)]
     List(Box<Ty>, TyAttr),
+    #[subenum(ConcreteTy, RuntimeTy)]
     Map {
         key: Box<Ty>,
         value: Box<Ty>,
         attr: TyAttr,
     },
+    #[subenum(RuntimeTy)]
     Union(Vec<Ty>, TyAttr),
 
     // --- Runtime-only: present at runtime, not in user-facing type syntax ---
@@ -185,12 +211,14 @@ pub enum Ty {
     ///
     /// Use the convenience constructors `Ty::resource()`, `Ty::prompt_ast()`,
     /// `Ty::type_type()` instead of constructing directly.
+    #[subenum(ConcreteTy, RuntimeTy)]
     Opaque(TypeName, TyAttr),
 
     // --- Compiler-specific: present in VIR/MIR, absent at runtime ---
     /// Only recursive aliases survive lower_ty; non-recursive are expanded.
     TypeAlias(TypeName, TyAttr),
     /// Function/arrow type: `(T1, T2, ...) -> R`
+    #[subenum(ConcreteTy, RuntimeTy)]
     Function {
         params: Vec<Ty>,
         ret: Box<Ty>,
@@ -200,10 +228,10 @@ pub enum Ty {
     /// Void type — the type of effectful expressions (was VIR `Unit`).
     /// Also used for diverging expressions (return, break, continue) since
     /// MIR encodes divergence via control flow terminators, not the type.
-    Void {
-        attr: TyAttr,
-    },
+    #[subenum(RuntimeTy)]
+    Void { attr: TyAttr },
     /// Watch accessor type: represents `x.$watch` on a watched variable.
+    #[subenum(RuntimeTy)]
     WatchAccessor(Box<Ty>, TyAttr),
     /// Internal-only type for builtin functions that accept any argument.
     ///
@@ -217,15 +245,15 @@ pub enum Ty {
     /// ```
     ///
     /// This is a compiler-only variant that should never reach runtime.
-    BuiltinUnknown {
-        attr: TyAttr,
-    },
+    #[subenum(RuntimeTy)]
+    BuiltinUnknown { attr: TyAttr },
     /// A future handle — the result of `schedule_future` or `spawn`
     /// before `await`.
     ///
     /// Carries both the value type the future resolves to and the error
     /// type the future may throw. The error type approximates `never` as
     /// `Null` when the body of the future statically cannot throw.
+    #[subenum(ConcreteTy, RuntimeTy)]
     Future(Box<Ty>, Box<Ty>, TyAttr),
 }
 
