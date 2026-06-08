@@ -717,7 +717,11 @@ pub fn convert_tir2_ty(ty: &Tir2Ty, resolved: &ResolvedAliases) -> Ty {
                 .collect(),
             attr.clone(),
         ),
-        Tir2Ty::Literal(lit, _freshness, attr) => Ty::Literal(lit.clone(), attr.clone()),
+        // Freshness is a compiler-only flag; runtime literal types are uniform,
+        // so normalize to `Regular` at the boundary.
+        Tir2Ty::Literal(lit, _freshness, attr) => {
+            Ty::Literal(lit.clone(), baml_type::Freshness::Regular, attr.clone())
+        }
 
         // Evolving containers → freeze to regular containers
         Tir2Ty::EvolvingList(inner, attr) => {
@@ -5440,7 +5444,7 @@ impl LoweringContext<'_> {
 
         // Check if TIR already folded this expression to a literal constant
         if self.opt >= crate::OptLevel::Two {
-            if let Ty::Literal(ref lit, _) = self.expr_ty(expr_id) {
+            if let Ty::Literal(ref lit, _, _) = self.expr_ty(expr_id) {
                 let constant = Self::lower_literal(lit);
                 self.builder
                     .assign(dest, Rvalue::Use(Operand::Constant(constant)));
@@ -5813,7 +5817,7 @@ impl LoweringContext<'_> {
     fn lower_unary(&mut self, expr_id: AstExprId, op: AstUnaryOp, expr: AstExprId, dest: Place) {
         // Check if TIR already folded this expression to a literal constant
         if self.opt >= crate::OptLevel::Two {
-            if let Ty::Literal(ref lit, _) = self.expr_ty(expr_id) {
+            if let Ty::Literal(ref lit, _, _) = self.expr_ty(expr_id) {
                 let constant = Self::lower_literal(lit);
                 self.builder
                     .assign(dest, Rvalue::Use(Operand::Constant(constant)));

@@ -568,7 +568,7 @@ impl OutputFormatContent {
             Ty::Uint8Array { .. } => Err(RenderError::UnsupportedType("uint8array".to_string())),
             Ty::Media(kind, _) => Ok(Some(kind.to_string())),
 
-            Ty::Literal(lit, _) => Ok(Some(render_literal(lit))),
+            Ty::Literal(lit, _, _) => Ok(Some(render_literal(lit))),
 
             Ty::Opaque(tn, _) => {
                 // `baml.reflect.Type` surfaces as the `type` keyword (matching
@@ -871,7 +871,7 @@ impl RenderOptions {
 
 #[cfg(test)]
 mod tests {
-    use baml_type::{TyAttr, TypeName};
+    use baml_type::{Freshness, TyAttr, TypeName};
 
     use super::*;
 
@@ -1300,6 +1300,7 @@ mod tests {
     fn test_render_literal_string() {
         let content = OutputFormatContent::new(Ty::Literal(
             LiteralValue::String("hello".to_string()),
+            Freshness::Regular,
             TyAttr::default(),
         ));
         let rendered = content.render(&RenderOptions::default()).unwrap();
@@ -1311,8 +1312,11 @@ mod tests {
 
     #[test]
     fn test_render_literal_int() {
-        let content =
-            OutputFormatContent::new(Ty::Literal(LiteralValue::Int(42), TyAttr::default()));
+        let content = OutputFormatContent::new(Ty::Literal(
+            LiteralValue::Int(42),
+            Freshness::Regular,
+            TyAttr::default(),
+        ));
         let rendered = content.render(&RenderOptions::default()).unwrap();
         assert_eq!(
             rendered,
@@ -1322,8 +1326,11 @@ mod tests {
 
     #[test]
     fn test_render_literal_bool() {
-        let content =
-            OutputFormatContent::new(Ty::Literal(LiteralValue::Bool(true), TyAttr::default()));
+        let content = OutputFormatContent::new(Ty::Literal(
+            LiteralValue::Bool(true),
+            Freshness::Regular,
+            TyAttr::default(),
+        ));
         let rendered = content.render(&RenderOptions::default()).unwrap();
         assert_eq!(
             rendered,
@@ -2461,6 +2468,7 @@ Answer in JSON using this schema: Ret"#
                         ty_class("Date"),
                         Ty::Literal(
                             LiteralValue::String("current".to_string()),
+                            Freshness::Regular,
                             TyAttr::default(),
                         ),
                     ]),
@@ -2583,6 +2591,7 @@ Answer in JSON using this schema: Ret"#
                         ty_class("Date"),
                         Ty::Literal(
                             LiteralValue::String("current".to_string()),
+                            Freshness::Regular,
                             TyAttr::default(),
                         ),
                     ]),

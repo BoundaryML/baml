@@ -875,12 +875,12 @@ fn value_matches_type(value: &BexExternalValue, ty: &Ty) -> bool {
         (BexExternalValue::Bool(_), Ty::Bool { .. }) => true,
         (BexExternalValue::String(_), Ty::String { .. }) => true,
         // Literal types match their corresponding runtime values
-        (BexExternalValue::Int(_), Ty::Literal(Literal::Int(_), _)) => true,
-        (BexExternalValue::Bigint(_), Ty::Literal(Literal::Bigint(_), _)) => true,
-        (BexExternalValue::Float(_), Ty::Literal(Literal::Float(_), _)) => true,
+        (BexExternalValue::Int(_), Ty::Literal(Literal::Int(_), _, _)) => true,
+        (BexExternalValue::Bigint(_), Ty::Literal(Literal::Bigint(_), _, _)) => true,
+        (BexExternalValue::Float(_), Ty::Literal(Literal::Float(_), _, _)) => true,
         (BexExternalValue::Uint8Array(_), Ty::Uint8Array { .. }) => true,
-        (BexExternalValue::String(_), Ty::Literal(Literal::String(_), _)) => true,
-        (BexExternalValue::Bool(_), Ty::Literal(Literal::Bool(_), _)) => true,
+        (BexExternalValue::String(_), Ty::Literal(Literal::String(_), _, _)) => true,
+        (BexExternalValue::Bool(_), Ty::Literal(Literal::Bool(_), _, _)) => true,
         (BexExternalValue::Array { .. }, Ty::List(_, _)) => true,
         (BexExternalValue::Map { .. }, Ty::Map { .. }) => true,
         // A host-encoded object arrives as a bare `Map` (the JS encoder emits
@@ -1129,19 +1129,19 @@ fn find_matching_union_member(value: Value, members: &[Ty]) -> Option<&Ty> {
         ValueKind::Null => members.iter().find(|m| matches!(m, Ty::Null { .. })),
         ValueKind::Int(_) => members
             .iter()
-            .find(|m| matches!(m, Ty::Int { .. } | Ty::Literal(Literal::Int(_), _))),
+            .find(|m| matches!(m, Ty::Int { .. } | Ty::Literal(Literal::Int(_), _, _))),
         ValueKind::Bool(_) => members
             .iter()
-            .find(|m| matches!(m, Ty::Bool { .. } | Ty::Literal(Literal::Bool(_), _))),
+            .find(|m| matches!(m, Ty::Bool { .. } | Ty::Literal(Literal::Bool(_), _, _))),
         ValueKind::Object(ptr) => {
             let obj = unsafe { ptr.get() };
             match obj {
                 Object::Float(_) => members
                     .iter()
-                    .find(|m| matches!(m, Ty::Float { .. } | Ty::Literal(Literal::Float(_), _))),
-                Object::String(_) => members
-                    .iter()
-                    .find(|m| matches!(m, Ty::String { .. } | Ty::Literal(Literal::String(_), _))),
+                    .find(|m| matches!(m, Ty::Float { .. } | Ty::Literal(Literal::Float(_), _, _))),
+                Object::String(_) => members.iter().find(|m| {
+                    matches!(m, Ty::String { .. } | Ty::Literal(Literal::String(_), _, _))
+                }),
                 Object::Instance(inst) => {
                     let class_obj = unsafe { inst.class.get() };
                     if let Object::Class(class) = class_obj {
@@ -1192,9 +1192,9 @@ fn find_matching_union_member(value: Value, members: &[Ty]) -> Option<&Ty> {
                 Object::Uint8Array(_) => {
                     members.iter().find(|m| matches!(m, Ty::Uint8Array { .. }))
                 }
-                Object::Bigint(_) => members
-                    .iter()
-                    .find(|m| matches!(m, Ty::Bigint { .. } | Ty::Literal(Literal::Bigint(_), _))),
+                Object::Bigint(_) => members.iter().find(|m| {
+                    matches!(m, Ty::Bigint { .. } | Ty::Literal(Literal::Bigint(_), _, _))
+                }),
                 // Types that don't participate in union discrimination.
                 Object::Function(_)
                 | Object::Closure(_)
@@ -1439,14 +1439,14 @@ fn coerce_numeric_to_declared_type(
     match (value, ty) {
         // Int → Bigint widening (FFI boundary only — `int` is not a subtype of
         // `bigint` in the type system).
-        (BexExternalValue::Int(i), Ty::Bigint { .. } | Ty::Literal(Literal::Bigint(_), _)) => {
+        (BexExternalValue::Int(i), Ty::Bigint { .. } | Ty::Literal(Literal::Bigint(_), _, _)) => {
             Ok(BexExternalValue::Bigint(num_bigint::BigInt::from(i)))
         }
 
         // Bigint → Int narrowing: host-supplied bigint must fit in i64, otherwise
         // there is no safe representation in the `int` slot and we reject the
         // call rather than silently truncate.
-        (BexExternalValue::Bigint(bi), Ty::Int { .. } | Ty::Literal(Literal::Int(_), _)) => {
+        (BexExternalValue::Bigint(bi), Ty::Int { .. } | Ty::Literal(Literal::Int(_), _, _)) => {
             i64::try_from(&bi)
                 .map(BexExternalValue::Int)
                 .map_err(|_| EngineError::TypeMismatch {
@@ -1463,10 +1463,10 @@ fn coerce_numeric_to_declared_type(
         (v, Ty::Union(members, _)) => {
             let has_int = members
                 .iter()
-                .any(|m| matches!(m, Ty::Int { .. } | Ty::Literal(Literal::Int(_), _)));
+                .any(|m| matches!(m, Ty::Int { .. } | Ty::Literal(Literal::Int(_), _, _)));
             let has_bigint = members
                 .iter()
-                .any(|m| matches!(m, Ty::Bigint { .. } | Ty::Literal(Literal::Bigint(_), _)));
+                .any(|m| matches!(m, Ty::Bigint { .. } | Ty::Literal(Literal::Bigint(_), _, _)));
             if has_int == has_bigint {
                 Ok(v)
             } else if let Some(target) = members.iter().find(|m| {
@@ -1474,7 +1474,7 @@ fn coerce_numeric_to_declared_type(
                     m,
                     Ty::Int { .. }
                         | Ty::Bigint { .. }
-                        | Ty::Literal(Literal::Int(_) | Literal::Bigint(_), _)
+                        | Ty::Literal(Literal::Int(_) | Literal::Bigint(_), _, _)
                 )
             }) {
                 coerce_numeric_to_declared_type(v, target)

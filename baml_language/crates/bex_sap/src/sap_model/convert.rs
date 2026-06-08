@@ -354,24 +354,24 @@ impl TypeCtx {
                     convert_ty_attrs(ty_attr),
                 )
             }
-            baml_type::Ty::Literal(baml_type::Literal::Int(i), attr) => TyWithMeta::new(
+            baml_type::Ty::Literal(baml_type::Literal::Int(i), _, attr) => TyWithMeta::new(
                 sap_model::Ty::Resolved(TyResolved::LiteralInt(IntLiteralTy(*i))),
                 convert_ty_attrs(attr),
             ),
-            baml_type::Ty::Literal(baml_type::Literal::Bigint(bi), attr) => TyWithMeta::new(
+            baml_type::Ty::Literal(baml_type::Literal::Bigint(bi), _, attr) => TyWithMeta::new(
                 sap_model::Ty::Resolved(TyResolved::LiteralBigint(BigintLiteralTy(bi.clone()))),
                 convert_ty_attrs(attr),
             ),
             baml_type::Ty::Literal(baml_type::Literal::Float(..), ..) => {
                 return Err(ConvertError::FloatLiteral);
             }
-            baml_type::Ty::Literal(baml_type::Literal::String(s), attr) => TyWithMeta::new(
+            baml_type::Ty::Literal(baml_type::Literal::String(s), _, attr) => TyWithMeta::new(
                 sap_model::Ty::Resolved(TyResolved::LiteralString(StringLiteralTy(Cow::Borrowed(
                     s,
                 )))),
                 convert_ty_attrs(attr),
             ),
-            baml_type::Ty::Literal(baml_type::Literal::Bool(b), attr) => TyWithMeta::new(
+            baml_type::Ty::Literal(baml_type::Literal::Bool(b), _, attr) => TyWithMeta::new(
                 sap_model::Ty::Resolved(TyResolved::LiteralBool(BoolLiteralTy(*b))),
                 convert_ty_attrs(attr),
             ),

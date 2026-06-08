@@ -425,7 +425,7 @@ fn ty_value_to_serde(
             Ok(value_to_serde(vm, value))
         }
         Ty::Bigint { .. } => Ok(value_to_serde(vm, value)),
-        Ty::Literal(_, _) => Ok(value_to_serde(vm, value)),
+        Ty::Literal(_, _, _) => Ok(value_to_serde(vm, value)),
 
         Ty::List(elem, _) => {
             let items = match value.as_object_ptr() {
@@ -877,7 +877,7 @@ fn ty_serde_to_value(
             Err(raise_decode(vm, "no union member matched", path))
         }
 
-        Ty::Literal(lit, _) => match (lit, json) {
+        Ty::Literal(lit, _, _) => match (lit, json) {
             (baml_type::Literal::Bool(b), serde_json::Value::Bool(jb)) if b == jb => {
                 Ok(Value::bool(*jb))
             }

@@ -131,7 +131,7 @@ fn value_satisfies_ty(value: &BexExternalValue, ty: &Ty) -> bool {
         Ty::String { .. } => matches!(value, BexExternalValue::String(_)),
         Ty::Uint8Array { .. } => matches!(value, BexExternalValue::Uint8Array(_)),
 
-        Ty::Literal(lit, _) => match (lit, value) {
+        Ty::Literal(lit, _, _) => match (lit, value) {
             (Literal::Bool(b), BexExternalValue::Bool(v)) => b == v,
             (Literal::Int(i), BexExternalValue::Int(v)) => i == v,
             (Literal::String(s), BexExternalValue::String(v)) => s == v,
@@ -214,7 +214,7 @@ fn type_name_matches_external_name(external_name: &str, type_name: &TypeName) ->
 
 #[cfg(test)]
 mod tests {
-    use baml_type::{Literal, Name, Ty, TyAttr, TypeName};
+    use baml_type::{Freshness, Literal, Name, Ty, TyAttr, TypeName};
     use indexmap::IndexMap;
 
     use super::*;
@@ -248,7 +248,7 @@ mod tests {
 
     #[test]
     fn literal_value_equality() {
-        let lit5 = Ty::Literal(Literal::Int(5), TyAttr::default());
+        let lit5 = Ty::Literal(Literal::Int(5), Freshness::Regular, TyAttr::default());
         assert!(validate_host_return(&BexExternalValue::Int(5), &lit5).is_ok());
         assert!(validate_host_return(&BexExternalValue::Int(6), &lit5).is_err());
     }

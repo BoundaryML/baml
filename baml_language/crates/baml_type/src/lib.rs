@@ -102,8 +102,11 @@ pub enum Ty {
     Uint8Array { attr: TyAttr },
     #[subenum(ConcreteTy, RuntimeTy)]
     Media(MediaKind, TyAttr),
+    /// A literal type — a single value (`1`, `"hi"`, `true`) as a type. The
+    /// [`Freshness`] flag is compiler-only (fresh literals widen at mutable
+    /// binding sites); it is normalized to `Regular` at the runtime boundary.
     #[subenum(RuntimeTy)]
-    Literal(Literal, TyAttr),
+    Literal(Literal, Freshness, TyAttr),
     #[subenum(ConcreteTy, RuntimeTy)]
     Class(TypeName, Vec<Ty>, TyAttr),
     #[subenum(RuntimeTy)]
@@ -243,7 +246,7 @@ impl Ty {
             Ty::BuiltinUnknown { .. } => Ty::BuiltinUnknown { attr },
             Ty::Uint8Array { .. } => Ty::Uint8Array { attr },
             Ty::Media(kind, _) => Ty::Media(kind, attr),
-            Ty::Literal(lit, _) => Ty::Literal(lit, attr),
+            Ty::Literal(lit, freshness, _) => Ty::Literal(lit, freshness, attr),
             Ty::Class(tn, args, _) => Ty::Class(tn, args, attr),
             Ty::Interface(tn, args, associated_bindings, _) => {
                 Ty::Interface(tn, args, associated_bindings, attr)
@@ -311,7 +314,7 @@ impl Ty {
             | Ty::RustType { attr }
             | Ty::Type { attr } => attr,
             Ty::Media(_, attr)
-            | Ty::Literal(_, attr)
+            | Ty::Literal(_, _, attr)
             | Ty::Class(_, _, attr)
             | Ty::Interface(_, _, _, attr)
             | Ty::Enum(_, attr)
@@ -575,11 +578,11 @@ impl Ty {
             // Literal types are subtypes of their corresponding primitives.
             // (Same representation — these are free widenings, like
             // `Literal(Int 42) <: Int`.)
-            (Ty::Literal(Literal::Int(_), _), Ty::Int { .. }) => true,
-            (Ty::Literal(Literal::Float(_), _), Ty::Float { .. }) => true,
-            (Ty::Literal(Literal::String(_), _), Ty::String { .. }) => true,
-            (Ty::Literal(Literal::Bool(_), _), Ty::Bool { .. }) => true,
-            (Ty::Literal(Literal::Bigint(_), _), Ty::Bigint { .. }) => true,
+            (Ty::Literal(Literal::Int(_), _, _), Ty::Int { .. }) => true,
+            (Ty::Literal(Literal::Float(_), _, _), Ty::Float { .. }) => true,
+            (Ty::Literal(Literal::String(_), _, _), Ty::String { .. }) => true,
+            (Ty::Literal(Literal::Bool(_), _, _), Ty::Bool { .. }) => true,
+            (Ty::Literal(Literal::Bigint(_), _, _), Ty::Bigint { .. }) => true,
 
             // T is a subtype of T | U (union containing T). Subsumes the former
             // `Optional` rules: `?` is now `T | null`, so `null <: T | null` and
@@ -744,7 +747,7 @@ impl fmt::Display for Ty {
             Ty::Null { .. } => write!(f, "null"),
             Ty::Uint8Array { .. } => write!(f, "uint8array"),
             Ty::Media(kind, _) => write!(f, "{kind}"),
-            Ty::Literal(lit, _) => match lit {
+            Ty::Literal(lit, _, _) => match lit {
                 Literal::Int(i) => write!(f, "{i}"),
                 Literal::Bigint(n) => write!(f, "{n}n"),
                 Literal::Float(s) => write!(f, "{s}"),
@@ -901,13 +904,17 @@ mod tests {
 
     #[test]
     fn test_literal_int_subtype_of_int() {
-        let lit_42 = Ty::Literal(Literal::Int(42), TyAttr::default());
+        let lit_42 = Ty::Literal(Literal::Int(42), Freshness::Regular, TyAttr::default());
         assert!(lit_42.is_subtype_of(&ty_int()));
     }
 
     #[test]
     fn test_literal_float_subtype_of_float() {
-        let lit_3_14 = Ty::Literal(Literal::Float("3.14".to_string()), TyAttr::default());
+        let lit_3_14 = Ty::Literal(
+            Literal::Float("3.14".to_string()),
+            Freshness::Regular,
+            TyAttr::default(),
+        );
         assert!(lit_3_14.is_subtype_of(&ty_float()));
     }
 
@@ -917,39 +924,47 @@ mod tests {
         // → float widening is a representation change, not a structural
         // subtype. TIR keeps the scalar widening as a runtime coercion
         // (MIR-level), not as a subtype relation modeled here.
-        let lit_42 = Ty::Literal(Literal::Int(42), TyAttr::default());
+        let lit_42 = Ty::Literal(Literal::Int(42), Freshness::Regular, TyAttr::default());
         assert!(!lit_42.is_subtype_of(&ty_float()));
     }
 
     #[test]
     fn test_literal_string_subtype_of_string() {
-        let lit_hello = Ty::Literal(Literal::String("hello".to_string()), TyAttr::default());
+        let lit_hello = Ty::Literal(
+            Literal::String("hello".to_string()),
+            Freshness::Regular,
+            TyAttr::default(),
+        );
         assert!(lit_hello.is_subtype_of(&ty_string()));
     }
 
     #[test]
     fn test_literal_bool_subtype_of_bool() {
-        let lit_true = Ty::Literal(Literal::Bool(true), TyAttr::default());
+        let lit_true = Ty::Literal(Literal::Bool(true), Freshness::Regular, TyAttr::default());
         assert!(lit_true.is_subtype_of(&ty_bool()));
     }
 
     #[test]
     fn test_literal_in_union() {
-        let lit_42 = Ty::Literal(Literal::Int(42), TyAttr::default());
+        let lit_42 = Ty::Literal(Literal::Int(42), Freshness::Regular, TyAttr::default());
         let union_type = Ty::Union(vec![ty_string(), ty_int()], TyAttr::default());
         assert!(lit_42.is_subtype_of(&union_type));
     }
 
     #[test]
     fn test_literal_float_in_union() {
-        let lit_3_14 = Ty::Literal(Literal::Float("3.14".to_string()), TyAttr::default());
+        let lit_3_14 = Ty::Literal(
+            Literal::Float("3.14".to_string()),
+            Freshness::Regular,
+            TyAttr::default(),
+        );
         let union_type = Ty::Union(vec![ty_string(), ty_float()], TyAttr::default());
         assert!(lit_3_14.is_subtype_of(&union_type));
     }
 
     #[test]
     fn test_literal_in_optional() {
-        let lit_42 = Ty::Literal(Literal::Int(42), TyAttr::default());
+        let lit_42 = Ty::Literal(Literal::Int(42), Freshness::Regular, TyAttr::default());
         let opt_int = Ty::optional(ty_int());
         assert!(lit_42.is_subtype_of(&opt_int));
     }
@@ -994,7 +1009,11 @@ mod tests {
     #[test]
     fn test_list_covariance() {
         let list_lit = Ty::List(
-            Box::new(Ty::Literal(Literal::Int(42), TyAttr::default())),
+            Box::new(Ty::Literal(
+                Literal::Int(42),
+                Freshness::Regular,
+                TyAttr::default(),
+            )),
             TyAttr::default(),
         );
         let list_int = Ty::List(Box::new(ty_int()), TyAttr::default());
@@ -1007,9 +1026,13 @@ mod tests {
         assert!(ty_float().validate_runtime().is_ok());
         assert!(ty_string().validate_runtime().is_ok());
         assert!(
-            Ty::Literal(Literal::Float("3.14".to_string()), TyAttr::default())
-                .validate_runtime()
-                .is_ok()
+            Ty::Literal(
+                Literal::Float("3.14".to_string()),
+                Freshness::Regular,
+                TyAttr::default()
+            )
+            .validate_runtime()
+            .is_ok()
         );
     }
 

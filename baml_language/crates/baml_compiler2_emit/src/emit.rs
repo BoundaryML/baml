@@ -507,9 +507,9 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             Ty::Int { .. } => Some(ArithTyClass::Int),
             Ty::Float { .. } => Some(ArithTyClass::Float),
             Ty::Bigint { .. } => Some(ArithTyClass::Bigint),
-            Ty::Literal(baml_type::Literal::Int(_), _) => Some(ArithTyClass::Int),
-            Ty::Literal(baml_type::Literal::Float(_), _) => Some(ArithTyClass::Float),
-            Ty::Literal(baml_type::Literal::Bigint(_), _) => Some(ArithTyClass::Bigint),
+            Ty::Literal(baml_type::Literal::Int(_), _, _) => Some(ArithTyClass::Int),
+            Ty::Literal(baml_type::Literal::Float(_), _, _) => Some(ArithTyClass::Float),
+            Ty::Literal(baml_type::Literal::Bigint(_), _, _) => Some(ArithTyClass::Bigint),
             _ => None,
         }
     }
@@ -3202,7 +3202,7 @@ impl PullSink for StackifyCodegen<'_, '_> {
                     Ty::Map { .. } => Some(baml_type::typetag::MAP),
                     Ty::Function { .. } => Some(baml_type::typetag::FUNCTION),
                     Ty::Uint8Array { .. } => Some(baml_type::typetag::UINT8ARRAY),
-                    Ty::Literal(lit, _) => Some(match lit {
+                    Ty::Literal(lit, _, _) => Some(match lit {
                         baml_base::Literal::Int(_) => baml_type::typetag::INT,
                         baml_base::Literal::Bigint(_) => baml_type::typetag::BIGINT,
                         baml_base::Literal::Float(_) => baml_type::typetag::FLOAT,

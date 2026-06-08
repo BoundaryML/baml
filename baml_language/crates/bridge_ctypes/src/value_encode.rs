@@ -394,7 +394,7 @@ fn ty_to_field_type(ty: &Ty) -> BamlTy {
         Ty::Media(kind, _) => Some(FieldType::MediaType(BamlTyMedia {
             media: media_kind_to_proto_enum(*kind).into(),
         })),
-        Ty::Literal(lit, _) => Some(FieldType::LiteralType(literal_to_field_type_literal(lit))),
+        Ty::Literal(lit, _, _) => Some(FieldType::LiteralType(literal_to_field_type_literal(lit))),
         Ty::Opaque(tn, _) => {
             unreachable!("runtime-only {tn} should not reach FFI type encoding")
         }
