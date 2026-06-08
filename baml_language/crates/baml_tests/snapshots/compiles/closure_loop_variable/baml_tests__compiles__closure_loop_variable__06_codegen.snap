@@ -84,6 +84,9 @@ function user.sum_array(arr: int[]) -> int {
     jump L12
 
   L11:
+    load_var arr
+    is_type int[]
+    pop_jump_if_false L92
     load_type int
     load_var arr
     call baml.iter.Iterable$for$T[].iter
@@ -239,6 +242,9 @@ function user.sum_array(arr: int[]) -> int {
     jump L35
 
   L34:
+    load_var _4
+    is_type baml.iter.Peekable<...>
+    pop_jump_if_false L92
     load_type int
     load_type void
     load_var _4
@@ -406,6 +412,9 @@ function user.sum_array(arr: int[]) -> int {
     jump L59
 
   L58:
+    load_var _69
+    is_type (() -> void throws never)[]
+    pop_jump_if_false L92
     load_type () -> void throws never
     load_var _69
     call baml.iter.Iterable$for$T[].iter
@@ -549,6 +558,9 @@ function user.sum_array(arr: int[]) -> int {
     jump L80
 
   L79:
+    load_var _70
+    is_type baml.iter.Peekable<...>
+    pop_jump_if_false L92
     load_type () -> void throws never
     load_type void
     load_var _70
@@ -638,4 +650,7 @@ function user.sum_array(arr: int[]) -> int {
   L91:
     load_deref ?2
     return
+
+  L92:
+    unreachable
 }

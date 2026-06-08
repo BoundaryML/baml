@@ -892,6 +892,13 @@ pub fn tir2_to_template(
     generic_params: &[baml_base::Name],
 ) -> TyTemplate {
     match ty {
+        Tir2Ty::AssociatedTypeProjection { member, .. } => generic_params
+            .iter()
+            .position(|p| p == member)
+            .map(|n| {
+                TyTemplate::TypeArgRef(u32::try_from(n).expect("generic param index fits in u32"))
+            })
+            .unwrap_or_else(|| TyTemplate::Concrete(convert_tir2_ty(ty, resolved))),
         Tir2Ty::TypeVar(name, _) => {
             if let Some(n) = generic_params.iter().position(|p| p == name) {
                 TyTemplate::TypeArgRef(u32::try_from(n).expect("generic param index fits in u32"))
@@ -3297,14 +3304,60 @@ impl<'db> LoweringContext<'db> {
     }
 
     fn interface_dispatch_target_for_expr(&self, expr_id: AstExprId) -> Option<InterfaceTypeView> {
-        self.expr_types
-            .get(&self.expr_metadata_key(expr_id))
-            .and_then(|ty| self.interface_dispatch_target_for_tir_ty(ty))
+        self.source_param_interface_view_for_expr(expr_id)
+            .or_else(|| {
+                self.expr_types
+                    .get(&self.expr_metadata_key(expr_id))
+                    .and_then(|ty| self.interface_dispatch_target_for_tir_ty(ty))
+            })
             .or_else(|| {
                 self.self_typevar_for_expr(expr_id)
                     .and_then(|ty| self.interface_dispatch_target_for_tir_ty(&ty))
             })
             .or_else(|| self.upcast_target_interface_view(expr_id))
+    }
+
+    fn source_param_interface_view_for_expr(
+        &self,
+        expr_id: AstExprId,
+    ) -> Option<InterfaceTypeView> {
+        let AstExpr::Path(segments) = &self.body.exprs[expr_id] else {
+            return None;
+        };
+        if segments.len() != 1 {
+            return None;
+        }
+        self.source_param_interface_view_for_name(&segments[0])
+    }
+
+    fn source_param_interface_view_for_name(&self, name: &Name) -> Option<InterfaceTypeView> {
+        let func_loc = self.func_loc?;
+        let sig = baml_compiler2_ppir::function_signature(self.db, func_loc);
+        let param = sig.params.iter().find(|param| param.name == *name)?;
+
+        let pkg_info = file_package(self.db, self.file);
+        let pkg_id = PackageId::new(self.db, pkg_info.package);
+        let pkg_items = package_items(self.db, pkg_id);
+        let generic_params = self.enclosing_generic_params();
+        let bindings = generic_params
+            .iter()
+            .map(|param| {
+                (
+                    param.clone(),
+                    Tir2Ty::TypeVar(param.clone(), TyAttr::default()),
+                )
+            })
+            .collect();
+        let mut diags = Vec::new();
+        let ty = baml_compiler2_tir::generics::lower_type_expr_with_generics(
+            self.db,
+            &param.ty,
+            pkg_items,
+            &pkg_info.namespace_path,
+            &bindings,
+            &mut diags,
+        );
+        self.interface_dispatch_target_for_tir_ty(&ty)
     }
 
     fn dispatch_receiver_static_tir_ty(&self, expr_id: AstExprId) -> Option<Tir2Ty> {
@@ -3504,6 +3557,18 @@ impl<'db> LoweringContext<'db> {
                 .map(|t| self.ty_to_template(t, &generic_params))
                 .collect(),
             _ => vec![],
+        }
+    }
+
+    fn object_class_type_arg_templates(
+        &self,
+        expr_id: AstExprId,
+        explicit_type_args: &[AstTypeExpr],
+    ) -> Vec<TyTemplate> {
+        if explicit_type_args.is_empty() {
+            self.class_type_arg_templates(expr_id)
+        } else {
+            self.generic_apply_type_arg_templates(explicit_type_args)
         }
     }
 
@@ -4393,11 +4458,19 @@ impl LoweringContext<'_> {
 
             AstExpr::Object {
                 type_name,
+                type_args,
                 fields,
                 spreads,
                 ..
             } => {
-                self.lower_object(expr_id, type_name.as_ref(), &fields, &spreads, dest);
+                self.lower_object(
+                    expr_id,
+                    type_name.as_ref(),
+                    &type_args,
+                    &fields,
+                    &spreads,
+                    dest,
+                );
             }
 
             AstExpr::MemberAccess { base, member } => {
@@ -5853,9 +5926,13 @@ impl LoweringContext<'_> {
                         }
                     });
                 let iface_dispatch_opt: Option<InterfaceTypeView> = if segments.len() == 2 {
-                    if let Some(target) = recv_tir_ty
-                        .as_ref()
-                        .and_then(|ty| self.interface_dispatch_target_for_tir_ty(ty))
+                    if let Some(target) = self
+                        .source_param_interface_view_for_name(&segments[0])
+                        .or_else(|| {
+                            recv_tir_ty
+                                .as_ref()
+                                .and_then(|ty| self.interface_dispatch_target_for_tir_ty(ty))
+                        })
                     {
                         Some(target)
                     } else {
@@ -6657,7 +6734,6 @@ impl LoweringContext<'_> {
         call_expr_id: AstExprId,
     ) -> Option<TyTemplate> {
         use baml_compiler2_ast::BuiltinKind;
-        use baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns;
 
         // ── 1. Check the callee resolves to `baml.reflect.type_of` ──────────
         let func_loc = if let AstExpr::Path(segments) = &self.body.exprs[callee] {
@@ -6743,11 +6819,6 @@ impl LoweringContext<'_> {
         };
         let type_arg = type_args.into_iter().next()?;
 
-        // ── 3. Lower the type expression to a Tir2Ty ────────────────────────
-        let pkg_info = file_package(self.db, self.file);
-        let pkg_id = PackageId::new(self.db, pkg_info.package);
-        let pkg_items = package_items(self.db, pkg_id);
-
         // Include the enclosing class + function generic params so that `T`
         // in `reflect.type_of<T>()` resolves to `Tir2Ty::TypeVar("T")` rather
         // than an unresolved-type error — both for free generic functions and
@@ -6756,19 +6827,55 @@ impl LoweringContext<'_> {
         // ++ user_generic_params` convention used in `callable.rs`.
         let generic_params = self.enclosing_generic_params();
 
+        // ── 4. Build TyTemplate — TypeVar → TypeArgRef(N) ─────────────────────
+        let template = self.type_expr_to_template(&type_arg, &generic_params);
+        Some(template)
+    }
+
+    fn type_expr_to_template(
+        &self,
+        type_arg: &AstTypeExpr,
+        generic_params: &[baml_base::Name],
+    ) -> TyTemplate {
+        if let Some(template) = Self::direct_frame_type_arg_template(type_arg, generic_params) {
+            return template;
+        }
+
+        let pkg_info = file_package(self.db, self.file);
+        let pkg_id = PackageId::new(self.db, pkg_info.package);
+        let pkg_items = package_items(self.db, pkg_id);
         let mut diags = Vec::new();
-        let tir_ty = lower_type_expr_in_ns(
+        let tir_ty = baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns(
             self.db,
-            &type_arg,
+            type_arg,
             pkg_items,
             &pkg_info.namespace_path,
-            &generic_params,
+            generic_params,
             &mut diags,
         );
+        self.ty_to_template(&tir_ty, generic_params)
+    }
 
-        // ── 4. Build TyTemplate — TypeVar → TypeArgRef(N) ─────────────────────
-        let template = self.ty_to_template(&tir_ty, &generic_params);
-        Some(template)
+    fn direct_frame_type_arg_template(
+        type_arg: &AstTypeExpr,
+        generic_params: &[baml_base::Name],
+    ) -> Option<TyTemplate> {
+        let AstTypeExpr::Path {
+            segments,
+            generic_args,
+            associated_type_bindings,
+            ..
+        } = type_arg
+        else {
+            return None;
+        };
+        if segments.len() != 1 || !generic_args.is_empty() || !associated_type_bindings.is_empty() {
+            return None;
+        }
+        generic_params
+            .iter()
+            .position(|param| param == &segments[0])
+            .map(|idx| TyTemplate::TypeArgRef(u32::try_from(idx).expect("type arg index fits")))
     }
 
     /// Recursively convert a `Tir2Ty` to a `TyTemplate`.
@@ -6942,17 +7049,11 @@ impl LoweringContext<'_> {
     /// Returns `(type_arg_operands, ntypeargs)` — the number equals
     /// `ast_type_args.len()`.  Returns an empty vec when there are no type args.
     fn lower_explicit_type_args(&mut self, ast_type_args: &[AstTypeExpr]) -> Vec<Operand> {
-        use baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns;
-
         if ast_type_args.is_empty() {
             return vec![];
         }
 
         let generic_params = self.enclosing_generic_params();
-        let pkg_info = file_package(self.db, self.file);
-        let pkg_id = PackageId::new(self.db, pkg_info.package);
-        let pkg_items = package_items(self.db, pkg_id);
-
         let type_ty = baml_type::Ty::Opaque(
             baml_type::TypeName {
                 name: baml_base::Name::new("Type"),
@@ -6967,17 +7068,7 @@ impl LoweringContext<'_> {
 
         let mut operands = Vec::with_capacity(ast_type_args.len());
         for type_arg in ast_type_args {
-            let mut diags = Vec::new();
-            let tir_ty = lower_type_expr_in_ns(
-                self.db,
-                type_arg,
-                pkg_items,
-                &pkg_info.namespace_path,
-                &generic_params,
-                &mut diags,
-            );
-            // Ignore diagnostics here — TIR already validated the type args.
-            let template = self.ty_to_template(&tir_ty, &generic_params);
+            let template = self.type_expr_to_template(type_arg, &generic_params);
             let temp = self.builder.temp(type_ty.clone());
             self.builder
                 .assign(Place::local(temp), Rvalue::LoadType(template));
@@ -7098,25 +7189,10 @@ impl LoweringContext<'_> {
     /// `is_fully_concrete()` unless the arg references an enclosing generic
     /// param (then it carries a `TypeArgRef`, resolved at runtime).
     fn generic_apply_type_arg_templates(&self, type_args: &[AstTypeExpr]) -> Vec<TyTemplate> {
-        use baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns;
         let generic_params = self.enclosing_generic_params();
-        let pkg_info = file_package(self.db, self.file);
-        let pkg_id = PackageId::new(self.db, pkg_info.package);
-        let pkg_items = package_items(self.db, pkg_id);
         type_args
             .iter()
-            .map(|type_arg| {
-                let mut diags = Vec::new();
-                let tir_ty = lower_type_expr_in_ns(
-                    self.db,
-                    type_arg,
-                    pkg_items,
-                    &pkg_info.namespace_path,
-                    &generic_params,
-                    &mut diags,
-                );
-                self.ty_to_template(&tir_ty, &generic_params)
-            })
+            .map(|type_arg| self.type_expr_to_template(type_arg, &generic_params))
             .collect()
     }
 }
@@ -7251,6 +7327,7 @@ impl<'db> LoweringContext<'db> {
         &mut self,
         expr_id: AstExprId,
         type_name: Option<&TypePath>,
+        type_args: &[AstTypeExpr],
         fields: &[(Name, AstExprId)],
         spreads: &[baml_compiler2_ast::SpreadField],
         dest: Place,
@@ -7322,7 +7399,7 @@ impl<'db> LoweringContext<'db> {
                     .map(|(_, e)| self.lower_to_operand(*e))
                     .collect()
             };
-            let type_arg_templates = self.class_type_arg_templates(expr_id);
+            let type_arg_templates = self.object_class_type_arg_templates(expr_id, type_args);
             self.builder.assign(
                 dest,
                 Rvalue::Aggregate {
@@ -7392,7 +7469,8 @@ impl<'db> LoweringContext<'db> {
                         .iter()
                         .map(|(_, e)| self.lower_to_operand(*e))
                         .collect();
-                    let type_arg_templates = self.class_type_arg_templates(expr_id);
+                    let type_arg_templates =
+                        self.object_class_type_arg_templates(expr_id, type_args);
                     self.builder.assign(
                         dest,
                         Rvalue::Aggregate {
@@ -7441,7 +7519,7 @@ impl<'db> LoweringContext<'db> {
                 }
             }
 
-            let type_arg_templates = self.class_type_arg_templates(expr_id);
+            let type_arg_templates = self.object_class_type_arg_templates(expr_id, type_args);
             self.builder.assign(
                 dest,
                 Rvalue::Aggregate {
@@ -9238,17 +9316,12 @@ impl<'db> LoweringContext<'db> {
                                 let func_loc = baml_compiler2_hir::loc::FunctionLoc::new(
                                     self.db, file, *method_id,
                                 );
-                                let frame_type_args = imp
-                                    .generic_params
-                                    .iter()
-                                    .map(|param| {
-                                        instantiation.bindings.get(param).cloned().unwrap_or_else(
-                                            || Tir2Ty::BuiltinUnknown {
-                                                attr: baml_compiler2_tir::ty::TyAttr::default(),
-                                            },
-                                        )
-                                    })
-                                    .collect();
+                                let frame_type_args = Self::impl_frame_type_args_for_request(
+                                    &imp.generic_params,
+                                    &instantiation,
+                                    &rule.interface_ty,
+                                    &requested_iface_ty,
+                                );
                                 out.push((
                                     requested_idx,
                                     InterfaceMethodCandidate {
@@ -9407,6 +9480,75 @@ impl<'db> LoweringContext<'db> {
             }
             _ => false,
         }
+    }
+
+    fn impl_frame_type_args_for_request(
+        generic_params: &[Name],
+        instantiation: &baml_compiler2_tir::interfaces::InterfaceImplInstantiation,
+        rule_iface_ty: &Tir2Ty,
+        requested_iface_ty: &Tir2Ty,
+    ) -> Vec<Tir2Ty> {
+        generic_params
+            .iter()
+            .map(|param| {
+                instantiation
+                    .bindings
+                    .get(param)
+                    .filter(|ty| !Self::is_unresolved_impl_binding_for_param(param, ty))
+                    .cloned()
+                    .or_else(|| {
+                        Self::requested_iface_binding_for_impl_param(
+                            param,
+                            rule_iface_ty,
+                            requested_iface_ty,
+                        )
+                    })
+                    .unwrap_or_else(|| Tir2Ty::BuiltinUnknown {
+                        attr: baml_compiler2_tir::ty::TyAttr::default(),
+                    })
+            })
+            .collect()
+    }
+
+    fn is_unresolved_impl_binding_for_param(param: &Name, ty: &Tir2Ty) -> bool {
+        matches!(ty, Tir2Ty::Unknown { .. } | Tir2Ty::BuiltinUnknown { .. })
+            || matches!(ty, Tir2Ty::TypeVar(name, _) if name == param)
+    }
+
+    fn requested_iface_binding_for_impl_param(
+        param: &Name,
+        rule_iface_ty: &Tir2Ty,
+        requested_iface_ty: &Tir2Ty,
+    ) -> Option<Tir2Ty> {
+        let (
+            Tir2Ty::Interface(_, rule_args, rule_assoc, _),
+            Tir2Ty::Interface(_, requested_args, requested_assoc, _),
+        ) = (rule_iface_ty, requested_iface_ty)
+        else {
+            return None;
+        };
+
+        rule_args
+            .iter()
+            .zip(requested_args.iter())
+            .find_map(|(rule_arg, requested_arg)| {
+                Self::is_direct_impl_param_reference(param, rule_arg).then(|| requested_arg.clone())
+            })
+            .or_else(|| {
+                rule_assoc.iter().find_map(|(assoc_name, rule_ty)| {
+                    if !Self::is_direct_impl_param_reference(param, rule_ty) {
+                        return None;
+                    }
+                    requested_assoc
+                        .iter()
+                        .find(|(requested_name, _)| requested_name == assoc_name)
+                        .map(|(_, requested_ty)| requested_ty.clone())
+                })
+            })
+    }
+
+    fn is_direct_impl_param_reference(param: &Name, ty: &Tir2Ty) -> bool {
+        matches!(ty, Tir2Ty::TypeVar(name, _) if name == param)
     }
 
     fn tir_types_equivalent(&self, a: &Tir2Ty, b: &Tir2Ty) -> bool {
@@ -9717,17 +9859,12 @@ impl<'db> LoweringContext<'db> {
                             let func_loc = baml_compiler2_hir::loc::FunctionLoc::new(
                                 self.db, file, *method_id,
                             );
-                            let frame_type_args = imp
-                                .generic_params
-                                .iter()
-                                .map(|param| {
-                                    instantiation.bindings.get(param).cloned().unwrap_or_else(
-                                        || Tir2Ty::BuiltinUnknown {
-                                            attr: TyAttr::default(),
-                                        },
-                                    )
-                                })
-                                .collect();
+                            let frame_type_args = Self::impl_frame_type_args_for_request(
+                                &imp.generic_params,
+                                &instantiation,
+                                &rule.interface_ty,
+                                &requested_iface_ty,
+                            );
                             return Some((
                                 def_to_item_ref(self.db, Definition::Function(func_loc)),
                                 frame_type_args,

@@ -167,6 +167,9 @@ function for_loops.for_loops_first_even(xs: int[]) -> int {
     jump L12
 
   L11:
+    load_var xs
+    is_type int[]
+    pop_jump_if_false L49
     load_type int
     load_var xs
     call baml.iter.Iterable$for$T[].iter
@@ -322,6 +325,9 @@ function for_loops.for_loops_first_even(xs: int[]) -> int {
     jump L35
 
   L34:
+    load_var _2
+    is_type baml.iter.Peekable<...>
+    pop_jump_if_false L49
     load_type int
     load_type void
     load_var _2
@@ -425,6 +431,9 @@ function for_loops.for_loops_first_even(xs: int[]) -> int {
 
   L48:
     return
+
+  L49:
+    unreachable
 }
 
 function for_loops.for_loops_for_with_break(xs: int[]) -> int {
@@ -502,6 +511,9 @@ function for_loops.for_loops_for_with_break(xs: int[]) -> int {
     jump L12
 
   L11:
+    load_var xs
+    is_type int[]
+    pop_jump_if_false L49
     load_type int
     load_var xs
     call baml.iter.Iterable$for$T[].iter
@@ -657,6 +669,9 @@ function for_loops.for_loops_for_with_break(xs: int[]) -> int {
     jump L35
 
   L34:
+    load_var _3
+    is_type baml.iter.Peekable<...>
+    pop_jump_if_false L49
     load_type int
     load_type void
     load_var _3
@@ -760,6 +775,9 @@ function for_loops.for_loops_for_with_break(xs: int[]) -> int {
   L48:
     load_var result
     return
+
+  L49:
+    unreachable
 }
 
 function for_loops.for_loops_for_with_continue(xs: int[]) -> int {
@@ -837,6 +855,9 @@ function for_loops.for_loops_for_with_continue(xs: int[]) -> int {
     jump L12
 
   L11:
+    load_var xs
+    is_type int[]
+    pop_jump_if_false L49
     load_type int
     load_var xs
     call baml.iter.Iterable$for$T[].iter
@@ -992,6 +1013,9 @@ function for_loops.for_loops_for_with_continue(xs: int[]) -> int {
     jump L35
 
   L34:
+    load_var _3
+    is_type baml.iter.Peekable<...>
+    pop_jump_if_false L49
     load_type int
     load_type void
     load_var _3
@@ -1095,6 +1119,9 @@ function for_loops.for_loops_for_with_continue(xs: int[]) -> int {
   L48:
     load_var result
     return
+
+  L49:
+    unreachable
 }
 
 function for_loops.for_loops_has_empty_cell(grid: string[][]) -> bool {
@@ -1164,6 +1191,9 @@ function for_loops.for_loops_has_empty_cell(grid: string[][]) -> bool {
     jump L11
 
   L10:
+    load_var grid
+    is_type string[][]
+    pop_jump_if_false L88
     load_type string[]
     load_var grid
     call baml.iter.Iterable$for$T[].iter
@@ -1307,6 +1337,9 @@ function for_loops.for_loops_has_empty_cell(grid: string[][]) -> bool {
     jump L32
 
   L31:
+    load_var _2
+    is_type baml.iter.Peekable<...>
+    pop_jump_if_false L88
     load_type string[]
     load_type void
     load_var _2
@@ -1455,6 +1488,9 @@ function for_loops.for_loops_has_empty_cell(grid: string[][]) -> bool {
     jump L54
 
   L53:
+    load_var _63
+    is_type string[]
+    pop_jump_if_false L88
     load_type string
     load_var _63
     call baml.iter.Iterable$for$T[].iter
@@ -1598,6 +1634,9 @@ function for_loops.for_loops_has_empty_cell(grid: string[][]) -> bool {
     jump L75
 
   L74:
+    load_var _64
+    is_type baml.iter.Peekable<...>
+    pop_jump_if_false L88
     load_type string
     load_type void
     load_var _64
@@ -1691,6 +1730,9 @@ function for_loops.for_loops_has_empty_cell(grid: string[][]) -> bool {
 
   L87:
     return
+
+  L88:
+    unreachable
 }
 
 function for_loops.for_loops_nested_for(arr_a: int[], arr_b: int[]) -> int {
@@ -1768,6 +1810,9 @@ function for_loops.for_loops_nested_for(arr_a: int[], arr_b: int[]) -> int {
     jump L12
 
   L11:
+    load_var arr_a
+    is_type int[]
+    pop_jump_if_false L95
     load_type int
     load_var arr_a
     call baml.iter.Iterable$for$T[].iter
@@ -1923,6 +1968,9 @@ function for_loops.for_loops_nested_for(arr_a: int[], arr_b: int[]) -> int {
     jump L35
 
   L34:
+    load_var _4
+    is_type baml.iter.Peekable<...>
+    pop_jump_if_false L95
     load_type int
     load_type void
     load_var _4
@@ -2084,6 +2132,9 @@ function for_loops.for_loops_nested_for(arr_a: int[], arr_b: int[]) -> int {
     jump L59
 
   L58:
+    load_var arr_b
+    is_type int[]
+    pop_jump_if_false L95
     load_type int
     load_var arr_b
     call baml.iter.Iterable$for$T[].iter
@@ -2239,6 +2290,9 @@ function for_loops.for_loops_nested_for(arr_a: int[], arr_b: int[]) -> int {
     jump L82
 
   L81:
+    load_var _67
+    is_type baml.iter.Peekable<...>
+    pop_jump_if_false L95
     load_type int
     load_type void
     load_var _67
@@ -2336,6 +2390,9 @@ function for_loops.for_loops_nested_for(arr_a: int[], arr_b: int[]) -> int {
   L94:
     load_var result
     return
+
+  L95:
+    unreachable
 }
 
 function for_loops.for_loops_render(xs: string[]) -> string {
@@ -2407,6 +2464,9 @@ function for_loops.for_loops_render(xs: string[]) -> string {
     jump L11
 
   L10:
+    load_var xs
+    is_type string[]
+    pop_jump_if_false L46
     load_type string
     load_var xs
     call baml.iter.Iterable$for$T[].iter
@@ -2550,6 +2610,9 @@ function for_loops.for_loops_render(xs: string[]) -> string {
     jump L32
 
   L31:
+    load_var _3
+    is_type baml.iter.Peekable<...>
+    pop_jump_if_false L46
     load_type string
     load_type void
     load_var _3
@@ -2654,6 +2717,9 @@ function for_loops.for_loops_render(xs: string[]) -> string {
   L45:
     load_var result
     return
+
+  L46:
+    unreachable
 }
 
 function for_loops.for_loops_sum(xs: int[]) -> int {
@@ -2731,6 +2797,9 @@ function for_loops.for_loops_sum(xs: int[]) -> int {
     jump L12
 
   L11:
+    load_var xs
+    is_type int[]
+    pop_jump_if_false L48
     load_type int
     load_var xs
     call baml.iter.Iterable$for$T[].iter
@@ -2886,6 +2955,9 @@ function for_loops.for_loops_sum(xs: int[]) -> int {
     jump L35
 
   L34:
+    load_var _3
+    is_type baml.iter.Peekable<...>
+    pop_jump_if_false L48
     load_type int
     load_type void
     load_var _3
@@ -2981,6 +3053,9 @@ function for_loops.for_loops_sum(xs: int[]) -> int {
   L47:
     load_var result
     return
+
+  L48:
+    unreachable
 }
 
 function for_loops.for_loops_sum_let_var() -> int {
@@ -3062,6 +3137,9 @@ function for_loops.for_loops_sum_let_var() -> int {
     jump L12
 
   L11:
+    load_var _3
+    is_type int[]
+    pop_jump_if_false L48
     load_type int
     load_var _3
     call baml.iter.Iterable$for$T[].iter
@@ -3217,6 +3295,9 @@ function for_loops.for_loops_sum_let_var() -> int {
     jump L35
 
   L34:
+    load_var _4
+    is_type baml.iter.Peekable<...>
+    pop_jump_if_false L48
     load_type int
     load_type void
     load_var _4
@@ -3312,6 +3393,9 @@ function for_loops.for_loops_sum_let_var() -> int {
   L47:
     load_var sum
     return
+
+  L48:
+    unreachable
 }
 
 function for_loops.for_loops_sum_let_var_no_parens() -> int {
@@ -3393,6 +3477,9 @@ function for_loops.for_loops_sum_let_var_no_parens() -> int {
     jump L12
 
   L11:
+    load_var _3
+    is_type int[]
+    pop_jump_if_false L48
     load_type int
     load_var _3
     call baml.iter.Iterable$for$T[].iter
@@ -3548,6 +3635,9 @@ function for_loops.for_loops_sum_let_var_no_parens() -> int {
     jump L35
 
   L34:
+    load_var _4
+    is_type baml.iter.Peekable<...>
+    pop_jump_if_false L48
     load_type int
     load_type void
     load_var _4
@@ -3643,4 +3733,7 @@ function for_loops.for_loops_sum_let_var_no_parens() -> int {
   L47:
     load_var sum
     return
+
+  L48:
+    unreachable
 }

@@ -366,6 +366,9 @@ function user.for_let_ascription(items: int[]) -> int {
     jump L12
 
   L11:
+    load_var items
+    is_type int[]
+    pop_jump_if_false L48
     load_type int
     load_var items
     call baml.iter.Iterable$for$T[].iter
@@ -521,6 +524,9 @@ function user.for_let_ascription(items: int[]) -> int {
     jump L35
 
   L34:
+    load_var _3
+    is_type baml.iter.Peekable<...>
+    pop_jump_if_false L48
     load_type int
     load_type void
     load_var _3
@@ -619,6 +625,9 @@ function user.for_let_ascription(items: int[]) -> int {
   L47:
     load_var sum
     return
+
+  L48:
+    unreachable
 }
 
 function user.for_let_fn_narrow(items: ((int) -> int throws never)[]) -> int {
@@ -690,6 +699,9 @@ function user.for_let_fn_narrow(items: ((int) -> int throws never)[]) -> int {
     jump L11
 
   L10:
+    load_var items
+    is_type ((int) -> int throws never)[]
+    pop_jump_if_false L44
     load_type (int) -> int throws never
     load_var items
     call baml.iter.Iterable$for$T[].iter
@@ -833,6 +845,9 @@ function user.for_let_fn_narrow(items: ((int) -> int throws never)[]) -> int {
     jump L32
 
   L31:
+    load_var _3
+    is_type baml.iter.Peekable<...>
+    pop_jump_if_false L44
     load_type (int) -> int throws never
     load_type void
     load_var _3
@@ -925,6 +940,9 @@ function user.for_let_fn_narrow(items: ((int) -> int throws never)[]) -> int {
   L43:
     load_var total
     return
+
+  L44:
+    unreachable
 }
 
 function user.for_let_with_narrow(items: int[]) -> int {
@@ -1002,6 +1020,9 @@ function user.for_let_with_narrow(items: int[]) -> int {
     jump L12
 
   L11:
+    load_var items
+    is_type int[]
+    pop_jump_if_false L48
     load_type int
     load_var items
     call baml.iter.Iterable$for$T[].iter
@@ -1157,6 +1178,9 @@ function user.for_let_with_narrow(items: int[]) -> int {
     jump L35
 
   L34:
+    load_var _3
+    is_type baml.iter.Peekable<...>
+    pop_jump_if_false L48
     load_type int
     load_type void
     load_var _3
@@ -1252,6 +1276,9 @@ function user.for_let_with_narrow(items: int[]) -> int {
   L47:
     load_var sum
     return
+
+  L48:
+    unreachable
 }
 
 function user.int_widens_to_alias(v: int | float) -> int {

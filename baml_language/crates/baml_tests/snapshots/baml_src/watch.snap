@@ -406,6 +406,9 @@ function watch.watch_break_unwatches_fn() -> int {
     jump L12
 
   L11:
+    load_var _2
+    is_type int[]
+    pop_jump_if_false L50
     load_type int
     load_var _2
     call baml.iter.Iterable$for$T[].iter
@@ -561,6 +564,9 @@ function watch.watch_break_unwatches_fn() -> int {
     jump L35
 
   L34:
+    load_var _3
+    is_type baml.iter.Peekable<...>
+    pop_jump_if_false L50
     load_type int
     load_type void
     load_var _3
@@ -676,6 +682,9 @@ function watch.watch_break_unwatches_fn() -> int {
   L49:
     load_var total
     return
+
+  L50:
+    unreachable
 }
 
 function watch.watch_catch_arm_fallthrough_fails() -> int {
@@ -848,6 +857,9 @@ function watch.watch_continue_unwatches_fn() -> int {
     jump L12
 
   L11:
+    load_var _2
+    is_type int[]
+    pop_jump_if_false L50
     load_type int
     load_var _2
     call baml.iter.Iterable$for$T[].iter
@@ -1003,6 +1015,9 @@ function watch.watch_continue_unwatches_fn() -> int {
     jump L35
 
   L34:
+    load_var _3
+    is_type baml.iter.Peekable<...>
+    pop_jump_if_false L50
     load_type int
     load_type void
     load_var _3
@@ -1119,6 +1134,9 @@ function watch.watch_continue_unwatches_fn() -> int {
   L49:
     load_var total
     return
+
+  L50:
+    unreachable
 }
 
 function watch.watch_cyclic_graph_fn() -> int {
@@ -1290,6 +1308,9 @@ function watch.watch_for_throw_fails() -> int {
     jump L12
 
   L11:
+    load_var _1
+    is_type int[]
+    pop_jump_if_false L50
     load_type int
     load_var _1
     call baml.iter.Iterable$for$T[].iter
@@ -1445,6 +1466,9 @@ function watch.watch_for_throw_fails() -> int {
     jump L35
 
   L34:
+    load_var _2
+    is_type baml.iter.Peekable<...>
+    pop_jump_if_false L50
     load_type int
     load_type void
     load_var _2
@@ -1559,6 +1583,9 @@ function watch.watch_for_throw_fails() -> int {
   L49:
     load_const 0
     return
+
+  L50:
+    unreachable
 }
 
 function watch.watch_for_throw_unwatches_fn() -> int {

@@ -158,6 +158,9 @@ function iter_impl_generics_only.core.Chain$stream.Iterator<T, E>.next(self: ite
     jump L10
 
   L9:
+    load_var _5
+    is_type iter_impl_generics_only.core.Peekable<...>
+    pop_jump_if_false L45
     load_type #0
     load_type #1
     load_var _5
@@ -313,6 +316,9 @@ function iter_impl_generics_only.core.Chain$stream.Iterator<T, E>.next(self: ite
     jump L34
 
   L33:
+    load_var _32
+    is_type iter_impl_generics_only.core.Peekable<...>
+    pop_jump_if_false L45
     load_type #0
     load_type #1
     load_var _32
@@ -381,6 +387,9 @@ function iter_impl_generics_only.core.Chain$stream.Iterator<T, E>.next(self: ite
 
   L44:
     return
+
+  L45:
+    unreachable
 }
 
 function iter_impl_generics_only.core.Chain.Iterable<T, E>.iter(self: iter_impl_generics_only.core.Chain<unknown, unknown>) -> iter_impl_generics_only.core.Iterator<unknown, unknown> {
@@ -455,6 +464,9 @@ function iter_impl_generics_only.core.Chain.Iterator<T, E>.next(self: iter_impl_
     jump L10
 
   L9:
+    load_var _5
+    is_type iter_impl_generics_only.core.Peekable<...>
+    pop_jump_if_false L45
     load_type #0
     load_type #1
     load_var _5
@@ -610,6 +622,9 @@ function iter_impl_generics_only.core.Chain.Iterator<T, E>.next(self: iter_impl_
     jump L34
 
   L33:
+    load_var _32
+    is_type iter_impl_generics_only.core.Peekable<...>
+    pop_jump_if_false L45
     load_type #0
     load_type #1
     load_var _32
@@ -678,6 +693,9 @@ function iter_impl_generics_only.core.Chain.Iterator<T, E>.next(self: iter_impl_
 
   L44:
     return
+
+  L45:
+    unreachable
 }
 
 function iter_impl_generics_only.core.Filter$stream.Iterable<T, E | E2>.iter(self: iter_impl_generics_only.core.Filter$stream<unknown, unknown, unknown>) -> iter_impl_generics_only.core.Iterator<unknown, unknown | unknown> {
@@ -758,6 +776,9 @@ function iter_impl_generics_only.core.Filter$stream.Iterator<T, E | E2>.next(sel
     jump L13
 
   L12:
+    load_var _3
+    is_type iter_impl_generics_only.core.Peekable<...>
+    pop_jump_if_false L27
     load_type #0
     load_type #1
     load_var _3
@@ -856,6 +877,9 @@ function iter_impl_generics_only.core.Filter$stream.Iterator<T, E | E2>.next(sel
 
   L26:
     return
+
+  L27:
+    unreachable
 }
 
 function iter_impl_generics_only.core.Filter.Iterable<T, E | E2>.iter(self: iter_impl_generics_only.core.Filter<unknown, unknown, unknown>) -> iter_impl_generics_only.core.Iterator<unknown, unknown | unknown> {
@@ -936,6 +960,9 @@ function iter_impl_generics_only.core.Filter.Iterator<T, E | E2>.next(self: iter
     jump L13
 
   L12:
+    load_var _3
+    is_type iter_impl_generics_only.core.Peekable<...>
+    pop_jump_if_false L27
     load_type #0
     load_type #1
     load_var _3
@@ -1034,6 +1061,9 @@ function iter_impl_generics_only.core.Filter.Iterator<T, E | E2>.next(self: iter
 
   L26:
     return
+
+  L27:
+    unreachable
 }
 
 function iter_impl_generics_only.core.FilterMap$stream.Iterable<R, E | E2>.iter(self: iter_impl_generics_only.core.FilterMap$stream<unknown, unknown, unknown, unknown>) -> iter_impl_generics_only.core.Iterator<unknown, unknown | unknown> {
@@ -1114,6 +1144,9 @@ function iter_impl_generics_only.core.FilterMap$stream.Iterator<R, E | E2>.next(
     jump L13
 
   L12:
+    load_var _3
+    is_type iter_impl_generics_only.core.Peekable<...>
+    pop_jump_if_false L28
     load_type #0
     load_type #2
     load_var _3
@@ -1217,6 +1250,9 @@ function iter_impl_generics_only.core.FilterMap$stream.Iterator<R, E | E2>.next(
 
   L27:
     return
+
+  L28:
+    unreachable
 }
 
 function iter_impl_generics_only.core.FilterMap.Iterable<R, E | E2>.iter(self: iter_impl_generics_only.core.FilterMap<unknown, unknown, unknown, unknown>) -> iter_impl_generics_only.core.Iterator<unknown, unknown | unknown> {
@@ -1297,6 +1333,9 @@ function iter_impl_generics_only.core.FilterMap.Iterator<R, E | E2>.next(self: i
     jump L13
 
   L12:
+    load_var _3
+    is_type iter_impl_generics_only.core.Peekable<...>
+    pop_jump_if_false L28
     load_type #0
     load_type #2
     load_var _3
@@ -1400,6 +1439,9 @@ function iter_impl_generics_only.core.FilterMap.Iterator<R, E | E2>.next(self: i
 
   L27:
     return
+
+  L28:
+    unreachable
 }
 
 function iter_impl_generics_only.core.FlatMap$stream.Iterable<R, E | E2 | E3>.iter(self: iter_impl_generics_only.core.FlatMap$stream<unknown, unknown, unknown, unknown, unknown>) -> iter_impl_generics_only.core.Iterator<unknown, unknown | unknown | unknown> {
@@ -1680,6 +1722,9 @@ function iter_impl_generics_only.core.FlatMap$stream.Iterator<R, E | E2 | E3>.ne
     jump L46
 
   L45:
+    load_var _65
+    is_type iter_impl_generics_only.core.Peekable<...>
+    pop_jump_if_false L105
     load_type #0
     load_type #2
     load_var _65
@@ -1828,6 +1873,9 @@ function iter_impl_generics_only.core.FlatMap$stream.Iterator<R, E | E2 | E3>.ne
     jump L68
 
   L67:
+    load_var _93
+    is_type iter_impl_generics_only.core.Peekable<...>
+    pop_jump_if_false L105
     load_type #1
     load_type #4
     load_var _93
@@ -1976,6 +2024,9 @@ function iter_impl_generics_only.core.FlatMap$stream.Iterator<R, E | E2 | E3>.ne
     jump L91
 
   L90:
+    load_var cur
+    is_type iter_impl_generics_only.core.Peekable<...>
+    pop_jump_if_false L105
     load_type #1
     load_type #4
     load_var cur
@@ -2070,6 +2121,9 @@ function iter_impl_generics_only.core.FlatMap$stream.Iterator<R, E | E2 | E3>.ne
     alloc_instance user.iter_impl_generics_only.core.Done
     store_field .2
     jump L0
+
+  L105:
+    unreachable
 }
 
 function iter_impl_generics_only.core.FlatMap.Iterable<R, E | E2 | E3>.iter(self: iter_impl_generics_only.core.FlatMap<unknown, unknown, unknown, unknown, unknown>) -> iter_impl_generics_only.core.Iterator<unknown, unknown | unknown | unknown> {
@@ -2350,6 +2404,9 @@ function iter_impl_generics_only.core.FlatMap.Iterator<R, E | E2 | E3>.next(self
     jump L46
 
   L45:
+    load_var _65
+    is_type iter_impl_generics_only.core.Peekable<...>
+    pop_jump_if_false L105
     load_type #0
     load_type #2
     load_var _65
@@ -2498,6 +2555,9 @@ function iter_impl_generics_only.core.FlatMap.Iterator<R, E | E2 | E3>.next(self
     jump L68
 
   L67:
+    load_var _93
+    is_type iter_impl_generics_only.core.Peekable<...>
+    pop_jump_if_false L105
     load_type #1
     load_type #4
     load_var _93
@@ -2646,6 +2706,9 @@ function iter_impl_generics_only.core.FlatMap.Iterator<R, E | E2 | E3>.next(self
     jump L91
 
   L90:
+    load_var cur
+    is_type iter_impl_generics_only.core.Peekable<...>
+    pop_jump_if_false L105
     load_type #1
     load_type #4
     load_var cur
@@ -2740,6 +2803,9 @@ function iter_impl_generics_only.core.FlatMap.Iterator<R, E | E2 | E3>.next(self
     alloc_instance user.iter_impl_generics_only.core.Done
     store_field .2
     jump L0
+
+  L105:
+    unreachable
 }
 
 function iter_impl_generics_only.core.Flatten$stream.Iterable<R, E | E3>.iter(self: iter_impl_generics_only.core.Flatten$stream<unknown, unknown, unknown>) -> iter_impl_generics_only.core.Iterator<unknown, unknown | unknown> {
@@ -3014,6 +3080,9 @@ function iter_impl_generics_only.core.Flatten$stream.Iterator<R, E | E3>.next(se
     jump L45
 
   L44:
+    load_var _65
+    is_type iter_impl_generics_only.core.Peekable<...>
+    pop_jump_if_false L103
     load_type iter_impl_generics_only.core.Iterable<#0, #2>
     load_type #1
     load_var _65
@@ -3153,6 +3222,9 @@ function iter_impl_generics_only.core.Flatten$stream.Iterator<R, E | E3>.next(se
     jump L66
 
   L65:
+    load_var x
+    is_type iter_impl_generics_only.core.Peekable<...>
+    pop_jump_if_false L103
     load_type #0
     load_type #2
     load_var x
@@ -3301,6 +3373,9 @@ function iter_impl_generics_only.core.Flatten$stream.Iterator<R, E | E3>.next(se
     jump L89
 
   L88:
+    load_var cur
+    is_type iter_impl_generics_only.core.Peekable<...>
+    pop_jump_if_false L103
     load_type #0
     load_type #2
     load_var cur
@@ -3395,6 +3470,9 @@ function iter_impl_generics_only.core.Flatten$stream.Iterator<R, E | E3>.next(se
     alloc_instance user.iter_impl_generics_only.core.Done
     store_field .1
     jump L0
+
+  L103:
+    unreachable
 }
 
 function iter_impl_generics_only.core.Flatten.Iterable<R, E | E3>.iter(self: iter_impl_generics_only.core.Flatten<unknown, unknown, unknown>) -> iter_impl_generics_only.core.Iterator<unknown, unknown | unknown> {
@@ -3669,6 +3747,9 @@ function iter_impl_generics_only.core.Flatten.Iterator<R, E | E3>.next(self: ite
     jump L45
 
   L44:
+    load_var _65
+    is_type iter_impl_generics_only.core.Peekable<...>
+    pop_jump_if_false L103
     load_type iter_impl_generics_only.core.Iterable<#0, #2>
     load_type #1
     load_var _65
@@ -3808,6 +3889,9 @@ function iter_impl_generics_only.core.Flatten.Iterator<R, E | E3>.next(self: ite
     jump L66
 
   L65:
+    load_var x
+    is_type iter_impl_generics_only.core.Peekable<...>
+    pop_jump_if_false L103
     load_type #0
     load_type #2
     load_var x
@@ -3956,6 +4040,9 @@ function iter_impl_generics_only.core.Flatten.Iterator<R, E | E3>.next(self: ite
     jump L89
 
   L88:
+    load_var cur
+    is_type iter_impl_generics_only.core.Peekable<...>
+    pop_jump_if_false L103
     load_type #0
     load_type #2
     load_var cur
@@ -4050,6 +4137,9 @@ function iter_impl_generics_only.core.Flatten.Iterator<R, E | E3>.next(self: ite
     alloc_instance user.iter_impl_generics_only.core.Done
     store_field .1
     jump L0
+
+  L103:
+    unreachable
 }
 
 function iter_impl_generics_only.core.Iterable<T, never>$for$T[].iter(self: unknown[]) -> iter_impl_generics_only.core.Iterator<unknown, void> {
@@ -4135,6 +4225,9 @@ function iter_impl_generics_only.core.Iterator.collect(self: iter_impl_generics_
     jump L11
 
   L10:
+    load_var self
+    is_type iter_impl_generics_only.core.Peekable<...>
+    pop_jump_if_false L24
     load_type #0
     load_type #1
     load_var self
@@ -4227,6 +4320,9 @@ function iter_impl_generics_only.core.Iterator.collect(self: iter_impl_generics_
   L23:
     load_var r
     return
+
+  L24:
+    unreachable
 }
 
 function iter_impl_generics_only.core.Iterator.count(self: iter_impl_generics_only.core.Iterator<unknown, unknown>) -> int {
@@ -4296,6 +4392,9 @@ function iter_impl_generics_only.core.Iterator.count(self: iter_impl_generics_on
     jump L11
 
   L10:
+    load_var self
+    is_type iter_impl_generics_only.core.Peekable<...>
+    pop_jump_if_false L24
     load_type #0
     load_type #1
     load_var self
@@ -4377,6 +4476,9 @@ function iter_impl_generics_only.core.Iterator.count(self: iter_impl_generics_on
   L23:
     load_var n
     return
+
+  L24:
+    unreachable
 }
 
 function iter_impl_generics_only.core.Iterator.every(self: iter_impl_generics_only.core.Iterator<unknown, unknown>, predicate: (unknown) -> bool throws unknown) -> bool {
@@ -4443,6 +4545,9 @@ function iter_impl_generics_only.core.Iterator.every(self: iter_impl_generics_on
     jump L11
 
   L10:
+    load_var self
+    is_type iter_impl_generics_only.core.Peekable<...>
+    pop_jump_if_false L25
     load_type #0
     load_type #1
     load_var self
@@ -4539,6 +4644,9 @@ function iter_impl_generics_only.core.Iterator.every(self: iter_impl_generics_on
 
   L24:
     return
+
+  L25:
+    unreachable
 }
 
 function iter_impl_generics_only.core.Iterator.filter(self: iter_impl_generics_only.core.Iterator<unknown, unknown>, predicate: (unknown) -> bool throws unknown) -> iter_impl_generics_only.core.Iterator<unknown, unknown | unknown> {
@@ -4624,6 +4732,9 @@ function iter_impl_generics_only.core.Iterator.find(self: iter_impl_generics_onl
     jump L11
 
   L10:
+    load_var self
+    is_type iter_impl_generics_only.core.Peekable<...>
+    pop_jump_if_false L25
     load_type #0
     load_type #1
     load_var self
@@ -4721,6 +4832,9 @@ function iter_impl_generics_only.core.Iterator.find(self: iter_impl_generics_onl
 
   L24:
     return
+
+  L25:
+    unreachable
 }
 
 function iter_impl_generics_only.core.Iterator.flat_map(self: iter_impl_generics_only.core.Iterator<unknown, unknown>, fn: (unknown) -> iter_impl_generics_only.core.Iterable<unknown, unknown> throws unknown) -> iter_impl_generics_only.core.Iterator<unknown, unknown | unknown | unknown> {
@@ -4822,6 +4936,9 @@ function iter_impl_generics_only.core.Iterator.reduce(self: iter_impl_generics_o
     jump L11
 
   L10:
+    load_var self
+    is_type iter_impl_generics_only.core.Peekable<...>
+    pop_jump_if_false L24
     load_type #0
     load_type #1
     load_var self
@@ -4915,6 +5032,9 @@ function iter_impl_generics_only.core.Iterator.reduce(self: iter_impl_generics_o
   L23:
     load_var acc
     return
+
+  L24:
+    unreachable
 }
 
 function iter_impl_generics_only.core.Iterator.some(self: iter_impl_generics_only.core.Iterator<unknown, unknown>, predicate: (unknown) -> bool throws unknown) -> bool {
@@ -4981,6 +5101,9 @@ function iter_impl_generics_only.core.Iterator.some(self: iter_impl_generics_onl
     jump L11
 
   L10:
+    load_var self
+    is_type iter_impl_generics_only.core.Peekable<...>
+    pop_jump_if_false L25
     load_type #0
     load_type #1
     load_var self
@@ -5076,6 +5199,9 @@ function iter_impl_generics_only.core.Iterator.some(self: iter_impl_generics_onl
 
   L24:
     return
+
+  L25:
+    unreachable
 }
 
 function iter_impl_generics_only.core.Iterator.step_by(self: iter_impl_generics_only.core.Iterator<unknown, unknown>, n: int) -> iter_impl_generics_only.core.Iterator<unknown, unknown> {
@@ -5155,6 +5281,9 @@ function iter_impl_generics_only.core.Map$stream.Iterator<R, E | E2>.next(self: 
     jump L10
 
   L9:
+    load_var _3
+    is_type iter_impl_generics_only.core.Peekable<...>
+    pop_jump_if_false L24
     load_type #0
     load_type #2
     load_var _3
@@ -5249,6 +5378,9 @@ function iter_impl_generics_only.core.Map$stream.Iterator<R, E | E2>.next(self: 
 
   L23:
     return
+
+  L24:
+    unreachable
 }
 
 function iter_impl_generics_only.core.Map.Iterable<R, E | E2>.iter(self: iter_impl_generics_only.core.Map<unknown, unknown, unknown, unknown>) -> iter_impl_generics_only.core.Iterator<unknown, unknown | unknown> {
@@ -5319,6 +5451,9 @@ function iter_impl_generics_only.core.Map.Iterator<R, E | E2>.next(self: iter_im
     jump L10
 
   L9:
+    load_var _3
+    is_type iter_impl_generics_only.core.Peekable<...>
+    pop_jump_if_false L24
     load_type #0
     load_type #2
     load_var _3
@@ -5413,6 +5548,9 @@ function iter_impl_generics_only.core.Map.Iterator<R, E | E2>.next(self: iter_im
 
   L23:
     return
+
+  L24:
+    unreachable
 }
 
 function iter_impl_generics_only.core.OutOfBodyBox.new(value: unknown) -> iter_impl_generics_only.core.OutOfBodyBox<unknown> {
@@ -5502,6 +5640,9 @@ function iter_impl_generics_only.core.Peekable$stream.Iterator<T, E>.next(self: 
     jump L11
 
   L10:
+    load_var _4
+    is_type iter_impl_generics_only.core.Peekable<...>
+    pop_jump_if_false L23
     load_type #0
     load_type #1
     load_var _4
@@ -5583,6 +5724,9 @@ function iter_impl_generics_only.core.Peekable$stream.Iterator<T, E>.next(self: 
 
   L22:
     return
+
+  L23:
+    unreachable
 }
 
 function iter_impl_generics_only.core.Peekable.Iterable<T, E>.iter(self: iter_impl_generics_only.core.Peekable<unknown, unknown>) -> iter_impl_generics_only.core.Iterator<unknown, unknown> {
@@ -5659,6 +5803,9 @@ function iter_impl_generics_only.core.Peekable.Iterator<T, E>.next(self: iter_im
     jump L11
 
   L10:
+    load_var _4
+    is_type iter_impl_generics_only.core.Peekable<...>
+    pop_jump_if_false L23
     load_type #0
     load_type #1
     load_var _4
@@ -5740,6 +5887,9 @@ function iter_impl_generics_only.core.Peekable.Iterator<T, E>.next(self: iter_im
 
   L22:
     return
+
+  L23:
+    unreachable
 }
 
 function iter_impl_generics_only.core.Peekable.peek(self: iter_impl_generics_only.core.Peekable<unknown, unknown>) -> unknown | iter_impl_generics_only.core.Done {
@@ -5811,6 +5961,9 @@ function iter_impl_generics_only.core.Peekable.peek(self: iter_impl_generics_onl
     jump L11
 
   L10:
+    load_var _4
+    is_type iter_impl_generics_only.core.Peekable<...>
+    pop_jump_if_false L24
     load_type #0
     load_type #1
     load_var _4
@@ -5903,6 +6056,9 @@ function iter_impl_generics_only.core.Peekable.peek(self: iter_impl_generics_onl
 
   L23:
     return
+
+  L24:
+    unreachable
 }
 
 function iter_impl_generics_only.core.Range$stream.Iterable<int, never>.iter(self: iter_impl_generics_only.core.Range$stream) -> iter_impl_generics_only.core.Iterator<int, void> {
@@ -6181,6 +6337,9 @@ function iter_impl_generics_only.core.StepBy$stream.Iterator<T, E>.next(self: it
     jump L13
 
   L12:
+    load_var _60
+    is_type iter_impl_generics_only.core.Peekable<...>
+    pop_jump_if_false L69
     load_type #0
     load_type #1
     load_var _60
@@ -6311,6 +6470,9 @@ function iter_impl_generics_only.core.StepBy$stream.Iterator<T, E>.next(self: it
     jump L34
 
   L33:
+    load_var _34
+    is_type iter_impl_generics_only.core.Peekable<...>
+    pop_jump_if_false L69
     load_type #0
     load_type #1
     load_var _34
@@ -6459,6 +6621,9 @@ function iter_impl_generics_only.core.StepBy$stream.Iterator<T, E>.next(self: it
     jump L58
 
   L57:
+    load_var _3
+    is_type iter_impl_generics_only.core.Peekable<...>
+    pop_jump_if_false L69
     load_type #0
     load_type #1
     load_var _3
@@ -6527,6 +6692,9 @@ function iter_impl_generics_only.core.StepBy$stream.Iterator<T, E>.next(self: it
 
   L68:
     return
+
+  L69:
+    unreachable
 }
 
 function iter_impl_generics_only.core.StepBy.Iterable<T, E>.iter(self: iter_impl_generics_only.core.StepBy<unknown, unknown>) -> iter_impl_generics_only.core.Iterator<unknown, unknown> {
@@ -6616,6 +6784,9 @@ function iter_impl_generics_only.core.StepBy.Iterator<T, E>.next(self: iter_impl
     jump L13
 
   L12:
+    load_var _60
+    is_type iter_impl_generics_only.core.Peekable<...>
+    pop_jump_if_false L69
     load_type #0
     load_type #1
     load_var _60
@@ -6746,6 +6917,9 @@ function iter_impl_generics_only.core.StepBy.Iterator<T, E>.next(self: iter_impl
     jump L34
 
   L33:
+    load_var _34
+    is_type iter_impl_generics_only.core.Peekable<...>
+    pop_jump_if_false L69
     load_type #0
     load_type #1
     load_var _34
@@ -6894,6 +7068,9 @@ function iter_impl_generics_only.core.StepBy.Iterator<T, E>.next(self: iter_impl
     jump L58
 
   L57:
+    load_var _3
+    is_type iter_impl_generics_only.core.Peekable<...>
+    pop_jump_if_false L69
     load_type #0
     load_type #1
     load_var _3
@@ -6962,6 +7139,9 @@ function iter_impl_generics_only.core.StepBy.Iterator<T, E>.next(self: iter_impl
 
   L68:
     return
+
+  L69:
+    unreachable
 }
 
 function iter_impl_generics_only.core.flatten(src: iter_impl_generics_only.core.Iterator<iter_impl_generics_only.core.Iterable<unknown, unknown>, unknown>) -> iter_impl_generics_only.core.Iterator<unknown, unknown | unknown> {

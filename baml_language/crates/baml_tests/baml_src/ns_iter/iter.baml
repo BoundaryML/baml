@@ -128,6 +128,56 @@ test "iter_array_for_each" {
   assert.is_true(baml.deep_equals(iter_array_for_each(), [3, 6, 9]))
 }
 
+function iter_array_first_native_methods() -> bool throws unknown {
+  let mapped = [1, 2, 3].map((x: int) -> int { x * 2 });
+  let flat_mapped = [1, 2].flat_map((x: int) -> int[] { [x, x + 10] });
+  let reduced = [1, 2, 3, 4].reduce((acc: int, x: int) -> int { acc + x }, 0);
+
+  baml.deep_equals(mapped, [2, 4, 6]) &&
+    baml.deep_equals(flat_mapped, [1, 11, 2, 12]) &&
+    reduced == 10
+}
+
+test "iter_array_first_native_methods" {
+  assert.is_true(iter_array_first_native_methods())
+}
+
+function iter_array_first_adapter_defaults() -> bool throws unknown {
+  let mapped = [1, 2, 3, 4].filter((x: int) -> bool {
+    x % 2 == 0
+  }).map((x: int) -> int {
+    x * 10
+  }).collect();
+
+  let flattened = [1, 2, 3].filter((x: int) -> bool {
+    x < 3
+  }).flat_map((x: int) -> baml.iter.Iterable<Item = int, Error = never> {
+    [x, x + 10]
+  }).collect();
+
+  let reduced = [1, 2, 3, 4].filter((x: int) -> bool {
+    x >= 2
+  }).reduce((acc: int, x: int) -> int {
+    acc + x
+  }, 0);
+
+  let visited: int[] = [];
+  [1, 2, 3].filter((x: int) -> bool {
+    x != 2
+  }).for_each((x: int) -> void {
+    visited.push(x * 3);
+  });
+
+  baml.deep_equals(mapped, [20, 40]) &&
+    baml.deep_equals(flattened, [1, 11, 2, 12]) &&
+    reduced == 9 &&
+    baml.deep_equals(visited, [3, 9])
+}
+
+test "iter_array_first_adapter_defaults" {
+  assert.is_true(iter_array_first_adapter_defaults())
+}
+
 function iter_array_collect_count() -> bool {
   baml.deep_equals([4, 5, 6].collect(), [4, 5, 6]) && [4, 5, 6].count() == 3
 }

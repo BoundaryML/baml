@@ -217,6 +217,9 @@ function typed_inputs.sum(arr: int[]) -> int {
     jump L12
 
   L11:
+    load_var arr
+    is_type int[]
+    pop_jump_if_false L48
     load_type int
     load_var arr
     call baml.iter.Iterable$for$T[].iter
@@ -372,6 +375,9 @@ function typed_inputs.sum(arr: int[]) -> int {
     jump L35
 
   L34:
+    load_var _3
+    is_type baml.iter.Peekable<...>
+    pop_jump_if_false L48
     load_type int
     load_type void
     load_var _3
@@ -467,4 +473,7 @@ function typed_inputs.sum(arr: int[]) -> int {
   L47:
     load_var total
     return
+
+  L48:
+    unreachable
 }

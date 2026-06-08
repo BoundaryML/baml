@@ -247,6 +247,9 @@ function inferred_generic_type_args.Cursor.take_one(self: inferred_generic_type_
     jump L1
 
   L0:
+    load_var self
+    is_type inferred_generic_type_args.ArrayCursor<...>
+    pop_jump_if_false L3
     load_type #0
     load_var self
     call user.inferred_generic_type_args.ArrayCursor.Cursor<T>.head
@@ -261,6 +264,9 @@ function inferred_generic_type_args.Cursor.take_one(self: inferred_generic_type_
     load_type #0
     init_instance<1> user.inferred_generic_type_args.SingleCursor .value
     return
+
+  L3:
+    unreachable
 }
 
 function inferred_generic_type_args.Dog$stream.Animal.speak(self: inferred_generic_type_args.Dog$stream<unknown>) -> string {
@@ -375,6 +381,9 @@ function inferred_generic_type_args.NextIter.collect2(self: inferred_generic_typ
     jump L2
 
   L1:
+    load_var self
+    is_type inferred_generic_type_args.ArrIter<...>
+    pop_jump_if_false L6
     load_type #0
     load_var self
     call user.inferred_generic_type_args.ArrIter.NextIter<T, never>.next2
@@ -402,6 +411,9 @@ function inferred_generic_type_args.NextIter.collect2(self: inferred_generic_typ
   L5:
     load_var out
     return
+
+  L6:
+    unreachable
 }
 
 function inferred_generic_type_args.OneBag$stream.Bag<T>.first(self: inferred_generic_type_args.OneBag$stream<unknown>) -> unknown {
@@ -544,6 +556,9 @@ function inferred_generic_type_args.class_method_builds_generic() -> int {
     jump L1
 
   L0:
+    load_var w
+    is_type inferred_generic_type_args.SrcWrap<...>
+    pop_jump_if_false L3
     load_type int
     load_var w
     call user.inferred_generic_type_args.SrcWrap.Wrap<T>.first
@@ -556,6 +571,9 @@ function inferred_generic_type_args.class_method_builds_generic() -> int {
 
   L2:
     return
+
+  L3:
+    unreachable
 }
 
 function inferred_generic_type_args.default_forward_reads_type_var() -> string {
@@ -568,6 +586,9 @@ function inferred_generic_type_args.default_forward_reads_type_var() -> string {
     jump L1
 
   L0:
+    load_var c
+    is_type inferred_generic_type_args.IntCounter<...>
+    pop_jump_if_false L3
     load_type int
     load_var c
     call user.inferred_generic_type_args.IntCounter.Counter<T>.describe
@@ -580,6 +601,9 @@ function inferred_generic_type_args.default_forward_reads_type_var() -> string {
 
   L2:
     return
+
+  L3:
+    unreachable
 }
 
 function inferred_generic_type_args.default_method_typevar_name() -> string {
@@ -596,6 +620,9 @@ function inferred_generic_type_args.default_method_typevar_name() -> string {
     jump L1
 
   L0:
+    load_var s
+    is_type inferred_generic_type_args.OneNamed<...>
+    pop_jump_if_false L3
     load_type int
     load_var s
     call user.inferred_generic_type_args.Named.tname
@@ -608,6 +635,9 @@ function inferred_generic_type_args.default_method_typevar_name() -> string {
 
   L2:
     return
+
+  L3:
+    unreachable
 }
 
 function inferred_generic_type_args.echo_type(a: unknown) -> string {
@@ -643,6 +673,9 @@ function inferred_generic_type_args.generic_behind_nongeneric_iface() -> string 
 
   L0:
     load_var d
+    is_type inferred_generic_type_args.PlainThing
+    pop_jump_if_false L3
+    load_var d
     call user.inferred_generic_type_args.PlainThing.Describable.describe
     jump L2
 
@@ -653,6 +686,9 @@ function inferred_generic_type_args.generic_behind_nongeneric_iface() -> string 
 
   L2:
     return
+
+  L3:
+    unreachable
 }
 
 function inferred_generic_type_args.inferred_ctor_collect_count() -> int {
@@ -669,6 +705,9 @@ function inferred_generic_type_args.inferred_ctor_collect_count() -> int {
     jump L1
 
   L0:
+    load_var it
+    is_type inferred_generic_type_args.ArrIter<...>
+    pop_jump_if_false L3
     load_type int
     load_type void
     load_var it
@@ -684,6 +723,9 @@ function inferred_generic_type_args.inferred_ctor_collect_count() -> int {
   L2:
     container_len
     return
+
+  L3:
+    unreachable
 }
 
 function inferred_generic_type_args.inferred_ctor_instance_is_typed() -> int {
@@ -734,6 +776,9 @@ function inferred_generic_type_args.inferred_static_ctor_first() -> int {
     jump L1
 
   L0:
+    load_var s
+    is_type inferred_generic_type_args.ArrBag<...>
+    pop_jump_if_false L3
     load_type int
     load_var s
     call user.inferred_generic_type_args.ArrBag.Bag<T>.first
@@ -746,6 +791,9 @@ function inferred_generic_type_args.inferred_static_ctor_first() -> int {
 
   L2:
     return
+
+  L3:
+    unreachable
 }
 
 function inferred_generic_type_args.inferred_static_ctor_speak() -> string {
@@ -760,6 +808,9 @@ function inferred_generic_type_args.inferred_static_ctor_speak() -> string {
 
   L0:
     load_var d
+    is_type inferred_generic_type_args.Dog
+    pop_jump_if_false L3
+    load_var d
     make_bound_method user.inferred_generic_type_args.Dog.Animal.speak
     call_indirect
     jump L2
@@ -770,6 +821,9 @@ function inferred_generic_type_args.inferred_static_ctor_speak() -> string {
 
   L2:
     return
+
+  L3:
+    unreachable
 }
 
 function inferred_generic_type_args.interface_dispatch_inferred_method_type_arg() -> string {
@@ -785,6 +839,9 @@ function inferred_generic_type_args.interface_dispatch_inferred_method_type_arg(
     jump L1
 
   L0:
+    load_var p
+    is_type inferred_generic_type_args.ProbeB
+    pop_jump_if_false L3
     load_var2 3 1
     load_var _3
     call user.inferred_generic_type_args.ProbeB.TypeProbe.seen
@@ -797,6 +854,9 @@ function inferred_generic_type_args.interface_dispatch_inferred_method_type_arg(
 
   L2:
     return
+
+  L3:
+    unreachable
 }
 
 function inferred_generic_type_args.nested_self_inferred_binding() -> string {
@@ -809,6 +869,9 @@ function inferred_generic_type_args.nested_self_inferred_binding() -> string {
 
   L0:
     load_var e
+    is_type inferred_generic_type_args.EchoA
+    pop_jump_if_false L3
+    load_var e
     call user.inferred_generic_type_args.SelfEcho.nested_self_type
     jump L2
 
@@ -818,6 +881,9 @@ function inferred_generic_type_args.nested_self_inferred_binding() -> string {
 
   L2:
     return
+
+  L3:
+    unreachable
 }
 
 function inferred_generic_type_args.take_one_then_head() -> int {
@@ -834,6 +900,9 @@ function inferred_generic_type_args.take_one_then_head() -> int {
     jump L1
 
   L0:
+    load_var cursor
+    is_type inferred_generic_type_args.ArrayCursor<...>
+    pop_jump_if_false L6
     load_type int
     load_var cursor
     call user.inferred_generic_type_args.Cursor.take_one
@@ -853,6 +922,9 @@ function inferred_generic_type_args.take_one_then_head() -> int {
     jump L4
 
   L3:
+    load_var single
+    is_type inferred_generic_type_args.ArrayCursor<...>
+    pop_jump_if_false L6
     load_type int
     load_var single
     call user.inferred_generic_type_args.ArrayCursor.Cursor<T>.head
@@ -865,4 +937,7 @@ function inferred_generic_type_args.take_one_then_head() -> int {
 
   L5:
     return
+
+  L6:
+    unreachable
 }

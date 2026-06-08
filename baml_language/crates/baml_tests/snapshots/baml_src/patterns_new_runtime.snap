@@ -866,6 +866,9 @@ function patterns_new_runtime.from_array_boxes(boxes: patterns_new_runtime.BoxT<
     jump L11
 
   L10:
+    load_var boxes
+    is_type patterns_new_runtime.BoxT<int>[]
+    pop_jump_if_false L44
     load_type patterns_new_runtime.BoxT<int>
     load_var boxes
     call baml.iter.Iterable$for$T[].iter
@@ -1009,6 +1012,9 @@ function patterns_new_runtime.from_array_boxes(boxes: patterns_new_runtime.BoxT<
     jump L32
 
   L31:
+    load_var _3
+    is_type baml.iter.Peekable<...>
+    pop_jump_if_false L44
     load_type patterns_new_runtime.BoxT<int>
     load_type void
     load_var _3
@@ -1099,6 +1105,9 @@ function patterns_new_runtime.from_array_boxes(boxes: patterns_new_runtime.BoxT<
   L43:
     load_var total
     return
+
+  L44:
+    unreachable
 }
 
 function patterns_new_runtime.from_optional_box(box: patterns_new_runtime.BoxT<int> | null) -> int {
@@ -3493,6 +3502,9 @@ function patterns_new_runtime.test_for_class_binds_inner_zip() -> int {
     jump L11
 
   L10:
+    load_var _12
+    is_type patterns_new_runtime.UserCoord[]
+    pop_jump_if_false L44
     load_type patterns_new_runtime.UserCoord
     load_var _12
     call baml.iter.Iterable$for$T[].iter
@@ -3636,6 +3648,9 @@ function patterns_new_runtime.test_for_class_binds_inner_zip() -> int {
     jump L32
 
   L31:
+    load_var _13
+    is_type baml.iter.Peekable<...>
+    pop_jump_if_false L44
     load_type patterns_new_runtime.UserCoord
     load_type void
     load_var _13
@@ -3728,6 +3743,9 @@ function patterns_new_runtime.test_for_class_binds_inner_zip() -> int {
   L43:
     load_var product
     return
+
+  L44:
+    unreachable
 }
 
 function patterns_new_runtime.test_for_deep_class_capture_fresh() -> int {
@@ -3815,6 +3833,9 @@ function patterns_new_runtime.test_for_deep_class_capture_fresh() -> int {
     jump L11
 
   L10:
+    load_var _12
+    is_type patterns_new_runtime.UserCoord[]
+    pop_jump_if_false L44
     load_type patterns_new_runtime.UserCoord
     load_var _12
     call baml.iter.Iterable$for$T[].iter
@@ -3958,6 +3979,9 @@ function patterns_new_runtime.test_for_deep_class_capture_fresh() -> int {
     jump L32
 
   L31:
+    load_var _13
+    is_type baml.iter.Peekable<...>
+    pop_jump_if_false L44
     load_type patterns_new_runtime.UserCoord
     load_type void
     load_var _13
@@ -4079,6 +4103,9 @@ function patterns_new_runtime.test_for_deep_class_capture_fresh() -> int {
     load_var _90
     add_int
     return
+
+  L44:
+    unreachable
 }
 
 function patterns_new_runtime.test_for_deep_class_sums() -> int {
@@ -4163,6 +4190,9 @@ function patterns_new_runtime.test_for_deep_class_sums() -> int {
     jump L11
 
   L10:
+    load_var _12
+    is_type patterns_new_runtime.UserCoord[]
+    pop_jump_if_false L44
     load_type patterns_new_runtime.UserCoord
     load_var _12
     call baml.iter.Iterable$for$T[].iter
@@ -4306,6 +4336,9 @@ function patterns_new_runtime.test_for_deep_class_sums() -> int {
     jump L32
 
   L31:
+    load_var _13
+    is_type baml.iter.Peekable<...>
+    pop_jump_if_false L44
     load_type patterns_new_runtime.UserCoord
     load_type void
     load_var _13
@@ -4398,6 +4431,9 @@ function patterns_new_runtime.test_for_deep_class_sums() -> int {
   L43:
     load_var total
     return
+
+  L44:
+    unreachable
 }
 
 function patterns_new_runtime.test_for_inside_class_destruct() -> int {
@@ -4479,6 +4515,9 @@ function patterns_new_runtime.test_for_inside_class_destruct() -> int {
     jump L11
 
   L10:
+    load_var _9
+    is_type patterns_new_runtime.Team1[]
+    pop_jump_if_false L44
     load_type patterns_new_runtime.Team1
     load_var _9
     call baml.iter.Iterable$for$T[].iter
@@ -4622,6 +4661,9 @@ function patterns_new_runtime.test_for_inside_class_destruct() -> int {
     jump L32
 
   L31:
+    load_var _10
+    is_type baml.iter.Peekable<...>
+    pop_jump_if_false L44
     load_type patterns_new_runtime.Team1
     load_type void
     load_var _10
@@ -4715,6 +4757,9 @@ function patterns_new_runtime.test_for_inside_class_destruct() -> int {
   L43:
     load_var total
     return
+
+  L44:
+    unreachable
 }
 
 function patterns_new_runtime.test_for_let_chain_alias_capture() -> int {
@@ -4799,6 +4844,9 @@ function patterns_new_runtime.test_for_let_chain_alias_capture() -> int {
     jump L12
 
   L11:
+    load_var _2
+    is_type int[]
+    pop_jump_if_false L48
     load_type int
     load_var _2
     call baml.iter.Iterable$for$T[].iter
@@ -4954,6 +5002,9 @@ function patterns_new_runtime.test_for_let_chain_alias_capture() -> int {
     jump L35
 
   L34:
+    load_var _3
+    is_type baml.iter.Peekable<...>
+    pop_jump_if_false L48
     load_type int
     load_type void
     load_var _3
@@ -5082,6 +5133,9 @@ function patterns_new_runtime.test_for_let_chain_alias_capture() -> int {
     load_var _80
     add_int
     return
+
+  L48:
+    unreachable
 }
 
 function patterns_new_runtime.test_for_let_chain_of_bindings() -> int {
@@ -5163,6 +5217,9 @@ function patterns_new_runtime.test_for_let_chain_of_bindings() -> int {
     jump L12
 
   L11:
+    load_var _2
+    is_type int[]
+    pop_jump_if_false L48
     load_type int
     load_var _2
     call baml.iter.Iterable$for$T[].iter
@@ -5318,6 +5375,9 @@ function patterns_new_runtime.test_for_let_chain_of_bindings() -> int {
     jump L35
 
   L34:
+    load_var _3
+    is_type baml.iter.Peekable<...>
+    pop_jump_if_false L48
     load_type int
     load_type void
     load_var _3
@@ -5417,6 +5477,9 @@ function patterns_new_runtime.test_for_let_chain_of_bindings() -> int {
   L47:
     load_var total
     return
+
+  L48:
+    unreachable
 }
 
 function patterns_new_runtime.test_for_let_chain_trailing_type() -> int {
@@ -5496,6 +5559,9 @@ function patterns_new_runtime.test_for_let_chain_trailing_type() -> int {
     jump L11
 
   L10:
+    load_var _2
+    is_type int[][]
+    pop_jump_if_false L44
     load_type int[]
     load_var _2
     call baml.iter.Iterable$for$T[].iter
@@ -5639,6 +5705,9 @@ function patterns_new_runtime.test_for_let_chain_trailing_type() -> int {
     jump L32
 
   L31:
+    load_var _5
+    is_type baml.iter.Peekable<...>
+    pop_jump_if_false L44
     load_type int[]
     load_type void
     load_var _5
@@ -5744,6 +5813,9 @@ function patterns_new_runtime.test_for_let_chain_trailing_type() -> int {
   L43:
     load_var total
     return
+
+  L44:
+    unreachable
 }
 
 function patterns_new_runtime.test_for_let_or_same_binding() -> int {
@@ -5826,6 +5898,9 @@ function patterns_new_runtime.test_for_let_or_same_binding() -> int {
     jump L12
 
   L11:
+    load_var _2
+    is_type int[]
+    pop_jump_if_false L51
     load_type int
     load_var _2
     call baml.iter.Iterable$for$T[].iter
@@ -5981,6 +6056,9 @@ function patterns_new_runtime.test_for_let_or_same_binding() -> int {
     jump L35
 
   L34:
+    load_var _3
+    is_type baml.iter.Peekable<...>
+    pop_jump_if_false L51
     load_type int
     load_type void
     load_var _3
@@ -6076,6 +6154,9 @@ function patterns_new_runtime.test_for_let_or_same_binding() -> int {
 
   L47:
     load_var _64
+    is_type int
+    pop_jump_if_false L51
+    load_var _64
     store_var x
     jump L49
 
@@ -6092,6 +6173,9 @@ function patterns_new_runtime.test_for_let_or_same_binding() -> int {
   L50:
     load_var total
     return
+
+  L51:
+    unreachable
 }
 
 function patterns_new_runtime.test_for_let_or_six_bindings() -> int {
@@ -6173,6 +6257,9 @@ function patterns_new_runtime.test_for_let_or_six_bindings() -> int {
     jump L12
 
   L11:
+    load_var _2
+    is_type int[]
+    pop_jump_if_false L59
     load_type int
     load_var _2
     call baml.iter.Iterable$for$T[].iter
@@ -6328,6 +6415,9 @@ function patterns_new_runtime.test_for_let_or_six_bindings() -> int {
     jump L35
 
   L34:
+    load_var _3
+    is_type baml.iter.Peekable<...>
+    pop_jump_if_false L59
     load_type int
     load_type void
     load_var _3
@@ -6447,6 +6537,9 @@ function patterns_new_runtime.test_for_let_or_six_bindings() -> int {
 
   L51:
     load_var _64
+    is_type int
+    pop_jump_if_false L59
+    load_var _64
     store_var x
     jump L57
 
@@ -6483,6 +6576,9 @@ function patterns_new_runtime.test_for_let_or_six_bindings() -> int {
   L58:
     load_var total
     return
+
+  L59:
+    unreachable
 }
 
 function patterns_new_runtime.test_for_nested_rest_irrefutable() -> int {
@@ -6561,6 +6657,9 @@ function patterns_new_runtime.test_for_nested_rest_irrefutable() -> int {
     jump L11
 
   L10:
+    load_var _2
+    is_type (int[] | void[])[]
+    pop_jump_if_false L44
     load_type int[] | void[]
     load_var _2
     call baml.iter.Iterable$for$T[].iter
@@ -6704,6 +6803,9 @@ function patterns_new_runtime.test_for_nested_rest_irrefutable() -> int {
     jump L32
 
   L31:
+    load_var _6
+    is_type baml.iter.Peekable<...>
+    pop_jump_if_false L44
     load_type int[] | void[]
     load_type void
     load_var _6
@@ -6783,6 +6885,9 @@ function patterns_new_runtime.test_for_nested_rest_irrefutable() -> int {
   L43:
     load_var total
     return
+
+  L44:
+    unreachable
 }
 
 function patterns_new_runtime.test_for_rest_capture_fresh_cell() -> int {
@@ -6867,6 +6972,9 @@ function patterns_new_runtime.test_for_rest_capture_fresh_cell() -> int {
     jump L11
 
   L10:
+    load_var _6
+    is_type int[][]
+    pop_jump_if_false L44
     load_type int[]
     load_var _6
     call baml.iter.Iterable$for$T[].iter
@@ -7010,6 +7118,9 @@ function patterns_new_runtime.test_for_rest_capture_fresh_cell() -> int {
     jump L32
 
   L31:
+    load_var _7
+    is_type baml.iter.Peekable<...>
+    pop_jump_if_false L44
     load_type int[]
     load_type void
     load_var _7
@@ -7128,6 +7239,9 @@ function patterns_new_runtime.test_for_rest_capture_fresh_cell() -> int {
     load_var _81
     add_int
     return
+
+  L44:
+    unreachable
 }
 
 function patterns_new_runtime.test_for_rest_sums_rows() -> int {
@@ -7207,6 +7321,9 @@ function patterns_new_runtime.test_for_rest_sums_rows() -> int {
     jump L11
 
   L10:
+    load_var _6
+    is_type int[][]
+    pop_jump_if_false L44
     load_type int[]
     load_var _6
     call baml.iter.Iterable$for$T[].iter
@@ -7350,6 +7467,9 @@ function patterns_new_runtime.test_for_rest_sums_rows() -> int {
     jump L32
 
   L31:
+    load_var _7
+    is_type baml.iter.Peekable<...>
+    pop_jump_if_false L44
     load_type int[]
     load_type void
     load_var _7
@@ -7442,6 +7562,9 @@ function patterns_new_runtime.test_for_rest_sums_rows() -> int {
   L43:
     load_var total
     return
+
+  L44:
+    unreachable
 }
 
 function patterns_new_runtime.test_for_rest_wildcard_irrefutable() -> int {
@@ -7520,6 +7643,9 @@ function patterns_new_runtime.test_for_rest_wildcard_irrefutable() -> int {
     jump L11
 
   L10:
+    load_var _6
+    is_type int[][]
+    pop_jump_if_false L44
     load_type int[]
     load_var _6
     call baml.iter.Iterable$for$T[].iter
@@ -7663,6 +7789,9 @@ function patterns_new_runtime.test_for_rest_wildcard_irrefutable() -> int {
     jump L32
 
   L31:
+    load_var _7
+    is_type baml.iter.Peekable<...>
+    pop_jump_if_false L44
     load_type int[]
     load_type void
     load_var _7
@@ -7742,6 +7871,9 @@ function patterns_new_runtime.test_for_rest_wildcard_irrefutable() -> int {
   L43:
     load_var count
     return
+
+  L44:
+    unreachable
 }
 
 function patterns_new_runtime.test_generic_backfills_wrapped() -> int {

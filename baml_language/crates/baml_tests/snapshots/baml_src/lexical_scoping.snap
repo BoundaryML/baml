@@ -324,6 +324,9 @@ function lexical_scoping.for_loop_restores_outer() -> int {
     jump L12
 
   L11:
+    load_var _2
+    is_type int[]
+    pop_jump_if_false L48
     load_type int
     load_var _2
     call baml.iter.Iterable$for$T[].iter
@@ -479,6 +482,9 @@ function lexical_scoping.for_loop_restores_outer() -> int {
     jump L35
 
   L34:
+    load_var _3
+    is_type baml.iter.Peekable<...>
+    pop_jump_if_false L48
     load_type int
     load_type void
     load_var _3
@@ -573,6 +579,9 @@ function lexical_scoping.for_loop_restores_outer() -> int {
   L47:
     load_const 1
     return
+
+  L48:
+    unreachable
 }
 
 function lexical_scoping.initializer_uses_previous() -> int {
@@ -816,6 +825,9 @@ function lexical_scoping.rule2_for_outer_mutation_escapes() -> int {
     jump L12
 
   L11:
+    load_var _2
+    is_type int[]
+    pop_jump_if_false L48
     load_type int
     load_var _2
     call baml.iter.Iterable$for$T[].iter
@@ -971,6 +983,9 @@ function lexical_scoping.rule2_for_outer_mutation_escapes() -> int {
     jump L35
 
   L34:
+    load_var _3
+    is_type baml.iter.Peekable<...>
+    pop_jump_if_false L48
     load_type int
     load_type void
     load_var _3
@@ -1053,6 +1068,9 @@ function lexical_scoping.rule2_for_outer_mutation_escapes() -> int {
   L47:
     load_var x
     return
+
+  L48:
+    unreachable
 }
 
 function lexical_scoping.rule2_pre_shadow_mutation_escapes_post_shadow_does_not() -> int {

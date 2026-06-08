@@ -2049,21 +2049,14 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 then_block,
                 else_block,
             } => {
-                // Optimization: If else_block is unreachable (last arm of exhaustive match),
-                // we know the condition must be true, so skip the comparison entirely.
-                if self.analysis.is_block_unreachable(*else_block, self.body) {
-                    // Don't evaluate condition - just go directly to then_block
-                    self.emit_jump_unless_fallthrough(*then_block);
-                } else {
-                    self.emit_operand_pull(condition);
-                    // PopJumpIfFalse to else_block (pops condition from stack)
-                    // Apply jump threading to resolve through empty blocks
-                    let resolved_else = self.resolve_pending_target(*else_block);
-                    let else_jump = self.emit(Instruction::PopJumpIfFalse(0));
-                    self.pending_jumps.push((else_jump, resolved_else));
-                    // Jump to then_block (may be elided if it's next)
-                    self.emit_jump_unless_fallthrough(*then_block);
-                }
+                self.emit_operand_pull(condition);
+                // PopJumpIfFalse to else_block (pops condition from stack).
+                // Apply jump threading to resolve through empty blocks.
+                let resolved_else = self.resolve_pending_target(*else_block);
+                let else_jump = self.emit(Instruction::PopJumpIfFalse(0));
+                self.pending_jumps.push((else_jump, resolved_else));
+                // Jump to then_block (may be elided if it's next).
+                self.emit_jump_unless_fallthrough(*then_block);
             }
 
             Terminator::Switch {
@@ -3392,4 +3385,110 @@ pub(crate) fn compile_mir_function<'mir>(
         f.span = span;
     }
     f
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::{HashMap, HashSet};
+
+    use baml_compiler2_mir::{
+        BasicBlock, BlockId, Constant, Local, LocalDecl, MirFunctionBody, Operand, Place, Rvalue,
+        Statement, StatementKind, Terminator,
+    };
+    use baml_type::Ty;
+    use bex_vm_types::{Instruction, ObjectPool};
+
+    use crate::{MirCodegenContext, analysis::OptLevel};
+
+    use super::compile_mir_function;
+
+    fn local(ty: Ty) -> LocalDecl {
+        LocalDecl {
+            name: None,
+            ty,
+            span: None,
+            scope_span: None,
+            is_watched: false,
+            is_captured: false,
+        }
+    }
+
+    #[test]
+    fn branch_condition_is_emitted_even_when_else_is_unreachable() {
+        let mut entry = BasicBlock::new(BlockId(0));
+        entry.terminator = Some(Terminator::Branch {
+            condition: Operand::copy_local(Local(1)),
+            then_block: BlockId(1),
+            else_block: BlockId(2),
+        });
+
+        let mut then_block = BasicBlock::new(BlockId(1));
+        then_block.statements.push(Statement {
+            kind: StatementKind::Assign {
+                destination: Place::local(Local(0)),
+                value: Rvalue::Use(Operand::constant(Constant::Int(1))),
+            },
+            span: None,
+        });
+        then_block.terminator = Some(Terminator::Goto { target: BlockId(3) });
+
+        let mut unreachable_else = BasicBlock::new(BlockId(2));
+        unreachable_else.terminator = Some(Terminator::Unreachable);
+
+        let mut return_block = BasicBlock::new(BlockId(3));
+        return_block.terminator = Some(Terminator::Return);
+
+        let body = MirFunctionBody {
+            blocks: vec![entry, then_block, unreachable_else, return_block],
+            entry: BlockId(0),
+            locals: vec![local(Ty::int()), local(Ty::bool())],
+            catch_regions: Vec::new(),
+            viz_nodes: Vec::new(),
+        };
+
+        let globals = HashMap::new();
+        let classes = HashMap::new();
+        let class_object_indices = HashMap::new();
+        let enum_object_indices = HashMap::new();
+        let enum_variants = HashMap::new();
+        let mut objects = ObjectPool::default();
+        let lambda_object_indices = Vec::new();
+        let lambda_names = Vec::new();
+        let capture_types = Vec::new();
+        let spawn_capture_indices = HashSet::new();
+        let line_starts = [0];
+
+        let function = compile_mir_function(
+            &body,
+            1,
+            None,
+            &line_starts,
+            MirCodegenContext {
+                globals: &globals,
+                classes: &classes,
+                class_object_indices: &class_object_indices,
+                enum_object_indices: &enum_object_indices,
+                enum_variants: &enum_variants,
+                objects: &mut objects,
+                lambda_object_indices: &lambda_object_indices,
+                lambda_names: &lambda_names,
+                capture_types: &capture_types,
+                spawn_capture_indices: &spawn_capture_indices,
+            },
+            OptLevel::One,
+        );
+
+        assert!(
+            function
+                .bytecode
+                .instructions
+                .windows(2)
+                .any(|window| matches!(
+                    window,
+                    [Instruction::LoadVar(1), Instruction::PopJumpIfFalse(_)]
+                )),
+            "expected branch bytecode to load the condition before PopJumpIfFalse, got: {:?}",
+            function.bytecode.instructions
+        );
+    }
 }

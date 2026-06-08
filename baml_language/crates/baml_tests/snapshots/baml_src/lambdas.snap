@@ -288,6 +288,9 @@ function lambdas.lambdas_captures_loop_variable_accumulation() -> int {
     jump L12
 
   L11:
+    load_var _4
+    is_type int[]
+    pop_jump_if_false L48
     load_type int
     load_var _4
     call baml.iter.Iterable$for$T[].iter
@@ -443,6 +446,9 @@ function lambdas.lambdas_captures_loop_variable_accumulation() -> int {
     jump L35
 
   L34:
+    load_var _5
+    is_type baml.iter.Peekable<...>
+    pop_jump_if_false L48
     load_type int
     load_type void
     load_var _5
@@ -539,6 +545,9 @@ function lambdas.lambdas_captures_loop_variable_accumulation() -> int {
   L47:
     load_deref ?1
     return
+
+  L48:
+    unreachable
 }
 
 function lambdas.lambdas_captures_multiple_variables() -> int {

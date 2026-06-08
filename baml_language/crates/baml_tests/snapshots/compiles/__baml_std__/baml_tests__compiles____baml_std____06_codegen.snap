@@ -78,72 +78,100 @@ function baml.Array.chain(self: baml.Array<unknown>, other: baml.iter.Iterable<I
     jump L10
 
   L9:
+    load_var _3
+    is_type baml.iter.Peekable<...>
+    pop_jump_if_false L21
+    load_type #0
+    load_type void
     load_var2 5 3
     load_var other
     call baml.iter.Iterator.chain
     jump L20
 
   L10:
+    load_type #0
+    load_type void
     load_var2 5 3
     load_var other
     call baml.iter.Iterator.chain
     jump L20
 
   L11:
+    load_type #0
+    load_type void
     load_var2 5 3
     load_var other
     call baml.iter.Iterator.chain
     jump L20
 
   L12:
+    load_type #0
+    load_type void
     load_var2 5 3
     load_var other
     call baml.iter.Iterator.chain
     jump L20
 
   L13:
+    load_type #0
+    load_type void
     load_var2 5 3
     load_var other
     call baml.iter.Iterator.chain
     jump L20
 
   L14:
+    load_type #0
+    load_type void
     load_var2 5 3
     load_var other
     call baml.iter.Iterator.chain
     jump L20
 
   L15:
+    load_type #0
+    load_type void
     load_var2 5 3
     load_var other
     call baml.iter.Iterator.chain
     jump L20
 
   L16:
+    load_type #0
+    load_type void
     load_var2 5 3
     load_var other
     call baml.iter.Iterator.chain
     jump L20
 
   L17:
+    load_type #0
+    load_type void
     load_var2 5 3
     load_var other
     call baml.iter.Iterator.chain
     jump L20
 
   L18:
+    load_type #0
+    load_type void
     load_var2 5 3
     load_var other
     call baml.iter.Iterator.chain
     jump L20
 
   L19:
+    load_type #0
+    load_type void
     load_var2 5 3
     load_var other
     call baml.iter.Iterator.chain
 
   L20:
     return
+
+  L21:
+    unreachable
 }
 
 function baml.Array.clear(self: baml.Array<unknown>) -> null {
@@ -245,72 +273,100 @@ function baml.Array.filter(self: baml.Array<unknown>, predicate: (unknown) -> bo
     jump L10
 
   L9:
+    load_var _3
+    is_type baml.iter.Peekable<...>
+    pop_jump_if_false L21
+    load_type #0
+    load_type void
     load_var2 5 3
     load_var predicate
     call baml.iter.Iterator.filter
     jump L20
 
   L10:
+    load_type #0
+    load_type void
     load_var2 5 3
     load_var predicate
     call baml.iter.Iterator.filter
     jump L20
 
   L11:
+    load_type #0
+    load_type void
     load_var2 5 3
     load_var predicate
     call baml.iter.Iterator.filter
     jump L20
 
   L12:
+    load_type #0
+    load_type void
     load_var2 5 3
     load_var predicate
     call baml.iter.Iterator.filter
     jump L20
 
   L13:
+    load_type #0
+    load_type void
     load_var2 5 3
     load_var predicate
     call baml.iter.Iterator.filter
     jump L20
 
   L14:
+    load_type #0
+    load_type void
     load_var2 5 3
     load_var predicate
     call baml.iter.Iterator.filter
     jump L20
 
   L15:
+    load_type #0
+    load_type void
     load_var2 5 3
     load_var predicate
     call baml.iter.Iterator.filter
     jump L20
 
   L16:
+    load_type #0
+    load_type void
     load_var2 5 3
     load_var predicate
     call baml.iter.Iterator.filter
     jump L20
 
   L17:
+    load_type #0
+    load_type void
     load_var2 5 3
     load_var predicate
     call baml.iter.Iterator.filter
     jump L20
 
   L18:
+    load_type #0
+    load_type void
     load_var2 5 3
     load_var predicate
     call baml.iter.Iterator.filter
     jump L20
 
   L19:
+    load_type #0
+    load_type void
     load_var2 5 3
     load_var predicate
     call baml.iter.Iterator.filter
 
   L20:
     return
+
+  L21:
+    unreachable
 }
 
 function baml.Array.filter_map(self: baml.Array<unknown>, fn: (unknown) -> unknown | null throws unknown) -> baml.iter.Iterator<Item = unknown, Error = void | unknown> {
@@ -389,72 +445,100 @@ function baml.Array.filter_map(self: baml.Array<unknown>, fn: (unknown) -> unkno
     jump L10
 
   L9:
+    load_var _3
+    is_type baml.iter.Peekable<...>
+    pop_jump_if_false L21
+    load_type #0
+    load_type void
     load_var2 5 6
     load_var2 3 2
     call baml.iter.Iterator.filter_map
     jump L20
 
   L10:
+    load_type #0
+    load_type void
     load_var2 5 6
     load_var2 3 2
     call baml.iter.Iterator.filter_map
     jump L20
 
   L11:
+    load_type #0
+    load_type void
     load_var2 5 6
     load_var2 3 2
     call baml.iter.Iterator.filter_map
     jump L20
 
   L12:
+    load_type #0
+    load_type void
     load_var2 5 6
     load_var2 3 2
     call baml.iter.Iterator.filter_map
     jump L20
 
   L13:
+    load_type #0
+    load_type void
     load_var2 5 6
     load_var2 3 2
     call baml.iter.Iterator.filter_map
     jump L20
 
   L14:
+    load_type #0
+    load_type void
     load_var2 5 6
     load_var2 3 2
     call baml.iter.Iterator.filter_map
     jump L20
 
   L15:
+    load_type #0
+    load_type void
     load_var2 5 6
     load_var2 3 2
     call baml.iter.Iterator.filter_map
     jump L20
 
   L16:
+    load_type #0
+    load_type void
     load_var2 5 6
     load_var2 3 2
     call baml.iter.Iterator.filter_map
     jump L20
 
   L17:
+    load_type #0
+    load_type void
     load_var2 5 6
     load_var2 3 2
     call baml.iter.Iterator.filter_map
     jump L20
 
   L18:
+    load_type #0
+    load_type void
     load_var2 5 6
     load_var2 3 2
     call baml.iter.Iterator.filter_map
     jump L20
 
   L19:
+    load_type #0
+    load_type void
     load_var2 5 6
     load_var2 3 2
     call baml.iter.Iterator.filter_map
 
   L20:
     return
+
+  L21:
+    unreachable
 }
 
 function baml.Array.find(self: baml.Array<unknown>, predicate: (unknown) -> bool throws unknown) -> unknown | null {
@@ -546,6 +630,9 @@ function baml.Array.for_each(self: baml.Array<unknown>, fn: (unknown) -> void th
     jump L11
 
   L10:
+    load_var _3
+    is_type unknown[]
+    pop_jump_if_false L46
     load_type #0
     load_var _3
     call baml.iter.Iterable$for$T[].iter
@@ -694,6 +781,9 @@ function baml.Array.for_each(self: baml.Array<unknown>, fn: (unknown) -> void th
     jump L33
 
   L32:
+    load_var _6
+    is_type baml.iter.Peekable<...>
+    pop_jump_if_false L46
     load_type #0
     load_type void
     load_var _6
@@ -789,6 +879,9 @@ function baml.Array.for_each(self: baml.Array<unknown>, fn: (unknown) -> void th
   L45:
     load_const null
     return
+
+  L46:
+    unreachable
 }
 
 function baml.Array.from_json(j: baml.json.json) -> baml.Array<unknown> {
@@ -935,61 +1028,89 @@ function baml.Array.step_by(self: baml.Array<unknown>, n: int) -> baml.iter.Iter
     jump L10
 
   L9:
+    load_var _3
+    is_type baml.iter.Peekable<...>
+    pop_jump_if_false L21
+    load_type #0
+    load_type void
     load_var2 3 2
     call baml.iter.Iterator.step_by
     jump L20
 
   L10:
+    load_type #0
+    load_type void
     load_var2 3 2
     call baml.iter.Iterator.step_by
     jump L20
 
   L11:
+    load_type #0
+    load_type void
     load_var2 3 2
     call baml.iter.Iterator.step_by
     jump L20
 
   L12:
+    load_type #0
+    load_type void
     load_var2 3 2
     call baml.iter.Iterator.step_by
     jump L20
 
   L13:
+    load_type #0
+    load_type void
     load_var2 3 2
     call baml.iter.Iterator.step_by
     jump L20
 
   L14:
+    load_type #0
+    load_type void
     load_var2 3 2
     call baml.iter.Iterator.step_by
     jump L20
 
   L15:
+    load_type #0
+    load_type void
     load_var2 3 2
     call baml.iter.Iterator.step_by
     jump L20
 
   L16:
+    load_type #0
+    load_type void
     load_var2 3 2
     call baml.iter.Iterator.step_by
     jump L20
 
   L17:
+    load_type #0
+    load_type void
     load_var2 3 2
     call baml.iter.Iterator.step_by
     jump L20
 
   L18:
+    load_type #0
+    load_type void
     load_var2 3 2
     call baml.iter.Iterator.step_by
     jump L20
 
   L19:
+    load_type #0
+    load_type void
     load_var2 3 2
     call baml.iter.Iterator.step_by
 
   L20:
     return
+
+  L21:
+    unreachable
 }
 
 function baml.Array.to_json(self: baml.Array<unknown>) -> baml.json.json {
@@ -2063,7 +2184,9 @@ function baml.future.Future.cancel(self: future<unknown, unknown>) -> bool {
 }
 
 function baml.future.Future.from_json(j: baml.json.json) -> future<unknown, unknown> {
-    alloc_instance Future
+    load_type #0
+    load_type #1
+    alloc_instance<2> Future
     return
 }
 
@@ -2643,6 +2766,9 @@ function baml.iter.Chain$stream.Iterator.next(self: baml.iter.Chain$stream<unkno
     jump L10
 
   L9:
+    load_var _5
+    is_type baml.iter.Peekable<...>
+    pop_jump_if_false L45
     load_type #0
     load_type #1
     load_var _5
@@ -2797,6 +2923,9 @@ function baml.iter.Chain$stream.Iterator.next(self: baml.iter.Chain$stream<unkno
     jump L34
 
   L33:
+    load_var _31
+    is_type baml.iter.Peekable<...>
+    pop_jump_if_false L45
     load_type #0
     load_type #2
     load_var _31
@@ -2864,6 +2993,9 @@ function baml.iter.Chain$stream.Iterator.next(self: baml.iter.Chain$stream<unkno
 
   L44:
     return
+
+  L45:
+    unreachable
 }
 
 function baml.iter.Chain.Iterable.iter(self: baml.iter.Chain<unknown, unknown, unknown>) -> baml.iter.Iterator<Item = unknown, Error = unknown | unknown> {
@@ -2938,6 +3070,9 @@ function baml.iter.Chain.Iterator.next(self: baml.iter.Chain<unknown, unknown, u
     jump L10
 
   L9:
+    load_var _5
+    is_type baml.iter.Peekable<...>
+    pop_jump_if_false L45
     load_type #0
     load_type #1
     load_var _5
@@ -3092,6 +3227,9 @@ function baml.iter.Chain.Iterator.next(self: baml.iter.Chain<unknown, unknown, u
     jump L34
 
   L33:
+    load_var _31
+    is_type baml.iter.Peekable<...>
+    pop_jump_if_false L45
     load_type #0
     load_type #2
     load_var _31
@@ -3159,6 +3297,9 @@ function baml.iter.Chain.Iterator.next(self: baml.iter.Chain<unknown, unknown, u
 
   L44:
     return
+
+  L45:
+    unreachable
 }
 
 function baml.iter.Chain.from_json(j: baml.json.json) -> baml.iter.Chain<unknown, unknown, unknown> {
@@ -3319,6 +3460,9 @@ function baml.iter.Chain.to_json(self: baml.iter.Chain<unknown, unknown, unknown
     jump L21
 
   L20:
+    load_var _3
+    is_type baml.iter.Peekable<...>
+    pop_jump_if_false L86
     load_type #0
     load_type #1
     load_var _3
@@ -3602,6 +3746,9 @@ function baml.iter.Chain.to_json(self: baml.iter.Chain<unknown, unknown, unknown
     jump L64
 
   L63:
+    load_var _52
+    is_type baml.iter.Peekable<...>
+    pop_jump_if_false L86
     load_type #0
     load_type #2
     load_var _52
@@ -3768,6 +3915,9 @@ function baml.iter.Chain.to_json(self: baml.iter.Chain<unknown, unknown, unknown
     load_const "first_done"
     alloc_map 3
     return
+
+  L86:
+    unreachable
 }
 
 function baml.iter.Done.from_json(j: baml.json.json) -> baml.iter.Done {
@@ -3858,6 +4008,9 @@ function baml.iter.Filter$stream.Iterator.next(self: baml.iter.Filter$stream<unk
     jump L13
 
   L12:
+    load_var _3
+    is_type baml.iter.Peekable<...>
+    pop_jump_if_false L27
     load_type #0
     load_type #1
     load_var _3
@@ -3955,6 +4108,9 @@ function baml.iter.Filter$stream.Iterator.next(self: baml.iter.Filter$stream<unk
 
   L26:
     return
+
+  L27:
+    unreachable
 }
 
 function baml.iter.Filter.Iterable.iter(self: baml.iter.Filter<unknown, unknown, unknown>) -> baml.iter.Iterator<Item = unknown, Error = unknown | unknown> {
@@ -4035,6 +4191,9 @@ function baml.iter.Filter.Iterator.next(self: baml.iter.Filter<unknown, unknown,
     jump L13
 
   L12:
+    load_var _3
+    is_type baml.iter.Peekable<...>
+    pop_jump_if_false L27
     load_type #0
     load_type #1
     load_var _3
@@ -4132,6 +4291,9 @@ function baml.iter.Filter.Iterator.next(self: baml.iter.Filter<unknown, unknown,
 
   L26:
     return
+
+  L27:
+    unreachable
 }
 
 function baml.iter.Filter.from_json(j: baml.json.json) -> baml.iter.Filter<unknown, unknown, unknown> {
@@ -4230,6 +4392,9 @@ function baml.iter.FilterMap$stream.Iterator.next(self: baml.iter.FilterMap$stre
     jump L13
 
   L12:
+    load_var _3
+    is_type baml.iter.Peekable<...>
+    pop_jump_if_false L28
     load_type #0
     load_type #2
     load_var _3
@@ -4332,6 +4497,9 @@ function baml.iter.FilterMap$stream.Iterator.next(self: baml.iter.FilterMap$stre
 
   L27:
     return
+
+  L28:
+    unreachable
 }
 
 function baml.iter.FilterMap.Iterable.iter(self: baml.iter.FilterMap<unknown, unknown, unknown, unknown>) -> baml.iter.Iterator<Item = unknown, Error = unknown | unknown> {
@@ -4412,6 +4580,9 @@ function baml.iter.FilterMap.Iterator.next(self: baml.iter.FilterMap<unknown, un
     jump L13
 
   L12:
+    load_var _3
+    is_type baml.iter.Peekable<...>
+    pop_jump_if_false L28
     load_type #0
     load_type #2
     load_var _3
@@ -4514,6 +4685,9 @@ function baml.iter.FilterMap.Iterator.next(self: baml.iter.FilterMap<unknown, un
 
   L27:
     return
+
+  L28:
+    unreachable
 }
 
 function baml.iter.FilterMap.from_json(j: baml.json.json) -> baml.iter.FilterMap<unknown, unknown, unknown, unknown> {
@@ -4812,6 +4986,9 @@ function baml.iter.FlatMap$stream.Iterator.next(self: baml.iter.FlatMap$stream<u
     jump L46
 
   L45:
+    load_var _64
+    is_type baml.iter.Peekable<...>
+    pop_jump_if_false L107
     load_type #0
     load_type #2
     load_var _64
@@ -4965,7 +5142,10 @@ function baml.iter.FlatMap$stream.Iterator.next(self: baml.iter.FlatMap$stream<u
     jump L69
 
   L68:
-    load_type #0
+    load_var _91
+    is_type unknown[]
+    pop_jump_if_false L107
+    load_type #1
     load_var _91
     call baml.iter.Iterable$for$T[].iter
     store_var it
@@ -5119,6 +5299,9 @@ function baml.iter.FlatMap$stream.Iterator.next(self: baml.iter.FlatMap$stream<u
     jump L93
 
   L92:
+    load_var cur
+    is_type baml.iter.Peekable<...>
+    pop_jump_if_false L107
     load_type #1
     load_type #4
     load_var cur
@@ -5212,6 +5395,9 @@ function baml.iter.FlatMap$stream.Iterator.next(self: baml.iter.FlatMap$stream<u
     alloc_instance baml.iter.Done
     store_field .2
     jump L0
+
+  L107:
+    unreachable
 }
 
 function baml.iter.FlatMap.Iterable.iter(self: baml.iter.FlatMap<unknown, unknown, unknown, unknown, unknown>) -> baml.iter.Iterator<Item = unknown, Error = unknown | unknown | unknown> {
@@ -5492,6 +5678,9 @@ function baml.iter.FlatMap.Iterator.next(self: baml.iter.FlatMap<unknown, unknow
     jump L46
 
   L45:
+    load_var _64
+    is_type baml.iter.Peekable<...>
+    pop_jump_if_false L107
     load_type #0
     load_type #2
     load_var _64
@@ -5645,7 +5834,10 @@ function baml.iter.FlatMap.Iterator.next(self: baml.iter.FlatMap<unknown, unknow
     jump L69
 
   L68:
-    load_type #0
+    load_var _91
+    is_type unknown[]
+    pop_jump_if_false L107
+    load_type #1
     load_var _91
     call baml.iter.Iterable$for$T[].iter
     store_var it
@@ -5799,6 +5991,9 @@ function baml.iter.FlatMap.Iterator.next(self: baml.iter.FlatMap<unknown, unknow
     jump L93
 
   L92:
+    load_var cur
+    is_type baml.iter.Peekable<...>
+    pop_jump_if_false L107
     load_type #1
     load_type #4
     load_var cur
@@ -5892,6 +6087,9 @@ function baml.iter.FlatMap.Iterator.next(self: baml.iter.FlatMap<unknown, unknow
     alloc_instance baml.iter.Done
     store_field .2
     jump L0
+
+  L107:
+    unreachable
 }
 
 function baml.iter.FlatMap.from_json(j: baml.json.json) -> baml.iter.FlatMap<unknown, unknown, unknown, unknown, unknown> {
@@ -6190,6 +6388,9 @@ function baml.iter.Flatten$stream.Iterator.next(self: baml.iter.Flatten$stream<u
     jump L46
 
   L45:
+    load_var _64
+    is_type baml.iter.Peekable<...>
+    pop_jump_if_false L107
     load_type #0
     load_type #2
     load_var _64
@@ -6340,7 +6541,10 @@ function baml.iter.Flatten$stream.Iterator.next(self: baml.iter.Flatten$stream<u
     jump L69
 
   L68:
-    load_type void
+    load_var x
+    is_type unknown[]
+    pop_jump_if_false L107
+    load_type #1
     load_var x
     call baml.iter.Iterable$for$T[].iter
     store_var it
@@ -6494,6 +6698,9 @@ function baml.iter.Flatten$stream.Iterator.next(self: baml.iter.Flatten$stream<u
     jump L93
 
   L92:
+    load_var cur
+    is_type baml.iter.Peekable<...>
+    pop_jump_if_false L107
     load_type #1
     load_type #3
     load_var cur
@@ -6587,6 +6794,9 @@ function baml.iter.Flatten$stream.Iterator.next(self: baml.iter.Flatten$stream<u
     alloc_instance baml.iter.Done
     store_field .1
     jump L0
+
+  L107:
+    unreachable
 }
 
 function baml.iter.Flatten.Iterable.iter(self: baml.iter.Flatten<unknown, unknown, unknown, unknown>) -> baml.iter.Iterator<Item = unknown, Error = unknown | unknown> {
@@ -6867,6 +7077,9 @@ function baml.iter.Flatten.Iterator.next(self: baml.iter.Flatten<unknown, unknow
     jump L46
 
   L45:
+    load_var _64
+    is_type baml.iter.Peekable<...>
+    pop_jump_if_false L107
     load_type #0
     load_type #2
     load_var _64
@@ -7017,7 +7230,10 @@ function baml.iter.Flatten.Iterator.next(self: baml.iter.Flatten<unknown, unknow
     jump L69
 
   L68:
-    load_type void
+    load_var x
+    is_type unknown[]
+    pop_jump_if_false L107
+    load_type #1
     load_var x
     call baml.iter.Iterable$for$T[].iter
     store_var it
@@ -7171,6 +7387,9 @@ function baml.iter.Flatten.Iterator.next(self: baml.iter.Flatten<unknown, unknow
     jump L93
 
   L92:
+    load_var cur
+    is_type baml.iter.Peekable<...>
+    pop_jump_if_false L107
     load_type #1
     load_type #3
     load_var cur
@@ -7264,6 +7483,9 @@ function baml.iter.Flatten.Iterator.next(self: baml.iter.Flatten<unknown, unknow
     alloc_instance baml.iter.Done
     store_field .1
     jump L0
+
+  L107:
+    unreachable
 }
 
 function baml.iter.Flatten.from_json(j: baml.json.json) -> baml.iter.Flatten<unknown, unknown, unknown, unknown> {
@@ -7418,6 +7640,9 @@ function baml.iter.Flatten.to_json(self: baml.iter.Flatten<unknown, unknown, unk
     jump L21
 
   L20:
+    load_var _3
+    is_type baml.iter.Peekable<...>
+    pop_jump_if_false L88
     load_type #0
     load_type #2
     load_var _3
@@ -7708,6 +7933,9 @@ function baml.iter.Flatten.to_json(self: baml.iter.Flatten<unknown, unknown, unk
 
   L64:
     load_var _53
+    is_type baml.iter.Done
+    pop_jump_if_false L88
+    load_var _53
     call baml.iter.Done.to_json
     store_var _51
     jump L87
@@ -7873,6 +8101,9 @@ function baml.iter.Flatten.to_json(self: baml.iter.Flatten<unknown, unknown, unk
     load_const "inner"
     alloc_map 2
     return
+
+  L88:
+    unreachable
 }
 
 function baml.iter.Iterable$for$T[].iter(self: unknown[]) -> baml.iter.Iterator<Item = unknown, Error = void> {
@@ -7884,7 +8115,7 @@ function baml.iter.Iterable$for$T[].iter(self: unknown[]) -> baml.iter.Iterator<
 
 function baml.iter.Iterator.chain(self: baml.iter.Iterator, other: baml.iter.Iterable<Item = void, Error = unknown>) -> baml.iter.Iterator<Item = void, Error = void | unknown> {
     load_var other
-    is_type baml.iter.Flatten
+    is_type baml.iter.Flatten<...>
     pop_jump_if_false L0
     jump L21
 
@@ -7896,7 +8127,7 @@ function baml.iter.Iterator.chain(self: baml.iter.Iterator, other: baml.iter.Ite
 
   L1:
     load_var other
-    is_type baml.iter.ArrayIterator
+    is_type baml.iter.ArrayIterator<...>
     pop_jump_if_false L2
     jump L19
 
@@ -7908,37 +8139,37 @@ function baml.iter.Iterator.chain(self: baml.iter.Iterator, other: baml.iter.Ite
 
   L3:
     load_var other
-    is_type baml.iter.Chain
+    is_type baml.iter.Chain<...>
     pop_jump_if_false L4
     jump L17
 
   L4:
     load_var other
-    is_type baml.iter.Repeat
+    is_type baml.iter.Repeat<...>
     pop_jump_if_false L5
     jump L16
 
   L5:
     load_var other
-    is_type baml.iter.Map
+    is_type baml.iter.Map<...>
     pop_jump_if_false L6
     jump L15
 
   L6:
     load_var other
-    is_type baml.iter.Filter
+    is_type baml.iter.Filter<...>
     pop_jump_if_false L7
     jump L14
 
   L7:
     load_var other
-    is_type baml.iter.FilterMap
+    is_type baml.iter.FilterMap<...>
     pop_jump_if_false L8
     jump L13
 
   L8:
     load_var other
-    is_type baml.iter.FlatMap
+    is_type baml.iter.FlatMap<...>
     pop_jump_if_false L9
     jump L12
 
@@ -7949,16 +8180,20 @@ function baml.iter.Iterator.chain(self: baml.iter.Iterator, other: baml.iter.Ite
     jump L11
 
   L10:
-    load_type void
+    load_var other
+    is_type unknown[]
+    pop_jump_if_false L23
+    load_type #0
     load_var other
     call baml.iter.Iterable$for$T[].iter
     store_var _3
     jump L22
 
   L11:
+    load_type #0
+    load_type #2
     load_var other
-    make_bound_method baml.iter.Peekable.Iterable.iter
-    call_indirect
+    call baml.iter.Peekable.Iterable.iter
     store_var _3
     jump L22
 
@@ -7991,9 +8226,9 @@ function baml.iter.Iterator.chain(self: baml.iter.Iterator, other: baml.iter.Ite
     jump L22
 
   L16:
+    load_type #0
     load_var other
-    make_bound_method baml.iter.Repeat.Iterable.iter
-    call_indirect
+    call baml.iter.Repeat.Iterable.iter
     store_var _3
     jump L22
 
@@ -8005,16 +8240,17 @@ function baml.iter.Iterator.chain(self: baml.iter.Iterator, other: baml.iter.Ite
     jump L22
 
   L18:
+    load_type #0
+    load_type #2
     load_var other
-    make_bound_method baml.iter.StepBy.Iterable.iter
-    call_indirect
+    call baml.iter.StepBy.Iterable.iter
     store_var _3
     jump L22
 
   L19:
+    load_type #0
     load_var other
-    make_bound_method baml.iter.ArrayIterator.Iterable.iter
-    call_indirect
+    call baml.iter.ArrayIterator.Iterable.iter
     store_var _3
     jump L22
 
@@ -8033,11 +8269,14 @@ function baml.iter.Iterator.chain(self: baml.iter.Iterator, other: baml.iter.Ite
   L22:
     load_var2 1 3
     load_const false
-    load_type unknown
-    load_type unknown
     load_type #0
+    load_type #1
+    load_type #2
     init_instance<3> baml.iter.Chain .first, .other, .first_done
     return
+
+  L23:
+    unreachable
 }
 
 function baml.iter.Iterator.collect(self: baml.iter.Iterator) -> void[] {
@@ -8048,7 +8287,7 @@ function baml.iter.Iterator.collect(self: baml.iter.Iterator) -> void[] {
     load_const true
     pop_jump_if_false L23
     load_var self
-    is_type baml.iter.Flatten
+    is_type baml.iter.Flatten<...>
     pop_jump_if_false L1
     jump L20
 
@@ -8060,56 +8299,60 @@ function baml.iter.Iterator.collect(self: baml.iter.Iterator) -> void[] {
 
   L2:
     load_var self
-    is_type baml.iter.ArrayIterator
+    is_type baml.iter.ArrayIterator<...>
     pop_jump_if_false L3
     jump L18
 
   L3:
     load_var self
-    is_type baml.iter.StepBy
+    is_type baml.iter.StepBy<...>
     pop_jump_if_false L4
     jump L17
 
   L4:
     load_var self
-    is_type baml.iter.Chain
+    is_type baml.iter.Chain<...>
     pop_jump_if_false L5
     jump L16
 
   L5:
     load_var self
-    is_type baml.iter.Repeat
+    is_type baml.iter.Repeat<...>
     pop_jump_if_false L6
     jump L15
 
   L6:
     load_var self
-    is_type baml.iter.Map
+    is_type baml.iter.Map<...>
     pop_jump_if_false L7
     jump L14
 
   L7:
     load_var self
-    is_type baml.iter.Filter
+    is_type baml.iter.Filter<...>
     pop_jump_if_false L8
     jump L13
 
   L8:
     load_var self
-    is_type baml.iter.FilterMap
+    is_type baml.iter.FilterMap<...>
     pop_jump_if_false L9
     jump L12
 
   L9:
     load_var self
-    is_type baml.iter.FlatMap
+    is_type baml.iter.FlatMap<...>
     pop_jump_if_false L10
     jump L11
 
   L10:
     load_var self
-    make_bound_method baml.iter.Peekable.Iterator.next
-    call_indirect
+    is_type baml.iter.Peekable<...>
+    pop_jump_if_false L24
+    load_type #0
+    load_type #1
+    load_var self
+    call baml.iter.Peekable.Iterator.next
     store_var _4
     jump L21
 
@@ -8142,9 +8385,9 @@ function baml.iter.Iterator.collect(self: baml.iter.Iterator) -> void[] {
     jump L21
 
   L15:
+    load_type #0
     load_var self
-    make_bound_method baml.iter.Repeat.Iterator.next
-    call_indirect
+    call baml.iter.Repeat.Iterator.next
     store_var _4
     jump L21
 
@@ -8156,16 +8399,17 @@ function baml.iter.Iterator.collect(self: baml.iter.Iterator) -> void[] {
     jump L21
 
   L17:
+    load_type #0
+    load_type #1
     load_var self
-    make_bound_method baml.iter.StepBy.Iterator.next
-    call_indirect
+    call baml.iter.StepBy.Iterator.next
     store_var _4
     jump L21
 
   L18:
+    load_type #0
     load_var self
-    make_bound_method baml.iter.ArrayIterator.Iterator.next
-    call_indirect
+    call baml.iter.ArrayIterator.Iterator.next
     store_var _4
     jump L21
 
@@ -8196,6 +8440,9 @@ function baml.iter.Iterator.collect(self: baml.iter.Iterator) -> void[] {
   L23:
     load_var r
     return
+
+  L24:
+    unreachable
 }
 
 function baml.iter.Iterator.count(self: baml.iter.Iterator) -> int {
@@ -8206,7 +8453,7 @@ function baml.iter.Iterator.count(self: baml.iter.Iterator) -> int {
     load_const true
     pop_jump_if_false L23
     load_var self
-    is_type baml.iter.Flatten
+    is_type baml.iter.Flatten<...>
     pop_jump_if_false L1
     jump L20
 
@@ -8218,56 +8465,60 @@ function baml.iter.Iterator.count(self: baml.iter.Iterator) -> int {
 
   L2:
     load_var self
-    is_type baml.iter.ArrayIterator
+    is_type baml.iter.ArrayIterator<...>
     pop_jump_if_false L3
     jump L18
 
   L3:
     load_var self
-    is_type baml.iter.StepBy
+    is_type baml.iter.StepBy<...>
     pop_jump_if_false L4
     jump L17
 
   L4:
     load_var self
-    is_type baml.iter.Chain
+    is_type baml.iter.Chain<...>
     pop_jump_if_false L5
     jump L16
 
   L5:
     load_var self
-    is_type baml.iter.Repeat
+    is_type baml.iter.Repeat<...>
     pop_jump_if_false L6
     jump L15
 
   L6:
     load_var self
-    is_type baml.iter.Map
+    is_type baml.iter.Map<...>
     pop_jump_if_false L7
     jump L14
 
   L7:
     load_var self
-    is_type baml.iter.Filter
+    is_type baml.iter.Filter<...>
     pop_jump_if_false L8
     jump L13
 
   L8:
     load_var self
-    is_type baml.iter.FilterMap
+    is_type baml.iter.FilterMap<...>
     pop_jump_if_false L9
     jump L12
 
   L9:
     load_var self
-    is_type baml.iter.FlatMap
+    is_type baml.iter.FlatMap<...>
     pop_jump_if_false L10
     jump L11
 
   L10:
     load_var self
-    make_bound_method baml.iter.Peekable.Iterator.next
-    call_indirect
+    is_type baml.iter.Peekable<...>
+    pop_jump_if_false L24
+    load_type #0
+    load_type #1
+    load_var self
+    call baml.iter.Peekable.Iterator.next
     jump L21
 
   L11:
@@ -8295,9 +8546,9 @@ function baml.iter.Iterator.count(self: baml.iter.Iterator) -> int {
     jump L21
 
   L15:
+    load_type #0
     load_var self
-    make_bound_method baml.iter.Repeat.Iterator.next
-    call_indirect
+    call baml.iter.Repeat.Iterator.next
     jump L21
 
   L16:
@@ -8307,15 +8558,16 @@ function baml.iter.Iterator.count(self: baml.iter.Iterator) -> int {
     jump L21
 
   L17:
+    load_type #0
+    load_type #1
     load_var self
-    make_bound_method baml.iter.StepBy.Iterator.next
-    call_indirect
+    call baml.iter.StepBy.Iterator.next
     jump L21
 
   L18:
+    load_type #0
     load_var self
-    make_bound_method baml.iter.ArrayIterator.Iterator.next
-    call_indirect
+    call baml.iter.ArrayIterator.Iterator.next
     jump L21
 
   L19:
@@ -8343,6 +8595,9 @@ function baml.iter.Iterator.count(self: baml.iter.Iterator) -> int {
   L23:
     load_var n
     return
+
+  L24:
+    unreachable
 }
 
 function baml.iter.Iterator.every(self: baml.iter.Iterator, predicate: (void) -> bool throws unknown) -> bool {
@@ -8350,7 +8605,7 @@ function baml.iter.Iterator.every(self: baml.iter.Iterator, predicate: (void) ->
     load_const true
     pop_jump_if_false L23
     load_var self
-    is_type baml.iter.Flatten
+    is_type baml.iter.Flatten<...>
     pop_jump_if_false L1
     jump L20
 
@@ -8362,56 +8617,60 @@ function baml.iter.Iterator.every(self: baml.iter.Iterator, predicate: (void) ->
 
   L2:
     load_var self
-    is_type baml.iter.ArrayIterator
+    is_type baml.iter.ArrayIterator<...>
     pop_jump_if_false L3
     jump L18
 
   L3:
     load_var self
-    is_type baml.iter.StepBy
+    is_type baml.iter.StepBy<...>
     pop_jump_if_false L4
     jump L17
 
   L4:
     load_var self
-    is_type baml.iter.Chain
+    is_type baml.iter.Chain<...>
     pop_jump_if_false L5
     jump L16
 
   L5:
     load_var self
-    is_type baml.iter.Repeat
+    is_type baml.iter.Repeat<...>
     pop_jump_if_false L6
     jump L15
 
   L6:
     load_var self
-    is_type baml.iter.Map
+    is_type baml.iter.Map<...>
     pop_jump_if_false L7
     jump L14
 
   L7:
     load_var self
-    is_type baml.iter.Filter
+    is_type baml.iter.Filter<...>
     pop_jump_if_false L8
     jump L13
 
   L8:
     load_var self
-    is_type baml.iter.FilterMap
+    is_type baml.iter.FilterMap<...>
     pop_jump_if_false L9
     jump L12
 
   L9:
     load_var self
-    is_type baml.iter.FlatMap
+    is_type baml.iter.FlatMap<...>
     pop_jump_if_false L10
     jump L11
 
   L10:
     load_var self
-    make_bound_method baml.iter.Peekable.Iterator.next
-    call_indirect
+    is_type baml.iter.Peekable<...>
+    pop_jump_if_false L25
+    load_type #0
+    load_type #1
+    load_var self
+    call baml.iter.Peekable.Iterator.next
     store_var _3
     jump L21
 
@@ -8444,9 +8703,9 @@ function baml.iter.Iterator.every(self: baml.iter.Iterator, predicate: (void) ->
     jump L21
 
   L15:
+    load_type #0
     load_var self
-    make_bound_method baml.iter.Repeat.Iterator.next
-    call_indirect
+    call baml.iter.Repeat.Iterator.next
     store_var _3
     jump L21
 
@@ -8458,16 +8717,17 @@ function baml.iter.Iterator.every(self: baml.iter.Iterator, predicate: (void) ->
     jump L21
 
   L17:
+    load_type #0
+    load_type #1
     load_var self
-    make_bound_method baml.iter.StepBy.Iterator.next
-    call_indirect
+    call baml.iter.StepBy.Iterator.next
     store_var _3
     jump L21
 
   L18:
+    load_type #0
     load_var self
-    make_bound_method baml.iter.ArrayIterator.Iterator.next
-    call_indirect
+    call baml.iter.ArrayIterator.Iterator.next
     store_var _3
     jump L21
 
@@ -8502,23 +8762,26 @@ function baml.iter.Iterator.every(self: baml.iter.Iterator, predicate: (void) ->
 
   L24:
     return
+
+  L25:
+    unreachable
 }
 
 function baml.iter.Iterator.filter(self: baml.iter.Iterator, predicate: (void) -> bool throws unknown) -> baml.iter.Iterator<Item = void, Error = void | unknown> {
     load_var2 1 2
-    load_type unknown
-    load_type unknown
     load_type #0
+    load_type #1
+    load_type #2
     init_instance<3> baml.iter.Filter .source, .predicate
     return
 }
 
 function baml.iter.Iterator.filter_map(self: baml.iter.Iterator, fn: (void) -> unknown | null throws unknown) -> baml.iter.Iterator<Item = unknown, Error = void | unknown> {
     load_var2 1 2
-    load_type unknown
     load_type #0
-    load_type unknown
+    load_type #2
     load_type #1
+    load_type #3
     init_instance<4> baml.iter.FilterMap .source, .func
     return
 }
@@ -8528,7 +8791,7 @@ function baml.iter.Iterator.find(self: baml.iter.Iterator, predicate: (void) -> 
     load_const true
     pop_jump_if_false L23
     load_var self
-    is_type baml.iter.Flatten
+    is_type baml.iter.Flatten<...>
     pop_jump_if_false L1
     jump L20
 
@@ -8540,56 +8803,60 @@ function baml.iter.Iterator.find(self: baml.iter.Iterator, predicate: (void) -> 
 
   L2:
     load_var self
-    is_type baml.iter.ArrayIterator
+    is_type baml.iter.ArrayIterator<...>
     pop_jump_if_false L3
     jump L18
 
   L3:
     load_var self
-    is_type baml.iter.StepBy
+    is_type baml.iter.StepBy<...>
     pop_jump_if_false L4
     jump L17
 
   L4:
     load_var self
-    is_type baml.iter.Chain
+    is_type baml.iter.Chain<...>
     pop_jump_if_false L5
     jump L16
 
   L5:
     load_var self
-    is_type baml.iter.Repeat
+    is_type baml.iter.Repeat<...>
     pop_jump_if_false L6
     jump L15
 
   L6:
     load_var self
-    is_type baml.iter.Map
+    is_type baml.iter.Map<...>
     pop_jump_if_false L7
     jump L14
 
   L7:
     load_var self
-    is_type baml.iter.Filter
+    is_type baml.iter.Filter<...>
     pop_jump_if_false L8
     jump L13
 
   L8:
     load_var self
-    is_type baml.iter.FilterMap
+    is_type baml.iter.FilterMap<...>
     pop_jump_if_false L9
     jump L12
 
   L9:
     load_var self
-    is_type baml.iter.FlatMap
+    is_type baml.iter.FlatMap<...>
     pop_jump_if_false L10
     jump L11
 
   L10:
     load_var self
-    make_bound_method baml.iter.Peekable.Iterator.next
-    call_indirect
+    is_type baml.iter.Peekable<...>
+    pop_jump_if_false L25
+    load_type #0
+    load_type #1
+    load_var self
+    call baml.iter.Peekable.Iterator.next
     store_var _3
     jump L21
 
@@ -8622,9 +8889,9 @@ function baml.iter.Iterator.find(self: baml.iter.Iterator, predicate: (void) -> 
     jump L21
 
   L15:
+    load_type #0
     load_var self
-    make_bound_method baml.iter.Repeat.Iterator.next
-    call_indirect
+    call baml.iter.Repeat.Iterator.next
     store_var _3
     jump L21
 
@@ -8636,16 +8903,17 @@ function baml.iter.Iterator.find(self: baml.iter.Iterator, predicate: (void) -> 
     jump L21
 
   L17:
+    load_type #0
+    load_type #1
     load_var self
-    make_bound_method baml.iter.StepBy.Iterator.next
-    call_indirect
+    call baml.iter.StepBy.Iterator.next
     store_var _3
     jump L21
 
   L18:
+    load_type #0
     load_var self
-    make_bound_method baml.iter.ArrayIterator.Iterator.next
-    call_indirect
+    call baml.iter.ArrayIterator.Iterator.next
     store_var _3
     jump L21
 
@@ -8681,16 +8949,19 @@ function baml.iter.Iterator.find(self: baml.iter.Iterator, predicate: (void) -> 
 
   L24:
     return
+
+  L25:
+    unreachable
 }
 
 function baml.iter.Iterator.flat_map(self: baml.iter.Iterator, fn: (void) -> baml.iter.Iterable<Item = unknown, Error = unknown> throws unknown) -> baml.iter.Iterator<Item = unknown, Error = void | unknown | unknown> {
     load_var2 1 2
     alloc_instance baml.iter.Done
-    load_type unknown
     load_type #0
-    load_type unknown
-    load_type #1
     load_type #2
+    load_type #1
+    load_type #3
+    load_type #4
     init_instance<5> baml.iter.FlatMap .source, .func, .inner
     return
 }
@@ -8700,7 +8971,7 @@ function baml.iter.Iterator.for_each(self: baml.iter.Iterator, fn: (void) -> voi
     load_const true
     pop_jump_if_false L23
     load_var self
-    is_type baml.iter.Flatten
+    is_type baml.iter.Flatten<...>
     pop_jump_if_false L1
     jump L20
 
@@ -8712,56 +8983,60 @@ function baml.iter.Iterator.for_each(self: baml.iter.Iterator, fn: (void) -> voi
 
   L2:
     load_var self
-    is_type baml.iter.ArrayIterator
+    is_type baml.iter.ArrayIterator<...>
     pop_jump_if_false L3
     jump L18
 
   L3:
     load_var self
-    is_type baml.iter.StepBy
+    is_type baml.iter.StepBy<...>
     pop_jump_if_false L4
     jump L17
 
   L4:
     load_var self
-    is_type baml.iter.Chain
+    is_type baml.iter.Chain<...>
     pop_jump_if_false L5
     jump L16
 
   L5:
     load_var self
-    is_type baml.iter.Repeat
+    is_type baml.iter.Repeat<...>
     pop_jump_if_false L6
     jump L15
 
   L6:
     load_var self
-    is_type baml.iter.Map
+    is_type baml.iter.Map<...>
     pop_jump_if_false L7
     jump L14
 
   L7:
     load_var self
-    is_type baml.iter.Filter
+    is_type baml.iter.Filter<...>
     pop_jump_if_false L8
     jump L13
 
   L8:
     load_var self
-    is_type baml.iter.FilterMap
+    is_type baml.iter.FilterMap<...>
     pop_jump_if_false L9
     jump L12
 
   L9:
     load_var self
-    is_type baml.iter.FlatMap
+    is_type baml.iter.FlatMap<...>
     pop_jump_if_false L10
     jump L11
 
   L10:
     load_var self
-    make_bound_method baml.iter.Peekable.Iterator.next
-    call_indirect
+    is_type baml.iter.Peekable<...>
+    pop_jump_if_false L24
+    load_type #0
+    load_type #1
+    load_var self
+    call baml.iter.Peekable.Iterator.next
     store_var _3
     jump L21
 
@@ -8794,9 +9069,9 @@ function baml.iter.Iterator.for_each(self: baml.iter.Iterator, fn: (void) -> voi
     jump L21
 
   L15:
+    load_type #0
     load_var self
-    make_bound_method baml.iter.Repeat.Iterator.next
-    call_indirect
+    call baml.iter.Repeat.Iterator.next
     store_var _3
     jump L21
 
@@ -8808,16 +9083,17 @@ function baml.iter.Iterator.for_each(self: baml.iter.Iterator, fn: (void) -> voi
     jump L21
 
   L17:
+    load_type #0
+    load_type #1
     load_var self
-    make_bound_method baml.iter.StepBy.Iterator.next
-    call_indirect
+    call baml.iter.StepBy.Iterator.next
     store_var _3
     jump L21
 
   L18:
+    load_type #0
     load_var self
-    make_bound_method baml.iter.ArrayIterator.Iterator.next
-    call_indirect
+    call baml.iter.ArrayIterator.Iterator.next
     store_var _3
     jump L21
 
@@ -8848,14 +9124,17 @@ function baml.iter.Iterator.for_each(self: baml.iter.Iterator, fn: (void) -> voi
   L23:
     load_const null
     return
+
+  L24:
+    unreachable
 }
 
 function baml.iter.Iterator.map(self: baml.iter.Iterator, fn: (void) -> unknown throws unknown) -> baml.iter.Iterator<Item = unknown, Error = void | unknown> {
     load_var2 1 2
-    load_type unknown
     load_type #0
-    load_type unknown
+    load_type #2
     load_type #1
+    load_type #3
     init_instance<4> baml.iter.Map .source, .func
     return
 }
@@ -8864,8 +9143,8 @@ function baml.iter.Iterator.peekable(self: baml.iter.Iterator) -> baml.iter.Peek
     load_var self
     alloc_instance baml.iter.Done
     load_const false
-    load_type unknown
-    load_type unknown
+    load_type #0
+    load_type #1
     init_instance<2> baml.iter.Peekable .source, .buffer, .has_buffer
     return
 }
@@ -8878,7 +9157,7 @@ function baml.iter.Iterator.reduce(self: baml.iter.Iterator, fn: (unknown, void)
     load_const true
     pop_jump_if_false L23
     load_var self
-    is_type baml.iter.Flatten
+    is_type baml.iter.Flatten<...>
     pop_jump_if_false L1
     jump L20
 
@@ -8890,56 +9169,60 @@ function baml.iter.Iterator.reduce(self: baml.iter.Iterator, fn: (unknown, void)
 
   L2:
     load_var self
-    is_type baml.iter.ArrayIterator
+    is_type baml.iter.ArrayIterator<...>
     pop_jump_if_false L3
     jump L18
 
   L3:
     load_var self
-    is_type baml.iter.StepBy
+    is_type baml.iter.StepBy<...>
     pop_jump_if_false L4
     jump L17
 
   L4:
     load_var self
-    is_type baml.iter.Chain
+    is_type baml.iter.Chain<...>
     pop_jump_if_false L5
     jump L16
 
   L5:
     load_var self
-    is_type baml.iter.Repeat
+    is_type baml.iter.Repeat<...>
     pop_jump_if_false L6
     jump L15
 
   L6:
     load_var self
-    is_type baml.iter.Map
+    is_type baml.iter.Map<...>
     pop_jump_if_false L7
     jump L14
 
   L7:
     load_var self
-    is_type baml.iter.Filter
+    is_type baml.iter.Filter<...>
     pop_jump_if_false L8
     jump L13
 
   L8:
     load_var self
-    is_type baml.iter.FilterMap
+    is_type baml.iter.FilterMap<...>
     pop_jump_if_false L9
     jump L12
 
   L9:
     load_var self
-    is_type baml.iter.FlatMap
+    is_type baml.iter.FlatMap<...>
     pop_jump_if_false L10
     jump L11
 
   L10:
     load_var self
-    make_bound_method baml.iter.Peekable.Iterator.next
-    call_indirect
+    is_type baml.iter.Peekable<...>
+    pop_jump_if_false L24
+    load_type #0
+    load_type #1
+    load_var self
+    call baml.iter.Peekable.Iterator.next
     store_var _5
     jump L21
 
@@ -8972,9 +9255,9 @@ function baml.iter.Iterator.reduce(self: baml.iter.Iterator, fn: (unknown, void)
     jump L21
 
   L15:
+    load_type #0
     load_var self
-    make_bound_method baml.iter.Repeat.Iterator.next
-    call_indirect
+    call baml.iter.Repeat.Iterator.next
     store_var _5
     jump L21
 
@@ -8986,16 +9269,17 @@ function baml.iter.Iterator.reduce(self: baml.iter.Iterator, fn: (unknown, void)
     jump L21
 
   L17:
+    load_type #0
+    load_type #1
     load_var self
-    make_bound_method baml.iter.StepBy.Iterator.next
-    call_indirect
+    call baml.iter.StepBy.Iterator.next
     store_var _5
     jump L21
 
   L18:
+    load_type #0
     load_var self
-    make_bound_method baml.iter.ArrayIterator.Iterator.next
-    call_indirect
+    call baml.iter.ArrayIterator.Iterator.next
     store_var _5
     jump L21
 
@@ -9027,6 +9311,9 @@ function baml.iter.Iterator.reduce(self: baml.iter.Iterator, fn: (unknown, void)
   L23:
     load_var acc
     return
+
+  L24:
+    unreachable
 }
 
 function baml.iter.Iterator.some(self: baml.iter.Iterator, predicate: (void) -> bool throws unknown) -> bool {
@@ -9034,7 +9321,7 @@ function baml.iter.Iterator.some(self: baml.iter.Iterator, predicate: (void) -> 
     load_const true
     pop_jump_if_false L23
     load_var self
-    is_type baml.iter.Flatten
+    is_type baml.iter.Flatten<...>
     pop_jump_if_false L1
     jump L20
 
@@ -9046,56 +9333,60 @@ function baml.iter.Iterator.some(self: baml.iter.Iterator, predicate: (void) -> 
 
   L2:
     load_var self
-    is_type baml.iter.ArrayIterator
+    is_type baml.iter.ArrayIterator<...>
     pop_jump_if_false L3
     jump L18
 
   L3:
     load_var self
-    is_type baml.iter.StepBy
+    is_type baml.iter.StepBy<...>
     pop_jump_if_false L4
     jump L17
 
   L4:
     load_var self
-    is_type baml.iter.Chain
+    is_type baml.iter.Chain<...>
     pop_jump_if_false L5
     jump L16
 
   L5:
     load_var self
-    is_type baml.iter.Repeat
+    is_type baml.iter.Repeat<...>
     pop_jump_if_false L6
     jump L15
 
   L6:
     load_var self
-    is_type baml.iter.Map
+    is_type baml.iter.Map<...>
     pop_jump_if_false L7
     jump L14
 
   L7:
     load_var self
-    is_type baml.iter.Filter
+    is_type baml.iter.Filter<...>
     pop_jump_if_false L8
     jump L13
 
   L8:
     load_var self
-    is_type baml.iter.FilterMap
+    is_type baml.iter.FilterMap<...>
     pop_jump_if_false L9
     jump L12
 
   L9:
     load_var self
-    is_type baml.iter.FlatMap
+    is_type baml.iter.FlatMap<...>
     pop_jump_if_false L10
     jump L11
 
   L10:
     load_var self
-    make_bound_method baml.iter.Peekable.Iterator.next
-    call_indirect
+    is_type baml.iter.Peekable<...>
+    pop_jump_if_false L25
+    load_type #0
+    load_type #1
+    load_var self
+    call baml.iter.Peekable.Iterator.next
     store_var _3
     jump L21
 
@@ -9128,9 +9419,9 @@ function baml.iter.Iterator.some(self: baml.iter.Iterator, predicate: (void) -> 
     jump L21
 
   L15:
+    load_type #0
     load_var self
-    make_bound_method baml.iter.Repeat.Iterator.next
-    call_indirect
+    call baml.iter.Repeat.Iterator.next
     store_var _3
     jump L21
 
@@ -9142,16 +9433,17 @@ function baml.iter.Iterator.some(self: baml.iter.Iterator, predicate: (void) -> 
     jump L21
 
   L17:
+    load_type #0
+    load_type #1
     load_var self
-    make_bound_method baml.iter.StepBy.Iterator.next
-    call_indirect
+    call baml.iter.StepBy.Iterator.next
     store_var _3
     jump L21
 
   L18:
+    load_type #0
     load_var self
-    make_bound_method baml.iter.ArrayIterator.Iterator.next
-    call_indirect
+    call baml.iter.ArrayIterator.Iterator.next
     store_var _3
     jump L21
 
@@ -9185,13 +9477,16 @@ function baml.iter.Iterator.some(self: baml.iter.Iterator, predicate: (void) -> 
 
   L24:
     return
+
+  L25:
+    unreachable
 }
 
 function baml.iter.Iterator.step_by(self: baml.iter.Iterator, n: int) -> baml.iter.Iterator<Item = void, Error = void> {
     load_var2 1 2
     load_const true
-    load_type unknown
-    load_type unknown
+    load_type #0
+    load_type #1
     init_instance<2> baml.iter.StepBy .source, .n, .first
     return
 }
@@ -9264,6 +9559,9 @@ function baml.iter.Map$stream.Iterator.next(self: baml.iter.Map$stream<unknown, 
     jump L10
 
   L9:
+    load_var _3
+    is_type baml.iter.Peekable<...>
+    pop_jump_if_false L24
     load_type #0
     load_type #2
     load_var _3
@@ -9357,6 +9655,9 @@ function baml.iter.Map$stream.Iterator.next(self: baml.iter.Map$stream<unknown, 
 
   L23:
     return
+
+  L24:
+    unreachable
 }
 
 function baml.iter.Map.Iterable.iter(self: baml.iter.Map<unknown, unknown, unknown, unknown>) -> baml.iter.Iterator<Item = unknown, Error = unknown | unknown> {
@@ -9427,6 +9728,9 @@ function baml.iter.Map.Iterator.next(self: baml.iter.Map<unknown, unknown, unkno
     jump L10
 
   L9:
+    load_var _3
+    is_type baml.iter.Peekable<...>
+    pop_jump_if_false L24
     load_type #0
     load_type #2
     load_var _3
@@ -9520,6 +9824,9 @@ function baml.iter.Map.Iterator.next(self: baml.iter.Map<unknown, unknown, unkno
 
   L23:
     return
+
+  L24:
+    unreachable
 }
 
 function baml.iter.Map.from_json(j: baml.json.json) -> baml.iter.Map<unknown, unknown, unknown, unknown> {
@@ -9614,6 +9921,9 @@ function baml.iter.Peekable$stream.Iterator.next(self: baml.iter.Peekable$stream
     jump L11
 
   L10:
+    load_var _4
+    is_type baml.iter.Peekable<...>
+    pop_jump_if_false L23
     load_type #0
     load_type #1
     load_var _4
@@ -9694,6 +10004,9 @@ function baml.iter.Peekable$stream.Iterator.next(self: baml.iter.Peekable$stream
 
   L22:
     return
+
+  L23:
+    unreachable
 }
 
 function baml.iter.Peekable.Iterable.iter(self: baml.iter.Peekable<unknown, unknown>) -> baml.iter.Iterator<Item = unknown, Error = unknown> {
@@ -9770,6 +10083,9 @@ function baml.iter.Peekable.Iterator.next(self: baml.iter.Peekable<unknown, unkn
     jump L11
 
   L10:
+    load_var _4
+    is_type baml.iter.Peekable<...>
+    pop_jump_if_false L23
     load_type #0
     load_type #1
     load_var _4
@@ -9850,6 +10166,9 @@ function baml.iter.Peekable.Iterator.next(self: baml.iter.Peekable<unknown, unkn
 
   L22:
     return
+
+  L23:
+    unreachable
 }
 
 function baml.iter.Peekable.from_json(j: baml.json.json) -> baml.iter.Peekable<unknown, unknown> {
@@ -9949,6 +10268,9 @@ function baml.iter.Peekable.peek(self: baml.iter.Peekable<unknown, unknown>) -> 
     jump L11
 
   L10:
+    load_var _4
+    is_type baml.iter.Peekable<...>
+    pop_jump_if_false L24
     load_type #0
     load_type #1
     load_var _4
@@ -10040,6 +10362,9 @@ function baml.iter.Peekable.peek(self: baml.iter.Peekable<unknown, unknown>) -> 
 
   L23:
     return
+
+  L24:
+    unreachable
 }
 
 function baml.iter.Peekable.to_json(self: baml.iter.Peekable<unknown, unknown>) -> baml.json.json {
@@ -10171,6 +10496,9 @@ function baml.iter.Peekable.to_json(self: baml.iter.Peekable<unknown, unknown>) 
     jump L21
 
   L20:
+    load_var _3
+    is_type baml.iter.Peekable<...>
+    pop_jump_if_false L43
     load_type #0
     load_type #1
     load_var _3
@@ -10316,6 +10644,9 @@ function baml.iter.Peekable.to_json(self: baml.iter.Peekable<unknown, unknown>) 
     load_const "has_buffer"
     alloc_map 3
     return
+
+  L43:
+    unreachable
 }
 
 function baml.iter.Range$stream.Iterable.iter(self: baml.iter.Range$stream) -> baml.iter.Iterator<Item = int, Error = void> {
@@ -10636,6 +10967,9 @@ function baml.iter.Repeat.to_json(self: baml.iter.Repeat<unknown>) -> baml.json.
 
   L9:
     load_var self
+    is_type baml.iter.Peekable<...>
+    pop_jump_if_false L21
+    load_var self
     make_bound_method baml.iter.Iterator.count
     jump L20
 
@@ -10696,6 +11030,9 @@ function baml.iter.Repeat.to_json(self: baml.iter.Repeat<unknown>) -> baml.json.
     load_const "count"
     alloc_map 2
     return
+
+  L21:
+    unreachable
 }
 
 function baml.iter.StepBy$stream.Iterable.iter(self: baml.iter.StepBy$stream<unknown, unknown>) -> baml.iter.Iterator<Item = unknown, Error = unknown> {
@@ -10785,6 +11122,9 @@ function baml.iter.StepBy$stream.Iterator.next(self: baml.iter.StepBy$stream<unk
     jump L13
 
   L12:
+    load_var _58
+    is_type baml.iter.Peekable<...>
+    pop_jump_if_false L69
     load_type #0
     load_type #1
     load_var _58
@@ -10914,6 +11254,9 @@ function baml.iter.StepBy$stream.Iterator.next(self: baml.iter.StepBy$stream<unk
     jump L34
 
   L33:
+    load_var _33
+    is_type baml.iter.Peekable<...>
+    pop_jump_if_false L69
     load_type #0
     load_type #1
     load_var _33
@@ -11061,6 +11404,9 @@ function baml.iter.StepBy$stream.Iterator.next(self: baml.iter.StepBy$stream<unk
     jump L58
 
   L57:
+    load_var _3
+    is_type baml.iter.Peekable<...>
+    pop_jump_if_false L69
     load_type #0
     load_type #1
     load_var _3
@@ -11128,6 +11474,9 @@ function baml.iter.StepBy$stream.Iterator.next(self: baml.iter.StepBy$stream<unk
 
   L68:
     return
+
+  L69:
+    unreachable
 }
 
 function baml.iter.StepBy.Iterable.iter(self: baml.iter.StepBy<unknown, unknown>) -> baml.iter.Iterator<Item = unknown, Error = unknown> {
@@ -11217,6 +11566,9 @@ function baml.iter.StepBy.Iterator.next(self: baml.iter.StepBy<unknown, unknown>
     jump L13
 
   L12:
+    load_var _58
+    is_type baml.iter.Peekable<...>
+    pop_jump_if_false L69
     load_type #0
     load_type #1
     load_var _58
@@ -11346,6 +11698,9 @@ function baml.iter.StepBy.Iterator.next(self: baml.iter.StepBy<unknown, unknown>
     jump L34
 
   L33:
+    load_var _33
+    is_type baml.iter.Peekable<...>
+    pop_jump_if_false L69
     load_type #0
     load_type #1
     load_var _33
@@ -11493,6 +11848,9 @@ function baml.iter.StepBy.Iterator.next(self: baml.iter.StepBy<unknown, unknown>
     jump L58
 
   L57:
+    load_var _3
+    is_type baml.iter.Peekable<...>
+    pop_jump_if_false L69
     load_type #0
     load_type #1
     load_var _3
@@ -11560,6 +11918,9 @@ function baml.iter.StepBy.Iterator.next(self: baml.iter.StepBy<unknown, unknown>
 
   L68:
     return
+
+  L69:
+    unreachable
 }
 
 function baml.iter.StepBy.from_json(j: baml.json.json) -> baml.iter.StepBy<unknown, unknown> {
@@ -11719,6 +12080,9 @@ function baml.iter.StepBy.to_json(self: baml.iter.StepBy<unknown, unknown>) -> b
     jump L21
 
   L20:
+    load_var _3
+    is_type baml.iter.Peekable<...>
+    pop_jump_if_false L43
     load_type #0
     load_type #1
     load_var _3
@@ -11863,6 +12227,9 @@ function baml.iter.StepBy.to_json(self: baml.iter.StepBy<unknown, unknown>) -> b
     load_const "first"
     alloc_map 3
     return
+
+  L43:
+    unreachable
 }
 
 function baml.iter.flatten(src: baml.iter.Iterator<Item = unknown, Error = unknown>) -> baml.iter.Iterator<Item = unknown, Error = unknown | unknown> {
@@ -12611,6 +12978,9 @@ function baml.llm.Client.build_attempt_with_state(self: baml.llm.Client, planner
     jump L16
 
   L15:
+    load_var _9
+    is_type baml.llm.Client[]
+    pop_jump_if_false L94
     load_type baml.llm.Client
     load_var _9
     call baml.iter.Iterable$for$T[].iter
@@ -12754,6 +13124,9 @@ function baml.llm.Client.build_attempt_with_state(self: baml.llm.Client, planner
     jump L37
 
   L36:
+    load_var _10
+    is_type baml.iter.Peekable<...>
+    pop_jump_if_false L94
     load_type baml.llm.Client
     load_type void
     load_var _10
@@ -12904,6 +13277,9 @@ function baml.llm.Client.build_attempt_with_state(self: baml.llm.Client, planner
     jump L59
 
   L58:
+    load_var _71
+    is_type baml.llm.OrchestrationStep[]
+    pop_jump_if_false L94
     load_type baml.llm.OrchestrationStep
     load_var _71
     call baml.iter.Iterable$for$T[].iter
@@ -13047,6 +13423,9 @@ function baml.llm.Client.build_attempt_with_state(self: baml.llm.Client, planner
     jump L80
 
   L79:
+    load_var _72
+    is_type baml.iter.Peekable<...>
+    pop_jump_if_false L94
     load_type baml.llm.OrchestrationStep
     load_type void
     load_var _72
@@ -13148,6 +13527,9 @@ function baml.llm.Client.build_attempt_with_state(self: baml.llm.Client, planner
 
   L93:
     return
+
+  L94:
+    unreachable
 }
 
 function baml.llm.Client.build_plan(self: baml.llm.Client) -> baml.llm.OrchestrationStep[] {
@@ -13300,6 +13682,9 @@ function baml.llm.Client.build_plan_with_state(self: baml.llm.Client, planner_st
     jump L20
 
   L19:
+    load_var _26
+    is_type baml.llm.OrchestrationStep[]
+    pop_jump_if_false L53
     load_type baml.llm.OrchestrationStep
     load_var _26
     call baml.iter.Iterable$for$T[].iter
@@ -13443,6 +13828,9 @@ function baml.llm.Client.build_plan_with_state(self: baml.llm.Client, planner_st
     jump L41
 
   L40:
+    load_var _27
+    is_type baml.iter.Peekable<...>
+    pop_jump_if_false L53
     load_type baml.llm.OrchestrationStep
     load_type void
     load_var _27
@@ -13538,6 +13926,9 @@ function baml.llm.Client.build_plan_with_state(self: baml.llm.Client, planner_st
     add_int
     store_var attempt
     jump L2
+
+  L53:
+    unreachable
 }
 
 function baml.llm.Client.execute_once_oneshot(self: baml.llm.Client, context: baml.llm.ExecutionContext, active_delay_ms: int) -> unknown {
@@ -13663,6 +14054,9 @@ function baml.llm.Client.execute_once_oneshot(self: baml.llm.Client, context: ba
     jump L16
 
   L15:
+    load_var _35
+    is_type baml.llm.Client[]
+    pop_jump_if_false L57
     load_type baml.llm.Client
     load_var _35
     call baml.iter.Iterable$for$T[].iter
@@ -13806,6 +14200,9 @@ function baml.llm.Client.execute_once_oneshot(self: baml.llm.Client, context: ba
     jump L37
 
   L36:
+    load_var _36
+    is_type baml.iter.Peekable<...>
+    pop_jump_if_false L57
     load_type baml.llm.Client
     load_type void
     load_var _36
@@ -13980,6 +14377,9 @@ function baml.llm.Client.execute_once_oneshot(self: baml.llm.Client, context: ba
 
   L56:
     return
+
+  L57:
+    unreachable
 }
 
 function baml.llm.Client.execute_once_stream(self: baml.llm.Client, context: baml.llm.ExecutionContext, active_delay_ms: int) -> baml.llm.Stream<unknown, unknown> {
@@ -14106,6 +14506,9 @@ function baml.llm.Client.execute_once_stream(self: baml.llm.Client, context: bam
     jump L16
 
   L15:
+    load_var _24
+    is_type baml.llm.Client[]
+    pop_jump_if_false L52
     load_type baml.llm.Client
     load_var _24
     call baml.iter.Iterable$for$T[].iter
@@ -14249,6 +14652,9 @@ function baml.llm.Client.execute_once_stream(self: baml.llm.Client, context: bam
     jump L37
 
   L36:
+    load_var _25
+    is_type baml.iter.Peekable<...>
+    pop_jump_if_false L52
     load_type baml.llm.Client
     load_type void
     load_var _25
@@ -14378,6 +14784,9 @@ function baml.llm.Client.execute_once_stream(self: baml.llm.Client, context: bam
 
   L51:
     return
+
+  L52:
+    unreachable
 }
 
 function baml.llm.Client.execute_oneshot(self: baml.llm.Client, context: baml.llm.ExecutionContext, inherited_delay_ms: int) -> unknown {
@@ -14951,6 +15360,9 @@ function baml.llm.PlannerState.rr_local_offset(self: baml.llm.PlannerState, clie
     jump L11
 
   L10:
+    load_var _4
+    is_type string[]
+    pop_jump_if_false L44
     load_type string
     load_var _4
     call baml.iter.Iterable$for$T[].iter
@@ -15094,6 +15506,9 @@ function baml.llm.PlannerState.rr_local_offset(self: baml.llm.PlannerState, clie
     jump L32
 
   L31:
+    load_var _5
+    is_type baml.iter.Peekable<...>
+    pop_jump_if_false L44
     load_type string
     load_type void
     load_var _5
@@ -15187,6 +15602,9 @@ function baml.llm.PlannerState.rr_local_offset(self: baml.llm.PlannerState, clie
   L43:
     load_var offset
     return
+
+  L44:
+    unreachable
 }
 
 function baml.llm.PlannerState.rr_pick_index(self: baml.llm.PlannerState, client_name: string, counter: int, sub_client_count: int) -> int {
@@ -18464,6 +18882,9 @@ function baml.toml.Table.from_json(json: baml.json.json) -> baml.toml.Table {
     jump L13
 
   L12:
+    load_var _4
+    is_type string[]
+    pop_jump_if_false L47
     load_type string
     load_var _4
     call baml.iter.Iterable$for$T[].iter
@@ -18607,6 +19028,9 @@ function baml.toml.Table.from_json(json: baml.json.json) -> baml.toml.Table {
     jump L34
 
   L33:
+    load_var _7
+    is_type baml.iter.Peekable<...>
+    pop_jump_if_false L47
     load_type string
     load_type void
     load_var _7
@@ -18713,6 +19137,9 @@ function baml.toml.Table.from_json(json: baml.json.json) -> baml.toml.Table {
     load_var items
     init_instance baml.toml.Table .items
     return
+
+  L47:
+    unreachable
 }
 
 function baml.toml.Table.parse(s: string) -> baml.toml.Table {

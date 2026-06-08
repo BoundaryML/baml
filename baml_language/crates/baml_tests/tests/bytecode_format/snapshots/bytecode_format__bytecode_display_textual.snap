@@ -260,6 +260,9 @@ function testing.TestCollector.find_testset(self: testing.TestCollector, name: s
     jump L11
 
   L10:
+    load_var _3
+    is_type testing.TestSetRegistration[]
+    pop_jump_if_false L44
     load_type testing.TestSetRegistration
     load_var _3
     call baml.iter.Iterable$for$T[].iter
@@ -403,6 +406,9 @@ function testing.TestCollector.find_testset(self: testing.TestCollector, name: s
     jump L32
 
   L31:
+    load_var _4
+    is_type baml.iter.Peekable<...>
+    pop_jump_if_false L44
     load_type testing.TestSetRegistration
     load_type void
     load_var _4
@@ -498,6 +504,9 @@ function testing.TestCollector.find_testset(self: testing.TestCollector, name: s
     load_var name
     bin_op +
     throw
+
+  L44:
+    unreachable
 }
 
 function testing.TestCollector.from_json(j: baml.json.json) -> testing.TestCollector {
@@ -631,6 +640,9 @@ function testing.TestCollector.register_test(self: testing.TestCollector, name: 
     jump L14
 
   L13:
+    load_var _13
+    is_type testing.TestRegistration[]
+    pop_jump_if_false L52
     load_type testing.TestRegistration
     load_var _13
     call baml.iter.Iterable$for$T[].iter
@@ -774,6 +786,9 @@ function testing.TestCollector.register_test(self: testing.TestCollector, name: 
     jump L35
 
   L34:
+    load_var _14
+    is_type baml.iter.Peekable<...>
+    pop_jump_if_false L52
     load_type testing.TestRegistration
     load_type void
     load_var _14
@@ -916,6 +931,9 @@ function testing.TestCollector.register_test(self: testing.TestCollector, name: 
     pop 1
     load_const null
     return
+
+  L52:
+    unreachable
 }
 
 function testing.TestCollector.register_test_set(self: testing.TestCollector, name: string, collector: (testing.TestCollector) -> void throws unknown, runner: ((() -> testing.TestSetReport throws never) -> (() -> testing.TestSetReport throws never) throws never) | null) -> void {
@@ -1015,6 +1033,9 @@ function testing.TestCollector.register_test_set(self: testing.TestCollector, na
     jump L14
 
   L13:
+    load_var _13
+    is_type testing.TestSetRegistration[]
+    pop_jump_if_false L52
     load_type testing.TestSetRegistration
     load_var _13
     call baml.iter.Iterable$for$T[].iter
@@ -1158,6 +1179,9 @@ function testing.TestCollector.register_test_set(self: testing.TestCollector, na
     jump L35
 
   L34:
+    load_var _14
+    is_type baml.iter.Peekable<...>
+    pop_jump_if_false L52
     load_type testing.TestSetRegistration
     load_type void
     load_var _14
@@ -1300,6 +1324,9 @@ function testing.TestCollector.register_test_set(self: testing.TestCollector, na
     pop 1
     load_const null
     return
+
+  L52:
+    unreachable
 }
 
 function testing.TestCollector.to_json(self: testing.TestCollector) -> baml.json.json {
@@ -1425,6 +1452,9 @@ function testing.TestRegistry.expand_set(self: testing.TestRegistry, name: strin
     jump L11
 
   L10:
+    load_var _3
+    is_type testing.TestSetRegistration[]
+    pop_jump_if_false L89
     load_type testing.TestSetRegistration
     load_var _3
     call baml.iter.Iterable$for$T[].iter
@@ -1568,6 +1598,9 @@ function testing.TestRegistry.expand_set(self: testing.TestRegistry, name: strin
     jump L32
 
   L31:
+    load_var _4
+    is_type baml.iter.Peekable<...>
+    pop_jump_if_false L89
     load_type testing.TestSetRegistration
     load_type void
     load_var _4
@@ -1756,6 +1789,9 @@ function testing.TestRegistry.expand_set(self: testing.TestRegistry, name: strin
     jump L55
 
   L54:
+    load_var _86
+    is_type string[]
+    pop_jump_if_false L89
     load_type string
     load_var _86
     call baml.iter.Iterable$for$T[].iter
@@ -1899,6 +1935,9 @@ function testing.TestRegistry.expand_set(self: testing.TestRegistry, name: strin
     jump L76
 
   L75:
+    load_var _90
+    is_type baml.iter.Peekable<...>
+    pop_jump_if_false L89
     load_type string
     load_type void
     load_var _90
@@ -2003,6 +2042,9 @@ function testing.TestRegistry.expand_set(self: testing.TestRegistry, name: strin
     load_var name
     bin_op +
     throw
+
+  L89:
+    unreachable
 }
 
 function testing.TestRegistry.from_json(j: baml.json.json) -> testing.TestRegistry {
@@ -2109,6 +2151,9 @@ function testing.TestRegistry.run_test(self: testing.TestRegistry, name: string)
     jump L11
 
   L10:
+    load_var _3
+    is_type testing.TestRegistration[]
+    pop_jump_if_false L89
     load_type testing.TestRegistration
     load_var _3
     call baml.iter.Iterable$for$T[].iter
@@ -2252,6 +2297,9 @@ function testing.TestRegistry.run_test(self: testing.TestRegistry, name: string)
     jump L32
 
   L31:
+    load_var _4
+    is_type baml.iter.Peekable<...>
+    pop_jump_if_false L89
     load_type testing.TestRegistration
     load_type void
     load_var _4
@@ -2419,6 +2467,9 @@ function testing.TestRegistry.run_test(self: testing.TestRegistry, name: string)
     jump L55
 
   L54:
+    load_var _69
+    is_type string[]
+    pop_jump_if_false L89
     load_type string
     load_var _69
     call baml.iter.Iterable$for$T[].iter
@@ -2562,6 +2613,9 @@ function testing.TestRegistry.run_test(self: testing.TestRegistry, name: string)
     jump L76
 
   L75:
+    load_var _73
+    is_type baml.iter.Peekable<...>
+    pop_jump_if_false L89
     load_type string
     load_type void
     load_var _73
@@ -2666,6 +2720,9 @@ function testing.TestRegistry.run_test(self: testing.TestRegistry, name: string)
     load_var name
     bin_op +
     throw
+
+  L89:
+    unreachable
 }
 
 function testing.TestRegistry.serialize(self: testing.TestRegistry) -> (testing.SerializedTest | testing.SerializedTestSet)[] {
@@ -2740,6 +2797,9 @@ function testing.TestRegistry.serialize(self: testing.TestRegistry) -> (testing.
     jump L11
 
   L10:
+    load_var _3
+    is_type testing.TestRegistration[]
+    pop_jump_if_false L90
     load_type testing.TestRegistration
     load_var _3
     call baml.iter.Iterable$for$T[].iter
@@ -2883,6 +2943,9 @@ function testing.TestRegistry.serialize(self: testing.TestRegistry) -> (testing.
     jump L32
 
   L31:
+    load_var _4
+    is_type baml.iter.Peekable<...>
+    pop_jump_if_false L90
     load_type testing.TestRegistration
     load_type void
     load_var _4
@@ -3043,6 +3106,9 @@ function testing.TestRegistry.serialize(self: testing.TestRegistry) -> (testing.
     jump L55
 
   L54:
+    load_var _68
+    is_type testing.TestSetRegistration[]
+    pop_jump_if_false L90
     load_type testing.TestSetRegistration
     load_var _68
     call baml.iter.Iterable$for$T[].iter
@@ -3186,6 +3252,9 @@ function testing.TestRegistry.serialize(self: testing.TestRegistry) -> (testing.
     jump L76
 
   L75:
+    load_var _69
+    is_type baml.iter.Peekable<...>
+    pop_jump_if_false L90
     load_type testing.TestSetRegistration
     load_type void
     load_var _69
@@ -3312,6 +3381,9 @@ function testing.TestRegistry.serialize(self: testing.TestRegistry) -> (testing.
   L89:
     load_var items
     return
+
+  L90:
+    unreachable
 }
 
 function testing.TestRegistry.to_json(self: testing.TestRegistry) -> baml.json.json {

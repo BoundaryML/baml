@@ -341,6 +341,9 @@ function user.iterator_style_for_loop() -> int {
     jump L12
 
   L11:
+    load_var _2
+    is_type int[]
+    pop_jump_if_false L48
     load_type int
     load_var _2
     call baml.iter.Iterable$for$T[].iter
@@ -496,6 +499,9 @@ function user.iterator_style_for_loop() -> int {
     jump L35
 
   L34:
+    load_var _3
+    is_type baml.iter.Peekable<...>
+    pop_jump_if_false L48
     load_type int
     load_type void
     load_var _3
@@ -591,6 +597,9 @@ function user.iterator_style_for_loop() -> int {
   L47:
     load_var result
     return
+
+  L48:
+    unreachable
 }
 
 function user.let_mixed_semicolons() -> int {
@@ -739,6 +748,9 @@ function user.nested_for_loop() -> int {
     jump L12
 
   L11:
+    load_var _2
+    is_type int[]
+    pop_jump_if_false L95
     load_type int
     load_var _2
     call baml.iter.Iterable$for$T[].iter
@@ -894,6 +906,9 @@ function user.nested_for_loop() -> int {
     jump L35
 
   L34:
+    load_var _3
+    is_type baml.iter.Peekable<...>
+    pop_jump_if_false L95
     load_type int
     load_type void
     load_var _3
@@ -1059,6 +1074,9 @@ function user.nested_for_loop() -> int {
     jump L59
 
   L58:
+    load_var _66
+    is_type int[]
+    pop_jump_if_false L95
     load_type int
     load_var _66
     call baml.iter.Iterable$for$T[].iter
@@ -1214,6 +1232,9 @@ function user.nested_for_loop() -> int {
     jump L82
 
   L81:
+    load_var _67
+    is_type baml.iter.Peekable<...>
+    pop_jump_if_false L95
     load_type int
     load_type void
     load_var _67
@@ -1311,6 +1332,9 @@ function user.nested_for_loop() -> int {
   L94:
     load_var result
     return
+
+  L95:
+    unreachable
 }
 
 function user.nested_while_loop() -> int {
