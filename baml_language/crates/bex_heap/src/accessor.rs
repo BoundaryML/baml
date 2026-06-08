@@ -255,6 +255,45 @@ impl<'a> BexValue<'a> {
         }
     }
 
+    /// Extract a rooted host [`Handle`](bex_external_types::Handle) to a callable
+    /// BAML value (function, closure, or bound method).
+    ///
+    /// Used for `function`-typed sys-op arguments: a callable cannot be
+    /// serialized into a `BexExternalValue`, but it crosses the boundary as a
+    /// `BexExternalValue::Handle` (a GC root into the shared heap). The sys-op
+    /// holds the handle and later invokes it via `VmSpawner::spawn_with_callable`,
+    /// which validates that the handle actually points at a callable object.
+    pub fn as_callable_handle(
+        self,
+        _heap: &BexHeap,
+        _permit: PermitProof<'a>,
+    ) -> Result<bex_external_types::Handle, AccessError> {
+        match self {
+            BexValue::ExternalValue(BexExternalValue::Handle(handle)) => Ok(handle.clone()),
+            other => Err(AccessError::TypeMismatch {
+                expected: "function",
+                actual: other.type_name(),
+            }),
+        }
+    }
+
+    /// Like [`Self::as_callable_handle`], but for an optional callable param:
+    /// `null` yields `None`, a callable handle yields `Some`.
+    pub fn as_optional_callable_handle(
+        self,
+        _heap: &BexHeap,
+        _permit: PermitProof<'a>,
+    ) -> Result<Option<bex_external_types::Handle>, AccessError> {
+        match self {
+            BexValue::ExternalValue(BexExternalValue::Null) => Ok(None),
+            BexValue::ExternalValue(BexExternalValue::Handle(handle)) => Ok(Some(handle.clone())),
+            other => Err(AccessError::TypeMismatch {
+                expected: "function?",
+                actual: other.type_name(),
+            }),
+        }
+    }
+
     pub fn as_string(
         self,
         heap: &BexHeap,

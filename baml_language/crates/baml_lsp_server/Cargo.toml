@@ -45,6 +45,7 @@ crossbeam-channel = { workspace = true }
 futures = { workspace = true }
 indexmap = { workspace = true }
 lsp-server = { workspace = true }
+num-bigint = { workspace = true }
 parking_lot = { workspace = true, features = [ "deadlock_detection" ] }
 prost = { workspace = true }
 regex = { workspace = true }
