@@ -257,7 +257,43 @@ fn normalize_direct_skill_references(mut content: String, _spec: SkillSpec) -> S
         content = content.replace(&format!("baml:{}", skill.legacy_name), skill.direct_name);
     }
     content = content.replace("baml:*", "baml-*");
+    content = normalize_baml_toml_package_table(content);
     content
+}
+
+fn normalize_baml_toml_package_table(content: String) -> String {
+    let mut out = String::with_capacity(content.len());
+    let mut recent_context = Vec::new();
+
+    for segment in content.split_inclusive('\n') {
+        let (line, newline) = segment
+            .strip_suffix('\n')
+            .map_or((segment, ""), |line| (line, "\n"));
+        let (line, carriage_return) = line
+            .strip_suffix('\r')
+            .map_or((line, ""), |line| (line, "\r"));
+
+        if line.trim() == "[project]"
+            && recent_context
+                .iter()
+                .rev()
+                .take(6)
+                .any(|line: &String| line.contains("baml.toml"))
+        {
+            out.push_str("[package]");
+            out.push_str(carriage_return);
+            out.push_str(newline);
+        } else {
+            out.push_str(segment);
+        }
+
+        recent_context.push(line.to_string());
+        if recent_context.len() > 6 {
+            recent_context.remove(0);
+        }
+    }
+
+    out
 }
 
 fn split_frontmatter(content: &str) -> Result<(&str, &str)> {
@@ -469,6 +505,18 @@ mod tests {
             .unwrap();
         assert!(core.content.contains("name: baml-core"));
         assert!(!core.content.contains("baml:testing"));
+    }
+
+    #[test]
+    fn skill_baml_toml_template_uses_package_table() {
+        let content = format!(
+            "{}\nCreate `baml.toml`:\n\n```toml\n[project]\nname = \"test\"\nversion = \"0.1.0\"\n```\n",
+            skill("baml-core")
+        );
+
+        let normalized = normalize_direct_skill_references(content, SKILLS[0]);
+        assert!(normalized.contains("[package]\nname = \"test\""));
+        assert!(!normalized.contains("[project]\nname = \"test\""));
     }
 
     #[test]

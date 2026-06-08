@@ -350,6 +350,41 @@ fn describe_stdlib_without_baml_toml_succeeds() {
     );
 }
 
+/// `baml describe` should not hide the common `baml.toml` typo where users
+/// write `[project]` (from Python packaging muscle memory) instead of
+/// BAML's `[package]`.
+#[test]
+fn describe_with_project_table_reports_package_hint() {
+    let built = common::ensure_built();
+    let tmp = tempfile::tempdir().unwrap();
+    std::fs::write(
+        tmp.path().join("baml.toml"),
+        "[project]\nname = \"test\"\nversion = \"0.1.0\"\n",
+    )
+    .unwrap();
+
+    let output = run_baml_cli(built, tmp.path(), &["describe", "String", "--from", "."]);
+
+    assert!(
+        !output.status.success(),
+        "Expected describe to reject `[project]`, got exit {:?}\nstdout: {}\nstderr: {}",
+        output.status.code(),
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr),
+    );
+    assert_eq!(output.status.code(), Some(4));
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("[project]"), "got:\n{stderr}");
+    assert!(
+        stderr.contains("did you mean `[package]`"),
+        "got:\n{stderr}"
+    );
+    assert!(
+        !stderr.contains("missing `[package]` table"),
+        "got:\n{stderr}"
+    );
+}
+
 /// `baml describe` walks up to an ancestor `baml.toml`, so introspection
 /// from a project subdirectory resolves a user-defined symbol.
 #[test]

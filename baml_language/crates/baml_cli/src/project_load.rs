@@ -65,8 +65,10 @@ pub(crate) fn load_project_from_reporting(
 ///    or `baml_src/`. If one is found, load that project exactly as
 ///    [`load_project_from`] would — so running `baml describe` from a
 ///    subdirectory resolves the enclosing project. Manifest validation is
-///    intentionally skipped: introspection doesn't need a valid
-///    `[package].name`, and a malformed manifest shouldn't block it.
+///    intentionally skipped except for the common `[project]` typo:
+///    introspection doesn't need a valid `[package].name`, but when a user
+///    clearly wrote the wrong table header, the actionable diagnostic is
+///    more useful than silently loading a broken project.
 /// 2. If no project marker exists anywhere up the tree, return a **default
 ///    state**: a [`ProjectDatabase`] holding only the BAML stdlib
 ///    (`baml.*`, loaded by `set_project_root` regardless of user files)
@@ -97,10 +99,13 @@ pub(crate) fn load_project_or_default(
 
     match find_project_root(&canonical) {
         // Walk-up: load the ancestor project. Manifest validation is
-        // intentionally skipped (see the docstring on point 1) — unlike the
-        // strict `load_project_from` path, introspection doesn't need a
-        // valid `[package].name`.
-        Some(root) => build_project_db(root, |_| {}),
+        // intentionally skipped except for the known `[project]` typo (see
+        // the docstring on point 1) — unlike the strict `load_project_from`
+        // path, introspection doesn't need a valid `[package].name`.
+        Some(root) => {
+            reject_project_table_without_package(&root.join("baml.toml"))?;
+            build_project_db(root, |_| {})
+        }
         None => {
             let mut db = ProjectDatabase::new();
             db.set_project_root(&canonical);
@@ -201,11 +206,13 @@ pub(crate) fn validate_baml_toml(toml_path: &Path) -> Result<String> {
         .get("package")
         .and_then(|v| v.as_table())
         .ok_or_else(|| {
-            anyhow::anyhow!(
-                "{}: missing `[package]` table.\n\
+            project_table_without_package_error(toml_path, &table).unwrap_or_else(|| {
+                anyhow::anyhow!(
+                    "{}: missing `[package]` table.\n\
              Add:\n\n    [package]\n    name = \"<your-project-name>\"\n",
-                toml_path.display()
-            )
+                    toml_path.display()
+                )
+            })
         })?;
     let name = package
         .get("name")
@@ -220,6 +227,37 @@ pub(crate) fn validate_baml_toml(toml_path: &Path) -> Result<String> {
         anyhow::bail!("{}: `[package].name` cannot be empty.", toml_path.display());
     }
     Ok(name.to_string())
+}
+
+fn reject_project_table_without_package(toml_path: &Path) -> Result<()> {
+    if !toml_path.is_file() {
+        return Ok(());
+    }
+    let Ok(content) = std::fs::read_to_string(toml_path) else {
+        return Ok(());
+    };
+    let Ok(table) = content.parse::<toml::Table>() else {
+        return Ok(());
+    };
+    if let Some(err) = project_table_without_package_error(toml_path, &table) {
+        return Err(err);
+    }
+    Ok(())
+}
+
+fn project_table_without_package_error(
+    toml_path: &Path,
+    table: &toml::Table,
+) -> Option<anyhow::Error> {
+    let has_package_table = table.get("package").is_some_and(|v| v.is_table());
+    let has_project_table = table.get("project").is_some_and(|v| v.is_table());
+    if has_project_table && !has_package_table {
+        return Some(anyhow::anyhow!(
+            "{}: `[project]` is not a recognized table in baml.toml; did you mean `[package]`?",
+            toml_path.display()
+        ));
+    }
+    None
 }
 
 /// Resolve the project's name for output-artifact naming (used by `baml
@@ -327,6 +365,23 @@ mod tests {
         let err = load_project_from(tmp.path()).unwrap_err();
         let msg = format!("{err}");
         assert!(msg.contains("[package]"), "got: {msg}");
+    }
+
+    /// `baml.toml` with `[project]` instead of `[package]` gets the targeted
+    /// typo diagnostic instead of the generic missing-table message.
+    #[test]
+    fn rejects_project_table_with_package_hint() {
+        let tmp = TempDir::new().unwrap();
+        fs::write(
+            tmp.path().join("baml.toml"),
+            "[project]\nname = \"test\"\nversion = \"0.1.0\"\n",
+        )
+        .unwrap();
+        let err = load_project_from(tmp.path()).unwrap_err();
+        let msg = format!("{err}");
+        assert!(msg.contains("[project]"), "got: {msg}");
+        assert!(msg.contains("did you mean `[package]`"), "got: {msg}");
+        assert!(!msg.contains("missing `[package]` table"), "got: {msg}");
     }
 
     /// `baml.toml` with `[package]` but no `name` field → likewise.
@@ -507,6 +562,24 @@ mod tests {
         // ...but the introspection loader still loads the files.
         let (_db, _root, files) = load_project_or_default(tmp.path()).unwrap();
         assert_eq!(files.len(), 1, "got files: {files:?}");
+    }
+
+    /// The lenient `describe`/introspection loader still reports the known
+    /// `[project]` typo, because silently loading it hides the broken manifest.
+    #[test]
+    fn walk_up_reports_project_table_typo() {
+        let tmp = TempDir::new().unwrap();
+        fs::write(
+            tmp.path().join("baml.toml"),
+            "[project]\nname = \"test\"\nversion = \"0.1.0\"\n",
+        )
+        .unwrap();
+        fs::write(tmp.path().join("a.baml"), "function main() -> int { 1 }").unwrap();
+
+        let err = load_project_or_default(tmp.path()).unwrap_err();
+        let msg = format!("{err}");
+        assert!(msg.contains("[project]"), "got: {msg}");
+        assert!(msg.contains("did you mean `[package]`"), "got: {msg}");
     }
 
     /// `baml.toml` + `baml_src/` project layout: only the `baml_src/`
