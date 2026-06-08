@@ -208,23 +208,8 @@ fn value_satisfies_ty(value: &BexExternalValue, ty: &Ty) -> bool {
 /// name, the bare short name (for local types), or the dotted module-qualified
 /// name. Mirrors `bex_engine::conversion::type_name_matches_external_name`.
 fn type_name_matches_external_name(external_name: &str, type_name: &TypeName) -> bool {
-    if external_name == type_name.display_name.as_str() {
-        return true;
-    }
-
-    if type_name.module_path.is_empty() {
-        return external_name == type_name.name.as_str();
-    }
-
-    let qualified_name = type_name
-        .module_path
-        .iter()
-        .map(baml_type::Name::as_str)
-        .chain(std::iter::once(type_name.name.as_str()))
-        .collect::<Vec<_>>()
-        .join(".");
-
-    external_name == qualified_name
+    external_name == type_name.display_name().as_str()
+        || external_name == type_name.render_dotted(false)
 }
 
 #[cfg(test)]

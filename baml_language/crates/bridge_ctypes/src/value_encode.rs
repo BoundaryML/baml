@@ -202,11 +202,11 @@ fn empty_ty_name() -> BamlTyName {
 fn ty_to_baml_ty_name(ty: &Ty) -> BamlTyName {
     match ty {
         Ty::Class(tn, args, _) => BamlTyName {
-            name: tn.display_name.to_string(),
+            name: tn.display_name().to_string(),
             generic_args: ty_args_to_baml_generic_args(args, &[]),
         },
         Ty::Interface(tn, args, associated_bindings, _) => BamlTyName {
-            name: tn.display_name.to_string(),
+            name: tn.display_name().to_string(),
             generic_args: ty_args_to_baml_generic_args(args, associated_bindings),
         },
         _ => BamlTyName {
@@ -377,7 +377,7 @@ fn ty_to_field_type(ty: &Ty) -> BamlTy {
         }
         Ty::EnumVariant(tn, ..) | Ty::Enum(tn, _) => {
             Some(FieldType::EnumType(crate::baml_core::cffi::BamlTyEnum {
-                name: tn.display_name.to_string(),
+                name: tn.display_name().to_string(),
             }))
         }
         // A nullable union (`T | null`) preserves the old `Optional` wire format:

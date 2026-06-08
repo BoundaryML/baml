@@ -48,20 +48,7 @@ where
 /// (where `display_name` already encodes the full path) this also works
 /// because `module_path` is the same path split on dots.
 fn class_lookup_key(qtn: &TypeName) -> String {
-    if qtn.module_path.is_empty() {
-        qtn.name.to_string()
-    } else {
-        let mut buf = String::new();
-        for (i, seg) in qtn.module_path.iter().enumerate() {
-            if i > 0 {
-                buf.push('.');
-            }
-            buf.push_str(seg.as_str());
-        }
-        buf.push('.');
-        buf.push_str(qtn.name.as_str());
-        buf
-    }
+    qtn.render_dotted(false)
 }
 use std::collections::HashMap;
 
@@ -476,7 +463,7 @@ fn ty_value_to_serde(
             Ok(serde_json::Value::Object(out))
         }
 
-        Ty::TypeAlias(name, _) if name.display_name.as_str() == BAML_JSON_JSON => {
+        Ty::TypeAlias(name, _) if name.display_name().as_str() == BAML_JSON_JSON => {
             Ok(value_to_serde(vm, value))
         }
 
@@ -611,7 +598,7 @@ fn serialize_class_instance(
         }
     };
 
-    if let Some(kind) = media_kind_from_fqn(qtn.display_name.as_str()) {
+    if let Some(kind) = media_kind_from_fqn(qtn.display_name().as_str()) {
         return serialize_media(vm, value, kind, path);
     }
 
@@ -818,7 +805,7 @@ fn ty_serde_to_value(
             _ => Err(raise_decode(vm, "expected object", path)),
         },
 
-        Ty::TypeAlias(name, _) if name.display_name.as_str() == BAML_JSON_JSON => {
+        Ty::TypeAlias(name, _) if name.display_name().as_str() == BAML_JSON_JSON => {
             Ok(serde_to_value(vm, json))
         }
 
@@ -828,7 +815,7 @@ fn ty_serde_to_value(
         }
 
         Ty::Class(qtn, type_args, _) => {
-            if let Some(kind) = media_kind_from_fqn(qtn.display_name.as_str()) {
+            if let Some(kind) = media_kind_from_fqn(qtn.display_name().as_str()) {
                 return deserialize_media(vm, json, kind, qtn, path);
             }
             deserialize_class_instance(vm, json, qtn, type_args, path)
@@ -1151,7 +1138,7 @@ fn try_yield_user_from_json(vm: &mut BexVm, j: Value, ty: &Ty) -> Option<NativeC
         Ty::Class(qtn, type_args, _) | Ty::Interface(qtn, type_args, _, _) => (qtn, type_args),
         _ => return None,
     };
-    if media_kind_from_fqn(qtn.display_name.as_str()).is_some() {
+    if media_kind_from_fqn(qtn.display_name().as_str()).is_some() {
         return None;
     }
     let from_json_name = format!("{}.from_json", class_lookup_key(qtn));

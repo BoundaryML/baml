@@ -104,6 +104,12 @@ impl QualifiedTypeName {
         }
     }
 
+    /// A local (`user`-package) type with no namespace — a bare class/enum
+    /// name. Replaces the legacy `TypeName::local`.
+    pub fn local(name: Name) -> Self {
+        Self::new(Name::new(RESERVED_USER_PACKAGE), Vec::new(), name)
+    }
+
     pub fn package(&self) -> &Name {
         self.pkg.as_name()
     }
@@ -140,6 +146,54 @@ impl QualifiedTypeName {
             .chain(std::iter::once(&self.name))
             .cloned()
             .collect::<Vec<_>>()
+    }
+
+    /// The flat `[package, ...namespace]` path, matching the legacy
+    /// `TypeName::module_path` representation that fused package and namespace
+    /// into one `Vec`. Allocates — prefer [`package`](Self::package) /
+    /// [`namespace`](Self::namespace) on hot paths; kept for call sites that
+    /// build a fully-qualified dotted string.
+    pub fn module_path(&self) -> Vec<Name> {
+        std::iter::once(self.pkg.as_name().clone())
+            .chain(self.namespace.iter().cloned())
+            .collect()
+    }
+
+    /// The user-facing display name (legacy `TypeName::display_name`): the
+    /// reserved `user` package is elided for local types, dependency packages
+    /// are kept. Matches the previous `qtn_to_type_name` mapping.
+    pub fn display_name(&self) -> Name {
+        if self.is_local() {
+            let parts: Vec<String> = self
+                .namespace
+                .iter()
+                .map(std::string::ToString::to_string)
+                .chain(std::iter::once(self.name.to_string()))
+                .collect();
+            Name::new(parts.join("."))
+        } else {
+            Name::new(self.to_string())
+        }
+    }
+
+    /// Parse a dotted path into a qualified name: the first segment is the
+    /// package, the last is the short name, and any middle segments form the
+    /// namespace (`"baml.json.json"` → pkg `baml`, ns `["json"]`, name `json`).
+    /// A single bare segment is treated as a local (`user`-package) type.
+    pub fn from_dotted_path(path: &str) -> Self {
+        let segments: Vec<&str> = path.split('.').collect();
+        let name = Name::new(*segments.last().expect("path must be non-empty"));
+        match segments.len() {
+            0 | 1 => Self::new(Name::new(RESERVED_USER_PACKAGE), Vec::new(), name),
+            _ => Self::new(
+                Name::new(segments[0]),
+                segments[1..segments.len() - 1]
+                    .iter()
+                    .map(|s| Name::new(*s))
+                    .collect(),
+                name,
+            ),
+        }
     }
 
     /// The dotted path `package.namespace.name` (no `<generic_params>` suffix).

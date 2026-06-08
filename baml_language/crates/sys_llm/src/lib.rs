@@ -133,7 +133,7 @@ fn find_class_definition<'a>(
         let mut matches = ctx
             .class_definitions
             .iter()
-            .filter(|(name, _)| name.display_name == type_name.display_name)
+            .filter(|(name, _)| name.display_name() == type_name.display_name())
             .map(|(_, def)| def);
         let first = matches.next()?;
         matches.next().is_none().then_some(first)
@@ -148,7 +148,7 @@ fn find_enum_definition<'a>(
         let mut matches = ctx
             .enum_definitions
             .iter()
-            .filter(|(name, _)| name.display_name == type_name.display_name)
+            .filter(|(name, _)| name.display_name() == type_name.display_name())
             .map(|(_, def)| def);
         let first = matches.next()?;
         matches.next().is_none().then_some(first)
@@ -163,7 +163,7 @@ fn find_type_alias_definition<'a>(
         let mut matches = ctx
             .type_alias_definitions
             .iter()
-            .filter(|(name, _)| name.display_name == type_name.display_name)
+            .filter(|(name, _)| name.display_name() == type_name.display_name())
             .map(|(_, ty)| ty);
         let first = matches.next()?;
         matches.next().is_none().then_some(first)
@@ -183,7 +183,7 @@ fn walk_ty(
 
     match ty {
         Ty::Class(type_name, _, _) => {
-            let key = type_name.display_name.clone();
+            let key = type_name.display_name();
 
             // If this class is already on the ancestry stack, it's a recursive cycle.
             // Only mark classes from the cycle start, not unrelated ancestors.
@@ -212,9 +212,9 @@ fn walk_ty(
                     .collect();
 
                 content.classes.insert(
-                    type_name.display_name.to_string(),
+                    type_name.display_name().to_string(),
                     types::Class {
-                        name: type_name.display_name.to_string(),
+                        name: type_name.display_name().to_string(),
                         alias: class_def.alias.clone(),
                         description: class_def.description.clone(),
                         fields,
@@ -232,7 +232,7 @@ fn walk_ty(
             }
         }
         Ty::Enum(type_name, _) => {
-            let key = type_name.display_name.clone();
+            let key = type_name.display_name();
             if !visited.insert(key) {
                 return;
             }
@@ -249,9 +249,9 @@ fn walk_ty(
                     .collect();
 
                 content.enums.insert(
-                    type_name.display_name.to_string(),
+                    type_name.display_name().to_string(),
                     types::Enum {
-                        name: type_name.display_name.to_string(),
+                        name: type_name.display_name().to_string(),
                         alias: enum_def.alias.clone(),
                         description: enum_def.description.clone(),
                         values,
@@ -266,18 +266,18 @@ fn walk_ty(
             // `recursive_type_aliases` (which would trigger schema emission) and do *not*
             // recurse into the alias body (which would diverge on the self-referential
             // `json[]` / `map<string, json>` arms).
-            if type_name.display_name.as_str() == ::baml_base::qualified_name::BAML_JSON_JSON {
-                visited.insert(type_name.display_name.clone());
+            if type_name.display_name().as_str() == ::baml_base::qualified_name::BAML_JSON_JSON {
+                visited.insert(type_name.display_name());
                 return;
             }
-            let key = type_name.display_name.clone();
+            let key = type_name.display_name();
             if !visited.insert(key) {
                 return;
             }
             if let Some(target_ty) = find_type_alias_definition(ctx, type_name) {
                 content
                     .recursive_type_aliases
-                    .insert(type_name.display_name.to_string(), target_ty.clone());
+                    .insert(type_name.display_name().to_string(), target_ty.clone());
                 walk_ty(target_ty, ctx, content, visited, ancestry);
             }
         }

@@ -4,10 +4,7 @@
 //! TIR keeps its own `Ty` with `QualifiedName` and `TypeAlias` — this crate
 //! provides the single conversion point from TIR types.
 
-use std::{
-    fmt,
-    hash::{Hash, Hasher},
-};
+use std::fmt;
 
 // Re-export core baml_base types so downstream crates can depend on baml_type
 // instead of baml_base directly.
@@ -51,80 +48,11 @@ pub const MAX_BIGINT_BITS: u64 = 1 << 28;
 #[allow(clippy::cast_possible_truncation)] // MAX_BIGINT_BITS is 2^28; fits in usize on 32/64-bit
 pub const MAX_BIGINT_DECIMAL_DIGITS: usize = (MAX_BIGINT_BITS / 3 + 2) as usize;
 
-/// A lightweight name type for class/enum/type-alias references.
-///
-/// Replaces both `QualifiedName` (VIR+) and plain `String` keys.
-/// `display_name` is pre-computed from the source FQN and does NOT participate
-/// in equality/hashing — it's a cache for display purposes.
-#[derive(Debug, Clone, BorshSerialize, BorshDeserialize)]
-pub struct TypeName {
-    /// Short name: "Response", "User"
-    pub name: Name,
-    /// Module path segments: empty for local types, ["baml", "http"] for baml.http.Response.
-    /// Used by runtime maps (SysOpContext) to distinguish `baml.SomeType` from local `SomeType`.
-    pub module_path: Vec<Name>,
-    /// Pre-computed display string: "baml.http.Response" for builtins, "User" for locals.
-    /// Does NOT participate in PartialEq/Hash.
-    pub display_name: Name,
-}
-
-impl TypeName {
-    /// Create a TypeName for a local (non-namespaced) type.
-    pub fn local(name: Name) -> Self {
-        Self {
-            display_name: name.clone(),
-            name,
-            module_path: vec![],
-        }
-    }
-
-    /// Create a TypeName from a dotted path like `"baml.http.Response"`.
-    ///
-    /// The last segment becomes `name`, everything before it becomes `module_path`,
-    /// and `display_name` is the full dotted path.
-    /// Returns `true` if this type lives in the `baml.panics` namespace.
-    pub fn is_panic_type(&self) -> bool {
-        // module_path is [package, namespace...], so split into package + rest.
-        self.module_path
-            .first()
-            .is_some_and(|pkg| baml_base::is_panic_namespace(pkg.as_str(), &self.module_path[1..]))
-    }
-
-    pub fn from_dotted_path(path: &str) -> Self {
-        let segments: Vec<&str> = path.split('.').collect();
-        let name = Name::new(*segments.last().expect("path must be non-empty"));
-        let module_path = segments[..segments.len() - 1]
-            .iter()
-            .map(|s| Name::new(*s))
-            .collect();
-        Self {
-            display_name: Name::new(path),
-            name,
-            module_path,
-        }
-    }
-}
-
-impl PartialEq for TypeName {
-    fn eq(&self, other: &Self) -> bool {
-        self.name == other.name && self.module_path == other.module_path
-    }
-}
-
-impl Eq for TypeName {}
-
-impl Hash for TypeName {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.name.hash(state);
-        self.module_path.hash(state);
-    }
-}
-
-impl fmt::Display for TypeName {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.display_name)
-    }
-}
+/// Transitional alias for [`QualifiedTypeName`], the single qualified-name type
+/// for class/enum/type-alias references. The legacy public fields
+/// (`name`/`module_path`/`display_name`) are now methods: [`QualifiedTypeName::name`],
+/// [`QualifiedTypeName::module_path`], [`QualifiedTypeName::display_name`].
+pub use crate::QualifiedTypeName as TypeName;
 
 /// Freshness flag for literal types.
 ///
@@ -465,11 +393,7 @@ impl Ty {
     /// `Class(name)` under the `"user"` package (matches compiler2 output for user-defined classes).
     pub fn user_class(name: &str) -> Self {
         Ty::Class(
-            TypeName {
-                display_name: Name::new(name),
-                name: Name::new(name),
-                module_path: vec![Name::new("user")],
-            },
+            QualifiedTypeName::local(Name::new(name)),
             Vec::new(),
             TyAttr::default(),
         )
@@ -478,11 +402,7 @@ impl Ty {
     /// `Class(name, args)` under the `"user"` package (matches compiler2 output for user-defined classes).
     pub fn user_class_with_args(name: &str, args: Vec<Ty>) -> Self {
         Ty::Class(
-            TypeName {
-                display_name: Name::new(name),
-                name: Name::new(name),
-                module_path: vec![Name::new("user")],
-            },
+            QualifiedTypeName::local(Name::new(name)),
             args,
             TyAttr::default(),
         )
@@ -497,63 +417,36 @@ impl Ty {
 
     // --- Opaque type constructors ---
 
-    /// Helper to build a TypeName for a builtin opaque type.
-    ///
-    /// `qualified_name`: dotted path like `"baml.llm.Resource"` — the last
-    /// segment becomes `name`, everything before it becomes `module_path`.
-    ///
-    /// `display`: the user-facing display string (may differ from the
-    /// qualified name).
-    fn opaque_builtin(qualified_name: &str, display: &str, attr: TyAttr) -> Self {
-        let segments: Vec<&str> = qualified_name.split('.').collect();
-        let name = Name::new(*segments.last().expect("qualified_name must be non-empty"));
-        let module_path = segments[..segments.len() - 1]
-            .iter()
-            .map(Name::new)
-            .collect();
-        Ty::Opaque(
-            TypeName {
-                name,
-                module_path,
-                display_name: Name::new(display),
-            },
-            attr,
-        )
+    /// Helper to build an opaque type from a dotted `qualified_name` like
+    /// `"baml.llm.Resource"` (first segment = package, last = short name).
+    fn opaque_builtin(qualified_name: &str, attr: TyAttr) -> Self {
+        Ty::Opaque(QualifiedTypeName::from_dotted_path(qualified_name), attr)
     }
 
     /// Opaque resource handle type (file, socket, HTTP response body).
     /// NOTE: Uses TyAttr::default(). Callers with a source attr should use opaque_builtin() directly.
     pub fn resource() -> Self {
-        Self::opaque_builtin("baml.llm.Resource", "baml.llm.Resource", TyAttr::default())
+        Self::opaque_builtin("baml.llm.Resource", TyAttr::default())
     }
 
     /// Opaque structured prompt tree type for LLM calls.
     /// NOTE: Uses TyAttr::default(). Callers with a source attr should use opaque_builtin() directly.
     pub fn prompt_ast() -> Self {
-        Self::opaque_builtin(
-            "baml.llm.PromptAst",
-            "baml.llm.PromptAst",
-            TyAttr::default(),
-        )
+        Self::opaque_builtin("baml.llm.PromptAst", TyAttr::default())
     }
 
-    /// Meta-type — a runtime value that wraps a `Ty`.
+    /// Meta-type — a runtime value that wraps a `Ty`. Renders as the `type`
+    /// keyword (see `Display`) though its qualified name is `baml.reflect.Type`.
     /// NOTE: Uses TyAttr::default(). Callers with a source attr should use opaque_builtin() directly.
     pub fn type_type() -> Self {
-        Self::opaque_builtin("baml.reflect.Type", "type", TyAttr::default())
+        Self::opaque_builtin("baml.reflect.Type", TyAttr::default())
     }
 
     /// Check if this is an opaque type with the given qualified name
     /// (e.g. `"baml.llm.PromptAst"`).
     pub fn is_opaque(&self, qualified_name: &str) -> bool {
         match self {
-            Ty::Opaque(tn, _) => {
-                // Build "module.path.Name" and compare.
-                let mut parts: Vec<&str> = tn.module_path.iter().map(|n| n.as_str()).collect();
-                parts.push(tn.name.as_str());
-                let full = parts.join(".");
-                full == qualified_name
-            }
+            Ty::Opaque(tn, _) => tn.render_dotted(false) == qualified_name,
             _ => false,
         }
     }
@@ -791,7 +684,7 @@ impl fmt::Display for Ty {
             },
             Ty::Bigint { .. } => write!(f, "bigint"),
             Ty::Class(tn, args, _) => {
-                write!(f, "{tn}")?;
+                write!(f, "{}", tn.display_name())?;
                 if !args.is_empty() {
                     write!(f, "<")?;
                     for (i, arg) in args.iter().enumerate() {
@@ -805,7 +698,7 @@ impl fmt::Display for Ty {
                 Ok(())
             }
             Ty::Interface(tn, args, associated_bindings, _) => {
-                write!(f, "{tn}")?;
+                write!(f, "{}", tn.display_name())?;
                 if !args.is_empty() || !associated_bindings.is_empty() {
                     write!(f, "<")?;
                     let mut first = true;
@@ -827,10 +720,18 @@ impl fmt::Display for Ty {
                 }
                 Ok(())
             }
-            Ty::Enum(tn, _) => write!(f, "{tn}"),
-            Ty::EnumVariant(tn, variant, _) => write!(f, "{tn}.{variant}"),
-            Ty::Opaque(tn, _) => write!(f, "{tn}"),
-            Ty::TypeAlias(tn, _) => write!(f, "{tn}"),
+            Ty::Enum(tn, _) => write!(f, "{}", tn.display_name()),
+            Ty::EnumVariant(tn, variant, _) => write!(f, "{}.{variant}", tn.display_name()),
+            Ty::Opaque(tn, _) => {
+                // The reflection meta-type renders as the `type` keyword even
+                // though its qualified name is `baml.reflect.Type`.
+                if tn.render_dotted(false) == "baml.reflect.Type" {
+                    write!(f, "type")
+                } else {
+                    write!(f, "{}", tn.display_name())
+                }
+            }
+            Ty::TypeAlias(tn, _) => write!(f, "{}", tn.display_name()),
             Ty::List(inner, _) => {
                 inner.fmt_as_postfix_base(f)?;
                 write!(f, "[]")
@@ -1045,7 +946,7 @@ mod tests {
         assert!(Ty::resource().is_opaque("baml.llm.Resource"));
         assert!(!Ty::resource().is_opaque("baml.reflect.Type"));
         assert_eq!(
-            Ty::prompt_ast().as_opaque().map(|tn| tn.name.as_str()),
+            Ty::prompt_ast().as_opaque().map(|tn| tn.name().as_str()),
             Some("PromptAst"),
         );
         assert_eq!(ty_int().as_opaque(), None);

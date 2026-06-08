@@ -1792,7 +1792,7 @@ mod tests {
         let Object::Class(c) = (unsafe { inst.class.get() }) else {
             panic!("not class")
         };
-        assert_eq!(c.name.name.as_str(), "TestClass");
+        assert_eq!(c.name.name().as_str(), "TestClass");
     }
 
     #[test]
@@ -1824,7 +1824,7 @@ mod tests {
         let Object::Enum(e) = (unsafe { v.enm.get() }) else {
             panic!("not enum")
         };
-        assert_eq!(e.name.name.as_str(), "Color");
+        assert_eq!(e.name.name().as_str(), "Color");
     }
 
     #[test]
@@ -2035,7 +2035,7 @@ mod tests {
         let Object::Class(c) = (unsafe { new_roots[0].get() }) else {
             panic!("not class")
         };
-        assert_eq!(c.name.name.as_str(), "MyClass");
+        assert_eq!(c.name.name().as_str(), "MyClass");
         assert_eq!(c.type_tag, 42);
     }
 
@@ -2058,7 +2058,7 @@ mod tests {
         let Object::Enum(e) = (unsafe { new_roots[0].get() }) else {
             panic!("not enum")
         };
-        assert_eq!(e.name.name.as_str(), "Status");
+        assert_eq!(e.name.name().as_str(), "Status");
     }
 
     #[test]
@@ -2568,7 +2568,7 @@ mod tests {
         let Object::Enum(e) = (unsafe { var.enm.get() }) else {
             panic!("variant.enm not Enum")
         };
-        assert_eq!(e.name.name.as_str(), "E");
+        assert_eq!(e.name.name().as_str(), "E");
     }
 
     // ========================================================================

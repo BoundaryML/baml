@@ -56,29 +56,17 @@ use baml_compiler2_tir::ty::{
     Ty as Tir2Ty,
 };
 
+/// Project a TIR qualified name into the runtime name space.
+///
+/// TIR and `baml_type` now share `QualifiedTypeName`, so this is a near
+/// identity: it only strips the declared `generic_params`, which never reach
+/// runtime types (a runtime `Foo<T>` and `Foo` must compare equal). Once
+/// `generic_params` is removed from the name entirely this collapses to a
+/// plain clone and can be deleted.
 pub fn qtn_to_type_name(qtn: &QualifiedTypeName) -> TypeName {
-    let module_path = std::iter::once(qtn.package().clone())
-        .chain(qtn.namespace().iter().cloned())
-        .collect::<Vec<_>>();
-    // For user-defined types (the local package), display with only the local
-    // namespace path so snapshots show `Point` rather than `user.Point`.
-    // For builtin types (package = "baml", etc.), keep the full FQ path.
-    let display_name = if qtn.is_local() {
-        let parts: Vec<_> = qtn
-            .namespace()
-            .iter()
-            .map(std::string::ToString::to_string)
-            .chain(std::iter::once(qtn.name().to_string()))
-            .collect();
-        smol_str::SmolStr::new(parts.join("."))
-    } else {
-        smol_str::SmolStr::new(qtn.to_string())
-    };
-    TypeName {
-        name: qtn.name().clone(),
-        module_path,
-        display_name,
-    }
+    let mut out = qtn.clone();
+    out.generic_params.clear();
+    out
 }
 
 /// Pre-computed type alias data for inline expansion in `convert_tir2_ty`.
@@ -772,11 +760,7 @@ pub fn convert_tir2_ty(ty: &Tir2Ty, resolved: &ResolvedAliases) -> Ty {
         Tir2Ty::RustType { attr } => {
             // RustType is an opaque sentinel — map to Opaque with a synthetic name
             Ty::Opaque(
-                TypeName {
-                    name: Name::new("RustType"),
-                    module_path: vec![Name::new("baml"), Name::new("rust")],
-                    display_name: Name::new("RustType"),
-                },
+                QualifiedTypeName::from_dotted_path("baml.rust.RustType"),
                 attr.clone(),
             )
         }
@@ -784,11 +768,7 @@ pub fn convert_tir2_ty(ty: &Tir2Ty, resolved: &ResolvedAliases) -> Ty {
             // The `type` metatype maps to the same opaque representation as v1.
             // See Ty::type_type() in baml_type/src/lib.rs.
             Ty::Opaque(
-                TypeName {
-                    name: Name::new("Type"),
-                    module_path: vec![Name::new("baml"), Name::new("reflect")],
-                    display_name: Name::new("type"),
-                },
+                QualifiedTypeName::from_dotted_path("baml.reflect.Type"),
                 attr.clone(),
             )
         }
@@ -1834,7 +1814,7 @@ impl<'db> LoweringContext<'db> {
         actual_ty: &Tir2Ty,
         target_tn: &TypeName,
     ) -> Option<InterfaceTypeView> {
-        let target_qtn = Self::baml_iter_qtn(target_tn.name.as_str());
+        let target_qtn = Self::baml_iter_qtn(target_tn.name().as_str());
         for pkg_id in self.registry_package_ids_for_interface_lookup(actual_ty, &target_qtn) {
             let default_pkg = pkg_id.name(self.db).clone();
             let registry =
@@ -5328,18 +5308,14 @@ impl<'db> LoweringContext<'db> {
         use baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns;
         let db = self.db;
 
-        let Some(pkg_name) = class_tn.module_path.first() else {
-            return Ty::Null {
-                attr: TyAttr::default(),
-            };
-        };
+        let pkg_name = class_tn.package();
         let pkg_id = baml_compiler2_hir::package::PackageId::new(db, pkg_name.clone());
         let pkg_items_ref = package_items(db, pkg_id);
 
-        let namespace: Vec<Name> = class_tn.module_path[1..].to_vec();
+        let namespace: Vec<Name> = class_tn.namespace().clone();
 
         let Some(Definition::Class(class_loc)) =
-            pkg_items_ref.lookup_type(&namespace, &class_tn.name)
+            pkg_items_ref.lookup_type(&namespace, class_tn.name())
         else {
             return Ty::Null {
                 attr: TyAttr::default(),
@@ -6089,7 +6065,7 @@ impl LoweringContext<'_> {
                     // Decide how many leading segments form the receiver
                     // value (the rest are type qualifiers).
                     let prefix_is_qualifier = segments.len() >= 3
-                        && segments[prefix_idx].as_str() == iface_tn.name.as_str();
+                        && segments[prefix_idx].as_str() == iface_tn.name().as_str();
                     let receiver_segments_end = if prefix_is_qualifier {
                         prefix_idx
                     } else {
@@ -7313,14 +7289,7 @@ impl LoweringContext<'_> {
 
         let generic_params = self.enclosing_generic_params();
         let type_ty = baml_type::Ty::Opaque(
-            baml_type::TypeName {
-                name: baml_base::Name::new("Type"),
-                module_path: vec![
-                    baml_base::Name::new("baml"),
-                    baml_base::Name::new("reflect"),
-                ],
-                display_name: baml_base::Name::new("type"),
-            },
+            baml_type::QualifiedTypeName::from_dotted_path("baml.reflect.Type"),
             baml_type::TyAttr::default(),
         );
 
@@ -7610,9 +7579,7 @@ impl<'db> LoweringContext<'db> {
         // synthetic Object exprs from `lower_cst.rs` that already use registry-
         // matching dotted forms like "baml.llm.Client".
         let class_name = if let Some(tn) = &type_name_key {
-            let mut parts: Vec<String> = tn.module_path.iter().map(ToString::to_string).collect();
-            parts.push(tn.name.to_string());
-            parts.join(".")
+            tn.render_dotted(false)
         } else {
             type_name.map(ToString::to_string).unwrap_or_default()
         };
@@ -7984,7 +7951,9 @@ impl<'db> LoweringContext<'db> {
                         "internal compiler error: MIR failed to resolve field access \
                          .{} against class definition '{}' (module_path: {:?}). \
                          This class should be in class_fields but isn't.",
-                        field_str, tn.name, tn.module_path,
+                        field_str,
+                        tn.name(),
+                        tn.module_path(),
                     ),
                     expr_id,
                 );
@@ -8114,7 +8083,7 @@ impl<'db> LoweringContext<'db> {
         for (tag, class_name, field_idx) in candidates {
             let bb_body = self.builder.create_block();
             arms.push((tag, bb_body));
-            arm_names.push((tag, class_name.name.to_string()));
+            arm_names.push((tag, class_name.name().to_string()));
 
             self.builder.set_current_block(bb_body);
             self.builder.assign(
@@ -8888,11 +8857,11 @@ impl<'db> LoweringContext<'db> {
         &self,
         iface_tn: &TypeName,
     ) -> Option<(baml_compiler2_hir::loc::InterfaceLoc<'db>, Vec<Name>)> {
-        let iface_pkg_name = iface_tn.module_path.first()?;
+        let iface_pkg_name = iface_tn.package();
         let iface_pkg_items = self.resolve_class_pkg_items_by_name(iface_pkg_name);
-        let iface_ns: Vec<Name> = iface_tn.module_path.iter().skip(1).cloned().collect();
+        let iface_ns: Vec<Name> = iface_tn.namespace().clone();
         let Definition::Interface(iface_loc) =
-            iface_pkg_items.lookup_type(&iface_ns, &iface_tn.name)?
+            iface_pkg_items.lookup_type(&iface_ns, iface_tn.name())?
         else {
             return None;
         };
@@ -8923,17 +8892,17 @@ impl<'db> LoweringContext<'db> {
             return false;
         };
         name == method
-            && class == &iface_tn.name
-            && iface_tn.module_path.first() == Some(package)
-            && iface_tn.module_path.iter().skip(1).eq(namespace.iter())
+            && class == iface_tn.name()
+            && iface_tn.package() == package
+            && iface_tn.namespace().iter().eq(namespace.iter())
     }
 
     fn interface_method_generic_count(&self, iface_tn: &TypeName, method: &Name) -> Option<usize> {
-        let iface_pkg_name = iface_tn.module_path.first()?;
+        let iface_pkg_name = iface_tn.package();
         let iface_pkg_items = self.resolve_class_pkg_items_by_name(iface_pkg_name);
-        let iface_ns: Vec<Name> = iface_tn.module_path.iter().skip(1).cloned().collect();
+        let iface_ns: Vec<Name> = iface_tn.namespace().clone();
         let Definition::Interface(iface_loc) =
-            iface_pkg_items.lookup_type(&iface_ns, &iface_tn.name)?
+            iface_pkg_items.lookup_type(&iface_ns, iface_tn.name())?
         else {
             return None;
         };
@@ -9826,11 +9795,11 @@ impl<'db> LoweringContext<'db> {
         iface_type_args: &[Tir2Ty],
         iface_assoc: &[(Name, Tir2Ty)],
     ) -> Option<Vec<InterfaceTypeView>> {
-        let iface_pkg_name = iface_tn.module_path.first()?;
+        let iface_pkg_name = iface_tn.package();
         let iface_pkg_items = self.resolve_class_pkg_items_by_name(iface_pkg_name);
-        let iface_ns: Vec<Name> = iface_tn.module_path.iter().skip(1).cloned().collect();
+        let iface_ns: Vec<Name> = iface_tn.namespace().clone();
         let Definition::Interface(requested_root_loc) =
-            iface_pkg_items.lookup_type(&iface_ns, &iface_tn.name)?
+            iface_pkg_items.lookup_type(&iface_ns, iface_tn.name())?
         else {
             return None;
         };
@@ -10153,26 +10122,28 @@ impl<'db> LoweringContext<'db> {
         &self,
         class_tn: &TypeName,
     ) -> Option<baml_compiler2_hir::loc::ClassLoc<'db>> {
-        let pkg_name = class_tn.module_path.first()?;
+        let pkg_name = class_tn.package();
         let pkg_items = self.resolve_class_pkg_items_by_name(pkg_name);
-        let ns: Vec<Name> = class_tn.module_path.iter().skip(1).cloned().collect();
-        let Some(Definition::Class(class_loc)) = pkg_items.lookup_type(&ns, &class_tn.name) else {
+        let ns: Vec<Name> = class_tn.namespace().clone();
+        let Some(Definition::Class(class_loc)) = pkg_items.lookup_type(&ns, class_tn.name()) else {
             return None;
         };
         Some(class_loc)
     }
 
     fn resolve_qtn_by_type_name(&self, tn: &TypeName) -> Option<QualifiedTypeName> {
-        let pkg_name = tn.module_path.first()?;
+        let pkg_name = tn.package();
         let pkg_items = self.resolve_class_pkg_items_by_name(pkg_name);
-        let ns: Vec<Name> = tn.module_path.iter().skip(1).cloned().collect();
-        let def = pkg_items.lookup_type(&ns, &tn.name)?;
+        let ns: Vec<Name> = tn.namespace().clone();
+        let def = pkg_items.lookup_type(&ns, tn.name())?;
         match def {
             Definition::Class(_)
             | Definition::Enum(_)
             | Definition::Interface(_)
             | Definition::TypeAlias(_) => Some(baml_compiler2_tir::lower_type_expr::qualify_def(
-                self.db, def, &tn.name,
+                self.db,
+                def,
+                tn.name(),
             )),
             _ => None,
         }
@@ -10225,11 +10196,11 @@ impl<'db> LoweringContext<'db> {
         iface_tn: &TypeName,
         method: &Name,
     ) -> Option<ItemRef> {
-        let iface_pkg_name = iface_tn.module_path.first()?;
+        let iface_pkg_name = iface_tn.package();
         let iface_pkg_items = self.resolve_class_pkg_items_by_name(iface_pkg_name);
-        let iface_ns: Vec<Name> = iface_tn.module_path.iter().skip(1).cloned().collect();
+        let iface_ns: Vec<Name> = iface_tn.namespace().clone();
         let Definition::Interface(iface_loc) =
-            iface_pkg_items.lookup_type(&iface_ns, &iface_tn.name)?
+            iface_pkg_items.lookup_type(&iface_ns, iface_tn.name())?
         else {
             return None;
         };
@@ -10347,12 +10318,10 @@ impl<'db> LoweringContext<'db> {
     /// True iff the interface named by `iface_tn` declares `field` directly in
     /// its own body (not via `requires`).
     fn interface_declares_field(&self, iface_tn: &TypeName, field: &Name) -> bool {
-        let Some(pkg_name) = iface_tn.module_path.first() else {
-            return false;
-        };
+        let pkg_name = iface_tn.package();
         let pkg_items = self.resolve_class_pkg_items_by_name(pkg_name);
-        let ns: Vec<Name> = iface_tn.module_path.iter().skip(1).cloned().collect();
-        let Some(Definition::Interface(loc)) = pkg_items.lookup_type(&ns, &iface_tn.name) else {
+        let ns: Vec<Name> = iface_tn.namespace().clone();
+        let Some(Definition::Interface(loc)) = pkg_items.lookup_type(&ns, iface_tn.name()) else {
             return false;
         };
         let tree = file_item_tree(self.db, loc.file(self.db));
@@ -10364,12 +10333,10 @@ impl<'db> LoweringContext<'db> {
     /// True iff the interface named by `iface_tn` declares `method` directly
     /// (as a default or required method), not via `requires`.
     fn interface_declares_method(&self, iface_tn: &TypeName, method: &Name) -> bool {
-        let Some(pkg_name) = iface_tn.module_path.first() else {
-            return false;
-        };
+        let pkg_name = iface_tn.package();
         let pkg_items = self.resolve_class_pkg_items_by_name(pkg_name);
-        let ns: Vec<Name> = iface_tn.module_path.iter().skip(1).cloned().collect();
-        let Some(Definition::Interface(loc)) = pkg_items.lookup_type(&ns, &iface_tn.name) else {
+        let ns: Vec<Name> = iface_tn.namespace().clone();
+        let Some(Definition::Interface(loc)) = pkg_items.lookup_type(&ns, iface_tn.name()) else {
             return false;
         };
         let tree = file_item_tree(self.db, loc.file(self.db));
@@ -11291,7 +11258,9 @@ impl LoweringContext<'_> {
                             "internal compiler error: MIR failed to resolve member access \
                              .{} against class definition '{}' (module_path: {:?}). \
                              This class should be in class_fields but isn't.",
-                            member_name, tn.name, tn.module_path,
+                            member_name,
+                            tn.name(),
+                            tn.module_path(),
                         ),
                         base_id,
                     );
@@ -11831,7 +11800,7 @@ impl LoweringContext<'_> {
                 let reverse_class: std::collections::HashMap<i64, &str> = self
                     .class_type_tags
                     .iter()
-                    .map(|(tn, tag)| (*tag, tn.name.as_str()))
+                    .map(|(tn, tag)| (*tag, tn.name().as_str()))
                     .collect();
                 int_arms
                     .iter()
@@ -12407,7 +12376,7 @@ impl LoweringContext<'_> {
             Ty::Map { .. } => Some(baml_type::typetag::MAP),
             Ty::Function { .. } => Some(baml_type::typetag::FUNCTION),
             Ty::Future(..) => Some(baml_type::typetag::FUTURE),
-            Ty::Opaque(tn, _) if tn.display_name.as_str() == "type" => {
+            Ty::Opaque(tn, _) if tn.display_name().as_str() == "type" => {
                 Some(baml_type::typetag::TYPE)
             }
             Ty::Class(tn, _, _) => self.class_type_tags.get(tn).copied(),

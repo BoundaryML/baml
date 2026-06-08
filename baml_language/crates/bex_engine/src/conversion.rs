@@ -144,7 +144,7 @@ impl BexEngine {
                 // once at lift time and carried inline on the variant so
                 // the wire encoder doesn't need a heap permit. See plan
                 // 23a §"Engine-side ripple effects".
-                if class.name.display_name.as_str() == "baml.llm.Stream" {
+                if class.name.display_name().as_str() == "baml.llm.Stream" {
                     let handle = self.heap.create_handle(ptr);
                     let ty = Ty::Class(
                         class.name.clone(),
@@ -833,23 +833,8 @@ fn find_matching_member(value: &BexExternalValue, members: &[Ty]) -> Result<Ty, 
 }
 
 fn type_name_matches_external_name(external_name: &str, type_name: &baml_type::TypeName) -> bool {
-    if external_name == type_name.display_name.as_str() {
-        return true;
-    }
-
-    if type_name.module_path.is_empty() {
-        return external_name == type_name.name.as_str();
-    }
-
-    let qualified_name = type_name
-        .module_path
-        .iter()
-        .map(baml_type::Name::as_str)
-        .chain(std::iter::once(type_name.name.as_str()))
-        .collect::<Vec<_>>()
-        .join(".");
-
-    external_name == qualified_name
+    external_name == type_name.display_name().as_str()
+        || external_name == type_name.render_dotted(false)
 }
 
 fn resolve_named_object<'a>(

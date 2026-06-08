@@ -267,17 +267,7 @@ fn collect_class_fields_with_implements(
 /// codegen-output Python and the runtime see the same `<pkg>.<…>` form
 /// end-to-end. See `12a-namespace-rules.md §5` for the rationale.
 fn fq_to_type_name(fq: &str) -> baml_type::TypeName {
-    let segments: Vec<&str> = fq.split('.').collect();
-    let name = baml_base::Name::new(*segments.last().expect("non-empty fq name"));
-    let module_path = segments[..segments.len() - 1]
-        .iter()
-        .map(|s| baml_base::Name::new(*s))
-        .collect();
-    baml_type::TypeName {
-        name,
-        module_path,
-        display_name: baml_base::Name::new(fq),
-    }
+    baml_type::QualifiedTypeName::from_dotted_path(fq)
 }
 
 /// Generate bytecode for the entire project (default: `OptLevel::Two`).
@@ -1080,11 +1070,7 @@ pub fn generate_project_bytecode_with_opt(
                             _ => None,
                         };
                         if let Some(prim_name) = prim_name {
-                            let tn = baml_type::TypeName {
-                                name: Name::new(prim_name),
-                                module_path: Vec::new(),
-                                display_name: Name::new(prim_name),
-                            };
+                            let tn = baml_type::QualifiedTypeName::local(Name::new(prim_name));
                             add_impl(
                                 iface_qtn,
                                 tn,
@@ -1141,11 +1127,11 @@ pub fn generate_project_bytecode_with_opt(
         // `FxHashMap` iteration that built the rules.
         let impl_sort_key = |tn: &baml_type::TypeName| {
             (
-                tn.module_path
+                tn.module_path()
                     .iter()
                     .map(std::string::ToString::to_string)
                     .collect::<Vec<_>>(),
-                tn.name.to_string(),
+                tn.name().to_string(),
             )
         };
         for impls in inverted.values_mut() {

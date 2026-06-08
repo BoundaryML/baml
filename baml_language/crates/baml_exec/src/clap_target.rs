@@ -467,15 +467,7 @@ mod tests {
         }
     }
     fn ty_class(name: &str) -> Ty {
-        Ty::Class(
-            TypeName {
-                name: name.into(),
-                module_path: vec![],
-                display_name: name.into(),
-            },
-            vec![],
-            TyAttr::default(),
-        )
+        Ty::Class(TypeName::local(name.into()), vec![], TyAttr::default())
     }
 
     fn func_info(names: &[&str], types: Vec<Ty>, defaults: Vec<bool>, ret: Ty) -> UserFunctionInfo {

@@ -435,26 +435,16 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
     }
 
     fn class_object_index_for_type_name(&self, tn: &TypeName) -> Option<usize> {
-        let full_name = if tn.module_path.is_empty() {
-            tn.name.to_string()
-        } else {
-            let module = tn
-                .module_path
-                .iter()
-                .map(baml_base::Name::as_str)
-                .collect::<Vec<_>>()
-                .join(".");
-            format!("{module}.{}", tn.name)
-        };
+        let full_name = tn.render_dotted(false);
         self.class_object_indices
             .get(&full_name)
             .copied()
             .or_else(|| {
                 self.class_object_indices
-                    .get(tn.display_name.as_str())
+                    .get(tn.display_name().as_str())
                     .copied()
             })
-            .or_else(|| self.class_object_indices.get(tn.name.as_str()).copied())
+            .or_else(|| self.class_object_indices.get(tn.name().as_str()).copied())
     }
 
     /// Resolve the type of a MIR Place by walking from the root local through projections.
@@ -3134,7 +3124,7 @@ impl PullSink for StackifyCodegen<'_, '_> {
                 // Generic class instantiation with TypeArgRef leaves or
                 // concrete-but-parametric (e.g. Foo<int>).  Use the
                 // ClassWithTypeArgs constant so the VM can compare args.
-                let class_name_str = tn.display_name.as_str();
+                let class_name_str = tn.display_name();
                 if let Some(class_obj_idx) = self.class_object_index_for_type_name(tn) {
                     let c = self.add_constant(ConstValue::ClassWithTypeArgs {
                         class_obj: ObjectIndex::from_raw(class_obj_idx),
@@ -3158,7 +3148,7 @@ impl PullSink for StackifyCodegen<'_, '_> {
                     _ => None,
                 };
                 if let Some((tn, ty_args_opt)) = maybe_class {
-                    let class_name_str = tn.display_name.as_str();
+                    let class_name_str = tn.display_name();
                     if let Some(class_obj_idx) = self.class_object_index_for_type_name(tn) {
                         match ty_args_opt {
                             Some(ty_args) if !ty_args.is_empty() => {
@@ -3308,7 +3298,7 @@ impl PullSink for StackifyCodegen<'_, '_> {
 
     fn resolve_field_name(&self, base: &Place, field_idx: usize) -> String {
         let class_name = match self.resolve_place_type(base) {
-            Some(Ty::Class(tn, _, _)) => tn.display_name.to_string(),
+            Some(Ty::Class(tn, _, _)) => tn.display_name().to_string(),
             _ => return format!("{field_idx}"),
         };
         self.lookup_class_field_name(&class_name, field_idx)
