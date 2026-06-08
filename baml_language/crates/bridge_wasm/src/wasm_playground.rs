@@ -83,6 +83,13 @@ pub enum PlaygroundNotification {
         graph: Option<serde_json::Value>,
     },
     #[serde(rename_all = "camelCase")]
+    ControlFlowGraphDiffResult {
+        function_name: String,
+        base_graph: Option<serde_json::Value>,
+        head_graph: Option<serde_json::Value>,
+        diff: Option<serde_json::Value>,
+    },
+    #[serde(rename_all = "camelCase")]
     CursorContext { context: serde_json::Value },
     #[serde(rename_all = "camelCase")]
     TestCollectionResult {
@@ -167,6 +174,17 @@ impl From<bex_project::PlaygroundNotification> for PlaygroundNotification {
             } => PlaygroundNotification::ControlFlowGraphResult {
                 function_name,
                 graph,
+            },
+            bex_project::PlaygroundNotification::ControlFlowGraphDiffResult {
+                function_name,
+                base_graph,
+                head_graph,
+                diff,
+            } => PlaygroundNotification::ControlFlowGraphDiffResult {
+                function_name,
+                base_graph,
+                head_graph,
+                diff,
             },
             bex_project::PlaygroundNotification::CursorContext { context } => {
                 PlaygroundNotification::CursorContext { context }

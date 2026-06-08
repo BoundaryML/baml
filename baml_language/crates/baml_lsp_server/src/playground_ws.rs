@@ -61,6 +61,18 @@ pub enum WsInMessage {
         #[serde(rename = "functionName")]
         function_name: String,
     },
+    #[serde(rename = "requestControlFlowGraphDiff")]
+    RequestControlFlowGraphDiff {
+        project: String,
+        #[serde(rename = "functionName")]
+        function_name: String,
+        /// Git ref to diff against (branch, tag, commit, "HEAD~1", etc).
+        /// If absent, defaults to merge-base against main/master.
+        #[serde(rename = "baseRef", default)]
+        base_ref: Option<String>,
+    },
+    #[serde(rename = "requestGitRefs")]
+    RequestGitRefs,
     #[serde(rename = "cursorPosition")]
     CursorPosition {
         file: String,
@@ -171,6 +183,21 @@ pub enum WsOutMessage {
         #[serde(rename = "functionName")]
         function_name: String,
         graph: Option<serde_json::Value>,
+    },
+    #[serde(rename = "controlFlowGraphDiffResult")]
+    ControlFlowGraphDiffResult {
+        #[serde(rename = "functionName")]
+        function_name: String,
+        #[serde(rename = "baseGraph")]
+        base_graph: Option<serde_json::Value>,
+        #[serde(rename = "headGraph")]
+        head_graph: Option<serde_json::Value>,
+        diff: Option<serde_json::Value>,
+    },
+    #[serde(rename = "gitRefs")]
+    GitRefs {
+        branches: Vec<String>,
+        tags: Vec<String>,
     },
     #[serde(rename = "cursorContext")]
     CursorContext { context: serde_json::Value },

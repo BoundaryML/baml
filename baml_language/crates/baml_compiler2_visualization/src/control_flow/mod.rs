@@ -3,11 +3,13 @@
 //! Graph types, builder infrastructure, the AST-based graph builder, the LLM
 //! graph builder, and the three-pass flattening pipeline.
 
+mod diff;
 mod flatten;
 mod from_ast;
 
 use std::{collections::HashMap, fmt};
 
+pub use diff::{GraphDiff, compute_graph_diff};
 pub use flatten::{flatten_control_flow_graph, prepare_control_flow_graph_for_visualization};
 pub use from_ast::{STMT_SOURCE_EXPR_TAG, build_control_flow_graph_from_ast};
 use indexmap::IndexMap;
@@ -49,7 +51,7 @@ pub enum PathSegment {
 }
 
 /// The type of a visualization node.
-#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum NodeType {
     FunctionRoot,

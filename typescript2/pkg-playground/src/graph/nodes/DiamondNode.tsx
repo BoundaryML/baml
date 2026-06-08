@@ -1,7 +1,7 @@
 import { type NodeProps } from '@xyflow/react';
 import { GitBranch } from 'lucide-react';
 import { type ComponentType, memo } from 'react';
-import { nodeBackground, nodeShadow, selectionRing, stateColors } from '../constants';
+import { nodeBackground, nodeShadow, selectionRing, stateColors, diffColors, diffNodeShadow } from '../constants';
 import type { WorkflowNodeData } from '../types';
 import { NodeHandles } from './NodeHandles';
 
@@ -26,9 +26,18 @@ export const DiamondNode: ComponentType<NodeProps> = memo(({ data }) => {
           gap: 8,
           padding: '7px 11px 7px 9px',
           borderRadius: 8,
-          background: nodeBackground(colors),
-          border: `1px solid ${colors.border}`,
-          boxShadow: nodeShadow(colors, !!isHighlighted),
+          background: d.diffStatus
+            ? `${diffColors[d.diffStatus].bg}, ${nodeBackground(colors)}`
+            : nodeBackground(colors),
+          border: `${d.diffStatus ? (diffColors[d.diffStatus].borderWidth ?? '1px') : '1px'} ${d.diffStatus === 'removed' ? 'dashed' : 'solid'} ${
+            d.diffStatus && !isHighlighted
+              ? diffColors[d.diffStatus].border
+              : colors.border
+          }`,
+          boxShadow: d.diffStatus
+            ? diffNodeShadow(d.diffStatus)
+            : nodeShadow(colors, !!isHighlighted),
+          opacity: d.diffStatus ? diffColors[d.diffStatus].opacity : undefined,
           width: '100%',
           height: '100%',
           boxSizing: 'border-box',

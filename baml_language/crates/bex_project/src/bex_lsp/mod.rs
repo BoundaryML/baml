@@ -146,6 +146,13 @@ pub enum PlaygroundNotification {
         graph: Option<serde_json::Value>,
     },
     #[serde(rename_all = "camelCase")]
+    ControlFlowGraphDiffResult {
+        function_name: String,
+        base_graph: Option<serde_json::Value>,
+        head_graph: Option<serde_json::Value>,
+        diff: Option<serde_json::Value>,
+    },
+    #[serde(rename_all = "camelCase")]
     CursorContext { context: serde_json::Value },
     #[serde(rename_all = "camelCase")]
     TestCollectionResult {
@@ -203,6 +210,16 @@ pub trait BexLsp: Send + Sync + notification::BexLspNotification + request::BexL
     /// callback as a `PlaygroundNotification::ControlFlowGraphResult`.
     fn request_control_flow_graph(&self, function_name: &str);
 
+    /// Request a diff of the control flow graph between base files and current state.
+    ///
+    /// Builds a temporary project from `base_files`, computes both graphs,
+    /// diffs them, and sends the result via `ControlFlowGraphDiffResult`.
+    fn request_control_flow_graph_diff(
+        &self,
+        function_name: &str,
+        base_files: std::collections::HashMap<String, String>,
+    );
+
     /// Get cursor context for playground navigation.
     ///
     /// Given a file path and position, returns context about what entity
@@ -244,6 +261,9 @@ pub trait BexLsp: Send + Sync + notification::BexLspNotification + request::BexL
     /// Used by the playground to navigate to source locations when clicking on
     /// log events. Returns the file path if the ID is valid, or None if not found.
     fn resolve_file_id(&self, file_id: u32) -> Option<String>;
+
+    /// Return the workspace root directories known to this LSP session.
+    fn workspace_roots(&self) -> Vec<std::path::PathBuf>;
 }
 
 use ::std::sync::Arc;

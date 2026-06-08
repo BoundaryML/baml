@@ -243,7 +243,6 @@ export const FunctionSidebar: FC<FunctionSidebarProps> = ({
           const isSelected = selectedFn === fn.name;
           const isInternal = fn.origin !== 'userDefined';
           const Icon = fn.kind === 'llm' ? Bot : FunctionSquare;
-
           return (
             <button
               type="button"

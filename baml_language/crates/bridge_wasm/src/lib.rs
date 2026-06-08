@@ -411,6 +411,23 @@ impl BamlWasmRuntime {
         self.bex.request_control_flow_graph(function_name);
     }
 
+    /// Request a diff of the control flow graph for a function against base files.
+    ///
+    /// `base_files_json` is a JSON string of `Record<string, string>` mapping
+    /// file paths to their base-branch content.
+    #[wasm_bindgen(js_name = requestControlFlowGraphDiff)]
+    pub fn request_control_flow_graph_diff(
+        &self,
+        _project: String,
+        function_name: &str,
+        base_files_json: &str,
+    ) {
+        let base_files: std::collections::HashMap<String, String> =
+            serde_json::from_str(base_files_json).unwrap_or_default();
+        self.bex
+            .request_control_flow_graph_diff(function_name, base_files);
+    }
+
     /// Handle a cursor position change from the editor.
     ///
     /// Computes cursor context (which function/workflow the cursor is in) and

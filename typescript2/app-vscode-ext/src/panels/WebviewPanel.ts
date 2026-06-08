@@ -148,6 +148,7 @@ export class WebviewPanel {
     void this._panel.webview.postMessage({ type: 'cursorPosition', position });
   }
 
+
   public dispose() {
     WebviewPanel.currentPanel = undefined;
     this._panel.dispose();

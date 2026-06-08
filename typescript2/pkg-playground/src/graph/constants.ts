@@ -1,3 +1,5 @@
+import type { DiffStatus } from './types';
+
 /**
  * Shared state colors & visual tokens for the graph.
  *
@@ -118,6 +120,27 @@ export function nodeBackground(s: NodeStateStyle): string {
     `linear-gradient(rgba(255,255,255,0.04), rgba(255,255,255,0) 28%)`,
     `linear-gradient(180deg, ${s.bgTop} 0%, ${s.bgBottom} 100%)`,
   ].join(', ');
+}
+
+export const diffColors: Record<DiffStatus, {
+  border: string;
+  glow: string;
+  bg: string;
+  opacity: number;
+  borderStyle?: string;
+  borderWidth?: string;
+}> = {
+  added:     { border: '#4ade80',               glow: 'rgba(74,222,128,0.35)',  bg: 'rgba(74,222,128,0.12)',  opacity: 1, borderWidth: '2px' },
+  removed:   { border: '#f87171',               glow: 'rgba(248,113,113,0.30)', bg: 'rgba(248,113,113,0.10)', opacity: 0.7, borderStyle: 'dashed', borderWidth: '2px' },
+  modified:  { border: '#fbbf24',               glow: 'rgba(251,191,36,0.35)',  bg: 'rgba(251,191,36,0.10)',  opacity: 1, borderWidth: '2px' },
+  unchanged: { border: 'rgba(255,255,255,0.08)', glow: 'transparent',           bg: 'transparent',           opacity: 0.25 },
+};
+
+/** Build a diff-aware box-shadow with a colored halo. */
+export function diffNodeShadow(diffStatus: DiffStatus): string {
+  const dc = diffColors[diffStatus];
+  if (dc.glow === 'transparent') return '0 1px 2px rgba(0,0,0,0.30), 0 4px 12px rgba(0,0,0,0.20)';
+  return `0 0 0 2px ${dc.glow}, 0 0 12px ${dc.glow}, 0 1px 2px rgba(0,0,0,0.30)`;
 }
 
 /**

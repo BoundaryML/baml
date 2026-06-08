@@ -62,6 +62,161 @@ pub async fn pick_port(base_port: u16, max_attempts: u16) -> anyhow::Result<(Tcp
 }
 
 // ---------------------------------------------------------------------------
+// Git helpers for diff mode
+// ---------------------------------------------------------------------------
+
+/// Retrieve `.baml` file contents at a given git ref.
+///
+/// If `base_ref` is `None`, defaults to `merge-base HEAD main` (fallback to `master`).
+/// Otherwise resolves the ref directly (branch name, tag, commit hash, `HEAD~1`, etc).
+///
+/// Returns (relative_path -> content, workspace_root).
+fn get_git_base_files(
+    bex: &Arc<dyn bex_project::BexLsp>,
+    base_ref: Option<&str>,
+) -> (
+    std::collections::HashMap<String, String>,
+    Option<std::path::PathBuf>,
+) {
+    use std::process::Command;
+
+    let roots = bex.workspace_roots();
+    let workspace = match roots.first() {
+        Some(r) => r,
+        None => return (Default::default(), None),
+    };
+
+    // Special case: "__staged__" reads from the git index (staging area)
+    let is_staged = base_ref == Some("__staged__");
+
+    // Resolve the git ref to a commit-ish (unless reading staged)
+    let resolved_ref = if is_staged {
+        String::new() // not used — staged uses ":<file>" syntax
+    } else {
+        match base_ref {
+            Some(r) if !r.is_empty() => {
+                // Try to resolve the ref directly via rev-parse
+                let output = Command::new("git")
+                    .args(["rev-parse", "--verify", r])
+                    .current_dir(workspace)
+                    .output();
+                match output {
+                    Ok(out) if out.status.success() => {
+                        String::from_utf8_lossy(&out.stdout).trim().to_string()
+                    }
+                    _ => return (Default::default(), None),
+                }
+            }
+            _ => {
+                // Default: merge-base against main (fallback to master)
+                let try_main = Command::new("git")
+                    .args(["merge-base", "HEAD", "main"])
+                    .current_dir(workspace)
+                    .output();
+                match try_main {
+                    Ok(out) if out.status.success() => {
+                        String::from_utf8_lossy(&out.stdout).trim().to_string()
+                    }
+                    _ => {
+                        let try_master = Command::new("git")
+                            .args(["merge-base", "HEAD", "master"])
+                            .current_dir(workspace)
+                            .output();
+                        match try_master {
+                            Ok(out) if out.status.success() => {
+                                String::from_utf8_lossy(&out.stdout).trim().to_string()
+                            }
+                            _ => return (Default::default(), None),
+                        }
+                    }
+                }
+            }
+        }
+    };
+
+    // List tracked .baml files
+    let ls_output = Command::new("git")
+        .args(["ls-files", "*.baml"])
+        .current_dir(workspace)
+        .output();
+    let baml_files: Vec<String> = match ls_output {
+        Ok(out) if out.status.success() => String::from_utf8_lossy(&out.stdout)
+            .lines()
+            .filter(|l| !l.is_empty())
+            .map(|l| l.to_string())
+            .collect(),
+        _ => return (Default::default(), None),
+    };
+
+    let mut base_files = std::collections::HashMap::new();
+    for file in &baml_files {
+        // For staged: "git show :<file>" reads from the index
+        // For commits: "git show <ref>:<file>" reads from that commit
+        let show_arg = if is_staged {
+            format!(":{file}")
+        } else {
+            format!("{resolved_ref}:{file}")
+        };
+        let show_output = Command::new("git")
+            .args(["show", &show_arg])
+            .current_dir(workspace)
+            .output();
+        if let Ok(out) = show_output
+            && out.status.success()
+            && let Ok(content) = String::from_utf8(out.stdout)
+        {
+            base_files.insert(file.clone(), content);
+        }
+    }
+
+    (base_files, Some(workspace.clone()))
+}
+
+/// List git branches and tags for the workspace.
+fn get_git_refs(bex: &Arc<dyn bex_project::BexLsp>) -> (Vec<String>, Vec<String>) {
+    use std::process::Command;
+
+    let roots = bex.workspace_roots();
+    let workspace = match roots.first() {
+        Some(r) => r,
+        None => return (vec![], vec![]),
+    };
+
+    let branches = Command::new("git")
+        .args(["branch", "--format=%(refname:short)"])
+        .current_dir(workspace)
+        .output()
+        .ok()
+        .filter(|o| o.status.success())
+        .map(|o| {
+            String::from_utf8_lossy(&o.stdout)
+                .lines()
+                .filter(|l| !l.is_empty())
+                .map(|l| l.to_string())
+                .collect()
+        })
+        .unwrap_or_default();
+
+    let tags = Command::new("git")
+        .args(["tag", "--sort=-creatordate", "-l"])
+        .current_dir(workspace)
+        .output()
+        .ok()
+        .filter(|o| o.status.success())
+        .map(|o| {
+            String::from_utf8_lossy(&o.stdout)
+                .lines()
+                .filter(|l| !l.is_empty())
+                .take(20) // Limit to 20 most recent tags
+                .map(|l| l.to_string())
+                .collect()
+        })
+        .unwrap_or_default();
+
+    (branches, tags)
+}
+
+// ---------------------------------------------------------------------------
 // Shared state for Axum handlers
 // ---------------------------------------------------------------------------
 
@@ -451,6 +606,101 @@ async fn handle_ws_in_message(
                 && sink.send(ws_msg).await.is_err()
             {
                 tracing::warn!("Failed to send control flow graph result");
+            }
+        }
+
+        WsInMessage::RequestControlFlowGraphDiff {
+            project: _,
+            function_name,
+            base_ref,
+        } => {
+            use baml_compiler2_visualization::control_flow::{
+                compute_graph_diff, prepare_control_flow_graph_for_visualization,
+            };
+
+            // Head graph: from current project state
+            let head_graph = state.bex.ast_control_flow_graph(&function_name);
+            let head_prepared =
+                head_graph.map(|g| prepare_control_flow_graph_for_visualization(&g));
+
+            // Base graph: retrieve base branch files via git, build a temporary project
+            let (base_files, _workspace_root) = get_git_base_files(&state.bex, base_ref.as_deref());
+            let base_graph = if base_files.is_empty() {
+                None
+            } else {
+                // Use a synthetic /tmp root to avoid filesystem canonicalization
+                // issues. The temp ProjectDatabase never touches disk — it only
+                // needs consistent paths between set_project_root and add_or_update_file.
+                let synthetic_root = std::path::Path::new("/tmp");
+                let mut base_db = baml_project::ProjectDatabase::new();
+                base_db.set_project_root(synthetic_root);
+                for (rel_path, content) in &base_files {
+                    // Strip leading directory to get just the filename under the synthetic root
+                    // e.g. "baml_src/resume.baml" → "/tmp/resume.baml"
+                    let file_name = std::path::Path::new(rel_path)
+                        .file_name()
+                        .unwrap_or_default();
+                    let abs_path = synthetic_root.join(file_name);
+                    base_db.add_or_update_file(&abs_path, content);
+                }
+                base_db.ast_control_flow_graph(&function_name)
+            };
+            let base_prepared =
+                base_graph.map(|g| prepare_control_flow_graph_for_visualization(&g));
+
+            let diff = match (&base_prepared, &head_prepared) {
+                (Some(base), Some(head)) => Some(compute_graph_diff(base, head)),
+                // New function (no base) — all head nodes are "added"
+                (None, Some(head)) => {
+                    let added = head.nodes.keys().copied().collect();
+                    Some(baml_compiler2_visualization::control_flow::GraphDiff {
+                        added,
+                        removed: vec![],
+                        modified: vec![],
+                        unchanged: vec![],
+                    })
+                }
+                // Removed function (no head) — all base nodes are "removed"
+                (Some(base), None) => {
+                    let removed = base.nodes.keys().copied().collect();
+                    Some(baml_compiler2_visualization::control_flow::GraphDiff {
+                        added: vec![],
+                        removed,
+                        modified: vec![],
+                        unchanged: vec![],
+                    })
+                }
+                (None, None) => None,
+            };
+
+            let base_json = base_prepared
+                .as_ref()
+                .and_then(|g| serde_json::to_value(g).ok());
+            let head_json = head_prepared
+                .as_ref()
+                .and_then(|g| serde_json::to_value(g).ok());
+            let diff_json = diff.as_ref().and_then(|d| serde_json::to_value(d).ok());
+
+            let msg = WsOutMessage::ControlFlowGraphDiffResult {
+                function_name,
+                base_graph: base_json,
+                head_graph: head_json,
+                diff: diff_json,
+            };
+            if let Some(ws_msg) = to_ws_text(&msg)
+                && sink.send(ws_msg).await.is_err()
+            {
+                tracing::warn!("Failed to send control flow graph diff result");
+            }
+        }
+
+        WsInMessage::RequestGitRefs => {
+            let (branches, tags) = get_git_refs(&state.bex);
+            let msg = WsOutMessage::GitRefs { branches, tags };
+            if let Some(ws_msg) = to_ws_text(&msg)
+                && sink.send(ws_msg).await.is_err()
+            {
+                tracing::warn!("Failed to send git refs");
             }
         }
 

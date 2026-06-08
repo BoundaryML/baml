@@ -419,6 +419,15 @@ function onPlaygroundNotification(notification: PlaygroundNotification): void {
         graph: notification.graph ?? null,
       });
       break;
+    case "controlFlowGraphDiffResult":
+      postOut({
+        type: "controlFlowGraphDiffResult",
+        functionName: notification.functionName,
+        baseGraph: notification.baseGraph ?? null,
+        headGraph: notification.headGraph ?? null,
+        diff: notification.diff ?? null,
+      });
+      break;
     case "cursorContext":
       postOut({
         type: "cursorContext",
@@ -826,6 +835,12 @@ self.onmessage = async (event: MessageEvent) => {
 
     case "requestControlFlowGraph":
       runtime?.requestControlFlowGraph(msg.project, msg.functionName);
+      return;
+
+    case "requestControlFlowGraphDiff":
+    case "requestGitRefs":
+      // WASM path: diff/git not supported (no git access)
+      // The WebSocket path handles this server-side via git
       return;
 
     case "cursorPosition":

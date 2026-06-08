@@ -45,6 +45,8 @@ export type NodeExecutionState =
   | 'skipped'
   | 'cached';
 
+export type DiffStatus = 'added' | 'removed' | 'modified' | 'unchanged';
+
 // ReactFlow node data
 export interface WorkflowNodeData {
   label: string;
@@ -59,6 +61,7 @@ export interface WorkflowNodeData {
   imageOutputs?: BamlJsMedia[];
   errorMessage?: string | null;
   customRenderers?: Record<string, FC<ResultRendererProps>>;
+  diffStatus?: DiffStatus;
   [key: string]: unknown;
 }
 

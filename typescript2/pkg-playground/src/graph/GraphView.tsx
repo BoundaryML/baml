@@ -10,12 +10,13 @@ import {
   Background,
   BackgroundVariant,
   type NodeMouseHandler,
+  type Viewport,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 
-import type { ControlFlowGraph, DeserializedRuntimeEvent, RunEntry } from '../worker-protocol';
+import type { ControlFlowGraph, DeserializedRuntimeEvent, RunEntry, GraphDiffResult } from '../worker-protocol';
 import type { ResultRendererProps } from '../result-renderers';
-import { cfgToGraphNodes, graphToReactflow } from './convert';
+import { cfgToGraphNodes, graphToReactflow, decorateNodesWithDiff } from './convert';
 import { collectGraphNodeRuntime } from './runtime-output';
 import { layoutGraph } from './layout';
 import { kNodeTypes } from './nodes';
@@ -31,6 +32,12 @@ interface GraphViewProps {
   customRenderers?: Record<string, FC<ResultRendererProps>>;
   selectedNodeId: number | null;
   onNodeClick: (nodeId: number) => void;
+  /** Called when the user pans or zooms. Used to sync viewports in diff mode. */
+  onViewportChange?: (viewport: Viewport) => void;
+  /** Ref populated with a setViewport function for external viewport control. */
+  viewportRef?: React.MutableRefObject<((v: Viewport) => void) | null>;
+  /** When present, annotates nodes with diff status colors (added/removed/modified/unchanged). */
+  diffAnnotations?: { diff: GraphDiffResult; side: 'base' | 'head' };
 }
 
 const EMPTY_RUNTIME_EVENTS: DeserializedRuntimeEvent[] = [];
@@ -44,6 +51,9 @@ function GraphViewInner({
   customRenderers,
   selectedNodeId,
   onNodeClick,
+  onViewportChange,
+  viewportRef,
+  diffAnnotations,
 }: GraphViewProps) {
   const [nodes, setNodes, onNodesChange] = useNodesState<WorkflowNode>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<WorkflowEdge>([]);
@@ -56,9 +66,12 @@ function GraphViewInner({
 
   const graphModel = useMemo(() => {
     const { nodes: graphNodes, edges: graphEdges } = cfgToGraphNodes(graph);
-    const { nodes: rfNodes, edges: rfEdges } = graphToReactflow(graphNodes, graphEdges);
+    let { nodes: rfNodes, edges: rfEdges } = graphToReactflow(graphNodes, graphEdges);
+    if (diffAnnotations) {
+      rfNodes = decorateNodesWithDiff(rfNodes, diffAnnotations.diff, diffAnnotations.side);
+    }
     return { graphNodes, rfNodes, rfEdges };
-  }, [graph]);
+  }, [graph, diffAnnotations]);
 
   const runtimeInputsRef = useRef({
     runtimeEvents,
@@ -183,8 +196,16 @@ function GraphViewInner({
   }, [selectedNodeId, setNodes]);
 
   // Auto-pan viewport to center the selected node — only when it's off-screen
-  const { setCenter, getNode, getViewport } = useReactFlow();
+  const { setCenter, getNode, getViewport, setViewport } = useReactFlow();
   const containerWidth = useStore((s) => s.width);
+
+  // Expose setViewport to parent via ref (for syncing viewports in diff mode)
+  useEffect(() => {
+    if (viewportRef) {
+      viewportRef.current = (v: Viewport) => setViewport(v, { duration: 0 });
+    }
+    return () => { if (viewportRef) viewportRef.current = null; };
+  }, [viewportRef, setViewport]);
   const containerHeight = useStore((s) => s.height);
   const prevGraphRef = useRef(graph);
   useEffect(() => {
@@ -310,6 +331,7 @@ function GraphViewInner({
         panOnScroll
         fitView
         fitViewOptions={{ minZoom: 0.3, maxZoom: 0.85, padding: 0.2 }}
+        onViewportChange={onViewportChange}
         proOptions={{ hideAttribution: true }}
         colorMode="dark"
       >

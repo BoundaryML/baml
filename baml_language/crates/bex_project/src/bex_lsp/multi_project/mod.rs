@@ -944,6 +944,53 @@ impl super::BexLsp for BexMulitProject {
         );
     }
 
+    fn request_control_flow_graph_diff(
+        &self,
+        function_name: &str,
+        base_files: std::collections::HashMap<String, String>,
+    ) {
+        use baml_compiler2_visualization::control_flow::{
+            compute_graph_diff, prepare_control_flow_graph_for_visualization,
+        };
+
+        // Head graph: from current project state (same as request_control_flow_graph)
+        let head_graph = self.ast_control_flow_graph(function_name);
+        let head_prepared = head_graph.map(|g| prepare_control_flow_graph_for_visualization(&g));
+
+        // Base graph: build a temporary ProjectDatabase from base files
+        let base_graph = {
+            let mut base_db = baml_project::ProjectDatabase::new();
+            for (path, content) in &base_files {
+                base_db.add_or_update_file(std::path::Path::new(path), content);
+            }
+            base_db.ast_control_flow_graph(function_name)
+        };
+        let base_prepared = base_graph.map(|g| prepare_control_flow_graph_for_visualization(&g));
+
+        // Compute diff if both graphs exist
+        let diff = match (&base_prepared, &head_prepared) {
+            (Some(base), Some(head)) => Some(compute_graph_diff(base, head)),
+            _ => None,
+        };
+
+        let base_json = base_prepared
+            .as_ref()
+            .and_then(|g| serde_json::to_value(g).ok());
+        let head_json = head_prepared
+            .as_ref()
+            .and_then(|g| serde_json::to_value(g).ok());
+        let diff_json = diff.as_ref().and_then(|d| serde_json::to_value(d).ok());
+
+        self.playground_sender.send_playground_notification(
+            crate::bex_lsp::PlaygroundNotification::ControlFlowGraphDiffResult {
+                function_name: function_name.to_string(),
+                base_graph: base_json,
+                head_graph: head_json,
+                diff: diff_json,
+            },
+        );
+    }
+
     fn playground_cursor_context(
         &self,
         file_path: &str,
@@ -1028,6 +1075,14 @@ impl super::BexLsp for BexMulitProject {
             }
         }
         None
+    }
+
+    fn workspace_roots(&self) -> Vec<std::path::PathBuf> {
+        let roots = self.workspace_roots.lock().unwrap();
+        roots
+            .iter()
+            .map(|vfs_path| std::path::PathBuf::from(vfs_path.as_str()))
+            .collect()
     }
 }
 
