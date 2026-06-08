@@ -52,9 +52,9 @@
     "@arethetypeswrong/cli": "0.18.3",
     "@napi-rs/cli": "3.7.0",
     "@types/node": "^20.0.0",
-    "protobufjs-cli": "^1.2.0",
+    "protobufjs-cli": "^1.2.1",
     "typescript": "^5.4.5",
-    "vitest": "^3.2.3"
+    "vitest": "^3.2.6"
   },
   "dependencies": {
     "protobufjs": "^7.6.2"
