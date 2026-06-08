@@ -56,7 +56,7 @@ async fn captured_int_arithmetic_uses_generic_binop() {
         "#
     );
 
-    insta::assert_snapshot!(output.bytecode, @r#"
+    insta::assert_snapshot!(output.bytecode, @"
     function main() -> int {
         load_var ?1
         make_cell
@@ -65,6 +65,7 @@ async fn captured_int_arithmetic_uses_generic_binop() {
         store_deref ?1
         load_var value
         make_closure .<lambda(main, 0)>, 1
+        load_const null
         load_const null
         spawn
         store_var _4
@@ -76,7 +77,7 @@ async fn captured_int_arithmetic_uses_generic_binop() {
         bin_op +
         return
     }
-    "#);
+    ");
     assert_eq!(output.result, Ok(BexExternalValue::Int(2)));
 }
 
@@ -94,7 +95,7 @@ async fn spawned_closure_capture_marks_transitive_cells() {
         "#
     );
 
-    insta::assert_snapshot!(output.bytecode, @r#"
+    insta::assert_snapshot!(output.bytecode, @"
     function main() -> int {
         load_var ?1
         make_cell
@@ -110,6 +111,7 @@ async fn spawned_closure_capture_marks_transitive_cells() {
         load_var bump
         make_closure .<lambda(main, 1)>, 1
         load_const null
+        load_const null
         spawn
         store_var _5
         load_var _5
@@ -120,7 +122,7 @@ async fn spawned_closure_capture_marks_transitive_cells() {
         bin_op +
         return
     }
-    "#);
+    ");
     assert_eq!(output.result, Ok(BexExternalValue::Int(2)));
 }
 
@@ -137,7 +139,7 @@ async fn captured_float_array_element_arithmetic_uses_generic_binop() {
         "#
     );
 
-    insta::assert_snapshot!(output.bytecode, @r#"
+    insta::assert_snapshot!(output.bytecode, @"
     function main() -> float {
         load_var ?1
         make_cell
@@ -147,6 +149,7 @@ async fn captured_float_array_element_arithmetic_uses_generic_binop() {
         store_deref ?1
         load_var values
         make_closure .<lambda(main, 0)>, 1
+        load_const null
         load_const null
         spawn
         store_var _4
@@ -160,6 +163,6 @@ async fn captured_float_array_element_arithmetic_uses_generic_binop() {
         bin_op +
         return
     }
-    "#);
+    ");
     assert_eq!(output.result, Ok(BexExternalValue::Float(2.0)));
 }

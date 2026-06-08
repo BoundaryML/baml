@@ -2201,13 +2201,18 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             Terminator::Spawn {
                 closure,
                 name,
+                config,
                 future,
                 resume,
             } => {
-                // Push closure then name. The runtime `OpCode::Spawn`
-                // pops them in reverse: name first, then closure.
+                // Push closure, name, then config. The runtime `OpCode::Spawn`
+                // pops them in reverse: config first, then name, then closure.
+                // Config is null when there is no `with` clause, so a fixed
+                // three values are always pushed (BEP-034 spawn options).
                 self.emit_operand_pull(closure);
                 self.emit_operand_pull(name);
+                let null_config = Operand::Constant(Constant::Null);
+                self.emit_operand_pull(config.as_deref().unwrap_or(&null_config));
                 self.emit(Instruction::Spawn);
                 self.emit_store_place(future);
                 self.emit_jump_unless_fallthrough(*resume);
@@ -2221,6 +2226,21 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             } => {
                 unwrap_infallible(pull_semantics::walk_await_future(self, future));
                 self.emit(Instruction::Await);
+
+                self.emit_store_place(destination);
+                self.emit_jump_unless_fallthrough(*target);
+            }
+
+            Terminator::AwaitAny {
+                futures,
+                destination,
+                target,
+                unwind: _,
+            } => {
+                // Push the array of futures, then AWAIT_ANY pops it and pushes
+                // the winning `int` index (BEP-034 `baml.future.__await_any`).
+                self.emit_operand_pull(futures);
+                self.emit(Instruction::AwaitAny);
 
                 self.emit_store_place(destination);
                 self.emit_jump_unless_fallthrough(*target);
@@ -2266,7 +2286,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 self.emit_operand_pull(operand);
 
                 if *is_and {
-                    // &&: false → short-circuit (value stays on TOS), jump to join.
+                    // &&: false → short-circuit edge (materialize dest), jump to join.
                     //     true → pop, evaluate rhs.
                     let sc_jump = self.emit(Instruction::JumpIfFalse(0));
                     let resolved_join = self.resolve_pending_target(*join);
@@ -2285,7 +2305,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                     }
                 } else {
                     // ||: false → pop, evaluate rhs.
-                    //     true → value stays on TOS, jump to join.
+                    //     true → short-circuit edge (materialize dest), jump to join.
                     let false_jump = self.emit(Instruction::JumpIfFalse(0));
                     let resolved_join = self.resolve_pending_target(*join);
                     if store_on_taken_path {

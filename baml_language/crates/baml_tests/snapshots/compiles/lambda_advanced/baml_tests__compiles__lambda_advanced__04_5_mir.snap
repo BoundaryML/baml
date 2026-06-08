@@ -464,7 +464,7 @@ fn user.test_generic_apply_inferred() -> int {
         _1 = make_closure lambda[0]();
         _2 = copy _1;
         _3 = make_closure lambda[1]();
-        _4 = load_type(21);
+        _4 = load_type(int);
         _5 = load_type(int);
         _0 = call copy _2<copy _4, copy _5>(copy _3, const 21_i64) -> [bb1];
     }
@@ -520,13 +520,13 @@ fn user.test_generic_multi_instantiation() -> int {
     bb0: {
         _1 = make_closure lambda[0]();
         _3 = copy _1;
-        _4 = load_type(int | 42);
+        _4 = load_type(int);
         _2 = call copy _3<copy _4>(const 42_i64) -> [bb1];
     }
 
     bb1: {
         _6 = copy _1;
-        _7 = load_type(string | "hello");
+        _7 = load_type(string);
         _5 = call copy _6<copy _7>(const "hello") -> [bb2];
     }
 

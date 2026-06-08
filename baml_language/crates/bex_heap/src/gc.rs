@@ -47,7 +47,12 @@ fn future_object_ref(fut: &Future) -> Option<HeapPtr> {
     use bex_vm_types::FutureRead;
     match fut.read() {
         FutureRead::Ready(v) | FutureRead::Error(v) => v.as_object_ptr(),
-        FutureRead::Pending(_) | FutureRead::Cancelled | FutureRead::InternalError(_) => None,
+        // ErrorPending's value lives in the ENGINE's GC-rooted stash, not in
+        // the heap future — nothing reachable from here.
+        FutureRead::Pending(_)
+        | FutureRead::Cancelled
+        | FutureRead::InternalError(_)
+        | FutureRead::ErrorPending(_) => None,
     }
 }
 
@@ -385,6 +390,9 @@ impl BexHeap {
                 if let Some(name_ptr) = future.name {
                     worklist.push(name_ptr);
                 }
+                if let Some(config_ptr) = future.config {
+                    worklist.push(config_ptr);
+                }
                 worklist.push(future.closure);
             }
             // Primitives have no references
@@ -525,6 +533,11 @@ impl BexHeap {
                     && let Some(&new_ptr) = forwarding.get(name_ptr)
                 {
                     *name_ptr = new_ptr;
+                }
+                if let Some(config_ptr) = &mut future.config
+                    && let Some(&new_ptr) = forwarding.get(config_ptr)
+                {
+                    *config_ptr = new_ptr;
                 }
                 if let Some(&new_ptr) = forwarding.get(&future.closure) {
                     future.closure = new_ptr;
@@ -787,6 +800,11 @@ impl BexHeap {
                     && self.generation_of(name_ptr).is_young()
                 {
                     worklist.push(name_ptr);
+                }
+                if let Some(config_ptr) = future.config
+                    && self.generation_of(config_ptr).is_young()
+                {
+                    worklist.push(config_ptr);
                 }
                 if self.generation_of(future.closure).is_young() {
                     worklist.push(future.closure);
@@ -1893,10 +1911,11 @@ mod tests {
         // purposes — the GC only needs a valid HeapPtr to walk.
         let closure = tlab.alloc_string("closure-stand-in".to_string());
         let name = tlab.alloc_string("spawn-name".to_string());
-        let future_ptr = tlab.alloc(Object::UnscheduledFuture(UnscheduledFuture {
+        let future_ptr = tlab.alloc(Object::UnscheduledFuture(Box::new(UnscheduledFuture {
             closure,
             name: Some(name),
-        }));
+            config: None,
+        })));
 
         let roots = vec![future_ptr];
         let (stats, _new_roots, _) = unsafe { heap.collect_garbage(&roots) };
@@ -2409,10 +2428,11 @@ mod tests {
         // --- Container: Object::UnscheduledFuture ---
         // After BEP-034 phase D′ the spawn case is all that's left;
         // the closure pointer stands in as the traced HeapPtr.
-        let future_container = tlab.alloc(Object::UnscheduledFuture(UnscheduledFuture {
+        let future_container = tlab.alloc(Object::UnscheduledFuture(Box::new(UnscheduledFuture {
             closure: leaf_for_future,
             name: None,
-        }));
+            config: None,
+        })));
 
         // --- Container: Object::Instance ---
         // Instance requires a class pointer.

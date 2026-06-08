@@ -39,6 +39,7 @@ function future_methods.fail_io() -> int {
 function future_methods.methods_after_cancel() -> baml.future.FutureState {
     make_closure .<lambda(methods_after_cancel, 0)>, 0
     load_const null
+    load_const null
     spawn
     store_var _3
     load_var _3
@@ -53,6 +54,7 @@ function future_methods.methods_after_cancel() -> baml.future.FutureState {
 
 function future_methods.methods_after_successful_settle() -> bool[] {
     make_closure .<lambda(methods_after_successful_settle, 0)>, 0
+    load_const null
     load_const null
     spawn
     store_var _3
@@ -76,6 +78,7 @@ function future_methods.methods_after_successful_settle() -> bool[] {
 
 function future_methods.methods_on_errored_future() -> baml.future.FutureState {
     make_closure .<lambda(methods_on_errored_future, 0)>, 0
+    load_const null
     load_const null
     spawn
     store_var _3
@@ -101,6 +104,7 @@ function future_methods.methods_on_errored_future() -> baml.future.FutureState {
 
 function future_methods.methods_on_pending_future() -> baml.future.FutureState {
     make_closure .<lambda(methods_on_pending_future, 0)>, 0
+    load_const null
     load_const null
     spawn
     store_var _3

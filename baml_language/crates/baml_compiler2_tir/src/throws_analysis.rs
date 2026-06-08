@@ -5,7 +5,7 @@ use baml_compiler2_ast::{Expr, ExprBody, ExprId, Stmt, StmtId};
 
 use crate::{
     throw_inference::flatten_ty_to_facts,
-    ty::{Ty, TyAttr},
+    ty::{PrimitiveType, Ty, TyAttr},
 };
 
 pub(crate) trait ThrowsAnalysisContext {
@@ -298,20 +298,61 @@ fn collect_from_expr<C: ThrowsAnalysisContext>(
         }
         Expr::Spawn {
             name,
+            with_exprs,
             body: spawn_body,
         } => {
             // Throws from a spawned body do NOT escape the spawning
             // function — they are captured into the resulting
             // `Future<T, E>`'s E parameter and only re-thrown at an
-            // `await` site. The name expression itself can throw, so
-            // walk it; do not walk spawn_body.
+            // `await` site. The name and `with` expressions are evaluated
+            // eagerly in the spawning function, so their throws DO escape —
+            // walk them; do not walk spawn_body.
             if let Some(name_id) = name {
                 collect_from_expr(context, *name_id, body, out);
+            }
+            for with_id in with_exprs {
+                collect_from_expr(context, *with_id, body, out);
+                // The middleware pipeline INVOKES each transformer eagerly at
+                // the spawn site (`b(a(SpawnParams { ... }))`), so a
+                // transformer's own callable `throws` escapes the spawning
+                // function — not just whatever evaluating the expression
+                // throws.
+                if let Some(Ty::Function { throws, .. }) = context.expression_type(*with_id) {
+                    match throws.as_ref() {
+                        Ty::Never { .. } | Ty::Unknown { .. } | Ty::Error { .. } => {}
+                        Ty::Primitive(PrimitiveType::Null, _) => {}
+                        t => out.extend(flatten_ty_to_facts(t)),
+                    }
+                }
             }
             let _ = spawn_body;
         }
         Expr::Await { future } => {
+            // `await f` re-throws the awaited future's error: `f: Future<T, E>`
+            // contributes `E` to the body's escaping throws — and `await`
+            // distributes over a UNION of futures (BEP-034), contributing
+            // every member's error type. `null`/`never` mark a future that
+            // cannot fail (BEP-034 v1 spells `never` as `null`);
+            // `Unknown`/`Error` add no information — skip those.
+            fn add_error_facts(error: &Ty, out: &mut BTreeSet<Ty>) {
+                match error {
+                    Ty::Never { .. } | Ty::Unknown { .. } | Ty::Error { .. } => {}
+                    Ty::Primitive(PrimitiveType::Null, _) => {}
+                    e => out.extend(flatten_ty_to_facts(e)),
+                }
+            }
             collect_from_expr(context, *future, body, out);
+            match context.expression_type(*future) {
+                Some(Ty::Future(_, error, _)) => add_error_facts(&error, out),
+                Some(Ty::Union(members, _)) => {
+                    for member in &members {
+                        if let Ty::Future(_, error, _) = member {
+                            add_error_facts(error, out);
+                        }
+                    }
+                }
+                _ => {}
+            }
         }
         Expr::GenericApply { base, .. } => {
             collect_from_expr(context, *base, body, out);

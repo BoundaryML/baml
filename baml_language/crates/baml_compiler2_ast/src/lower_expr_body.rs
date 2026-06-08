@@ -32,16 +32,20 @@ pub struct EnvVarRef {
 /// Returns true if `kind` can serve as an identifier token in expression position.
 ///
 /// The parser allows `KW_CLIENT` (and `WORD`) inside `PATH_EXPR` / `FIELD_ACCESS_EXPR`
-/// nodes when `client` is used as a variable or field name. The interface-related
-/// keywords (`implements`, `interface`, `extends`) likewise remain valid as
-/// member names — e.g. `dog_t.implements(animal_t)` on the reflection `type`
-/// value. This must match exactly what `parse_path_or_ident` / `at_member_name`
-/// accept in the parser.
+/// nodes when `client` is used as a variable or field name. It likewise allows
+/// `KW_SPAWN` / `KW_AWAIT` as path segments (e.g. the `baml.spawn` namespace),
+/// since they are unambiguous after a `.`, and the interface-related keywords
+/// (`implements`, `interface`, `extends`) as member names — e.g.
+/// `dog_t.implements(animal_t)` on the reflection `type` value. This must
+/// match exactly what `parse_path_or_ident` / `at_member_name` accept in the
+/// parser; adding a new keyword there requires adding it here too.
 fn is_ident_token(kind: SyntaxKind) -> bool {
     matches!(
         kind,
         SyntaxKind::WORD
             | SyntaxKind::KW_CLIENT
+            | SyntaxKind::KW_SPAWN
+            | SyntaxKind::KW_AWAIT
             | SyntaxKind::KW_IMPLEMENTS
             | SyntaxKind::KW_IMPLEMENT
             | SyntaxKind::KW_INTERFACE
@@ -722,10 +726,63 @@ impl LoweringContext {
         use baml_compiler_syntax::ast as cst_ast;
 
         let mut name: Option<ExprId> = None;
+        let mut with_exprs: Vec<ExprId> = Vec::new();
         let mut body_lambda: Option<ExprId> = None;
+        // The CST is flat: `KW_SPAWN [name expr] [KW_WITH expr (COMMA expr)*]
+        // BLOCK_EXPR`. We walk children-with-tokens so the `KW_WITH` token is
+        // visible; everything after it (other than the body) is a `with` expr.
+        let mut seen_with = false;
 
-        for child in node.children() {
-            if child.kind() == SyntaxKind::BLOCK_EXPR {
+        for child in node.children_with_tokens() {
+            let kind = child.kind();
+            if kind == SyntaxKind::KW_WITH {
+                seen_with = true;
+                continue;
+            }
+            // Expression NODES and bare expression TOKENS both matter past
+            // here (a literal like `spawn with 42 { .. }` arrives as a plain
+            // token); skip `KW_SPAWN`, commas, and trivia. Dropping tokens
+            // here would silently swallow the expression — the type checker
+            // must see it to reject it with a real diagnostic.
+            let child = match child {
+                rowan::NodeOrToken::Node(n) => n,
+                rowan::NodeOrToken::Token(t) => {
+                    let span = t.text_range();
+                    let expr = match t.kind() {
+                        SyntaxKind::INTEGER_LITERAL => Some(Expr::Literal(Literal::Int(
+                            t.text().parse::<i64>().unwrap_or(0),
+                        ))),
+                        SyntaxKind::FLOAT_LITERAL => {
+                            Some(Expr::Literal(Literal::Float(t.text().to_string())))
+                        }
+                        SyntaxKind::STRING_LITERAL | SyntaxKind::RAW_STRING_LITERAL => Some(
+                            Expr::Literal(Literal::String(strip_string_delimiters(t.text()))),
+                        ),
+                        // `spawn`/`await` pass `is_ident_token` (they're
+                        // valid path SEGMENTS) but here they're the keywords
+                        // themselves — never a name/with expression.
+                        SyntaxKind::KW_SPAWN | SyntaxKind::KW_AWAIT => None,
+                        k if is_ident_token(k) => Some(match t.text() {
+                            "true" => Expr::Literal(Literal::Bool(true)),
+                            "false" => Expr::Literal(Literal::Bool(false)),
+                            "null" => Expr::Null,
+                            other => Expr::Path(vec![Name::new(other)]),
+                        }),
+                        _ => None,
+                    };
+                    if let Some(expr) = expr {
+                        let id = self.alloc_expr(expr, span);
+                        if seen_with {
+                            with_exprs.push(id);
+                        } else if name.is_none() {
+                            name = Some(id);
+                        }
+                    }
+                    continue;
+                }
+            };
+            let child = &child;
+            if kind == SyntaxKind::BLOCK_EXPR {
                 // Synthesize a 0-arg lambda whose body is this block —
                 // mirroring `lower_lambda_expr` so the existing
                 // capture / scope / MIR plumbing applies unchanged.
@@ -758,13 +815,22 @@ impl LoweringContext {
                     body_lambda =
                         Some(self.alloc_expr(Expr::Lambda(Box::new(fd)), child.text_range()));
                 }
+            } else if seen_with {
+                with_exprs.push(self.lower_expr(child));
             } else if name.is_none() {
-                name = Some(self.lower_expr(&child));
+                name = Some(self.lower_expr(child));
             }
         }
 
         let body = body_lambda.unwrap_or_else(|| self.alloc_expr(Expr::Missing, node.text_range()));
-        self.alloc_expr(Expr::Spawn { name, body }, node.text_range())
+        self.alloc_expr(
+            Expr::Spawn {
+                name,
+                with_exprs,
+                body,
+            },
+            node.text_range(),
+        )
     }
 
     /// Lower `await expr`. The CST shape is `AWAIT_EXPR [ KW_AWAIT

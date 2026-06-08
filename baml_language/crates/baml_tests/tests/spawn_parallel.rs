@@ -19,9 +19,7 @@ async fn spawn_three_sleeps_runs_in_parallel() {
     let program = compile_source_with_opt(
         r#"
         function nap() -> int {
-            baml.sys.sleep(200) catch (e) {
-                let e => 0
-            };
+            baml.sys.sleep(200);
             1
         }
         function main() -> int {
@@ -33,10 +31,13 @@ async fn spawn_three_sleeps_runs_in_parallel() {
         "#,
         OptLevel::One,
     );
+    // Use the *native* sys-ops so `baml.sys.sleep` actually sleeps — the
+    // default `sys_ops` impl returns `Unsupported`, which would make the
+    // "sleeps" no-ops and the test a false positive.
     let engine = Arc::new(
         BexEngine::new(
             program,
-            Arc::new(sys_ops::SysOps::native()),
+            Arc::new(sys_native::SysOps::native()),
             None,
             Vec::new(),
         )

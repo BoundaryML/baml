@@ -4659,7 +4659,7 @@ function iter_impl_generics_only.iter_reduce() -> int {
     store_var it
     make_closure .<lambda(iter_reduce, 0)>, 0
     store_var _4
-    load_type int | 0
+    load_type int
     store_var _6
     load_type void
     store_var _7

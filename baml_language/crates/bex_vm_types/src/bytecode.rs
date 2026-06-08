@@ -482,6 +482,17 @@ pub enum Instruction {
     /// control flow to the embedder and doesn't care about anything else.
     Await,
 
+    /// BEP-034 `baml.future.__await_any`. Awaits the *first* of an array of
+    /// futures (the single array operand on top of the stack) to settle, and
+    /// pushes the `int` index of the first-settled future in input order.
+    ///
+    /// Like `Await`, the VM yields `VmExecState::AwaitAny(ids)` to the engine
+    /// when none of the inputs have settled yet; the engine parks until the
+    /// first wakes, then re-executes this opcode, which now finds a settled
+    /// future and pushes its index. The combinators (`race`, `any`) are pure
+    /// BAML built on top of this.
+    AwaitAny,
+
     /// Creates a watched var and tracks its state.
     ///
     /// Format: `WATCH i` where `i` is the relative index of the variable in the
@@ -929,6 +940,10 @@ pub enum OpCode {
     // ── Operand-movement superinstructions: two u32 operands (9 bytes) ──
     LoadVar2,
     StoreVar2,
+
+    // ── Unit op appended out of group order to preserve discriminants ──
+    // BEP-034 `baml.future.__await_any`: no operands (1 byte), like `Await`.
+    AwaitAny,
 }
 
 impl OpCode {
@@ -952,6 +967,7 @@ impl OpCode {
             | Self::SendEvent
             | Self::ContainerLen
             | Self::Spawn
+            | Self::AwaitAny
             | Self::Add
             | Self::Sub
             | Self::Mul
@@ -1076,6 +1092,7 @@ impl TryFrom<u8> for OpCode {
         match byte {
             x if x == Self::Return as u8 => Ok(Self::Return),
             x if x == Self::Await as u8 => Ok(Self::Await),
+            x if x == Self::AwaitAny as u8 => Ok(Self::AwaitAny),
             x if x == Self::Throw as u8 => Ok(Self::Throw),
             x if x == Self::LoadArrayElement as u8 => Ok(Self::LoadArrayElement),
             x if x == Self::LoadMapElement as u8 => Ok(Self::LoadMapElement),
@@ -1204,6 +1221,7 @@ impl std::fmt::Display for OpCode {
         let name = match self {
             Self::Return => "RETURN",
             Self::Await => "AWAIT",
+            Self::AwaitAny => "AWAIT_ANY",
             Self::Throw => "THROW",
             Self::LoadArrayElement => "LOAD_ARRAY_ELEMENT",
             Self::LoadMapElement => "LOAD_MAP_ELEMENT",
@@ -1566,6 +1584,7 @@ impl std::fmt::Display for Instruction {
             Instruction::SysOp(callee) => write!(f, "SYS_OP {callee}"),
             Instruction::Spawn => write!(f, "SPAWN"),
             Instruction::Await => f.write_str("AWAIT"),
+            Instruction::AwaitAny => f.write_str("AWAIT_ANY"),
             Instruction::Call { callee, ntypeargs } => {
                 write!(f, "CALL {callee} ntypeargs={ntypeargs}")
             }
@@ -1994,7 +2013,8 @@ impl Bytecode {
                 | Instruction::MakeCell
                 | Instruction::SendEvent
                 | Instruction::ContainerLen
-                | Instruction::Spawn => {}
+                | Instruction::Spawn
+                | Instruction::AwaitAny => {}
 
                 // ── Expanded sub-enum ops: no operands ──────────────
                 Instruction::BinOp(_)
@@ -2302,6 +2322,7 @@ impl Bytecode {
         match instr {
             Instruction::Return => OpCode::Return,
             Instruction::Await => OpCode::Await,
+            Instruction::AwaitAny => OpCode::AwaitAny,
             Instruction::Throw => OpCode::Throw,
             Instruction::LoadArrayElement => OpCode::LoadArrayElement,
             Instruction::LoadMapElement => OpCode::LoadMapElement,

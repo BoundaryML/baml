@@ -740,6 +740,21 @@ pub enum VmExecState {
     /// - Output (internal error): engine error
     Await(FutureId),
 
+    /// BEP-034 `baml.future.__await_any`: awaiting the *first* of several
+    /// pending futures to settle.
+    ///
+    /// - Input: the `FutureId`s of the inputs that are still pending (the
+    ///   `OpCode::AwaitAny` handler scans the array operand and only yields
+    ///   the ones not yet settled; if any were already settled it resolves
+    ///   inline without yielding).
+    /// - Output (success): nothing pushed — the engine parks until the first
+    ///   of these settles, then resumes the VM, which re-executes the
+    ///   `AwaitAny` opcode, finds a settled future, and pushes its `int`
+    ///   index in input order.
+    /// - Output (cancel): the thread's own cancel token fired; handled like
+    ///   `Await` (settle our future as cancelled, or surface `Cancelled`).
+    AwaitAny(Vec<FutureId>),
+
     /// BEP-034: VM yields a `spawn { body }` to the engine.
     ///
     /// - Input: a `HeapPtr` to the `UnscheduledFuture` object the VM
@@ -4652,6 +4667,11 @@ impl BexVm {
 
                 // ── Spawn (BEP-034) ────────────────────────────────────────────
                 OpCode::Spawn => {
+                    // Stack layout (pushed by emit in this order): closure, name,
+                    // config. So pop in reverse: config (top), name, closure.
+                    // `config` is the optional `baml.spawn.SpawnConfig` from a
+                    // `with baml.spawn.options(...)` clause, or null.
+                    let config_value = self.stack.ensure_pop();
                     let name_value = self.stack.ensure_pop();
                     let closure_value = self.stack.ensure_pop();
                     let closure_ptr =
@@ -4667,11 +4687,30 @@ impl BexVm {
                         }
                         .into());
                     };
+                    let config_ptr = if config_value.is_null() {
+                        None
+                    } else if let Some(ptr) = config_value.as_object_ptr()
+                        && matches!(unsafe { ptr.get() }, Object::Instance(_))
+                    {
+                        // Must be an instance (`baml.spawn.SpawnParams`) — an
+                        // arbitrary heap object here would turn a local type
+                        // error into a VM→engine contract break downstream.
+                        Some(ptr)
+                    } else {
+                        return Err(VmInternalError::TypeError {
+                            expected: Type::Object(ObjectType::Instance),
+                            got: self.type_of(&config_value),
+                        }
+                        .into());
+                    };
                     let pending_future = bex_vm_types::types::UnscheduledFuture {
                         closure: closure_ptr,
                         name: name_ptr,
+                        config: config_ptr,
                     };
-                    let object_index = self.tlab.alloc(Object::UnscheduledFuture(pending_future));
+                    let object_index = self
+                        .tlab
+                        .alloc(Object::UnscheduledFuture(Box::new(pending_future)));
                     return Ok(Some(VmExecState::Spawn(object_index)));
                 }
 
@@ -5050,7 +5089,13 @@ impl BexVm {
                             .into());
                         };
                         match awaiting.read() {
-                            FutureRead::Pending(future_id) => {
+                            // ErrorPending: the future HAS failed but its error
+                            // value is parked engine-side — yield exactly like
+                            // Pending so the engine's `future_ready` consumes
+                            // the parked error (settling the real `Error`) and
+                            // this Await re-executes against it.
+                            FutureRead::Pending(future_id)
+                            | FutureRead::ErrorPending(future_id) => {
                                 // Rewind pc to the Await opcode so the outer loop
                                 // saves a position that re-executes Await once the
                                 // future completes.
@@ -5080,6 +5125,65 @@ impl BexVm {
                     self.stack.push(ready_value);
                     if self.early_yield.should_early_yield() {
                         return Ok(Some(VmExecState::EarlyYield));
+                    }
+                }
+
+                // ── AwaitAny (BEP-034 baml.future.__await_any) ─────────────────
+                OpCode::AwaitAny => {
+                    // Like Await, this opcode re-executes on resume, so the
+                    // array operand is peeked (not popped) until a winner is
+                    // found. Rewinding by `AWAIT_ANY_OPCODE_LEN` puts `pc`
+                    // back at the opcode byte for re-execution.
+                    const AWAIT_ANY_OPCODE_LEN: usize = 1;
+                    let top = self.stack.ensure_stack_top();
+                    let array_val = self.stack[top];
+                    // Scan the input futures in order. The first non-pending
+                    // future (settled with a value, error, or cancellation)
+                    // is the winner; otherwise gather the pending ids to park
+                    // on. `race`/`any` are built on "first to settle", so we
+                    // do not distinguish success from failure here.
+                    let mut pending_ids: Vec<FutureId> = Vec::new();
+                    let mut winner: Option<usize> = None;
+                    {
+                        let arr = self.as_array(&array_val)?;
+                        for (i, elem) in arr.iter().enumerate() {
+                            let fut_ptr = self.as_object_ptr(
+                                *elem,
+                                bex_vm_types::types::FutureType::Any.into(),
+                            )?;
+                            let Object::Future(fut) = self.get_object(fut_ptr) else {
+                                return Err(VmInternalError::TypeError {
+                                    expected: bex_vm_types::types::FutureType::Any.into(),
+                                    got: ObjectType::of(self.get_object(fut_ptr)).into(),
+                                }
+                                .into());
+                            };
+                            match fut.read() {
+                                FutureRead::Pending(id) => pending_ids.push(id),
+                                // Ready / Error / Cancelled / InternalError all
+                                // count as "settled" — this index has won.
+                                _ => {
+                                    winner = Some(i);
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                    match winner {
+                        Some(i) => {
+                            self.stack.pop();
+                            self.stack.push(Value::int(i as i64));
+                            if self.early_yield.should_early_yield() {
+                                return Ok(Some(VmExecState::EarlyYield));
+                            }
+                        }
+                        None => {
+                            // No input has settled yet — park until the first
+                            // does. Rewind pc so the opcode re-executes (with
+                            // the array still on the stack) once resumed.
+                            *pc -= AWAIT_ANY_OPCODE_LEN;
+                            return Ok(Some(VmExecState::AwaitAny(pending_ids)));
+                        }
                     }
                 }
 

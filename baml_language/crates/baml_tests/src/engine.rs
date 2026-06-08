@@ -208,7 +208,19 @@ pub async fn run_test_with_options(
     show_auto_derive: bool,
 ) -> TestOutput {
     let program = compile_source_with_opt(source, opt);
+    run_compiled(program, entry, args, show_auto_derive).await
+}
 
+/// Run an already-compiled `program`, returning its bytecode display and the
+/// engine result. Split out of [`run_test_with_options`] so timing-sensitive
+/// tests can compile FIRST (compilation grows with the stdlib) and time only
+/// the engine execution — see `cancel_cascade.rs`.
+pub async fn run_compiled(
+    program: Program,
+    entry: &str,
+    args: IndexMap<&str, BexExternalValue>,
+    show_auto_derive: bool,
+) -> TestOutput {
     // Display bytecode before the engine consumes the program.
     let bytecode = display_user_functions_with_options(&program, show_auto_derive);
 

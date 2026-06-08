@@ -656,3 +656,286 @@ async fn cancelled_panic_shape_equivalence() {
         assert_eq!(s_val, v_val, "field {s_key} differs");
     }
 }
+
+// ============================================================================
+// BEP-034 spawn options — `spawn with baml.spawn.options(cancel = tok)`
+// ============================================================================
+
+/// Firing a BAML-surface `CancelToken` passed via
+/// `baml.spawn.options(cancel = ...)` cancels the spawned child; awaiting it
+/// re-throws `Cancelled`, and it returns well before the 10s sleep would.
+#[tokio::test]
+async fn spawn_with_options_cancel_token_propagates() {
+    let source = r#"
+        function main() -> int {
+            let tok = baml.spawn.CancelToken.new();
+            let f = spawn with baml.spawn.options(cancel = tok) {
+                baml.sys.sleep(10000);
+                42
+            };
+            let _ = tok.cancel();
+            await f
+        }
+    "#;
+
+    let snapshot = compile_for_engine(source);
+    let engine = Arc::new(
+        BexEngine::new(
+            snapshot,
+            std::sync::Arc::new(sys_native::SysOps::native()),
+            None,
+            Vec::new(),
+        )
+        .expect("Failed to create engine"),
+    );
+
+    let start = std::time::Instant::now();
+    let result = engine
+        .call_function(
+            "main",
+            vec![],
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+            true,
+        )
+        .await;
+
+    assert_cancelled(&result);
+    assert!(
+        start.elapsed() < std::time::Duration::from_secs(2),
+        "cancel via options(cancel=) took too long: {:?}",
+        start.elapsed()
+    );
+}
+
+/// `Cancelled` delivered to a token-cancelled spawn is catchable at the
+/// awaiter — the `catch` arm runs and produces the fallback value.
+#[tokio::test]
+async fn spawn_with_options_cancel_token_is_catchable() {
+    let source = r#"
+        function main() -> int {
+            let tok = baml.spawn.CancelToken.new();
+            let f = spawn with baml.spawn.options(cancel = tok) {
+                baml.sys.sleep(10000);
+                42
+            };
+            let _ = tok.cancel();
+            (await f) catch (e) { baml.panics.Cancelled => 0 }
+        }
+    "#;
+
+    let snapshot = compile_for_engine(source);
+    let engine = Arc::new(
+        BexEngine::new(
+            snapshot,
+            std::sync::Arc::new(sys_native::SysOps::native()),
+            None,
+            Vec::new(),
+        )
+        .expect("Failed to create engine"),
+    );
+
+    let result = engine
+        .call_function(
+            "main",
+            vec![],
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+            true,
+        )
+        .await
+        .expect("call should succeed (Cancelled caught)");
+
+    assert_eq!(result, BexExternalValue::Int(0));
+}
+
+/// A spawn configured with `options(cancel = tok)` whose token is never fired
+/// completes normally — the option must not perturb the happy path.
+#[tokio::test]
+async fn spawn_with_options_uncancelled_completes_normally() {
+    let source = r#"
+        function main() -> int {
+            let tok = baml.spawn.CancelToken.new();
+            let f = spawn with baml.spawn.options(cancel = tok) { 42 };
+            await f
+        }
+    "#;
+
+    let snapshot = compile_for_engine(source);
+    let engine = Arc::new(
+        BexEngine::new(
+            snapshot,
+            std::sync::Arc::new(sys_native::SysOps::native()),
+            None,
+            Vec::new(),
+        )
+        .expect("Failed to create engine"),
+    );
+
+    let result = engine
+        .call_function(
+            "main",
+            vec![],
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+            true,
+        )
+        .await
+        .expect("call should succeed");
+
+    assert_eq!(result, BexExternalValue::Int(42));
+}
+
+/// `CancelToken.any([a, b])` composes inputs: firing one input cancels a spawn
+/// configured with the composite token. The awaiter catches `Cancelled` and
+/// returns the fallback; if composition were broken the 10s sleep would run to
+/// completion and yield 42 instead.
+#[tokio::test]
+async fn spawn_with_options_cancel_token_any_composes() {
+    let source = r#"
+        function main() -> int {
+            let a = baml.spawn.CancelToken.new();
+            let b = baml.spawn.CancelToken.new();
+            let combined = baml.spawn.CancelToken.any([a, b]);
+            let f = spawn with baml.spawn.options(cancel = combined) {
+                baml.sys.sleep(10000);
+                42
+            };
+            let _ = a.cancel();
+            (await f) catch (e) { baml.panics.Cancelled => 0 }
+        }
+    "#;
+
+    let snapshot = compile_for_engine(source);
+    let engine = Arc::new(
+        BexEngine::new(
+            snapshot,
+            std::sync::Arc::new(sys_native::SysOps::native()),
+            None,
+            Vec::new(),
+        )
+        .expect("Failed to create engine"),
+    );
+
+    let start = std::time::Instant::now();
+    let result = engine
+        .call_function(
+            "main",
+            vec![],
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+            true,
+        )
+        .await
+        .expect("call should succeed (Cancelled caught)");
+
+    assert_eq!(result, BexExternalValue::Int(0));
+    assert!(
+        start.elapsed() < std::time::Duration::from_secs(2),
+        "any-composed cancel took too long: {:?}",
+        start.elapsed()
+    );
+}
+
+// ============================================================================
+// BEP-034 spawn options — `detach = true`
+// ============================================================================
+
+/// `detach = true` does not perturb normal completion.
+#[tokio::test]
+async fn spawn_with_options_detach_completes_normally() {
+    let source = r#"
+        function main() -> int {
+            let f = spawn with baml.spawn.options(detach = true) { 42 };
+            await f
+        }
+    "#;
+
+    let snapshot = compile_for_engine(source);
+    let engine = Arc::new(
+        BexEngine::new(
+            snapshot,
+            std::sync::Arc::new(sys_native::SysOps::native()),
+            None,
+            Vec::new(),
+        )
+        .expect("Failed to create engine"),
+    );
+
+    let result = engine
+        .call_function(
+            "main",
+            vec![],
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+            true,
+        )
+        .await
+        .expect("call should succeed");
+
+    assert_eq!(result, BexExternalValue::Int(42));
+}
+
+/// A `detach = true` spawn still honors an explicit `cancel` token: detach only
+/// drops the *parent* token from the effective token, so a user token linked
+/// via `options(cancel = ...)` still cancels it.
+#[tokio::test]
+async fn spawn_with_options_detach_still_honors_cancel_token() {
+    let source = r#"
+        function main() -> int {
+            let tok = baml.spawn.CancelToken.new();
+            let f = spawn with baml.spawn.options(cancel = tok, detach = true) {
+                baml.sys.sleep(10000);
+                42
+            };
+            let _ = tok.cancel();
+            (await f) catch (e) { baml.panics.Cancelled => 0 }
+        }
+    "#;
+
+    let snapshot = compile_for_engine(source);
+    let engine = Arc::new(
+        BexEngine::new(
+            snapshot,
+            std::sync::Arc::new(sys_native::SysOps::native()),
+            None,
+            Vec::new(),
+        )
+        .expect("Failed to create engine"),
+    );
+
+    let start = std::time::Instant::now();
+    let result = engine
+        .call_function(
+            "main",
+            vec![],
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+            true,
+        )
+        .await
+        .expect("call should succeed (Cancelled caught)");
+
+    assert_eq!(result, BexExternalValue::Int(0));
+    assert!(
+        start.elapsed() < std::time::Duration::from_secs(2),
+        "detached cancel-token took too long: {:?}",
+        start.elapsed()
+    );
+}
+
+/// `spawn ... with` accepts only a `baml.spawn.options(...)` config: any other
+/// expression is a compile error (BEP-034 spawn options, v1). `compile_for_engine`
+/// panics on diagnostics, so a rejected program unwinds here.
+#[test]
+fn spawn_with_non_options_is_rejected() {
+    let bad = r#"
+        function helper() -> int { 1 }
+        function main() -> int {
+            let f = spawn with helper() { 1 };
+            await f
+        }
+    "#;
+    let prev = std::panic::take_hook();
+    std::panic::set_hook(Box::new(|_| {})); // suppress the diagnostic backtrace
+    let compiled = std::panic::catch_unwind(|| compile_for_engine(bad));
+    std::panic::set_hook(prev);
+    assert!(
+        compiled.is_err(),
+        "`spawn with helper()` should fail to compile (with accepts only baml.spawn.options(...))"
+    );
+}

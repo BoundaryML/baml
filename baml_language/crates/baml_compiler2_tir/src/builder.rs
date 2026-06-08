@@ -84,6 +84,28 @@ struct InterfaceMemberLookup<'a> {
     self_recv: SelfReceiver<'a>,
 }
 
+/// Construct `Ty::Class` for `baml.spawn.SpawnParams<value, error>` (BEP-034
+/// middleware: the value a `spawn ... with` pipeline transforms).
+fn spawn_params_ty(value: Ty, error: Ty) -> Ty {
+    Ty::Class(
+        crate::ty::QualifiedTypeName::new(
+            Name::new("baml"),
+            vec![Name::new("spawn")],
+            Name::new("SpawnParams"),
+        ),
+        vec![value, error],
+        TyAttr::default(),
+    )
+}
+
+/// `true` when `qn` names `baml.spawn.SpawnParams`.
+fn is_spawn_params_qtn(qn: &crate::ty::QualifiedTypeName) -> bool {
+    qn.package().as_str() == "baml"
+        && qn.namespace().len() == 1
+        && qn.namespace()[0].as_str() == "spawn"
+        && qn.name().as_str() == "SpawnParams"
+}
+
 fn json_alias_ty() -> Ty {
     Ty::TypeAlias(
         crate::ty::QualifiedTypeName::new(
@@ -463,6 +485,10 @@ struct CallCheckRequest<'a> {
     /// site. `Some(map)` means the caller already validated arity and resolved each `TypeExpr`;
     /// `None` means use the existing forward/reverse inference paths.
     explicit_type_arg_bindings: Option<FxHashMap<Name, Ty>>,
+    /// The callee expression, when one exists. Used to resolve the callee's
+    /// declared generic params so the call's final type-arg bindings can be
+    /// recorded (in declared order) in `call_type_instantiations` for MIR.
+    callee_expr: Option<ExprId>,
     /// Generic params in the order the callee's runtime frame expects them.
     /// For static methods on generic classes this includes owner class params
     /// before method params; for bound methods the receiver seeds owner params,
@@ -618,6 +644,10 @@ pub struct TypeInferenceBuilder<'db> {
     pub param_types: Vec<(Name, Ty)>,
     /// Full parameter binding plans for checked call expressions.
     pub call_plans: FxHashMap<ExprId, crate::inference::CallPlan>,
+    /// Generic instantiation per checked call whose callee declares type
+    /// params, in declared De Bruijn order. See
+    /// `ScopeInference::call_type_instantiations`.
+    pub call_type_instantiations: FxHashMap<ExprId, Vec<Ty>>,
     /// Function adapters required by checked optional-parameter coercions.
     pub function_coercions: FxHashMap<ExprId, crate::inference::FunctionCoercion>,
     /// Metadata produced while checking parameter defaults. Kept separate from
@@ -859,6 +889,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             self_pinned_rigid_var: FxHashMap::default(),
             param_types: Vec::new(),
             call_plans: FxHashMap::default(),
+            call_type_instantiations: FxHashMap::default(),
             function_coercions: FxHashMap::default(),
             default_parameter_inference: crate::inference::DefaultParameterInference::empty(),
             nested_lambda_types: FxHashMap::default(),
@@ -956,6 +987,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         FxHashMap<ExprId, Vec<crate::inference::MemberResolution<'db>>>,
         Vec<(Name, Ty)>,
         FxHashMap<ExprId, crate::inference::CallPlan>,
+        FxHashMap<ExprId, Vec<Ty>>,
         FxHashMap<ExprId, crate::inference::FunctionCoercion>,
         FxHashMap<FileScopeId, Ty>,
         crate::inference::DefaultParameterInference<'db>,
@@ -973,6 +1005,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             self.path_member_resolutions,
             self.param_types,
             self.call_plans,
+            self.call_type_instantiations,
             self.function_coercions,
             self.nested_lambda_types,
             self.default_parameter_inference,
@@ -1653,6 +1686,63 @@ impl<'db> TypeInferenceBuilder<'db> {
         }
     }
 
+    /// The callee's declared generic-param names in De Bruijn order
+    /// (`[class params...] ++ [user fn params...]`), plus the callee's name
+    /// for diagnostics. Resolved from the callee expression's recorded
+    /// `MemberResolution`; `None` when the callee is not a declared function
+    /// (lambda values, unresolved callees).
+    fn callee_declared_generic_params(&self, callee_id: ExprId) -> Option<(Vec<Name>, Name)> {
+        let Some(resolution) = self.resolutions.get(&callee_id).cloned() else {
+            // Interface methods aren't in `resolutions`; their declared generic
+            // params are recorded separately during interface checking.
+            let (callee_name, declared_params) = self
+                .interface_method_generic_params
+                .get(&callee_id)
+                .cloned()?;
+            return Some((declared_params, callee_name));
+        };
+        let (func_loc, treat_as_static_method) = match resolution {
+            crate::inference::MemberResolution::Free { func_loc } => (func_loc, true),
+            // `UnboundMethod` covers `Class.method` / `Class<...>.method` call
+            // sites where the receiver is a type name.  When the call writes
+            // `Class<...>.method(...)`, the receiver-type's `<...>` is parsed
+            // as the call's type-args by `find_callee_generic_args` in
+            // `lower_expr_body.rs`; those args fill the *enclosing class's*
+            // generic params (BEP-039), so we include them in the declared
+            // list.
+            crate::inference::MemberResolution::UnboundMethod { func_loc, .. } => (func_loc, true),
+            // BoundMethod calls (`inst.method(args)`) get class type-args
+            // from the receiver instance's `class_type_args` at runtime, not
+            // from the call site.
+            crate::inference::MemberResolution::BoundMethod { func_loc, .. } => (func_loc, false),
+            crate::inference::MemberResolution::InterfaceDefaultMethod { func_loc, .. } => {
+                (func_loc, false)
+            }
+            _ => return None,
+        };
+        let db = self.context.db();
+        let sig = baml_compiler2_ppir::elaborated_function_signature(db, func_loc);
+        // Only user-declared generic params are supplied at the call site;
+        // synthetic effect params are always inferred.  For
+        // static-method-on-generic-class calls, prepend the class's generic
+        // params: type-args fill `[class_params..., function_params...]`.
+        let class_params: Vec<Name> = if treat_as_static_method {
+            let file = func_loc.file(db);
+            let item_tree = baml_compiler2_ppir::file_item_tree(db, file);
+            item_tree
+                .classes
+                .values()
+                .find(|class_data| class_data.methods.contains(&func_loc.id(db)))
+                .map(|class_data| class_data.generic_params.clone())
+                .unwrap_or_default()
+        } else {
+            Vec::new()
+        };
+        let mut declared_params: Vec<Name> = class_params;
+        declared_params.extend(sig.user_generic_params.iter().cloned());
+        Some((declared_params, sig.name.clone()))
+    }
+
     /// Resolve explicit type arguments written at a call site (e.g. `foo<int, string>(x)`).
     ///
     /// Returns `Some(bindings)` when all type args are valid, where `bindings` maps each
@@ -1808,60 +1898,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         type_args: &[TypeExpr],
         call_expr_id: ExprId,
     ) -> Option<FxHashMap<Name, Ty>> {
-        let db = self.context.db();
-        let resolution = self.resolutions.get(&callee_id).cloned();
-        let (callee_name, declared_params) = if let Some(resolution) = resolution {
-            let (func_loc, treat_as_static_method) = match resolution {
-                crate::inference::MemberResolution::Free { func_loc } => (func_loc, true),
-                // `UnboundMethod` covers `Class.method` / `Class<...>.method` call
-                // sites where the receiver is a type name.  When the call writes
-                // `Class<...>.method(...)`, the receiver-type's `<...>` is parsed
-                // as the call's type-args by `find_callee_generic_args` in
-                // `lower_expr_body.rs`; those args fill the *enclosing class's*
-                // generic params (BEP-039), so we include them in the
-                // expected-arity check below.
-                crate::inference::MemberResolution::UnboundMethod { func_loc, .. } => {
-                    (func_loc, true)
-                }
-                // BoundMethod calls (`inst.method(args)`) get class type-args
-                // from the receiver instance's `class_type_args` at runtime, not
-                // from the call site.
-                crate::inference::MemberResolution::BoundMethod { func_loc, .. } => {
-                    (func_loc, false)
-                }
-                crate::inference::MemberResolution::InterfaceDefaultMethod { func_loc, .. } => {
-                    (func_loc, false)
-                }
-                _ => return None,
-            };
-            let sig = baml_compiler2_ppir::elaborated_function_signature(db, func_loc);
-            // Only user-declared generic params are supplied explicitly; synthetic effect params
-            // are always inferred.  For static-method-on-generic-class calls, prepend the
-            // class's generic params: type-args fill `[class_params..., function_params...]`.
-            let class_params: Vec<Name> = if treat_as_static_method {
-                let file = func_loc.file(db);
-                let item_tree = baml_compiler2_ppir::file_item_tree(db, file);
-                item_tree
-                    .classes
-                    .values()
-                    .find(|class_data| class_data.methods.contains(&func_loc.id(db)))
-                    .map(|class_data| class_data.generic_params.clone())
-                    .unwrap_or_default()
-            } else {
-                Vec::new()
-            };
-            let mut declared_params: Vec<Name> = class_params;
-            declared_params.extend(sig.user_generic_params.iter().cloned());
-            (sig.name.clone(), declared_params)
-        } else if let Some((callee_name, declared_params)) = self
-            .interface_method_generic_params
-            .get(&callee_id)
-            .cloned()
-        {
-            (callee_name, declared_params)
-        } else {
-            return None;
-        };
+        let (declared_params, callee_name) = self.callee_declared_generic_params(callee_id)?;
 
         if type_args.len() != declared_params.len() {
             self.context.report_simple(
@@ -1876,6 +1913,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         }
 
         // Resolve each type argument in the current namespace context.
+        let db = self.context.db();
         let mut bindings = FxHashMap::default();
         let ns = self.ns_context.clone();
         let caller_generic_params = self.generic_params.clone();
@@ -2083,9 +2121,16 @@ impl<'db> TypeInferenceBuilder<'db> {
         generic_params
             .iter()
             .map(|param| {
+                // Widen FRESH literal types out of inferred bindings: `mk("hi")`
+                // must thread `T = string`, not `T = literal "hi"` — the runtime
+                // compares class type args invariantly, so an escaped instance
+                // carrying the literal would never match `is Box<string>`.
+                // (Explicit type args never reach here; recording is gated on
+                // `!explicit_args_used`.)
                 let ty = bindings
                     .get(param)
                     .cloned()
+                    .map(Ty::widen_fresh)
                     .unwrap_or_else(|| Ty::BuiltinUnknown {
                         attr: TyAttr::default(),
                     });
@@ -2224,6 +2269,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             std::mem::take(&mut self.interface_default_owner_type_arg_bindings);
         let saved_self_pinned_rigid_var = std::mem::take(&mut self.self_pinned_rigid_var);
         let saved_call_plans = std::mem::take(&mut self.call_plans);
+        let saved_call_type_instantiations = std::mem::take(&mut self.call_type_instantiations);
         let saved_function_coercions = std::mem::take(&mut self.function_coercions);
         let saved_lambda_effective_throws = std::mem::take(&mut self.lambda_effective_throws);
         let defaults = &parameter_defaults.defaults;
@@ -2303,6 +2349,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             path_segment_types: std::mem::take(&mut self.path_segment_types),
             path_member_resolutions: std::mem::take(&mut self.path_member_resolutions),
             call_plans: std::mem::take(&mut self.call_plans),
+            call_type_instantiations: std::mem::take(&mut self.call_type_instantiations),
             function_coercions: std::mem::take(&mut self.function_coercions),
         };
 
@@ -2319,6 +2366,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             saved_interface_default_owner_type_arg_bindings;
         self.self_pinned_rigid_var = saved_self_pinned_rigid_var;
         self.call_plans = saved_call_plans;
+        self.call_type_instantiations = saved_call_type_instantiations;
         self.function_coercions = saved_function_coercions;
         self.lambda_effective_throws = saved_lambda_effective_throws;
         self.body_source_map = saved_body_source_map;
@@ -2674,6 +2722,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             }
             Expr::Spawn {
                 name,
+                with_exprs,
                 body: spawn_body,
             } => {
                 if let Some(name_id) = name {
@@ -2685,13 +2734,20 @@ impl<'db> TypeInferenceBuilder<'db> {
                         refs,
                     );
                 }
-                Self::collect_default_expr_forward_references(
-                    *spawn_body,
-                    body,
-                    later_params,
-                    shadowed,
-                    refs,
-                );
+                for with_id in with_exprs {
+                    Self::collect_default_expr_forward_references(
+                        *with_id,
+                        body,
+                        later_params,
+                        shadowed,
+                        refs,
+                    );
+                }
+                // The spawn BODY is deferred (wrapped in a synthetic lambda
+                // and evaluated on the spawned task) — only `name` and the
+                // `with` transformers are evaluated eagerly, so a default
+                // capturing a later parameter inside `spawn { ... }` is fine.
+                let _ = spawn_body;
             }
             Expr::Await { future } => {
                 Self::collect_default_expr_forward_references(
@@ -2894,6 +2950,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             is_value_call,
             is_optional_call,
             explicit_type_arg_bindings,
+            callee_expr,
             runtime_type_arg_params,
             runtime_type_arg_binding_seed,
             rigid_self_var,
@@ -2997,10 +3054,21 @@ impl<'db> TypeInferenceBuilder<'db> {
                             params: fn_params, ..
                         }) = self.expected_lambda_function_ty(&substituted)
                         {
-                            let all_params_concrete = fn_params
-                                .iter()
-                                .all(|param| !crate::generics::contains_typevar(&param.ty));
-                            if all_params_concrete {
+                            // Drive bidirectional checking as long as every
+                            // callback parameter is concrete *modulo the
+                            // enclosing function's own generics*. Those outer
+                            // generics are rigid here, so a param like
+                            // `Future<T, E>` (T/E being the caller's generics)
+                            // still gives an unannotated lambda param a concrete
+                            // shape; only a callee inference var the call hasn't
+                            // bound yet forces synthesis.
+                            let all_params_inferable = fn_params.iter().all(|param| {
+                                !crate::generics::contains_non_rigid_typevar(
+                                    &param.ty,
+                                    &self.generic_params,
+                                )
+                            });
+                            if all_params_inferable {
                                 self.check_expr(*arg, body, &substituted)
                             } else {
                                 self.infer_expr(*arg, body)
@@ -3027,6 +3095,58 @@ impl<'db> TypeInferenceBuilder<'db> {
                                 &mut bindings,
                                 rigid_self_var.as_ref(),
                             );
+                        }
+                    }
+
+                    // Backfill: a callee generic matched ONLY against the
+                    // caller's own rigid TypeVars (e.g. `map`'s `U`/`E` against
+                    // the enclosing `all<T, E>`'s `T`/`E` in
+                    // `futures.map((f) -> { await f })`) is bound to those
+                    // TypeVars. Plain inference skips TypeVar actuals — fresh
+                    // inference vars carry no information — but a rigid caller
+                    // generic is as concrete as any type inside this body, and
+                    // leaving the callee generic unbound makes the call's
+                    // result type fail strict rigid-var checking at its use
+                    // site (`U[]` ≢ `T[]`).
+                    let unbound: Vec<&FunctionParamTy> = param_arg_pairs
+                        .iter()
+                        .map(|(param, _)| *param)
+                        .filter(|param| {
+                            crate::generics::contains_typevar(&crate::generics::substitute_ty(
+                                &param.ty, &bindings,
+                            ))
+                        })
+                        .collect();
+                    if !unbound.is_empty() {
+                        let mut typevar_bindings: FxHashMap<Name, Ty> = FxHashMap::default();
+                        for (param, arg) in &param_arg_pairs {
+                            if let Some(arg_ty) = self.expressions.get(arg) {
+                                crate::generics::infer_bindings_allow_typevars(
+                                    &param.ty,
+                                    arg_ty,
+                                    &mut typevar_bindings,
+                                );
+                            }
+                        }
+                        for (name, ty) in typevar_bindings {
+                            // Only a CALLEE-inferable generic may be backfilled.
+                            // A formal TypeVar that names one of the CALLER's
+                            // own generics is RIGID in this body (receiver
+                            // substitution leaves e.g. a Self-pinned `T` in
+                            // the signature): binding it from an argument
+                            // would silently collapse `x.eq(5)` to `T = int`
+                            // instead of rejecting the literal against the
+                            // rigid `T`. Same for the pinned `Self` var.
+                            let callee_inferable = !self.generic_params.contains(&name)
+                                && rigid_self_var.as_ref() != Some(&name);
+                            let all_rigid = !matches!(ty, Ty::Unknown { .. } | Ty::Error { .. })
+                                && !crate::generics::contains_non_rigid_typevar(
+                                    &ty,
+                                    &self.generic_params,
+                                );
+                            if callee_inferable && all_rigid {
+                                bindings.entry(name).or_insert(ty);
+                            }
                         }
                     }
                 } else {
@@ -3263,6 +3383,57 @@ impl<'db> TypeInferenceBuilder<'db> {
                     }
                 }
 
+                // Record the call's final generic instantiation (declared
+                // De Bruijn order) so MIR can thread it into the callee's
+                // `frame.type_args` at runtime. Values are recorded BEFORE
+                // typevar erasure: a binding to the *caller's* rigid `TypeVar`
+                // must survive so MIR can lower it to a `TypeArgRef` into the
+                // caller's own frame (generic→generic calls). Fresh literal
+                // types widen to their base primitive (`"hi"` infers
+                // `T = Literal("hi")`, but the runtime tag must be `string`
+                // so `is Box<string>` compares equal).
+                if let Some(callee_id) = callee_expr {
+                    if let Some((declared_params, _)) =
+                        self.callee_declared_generic_params(callee_id)
+                    {
+                        if !declared_params.is_empty() {
+                            // The type-checking `bindings` pass refuses
+                            // TypeVar actuals (`infer_bindings` passes
+                            // allow_typevar_actuals=false), so a generic→
+                            // generic call (`any(fs)` inside `helper<E>`,
+                            // where `fs: Future<int, E>[]`) leaves E2 unbound
+                            // there. For RECORDING those rigid caller
+                            // TypeVars are exactly what we want (MIR lowers
+                            // them to TypeArgRef) — fill the gaps with an
+                            // allow-typevars pass over the checked arg types.
+                            let mut typevar_bindings: FxHashMap<Name, Ty> = FxHashMap::default();
+                            for (param, arg) in &param_arg_pairs {
+                                if let Some(arg_ty) = self.expressions.get(arg) {
+                                    crate::generics::infer_bindings_allow_typevars(
+                                        &param.ty,
+                                        arg_ty,
+                                        &mut typevar_bindings,
+                                    );
+                                }
+                            }
+                            let instantiation: Vec<Ty> = declared_params
+                                .iter()
+                                .map(|name| {
+                                    bindings
+                                        .get(name)
+                                        .or_else(|| typevar_bindings.get(name))
+                                        .cloned()
+                                        .map(Ty::widen_fresh)
+                                        .unwrap_or(Ty::Unknown {
+                                            attr: TyAttr::default(),
+                                        })
+                                })
+                                .collect();
+                            self.call_type_instantiations.insert(expr_id, instantiation);
+                        }
+                    }
+                }
+
                 let substituted_ret = crate::generics::substitute_ty(ret, &bindings);
                 let substituted_ret = if crate::generics::contains_typevar(&substituted_ret) {
                     substituted_ret
@@ -3437,6 +3608,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                         is_value_call,
                         is_optional_call,
                         explicit_type_arg_bindings,
+                        callee_expr,
                         runtime_type_arg_params: Vec::new(),
                         runtime_type_arg_binding_seed: Vec::new(),
                         rigid_self_var,
@@ -3570,6 +3742,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             is_value_call: false,
             is_optional_call: true,
             explicit_type_arg_bindings: None,
+            callee_expr: Some(callee_id),
             runtime_type_arg_params,
             runtime_type_arg_binding_seed: self
                 .interface_default_owner_type_arg_bindings
@@ -3825,8 +3998,9 @@ impl<'db> TypeInferenceBuilder<'db> {
             Expr::Lambda(func_def) => self.infer_lambda_expr(expr_id, func_def),
             Expr::Spawn {
                 name,
+                with_exprs,
                 body: spawn_body,
-            } => self.infer_spawn_expr(body, *name, *spawn_body),
+            } => self.infer_spawn_expr(body, *name, with_exprs, *spawn_body),
             Expr::Await { future } => self.infer_await_expr(body, *future),
             Expr::Missing => Ty::Unknown {
                 attr: TyAttr::default(),
@@ -4152,9 +4326,10 @@ impl<'db> TypeInferenceBuilder<'db> {
         &mut self,
         body: &ExprBody,
         name: Option<ExprId>,
+        with_exprs: &[ExprId],
         spawn_body: ExprId,
     ) -> Ty {
-        // BEP-034: `spawn name? { body } : Future<T, E>` where
+        // BEP-034: `spawn name? with? { body } : Future<T, E>` where
         // `body` has type `T throws E`. After AST lowering the
         // body is wrapped in a synthetic 0-arg lambda; we infer
         // the lambda's type, peel out its return as `T`, and
@@ -4187,7 +4362,130 @@ impl<'db> TypeInferenceBuilder<'db> {
                     }
                 },
             );
-        Ty::Future(Box::new(value_ty), Box::new(throws_ty), TyAttr::default())
+
+        // BEP-034 middleware: fold the `with` transformers left-to-right.
+        // The body seeds an implicit `SpawnParams<T0, E0>`; each transformer
+        // must check against `(SpawnParams<cur>) -> SpawnParams<?, ?>` —
+        // checking with that expected type lets phase-0 reverse inference
+        // bind a generic transformer's own type params from the parameter
+        // position (e.g. `withRetry(3)` whose declared type is
+        // `(SpawnParams<T, E>) -> SpawnParams<T, E>`). The transformer's
+        // OUTPUT type args feed the next link; the final pair types the
+        // spawn's `Future`. Type-changing transformers (e.g. a fallback
+        // erasing the error type) fall out naturally.
+        // Widen fresh literal types out of the seed (`spawn with t { 1 }`
+        // must read `SpawnParams<int, null>` in diagnostics and bindings,
+        // not `SpawnParams<1, null>`).
+        let mut cur_value = value_ty.widen_fresh();
+        let mut cur_error = throws_ty.widen_fresh();
+        for with_id in with_exprs {
+            let params_in = spawn_params_ty(cur_value.clone(), cur_error.clone());
+            // The expected RETURN is `SpawnParams<unknown, unknown>` (not a
+            // bare `Unknown`): a non-transformer return type then fails the
+            // check with a readable mismatch instead of coercing into the
+            // open slot.
+            let expected = Ty::Function {
+                generic_params: Vec::new(),
+                generic_param_bounds: Vec::new(),
+                params: vec![FunctionParamTy {
+                    name: None,
+                    ty: params_in,
+                    mode: FunctionParamMode::Required,
+                }],
+                ret: Box::new(spawn_params_ty(
+                    Ty::Unknown {
+                        attr: TyAttr::default(),
+                    },
+                    Ty::Unknown {
+                        attr: TyAttr::default(),
+                    },
+                )),
+                throws: Box::new(Ty::Unknown {
+                    attr: TyAttr::default(),
+                }),
+                attr: TyAttr::default(),
+            };
+            // A VARIABLE-BOUND transformer (`let t = withRetry(3); spawn
+            // with t { .. }`) is a bare path whose type still carries the
+            // transformer's unbound generics — `check_expr` would reject
+            // `SpawnParams<int, E>` against the link's concrete input. Infer
+            // it instead and instantiate its generics from the input, the
+            // same binding a direct call gets from phase-0.
+            let is_value_ref = matches!(
+                &body.exprs[*with_id],
+                Expr::Path(_) | Expr::MemberAccess { .. }
+            );
+            let got = if is_value_ref {
+                let inferred = self.infer_expr(*with_id, body);
+                if let Ty::Function { params, .. } = &inferred
+                    && params.len() == 1
+                    && crate::generics::contains_typevar(&inferred)
+                {
+                    let mut bindings = FxHashMap::default();
+                    crate::generics::infer_bindings(
+                        &params[0].ty,
+                        &spawn_params_ty(cur_value.clone(), cur_error.clone()),
+                        &mut bindings,
+                    );
+                    crate::generics::substitute_ty(&inferred, &bindings)
+                } else {
+                    inferred
+                }
+            } else {
+                self.check_expr(*with_id, body, &expected)
+            };
+            match &got {
+                Ty::Function { params, ret, .. } if params.len() == 1 => {
+                    // Value-refs skipped `check_expr`, so validate the input
+                    // side here: the transformer's parameter must accept the
+                    // link's `SpawnParams`.
+                    let input_ok = !is_value_ref
+                        || self.is_subtype(
+                            &spawn_params_ty(cur_value.clone(), cur_error.clone()),
+                            &params[0].ty,
+                        );
+                    if let Ty::Class(qn, args, _) = ret.as_ref()
+                        && input_ok
+                        && is_spawn_params_qtn(qn)
+                        && args.len() == 2
+                    {
+                        cur_value = args[0].clone();
+                        cur_error = args[1].clone();
+                    } else if !matches!(ret.as_ref(), Ty::Unknown { .. } | Ty::Error { .. }) {
+                        self.context.report_simple(
+                            TirTypeError::SpawnWithNotATransformer {
+                                expected_input: spawn_params_ty(
+                                    cur_value.clone(),
+                                    cur_error.clone(),
+                                ),
+                                got: got.clone(),
+                            },
+                            *with_id,
+                        );
+                    }
+                }
+                // Already diagnosed (unresolved name, failed call, ...).
+                Ty::Unknown { .. } | Ty::Error { .. } => {}
+                other => {
+                    // Checked routes already got `check_expr`'s concrete
+                    // mismatch; value-refs skipped it and must report here.
+                    if is_value_ref {
+                        self.context.report_simple(
+                            TirTypeError::SpawnWithNotATransformer {
+                                expected_input: spawn_params_ty(
+                                    cur_value.clone(),
+                                    cur_error.clone(),
+                                ),
+                                got: other.clone(),
+                            },
+                            *with_id,
+                        );
+                    }
+                }
+            }
+        }
+
+        Ty::Future(Box::new(cur_value), Box::new(cur_error), TyAttr::default())
     }
 
     #[inline(never)]
@@ -4196,6 +4494,21 @@ impl<'db> TypeInferenceBuilder<'db> {
         let fut_ty = self.infer_expr(future, body);
         match fut_ty {
             Ty::Future(value, _error, _) => *value,
+            // `await` DISTRIBUTES over a union of futures (BEP-034): `Future`
+            // is invariant, so combining differently-typed futures (if/else,
+            // array elements) yields `Future<A, E1> | Future<B, E2>` — not a
+            // future of a union. Awaiting it gives value `A | B`; the error
+            // side (`E1 | E2`) is contributed by the throws analysis.
+            Ty::Union(ref members, _)
+                if !members.is_empty() && members.iter().all(|m| matches!(m, Ty::Future(..))) =>
+            {
+                let mut values = members.iter().filter_map(|m| match m {
+                    Ty::Future(value, _, _) => Some(value.as_ref().clone()),
+                    _ => None,
+                });
+                let first = values.next().expect("non-empty checked above");
+                values.fold(first, |acc, v| crate::generics::union_ty(&acc, &v))
+            }
             Ty::Unknown { .. } | Ty::Error { .. } => fut_ty,
             other => {
                 // `await` requires a Future operand. Emit a
@@ -4265,6 +4578,22 @@ impl<'db> TypeInferenceBuilder<'db> {
             .map(|te| self.lower_lambda_type_expr(&te.expr, &all_generic_params, te.span));
         let (throws_ty, throws_span, warn_extraneous_throws) =
             self.choose_lambda_throws_surface(func_def, &all_generic_params, None);
+        // An UNANNOTATED lambda in synthesis mode (no contextual throws)
+        // INFERS its throws surface from the body — a lambda throws what it
+        // throws. Pass `Unknown` to the declared-vs-effective check (open
+        // slot → skipped; there is nothing declared to violate) and take the
+        // effective set as the function type's throws below. E.g. a
+        // middleware body wrap `() -> { original() * 2 }` where `original:
+        // () -> T throws E` types as `() -> T throws E`, not `throws never`.
+        let infer_throws_from_body =
+            func_def.throws.is_none() && !Self::is_spawn_body_lambda(func_def);
+        let throws_ty = if infer_throws_from_body {
+            Ty::Unknown {
+                attr: TyAttr::default(),
+            }
+        } else {
+            throws_ty
+        };
 
         // Infer the lambda body using save/restore approach
         let (ret_ty, _lambda_expressions, lambda_fsi, lambda_effective_throws) = self
@@ -4278,12 +4607,17 @@ impl<'db> TypeInferenceBuilder<'db> {
             );
         let surface_ret_ty = return_annotation.unwrap_or(ret_ty);
 
+        let surface_throws = if infer_throws_from_body {
+            lambda_effective_throws.clone()
+        } else {
+            throws_ty
+        };
         let result = Ty::Function {
             generic_params: func_def.generic_params.clone(),
             generic_param_bounds: Vec::new(),
             params: param_tys,
             ret: Box::new(surface_ret_ty),
-            throws: Box::new(throws_ty),
+            throws: Box::new(surface_throws),
             attr: TyAttr::default(),
         };
         self.lambda_effective_throws
@@ -4685,6 +5019,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             is_value_call,
             is_optional_call: false,
             explicit_type_arg_bindings,
+            callee_expr: Some(callee),
             runtime_type_arg_params,
             runtime_type_arg_binding_seed: self
                 .interface_default_owner_type_arg_bindings
@@ -6879,6 +7214,53 @@ impl<'db> TypeInferenceBuilder<'db> {
         )
     }
 
+    /// The argument type used for throws instantiation. For a lambda argument
+    /// whose EFFECTIVE throws is known (side table populated when the lambda
+    /// body was checked), override the recorded surface throws with it: an
+    /// omitted-throws lambda's surface is open (`Unknown`), which would leave
+    /// the callee's throws generic unbound — `map`'s `E` would then leak as a
+    /// raw `TypeVar` (a non-throwing callback) or stay symbolic where the body
+    /// demonstrably throws. The effective value gives the truth either way:
+    /// `Never` for a non-throwing callback, the thrown type otherwise.
+    fn callee_throws_arg_ty(&self, arg_expr_id: ExprId) -> Ty {
+        let arg_ty = self
+            .expressions
+            .get(&arg_expr_id)
+            .cloned()
+            .unwrap_or(Ty::Unknown {
+                attr: TyAttr::default(),
+            });
+        if let Ty::Function {
+            generic_params,
+            generic_param_bounds,
+            params,
+            ret,
+            throws,
+            attr,
+        } = &arg_ty
+            && let Some(effective) = self.lambda_effective_throws.get(&arg_expr_id)
+            // Only an OPEN surface is replaced: an omitted-throws lambda's
+            // surface is `Unknown`, and a lambda checked against an
+            // effect-polymorphic callback param carries the unbound effect
+            // TypeVar. An EXPLICIT (or contextual-concrete) `throws Foo | Bar`
+            // is a deliberate contract wider than the current body facts —
+            // narrowing it to today's effective set would instantiate a
+            // higher-order `E` too tightly.
+            && (matches!(throws.as_ref(), Ty::Unknown { .. })
+                || crate::generics::contains_typevar(throws))
+        {
+            return Ty::Function {
+                generic_params: generic_params.clone(),
+                generic_param_bounds: generic_param_bounds.clone(),
+                params: params.clone(),
+                ret: ret.clone(),
+                throws: Box::new(effective.clone()),
+                attr: attr.clone(),
+            };
+        }
+        arg_ty
+    }
+
     fn instantiated_callee_throws(
         &self,
         callee_expr_id: ExprId,
@@ -6933,24 +7315,12 @@ impl<'db> TypeInferenceBuilder<'db> {
                 let Some(param) = effective_params.get(param_index) else {
                     continue;
                 };
-                let arg_ty = self
-                    .expressions
-                    .get(&arg_expr_id)
-                    .cloned()
-                    .unwrap_or(Ty::Unknown {
-                        attr: TyAttr::default(),
-                    });
+                let arg_ty = self.callee_throws_arg_ty(arg_expr_id);
                 crate::generics::infer_bindings_allow_typevars(&param.ty, &arg_ty, &mut bindings);
             }
         } else {
             for (param, arg_expr_id) in effective_params.iter().zip(args.iter()) {
-                let arg_ty = self
-                    .expressions
-                    .get(arg_expr_id)
-                    .cloned()
-                    .unwrap_or(Ty::Unknown {
-                        attr: TyAttr::default(),
-                    });
+                let arg_ty = self.callee_throws_arg_ty(*arg_expr_id);
                 crate::generics::infer_bindings_allow_typevars(&param.ty, &arg_ty, &mut bindings);
             }
         }
@@ -7089,15 +7459,20 @@ impl<'db> TypeInferenceBuilder<'db> {
             }
             Expr::Spawn {
                 name,
+                with_exprs,
                 body: spawn_body,
             } => {
                 // Spawn-body throws do NOT escape the spawning function
                 // — they are captured into the resulting `Future<T, E>`'s
                 // E parameter and only re-thrown at an `await` site. The
-                // name expression itself can throw, so walk it; do not
-                // walk spawn_body.
+                // name and `with` expressions are evaluated eagerly in the
+                // spawning function, so their throws DO escape — walk them;
+                // do not walk spawn_body.
                 if let Some(name_id) = name {
                     self.collect_throw_facts_from_expr(*name_id, body, out);
+                }
+                for with_id in with_exprs {
+                    self.collect_throw_facts_from_expr(*with_id, body, out);
                 }
                 let _ = spawn_body;
             }
@@ -13200,6 +13575,34 @@ impl<'db> TypeInferenceBuilder<'db> {
         {
             return true;
         }
+        // Same-class generic args are invariant. The normalizer implements
+        // that invariance as structural EQUALITY, which is both too strict
+        // and too weak for two cases the spawn `with`-chain (and any
+        // expected-type-driven generic instantiation) hits:
+        //   1. HOLES — `Ty::Unknown` (error recovery / not-yet-constrained,
+        //      bidirectionally compatible by the top-level rule in
+        //      `normalize::is_subtype_of`) and `Ty::BuiltinUnknown` (what
+        //      unresolved callee typevars are ERASED to, e.g.
+        //      `let t = withDouble();` leaving `SpawnParams<int, unknown>`).
+        //      Equality rejects `SpawnParams<int, E> <:
+        //      SpawnParams<unknown, unknown>` even though the hole means
+        //      "anything goes here", not "a different type".
+        //   2. EQUIVALENT SPELLINGS — phase-0 can bind `T = int | 99` (arg
+        //      literal joined with the expected type); that denotes the same
+        //      type as `int` but is not structurally equal to it.
+        // Compare args pairwise instead: holes match anything, concrete args
+        // must be MUTUAL subtypes (the proper definition of invariant
+        // compatibility, of which structural equality is a special case).
+        if let (Ty::Class(sub_qtn, sub_args, _), Ty::Class(sup_qtn, sup_args, _)) = (sub, sup)
+            && sub_qtn == sup_qtn
+            && sub_args.len() == sup_args.len()
+        {
+            return sub_args.iter().zip(sup_args.iter()).all(|(a, b)| {
+                matches!(a, Ty::Unknown { .. } | Ty::BuiltinUnknown { .. })
+                    || matches!(b, Ty::Unknown { .. } | Ty::BuiltinUnknown { .. })
+                    || (self.is_subtype(a, b) && self.is_subtype(b, a))
+            });
+        }
         if let Ty::Interface(iface_qtn, iface_args, associated_bindings, _) = sup
             && !matches!(sub, Ty::Interface(..))
         {
@@ -14608,6 +15011,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         let saved_self_pinned_rigid_var = std::mem::take(&mut self.self_pinned_rigid_var);
         let saved_lambda_effective_throws = std::mem::take(&mut self.lambda_effective_throws);
         let saved_call_plans = std::mem::take(&mut self.call_plans);
+        let saved_call_type_instantiations = std::mem::take(&mut self.call_type_instantiations);
         let saved_function_coercions = std::mem::take(&mut self.function_coercions);
         let saved_body_source_map = self.body_source_map.clone();
         self.body_source_map = Some(lambda_source_map.clone());
@@ -14691,12 +15095,34 @@ impl<'db> TypeInferenceBuilder<'db> {
             throws_report_span,
             warn_extraneous_throws,
         );
-        let lambda_effective_throws = Self::ty_from_concrete_facts(
-            &self.collect_effective_throws(lambda_body),
-        )
-        .unwrap_or(Ty::Never {
-            attr: TyAttr::default(),
-        });
+        let effective_facts = self.collect_effective_throws(lambda_body);
+        let lambda_effective_throws = Self::ty_from_concrete_facts(&effective_facts)
+            .or_else(|| {
+                // A rigid TypeVar fact — an ENCLOSING function's generic param,
+                // e.g. the `E` contributed by `await f` (`f: Future<T, E>`)
+                // inside a std combinator's lambda — is concrete-enough for
+                // the effective-throws surface: it resolves at the outer call
+                // site like any rigid type. Only genuinely open facts (fresh
+                // effect slots, Unknown/recovery types) keep the surface open
+                // and collapse to `Never` below.
+                let all_rigid_or_concrete = !effective_facts.is_empty()
+                    && effective_facts.iter().all(|fact| match fact {
+                        Ty::TypeVar(name, _) => {
+                            self.generic_params.contains(name)
+                                && !crate::ty::is_synthetic_effect_param(name)
+                        }
+                        Ty::Unknown { .. } | Ty::BuiltinUnknown { .. } | Ty::Error { .. } => false,
+                        _ => true,
+                    });
+                all_rigid_or_concrete.then(|| {
+                    let mut iter = effective_facts.iter();
+                    let first = iter.next().expect("non-empty checked above").clone();
+                    iter.fold(first, |acc, fact| crate::generics::union_ty(&acc, fact))
+                })
+            })
+            .unwrap_or(Ty::Never {
+                attr: TyAttr::default(),
+            });
 
         // Collect the lambda's expression types and restore parent state
         let lambda_expressions = std::mem::replace(&mut self.expressions, saved_expressions);
@@ -14714,6 +15140,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         self.self_pinned_rigid_var = saved_self_pinned_rigid_var;
         self.lambda_effective_throws = saved_lambda_effective_throws;
         self.call_plans = saved_call_plans;
+        self.call_type_instantiations = saved_call_type_instantiations;
         self.function_coercions = saved_function_coercions;
         self.locals = saved_locals;
         self.scoped_local_declarations = saved_scoped_local_declarations;

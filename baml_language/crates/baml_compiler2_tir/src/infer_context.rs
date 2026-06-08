@@ -50,6 +50,10 @@ pub enum TirTypeError {
     /// The return value of a void-returning function was used where a value
     /// is required — assigned to a variable, passed as an argument, etc.
     VoidFunctionResultUsed,
+    /// A `spawn ... with` clause expression is not a middleware transformer
+    /// (BEP-034: each `with` expression must be a function
+    /// `(baml.spawn.SpawnParams<T, E>) -> baml.spawn.SpawnParams<U, F>`).
+    SpawnWithNotATransformer { expected_input: Ty, got: Ty },
     /// Expression is not callable (e.g. `42(1)` or `Foo(1)` where Foo is a class).
     NotCallable { ty: Ty },
     /// Expression is not iterable (e.g. `for let i in 42 { ... }` where 42 is an int).
@@ -350,6 +354,15 @@ impl fmt::Display for TirTypeError {
             }
             TirTypeError::VoidFunctionResultUsed => {
                 write!(f, "cannot use return value of a void function")
+            }
+            TirTypeError::SpawnWithNotATransformer {
+                expected_input,
+                got,
+            } => {
+                write!(
+                    f,
+                    "`spawn ... with` takes middleware transformer functions: this link receives `{expected_input}` and must return a `baml.spawn.SpawnParams`, got `{got}`"
+                )
             }
             TirTypeError::NotCallable { ty } => {
                 write!(

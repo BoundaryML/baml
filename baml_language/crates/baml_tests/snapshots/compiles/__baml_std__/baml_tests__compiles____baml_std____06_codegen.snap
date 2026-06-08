@@ -2180,6 +2180,29 @@ function baml.fs.write(path: string, content: string) -> int {
 function baml.fs.write_bytes(path: string, content: uint8array) -> int {
 }
 
+function baml.future.AllFailed.from_json(j: baml.json.json) -> baml.future.AllFailed<unknown> {
+    load_var j
+    load_const "errors"
+    call baml.json.field
+    store_var _3
+    load_type #0[]
+    load_var _3
+    call baml.json.from_json
+    load_type #0
+    init_instance<1> baml.future.AllFailed .errors
+    return
+}
+
+function baml.future.AllFailed.to_json(self: baml.future.AllFailed<unknown>) -> baml.json.json {
+    load_type #0
+    load_var self
+    load_field .errors
+    call baml.Array.to_json
+    load_const "errors"
+    alloc_map 1
+    return
+}
+
 function baml.future.Future.cancel(self: future<unknown, unknown>) -> bool {
 }
 
@@ -2207,6 +2230,70 @@ function baml.future.Future.state(self: future<unknown, unknown>) -> baml.future
 
 function baml.future.Future.to_json(self: future<unknown, unknown>) -> baml.json.json {
     alloc_map 0
+    return
+}
+
+function baml.future.all(futures: future<unknown, unknown>[]) -> future<unknown[], unknown> {
+    load_var ?1
+    make_cell
+    store_var ?1
+    load_type #0
+    load_type #1
+    load_var futures
+    make_closure .<lambda(all, 0)>, captures=1, ntypeargs=2
+    load_const null
+    load_const null
+    spawn
+    store_var _3
+    load_var _3
+    return
+}
+
+function baml.future.all_complete(futures: future<unknown, unknown>[]) -> future<unknown[], unknown> {
+    load_var ?1
+    make_cell
+    store_var ?1
+    load_type #0
+    load_type #1
+    load_var futures
+    make_closure .<lambda(all_complete, 0)>, captures=1, ntypeargs=2
+    load_const null
+    load_const null
+    spawn
+    store_var _3
+    load_var _3
+    return
+}
+
+function baml.future.any(futures: future<unknown, unknown>[]) -> future<unknown, baml.future.AllFailed<unknown>> {
+    load_var ?1
+    make_cell
+    store_var ?1
+    load_type #0
+    load_type #1
+    load_var futures
+    make_closure .<lambda(any, 0)>, captures=1, ntypeargs=2
+    load_const null
+    load_const null
+    spawn
+    store_var _3
+    load_var _3
+    return
+}
+
+function baml.future.race(futures: future<unknown, unknown>[]) -> future<unknown, unknown> {
+    load_var ?1
+    make_cell
+    store_var ?1
+    load_type #0
+    load_type #1
+    load_var futures
+    make_closure .<lambda(race, 0)>, captures=1, ntypeargs=2
+    load_const null
+    load_const null
+    spawn
+    store_var _3
+    load_var _3
     return
 }
 
@@ -16944,6 +17031,135 @@ function baml.panics.UserPanic.to_json(self: baml.panics.UserPanic) -> baml.json
     return
 }
 
+function baml.spawn.CancelToken.any(tokens: baml.spawn.CancelToken[]) -> baml.spawn.CancelToken {
+}
+
+function baml.spawn.CancelToken.cancel(self: baml.spawn.CancelToken) -> int {
+}
+
+function baml.spawn.CancelToken.from_json(j: baml.json.json) -> baml.spawn.CancelToken {
+    load_var j
+    call baml.json.stringify
+    store_var _2
+    load_type baml.spawn.CancelToken
+    load_var _2
+    call baml.json.from_string
+    return
+}
+
+function baml.spawn.CancelToken.is_cancelled(self: baml.spawn.CancelToken) -> bool {
+}
+
+function baml.spawn.CancelToken.new() -> baml.spawn.CancelToken {
+}
+
+function baml.spawn.CancelToken.to_json(self: baml.spawn.CancelToken) -> baml.json.json {
+    load_type baml.spawn.CancelToken
+    load_var self
+    call baml.json.to_string
+    call baml.json.parse
+    return
+}
+
+function baml.spawn.SpawnParams.from_json(j: baml.json.json) -> baml.spawn.SpawnParams<unknown, unknown> {
+    load_var j
+    call baml.json.stringify
+    store_var _2
+    load_type baml.spawn.SpawnParams<#0, #1>
+    load_var _2
+    call baml.json.from_string
+    return
+}
+
+function baml.spawn.SpawnParams.to_json(self: baml.spawn.SpawnParams<unknown, unknown>) -> baml.json.json {
+    load_type baml.spawn.SpawnParams<#0, #1>
+    load_var self
+    call baml.json.to_string
+    call baml.json.parse
+    return
+}
+
+function baml.spawn.TaskGroup.active_count(self: baml.spawn.TaskGroup) -> int {
+}
+
+function baml.spawn.TaskGroup.cancel(self: baml.spawn.TaskGroup, pending: bool | null, active: bool | null) -> int {
+}
+
+function baml.spawn.TaskGroup.from_json(j: baml.json.json) -> baml.spawn.TaskGroup {
+    load_var j
+    call baml.json.stringify
+    store_var _2
+    load_type baml.spawn.TaskGroup
+    load_var _2
+    call baml.json.from_string
+    return
+}
+
+function baml.spawn.TaskGroup.limit(self: baml.spawn.TaskGroup) -> int {
+}
+
+function baml.spawn.TaskGroup.name(self: baml.spawn.TaskGroup) -> string | null {
+}
+
+function baml.spawn.TaskGroup.new(limit: int, name: string | null) -> baml.spawn.TaskGroup {
+}
+
+function baml.spawn.TaskGroup.queued_count(self: baml.spawn.TaskGroup) -> int {
+}
+
+function baml.spawn.TaskGroup.set_limit(self: baml.spawn.TaskGroup, limit: int) -> void {
+}
+
+function baml.spawn.TaskGroup.to_json(self: baml.spawn.TaskGroup) -> baml.json.json {
+    load_type baml.spawn.TaskGroup
+    load_var self
+    call baml.json.to_string
+    call baml.json.parse
+    return
+}
+
+function baml.spawn.options(group: baml.spawn.TaskGroup | null, cancel: baml.spawn.CancelToken | null, detach: bool | null) -> (baml.spawn.SpawnParams<unknown, unknown>) -> baml.spawn.SpawnParams<unknown, unknown> throws never {
+    load_var ?1
+    make_cell
+    store_var ?1
+    load_var ?2
+    make_cell
+    store_var ?2
+    load_var ?3
+    make_cell
+    store_var ?3
+    load_deref ?1
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const null
+    store_deref ?1
+
+  L0:
+    load_deref ?2
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L1
+    load_const null
+    store_deref ?2
+
+  L1:
+    load_deref ?3
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L2
+    load_const null
+    store_deref ?3
+
+  L2:
+    load_type #0
+    load_type #1
+    load_var2 1 2
+    load_var detach
+    make_closure .<lambda(options, 0)>, captures=3, ntypeargs=2
+    return
+}
+
 function baml.stream.StreamFinished.from_json(j: baml.json.json) -> baml.stream.StreamFinished {
     alloc_instance baml.stream.StreamFinished
     return
@@ -17350,10 +17566,6 @@ function baml.time.Instant.from_json(j: baml.json.json) -> baml.time.Instant {
     load_var _
     is_type baml.errors.ParseError
     pop_jump_if_false L2
-    load_var _
-    load_field .0
-    is_type string
-    pop_jump_if_false L2
     jump L3
 
   L2:
@@ -17454,10 +17666,6 @@ function baml.time.Instant.to_json(self: baml.time.Instant) -> string {
     load_var _
     is_type baml.errors.InvalidArgument
     pop_jump_if_false L0
-    load_var _
-    load_field .0
-    is_type string
-    pop_jump_if_false L0
     jump L1
 
   L0:
@@ -17537,10 +17745,6 @@ function baml.time.PlainDate.from_json(j: baml.json.json) -> baml.time.PlainDate
     load_var _
     is_type baml.errors.ParseError
     pop_jump_if_false L2
-    load_var _
-    load_field .0
-    is_type string
-    pop_jump_if_false L2
     jump L3
 
   L2:
@@ -17570,10 +17774,6 @@ function baml.time.PlainDate.to_json(self: baml.time.PlainDate) -> string {
     jump L2
     load_var _
     is_type baml.errors.InvalidArgument
-    pop_jump_if_false L0
-    load_var _
-    load_field .0
-    is_type string
     pop_jump_if_false L0
     jump L1
 
@@ -17696,10 +17896,6 @@ function baml.time.PlainDateTime.from_json(j: baml.json.json) -> baml.time.Plain
     load_var _
     is_type baml.errors.ParseError
     pop_jump_if_false L2
-    load_var _
-    load_field .0
-    is_type string
-    pop_jump_if_false L2
     jump L3
 
   L2:
@@ -17781,10 +17977,6 @@ function baml.time.PlainDateTime.to_json(self: baml.time.PlainDateTime) -> strin
     jump L2
     load_var _
     is_type baml.errors.InvalidArgument
-    pop_jump_if_false L0
-    load_var _
-    load_field .0
-    is_type string
     pop_jump_if_false L0
     jump L1
 
@@ -18025,10 +18217,6 @@ function baml.time.PlainTime.from_json(j: baml.json.json) -> baml.time.PlainTime
     jump L4
     load_var _
     is_type baml.errors.ParseError
-    pop_jump_if_false L2
-    load_var _
-    load_field .0
-    is_type string
     pop_jump_if_false L2
     jump L3
 
@@ -18416,10 +18604,6 @@ function baml.time.ZonedDateTime.from_json(j: baml.json.json) -> baml.time.Zoned
     load_var _
     is_type baml.errors.ParseError
     pop_jump_if_false L2
-    load_var _
-    load_field .0
-    is_type string
-    pop_jump_if_false L2
     jump L3
 
   L2:
@@ -18680,29 +18864,17 @@ function baml.time.ZonedDateTime.to_json(self: baml.time.ZonedDateTime) -> strin
     load_var _
     is_type baml.errors.InvalidArgument
     pop_jump_if_false L0
-    load_var _
-    load_field .0
-    is_type string
-    pop_jump_if_false L0
     jump L5
 
   L0:
     load_var _
     is_type baml.time.UnknownTimezoneError
     pop_jump_if_false L1
-    load_var _
-    load_field .0
-    is_type string
-    pop_jump_if_false L1
     jump L4
 
   L1:
     load_var _
     is_type baml.errors.Io
-    pop_jump_if_false L2
-    load_var _
-    load_field .0
-    is_type string
     pop_jump_if_false L2
     jump L3
 
@@ -19154,10 +19326,6 @@ function baml.toml.Table.to_json(self: baml.toml.Table) -> baml.json.json {
     jump L2
     load_var _
     is_type baml.json.JsonParseError
-    pop_jump_if_false L0
-    load_var _
-    load_field .0
-    is_type string
     pop_jump_if_false L0
     jump L1
 

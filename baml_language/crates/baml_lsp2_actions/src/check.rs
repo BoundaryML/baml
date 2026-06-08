@@ -379,6 +379,7 @@ pub fn check_file(db: &dyn Db, file: SourceFile) -> Vec<Diagnostic> {
                 _path_member_resolutions,
                 _param_types,
                 _call_plans,
+                _call_type_instantiations,
                 _function_coercions,
                 _call_throws,
                 _default_parameter_inference,
@@ -6297,6 +6298,7 @@ fn tir_type_error_to_diagnostic_id(
         TirTypeError::DeadCode { .. } => DiagnosticId::TypeMismatch,
         TirTypeError::VoidUsedAsValue => DiagnosticId::TypeMismatch,
         TirTypeError::VoidFunctionResultUsed => DiagnosticId::TypeMismatch,
+        TirTypeError::SpawnWithNotATransformer { .. } => DiagnosticId::TypeMismatch,
         TirTypeError::NotCallable { .. } => DiagnosticId::NotCallable,
         TirTypeError::NotIterable { .. } => DiagnosticId::NotCallable,
         TirTypeError::NotIndexable { .. } => DiagnosticId::NotIndexable,
@@ -6415,13 +6417,17 @@ mod tests {
     }
 
     #[test]
-    fn check_file_preserves_callback_related_info() {
+    fn check_file_reports_concrete_callback_throws_violation() {
+        // The callback's effective throws (`string`) now binds the callee's
+        // effect param, so a COVERED callback throw (`demo() throws string`)
+        // no longer reports at all (the old "current limitation" is lifted),
+        // and a genuine violation reports the precise concrete type.
         let test = CursorTest::new(
             r#"function forward(cb: (x: int) -> int) -> int {
   return cb(1)
 }
 
-function demo() -> int throws string {
+function demo() -> int throws never {
   return forward((x: int) -> int {
     throw "boom"
   })
@@ -6434,24 +6440,13 @@ function demo() -> int throws string {
             .iter()
             .find(|diag| {
                 diag.id == DiagnosticId::ThrowsContractViolation
-                    && diag
-                        .message
-                        .contains("this body may throw through callback `cb`")
-                    && diag.message.contains("declared throws is `string`")
+                    && diag.message.contains("declared throws is `never`")
+                    && diag.message.contains("`string`")
             })
-            .expect("callback-aware throws diagnostic");
-
-        assert_eq!(diag.related_info.len(), 2);
-        assert_eq!(
-            diag.related_info
-                .iter()
-                .map(|related| related.message.as_str())
-                .collect::<Vec<_>>(),
-            vec![
-                "this call forwards whatever callback `cb` throws",
-                "this callback throws `string`",
-            ]
-        );
+            .expect("concrete callback throws violation");
+        // The concrete-type violation carries no callback-provenance related
+        // info (that path only fires when the thrown type cannot be named).
+        assert!(diag.related_info.is_empty());
     }
 
     #[test]

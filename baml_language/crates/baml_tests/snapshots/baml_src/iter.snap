@@ -1889,7 +1889,7 @@ function iter.iter_array_first_adapter_defaults() -> bool {
     store_var _155
     make_closure .<lambda(iter_array_first_adapter_defaults, 5)>, 0
     store_var _160
-    load_type 0 | int
+    load_type int
     store_var _162
     load_type void
     store_var _163
@@ -2304,7 +2304,7 @@ function iter.iter_array_first_native_methods() -> bool {
     call baml.Array.flat_map
     store_var flat_mapped
     load_type int
-    load_type 0 | int
+    load_type int
     load_type void
     load_const 1
     load_const 2
@@ -9220,7 +9220,7 @@ function iter.iter_reduce() -> int {
     store_var it
     make_closure .<lambda(iter_reduce, 0)>, 0
     store_var _4
-    load_type int | 0
+    load_type int
     store_var _6
     load_type void
     store_var _7

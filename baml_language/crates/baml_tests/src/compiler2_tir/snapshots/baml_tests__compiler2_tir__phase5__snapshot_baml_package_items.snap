@@ -50,8 +50,14 @@ namespace baml.fs:
   function write
   function write_bytes
 namespace baml.future:
+  class AllFailed<E> { methods: [to_json, from_json] }
   class Future<T, E> { methods: [cancel, is_settled, is_cancelled, is_result, is_error, state, to_json, from_json] }
   enum FutureState
+  function __await_any<T, E>
+  function all<T, E>
+  function all_complete<T, E>
+  function any<T, Err>
+  function race<T, E>
 namespace baml.glob:
   class Glob { methods: [scan, matches, to_json, from_json] }
   class ScanOptions { methods: [to_json, from_json] }
@@ -162,6 +168,11 @@ namespace baml.panics:
   class StackOverflow { methods: [to_json, from_json] }
   class Unreachable { methods: [to_json, from_json] }
   class UserPanic { methods: [to_json, from_json] }
+namespace baml.spawn:
+  class CancelToken { methods: [new, any, cancel, is_cancelled, to_json, from_json] }
+  class SpawnParams<T, E> { methods: [to_json, from_json] }
+  class TaskGroup { methods: [new, cancel, set_limit, limit, name, active_count, queued_count, to_json, from_json] }
+  function options<T, E>
 namespace baml.stream:
   class StreamFinished { methods: [to_json, from_json] }
   class StreamNoYield { methods: [to_json, from_json] }

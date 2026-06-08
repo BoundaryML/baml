@@ -797,7 +797,7 @@ function inferred_generic_type_args.inferred_static_ctor_first() -> int {
 }
 
 function inferred_generic_type_args.inferred_static_ctor_speak() -> string {
-    load_type 42
+    load_type int
     load_const 42
     call user.inferred_generic_type_args.Dog.make
     store_var d

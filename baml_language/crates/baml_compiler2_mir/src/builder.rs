@@ -411,6 +411,27 @@ impl MirBuilder {
         });
     }
 
+    /// BEP-034: emit an `await_any` terminator — suspend until the first of
+    /// the `futures` array settles and bind its `int` index into `destination`.
+    pub(crate) fn await_any(
+        &mut self,
+        futures: Operand,
+        destination: Place,
+        target: BlockId,
+        unwind: Option<BlockId>,
+    ) {
+        debug_assert!(
+            matches!(destination, Place::Local(_)),
+            "AwaitAny destination must be a local place"
+        );
+        self.set_terminator(Terminator::AwaitAny {
+            futures,
+            destination,
+            target,
+            unwind,
+        });
+    }
+
     /// BEP-034: emit a spawn terminator. Pops a closure operand plus an
     /// optional name operand and binds the resulting `Future<T, E>`
     /// handle into `future`.
@@ -418,6 +439,7 @@ impl MirBuilder {
         &mut self,
         closure: Operand,
         name: Operand,
+        config: Option<Box<Operand>>,
         future: Place,
         resume: BlockId,
     ) {
@@ -428,6 +450,7 @@ impl MirBuilder {
         self.set_terminator(Terminator::Spawn {
             closure,
             name,
+            config,
             future,
             resume,
         });

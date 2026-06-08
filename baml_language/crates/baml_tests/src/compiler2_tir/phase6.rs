@@ -1166,7 +1166,12 @@ function f() -> null {
 }
 
 #[test]
-fn stored_lambda_with_omitted_throws_stays_closed_in_expr_type() {
+fn stored_lambda_with_omitted_throws_infers_throws_in_expr_type() {
+    // An UNANNOTATED lambda infers its throws surface from its body — a
+    // lambda throws what it throws (BEP-034 middleware relies on this for
+    // body wraps like `() -> { original() }` where the throws is the
+    // enclosing fn's generic `E`). The stored value's type carries the
+    // inferred, concrete surface instead of a blanket `never`.
     let mut db = make_db();
     let file = db.add_file(
         "test.baml",
@@ -1182,7 +1187,7 @@ function f() -> null {
     );
     assert_eq!(
         expr_type_in_function(&db, file, "f", "risky"),
-        "(x: int) -> int throws never"
+        "(x: int) -> int throws string"
     );
 }
 

@@ -263,7 +263,9 @@ fn deep_equals_recursive(
                 }
 
                 (Object::UnscheduledFuture(a_fut), Object::UnscheduledFuture(b_fut)) => {
-                    a_fut.closure == b_fut.closure && a_fut.name == b_fut.name
+                    a_fut.closure == b_fut.closure
+                        && a_fut.name == b_fut.name
+                        && a_fut.config == b_fut.config
                 }
 
                 _ => false,

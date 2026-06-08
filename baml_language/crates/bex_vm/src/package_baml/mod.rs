@@ -28,6 +28,7 @@ mod math;
 mod media;
 mod primitives;
 mod root;
+mod spawn;
 mod stack_trace;
 mod string;
 mod sys;
@@ -121,6 +122,10 @@ pub trait Continuation: Send {
     clippy::iter_not_returning_iterator,
     clippy::needless_lifetimes,
     clippy::redundant_closure_call,
+    // Static builtin constructors (e.g. `baml.spawn.CancelToken.new`) are
+    // generated as trait methods returning `Value` (the heap instance), not
+    // `Self` — that is the codegen contract, not a smell.
+    clippy::new_ret_no_self,
     clippy::too_many_arguments,
     non_snake_case
 )]

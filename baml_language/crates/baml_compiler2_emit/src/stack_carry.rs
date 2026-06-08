@@ -207,6 +207,11 @@ fn is_stack_carry_use_safe(
                     }
                     *target
                 }
+                // `AwaitAny` intentionally omitted: its result is never stack-
+                // carried (it falls through to `return false` here), because
+                // the opcode rewinds + re-executes across the engine suspend
+                // and a carried result does not survive that. See the matching
+                // note in `analysis.rs` (call-result-immediate checks).
                 _ => return false,
             }
         }
@@ -309,6 +314,7 @@ fn is_stack_carry_use_safe(
             Terminator::Call { target, .. }
             | Terminator::SysOp { target, .. }
             | Terminator::Await { target, .. }
+            | Terminator::AwaitAny { target, .. }
                 if kind == StackCarryKind::AggregateOperand =>
             {
                 if !simulate_terminator_stack(term, &mut sim, local, body, classifications, def_use)
@@ -581,6 +587,7 @@ fn simulate_terminator_stack(
         Terminator::Spawn {
             closure,
             name,
+            config,
             future,
             ..
         } => {
@@ -596,7 +603,14 @@ fn simulate_terminator_stack(
             if pull_semantics::walk_operand_pull(&mut sink, name).is_err() {
                 return false;
             }
-            if !sim.pop_n(2) {
+            // Config operand is pushed last (null when there is no `with`
+            // clause). Mirror `emit`: always push three, pop three.
+            let null_config = Operand::Constant(Constant::Null);
+            let config_op = config.as_deref().unwrap_or(&null_config);
+            if pull_semantics::walk_operand_pull(&mut sink, config_op).is_err() {
+                return false;
+            }
+            if !sim.pop_n(3) {
                 return false;
             }
             sim.push();
@@ -614,6 +628,28 @@ fn simulate_terminator_stack(
                 def_use,
             };
             if pull_semantics::walk_await_future(&mut sink, future).is_err() {
+                return false;
+            }
+            if !sim.pop_n(1) {
+                return false;
+            }
+            sim.push();
+            simulate_store_place_stack(destination, sim, classifications)
+        }
+        Terminator::AwaitAny {
+            futures,
+            destination,
+            ..
+        } => {
+            let mut sink = StackCarryPullSink {
+                sim,
+                carried_local,
+                classifications,
+                def_use,
+            };
+            // Push the array operand, then AWAIT_ANY pops it (1) and pushes
+            // the winning index (1).
+            if pull_semantics::walk_operand_pull(&mut sink, futures).is_err() {
                 return false;
             }
             if !sim.pop_n(1) {

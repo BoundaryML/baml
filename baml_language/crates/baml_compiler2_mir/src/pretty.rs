@@ -43,6 +43,7 @@ pub fn write_function(f: &mut impl Write, func: &MirFunction) -> fmt::Result {
                 BuiltinKind::Io => "io",
                 BuiltinKind::Vm => "vm",
                 BuiltinKind::Intrinsic => "intrinsic",
+                BuiltinKind::AwaitAny => "await_any",
             };
             writeln!(f, "fn {} = builtin({kind_str})", func.item_ref)
         }
@@ -313,6 +314,7 @@ fn write_terminator(f: &mut impl Write, term: &Terminator) -> fmt::Result {
         Terminator::Spawn {
             closure,
             name,
+            config,
             future,
             resume,
         } => {
@@ -320,6 +322,10 @@ fn write_terminator(f: &mut impl Write, term: &Terminator) -> fmt::Result {
             write_operand(f, closure)?;
             write!(f, " name=")?;
             write_operand(f, name)?;
+            if let Some(config) = config {
+                write!(f, " config=")?;
+                write_operand(f, config)?;
+            }
             write!(f, " -> {resume};")
         }
         Terminator::Await {
@@ -329,6 +335,20 @@ fn write_terminator(f: &mut impl Write, term: &Terminator) -> fmt::Result {
             unwind,
         } => {
             write!(f, "{destination} = await {future} -> [{target}")?;
+            if let Some(u) = unwind {
+                write!(f, ", unwind: {u}")?;
+            }
+            write!(f, "];")
+        }
+        Terminator::AwaitAny {
+            futures,
+            destination,
+            target,
+            unwind,
+        } => {
+            write!(f, "{destination} = await_any ")?;
+            write_operand(f, futures)?;
+            write!(f, " -> [{target}")?;
             if let Some(u) = unwind {
                 write!(f, ", unwind: {u}")?;
             }

@@ -1643,6 +1643,10 @@ struct LoweringContext<'db> {
         FxHashMap<ExprMetadataKey, Vec<baml_compiler2_tir::inference::MemberResolution<'db>>>,
     // Full-arity argument binding plans from TIR.
     call_plans: FxHashMap<ExprMetadataKey, baml_compiler2_tir::inference::CallPlan>,
+    /// TIR-recorded generic instantiation per call whose callee declares type
+    /// params (declared De Bruijn order). Lowered to `LoadType` operands when
+    /// the call site writes no explicit `<...>`, so inferred-generic calls
+    /// populate the callee's `frame.type_args` just like explicit ones.
     // Function-value adapters from TIR checked coercions.
     function_coercions: FxHashMap<ExprMetadataKey, baml_compiler2_tir::inference::FunctionCoercion>,
     // Function generic bounds, lowered in TIR space. MIR uses these to keep
@@ -3647,6 +3651,28 @@ impl<'db> LoweringContext<'db> {
         self.resolved_aliases.convert(&tir_ty)
     }
 
+    /// Lower a pattern's type annotation to TIR with the enclosing function's
+    /// generic params in scope, so `TypeVar`s survive (unlike
+    /// [`Self::resolve_type_annotation`], which erases them). Used by typed
+    /// pattern tests, where a surviving `TypeVar` lowers to a `TypeArgRef`
+    /// template instead of a constant-false `Void` test.
+    fn lower_type_annotation_tir(&self, ty_expr: &baml_compiler2_ast::TypeExpr) -> Tir2Ty {
+        use baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns;
+        let generic_params = self.enclosing_generic_params();
+        let pkg_info = file_package(self.db, self.file);
+        let pkg_id = PackageId::new(self.db, pkg_info.package);
+        let pkg_items = package_items(self.db, pkg_id);
+        let mut diags = Vec::new();
+        lower_type_expr_in_ns(
+            self.db,
+            ty_expr,
+            pkg_items,
+            &pkg_info.namespace_path,
+            &generic_params,
+            &mut diags,
+        )
+    }
+
     /// Build a `Span` from an expression's source range.
     /// Returns `None` if no source map is available (e.g. synthesized bodies).
     fn span_for_expr(&self, expr_id: AstExprId) -> Option<baml_base::Span> {
@@ -4607,8 +4633,12 @@ impl LoweringContext<'_> {
                 self.emit_panic_call("parse error", expr_id);
             }
 
-            AstExpr::Spawn { name, body } => {
-                self.lower_spawn(expr_id, name, body, dest);
+            AstExpr::Spawn {
+                name,
+                with_exprs,
+                body,
+            } => {
+                self.lower_spawn(expr_id, name, &with_exprs, body, dest);
             }
 
             AstExpr::Await { future } => {
@@ -4619,14 +4649,17 @@ impl LoweringContext<'_> {
         self.builder.current_source_span = prev_span;
     }
 
-    /// Lower `spawn name? { body }` into:
+    /// Lower `spawn name? with? { body }` into:
     ///   1. A `MakeClosure` for the body wrapped as a 0-arg lambda.
     ///   2. A name temp (string operand or null constant).
-    ///   3. A `Terminator::Spawn` writing the resulting Future handle.
+    ///   3. An optional config operand from the `with baml.spawn.options(...)`
+    ///      clause (BEP-034 spawn options).
+    ///   4. A `Terminator::Spawn` writing the resulting Future handle.
     fn lower_spawn(
         &mut self,
         expr_id: AstExprId,
         name: Option<AstExprId>,
+        with_exprs: &[AstExprId],
         body: AstExprId,
         dest: Place,
     ) {
@@ -4647,6 +4680,58 @@ impl LoweringContext<'_> {
             None => Operand::Constant(Constant::Null),
         };
 
+        // BEP-034 middleware: with transformers present, package the body
+        // closure + name into a `baml.spawn.SpawnParams` instance, apply each
+        // `with` expression to it left-to-right (each is a function
+        // `(SpawnParams<T, E>) -> SpawnParams<U, F>`), and hand the FINAL
+        // params to the spawn as the config operand. The engine reads
+        // body/name/group/cancel/detach from its fields — a transformer may
+        // have replaced any of them, including the body. Fields are built in
+        // declaration order (the engine reads them BY INDEX; see
+        // ns_spawn/spawn.baml).
+        let config_op = if with_exprs.is_empty() {
+            None
+        } else {
+            let params_local = self.builder.temp(Ty::Null {
+                attr: TyAttr::default(),
+            });
+            self.builder.assign(
+                Place::Local(params_local),
+                Rvalue::Aggregate {
+                    kind: AggregateKind::Class {
+                        name: "baml.spawn.SpawnParams".to_string(),
+                        type_arg_templates: Vec::new(),
+                    },
+                    fields: vec![
+                        closure_op.clone(),
+                        name_op.clone(),
+                        Operand::Constant(Constant::Null),
+                        Operand::Constant(Constant::Null),
+                        Operand::Constant(Constant::Bool(false)),
+                    ],
+                },
+            );
+            let unwind = self.catch_context.as_ref().map(|c| c.unwind_target);
+            let mut cur = params_local;
+            for &with_id in with_exprs {
+                let transformer_op = self.lower_to_operand(with_id);
+                let next = self.builder.temp(Ty::Null {
+                    attr: TyAttr::default(),
+                });
+                let resume = self.builder.create_block();
+                self.builder.call(
+                    transformer_op,
+                    vec![Operand::Copy(Place::Local(cur))],
+                    Place::Local(next),
+                    resume,
+                    unwind,
+                );
+                self.builder.set_current_block(resume);
+                cur = next;
+            }
+            Some(Box::new(Operand::Copy(Place::Local(cur))))
+        };
+
         // Allocate the future temp. Phase C uses a defaulted `Null` type
         // for the future local; the TIR-tracked value/error types flow
         // through to runtime via the surrounding context. A follow-up
@@ -4659,7 +4744,7 @@ impl LoweringContext<'_> {
 
         let resume = self.builder.create_block();
         self.builder
-            .spawn(closure_op, name_op, future_place.clone(), resume);
+            .spawn(closure_op, name_op, config_op, future_place.clone(), resume);
         self.builder.set_current_block(resume);
         // The result of `spawn` is the Future handle.
         self.builder
@@ -5424,24 +5509,44 @@ impl LoweringContext<'_> {
         dest: Place,
         is_and: bool,
     ) {
+        // `ShortCircuit`'s destination must be a `Place::Local`: the emitter
+        // materializes it with `emit_store_place` on the short-circuit edge,
+        // which does not handle Field/Index projections. Normalize through a
+        // temp and assign through at the join — mirrors `lower_await`.
+        let (sc_dest, projection_dest) = match dest {
+            Place::Local(_) => (dest, None),
+            projection => {
+                let tmp = self.builder.temp(Ty::Null {
+                    attr: TyAttr::default(),
+                });
+                (Place::Local(tmp), Some(projection))
+            }
+        };
+
         let lhs_op = self.lower_to_operand(lhs);
 
         let bb_rhs = self.builder.create_block();
         let bb_join = self.builder.create_block();
 
-        // ShortCircuit terminator: JumpIfFalse (peek) keeps lhs on TOS
-        // when short-circuiting. The rhs block evaluates and leaves its
-        // result on TOS. At join, dest is on TOS (PhiLike).
+        // ShortCircuit terminator: JumpIfFalse (peek) keeps lhs on TOS when
+        // short-circuiting. The rhs block evaluates and leaves its result on
+        // TOS. At join, dest is on TOS when the destination local is
+        // stack-carried (PhiLike); otherwise the emitter stores to its slot
+        // on both edges and the join reads the slot.
         self.builder
-            .short_circuit(lhs_op, is_and, dest.clone(), bb_rhs, bb_join);
+            .short_circuit(lhs_op, is_and, sc_dest.clone(), bb_rhs, bb_join);
 
         self.builder.set_current_block(bb_rhs);
-        self.lower_expr(rhs, dest);
+        self.lower_expr(rhs, sc_dest.clone());
         if !self.builder.is_current_terminated() {
             self.builder.goto(bb_join);
         }
 
         self.builder.set_current_block(bb_join);
+        if let Some(projection) = projection_dest {
+            self.builder
+                .assign(projection, Rvalue::Use(Operand::Copy(sc_dest)));
+        }
     }
 
     /// Lower `a ?? b` — evaluate `a`, if null then evaluate `b`, otherwise use `a`.
@@ -6470,6 +6575,41 @@ impl LoweringContext<'_> {
             arg_operands.clone()
         };
 
+        // BEP-034 `baml.future.__await_any(futures)` lowers to a dedicated
+        // `Terminator::AwaitAny` suspend point (like `await`), not a call.
+        if self.check_await_any(callee) {
+            // The single value arg is the array of futures. (`__await_any` has
+            // two type params T,E used only for type checking; the runtime
+            // terminator just needs the array operand.)
+            let futures_operand = arg_operands
+                .into_iter()
+                .next()
+                .expect("__await_any takes exactly one (array) argument");
+            match &dest {
+                Place::Local(l) => {
+                    self.builder
+                        .await_any(futures_operand, Place::Local(*l), target, unwind);
+                }
+                _ => {
+                    // Projection/capture destination: await into a temp, then
+                    // assign across (mirrors the regular-call path below).
+                    let call_ty = self.expr_ty(expr_id);
+                    let tmp = self.builder.temp(call_ty);
+                    self.builder
+                        .await_any(futures_operand, Place::local(tmp), target, unwind);
+                    self.builder.set_current_block(target);
+                    let after = self.builder.create_block();
+                    self.builder
+                        .assign(dest, Rvalue::Use(Operand::Copy(Place::local(tmp))));
+                    self.builder.goto(after);
+                    self.builder.set_current_block(after);
+                    return;
+                }
+            }
+            self.builder.set_current_block(target);
+            return;
+        }
+
         if is_sys_op {
             // BEP-034 phase D′: sys-ops now lower to a single
             // `Terminator::SysOp` that runs the op inline in the
@@ -6544,6 +6684,101 @@ impl LoweringContext<'_> {
         }
 
         self.builder.set_current_block(target);
+    }
+
+    /// True when the callee is the BEP-034 `baml.future.__await_any`
+    fn check_await_any(&self, callee: AstExprId) -> bool {
+        matches!(
+            self.callee_builtin_kind(callee),
+            Some(baml_compiler2_ast::BuiltinKind::AwaitAny)
+        )
+    }
+    fn callee_builtin_kind(&self, callee: AstExprId) -> Option<baml_compiler2_ast::BuiltinKind> {
+        // ── Path callee (single- or multi-segment) ─────────────────────────────
+        if let AstExpr::Path(segments) = &self.body.exprs[callee] {
+            let func_loc = if segments.len() == 1 {
+                let span_start = self
+                    .source_map
+                    .as_ref()
+                    .map(|sm| sm.expr_span(callee).start())
+                    .unwrap_or_default();
+                let resolved = resolve_name_at_in_scope(
+                    self.db,
+                    self.file,
+                    span_start,
+                    &segments[0],
+                    self.scope_func_name.as_ref(),
+                );
+                match resolved {
+                    ResolvedName::Builtin(Definition::Function(fl)) => Some(fl),
+                    ResolvedName::Item(Definition::Function(fl)) => Some(fl),
+                    _ => None,
+                }
+            } else {
+                // Multi-segment: check path_member_resolutions first (local-rooted paths
+                // like `file.read_string`), then fall back to flat resolutions (package paths).
+                // The last resolution in path_member_resolutions is the final-segment resolution.
+                use baml_compiler2_tir::inference::MemberResolution;
+                let from_pmr = self
+                    .path_member_resolutions
+                    .get(&self.expr_metadata_key(callee))
+                    .and_then(|resolutions| resolutions.last())
+                    .and_then(|res| match res {
+                        MemberResolution::Free { func_loc } => Some(*func_loc),
+                        MemberResolution::BoundMethod { func_loc, .. }
+                        | MemberResolution::UnboundMethod { func_loc, .. }
+                        | MemberResolution::InterfaceDefaultMethod { func_loc, .. } => {
+                            Some(*func_loc)
+                        }
+                        MemberResolution::Field { .. } | MemberResolution::Variant { .. } => None,
+                    });
+                if from_pmr.is_some() {
+                    from_pmr
+                } else {
+                    self.resolutions
+                        .get(&self.expr_metadata_key(callee))
+                        .and_then(|res| match res {
+                            MemberResolution::Free { func_loc } => Some(*func_loc),
+                            MemberResolution::BoundMethod { func_loc, .. }
+                            | MemberResolution::UnboundMethod { func_loc, .. }
+                            | MemberResolution::InterfaceDefaultMethod { func_loc, .. } => {
+                                Some(*func_loc)
+                            }
+                            MemberResolution::Field { .. } | MemberResolution::Variant { .. } => {
+                                None
+                            }
+                        })
+                }
+            };
+            if let Some(fl) = func_loc {
+                let body = baml_compiler2_ppir::function_body(self.db, fl);
+                if let FunctionBody::Builtin(kind) = body.as_ref() {
+                    return Some(*kind);
+                }
+            }
+        }
+
+        // ── NEW: MemberAccess callee (e.g. f.read, sock.recv) ──────────────────
+        if let AstExpr::MemberAccess { .. } = &self.body.exprs[callee] {
+            use baml_compiler2_tir::inference::MemberResolution;
+            if let Some(resolution) = self.resolutions.get(&self.expr_metadata_key(callee)) {
+                let func_loc = match resolution {
+                    MemberResolution::BoundMethod { func_loc, .. }
+                    | MemberResolution::UnboundMethod { func_loc, .. }
+                    | MemberResolution::InterfaceDefaultMethod { func_loc, .. } => Some(*func_loc),
+                    MemberResolution::Free { func_loc } => Some(*func_loc),
+                    MemberResolution::Field { .. } | MemberResolution::Variant { .. } => None,
+                };
+                if let Some(fl) = func_loc {
+                    let body = baml_compiler2_ppir::function_body(self.db, fl);
+                    if let FunctionBody::Builtin(kind) = body.as_ref() {
+                        return Some(*kind);
+                    }
+                }
+            }
+        }
+
+        None
     }
 
     fn sys_op_synthetic_type_arg_count(&self, callee: AstExprId) -> Option<usize> {
@@ -6635,7 +6870,6 @@ impl LoweringContext<'_> {
 
         None
     }
-
     fn synthetic_type_arg_count_for_sys_op(
         &self,
         func_loc: baml_compiler2_hir::loc::FunctionLoc<'_>,
@@ -11869,17 +12103,34 @@ impl LoweringContext<'_> {
             // the template is TyTemplate::Concrete(ty) — the emitter falls back
             // to the same fast path as before.
             let ty_template = ty_to_template_from_resolved_ty(&ty);
-            let test = Rvalue::IsType {
-                operand: Operand::Copy(Place::Local(scrutinee)),
-                ty_template,
-            };
-            let test_local = self.builder.temp(Ty::Bool {
-                attr: TyAttr::default(),
-            });
-            self.builder.assign(Place::local(test_local), test);
-            self.builder
-                .branch(Operand::Copy(Place::Local(test_local)), success, failure);
+            self.emit_is_type_template_branch(scrutinee, ty_template, success, failure);
         }
+    }
+
+    /// Emit an `IsType` test + branch for an already-built `TyTemplate`.
+    ///
+    /// Used directly (instead of [`Self::emit_is_type_branch`]) when the
+    /// pattern type still contains the enclosing function's `TypeVar`s: the
+    /// caller builds the template via `ty_to_template` so those lower to
+    /// `TypeArgRef` leaves resolved against `frame.type_args` at runtime,
+    /// rather than being erased to `Ty::Void` (a constant-false test).
+    fn emit_is_type_template_branch(
+        &mut self,
+        scrutinee: Local,
+        ty_template: TyTemplate,
+        success: BlockId,
+        failure: BlockId,
+    ) {
+        let test = Rvalue::IsType {
+            operand: Operand::Copy(Place::Local(scrutinee)),
+            ty_template,
+        };
+        let test_local = self.builder.temp(Ty::Bool {
+            attr: TyAttr::default(),
+        });
+        self.builder.assign(Place::local(test_local), test);
+        self.builder
+            .branch(Operand::Copy(Place::Local(test_local)), success, failure);
     }
 
     fn emit_is_tir_type_branch(
@@ -12475,12 +12726,18 @@ impl LoweringContext<'_> {
                 self.builder.goto(success);
             }
             AstPattern::Bind { .. } => {
-                if let Some(tir_ty) = self.pat_types.get(&self.pat_metadata_key(pat_id)).cloned() {
-                    let resolved = self.resolved_aliases.convert(&tir_ty);
-                    self.emit_is_type_branch(scrutinee, resolved, success, failure);
-                } else {
-                    self.builder.goto(success);
-                }
+                // A bare `let e` (no annotation — annotated binds carry the
+                // annotation as a subpattern and recursed above) is
+                // IRREFUTABLE: arm dispatch is sequential, so the bind takes
+                // whatever reaches it; its `pat_types` entry is exhaustiveness
+                // bookkeeping, not a runtime dispatch condition. Emitting a
+                // type test here is at best a tautology and at worst a
+                // miscompile: a rigid generic (e.g. the `E` of a combinator's
+                // `catch (e) { let e => … }`) erases to `Ty::Void` in
+                // `convert_tir2_ty`, making the test constant-false and the
+                // catch arm silently rethrow. (Panic fall-through for catch
+                // arms is handled separately by `ThrowIfPanic`.)
+                self.builder.goto(success);
             }
             // OLD's Pattern::Type covered structural shape tests; OLD's
             // Pattern::Literal / Pattern::Null / Pattern::EnumVariant were
@@ -12545,23 +12802,41 @@ impl LoweringContext<'_> {
                         .branch(Operand::Copy(Place::Local(test_local)), success, failure);
                 }
                 _ => {
+                    // The annotated-bind recursion (`let e: T => …` recurses
+                    // into its Type subpattern) has no `pat_types` entry for
+                    // the subpattern, so fall back to lowering the annotation
+                    // itself with the enclosing generic params in scope.
+                    let pat_tir_ty = self
+                        .pat_types
+                        .get(&self.pat_metadata_key(pat_id))
+                        .cloned()
+                        .unwrap_or_else(|| self.lower_type_annotation_tir(ty_expr));
                     // A generic-interface pattern (`Slot<int>`) needs the
                     // TIR-typed test, which preserves the type argument and
                     // tests only the implementors of *that* instantiation —
                     // otherwise the erased path matches every implementor and a
-                    // `Slot<string>` value falls into a `Slot<int>` arm. Other
-                    // patterns keep the erased fast path (unchanged codegen).
-                    let tir_ty = self.pat_types.get(&self.pat_metadata_key(pat_id)).cloned();
-                    if let Some(tir_ty) = &tir_ty
-                        && Self::tir_ty_needs_interface_shape_test(tir_ty)
-                    {
-                        self.emit_is_tir_type_branch(scrutinee, tir_ty, success, failure);
-                    } else {
-                        let annotation_ty = tir_ty
-                            .map(|t| convert_tir2_ty(&t, self.resolved_aliases))
-                            .unwrap_or_else(|| self.resolve_type_annotation(ty_expr));
-                        self.emit_is_type_branch(scrutinee, annotation_ty, success, failure);
+                    // `Slot<string>` value falls into a `Slot<int>` arm.
+                    if Self::tir_ty_needs_interface_shape_test(&pat_tir_ty) {
+                        self.emit_is_tir_type_branch(scrutinee, &pat_tir_ty, success, failure);
+                        return;
                     }
+                    // A class pattern type still carrying the enclosing
+                    // function's TypeVars (e.g. `let e: AllFailed<E>` inside
+                    // `any<T, E>`) must NOT go through `convert_tir2_ty` —
+                    // that erases TypeVar → Void and the test becomes
+                    // constant-false. Build a template instead so the args
+                    // lower to `TypeArgRef` resolved against the frame.
+                    if matches!(&pat_tir_ty, Tir2Ty::Class(..))
+                        && baml_compiler2_tir::generics::contains_typevar(&pat_tir_ty)
+                    {
+                        let generic_params = self.enclosing_generic_params();
+                        let template = self.ty_to_template(&pat_tir_ty, &generic_params);
+                        self.emit_is_type_template_branch(scrutinee, template, success, failure);
+                        return;
+                    }
+                    // Other patterns keep the erased fast path (unchanged codegen).
+                    let annotation_ty = convert_tir2_ty(&pat_tir_ty, self.resolved_aliases);
+                    self.emit_is_type_branch(scrutinee, annotation_ty, success, failure);
                 }
             },
             AstPattern::Or(sub_pats) => {

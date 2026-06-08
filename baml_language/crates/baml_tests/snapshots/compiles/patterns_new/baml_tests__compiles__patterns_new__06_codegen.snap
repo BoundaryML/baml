@@ -1321,31 +1321,6 @@ function user.nested_paren_union_array_two(items: (int | string)[]) -> int {
 
 function user.or_with_repeated_bare_binding(v: int) -> int {
     load_var v
-    is_type int
-    pop_jump_if_false L0
-    jump L3
-
-  L0:
-    load_var v
-    is_type int
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
-    load_var v
-    is_type int
-    pop_jump_if_false L4
-    load_var v
-    jump L4
-
-  L2:
-    load_var v
-    jump L4
-
-  L3:
-    load_var v
-
-  L4:
     return
 }
 

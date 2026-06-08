@@ -763,16 +763,7 @@ function is_operator.is_class_destructure_pattern_match_fn() -> bool {
     load_const "Ada"
     load_const 36
     init_instance user.is_operator.User .name, .age
-    store_var_load_var u
     is_type is_operator.User
-    pop_jump_if_false L0
-    load_var u
-    load_field .name
-    is_type string
-    pop_jump_if_false L0
-    load_var u
-    load_field .age
-    is_type int
     pop_jump_if_false L0
     jump L1
 

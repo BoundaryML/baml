@@ -82,7 +82,7 @@ fn user.test_generic_lambda() -> int {
     bb0: {
         _1 = make_closure lambda[0]();
         _2 = copy _1;
-        _3 = load_type(int | 42);
+        _3 = load_type(int);
         _0 = call copy _2<copy _3>(const 42_i64) -> [bb1];
     }
 

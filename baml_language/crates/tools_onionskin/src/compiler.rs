@@ -642,6 +642,7 @@ fn expr_desc_spans<'db>(
         }
         Expr::Spawn {
             name,
+            with_exprs: _,
             body: spawn_body,
         } => {
             spans.push(DetailSpan::Code("spawn ".into()));
@@ -4001,6 +4002,13 @@ impl CompilerRunner {
                 Ok(VmExecState::Await(_)) => {
                     self.vm_runner_state.execution_result = Some(VmExecutionResult::Error(
                         "Function awaits a future (not supported in VM Runner)".to_string(),
+                    ));
+                    break;
+                }
+                Ok(VmExecState::AwaitAny(_)) => {
+                    self.vm_runner_state.execution_result = Some(VmExecutionResult::Error(
+                        "Function awaits any of several futures (not supported in VM Runner)"
+                            .to_string(),
                     ));
                     break;
                 }

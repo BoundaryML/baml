@@ -113,6 +113,7 @@ pub const ALL: &[BuiltinFile] = &[
     builtin!("baml", "ns_stream/stream.baml"),
     builtin!("baml", "ns_iter/iter.baml"),
     builtin!("baml", "ns_future/future.baml"),
+    builtin!("baml", "ns_spawn/spawn.baml"),
     builtin!("baml", "ns_host/host.baml"),
     builtin!("baml", "ns_time/duration.baml"),
     builtin!("baml", "ns_time/instant.baml"),
