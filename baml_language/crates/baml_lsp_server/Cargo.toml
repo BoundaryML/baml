@@ -29,7 +29,6 @@ rustls = [ "aws-crypto" ]
 
 [dependencies]
 baml_compiler2_visualization = { workspace = true }
-baml_type = { workspace = true }
 baml_version = { workspace = true }
 bex_events = { workspace = true }
 bex_events_native = { workspace = true }
@@ -45,23 +44,19 @@ base64 = { workspace = true }
 crossbeam-channel = { workspace = true }
 futures = { workspace = true }
 indexmap = { workspace = true }
-log = { workspace = true }
 lsp-server = { workspace = true }
-parking_lot = { workspace = true }
+parking_lot = { workspace = true, features = [ "deadlock_detection" ] }
 prost = { workspace = true }
 regex = { workspace = true }
 reqwest = { workspace = true }
 rustls = { workspace = true, optional = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-thiserror = { workspace = true }
 tokio = { workspace = true, features = [ "sync", "rt-multi-thread", "net", "time", "macros" ] }
 tokio-tungstenite = { workspace = true }
 tower-http = { workspace = true }
 tracing = { workspace = true }
-tracing-log = { workspace = true }
 tracing-subscriber = { workspace = true }
-url = { workspace = true }
 vfs = { workspace = true }
 webbrowser = { workspace = true }
 

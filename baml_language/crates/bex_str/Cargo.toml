@@ -5,11 +5,7 @@ edition.workspace = true
 rust-version.workspace = true
 
 [dependencies]
-ahash = { workspace = true }
 bytecount = { workspace = true }
-
-[target.'cfg(target_arch = "wasm32")'.dependencies]
-getrandom_03 = { workspace = true }
 
 [dev-dependencies]
 divan = { workspace = true }

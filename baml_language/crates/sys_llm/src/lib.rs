@@ -13,7 +13,6 @@ pub(crate) mod jinja;
 mod model_features;
 pub(crate) mod parse_response;
 mod provider;
-mod render_prompt;
 pub(crate) mod resolve_media;
 mod specialize_prompt;
 pub mod stream_accumulator;

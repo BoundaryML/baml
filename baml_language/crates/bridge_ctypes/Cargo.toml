@@ -12,7 +12,6 @@ doctest = false
 baml_type = { workspace = true }
 bex_events = { workspace = true }
 bex_project = { workspace = true }
-bex_resource_types = { workspace = true }
 indexmap = { workspace = true }
 num-bigint = { workspace = true }
 prost = { workspace = true }
