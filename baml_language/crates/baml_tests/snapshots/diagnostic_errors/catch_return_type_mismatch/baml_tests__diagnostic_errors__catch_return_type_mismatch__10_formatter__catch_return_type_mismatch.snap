@@ -18,6 +18,8 @@ function callee() -> bool throws Errors {
 // The type checker must report a mismatch.
 function caller() -> bool {
     callee() catch (e) {
-    Errors.AuthenticationError => { return e }
-  }
+        Errors.AuthenticationError => {
+            return e;
+        }
+    }
 }
