@@ -252,6 +252,37 @@ mod pattern_format_tests {
 }
 
 #[cfg(test)]
+mod catch_format_tests {
+    use super::*;
+
+    #[test]
+    fn test_catch_arm_bodies_indent_inside_enclosing_block() {
+        let source = r#"function demo(s: string) -> int {
+    baml.json.from_string<int>(s) catch (e) {
+    baml.json.JsonParseError => 0,
+    baml.json.JsonDecodeError => 0,
+  };
+    42
+}
+"#;
+        let expected = r#"function demo(s: string) -> int {
+    baml.json.from_string<int>(s) catch (e) {
+        baml.json.JsonParseError => 0,
+        baml.json.JsonDecodeError => 0,
+    };
+    42
+}
+"#;
+        let options = FormatOptions::default();
+        let formatted = format(source, &options).expect("formatter should succeed on catch arms");
+
+        assert_eq!(formatted, expected);
+        let second = format(&formatted, &options).expect("formatter should be idempotent");
+        assert_eq!(formatted, second, "formatter should be idempotent");
+    }
+}
+
+#[cfg(test)]
 mod is_format_tests {
     //! Formatter tests for `<expr> is <pattern>`. Each case rounds the
     //! source through `format` twice and asserts (a) the formatter
