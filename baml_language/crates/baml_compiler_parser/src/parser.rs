@@ -5434,6 +5434,8 @@ impl<'a> Parser<'a> {
         } else if self.at(TokenKind::Throw) {
             // Throw expression
             self.parse_throw_expr();
+        } else if self.looks_like_array_type_constructor() {
+            self.parse_array_type_constructor_expr();
         } else if self.at(TokenKind::Word) {
             // Collect text as owned String so the borrow is released before any &mut calls.
             let text: String = self.current().map(|t| t.text.clone()).unwrap_or_default();
@@ -5507,6 +5509,75 @@ impl<'a> Parser<'a> {
             // Consume the unexpected token to avoid infinite loops
             if !self.at_end() {
                 self.bump();
+            }
+        }
+    }
+
+    /// Parse `T[](size, default)` as a call-shaped expression whose callee is a
+    /// `TYPE_EXPR`. AST lowering desugars it to `baml.Array.new<T>(size, default)`.
+    fn parse_array_type_constructor_expr(&mut self) {
+        self.with_node(SyntaxKind::CALL_EXPR, |p| {
+            p.parse_type();
+            p.parse_call_args();
+        });
+    }
+
+    /// Recognize a type expression ending in `[]` followed immediately by call
+    /// arguments. This keeps ordinary calls (`foo(...)`) and indexing
+    /// (`foo[i]`) on their existing paths while admitting `int[](3, 0)`.
+    fn looks_like_array_type_constructor(&self) -> bool {
+        if !self.is_at_type_start() {
+            return false;
+        }
+
+        let mut i = 0;
+        let mut generic_depth = 0i32;
+        let mut saw_array_suffix = false;
+
+        loop {
+            let Some(tok) = self.peek(i) else {
+                return false;
+            };
+
+            if generic_depth > 0 {
+                match tok.kind {
+                    TokenKind::Less => generic_depth += 1,
+                    TokenKind::Greater => generic_depth -= 1,
+                    TokenKind::GreaterGreater => generic_depth -= 2,
+                    _ => {}
+                }
+                if generic_depth < 0 {
+                    return false;
+                }
+                i += 1;
+                continue;
+            }
+
+            match tok.kind {
+                TokenKind::Less => {
+                    generic_depth += 1;
+                    i += 1;
+                }
+                TokenKind::Word
+                | TokenKind::Dot
+                | TokenKind::Question
+                | TokenKind::Quote
+                | TokenKind::Hash
+                | TokenKind::BigintLiteral
+                | TokenKind::IntegerLiteral
+                | TokenKind::FloatLiteral
+                | TokenKind::Minus => {
+                    i += 1;
+                }
+                TokenKind::LBracket => {
+                    if self.peek(i + 1).map(|t| t.kind) != Some(TokenKind::RBracket) {
+                        return false;
+                    }
+                    saw_array_suffix = true;
+                    i += 2;
+                }
+                TokenKind::LParen => return saw_array_suffix,
+                _ => return false,
             }
         }
     }

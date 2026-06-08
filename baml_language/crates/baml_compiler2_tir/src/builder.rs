@@ -12833,6 +12833,80 @@ impl<'db> TypeInferenceBuilder<'db> {
                 self.record_expr_type(callee_id, callee_expr_ty);
                 Some(result)
             }
+            "set" if args.len() == 2 => {
+                let (elem_ty, is_evolving, container_attr) = match &local_ty {
+                    Ty::EvolvingList(elem, attr) => (elem, true, attr.clone()),
+                    Ty::List(elem, attr) => (elem, false, attr.clone()),
+                    _ => return None,
+                };
+
+                let index_ty = self.infer_expr(args[0], body);
+                let expected_index_ty = Ty::Primitive(PrimitiveType::Int, TyAttr::default());
+                if !self.is_subtype(&index_ty, &expected_index_ty) {
+                    self.context.report(
+                        TirTypeError::TypeMismatch {
+                            expected: expected_index_ty,
+                            got: index_ty.clone(),
+                        },
+                        args[0],
+                        Vec::new(),
+                    );
+                }
+
+                let value_ty = self.infer_expr(args[1], body);
+                let widened_value = value_ty.clone().widen_fresh();
+
+                let effective_local_ty = if matches!(**elem_ty, Ty::Never { .. }) {
+                    let new_ty = if is_evolving {
+                        Ty::EvolvingList(Box::new(widened_value), container_attr)
+                    } else {
+                        Ty::List(Box::new(widened_value), container_attr)
+                    };
+                    self.assign_local(local_name.clone(), new_ty.clone());
+                    self.sync_let_binding_type(&local_name, new_ty.clone());
+                    new_ty
+                } else if !self.is_subtype(&widened_value, elem_ty) {
+                    self.context.report(
+                        TirTypeError::TypeMismatch {
+                            expected: *elem_ty.clone(),
+                            got: widened_value,
+                        },
+                        args[1],
+                        Vec::new(),
+                    );
+                    local_ty.clone()
+                } else {
+                    local_ty.clone()
+                };
+
+                let effective_elem = match &effective_local_ty {
+                    Ty::EvolvingList(e, _) | Ty::List(e, _) => e.as_ref().clone(),
+                    _ => Ty::Unknown {
+                        attr: TyAttr::default(),
+                    },
+                };
+                let method_ty = self
+                    .resolve_builtin_member(&["Array"], &[effective_elem], &method_name, callee_id)
+                    .unwrap_or(Ty::Unknown {
+                        attr: TyAttr::default(),
+                    });
+                let result = match &method_ty {
+                    Ty::Function { ret, .. } => ret.as_ref().clone(),
+                    _ => Ty::Unknown {
+                        attr: TyAttr::default(),
+                    },
+                };
+                let callee_expr_ty = match &body.exprs[callee_id] {
+                    Expr::OptionalMemberAccess { .. } => Ty::nullable(method_ty),
+                    _ => method_ty,
+                };
+
+                self.record_expr_type(base_id, effective_local_ty);
+                self.record_expr_type(args[0], index_ty);
+                self.record_expr_type(args[1], value_ty);
+                self.record_expr_type(callee_id, callee_expr_ty);
+                Some(result)
+            }
             _ => None,
         }
     }

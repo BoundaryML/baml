@@ -407,6 +407,24 @@ impl Continuation for ToJsonContinuation {
 }
 
 impl BamlClassArray for PackageBamlImpl {
+    fn new(size: i64, default: &Value) -> Result<Vec<Value>, VmRustFnError> {
+        let Ok(size) = usize::try_from(size) else {
+            return Err(VmBamlError::InvalidArgument {
+                message: format!("array constructor: size ({size}) is negative"),
+            }
+            .into());
+        };
+
+        let mut array = Vec::new();
+        array.try_reserve_exact(size).map_err(|_| {
+            VmRustFnError::from(VmBamlError::InvalidArgument {
+                message: format!("array constructor: unable to allocate array of length {size}"),
+            })
+        })?;
+        array.resize(size, *default);
+        Ok(array)
+    }
+
     #[allow(clippy::cast_possible_wrap)]
     fn length(array: &[Value]) -> i64 {
         array.len() as i64
@@ -416,6 +434,27 @@ impl BamlClassArray for PackageBamlImpl {
     fn push(array: &mut Vec<Value>, item: &Value) -> i64 {
         array.push(*item);
         array.len() as i64
+    }
+
+    #[allow(clippy::unused_unit)]
+    fn set(array: &mut Vec<Value>, index: i64, value: &Value) -> Result<(), VmRustFnError> {
+        let len = array.len();
+        let Ok(index_usize) = usize::try_from(index) else {
+            return Err(VmBamlError::InvalidArgument {
+                message: format!("array.set: index ({index}) is negative"),
+            }
+            .into());
+        };
+        if index_usize >= len {
+            return Err(VmBamlError::InvalidArgument {
+                message: format!(
+                    "array.set: index ({index_usize}) is outside the array length ({len})"
+                ),
+            }
+            .into());
+        }
+        array[index_usize] = *value;
+        Ok(())
     }
 
     #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]

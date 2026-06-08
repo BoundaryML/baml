@@ -1,5 +1,18 @@
 /// An ordered, growable collection of elements of type T.
 class Array<T> {
+  /// Creates an array of length `size`, filled with `default`.
+  ///
+  /// Throws `InvalidArgument` if `size` is negative or cannot be allocated.
+  ///
+  /// # Examples
+  /// ```
+  /// int[](3, 0)        // [0, 0, 0]
+  /// string[](2, "x")  // ["x", "x"]
+  /// ```
+  function new(size: int, default: T) -> T[] throws root.errors.InvalidArgument {
+    $rust_function
+  }
+
   /// Returns the number of elements in the array.
   function length(self) -> int throws never {
     $rust_function
@@ -22,6 +35,21 @@ class Array<T> {
   /// Appends `item` to the end of the array. Returns the new length. Mutates `self`.
   //baml:mut_self
   function push(self, item: T) -> int throws never {
+    $rust_function
+  }
+
+  /// Replaces the element at `index` with `value`. Mutates `self`.
+  ///
+  /// Throws `InvalidArgument` if `index < 0` or `index >= length()`.
+  ///
+  /// # Examples
+  /// ```
+  /// let xs = int[](3, 0);
+  /// xs.set(1, 99);
+  /// xs  // [0, 99, 0]
+  /// ```
+  //baml:mut_self
+  function set(self, index: int, value: T) -> null throws root.errors.InvalidArgument {
     $rust_function
   }
 

@@ -577,7 +577,7 @@ Use expression IDs and the span lookup infrastructure instead. If you're unsure 
 
 ## Mutability
 
-BAML supports mutable variables. You can reassign variables (`x = newValue`), use compound assignment operators (`i += 1`, `x -= 1`, etc.), and mutate data structures via methods like `.push()`. The MIR models this through `Assign` and `AssignOp` statements, and mutable variables captured by lambdas are wrapped in cells (indirection pointers) so that inner and outer scopes can mutate the same value.
+BAML supports mutable variables. You can reassign variables (`x = newValue`), use compound assignment operators (`i += 1`, `x -= 1`, etc.), and mutate data structures via methods like `.push()` and `.set(index, value)`. The MIR models this through `Assign` and `AssignOp` statements, and mutable variables captured by lambdas are wrapped in cells (indirection pointers) so that inner and outer scopes can mutate the same value.
 
 ---
 

@@ -2111,6 +2111,9 @@ impl LoweringContext {
     fn lower_call_expr(&mut self, node: &SyntaxNode) -> ExprId {
         // CALL_EXPR structure: callee expr node (or WORD token), then CALL_ARGS node
         let callee_node = node.children().find(|n| n.kind() != SyntaxKind::CALL_ARGS);
+        let array_constructor_element_type = callee_node
+            .as_ref()
+            .and_then(Self::array_constructor_element_type);
 
         // Extract explicit type arguments from the callee node.
         //
@@ -2126,10 +2129,15 @@ impl LoweringContext {
         //      method's frame correctly (e.g. `Box.from_json` sees
         //      `T = Secret`).
         let callee_generic_args = callee_node.as_ref().and_then(find_callee_generic_args);
-        let type_args: Vec<TypeExpr> = callee_generic_args
-            .as_ref()
-            .map(Self::lower_generic_args_node)
-            .unwrap_or_default();
+        let type_args: Vec<TypeExpr> =
+            if let Some(element_type) = array_constructor_element_type.clone() {
+                vec![element_type]
+            } else {
+                callee_generic_args
+                    .as_ref()
+                    .map(Self::lower_generic_args_node)
+                    .unwrap_or_default()
+            };
         // Mark EVERY `GENERIC_ARGS` node in the callee subtree as consumed, so
         // lowering the callee/receiver below does not wrap any of them into an
         // `Expr::GenericApply`. `foo<int>(x)` keeps its callee a plain path (the
@@ -2146,7 +2154,16 @@ impl LoweringContext {
             }
         }
 
-        let callee = if let Some(n) = callee_node {
+        let callee = if array_constructor_element_type.is_some() {
+            self.alloc_expr(
+                Expr::Path(vec![
+                    Name::new("baml"),
+                    Name::new("Array"),
+                    Name::new("new"),
+                ]),
+                node.text_range(),
+            )
+        } else if let Some(n) = callee_node {
             self.lower_expr_in_chain(&n)
         } else {
             // No callee node - check for an identifier token (simple function name)
@@ -2185,6 +2202,18 @@ impl LoweringContext {
             self.needs_chain_wrap.insert(id);
         }
         id
+    }
+
+    fn array_constructor_element_type(node: &SyntaxNode) -> Option<TypeExpr> {
+        if node.kind() != SyntaxKind::TYPE_EXPR {
+            return None;
+        }
+        let cst_ty = baml_compiler_syntax::ast::TypeExpr::cast(node.clone())?;
+        let lowered = crate::lower_type_expr::lower_type_expr_node(&cst_ty);
+        match lowered {
+            TypeExpr::List { inner, .. } => Some(*inner),
+            _ => None,
+        }
     }
 
     fn finalize_call_args(
