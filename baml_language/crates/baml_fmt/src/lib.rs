@@ -78,6 +78,36 @@ pub enum FormatterError {
 }
 
 #[cfg(test)]
+mod catch_format_tests {
+    use super::*;
+
+    fn assert_formats_to(source: &str, expected: &str) {
+        let options = FormatOptions::default();
+        let formatted = format(source, &options).expect("formatter should succeed on `catch`");
+        assert_eq!(
+            formatted, expected,
+            "formatter output didn't match expected\n--- got ---\n{formatted}\n--- want ---\n{expected}"
+        );
+        let second = format(&formatted, &options).expect("formatter should be idempotent");
+        assert_eq!(formatted, second, "formatter should be idempotent");
+    }
+
+    #[test]
+    fn test_catch_arm_indentation_in_function_body() {
+        let source = "function demo(s: string) -> int {\n    baml.json.from_string<int>(s) catch (e) {\n    baml.json.JsonParseError => 0,\n    baml.json.JsonDecodeError => 0,\n  };\n    42\n}\n";
+        let expected = "function demo(s: string) -> int {\n    baml.json.from_string<int>(s) catch (e) {\n        baml.json.JsonParseError => 0,\n        baml.json.JsonDecodeError => 0,\n    };\n    42\n}\n";
+        assert_formats_to(source, expected);
+    }
+
+    #[test]
+    fn test_chained_catch_all_indentation() {
+        let source = "function demo(s: string) -> int {\n    baml.json.from_string<int>(s) catch (e) {\n    baml.json.JsonParseError => 0\n  } catch_all (e2) {\n    _ => 1\n  };\n    42\n}\n";
+        let expected = "function demo(s: string) -> int {\n    baml.json.from_string<int>(s) catch (e) {\n        baml.json.JsonParseError => 0\n    } catch_all (e2) {\n        _ => 1\n    };\n    42\n}\n";
+        assert_formats_to(source, expected);
+    }
+}
+
+#[cfg(test)]
 mod lambda_format_tests {
     use super::*;
 

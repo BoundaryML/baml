@@ -30,6 +30,7 @@ pub enum Expression {
     If(IfExpr),
     IfLet(IfLetExpr),
     Match(MatchExpr),
+    Catch(CatchExpr),
     Call(CallExpr),
     Index(IndexExpr),
     FieldAccess(FieldAccessExpr),
@@ -55,6 +56,7 @@ impl Expression {
             Expression::If(_)
                 | Expression::IfLet(_)
                 | Expression::Match(_)
+                | Expression::Catch(_)
                 | Expression::Lambda(_)
                 | Expression::Unknown(_)
         )
@@ -96,6 +98,7 @@ impl FromCST for Expression {
             SyntaxKind::IF_EXPR => IfExpr::from_cst(elem).map(Expression::If)?,
             SyntaxKind::IF_LET_EXPR => IfLetExpr::from_cst(elem).map(Expression::IfLet)?,
             SyntaxKind::MATCH_EXPR => MatchExpr::from_cst(elem).map(Expression::Match)?,
+            SyntaxKind::CATCH_EXPR => CatchExpr::from_cst(elem).map(Expression::Catch)?,
             SyntaxKind::CALL_EXPR => CallExpr::from_cst(elem).map(Expression::Call)?,
             SyntaxKind::INDEX_EXPR => IndexExpr::from_cst(elem).map(Expression::Index)?,
             SyntaxKind::FIELD_ACCESS_EXPR => {
@@ -151,6 +154,7 @@ impl Expression {
             Expression::If(_) => None,
             Expression::IfLet(_) => None,
             Expression::Match(_) => None,
+            Expression::Catch(_) => None,
             Expression::Call(call) => call.single_line_width(input),
             Expression::Index(index) => index.single_line_width(input),
             Expression::FieldAccess(fa) => fa.single_line_width(input),
@@ -199,6 +203,7 @@ impl Printable for Expression {
             Expression::If(if_expr) => if_expr.print(shape, printer),
             Expression::IfLet(if_let_expr) => if_let_expr.print(shape, printer),
             Expression::Match(match_expr) => match_expr.print(shape, printer),
+            Expression::Catch(catch_expr) => catch_expr.print(shape, printer),
             Expression::EnvAccess(env) => env.print(shape, printer),
             Expression::Block(block) => block.print(shape, printer),
             Expression::ArrayInitializer(array) => array.print(shape, printer),
@@ -225,6 +230,7 @@ impl Printable for Expression {
             Expression::If(if_expr) => if_expr.leftmost_token(),
             Expression::IfLet(if_let_expr) => if_let_expr.leftmost_token(),
             Expression::Match(match_expr) => match_expr.leftmost_token(),
+            Expression::Catch(catch_expr) => catch_expr.leftmost_token(),
             Expression::Call(call) => call.leftmost_token(),
             Expression::Index(index) => index.leftmost_token(),
             Expression::FieldAccess(fa) => fa.base.leftmost_token(),
@@ -254,6 +260,7 @@ impl Printable for Expression {
             Expression::If(if_expr) => if_expr.rightmost_token(),
             Expression::IfLet(if_let_expr) => if_let_expr.rightmost_token(),
             Expression::Match(match_expr) => match_expr.rightmost_token(),
+            Expression::Catch(catch_expr) => catch_expr.rightmost_token(),
             Expression::Call(call) => call.rightmost_token(),
             Expression::Index(index) => index.rightmost_token(),
             Expression::FieldAccess(fa) => fa.field.span(),
@@ -1553,6 +1560,311 @@ impl Printable for MatchExpr {
     }
     fn rightmost_token(&self) -> TextRange {
         self.close_brace.span()
+    }
+}
+
+/// Corresponds to a [`SyntaxKind::CATCH_EXPR`] node.
+#[derive(Debug)]
+pub struct CatchExpr {
+    pub base: Box<Expression>,
+    pub clauses: Vec<CatchClause>,
+}
+
+impl FromCST for CatchExpr {
+    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
+        let node = StrongAstError::assert_is_node(elem)?;
+        StrongAstError::assert_kind_node(&node, SyntaxKind::CATCH_EXPR)?;
+
+        let mut it = SyntaxNodeIter::new(&node);
+        let base_node = it.expect_next("catch base expression")?;
+        let base = Box::new(Expression::from_cst(base_node)?);
+
+        let mut clauses = Vec::new();
+        while let Some(elem) = it.next() {
+            if elem.kind() != SyntaxKind::CATCH_CLAUSE {
+                return Err(StrongAstError::UnexpectedKindDesc {
+                    expected_desc: "CATCH_CLAUSE".into(),
+                    found: elem.kind(),
+                    at: elem.text_range(),
+                });
+            }
+            clauses.push(CatchClause::from_cst(elem)?);
+        }
+
+        Ok(Self { base, clauses })
+    }
+}
+
+impl KnownKind for CatchExpr {
+    fn kind() -> SyntaxKind {
+        SyntaxKind::CATCH_EXPR
+    }
+}
+
+impl Printable for CatchExpr {
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        let mut multi_lined = printer.print(&*self.base, shape.clone()).multi_lined;
+
+        for clause in &self.clauses {
+            printer.print_str(" ");
+            multi_lined |= printer.print(clause, shape.clone()).multi_lined;
+        }
+
+        PrintInfo { multi_lined }
+    }
+
+    fn leftmost_token(&self) -> TextRange {
+        self.base.leftmost_token()
+    }
+
+    fn rightmost_token(&self) -> TextRange {
+        self.clauses
+            .last()
+            .map_or_else(|| self.base.rightmost_token(), Printable::rightmost_token)
+    }
+}
+
+#[derive(Debug)]
+pub enum CatchKeyword {
+    Catch(t::Catch),
+    CatchAll(t::CatchAll),
+}
+
+impl FromCST for CatchKeyword {
+    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
+        match elem.kind() {
+            SyntaxKind::KW_CATCH => Ok(Self::Catch(t::Catch::from_cst(elem)?)),
+            SyntaxKind::KW_CATCH_ALL => Ok(Self::CatchAll(t::CatchAll::from_cst(elem)?)),
+            found => Err(StrongAstError::UnexpectedKindDesc {
+                expected_desc: "KW_CATCH or KW_CATCH_ALL".into(),
+                found,
+                at: elem.text_range(),
+            }),
+        }
+    }
+}
+
+impl Token for CatchKeyword {
+    fn span(&self) -> TextRange {
+        match self {
+            Self::Catch(token) => token.span(),
+            Self::CatchAll(token) => token.span(),
+        }
+    }
+}
+
+/// Corresponds to a [`SyntaxKind::CATCH_CLAUSE`] node.
+#[derive(Debug)]
+pub struct CatchClause {
+    pub keyword: CatchKeyword,
+    pub open_paren: t::LParen,
+    pub binding: t::Word,
+    pub stack_trace_binding: Option<(t::Comma, t::Word)>,
+    pub close_paren: t::RParen,
+    pub open_brace: t::LBrace,
+    pub arms: Vec<CatchArm>,
+    pub close_brace: t::RBrace,
+}
+
+impl CatchClause {
+    fn parse_binding(
+        elem: SyntaxElement,
+        expected: SyntaxKind,
+        desc: &'static str,
+    ) -> Result<t::Word, StrongAstError> {
+        let node = StrongAstError::assert_is_node(elem)?;
+        StrongAstError::assert_kind_node(&node, expected)?;
+        let mut it = SyntaxNodeIter::new(&node);
+        let binding: t::Word = it.expect_parse()?;
+        it.expect_end()?;
+        if binding.span().is_empty() {
+            return Err(StrongAstError::missing_desc(desc, node.text_range()));
+        }
+        Ok(binding)
+    }
+}
+
+impl FromCST for CatchClause {
+    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
+        let node = StrongAstError::assert_is_node(elem)?;
+        StrongAstError::assert_kind_node(&node, SyntaxKind::CATCH_CLAUSE)?;
+
+        let mut it = SyntaxNodeIter::new(&node);
+        let keyword = CatchKeyword::from_cst(it.expect_next("catch clause keyword")?)?;
+        let open_paren = it.expect_parse()?;
+        let binding = Self::parse_binding(
+            it.expect_next("catch binding")?,
+            SyntaxKind::CATCH_BINDING,
+            "catch binding",
+        )?;
+        let stack_trace_binding = if let Some(comma) = it.next_if_kind(SyntaxKind::COMMA) {
+            Some((
+                t::Comma::from_cst(comma)?,
+                Self::parse_binding(
+                    it.expect_next("catch stack trace binding")?,
+                    SyntaxKind::CATCH_STACK_TRACE_BINDING,
+                    "catch stack trace binding",
+                )?,
+            ))
+        } else {
+            None
+        };
+        let close_paren = it.expect_parse()?;
+        let open_brace = it.expect_parse()?;
+
+        let mut arms = Vec::new();
+        let close_brace = loop {
+            let Some(elem) = it.next() else {
+                return Err(StrongAstError::missing(SyntaxKind::R_BRACE, it.parent));
+            };
+            match elem.kind() {
+                SyntaxKind::R_BRACE => break t::RBrace::from_cst(elem)?,
+                SyntaxKind::CATCH_ARM => arms.push(CatchArm::from_cst(elem)?),
+                found => {
+                    return Err(StrongAstError::UnexpectedKindDesc {
+                        expected_desc: "CATCH_ARM or R_BRACE".into(),
+                        found,
+                        at: elem.text_range(),
+                    });
+                }
+            }
+        };
+
+        it.expect_end()?;
+
+        Ok(Self {
+            keyword,
+            open_paren,
+            binding,
+            stack_trace_binding,
+            close_paren,
+            open_brace,
+            arms,
+            close_brace,
+        })
+    }
+}
+
+impl KnownKind for CatchClause {
+    fn kind() -> SyntaxKind {
+        SyntaxKind::CATCH_CLAUSE
+    }
+}
+
+impl Printable for CatchClause {
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        let inner_indent = shape.indent + printer.config.indent_width;
+
+        printer.print_raw_token(&self.keyword);
+        printer.print_str(" ");
+        printer.print_raw_token(&self.open_paren);
+        printer.print_raw_token(&self.binding);
+        if let Some((comma, stack_trace_binding)) = &self.stack_trace_binding {
+            printer.print_raw_token(comma);
+            printer.print_str(" ");
+            printer.print_raw_token(stack_trace_binding);
+        }
+        printer.print_raw_token(&self.close_paren);
+        printer.print_str(" ");
+        printer.print_raw_token(&self.open_brace);
+        printer.print_trivia_all_trailing_for(self.open_brace.span());
+        printer.print_newline();
+
+        for arm in &self.arms {
+            printer.print_standalone_with_trivia(arm, inner_indent);
+            printer.print_newline();
+        }
+
+        printer.print_trivia_all_leading_with_newline_for(self.close_brace.span(), inner_indent);
+        printer.print_spaces(shape.indent);
+        printer.print_raw_token(&self.close_brace);
+
+        PrintInfo::default_multi_lined()
+    }
+
+    fn leftmost_token(&self) -> TextRange {
+        self.keyword.span()
+    }
+
+    fn rightmost_token(&self) -> TextRange {
+        self.close_brace.span()
+    }
+}
+
+/// Corresponds to a [`SyntaxKind::CATCH_ARM`] node.
+#[derive(Debug)]
+pub struct CatchArm {
+    pub pattern: MatchPattern,
+    pub fat_arrow: t::FatArrow,
+    pub body: Expression,
+    pub comma: Option<t::Comma>,
+}
+
+impl FromCST for CatchArm {
+    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
+        let node = StrongAstError::assert_is_node(elem)?;
+        StrongAstError::assert_kind_node(&node, SyntaxKind::CATCH_ARM)?;
+
+        let mut it = SyntaxNodeIter::new(&node);
+        let pattern = it.expect_parse()?;
+        let fat_arrow = it.expect_parse()?;
+        let body = Expression::from_cst(it.expect_next("catch arm body")?)?;
+        let comma = it.next().map(t::Comma::from_cst).transpose()?;
+
+        it.expect_end()?;
+
+        Ok(Self {
+            pattern,
+            fat_arrow,
+            body,
+            comma,
+        })
+    }
+}
+
+impl KnownKind for CatchArm {
+    fn kind() -> SyntaxKind {
+        SyntaxKind::CATCH_ARM
+    }
+}
+
+impl Printable for CatchArm {
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        let mut multi_lined = printer.print(&self.pattern, shape.clone()).multi_lined;
+        printer.print_str(" ");
+        printer.print_raw_token(&self.fat_arrow);
+        printer.print_str(" ");
+
+        let body_offset = printer.current_line_len().saturating_sub(shape.indent);
+        let body_shape = Shape {
+            width: printer
+                .config
+                .line_width
+                .saturating_sub(shape.indent + body_offset),
+            indent: shape.indent,
+            first_line_offset: body_offset,
+        };
+        multi_lined |= printer.print(&self.body, body_shape).multi_lined;
+
+        if let Some(comma) = &self.comma {
+            let body_trailing = printer.trivia.get_trailing_for_element(&self.body);
+            printer.print_trivia_squished(body_trailing);
+            let (comma_leading, _) = printer.trivia.get_for_range_split(comma.span());
+            printer.print_trivia_squished(comma_leading);
+            printer.print_raw_token(comma);
+        }
+
+        PrintInfo { multi_lined }
+    }
+
+    fn leftmost_token(&self) -> TextRange {
+        self.pattern.leftmost_token()
+    }
+
+    fn rightmost_token(&self) -> TextRange {
+        self.comma
+            .as_ref()
+            .map_or_else(|| self.body.rightmost_token(), Token::span)
     }
 }
 
