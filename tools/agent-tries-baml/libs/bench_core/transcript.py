@@ -131,10 +131,15 @@ def render_terminal_transcript(jsonl: str) -> str:
     """
     out: list[str] = []
 
-    def block(text: str, marker: str, cont: str) -> None:
-        """Append a marked first line plus indented continuation lines."""
+    def block(text: str, marker: str, cont: str, ts: str = "") -> None:
+        """Append a marked first line plus indented continuation lines.
+
+        When ``ts`` (HH:MM:SS) is given, the marker line carries a leading
+        ``[HH:MM:SS]`` stamp so readers/UIs can recover wall-clock timing.
+        """
         parts = (text.rstrip("\n") or "").split("\n")
-        out.append(f"{marker}{parts[0]}")
+        stamp = f"[{ts}] " if ts else ""
+        out.append(f"{stamp}{marker}{parts[0]}")
         out.extend(f"{cont}{p}" for p in parts[1:])
         out.append("")
 
@@ -145,15 +150,18 @@ def render_terminal_transcript(jsonl: str) -> str:
             continue
         typ = v.get("type")
         content = (v.get("message") or {}).get("content")
+        # session jsonl rows carry an ISO timestamp; keep just HH:MM:SS (UTC)
+        raw_ts = v.get("timestamp")
+        ts = raw_ts[11:19] if isinstance(raw_ts, str) and len(raw_ts) >= 19 else ""
         if typ == "user":
             if isinstance(content, str):
-                block(content, "> ", "  ")
+                block(content, "> ", "  ", ts)
             elif isinstance(content, list):
                 for c in content:
                     if not isinstance(c, dict):
                         continue
                     if c.get("type") == "text":
-                        block(c.get("text", ""), "> ", "  ")
+                        block(c.get("text", ""), "> ", "  ", ts)
                     elif c.get("type") == "tool_result":
                         body = _result_text(c).strip()
                         if c.get("is_error"):
@@ -165,12 +173,15 @@ def render_terminal_transcript(jsonl: str) -> str:
                     continue
                 ctype = c.get("type")
                 if ctype == "thinking" and (c.get("thinking") or "").strip():
-                    block(c["thinking"].strip(), "✻ Thinking…\n", "  ")
+                    block(c["thinking"].strip(), "✻ Thinking…\n", "  ", ts)
                 elif ctype == "text" and (c.get("text") or "").strip():
-                    block(c["text"].strip(), "⏺ ", "  ")
+                    block(c["text"].strip(), "⏺ ", "  ", ts)
                 elif ctype == "tool_use":
                     name = c.get("name") or "tool"
-                    out.append(f"⏺ {name}({_tool_call_summary(name, c.get('input'))})")
+                    stamp = f"[{ts}] " if ts else ""
+                    out.append(
+                        f"{stamp}⏺ {name}({_tool_call_summary(name, c.get('input'))})"
+                    )
     return "\n".join(out).rstrip() + "\n"
 
 
@@ -204,6 +215,9 @@ def parse_turn_log(jsonl: str) -> tuple[list[dict[str, Any]], int]:
             if not isinstance(content, list):
                 continue
             turn: dict[str, Any] = {"i": len(turns) + 1}
+            # ISO wall-clock timestamp of the assistant message (UI timelines)
+            if isinstance(v.get("timestamp"), str):
+                turn["ts"] = v["timestamp"]
             thinking, text, tools = "", "", []
             for c in content:
                 if not isinstance(c, dict):

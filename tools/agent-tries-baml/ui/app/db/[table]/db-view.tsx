@@ -2,31 +2,34 @@
 
 import Link from 'next/link';
 
+import { DataTable, Td, Th, Tr } from '@/components/ui/data-table';
+import { InlineCode } from '@/components/ui/inline-code';
+import { Pulse } from '@/components/ui/pulse';
+import { StatPill, type StatPillTone } from '@/components/ui/stat-pill';
+
 import type { Issue, LiveState } from '../../lib/data';
 import { ago } from '../../lib/format';
 import { usePolledState } from '../../live-dashboard';
 
-const TONE: Record<string, string> = {
-  queued: 'mute',
-  running: 'ok',
-  done: 'completed',
-  failed: 'failed',
-  deduping: 'partial',
-  success: 'completed',
-  partial: 'partial',
-  open: 'partial',
-  confirmed: 'timeout',
-  approved: 'completed',
-  fixing: 'partial',
-  cursor: 'cursor',
+// raw row status → pill tone (statuses without a mapping render uncolored)
+const TONE: Record<string, StatPillTone> = {
+  running: 'success',
+  done: 'success',
+  failed: 'destructive',
+  deduping: 'mute',
+  success: 'success',
+  partial: 'mute',
+  open: 'mute',
+  confirmed: 'mute',
+  approved: 'success',
+  fixing: 'mute',
+  cursor: 'link',
   closed: 'mute',
   rejected: 'mute',
 };
 const ACTIVE = new Set(['running', 'deduping', 'syncing', 'building']);
 
-const pill = (v: string) => (
-  <span className={`statpill ${TONE[v] ?? ''}`}>{v}</span>
-);
+const pill = (v: string) => <StatPill tone={TONE[v] ?? 'default'}>{v}</StatPill>;
 
 // ---- issue lifecycle stages (the columns of the Notion board, mirrored here) ----
 const STAGE_ORDER = [
@@ -39,13 +42,13 @@ const STAGE_ORDER = [
   'closed',
   'rejected',
 ];
-const STAGE_TONE: Record<string, string> = {
-  approved: 'completed',
-  'to cursor': 'cursor',
-  redraft: 'partial',
-  'not started': 'timeout',
-  fixed: 'completed',
-  failed: 'failed',
+const STAGE_TONE: Record<string, StatPillTone> = {
+  approved: 'success',
+  'to cursor': 'link',
+  redraft: 'mute',
+  'not started': 'mute',
+  fixed: 'success',
+  failed: 'destructive',
   closed: 'mute',
   rejected: 'mute',
 };
@@ -87,12 +90,12 @@ function issueStage(i: Issue): string {
  */
 function reportsCell(i: Issue) {
   const ev = (i.evidence ?? []).filter((e) => e.trophyId);
-  if (ev.length === 0) return <span className="mute">—</span>;
+  if (ev.length === 0) return <span className="text-muted-foreground">—</span>;
   return ev.map((e, idx) => (
     <Link
       key={idx}
       href={`/runs/${e.trophyId}${e.call_index != null ? `?call=${e.call_index}` : ''}`}
-      style={{ marginRight: 8 }}
+      className="mr-2"
     >
       report{e.call_index != null ? `·c${e.call_index}` : ''}
     </Link>
@@ -119,18 +122,24 @@ export default function DbView({
   const now = Date.now();
 
   const header = (count: number) => (
-    <header className="page">
-      <p style={{ marginBottom: 6 }}>
-        <Link href="/" className="back-link">
+    <header className="mb-9 max-[640px]:mb-6">
+      <p className="mb-1.5">
+        <Link
+          href="/"
+          className="text-sm text-muted-foreground no-underline hover:text-link"
+        >
           ← graph
         </Link>
       </p>
-      <h1>
-        {table} <span className={`pulse ${live ? 'on' : ''}`} />
+      <h1 className="mb-1.5 text-[28px] font-medium tracking-[-0.01em] max-[640px]:text-[22px]">
+        {table} <Pulse on={live} />
       </h1>
-      <p className="mute" style={{ fontSize: 13 }}>
+      <p className="text-[13px] text-muted-foreground">
         {count} {table === 'issues' ? 'issues' : 'rows'} ·{' '}
-        <button className="linkbtn" onClick={() => setLive((v) => !v)}>
+        <button
+          className="cursor-pointer border-0 bg-transparent p-0 text-link"
+          onClick={() => setLive((v) => !v)}
+        >
           {live ? 'live ⏸' : 'paused ▶'}
         </button>
       </p>
@@ -151,41 +160,38 @@ export default function DbView({
     return (
       <div>
         {header(s.issues.length)}
-        {s.issues.length === 0 ? <p className="mute">empty.</p> : null}
+        {s.issues.length === 0 ? (
+          <p className="text-muted-foreground">empty.</p>
+        ) : null}
         {stages.map((st) => (
-          <section key={st} className="stage" style={{ marginBottom: 30 }}>
-            <h2 style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
-              <span className={`statpill ${STAGE_TONE[st] ?? ''}`}>{st}</span>
-              <span className="mono mute" style={{ fontSize: 13 }}>
-                {groups[st].length}
-              </span>
+          <section key={st} className="mb-[30px]">
+            <h2 className="mb-[18px] flex items-baseline gap-2.5 text-[13px] font-medium uppercase tracking-[0.06em] text-muted-foreground">
+              <StatPill tone={STAGE_TONE[st] ?? 'default'}>{st}</StatPill>
+              <span className="mono text-[13px]">{groups[st].length}</span>
               {STAGE_BLURB[st] ? (
-                <span
-                  className="mute"
-                  style={{ fontSize: 13, fontWeight: 400 }}
-                >
-                  {STAGE_BLURB[st]}
-                </span>
+                <span className="font-normal">{STAGE_BLURB[st]}</span>
               ) : null}
             </h2>
-            <table className="runtable">
+            <DataTable>
               <thead>
                 <tr>
-                  <th>kind</th>
-                  <th>title</th>
-                  <th>reports</th>
+                  <Th>kind</Th>
+                  <Th>title</Th>
+                  <Th>reports</Th>
                 </tr>
               </thead>
               <tbody>
                 {groups[st].map((i) => (
-                  <tr key={i._id} className="runrow">
-                    <td>{pill(i.kind)}</td>
-                    <td>{i.title}</td>
-                    <td className="mono">{reportsCell(i)}</td>
-                  </tr>
+                  <Tr key={i._id}>
+                    <Td>{pill(i.kind)}</Td>
+                    <Td>
+                      <InlineCode text={i.title} />
+                    </Td>
+                    <Td className="mono">{reportsCell(i)}</Td>
+                  </Tr>
                 ))}
               </tbody>
-            </table>
+            </DataTable>
           </section>
         ))}
       </div>
@@ -204,63 +210,67 @@ export default function DbView({
     );
     head = (
       <tr>
-        <th>status</th>
-        <th>source</th>
-        <th>prompt</th>
-        <th>report</th>
-        <th>worker</th>
-        <th className="r">age</th>
+        <Th>status</Th>
+        <Th>source</Th>
+        <Th>prompt</Th>
+        <Th>report</Th>
+        <Th>worker</Th>
+        <Th align="right">age</Th>
       </tr>
     );
     rows = data.map((t) => (
-      <tr key={t._id} className="runrow">
-        <td>
+      <Tr key={t._id}>
+        <Td>
           {pill(t.status)}
-          {ACTIVE.has(t.status) ? (
-            <span className="pulse on" style={{ marginLeft: 6 }} />
-          ) : null}
-        </td>
-        <td className="mono mute">{t.source}</td>
-        <td>{t.prompt}</td>
-        <td>
+          {ACTIVE.has(t.status) ? <Pulse on className="ml-1.5" /> : null}
+        </Td>
+        <Td className="mono text-muted-foreground">{t.source}</Td>
+        <Td>
+          <InlineCode text={t.prompt} />
+        </Td>
+        <Td>
           {t.reportId ? (
             <Link href={`/runs/${t.reportId}`}>trophy →</Link>
           ) : (
-            <span className="mute">—</span>
+            <span className="text-muted-foreground">—</span>
           )}
-        </td>
-        <td className="mono mute">{(t.claimedBy ?? '').slice(0, 16)}</td>
-        <td className="r mono mute">
+        </Td>
+        <Td className="mono text-muted-foreground">
+          {(t.claimedBy ?? '').slice(0, 16)}
+        </Td>
+        <Td align="right" className="mono text-muted-foreground">
           {ago(now - (t.claimedAt ?? t.createdAt))}
-        </td>
-      </tr>
+        </Td>
+      </Tr>
     ));
   } else {
     head = (
       <tr>
-        <th>outcome</th>
-        <th>task</th>
-        <th>src</th>
-        <th className="r">turns</th>
-        <th className="r">api</th>
-        <th className="r">tokens</th>
-        <th className="r">cost</th>
-        <th className="r">issues</th>
+        <Th>outcome</Th>
+        <Th>task</Th>
+        <Th>src</Th>
+        <Th align="right">turns</Th>
+        <Th align="right">api</Th>
+        <Th align="right">tokens</Th>
+        <Th align="right">cost</Th>
+        <Th align="right">issues</Th>
       </tr>
     );
     rows = s.runs.map((r) => (
-      <tr key={r.trophyId} className="runrow">
-        <td>{pill(r.outcome)}</td>
-        <td>
-          <Link href={`/runs/${r.trophyId}`}>{r.prompt}</Link>
-        </td>
-        <td className="mono mute">{r.source}</td>
-        <td className="r mono">{r.turns ?? '-'}</td>
-        <td className="r mono">{r.apiCalls ?? '-'}</td>
-        <td className="r mono">{r.outputTokens ?? '-'}</td>
-        <td className="r mono">${(r.costUsd ?? 0).toFixed(2)}</td>
-        <td className="r mono">{r.findings || ''}</td>
-      </tr>
+      <Tr key={r.trophyId}>
+        <Td>{pill(r.outcome)}</Td>
+        <Td>
+          <Link href={`/runs/${r.trophyId}`}>
+            <InlineCode text={r.prompt} />
+          </Link>
+        </Td>
+        <Td className="mono text-muted-foreground">{r.source}</Td>
+        <Td align="right" className="mono">{r.turns ?? '-'}</Td>
+        <Td align="right" className="mono">{r.apiCalls ?? '-'}</Td>
+        <Td align="right" className="mono">{r.outputTokens ?? '-'}</Td>
+        <Td align="right" className="mono">${(r.costUsd ?? 0).toFixed(2)}</Td>
+        <Td align="right" className="mono">{r.findings || ''}</Td>
+      </Tr>
     ));
   }
 
@@ -268,12 +278,12 @@ export default function DbView({
     <div>
       {header(rows.length)}
       {rows.length === 0 ? (
-        <p className="mute">empty.</p>
+        <p className="text-muted-foreground">empty.</p>
       ) : (
-        <table className="runtable">
+        <DataTable>
           <thead>{head}</thead>
           <tbody>{rows}</tbody>
-        </table>
+        </DataTable>
       )}
     </div>
   );

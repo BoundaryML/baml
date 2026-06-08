@@ -8,6 +8,7 @@ const TOKEN = process.env.SERVICE_TOKEN ?? '';
 /** One Claude Code transcript turn (a single API call) in a trophy's turn log. */
 export type Turn = {
   i: number;
+  ts?: string; // ISO wall-clock timestamp of the assistant message (newer runs)
   thinking_chars?: number;
   thinking_preview?: string;
   text_chars?: number;
@@ -495,6 +496,64 @@ export async function loadRun(trophyId: string): Promise<RunDetail | null> {
     ? await getText(`/transcripts/${trophy.transcriptStorageId}`)
     : null;
   return { trophy, task: task ?? null, bamlLabel, transcriptText };
+}
+
+/** An issue-detail bundle: the issue plus its evidence runs joined to task prompts. */
+export type IssueDetail = {
+  issue: Issue;
+  evidenceRuns: Array<{
+    trophyId: string;
+    callIndex: number | null;
+    prompt: string | null;
+    outcome: string | null;
+    turns: number | null;
+    costUsd: number | null;
+    createdAt: number | null;
+  }>;
+};
+
+/**
+ * Loads a single issue plus its evidence trophies (joined to task prompts for labels).
+ * @param id - the issue id to load
+ * @returns the issue detail, or null if unconfigured or the issue is not found
+ */
+export async function loadIssue(id: string): Promise<IssueDetail | null> {
+  if (!BASE) return null;
+  const issue = await get<Issue>(`/issues/${id}`);
+  if (!issue) return null;
+  const evidence = issue.evidence ?? [];
+  const trophyIds = [
+    ...new Set(evidence.map((e) => e.trophyId).filter(Boolean)),
+  ] as string[];
+  const trophies = await Promise.all(
+    trophyIds.map((tid) => get<Trophy>(`/trophies/${tid}`)),
+  );
+  const trophyById = new Map(
+    trophies.filter(Boolean).map((t) => [t!._id, t!]),
+  );
+  const taskIds = [
+    ...new Set([...trophyById.values()].map((t) => t.taskId).filter(Boolean)),
+  ];
+  const tasks = await Promise.all(
+    taskIds.map((tid) => get<Task>(`/tasks/${tid}`)),
+  );
+  const taskById = new Map(tasks.filter(Boolean).map((t) => [t!._id, t!]));
+  const evidenceRuns = evidence
+    .filter((e) => e.trophyId)
+    .map((e) => {
+      const trophy = trophyById.get(e.trophyId!);
+      const task = trophy ? taskById.get(trophy.taskId) : undefined;
+      return {
+        trophyId: e.trophyId!,
+        callIndex: e.call_index ?? null,
+        prompt: task?.prompt ?? null,
+        outcome: trophy?.outcome ?? null,
+        turns: trophy?.metrics?.turns ?? null,
+        costUsd: trophy?.metrics?.estimated_cost_usd ?? null,
+        createdAt: trophy?.createdAt ?? null,
+      };
+    });
+  return { issue, evidenceRuns };
 }
 
 /**

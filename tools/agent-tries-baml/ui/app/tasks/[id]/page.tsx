@@ -1,6 +1,9 @@
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 
+import { BackLink, PageHeader } from '@/components/page-header';
+import { InlineCode } from '@/components/ui/inline-code';
+
 import { loadTask } from '../../lib/data';
 
 export const dynamic = 'force-dynamic';
@@ -26,13 +29,10 @@ export default async function TaskPage({
   const t = d.task;
   return (
     <div>
-      <header className="page">
-        <p style={{ marginBottom: 6 }}>
-          <Link href="/" className="back-link">
-            ← dashboard
-          </Link>
-        </p>
-        <h1>{t.prompt}</h1>
+      <PageHeader
+        back={<BackLink href="/">← dashboard</BackLink>}
+        title={<InlineCode text={t.prompt} />}
+      >
         <p>
           <strong>{t.status}</strong>
           {t.source ? <> · {t.source}</> : null}
@@ -40,7 +40,9 @@ export default async function TaskPage({
             <>
               {' '}
               · agent{' '}
-              <span className="mono mute">{t.claimedBy.slice(0, 22)}</span>
+              <span className="mono text-muted-foreground">
+                {t.claimedBy.slice(0, 22)}
+              </span>
             </>
           ) : null}
           {d.bamlLabel ? (
@@ -51,12 +53,17 @@ export default async function TaskPage({
           ) : t.bamlVersion ? (
             <>
               {' '}
-              · baml <span className="mono">{t.bamlVersion === 'coldstart' ? 'cold start' : t.bamlVersion.slice(0, 8)}</span>
+              · baml{' '}
+              <span className="mono">
+                {t.bamlVersion === 'coldstart'
+                  ? 'cold start'
+                  : t.bamlVersion.slice(0, 8)}
+              </span>
             </>
           ) : null}
         </p>
-      </header>
-      <p className="mute">
+      </PageHeader>
+      <p className="text-muted-foreground">
         This run is still in progress. The trophy (metrics, report, transcript)
         will appear here when it finishes. Refresh to check, or watch it move on
         the <Link href="/">dashboard graph</Link>.

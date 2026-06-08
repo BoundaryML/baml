@@ -52,129 +52,50 @@ export default async function ChangelogPage() {
   const entries = await loadEntries();
 
   return (
-    <main
-      style={{
-        margin: '0 auto',
-        maxWidth: 720,
-        padding: '64px 24px 128px',
-      }}
-    >
-      <header style={{ marginBottom: 56 }}>
-        <h1
-          style={{
-            fontSize: 'clamp(40px, 6vw, 64px)',
-            fontWeight: 600,
-            letterSpacing: '-0.02em',
-            lineHeight: 1,
-            margin: 0,
-          }}
-        >
+    <main className="mx-auto max-w-[720px] px-6 pt-16 pb-32">
+      <header className="mb-14">
+        <h1 className="m-0 text-[clamp(40px,6vw,64px)] font-semibold leading-none tracking-[-0.02em]">
           Changelog
         </h1>
-        <p
-          style={{
-            color: '#6b6456',
-            fontSize: 18,
-            margin: '20px 0 0',
-            maxWidth: 460,
-          }}
-        >
+        <p className="mt-5 max-w-[460px] text-lg text-[#6b6456]">
           The latest releases of BAML, a typed language for reliable LLM
           functions.
         </p>
       </header>
 
       {entries.length === 0 ? (
-        <p style={{ color: '#6b6456' }}>No entries yet.</p>
+        <p className="text-[#6b6456]">No entries yet.</p>
       ) : (
-        <ol
-          style={{
-            listStyle: 'none',
-            margin: 0,
-            padding: 0,
-            position: 'relative',
-          }}
-        >
+        <ol className="relative m-0 list-none p-0">
           {/* continuous vertical rail running through every marker */}
           <div
             aria-hidden
-            style={{
-              background: '#D9D3C4',
-              bottom: 8,
-              left: 140,
-              position: 'absolute',
-              top: 8,
-              width: 1,
-            }}
+            className="absolute top-2 bottom-2 left-[140px] w-px bg-[#D9D3C4]"
           />
 
           {entries.map((e) => (
             <li
               key={e.version}
               id={e.version}
-              style={{
-                alignItems: 'start',
-                display: 'grid',
-                gridTemplateColumns: '120px 40px 1fr',
-                padding: '40px 0',
-                position: 'relative',
-                scrollMarginTop: 24,
-              }}
+              className="relative grid grid-cols-[120px_40px_1fr] items-start py-10 scroll-mt-6"
             >
               <time
                 dateTime={e.date}
-                style={{
-                  color: '#6b6456',
-                  fontSize: 12,
-                  fontWeight: 500,
-                  gridColumnStart: 1,
-                  paddingTop: 8,
-                  textAlign: 'right',
-                  whiteSpace: 'nowrap',
-                }}
+                className="col-start-1 pt-2 text-right text-xs font-medium whitespace-nowrap text-[#6b6456]"
               >
                 {formatDate(e.date)}
               </time>
 
               <span
                 aria-hidden
-                style={{
-                  alignItems: 'center',
-                  background: '#FBF7ED',
-                  border: '1px solid #D9D3C4',
-                  borderRadius: '50%',
-                  display: 'flex',
-                  gridColumnStart: 2,
-                  height: 12,
-                  justifyContent: 'center',
-                  justifySelf: 'center',
-                  marginTop: 7,
-                  position: 'relative',
-                  width: 12,
-                  zIndex: 1,
-                }}
+                className="relative z-[1] col-start-2 mt-[7px] flex size-3 items-center justify-center justify-self-center rounded-full border border-[#D9D3C4] bg-[#FBF7ED]"
               >
-                <span
-                  style={{
-                    background: '#1a1a1a',
-                    borderRadius: '50%',
-                    height: 4,
-                    width: 4,
-                  }}
-                />
+                <span className="size-1 rounded-full bg-[#1a1a1a]" />
               </span>
 
-              <div style={{ gridColumnStart: 3, minWidth: 0 }}>
-                <h2
-                  style={{
-                    fontSize: 24,
-                    fontWeight: 600,
-                    letterSpacing: '-0.01em',
-                    lineHeight: 1.2,
-                    margin: '0 0 16px',
-                  }}
-                >
-                  <a href={`#${e.version}`} style={{ color: 'inherit' }}>
+              <div className="col-start-3 min-w-0">
+                <h2 className="mb-4 text-2xl font-semibold leading-[1.2] tracking-[-0.01em]">
+                  <a href={`#${e.version}`} className="text-inherit">
                     {e.title}
                   </a>
                 </h2>
@@ -182,13 +103,7 @@ export default async function ChangelogPage() {
                 <ChangelogBody>{e.body}</ChangelogBody>
 
                 {e.authors.length > 0 && (
-                  <p
-                    style={{
-                      color: '#6b6456',
-                      fontSize: 12,
-                      marginTop: 28,
-                    }}
-                  >
+                  <p className="mt-7 text-xs text-[#6b6456]">
                     By {e.authors.join(', ')}
                   </p>
                 )}

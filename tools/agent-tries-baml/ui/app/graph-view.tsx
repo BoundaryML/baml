@@ -5,9 +5,13 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 
+import { InlineCode } from '@/components/ui/inline-code';
+import { Pulse } from '@/components/ui/pulse';
+import { cn } from '@/lib/utils';
+
 import type { LiveState } from './lib/data';
 import { ago } from './lib/format';
-import { usePolledState } from './live-dashboard';
+import { BottomTabs, usePolledState } from './live-dashboard';
 import NodePanel, { nodeHasPanel } from './node-panel';
 
 const cnt = (o: Record<string, number>) =>
@@ -512,47 +516,68 @@ export default function GraphView({ initial }: { initial: LiveState }) {
     ? s.inflight.filter((f) => STAGE_EL[f.stage] === pop.id)
     : [];
 
+  // shared chrome-button style for the recenter / exit-fullscreen controls
+  const chromeBtn =
+    'absolute z-[6] inline-flex items-center justify-center p-0 cursor-pointer ' +
+    'text-[#6b665c] bg-background border border-border rounded-md ' +
+    'shadow-[0_1px_2px_rgba(0,0,0,0.06)] transition-colors duration-[120ms] ' +
+    'hover:text-[#1a1a1a] hover:border-[#bcb6aa]';
+
   return (
     <div>
-      <header className="page">
-        <h1>
-          agent tries baml <span className={`pulse ${live ? 'on' : ''}`} />
+      <header className="mb-9 max-[640px]:mb-6">
+        <h1 className="mb-1.5 text-[28px] font-medium tracking-[-0.01em] max-[640px]:text-[22px]">
+          agent tries baml <Pulse on={live} />
         </h1>
-        <p className="blurb">
+        <p className="text-[15px] leading-[1.55] text-muted-foreground">
           A live look at an autonomous agent that uses BAML on real tasks. It
           picks up work, runs it, and files what it finds. Each node is a stage
           in that pipeline. Click a node to open its data, and watch edges glow
           green where work is in flight.
         </p>
-        <p className="mute" style={{ fontSize: 13 }}>
+        <p className="text-[13px] text-muted-foreground">
           ${s.totals.costUsd.toFixed(2)} est ·{' '}
-          <button className="linkbtn" onClick={() => setLive((v) => !v)}>
+          <button
+            className="cursor-pointer border-0 bg-transparent p-0 text-link"
+            onClick={() => setLive((v) => !v)}
+          >
             {live ? 'live ⏸' : 'paused ▶'}
           </button>{' '}
           · {s.generatedAt}
         </p>
-        <p className="agents mono">
+        <p className="mono mt-2 flex flex-wrap gap-4 text-xs text-muted-foreground">
           <span>
-            <b>{s.agents.activeTasks}</b> active tasks
+            <b className="font-semibold text-foreground">
+              {s.agents.activeTasks}
+            </b>{' '}
+            active tasks
           </span>
           <span>
-            <b>{s.agents.workers}</b> workers
+            <b className="font-semibold text-foreground">{s.agents.workers}</b>{' '}
+            workers
           </span>
           <span>
-            <b>{s.agents.dedupers}</b> dedupers
+            <b className="font-semibold text-foreground">{s.agents.dedupers}</b>{' '}
+            dedupers
           </span>
           <span>
-            <b>{s.agents.fixers}</b> fixers
+            <b className="font-semibold text-foreground">{s.agents.fixers}</b>{' '}
+            fixers
           </span>
         </p>
       </header>
 
       <div
-        className={`graphwrap ${fullscreen ? 'fs' : ''} ${
-          panel && fullscreen ? 'panel-open' : ''
-        }`}
+        className={cn(
+          'relative my-2 mb-[30px]',
+          fullscreen && 'fixed inset-0 z-[60] m-0 bg-background p-5',
+          panel && fullscreen && 'pr-[412px]',
+        )}
       >
-        <div className="graph" ref={box} />
+        <div
+          className={cn('graph', fullscreen && 'h-full rounded-md')}
+          ref={box}
+        />
         {fullscreen && panel ? (
           <NodePanel nodeId={panel} onClose={() => setPanel(null)} s={s} />
         ) : null}
@@ -563,7 +588,15 @@ export default function GraphView({ initial }: { initial: LiveState }) {
         ) : null}
         <button
           aria-label="Recenter graph"
-          className="graph-recenter"
+          className={cn(
+            chromeBtn,
+            'size-[30px]',
+            fullscreen
+              ? panel
+                ? 'right-[408px] bottom-7'
+                : 'right-7 bottom-7'
+              : 'right-3 bottom-3',
+          )}
           onClick={recenter}
           title="Recenter"
           type="button"
@@ -588,7 +621,11 @@ export default function GraphView({ initial }: { initial: LiveState }) {
         {fullscreen ? (
           <button
             aria-label="Exit fullscreen"
-            className="graph-close"
+            className={cn(
+              chromeBtn,
+              'size-8 text-xl leading-none',
+              panel ? 'top-7 right-[408px]' : 'top-7 right-7',
+            )}
             onClick={() => setFullscreen(false)}
             title="Exit fullscreen"
             type="button"
@@ -597,26 +634,39 @@ export default function GraphView({ initial }: { initial: LiveState }) {
           </button>
         ) : null}
         {pop ? (
-          <div className="gpop" style={{ left: pop.x, top: pop.y }}>
-            <div className="gpop-head">
+          <div
+            className="absolute z-[5] min-w-[180px] max-w-[340px] -translate-x-1/2 translate-y-2.5 rounded border border-foreground bg-background px-2.5 py-2 text-[12.5px] shadow-[0_4px_14px_rgba(0,0,0,0.1)]"
+            style={{ left: pop.x, top: pop.y }}
+          >
+            <div className="mb-1.5 flex items-center justify-between text-[11px] uppercase tracking-[0.06em] text-muted-foreground">
               in flight{' '}
-              <button className="gpop-x" onClick={() => setPop(null)}>
+              <button
+                className="cursor-pointer border-0 bg-transparent p-0 text-[15px] leading-none text-muted-foreground"
+                onClick={() => setPop(null)}
+              >
                 ×
               </button>
             </div>
             {popItems.length === 0 ? (
-              <div className="gpop-item mute">nothing in flight here</div>
+              <div className="border-t border-border py-[3px] text-muted-foreground first:border-t-0">
+                nothing in flight here
+              </div>
             ) : (
               popItems.map((f) => (
-                <div className="gpop-item" key={f.id}>
+                <div
+                  className="border-t border-border py-[3px] first:border-t-0 [&>div]:my-px"
+                  key={f.id}
+                >
                   <div>
                     <b>{f.stage}</b>{' '}
-                    <span className="mono mute">
+                    <span className="mono text-muted-foreground">
                       {(f.claimedBy ?? 'agent').slice(0, 22)}
                     </span>
                   </div>
-                  <div className="gpop-task">{f.label}</div>
-                  <div className="mono mute" style={{ fontSize: 11 }}>
+                  <div className="my-0.5 whitespace-normal [overflow-wrap:anywhere]">
+                    <InlineCode text={f.label} />
+                  </div>
+                  <div className="mono text-[11px] text-muted-foreground">
                     call {f.id.slice(0, 8)} · {ago(f.sinceMs)}
                   </div>
                 </div>
@@ -626,49 +676,7 @@ export default function GraphView({ initial }: { initial: LiveState }) {
         ) : null}
       </div>
 
-      <h2>Recent runs</h2>
-      {s.runs.length === 0 ? (
-        <p className="mute">no runs yet.</p>
-      ) : (
-        <table className="runtable">
-          <thead>
-            <tr>
-              <th>outcome</th>
-              <th>task</th>
-              <th>src</th>
-              <th className="r">turns</th>
-              <th className="r">api</th>
-              <th className="r">cost</th>
-              <th className="r">issues</th>
-              <th className="r">age</th>
-            </tr>
-          </thead>
-          <tbody>
-            {s.runs.map((r) => (
-              <tr className="runrow" key={r.trophyId}>
-                <td>
-                  <span
-                    className={`statpill ${r.outcome === 'success' ? 'completed' : r.outcome === 'failed' ? 'failed' : 'partial'}`}
-                  >
-                    {r.outcome}
-                  </span>
-                </td>
-                <td>
-                  <Link href={`/runs/${r.trophyId}`}>
-                    {r.prompt}
-                  </Link>
-                </td>
-                <td className="mono mute">{r.source}</td>
-                <td className="r mono">{r.turns ?? '-'}</td>
-                <td className="r mono">{r.apiCalls ?? '-'}</td>
-                <td className="r mono">${(r.costUsd ?? 0).toFixed(2)}</td>
-                <td className="r mono">{r.findings || ''}</td>
-                <td className="r mono mute">{ago(now - r.createdAt)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
+      <BottomTabs s={s} now={now} />
     </div>
   );
 }

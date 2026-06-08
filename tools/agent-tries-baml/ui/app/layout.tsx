@@ -9,8 +9,8 @@ export const metadata: Metadata = {
 
 /**
  * Root server-component layout wrapping every page in the html/body shell.
- * The dashboard stylesheet is scoped under `.atb-scope`, so the body wraps
- * children in that class (and sets the page background) for the styles to apply.
+ * Page chrome (paper background, body type) comes from the Tailwind base
+ * layer; `.atb-page` provides the 760px editorial column every page sits in.
  * @param children - the routed page content rendered inside the body
  * @returns the top-level html document structure
  */
@@ -21,8 +21,8 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body style={{ background: "#FBF7ED" }}>
-        <div className="atb-scope">{children}</div>
+      <body>
+        <div className="atb-page">{children}</div>
       </body>
     </html>
   );

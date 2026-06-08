@@ -2,29 +2,32 @@
 
 import Link from 'next/link';
 
+import { DataTable, Td, Th, Tr } from '@/components/ui/data-table';
+import { InlineCode } from '@/components/ui/inline-code';
+import { StatPill, type StatPillTone } from '@/components/ui/stat-pill';
+
 import type { Issue, LiveState } from './lib/data';
 import { ago } from './lib/format';
 
-const TONE: Record<string, string> = {
-  approved: 'completed',
+// raw row status → pill tone (statuses without a mapping render uncolored)
+const TONE: Record<string, StatPillTone> = {
+  approved: 'success',
   closed: 'mute',
-  confirmed: 'timeout',
-  cursor: 'cursor',
-  deduping: 'partial',
-  done: 'completed',
-  failed: 'failed',
-  fixing: 'partial',
-  open: 'partial',
-  partial: 'partial',
+  confirmed: 'mute',
+  cursor: 'link',
+  deduping: 'mute',
+  done: 'success',
+  failed: 'destructive',
+  fixing: 'mute',
+  open: 'mute',
+  partial: 'mute',
   queued: 'mute',
   rejected: 'mute',
-  running: 'ok',
-  success: 'completed',
+  running: 'success',
+  success: 'success',
 };
 const ACTIVE = new Set(['running', 'deduping', 'syncing', 'building']);
-const pill = (v: string) => (
-  <span className={`statpill ${TONE[v] ?? ''}`}>{v}</span>
-);
+const pill = (v: string) => <StatPill tone={TONE[v] ?? 'default'}>{v}</StatPill>;
 
 // Mirror of the issue lifecycle mapping used by the /db/issues view, so the
 // approved / to-cursor / redraft nodes can show their own filtered slice.
@@ -96,6 +99,7 @@ export default function NodePanel({
         ? s.runs.length
         : issues.length;
 
+  const empty = <p className="text-muted-foreground">empty.</p>;
   const body = (() => {
     if (meta.table === 'tasks') {
       const data = [...s.tasks].sort(
@@ -103,109 +107,111 @@ export default function NodePanel({
           (ACTIVE.has(b.status) ? 1 : 0) - (ACTIVE.has(a.status) ? 1 : 0) ||
           b.createdAt - a.createdAt,
       );
-      if (data.length === 0) return <p className="mute">empty.</p>;
+      if (data.length === 0) return empty;
       return (
-        <table className="runtable">
+        <DataTable className="text-sm">
           <thead>
             <tr>
-              <th>status</th>
-              <th>prompt</th>
-              <th className="r">age</th>
+              <Th>status</Th>
+              <Th>prompt</Th>
+              <Th align="right">age</Th>
             </tr>
           </thead>
           <tbody>
             {data.map((t) => (
-              <tr className="runrow" key={t._id}>
-                <td>{pill(t.status)}</td>
-                <td>
+              <Tr key={t._id}>
+                <Td>{pill(t.status)}</Td>
+                <Td>
                   {t.reportId ? (
                     <Link href={`/runs/${t.reportId}`}>
-                      {t.prompt}
+                      <InlineCode text={t.prompt} />
                     </Link>
                   ) : (
-                    t.prompt
+                    <InlineCode text={t.prompt} />
                   )}
-                </td>
-                <td className="r mono mute">
+                </Td>
+                <Td align="right" className="mono text-muted-foreground">
                   {ago(now - (t.claimedAt ?? t.createdAt))}
-                </td>
-              </tr>
+                </Td>
+              </Tr>
             ))}
           </tbody>
-        </table>
+        </DataTable>
       );
     }
     if (meta.table === 'trophies') {
-      if (s.runs.length === 0) return <p className="mute">empty.</p>;
+      if (s.runs.length === 0) return empty;
       return (
-        <table className="runtable">
+        <DataTable className="text-sm">
           <thead>
             <tr>
-              <th>outcome</th>
-              <th>task</th>
-              <th className="r">cost</th>
+              <Th>outcome</Th>
+              <Th>task</Th>
+              <Th align="right">cost</Th>
             </tr>
           </thead>
           <tbody>
             {s.runs.map((r) => (
-              <tr className="runrow" key={r.trophyId}>
-                <td>{pill(r.outcome)}</td>
-                <td>
+              <Tr key={r.trophyId}>
+                <Td>{pill(r.outcome)}</Td>
+                <Td>
                   <Link href={`/runs/${r.trophyId}`}>
-                    {r.prompt}
+                    <InlineCode text={r.prompt} />
                   </Link>
-                </td>
-                <td className="r mono">${(r.costUsd ?? 0).toFixed(2)}</td>
-              </tr>
+                </Td>
+                <Td align="right" className="mono">
+                  ${(r.costUsd ?? 0).toFixed(2)}
+                </Td>
+              </Tr>
             ))}
           </tbody>
-        </table>
+        </DataTable>
       );
     }
-    if (issues.length === 0) return <p className="mute">empty.</p>;
+    if (issues.length === 0) return empty;
     return (
-      <table className="runtable">
+      <DataTable className="text-sm">
         <thead>
           <tr>
-            <th>kind</th>
-            <th>title</th>
+            <Th>kind</Th>
+            <Th>title</Th>
           </tr>
         </thead>
         <tbody>
           {issues.map((i) => (
-            <tr className="runrow" key={i._id}>
-              <td>{pill(i.kind)}</td>
-              <td>{i.title}</td>
-            </tr>
+            <Tr key={i._id}>
+              <Td>{pill(i.kind)}</Td>
+              <Td>
+                <InlineCode text={i.title} />
+              </Td>
+            </Tr>
           ))}
         </tbody>
-      </table>
+      </DataTable>
     );
   })();
 
   return (
-    <aside className="nodepanel">
-      <div className="nodepanel-head">
+    <aside className="fixed inset-y-0 right-0 z-[70] flex w-[380px] flex-col border-l border-border bg-background shadow-[-2px_0_14px_rgba(0,0,0,0.07)]">
+      <div className="flex items-baseline justify-between gap-3 border-b border-border px-5 pt-[18px] pb-3">
         <div>
-          <span className="nodepanel-title">{meta.title}</span>{' '}
-          <span className="mono mute" style={{ fontSize: 12 }}>
-            {count}
-          </span>
+          <span className="text-lg font-medium tracking-[-0.01em]">
+            {meta.title}
+          </span>{' '}
+          <span className="mono text-xs text-muted-foreground">{count}</span>
         </div>
         <button
           aria-label="Close panel"
-          className="nodepanel-x"
+          className="cursor-pointer border-0 bg-transparent text-[22px] leading-none text-muted-foreground hover:text-foreground"
           onClick={onClose}
           type="button"
         >
           ×
         </button>
       </div>
-      <div className="nodepanel-body">{body}</div>
-      <div className="nodepanel-foot">
-        <Link href={`/db/${meta.table}`}>
-          open full {meta.table} view →
-        </Link>
+      <div className="flex-1 overflow-y-auto px-5 py-3">{body}</div>
+      <div className="border-t border-border px-5 py-3 text-[13px]">
+        <Link href={`/db/${meta.table}`}>open full {meta.table} view →</Link>
       </div>
     </aside>
   );

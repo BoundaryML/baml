@@ -25,9 +25,8 @@ export default function ExpandAll() {
 
   return (
     <button
-      className="linkbtn"
+      className="cursor-pointer border-0 bg-transparent p-0 text-[13px] font-normal text-link"
       onClick={toggle}
-      style={{ fontSize: 13, fontWeight: 400 }}
     >
       {open ? 'collapse all' : 'expand all'}
     </button>

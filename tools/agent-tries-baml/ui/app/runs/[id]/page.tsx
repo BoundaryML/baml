@@ -1,10 +1,13 @@
-import Link from 'next/link';
 import { notFound } from 'next/navigation';
+
+import { BackLink, PageHeader } from '@/components/page-header';
+import { InlineCode } from '@/components/ui/inline-code';
+import { StatPill } from '@/components/ui/stat-pill';
 
 import { loadRun, type Turn } from '../../lib/data';
 import CallScroller from './call-scroller';
-import CodeView from './code-view';
 import ExpandAll from './expand-all';
+import FilesIde from './files-ide';
 import ReportMd from './report-md';
 import TranscriptTabs from './transcript-tabs';
 
@@ -22,9 +25,11 @@ const int = (n: unknown) =>
  */
 function Stat({ k, v }: { k: string; v: React.ReactNode }) {
   return (
-    <div className="mstat">
-      <div className="mk">{k}</div>
-      <div className="mv mono">{v}</div>
+    <div className="bg-background px-3 py-2.5">
+      <div className="text-[11px] uppercase tracking-[0.05em] text-muted-foreground">
+        {k}
+      </div>
+      <div className="mono mt-[3px] text-[19px]">{v}</div>
     </div>
   );
 }
@@ -59,17 +64,16 @@ export default async function RunPage({ params }: { params: Promise<Params> }) {
   return (
     <div>
       <CallScroller />
-      <header className="page">
-        <p style={{ marginBottom: 6 }}>
-          <Link href="/" className="back-link">
-            ← dashboard
-          </Link>
-          {'   ·   '}
-          <Link href="/db/tasks" className="back-link">
-            task
-          </Link>
-        </p>
-        <h1>{task?.prompt ?? '(task not found)'}</h1>
+      <PageHeader
+        back={
+          <>
+            <BackLink href="/">← dashboard</BackLink>
+            {'   ·   '}
+            <BackLink href="/db/tasks">task</BackLink>
+          </>
+        }
+        title={<InlineCode text={task?.prompt ?? '(task not found)'} />}
+      >
         <p>
           <strong>{trophy.outcome}</strong>
           {task ? <> · {task.source}</> : null}
@@ -82,13 +86,19 @@ export default async function RunPage({ params }: { params: Promise<Params> }) {
             <>
               {' '}
               · baml{' '}
-              <span className="mono">{trophy.bamlVersion === 'coldstart' ? 'cold start' : trophy.bamlVersion.slice(0, 8)}</span>
+              <span className="mono">
+                {trophy.bamlVersion === 'coldstart'
+                  ? 'cold start'
+                  : trophy.bamlVersion.slice(0, 8)}
+              </span>
             </>
           ) : null}
           {' · '}
-          <span className="mono mute">{trophy._id.slice(0, 10)}</span>
+          <span className="mono text-muted-foreground">
+            {trophy._id.slice(0, 10)}
+          </span>
         </p>
-      </header>
+      </PageHeader>
 
       {trophy.summary ? (
         <section className="md-body" style={{ margin: '16px 0' }}>
@@ -96,8 +106,9 @@ export default async function RunPage({ params }: { params: Promise<Params> }) {
         </section>
       ) : null}
 
-      <section className="metrics">
-        <div className="mgrid">
+      <section className="my-4 mb-[26px]">
+        {/* gap-px + bg-border fakes 1px borders between cells */}
+        <div className="grid grid-cols-[repeat(auto-fit,minmax(94px,1fr))] gap-px border border-border bg-border">
           <Stat k="turns" v={int(m.turns)} />
           <Stat k="tool calls" v={int(toolCalls)} />
           <Stat k="api calls" v={int(m.api_calls)} />
@@ -111,11 +122,11 @@ export default async function RunPage({ params }: { params: Promise<Params> }) {
       </section>
 
       {trophy.whatWentWell?.length || trophy.whatFailed?.length ? (
-        <section className="cols">
+        <section className="my-2 mb-6 grid grid-cols-2 gap-x-7 gap-y-1 max-[640px]:grid-cols-1">
           {trophy.whatWentWell?.length ? (
             <div>
-              <h3>What went well</h3>
-              <ul>
+              <h3 className="text-[1.17em] font-bold">What went well</h3>
+              <ul className="mt-1.5 list-disc pl-[18px] [&>li]:my-1">
                 {trophy.whatWentWell.map((x, i) => (
                   <li key={i}>{x}</li>
                 ))}
@@ -124,8 +135,8 @@ export default async function RunPage({ params }: { params: Promise<Params> }) {
           ) : null}
           {trophy.whatFailed?.length ? (
             <div>
-              <h3>What failed</h3>
-              <ul>
+              <h3 className="text-[1.17em] font-bold">What failed</h3>
+              <ul className="mt-1.5 list-disc pl-[18px] [&>li]:my-1">
                 {trophy.whatFailed.map((x, i) => (
                   <li key={i}>{x}</li>
                 ))}
@@ -136,7 +147,7 @@ export default async function RunPage({ params }: { params: Promise<Params> }) {
       ) : null}
 
       {trophy.reportMd ? (
-        <section className="report-md" style={{ marginTop: 20 }}>
+        <section className="report-md mt-5">
           <details open className="run-block">
             <summary>Report</summary>
             <ReportMd>{trophy.reportMd}</ReportMd>
@@ -145,30 +156,30 @@ export default async function RunPage({ params }: { params: Promise<Params> }) {
       ) : null}
 
       {trophy.findings && trophy.findings.length > 0 ? (
-        <section className="findings" style={{ marginTop: 20 }}>
-          <h2>Findings ({trophy.findings.length})</h2>
+        <section className="findings mt-5">
+          <h2 className="text-2xl font-bold">
+            Findings ({trophy.findings.length})
+          </h2>
           {trophy.findings.map((f, i) => {
             const call = f.anchor?.call_index;
             return (
               <details key={i} className="run-block">
                 <summary>
-                  <span
-                    className={`statpill ${f.kind === 'language' ? 'failed' : 'partial'}`}
-                  >
+                  <StatPill tone={f.kind === 'language' ? 'destructive' : 'mute'}>
                     {f.kind}
-                  </span>{' '}
+                  </StatPill>{' '}
                   {f.reproVerified ? (
-                    <span className="statpill completed">repro verified</span>
+                    <StatPill tone="success">repro verified</StatPill>
                   ) : null}{' '}
-                  {f.title}
+                  <InlineCode text={f.title} />
                   {call != null ? (
-                    <a href={`#call-${call}`} className="mono mute">
+                    <a href={`#call-${call}`} className="mono text-muted-foreground">
                       {' '}
                       · call {call}
                     </a>
                   ) : null}
                 </summary>
-                <p style={{ marginTop: 8 }}>{f.description}</p>
+                <p className="mt-2">{f.description}</p>
                 {f.repro ? <pre className="tool-input">{f.repro}</pre> : null}
               </details>
             );
@@ -177,30 +188,21 @@ export default async function RunPage({ params }: { params: Promise<Params> }) {
       ) : null}
 
       {filesCreated.length > 0 ? (
-        <section style={{ marginTop: 20 }}>
-          <h2>Files created ({filesCreated.length})</h2>
-          {filesCreated.map(([path, content]) => (
-            <details key={path} className="run-block">
-              <summary>
-                <span className="mono">{path}</span>
-                <span className="mute">
-                  {' '}
-                  · {(content ?? '').split('\n').length} lines
-                </span>
-              </summary>
-              <CodeView path={path} content={content} />
-            </details>
-          ))}
+        <section className="mt-5">
+          <h2 className="mb-3 text-2xl font-bold">
+            Files created ({filesCreated.length})
+          </h2>
+          <FilesIde files={filesCreated} />
         </section>
       ) : null}
 
       {turns.length > 0 || transcriptText ? (
         <section id="transcript" className="transcript">
-          <h2 style={{ display: 'flex', alignItems: 'baseline', gap: 12 }}>
+          <h2 className="flex items-baseline gap-3 text-2xl font-bold">
             agent transcript ({turns.length} calls)
             <ExpandAll />
           </h2>
-          <p className="mute" style={{ marginBottom: 12, fontSize: 14 }}>
+          <p className="mb-3 text-sm text-muted-foreground">
             Each call has an anchor <span className="mono">#call-N</span>; open
             with <span className="mono">?call=N</span> to jump to it (evidence
             links). Switch to <span className="mono">raw</span> for the full
@@ -232,11 +234,20 @@ function TurnBlock({ turn }: { turn: Turn }) {
     >
       <summary>
         <span className="mono">#{turn.i}</span>
+        {turn.ts ? (
+          <span className="mono text-muted-foreground">
+            {' '}
+            · {turn.ts.slice(11, 19)}
+          </span>
+        ) : null}
         {turn.text_chars ? (
-          <span className="mute"> · {turn.text_chars} text chars</span>
+          <span className="text-muted-foreground">
+            {' '}
+            · {turn.text_chars} text chars
+          </span>
         ) : null}
         {turn.tools && turn.tools.length > 0 ? (
-          <span className="mute">
+          <span className="text-muted-foreground">
             {' · '}
             {turn.tools.map((t) => t.name ?? 'tool').join(', ')}
           </span>
@@ -258,9 +269,14 @@ function TurnBlock({ turn }: { turn: Turn }) {
         <details key={idx} className="run-subblock">
           <summary>
             tool: <span className="mono">{tool.name ?? '?'}</span>
-            {tool.is_error ? <span className="hot"> (error)</span> : null}
+            {tool.is_error ? (
+              <span className="text-destructive"> (error)</span>
+            ) : null}
             {tool.result_chars ? (
-              <span className="mute"> · {tool.result_chars} chars</span>
+              <span className="text-muted-foreground">
+                {' '}
+                · {tool.result_chars} chars
+              </span>
             ) : null}
           </summary>
           {tool.input ? (
