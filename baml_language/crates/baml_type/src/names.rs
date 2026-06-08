@@ -80,27 +80,14 @@ pub struct QualifiedTypeName {
     namespace: Vec<Name>,
     /// The short/local name of the type (e.g. `"Foo"`).
     name: Name,
-    /// Unresolved generic type parameter names (e.g. `["T"]` for `Array<T>`).
-    /// Empty for non-generic types or when concrete type args are substituted.
-    pub generic_params: Vec<Name>,
 }
 
 impl QualifiedTypeName {
     pub fn new(pkg: Name, namespace: Vec<Name>, name: Name) -> Self {
-        Self::new_with_generic_params(pkg, namespace, name, Vec::new())
-    }
-
-    pub fn new_with_generic_params(
-        pkg: Name,
-        namespace: Vec<Name>,
-        name: Name,
-        generic_params: Vec<Name>,
-    ) -> Self {
         Self {
             pkg: Package::from_name(pkg),
             namespace,
             name,
-            generic_params,
         }
     }
 
@@ -218,28 +205,11 @@ impl QualifiedTypeName {
         }
     }
 
-    /// Like [`render_dotted`](Self::render_dotted) plus the declared
-    /// `<generic_params>` suffix (e.g. `Array<T>`).
-    pub fn render_qualified(&self, user_facing: bool) -> String {
-        let mut out = self.render_dotted(user_facing);
-        if !self.generic_params.is_empty() {
-            let params: Vec<_> = self
-                .generic_params
-                .iter()
-                .map(std::string::ToString::to_string)
-                .collect();
-            out.push('<');
-            out.push_str(&params.join(", "));
-            out.push('>');
-        }
-        out
-    }
-
     /// User-facing rendering of the qualified name: identical to the canonical
     /// [`fmt::Display`] except the reserved implicit `user` package is elided.
     /// Call this instead of post-processing the canonical string.
     pub fn render_user_facing(&self) -> String {
-        self.render_qualified(true)
+        self.render_dotted(true)
     }
 
     /// If this names a builtin `baml` companion class that has a lowercase
@@ -295,7 +265,7 @@ pub fn is_synthetic_effect_param(name: &Name) -> bool {
 
 impl fmt::Display for QualifiedTypeName {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.render_qualified(false))
+        write!(f, "{}", self.render_dotted(false))
     }
 }
 

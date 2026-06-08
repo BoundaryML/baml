@@ -402,21 +402,11 @@ impl Ty {
 /// `Ty` (the former "~10 renderers").
 pub trait TyRenderStrategy {
     /// Render a qualified name's dotted path (package/namespace/name) *without*
-    /// any `<...>` suffix; the renderer appends type args or placeholders. When
-    /// `with_generic_params` is set, append the name's own declared
-    /// `<generic_params>` — used for the name-only positions (enums, aliases,
-    /// enum variants) where the canonical form shows them.
-    fn qtn(&self, qtn: &QualifiedTypeName, with_generic_params: bool) -> String;
+    /// any `<...>` suffix; the renderer appends any type args separately.
+    fn qtn(&self, qtn: &QualifiedTypeName) -> String;
 
     /// Render a type-variable name (`T`, or a synthetic effect param).
     fn type_var(&self, name: &Name) -> String;
-
-    /// Whether unspecialized generic classes/interfaces render their declared
-    /// params as `<_, _>` placeholders. Canonical/user-facing: yes; the LSP's
-    /// hover renders the bare name.
-    fn show_unspecialized_placeholders(&self) -> bool {
-        true
-    }
 
     /// Whether evolving list/map types are annotated `(evolving)`.
     /// Canonical/user-facing: yes; the LSP's hover hides it.
@@ -474,23 +464,17 @@ impl Ty {
     pub fn render_with(&self, s: &dyn TyRenderStrategy) -> String {
         match self {
             Ty::Class(qn, type_args, _) => {
-                let mut out = s.qtn(qn, false);
+                let mut out = s.qtn(qn);
                 if !type_args.is_empty() {
                     let args: Vec<_> = type_args.iter().map(|a| a.render_with(s)).collect();
                     out.push('<');
                     out.push_str(&args.join(", "));
                     out.push('>');
-                } else if !qn.generic_params.is_empty() && s.show_unspecialized_placeholders() {
-                    // Unspecialized generic — show `_` placeholders, one per declared param.
-                    let placeholders = vec!["_"; qn.generic_params.len()];
-                    out.push('<');
-                    out.push_str(&placeholders.join(", "));
-                    out.push('>');
                 }
                 out
             }
             Ty::Interface(qn, type_args, associated_bindings, _) => {
-                let mut out = s.qtn(qn, false);
+                let mut out = s.qtn(qn);
                 if !type_args.is_empty() || !associated_bindings.is_empty() {
                     let mut args: Vec<_> = type_args.iter().map(|a| a.render_with(s)).collect();
                     args.extend(
@@ -501,16 +485,11 @@ impl Ty {
                     out.push('<');
                     out.push_str(&args.join(", "));
                     out.push('>');
-                } else if !qn.generic_params.is_empty() && s.show_unspecialized_placeholders() {
-                    let placeholders = vec!["_"; qn.generic_params.len()];
-                    out.push('<');
-                    out.push_str(&placeholders.join(", "));
-                    out.push('>');
                 }
                 out
             }
-            Ty::Enum(qn, _) | Ty::TypeAlias(qn, _) => s.qtn(qn, true),
-            Ty::EnumVariant(qn, v, _) => format!("{}.{v}", s.qtn(qn, true)),
+            Ty::Enum(qn, _) | Ty::TypeAlias(qn, _) => s.qtn(qn),
+            Ty::EnumVariant(qn, v, _) => format!("{}.{v}", s.qtn(qn)),
             Ty::Primitive(p, _) => p.to_string(),
             Ty::List(inner, _) => format!("{}[]", inner.render_as_postfix_base(s)),
             Ty::Map(k, v, _) => format!("map<{}, {}>", k.render_with(s), v.render_with(s)),
@@ -635,12 +614,8 @@ struct CanonicalTyRender {
 }
 
 impl TyRenderStrategy for CanonicalTyRender {
-    fn qtn(&self, qtn: &QualifiedTypeName, with_generic_params: bool) -> String {
-        if with_generic_params {
-            qtn.render_qualified(self.user_facing)
-        } else {
-            qtn.render_dotted(self.user_facing)
-        }
+    fn qtn(&self, qtn: &QualifiedTypeName) -> String {
+        qtn.render_dotted(self.user_facing)
     }
 
     fn type_var(&self, name: &Name) -> String {

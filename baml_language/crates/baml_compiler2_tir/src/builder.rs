@@ -6712,7 +6712,14 @@ impl<'db> TypeInferenceBuilder<'db> {
         if !generic_args.is_empty() {
             return false;
         }
-        if !qn.generic_params.is_empty() || args.iter().any(crate::generics::contains_typevar) {
+        // Fast path: an unspecialized generic carries its declaration's params as
+        // non-rigid `TypeVar` args. The enclosing function's own rigid params
+        // (e.g. `Err` in a thrown `AllFailed<Err>`) are bound, not missing, so
+        // they fall through to the declaration-arity check below.
+        if args
+            .iter()
+            .any(|a| crate::generics::contains_non_rigid_typevar(a, &self.generic_params))
+        {
             return true;
         }
         let Some(pkg_items) = self.resolve_class_pkg_items(qn.package()) else {
@@ -6771,62 +6778,6 @@ impl<'db> TypeInferenceBuilder<'db> {
             | Ty::TypeVar(..)
             | Ty::Never { .. }
             | Ty::Void { .. }
-            | Ty::RustType { .. }
-            | Ty::Type { .. } => false,
-        }
-    }
-
-    fn ty_contains_unfilled_generic_class(ty: &Ty) -> bool {
-        match ty {
-            Ty::Class(qn, type_args, _) | Ty::Interface(qn, type_args, _, _) => {
-                type_args.is_empty() && !qn.generic_params.is_empty()
-                    || type_args
-                        .iter()
-                        .any(Self::ty_contains_unfilled_generic_class)
-            }
-            Ty::AssociatedTypeProjection {
-                base, interface, ..
-            } => {
-                Self::ty_contains_unfilled_generic_class(base)
-                    || interface.as_ref().is_some_and(|interface| {
-                        Self::ty_contains_unfilled_generic_class(interface)
-                    })
-            }
-            Ty::Union(args, _) => args.iter().any(Self::ty_contains_unfilled_generic_class),
-            Ty::List(elem, _) | Ty::EvolvingList(elem, _) => {
-                Self::ty_contains_unfilled_generic_class(elem)
-            }
-            Ty::Map(key, value, _) | Ty::EvolvingMap(key, value, _) => {
-                Self::ty_contains_unfilled_generic_class(key)
-                    || Self::ty_contains_unfilled_generic_class(value)
-            }
-            Ty::Function {
-                params,
-                ret,
-                throws,
-                ..
-            } => {
-                params
-                    .iter()
-                    .any(|param| Self::ty_contains_unfilled_generic_class(&param.ty))
-                    || Self::ty_contains_unfilled_generic_class(ret)
-                    || Self::ty_contains_unfilled_generic_class(throws)
-            }
-            Ty::Future(value, error, _) => {
-                Self::ty_contains_unfilled_generic_class(value)
-                    || Self::ty_contains_unfilled_generic_class(error)
-            }
-            Ty::Enum(..)
-            | Ty::EnumVariant(..)
-            | Ty::TypeAlias(..)
-            | Ty::Primitive(..)
-            | Ty::Literal(..)
-            | Ty::TypeVar(..)
-            | Ty::Unknown { .. }
-            | Ty::BuiltinUnknown { .. }
-            | Ty::Never { .. }
-            | Ty::Void { .. }
-            | Ty::Error { .. }
             | Ty::RustType { .. }
             | Ty::Type { .. } => false,
         }
@@ -6940,7 +6891,14 @@ impl<'db> TypeInferenceBuilder<'db> {
             }
         };
 
-        if Self::ty_contains_recovery_unknown(&ty) || Self::ty_contains_unfilled_generic_class(&ty)
+        // A derived type is a useful bidirectional hint only when it is fully
+        // resolved: not polluted by recovery `Unknown`, and not still carrying
+        // an *unspecialized* generic. Declared generics live on the type as
+        // `TypeVar` args now, so an unspecialized class shows up as a non-rigid
+        // type var; the enclosing function's own rigid params (e.g. the `Err`
+        // in `AllFailed<Err>`) are already bound and so don't disqualify it.
+        if Self::ty_contains_recovery_unknown(&ty)
+            || crate::generics::contains_non_rigid_typevar(&ty, &self.generic_params)
         {
             None
         } else {
@@ -12854,13 +12812,18 @@ impl<'db> TypeInferenceBuilder<'db> {
                 let builtin_class_ty = if type_args.is_empty() {
                     let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
                     Ty::Class(
-                        crate::ty::QualifiedTypeName::new_with_generic_params(
+                        crate::ty::QualifiedTypeName::new(
                             pkg_info.package,
                             pkg_info.namespace_path,
                             class_data.name.clone(),
-                            class_data.generic_params.clone(),
                         ),
-                        vec![],
+                        // Declared generics live on the type as `TypeVar` args,
+                        // not on the name.
+                        class_data
+                            .generic_params
+                            .iter()
+                            .map(|p| Ty::TypeVar(p.clone(), TyAttr::default()))
+                            .collect(),
                         TyAttr::default(),
                     )
                 } else if type_args.len() == 1 {

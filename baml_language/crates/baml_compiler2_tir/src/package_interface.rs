@@ -178,7 +178,20 @@ impl ExportedType {
     /// Convert to a Ty (for type resolution results).
     pub fn to_ty(&self) -> Ty {
         match self {
-            ExportedType::Class { qtn, .. } => Ty::Class(qtn.clone(), vec![], TyAttr::default()),
+            // Declared generics live on the type as `TypeVar` args (an
+            // unspecialized generic class is `Foo<T>`), not on the name.
+            ExportedType::Class {
+                qtn,
+                generic_params,
+                ..
+            } => Ty::Class(
+                qtn.clone(),
+                generic_params
+                    .iter()
+                    .map(|p| Ty::TypeVar(p.clone(), TyAttr::default()))
+                    .collect(),
+                TyAttr::default(),
+            ),
             ExportedType::Enum { qtn, .. } => Ty::Enum(qtn.clone(), TyAttr::default()),
             ExportedType::TypeAlias { qtn, .. } => Ty::TypeAlias(qtn.clone(), TyAttr::default()),
         }
@@ -509,13 +522,19 @@ fn build_self_type_for_class(
             TyAttr::default(),
         ),
         _ => {
-            let qtn = QualifiedTypeName::new_with_generic_params(
+            let qtn = QualifiedTypeName::new(
                 Name::new("baml"),
                 ns_path.to_vec(),
                 class_data.name.clone(),
-                class_data.generic_params.clone(),
             );
-            Ty::Class(qtn, vec![], TyAttr::default())
+            // Declared generics live on the type as `TypeVar` args (an
+            // unspecialized generic class is `Foo<T>`), not on the name.
+            let args = class_data
+                .generic_params
+                .iter()
+                .map(|p| Ty::TypeVar(p.clone(), TyAttr::default()))
+                .collect();
+            Ty::Class(qtn, args, TyAttr::default())
         }
     }
 }

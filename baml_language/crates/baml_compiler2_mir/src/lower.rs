@@ -56,17 +56,11 @@ use baml_compiler2_tir::ty::{
     Ty as Tir2Ty,
 };
 
-/// Project a TIR qualified name into the runtime name space.
-///
-/// TIR and `baml_type` now share `QualifiedTypeName`, so this is a near
-/// identity: it only strips the declared `generic_params`, which never reach
-/// runtime types (a runtime `Foo<T>` and `Foo` must compare equal). Once
-/// `generic_params` is removed from the name entirely this collapses to a
-/// plain clone and can be deleted.
+/// Project a TIR qualified name into the runtime name space. TIR and
+/// `baml_type` now share `QualifiedTypeName`, so this is a plain clone; kept as
+/// the named projection point for the TIR→runtime boundary.
 pub fn qtn_to_type_name(qtn: &QualifiedTypeName) -> TypeName {
-    let mut out = qtn.clone();
-    out.generic_params.clear();
-    out
+    qtn.clone()
 }
 
 /// Pre-computed type alias data for inline expansion in `convert_tir2_ty`.
