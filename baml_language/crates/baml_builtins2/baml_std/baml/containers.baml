@@ -87,6 +87,40 @@ class Array<T> {
     $rust_function
   }
 
+  /// Sorts this array in place using natural ascending order, then returns `self`.
+  ///
+  /// Natural ordering supports ints, floats, bigints, strings, and supported
+  /// int/float or int/bigint mixes. Nulls, NaN, and non-orderable values throw
+  /// `InvalidArgument`.
+  //baml:mut_vm
+  //baml:may_yield
+  //baml:mut_self
+  function sort(self) -> T[] throws root.errors.InvalidArgument {
+    $rust_function
+  }
+
+  /// Sorts this array in place using a comparator, then returns `self`.
+  ///
+  /// The comparator follows the JavaScript convention: negative means the
+  /// first argument sorts before the second, zero preserves relative order, and
+  /// positive means it sorts after the second.
+  //baml:mut_vm
+  //baml:may_yield
+  //baml:mut_self
+  function sort_by<E>(self, compare: (T, T) -> int throws E) -> T[] throws E {
+    $rust_function
+  }
+
+  /// Sorts this array in place by keys computed once per element, then returns `self`.
+  ///
+  /// Keys are computed left-to-right and sorted by natural ascending order.
+  //baml:mut_vm
+  //baml:may_yield
+  //baml:mut_self
+  function sort_by_key<U, E>(self, key: (T) -> U throws E) -> T[] throws E | root.errors.InvalidArgument {
+    $rust_function
+  }
+
   /// Returns a sub-array from index `start` (inclusive) to `end` (exclusive).
   ///
   /// Negative indices count from the end. Out-of-range indices are clamped.

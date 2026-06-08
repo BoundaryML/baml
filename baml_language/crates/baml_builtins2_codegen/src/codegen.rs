@@ -1211,7 +1211,13 @@ fn emit_mut_receiver_extraction_indented(
     name: &str,
     recv: &Receiver,
     indent: &str,
+    pass_raw_receiver: bool,
 ) {
+    if pass_raw_receiver {
+        writeln!(out, "{indent}let {name} = &args[0];").unwrap();
+        return;
+    }
+
     let expr = match recv.class_name.as_str() {
         "Array" => "vm.as_array_mut(&args[0])?".to_string(),
         "Map" => "vm.as_map_mut(&args[0])?".to_string(),
@@ -1266,7 +1272,13 @@ fn emit_arg_extractions_indented(
                 );
             }
             let recv_name = receiver_param_name(recv);
-            emit_mut_receiver_extraction_indented(out, &recv_name, recv, indent);
+            emit_mut_receiver_extraction_indented(
+                out,
+                &recv_name,
+                recv,
+                indent,
+                matches!(b.vm_usage, VmUsage::MutRef) && b.may_yield,
+            );
         } else {
             let recv_name = receiver_param_name(recv);
             emit_immut_receiver_extraction_indented(
@@ -1515,9 +1527,13 @@ fn call_arg_list(b: &NativeBuiltin, needs_owned: bool, arraymap_needs_owned: boo
             if recv.receiver_type.is_mut() {
                 // Container mut receivers are guards; take &mut name so
                 // DerefMut coerces to the underlying mutable reference.
-                let arg = match recv.class_name.as_str() {
-                    "Array" | "Map" | "Uint8Array" => format!("&mut {name}"),
-                    _ => name,
+                let arg = if matches!(b.vm_usage, VmUsage::MutRef) && b.may_yield {
+                    name
+                } else {
+                    match recv.class_name.as_str() {
+                        "Array" | "Map" | "Uint8Array" => format!("&mut {name}"),
+                        _ => name,
+                    }
                 };
                 args.push(arg);
             } else if needs_owned && is_media_class(recv.class_name.as_str()) {
@@ -1820,28 +1836,36 @@ fn receiver_input_type(recv: &Receiver) -> String {
 fn receiver_input_type_with_vm_usage(recv: &Receiver, vm_usage: VmUsage) -> String {
     match recv.class_name.as_str() {
         "Array" => {
-            if recv.receiver_type.is_mut() {
+            if recv.receiver_type.is_mut() && matches!(vm_usage, VmUsage::MutRef) {
+                "&Value".to_string()
+            } else if recv.receiver_type.is_mut() {
                 "&mut Vec<Value>".to_string()
             } else {
                 "&[Value]".to_string()
             }
         }
         "Map" => {
-            if recv.receiver_type.is_mut() {
+            if recv.receiver_type.is_mut() && matches!(vm_usage, VmUsage::MutRef) {
+                "&Value".to_string()
+            } else if recv.receiver_type.is_mut() {
                 "&mut IndexMap<bex_str::BexStr, Value>".to_string()
             } else {
                 "&IndexMap<bex_str::BexStr, Value>".to_string()
             }
         }
         "String" => {
-            if recv.receiver_type.is_mut() {
+            if recv.receiver_type.is_mut() && matches!(vm_usage, VmUsage::MutRef) {
+                "&Value".to_string()
+            } else if recv.receiver_type.is_mut() {
                 "&mut bex_str::BexStr".to_string()
             } else {
                 "&bex_str::BexStr".to_string()
             }
         }
         "Uint8Array" => {
-            if recv.receiver_type.is_mut() {
+            if recv.receiver_type.is_mut() && matches!(vm_usage, VmUsage::MutRef) {
+                "&Value".to_string()
+            } else if recv.receiver_type.is_mut() {
                 "&mut Vec<u8>".to_string()
             } else {
                 "&[u8]".to_string()
@@ -2147,7 +2171,12 @@ mod tests {
             let has_mut_vm = output.contains(&format!("fn {name}(vm: &mut BexVm, {params})"));
             let has_ref_vm = output.contains(&format!("fn {name}(vm: &BexVm, {params})"));
 
-            if has_mut_receiver {
+            if has_mut_receiver && b.may_yield {
+                assert!(
+                    has_mut_vm && !has_ref_vm,
+                    "yielding mutable method {name} should have vm: &mut BexVm"
+                );
+            } else if has_mut_receiver {
                 assert!(
                     !has_mut_vm && !has_ref_vm,
                     "method {name} should NOT have vm param (mutable receiver)"

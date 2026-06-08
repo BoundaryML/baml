@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 4252
 ---
 === MIR2 ===
 
@@ -1149,6 +1150,12 @@ fn baml.Array.shift = builtin(vm)
 fn baml.Array.slice = builtin(vm)
 
 fn baml.Array.some = builtin(vm)
+
+fn baml.Array.sort = builtin(vm)
+
+fn baml.Array.sort_by = builtin(vm)
+
+fn baml.Array.sort_by_key = builtin(vm)
 
 fn baml.Array.splice = builtin(vm)
 

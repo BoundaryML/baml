@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 4158
 ---
 === HIR2 ===
 
@@ -93,6 +94,9 @@ function baml.set(self: ?, key: K, value: V) -> V?  [builtin]
 function baml.shift(self: ?) -> T?  [builtin]
 function baml.slice(self: ?, start: int, end: int) -> T[]  [builtin]
 function baml.some(self: ?, predicate: (T) -> bool throws E) -> bool  [builtin]
+function baml.sort(self: ?) -> T[]  [builtin]
+function baml.sort_by(self: ?, compare: (T, T) -> int throws E) -> T[]  [builtin]
+function baml.sort_by_key(self: ?, key: (T) -> U throws E) -> T[]  [builtin]
 function baml.splice(self: ?, start: int, count: int, replace: T[]) -> null  [builtin]
 function baml.step_by(self: ?, n: int) -> baml.iter.Iterator<Item = T, Error = never>  [expr] {
   {  } baml.iter.ArrayIterator.new(self.slice(0, self.length())).step_by(n)

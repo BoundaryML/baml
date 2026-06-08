@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 4386
 ---
 function baml.Array.at(self: baml.Array<unknown>, index: int) -> unknown | null {
 }
@@ -951,6 +952,15 @@ function baml.Array.slice(self: baml.Array<unknown>, start: int, end: int) -> un
 }
 
 function baml.Array.some(self: baml.Array<unknown>, predicate: (unknown) -> bool throws unknown) -> bool {
+}
+
+function baml.Array.sort(self: baml.Array<unknown>) -> unknown[] {
+}
+
+function baml.Array.sort_by(self: baml.Array<unknown>, compare: (unknown, unknown) -> int throws unknown) -> unknown[] {
+}
+
+function baml.Array.sort_by_key(self: baml.Array<unknown>, key: (unknown) -> unknown throws unknown) -> unknown[] {
 }
 
 function baml.Array.splice(self: baml.Array<unknown>, start: int, count: int, replace: unknown[]) -> null {

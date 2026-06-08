@@ -239,9 +239,9 @@ fn extract_from_class(
              -- these are mutually exclusive"
         );
         assert!(
-            !(is_mut && (has_vm || has_mut_vm)),
-            "baml codegen error: {path} has //baml:mut_self with //baml:vm or //baml:mut_vm \
-             -- these are mutually exclusive (mutable receiver already borrows vm)"
+            !(is_mut && has_vm || is_mut && has_mut_vm && !may_yield),
+            "baml codegen error: {path} has //baml:mut_self with //baml:vm, or non-yielding //baml:mut_vm \
+             -- mutable receiver and VM access are only supported for //baml:may_yield glue"
         );
         assert!(
             !may_yield || has_mut_vm,
