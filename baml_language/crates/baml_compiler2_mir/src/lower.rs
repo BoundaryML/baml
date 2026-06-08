@@ -1661,6 +1661,7 @@ struct LoweringContext<'db> {
     source_map: Option<AstSourceMap>,
     file: baml_base::SourceFile,
     func_loc: Option<FunctionLoc<'db>>,
+    source_param_scope: Option<FileScopeId>,
     /// Raw function name from the item tree (e.g. `"Foo$render_prompt"`).
     /// Used to disambiguate companion scopes that share the same span.
     scope_func_name: Option<Name>,
@@ -2827,6 +2828,7 @@ impl<'db> LoweringContext<'db> {
             source_map,
             file,
             func_loc: Some(func_loc),
+            source_param_scope: Some(func_scope_id),
             scope_func_name: Some(func_data.name.clone()),
             class_fields: &pkg_data.class_fields,
             class_field_types: &pkg_data.class_field_types,
@@ -3046,6 +3048,7 @@ impl<'db> LoweringContext<'db> {
             source_map,
             file,
             func_loc: None,
+            source_param_scope: None,
             scope_func_name: Some(let_name),
             class_fields: &pkg_data.class_fields,
             class_field_types: &pkg_data.class_field_types,
@@ -3327,13 +3330,34 @@ impl<'db> LoweringContext<'db> {
         if segments.len() != 1 {
             return None;
         }
-        self.source_param_interface_view_for_name(&segments[0])
+        self.source_param_interface_view_for_name_at(expr_id, &segments[0])
     }
 
-    fn source_param_interface_view_for_name(&self, name: &Name) -> Option<InterfaceTypeView> {
+    fn source_param_interface_view_for_name_at(
+        &self,
+        expr_id: AstExprId,
+        name: &Name,
+    ) -> Option<InterfaceTypeView> {
+        let binding_id = self.binding_id_for_name_at(expr_id, name)?;
+        self.source_param_interface_view_for_binding(name, binding_id)
+    }
+
+    fn source_param_interface_view_for_binding(
+        &self,
+        name: &Name,
+        binding_id: BindingId,
+    ) -> Option<InterfaceTypeView> {
         let func_loc = self.func_loc?;
+        let param_scope = self.source_param_scope?;
         let sig = baml_compiler2_ppir::function_signature(self.db, func_loc);
-        let param = sig.params.iter().find(|param| param.name == *name)?;
+        let (param_idx, param) = sig
+            .params
+            .iter()
+            .enumerate()
+            .find(|(_, param)| param.name == *name)?;
+        if binding_id != BindingId::parameter(param_scope, param_idx) {
+            return None;
+        }
 
         let pkg_info = file_package(self.db, self.file);
         let pkg_id = PackageId::new(self.db, pkg_info.package);
@@ -5927,7 +5951,7 @@ impl LoweringContext<'_> {
                     });
                 let iface_dispatch_opt: Option<InterfaceTypeView> = if segments.len() == 2 {
                     if let Some(target) = self
-                        .source_param_interface_view_for_name(&segments[0])
+                        .source_param_interface_view_for_name_at(callee, &segments[0])
                         .or_else(|| {
                             recv_tir_ty
                                 .as_ref()

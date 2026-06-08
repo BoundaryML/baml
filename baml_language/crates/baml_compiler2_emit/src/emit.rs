@@ -3398,9 +3398,8 @@ mod tests {
     use baml_type::Ty;
     use bex_vm_types::{Instruction, ObjectPool};
 
-    use crate::{MirCodegenContext, analysis::OptLevel};
-
     use super::compile_mir_function;
+    use crate::{MirCodegenContext, analysis::OptLevel};
 
     fn local(ty: Ty) -> LocalDecl {
         LocalDecl {

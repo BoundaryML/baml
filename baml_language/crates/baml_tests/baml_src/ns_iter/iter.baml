@@ -2,6 +2,12 @@
 
 class IterLoopBox { value int }
 
+class IterShadow {
+  function iter(self) -> string {
+    "shadow"
+  }
+}
+
 function iter_collect() -> int[] throws unknown {
   let it: baml.iter.Iterator<Item = int, Error = never> = baml.iter.ArrayIterator.new([5, 6, 7]);
   it.collect()
@@ -250,6 +256,28 @@ function iter_array_as_iterable_param() -> int[] throws never {
 
 test "iter_array_as_iterable_param" {
   assert.is_true(baml.deep_equals(iter_array_as_iterable_param(), [10, 20, 30]))
+}
+
+function iter_shadowed_param_method(source: baml.iter.Iterable<Item = int, Error = never>) -> string {
+  let source = IterShadow {};
+  source.iter()
+}
+
+test "iter_shadowed_param_method" {
+  assert.equal(iter_shadowed_param_method([1, 2, 3]), "shadow")
+}
+
+function iter_shadowed_param_for_in(source: baml.iter.Iterable<Item = int, Error = never>) -> string[] {
+  let source = ["a", "b"];
+  let out: string[] = [];
+  for (let x in source) {
+    out.push(x);
+  }
+  out
+}
+
+test "iter_shadowed_param_for_in" {
+  assert.is_true(baml.deep_equals(iter_shadowed_param_for_in([1, 2, 3]), ["a", "b"]))
 }
 
 function iter_for_in_repeat() -> int[] {
