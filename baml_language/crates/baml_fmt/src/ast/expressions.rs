@@ -2150,7 +2150,9 @@ impl Printable for CatchArm {
                     .saturating_sub(shape.indent + line_len_remaining),
             };
             let info = printer.print(block, body_shape);
-            printer.print_str(",");
+            if self.comma.is_some() {
+                printer.print_str(",");
+            }
             return info;
         }
 
@@ -2168,11 +2170,16 @@ impl Printable for CatchArm {
             );
             printer.print_newline();
             printer.print_spaces(shape.indent);
-            printer.print_str("},");
+            printer.print_str("}");
+            if self.comma.is_some() {
+                printer.print_str(",");
+            }
             PrintInfo::default_multi_lined()
         } else {
             printer.append_from_printer(try_body);
-            printer.print_str(",");
+            if self.comma.is_some() {
+                printer.print_str(",");
+            }
             PrintInfo::default_single_line()
         }
     }
