@@ -11,6 +11,7 @@ java = "temurin-23"
 uv = "0.11.3"
 direnv = "2.37.1"
 sccache = "0.10.0"
+clang = "22.1.7" # LLVM tools for CI, including llvm-strip
 
 # Rust tools
 "cargo:bacon" = "latest"

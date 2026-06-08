@@ -16,10 +16,12 @@ use bex_engine::{BexEngine, BexExternalValue, EngineError, FunctionCallContextBu
 use common::compile_for_engine;
 use sys_native::SysOpsExt;
 
-/// Compile `source` and run its `main()` to completion.
-async fn run_main(source: &str) -> Result<BexExternalValue, EngineError> {
+/// Compile `source` into a ready-to-run engine. Kept separate from
+/// [`run_engine`] so timing-sensitive tests can exclude compilation (which
+/// grows with the stdlib) from what they measure.
+fn build_engine(source: &str) -> Arc<BexEngine> {
     let snapshot = compile_for_engine(source);
-    let engine = Arc::new(
+    Arc::new(
         BexEngine::new(
             snapshot,
             Arc::new(sys_native::SysOps::native()),
@@ -27,7 +29,11 @@ async fn run_main(source: &str) -> Result<BexExternalValue, EngineError> {
             Vec::new(),
         )
         .expect("Failed to create engine"),
-    );
+    )
+}
+
+/// Invoke `main()` on an already-built engine.
+async fn run_engine(engine: &Arc<BexEngine>) -> Result<BexExternalValue, EngineError> {
     engine
         .call_function(
             "main",
@@ -36,6 +42,12 @@ async fn run_main(source: &str) -> Result<BexExternalValue, EngineError> {
             true,
         )
         .await
+}
+
+/// Compile `source` and run its `main()` to completion.
+async fn run_main(source: &str) -> Result<BexExternalValue, EngineError> {
+    let engine = build_engine(source);
+    run_engine(&engine).await
 }
 
 /// The cap is enforced at admission: spawning four members into a `limit = 2`
@@ -102,14 +114,17 @@ async fn task_group_cancel_cancels_members() {
         }
     "#;
 
+    // Compile OUTSIDE the timed region — we're measuring cancellation
+    // promptness, not the debug-build compile (which grows with the stdlib
+    // and once pushed this assert past a wall-clock bound).
+    let engine = build_engine(source);
     let start = std::time::Instant::now();
-    let result = run_main(source).await.expect("call should succeed");
+    let result = run_engine(&engine).await.expect("call should succeed");
     assert_eq!(result, BexExternalValue::Int(0));
-    // The bound must stay well under the member's 10s sleep (that's what it
-    // guards), but `run_main` times COMPILATION too — the stdlib keeps
-    // growing, so leave headroom above the ~2-3s a debug-build compile takes.
+    // `cancel()` must tear the 10s sleep down promptly; 2s is plenty of
+    // headroom for the engine run alone while still far under that sleep.
     assert!(
-        start.elapsed() < std::time::Duration::from_secs(5),
+        start.elapsed() < std::time::Duration::from_secs(2),
         "group.cancel() should be prompt: {:?}",
         start.elapsed()
     );

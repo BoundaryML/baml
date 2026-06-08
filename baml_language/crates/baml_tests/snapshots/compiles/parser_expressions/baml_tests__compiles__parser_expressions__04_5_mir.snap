@@ -222,6 +222,7 @@ fn user.User.to_json(self: User) -> baml.json.json {
     let _8: baml.json.json
     let _9: string[]
     let _10: User
+    let _11: type
 
     bb0: {
         _4 = copy _1;
@@ -238,7 +239,8 @@ fn user.User.to_json(self: User) -> baml.json.json {
     bb2: {
         _10 = copy _1;
         _9 = copy _10.2;
-        _8 = call const fn baml.Array.to_json(copy _9) -> [bb3];
+        _11 = load_type(string);
+        _8 = call const fn baml.Array.to_json<copy _11>(copy _9) -> [bb3];
     }
 
     bb3: {
@@ -382,6 +384,7 @@ fn user.IndexUser.to_json(self: IndexUser) -> baml.json.json {
     let _8: baml.json.json
     let _9: string[]
     let _10: IndexUser
+    let _11: type
 
     bb0: {
         _4 = copy _1;
@@ -398,7 +401,8 @@ fn user.IndexUser.to_json(self: IndexUser) -> baml.json.json {
     bb2: {
         _10 = copy _1;
         _9 = copy _10.2;
-        _8 = call const fn baml.Array.to_json(copy _9) -> [bb3];
+        _11 = load_type(string);
+        _8 = call const fn baml.Array.to_json<copy _11>(copy _9) -> [bb3];
     }
 
     bb3: {

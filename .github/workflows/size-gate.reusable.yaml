@@ -230,19 +230,17 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: "Install LLVM tools (llvm-strip)"
-        run: |
-          choco install llvm -y
-          echo 'C:\Program Files\LLVM\bin' >> $GITHUB_PATH
-
       - name: "Install Rust toolchain"
         run: rustup show
         working-directory: baml_language
 
-      - name: "Install sccache and direnv"
+      # Cargo linking uses rust-lld from the Rust toolchain on Windows. The
+      # extra clang tool is installed through mise for llvm-strip, replacing
+      # the previous Chocolatey LLVM install.
+      - name: "Install sccache, direnv, and clang"
         uses: ./.github/actions/setup-mise
         with:
-          install_args: "sccache direnv"
+          install_args: "sccache direnv clang"
 
       - name: "Verify sccache"
         run: sccache --version

@@ -147,13 +147,15 @@ fn user.test_map_inferred() -> int[] {
     let _2: (int) -> int throws unknown
     let _3: type
     let _4: type
+    let _5: type
 
     bb0: {
         _1 = [const 1_i64, const 2_i64, const 3_i64];
         _2 = make_closure lambda[0]();
         _3 = load_type(int);
         _4 = load_type(void);
-        _0 = call const fn baml.Array.map<copy _3, copy _4>(copy _1, copy _2) -> [bb1];
+        _5 = load_type(int);
+        _0 = call const fn baml.Array.map<copy _5, copy _3, copy _4>(copy _1, copy _2) -> [bb1];
     }
 
     bb1: {

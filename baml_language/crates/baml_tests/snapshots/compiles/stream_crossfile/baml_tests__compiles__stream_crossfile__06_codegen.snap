@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 23854
 ---
 function user.Education.from_json(j: baml.json.json) -> Education {
     load_var j
@@ -84,6 +83,7 @@ function user.Resume.to_json(self: Resume) -> baml.json.json {
     load_var self
     load_field .name
     call baml.String.to_json
+    load_type Education
     load_var self
     load_field .education
     call baml.Array.to_json

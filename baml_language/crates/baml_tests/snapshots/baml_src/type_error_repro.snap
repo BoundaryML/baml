@@ -516,6 +516,7 @@ function type_error_repro.Stack.peek(self: type_error_repro.Stack) -> int {
 }
 
 function type_error_repro.Stack.push(self: type_error_repro.Stack, val: int) -> null {
+    load_type int
     load_var self
     load_field .items
     load_var val

@@ -46,7 +46,7 @@ fn guard_template_matches(
         baml_type::TyTemplate::Wildcard => true,
         baml_type::TyTemplate::TypeArgRefOrWildcard(n) => match frame_type_args.get(*n as usize) {
             Some(baml_type::Ty::BuiltinUnknown { .. }) | None => true,
-            Some(expected) => expected == actual,
+            Some(expected) => actual.is_subtype_of(expected),
         },
         baml_type::TyTemplate::TypeArgRef(n) => {
             frame_type_args
@@ -76,9 +76,16 @@ fn guard_template_matches(
                     .is_some_and(|(_, actual)| guard_template_matches(template, frame_type_args, actual))
             }))
         }
-        baml_type::TyTemplate::Union(parts) => parts
-            .iter()
-            .any(|part| guard_template_matches(part, frame_type_args, actual)),
+        baml_type::TyTemplate::Union(parts) => match actual {
+            baml_type::Ty::Union(actual_parts, _) => actual_parts.iter().all(|actual_part| {
+                parts
+                    .iter()
+                    .any(|part| guard_template_matches(part, frame_type_args, actual_part))
+            }),
+            _ => parts
+                .iter()
+                .any(|part| guard_template_matches(part, frame_type_args, actual)),
+        },
     }
 }
 

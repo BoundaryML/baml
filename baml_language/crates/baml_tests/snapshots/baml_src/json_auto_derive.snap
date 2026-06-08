@@ -325,6 +325,7 @@ function json_auto_derive.BZeroFrom.from_json(j: baml.json.json) -> json_auto_de
 }
 
 function json_auto_derive.G.f(self: json_auto_derive.G<unknown>) -> baml.json.json[] {
+    load_type #0
     load_type baml.json.json
     load_type baml.json.JsonParseError | baml.json.JsonSerializationError
     load_var self
@@ -398,6 +399,7 @@ function json_auto_derive.alias_chain_dispatch_to_json_val() -> int {
 }
 
 function json_auto_derive.array_of_class_to_json_str() -> string {
+    load_type json_auto_derive.BArr
     load_const 1
     init_instance user.json_auto_derive.BArr .x
     load_const 2
@@ -409,6 +411,7 @@ function json_auto_derive.array_of_class_to_json_str() -> string {
 }
 
 function json_auto_derive.array_of_int_to_json_str() -> string {
+    load_type int
     load_const 1
     load_const 2
     load_const 3
@@ -615,6 +618,8 @@ function json_auto_derive.int_to_json_result() -> baml.json.json {
 }
 
 function json_auto_derive.map_of_int_to_json_str() -> string {
+    load_type string
+    load_type int
     load_const 1
     load_const 2
     load_const "a"
