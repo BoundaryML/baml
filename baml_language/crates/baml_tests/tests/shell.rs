@@ -17,8 +17,22 @@
 //!   shell_with_options     — platform-split (`pwd` vs `cmd /c cd`).
 //!   shell_stderr_bytes     — Unix-only `>&2` redirect, byte-prefix assertion.
 
-use baml_tests::baml_test;
+use baml_tests::{baml_test, engine::TestOutput};
 use bex_engine::BexExternalValue;
+
+fn assert_hello_world_stdout(output: TestOutput) {
+    match &output.result {
+        Ok(BexExternalValue::String(stdout)) => {
+            assert!(!stdout.is_empty(), "shell stdout should not be empty");
+        }
+        other => panic!("expected shell stdout string, got {other:?}"),
+    }
+
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("hello_world\n".to_string().into()))
+    );
+}
 
 #[tokio::test]
 #[cfg(not(target_os = "windows"))]
@@ -82,6 +96,57 @@ async fn shell_stderr() {
     if let Ok(BexExternalValue::String(stderr)) = &output.result {
         assert!(stderr.contains("error output"));
     }
+}
+
+#[tokio::test]
+#[cfg(not(target_os = "windows"))]
+async fn shell_concat_after_println() {
+    let output = baml_test!(
+        r#"
+            function main() -> string {
+                let cmd = "echo " + "hello_world";
+                baml.io.println("-> " + cmd);
+                baml.sys.shell(cmd, null).stdout.to_string()
+            }
+        "#
+    );
+
+    assert_hello_world_stdout(output);
+}
+
+#[tokio::test]
+#[cfg(not(target_os = "windows"))]
+async fn shell_concat_after_two_printlns() {
+    let output = baml_test!(
+        r#"
+            function main() -> string {
+                let cmd = "echo " + "hello_world";
+                baml.io.println("first -> " + cmd);
+                baml.io.println("second -> " + cmd);
+                baml.sys.shell(cmd, null).stdout.to_string()
+            }
+        "#
+    );
+
+    assert_hello_world_stdout(output);
+}
+
+#[tokio::test]
+#[cfg(not(target_os = "windows"))]
+async fn shell_multistep_concat_after_assigned_println() {
+    let output = baml_test!(
+        r#"
+            function main() -> string {
+                let echo = "ec" + "ho ";
+                let message = "hello" + "_world";
+                let cmd = echo + message;
+                let _ = baml.io.println("-> " + cmd);
+                baml.sys.shell(cmd, null).stdout.to_string()
+            }
+        "#
+    );
+
+    assert_hello_world_stdout(output);
 }
 
 // === exec() tests ===
