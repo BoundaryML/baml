@@ -83,7 +83,7 @@ pub enum Freshness {
 /// `TyAttr::default()` — only stream type generation (HIR lowering) will populate
 /// non-default values.
 #[subenum(ConcreteTy, RuntimeTy)]
-#[derive(Debug, Clone, PartialEq, Eq, Hash, BorshSerialize, BorshDeserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, BorshSerialize, BorshDeserialize)]
 pub enum Ty {
     // --- Core: used by all VIR+ stages ---
     #[subenum(ConcreteTy, RuntimeTy)]
@@ -183,15 +183,46 @@ pub enum Ty {
     /// `Null` when the body of the future statically cannot throw.
     #[subenum(ConcreteTy, RuntimeTy)]
     Future(Box<Ty>, Box<Ty>, TyAttr),
-}
 
-// NOTE: `Unknown`, `Error`, and `Never` are intentionally excluded from this enum.
-// - Unknown/Error are TIR-only error recovery types. They are mapped to `Null` during
-//   TIR→baml_type conversion in `convert_tir_ty`. All real type checking happens in TIR
-//   (which keeps its own Ty), so VIR+ stages don't need these for error recovery.
-// - Never is a VIR-only bottom type for diverging expressions (return/break/continue).
-//   MIR already collapsed Never→Void via control flow terminators. VIR lowering now
-//   produces `Void` directly instead of `Never`.
+    // --- TIR-only: present during type checking, erased at the runtime
+    // boundary (`convert_tir2_ty`). Excluded from `ConcreteTy`; only the ones
+    // that can legitimately nest in a runtime type carry `RuntimeTy`.
+    /// A type variable (generic parameter) — e.g. `T` in `Array<T>`. Bound
+    /// during inference; can survive at runtime only inside reflective generic
+    /// metadata.
+    #[subenum(RuntimeTy)]
+    TypeVar(Name, TyAttr),
+    /// Associated type projection, e.g. `P.Output` or `(T as Iterator).Item`.
+    /// Resolved before the runtime boundary.
+    AssociatedTypeProjection {
+        base: Box<Ty>,
+        interface: Option<Box<Ty>>,
+        member: Name,
+        attr: TyAttr,
+    },
+    /// The bottom type — an expression that never produces a value (`return`,
+    /// `break`, `continue`, diverging blocks). A subtype of every type.
+    #[subenum(RuntimeTy)]
+    Never { attr: TyAttr },
+    /// Error-recovery sentinel: the type is structurally unknown (e.g. an
+    /// unresolved name). Distinct from `BuiltinUnknown` (a well-formed top type).
+    Unknown { attr: TyAttr },
+    /// Error sentinel: a hard type error was emitted for this expression.
+    Error { attr: TyAttr },
+    /// Evolving list — an empty `[]` literal at a mutable binding whose element
+    /// type is refined by mutations. Frozen to `List` at the runtime boundary.
+    EvolvingList(Box<Ty>, TyAttr),
+    /// Evolving map — the map analogue of [`Ty::EvolvingList`].
+    EvolvingMap(Box<Ty>, Box<Ty>, TyAttr),
+    /// Opaque Rust-managed state (`$rust_type` fields in builtin class stubs,
+    /// e.g. `Media._data`). A leaf concrete type with no inner structure.
+    #[subenum(ConcreteTy, RuntimeTy)]
+    RustType { attr: TyAttr },
+    /// The `type` metatype keyword — a runtime value that wraps a `Ty`
+    /// (reflection). A leaf concrete type.
+    #[subenum(ConcreteTy, RuntimeTy)]
+    Type { attr: TyAttr },
+}
 
 impl Ty {
     // --- TyAttr accessor ---
@@ -237,6 +268,25 @@ impl Ty {
             },
             Ty::WatchAccessor(inner, _) => Ty::WatchAccessor(inner, attr),
             Ty::Future(value, error, _) => Ty::Future(value, error, attr),
+            Ty::TypeVar(name, _) => Ty::TypeVar(name, attr),
+            Ty::AssociatedTypeProjection {
+                base,
+                interface,
+                member,
+                ..
+            } => Ty::AssociatedTypeProjection {
+                base,
+                interface,
+                member,
+                attr,
+            },
+            Ty::Never { .. } => Ty::Never { attr },
+            Ty::Unknown { .. } => Ty::Unknown { attr },
+            Ty::Error { .. } => Ty::Error { attr },
+            Ty::EvolvingList(inner, _) => Ty::EvolvingList(inner, attr),
+            Ty::EvolvingMap(key, value, _) => Ty::EvolvingMap(key, value, attr),
+            Ty::RustType { .. } => Ty::RustType { attr },
+            Ty::Type { .. } => Ty::Type { attr },
         }
     }
 
@@ -253,7 +303,13 @@ impl Ty {
             | Ty::BuiltinUnknown { attr }
             | Ty::Uint8Array { attr }
             | Ty::Map { attr, .. }
-            | Ty::Function { attr, .. } => attr,
+            | Ty::Function { attr, .. }
+            | Ty::AssociatedTypeProjection { attr, .. }
+            | Ty::Never { attr }
+            | Ty::Unknown { attr }
+            | Ty::Error { attr }
+            | Ty::RustType { attr }
+            | Ty::Type { attr } => attr,
             Ty::Media(_, attr)
             | Ty::Literal(_, attr)
             | Ty::Class(_, _, attr)
@@ -265,7 +321,10 @@ impl Ty {
             | Ty::Opaque(_, attr)
             | Ty::TypeAlias(_, attr)
             | Ty::WatchAccessor(_, attr)
-            | Ty::Future(_, _, attr) => attr,
+            | Ty::Future(_, _, attr)
+            | Ty::TypeVar(_, attr)
+            | Ty::EvolvingList(_, attr)
+            | Ty::EvolvingMap(_, _, attr) => attr,
         }
     }
 
@@ -625,6 +684,16 @@ impl Ty {
                 }
                 Ok(())
             }
+            // TIR-only variants must have been erased before runtime.
+            Ty::TypeVar(..)
+            | Ty::AssociatedTypeProjection { .. }
+            | Ty::Never { .. }
+            | Ty::Unknown { .. }
+            | Ty::Error { .. }
+            | Ty::EvolvingList(..)
+            | Ty::EvolvingMap(..)
+            | Ty::RustType { .. }
+            | Ty::Type { .. } => Err("compiler-only type should not reach runtime".to_string()),
             Ty::Int { .. }
             | Ty::Bigint { .. }
             | Ty::Float { .. }
@@ -778,6 +847,23 @@ impl fmt::Display for Ty {
             Ty::WatchAccessor(inner, _) => write!(f, "{inner}.$watch"),
             Ty::BuiltinUnknown { .. } => write!(f, "unknown"),
             Ty::Future(value, error, _) => write!(f, "future<{value}, {error}>"),
+            Ty::TypeVar(name, _) => write!(f, "{name}"),
+            Ty::AssociatedTypeProjection {
+                base,
+                interface,
+                member,
+                ..
+            } => match interface {
+                Some(iface) => write!(f, "({base} as {iface}).{member}"),
+                None => write!(f, "{base}.{member}"),
+            },
+            Ty::Never { .. } => write!(f, "never"),
+            Ty::Unknown { .. } => write!(f, "unknown"),
+            Ty::Error { .. } => write!(f, "<error>"),
+            Ty::EvolvingList(inner, _) => write!(f, "{inner}[]"),
+            Ty::EvolvingMap(key, value, _) => write!(f, "map<{key}, {value}>"),
+            Ty::RustType { .. } => write!(f, "RustType"),
+            Ty::Type { .. } => write!(f, "type"),
         }
     }
 }

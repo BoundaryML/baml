@@ -497,7 +497,16 @@ impl TypeCtx {
             | baml_type::Ty::Void { .. }
             | baml_type::Ty::WatchAccessor(_, _)
             | baml_type::Ty::BuiltinUnknown { .. }
-            | baml_type::Ty::Future(_, _, _)) => {
+            | baml_type::Ty::Future(_, _, _)
+            | baml_type::Ty::TypeVar(_, _)
+            | baml_type::Ty::AssociatedTypeProjection { .. }
+            | baml_type::Ty::Never { .. }
+            | baml_type::Ty::Unknown { .. }
+            | baml_type::Ty::Error { .. }
+            | baml_type::Ty::EvolvingList(_, _)
+            | baml_type::Ty::EvolvingMap(_, _, _)
+            | baml_type::Ty::RustType { .. }
+            | baml_type::Ty::Type { .. }) => {
                 return Err(ConvertError::NonParsableType(Box::new(unparsable.clone())));
             }
         };
@@ -581,7 +590,16 @@ impl TypeCtx {
             | ::baml_type::Ty::Void { .. }
             | ::baml_type::Ty::WatchAccessor(_, _)
             | ::baml_type::Ty::BuiltinUnknown { .. }
-            | ::baml_type::Ty::Future(_, _, _)) => {
+            | ::baml_type::Ty::Future(_, _, _)
+            | ::baml_type::Ty::TypeVar(_, _)
+            | ::baml_type::Ty::AssociatedTypeProjection { .. }
+            | ::baml_type::Ty::Never { .. }
+            | ::baml_type::Ty::Unknown { .. }
+            | ::baml_type::Ty::Error { .. }
+            | ::baml_type::Ty::EvolvingList(_, _)
+            | ::baml_type::Ty::EvolvingMap(_, _, _)
+            | ::baml_type::Ty::RustType { .. }
+            | ::baml_type::Ty::Type { .. }) => {
                 return Err(ConvertError::NonParsableType(Box::new(unparsable.clone())));
             }
         };
@@ -760,7 +778,16 @@ fn is_sap_parseable(ty: &baml_type::Ty) -> Result<Vec<TypeName>, ()> {
         | baml_type::Ty::Void { .. }
         | baml_type::Ty::WatchAccessor(..)
         | baml_type::Ty::BuiltinUnknown { .. }
-        | baml_type::Ty::Future(..) => Err(()),
+        | baml_type::Ty::Future(..)
+        | baml_type::Ty::TypeVar(..)
+        | baml_type::Ty::AssociatedTypeProjection { .. }
+        | baml_type::Ty::Never { .. }
+        | baml_type::Ty::Unknown { .. }
+        | baml_type::Ty::Error { .. }
+        | baml_type::Ty::EvolvingList(..)
+        | baml_type::Ty::EvolvingMap(..)
+        | baml_type::Ty::RustType { .. }
+        | baml_type::Ty::Type { .. } => Err(()),
     }
 }
 

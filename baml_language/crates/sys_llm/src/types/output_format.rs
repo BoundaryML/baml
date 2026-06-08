@@ -591,7 +591,16 @@ impl OutputFormatContent {
             | Ty::WatchAccessor(..)
             | Ty::BuiltinUnknown { .. }
             | Ty::EnumVariant(..)
-            | Ty::Future(..) => {
+            | Ty::Future(..)
+            | Ty::TypeVar(..)
+            | Ty::AssociatedTypeProjection { .. }
+            | Ty::Never { .. }
+            | Ty::Unknown { .. }
+            | Ty::Error { .. }
+            | Ty::EvolvingList(..)
+            | Ty::EvolvingMap(..)
+            | Ty::RustType { .. }
+            | Ty::Type { .. } => {
                 unreachable!(
                     "compiler-only variant {:?} should not reach output_format",
                     ty

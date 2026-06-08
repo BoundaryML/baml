@@ -407,7 +407,16 @@ fn ty_to_field_type(ty: &Ty) -> BamlTy {
         | Ty::Future(..)
         | Ty::Function { .. }
         | Ty::Void { .. }
-        | Ty::WatchAccessor(_, _) => {
+        | Ty::WatchAccessor(_, _)
+        | Ty::TypeVar(..)
+        | Ty::AssociatedTypeProjection { .. }
+        | Ty::Never { .. }
+        | Ty::Unknown { .. }
+        | Ty::Error { .. }
+        | Ty::EvolvingList(..)
+        | Ty::EvolvingMap(..)
+        | Ty::RustType { .. }
+        | Ty::Type { .. } => {
             unreachable!("compiler-only variant should not reach FFI: {ty:?}")
         }
     };

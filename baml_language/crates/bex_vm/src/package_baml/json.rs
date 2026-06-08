@@ -555,6 +555,23 @@ fn ty_value_to_serde(
             // substitution before reaching this point.
             Ok(value_to_serde(vm, value))
         }
+
+        // TIR-internal compiler-only types erased at the TIR→runtime boundary;
+        // they never carry a runtime value to serialize.
+        Ty::TypeVar(_, _)
+        | Ty::AssociatedTypeProjection { .. }
+        | Ty::Never { .. }
+        | Ty::Unknown { .. }
+        | Ty::Error { .. }
+        | Ty::EvolvingList(_, _)
+        | Ty::EvolvingMap(_, _, _)
+        | Ty::RustType { .. }
+        | Ty::Type { .. } => Err(raise_serialize(
+            vm,
+            "cannot serialize compiler-only type",
+            path,
+            "compiler_only",
+        )),
     }
 }
 
@@ -908,6 +925,18 @@ fn ty_serde_to_value(
             // whose shape is already JSON-representable.
             Ok(serde_to_value(vm, json))
         }
+
+        // TIR-internal compiler-only types erased at the TIR→runtime boundary;
+        // they never appear as a runtime decode target.
+        Ty::TypeVar(_, _)
+        | Ty::AssociatedTypeProjection { .. }
+        | Ty::Never { .. }
+        | Ty::Unknown { .. }
+        | Ty::Error { .. }
+        | Ty::EvolvingList(_, _)
+        | Ty::EvolvingMap(_, _, _)
+        | Ty::RustType { .. }
+        | Ty::Type { .. } => Err(raise_decode(vm, "cannot decode compiler-only type", path)),
     }
 }
 
