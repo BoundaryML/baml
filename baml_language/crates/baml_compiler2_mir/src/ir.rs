@@ -481,23 +481,11 @@ impl Terminator {
                 succs
             }
             Terminator::Return => vec![],
-            Terminator::Call { target, unwind, .. } => {
-                let mut succs = vec![*target];
-                if let Some(u) = unwind {
-                    succs.push(*u);
-                }
-                succs
-            }
             Terminator::Unreachable => vec![],
-            Terminator::SysOp { target, unwind, .. } => {
-                let mut succs = vec![*target];
-                if let Some(u) = unwind {
-                    succs.push(*u);
-                }
-                succs
-            }
             Terminator::Spawn { resume, .. } => vec![*resume],
-            Terminator::Await { target, unwind, .. } => {
+            Terminator::Call { target, unwind, .. }
+            | Terminator::SysOp { target, unwind, .. }
+            | Terminator::Await { target, unwind, .. } => {
                 let mut succs = vec![*target];
                 if let Some(u) = unwind {
                     succs.push(*u);

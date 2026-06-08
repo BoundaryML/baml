@@ -177,37 +177,3 @@ pub fn list_tests_with_metadata(db: &ProjectDatabase) -> Vec<TestSymbol> {
     result.sort_by(|a, b| a.name.cmp(&b.name));
     result
 }
-
-// --- Stubs for remaining symbol types (not yet ported to compiler2) ---
-
-pub fn list_classes(_db: &ProjectDatabase) -> Vec<Symbol> {
-    Vec::new()
-}
-
-pub fn list_enums(_db: &ProjectDatabase) -> Vec<Symbol> {
-    Vec::new()
-}
-
-pub fn list_type_aliases(_db: &ProjectDatabase) -> Vec<Symbol> {
-    Vec::new()
-}
-
-pub fn list_clients(_db: &ProjectDatabase) -> Vec<Symbol> {
-    Vec::new()
-}
-
-pub fn list_tests(_db: &ProjectDatabase) -> Vec<Symbol> {
-    Vec::new()
-}
-
-pub fn list_generators(_db: &ProjectDatabase) -> Vec<Symbol> {
-    Vec::new()
-}
-
-pub fn find_symbol(db: &ProjectDatabase, name: &str) -> Option<Symbol> {
-    find_symbol_locations(db, name).into_iter().next()
-}
-
-pub fn find_symbol_locations(_db: &ProjectDatabase, _name: &str) -> Vec<Symbol> {
-    Vec::new()
-}

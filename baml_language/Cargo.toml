@@ -29,14 +29,6 @@ exclude = [
   # unsupported features through resolver feature unification.
   "forks/aws-config-systest",
   "forks/google-cloud-auth-systest",
-  # Generated Python rig-test outputs do not contain Cargo manifests, but the
-  # workspace member glob above would otherwise make cargo metadata fail.
-  "rig_tests/crates/python_empty",
-  "rig_tests/crates/python_literal_types",
-  "rig_tests/crates/python_map_types",
-  "rig_tests/crates/python_mixed_complex_types",
-  "rig_tests/crates/python_semantic_streaming",
-  "rig_tests/crates/python_union_types_extended",
 ]
 resolver = "2"
 
@@ -59,11 +51,8 @@ bex_str = { path = "crates/bex_str" }
 ahash = "0.8"
 baml_base = { path = "crates/baml_base" }
 baml_type = { path = "crates/baml_type" }
-baml_builtins = { path = "crates/baml_builtins" }
-baml_builtins_codegen = { path = "crates/baml_builtins_codegen" }
 baml_builtins2 = { path = "crates/baml_builtins2" }
 baml_builtins2_codegen = { path = "crates/baml_builtins2_codegen" }
-baml_builtins_macros = { path = "crates/baml_builtins_macros" }
 sdkgen_go = { path = "sdks/go/sdkgen_go" }
 sdkgen_typescript_node = { path = "sdks/nodejs/sdkgen_typescript_node" }
 sdkgen_python_pydantic2 = { path = "sdks/python/rust/sdkgen_python_pydantic2" }
@@ -92,7 +81,6 @@ baml_db = { path = "crates/baml_db" }
 baml_fmt = { path = "crates/baml_fmt" }
 baml_lsp2_actions = { path = "crates/baml_lsp2_actions" }
 baml_lsp_server = { path = "crates/baml_lsp_server", default-features = false }
-baml_lsp_types = { path = "crates/baml_lsp_types" }
 baml_project = { path = "crates/baml_project" }
 baml_release = { path = "crates/baml_release" }
 baml_tests = { path = "crates/baml_tests" }
@@ -156,7 +144,6 @@ bytes = "1"
 cargo_metadata = { version = "0.23.1" }
 cbindgen = "0.28.0"
 clap = { version = "4.4.6", features = [ "cargo", "derive" ] }
-clap-cargo = "0.14.1"
 console = "0.16"
 console_error_panic_hook = "0.1"
 crossbeam-channel = { version = "0.5" }

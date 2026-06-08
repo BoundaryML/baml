@@ -62,16 +62,6 @@ impl<T> LocalItemId<T> {
         }
     }
 
-    #[allow(clippy::cast_possible_truncation)]
-    pub const fn name_hash(self) -> u16 {
-        (self.packed >> 16) as u16
-    }
-
-    #[allow(clippy::cast_possible_truncation)]
-    pub const fn collision_index(self) -> u16 {
-        self.packed as u16
-    }
-
     pub const fn as_u32(self) -> u32 {
         self.packed
     }
