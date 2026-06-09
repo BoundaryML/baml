@@ -17,6 +17,7 @@ const TONE: Record<string, StatPillTone> = {
   done: 'success',
   failed: 'destructive',
   deduping: 'mute',
+  comparing: 'link',
   success: 'success',
   partial: 'mute',
   open: 'mute',
@@ -240,6 +241,51 @@ export default function DbView({
         </Td>
         <Td align="right" className="mono text-muted-foreground">
           {ago(now - (t.claimedAt ?? t.createdAt))}
+        </Td>
+      </Tr>
+    ));
+  } else if (table === 'cohorts') {
+    const data = [...s.cohorts].sort(
+      (a, b) =>
+        (a.status === 'comparing' ? 1 : 0) - (b.status === 'comparing' ? 1 : 0) ||
+        b.createdAt - a.createdAt,
+    );
+    head = (
+      <tr>
+        <Th>status</Th>
+        <Th>prompt</Th>
+        <Th>branches</Th>
+        <Th align="right">variants</Th>
+        <Th>report</Th>
+        <Th align="right">age</Th>
+      </tr>
+    );
+    rows = data.map((c) => (
+      <Tr key={c._id}>
+        <Td>
+          {pill(c.status)}
+          {c.status === 'comparing' ? <Pulse on className="ml-1.5" /> : null}
+        </Td>
+        <Td>
+          <Link href={`/cohorts/${c._id}`}>
+            <InlineCode text={c.prompt} />
+          </Link>
+        </Td>
+        <Td className="mono text-muted-foreground">
+          {(c.skillRefs ?? []).join(', ')}
+        </Td>
+        <Td align="right" className="mono">
+          {(c.memberTaskIds ?? []).length}
+        </Td>
+        <Td>
+          {c.reportTrophyId ? (
+            <Link href={`/runs/${c.reportTrophyId}`}>comparison →</Link>
+          ) : (
+            <span className="text-muted-foreground">—</span>
+          )}
+        </Td>
+        <Td align="right" className="mono text-muted-foreground">
+          {ago(now - c.createdAt)}
         </Td>
       </Tr>
     ));

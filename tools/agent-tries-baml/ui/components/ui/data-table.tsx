@@ -3,9 +3,11 @@ import { cva, type VariantProps } from 'class-variance-authority';
 import { cn } from '@/lib/utils';
 
 /**
- * Bordered data grid (legacy `.runtable`). On mobile (<640px) the table
- * becomes a horizontally scrollable block via the `atb-table-mobile`
- * companion class (display/table semantics aren't utility-expressible).
+ * Editorial data grid: no cell borders, no header fill — just hairline rules
+ * between rows and tabular numerals, so dense data reads like a printed table.
+ * On mobile (<640px) it becomes a horizontally scrollable block via the
+ * `atb-table-mobile` companion class (display/table semantics aren't
+ * utility-expressible).
  */
 export function DataTable({
   className,
@@ -15,26 +17,21 @@ export function DataTable({
   children: React.ReactNode;
 }) {
   return (
-    <table
-      className={cn(
-        'w-full border-collapse border border-border atb-table-mobile',
-        className,
-      )}
-    >
+    <table className={cn('w-full border-collapse atb-table-mobile', className)}>
       {children}
     </table>
   );
 }
 
 const th = cva(
-  'border border-border bg-muted px-2.5 py-1.5 text-xs font-semibold text-muted-foreground',
+  'border-b border-border pb-1.5 pr-3 text-[12.5px] font-medium text-muted-foreground last:pr-0',
   {
     variants: { align: { left: 'text-left', right: 'text-right' } },
     defaultVariants: { align: 'left' },
   },
 );
 
-/** Header cell; `align="right"` replaces the legacy `.r` class. */
+/** Header cell; `align="right"` for numeric columns. */
 export function Th({
   align,
   className,
@@ -49,7 +46,7 @@ export function Th({
 
 const td = cva(
   // long unbroken tokens must not widen the table past the viewport
-  'border border-border px-2.5 py-2 text-[13.5px] align-top [overflow-wrap:anywhere]',
+  'border-b border-border py-2 pr-3 text-[13.5px] align-top tabular-nums [overflow-wrap:anywhere] last:pr-0',
   {
     variants: {
       align: { left: '', right: 'text-right' },
@@ -78,7 +75,7 @@ export function Td({
   return <td className={cn(td({ align, cell }), className)}>{children}</td>;
 }
 
-/** Body row with the soft hover (legacy `.runrow`). */
+/** Body row with the soft hover; the last row drops its bottom rule. */
 export function Tr({
   className,
   children,
@@ -86,5 +83,9 @@ export function Tr({
   className?: string;
   children: React.ReactNode;
 }) {
-  return <tr className={cn('hover:bg-muted', className)}>{children}</tr>;
+  return (
+    <tr className={cn('hover:bg-muted [&:last-child>td]:border-b-0', className)}>
+      {children}
+    </tr>
+  );
 }

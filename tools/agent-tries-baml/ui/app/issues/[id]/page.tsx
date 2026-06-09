@@ -57,7 +57,7 @@ export default async function IssuePage({
           >
             {label}
           </StatPill>{' '}
-          · <span className="mono">{issue.kind}</span> · first seen{' '}
+          · <KindTag kind={issue.kind}>{issue.kind}</KindTag> · first seen{' '}
           {ago(now - issue.firstSeenAt)} ago · last seen{' '}
           {ago(now - issue.lastSeenAt)} ago
           {notion ? (

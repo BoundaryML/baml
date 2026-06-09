@@ -13,6 +13,7 @@ import { ago } from './lib/format';
 const TONE: Record<string, StatPillTone> = {
   approved: 'success',
   closed: 'mute',
+  comparing: 'link',
   confirmed: 'mute',
   cursor: 'link',
   deduping: 'mute',
@@ -52,9 +53,14 @@ function issueStage(i: Issue): string {
 // Graph node id -> which table it reads and (for issue sub-nodes) which stage.
 const NODE_MAP: Record<
   string,
-  { title: string; table: 'tasks' | 'trophies' | 'issues'; stage?: string }
+  {
+    title: string;
+    table: 'tasks' | 'trophies' | 'issues' | 'cohorts';
+    stage?: string;
+  }
 > = {
   approved: { stage: 'approved', table: 'issues', title: 'approved' },
+  cohorts: { table: 'cohorts', title: 'cohorts' },
   issues: { table: 'issues', title: 'issues' },
   redraft: { stage: 'redraft', table: 'issues', title: 'redraft' },
   tasks: { table: 'tasks', title: 'tasks' },
@@ -97,7 +103,9 @@ export default function NodePanel({
       ? s.tasks.length
       : meta.table === 'trophies'
         ? s.runs.length
-        : issues.length;
+        : meta.table === 'cohorts'
+          ? s.cohorts.length
+          : issues.length;
 
   const empty = <p className="text-muted-foreground">empty.</p>;
   const body = (() => {
@@ -161,6 +169,35 @@ export default function NodePanel({
                 </Td>
                 <Td align="right" className="mono">
                   ${(r.costUsd ?? 0).toFixed(2)}
+                </Td>
+              </Tr>
+            ))}
+          </tbody>
+        </DataTable>
+      );
+    }
+    if (meta.table === 'cohorts') {
+      if (s.cohorts.length === 0) return empty;
+      return (
+        <DataTable className="text-sm">
+          <thead>
+            <tr>
+              <Th>status</Th>
+              <Th>prompt</Th>
+              <Th align="right">variants</Th>
+            </tr>
+          </thead>
+          <tbody>
+            {s.cohorts.map((c) => (
+              <Tr key={c._id}>
+                <Td>{pill(c.status)}</Td>
+                <Td>
+                  <Link href={`/cohorts/${c._id}`}>
+                    <InlineCode text={c.prompt} />
+                  </Link>
+                </Td>
+                <Td align="right" className="mono">
+                  {(c.memberTaskIds ?? []).length}
                 </Td>
               </Tr>
             ))}

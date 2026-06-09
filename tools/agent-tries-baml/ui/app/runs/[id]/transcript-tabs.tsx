@@ -293,7 +293,7 @@ function TerminalView({ text }: { text: string }) {
   return (
     <div className="overflow-hidden rounded-lg border border-[#3a3a38] shadow-[0_8px_30px_rgba(0,0,0,0.25)]">
       {/* title bar: traffic lights + session label */}
-      <div className="flex items-center gap-2 bg-[#2a2a28] px-3.5 py-2">
+      <div className="flex items-center gap-2 bg-[#2a2a28] px-3.5 py-2" aria-hidden>
         <span className="size-3 rounded-full bg-[#ff5f57]" />
         <span className="size-3 rounded-full bg-[#febc2e]" />
         <span className="size-3 rounded-full bg-[#28c840]" />
@@ -315,7 +315,10 @@ function TerminalView({ text }: { text: string }) {
               onClick={() => jump(e.block)}
               onMouseEnter={() => setHover(e)}
               onMouseLeave={() => setHover(null)}
-              className={`absolute top-1/2 w-[3px] -translate-x-1/2 -translate-y-1/2 cursor-pointer rounded-full border-0 p-0 ${TICK[e.kind]} hover:scale-y-150 hover:brightness-125`}
+              onFocus={() => setHover(e)}
+              onBlur={() => setHover(null)}
+              aria-label={`jump to: ${e.label}`}
+              className={`absolute top-1/2 w-[3px] -translate-x-1/2 -translate-y-1/2 cursor-pointer rounded-full border-0 p-0 ${TICK[e.kind]} hover:scale-y-150 hover:brightness-125 focus-visible:scale-y-150 focus-visible:brightness-125`}
               style={{ left: `${(pos[e.block] ?? e.at) * 100}%` }}
             />
           ))}

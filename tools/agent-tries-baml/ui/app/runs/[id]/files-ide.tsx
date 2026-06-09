@@ -41,9 +41,9 @@ export default function FilesIde({
     <div className="overflow-hidden rounded-lg border border-border shadow-[0_4px_18px_rgba(60,50,30,0.10)]">
       {/* editor window title bar */}
       <div className="flex items-center gap-2 border-b border-border bg-muted px-3.5 py-2">
-        <span className="size-3 rounded-full bg-[#ff5f57]" />
-        <span className="size-3 rounded-full bg-[#febc2e]" />
-        <span className="size-3 rounded-full bg-[#28c840]" />
+        <span className="size-3 rounded-full bg-[#ff5f57]" aria-hidden />
+        <span className="size-3 rounded-full bg-[#febc2e]" aria-hidden />
+        <span className="size-3 rounded-full bg-[#28c840]" aria-hidden />
         <span className="ml-2 font-mono text-[11px] text-muted-foreground">
           {active || 'files'}
         </span>

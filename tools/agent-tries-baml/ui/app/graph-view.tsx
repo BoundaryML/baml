@@ -16,7 +16,7 @@ import NodePanel, { nodeHasPanel } from './node-panel';
 
 const cnt = (o: Record<string, number>) =>
   Object.values(o).reduce((a, b) => a + b, 0);
-const dbHref = (table: 'tasks' | 'trophies' | 'issues') =>
+const dbHref = (table: 'tasks' | 'trophies' | 'issues' | 'cohorts') =>
   `/db/${table}`;
 // How far inside the container edge a node's center must be to count as "in the
 // graph"; below this it's treated as dragged out and bounces back.
@@ -44,6 +44,7 @@ const STAGE_EL: Record<string, string> = {
   dedup: 'e_trophies_issues',
   'notion-sync': 'e_issues_notion',
   worker: 'e_tasks_trophies',
+  'cohort-compare': 'e_cohorts_trophies',
 };
 
 /**
@@ -93,6 +94,17 @@ function elements(s: LiveState): cytoscape.ElementDefinition[] {
         label: N('tasks', String(cnt(s.counts.tasks))),
       },
       position: { x: 300, y: 185 },
+    },
+    {
+      // skill-arena: tasks fan out into a cohort, which compares its variant runs
+      // and feeds a comparison trophy back into the dedup flow.
+      data: {
+        href: dbHref('cohorts'),
+        id: 'cohorts',
+        kind: 'db',
+        label: N('cohorts', String(cnt(s.counts.cohorts))),
+      },
+      position: { x: 430, y: 40 },
     },
     {
       data: {
@@ -157,6 +169,22 @@ function elements(s: LiveState): cytoscape.ElementDefinition[] {
         id: 'e_tasks_trophies',
         label: 'worker',
         source: 'tasks',
+        target: 'trophies',
+      },
+    },
+    {
+      data: {
+        id: 'e_tasks_cohorts',
+        label: 'arena',
+        source: 'tasks',
+        target: 'cohorts',
+      },
+    },
+    {
+      data: {
+        id: 'e_cohorts_trophies',
+        label: 'compare',
+        source: 'cohorts',
         target: 'trophies',
       },
     },

@@ -61,6 +61,10 @@ export type Trophy = {
   filesCreated?: Record<string, string> | null;
   turnLog?: Turn[];
   transcriptStorageId?: string | null;
+  // skill-arena: a held member trophy carries cohortId; the synthesized comparison
+  // is a trophy with isCohortReport=true that enters dedup like any other.
+  cohortId?: string | null;
+  isCohortReport?: boolean;
   createdAt: number;
   status: string;
 };
@@ -73,6 +77,21 @@ export type Task = {
   slackUser?: string | null;
   bamlVersion?: string | null;
   status: string;
+  createdAt: number;
+  // skill-arena: set on a cohort member task (which variant it runs).
+  cohortId?: string | null;
+  skillRef?: string | null;
+};
+
+/** A skill-arena cohort: one task run across N baml-skill branches, then compared. */
+export type Cohort = {
+  _id: string;
+  prompt: string;
+  skillRefs: string[];
+  memberTaskIds: string[];
+  status: string; // pending | queued | comparing | done | failed
+  reportTrophyId?: string | null;
+  slackUser?: string | null;
   createdAt: number;
 };
 
@@ -277,12 +296,14 @@ export type LiveState = {
     trophies: Record<string, number>;
     issues: Record<string, number>;
     builds: Record<string, number>;
+    cohorts: Record<string, number>;
   };
   inflight: Inflight[];
   runs: RunRow[];
   issues: Issue[];
   builds: Build[];
   tasks: TaskRow[];
+  cohorts: Cohort[];
   agents: {
     activeTasks: number;
     workers: number;
@@ -321,6 +342,7 @@ const INFLIGHT: Array<[string, string, string, (r: any) => boolean]> = [
   ['trophy', 'dedup', 'deduping', (r) => r.status === 'deduping'],
   ['issue', 'notion-sync', 'syncing', (r) => r.notionSyncStatus === 'syncing'],
   ['build', 'baml-build', 'building', (r) => r.status === 'building'],
+  ['cohort', 'cohort-compare', 'comparing', (r) => r.status === 'comparing'],
 ];
 
 /**
@@ -332,26 +354,29 @@ export async function loadState(): Promise<LiveState> {
   const empty = {
     configured: false,
     generatedAt,
-    counts: { tasks: {}, trophies: {}, issues: {}, builds: {} },
+    counts: { tasks: {}, trophies: {}, issues: {}, builds: {}, cohorts: {} },
     inflight: [],
     runs: [],
     issues: [],
     builds: [],
     tasks: [],
+    cohorts: [],
     agents: { activeTasks: 0, workers: 0, dedupers: 0, fixers: 0 },
     totals: { tasks: 0, trophies: 0, openIssues: 0, costUsd: 0 },
   };
   if (!BASE) return empty;
-  const [trophies, tasks, issues, builds] = await Promise.all([
+  const [trophies, tasks, issues, builds, cohorts] = await Promise.all([
     get<Trophy[]>('/trophies?limit=60'),
     get<TaskRow[]>('/tasks?limit=200'),
     get<Issue[]>('/issues?limit=100'),
     get<Build[]>('/bamlBuilds?limit=20'),
+    get<Cohort[]>('/cohorts?limit=60'),
   ]);
   const T = tasks ?? [],
     TR = trophies ?? [],
     IS = issues ?? [],
-    BD = builds ?? [];
+    BD = builds ?? [],
+    CO = cohorts ?? [];
   const now = Date.now();
   const taskById = new Map(T.map((t) => [t._id, t]));
   const reportByTask = new Map(TR.map((tr) => [tr.taskId, tr._id]));
@@ -384,6 +409,7 @@ export async function loadState(): Promise<LiveState> {
     trophy: TR,
     issue: IS,
     build: BD,
+    cohort: CO,
   };
   for (const [kind, stage, , pred] of INFLIGHT) {
     for (const r of pools[kind]) {
@@ -395,7 +421,9 @@ export async function loadState(): Promise<LiveState> {
             ? (taskById.get(r.taskId)?.prompt ?? 'dedup batch')
             : kind === 'issue'
               ? r.title
-              : `baml ${String(r.sha).slice(0, 8)}`;
+              : kind === 'cohort'
+                ? (r.prompt ?? 'skill arena')
+                : `baml ${String(r.sha).slice(0, 8)}`;
       inflight.push({
         kind,
         stage,
@@ -436,6 +464,7 @@ export async function loadState(): Promise<LiveState> {
       trophies: tally(TR, (r) => r.status),
       issues: tally(IS, issueStatusLabel),
       builds: tally(BD, (r) => r.status),
+      cohorts: tally(CO, (r) => r.status),
     },
     inflight,
     runs,
@@ -445,6 +474,7 @@ export async function loadState(): Promise<LiveState> {
       ...t,
       reportId: reportByTask.get(t._id) ?? null,
     })),
+    cohorts: CO,
     agents,
     totals: {
       tasks: T.length,
@@ -579,4 +609,73 @@ export async function loadTask(
     task.bamlVersion ?? trophies?.[0]?.bamlVersion,
   );
   return { task, trophyId, bamlLabel };
+}
+
+/** One skill-arena variant: a member task, its held trophy, and that run's headline stats. */
+export type CohortVariant = {
+  skillRef: string | null;
+  taskId: string;
+  trophyId: string | null;
+  outcome: string | null;
+  status: string; // member task status
+  turns: number | null;
+  costUsd: number | null;
+  findings: number;
+};
+
+/** A cohort-detail bundle: the cohort, its per-branch variants, and the comparison report. */
+export type CohortDetail = {
+  cohort: Cohort;
+  variants: CohortVariant[];
+  reportTrophyId: string | null;
+  /** The comparison trophy's narrative, inlined so the cohort page tells the whole story. */
+  report: { summary: string | null; reportMd: string | null } | null;
+};
+
+/**
+ * Loads a single cohort plus its variant member runs (joined to their held trophies).
+ * @param id - the cohort id to load
+ * @returns the cohort detail, or null if unconfigured or the cohort is not found
+ */
+export async function loadCohort(id: string): Promise<CohortDetail | null> {
+  if (!BASE) return null;
+  const cohort = await get<Cohort>(`/cohorts/${id}`);
+  if (!cohort) return null;
+  const members =
+    (await get<Task[]>(`/tasks?field=cohortId&value=${id}&index=by_cohort&limit=50`)) ??
+    [];
+  const variants: CohortVariant[] = await Promise.all(
+    members.map(async (m) => {
+      const trophies = await get<Trophy[]>(
+        `/trophies?field=taskId&value=${m._id}&index=by_task&limit=3`,
+      );
+      // The member's own held trophy (never the cohort report, which is anchored
+      // to a representative member id).
+      const tr = (trophies ?? []).find((t) => !t.isCohortReport) ?? null;
+      return {
+        skillRef: m.skillRef ?? null,
+        taskId: m._id,
+        trophyId: tr?._id ?? null,
+        outcome: tr?.outcome ?? null,
+        status: m.status,
+        turns: tr?.metrics?.turns ?? null,
+        costUsd: tr?.metrics?.estimated_cost_usd ?? null,
+        findings: (tr?.findings ?? []).length,
+      };
+    }),
+  );
+  const reportTrophy = cohort.reportTrophyId
+    ? await get<Trophy>(`/trophies/${cohort.reportTrophyId}`)
+    : null;
+  return {
+    cohort,
+    variants,
+    reportTrophyId: cohort.reportTrophyId ?? null,
+    report: reportTrophy
+      ? {
+          summary: reportTrophy.summary ?? null,
+          reportMd: reportTrophy.reportMd ?? null,
+        }
+      : null,
+  };
 }

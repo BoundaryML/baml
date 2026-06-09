@@ -5,7 +5,7 @@ import DbView from './db-view';
 
 export const dynamic = 'force-dynamic';
 
-const TABLES = ['tasks', 'trophies', 'issues'];
+const TABLES = ['tasks', 'trophies', 'issues', 'cohorts'];
 
 /**
  * Server component for the "/db/[table]" route. Validates the table slug against

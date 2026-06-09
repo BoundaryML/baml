@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { notFound } from 'next/navigation';
 
 import { BackLink, PageHeader } from '@/components/page-header';
@@ -76,7 +77,31 @@ export default async function RunPage({ params }: { params: Promise<Params> }) {
       >
         <p>
           <strong>{trophy.outcome}</strong>
+          {trophy.isCohortReport ? (
+            <>
+              {' '}
+              · <StatPill tone="link">cohort report</StatPill>
+              {trophy.cohortId ? (
+                <>
+                  {' '}
+                  · <Link href={`/cohorts/${trophy.cohortId}`}>view cohort</Link>
+                </>
+              ) : null}
+            </>
+          ) : null}
           {task ? <> · {task.source}</> : null}
+          {task?.skillRef ? (
+            <>
+              {' '}
+              · skill <span className="mono">{task.skillRef}</span>
+            </>
+          ) : null}
+          {task?.cohortId && !trophy.isCohortReport ? (
+            <>
+              {' '}
+              · <Link href={`/cohorts/${task.cohortId}`}>arena →</Link>
+            </>
+          ) : null}
           {bamlLabel ? (
             <>
               {' '}
@@ -121,6 +146,34 @@ export default async function RunPage({ params }: { params: Promise<Params> }) {
         </div>
       </section>
 
+      {/* jump bar: long run pages get one-click section access */}
+      <nav
+        aria-label="run sections"
+        className="sticky top-0 z-10 -mx-1 mb-2 flex items-baseline gap-4 overflow-x-auto border-b border-border bg-background px-1 py-2 font-mono text-[12px]"
+      >
+        <span className="text-muted-foreground">jump:</span>
+        {trophy.reportMd ? (
+          <a href="#report" className="whitespace-nowrap no-underline hover:text-link">
+            report
+          </a>
+        ) : null}
+        {trophy.findings?.length ? (
+          <a href="#findings" className="whitespace-nowrap no-underline hover:text-link">
+            findings ({trophy.findings.length})
+          </a>
+        ) : null}
+        {filesCreated.length > 0 ? (
+          <a href="#files" className="whitespace-nowrap no-underline hover:text-link">
+            files ({filesCreated.length})
+          </a>
+        ) : null}
+        {turns.length > 0 || transcriptText ? (
+          <a href="#transcript" className="whitespace-nowrap no-underline hover:text-link">
+            transcript ({turns.length})
+          </a>
+        ) : null}
+      </nav>
+
       {trophy.whatWentWell?.length || trophy.whatFailed?.length ? (
         <section className="my-2 mb-6 grid grid-cols-2 gap-x-7 gap-y-1 max-[640px]:grid-cols-1">
           {trophy.whatWentWell?.length ? (
@@ -147,7 +200,7 @@ export default async function RunPage({ params }: { params: Promise<Params> }) {
       ) : null}
 
       {trophy.reportMd ? (
-        <section className="report-md mt-5">
+        <section id="report" className="report-md mt-5 scroll-mt-12">
           <details open className="run-block">
             <summary>Report</summary>
             <ReportMd>{trophy.reportMd}</ReportMd>
@@ -156,7 +209,7 @@ export default async function RunPage({ params }: { params: Promise<Params> }) {
       ) : null}
 
       {trophy.findings && trophy.findings.length > 0 ? (
-        <section className="findings mt-5">
+        <section id="findings" className="findings mt-5 scroll-mt-12">
           <h2 className="text-2xl font-bold">
             Findings ({trophy.findings.length})
           </h2>
@@ -188,7 +241,7 @@ export default async function RunPage({ params }: { params: Promise<Params> }) {
       ) : null}
 
       {filesCreated.length > 0 ? (
-        <section className="mt-5">
+        <section id="files" className="mt-5 scroll-mt-12">
           <h2 className="mb-3 text-2xl font-bold">
             Files created ({filesCreated.length})
           </h2>
@@ -197,7 +250,7 @@ export default async function RunPage({ params }: { params: Promise<Params> }) {
       ) : null}
 
       {turns.length > 0 || transcriptText ? (
-        <section id="transcript" className="transcript">
+        <section id="transcript" className="transcript scroll-mt-12">
           <h2 className="flex items-baseline gap-3 text-2xl font-bold">
             agent transcript ({turns.length} calls)
             <ExpandAll />
