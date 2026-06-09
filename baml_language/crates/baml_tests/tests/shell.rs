@@ -48,6 +48,68 @@ async fn shell_with_pipe() {
 }
 
 #[tokio::test]
+async fn shell_concat_command_survives_println_before_shell() {
+    let cases = [
+        (
+            "single println",
+            r#"
+            function main() -> string {
+                let cmd = "echo " + "hello_world";
+                baml.io.println("-> " + cmd);
+                baml.sys.shell(cmd, null).stdout.to_string()
+            }
+            "#,
+        ),
+        (
+            "println twice",
+            r#"
+            function main() -> string {
+                let cmd = "echo " + "hello_world";
+                baml.io.println("first -> " + cmd);
+                baml.io.println("second -> " + cmd);
+                baml.sys.shell(cmd, null).stdout.to_string()
+            }
+            "#,
+        ),
+        (
+            "multi-step concat",
+            r#"
+            function main() -> string {
+                let echo = "echo ";
+                let message = "hello_world";
+                let cmd = echo + message;
+                baml.io.println("-> " + cmd);
+                baml.sys.shell(cmd, null).stdout.to_string()
+            }
+            "#,
+        ),
+        (
+            "assigned println result",
+            r#"
+            function main() -> string {
+                let cmd = "echo " + "hello_world";
+                let _ = baml.io.println("-> " + cmd);
+                baml.sys.shell(cmd, null).stdout.to_string()
+            }
+            "#,
+        ),
+    ];
+
+    for (case, source) in cases {
+        let output = baml_test!(source);
+
+        let Ok(BexExternalValue::String(stdout)) = &output.result else {
+            panic!("{case}: expected string stdout, got {:?}", output.result);
+        };
+        assert!(
+            !stdout.is_empty(),
+            "{case}: shell stdout should not be silently emptied"
+        );
+        assert_eq!(stdout.as_str(), "hello_world\n", "{case}");
+    }
+}
+
+#[tokio::test]
 async fn shell_nonexistent_command() {
     let output = baml_test!(
         r#"
