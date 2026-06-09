@@ -295,8 +295,15 @@ fn write_ty_identity(out: &mut String, ty: &Ty) {
             }
             let _ = write!(out, ".{member}>");
         }
-        Ty::Primitive(p, _) => {
-            let _ = write!(out, "P:{p:?}");
+        Ty::Int { .. } => out.push_str("P:Int"),
+        Ty::Bigint { .. } => out.push_str("P:Bigint"),
+        Ty::Float { .. } => out.push_str("P:Float"),
+        Ty::String { .. } => out.push_str("P:String"),
+        Ty::Bool { .. } => out.push_str("P:Bool"),
+        Ty::Null { .. } => out.push_str("P:Null"),
+        Ty::Uint8Array { .. } => out.push_str("P:Uint8Array"),
+        Ty::Media(kind, _) => {
+            let _ = write!(out, "P:{kind:?}");
         }
         Ty::Union(members, _) => {
             out.push_str("U:[");
@@ -312,7 +319,10 @@ fn write_ty_identity(out: &mut String, ty: &Ty) {
             out.push_str("Lst:");
             write_ty_identity(out, elem);
         }
-        Ty::Map(k, v, _) | Ty::EvolvingMap(k, v, _) => {
+        Ty::Map {
+            key: k, value: v, ..
+        }
+        | Ty::EvolvingMap(k, v, _) => {
             out.push_str("M:");
             write_ty_identity(out, k);
             out.push(',');
@@ -355,6 +365,15 @@ fn write_ty_identity(out: &mut String, ty: &Ty) {
             out.push(',');
             write_ty_identity(out, error);
             out.push('>');
+        }
+        // `Resource`/`PromptAst`/`WatchAccessor` are never produced by TIR; the
+        // arms exist only so the match stays exhaustive over the shared
+        // `baml_type::Ty`.
+        Ty::Resource { .. } => out.push_str("Res"),
+        Ty::PromptAst { .. } => out.push_str("PAst"),
+        Ty::WatchAccessor(inner, _) => {
+            out.push_str("Watch:");
+            write_ty_identity(out, inner);
         }
     }
 }
@@ -604,7 +623,7 @@ fn write_single_witness(f: &mut fmt::Formatter<'_>, ty: &Ty) -> fmt::Result {
             Literal::Float(s) => write!(f, "{s}"),
         },
         Ty::EnumVariant(qtn, variant, _) => write!(f, "{qtn}.{variant}"),
-        Ty::Primitive(PrimitiveType::Null, _) => write!(f, "null"),
+        Ty::Null { .. } => write!(f, "null"),
         _ => write!(f, "{ty:?}"),
     }
 }
@@ -614,7 +633,14 @@ fn write_single_witness(f: &mut fmt::Formatter<'_>, ty: &Ty) -> fmt::Result {
 /// shape — `int`, `string`, `Foo`, etc. — rather than `_`.
 fn write_member_ty_witness(f: &mut fmt::Formatter<'_>, ty: &Ty) -> fmt::Result {
     match ty {
-        Ty::Primitive(p, _) => write!(f, "{p}"),
+        Ty::Int { .. } => write!(f, "{}", PrimitiveType::Int),
+        Ty::Bigint { .. } => write!(f, "{}", PrimitiveType::Bigint),
+        Ty::Float { .. } => write!(f, "{}", PrimitiveType::Float),
+        Ty::String { .. } => write!(f, "{}", PrimitiveType::String),
+        Ty::Bool { .. } => write!(f, "{}", PrimitiveType::Bool),
+        Ty::Null { .. } => write!(f, "{}", PrimitiveType::Null),
+        Ty::Uint8Array { .. } => write!(f, "{}", PrimitiveType::Uint8Array),
+        Ty::Media(kind, _) => write!(f, "{kind}"),
         // Interfaces are open-world, so a union-member witness names the
         // uncovered interface (`Animal`, `Slot<int>`) rather than collapsing to
         // a bare `_`. Rendered user-facing (no `user.` package prefix).
@@ -1418,13 +1444,11 @@ mod tests {
     impl PatCtx for StubCtx {
         fn enumerate_ctors(&self, ty: &Ty) -> Vec<Ctor> {
             match ty {
-                Ty::Primitive(PrimitiveType::Bool, _) => {
+                Ty::Bool { .. } => {
                     vec![Ctor::Single(bool_lit(true)), Ctor::Single(bool_lit(false))]
                 }
-                Ty::Primitive(PrimitiveType::Int, _)
-                | Ty::Primitive(PrimitiveType::Float, _)
-                | Ty::Primitive(PrimitiveType::String, _) => vec![Ctor::NonExhaustive],
-                Ty::Primitive(PrimitiveType::Null, _) => vec![Ctor::Single(ty.clone())],
+                Ty::Int { .. } | Ty::Float { .. } | Ty::String { .. } => vec![Ctor::NonExhaustive],
+                Ty::Null { .. } => vec![Ctor::Single(ty.clone())],
                 Ty::Union(members, _) => members
                     .iter()
                     .flat_map(|m| self.enumerate_ctors(m))
@@ -1462,10 +1486,14 @@ mod tests {
         )
     }
     fn bool_ty() -> Ty {
-        Ty::Primitive(PrimitiveType::Bool, Default::default())
+        Ty::Bool {
+            attr: Default::default(),
+        }
     }
     fn int_ty() -> Ty {
-        Ty::Primitive(PrimitiveType::Int, Default::default())
+        Ty::Int {
+            attr: Default::default(),
+        }
     }
 
     #[test]
@@ -1585,7 +1613,7 @@ mod tests {
         impl PatCtx for ArrayCtx {
             fn enumerate_ctors(&self, ty: &Ty) -> Vec<Ctor> {
                 match ty {
-                    Ty::Primitive(PrimitiveType::Bool, _) => vec![
+                    Ty::Bool { .. } => vec![
                         Ctor::Single(Ty::Literal(
                             Literal::Bool(true),
                             Freshness::Regular,
@@ -1662,7 +1690,7 @@ mod tests {
         impl PatCtx for ArrayCtx {
             fn enumerate_ctors(&self, ty: &Ty) -> Vec<Ctor> {
                 match ty {
-                    Ty::Primitive(PrimitiveType::Bool, _) => vec![
+                    Ty::Bool { .. } => vec![
                         Ctor::Single(Ty::Literal(
                             Literal::Bool(true),
                             Freshness::Regular,
@@ -1763,13 +1791,11 @@ mod tests {
             // Peel aliases first, the same way the real builder will.
             let ty = self.expand_alias(ty);
             match &ty {
-                Ty::Primitive(PrimitiveType::Bool, _) => {
+                Ty::Bool { .. } => {
                     vec![Ctor::Single(bool_lit(true)), Ctor::Single(bool_lit(false))]
                 }
-                Ty::Primitive(PrimitiveType::Int, _)
-                | Ty::Primitive(PrimitiveType::Float, _)
-                | Ty::Primitive(PrimitiveType::String, _) => vec![Ctor::NonExhaustive],
-                Ty::Primitive(PrimitiveType::Null, _) => vec![Ctor::Single(ty.clone())],
+                Ty::Int { .. } | Ty::Float { .. } | Ty::String { .. } => vec![Ctor::NonExhaustive],
+                Ty::Null { .. } => vec![Ctor::Single(ty.clone())],
                 Ty::Union(members, _) => members
                     .iter()
                     .flat_map(|m| self.enumerate_ctors(m))
@@ -1808,13 +1834,15 @@ mod tests {
         Ty::List(Box::new(elem), Default::default())
     }
     fn opt_of(t: Ty) -> Ty {
-        Ty::nullable(t)
+        Ty::optional(t)
     }
     fn union_of(ts: Vec<Ty>) -> Ty {
         Ty::Union(ts, Default::default())
     }
     fn null_ty() -> Ty {
-        Ty::Primitive(PrimitiveType::Null, Default::default())
+        Ty::Null {
+            attr: Default::default(),
+        }
     }
     fn never_ty() -> Ty {
         Ty::Never {
@@ -4007,13 +4035,11 @@ mod tests {
     impl PatCtx for UnionCtx {
         fn enumerate_ctors(&self, ty: &Ty) -> Vec<Ctor> {
             match ty {
-                Ty::Primitive(PrimitiveType::Bool, _) => {
+                Ty::Bool { .. } => {
                     vec![Ctor::Single(bool_lit(true)), Ctor::Single(bool_lit(false))]
                 }
-                Ty::Primitive(PrimitiveType::Int, _)
-                | Ty::Primitive(PrimitiveType::Float, _)
-                | Ty::Primitive(PrimitiveType::String, _) => vec![Ctor::NonExhaustive],
-                Ty::Primitive(PrimitiveType::Null, _) => vec![Ctor::Single(ty.clone())],
+                Ty::Int { .. } | Ty::Float { .. } | Ty::String { .. } => vec![Ctor::NonExhaustive],
+                Ty::Null { .. } => vec![Ctor::Single(ty.clone())],
                 // Key change: each union member becomes a UnionMember ctor.
                 Ty::Union(members, _) => members
                     .iter()
@@ -4413,7 +4439,7 @@ mod tests {
         impl PatCtx for PairCtx {
             fn enumerate_ctors(&self, ty: &Ty) -> Vec<Ctor> {
                 match ty {
-                    Ty::Primitive(PrimitiveType::Bool, _) => vec![
+                    Ty::Bool { .. } => vec![
                         Ctor::Single(Ty::Literal(
                             Literal::Bool(true),
                             Freshness::Regular,
@@ -4432,8 +4458,12 @@ mod tests {
             }
             fn class_field_types(&self, _q: &QualifiedTypeName, _t: &Ty) -> Vec<Ty> {
                 vec![
-                    Ty::Primitive(PrimitiveType::Bool, Default::default()),
-                    Ty::Primitive(PrimitiveType::Bool, Default::default()),
+                    Ty::Bool {
+                        attr: Default::default(),
+                    },
+                    Ty::Bool {
+                        attr: Default::default(),
+                    },
                 ]
             }
             fn list_element_type(&self, ty: &Ty) -> Ty {

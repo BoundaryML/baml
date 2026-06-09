@@ -339,7 +339,7 @@ fn resolve_type_alias_query() {
 #[test]
 fn class_field_bigint() {
     // Asserts that `class Foo { x bigint }` lowers the field type to
-    // `Ty::Primitive(PrimitiveType::Bigint, _)`, displayed as `bigint`.
+    // `Ty::Bigint { .. }`, displayed as `bigint`.
     // Note: to_json returns `map<string, unknown>` for bigint until Phase 2
     // wires up the bigint.to_json() method.
     let mut db = make_db();
@@ -459,7 +459,7 @@ fn function_type_throws_package_interface_exports_effect_params() {
 
     assert_eq!(exported.generic_params, vec![Name::new("__effect_param_0")]);
     assert_eq!(
-        format!("{}", exported.params[0].ty),
+        exported.params[0].ty.render_canonical(),
         "(value: int) -> string throws __effect_param_0"
     );
 }

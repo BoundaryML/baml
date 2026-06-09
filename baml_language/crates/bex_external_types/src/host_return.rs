@@ -131,7 +131,7 @@ fn value_satisfies_ty(value: &BexExternalValue, ty: &Ty) -> bool {
         Ty::String { .. } => matches!(value, BexExternalValue::String(_)),
         Ty::Uint8Array { .. } => matches!(value, BexExternalValue::Uint8Array(_)),
 
-        Ty::Literal(lit, _) => match (lit, value) {
+        Ty::Literal(lit, _, _) => match (lit, value) {
             (Literal::Bool(b), BexExternalValue::Bool(v)) => b == v,
             (Literal::Int(i), BexExternalValue::Int(v)) => i == v,
             (Literal::String(s), BexExternalValue::String(v)) => s == v,
@@ -208,28 +208,13 @@ fn value_satisfies_ty(value: &BexExternalValue, ty: &Ty) -> bool {
 /// name, the bare short name (for local types), or the dotted module-qualified
 /// name. Mirrors `bex_engine::conversion::type_name_matches_external_name`.
 fn type_name_matches_external_name(external_name: &str, type_name: &TypeName) -> bool {
-    if external_name == type_name.display_name.as_str() {
-        return true;
-    }
-
-    if type_name.module_path.is_empty() {
-        return external_name == type_name.name.as_str();
-    }
-
-    let qualified_name = type_name
-        .module_path
-        .iter()
-        .map(baml_type::Name::as_str)
-        .chain(std::iter::once(type_name.name.as_str()))
-        .collect::<Vec<_>>()
-        .join(".");
-
-    external_name == qualified_name
+    external_name == type_name.display_name().as_str()
+        || external_name == type_name.render_dotted(false)
 }
 
 #[cfg(test)]
 mod tests {
-    use baml_type::{Literal, Name, Ty, TyAttr, TypeName};
+    use baml_type::{Freshness, FunctionParamTy, Literal, Name, Ty, TyAttr, TypeName};
     use indexmap::IndexMap;
 
     use super::*;
@@ -263,7 +248,7 @@ mod tests {
 
     #[test]
     fn literal_value_equality() {
-        let lit5 = Ty::Literal(Literal::Int(5), TyAttr::default());
+        let lit5 = Ty::Literal(Literal::Int(5), Freshness::Regular, TyAttr::default());
         assert!(validate_host_return(&BexExternalValue::Int(5), &lit5).is_ok());
         assert!(validate_host_return(&BexExternalValue::Int(6), &lit5).is_err());
     }
@@ -399,7 +384,9 @@ mod tests {
     #[test]
     fn function_type_accepts_only_callables() {
         let fn_ty = Ty::Function {
-            params: vec![Ty::int()],
+            generic_params: vec![],
+            generic_param_bounds: vec![],
+            params: vec![FunctionParamTy::required(None, Ty::int())],
             ret: Box::new(Ty::string()),
             throws: Box::new(Ty::null()),
             attr: TyAttr::default(),

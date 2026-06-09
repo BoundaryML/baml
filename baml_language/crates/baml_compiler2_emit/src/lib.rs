@@ -62,9 +62,11 @@ fn contains_tir_type_var(ty: &baml_compiler2_tir::ty::Ty) -> bool {
                     .any(|(_, ty)| contains_tir_type_var(ty))
         }
         Ty::List(inner, _) | Ty::EvolvingList(inner, _) => contains_tir_type_var(inner),
-        Ty::Map(k, v, _) | Ty::EvolvingMap(k, v, _) | Ty::Future(k, v, _) => {
-            contains_tir_type_var(k) || contains_tir_type_var(v)
+        Ty::Map {
+            key: k, value: v, ..
         }
+        | Ty::EvolvingMap(k, v, _)
+        | Ty::Future(k, v, _) => contains_tir_type_var(k) || contains_tir_type_var(v),
         Ty::Function {
             generic_param_bounds,
             params,
@@ -267,17 +269,7 @@ fn collect_class_fields_with_implements(
 /// codegen-output Python and the runtime see the same `<pkg>.<…>` form
 /// end-to-end. See `12a-namespace-rules.md §5` for the rationale.
 fn fq_to_type_name(fq: &str) -> baml_type::TypeName {
-    let segments: Vec<&str> = fq.split('.').collect();
-    let name = baml_base::Name::new(*segments.last().expect("non-empty fq name"));
-    let module_path = segments[..segments.len() - 1]
-        .iter()
-        .map(|s| baml_base::Name::new(*s))
-        .collect();
-    baml_type::TypeName {
-        name,
-        module_path,
-        display_name: baml_base::Name::new(fq),
-    }
+    baml_type::QualifiedTypeName::from_dotted_path(fq)
 }
 
 /// Generate bytecode for the entire project (default: `OptLevel::Two`).
@@ -963,7 +955,7 @@ pub fn generate_project_bytecode_with_opt(
         for (qtn, tir_ty) in &cache.aliases {
             if cache.recursive.contains(qtn) {
                 let mir_ty = cache.convert(tir_ty);
-                let type_name = baml_compiler2_mir::qtn_to_type_name(qtn);
+                let type_name = qtn.clone();
                 program.recursive_type_alias_defs.insert(type_name, mir_ty);
             }
         }
@@ -1007,7 +999,7 @@ pub fn generate_project_bytecode_with_opt(
                  dedup_key: String,
                  iface_args: Vec<baml_type::Ty>,
                  iface_assoc: Vec<(Name, baml_type::Ty)>| {
-                    let iface_name = baml_compiler2_mir::qtn_to_type_name(iface_qtn);
+                    let iface_name = iface_qtn.clone();
                     if seen_pairs.insert((
                         iface_qtn.to_string(),
                         dedup_key,
@@ -1059,7 +1051,7 @@ pub fn generate_project_bytecode_with_opt(
                         };
                         add_impl(
                             iface_qtn,
-                            baml_compiler2_mir::qtn_to_type_name(class_qtn),
+                            class_qtn.clone(),
                             class_qtn.to_string(),
                             iface_args,
                             iface_assoc,
@@ -1068,31 +1060,30 @@ pub fn generate_project_bytecode_with_opt(
                     // BEP-044 wf3 #G19: an out-of-body `implements I for <primitive>`
                     // is visible to reflection via a synthetic primitive TypeName
                     // (the name MUST match `bex_vm`'s `primitive_type_name`).
-                    baml_compiler2_tir::ty::Ty::Primitive(prim, _) => {
-                        use baml_compiler2_tir::ty::PrimitiveType;
-                        let prim_name = match prim {
-                            PrimitiveType::Int => Some("int"),
-                            PrimitiveType::Bigint => Some("bigint"),
-                            PrimitiveType::Float => Some("float"),
-                            PrimitiveType::String => Some("string"),
-                            PrimitiveType::Bool => Some("bool"),
-                            PrimitiveType::Null => Some("null"),
-                            _ => None,
+                    baml_compiler2_tir::ty::Ty::Int { .. }
+                    | baml_compiler2_tir::ty::Ty::Bigint { .. }
+                    | baml_compiler2_tir::ty::Ty::Float { .. }
+                    | baml_compiler2_tir::ty::Ty::String { .. }
+                    | baml_compiler2_tir::ty::Ty::Bool { .. }
+                    | baml_compiler2_tir::ty::Ty::Null { .. } => {
+                        use baml_compiler2_tir::ty::Ty as Tir2Ty;
+                        let prim_name = match &rule.for_ty_pattern {
+                            Tir2Ty::Int { .. } => "int",
+                            Tir2Ty::Bigint { .. } => "bigint",
+                            Tir2Ty::Float { .. } => "float",
+                            Tir2Ty::String { .. } => "string",
+                            Tir2Ty::Bool { .. } => "bool",
+                            Tir2Ty::Null { .. } => "null",
+                            _ => unreachable!("matched scalar primitive above"),
                         };
-                        if let Some(prim_name) = prim_name {
-                            let tn = baml_type::TypeName {
-                                name: Name::new(prim_name),
-                                module_path: Vec::new(),
-                                display_name: Name::new(prim_name),
-                            };
-                            add_impl(
-                                iface_qtn,
-                                tn,
-                                format!("prim:{prim_name}"),
-                                converted_iface_args,
-                                converted_iface_assoc.clone(),
-                            );
-                        }
+                        let tn = baml_type::QualifiedTypeName::local(Name::new(prim_name));
+                        add_impl(
+                            iface_qtn,
+                            tn,
+                            format!("prim:{prim_name}"),
+                            converted_iface_args,
+                            converted_iface_assoc.clone(),
+                        );
                     }
                     baml_compiler2_tir::ty::Ty::TypeVar(type_var, _) => {
                         let Some(bound) = rule
@@ -1124,7 +1115,7 @@ pub fn generate_project_bytecode_with_opt(
                                 // (matches any instantiation at reflection time).
                                 add_impl(
                                     iface_qtn,
-                                    baml_compiler2_mir::qtn_to_type_name(class_qtn),
+                                    class_qtn.clone(),
                                     class_qtn.to_string(),
                                     Vec::new(),
                                     Vec::new(),
@@ -1141,11 +1132,11 @@ pub fn generate_project_bytecode_with_opt(
         // `FxHashMap` iteration that built the rules.
         let impl_sort_key = |tn: &baml_type::TypeName| {
             (
-                tn.module_path
+                tn.module_path()
                     .iter()
                     .map(std::string::ToString::to_string)
                     .collect::<Vec<_>>(),
-                tn.name.to_string(),
+                tn.name().to_string(),
             )
         };
         for impls in inverted.values_mut() {

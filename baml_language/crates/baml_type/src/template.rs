@@ -157,7 +157,7 @@ impl fmt::Display for TyTemplate {
             }
             Self::Map(k, v) => write!(f, "map<{k}, {v}>"),
             Self::Class(name, args) => {
-                write!(f, "{name}")?;
+                write!(f, "{}", name.display_name())?;
                 if !args.is_empty() {
                     write!(f, "<")?;
                     for (i, arg) in args.iter().enumerate() {
@@ -171,7 +171,7 @@ impl fmt::Display for TyTemplate {
                 Ok(())
             }
             Self::Interface(name, args, associated_bindings) => {
-                write!(f, "{name}")?;
+                write!(f, "{}", name.display_name())?;
                 if !args.is_empty() || !associated_bindings.is_empty() {
                     write!(f, "<")?;
                     let mut first = true;

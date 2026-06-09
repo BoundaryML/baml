@@ -41,27 +41,14 @@ where
 /// Build the runtime registration key for a `Ty::Class(qtn, ...)` /
 /// `Ty::Enum(qtn, _)` lookup against `BexVm::resolved_class_names`.
 ///
-/// Compiler-side `qtn_to_type_name` strips the `user.` prefix from
-/// user-defined types' `display_name` for nicer diagnostic strings, but
+/// Compiler-side `display_name` strips the `user.` prefix from
+/// user-defined types for nicer diagnostic strings, but
 /// the runtime registration uses the full `package.namespace.name` form.
 /// We rebuild that form here from `module_path + name`; for builtin types
 /// (where `display_name` already encodes the full path) this also works
 /// because `module_path` is the same path split on dots.
 fn class_lookup_key(qtn: &TypeName) -> String {
-    if qtn.module_path.is_empty() {
-        qtn.name.to_string()
-    } else {
-        let mut buf = String::new();
-        for (i, seg) in qtn.module_path.iter().enumerate() {
-            if i > 0 {
-                buf.push('.');
-            }
-            buf.push_str(seg.as_str());
-        }
-        buf.push('.');
-        buf.push_str(qtn.name.as_str());
-        buf
-    }
+    qtn.render_dotted(false)
 }
 use std::collections::HashMap;
 
@@ -438,7 +425,7 @@ fn ty_value_to_serde(
             Ok(value_to_serde(vm, value))
         }
         Ty::Bigint { .. } => Ok(value_to_serde(vm, value)),
-        Ty::Literal(_, _) => Ok(value_to_serde(vm, value)),
+        Ty::Literal(_, _, _) => Ok(value_to_serde(vm, value)),
 
         Ty::List(elem, _) => {
             let items = match value.as_object_ptr() {
@@ -476,7 +463,7 @@ fn ty_value_to_serde(
             Ok(serde_json::Value::Object(out))
         }
 
-        Ty::TypeAlias(name, _) if name.display_name.as_str() == BAML_JSON_JSON => {
+        Ty::TypeAlias(name, _) if name.display_name().as_str() == BAML_JSON_JSON => {
             Ok(value_to_serde(vm, value))
         }
 
@@ -529,9 +516,9 @@ fn ty_value_to_serde(
             Ok(value_to_serde(vm, value))
         }
 
-        Ty::Opaque(name, _) => Err(raise_serialize(
+        Ty::Resource { .. } | Ty::PromptAst { .. } => Err(raise_serialize(
             vm,
-            format!("cannot serialize opaque type `{name}`"),
+            "cannot serialize opaque type",
             path,
             "opaque",
         )),
@@ -568,6 +555,23 @@ fn ty_value_to_serde(
             // substitution before reaching this point.
             Ok(value_to_serde(vm, value))
         }
+
+        // TIR-internal compiler-only types erased at the TIR→runtime boundary;
+        // they never carry a runtime value to serialize.
+        Ty::TypeVar(_, _)
+        | Ty::AssociatedTypeProjection { .. }
+        | Ty::Never { .. }
+        | Ty::Unknown { .. }
+        | Ty::Error { .. }
+        | Ty::EvolvingList(_, _)
+        | Ty::EvolvingMap(_, _, _)
+        | Ty::RustType { .. }
+        | Ty::Type { .. } => Err(raise_serialize(
+            vm,
+            "cannot serialize compiler-only type",
+            path,
+            "compiler_only",
+        )),
     }
 }
 
@@ -611,7 +615,7 @@ fn serialize_class_instance(
         }
     };
 
-    if let Some(kind) = media_kind_from_fqn(qtn.display_name.as_str()) {
+    if let Some(kind) = media_kind_from_fqn(qtn.display_name().as_str()) {
         return serialize_media(vm, value, kind, path);
     }
 
@@ -818,7 +822,7 @@ fn ty_serde_to_value(
             _ => Err(raise_decode(vm, "expected object", path)),
         },
 
-        Ty::TypeAlias(name, _) if name.display_name.as_str() == BAML_JSON_JSON => {
+        Ty::TypeAlias(name, _) if name.display_name().as_str() == BAML_JSON_JSON => {
             Ok(serde_to_value(vm, json))
         }
 
@@ -828,7 +832,7 @@ fn ty_serde_to_value(
         }
 
         Ty::Class(qtn, type_args, _) => {
-            if let Some(kind) = media_kind_from_fqn(qtn.display_name.as_str()) {
+            if let Some(kind) = media_kind_from_fqn(qtn.display_name().as_str()) {
                 return deserialize_media(vm, json, kind, qtn, path);
             }
             deserialize_class_instance(vm, json, qtn, type_args, path)
@@ -873,7 +877,7 @@ fn ty_serde_to_value(
             Err(raise_decode(vm, "no union member matched", path))
         }
 
-        Ty::Literal(lit, _) => match (lit, json) {
+        Ty::Literal(lit, _, _) => match (lit, json) {
             (baml_type::Literal::Bool(b), serde_json::Value::Bool(jb)) if b == jb => {
                 Ok(Value::bool(*jb))
             }
@@ -905,11 +909,9 @@ fn ty_serde_to_value(
             _ => Err(raise_decode(vm, "literal mismatch", path)),
         },
 
-        Ty::Opaque(name, _) => Err(raise_decode(
-            vm,
-            format!("cannot deserialize opaque type `{name}`"),
-            path,
-        )),
+        Ty::Resource { .. } | Ty::PromptAst { .. } => {
+            Err(raise_decode(vm, "cannot deserialize opaque type", path))
+        }
 
         Ty::Function { .. }
         | Ty::Future(_, _, _)
@@ -921,6 +923,18 @@ fn ty_serde_to_value(
             // whose shape is already JSON-representable.
             Ok(serde_to_value(vm, json))
         }
+
+        // TIR-internal compiler-only types erased at the TIR→runtime boundary;
+        // they never appear as a runtime decode target.
+        Ty::TypeVar(_, _)
+        | Ty::AssociatedTypeProjection { .. }
+        | Ty::Never { .. }
+        | Ty::Unknown { .. }
+        | Ty::Error { .. }
+        | Ty::EvolvingList(_, _)
+        | Ty::EvolvingMap(_, _, _)
+        | Ty::RustType { .. }
+        | Ty::Type { .. } => Err(raise_decode(vm, "cannot decode compiler-only type", path)),
     }
 }
 
@@ -1151,7 +1165,7 @@ fn try_yield_user_from_json(vm: &mut BexVm, j: Value, ty: &Ty) -> Option<NativeC
         Ty::Class(qtn, type_args, _) | Ty::Interface(qtn, type_args, _, _) => (qtn, type_args),
         _ => return None,
     };
-    if media_kind_from_fqn(qtn.display_name.as_str()).is_some() {
+    if media_kind_from_fqn(qtn.display_name().as_str()).is_some() {
         return None;
     }
     let from_json_name = format!("{}.from_json", class_lookup_key(qtn));

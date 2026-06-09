@@ -361,7 +361,9 @@ impl fmt::Display for TirTypeError {
             } => {
                 write!(
                     f,
-                    "`spawn ... with` takes middleware transformer functions: this link receives `{expected_input}` and must return a `baml.spawn.SpawnParams`, got `{got}`"
+                    "`spawn ... with` takes middleware transformer functions: this link receives `{}` and must return a `baml.spawn.SpawnParams`, got `{}`",
+                    expected_input.render_user_facing(),
+                    got.render_user_facing()
                 )
             }
             TirTypeError::NotCallable { ty } => {

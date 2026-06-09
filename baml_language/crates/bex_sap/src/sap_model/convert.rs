@@ -354,24 +354,24 @@ impl TypeCtx {
                     convert_ty_attrs(ty_attr),
                 )
             }
-            baml_type::Ty::Literal(baml_type::Literal::Int(i), attr) => TyWithMeta::new(
+            baml_type::Ty::Literal(baml_type::Literal::Int(i), _, attr) => TyWithMeta::new(
                 sap_model::Ty::Resolved(TyResolved::LiteralInt(IntLiteralTy(*i))),
                 convert_ty_attrs(attr),
             ),
-            baml_type::Ty::Literal(baml_type::Literal::Bigint(bi), attr) => TyWithMeta::new(
+            baml_type::Ty::Literal(baml_type::Literal::Bigint(bi), _, attr) => TyWithMeta::new(
                 sap_model::Ty::Resolved(TyResolved::LiteralBigint(BigintLiteralTy(bi.clone()))),
                 convert_ty_attrs(attr),
             ),
             baml_type::Ty::Literal(baml_type::Literal::Float(..), ..) => {
                 return Err(ConvertError::FloatLiteral);
             }
-            baml_type::Ty::Literal(baml_type::Literal::String(s), attr) => TyWithMeta::new(
+            baml_type::Ty::Literal(baml_type::Literal::String(s), _, attr) => TyWithMeta::new(
                 sap_model::Ty::Resolved(TyResolved::LiteralString(StringLiteralTy(Cow::Borrowed(
                     s,
                 )))),
                 convert_ty_attrs(attr),
             ),
-            baml_type::Ty::Literal(baml_type::Literal::Bool(b), attr) => TyWithMeta::new(
+            baml_type::Ty::Literal(baml_type::Literal::Bool(b), _, attr) => TyWithMeta::new(
                 sap_model::Ty::Resolved(TyResolved::LiteralBool(BoolLiteralTy(*b))),
                 convert_ty_attrs(attr),
             ),
@@ -492,12 +492,22 @@ impl TypeCtx {
                 )
             }
             unparsable @ (baml_type::Ty::Uint8Array { .. }
-            | baml_type::Ty::Opaque(_, _)
+            | baml_type::Ty::Resource { .. }
+            | baml_type::Ty::PromptAst { .. }
             | baml_type::Ty::Function { .. }
             | baml_type::Ty::Void { .. }
             | baml_type::Ty::WatchAccessor(_, _)
             | baml_type::Ty::BuiltinUnknown { .. }
-            | baml_type::Ty::Future(_, _, _)) => {
+            | baml_type::Ty::Future(_, _, _)
+            | baml_type::Ty::TypeVar(_, _)
+            | baml_type::Ty::AssociatedTypeProjection { .. }
+            | baml_type::Ty::Never { .. }
+            | baml_type::Ty::Unknown { .. }
+            | baml_type::Ty::Error { .. }
+            | baml_type::Ty::EvolvingList(_, _)
+            | baml_type::Ty::EvolvingMap(_, _, _)
+            | baml_type::Ty::RustType { .. }
+            | baml_type::Ty::Type { .. }) => {
                 return Err(ConvertError::NonParsableType(Box::new(unparsable.clone())));
             }
         };
@@ -576,12 +586,22 @@ impl TypeCtx {
                 };
                 self.get_field_attrs(alias_ty, recursion_depth + 1)?
             }
-            unparsable @ (::baml_type::Ty::Opaque(_, _)
+            unparsable @ (::baml_type::Ty::Resource { .. }
+            | ::baml_type::Ty::PromptAst { .. }
             | ::baml_type::Ty::Function { .. }
             | ::baml_type::Ty::Void { .. }
             | ::baml_type::Ty::WatchAccessor(_, _)
             | ::baml_type::Ty::BuiltinUnknown { .. }
-            | ::baml_type::Ty::Future(_, _, _)) => {
+            | ::baml_type::Ty::Future(_, _, _)
+            | ::baml_type::Ty::TypeVar(_, _)
+            | ::baml_type::Ty::AssociatedTypeProjection { .. }
+            | ::baml_type::Ty::Never { .. }
+            | ::baml_type::Ty::Unknown { .. }
+            | ::baml_type::Ty::Error { .. }
+            | ::baml_type::Ty::EvolvingList(_, _)
+            | ::baml_type::Ty::EvolvingMap(_, _, _)
+            | ::baml_type::Ty::RustType { .. }
+            | ::baml_type::Ty::Type { .. }) => {
                 return Err(ConvertError::NonParsableType(Box::new(unparsable.clone())));
             }
         };
@@ -755,12 +775,22 @@ fn is_sap_parseable(ty: &baml_type::Ty) -> Result<Vec<TypeName>, ()> {
             Ok(names)
         }
         baml_type::Ty::TypeAlias(name, _) => Ok(vec![name.clone()]),
-        baml_type::Ty::Opaque(..)
+        baml_type::Ty::Resource { .. }
+        | baml_type::Ty::PromptAst { .. }
         | baml_type::Ty::Function { .. }
         | baml_type::Ty::Void { .. }
         | baml_type::Ty::WatchAccessor(..)
         | baml_type::Ty::BuiltinUnknown { .. }
-        | baml_type::Ty::Future(..) => Err(()),
+        | baml_type::Ty::Future(..)
+        | baml_type::Ty::TypeVar(..)
+        | baml_type::Ty::AssociatedTypeProjection { .. }
+        | baml_type::Ty::Never { .. }
+        | baml_type::Ty::Unknown { .. }
+        | baml_type::Ty::Error { .. }
+        | baml_type::Ty::EvolvingList(..)
+        | baml_type::Ty::EvolvingMap(..)
+        | baml_type::Ty::RustType { .. }
+        | baml_type::Ty::Type { .. } => Err(()),
     }
 }
 

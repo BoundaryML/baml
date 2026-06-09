@@ -1070,8 +1070,8 @@ fn numeric_place_kind(body: &MirFunctionBody, place: &Place) -> Option<NumericKi
 
 fn numeric_ty_kind(ty: &Ty) -> Option<NumericKind> {
     match ty {
-        Ty::Int { .. } | Ty::Literal(Literal::Int(_), _) => Some(NumericKind::Int),
-        Ty::Float { .. } | Ty::Literal(Literal::Float(_), _) => Some(NumericKind::Float),
+        Ty::Int { .. } | Ty::Literal(Literal::Int(_), _, _) => Some(NumericKind::Int),
+        Ty::Float { .. } | Ty::Literal(Literal::Float(_), _, _) => Some(NumericKind::Float),
         _ => None,
     }
 }

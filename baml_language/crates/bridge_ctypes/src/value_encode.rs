@@ -202,11 +202,11 @@ fn empty_ty_name() -> BamlTyName {
 fn ty_to_baml_ty_name(ty: &Ty) -> BamlTyName {
     match ty {
         Ty::Class(tn, args, _) => BamlTyName {
-            name: tn.display_name.to_string(),
+            name: tn.display_name().to_string(),
             generic_args: ty_args_to_baml_generic_args(args, &[]),
         },
         Ty::Interface(tn, args, associated_bindings, _) => BamlTyName {
-            name: tn.display_name.to_string(),
+            name: tn.display_name().to_string(),
             generic_args: ty_args_to_baml_generic_args(args, associated_bindings),
         },
         _ => BamlTyName {
@@ -377,7 +377,7 @@ fn ty_to_field_type(ty: &Ty) -> BamlTy {
         }
         Ty::EnumVariant(tn, ..) | Ty::Enum(tn, _) => {
             Some(FieldType::EnumType(crate::baml_core::cffi::BamlTyEnum {
-                name: tn.display_name.to_string(),
+                name: tn.display_name().to_string(),
             }))
         }
         // A nullable union (`T | null`) preserves the old `Optional` wire format:
@@ -394,9 +394,9 @@ fn ty_to_field_type(ty: &Ty) -> BamlTy {
         Ty::Media(kind, _) => Some(FieldType::MediaType(BamlTyMedia {
             media: media_kind_to_proto_enum(*kind).into(),
         })),
-        Ty::Literal(lit, _) => Some(FieldType::LiteralType(literal_to_field_type_literal(lit))),
-        Ty::Opaque(tn, _) => {
-            unreachable!("runtime-only {tn} should not reach FFI type encoding")
+        Ty::Literal(lit, _, _) => Some(FieldType::LiteralType(literal_to_field_type_literal(lit))),
+        Ty::Resource { .. } | Ty::PromptAst { .. } => {
+            unreachable!("runtime-only opaque type should not reach FFI type encoding")
         }
         Ty::Uint8Array { .. } => Some(FieldType::Uint8arrayType(BamlTyUint8Array {})),
         // BuiltinUnknown is used for dynamic types (e.g., map values, array elements)
@@ -407,7 +407,16 @@ fn ty_to_field_type(ty: &Ty) -> BamlTy {
         | Ty::Future(..)
         | Ty::Function { .. }
         | Ty::Void { .. }
-        | Ty::WatchAccessor(_, _) => {
+        | Ty::WatchAccessor(_, _)
+        | Ty::TypeVar(..)
+        | Ty::AssociatedTypeProjection { .. }
+        | Ty::Never { .. }
+        | Ty::Unknown { .. }
+        | Ty::Error { .. }
+        | Ty::EvolvingList(..)
+        | Ty::EvolvingMap(..)
+        | Ty::RustType { .. }
+        | Ty::Type { .. } => {
             unreachable!("compiler-only variant should not reach FFI: {ty:?}")
         }
     };

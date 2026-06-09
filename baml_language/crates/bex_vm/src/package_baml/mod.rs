@@ -170,7 +170,10 @@ pub(super) fn make_to_json_callee(vm: &mut BexVm, v: Value) -> Result<HeapPtr, V
             Object::Instance(inst) => {
                 let class_ptr = inst.class;
                 let fqn = match vm.get_object(class_ptr) {
-                    Object::Class(c) => c.name.display_name.as_str().to_string(),
+                    // Dispatch key must be the fully-qualified name (keeping the
+                    // package), matching how functions are registered — not the
+                    // user-facing `display_name` that elides `user`.
+                    Object::Class(c) => c.name.render_dotted(false),
                     _ => {
                         return Err(VmRustFnError::InternalError(
                             VmInternalError::MissingNativeFunction {
