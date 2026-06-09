@@ -21,6 +21,9 @@ crates/baml_type/tests/simplify_sap_tests.md
 ARCHITECTURE_MINI.md
 ARCHITECTURE.md
 
+# Type System Documentation
+TYPE_SYSTEM.md
+
 # Speedtest workload definitions
 tools/speedtest/workloads/**/*.md
 
