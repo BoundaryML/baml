@@ -22,7 +22,8 @@ pub use attr::*;
 pub use defs::*;
 pub use names::*;
 pub use primitive::*;
-use subenum::subenum;
+mod runtime_ty;
+pub use runtime_ty::*;
 pub use template::TyTemplate;
 
 /// Upper bound on the bit-length of a `bigint` value we are willing to
@@ -126,54 +127,45 @@ pub enum FunctionParamMode {
 /// variants) that holds SAP streaming annotations. All existing code uses
 /// `TyAttr::default()` — only stream type generation (HIR lowering) will populate
 /// non-default values.
-#[subenum(
-    ConcreteTy(
-        doc = "Concrete types that have concrete memory layouts and method implementations."
-    ),
-    RealizedTy(doc = "Realized types (excludes type aliases and unrealized type args)"),
-    RuntimeTy(doc = "Types that exist outside the compiler")
-)]
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, BorshSerialize, BorshDeserialize)]
 pub enum Ty {
-    #[subenum(ConcreteTy, RealizedTy, RuntimeTy)]
-    Int { attr: TyAttr },
-    #[subenum(ConcreteTy, RealizedTy, RuntimeTy)]
-    Bigint { attr: TyAttr },
-    #[subenum(ConcreteTy, RealizedTy, RuntimeTy)]
-    Float { attr: TyAttr },
-    #[subenum(ConcreteTy, RealizedTy, RuntimeTy)]
-    String { attr: TyAttr },
-    #[subenum(ConcreteTy, RealizedTy, RuntimeTy)]
-    Bool { attr: TyAttr },
-    #[subenum(ConcreteTy, RealizedTy, RuntimeTy)]
-    Null { attr: TyAttr },
-    #[subenum(ConcreteTy, RealizedTy, RuntimeTy)]
-    Uint8Array { attr: TyAttr },
-    #[subenum(ConcreteTy, RealizedTy, RuntimeTy)]
+    Int {
+        attr: TyAttr,
+    },
+    Bigint {
+        attr: TyAttr,
+    },
+    Float {
+        attr: TyAttr,
+    },
+    String {
+        attr: TyAttr,
+    },
+    Bool {
+        attr: TyAttr,
+    },
+    Null {
+        attr: TyAttr,
+    },
+    Uint8Array {
+        attr: TyAttr,
+    },
     Media(MediaKind, TyAttr),
     /// A literal type — a single value (`1`, `"hi"`, `true`) as a type. The
     /// [`Freshness`] flag is compiler-only (fresh literals widen at mutable
     /// binding sites); it is normalized to `Regular` at the runtime boundary.
-    #[subenum(RealizedTy, RuntimeTy)]
     Literal(Literal, Freshness, TyAttr),
-    #[subenum(ConcreteTy, RealizedTy, RuntimeTy)]
     Class(TypeName, Vec<Ty>, TyAttr),
-    #[subenum(RealizedTy, RuntimeTy)]
     Interface(TypeName, Vec<Ty>, Vec<(Name, Ty)>, TyAttr),
-    #[subenum(ConcreteTy, RealizedTy, RuntimeTy)]
     Enum(TypeName, TyAttr),
     /// A specific enum variant — `Status.HttpError`.
-    #[subenum(RealizedTy, RuntimeTy)]
     EnumVariant(TypeName, Name, TyAttr),
-    #[subenum(ConcreteTy, RealizedTy, RuntimeTy)]
     List(Box<Ty>, TyAttr),
-    #[subenum(ConcreteTy, RealizedTy, RuntimeTy)]
     Map {
         key: Box<Ty>,
         value: Box<Ty>,
         attr: TyAttr,
     },
-    #[subenum(RealizedTy, RuntimeTy)]
     Union(Vec<Ty>, TyAttr),
 
     /// Function/arrow type: `<G…>(T1, T2, ...) -> R throws E`.
@@ -181,7 +173,6 @@ pub enum Ty {
     /// `generic_params`/`generic_param_bounds` carry the function's declared
     /// type parameters and their bounds (kept at runtime for reflection, even
     /// though body `TypeVar`s are erased at the runtime boundary).
-    #[subenum(ConcreteTy, RealizedTy, RuntimeTy)]
     Function {
         generic_params: Vec<Name>,
         generic_param_bounds: Vec<Option<Ty>>,
@@ -196,54 +187,54 @@ pub enum Ty {
     /// Carries both the value type the future resolves to and the error
     /// type the future may throw. The error type approximates `never` as
     /// `Null` when the body of the future statically cannot throw.
-    #[subenum(ConcreteTy, RealizedTy, RuntimeTy)]
     Future(Box<Ty>, Box<Ty>, TyAttr),
     /// Opaque Rust-managed state (`$rust_type` fields in builtin class stubs,
     /// e.g. `Media._data`). A leaf concrete type with no inner structure.
     ///
     /// Renders as `$rust_type` (qualified name `baml.rust.RustType`).
-    #[subenum(ConcreteTy, RealizedTy, RuntimeTy)]
-    RustType { attr: TyAttr },
+    RustType {
+        attr: TyAttr,
+    },
     /// The `type` metatype keyword — a runtime value that wraps a `Ty`
     /// (reflection). A leaf concrete type.
     ///
     /// Renders as the `type` keyword (qualified name `baml.reflect.Type`).
-    #[subenum(ConcreteTy, RealizedTy, RuntimeTy)]
-    Type { attr: TyAttr },
+    Type {
+        attr: TyAttr,
+    },
     /// Opaque resource handle — file, socket, or HTTP response body. A leaf
     /// concrete type whose *values* are concrete Rust types on the VM heap; the
     /// type system treats it nominally (no structural decomposition).
     ///
     /// Renders as its qualified name `baml.llm.Resource`.
-    #[subenum(ConcreteTy, RealizedTy, RuntimeTy)]
-    Resource { attr: TyAttr },
+    Resource {
+        attr: TyAttr,
+    },
     /// Opaque structured prompt tree for LLM calls. A leaf concrete type whose
     /// *values* are concrete Rust types on the VM heap; the type system treats
     /// it nominally (no structural decomposition).
     ///
     /// Renders as its qualified name `baml.llm.PromptAst`.
-    #[subenum(ConcreteTy, RealizedTy, RuntimeTy)]
-    PromptAst { attr: TyAttr },
+    PromptAst {
+        attr: TyAttr,
+    },
 
     /// Void type — the type of effectful expressions (was VIR `Unit`).
-    #[subenum(RealizedTy, RuntimeTy)]
-    Void { attr: TyAttr },
+    Void {
+        attr: TyAttr,
+    },
     /// Watch accessor type: represents `x.$watch` on a watched variable.
-    #[subenum(RealizedTy, RuntimeTy)]
     WatchAccessor(Box<Ty>, TyAttr),
 
     /// Only recursive aliases survive lower_ty; non-recursive are expanded.
-    #[subenum(RuntimeTy)]
     TypeAlias(TypeName, TyAttr),
     /// A type variable (generic parameter) — e.g. `T` in `Array<T>`. Bound
     /// during inference; can survive at runtime only inside reflective generic
     /// metadata.
-    #[subenum(RuntimeTy)]
     TypeVar(Name, TyAttr),
     /// Associated type projection, e.g. `P.Output` or `(T as Iterator).Item`. Bound
     /// during inference; can survive at runtime only inside reflective generic
     /// metadata.
-    #[subenum(RuntimeTy)]
     AssociatedTypeProjection {
         base: Box<Ty>,
         interface: Option<Box<Ty>>,
@@ -260,56 +251,32 @@ pub enum Ty {
     /// ```baml
     /// function render_prompt(function_name: string, args: map<string, unknown>) -> PromptAst
     /// ```
-    #[subenum(RealizedTy, RuntimeTy)]
-    BuiltinUnknown { attr: TyAttr },
+    BuiltinUnknown {
+        attr: TyAttr,
+    },
     /// The bottom type — an expression that never produces a value (`return`,
     /// `break`, `continue`, diverging blocks). A subtype of every type.
-    #[subenum(RealizedTy, RuntimeTy)]
-    Never { attr: TyAttr },
+    Never {
+        attr: TyAttr,
+    },
 
     // --- TIR-only: present during type checking, erased at the runtime
     // boundary (`convert_tir2_ty`). Excluded from `ConcreteTy`; only the ones
     // that can legitimately nest in a runtime type carry `RuntimeTy`.
     /// Error-recovery sentinel: the type is structurally unknown (e.g. an
     /// unresolved name). Distinct from `BuiltinUnknown` (a well-formed top type).
-    Unknown { attr: TyAttr },
+    Unknown {
+        attr: TyAttr,
+    },
     /// Error sentinel: a hard type error was emitted for this expression.
-    Error { attr: TyAttr },
+    Error {
+        attr: TyAttr,
+    },
     /// Evolving list — an empty `[]` literal at a mutable binding whose element
     /// type is refined by mutations. Frozen to `List` at the runtime boundary.
     EvolvingList(Box<Ty>, TyAttr),
     /// Evolving map — the map analogue of [`Ty::EvolvingList`].
     EvolvingMap(Box<Ty>, Box<Ty>, TyAttr),
-}
-
-// ── Subset-hierarchy upcasts ─────────────────────────────────────────────────
-// `subenum` generates each subset's `From<child> for Ty` and `TryFrom<Ty> for
-// child`, but not the child→child casts. The taxonomy guarantees
-// `ConcreteTy ⊆ RealizedTy ⊆ RuntimeTy`, so these upcasts are infallible: round
-// through `Ty`; the `TryFrom` cannot fail for a value already in the subset.
-
-impl From<ConcreteTy> for RealizedTy {
-    fn from(value: ConcreteTy) -> Self {
-        Ty::from(value)
-            .try_into()
-            .unwrap_or_else(|_| unreachable!("every ConcreteTy is a RealizedTy"))
-    }
-}
-
-impl From<ConcreteTy> for RuntimeTy {
-    fn from(value: ConcreteTy) -> Self {
-        Ty::from(value)
-            .try_into()
-            .unwrap_or_else(|_| unreachable!("every ConcreteTy is a RuntimeTy"))
-    }
-}
-
-impl From<RealizedTy> for RuntimeTy {
-    fn from(value: RealizedTy) -> Self {
-        Ty::from(value)
-            .try_into()
-            .unwrap_or_else(|_| unreachable!("every RealizedTy is a RuntimeTy"))
-    }
 }
 
 /// Flatten, deduplicate, and collapse a vec of widened types into a single `Ty`.
