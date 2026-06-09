@@ -141,7 +141,7 @@ export default function DbView({
           className="cursor-pointer border-0 bg-transparent p-0 text-link"
           onClick={() => setLive((v) => !v)}
         >
-          {live ? 'live ⏸' : 'paused ▶'}
+          {live ? 'live — pause' : 'paused — resume'}
         </button>
       </p>
     </header>

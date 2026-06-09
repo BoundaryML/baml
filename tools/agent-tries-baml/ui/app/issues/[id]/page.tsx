@@ -112,14 +112,7 @@ export default async function IssuePage({
               }
               title={e.prompt ?? undefined}
             >
-              <KindTag kind={e.outcome ?? 'partial'}>
-                {e.outcome === 'success'
-                  ? '🏆 '
-                  : e.outcome === 'failed'
-                    ? '💀 '
-                    : '🥈 '}
-                {e.outcome ?? 'run'}
-              </KindTag>
+              <KindTag kind={e.outcome ?? 'partial'}>{e.outcome ?? 'run'}</KindTag>
               <IssueCardTitle>
                 <InlineCode text={(e.prompt ?? e.trophyId.slice(0, 12)).slice(0, 120)} />
               </IssueCardTitle>

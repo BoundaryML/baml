@@ -105,10 +105,10 @@ export default async function CohortPage({
                     {v.skillRef ?? '—'}
                     {isBest ? (
                       <span
-                        className="ml-1.5"
+                        className="ml-1.5 font-mono text-[11px] uppercase tracking-[0.04em] text-success"
                         title="lowest-cost success in this cohort"
                       >
-                        🏆
+                        best
                       </span>
                     ) : null}
                   </Td>

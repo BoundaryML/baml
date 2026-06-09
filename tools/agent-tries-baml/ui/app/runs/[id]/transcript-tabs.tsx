@@ -55,8 +55,8 @@ function bamlArgs(text: string): ReactNode {
  * Renders one transcript line with its Claude-Code marker styling.
  * @param line - the raw line
  * @param baml - this line sits in a Bash block that invokes the baml CLI:
- *   the tool line gets the 🐑 marker and command-position `baml …` segments
- *   (including on continuation lines of multi-line commands) run purple
+ *   the tool line's marker dot runs BAML purple and command-position
+ *   `baml …` segments (including on continuation lines) run purple too
  */
 function termLine(raw: string, baml = false): ReactNode {
   // newer transcripts stamp marker lines; render the stamp dimmed
@@ -70,7 +70,9 @@ function termLine(raw: string, baml = false): ReactNode {
       <>
         {stamp}
         {baml ? (
-          <span title="BAML CLI call">🐑</span>
+          <span title="BAML CLI call" className={BAML_PURPLE}>
+            ⏺
+          </span>
         ) : (
           <span className="t-dot">⏺</span>
         )}{' '}
@@ -204,7 +206,7 @@ function classifyBlock(entries: TermEntry[], block: number, at: number): TermEve
       block,
       at,
       kind: isBaml ? 'baml' : 'tool',
-      label: `${when}${isBaml ? '🐑 ' : ''}${tool[1]}${tool[2].slice(0, 110)}`,
+      label: `${when}${isBaml ? 'baml · ' : ''}${tool[1]}${tool[2].slice(0, 110)}`,
     };
   }
   if (first.startsWith('> '))

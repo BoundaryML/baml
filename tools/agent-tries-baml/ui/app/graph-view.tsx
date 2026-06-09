@@ -569,7 +569,7 @@ export default function GraphView({ initial }: { initial: LiveState }) {
             className="cursor-pointer border-0 bg-transparent p-0 text-link"
             onClick={() => setLive((v) => !v)}
           >
-            {live ? 'live ⏸' : 'paused ▶'}
+            {live ? 'live — pause' : 'paused — resume'}
           </button>{' '}
           · {s.generatedAt}
         </p>
