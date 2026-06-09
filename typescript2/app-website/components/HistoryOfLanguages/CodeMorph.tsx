@@ -20,7 +20,9 @@ type Glyph = {
 
 function tokenClass(token: string) {
   if (/^(function|client|prompt|enum)$/.test(token)) return styles.tokenKeyword;
-  if (/^(Category|ClassifyMessage|Greeting|Question|Complaint|Other)$/.test(token))
+  if (
+    /^(Category|ClassifyMessage|Greeting|Question|Complaint|Other)$/.test(token)
+  )
     return styles.tokenType;
   if (/^".*"$/.test(token) || /^#"$/.test(token) || /^"#$/.test(token))
     return styles.tokenString;
@@ -58,7 +60,11 @@ export function CodeMorph({ ascii, start }: CodeMorphProps) {
           {asciiGlyphs.map((glyph) => (
             <span
               key={glyph.key}
-              className={phase === 'dissolve' || phase === 'code' ? styles.morphGlyphDissolve : styles.morphGlyph}
+              className={
+                phase === 'dissolve' || phase === 'code'
+                  ? styles.morphGlyphDissolve
+                  : styles.morphGlyph
+              }
               style={
                 {
                   '--delay': `${glyph.delay}ms`,
@@ -73,12 +79,19 @@ export function CodeMorph({ ascii, start }: CodeMorphProps) {
         </code>
       </pre>
 
-      <div className={phase === 'code' ? styles.codeLayerVisible : styles.codeLayer}>
+      <div
+        className={
+          phase === 'code' ? styles.codeLayerVisible : styles.codeLayer
+        }
+      >
         <pre className={styles.morphCode}>
           {BAML_SNIPPET.split('\n').map((line, lineIndex) => (
             <div key={`line-${lineIndex}`} className={styles.codeLine}>
               {line.split(/(\s+|[{}()":,#-])/g).map((token, tokenIndex) => (
-                <span key={`${lineIndex}-${tokenIndex}`} className={tokenClass(token)}>
+                <span
+                  key={`${lineIndex}-${tokenIndex}`}
+                  className={tokenClass(token)}
+                >
                   {token}
                 </span>
               ))}

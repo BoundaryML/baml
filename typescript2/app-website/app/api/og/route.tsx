@@ -12,8 +12,9 @@ export async function GET(request: NextRequest) {
   const slug = searchParams.get('slug');
 
   // Use production URL or request origin for images
-  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL
-    || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : origin);
+  const baseUrl =
+    process.env.NEXT_PUBLIC_BASE_URL ||
+    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : origin);
 
   const bgImage = `${baseUrl}/baml-og-background.png`;
   const logoImage = `${baseUrl}/baml-logo-with-lamb.png`;
@@ -98,7 +99,8 @@ export async function GET(request: NextRequest) {
         {/* Dark gradient overlay for text readability */}
         <div
           style={{
-            background: 'linear-gradient(to top, rgba(0,0,0,0.95) 0%, rgba(0,0,0,0.7) 40%, rgba(0,0,0,0.3) 100%)',
+            background:
+              'linear-gradient(to top, rgba(0,0,0,0.95) 0%, rgba(0,0,0,0.7) 40%, rgba(0,0,0,0.3) 100%)',
             bottom: 0,
             display: 'flex',
             left: 0,

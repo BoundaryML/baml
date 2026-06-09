@@ -307,7 +307,12 @@ function EpisodePreviewArt({
               width: 44,
             }}
           >
-            <Play color="#fff" fill="#fff" size={18} style={{ marginLeft: 2 }} />
+            <Play
+              color="#fff"
+              fill="#fff"
+              size={18}
+              style={{ marginLeft: 2 }}
+            />
           </div>
         </div>
       </>

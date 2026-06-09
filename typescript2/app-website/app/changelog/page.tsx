@@ -20,11 +20,9 @@ const baseUrl =
 
 export const metadata: Metadata = {
   alternates: { canonical: `${baseUrl}/changelog` },
-  description:
-    'The latest releases of BAML.',
+  description: 'The latest releases of BAML.',
   openGraph: {
-    description:
-      'The latest releases of BAML.',
+    description: 'The latest releases of BAML.',
     siteName: 'BAML',
     title: 'BAML Changelog',
     type: 'website',

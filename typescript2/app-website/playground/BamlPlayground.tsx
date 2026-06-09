@@ -261,17 +261,16 @@ const EXAMPLE_ARGS: Record<string, string> = {
   Abs: JSON.stringify({ x: -3.5 }, null, 2),
   LineTotal: JSON.stringify(
     {
-      items: [
-        lineItem('Widget', 3, 10.0),
-        lineItem('Gizmo', 2, 49.5),
-      ],
+      items: [lineItem('Widget', 3, 10.0), lineItem('Gizmo', 2, 49.5)],
     },
     null,
     2,
   ),
   ValidateInvoice: JSON.stringify(
     {
-      inv: invoiceArg(30.0, null, [{ name: 'Widget', quantity: 3, price: 10.0 }]),
+      inv: invoiceArg(30.0, null, [
+        { name: 'Widget', quantity: 3, price: 10.0 },
+      ]),
     },
     null,
     2,
@@ -296,8 +295,7 @@ const EXAMPLE_ARGS: Record<string, string> = {
   Main: '{}',
   ExtractInvoice: JSON.stringify(
     {
-      text:
-        'Vendor: Acme. Total: $1247.50. Due 2026-06-01. Items: Widget x3 @ $10, Gizmo x2 @ $49.50.',
+      text: 'Vendor: Acme. Total: $1247.50. Due 2026-06-01. Items: Widget x3 @ $10, Gizmo x2 @ $49.50.',
     },
     null,
     2,
@@ -464,10 +462,7 @@ export function BamlPlayground() {
       style={{ cursor: dragging ? 'col-resize' : undefined }}
     >
       {/* Editor — left pane */}
-      <div
-        className="flex min-w-0 flex-col"
-        style={{ width: `${editorPct}%` }}
-      >
+      <div className="flex min-w-0 flex-col" style={{ width: `${editorPct}%` }}>
         <div className="flex min-h-0 flex-1 flex-col border-l border-r border-[#6D28D9]">
           <BamlEditor
             value={code}
@@ -493,10 +488,7 @@ export function BamlPlayground() {
         tabIndex={0}
       >
         {/* Wider invisible hit area */}
-        <span
-          aria-hidden
-          className="absolute inset-y-0 -left-1.5 -right-1.5"
-        />
+        <span aria-hidden className="absolute inset-y-0 -left-1.5 -right-1.5" />
         {/* Visible accent on hover/drag */}
         <span
           aria-hidden

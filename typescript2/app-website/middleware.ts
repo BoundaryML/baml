@@ -20,7 +20,11 @@ const AGENT_UA_PATTERNS: RegExp[] = [
   /\bBytespider\b/i,
 ];
 
-const AGENT_PREFERRED_TYPES = ['text/markdown', 'text/plain', 'application/json'];
+const AGENT_PREFERRED_TYPES = [
+  'text/markdown',
+  'text/plain',
+  'application/json',
+];
 
 // Highest q-value the Accept header assigns to a given media type (0 if absent).
 function preferredQ(accept: string, candidate: string): number {

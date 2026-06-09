@@ -121,7 +121,12 @@ const nextConfig = {
     // turbopackPersistentCaching: true,
     // useCache: true,
   },
-  transpilePackages: ['unist-util-visit', 'mdast', '@b/pkg-playground', '@b/pkg-proto'],
+  transpilePackages: [
+    'unist-util-visit',
+    'mdast',
+    '@b/pkg-playground',
+    '@b/pkg-proto',
+  ],
   serverExternalPackages: ['shiki', '@boundaryml/baml'],
 
   webpack: (config, { dev, isServer, webpack, nextRuntime }) => {
@@ -149,14 +154,16 @@ const nextConfig = {
 
     // Disable CSS minification to avoid cssnano issues
     if (!dev) {
-      config.optimization.minimizer = config.optimization.minimizer.filter((minimizer) => {
-        const ctorName = minimizer.constructor?.name ?? '';
-        const snippet = String(minimizer);
-        return (
-          !ctorName.includes('CssMinimizer') &&
-          !snippet.includes('css-minimizer-plugin')
-        );
-      });
+      config.optimization.minimizer = config.optimization.minimizer.filter(
+        (minimizer) => {
+          const ctorName = minimizer.constructor?.name ?? '';
+          const snippet = String(minimizer);
+          return (
+            !ctorName.includes('CssMinimizer') &&
+            !snippet.includes('css-minimizer-plugin')
+          );
+        },
+      );
     }
 
     // These experiments are for the WASM playground in the client/server

@@ -7,7 +7,13 @@ type ExternalEpisode = {
   eventDate: string;
   event_type: string;
   media?: { url: string | null; type?: string };
-  links?: { youtube?: string; code?: string; rsvp?: string; discord?: string; connect?: string };
+  links?: {
+    youtube?: string;
+    code?: string;
+    rsvp?: string;
+    discord?: string;
+    connect?: string;
+  };
   season?: number;
   episode?: number;
   isPast?: boolean;
@@ -253,23 +259,33 @@ const fallbackEpisodeData: FallbackEpisodeInput[] = [
   },
 ];
 
-const slugifyFallbackEpisode = (episode: FallbackEpisodeInput, index: number) => {
+const slugifyFallbackEpisode = (
+  episode: FallbackEpisodeInput,
+  index: number,
+) => {
   const base = episode.slug ?? episode.title ?? `episode-${index + 1}`;
-  return base
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/(^-|-$)+/g, '')
-    .replace(/--+/g, '-')
-    || `episode-${episode.id ?? index + 1}`;
+  return (
+    base
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/(^-|-$)+/g, '')
+      .replace(/--+/g, '-') || `episode-${episode.id ?? index + 1}`
+  );
 };
 
-export const fallbackEpisodes: PodcastEpisode[] = fallbackEpisodeData.map((episode, index) => ({
-  ...episode,
-  slug: slugifyFallbackEpisode(episode, index),
-}));
+export const fallbackEpisodes: PodcastEpisode[] = fallbackEpisodeData.map(
+  (episode, index) => ({
+    ...episode,
+    slug: slugifyFallbackEpisode(episode, index),
+  }),
+);
 
-function mapExternalEpisodes(externalEpisodes: ExternalEpisode[]): PodcastEpisode[] {
-  const onlyEpisodes = externalEpisodes.filter((episode) => episode.event_type === 'episode');
+function mapExternalEpisodes(
+  externalEpisodes: ExternalEpisode[],
+): PodcastEpisode[] {
+  const onlyEpisodes = externalEpisodes.filter(
+    (episode) => episode.event_type === 'episode',
+  );
   if (onlyEpisodes.length === 0) {
     return fallbackEpisodes;
   }
@@ -282,11 +298,14 @@ function mapExternalEpisodes(externalEpisodes: ExternalEpisode[]): PodcastEpisod
   );
 
   return [...onlyEpisodes]
-    .sort((a, b) => new Date(b.eventDate).getTime() - new Date(a.eventDate).getTime())
+    .sort(
+      (a, b) =>
+        new Date(b.eventDate).getTime() - new Date(a.eventDate).getTime(),
+    )
     .map((episode, idx) => {
       const youtubeFromLinks = episode.links?.youtube;
       const youtubeFromMedia = episode.media?.type?.includes('youtube')
-        ? episode.media?.url ?? undefined
+        ? (episode.media?.url ?? undefined)
         : undefined;
 
       // Only keep a YouTube link that points at an individual video. The feed
@@ -337,13 +356,18 @@ export async function fetchPodcastEpisodes(): Promise<PodcastEpisode[]> {
 
     const data = (await res.json()) as { episodes?: ExternalEpisode[] };
     if (!data.episodes) {
-      console.warn('Podcast feed response missing episodes array, using fallback data.');
+      console.warn(
+        'Podcast feed response missing episodes array, using fallback data.',
+      );
       return fallbackEpisodes;
     }
 
     return mapExternalEpisodes(data.episodes);
   } catch (error) {
-    console.warn('Failed to fetch podcast episodes, using fallback data.', error);
+    console.warn(
+      'Failed to fetch podcast episodes, using fallback data.',
+      error,
+    );
     return fallbackEpisodes;
   }
 }

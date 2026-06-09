@@ -34,12 +34,15 @@ export interface ParticleImageProps {
 // ─── Internal types ───────────────────────────────────────────────────────────
 
 type Particle = {
-  x: number; y: number;     // current logical position
-  vx: number; vy: number;   // velocity (logical px/frame)
-  tx: number; ty: number;   // target logical position
-  delay: number;            // ms before this particle begins moving
-  color: number;            // packed RGBA as little-endian Uint32 (ABGR in memory)
-  phase: number;            // per-particle random offset for idle jitter
+  x: number;
+  y: number; // current logical position
+  vx: number;
+  vy: number; // velocity (logical px/frame)
+  tx: number;
+  ty: number; // target logical position
+  delay: number; // ms before this particle begins moving
+  color: number; // packed RGBA as little-endian Uint32 (ABGR in memory)
+  phase: number; // per-particle random offset for idle jitter
   arrived: boolean;
 };
 
@@ -49,8 +52,8 @@ const SPRING = 0.055;
 const DAMPING = 0.85;
 const REPEL_STRENGTH = 5.5;
 // Squared thresholds avoid sqrt in hot loop
-const SETTLE_D2 = 2.25;  // 1.5px²
-const SETTLE_V2 = 0.06;  // ~0.245px/frame²
+const SETTLE_D2 = 2.25; // 1.5px²
+const SETTLE_V2 = 0.06; // ~0.245px/frame²
 const MAX_SAMPLE_DIM = 400;
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -77,7 +80,7 @@ export default function ParticleImage({
   const rafRef = useRef<number | null>(null);
   // Pre-allocated pixel buffers — reused every frame, zero allocations in render loop
   const imgDataRef = useRef<ImageData | null>(null);
-  const u32Ref = useRef<Uint32Array | null>(null);   // Uint32 view of the same buffer
+  const u32Ref = useRef<Uint32Array | null>(null); // Uint32 view of the same buffer
   // Physical pixel dimensions (logical × dpr)
   const physRef = useRef({ w: 0, h: 0, dpr: 1, sz: 1 });
 
@@ -89,7 +92,9 @@ export default function ParticleImage({
       const r = canvas.getBoundingClientRect();
       mouseRef.current = { x: e.clientX - r.left, y: e.clientY - r.top };
     };
-    const onLeave = () => { mouseRef.current = null; };
+    const onLeave = () => {
+      mouseRef.current = null;
+    };
     canvas.addEventListener('mousemove', onMove);
     canvas.addEventListener('mouseleave', onLeave);
     return () => {
@@ -129,7 +134,11 @@ export default function ParticleImage({
       if (cancelled) return;
 
       // ── 1. Sample image pixels at reduced resolution ─────────────────────
-      const scale = Math.min(1, MAX_SAMPLE_DIM / Math.max(img.naturalWidth || 1, img.naturalHeight || 1));
+      const scale = Math.min(
+        1,
+        MAX_SAMPLE_DIM /
+          Math.max(img.naturalWidth || 1, img.naturalHeight || 1),
+      );
       const sW = Math.max(1, Math.round(img.naturalWidth * scale));
       const sH = Math.max(1, Math.round(img.naturalHeight * scale));
 
@@ -143,7 +152,10 @@ export default function ParticleImage({
         data = offCtx.getImageData(0, 0, sW, sH).data;
       } catch (e) {
         // Retry with crossOrigin if tainted
-        console.error('[ParticleImage] getImageData failed, retrying with crossOrigin', e);
+        console.error(
+          '[ParticleImage] getImageData failed, retrying with crossOrigin',
+          e,
+        );
         return;
       }
 
@@ -151,7 +163,8 @@ export default function ParticleImage({
       let overrideR = 0;
       let overrideG = 0;
       let overrideB = 0;
-      const hasOverride = typeof color === 'string' && /^#?[0-9a-fA-F]{6}$/.test(color);
+      const hasOverride =
+        typeof color === 'string' && /^#?[0-9a-fA-F]{6}$/.test(color);
       if (hasOverride) {
         const hex = color!.replace('#', '');
         overrideR = parseInt(hex.slice(0, 2), 16);
@@ -224,9 +237,12 @@ export default function ParticleImage({
         }
 
         return {
-          x: ox, y: oy,
-          vx: 0, vy: 0,
-          tx: p.tx, ty: p.ty,
+          x: ox,
+          y: oy,
+          vx: 0,
+          vy: 0,
+          tx: p.tx,
+          ty: p.ty,
           delay,
           color: p.color,
           phase: Math.random() * Math.PI * 2,
@@ -344,7 +360,19 @@ export default function ParticleImage({
       particlesRef.current = [];
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [src, width, height, density, particleSize, streamDuration, streamStyle, jitter, hoverRepel, spring, color]);
+  }, [
+    src,
+    width,
+    height,
+    density,
+    particleSize,
+    streamDuration,
+    streamStyle,
+    jitter,
+    hoverRepel,
+    spring,
+    color,
+  ]);
 
   return (
     <canvas

@@ -31,7 +31,13 @@ export const metadata: Metadata = {
 };
 
 /** Build-time syntax-highlighted code block. */
-async function Code({ children, lang = 'bash' }: { children: string; lang?: string }) {
+async function Code({
+  children,
+  lang = 'bash',
+}: {
+  children: string;
+  lang?: string;
+}) {
   const html = await codeToHtml(children.trim(), {
     lang,
     theme: 'github-light',
@@ -180,8 +186,8 @@ yay -S baml`}</Code>
         <p>
           The BAML wrapper needs few updates since it is only a version manager.
           You can update it via your package manager, say brew, with{' '}
-          <code>brew upgrade baml</code>. If you did not use a package manager to
-          install <code>baml</code>, you can update the wrapper with{' '}
+          <code>brew upgrade baml</code>. If you did not use a package manager
+          to install <code>baml</code>, you can update the wrapper with{' '}
           <code>baml self-update</code>. Of course, this information and
           everything above is discoverable via the binary itself; agents
           shouldn&rsquo;t have any trouble, and if they do, let us know!

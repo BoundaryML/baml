@@ -38,11 +38,7 @@ export function ParserAnimation({ tint }: { tint: string }) {
   const cycle = Math.floor(tick / TICKS_PER_CYCLE);
 
   const isFinal = stage === STAGE_COUNT - 1;
-  const headerColor = isFinal
-    ? tint
-    : stage === 0
-      ? STRIP_COLOR
-      : '#E8B86D';
+  const headerColor = isFinal ? tint : stage === 0 ? STRIP_COLOR : '#E8B86D';
   const headerLabel = isFinal
     ? 'Receipt'
     : stage === 0
@@ -200,13 +196,7 @@ function Plain({ children }: { children: ReactNode }) {
   return <span style={{ color: PLAIN_COLOR }}>{children}</span>;
 }
 
-function Tinted({
-  children,
-  color,
-}: {
-  children: ReactNode;
-  color: string;
-}) {
+function Tinted({ children, color }: { children: ReactNode; color: string }) {
   return <span style={{ color }}>{children}</span>;
 }
 
@@ -290,13 +280,7 @@ function CollapseLine({
   );
 }
 
-function FixFooter({
-  stage,
-  tint,
-}: {
-  stage: number;
-  tint: string;
-}) {
+function FixFooter({ stage, tint }: { stage: number; tint: string }) {
   const isFinal = stage === STAGE_COUNT - 1;
   const label = STAGE_LABEL[stage] ?? STAGE_LABEL[0];
   const color = isFinal ? tint : label.color;

@@ -67,17 +67,20 @@ export function HeroPlaygroundMockup() {
               {/* Editor */}
               <div className="flex flex-1 min-h-0 overflow-auto">
                 <div className="w-8 shrink-0 border-r border-border bg-muted/20 py-2 text-right text-[10px] leading-relaxed text-muted-foreground">
-                  {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24].map(
-                    (n) => (
-                      <div key={n} className="pr-1.5">
-                        {n}
-                      </div>
-                    ),
-                  )}
+                  {[
+                    1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17,
+                    18, 19, 20, 21, 22, 23, 24,
+                  ].map((n) => (
+                    <div key={n} className="pr-1.5">
+                      {n}
+                    </div>
+                  ))}
                 </div>
                 <div className="min-w-0 flex-1 font-mono text-[11px] leading-relaxed text-left text-foreground sm:text-xs">
                   <pre className="whitespace-pre-wrap p-3 text-left">
-                    <span className="text-muted-foreground">// Agent: plan then execute steps</span>
+                    <span className="text-muted-foreground">
+                      // Agent: plan then execute steps
+                    </span>
                     {'\n\n'}
                     <CodeLine type="keyword">class</CodeLine>{' '}
                     <CodeLine type="type">Plan</CodeLine>{' '}
@@ -119,7 +122,9 @@ export function HeroPlaygroundMockup() {
                     <CodeLine type="keyword">Exponential</CodeLine>
                     {'\n  '}
                     <CodeLine type="property">prompt</CodeLine>{' '}
-                    <CodeLine type="string">#"Break down: </CodeLine><CodeLine type="template">{'{{ goal }}'}</CodeLine><CodeLine type="string">"#</CodeLine>
+                    <CodeLine type="string">#"Break down: </CodeLine>
+                    <CodeLine type="template">{'{{ goal }}'}</CodeLine>
+                    <CodeLine type="string">"#</CodeLine>
                     {'\n'}
                     <CodeLine type="bracket">{`}`}</CodeLine>
                     {'\n\n'}
@@ -132,13 +137,17 @@ export function HeroPlaygroundMockup() {
                     <CodeLine type="bracket">{`{`}</CodeLine>
                     {'\n  '}
                     <CodeLine type="property">client</CodeLine>{' '}
-                    <CodeLine type="string">anthropic/claude-3-5-sonnet</CodeLine>
+                    <CodeLine type="string">
+                      anthropic/claude-3-5-sonnet
+                    </CodeLine>
                     {'\n  '}
                     <CodeLine type="property">fallback</CodeLine>{' '}
                     <CodeLine type="string">openai/gpt-4o</CodeLine>
                     {'\n  '}
                     <CodeLine type="property">prompt</CodeLine>{' '}
-                    <CodeLine type="string">#"Execute: </CodeLine><CodeLine type="template">{'{{ step.action }}'}</CodeLine><CodeLine type="string">"#</CodeLine>
+                    <CodeLine type="string">#"Execute: </CodeLine>
+                    <CodeLine type="template">{'{{ step.action }}'}</CodeLine>
+                    <CodeLine type="string">"#</CodeLine>
                     {'\n'}
                     <CodeLine type="bracket">{`}`}</CodeLine>
                   </pre>
@@ -160,12 +169,18 @@ export function HeroPlaygroundMockup() {
                 <pre className="font-mono text-[10px] leading-relaxed text-foreground/90 sm:text-[11px]">
                   <span className="text-muted-foreground">{`{`}</span>
                   {'\n  '}
-                  <span className="text-violet-600 dark:text-violet-300">"goal"</span>
+                  <span className="text-violet-600 dark:text-violet-300">
+                    "goal"
+                  </span>
                   <span className="text-muted-foreground">: </span>
-                  <span className="text-violet-500 dark:text-violet-200">"Deploy API"</span>
+                  <span className="text-violet-500 dark:text-violet-200">
+                    "Deploy API"
+                  </span>
                   <span className="text-muted-foreground">,</span>
                   {'\n  '}
-                  <span className="text-violet-600 dark:text-violet-300">"steps"</span>
+                  <span className="text-violet-600 dark:text-violet-300">
+                    "steps"
+                  </span>
                   <span className="text-muted-foreground">: [</span>
                   {'\n    '}
                   <span className="text-muted-foreground">{`{ "action": "Write tests", "result": "..." },`}</span>
@@ -185,9 +200,7 @@ export function HeroPlaygroundMockup() {
             <span className="text-[10px] text-muted-foreground">
               agent.baml · L24 · Run with Cmd+Enter
             </span>
-            <span className="text-[10px] text-muted-foreground">
-              BAML
-            </span>
+            <span className="text-[10px] text-muted-foreground">BAML</span>
           </div>
         </div>
       </div>

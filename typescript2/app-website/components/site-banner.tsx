@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
 
 const BORDER = '#D9D3C4';
@@ -17,9 +18,15 @@ const RESERVED_HEIGHT = 41;
 
 export function SiteBanner() {
   const [mounted, setMounted] = useState(false);
+  const pathname = usePathname();
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  // The /learn2 deck is a full-screen experience — no marketing banner.
+  if (pathname?.startsWith('/learn2')) {
+    return null;
+  }
 
   if (!mounted) {
     return (

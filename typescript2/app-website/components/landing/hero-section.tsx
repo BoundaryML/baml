@@ -223,17 +223,13 @@ export default function HeroSection({ nextEvent }: HeroSectionProps) {
                 <code>
                   <span className="text-[#8B5CF6] font-medium">class</span>{' '}
                   <span className="text-[#059669]">Receipt</span> {'{'}
-                  {'\n'}  total <span className="text-[#059669]">float</span>{' '}
+                  {'\n'} total <span className="text-[#059669]">float</span>{' '}
                   @description(
-                  <span className="text-[#B45309]">
-                    "Final amount paid"
-                  </span>
-                  )
-                  {'\n'}  items <span className="text-[#059669]">Item[]</span>
-                  {'\n'}  date{'  '}
+                  <span className="text-[#B45309]">"Final amount paid"</span>)
+                  {'\n'} items <span className="text-[#059669]">Item[]</span>
+                  {'\n'} date{'  '}
                   <span className="text-[#059669]">string</span> @description(
-                  <span className="text-[#B45309]">"YYYY-MM-DD"</span>)
-                  {'\n'}
+                  <span className="text-[#B45309]">"YYYY-MM-DD"</span>){'\n'}
                   {'}'}
                   {'\n'}
                   {'\n'}
@@ -241,15 +237,16 @@ export default function HeroSection({ nextEvent }: HeroSectionProps) {
                   <span className="text-[#0D9488]">ExtractReceipt</span>(img:{' '}
                   <span className="text-[#059669]">Image</span>) -&gt;{' '}
                   <span className="text-[#059669]">Receipt</span> {'{'}
-                  {'\n'}  <span className="text-[#8B5CF6] font-medium">client</span>{' '}
+                  {'\n'}{' '}
+                  <span className="text-[#8B5CF6] font-medium">client</span>{' '}
                   GPT4o
-                  {'\n'}  <span className="text-[#8B5CF6] font-medium">prompt</span>{' '}
-                  #"
-                  {'\n'}    Extract the items and total from this receipt.
-                  {'\n'}    {'{{ ctx.output_format }}'}
+                  {'\n'}{' '}
+                  <span className="text-[#8B5CF6] font-medium">prompt</span> #"
+                  {'\n'} Extract the items and total from this receipt.
+                  {'\n'} {'{{ ctx.output_format }}'}
                   {'\n'}
-                  {'\n'}    Receipt: {'{{ img }}'}
-                  {'\n'}  "#
+                  {'\n'} Receipt: {'{{ img }}'}
+                  {'\n'} "#
                   {'\n'}
                   {'}'}
                 </code>

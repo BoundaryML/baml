@@ -194,6 +194,7 @@ impl BexLspRequest for BexMulitProject {
                             super::commands::OpenBamlPanel {
                                 project_path: Some(root_path.as_str().to_string()),
                                 function_name: Some(action.name),
+                                title: None,
                             }
                             .to_lsp_command()
                         }
@@ -201,6 +202,15 @@ impl BexLspRequest for BexMulitProject {
                             super::commands::OpenBamlPanel {
                                 project_path: Some(root_path.as_str().to_string()),
                                 function_name: Some(action.name),
+                                title: Some("▶ Run test".to_string()),
+                            }
+                            .to_lsp_command()
+                        }
+                        baml_lsp2_actions::FileActionKind::RunTestSet => {
+                            super::commands::OpenBamlPanel {
+                                project_path: Some(root_path.as_str().to_string()),
+                                function_name: Some(action.name),
+                                title: Some("▶ Run testset".to_string()),
                             }
                             .to_lsp_command()
                         }
@@ -387,6 +397,7 @@ impl BexLspRequest for BexMulitProject {
                             super::commands::OpenBamlPanel {
                                 project_path: Some(root_path.as_str().to_string()),
                                 function_name,
+                                title: None,
                             }
                             .to_lsp_code_action()
                         }
@@ -420,6 +431,7 @@ impl BexLspRequest for BexMulitProject {
                 let commands::OpenBamlPanel {
                     project_path,
                     function_name,
+                    ..
                 } = serde_json::from_value(args).map_err(|e| {
                     LspError::InvalidCommandArguments {
                         command: params.command.clone(),

@@ -58,7 +58,13 @@ export const TechniqueTitle: React.FC<{
     notes: string | React.ReactNode;
   };
   children?: React.ReactNode;
-}> = ({ type, title, count, children, takeaways = { score: 0, notes: '' } }) => {
+}> = ({
+  type,
+  title,
+  count,
+  children,
+  takeaways = { score: 0, notes: '' },
+}) => {
   const renderTypeBadge = (type: 'prompt' | 'model' | 'parser') => (
     <div
       className={`flex rounded-md px-2 py-1 text-xs font-semibold text-white ${

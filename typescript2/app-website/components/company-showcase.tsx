@@ -6,13 +6,29 @@ import Image from 'next/image';
 const BRANDFETCH_CLIENT_ID = '1idQbe1D_SxVi_WjGRi';
 
 const customerLogos = [
-  { alt: 'Product Hunt', src: '/testimonials/logos/product-hunt.png', type: 'local' as const },
-  { alt: 'SAP', src: '/testimonials/logos/sapLogo.png', type: 'local' as const },
+  {
+    alt: 'Product Hunt',
+    src: '/testimonials/logos/product-hunt.png',
+    type: 'local' as const,
+  },
+  {
+    alt: 'SAP',
+    src: '/testimonials/logos/sapLogo.png',
+    type: 'local' as const,
+  },
   { alt: 'EY', src: '/testimonials/logos/ey.png', type: 'local' as const },
   { alt: 'AMD', src: '/testimonials/logos/amd.png', type: 'local' as const },
-  { alt: 'Vetrec', src: '/testimonials/logos/vetrec.png', type: 'local' as const },
+  {
+    alt: 'Vetrec',
+    src: '/testimonials/logos/vetrec.png',
+    type: 'local' as const,
+  },
   { alt: 'AWS', src: '/testimonials/logos/aws.png', type: 'local' as const },
-  { alt: 'Cisco', src: '/testimonials/logos/cisco.png', type: 'local' as const },
+  {
+    alt: 'Cisco',
+    src: '/testimonials/logos/cisco.png',
+    type: 'local' as const,
+  },
 ];
 
 function LogoCell({ alt, src }: { alt: string; src: string }) {

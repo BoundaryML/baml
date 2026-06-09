@@ -28,14 +28,20 @@ type ParticleCanvasProps = {
 
 function tokenClass(token: string): string {
   if (/^(function|client|prompt|enum)$/.test(token)) return styles.tokenKeyword;
-  if (/^(Category|ClassifyMessage|Greeting|Question|Complaint|Other)$/.test(token))
+  if (
+    /^(Category|ClassifyMessage|Greeting|Question|Complaint|Other)$/.test(token)
+  )
     return styles.tokenType;
   if (/^".*"$/.test(token) || /^#"$/.test(token) || /^"#$/.test(token))
     return styles.tokenString;
   return styles.tokenPlain;
 }
 
-export function ParticleCanvas({ active, isBaml = false, shapeId }: ParticleCanvasProps) {
+export function ParticleCanvas({
+  active,
+  isBaml = false,
+  shapeId,
+}: ParticleCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const mouseRef = useRef<{ x: number; y: number } | null>(null);
   const [phase, setPhase] = useState<EnginePhase>('idle');
@@ -126,17 +132,23 @@ export function ParticleCanvas({ active, isBaml = false, shapeId }: ParticleCanv
     >
       <canvas
         ref={canvasRef}
-        style={{
-          width: '100%',
-          maxWidth: `${CANVAS_W}px`,
-          height: 'auto',
-          display: 'block',
-        } as CSSProperties}
+        style={
+          {
+            width: '100%',
+            maxWidth: `${CANVAS_W}px`,
+            height: 'auto',
+            display: 'block',
+          } as CSSProperties
+        }
         aria-hidden
       />
 
       {isBaml && (
-        <div className={codeVisible ? styles.bamlOverlayVisible : styles.bamlOverlay}>
+        <div
+          className={
+            codeVisible ? styles.bamlOverlayVisible : styles.bamlOverlay
+          }
+        >
           <pre className={styles.morphCode}>
             {BAML_SNIPPET.split('\n').map((line, lineIdx) => (
               // biome-ignore lint/suspicious/noArrayIndexKey: stable static content

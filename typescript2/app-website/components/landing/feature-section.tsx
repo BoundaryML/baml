@@ -40,9 +40,7 @@ export function FeatureSection() {
                 />
               )}
               {item.component && (
-                <div className="w-full h-full">
-                  {item.component}
-                </div>
+                <div className="w-full h-full">{item.component}</div>
               )}
             </div>
 

@@ -185,13 +185,7 @@ const DESCRIBE_LINES: { color: string; key: string; text: string }[] = [
   { key: 'tests', color: '#E8DFCF', text: 'tests:   3 passing' },
 ];
 
-function DescribeOutput({
-  delay,
-  tint,
-}: {
-  delay: number;
-  tint: string;
-}) {
+function DescribeOutput({ delay, tint }: { delay: number; tint: string }) {
   return (
     <motion.div
       animate={{ opacity: 1 }}
@@ -222,7 +216,7 @@ function DescribeOutput({
 function colorizeKeyValue(
   text: string,
   key: string,
-  tint: string
+  tint: string,
 ): JSX.Element {
   if (key === 'sep') {
     return <span style={{ color: '#3A332B' }}>{text}</span>;
@@ -235,7 +229,9 @@ function colorizeKeyValue(
 
   const label = text.slice(0, colonIdx);
   const valuePart = text.slice(colonIdx + 1).trimStart();
-  const padding = ' '.repeat(text.slice(colonIdx + 1).length - valuePart.length);
+  const padding = ' '.repeat(
+    text.slice(colonIdx + 1).length - valuePart.length,
+  );
 
   return (
     <>
