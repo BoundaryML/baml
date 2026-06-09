@@ -1871,7 +1871,7 @@ impl FromCST for CatchExpr {
         )?);
 
         let mut clauses = Vec::new();
-        while let Some(elem) = it.next() {
+        for elem in it {
             if elem.kind() != SyntaxKind::CATCH_CLAUSE {
                 return Err(StrongAstError::UnexpectedKindDesc {
                     expected_desc: "CATCH_CLAUSE".into(),
