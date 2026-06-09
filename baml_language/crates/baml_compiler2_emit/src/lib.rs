@@ -17,7 +17,7 @@ use baml_compiler2_hir::{
     compiler2_all_files,
     contributions::Definition,
     file_package::file_package,
-    loc::{FunctionLoc, LetLoc},
+    loc::{ClassLoc, FunctionLoc, InterfaceLoc, LetLoc},
     package::PackageId,
 };
 use baml_compiler2_mir::{
@@ -49,44 +49,313 @@ fn build_alias_caches(
     caches
 }
 
-fn contains_tir_type_var(ty: &baml_compiler2_tir::ty::Ty) -> bool {
-    use baml_compiler2_tir::ty::{FunctionParamTy, Ty};
+/// Build the program-wide interface-implementation registry for the runtime
+/// resolver.
+///
+/// Bakes every interface impl as a `RuntimeImplRule` carrying the implementor
+/// pattern (`TyTemplate`, generic params → `TypeArgRef`), the per-param bounds,
+/// the interface args/associated bindings, and the method FQNs. The runtime
+/// resolver matches a value's concrete type against these (rustc-style
+/// selection) to dispatch an interface method — operator overloading today;
+/// reflection once unified. Built from the item tree in two parts: (a)
+/// out-of-body `implements_for` blocks; (b) methods folded onto a class.
+fn build_interface_impls(
+    db: &dyn baml_compiler2_mir::Db,
+    all_files: &[baml_base::SourceFile],
+    alias_caches: &HashMap<Name, ResolvedAliases>,
+) -> bex_vm_types::types::InterfaceImplsByPackage {
+    use baml_compiler2_tir::{
+        lower_type_expr::{lower_type_expr_in_ns, qualify_def},
+        ty,
+    };
+    use bex_vm_types::types::{InterfaceBound, InterfaceImplsByPackage, RuntimeImplRule};
 
-    match ty {
-        Ty::TypeVar(..) => true,
-        Ty::Class(_, args, _) | Ty::Union(args, _) => args.iter().any(contains_tir_type_var),
-        Ty::Interface(_, args, associated_bindings, _) => {
-            args.iter().any(contains_tir_type_var)
-                || associated_bindings
-                    .iter()
-                    .any(|(_, ty)| contains_tir_type_var(ty))
-        }
-        Ty::List(inner, _) | Ty::EvolvingList(inner, _) => contains_tir_type_var(inner),
-        Ty::Map {
-            key: k, value: v, ..
-        }
-        | Ty::EvolvingMap(k, v, _)
-        | Ty::Future(k, v, _) => contains_tir_type_var(k) || contains_tir_type_var(v),
-        Ty::Function {
-            generic_param_bounds,
-            params,
-            ret,
-            throws,
-            ..
-        } => {
-            generic_param_bounds
-                .iter()
-                .flatten()
-                .any(contains_tir_type_var)
-                || params
-                    .iter()
-                    .any(|FunctionParamTy { ty, .. }| contains_tir_type_var(ty))
-                || contains_tir_type_var(ret)
-                || contains_tir_type_var(throws)
-        }
-        _ => false,
+    type IfaceParts = (
+        baml_type::TypeName,
+        Vec<baml_type::TyTemplate>,
+        Vec<(Name, baml_type::TyTemplate)>,
+    );
+    // Split a lowered interface type into its base `TypeName` plus its args /
+    // associated bindings as `TyTemplate`s (generic params → `TypeArgRef`).
+    fn split_interface(
+        iface_ty: &ty::Ty,
+        resolved: &ResolvedAliases,
+        generics: &[Name],
+    ) -> Option<IfaceParts> {
+        let ty::Ty::Interface(qtn, args, assoc, _) = iface_ty else {
+            return None;
+        };
+        let arg_templates = args
+            .iter()
+            .map(|a| baml_compiler2_mir::tir2_to_template(a, resolved, generics))
+            .collect();
+        let assoc_templates = assoc
+            .iter()
+            .map(|(n, t)| {
+                (
+                    n.clone(),
+                    baml_compiler2_mir::tir2_to_template(t, resolved, generics),
+                )
+            })
+            .collect();
+        Some((qtn.clone(), arg_templates, assoc_templates))
     }
+
+    // Sort key for a deterministic registry order. `display_name` is excluded from
+    // `Eq`, so key on the module path plus the short name.
+    fn tn_sort_key(tn: &baml_type::TypeName) -> (Vec<Name>, Name) {
+        (tn.module_path(), tn.name().clone())
+    }
+
+    // Per interface, its default methods (`name → fn FQN`). An implementing rule
+    // inherits these for any method it doesn't override, so each baked rule's
+    // method table is complete (the resolver needs no separate default lookup; a
+    // default body is generic over `Self`, so calling it on the concrete value
+    // dispatches its inner `self.m()` calls back to the impl). Built across all
+    // files first since an impl may live in a different file/package than its
+    // interface.
+    let mut iface_defaults: indexmap::IndexMap<
+        baml_type::TypeName,
+        indexmap::IndexMap<Name, String>,
+    > = indexmap::IndexMap::new();
+    for file in all_files {
+        let item_tree = file_item_tree(db, *file);
+        for (iface_id, iface_data) in &item_tree.interfaces {
+            if iface_data.default_methods.is_empty() {
+                continue;
+            }
+            let iface_tn = qualify_def(
+                db,
+                Definition::Interface(InterfaceLoc::new(db, *file, *iface_id)),
+                &iface_data.name,
+            );
+            let entry = iface_defaults.entry(iface_tn).or_default();
+            for &m in &iface_data.default_methods {
+                entry.insert(
+                    item_tree[m].name.clone(),
+                    def_to_item_ref(db, Definition::Function(FunctionLoc::new(db, *file, m)))
+                        .to_string(),
+                );
+            }
+        }
+    }
+    // Fill a rule's method table with the interface's defaults, override winning.
+    let merge_defaults = |methods: &mut indexmap::IndexMap<Name, String>,
+                          iface_tn: &baml_type::TypeName| {
+        if let Some(defaults) = iface_defaults.get(iface_tn) {
+            for (name, fqn) in defaults {
+                methods.entry(name.clone()).or_insert_with(|| fqn.clone());
+            }
+        }
+    };
+
+    let mut interface_impls: InterfaceImplsByPackage = indexmap::IndexMap::new();
+    for file in all_files {
+        let item_tree = file_item_tree(db, *file);
+        let pkg_info = file_package(db, *file);
+        let pkg_id = PackageId::new(db, pkg_info.package.clone());
+        let pkg_items = baml_compiler2_ppir::package_items(db, pkg_id);
+        let ns = &pkg_info.namespace_path;
+        let resolved = &alias_caches[&pkg_info.package];
+        // Lower a type expr in this file's namespace, discarding diagnostics
+        // (these targets were already validated upstream).
+        let lower = |expr: &TypeExpr, generics: &[Name]| -> ty::Ty {
+            let mut diags = Vec::new();
+            lower_type_expr_in_ns(db, expr, pkg_items, ns, generics, &mut diags)
+        };
+        // Each generic param's interface bound set (`T extends A & B` → {A, B};
+        // a param has at most one bound today). A bound is an interface, possibly
+        // generic or carrying associated bindings — `split_interface` captures its
+        // args/assoc as templates over the impl's params. A non-interface bound,
+        // rejected upstream, has no interface to record, so skip the whole rule
+        // (`None`); dropping a rule only ever loses a dispatch, never adds a wrong
+        // one.
+        let bound_sets = |param_bounds: &[Option<TypeExpr>],
+                          generics: &[Name]|
+         -> Option<Vec<Vec<InterfaceBound>>> {
+            param_bounds
+                .iter()
+                .map(|b| match b {
+                    None => Some(Vec::new()),
+                    Some(te) => split_interface(&lower(te, generics), resolved, generics).map(
+                        |(interface, args, assoc)| {
+                            vec![InterfaceBound {
+                                interface,
+                                args,
+                                assoc,
+                            }]
+                        },
+                    ),
+                })
+                .collect()
+        };
+        // Associated-type bindings written in an `implements` block body
+        // (`type Item = int`) live beside the target, not in it (`split_interface`
+        // only sees the target), so lower them here to fold into the implemented
+        // interface's bindings.
+        let lower_assoc = |bindings: &[baml_compiler2_ast::AssociatedTypeBindingDef],
+                           generics: &[Name]|
+         -> Vec<(Name, baml_type::TyTemplate)> {
+            bindings
+                .iter()
+                .filter_map(|b| {
+                    let te = b.type_expr.as_ref()?;
+                    Some((
+                        b.name.clone(),
+                        baml_compiler2_mir::tir2_to_template(
+                            &lower(&te.expr, generics),
+                            resolved,
+                            generics,
+                        ),
+                    ))
+                })
+                .collect()
+        };
+
+        // (a) Out-of-body `implement<G> I for FOR { ... }`: primitives,
+        // containers, generic classes, and blanket `for T`. (A non-generic
+        // concrete class's out-of-body impl folds onto the class — see (b).)
+        for imp in &item_tree.implements_for {
+            let Some((iface_tn, interface_args, mut interface_assoc)) = split_interface(
+                &lower(&imp.interface_target.expr, &imp.generic_params),
+                resolved,
+                &imp.generic_params,
+            ) else {
+                continue;
+            };
+            interface_assoc.extend(lower_assoc(
+                &imp.associated_type_bindings,
+                &imp.generic_params,
+            ));
+            let for_ty_pattern = baml_compiler2_mir::tir2_to_template(
+                &lower(&imp.for_target.expr, &imp.generic_params),
+                resolved,
+                &imp.generic_params,
+            );
+            let Some(generic_param_bounds) =
+                bound_sets(&imp.generic_param_bounds, &imp.generic_params)
+            else {
+                continue;
+            };
+            let mut methods = indexmap::IndexMap::new();
+            for &m in &imp.methods {
+                methods.insert(
+                    item_tree[m].name.clone(),
+                    def_to_item_ref(db, Definition::Function(FunctionLoc::new(db, *file, m)))
+                        .to_string(),
+                );
+            }
+            merge_defaults(&mut methods, &iface_tn);
+            interface_impls
+                .entry(pkg_info.package.clone())
+                .or_default()
+                .entry(iface_tn)
+                .or_default()
+                .push(RuntimeImplRule {
+                    for_ty_pattern,
+                    generic_param_bounds,
+                    interface_args,
+                    interface_assoc,
+                    methods,
+                });
+        }
+
+        // (b) In-body `class C { implements I { ... } }` and folded non-generic
+        // out-of-body `implement I for C` impls. Drive off the impl *blocks* so a
+        // field-only (method-less) impl is still registered (membership matters
+        // for reflection and bound checks even when there's nothing to dispatch);
+        // attach any folded methods, grouped by their interface target.
+        for (class_id, class_data) in &item_tree.classes {
+            if class_data.implements.is_empty() {
+                continue;
+            }
+            let class_tn = qualify_def(
+                db,
+                Definition::Class(ClassLoc::new(db, *file, *class_id)),
+                &class_data.name,
+            );
+            let generics = &class_data.generic_params;
+
+            // Folded methods grouped by the interface they implement.
+            let mut methods_by_iface: indexmap::IndexMap<
+                baml_type::TypeName,
+                indexmap::IndexMap<Name, String>,
+            > = indexmap::IndexMap::new();
+            for &m in &class_data.methods {
+                let Some(target) = item_tree.method_to_iface_target.get(&m) else {
+                    continue;
+                };
+                let Some((iface_tn, _, _)) =
+                    split_interface(&lower(&target.expr, generics), resolved, generics)
+                else {
+                    continue;
+                };
+                methods_by_iface.entry(iface_tn).or_default().insert(
+                    item_tree[m].name.clone(),
+                    def_to_item_ref(db, Definition::Function(FunctionLoc::new(db, *file, m)))
+                        .to_string(),
+                );
+            }
+
+            // The implementor pattern is the class at its own parameters; bounds
+            // come from the class's generic parameters. Shared by all its blocks.
+            let for_ty_pattern = if generics.is_empty() {
+                baml_type::TyTemplate::Concrete(baml_type::RuntimeTy::Class(
+                    class_tn.clone(),
+                    Vec::new(),
+                    TyAttr::default(),
+                ))
+            } else {
+                baml_type::TyTemplate::Class(
+                    class_tn.clone(),
+                    (0..u32::try_from(generics.len()).expect("generic arity fits u32"))
+                        .map(baml_type::TyTemplate::TypeArgRef)
+                        .collect(),
+                )
+            };
+            let Some(generic_param_bounds) = bound_sets(&class_data.generic_param_bounds, generics)
+            else {
+                continue;
+            };
+
+            for block in &class_data.implements {
+                let Some((iface_tn, interface_args, mut interface_assoc)) =
+                    split_interface(&lower(&block.target.expr, generics), resolved, generics)
+                else {
+                    continue;
+                };
+                interface_assoc.extend(lower_assoc(&block.associated_type_bindings, generics));
+                let mut methods = methods_by_iface.get(&iface_tn).cloned().unwrap_or_default();
+                merge_defaults(&mut methods, &iface_tn);
+                interface_impls
+                    .entry(pkg_info.package.clone())
+                    .or_default()
+                    .entry(iface_tn)
+                    .or_default()
+                    .push(RuntimeImplRule {
+                        for_ty_pattern: for_ty_pattern.clone(),
+                        generic_param_bounds: generic_param_bounds.clone(),
+                        interface_args,
+                        interface_assoc,
+                        methods,
+                    });
+            }
+        }
+    }
+
+    // Deterministic order: files/classes iterate from unordered maps, so sort by
+    // package, then interface, then rule. Within one interface a `for_ty_pattern`
+    // is unique (overlap is a coherence error).
+    interface_impls.sort_keys();
+    for pkg_impls in interface_impls.values_mut() {
+        pkg_impls.sort_by_cached_key(|tn, _| tn_sort_key(tn));
+        for rules in pkg_impls.values_mut() {
+            rules.sort_by_cached_key(|rule| rule.for_ty_pattern.to_string());
+        }
+    }
+    interface_impls
 }
+
 pub(crate) use emit::compile_mir_function;
 
 fn is_builtin_function_name(name: &str) -> bool {
@@ -945,186 +1214,7 @@ pub fn generate_project_bytecode_with_opt(
         }
     }
 
-    // --- Pass 7.6: Interface implementation registry (BEP-044) ---
-    //
-    // Inverts the per-class `package_implements_registry` (class → ifaces it
-    // implements) into a runtime-friendly per-interface map (iface → classes
-    // that implement it), then bakes it into `Program.interface_implementors`
-    // so the `type` reflection methods (`implements`, `implementors`,
-    // `implemented_by`) have a static lookup table at runtime.
-    {
-        use std::collections::HashSet;
-
-        use bex_vm_types::types::{InterfaceAssociatedBindings, InterfaceImplementors};
-
-        // Per interface name: the classes that implement it, each paired with
-        // the interface type args and associated type bindings that instantiation
-        // used. Reflection (`implements` / `implementors`) compares these so
-        // `Box<int>` and `Box<string>`, as well as `Source<Item = int>` and
-        // `Source<Item = string>`, are distinguished. Empty args/bindings match
-        // any instantiation for that dimension.
-        let mut inverted: InterfaceImplementors = indexmap::IndexMap::new();
-        // Dedup key: (interface qualified name, class/primitive dedup key,
-        // interface type args, associated bindings). The args/bindings are keyed
-        // structurally rather than by `format!("{:?}")` — `Debug` is not
-        // contractually unique across distinct types.
-        let mut seen_pairs: HashSet<(
-            String,
-            String,
-            Vec<baml_type::RuntimeTy>,
-            InterfaceAssociatedBindings,
-        )> = HashSet::new();
-        for (pkg_name, cache) in &alias_caches {
-            let pkg_id = PackageId::new(db, pkg_name.clone());
-            let registry = baml_compiler2_tir::interfaces::package_implements_registry(db, pkg_id);
-            let mut add_impl =
-                |iface_qtn: &baml_compiler2_tir::ty::QualifiedTypeName,
-                 class_name: baml_type::TypeName,
-                 dedup_key: String,
-                 iface_args: Vec<baml_type::RuntimeTy>,
-                 iface_assoc: Vec<(Name, baml_type::RuntimeTy)>| {
-                    let iface_name = iface_qtn.clone();
-                    if seen_pairs.insert((
-                        iface_qtn.to_string(),
-                        dedup_key,
-                        iface_args.clone(),
-                        iface_assoc.clone(),
-                    )) {
-                        inverted.entry(iface_name).or_default().push((
-                            class_name,
-                            iface_args,
-                            iface_assoc,
-                        ));
-                    }
-                };
-
-            for rule in &registry.interface_impl_rules {
-                let baml_compiler2_tir::ty::Ty::Interface(
-                    iface_qtn,
-                    iface_type_args,
-                    iface_associated_bindings,
-                    _,
-                ) = &rule.interface_ty
-                else {
-                    continue;
-                };
-                let converted_iface_args: Vec<baml_type::RuntimeTy> =
-                    iface_type_args.iter().map(|a| cache.convert(a)).collect();
-                let converted_iface_assoc: Vec<(Name, baml_type::RuntimeTy)> =
-                    iface_associated_bindings
-                        .iter()
-                        .map(|(name, ty)| (name.clone(), cache.convert(ty)))
-                        .collect();
-                match &rule.for_ty_pattern {
-                    baml_compiler2_tir::ty::Ty::Class(class_qtn, _, _) => {
-                        let iface_args = if iface_type_args.iter().any(contains_tir_type_var) {
-                            Vec::new()
-                        } else {
-                            converted_iface_args.clone()
-                        };
-                        let iface_assoc = if iface_associated_bindings
-                            .iter()
-                            .any(|(_, ty)| contains_tir_type_var(ty))
-                        {
-                            Vec::new()
-                        } else {
-                            converted_iface_assoc.clone()
-                        };
-                        add_impl(
-                            iface_qtn,
-                            class_qtn.clone(),
-                            class_qtn.to_string(),
-                            iface_args,
-                            iface_assoc,
-                        );
-                    }
-                    // BEP-044 wf3 #G19: an out-of-body `implements I for <primitive>`
-                    // is visible to reflection via a synthetic primitive TypeName
-                    // (the name MUST match `bex_vm`'s `primitive_type_name`).
-                    baml_compiler2_tir::ty::Ty::Int { .. }
-                    | baml_compiler2_tir::ty::Ty::Bigint { .. }
-                    | baml_compiler2_tir::ty::Ty::Float { .. }
-                    | baml_compiler2_tir::ty::Ty::String { .. }
-                    | baml_compiler2_tir::ty::Ty::Bool { .. }
-                    | baml_compiler2_tir::ty::Ty::Null { .. } => {
-                        use baml_compiler2_tir::ty::Ty as Tir2Ty;
-                        let prim_name = match &rule.for_ty_pattern {
-                            Tir2Ty::Int { .. } => "int",
-                            Tir2Ty::Bigint { .. } => "bigint",
-                            Tir2Ty::Float { .. } => "float",
-                            Tir2Ty::String { .. } => "string",
-                            Tir2Ty::Bool { .. } => "bool",
-                            Tir2Ty::Null { .. } => "null",
-                            _ => unreachable!("matched scalar primitive above"),
-                        };
-                        let tn = baml_type::QualifiedTypeName::local(Name::new(prim_name));
-                        add_impl(
-                            iface_qtn,
-                            tn,
-                            format!("prim:{prim_name}"),
-                            converted_iface_args,
-                            converted_iface_assoc.clone(),
-                        );
-                    }
-                    baml_compiler2_tir::ty::Ty::TypeVar(type_var, _) => {
-                        let Some(bound) = rule
-                            .generic_params
-                            .iter()
-                            .position(|param| param == type_var)
-                            .and_then(|idx| rule.generic_param_bounds.get(idx))
-                            .and_then(|bound| bound.as_ref())
-                        else {
-                            continue;
-                        };
-                        let baml_compiler2_tir::ty::Ty::Interface(..) = bound else {
-                            continue;
-                        };
-                        for class_qtn in registry.class_implements.keys() {
-                            let actual = baml_compiler2_tir::ty::Ty::Class(
-                                class_qtn.clone(),
-                                Vec::new(),
-                                baml_compiler2_tir::ty::TyAttr::default(),
-                            );
-                            if registry.type_implements_interface_via_rule(
-                                &actual,
-                                bound,
-                                &cache.aliases,
-                                |_actual, _bound| false,
-                            ) {
-                                // Blanket impl: the concrete interface args
-                                // aren't known here, so leave them empty
-                                // (matches any instantiation at reflection time).
-                                add_impl(
-                                    iface_qtn,
-                                    class_qtn.clone(),
-                                    class_qtn.to_string(),
-                                    Vec::new(),
-                                    Vec::new(),
-                                );
-                            }
-                        }
-                    }
-                    _ => {}
-                }
-            }
-        }
-        // Order each interface's implementors deterministically (lexicographic by
-        // qualified name) so `implementors()` doesn't depend on the unordered
-        // `FxHashMap` iteration that built the rules.
-        let impl_sort_key = |tn: &baml_type::TypeName| {
-            (
-                tn.module_path()
-                    .iter()
-                    .map(std::string::ToString::to_string)
-                    .collect::<Vec<_>>(),
-                tn.name().to_string(),
-            )
-        };
-        for impls in inverted.values_mut() {
-            impls.sort_by_key(|(a, _, _)| impl_sort_key(a));
-        }
-        program.interface_implementors = inverted;
-    }
+    program.interface_impls = build_interface_impls(db, &all_files, &alias_caches);
 
     // --- Pass 8: Test cases (only when requested) ---
     if options.emit_test_cases {

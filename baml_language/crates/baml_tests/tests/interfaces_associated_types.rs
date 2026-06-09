@@ -4684,7 +4684,14 @@ async fn reflection_implementors_respects_associated_type_bindings() {
 }
 
 #[tokio::test]
-async fn reflection_does_not_wildcard_missing_associated_type_bindings() {
+async fn reflection_resolves_generic_class_associated_type_binding() {
+    // A generic class's `type Item = T` binding resolves precisely at the
+    // instantiation: `Box<int>` *is* `Source<Item = int>` (consistent with
+    // runtime dispatch, which accepts `Box<int>` where `Source<Item = int>` is
+    // expected, and with how Rust resolves the projection), but it is *not*
+    // `Source<Item = string>`. `implementors()`, however, cannot enumerate
+    // generic instantiations, so it lists the generic base `Box` for *any*
+    // specific `Source<Item = …>` request (it can't pin the instantiation).
     let output = baml_test!(
         r#"
         interface Source {
@@ -4716,6 +4723,176 @@ async fn reflection_does_not_wildcard_missing_associated_type_bindings() {
             }
             if string_source.implementors().length() > 0 {
                 score = score + 1000
+            }
+            return score
+        }
+        "#
+    );
+    // `Box<int>.implements(Source<Item = int>)` holds (+1); the two `Item = string`
+    // membership checks are correctly false; and `implementors()` lists the generic
+    // base `Box` for the `Source<Item = string>` request (+1000) since it can't pin
+    // the instantiation.
+    assert_eq!(output.result.unwrap(), BexExternalValue::Int(1001));
+}
+
+#[tokio::test]
+async fn reflection_respects_generic_interface_impl_bound() {
+    // An impl-level bound that is itself a generic interface carrying an
+    // associated binding (`T extends Source<Item = int>`). The runtime resolver
+    // must discharge it as a nested obligation *at that exact instantiation*: a
+    // type implementing `Source<Item = int>` satisfies the blanket impl, while
+    // one implementing `Source<Item = string>` does not.
+    let output = baml_test!(
+        r#"
+        interface Source {
+            type Item
+        }
+
+        class IntSource {
+            implements Source {
+                type Item = int
+            }
+        }
+
+        class StrSource {
+            implements Source {
+                type Item = string
+            }
+        }
+
+        interface IntSourced {}
+        implement<T extends Source<Item = int>> IntSourced for T {}
+
+        function main() -> int {
+            let score = 0
+            if reflect.type_of<IntSource>().implements(reflect.type_of<IntSourced>()) {
+                score = score + 1
+            }
+            if reflect.type_of<StrSource>().implements(reflect.type_of<IntSourced>()) {
+                score = score + 10
+            }
+            return score
+        }
+        "#
+    );
+    assert_eq!(output.result.unwrap(), BexExternalValue::Int(1));
+}
+
+#[tokio::test]
+async fn reflection_respects_generic_interface_impl_bound_plain_args() {
+    // The plain-args form of a generic-interface bound (`T extends
+    // Container<int>`, an interface *type argument* rather than an associated
+    // binding). The resolver substitutes the bound's args and requires the
+    // type-arg to implement the interface at exactly that instantiation.
+    let output = baml_test!(
+        r#"
+        interface Container<T> {}
+        class IntBox {
+            implements Container<int> {}
+        }
+        class StrBox {
+            implements Container<string> {}
+        }
+
+        interface NeedsIntContainer {}
+        implement<T extends Container<int>> NeedsIntContainer for T {}
+
+        function main() -> int {
+            let score = 0
+            if reflect.type_of<IntBox>().implements(reflect.type_of<NeedsIntContainer>()) {
+                score = score + 1
+            }
+            if reflect.type_of<StrBox>().implements(reflect.type_of<NeedsIntContainer>()) {
+                score = score + 10
+            }
+            return score
+        }
+        "#
+    );
+    assert_eq!(output.result.unwrap(), BexExternalValue::Int(1));
+}
+
+#[tokio::test]
+async fn reflection_literal_type_uses_concrete_base_impls() {
+    // A literal type uses its concrete type's impls: `1` is an `int`, so reflection
+    // normalizes it to its concrete base before consulting the registry. It must
+    // answer exactly as `type_of<int>()` does.
+    let output = baml_test!(
+        r#"
+        interface Debuggable {
+            function debug(self) -> string
+        }
+        implements Debuggable for int {
+            function debug(self) -> string { return "int" }
+        }
+
+        function main() -> int {
+            let score = 0
+            if reflect.type_of<1>().implements(reflect.type_of<Debuggable>()) {
+                score = score + 1
+            }
+            if reflect.type_of<int>().implements(reflect.type_of<Debuggable>()) {
+                score = score + 10
+            }
+            return score
+        }
+        "#
+    );
+    assert_eq!(output.result.unwrap(), BexExternalValue::Int(11));
+}
+
+#[tokio::test]
+async fn reflection_enum_variant_type_uses_concrete_base_impls() {
+    // `Color.Red` as a type uses `Color`'s impls — reflection normalizes the
+    // enum-variant type to its enum base before consulting the registry.
+    let output = baml_test!(
+        r#"
+        interface Named {
+            function name(self) -> string
+        }
+        enum Color { Red  Green }
+        implements Named for Color {
+            function name(self) -> string { return "color" }
+        }
+
+        function main() -> int {
+            let score = 0
+            if reflect.type_of<Color.Red>().implements(reflect.type_of<Named>()) {
+                score = score + 1
+            }
+            if reflect.type_of<Color>().implements(reflect.type_of<Named>()) {
+                score = score + 10
+            }
+            return score
+        }
+        "#
+    );
+    assert_eq!(output.result.unwrap(), BexExternalValue::Int(11));
+}
+
+#[tokio::test]
+async fn reflection_bounded_impl_cycle_terminates() {
+    // Mutually-recursive blanket bounds: `A` is implemented by anything that is
+    // `B`, and `B` by anything that is `A`. No concrete type breaks the cycle, so
+    // `Node` implements neither — and resolution must *terminate*: the obligation
+    // stack detects the `Node: A ⇒ Node: B ⇒ Node: A` cycle and rejects it
+    // instead of spinning.
+    let output = baml_test!(
+        r#"
+        interface A {}
+        interface B {}
+        implement<T extends B> A for T {}
+        implement<T extends A> B for T {}
+
+        class Node {}
+
+        function main() -> int {
+            let score = 0
+            if reflect.type_of<Node>().implements(reflect.type_of<A>()) {
+                score = score + 1
+            }
+            if reflect.type_of<Node>().implements(reflect.type_of<B>()) {
+                score = score + 10
             }
             return score
         }

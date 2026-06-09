@@ -33,6 +33,7 @@ mod math;
 mod media;
 mod ops;
 mod primitives;
+mod resolve;
 mod root;
 mod spawn;
 mod stack_trace;
