@@ -27,7 +27,9 @@ export function ScrollVideo({ src, scrollHeightVh = 500 }: ScrollVideoProps) {
 
     const onLoaded = () => {
       if (cancelled) return;
-      durationRef.current = Number.isFinite(video.duration) ? video.duration : 0;
+      durationRef.current = Number.isFinite(video.duration)
+        ? video.duration
+        : 0;
       setReady(true);
       updateTarget();
     };

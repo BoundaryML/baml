@@ -60,7 +60,10 @@ const envVars: Record<string, string> = {};
 let nextEnvReqId = 0;
 const pendingEnvResolvers = new Map<number, (v: string | undefined) => void>();
 
-const requestPromises = new Map<number | string, (response: LspResponse) => void>();
+const requestPromises = new Map<
+  number | string,
+  (response: LspResponse) => void
+>();
 let nextLspReqId = 0;
 
 let nextDocVersion = 1;
@@ -303,7 +306,11 @@ self.onmessage = async (event: MessageEvent) => {
       if ('deleted' in change && change.deleted) {
         postOut({ type: 'vfsFileDeleted', path: change.path });
       } else {
-        postOut({ type: 'vfsFileChanged', path: change.path, content: change.content });
+        postOut({
+          type: 'vfsFileChanged',
+          path: change.path,
+          content: change.content,
+        });
       }
     };
 
@@ -324,7 +331,18 @@ self.onmessage = async (event: MessageEvent) => {
         input: () => notSupported('read_input'),
         exec: async () => notSupported('exec'),
         shell: async () => notSupported('shell'),
-        lsp_send_notification: () => {},
+        lsp_send_notification: (n: unknown) => {
+          // The marketing playground ignores LSP notifications, but custom
+          // editors (the learn2 Monaco) want positioned diagnostics. Forward
+          // publishDiagnostics so they can render squiggles + ErrorLens.
+          const note = mapsToRecordsDeep(n) as {
+            method?: string;
+            params?: unknown;
+          };
+          if (note?.method === 'textDocument/publishDiagnostics') {
+            self.postMessage({ type: 'lspDiagnostics', params: note.params });
+          }
+        },
         lsp_send_response: (response: LspResponse) => {
           response = mapsToRecordsDeep(response);
           const resolver = requestPromises.get(response.id);
@@ -334,7 +352,9 @@ self.onmessage = async (event: MessageEvent) => {
           }
         },
         lsp_make_request: () => {},
-        playground_send_notification: (notification: PlaygroundNotification) => {
+        playground_send_notification: (
+          notification: PlaygroundNotification,
+        ) => {
           notification = mapsToRecordsDeep(notification);
           onPlaygroundNotification(notification);
         },
@@ -346,7 +366,34 @@ self.onmessage = async (event: MessageEvent) => {
     await sendLspRequest('initialize', {
       processId: null,
       rootUri: `file://${rootPath}`,
-      capabilities: {},
+      // Declare the client capabilities a real LSP client (VSCode /
+      // monaco-languageclient) sends — the runtime tailors completion / inlay
+      // hints / hover to these, and omitting them yields empty/degraded results.
+      capabilities: {
+        textDocument: {
+          synchronization: { dynamicRegistration: true, didSave: true },
+          completion: {
+            dynamicRegistration: true,
+            contextSupport: true,
+            completionItem: {
+              snippetSupport: true,
+              documentationFormat: ['markdown', 'plaintext'],
+              resolveSupport: { properties: ['documentation', 'detail'] },
+            },
+          },
+          hover: {
+            dynamicRegistration: true,
+            contentFormat: ['markdown', 'plaintext'],
+          },
+          inlayHint: { dynamicRegistration: true },
+          codeLens: { dynamicRegistration: true },
+          publishDiagnostics: { relatedInformation: true },
+        },
+        workspace: {
+          inlayHint: { refreshSupport: true },
+          codeLens: { refreshSupport: true },
+        },
+      },
       workspaceFolders: [{ uri: `file://${rootPath}`, name: 'workspace' }],
     });
     runtime.handleLspNotification({ method: 'initialized', params: {} });
@@ -372,6 +419,69 @@ self.onmessage = async (event: MessageEvent) => {
     return;
   }
 
+  // ── openFiles: add + didOpen new files after init (multi-editor) ──────────
+  // Lets independent editors register their own project (baml.toml + main.baml)
+  // into the shared worker dynamically. Handled before the typed switch so we
+  // don't need to extend the shared WorkerInMessage union.
+  if (data && data.type === 'openFiles') {
+    const files = (data.files ?? {}) as Record<string, string>;
+    vfs.setFiles(files);
+    for (const [rel, content] of Object.entries(files)) {
+      // didOpen triggers a full project refresh (builds the bex + fires
+      // updateProject/diagnostics + auto-collect). Do NOT also call
+      // requestPlaygroundState here — with several editors registering at once
+      // it races the async re-eval and leaves earlier projects without a bex.
+      runtime?.handleLspNotification({
+        method: 'textDocument/didOpen',
+        params: {
+          textDocument: {
+            uri: fileUri(rel),
+            languageId: 'baml',
+            version: nextDocVersion++,
+            text: content,
+          },
+        },
+      });
+    }
+    return;
+  }
+
+  // ── requestCodeLens: forward textDocument/codeLens for a file ─────────────
+  if (data && data.type === 'requestCodeLens') {
+    const uri = data.uri as string;
+    const reqId = data.reqId;
+    try {
+      const resp = await sendLspRequest('textDocument/codeLens', {
+        textDocument: { uri },
+      });
+      self.postMessage({
+        type: 'codeLensResult',
+        reqId,
+        uri,
+        lenses: resp.result ?? [],
+      });
+    } catch {
+      self.postMessage({ type: 'codeLensResult', reqId, uri, lenses: [] });
+    }
+    return;
+  }
+
+  // ── lspRequest: generic LSP request passthrough (hover, inlayHint, …) ─────
+  if (data && data.type === 'lspRequest') {
+    const reqId = data.reqId;
+    try {
+      const resp = await sendLspRequest(data.method, data.params);
+      self.postMessage({
+        type: 'lspResult',
+        reqId,
+        result: resp.result ?? null,
+      });
+    } catch {
+      self.postMessage({ type: 'lspResult', reqId, result: null });
+    }
+    return;
+  }
+
   // ── Custom RPC messages ──────────────────────────────────────────────────
 
   const msg = data as WorkerInMessage;
@@ -379,11 +489,20 @@ self.onmessage = async (event: MessageEvent) => {
   switch (msg.type) {
     case 'callFunction': {
       if (!runtime) {
-        postOut({ type: 'callFunctionError', id: msg.id, error: 'Runtime not initialized' });
+        postOut({
+          type: 'callFunctionError',
+          id: msg.id,
+          error: 'Runtime not initialized',
+        });
         return;
       }
       try {
-        const resultBytes = await runtime.callFunction(msg.id, msg.project, msg.name, msg.argsProto);
+        const resultBytes = await runtime.callFunction(
+          msg.id,
+          msg.project,
+          msg.name,
+          msg.argsProto,
+        );
         const bytes = new Uint8Array(resultBytes);
         const handles: BamlHandle[] = [];
         // Return a plain handle descriptor (postMessage-cloneable) instead of
@@ -392,7 +511,11 @@ self.onmessage = async (event: MessageEvent) => {
         const decoded = decodeCallResult(bytes, (key, handleType, typeName) => {
           const h = new BamlHandle(key.toString(), handleType);
           handles.push(h);
-          return { handle_key: key, handle_type: handleType, type_name: typeName };
+          return {
+            handle_key: key,
+            handle_type: handleType,
+            type_name: typeName,
+          };
         });
         const existing = liveHandles.get(msg.id);
         if (existing) for (const h of existing) h.free();
@@ -402,7 +525,8 @@ self.onmessage = async (event: MessageEvent) => {
         // expects `result: BamlJsValue<PlainHandleDescriptor>`, not a string.
         postOut({ type: 'callFunctionResult', id: msg.id, result: decoded });
       } catch (e) {
-        const isCancelled = e instanceof Error && (e as any).name === 'BamlCancelledError';
+        const isCancelled =
+          e instanceof Error && (e as any).name === 'BamlCancelledError';
         postOut({
           type: 'callFunctionError',
           id: msg.id,
@@ -481,17 +605,30 @@ self.onmessage = async (event: MessageEvent) => {
 
     case 'callTestFunction': {
       if (!runtime) {
-        postOut({ type: 'callFunctionError', id: msg.id, error: 'Runtime not initialized' });
+        postOut({
+          type: 'callFunctionError',
+          id: msg.id,
+          error: 'Runtime not initialized',
+        });
         return;
       }
       try {
-        const resultBytes = await runtime.callTestFunction(msg.id, msg.project, msg.generation, msg.testName);
+        const resultBytes = await runtime.callTestFunction(
+          msg.id,
+          msg.project,
+          msg.generation,
+          msg.testName,
+        );
         const bytes = new Uint8Array(resultBytes);
         const handles: BamlHandle[] = [];
         const decoded = decodeCallResult(bytes, (key, handleType, typeName) => {
           const h = new BamlHandle(key.toString(), handleType);
           handles.push(h);
-          return { handle_key: key, handle_type: handleType, type_name: typeName };
+          return {
+            handle_key: key,
+            handle_type: handleType,
+            type_name: typeName,
+          };
         });
         const existing = liveHandles.get(msg.id);
         if (existing) for (const h of existing) h.free();
@@ -499,7 +636,8 @@ self.onmessage = async (event: MessageEvent) => {
         else liveHandles.delete(msg.id);
         postOut({ type: 'callFunctionResult', id: msg.id, result: decoded });
       } catch (e) {
-        const isCancelled = e instanceof Error && (e as any).name === 'BamlCancelledError';
+        const isCancelled =
+          e instanceof Error && (e as any).name === 'BamlCancelledError';
         postOut({
           type: 'callFunctionError',
           id: msg.id,

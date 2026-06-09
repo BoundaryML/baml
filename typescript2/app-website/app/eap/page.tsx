@@ -11,8 +11,7 @@ const baseUrl =
 
 export const metadata: Metadata = {
   alternates: { canonical: `${baseUrl}/eap` },
-  description:
-    'Sign up for a BAML early access onboarding session.',
+  description: 'Sign up for a BAML early access onboarding session.',
   openGraph: {
     description: 'Sign up for a BAML early access onboarding session.',
     siteName: 'BAML',

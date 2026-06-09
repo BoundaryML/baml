@@ -166,9 +166,13 @@ const browserStorage = createJSONStorage<{
 
 export const envVarsAtom = atomWithStorage<{
   [key: string]: string | undefined;
-}>('baml-env-vars', {
-  BOUNDARY_PROXY_URL: 'https://fiddle-proxy.fly.dev',
-}, browserStorage);
+}>(
+  'baml-env-vars',
+  {
+    BOUNDARY_PROXY_URL: 'https://fiddle-proxy.fly.dev',
+  },
+  browserStorage,
+);
 
 export const requiredEnvVarsAtom = atom((get) => {
   const { rt } = get(runtimeAtom);

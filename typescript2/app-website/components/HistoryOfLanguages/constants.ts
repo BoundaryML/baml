@@ -33,7 +33,8 @@ export const HISTORY_LANGUAGE_PANELS: TimelinePanelDef[] = [
     id: 'assembly',
     language: 'Assembly',
     year: '1949',
-    transitionText: 'In the beginning, we spoke to machines in their language...',
+    transitionText:
+      'In the beginning, we spoke to machines in their language...',
     tagline: 'Closest to the machine',
     shapeId: 'sphinx',
   },

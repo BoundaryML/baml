@@ -15,17 +15,27 @@ function PanelSlot({ index }: { index: number }) {
       className={styles.panelSlot}
       data-active={hasTriggered ? 'true' : 'false'}
     >
-      <TimelinePanel panel={panel} active={hasTriggered} shouldRender={hasTriggered} />
+      <TimelinePanel
+        panel={panel}
+        active={hasTriggered}
+        shouldRender={hasTriggered}
+      />
     </div>
   );
 }
 
 export function HistoryOfLanguages() {
   return (
-    <section id="story" className={styles.section} aria-label="The History of Languages">
+    <section
+      id="story"
+      className={styles.section}
+      aria-label="The History of Languages"
+    >
       <div className={styles.intro}>
         <h2 className={styles.title}>The History of Languages</h2>
-        <p className={styles.subtitle}>Every era gets the language it deserves.</p>
+        <p className={styles.subtitle}>
+          Every era gets the language it deserves.
+        </p>
       </div>
 
       <div className={styles.track}>

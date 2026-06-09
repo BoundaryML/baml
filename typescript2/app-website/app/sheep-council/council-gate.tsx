@@ -24,8 +24,18 @@ const FIELDS: {
   type: string;
 }[] = [
   { key: 'discord', label: 'Discord', placeholder: 'username', type: 'text' },
-  { key: 'email', label: 'Email', placeholder: 'you@example.com', type: 'email' },
-  { key: 'address', label: 'Address', placeholder: 'Mailing address', type: 'text' },
+  {
+    key: 'email',
+    label: 'Email',
+    placeholder: 'you@example.com',
+    type: 'email',
+  },
+  {
+    key: 'address',
+    label: 'Address',
+    placeholder: 'Mailing address',
+    type: 'text',
+  },
 ];
 
 // Provider wrapper: builds the Convex client from the public deployment URL.
@@ -158,9 +168,7 @@ function Council({
           value={pw}
         />
         {error && (
-          <p className="sc-error">
-            The flock does not recognize those words.
-          </p>
+          <p className="sc-error">The flock does not recognize those words.</p>
         )}
         <button
           className="sc-btn"

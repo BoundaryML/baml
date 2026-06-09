@@ -128,13 +128,7 @@ export function TypedErrorsAnimation({ tint }: { tint: string }) {
   );
 }
 
-function BranchFork({
-  active,
-  tint,
-}: {
-  active: Outcome;
-  tint: string;
-}) {
+function BranchFork({ active, tint }: { active: Outcome; tint: string }) {
   const branches: { color: string; key: Outcome; label: string }[] = [
     { key: 'ok', label: 'ok', color: '#7FD3C4' },
     { key: 'parse-error', label: 'ParseError', color: '#E27B7B' },
@@ -283,24 +277,11 @@ function ResultRow({
       transition={{ delay: 0.4, duration: 0.3 }}
     >
       {outcome === 'ok' ? (
-        <Check
-          aria-hidden
-          size={11}
-          strokeWidth={2.4}
-          style={{ color }}
-        />
+        <Check aria-hidden size={11} strokeWidth={2.4} style={{ color }} />
       ) : (
-        <Clock
-          aria-hidden
-          size={11}
-          strokeWidth={2.2}
-          style={{ color }}
-        />
+        <Clock aria-hidden size={11} strokeWidth={2.2} style={{ color }} />
       )}
-      <span
-        className="font-mono text-[10.5px] font-semibold"
-        style={{ color }}
-      >
+      <span className="font-mono text-[10.5px] font-semibold" style={{ color }}>
         {value}
       </span>
     </motion.div>

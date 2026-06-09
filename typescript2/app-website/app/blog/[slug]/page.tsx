@@ -52,7 +52,7 @@ export async function generateMetadata({ params }: BlogPostPageProps) {
     'LLM',
     'machine learning',
     'type safety',
-    'AI engineering'
+    'AI engineering',
   ].join(', ');
 
   return {

@@ -33,8 +33,11 @@ const getYouTubeVideoId = (url: string) => {
   return match ? match[1] : null;
 };
 
-export function EpisodesCarousel({ episodes, currentSlug }: EpisodesCarouselProps) {
-  const filteredEpisodes = episodes.filter(ep => ep.slug !== currentSlug);
+export function EpisodesCarousel({
+  episodes,
+  currentSlug,
+}: EpisodesCarouselProps) {
+  const filteredEpisodes = episodes.filter((ep) => ep.slug !== currentSlug);
 
   return (
     <div className="w-full">
@@ -43,35 +46,36 @@ export function EpisodesCarousel({ episodes, currentSlug }: EpisodesCarouselProp
         <div className="flex gap-4 overflow-x-auto pb-4 scrollbar-hide">
           {filteredEpisodes.map((episode) => {
             const isUpcoming = new Date(episode.date) > new Date();
-            
+
             return (
-              <Link 
-                href={`/podcast/${episode.slug}`} 
+              <Link
+                href={`/podcast/${episode.slug}`}
                 key={episode.id}
                 className="flex-shrink-0 w-80"
               >
                 <Card className="overflow-hidden hover:shadow-lg transition-shadow cursor-pointer h-full">
                   {/* Cover Image - YouTube Thumbnail */}
-                  {episode.youtubeUrl && getYouTubeVideoId(episode.youtubeUrl) && (
-                    <div className="relative h-40">
-                      <Image
-                        alt={episode.title}
-                        className="object-cover w-full h-full"
-                        height={160}
-                        src={`https://img.youtube.com/vi/${getYouTubeVideoId(episode.youtubeUrl)}/0.jpg`}
-                        width={320}
-                      />
-                      {/* Play button overlay */}
-                      <div className="absolute inset-0 flex items-center justify-center bg-black/30 group-hover:bg-black/40 transition-colors">
-                        <div className="w-12 h-12 bg-red-600 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform">
-                          <Play
-                            className="w-6 h-6 text-white ml-0.5"
-                            fill="currentColor"
-                          />
+                  {episode.youtubeUrl &&
+                    getYouTubeVideoId(episode.youtubeUrl) && (
+                      <div className="relative h-40">
+                        <Image
+                          alt={episode.title}
+                          className="object-cover w-full h-full"
+                          height={160}
+                          src={`https://img.youtube.com/vi/${getYouTubeVideoId(episode.youtubeUrl)}/0.jpg`}
+                          width={320}
+                        />
+                        {/* Play button overlay */}
+                        <div className="absolute inset-0 flex items-center justify-center bg-black/30 group-hover:bg-black/40 transition-colors">
+                          <div className="w-12 h-12 bg-red-600 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform">
+                            <Play
+                              className="w-6 h-6 text-white ml-0.5"
+                              fill="currentColor"
+                            />
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  )}
+                    )}
                   {!episode.youtubeUrl && isUpcoming && (
                     <div className="relative h-40 bg-gradient-to-br from-primary/15 to-transparent flex items-center justify-center">
                       <div className="text-primary text-xs font-medium flex items-center gap-2 bg-background/80 backdrop-blur px-3 py-1 rounded-full border border-primary/20">

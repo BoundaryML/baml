@@ -20,7 +20,8 @@ export function BaseLayout({
   featuredImage,
   baseUrl: baseUrlProp,
 }: BaseLayoutProps) {
-  const baseUrl = baseUrlProp ??
+  const baseUrl =
+    baseUrlProp ??
     process.env.NEXT_PUBLIC_BASE_URL ??
     (process.env.VERCEL_PROJECT_PRODUCTION_URL
       ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
@@ -109,7 +110,11 @@ export function BaseLayout({
         >
           <img
             alt="Featured"
-            src={featuredImage.startsWith('http') ? featuredImage : `${baseUrl}${featuredImage}`}
+            src={
+              featuredImage.startsWith('http')
+                ? featuredImage
+                : `${baseUrl}${featuredImage}`
+            }
             style={{
               border: '4px solid rgba(255,255,255,0.15)',
               borderRadius: 16,

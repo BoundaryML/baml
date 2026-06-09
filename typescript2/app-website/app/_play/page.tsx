@@ -1,4 +1,4 @@
-"use client";
+'use client';
 
 import {
   Code,
@@ -9,13 +9,13 @@ import {
   Share2,
   Sparkles,
   Terminal,
-} from "lucide-react";
-import Link from "next/link";
-import { useState } from "react";
-import { FooterSection } from "@/components/footer-section";
-import { Navbar } from "@/components/navbar";
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
+} from 'lucide-react';
+import Link from 'next/link';
+import { useState } from 'react';
+import { FooterSection } from '@/components/footer-section';
+import { Navbar } from '@/components/navbar';
+import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
 
 const exampleCode = `// Define your AI interface with BAML
 class User {
@@ -39,40 +39,40 @@ console.log(user.name) // TypeScript knows this is a string!`;
 
 const examples = [
   {
-    category: "Data Extraction",
-    description: "Parse unstructured text into typed objects",
+    category: 'Data Extraction',
+    description: 'Parse unstructured text into typed objects',
     id: 1,
-    title: "Extract Structured Data",
+    title: 'Extract Structured Data',
   },
   {
-    category: "Workflows",
-    description: "Chain multiple AI calls with type safety",
+    category: 'Workflows',
+    description: 'Chain multiple AI calls with type safety',
     id: 2,
-    title: "Multi-step AI Workflow",
+    title: 'Multi-step AI Workflow',
   },
   {
-    category: "Generation",
-    description: "Generate content with validated schemas",
+    category: 'Generation',
+    description: 'Generate content with validated schemas',
     id: 3,
-    title: "Content Generation",
+    title: 'Content Generation',
   },
   {
-    category: "Classification",
-    description: "Build reliable classification systems",
+    category: 'Classification',
+    description: 'Build reliable classification systems',
     id: 4,
-    title: "Classification Pipeline",
+    title: 'Classification Pipeline',
   },
 ];
 
 export default function PlaygroundPage() {
-  const [activeTab, setActiveTab] = useState("code");
+  const [activeTab, setActiveTab] = useState('code');
   const [isRunning, setIsRunning] = useState(false);
 
   const handleRun = () => {
     setIsRunning(true);
     setTimeout(() => {
       setIsRunning(false);
-      setActiveTab("output");
+      setActiveTab('output');
     }, 2000);
   };
 
@@ -162,22 +162,22 @@ export default function PlaygroundPage() {
                       <div className="flex gap-2">
                         <button
                           className={`px-3 py-1 text-sm font-medium rounded-md transition-colors ${
-                            activeTab === "code"
-                              ? "bg-background border border-border"
-                              : "text-muted-foreground hover:text-foreground"
+                            activeTab === 'code'
+                              ? 'bg-background border border-border'
+                              : 'text-muted-foreground hover:text-foreground'
                           }`}
-                          onClick={() => setActiveTab("code")}
+                          onClick={() => setActiveTab('code')}
                         >
                           <Code className="h-4 w-4 inline mr-1" />
                           BAML Code
                         </button>
                         <button
                           className={`px-3 py-1 text-sm font-medium rounded-md transition-colors ${
-                            activeTab === "output"
-                              ? "bg-background border border-border"
-                              : "text-muted-foreground hover:text-foreground"
+                            activeTab === 'output'
+                              ? 'bg-background border border-border'
+                              : 'text-muted-foreground hover:text-foreground'
                           }`}
-                          onClick={() => setActiveTab("output")}
+                          onClick={() => setActiveTab('output')}
                         >
                           <Terminal className="h-4 w-4 inline mr-1" />
                           Output
@@ -190,7 +190,7 @@ export default function PlaygroundPage() {
                   </div>
 
                   <div className="p-4 min-h-[500px]">
-                    {activeTab === "code" ? (
+                    {activeTab === 'code' ? (
                       <div className="font-mono text-sm">
                         <pre className="whitespace-pre-wrap">{exampleCode}</pre>
                       </div>
@@ -227,7 +227,7 @@ export default function PlaygroundPage() {
                       onClick={handleRun}
                     >
                       <Play className="h-4 w-4" />
-                      {isRunning ? "Running..." : "Run Code"}
+                      {isRunning ? 'Running...' : 'Run Code'}
                     </Button>
                     <Button variant="outline">Clear</Button>
                   </div>

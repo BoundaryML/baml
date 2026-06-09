@@ -13,7 +13,8 @@ interface MinimalSidebarProps {
   communityLinks?: SidebarLink[];
 }
 
-const DEFAULT_TIMELINE = 'PYTHON 1991 · JAVA 1995 · TYPESCRIPT 2012 · BAML 2025';
+const DEFAULT_TIMELINE =
+  'PYTHON 1991 · JAVA 1995 · TYPESCRIPT 2012 · BAML 2025';
 
 const DEFAULT_IMPORTANT: SidebarLink[] = [
   { label: 'Getting Started', href: '/learn' },

@@ -13,9 +13,9 @@ const ERAS = timeline.length;
 const ERA_IMAGES: Record<string, string> = {
   'C, Unix': '/Sphinx Icon.png',
   'Java, JavaScript': '/java-icon.png',
-  'TypeScript': '/Bridge Icon.png',
-  'Python': '/python-icon.png',
-  'BAML': '/baml-sheep.png',
+  TypeScript: '/Bridge Icon.png',
+  Python: '/python-icon.png',
+  BAML: '/baml-sheep.png',
 };
 
 const ERA_SIZES: Record<string, number> = {
@@ -76,7 +76,9 @@ function EraCard({
         flex: '0 0 60%',
         maxWidth: '60%',
         paddingLeft: isOdd
-          ? node.label === 'Java, JavaScript' || node.label === 'Python' ? 96 : 64
+          ? node.label === 'Java, JavaScript' || node.label === 'Python'
+            ? 96
+            : 64
           : 0,
         paddingRight: isOdd ? 0 : 64,
       }}
@@ -84,7 +86,9 @@ function EraCard({
       <h2
         className="font-bold"
         style={{
-          fontSize: isBaml ? 'clamp(2rem, 5vw, 3rem)' : 'clamp(1.5rem, 3vw, 2.25rem)',
+          fontSize: isBaml
+            ? 'clamp(2rem, 5vw, 3rem)'
+            : 'clamp(1.5rem, 3vw, 2.25rem)',
           color: isBaml ? '#8b5cf6' : undefined,
           letterSpacing: isBaml ? '0.06em' : '-0.02em',
         }}
@@ -107,9 +111,13 @@ function EraCard({
         maxWidth: '40%',
         paddingLeft: isOdd
           ? 0
-          : node.label === 'C, Unix' || node.label === 'TypeScript' ? 36 : 64,
+          : node.label === 'C, Unix' || node.label === 'TypeScript'
+            ? 36
+            : 64,
         paddingRight: isOdd
-          ? node.label === 'C, Unix' || node.label === 'TypeScript' ? 36 : 64
+          ? node.label === 'C, Unix' || node.label === 'TypeScript'
+            ? 36
+            : 64
           : 0,
         paddingTop: 40,
         paddingBottom: 40,
@@ -120,12 +128,21 @@ function EraCard({
       }}
     >
       {image && (
-        <div style={{ maxWidth: 400, width: '100%', display: 'flex', justifyContent: 'center' }}>
+        <div
+          style={{
+            maxWidth: 400,
+            width: '100%',
+            display: 'flex',
+            justifyContent: 'center',
+          }}
+        >
           <div
             style={
               isBaml
                 ? {
-                    animation: isActive ? 'baml-pulse 2.4s ease-in-out infinite' : 'none',
+                    animation: isActive
+                      ? 'baml-pulse 2.4s ease-in-out infinite'
+                      : 'none',
                     filter: 'drop-shadow(0 0 12px rgba(139,92,246,0.45))',
                   }
                 : undefined
@@ -158,12 +175,23 @@ function EraCard({
           aria-hidden
           className="pointer-events-none absolute inset-0 rounded-2xl"
           style={{
-            background: 'radial-gradient(ellipse at center, rgba(139,92,246,0.08) 0%, transparent 75%)',
+            background:
+              'radial-gradient(ellipse at center, rgba(139,92,246,0.08) 0%, transparent 75%)',
           }}
         />
       )}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
-        {isOdd ? <>{iconCol}{textCol}</> : <>{textCol}{iconCol}</>}
+        {isOdd ? (
+          <>
+            {iconCol}
+            {textCol}
+          </>
+        ) : (
+          <>
+            {textCol}
+            {iconCol}
+          </>
+        )}
       </div>
     </div>
   );
@@ -186,7 +214,10 @@ export function StoryTimeline() {
   });
 
   return (
-    <div ref={containerRef} style={{ height: `${ERAS * 100}vh`, position: 'relative' }}>
+    <div
+      ref={containerRef}
+      style={{ height: `${ERAS * 100}vh`, position: 'relative' }}
+    >
       <style>{`
         @keyframes baml-pulse {
           0%, 100% { filter: drop-shadow(0 0 12px rgba(139,92,246,0.45)); }
@@ -214,7 +245,8 @@ export function StoryTimeline() {
           <div
             className="absolute inset-0"
             style={{
-              background: 'linear-gradient(to bottom, rgba(209,213,219,0.9) 0%, rgba(209,213,219,0.9) 55%, rgba(139,92,246,0.9) 80%, rgba(139,92,246,1) 100%)',
+              background:
+                'linear-gradient(to bottom, rgba(209,213,219,0.9) 0%, rgba(209,213,219,0.9) 55%, rgba(139,92,246,0.9) 80%, rgba(139,92,246,1) 100%)',
               maskImage: DASH_MASK,
               WebkitMaskImage: DASH_MASK,
               opacity: isBamlActive ? 0 : 1,
@@ -224,7 +256,8 @@ export function StoryTimeline() {
           <div
             className="absolute inset-0"
             style={{
-              background: 'linear-gradient(to bottom, rgba(139,92,246,0.4) 0%, rgba(139,92,246,1) 100%)',
+              background:
+                'linear-gradient(to bottom, rgba(139,92,246,0.4) 0%, rgba(139,92,246,1) 100%)',
               maskImage: DASH_MASK,
               WebkitMaskImage: DASH_MASK,
               opacity: isBamlActive ? 1 : 0,
@@ -234,7 +267,10 @@ export function StoryTimeline() {
         </div>
 
         {/* Era panels — absolutely stacked, one visible at a time */}
-        <div className="relative px-4 sm:px-8 md:px-12" style={{ height: 'calc(100vh - 80px)' }}>
+        <div
+          className="relative px-4 sm:px-8 md:px-12"
+          style={{ height: 'calc(100vh - 80px)' }}
+        >
           {timeline.map((node, i) => (
             <div
               key={node.era}
@@ -272,7 +308,9 @@ export function StoryTimeline() {
                   i < activeIndex
                     ? 'rgba(139,92,246,0.4)'
                     : i === activeIndex
-                      ? isBamlActive ? '#8b5cf6' : 'rgba(26,26,26,0.7)'
+                      ? isBamlActive
+                        ? '#8b5cf6'
+                        : 'rgba(26,26,26,0.7)'
                       : 'rgba(209,213,219,0.6)',
                 transition: 'background-color 300ms ease',
               }}

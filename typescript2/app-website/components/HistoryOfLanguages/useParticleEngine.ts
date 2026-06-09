@@ -16,7 +16,12 @@ export type Particle = {
   alpha: number;
 };
 
-export type EnginePhase = 'idle' | 'assembling' | 'assembled' | 'dissolving' | 'done';
+export type EnginePhase =
+  | 'idle'
+  | 'assembling'
+  | 'assembled'
+  | 'dissolving'
+  | 'done';
 
 const SPRING = 0.045;
 const DAMPING = 0.87;
@@ -50,24 +55,27 @@ export function useParticleEngine({
   const dissolveTriggerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Spawn particles scattered randomly within canvas
-  const spawnParticles = useCallback((w: number, h: number) => {
-    particlesRef.current = targets.map((t) => {
-      const ox = Math.random() * w;
-      const oy = Math.random() * h;
-      return {
-        x: ox,
-        y: oy,
-        vx: (Math.random() - 0.5) * 2.5,
-        vy: (Math.random() - 0.5) * 2.5,
-        tx: t.x,
-        ty: t.y,
-        ox,
-        oy,
-        radius: 1.2 + Math.random() * 0.8,
-        alpha: 0.0, // fade in during assembly
-      };
-    });
-  }, [targets]);
+  const spawnParticles = useCallback(
+    (w: number, h: number) => {
+      particlesRef.current = targets.map((t) => {
+        const ox = Math.random() * w;
+        const oy = Math.random() * h;
+        return {
+          x: ox,
+          y: oy,
+          vx: (Math.random() - 0.5) * 2.5,
+          vy: (Math.random() - 0.5) * 2.5,
+          tx: t.x,
+          ty: t.y,
+          ox,
+          oy,
+          radius: 1.2 + Math.random() * 0.8,
+          alpha: 0.0, // fade in during assembly
+        };
+      });
+    },
+    [targets],
+  );
 
   const setPhase = useCallback(
     (p: EnginePhase) => {
@@ -146,7 +154,12 @@ export function useParticleEngine({
       if (phase === 'assembling') {
         const dx = Math.abs(p.tx - p.x);
         const dy = Math.abs(p.ty - p.y);
-        if (dx < SETTLED_POS && dy < SETTLED_POS && Math.abs(p.vx) < SETTLED_VEL && Math.abs(p.vy) < SETTLED_VEL) {
+        if (
+          dx < SETTLED_POS &&
+          dy < SETTLED_POS &&
+          Math.abs(p.vx) < SETTLED_VEL &&
+          Math.abs(p.vy) < SETTLED_VEL
+        ) {
           settledCount++;
         }
       }
@@ -165,7 +178,10 @@ export function useParticleEngine({
     if (phase === 'assembling' && settledCount >= particles.length * 0.92) {
       setPhase('assembled');
       if (isBaml) {
-        dissolveTriggerRef.current = setTimeout(() => setPhase('dissolving'), 2000);
+        dissolveTriggerRef.current = setTimeout(
+          () => setPhase('dissolving'),
+          2000,
+        );
       }
     }
 

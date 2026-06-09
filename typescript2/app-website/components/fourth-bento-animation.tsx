@@ -24,8 +24,7 @@ const boxConfigs: BoxConfig[] = [
     title: 'ClassifyText (claude-3-5-sonnet)',
   },
   {
-    className:
-      'bg-primary/20 border border-primary border-dashed text-primary',
+    className: 'bg-primary/20 border border-primary border-dashed text-primary',
     title: 'ClassifyText (gemini-1.5-pro)',
   },
 ];

@@ -1,17 +1,27 @@
-import type { WasmVfsMetadata } from "@b/bridge_wasm";
+import type { WasmVfsMetadata } from '@b/bridge_wasm';
 
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
 
 const MEDIA_EXTENSIONS = new Set([
-  "png", "jpg", "jpeg", "gif", "svg", "webp", "ico", "bmp",
-  "mp3", "wav", "ogg",
-  "mp4", "webm",
-  "pdf",
+  'png',
+  'jpg',
+  'jpeg',
+  'gif',
+  'svg',
+  'webp',
+  'ico',
+  'bmp',
+  'mp3',
+  'wav',
+  'ogg',
+  'mp4',
+  'webm',
+  'pdf',
 ]);
 
 function isMediaFile(path: string): boolean {
-  const ext = path.split(".").pop()?.toLowerCase() ?? "";
+  const ext = path.split('.').pop()?.toLowerCase() ?? '';
   return MEDIA_EXTENSIONS.has(ext);
 }
 
@@ -23,8 +33,9 @@ function isMediaFile(path: string): boolean {
  * For deletes: `deleted` is true and `content` is undefined.
  */
 export type VfsChangeCallback = (
-  change: { path: string; content: string; deleted?: false }
-        | { path: string; deleted: true },
+  change:
+    | { path: string; content: string; deleted?: false }
+    | { path: string; deleted: true },
 ) => void;
 
 /**
@@ -53,7 +64,7 @@ export class BamlVfs {
 
   /** Convert a workspace-relative path to an absolute VFS path. */
   toAbsolute(relPath: string): string {
-    if (relPath.startsWith("/")) return relPath;
+    if (relPath.startsWith('/')) return relPath;
     return `${this.rootPath}/${relPath}`;
   }
 
@@ -73,7 +84,10 @@ export class BamlVfs {
       for (const [rel, content] of Object.entries(files)) {
         const abs = this.toAbsolute(rel);
         newAbsKeys.add(abs);
-        this.files.set(abs, isMediaFile(abs) ? dataUrlToBytes(content) : encoder.encode(content));
+        this.files.set(
+          abs,
+          isMediaFile(abs) ? dataUrlToBytes(content) : encoder.encode(content),
+        );
         this.ensureParentDirs(abs);
       }
       for (const abs of this.files.keys()) {
@@ -92,20 +106,20 @@ export class BamlVfs {
 
   readonly wasmVfs = {
     readDir: (path: string): string[] => {
-      const prefix = path.endsWith("/") ? path : path + "/";
+      const prefix = path.endsWith('/') ? path : path + '/';
       const children = new Set<string>();
 
       for (const p of this.files.keys()) {
         if (p.startsWith(prefix)) {
           const rest = p.slice(prefix.length);
-          const slash = rest.indexOf("/");
+          const slash = rest.indexOf('/');
           children.add(slash >= 0 ? rest.slice(0, slash) : rest);
         }
       }
       for (const d of this.dirs) {
         if (d.startsWith(prefix)) {
           const rest = d.slice(prefix.length);
-          if (rest && !rest.includes("/")) {
+          if (rest && !rest.includes('/')) {
             children.add(rest);
           }
         }
@@ -117,24 +131,24 @@ export class BamlVfs {
     readDirEntries: (
       path: string,
     ): Array<{ name: string; file_type: string; is_symlink: boolean }> => {
-      const prefix = path.endsWith("/") ? path : path + "/";
-      const seen = new Map<string, "file" | "directory">();
+      const prefix = path.endsWith('/') ? path : path + '/';
+      const seen = new Map<string, 'file' | 'directory'>();
       for (const p of this.files.keys()) {
         if (p.startsWith(prefix)) {
           const rest = p.slice(prefix.length);
-          const slash = rest.indexOf("/");
+          const slash = rest.indexOf('/');
           if (slash >= 0) {
-            seen.set(rest.slice(0, slash), "directory");
+            seen.set(rest.slice(0, slash), 'directory');
           } else if (!seen.has(rest)) {
-            seen.set(rest, "file");
+            seen.set(rest, 'file');
           }
         }
       }
       for (const d of this.dirs) {
         if (d.startsWith(prefix)) {
           const rest = d.slice(prefix.length);
-          if (rest && !rest.includes("/") && !seen.has(rest)) {
-            seen.set(rest, "directory");
+          if (rest && !rest.includes('/') && !seen.has(rest)) {
+            seen.set(rest, 'directory');
           }
         }
       }
@@ -152,7 +166,7 @@ export class BamlVfs {
 
     exists: (path: string): boolean => {
       if (this.files.has(path) || this.dirs.has(path)) return true;
-      const prefix = path + "/";
+      const prefix = path + '/';
       for (const p of this.files.keys()) {
         if (p.startsWith(prefix)) return true;
       }
@@ -174,7 +188,7 @@ export class BamlVfs {
     metadata: (path: string): WasmVfsMetadata => {
       if (this.files.has(path)) {
         return {
-          file_type: "file",
+          file_type: 'file',
           len: this.files.get(path)!.length,
           created: undefined,
           modified: undefined,
@@ -183,18 +197,18 @@ export class BamlVfs {
       }
       if (this.dirs.has(path)) {
         return {
-          file_type: "directory",
+          file_type: 'directory',
           len: 0,
           created: undefined,
           modified: undefined,
           accessed: undefined,
         };
       }
-      const prefix = path + "/";
+      const prefix = path + '/';
       for (const p of this.files.keys()) {
         if (p.startsWith(prefix)) {
           return {
-            file_type: "directory",
+            file_type: 'directory',
             len: 0,
             created: undefined,
             modified: undefined,
@@ -212,7 +226,7 @@ export class BamlVfs {
 
     removeDir: (path: string): void => {
       this.dirs.delete(path);
-      const prefix = path + "/";
+      const prefix = path + '/';
       for (const p of this.files.keys()) {
         if (p.startsWith(prefix)) {
           this.files.delete(p);
@@ -225,7 +239,7 @@ export class BamlVfs {
     },
 
     setTime: (
-      _type: "creation" | "modification" | "access",
+      _type: 'creation' | 'modification' | 'access',
       _path: string,
       _time: number,
     ): void => {
@@ -252,11 +266,11 @@ export class BamlVfs {
     },
 
     moveDir: (src: string, dest: string): void => {
-      const srcPrefix = src + "/";
+      const srcPrefix = src + '/';
       const entries: [string, Uint8Array][] = [];
       for (const [p, data] of this.files) {
         if (p.startsWith(srcPrefix)) {
-          entries.push([dest + "/" + p.slice(srcPrefix.length), data]);
+          entries.push([dest + '/' + p.slice(srcPrefix.length), data]);
           this.files.delete(p);
           this.notifyDelete(p);
         }
@@ -285,7 +299,9 @@ export class BamlVfs {
 
   /** Convert an absolute VFS path back to a workspace-relative path. */
   private toRelative(absPath: string): string {
-    const prefix = this.rootPath.endsWith("/") ? this.rootPath : this.rootPath + "/";
+    const prefix = this.rootPath.endsWith('/')
+      ? this.rootPath
+      : this.rootPath + '/';
     if (absPath.startsWith(prefix)) return absPath.slice(prefix.length);
     return absPath;
   }
@@ -307,12 +323,12 @@ export class BamlVfs {
   }
 
   private ensureParentDirs(absPath: string): void {
-    let i = absPath.lastIndexOf("/");
+    let i = absPath.lastIndexOf('/');
     while (i > 0) {
       const dir = absPath.slice(0, i);
       if (this.dirs.has(dir)) break;
       this.dirs.add(dir);
-      i = dir.lastIndexOf("/");
+      i = dir.lastIndexOf('/');
     }
   }
 }
@@ -322,17 +338,26 @@ export class BamlVfs {
 // ---------------------------------------------------------------------------
 
 const MIME_TYPES: Record<string, string> = {
-  png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif",
-  svg: "image/svg+xml", webp: "image/webp", ico: "image/x-icon", bmp: "image/bmp",
-  mp3: "audio/mpeg", wav: "audio/wav", ogg: "audio/ogg",
-  mp4: "video/mp4", webm: "video/webm",
-  pdf: "application/pdf",
+  png: 'image/png',
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  gif: 'image/gif',
+  svg: 'image/svg+xml',
+  webp: 'image/webp',
+  ico: 'image/x-icon',
+  bmp: 'image/bmp',
+  mp3: 'audio/mpeg',
+  wav: 'audio/wav',
+  ogg: 'audio/ogg',
+  mp4: 'video/mp4',
+  webm: 'video/webm',
+  pdf: 'application/pdf',
 };
 
 function bytesToDataUrl(bytes: Uint8Array, path: string): string {
-  const ext = path.split(".").pop()?.toLowerCase() ?? "";
-  const mime = MIME_TYPES[ext] ?? "application/octet-stream";
-  let binary = "";
+  const ext = path.split('.').pop()?.toLowerCase() ?? '';
+  const mime = MIME_TYPES[ext] ?? 'application/octet-stream';
+  let binary = '';
   for (const byte of bytes) binary += String.fromCharCode(byte);
   return `data:${mime};base64,${btoa(binary)}`;
 }
@@ -342,29 +367,29 @@ function bytesToDataUrl(bytes: Uint8Array, path: string): string {
  * Supports: `**` (any path), `*` (single segment), `?` (single char).
  */
 function globToRegex(glob: string): RegExp {
-  let re = "^";
+  let re = '^';
   let i = 0;
   while (i < glob.length) {
-    if (glob[i] === "*" && glob[i + 1] === "*") {
-      re += ".*";
+    if (glob[i] === '*' && glob[i + 1] === '*') {
+      re += '.*';
       i += 2;
-      if (glob[i] === "/") i++;
-    } else if (glob[i] === "*") {
-      re += "[^/]*";
+      if (glob[i] === '/') i++;
+    } else if (glob[i] === '*') {
+      re += '[^/]*';
       i++;
-    } else if (glob[i] === "?") {
-      re += "[^/]";
+    } else if (glob[i] === '?') {
+      re += '[^/]';
       i++;
     } else {
-      re += glob[i]!.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      re += glob[i]!.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       i++;
     }
   }
-  return new RegExp(re + "$");
+  return new RegExp(re + '$');
 }
 
 function dataUrlToBytes(dataUrl: string): Uint8Array {
-  const commaIdx = dataUrl.indexOf(",");
+  const commaIdx = dataUrl.indexOf(',');
   if (commaIdx < 0) return encoder.encode(dataUrl);
   const base64 = dataUrl.slice(commaIdx + 1);
   const binary = atob(base64);

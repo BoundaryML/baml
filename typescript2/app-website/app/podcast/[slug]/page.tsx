@@ -33,21 +33,24 @@ const getYouTubeVideoId = (url: string) => {
 };
 
 // Helper function to fetch README from GitHub
-async function fetchReadmeFromGitHub(codeUrl: string, episodeTitle: string): Promise<string> {
+async function fetchReadmeFromGitHub(
+  codeUrl: string,
+  episodeTitle: string,
+): Promise<string> {
   try {
     // Convert GitHub tree URL to raw README URL
-    const rawUrl = codeUrl
-      .replace('github.com', 'raw.githubusercontent.com')
-      .replace('/tree/', '/')
-      + '/README.md';
-    
+    const rawUrl =
+      codeUrl
+        .replace('github.com', 'raw.githubusercontent.com')
+        .replace('/tree/', '/') + '/README.md';
+
     const response = await fetch(rawUrl, { signal: AbortSignal.timeout(8000) });
     if (!response.ok) {
       // Try README.md with different casing
-      const altUrl = codeUrl
-        .replace('github.com', 'raw.githubusercontent.com')
-        .replace('/tree/', '/')
-        + '/readme.md';
+      const altUrl =
+        codeUrl
+          .replace('github.com', 'raw.githubusercontent.com')
+          .replace('/tree/', '/') + '/readme.md';
 
       const altResponse = await fetch(altUrl, {
         signal: AbortSignal.timeout(8000),
@@ -57,9 +60,9 @@ async function fetchReadmeFromGitHub(codeUrl: string, episodeTitle: string): Pro
       }
       return await altResponse.text();
     }
-    
+
     const content = await response.text();
-    
+
     // Convert HTML img tags to markdown image syntax
     let processedContent = content.replace(
       /<img[^>]+src="([^"]+)"[^>]*>/g,
@@ -68,30 +71,33 @@ async function fetchReadmeFromGitHub(codeUrl: string, episodeTitle: string): Pro
         const altMatch = match.match(/alt="([^"]*)"/);
         const alt = altMatch ? altMatch[1] : 'image';
         return `![${alt}](${src})`;
-      }
+      },
     );
-    
+
     // Clean up duplicate titles (remove markdown headers that match the episode title)
-    const titleRegex = new RegExp(`^#+\\s*${episodeTitle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*$`, 'gm');
+    const titleRegex = new RegExp(
+      `^#+\\s*${episodeTitle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*$`,
+      'gm',
+    );
     processedContent = processedContent.replace(titleRegex, '');
-    
+
     // Remove YouTube video links and thumbnails
     processedContent = processedContent.replace(
       /\[!\[.*?\]\(https:\/\/img\.youtube\.com\/vi\/[^)]+\)\]\(https:\/\/www\.youtube\.com\/watch\?v=[^)]+\)/g,
-      ''
+      '',
     );
-    
+
     // Remove standalone YouTube links
     processedContent = processedContent.replace(
       /\[Video\]\(https:\/\/www\.youtube\.com\/watch\?v=[^)]+\)\s*\([^)]*\)/g,
-      ''
+      '',
     );
-    
+
     // Clean up extra whitespace and empty lines
     processedContent = processedContent
       .replace(/\n\s*\n\s*\n/g, '\n\n') // Remove multiple empty lines
       .trim();
-    
+
     return processedContent;
   } catch (error) {
     console.error('Failed to fetch README:', error);
@@ -120,7 +126,9 @@ export async function generateMetadata({
   const episodeUrl = `${baseUrl}/podcast/${episode.slug}`;
 
   // Extract YouTube thumbnail if available
-  const videoId = episode.youtubeUrl ? getYouTubeVideoId(episode.youtubeUrl) : null;
+  const videoId = episode.youtubeUrl
+    ? getYouTubeVideoId(episode.youtubeUrl)
+    : null;
   const thumbnailUrl = videoId
     ? `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`
     : `${baseUrl}/baml-og-background.png`; // Fallback to default image
@@ -134,7 +142,14 @@ export async function generateMetadata({
     alternates: {
       canonical: episodeUrl,
     },
-    keywords: [...episode.topics, 'AI', 'LLM', 'BAML', 'Boundary ML', 'Podcast'].join(', '),
+    keywords: [
+      ...episode.topics,
+      'AI',
+      'LLM',
+      'BAML',
+      'Boundary ML',
+      'Podcast',
+    ].join(', '),
     openGraph: {
       title: fullTitle,
       description: fullDescription,
@@ -150,15 +165,17 @@ export async function generateMetadata({
           alt: `${episode.title} - Episode ${episode.episodeNumber}`,
         },
       ],
-      videos: videoId ? [
-        {
-          url: `https://www.youtube.com/watch?v=${videoId}`,
-          secureUrl: `https://www.youtube.com/watch?v=${videoId}`,
-          type: 'text/html',
-          width: 1280,
-          height: 720,
-        },
-      ] : undefined,
+      videos: videoId
+        ? [
+            {
+              url: `https://www.youtube.com/watch?v=${videoId}`,
+              secureUrl: `https://www.youtube.com/watch?v=${videoId}`,
+              type: 'text/html',
+              width: 1280,
+              height: 720,
+            },
+          ]
+        : undefined,
     },
     twitter: {
       card: 'summary_large_image',
@@ -184,9 +201,17 @@ export default async function EpisodePage({
     notFound();
   }
 
-  const videoId = episode.youtubeUrl ? getYouTubeVideoId(episode.youtubeUrl) : null;
+  const videoId = episode.youtubeUrl
+    ? getYouTubeVideoId(episode.youtubeUrl)
+    : null;
   const isUpcoming = new Date(episode.date) > new Date();
-  const readmeContent = episode.codeUrl && !isUpcoming ? await fetchReadmeFromGitHub(episode.codeUrl, `🦄 ai that works: ${episode.title}`) : '';
+  const readmeContent =
+    episode.codeUrl && !isUpcoming
+      ? await fetchReadmeFromGitHub(
+          episode.codeUrl,
+          `🦄 ai that works: ${episode.title}`,
+        )
+      : '';
 
   return (
     <div className="max-w-7xl mx-auto border-x relative">
@@ -250,7 +275,8 @@ export default async function EpisodePage({
                   Upcoming Event
                 </div>
                 <p className="text-muted-foreground">
-                  This episode hasn't aired yet. RSVP to get notified when it goes live.
+                  This episode hasn't aired yet. RSVP to get notified when it
+                  goes live.
                 </p>
               </div>
             )}
@@ -270,7 +296,7 @@ export default async function EpisodePage({
                   )}
                 </div>
                 <div className="prose prose-lg max-w-none">
-                  <Markdown 
+                  <Markdown
                     className="text-base text-foreground"
                     components={{
                       img: ({ src, alt, ...props }) => (

@@ -87,10 +87,7 @@ export function WhyALanguage() {
     FEATURES.find((feature) => feature.id === activeFeatureId) ?? FEATURES[0];
 
   return (
-    <section
-      aria-labelledby="features-heading"
-      className="w-full bg-[#FBF7ED]"
-    >
+    <section aria-labelledby="features-heading" className="w-full bg-[#FBF7ED]">
       <div className="mx-auto max-w-[1600px] border-b border-[#D9D3C4] px-6 py-20 sm:px-12 sm:py-28">
         <div className="mx-auto grid max-w-[1240px] items-start gap-14 lg:grid-cols-[0.72fr_1.28fr] lg:gap-16">
           <div>
@@ -196,60 +193,60 @@ function LanguagePanel({
             repeat: Number.POSITIVE_INFINITY,
           }}
         >
-        <motion.div
-          animate={{
-            borderColor: `${activeTint}55`,
-            boxShadow: `0 0 0 1px ${activeTint}22, 0 36px 60px -28px rgba(26,22,18,0.4), 0 14px 28px -14px rgba(26,22,18,0.2), inset 0 2px 0 rgba(255,255,255,0.85)`,
-          }}
-          className="flex h-full flex-col rounded-xl border bg-gradient-to-b from-[#FFFEF9] to-[#F4EDDC] p-5 sm:p-6"
-          transition={{ duration: 0.3, ease: [0.22, 0.61, 0.36, 1] }}
-        >
-          <div className="mb-5 flex items-center justify-between gap-3">
-            <div>
-              <p className="mb-0.5 font-mono text-[10px] uppercase tracking-[0.18em] text-[#8A8580]">
-                Language Layer
-              </p>
-              <h3 className="text-lg font-semibold tracking-[-0.02em] text-[#1A1612]">
-                BAML Language Layer
-              </h3>
+          <motion.div
+            animate={{
+              borderColor: `${activeTint}55`,
+              boxShadow: `0 0 0 1px ${activeTint}22, 0 36px 60px -28px rgba(26,22,18,0.4), 0 14px 28px -14px rgba(26,22,18,0.2), inset 0 2px 0 rgba(255,255,255,0.85)`,
+            }}
+            className="flex h-full flex-col rounded-xl border bg-gradient-to-b from-[#FFFEF9] to-[#F4EDDC] p-5 sm:p-6"
+            transition={{ duration: 0.3, ease: [0.22, 0.61, 0.36, 1] }}
+          >
+            <div className="mb-5 flex items-center justify-between gap-3">
+              <div>
+                <p className="mb-0.5 font-mono text-[10px] uppercase tracking-[0.18em] text-[#8A8580]">
+                  Language Layer
+                </p>
+                <h3 className="text-lg font-semibold tracking-[-0.02em] text-[#1A1612]">
+                  BAML Language Layer
+                </h3>
+              </div>
+              <motion.div
+                animate={{
+                  boxShadow: [
+                    '0 0 0 1px rgba(167,99,255,0.22), 0 0 14px rgba(167,99,255,0.16)',
+                    '0 0 0 1px rgba(167,99,255,0.34), 0 0 22px rgba(167,99,255,0.24)',
+                    '0 0 0 1px rgba(167,99,255,0.22), 0 0 14px rgba(167,99,255,0.16)',
+                  ],
+                }}
+                className="grid size-10 shrink-0 place-items-center rounded-md border border-[#A763FF]/30 bg-white/80"
+                transition={{
+                  duration: 2.8,
+                  ease: 'easeInOut',
+                  repeat: Number.POSITIVE_INFINITY,
+                }}
+              >
+                <Image
+                  alt=""
+                  aria-hidden
+                  className="h-6 w-6 object-contain"
+                  height={24}
+                  src="/bamllogopurple.svg"
+                  width={24}
+                />
+              </motion.div>
             </div>
-            <motion.div
-              animate={{
-                boxShadow: [
-                  '0 0 0 1px rgba(167,99,255,0.22), 0 0 14px rgba(167,99,255,0.16)',
-                  '0 0 0 1px rgba(167,99,255,0.34), 0 0 22px rgba(167,99,255,0.24)',
-                  '0 0 0 1px rgba(167,99,255,0.22), 0 0 14px rgba(167,99,255,0.16)',
-                ],
-              }}
-              className="grid size-10 shrink-0 place-items-center rounded-md border border-[#A763FF]/30 bg-white/80"
-              transition={{
-                duration: 2.8,
-                ease: 'easeInOut',
-                repeat: Number.POSITIVE_INFINITY,
-              }}
-            >
-              <Image
-                alt=""
-                aria-hidden
-                className="h-6 w-6 object-contain"
-                height={24}
-                src="/bamllogopurple.svg"
-                width={24}
-              />
-            </motion.div>
-          </div>
 
-          <div className="grid flex-1 grid-cols-2 gap-2 sm:grid-cols-2">
-            {FEATURES.map((feature) => (
-              <FeatureChip
-                feature={feature}
-                isActive={feature.id === activeFeatureId}
-                key={feature.id}
-                onActivate={() => onActiveFeatureChange(feature.id)}
-              />
-            ))}
-          </div>
-        </motion.div>
+            <div className="grid flex-1 grid-cols-2 gap-2 sm:grid-cols-2">
+              {FEATURES.map((feature) => (
+                <FeatureChip
+                  feature={feature}
+                  isActive={feature.id === activeFeatureId}
+                  key={feature.id}
+                  onActivate={() => onActiveFeatureChange(feature.id)}
+                />
+              ))}
+            </div>
+          </motion.div>
         </motion.div>
       </motion.div>
     </div>

@@ -57,12 +57,7 @@ function channelOf(version: string): Channel {
 }
 
 // Canary-first ordering for the filter bar.
-const CHANNEL_ORDER = [
-  'canary',
-  'nightly',
-  'alpha',
-  'prerelease',
-];
+const CHANNEL_ORDER = ['canary', 'nightly', 'alpha', 'prerelease'];
 
 // ---- shiki markdown pipeline (client-side, lazy) -----------------------------
 // Built once on first use and reused. Dynamically imported so the (heavy) shiki
@@ -137,10 +132,7 @@ function getRenderer(): Promise<(body: string) => Promise<string>> {
 }
 
 function escapeHtml(s: string): string {
-  return s
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;');
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
 function Article({ entry, onBack }: { entry: Entry; onBack: () => void }) {
@@ -219,7 +211,11 @@ export function ChangelogList() {
   }, []);
 
   const open = useCallback((version: string) => {
-    window.history.pushState({}, '', `/changelog?v=${encodeURIComponent(version)}`);
+    window.history.pushState(
+      {},
+      '',
+      `/changelog?v=${encodeURIComponent(version)}`,
+    );
     setSelected(version);
     window.scrollTo({ top: 0 });
   }, []);
@@ -257,7 +253,11 @@ export function ChangelogList() {
       </header>
 
       {present.length > 1 && (
-        <div className="chlog-filters" role="group" aria-label="Filter by channel">
+        <div
+          className="chlog-filters"
+          role="group"
+          aria-label="Filter by channel"
+        >
           <button
             type="button"
             className={`chlog-filter${filter === null ? ' is-active' : ''}`}

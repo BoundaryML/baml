@@ -26,8 +26,12 @@
           "name": "comment.block.baml",
           "begin": "/\\*",
           "end": "\\*/",
-          "beginCaptures": { "0": { "name": "punctuation.definition.comment.begin.baml" } },
-          "endCaptures": { "0": { "name": "punctuation.definition.comment.end.baml" } }
+          "beginCaptures": {
+            "0": { "name": "punctuation.definition.comment.begin.baml" }
+          },
+          "endCaptures": {
+            "0": { "name": "punctuation.definition.comment.end.baml" }
+          }
         },
         {
           "name": "comment.line.documentation.baml",
@@ -55,10 +59,19 @@
         "2": { "name": "entity.name.type.class.baml" },
         "3": {
           "patterns": [
-            { "match": "[<>]", "name": "punctuation.definition.typeparameters.baml" },
+            {
+              "match": "[<>]",
+              "name": "punctuation.definition.typeparameters.baml"
+            },
             { "match": "[|:,]", "name": "punctuation.separator.baml" },
-            { "match": "\\b(int|string|float|bool|bytes|null|true|false|image|audio|map|set)\\b", "name": "support.type.primitive.baml" },
-            { "match": "[A-Za-z_][A-Za-z0-9_]*", "name": "entity.name.type.baml" }
+            {
+              "match": "\\b(int|string|float|bool|bytes|null|true|false|image|audio|map|set)\\b",
+              "name": "support.type.primitive.baml"
+            },
+            {
+              "match": "[A-Za-z_][A-Za-z0-9_]*",
+              "name": "entity.name.type.baml"
+            }
           ]
         },
         "4": { "name": "punctuation.definition.block.begin.baml" }
@@ -312,9 +325,7 @@
       "endCaptures": {
         "0": { "name": "punctuation.definition.block.end.baml" }
       },
-      "patterns": [
-        { "include": "#expression-body" }
-      ]
+      "patterns": [{ "include": "#expression-body" }]
     },
 
     "client-block": {
@@ -712,9 +723,7 @@
         "2": { "name": "entity.name.function.decorator.baml" }
       },
       "end": "(?<=\\))|(?=\\s+@)|(?=$)|(?=\\})",
-      "patterns": [
-        { "include": "#attribute-args" }
-      ]
+      "patterns": [{ "include": "#attribute-args" }]
     },
 
     "block-attribute": {
@@ -724,9 +733,7 @@
         "2": { "name": "entity.name.function.decorator.baml" }
       },
       "end": "(?<=\\))|(?=$)",
-      "patterns": [
-        { "include": "#attribute-args" }
-      ]
+      "patterns": [{ "include": "#attribute-args" }]
     },
 
     "attribute-args": {
@@ -1018,69 +1025,83 @@
 
     "raw-string-5": {
       "begin": "#####\"",
-      "beginCaptures": { "0": { "name": "punctuation.definition.string.begin.baml" } },
+      "beginCaptures": {
+        "0": { "name": "punctuation.definition.string.begin.baml" }
+      },
       "end": "\"#####",
-      "endCaptures": { "0": { "name": "punctuation.definition.string.end.baml" } },
+      "endCaptures": {
+        "0": { "name": "punctuation.definition.string.end.baml" }
+      },
       "name": "string.quoted.raw.baml",
       "contentName": "string.quoted.block.baml.prompt",
-      "patterns": [
-        { "include": "source.baml-jinja" }
-      ]
+      "patterns": [{ "include": "source.baml-jinja" }]
     },
 
     "raw-string-4": {
       "begin": "####\"",
-      "beginCaptures": { "0": { "name": "punctuation.definition.string.begin.baml" } },
+      "beginCaptures": {
+        "0": { "name": "punctuation.definition.string.begin.baml" }
+      },
       "end": "\"####",
-      "endCaptures": { "0": { "name": "punctuation.definition.string.end.baml" } },
+      "endCaptures": {
+        "0": { "name": "punctuation.definition.string.end.baml" }
+      },
       "name": "string.quoted.raw.baml",
       "contentName": "string.quoted.block.baml.prompt",
-      "patterns": [
-        { "include": "source.baml-jinja" }
-      ]
+      "patterns": [{ "include": "source.baml-jinja" }]
     },
 
     "raw-string-3": {
       "begin": "###\"",
-      "beginCaptures": { "0": { "name": "punctuation.definition.string.begin.baml" } },
+      "beginCaptures": {
+        "0": { "name": "punctuation.definition.string.begin.baml" }
+      },
       "end": "\"###",
-      "endCaptures": { "0": { "name": "punctuation.definition.string.end.baml" } },
+      "endCaptures": {
+        "0": { "name": "punctuation.definition.string.end.baml" }
+      },
       "name": "string.quoted.raw.baml",
       "contentName": "string.quoted.block.baml.prompt",
-      "patterns": [
-        { "include": "source.baml-jinja" }
-      ]
+      "patterns": [{ "include": "source.baml-jinja" }]
     },
 
     "raw-string-2": {
       "begin": "##\"",
-      "beginCaptures": { "0": { "name": "punctuation.definition.string.begin.baml" } },
+      "beginCaptures": {
+        "0": { "name": "punctuation.definition.string.begin.baml" }
+      },
       "end": "\"##",
-      "endCaptures": { "0": { "name": "punctuation.definition.string.end.baml" } },
+      "endCaptures": {
+        "0": { "name": "punctuation.definition.string.end.baml" }
+      },
       "name": "string.quoted.raw.baml",
       "contentName": "string.quoted.block.baml.prompt",
-      "patterns": [
-        { "include": "source.baml-jinja" }
-      ]
+      "patterns": [{ "include": "source.baml-jinja" }]
     },
 
     "raw-string-1": {
       "begin": "#\"",
-      "beginCaptures": { "0": { "name": "punctuation.definition.string.begin.baml" } },
+      "beginCaptures": {
+        "0": { "name": "punctuation.definition.string.begin.baml" }
+      },
       "end": "\"#",
-      "endCaptures": { "0": { "name": "punctuation.definition.string.end.baml" } },
+      "endCaptures": {
+        "0": { "name": "punctuation.definition.string.end.baml" }
+      },
       "name": "string.quoted.raw.baml",
       "contentName": "string.quoted.block.baml.prompt",
-      "patterns": [
-        { "include": "source.baml-jinja" }
-      ]
+      "patterns": [{ "include": "source.baml-jinja" }]
     },
 
     "quoted-string": {
       "begin": "\"",
-      "beginCaptures": { "0": { "name": "punctuation.definition.string.begin.baml" } },
+      "beginCaptures": {
+        "0": { "name": "punctuation.definition.string.begin.baml" }
+      },
       "end": "\"|$",
-      "endCaptures": { "0": { "name": "punctuation.definition.string.end.baml" } },
+      "endCaptures": {
+        "0": { "name": "punctuation.definition.string.end.baml" }
+      },
       "name": "string.quoted.double.baml",
       "patterns": [
         {

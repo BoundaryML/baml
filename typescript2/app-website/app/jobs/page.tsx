@@ -43,8 +43,7 @@ const ROLES: Role[] = [
     location: 'San Francisco · in-person preferred',
     summary:
       'Build the runtime that turns a typed BAML function into a streaming, retried, multi-provider call across Python, TypeScript, Ruby, and Go.',
-    applyHref:
-      'mailto:founders@boundaryml.com?subject=Runtime%20Engineer',
+    applyHref: 'mailto:founders@boundaryml.com?subject=Runtime%20Engineer',
   },
   {
     title: 'Developer Tools Engineer',
@@ -155,10 +154,10 @@ export default function JobsPage() {
               maxWidth: 680,
             }}
           >
-            We're a small team building the first language designed with LLMs
-            in mind — compiler, runtime, IDE tooling, and the language itself.
-            If you've ever wanted to ship across all of those at once, this is
-            the place.
+            We're a small team building the first language designed with LLMs in
+            mind — compiler, runtime, IDE tooling, and the language itself. If
+            you've ever wanted to ship across all of those at once, this is the
+            place.
           </p>
         </div>
       </section>

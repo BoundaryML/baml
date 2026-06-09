@@ -10,13 +10,19 @@ type TimelinePanelProps = {
   shouldRender: boolean;
 };
 
-export function TimelinePanel({ active, panel, shouldRender }: TimelinePanelProps) {
+export function TimelinePanel({
+  active,
+  panel,
+  shouldRender,
+}: TimelinePanelProps) {
   return (
     <article className={styles.panel} data-active={active ? 'true' : 'false'}>
       <div className={styles.panelInner}>
         <p className={styles.transitionText}>{panel.transitionText}</p>
         <h3 className={styles.heading}>
-          <span className={panel.isBaml ? styles.languageBaml : styles.language}>
+          <span
+            className={panel.isBaml ? styles.languageBaml : styles.language}
+          >
             {panel.language}
           </span>
           <span className={styles.year}>{panel.year}</span>

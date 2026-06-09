@@ -27,10 +27,7 @@ export function StorySection() {
         <div className="mt-10 rounded-xl border border-border bg-card/40 p-6 sm:p-8 backdrop-blur-sm">
           <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-4 sm:gap-x-8">
             {timeline.map((node, i) => (
-              <div
-                className="flex items-center gap-2 sm:gap-3"
-                key={node.era}
-              >
+              <div className="flex items-center gap-2 sm:gap-3" key={node.era}>
                 <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
                   {node.era}
                 </span>

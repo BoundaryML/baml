@@ -73,7 +73,7 @@ export function StreamingAnimation({ tint }: { tint: string }) {
   }, []);
 
   const fieldStates: { state: FieldState; value: string }[] = FIELDS.map(
-    () => ({ state: 'pending', value: '' })
+    () => ({ state: 'pending', value: '' }),
   );
 
   for (let i = 0; i <= tickIdx && i < SCHEDULE.length; i++) {
@@ -95,8 +95,7 @@ export function StreamingAnimation({ tint }: { tint: string }) {
       >
         <div className="text-[#E8DFCF]">
           <span className="font-semibold text-[#C792EA]">class</span>{' '}
-          <span className="text-[#7FD3C4]">Receipt</span>{' '}
-          <span>&#123;</span>
+          <span className="text-[#7FD3C4]">Receipt</span> <span>&#123;</span>
         </div>
         <div className="ml-3 mt-1 flex flex-col gap-1.5">
           {FIELDS.map((field, i) => (
@@ -165,11 +164,7 @@ function FieldRow({
   return (
     <div className="flex items-center gap-2">
       <div className="flex w-[22px] shrink-0 items-center justify-center">
-        <AnnotationIcon
-          annotation={annotation}
-          state={state}
-          tint={tint}
-        />
+        <AnnotationIcon annotation={annotation} state={state} tint={tint} />
       </div>
       <span className="w-[78px] shrink-0 text-[#E8DFCF]">{name}</span>
       <span className="w-[58px] shrink-0 text-[#82AAFF]">{type}</span>

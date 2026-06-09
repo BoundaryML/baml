@@ -13,7 +13,8 @@ export function useIntersectionTrigger(threshold = 0.5) {
 
     const observer = new IntersectionObserver(
       ([entry]) => {
-        const active = entry.isIntersecting && entry.intersectionRatio >= threshold;
+        const active =
+          entry.isIntersecting && entry.intersectionRatio >= threshold;
         setIsInView(active);
         if (active) setHasTriggered(true);
       },
