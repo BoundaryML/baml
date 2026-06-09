@@ -358,6 +358,9 @@ self.onmessage = async (event: MessageEvent) => {
           notification = mapsToRecordsDeep(notification);
           onPlaygroundNotification(notification);
         },
+        // Throwing (vs a silent no-op) lets the runtime complete the host
+        // call with an error instead of hanging the VM on it forever.
+        host_dispatch: () => notSupported('host functions'),
       },
       vfs.wasmVfs,
     );

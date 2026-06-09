@@ -231,6 +231,10 @@ export interface ExecutionPanelProps {
   initialFunctionName?: string;
   /** Seed for the args JSON editor (default '{}'). */
   initialArgsJson?: string;
+  /** Per-function seeds for the args editor, keyed by bare or fully-qualified
+      function name. Applied when a function is selected; args the user typed
+      for a function this session take precedence over its seed. */
+  argsByFunction?: Record<string, string>;
 }
 
 // ---------------------------------------------------------------------------
@@ -469,6 +473,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
   initialTab,
   initialFunctionName,
   initialArgsJson,
+  argsByFunction,
 }) => {
   const [projectRoots, setProjectRoots] = useState<string[]>([]);
   const [projectUpdates, setProjectUpdates] = useState<
@@ -492,6 +497,9 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
   const [selectedFn, setSelectedFn] = useState<string | null>(null);
   const [showInternalFunctions, setShowInternalFunctions] = useState(false);
   const [argsJson, setArgsJson] = useState(initialArgsJson ?? '{}');
+  // Args the user typed for each function this session — restored (over the
+  // `argsByFunction` seed) when they switch back to that function.
+  const typedArgsByFnRef = useRef<Record<string, string>>({});
 
   // Run history — each entry is a complete invocation with its logs + result
   const [runs, setRuns] = useState<RunEntry[]>([]);
@@ -1150,6 +1158,22 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
     setPreviewLoading(false);
   }, [selectedFn]);
 
+  // Swap the args editor when the selected function changes: args the user
+  // typed for that function win, then its `argsByFunction` seed (exact or
+  // bare-name key, since selection may be namespaced), then the panel seed.
+  const prevArgsFnRef = useRef(selectedFn);
+  useEffect(() => {
+    if (prevArgsFnRef.current === selectedFn) return;
+    prevArgsFnRef.current = selectedFn;
+    if (!selectedFn) return;
+    const seed =
+      argsByFunction?.[selectedFn] ??
+      argsByFunction?.[selectedFn.split('.').pop() ?? ''];
+    setArgsJson(
+      typedArgsByFnRef.current[selectedFn] ?? seed ?? initialArgsJson ?? '{}',
+    );
+  }, [selectedFn, argsByFunction, initialArgsJson]);
+
   // Auto-refresh prompt/curl preview when args change while tab is active
   useEffect(() => {
     if (activeTab !== 'prompt' && activeTab !== 'curl') return;
@@ -1240,9 +1264,13 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- only sync when port changes
   }, [port]);
 
-  const onArgsJsonChange = useCallback((e: ChangeEvent<HTMLInputElement>) => {
-    setArgsJson(e.target.value);
-  }, []);
+  const onArgsJsonChange = useCallback(
+    (e: ChangeEvent<HTMLInputElement>) => {
+      setArgsJson(e.target.value);
+      if (selectedFn) typedArgsByFnRef.current[selectedFn] = e.target.value;
+    },
+    [selectedFn],
+  );
 
   // ── Run function ───────────────────────────────────────────────────────
 

@@ -67,6 +67,29 @@ check_proto_exists() {
     [[ -s "${proto_dir}/baml_core/cffi/v1/baml_outbound.ts" ]]
 }
 
+# bridge_wasm source of truth, in order:
+#   1. Files already present (CLI deploys upload the locally built wasm).
+#   2. The published prebuilt artifact pinned in pkg-playground/wasm.version
+#      (written by `pnpm prep:wasm-publish`, published as
+#      @boundaryml/bridge-wasm). Authoritative for git deploys — checked
+#      BEFORE the .next/cache restore, whose key degenerates to a constant
+#      when .git is unavailable and can resurrect a stale artifact.
+#   3. The Vercel build cache.
+#   4. Compile from source with rustup/wasm-pack (slow fallback).
+wasm_pin_file="../pkg-playground/wasm.version"
+if ! check_wasm_exists && [[ -s "$wasm_pin_file" ]]; then
+  wasm_pin="$(tr -d '[:space:]' < "$wasm_pin_file")"
+  echo "==> [0/6] Restore bridge_wasm from npm (@boundaryml/bridge-wasm@${wasm_pin})"
+  wasm_tgz_dir="$(mktemp -d)"
+  if (cd "$wasm_tgz_dir" && npm pack "@boundaryml/bridge-wasm@${wasm_pin}" >/dev/null 2>&1); then
+    mkdir -p "$wasm_dir"
+    tar -xzf "$wasm_tgz_dir"/*.tgz --strip-components=1 -C "$wasm_dir"
+  else
+    echo "==> @boundaryml/bridge-wasm@${wasm_pin} not fetchable; trying cache/source"
+  fi
+  rm -rf "$wasm_tgz_dir"
+fi
+
 if ! check_wasm_exists &&
   [[ -f "${wasm_cache_dir}/.cache-key" ]] &&
   [[ "$(cat "${wasm_cache_dir}/.cache-key")" == "$wasm_cache_key" ]] &&

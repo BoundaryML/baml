@@ -1,7 +1,7 @@
 'use client';
 
 import { useSearchParams } from 'next/navigation';
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { Suspense, useCallback, useMemo, useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
 import { getSlides } from './slides';
 
@@ -98,9 +98,15 @@ export function Deck() {
       </header>
 
       <main className="l2-stage">
-        {/* key={idx} replays the per-slide entrance animation */}
+        {/* key={idx} replays the per-slide entrance animation.
+            The Suspense boundary is load-bearing for keyboard nav: slides
+            that suspend (BamlCode's `use(getLearnHighlighter())` on first
+            render) would otherwise suspend the whole deck, hiding the
+            focused .l2-deck container — focus falls to <body> and arrow
+            keys die. With the boundary, only the slide content is held
+            back and the deck keeps focus. */}
         <div key={idx} className="l2-slide">
-          {slides[idx]?.node}
+          <Suspense fallback={null}>{slides[idx]?.node}</Suspense>
         </div>
       </main>
 

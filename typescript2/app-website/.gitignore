@@ -45,3 +45,4 @@ next-env.d.ts
 docs/playground-and-wasm.md
 .env.local
 posthog-setup-report.md
+.env*

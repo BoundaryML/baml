@@ -9,15 +9,32 @@
 
 **/node_modules
 **/.next
+**/.next-dev
 **/.turbo
 **/.cache
 **/dist
 **/build
 **/coverage
 **/.DS_Store
+**/.venv
 
 # Rust build output can be very large locally.
 **/target
+# Prebuilt native SDK binaries (100MB+ each); not used by any web build.
+**/*.node
+**/*.abi3.so
+
+# Entire trees the website build never reads (old codebases, other products).
+# baml_language stays: vercel-build.sh compiles bridge_wasm from it on cache
+# miss and generates pkg-proto from its bridge_ctypes/types.
+/engine
+/typescript
+/jetbrains
+/languages
+/integ-tests
+/fern
+/docs
+/examples
 # NOTE: typescript2/pkg-playground/wasm is intentionally NOT ignored here. It is
 # gitignored (so it never reaches GitHub), but we DO want the locally-prebuilt
 # bridge_wasm uploaded with `vercel deploy` so the build skips the ~15 min
