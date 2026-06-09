@@ -412,7 +412,6 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
     expiresAt: number;
   } | null>(null);
 
-  const nextCallIdRef = useRef(0);
   const pendingCallsRef = useRef<Map<number, { resolve: (v: BamlJsValue) => void; reject: (e: Error) => void }>>(new Map());
   // Buffer fetch logs by callId so logs that arrive before testCollectionResult are not lost.
   const pendingLogsRef = useRef<Map<number, FetchLogEntry[]>>(new Map());
@@ -716,6 +715,11 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
           break;
         }
 
+        case 'nextFunctionCallResult':
+        case 'nextFunctionCallError':
+          // RuntimePort implementations consume allocator replies internally.
+          break;
+
         case 'fetchLogNew': {
           const logEntry = data.entry;
           // Always buffer by callId so logs that arrive before testCollectionResult are not lost.
@@ -948,8 +952,8 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
 
     const timer = setTimeout(async () => {
       try {
-        const argsProto = encodeCallArgs(parsed as Record<string, unknown>);
-        const callId = nextCallIdRef.current++;
+        const callId = await port.nextFunctionCall();
+        const argsProto = encodeCallArgs(parsed as Record<string, unknown>, callId);
         const resultValue = await new Promise<BamlJsValue>((resolve, reject) => {
           pendingCallsRef.current.set(callId, { resolve, reject });
           port.postMessage({
@@ -1056,7 +1060,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
 
     setActiveTab('run');
 
-    const runId = nextCallIdRef.current++;
+    const runId = await port.nextFunctionCall();
     const startTime = performance.now();
     const newRun: RunEntry = {
       id: runId,
@@ -1082,7 +1086,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
       if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
         throw new Error('Arguments must be a JSON object, e.g. {"arr": [3,1,2]}');
       }
-      const argsProto = encodeCallArgs(parsed as Record<string, unknown>);
+      const argsProto = encodeCallArgs(parsed as Record<string, unknown>, runId);
 
       const resultValue = await new Promise<BamlJsValue>((resolve, reject) => {
         pendingCallsRef.current.set(runId, { resolve, reject });
@@ -1116,7 +1120,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
     // Switch to the test run view so the runs panel is visible even when no function is selected.
     setViewingTestRun(true);
     setViewingCollection(false);
-    const runId = nextCallIdRef.current++;
+    const runId = await port.nextFunctionCall();
     const newRun: RunEntry = {
       id: runId,
       functionName: 'testing.run_test',

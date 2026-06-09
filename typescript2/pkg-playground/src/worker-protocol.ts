@@ -214,6 +214,8 @@ export type WorkerOutMessage =
   | { type: 'diagnostics'; entries: DiagnosticEntry[] }
   | { type: 'callFunctionResult'; id: number; result: BamlJsValue<PlainHandleDescriptor> }
   | { type: 'callFunctionError'; id: number; error: string; cancelled?: boolean }
+  | { type: 'nextFunctionCallResult'; id: number; callId: number }
+  | { type: 'nextFunctionCallError'; id: number; error: string }
   | { type: 'fetchLogNew'; entry: FetchLogEntry }
   | { type: 'fetchLogUpdate'; logId: number; patch: Partial<FetchLogEntry> }
   | { type: 'runtimeEventNew'; event: DeserializedRuntimeEvent; callId: number | null }
@@ -238,6 +240,7 @@ export type WorkerOutMessage =
 // ---------------------------------------------------------------------------
 
 export type WorkerInMessage =
+  | { type: 'nextFunctionCall'; id: number }
   | { type: 'callFunction'; id: number; name: string; argsProto: Uint8Array; project: string }
   | { type: 'cancelCall'; id: number; project: string }
   | { type: 'clearHandles'; runIds: number[] }

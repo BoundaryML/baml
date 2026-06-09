@@ -58,6 +58,10 @@ pub fn bridge_error_to_napi(err: bridge_cffi::error::BridgeError) -> napi::Error
                 "BamlError: BamlInvalidArgumentError: call_id {id} is already in use by an active call"
             ),
         ),
+        BridgeError::InvalidCallId => napi::Error::new(
+            Status::InvalidArg,
+            "BamlError: BamlInvalidArgumentError: call_id must be a nonzero uint64",
+        ),
         BridgeError::Internal(msg) => napi::Error::new(
             Status::GenericFailure,
             format!("BamlError: BamlClientError: Internal error: {msg}"),
@@ -79,10 +83,6 @@ pub fn runtime_error_to_napi(err: bex_project::RuntimeError) -> napi::Error {
                     Status::InvalidArg,
                     format!("BamlError: BamlInvalidArgumentError: {err}"),
                 ),
-                e if bex_project::is_cancelled_engine_error(e) => napi::Error::new(
-                    Status::Cancelled,
-                    format!("BamlError: BamlCancelledError: {err}"),
-                ),
                 _ => napi::Error::new(
                     Status::GenericFailure,
                     format!("BamlError: BamlClientError: {err}"),
@@ -94,11 +94,4 @@ pub fn runtime_error_to_napi(err: bex_project::RuntimeError) -> napi::Error {
             format!("BamlError: BamlClientError: {err}"),
         ),
     }
-}
-
-pub fn invalid_argument_error(message: impl Into<String>) -> napi::Error {
-    napi::Error::new(
-        Status::InvalidArg,
-        format!("BamlError: BamlInvalidArgumentError: {}", message.into()),
-    )
 }

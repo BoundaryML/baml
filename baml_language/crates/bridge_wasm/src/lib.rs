@@ -305,11 +305,18 @@ impl BamlWasmRuntime {
         Ok(BamlWasmRuntime { bex: Box::new(bex) })
     }
 
+    /// Allocate a fresh function call ID.
+    #[wasm_bindgen(js_name = nextFunctionCall)]
+    pub fn next_function_call(&self) -> Result<u32, JsError> {
+        let call_id = sys_types::CallId::next().0;
+        u32::try_from(call_id).map_err(|_| JsError::new("Function call ID overflowed u32"))
+    }
+
     /// Call a BAML function for a specific project.
     ///
     /// # Arguments
     ///
-    /// * `id` - Unique call identifier
+    /// * `_id` - Transport correlation identifier; the engine call ID is read from `args_proto`
     /// * `project` - Project root path (e.g. `"/workspace/baml_src"`)
     /// * `name` - The function name to call
     /// * `args_proto` - Protobuf-encoded `HostFunctionArguments`
@@ -320,7 +327,7 @@ impl BamlWasmRuntime {
     #[wasm_bindgen(js_name = callFunction)]
     pub async fn call_function(
         &self,
-        id: u32,
+        _id: u32,
         project: String,
         name: &str,
         args_proto: &[u8],
@@ -332,7 +339,7 @@ impl BamlWasmRuntime {
         let kwargs = kwargs_to_bex_values(args.kwargs, &HANDLE_TABLE)
             .map_err(|e| JsError::new(&format!("Failed to convert arguments: {e}")))?;
 
-        let call_id = sys_types::CallId(u64::from(id));
+        let call_id = sys_types::CallId(args.call_id);
         let fs_path = bex_project::FsPath::from_str(project);
 
         let function_call_ctx = bex_project::FunctionCallContextBuilder::new(call_id);

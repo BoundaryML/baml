@@ -17,14 +17,24 @@
 // The factory captures (fqn, mode, requiredNames, optionalNames) by closure;
 // the returned callable zips positional args against requiredNames into kwargs,
 // encodes it, calls the runtime, and decodes the result.
-import { getRuntime } from './native.js';
+import { getRuntime, newFunctionCall as nativeNewFunctionCall, } from './native.js';
 import { encodeCallArgs, decodeCallResult } from './proto.js';
 /** Sentinel for "argument not supplied" so optional kwargs can be skipped. */
 export const UNSET = Symbol('baml.UNSET');
-function buildKwargs(args, requiredParamNames, optionalParamNames) {
+function newFunctionCall() {
+    return BigInt(nativeNewFunctionCall());
+}
+function attachCallContext(ctx, callId) {
+    ctx?._attachCallId(callId.toString());
+    return {
+        detach() {
+            ctx?._detachCallId(callId.toString());
+        },
+    };
+}
+function buildArgs(args, requiredParamNames, optionalParamNames) {
     const positionalLimit = requiredParamNames.length;
-    const hasOpts = optionalParamNames.length > 0;
-    if (args.length > positionalLimit + (hasOpts ? 1 : 0)) {
+    if (args.length > positionalLimit + 1) {
         throw new TypeError(`got ${args.length} positional arguments but only ${positionalLimit} positional ` +
             `parameter names (${JSON.stringify(requiredParamNames)})`);
     }
@@ -34,16 +44,23 @@ function buildKwargs(args, requiredParamNames, optionalParamNames) {
             continue;
         built[requiredParamNames[i]] = args[i];
     }
-    if (hasOpts && args.length > positionalLimit) {
+    let ctx;
+    if (args.length > positionalLimit) {
         const opts = args[positionalLimit];
         if (opts === undefined || opts === UNSET) {
-            return built;
+            return { kwargs: built };
         }
         if (opts === null || Array.isArray(opts) || typeof opts !== 'object') {
             throw new TypeError('optional arguments must be passed as an object');
         }
         const optionNames = new Set(optionalParamNames);
         for (const [key, value] of Object.entries(opts)) {
+            if (key === '$ctx') {
+                if (value !== undefined && value !== UNSET) {
+                    ctx = value;
+                }
+                continue;
+            }
             if (!optionNames.has(key)) {
                 throw new TypeError(`unknown optional argument ${JSON.stringify(key)}`);
             }
@@ -52,7 +69,7 @@ function buildKwargs(args, requiredParamNames, optionalParamNames) {
             built[key] = value;
         }
     }
-    return built;
+    return { kwargs: built, ctx };
 }
 /**
  * Factory for a free function or static method binding. Returns a callable
@@ -64,19 +81,35 @@ export function defineFunction(bamlFqn, mode, requiredParamNames, optionalParamN
     const optionNames = [...(optionalParamNames ?? [])];
     if (mode === 'sync') {
         return (...args) => {
-            const merged = buildKwargs(args, requiredNames, optionNames);
+            const { kwargs: merged, ctx } = buildArgs(args, requiredNames, optionNames);
             const rt = getRuntime();
-            const argsProto = encodeCallArgs(merged, /* syncMode */ true);
-            const resultBytes = rt.callFunctionSync(bamlFqn, argsProto, null, null, null);
+            const callId = newFunctionCall();
+            const argsProto = encodeCallArgs(merged, { syncMode: true, callId });
+            const callCtxBinding = attachCallContext(ctx, callId);
+            let resultBytes;
+            try {
+                resultBytes = rt.callFunctionSync(bamlFqn, argsProto, null, null);
+            }
+            finally {
+                callCtxBinding.detach();
+            }
             return decodeCallResult(resultBytes);
         };
     }
     if (mode === 'async') {
         return async (...args) => {
-            const merged = buildKwargs(args, requiredNames, optionNames);
+            const { kwargs: merged, ctx } = buildArgs(args, requiredNames, optionNames);
             const rt = getRuntime();
-            const argsProto = encodeCallArgs(merged);
-            const resultBytes = await rt.callFunction(bamlFqn, argsProto, null, null, null);
+            const callId = newFunctionCall();
+            const argsProto = encodeCallArgs(merged, { callId });
+            const callCtxBinding = attachCallContext(ctx, callId);
+            let resultBytes;
+            try {
+                resultBytes = await rt.callFunction(bamlFqn, argsProto, null, null);
+            }
+            finally {
+                callCtxBinding.detach();
+            }
             return decodeCallResult(resultBytes);
         };
     }
@@ -94,28 +127,44 @@ export function defineInstanceFunction(bamlFqn, mode, requiredParamNames, option
     const optionNames = [...(optionalParamNames ?? [])];
     const selfName = requiredNames[0] ?? 'self';
     const rest = requiredNames.slice(1);
-    const makeKwargs = (self, args) => {
-        const merged = buildKwargs(args, rest, optionNames);
-        merged[selfName] = self;
-        return merged;
+    const makeArgs = (self, args) => {
+        const built = buildArgs(args, rest, optionNames);
+        built.kwargs[selfName] = self;
+        return built;
     };
     return {
         bind(self) {
             if (mode === 'sync') {
                 return (...args) => {
-                    const merged = makeKwargs(self, args);
+                    const { kwargs: merged, ctx } = makeArgs(self, args);
                     const rt = getRuntime();
-                    const argsProto = encodeCallArgs(merged, /* syncMode */ true);
-                    const resultBytes = rt.callFunctionSync(bamlFqn, argsProto, null, null, null);
+                    const callId = newFunctionCall();
+                    const argsProto = encodeCallArgs(merged, { syncMode: true, callId });
+                    const callCtxBinding = attachCallContext(ctx, callId);
+                    let resultBytes;
+                    try {
+                        resultBytes = rt.callFunctionSync(bamlFqn, argsProto, null, null);
+                    }
+                    finally {
+                        callCtxBinding.detach();
+                    }
                     return decodeCallResult(resultBytes);
                 };
             }
             if (mode === 'async') {
                 return async (...args) => {
-                    const merged = makeKwargs(self, args);
+                    const { kwargs: merged, ctx } = makeArgs(self, args);
                     const rt = getRuntime();
-                    const argsProto = encodeCallArgs(merged);
-                    const resultBytes = await rt.callFunction(bamlFqn, argsProto, null, null, null);
+                    const callId = newFunctionCall();
+                    const argsProto = encodeCallArgs(merged, { callId });
+                    const callCtxBinding = attachCallContext(ctx, callId);
+                    let resultBytes;
+                    try {
+                        resultBytes = await rt.callFunction(bamlFqn, argsProto, null, null);
+                    }
+                    finally {
+                        callCtxBinding.detach();
+                    }
                     return decodeCallResult(resultBytes);
                 };
             }

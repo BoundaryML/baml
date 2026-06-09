@@ -174,6 +174,12 @@ pub enum BexCallArg {
 /// the registry insert are atomic — there is no window during which the
 /// slot exists without an owning guard, so a panic at the registration
 /// site cannot leak entries.
+#[derive(Clone)]
+struct ActiveCall {
+    cancel: CancellationToken,
+    pending: bool,
+}
+
 struct ActiveCallGuard {
     engine: Arc<BexEngine>,
     call_id: CallId,
@@ -187,17 +193,51 @@ impl ActiveCallGuard {
         engine: Arc<BexEngine>,
         call_id: CallId,
         cancel: CancellationToken,
-    ) -> Result<Self, EngineError> {
+    ) -> Result<(Self, CancellationToken), EngineError> {
         let mut map = engine
             .active_calls
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        if map.contains_key(&call_id) {
-            return Err(EngineError::DuplicateCallId { call_id });
-        }
-        map.insert(call_id, cancel);
+        let cancel = match map.get_mut(&call_id) {
+            Some(existing) if existing.pending => {
+                existing.pending = false;
+                existing.cancel.clone()
+            }
+            Some(_) => return Err(EngineError::DuplicateCallId { call_id }),
+            None => {
+                map.insert(
+                    call_id,
+                    ActiveCall {
+                        cancel: cancel.clone(),
+                        pending: false,
+                    },
+                );
+                cancel
+            }
+        };
         drop(map);
-        Ok(Self { engine, call_id })
+        Ok((Self { engine, call_id }, cancel))
+    }
+
+    fn reserve_cancelled(engine: &BexEngine, call_id: CallId) {
+        let mut map = engine
+            .active_calls
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        match map.get(&call_id) {
+            Some(existing) => existing.cancel.cancel(),
+            None => {
+                let cancel = CancellationToken::new();
+                cancel.cancel();
+                map.insert(
+                    call_id,
+                    ActiveCall {
+                        cancel,
+                        pending: true,
+                    },
+                );
+            }
+        }
     }
 }
 
@@ -513,7 +553,7 @@ pub struct BexEngine {
     park_requested: Arc<AtomicBool>,
 
     /// Map of active function calls by ID.
-    active_calls: Mutex<HashMap<CallId, CancellationToken>>,
+    active_calls: Mutex<HashMap<CallId, ActiveCall>>,
 
     futures: FutureManager,
 
@@ -1420,7 +1460,13 @@ impl BexEngine {
         }: FunctionCallContext,
         copy_objects: bool,
     ) -> Result<BexExternalValue, EngineError> {
-        // Fail fast if already cancelled — guarantees pre-cancelled tokens
+        // Register this call so `cancel_function_call(call_id)` can target
+        // it. The RAII guard removes the entry on drop (including panic
+        // unwind). Insertion and guard construction are atomic, so a panic
+        // here cannot leak registry entries.
+        let (_call_guard, cancel) = ActiveCallGuard::register(Arc::clone(self), call_id, cancel)?;
+
+        // Fail fast if already cancelled — guarantees pre-cancelled IDs
         // always produce a `baml.panics.Cancelled` panic regardless of
         // function contents.
         if cancel.is_cancelled() {
@@ -1465,12 +1511,6 @@ impl BexEngine {
                 BexCallArg::OmittedDefault => Ok(BexCallArg::OmittedDefault),
             })
             .collect::<Result<_, EngineError>>()?;
-
-        // Register this call so `cancel_function_call(call_id)` can target
-        // it. The RAII guard removes the entry on drop (including panic
-        // unwind). Insertion and guard construction are atomic, so a panic
-        // here cannot leak registry entries.
-        let _call_guard = ActiveCallGuard::register(Arc::clone(self), call_id, cancel.clone())?;
 
         // Create the root thread (shared heap, own TLAB) and acquire its permit.
         let mut thread = self.new_root_thread(cancel.clone()).await;
@@ -1850,16 +1890,11 @@ impl BexEngine {
     /// Cancel a function call by its ID.
     ///
     /// If the call is still running, it will be interrupted at the next
-    /// cancellation check point. If the call has already completed or the ID
-    /// is unknown, this will return an error.
+    /// cancellation check point. If the ID is not active yet, reserve it with
+    /// an already-cancelled token so the later call starts cancelled.
     pub fn cancel_function_call(&self, call_id: CallId) -> Result<(), EngineError> {
-        let mut active_calls = self.active_calls.lock().unwrap();
-        if let Some(call) = active_calls.remove(&call_id) {
-            call.cancel();
-            Ok(())
-        } else {
-            Err(EngineError::FunctionCallNotFound { call_id })
-        }
+        ActiveCallGuard::reserve_cancelled(self, call_id);
+        Ok(())
     }
 
     fn validate_bound_args(

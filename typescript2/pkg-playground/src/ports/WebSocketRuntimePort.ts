@@ -26,6 +26,8 @@ type WsOutMessage =
   | { type: 'playgroundNotification'; notification: PlaygroundNotification }
   | { type: 'callFunctionResult'; id: number; result: string }
   | { type: 'callFunctionError'; id: number; error: string; cancelled?: boolean }
+  | { type: 'nextFunctionCallResult'; id: number; callId: number }
+  | { type: 'nextFunctionCallError'; id: number; error: string }
   | { type: 'envVarRequest'; id: number; variable: string }
   | { type: 'processEnvVars'; vars: Record<string, string> }
   | { type: 'envVarFromShell'; variable: string; value: string }
@@ -40,6 +42,7 @@ type WsOutMessage =
 
 /** Client → Server message shapes (must match playground_ws.rs WsInMessage) */
 type WsInMessage =
+  | { type: 'nextFunctionCall'; id: number }
   | { type: 'callFunction'; id: number; project: string; name: string; argsProto: string }
   | { type: 'cancelCall'; id: number; project: string }
   | { type: 'callTestFunction'; id: number; project: string; generation: number; testName: string }
@@ -67,6 +70,11 @@ export class WebSocketRuntimePort implements RuntimePort {
   private decorationsByLine = new Map<number, { level: LogLevel; message: string; count: number }>();
   private textEncoder = new TextEncoder();
   private playgroundCompatible = true;
+  private nextFunctionCallRequestId = 1;
+  private pendingNextFunctionCalls = new Map<
+    number,
+    { resolve: (callId: number) => void; reject: (error: Error) => void }
+  >();
 
   constructor(url: string) {
     this.url = url;
@@ -97,6 +105,23 @@ export class WebSocketRuntimePort implements RuntimePort {
         const raw: WsOutMessage = JSON.parse(event.data as string);
         const msg = this.fromServer(raw);
         if (!msg) return;
+
+        if (msg.type === 'nextFunctionCallResult') {
+          const pending = this.pendingNextFunctionCalls.get(msg.id);
+          if (pending) {
+            this.pendingNextFunctionCalls.delete(msg.id);
+            pending.resolve(msg.callId);
+          }
+          return;
+        }
+        if (msg.type === 'nextFunctionCallError') {
+          const pending = this.pendingNextFunctionCalls.get(msg.id);
+          if (pending) {
+            this.pendingNextFunctionCalls.delete(msg.id);
+            pending.reject(new Error(msg.error));
+          }
+          return;
+        }
 
         if (this.handlers.size === 0) {
           // No handler registered yet — buffer the message.
@@ -132,6 +157,18 @@ export class WebSocketRuntimePort implements RuntimePort {
   postMessage(msg: WorkerInMessage): void {
     const serverMsg = this.toServer(msg);
     if (!serverMsg) return;
+    this.sendServerMessage(serverMsg);
+  }
+
+  nextFunctionCall(): Promise<number> {
+    const id = this.nextFunctionCallRequestId++;
+    return new Promise((resolve, reject) => {
+      this.pendingNextFunctionCalls.set(id, { resolve, reject });
+      this.sendServerMessage({ type: 'nextFunctionCall', id });
+    });
+  }
+
+  private sendServerMessage(serverMsg: WsInMessage): void {
     const raw = JSON.stringify(serverMsg);
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
       this.ws.send(raw);
@@ -172,6 +209,10 @@ export class WebSocketRuntimePort implements RuntimePort {
       this.ws = null;
     }
     this.handlers.clear();
+    for (const pending of this.pendingNextFunctionCalls.values()) {
+      pending.reject(new Error('Runtime port disposed'));
+    }
+    this.pendingNextFunctionCalls.clear();
     this.outQueue = [];
     this.inBuffer = [];
   }
@@ -182,6 +223,8 @@ export class WebSocketRuntimePort implements RuntimePort {
 
   private toServer(msg: WorkerInMessage): WsInMessage | null {
     switch (msg.type) {
+      case 'nextFunctionCall':
+        return { type: 'nextFunctionCall', id: msg.id };
       case 'callFunction':
         this.clearLogDecorations();
         return {
@@ -297,6 +340,10 @@ export class WebSocketRuntimePort implements RuntimePort {
       }
       case 'callFunctionError':
         return { type: 'callFunctionError', id: raw.id, error: raw.error, cancelled: raw.cancelled };
+      case 'nextFunctionCallResult':
+        return { type: 'nextFunctionCallResult', id: raw.id, callId: raw.callId };
+      case 'nextFunctionCallError':
+        return { type: 'nextFunctionCallError', id: raw.id, error: raw.error };
       case 'envVarRequest':
         return { type: 'envVarRequest', id: raw.id, variable: raw.variable };
       case 'processEnvVars':

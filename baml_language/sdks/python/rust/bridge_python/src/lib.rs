@@ -3,7 +3,7 @@
 //! This crate provides the same Python API as `language_client_python`
 //! but powered by `bex_engine` (via `bridge_cffi`) instead of `baml-runtime`.
 
-mod abort_controller;
+mod baml_call_context;
 mod errors;
 pub mod host_value;
 mod media;
@@ -32,9 +32,21 @@ fn flush_events() {
     bridge_cffi::flush_event_sink();
 }
 
+#[gen_stub_pyfunction]
+#[pyfunction]
+fn new_function_call() -> u64 {
+    bridge_cffi::new_function_call_id()
+}
+
+#[gen_stub_pyfunction]
+#[pyfunction]
+fn cancel_function_call(call_id: u64) -> bool {
+    bridge_cffi::cancel_function_call_by_id(call_id)
+}
+
 #[pymodule]
 fn baml_py(m: &Bound<'_, PyModule>) -> PyResult<()> {
-    m.add_class::<abort_controller::AbortController>()?;
+    m.add_class::<baml_call_context::BamlCallContext>()?;
     m.add_class::<py_handle::BamlPyHandle>()?;
     m.add_wrapped(wrap_pyfunction!(py_handle::_seed_function_ref_handle))?;
     m.add_wrapped(wrap_pyfunction!(py_handle::_seed_generic_media_handle))?;
@@ -49,6 +61,8 @@ fn baml_py(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<types::collector::LLMCall>()?;
     m.add_wrapped(wrap_pyfunction!(get_version))?;
     m.add_wrapped(wrap_pyfunction!(flush_events))?;
+    m.add_wrapped(wrap_pyfunction!(new_function_call))?;
+    m.add_wrapped(wrap_pyfunction!(cancel_function_call))?;
     m.add_wrapped(wrap_pyfunction!(runtime::get_runtime))?;
     m.add_wrapped(wrap_pyfunction!(host_value::register_host_callable))?;
     m.add_wrapped(wrap_pyfunction!(host_value::release_host_callable))?;
