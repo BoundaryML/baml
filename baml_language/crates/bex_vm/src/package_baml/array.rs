@@ -1,7 +1,8 @@
-use std::collections::HashMap;
+use std::{borrow::Cow, cmp::Ordering, collections::HashMap};
 
 use bex_heap::TlabHolder;
-use bex_vm_types::{HeapPtr, Object, types::Value};
+use bex_vm_types::{HeapPtr, Object, ObjectType, types::Value};
+use num_bigint::BigInt;
 
 use super::{BamlClassArray, Continuation, NativeCallResult, PackageBamlImpl, make_to_json_callee};
 use crate::{
@@ -98,6 +99,244 @@ fn expect_bool(vm: &BexVm, value: Value) -> Result<bool, NativeCallResult> {
             got: vm.type_of(&value),
         }))
     }
+}
+
+fn expect_int(vm: &BexVm, value: Value) -> Result<i64, NativeCallResult> {
+    if let Some(i) = value.as_int() {
+        Ok(i)
+    } else {
+        Err(NativeCallResult::from(VmInternalError::TypeError {
+            expected: bex_vm_types::types::Type::Int,
+            got: vm.type_of(&value),
+        }))
+    }
+}
+
+#[derive(Clone, Copy)]
+enum NaturalDomain {
+    Int,
+    Float,
+    Bigint,
+    String,
+}
+
+#[derive(Clone, Copy)]
+enum NaturalKind {
+    Int,
+    Float,
+    Bigint,
+    String,
+}
+
+fn value_type_name(vm: &BexVm, value: Value) -> String {
+    if value.is_null() {
+        return "null".to_string();
+    }
+    if value.as_int().is_some() {
+        return "int".to_string();
+    }
+    if value.as_bool().is_some() {
+        return "bool".to_string();
+    }
+    if value.is_omitted() {
+        return "omitted".to_string();
+    }
+    if let Some(ptr) = value.as_object_ptr() {
+        return ObjectType::of(vm.get_object(ptr)).to_string();
+    }
+    "unknown".to_string()
+}
+
+fn invalid_sort(context: &str, message: impl Into<String>) -> VmRustFnError {
+    VmBamlError::InvalidArgument {
+        message: format!("{context}: {}", message.into()),
+    }
+    .into()
+}
+
+fn natural_kind(vm: &BexVm, context: &str, value: Value) -> Result<NaturalKind, VmRustFnError> {
+    if value.is_null() {
+        return Err(invalid_sort(
+            context,
+            "natural ordering does not support null",
+        ));
+    }
+    if value.as_int().is_some() {
+        return Ok(NaturalKind::Int);
+    }
+    let Some(ptr) = value.as_object_ptr() else {
+        return Err(invalid_sort(
+            context,
+            format!(
+                "natural ordering does not support {}",
+                value_type_name(vm, value)
+            ),
+        ));
+    };
+    match vm.get_object(ptr) {
+        Object::Float(f) => {
+            if f.is_nan() {
+                Err(invalid_sort(
+                    context,
+                    "natural ordering does not support NaN",
+                ))
+            } else {
+                Ok(NaturalKind::Float)
+            }
+        }
+        Object::Bigint(_) => Ok(NaturalKind::Bigint),
+        Object::String(_) => Ok(NaturalKind::String),
+        _ => Err(invalid_sort(
+            context,
+            format!(
+                "natural ordering does not support {}",
+                value_type_name(vm, value)
+            ),
+        )),
+    }
+}
+
+fn validate_natural_order_with_vm(
+    vm: &BexVm,
+    context: &str,
+    values: &[Value],
+) -> Result<NaturalDomain, VmRustFnError> {
+    let mut has_int = false;
+    let mut has_float = false;
+    let mut has_bigint = false;
+    let mut has_string = false;
+
+    for value in values {
+        match natural_kind(vm, context, *value)? {
+            NaturalKind::Int => has_int = true,
+            NaturalKind::Float => has_float = true,
+            NaturalKind::Bigint => has_bigint = true,
+            NaturalKind::String => has_string = true,
+        }
+    }
+
+    let numeric_domains = usize::from(has_float) + usize::from(has_bigint);
+    if has_string && (has_int || has_float || has_bigint) {
+        return Err(invalid_sort(
+            context,
+            "natural ordering does not support mixing string with numeric values",
+        ));
+    }
+    if has_float && has_bigint {
+        return Err(invalid_sort(
+            context,
+            "natural ordering does not support mixing float and bigint values",
+        ));
+    }
+    if has_string {
+        Ok(NaturalDomain::String)
+    } else if numeric_domains == 0 {
+        Ok(NaturalDomain::Int)
+    } else if has_float {
+        Ok(NaturalDomain::Float)
+    } else {
+        Ok(NaturalDomain::Bigint)
+    }
+}
+
+fn value_as_float_for_sort(vm: &BexVm, value: Value) -> f64 {
+    if let Some(i) = value.as_int() {
+        #[allow(clippy::cast_precision_loss)]
+        return i as f64;
+    }
+    let ptr = value
+        .as_object_ptr()
+        .expect("validated float sort value should be object-backed");
+    match vm.get_object(ptr) {
+        Object::Float(f) => *f,
+        _ => unreachable!("validated float sort value should be float or int"),
+    }
+}
+
+fn value_as_bigint_cow_for_sort(vm: &BexVm, value: Value) -> Cow<'_, BigInt> {
+    if let Some(i) = value.as_int() {
+        return Cow::Owned(BigInt::from(i));
+    }
+    let ptr = value
+        .as_object_ptr()
+        .expect("validated bigint sort value should be object-backed");
+    match vm.get_object(ptr) {
+        Object::Bigint(arc) => Cow::Borrowed(arc.as_ref()),
+        _ => unreachable!("validated bigint sort value should be bigint or int"),
+    }
+}
+
+fn value_as_string_for_sort(vm: &BexVm, value: Value) -> &bex_str::BexStr {
+    let ptr = value
+        .as_object_ptr()
+        .expect("validated string sort value should be object-backed");
+    match vm.get_object(ptr) {
+        Object::String(s) => s,
+        _ => unreachable!("validated string sort value should be string"),
+    }
+}
+
+fn compare_natural_values(
+    vm: &BexVm,
+    domain: NaturalDomain,
+    left: Value,
+    right: Value,
+) -> Ordering {
+    match domain {
+        NaturalDomain::Int => left
+            .as_int()
+            .expect("validated int sort value should be int")
+            .cmp(
+                &right
+                    .as_int()
+                    .expect("validated int sort value should be int"),
+            ),
+        NaturalDomain::Float => value_as_float_for_sort(vm, left)
+            .partial_cmp(&value_as_float_for_sort(vm, right))
+            .expect("validated float sort values should not be NaN"),
+        NaturalDomain::Bigint => {
+            value_as_bigint_cow_for_sort(vm, left).cmp(&value_as_bigint_cow_for_sort(vm, right))
+        }
+        NaturalDomain::String => {
+            value_as_string_for_sort(vm, left).cmp(value_as_string_for_sort(vm, right))
+        }
+    }
+}
+
+fn write_back_array(
+    vm: &mut BexVm,
+    receiver: Value,
+    sorted: Vec<Value>,
+) -> Result<Value, VmRustFnError> {
+    {
+        let mut array = vm.as_array_mut(&receiver)?;
+        *array = sorted;
+    }
+    Ok(receiver)
+}
+
+fn write_back_array_result(
+    vm: &mut BexVm,
+    receiver: Value,
+    sorted: Vec<Value>,
+) -> NativeCallResult {
+    match write_back_array(vm, receiver, sorted) {
+        Ok(value) => NativeCallResult::Done(value),
+        Err(e) => NativeCallResult::Error(e),
+    }
+}
+
+fn sort_values_natural(
+    vm: &BexVm,
+    context: &str,
+    values: &mut [Value],
+) -> Result<(), VmRustFnError> {
+    if values.is_empty() {
+        return Ok(());
+    }
+    let domain = validate_natural_order_with_vm(vm, context, values)?;
+    values.sort_by(|left, right| compare_natural_values(vm, domain, *left, *right));
+    Ok(())
 }
 
 // Boilerplate macro for the standard `Continuation` GC impls. Captures named
@@ -406,6 +645,134 @@ impl Continuation for ToJsonContinuation {
     gc_impl_array!(values: [array, results]);
 }
 
+// ─── Array.sort_by continuation ─────────────────────────────────────────────
+
+struct SortByContinuation {
+    receiver: Value,
+    f_ptr: HeapPtr,
+    items: Vec<Value>,
+    next_idx: usize,
+    sorted: Vec<Value>,
+    insert_idx: usize,
+    current: Value,
+}
+
+impl SortByContinuation {
+    fn advance_or_finish(mut self: Box<Self>, vm: &mut BexVm) -> NativeCallResult {
+        if self.next_idx >= self.items.len() {
+            return write_back_array_result(vm, self.receiver, self.sorted);
+        }
+        self.current = self.items[self.next_idx];
+        self.next_idx += 1;
+        self.insert_idx = 0;
+        self.yield_compare()
+    }
+
+    fn yield_compare(self: Box<Self>) -> NativeCallResult {
+        NativeCallResult::YieldToCall {
+            callee: self.f_ptr,
+            args: vec![self.current, self.sorted[self.insert_idx]],
+            type_args: vec![],
+            continuation: self,
+        }
+    }
+}
+
+impl Continuation for SortByContinuation {
+    fn call(mut self: Box<Self>, vm: &mut BexVm, value: Value) -> NativeCallResult {
+        let cmp = match expect_int(vm, value) {
+            Ok(i) => i,
+            Err(e) => return e,
+        };
+        if cmp < 0 {
+            self.sorted.insert(self.insert_idx, self.current);
+            return self.advance_or_finish(vm);
+        }
+        self.insert_idx += 1;
+        if self.insert_idx >= self.sorted.len() {
+            self.sorted.push(self.current);
+            return self.advance_or_finish(vm);
+        }
+        self.yield_compare()
+    }
+
+    fn gc_roots(&self) -> Vec<HeapPtr> {
+        let mut roots = vec![self.f_ptr];
+        collect_value_roots(&[self.receiver, self.current], &mut roots);
+        collect_value_roots(&self.items, &mut roots);
+        collect_value_roots(&self.sorted, &mut roots);
+        roots
+    }
+
+    fn apply_forwarding(&mut self, forwarding: &HashMap<HeapPtr, HeapPtr>) {
+        forward_ptr(&mut self.f_ptr, forwarding);
+        forward_values(std::slice::from_mut(&mut self.receiver), forwarding);
+        forward_values(std::slice::from_mut(&mut self.current), forwarding);
+        forward_values(&mut self.items, forwarding);
+        forward_values(&mut self.sorted, forwarding);
+    }
+}
+
+// ─── Array.sort_by_key continuation ─────────────────────────────────────────
+
+struct SortByKeyContinuation {
+    receiver: Value,
+    f_ptr: HeapPtr,
+    items: Vec<Value>,
+    idx: usize,
+    keys: Vec<Value>,
+}
+
+impl SortByKeyContinuation {
+    fn finish(self, vm: &mut BexVm) -> NativeCallResult {
+        let domain = match validate_natural_order_with_vm(vm, "array.sort_by_key", &self.keys) {
+            Ok(domain) => domain,
+            Err(e) => return NativeCallResult::Error(e),
+        };
+        let mut indices: Vec<usize> = (0..self.items.len()).collect();
+        indices.sort_by(|left, right| {
+            compare_natural_values(vm, domain, self.keys[*left], self.keys[*right])
+                .then_with(|| left.cmp(right))
+        });
+        let sorted = indices
+            .into_iter()
+            .map(|idx| self.items[idx])
+            .collect::<Vec<_>>();
+        write_back_array_result(vm, self.receiver, sorted)
+    }
+}
+
+impl Continuation for SortByKeyContinuation {
+    fn call(mut self: Box<Self>, vm: &mut BexVm, value: Value) -> NativeCallResult {
+        self.keys.push(value);
+        self.idx += 1;
+        if self.idx >= self.items.len() {
+            return self.finish(vm);
+        }
+        NativeCallResult::YieldToCall {
+            callee: self.f_ptr,
+            args: vec![self.items[self.idx]],
+            type_args: vec![],
+            continuation: self,
+        }
+    }
+
+    fn gc_roots(&self) -> Vec<HeapPtr> {
+        let mut roots = vec![self.f_ptr];
+        collect_value_roots(&[self.receiver], &mut roots);
+        collect_value_roots(&self.items, &mut roots);
+        collect_value_roots(&self.keys, &mut roots);
+        roots
+    }
+
+    fn apply_forwarding(&mut self, forwarding: &HashMap<HeapPtr, HeapPtr>) {
+        forward_ptr(&mut self.f_ptr, forwarding);
+        forward_values(std::slice::from_mut(&mut self.receiver), forwarding);
+        forward_values(&mut self.items, forwarding);
+        forward_values(&mut self.keys, forwarding);
+    }
+}
+
 impl BamlClassArray for PackageBamlImpl {
     #[allow(clippy::cast_possible_wrap)]
     fn length(array: &[Value]) -> i64 {
@@ -435,6 +802,73 @@ impl BamlClassArray for PackageBamlImpl {
         let mut result = array.to_vec();
         result.reverse();
         result
+    }
+
+    fn sort(vm: &mut BexVm, array: &Value) -> NativeCallResult {
+        let mut values = match vm.as_array(array) {
+            Ok(array) => array.to_vec(),
+            Err(e) => return NativeCallResult::Error(e.into()),
+        };
+        if let Err(e) = sort_values_natural(vm, "array.sort", &mut values) {
+            return NativeCallResult::Error(e);
+        }
+        write_back_array_result(vm, *array, values)
+    }
+
+    fn sort_by(vm: &mut BexVm, array: &Value, compare: &Value) -> NativeCallResult {
+        let f_ptr = match extract_callable(vm, *compare) {
+            Ok(p) => p,
+            Err(e) => return e,
+        };
+        let items = match vm.as_array(array) {
+            Ok(array) => array.to_vec(),
+            Err(e) => return NativeCallResult::Error(e.into()),
+        };
+        if items.len() <= 1 {
+            return write_back_array_result(vm, *array, items);
+        }
+        let first_sorted = items[0];
+        let first_current = items[1];
+        NativeCallResult::YieldToCall {
+            callee: f_ptr,
+            args: vec![first_current, first_sorted],
+            type_args: vec![],
+            continuation: Box::new(SortByContinuation {
+                receiver: *array,
+                f_ptr,
+                items,
+                next_idx: 2,
+                sorted: vec![first_sorted],
+                insert_idx: 0,
+                current: first_current,
+            }),
+        }
+    }
+
+    fn sort_by_key(vm: &mut BexVm, array: &Value, key: &Value) -> NativeCallResult {
+        let f_ptr = match extract_callable(vm, *key) {
+            Ok(p) => p,
+            Err(e) => return e,
+        };
+        let items = match vm.as_array(array) {
+            Ok(array) => array.to_vec(),
+            Err(e) => return NativeCallResult::Error(e.into()),
+        };
+        if items.is_empty() {
+            return write_back_array_result(vm, *array, items);
+        }
+        NativeCallResult::YieldToCall {
+            callee: f_ptr,
+            args: vec![items[0]],
+            type_args: vec![],
+            continuation: Box::new(SortByKeyContinuation {
+                receiver: *array,
+                f_ptr,
+                items,
+                idx: 0,
+                keys: Vec::new(),
+            }),
+        }
     }
 
     #[allow(

@@ -1,11 +1,12 @@
 ---
 source: crates/baml_cli/src/describe_command_tests.rs
+assertion_line: 354
 expression: output
 ---
 class            Bigint                           <builtin>/baml/bigint.baml:26
 class            Bool                             <builtin>/baml/bool.baml:2
 class            Array                            <builtin>/baml/containers.baml:2
-class            Map                              <builtin>/baml/containers.baml:385
+class            Map                              <builtin>/baml/containers.baml:419
 function         deep_copy                        <builtin>/baml/core.baml:3
 function         deep_equals                      <builtin>/baml/core.baml:9
 class            Float                            <builtin>/baml/float.baml:2
