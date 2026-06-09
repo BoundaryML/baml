@@ -254,7 +254,11 @@ fn lower_class_method_signature<'db>(
         let param_ty = if param.name.as_str() == "self"
             && matches!(param.ty, baml_compiler2_ast::TypeExpr::Unknown { .. })
         {
-            build_self_type_for_class(class_data, ns_path)
+            build_self_type_for_class(
+                class_data,
+                ns_path,
+                file_package::file_package(db, method_loc.file(db)).package,
+            )
         } else {
             lower_with_self(&param.ty, diags)
         };
@@ -500,6 +504,7 @@ pub fn package_interface<'db>(db: &'db dyn crate::Db, pkg_id: PackageId<'db>) ->
 fn build_self_type_for_class(
     class_data: &baml_compiler2_hir::item_tree::Class,
     ns_path: &[Name],
+    package: Name,
 ) -> Ty {
     // For known builtin containers, return the corresponding Ty variant
     match class_data.name.as_str() {
@@ -522,11 +527,7 @@ fn build_self_type_for_class(
             attr: TyAttr::default(),
         },
         _ => {
-            let qtn = QualifiedTypeName::new(
-                Name::new("baml"),
-                ns_path.to_vec(),
-                class_data.name.clone(),
-            );
+            let qtn = QualifiedTypeName::new(package, ns_path.to_vec(), class_data.name.clone());
             // Declared generics live on the type as `TypeVar` args (an
             // unspecialized generic class is `Foo<T>`), not on the name.
             let args = class_data
@@ -906,7 +907,18 @@ fn def_to_ty<'db>(db: &'db dyn crate::Db, def: Definition<'db>) -> Ty {
         }
     };
     match def {
-        Definition::Class(_) => Ty::Class(qualify_def(db, def, &name), vec![], TyAttr::default()),
+        Definition::Class(loc) => {
+            // Declared generics live on the type as `TypeVar` args, matching
+            // `ExportedType::to_ty` so own-package and dependency resolution
+            // produce the same `Ty::Class(qtn, [TypeVar…])` shape.
+            let item_tree = baml_compiler2_ppir::file_item_tree(db, loc.file(db));
+            let args = item_tree[loc.id(db)]
+                .generic_params
+                .iter()
+                .map(|p| Ty::TypeVar(p.clone(), TyAttr::default()))
+                .collect();
+            Ty::Class(qualify_def(db, def, &name), args, TyAttr::default())
+        }
         Definition::Interface(_) => Ty::Interface(
             qualify_def(db, def, &name),
             vec![],
