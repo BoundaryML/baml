@@ -58,10 +58,13 @@ check_wasm_exists() {
   done
 }
 
+# Must match the modules pkg-proto/src/index.ts imports (the protos moved
+# from package `baml.cffi.v1` to `baml_core.cffi.v1`; checking stale paths
+# here lets an old cache restore skip generation and break the build).
 check_proto_exists() {
-  [[ -s "${proto_dir}/baml/cffi/v1/baml_events.ts" ]] &&
-    [[ -s "${proto_dir}/baml/cffi/v1/baml_inbound.ts" ]] &&
-    [[ -s "${proto_dir}/baml/cffi/v1/baml_outbound.ts" ]]
+  [[ -s "${proto_dir}/baml_core/cffi/v1/baml_events.ts" ]] &&
+    [[ -s "${proto_dir}/baml_core/cffi/v1/baml_inbound.ts" ]] &&
+    [[ -s "${proto_dir}/baml_core/cffi/v1/baml_outbound.ts" ]]
 }
 
 if ! check_wasm_exists &&
@@ -76,7 +79,7 @@ fi
 if ! check_proto_exists &&
   [[ -f "${proto_cache_dir}/.cache-key" ]] &&
   [[ "$(cat "${proto_cache_dir}/.cache-key")" == "$proto_cache_key" ]] &&
-  [[ -s "${proto_cache_dir}/baml/cffi/v1/baml_events.ts" ]]; then
+  [[ -s "${proto_cache_dir}/baml_core/cffi/v1/baml_events.ts" ]]; then
   echo "==> [0/6] Restore pkg-proto generated files from Vercel build cache"
   mkdir -p "$proto_dir"
   cp -R "${proto_cache_dir}/." "$proto_dir/"
