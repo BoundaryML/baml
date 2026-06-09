@@ -207,7 +207,19 @@ impl bex_project::PlaygroundSender for WasmPlaygroundSender {
     fn send_playground_notification(&self, notification: bex_project::PlaygroundNotification) {
         let wasm_notif: PlaygroundNotification = notification.into();
         let callback = self.callback.inner();
-        let _ = callback.call1(&JsValue::NULL, &wasm_notif.into());
+        // Variants carrying `serde_json::Value` payloads must cross the
+        // boundary as JSON text: with serde_json's `arbitrary_precision`
+        // feature, serde-wasm-bindgen/Tsify renders every Value number as
+        // `{ "$serde_json::private::Number": "…" }`, which broke graph
+        // node ids / parent ids / edges on the JS side.
+        let js_notif: JsValue = match &wasm_notif {
+            PlaygroundNotification::ControlFlowGraphResult { .. }
+            | PlaygroundNotification::CursorContext { .. } => {
+                crate::wasm_lsp::to_json_jsvalue(&wasm_notif)
+            }
+            _ => wasm_notif.into(),
+        };
+        let _ = callback.call1(&JsValue::NULL, &js_notif);
     }
 }
 

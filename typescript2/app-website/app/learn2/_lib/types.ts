@@ -8,7 +8,8 @@ export type CodeLang =
   | 'typescript'
   | 'bash'
   | 'go'
-  | 'json';
+  | 'json'
+  | 'yaml';
 
 /** An Error-Lens style inline diagnostic, rendered at the end of a line. */
 export interface Diagnostic {

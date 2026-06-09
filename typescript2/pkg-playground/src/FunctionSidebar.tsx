@@ -1,10 +1,23 @@
 import type { FC } from 'react';
 import { useState } from 'react';
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from './components/ui/collapsible';
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from './components/ui/collapsible';
 import { Button } from './components/ui/button';
 import { Input } from './components/ui/input';
 import { cn } from './lib/utils';
-import { Bot, FunctionSquare, ChevronRight, RefreshCw, Search, Loader2, FlaskConical, Wrench } from 'lucide-react';
+import {
+  Bot,
+  FunctionSquare,
+  ChevronRight,
+  RefreshCw,
+  Search,
+  Loader2,
+  FlaskConical,
+  Wrench,
+} from 'lucide-react';
 import type { FunctionInfo, RunEntry } from './worker-protocol';
 
 // ---------------------------------------------------------------------------
@@ -18,9 +31,16 @@ export type SerializedTest = { type: 'test'; name: string };
 export type SerializedLazyTestSet = { type: 'lazyTestSet'; name: string };
 
 /** An expanded testset: { name: string, items: SerializedTestDef[], loadingTimeMs: number } */
-export type SerializedTestSet = { name: string; items: SerializedTestDef[]; loadingTimeMs: number };
+export type SerializedTestSet = {
+  name: string;
+  items: SerializedTestDef[];
+  loadingTimeMs: number;
+};
 
-export type SerializedTestDef = SerializedTest | SerializedLazyTestSet | SerializedTestSet;
+export type SerializedTestDef =
+  | SerializedTest
+  | SerializedLazyTestSet
+  | SerializedTestSet;
 
 // ---------------------------------------------------------------------------
 // TestTreeNode — recursive tree renderer for SerializedTestDef items
@@ -35,7 +55,14 @@ interface TestTreeNodeProps {
   onRetryExpand?: (name: string) => void;
 }
 
-function TestTreeNode({ def, depth = 0, onRunTest, testRunResults, failedExpands, onRetryExpand }: TestTreeNodeProps) {
+function TestTreeNode({
+  def,
+  depth = 0,
+  onRunTest,
+  testRunResults,
+  failedExpands,
+  onRetryExpand,
+}: TestTreeNodeProps) {
   const [expanded, setExpanded] = useState(true);
   const indent = 8 + depth * 12;
 
@@ -49,18 +76,29 @@ function TestTreeNode({ def, depth = 0, onRunTest, testRunResults, failedExpands
         {isFailed ? (
           <FlaskConical size={12} className="text-red-500 shrink-0" />
         ) : (
-          <Loader2 size={12} className="animate-spin text-vsc-text-faint shrink-0" />
+          <Loader2
+            size={12}
+            className="animate-spin text-vsc-text-faint shrink-0"
+          />
         )}
         <span className="truncate text-[11px] font-medium italic text-vsc-text-faint">
           {def.name.split('/').pop()}
         </span>
-        <span className={cn('text-[9px] ml-1', isFailed ? 'text-red-500' : 'text-vsc-text-faint')}>
+        <span
+          className={cn(
+            'text-[9px] ml-1',
+            isFailed ? 'text-red-500' : 'text-vsc-text-faint',
+          )}
+        >
           {isFailed ? 'failed' : 'loading\u2026'}
         </span>
         {isFailed && onRetryExpand && (
           <button
             className="ml-auto text-[9px] text-vsc-text-faint hover:text-vsc-text px-1 shrink-0"
-            onClick={(e) => { e.stopPropagation(); onRetryExpand(def.name); }}
+            onClick={(e) => {
+              e.stopPropagation();
+              onRetryExpand(def.name);
+            }}
             title={`Retry expansion: ${def.name}`}
           >
             retry
@@ -72,29 +110,40 @@ function TestTreeNode({ def, depth = 0, onRunTest, testRunResults, failedExpands
 
   if ('type' in def && def.type === 'test') {
     const report = testRunResults?.get(def.name);
-    const reportObj = report != null && typeof report === 'object' ? (report as Record<string, unknown>) : null;
-    const outcome = typeof reportObj?.outcome === 'string' ? reportObj.outcome : undefined;
+    const reportObj =
+      report != null && typeof report === 'object'
+        ? (report as Record<string, unknown>)
+        : null;
+    const outcome =
+      typeof reportObj?.outcome === 'string' ? reportObj.outcome : undefined;
     return (
       <div
         className="flex items-center gap-1.5 pr-2 py-0.5 text-[10px] font-vsc-mono text-vsc-text-muted"
         style={{ paddingLeft: indent }}
       >
         <FlaskConical size={12} className="text-vsc-text-faint shrink-0" />
-        <span className="truncate text-[11px]">{def.name.split('/').pop()}</span>
+        <span className="truncate text-[11px]">
+          {def.name.split('/').pop()}
+        </span>
         {onRunTest && (
           <button
             className="ml-auto text-[9px] text-vsc-text-faint hover:text-vsc-text px-1 shrink-0"
-            onClick={(e) => { e.stopPropagation(); onRunTest(def.name); }}
+            onClick={(e) => {
+              e.stopPropagation();
+              onRunTest(def.name);
+            }}
             title={`Run test: ${def.name}`}
           >
             run
           </button>
         )}
         {outcome && (
-          <span className={cn(
-            'text-[9px] shrink-0',
-            outcome === 'pass' ? 'text-green-500' : 'text-red-500'
-          )}>
+          <span
+            className={cn(
+              'text-[9px] shrink-0',
+              outcome === 'pass' ? 'text-green-500' : 'text-red-500',
+            )}
+          >
             {outcome}
           </span>
         )}
@@ -110,8 +159,15 @@ function TestTreeNode({ def, depth = 0, onRunTest, testRunResults, failedExpands
         className="flex items-center gap-1 w-full pr-2 py-0.5 cursor-pointer text-[10px] font-vsc-mono text-vsc-text-muted hover:bg-vsc-hover"
         style={{ paddingLeft: indent }}
       >
-        <ChevronRight className={cn('h-3 w-3 text-vsc-text-faint transition-transform', expanded && 'rotate-90')} />
-        <span className="truncate text-[11px] font-medium">{set.name.split('/').pop()}</span>
+        <ChevronRight
+          className={cn(
+            'h-3 w-3 text-vsc-text-faint transition-transform',
+            expanded && 'rotate-90',
+          )}
+        />
+        <span className="truncate text-[11px] font-medium">
+          {set.name.split('/').pop()}
+        </span>
         <span className="text-vsc-text-faint ml-1">({set.items.length})</span>
         {set.loadingTimeMs > 0 && (
           <span className="text-[9px] text-vsc-text-faint ml-auto shrink-0">
@@ -124,7 +180,7 @@ function TestTreeNode({ def, depth = 0, onRunTest, testRunResults, failedExpands
       <CollapsibleContent>
         {set.items.map((child, i) => (
           <TestTreeNode
-            key={`${('name' in child ? child.name : i)}-${i}`}
+            key={`${'name' in child ? child.name : i}-${i}`}
             def={child}
             depth={depth + 1}
             onRunTest={onRunTest}
@@ -196,12 +252,15 @@ export const FunctionSidebar: FC<FunctionSidebarProps> = ({
     return fn.name.toLowerCase().includes(lowerSearch);
   });
 
-  const treeItems: SerializedTestDef[] = Array.isArray(testTree) ? testTree : [];
+  const treeItems: SerializedTestDef[] = Array.isArray(testTree)
+    ? testTree
+    : [];
   let emptyFunctionMessage = 'No matches';
   if (functions.length === 0) {
-    emptyFunctionMessage = internalFunctionCount > 0 && !showInternalFunctions
-      ? 'No user functions'
-      : 'No functions yet';
+    emptyFunctionMessage =
+      internalFunctionCount > 0 && !showInternalFunctions
+        ? 'No user functions'
+        : 'No functions yet';
   }
 
   return (
@@ -222,11 +281,15 @@ export const FunctionSidebar: FC<FunctionSidebarProps> = ({
             <input
               type="checkbox"
               checked={showInternalFunctions}
-              onChange={(e) => onShowInternalFunctionsChange(e.currentTarget.checked)}
+              onChange={(e) =>
+                onShowInternalFunctionsChange(e.currentTarget.checked)
+              }
               className="h-3 w-3 accent-vsc-accent"
             />
             <span>Show internal functions</span>
-            <span className="ml-auto font-vsc-mono">{internalFunctionCount}</span>
+            <span className="ml-auto font-vsc-mono">
+              {internalFunctionCount}
+            </span>
           </label>
         )}
       </div>

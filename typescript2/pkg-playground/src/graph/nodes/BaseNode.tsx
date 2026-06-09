@@ -1,6 +1,11 @@
 import { type NodeProps } from '@xyflow/react';
 import { type ComponentType, memo } from 'react';
-import { nodeBackground, nodeShadow, selectionRing, stateColors } from '../constants';
+import {
+  nodeBackground,
+  nodeShadow,
+  selectionRing,
+  stateColors,
+} from '../constants';
 import type { WorkflowNodeData } from '../types';
 import { NodeHandles } from './NodeHandles';
 import { NodeOutputPreview } from './NodeOutputPreview';
@@ -15,30 +20,62 @@ const StateIcon = ({ state }: { state: string }) => {
         fill="none"
         stroke="white"
         strokeWidth="3"
-        style={{ animation: 'baml-graph-spin 800ms linear infinite', transformOrigin: 'center' }}
+        style={{
+          animation: 'baml-graph-spin 800ms linear infinite',
+          transformOrigin: 'center',
+        }}
       >
         <circle cx="12" cy="12" r="10" opacity="0.25" />
-        <path d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" fill="white" opacity="0.85" />
+        <path
+          d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+          fill="white"
+          opacity="0.85"
+        />
       </svg>
     );
   }
   if (state === 'success') {
     return (
-      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round">
+      <svg
+        width="11"
+        height="11"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="white"
+        strokeWidth="3.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
         <path d="M5 13l4 4L19 7" />
       </svg>
     );
   }
   if (state === 'error') {
     return (
-      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round">
+      <svg
+        width="11"
+        height="11"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="white"
+        strokeWidth="3"
+        strokeLinecap="round"
+      >
         <path d="M6 18L18 6M6 6l12 12" />
       </svg>
     );
   }
   if (state === 'cancelled') {
     return (
-      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3.5" strokeLinecap="round">
+      <svg
+        width="11"
+        height="11"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="white"
+        strokeWidth="3.5"
+        strokeLinecap="round"
+      >
         <path d="M6 12h12" />
       </svg>
     );
@@ -74,7 +111,8 @@ export const BaseNode: ComponentType<NodeProps> = memo(({ data }) => {
           height: '100%',
           boxSizing: 'border-box',
           color: colors.text,
-          fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif',
+          fontFamily:
+            'ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif',
           transition: 'box-shadow 120ms ease, border-color 120ms ease',
         }}
       >

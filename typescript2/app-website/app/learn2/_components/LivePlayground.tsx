@@ -12,6 +12,10 @@ import { registerBaml } from '../_lib/baml-monarch';
 
 interface LivePlaygroundProps {
   initialCode: string;
+  /** Function to preselect in the panel (e.g. the pipeline entrypoint). */
+  initialFunction?: string;
+  /** Panel tab to open on (default 'graph' — the viz is the point). */
+  initialTab?: 'run' | 'graph' | 'prompt' | 'curl';
 }
 
 type EditorInstance = Parameters<OnMount>[0];
@@ -50,7 +54,11 @@ function severityClass(sev?: number): 'error' | 'warning' | 'info' {
  * Diagnostics: the worker forwards LSP `publishDiagnostics`; we render them as
  * Monaco markers (squiggles + hover) plus inline ErrorLens-style messages.
  */
-export default function LivePlayground({ initialCode }: LivePlaygroundProps) {
+export default function LivePlayground({
+  initialCode,
+  initialFunction,
+  initialTab = 'graph',
+}: LivePlaygroundProps) {
   const [port, setPort] = useState<RuntimePort | null>(null);
   const [version, setVersion] = useState(0);
   const [failed, setFailed] = useState(false);
@@ -219,7 +227,12 @@ export default function LivePlayground({ initialCode }: LivePlaygroundProps) {
             renderLineHighlight: 'line',
             overviewRulerLanes: 0,
             hideCursorInOverviewRuler: true,
-            scrollbar: { verticalSliderSize: 6, horizontalSliderSize: 6 },
+            scrollbar: {
+              verticalSliderSize: 6,
+              horizontalSliderSize: 6,
+              // Don't trap page scroll when the cursor rests on the editor.
+              alwaysConsumeMouseWheel: false,
+            },
             padding: { top: 12, bottom: 12 },
             tabSize: 2,
             wordWrap: 'on',
@@ -237,6 +250,8 @@ export default function LivePlayground({ initialCode }: LivePlaygroundProps) {
             port={port}
             connectionVersion={version}
             initialArgsJson="{}"
+            initialTab={initialTab}
+            initialFunctionName={initialFunction}
           />
         ) : (
           <div className="l2-live-loading">starting runtime…</div>

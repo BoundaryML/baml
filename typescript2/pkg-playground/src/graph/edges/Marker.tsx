@@ -1,14 +1,15 @@
 // Arrow marker colors for light and dark modes
 const kBaseMarkerColorDark = '#cbd5e1'; // slate-300
-const kYesMarkerColorDark = '#4ade80';  // green-400
-const kNoMarkerColorDark = '#f87171';   // red-400
+const kYesMarkerColorDark = '#4ade80'; // green-400
+const kNoMarkerColorDark = '#f87171'; // red-400
 
-const kBaseMarkerColorLight = '#0f172a'; // slate-900
-const kYesMarkerColorLight = '#16a34a';  // green-600
-const kNoMarkerColorLight = '#dc2626';   // red-600
+// Light mode is warm ink on paper — matches the playground panel theme.
+const kBaseMarkerColorLight = '#4A443B';
+const kYesMarkerColorLight = '#047857';
+const kNoMarkerColorLight = '#B42318';
 
 const kBaseMarkerColorsDark = ['#a78bfa', '#f472b6', '#fbbf24', '#60a5fa'];
-const kBaseMarkerColorsLight = ['#6d28d9', '#db2777', '#d97706', '#2563eb'];
+const kBaseMarkerColorsLight = ['#6D28D9', '#BE185D', '#B45309', '#1D4ED8'];
 
 export const kAllMarkerColors = [
   kBaseMarkerColorLight,
@@ -22,7 +23,13 @@ export const kAllMarkerColors = [
 ];
 
 export const getMarkerColors = () => {
-  const isDark = typeof document === 'undefined' || !document.body?.dataset?.vscodeThemeKind?.includes('light');
+  // Outside VS Code (no theme dataset) the panel is the light paper theme,
+  // so default to LIGHT; inside VS Code, follow the editor's theme kind.
+  const themeKind =
+    typeof document === 'undefined'
+      ? undefined
+      : document.body?.dataset?.vscodeThemeKind;
+  const isDark = themeKind ? !themeKind.includes('light') : false;
   return {
     base: isDark ? kBaseMarkerColorDark : kBaseMarkerColorLight,
     yes: isDark ? kYesMarkerColorDark : kYesMarkerColorLight,

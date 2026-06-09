@@ -3,7 +3,11 @@
  */
 
 import type { FC } from 'react';
-import type { BamlJsPromptAst, BamlJsPromptAstSimple, BamlJsPromptAstMessage } from '@b/pkg-proto';
+import type {
+  BamlJsPromptAst,
+  BamlJsPromptAstSimple,
+  BamlJsPromptAstMessage,
+} from '@b/pkg-proto';
 import type { ResultRendererProps } from '../result-renderers';
 import { MediaRenderer } from './Media';
 import { CodeBlock } from '../components/ui/code-block';
@@ -45,12 +49,18 @@ const MessageBlock: FC<{ msg: BamlJsPromptAstMessage }> = ({ msg }) => {
   return (
     <div className="rounded border border-vsc-border overflow-hidden">
       <div className="flex items-center gap-1.5 px-2 py-1 bg-vsc-surface border-b border-vsc-border-subtle">
-        <span className={`font-semibold text-[11px] uppercase tracking-wide ${roleColor}`}>
+        <span
+          className={`font-semibold text-[11px] uppercase tracking-wide ${roleColor}`}
+        >
           {msg.role}
         </span>
       </div>
       <div className="px-2 py-1.5 text-xs leading-relaxed text-vsc-text">
-        {msg.content ? <SimpleContent node={msg.content} /> : <span className="text-vsc-text-faint">(empty)</span>}
+        {msg.content ? (
+          <SimpleContent node={msg.content} />
+        ) : (
+          <span className="text-vsc-text-faint">(empty)</span>
+        )}
       </div>
     </div>
   );
@@ -75,13 +85,20 @@ const AstNode: FC<{ node: BamlJsPromptAst }> = ({ node }) => {
   }
 };
 
-export const PromptAstRenderer: FC<ResultRendererProps> = ({ value, displayMode }) => {
+export const PromptAstRenderer: FC<ResultRendererProps> = ({
+  value,
+  displayMode,
+}) => {
   if (!isPromptAst(value)) {
     return <CodeBlock>{JSON.stringify(value, null, 2)}</CodeBlock>;
   }
 
   if (displayMode === 'inline') {
-    return <span className="font-vsc-mono text-xs text-vsc-text-faint">&lt;prompt_ast&gt;</span>;
+    return (
+      <span className="font-vsc-mono text-xs text-vsc-text-faint">
+        &lt;prompt_ast&gt;
+      </span>
+    );
   }
 
   return (

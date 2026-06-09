@@ -25,6 +25,7 @@ export function getLearnHighlighter(): Promise<Highlighter> {
         'bash',
         'go',
         'json',
+        'yaml',
       ],
     });
   }

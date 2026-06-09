@@ -18,9 +18,11 @@ function extractMetadata(logs: FetchLogEntry[]) {
     const h = log.responseHeaders;
     if (h) {
       if (!model && h['openai-model']) model = h['openai-model'];
-      if (!processingMs && h['openai-processing-ms']) processingMs = parseInt(h['openai-processing-ms'], 10);
+      if (!processingMs && h['openai-processing-ms'])
+        processingMs = parseInt(h['openai-processing-ms'], 10);
       if (!model && h['x-model']) model = h['x-model'];
-      const tokenHeader = h['x-total-tokens'] || h['x-ratelimit-remaining-tokens'];
+      const tokenHeader =
+        h['x-total-tokens'] || h['x-ratelimit-remaining-tokens'];
       if (!totalTokens && tokenHeader) totalTokens = parseInt(tokenHeader, 10);
     }
 
@@ -32,7 +34,10 @@ function extractMetadata(logs: FetchLogEntry[]) {
         if (totalTokens == null && body.usage) {
           const u = body.usage;
           if (typeof u.total_tokens === 'number') totalTokens = u.total_tokens;
-          else if (typeof u.input_tokens === 'number' && typeof u.output_tokens === 'number') {
+          else if (
+            typeof u.input_tokens === 'number' &&
+            typeof u.output_tokens === 'number'
+          ) {
             totalTokens = u.input_tokens + u.output_tokens;
           }
         }
@@ -45,7 +50,10 @@ function extractMetadata(logs: FetchLogEntry[]) {
   return { model, totalTokens, processingMs };
 }
 
-export const MetadataBadges: FC<MetadataBadgesProps> = ({ fetchLogs, durationMs }) => {
+export const MetadataBadges: FC<MetadataBadgesProps> = ({
+  fetchLogs,
+  durationMs,
+}) => {
   const { model, totalTokens, processingMs } = extractMetadata(fetchLogs);
   const latency = processingMs ?? (durationMs ? Math.round(durationMs) : null);
 
@@ -53,9 +61,33 @@ export const MetadataBadges: FC<MetadataBadgesProps> = ({ fetchLogs, durationMs 
 
   return (
     <div className="flex items-center gap-1.5 flex-wrap">
-      {model && <Badge variant="secondary" className="gap-0.5 text-[10px] font-vsc-mono"><Cpu size={10} />{model}</Badge>}
-      {latency != null && <Badge variant="secondary" className="gap-0.5 text-[10px] font-vsc-mono"><Clock size={10} />{latency}ms</Badge>}
-      {totalTokens != null && <Badge variant="secondary" className="gap-0.5 text-[10px] font-vsc-mono"><Hash size={10} />{totalTokens} tokens</Badge>}
+      {model && (
+        <Badge
+          variant="secondary"
+          className="gap-0.5 text-[10px] font-vsc-mono"
+        >
+          <Cpu size={10} />
+          {model}
+        </Badge>
+      )}
+      {latency != null && (
+        <Badge
+          variant="secondary"
+          className="gap-0.5 text-[10px] font-vsc-mono"
+        >
+          <Clock size={10} />
+          {latency}ms
+        </Badge>
+      )}
+      {totalTokens != null && (
+        <Badge
+          variant="secondary"
+          className="gap-0.5 text-[10px] font-vsc-mono"
+        >
+          <Hash size={10} />
+          {totalTokens} tokens
+        </Badge>
+      )}
     </div>
   );
 };

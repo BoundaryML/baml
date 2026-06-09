@@ -631,6 +631,40 @@
   font-size: 12px;
 }
 
+/* Slides containing the live playground get every pixel we can spare:
+   the slide/shell width caps come off and the column stretches so the
+   playground (flex: 1) absorbs all remaining stage height. */
+.l2-stage:has(.l2-live) {
+  padding: clamp(0.75rem, 1.5vw, 1.25rem);
+}
+.l2-slide:has(.l2-live) {
+  max-width: none;
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.l2-slide:has(.l2-live) .l2-slide-shell {
+  max-width: none;
+  width: 100%;
+  margin: 0;
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.l2-slide:has(.l2-live) .l2-slide-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.l2-slide:has(.l2-live) .l2-live {
+  flex: 1 1 auto;
+  height: auto;
+  min-height: 320px;
+}
+
 /* =================== multi-editor (scroll demo) =================== */
 /* The frame owns the border + radius (and optional filename header); the editor
    box sits flush inside it, so a framed BamlEditor matches the deck's static
@@ -782,6 +816,131 @@
   letter-spacing: 0.14em;
   color: #8a8580;
   margin: 0 0 0.5rem;
+}
+
+/* ---- editor header Run button + in-frame results panel ---- */
+.l2-run-btn {
+  margin-left: auto;
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  padding: 3px 12px;
+  border: none;
+  border-radius: 6px;
+  background: #047857;
+  color: #fffdf6;
+  cursor: pointer;
+  transition:
+    background 120ms ease,
+    transform 80ms ease;
+}
+.l2-run-btn:hover:not(:disabled) {
+  background: #065f46;
+}
+.l2-run-btn:active:not(:disabled) {
+  transform: translateY(1px);
+}
+.l2-run-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+/* results live INSIDE the editor frame, under the code — same paper, not a
+   detached terminal */
+.l2-runs {
+  border-top: 1px solid var(--l2-rule, #e2ddcf);
+  background: #faf6ea;
+  animation: l2-runs-in 200ms ease;
+}
+@keyframes l2-runs-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.l2-runs-head {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  padding: 5px 12px;
+  font-size: 10.5px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #8a8580;
+  border-bottom: 1px dashed #e2ddcf;
+}
+.l2-runs-summary {
+  margin-left: auto;
+  text-transform: none;
+  letter-spacing: 0.03em;
+  color: #6f6a63;
+}
+.l2-runs-clear {
+  border: none;
+  background: none;
+  padding: 0;
+  font: inherit;
+  color: #8a8580;
+  cursor: pointer;
+}
+.l2-runs-clear:hover {
+  color: #1a1612;
+}
+.l2-runs-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.55rem;
+  padding: 5px 12px;
+  font-family: var(--font-geist-mono), ui-monospace, monospace;
+  font-size: 12.5px;
+}
+.l2-runs-row + .l2-runs-row {
+  border-top: 1px solid rgba(26, 22, 18, 0.05);
+}
+.l2-runs-check {
+  width: 1em;
+  flex: 0 0 auto;
+}
+.l2-runs--pass .l2-runs-check {
+  color: #047857;
+}
+.l2-runs--fail .l2-runs-check {
+  color: #b42318;
+}
+.l2-runs--error .l2-runs-check {
+  color: #b45309;
+}
+.l2-runs--running .l2-runs-check {
+  color: #8a8580;
+}
+.l2-runs-name {
+  color: #1a1612;
+}
+.l2-runs-meta {
+  margin-left: auto;
+  color: #8a8580;
+  font-size: 11px;
+}
+.l2-runs-meta + .l2-runs-meta {
+  margin-left: 0.6rem;
+}
+.l2-runs-err {
+  flex-basis: 100%;
+  padding-left: 1.55em;
+  color: #b42318;
+  font-size: 11.5px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* showcase line highlight inside the Monaco editor (BamlEditor highlightLines) */
+.l2-ed-hl {
+  background: rgba(4, 120, 87, 0.09);
 }
 
 /* ErrorLens-style inline diagnostics in the Monaco editor */

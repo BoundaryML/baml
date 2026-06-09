@@ -118,11 +118,13 @@ export function registerBaml(monaco: Monaco) {
     base: 'vs',
     inherit: true,
     rules: [
-      { token: 'keyword', foreground: 'CF222E' },
+      // Keywords are blue, not GitHub red — red is reserved for diagnostics
+      // (squiggles + inline error-lens), so nothing healthy reads as an error.
+      { token: 'keyword', foreground: '0550AE' },
       { token: 'type', foreground: '953800' },
       { token: 'type.identifier', foreground: '953800' },
       { token: 'string', foreground: '0A3069' },
-      { token: 'comment', foreground: '6E7781', fontStyle: 'italic' },
+      { token: 'comment', foreground: '6E7781' },
       { token: 'number', foreground: '0550AE' },
       { token: 'variable', foreground: '6D28D9' },
       { token: 'operator', foreground: '24292E' },

@@ -1,9 +1,18 @@
 import type { ControlFlowGraph, CfgNodeType } from '../worker-protocol';
-import type { GraphNode, GraphEdge, GraphNodeType, WorkflowNode, WorkflowEdge } from './types';
+import type {
+  GraphNode,
+  GraphEdge,
+  GraphNodeType,
+  WorkflowNode,
+  WorkflowEdge,
+} from './types';
 import { getMarkerColors } from './edges/Marker';
 
 // Stage 1: ControlFlowGraph JSON -> GraphNode[] / GraphEdge[]
-export function cfgToGraphNodes(cfg: ControlFlowGraph): { nodes: GraphNode[]; edges: GraphEdge[] } {
+export function cfgToGraphNodes(cfg: ControlFlowGraph): {
+  nodes: GraphNode[];
+  edges: GraphEdge[];
+} {
   const nodes: GraphNode[] = [];
   const edges: GraphEdge[] = [];
 
@@ -41,13 +50,20 @@ function cfgNodeTypeToGraphType(nt: CfgNodeType): GraphNodeType {
   // Preserve semantic type — whether a node is a group is determined
   // separately in graphToReactflow via isContainer.
   switch (nt) {
-    case 'functionRoot': return 'function';
-    case 'llmFunction': return 'llm_function';
-    case 'headerContextEnter': return 'header';
-    case 'branchGroup': return 'conditional';
-    case 'branchArm': return 'scope';
-    case 'loop': return 'loop';
-    case 'otherScope': return 'scope';
+    case 'functionRoot':
+      return 'function';
+    case 'llmFunction':
+      return 'llm_function';
+    case 'headerContextEnter':
+      return 'header';
+    case 'branchGroup':
+      return 'conditional';
+    case 'branchArm':
+      return 'scope';
+    case 'loop':
+      return 'loop';
+    case 'otherScope':
+      return 'scope';
   }
 }
 
@@ -148,11 +164,17 @@ function computeEdgeColor(
 
 function graphTypeToReactflowType(gt: GraphNodeType): string {
   switch (gt) {
-    case 'function': return 'base';
-    case 'llm_function': return 'llm';
-    case 'conditional': return 'diamond';
-    case 'loop': return 'hexagon';
-    case 'scope': return 'base';
-    case 'header': return 'base';
+    case 'function':
+      return 'base';
+    case 'llm_function':
+      return 'llm';
+    case 'conditional':
+      return 'diamond';
+    case 'loop':
+      return 'hexagon';
+    case 'scope':
+      return 'base';
+    case 'header':
+      return 'base';
   }
 }

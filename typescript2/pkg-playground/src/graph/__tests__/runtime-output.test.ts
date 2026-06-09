@@ -2,7 +2,10 @@ import { describe, expect, it } from 'vitest';
 import type { BamlJsMedia, BamlJsValue } from '@b/pkg-proto';
 import type { DeserializedRuntimeEvent } from '../../worker-protocol';
 import type { GraphNode } from '../types';
-import { collectGraphNodeOutputs, collectGraphNodeRuntime } from '../runtime-output';
+import {
+  collectGraphNodeOutputs,
+  collectGraphNodeRuntime,
+} from '../runtime-output';
 
 const imageA: BamlJsMedia = {
   $baml: { type: '$media' },
@@ -37,7 +40,10 @@ const graphNodes: GraphNode[] = [
   },
 ];
 
-function functionStartEvent(name: string, spanId = `${name}-span`): DeserializedRuntimeEvent {
+function functionStartEvent(
+  name: string,
+  spanId = `${name}-span`,
+): DeserializedRuntimeEvent {
   return {
     spanId,
     rootSpanId: 'root',
@@ -78,7 +84,11 @@ function functionEndEvent(
 
 describe('collectGraphNodeOutputs', () => {
   it('maps mixed string/image function results to call-node image previews', () => {
-    const mixedResult: BamlJsValue = ['caption', imageA, { nested: imageB } as Record<string, BamlJsValue>];
+    const mixedResult: BamlJsValue = [
+      'caption',
+      imageA,
+      { nested: imageB } as Record<string, BamlJsValue>,
+    ];
     const outputs = collectGraphNodeOutputs(graphNodes, [
       functionEndEvent('GenerateImages', mixedResult),
     ]);
@@ -129,7 +139,11 @@ describe('collectGraphNodeOutputs', () => {
         label: 'GenerateImages(prompt)',
         type: 'scope',
         parent: '1',
-        metadata: { logFilterKey: 'call-2', sourceExpr: null, isContainer: false },
+        metadata: {
+          logFilterKey: 'call-2',
+          sourceExpr: null,
+          isContainer: false,
+        },
       },
     ];
 

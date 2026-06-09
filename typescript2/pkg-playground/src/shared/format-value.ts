@@ -5,7 +5,10 @@ import { getBamlType } from '../result-renderers';
  * Format a BamlJsValue as a compact string for non-React contexts
  * (e.g. Monaco editor inline decorations).
  */
-export function formatValue(value: BamlJsValue | null | undefined, mode: 'inline-hint'): string {
+export function formatValue(
+  value: BamlJsValue | null | undefined,
+  mode: 'inline-hint',
+): string {
   if (value == null) return 'null';
   if (typeof value === 'string') return JSON.stringify(value);
   if (typeof value === 'number') return String(value);

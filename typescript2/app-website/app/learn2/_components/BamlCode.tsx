@@ -12,12 +12,13 @@ const SEV_CLASS: Record<Severity, string> = {
   info: 'l2-sev-info',
 };
 
-// Shiki FontStyle bitmask: Italic=1, Bold=2, Underline=4.
+// Shiki FontStyle bitmask: Italic=1, Bold=2, Underline=4. Italic is
+// deliberately ignored — github-light italicizes comments, and in these
+// decks italics are reserved for inline diagnostics.
 function tokenStyle(color?: string, fontStyle?: number): CSSProperties {
   const style: CSSProperties = {};
   if (color) style.color = color;
   if (fontStyle) {
-    if (fontStyle & 1) style.fontStyle = 'italic';
     if (fontStyle & 2) style.fontWeight = 600;
     if (fontStyle & 4) style.textDecoration = 'underline';
   }
@@ -51,6 +52,9 @@ export function BamlCode({
     // BundledLanguage literal union; the cast is safe given the registration.
     lang: lang as BundledLanguage,
     theme: 'github-light',
+    // github-light paints keywords red (#cf222e); in the deck, red belongs to
+    // diagnostics only. Remap keyword red to blue (matches the Monaco theme).
+    colorReplacements: { '#cf222e': '#0550ae' },
   });
 
   const diagByLine = new Map<number, Diagnostic>();

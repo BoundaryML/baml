@@ -18,10 +18,13 @@ import {
 import type { Slide } from '../_lib/types';
 
 /* ------------------------------------------------------------------ *
- * Code snippets. Most are lifted/adapted from ~/projects/baml-demos.
- * NOTE: the demos use `field: Type` (colon) class syntax; the local
- * baml2 compiler stdlib uses `field Type` (no colon). Snippet dialect +
- * which runtime we run them against is an open decision (see checkpoint).
+ * Code snippets. The BAML ones (BAML_*) are real, self-contained, and
+ * each passes `baml check` with zero errors (verified against the baml
+ * CLI, toolchain 0.11.x — the same dialect the live editor runs). Keep
+ * them self-contained (every type/fn/client defined in the snippet) and
+ * re-verify with `baml check` if you edit them. Canonical dialect: class
+ * fields `name: Type,`; type aliases end `;`; snake_case fns; LLM fns use
+ * `client: "openai/gpt5.5"` + `{{ ctx.output_format }}`.
  * ------------------------------------------------------------------ */
 
 const PY_FAKE_TYPES = `def add_numbers(a: int, b: int) -> int:
@@ -84,17 +87,69 @@ client AiGatewayImagen {
   }
 }`;
 
-const BAML_AGENT = `function run_turn(history: string, msg: string) -> Turn {
-  let transcript = start(history, msg);
+const BAML_AGENT = `// A tiny agent loop: decide -> execute -> observe, in a typed turn loop.
+// The model returns a typed Step; a match dispatches to ordinary tool
+// functions; results are observed back into the transcript; the loop ends
+// when the model chooses to respond.
+
+class Step {
+  thought: string,
+  action: "read_file" | "run_bash" | "respond",
+  path: string?,
+  command: string?,
+  message: string?,
+}
+
+// The brain: given the transcript so far, pick the next single step.
+function decide(transcript: string) -> Step {
+  client: "openai/gpt5.5"
+  prompt: #"
+    You are a coding agent. Take ONE action at a time, then observe its result.
+    Actions: read_file (path), run_bash (command), respond (message).
+
+    Transcript so far:
+    {{ transcript }}
+
+    Decide the next step.
+    {{ ctx.output_format }}
+  "#
+}
+
+// Tools -- ordinary pure functions returning text the model can read.
+function read_file(path: string) -> string {
+  "contents of " + path + " (stub)"
+}
+
+function run_bash(command: string) -> string {
+  "$ " + command + " (exit 0, stub)"
+}
+
+// Dispatch a decided Step to its tool via a match on the action.
+function execute(step: Step) -> string {
+  match (step.action) {
+    "read_file" => read_file(step.path ?? ""),
+    "run_bash" => run_bash(step.command ?? ""),
+    "respond" => step.message ?? "",
+  }
+}
+
+// One turn: decide -> act -> observe, until the model responds.
+function run_turn(history: string, msg: string) -> string {
+  let transcript = history + " | user: " + msg;
   let steps = 0;
+  let max_steps = 8;
+
   while (steps < max_steps) {
     steps = steps + 1;
-    let step = decide(transcript);        // an LLM call
-    if (step.action == "respond") { return done(step) };
-    let result = execute(step);           // dispatch a tool
-    transcript = observe(transcript, step, result);
+    let step = decide(transcript);
+    if (step.action == "respond") {
+      return step.message ?? "";
+    };
+    let result = execute(step);
+    transcript = transcript + " | " + step.action + " -> " + result;
   }
-  giveup(transcript)
+
+  "(stopped after " + baml.unstable.string(max_steps) + " steps)"
 }`;
 
 const SH_DESCRIBE = `$ baml describe classify --budget 12
@@ -109,13 +164,36 @@ Verdict { label: "neutral", confidence: 0.62 }
 $ baml fmt sentiment.baml          # format in place
 $ baml generate                    # -> typed python/ts client (baml_sdk)`;
 
-const BAML_SPAWN = `function serve() -> null {
-  let listener = baml.net.listen("127.0.0.1:8080");
-  while (true) {
-    let sock = listener.accept();
-    let _ = spawn { handle(sock) };   // no async, no await, no color
+const BAML_SPAWN = `// Pure-compute "work" -- stands in for any slow task (LLM call, IO, ...).
+function work(i: int) -> int {
+  i * i
+}
+
+// Per-call helper so each spawn captures its OWN i. (spawn captures by
+// reference + let is function-scoped, so spawning inline in the loop races.)
+function spawn_work(i: int) -> baml.future.Future<int, null> {
+  spawn { work(i) }
+}
+
+// A PLAIN function -- no async, no "color". It launches N tasks
+// concurrently, then joins their results.
+function run_all(n: int) -> int[] {
+  let tasks = [];
+  for (let i = 0; i < n; i += 1) {
+    tasks.push(spawn_work(i));      // launch concurrently
   }
-  null
+
+  let results: int[] = [];
+  for (let task in tasks) {
+    let r = await task;             // join each result
+    results.push(r);
+  }
+  results
+}
+
+// Any caller just calls it normally -- no await, no coloring.
+function main() -> int[] {
+  run_all(5)
 }`;
 
 const TS_COLOR = `async function serve() {        // 'async' colors this fn...
@@ -124,60 +202,158 @@ const TS_COLOR = `async function serve() {        // 'async' colors this fn...
   }
 }`;
 
-const BAML_TEST = `testset "basics" {
+const BAML_TEST = `class Sentiment {
+  label: "positive" | "negative" | "neutral",
+}
+
+function classify(text: string) -> Sentiment {
+  let t = text.to_lower_case();
+  if (t.includes("love") || t.includes("great") || t.includes("amazing")) {
+    Sentiment { label: "positive" }
+  } else if (t.includes("hate") || t.includes("terrible") || t.includes("awful")) {
+    Sentiment { label: "negative" }
+  } else {
+    Sentiment { label: "neutral" }
+  }
+}
+
+testset "basics" {
   test "clearly positive" {
     let v = classify("absolutely loved it!");
     assert.equal(v.label, "positive");
   }
-}`;
 
-const BAML_JUDGE = `function judge(text: string, label: Label) -> Judgement {
-  client: "openai/gpt5.5"
-  prompt: #"
-    A classifier labeled this "{{ label }}". Text: {{ text }}
-    Would a careful reader accept that? {{ ctx.output_format }}
-  "#
-}
-
-testset "from_file" {                       // one test per row of a file
-  for (let c in load_cases("cases.json")) {
-    test c.name { assert.equal(classify(c.text).label, c.expected) }
+  test "clearly negative" {
+    let v = classify("this was terrible.");
+    assert.equal(v.label, "negative");
   }
 }`;
 
-const BAML_WITH = `test "mostly passes"   with PassRate(0.9)   { /* ... */ }
-testset "flaky-ok"     with WithRetry(3)    { /* ... */ }
-testset "consensus"    with WithQuorum(5,3) { /* ... */ }`;
+const BAML_JUDGE = `type Label = "positive" | "negative" | "neutral";
+
+class Verdict {
+  accept: bool,
+  reason: string,
+}
+
+class Case {
+  name: string,
+  text: string,
+  expected: Label,
+}
+
+function classify(text: string) -> Label {
+  let t = text.to_lower_case();
+  if (t.includes("love") || t.includes("great")) {
+    "positive"
+  } else if (t.includes("hate") || t.includes("terrible")) {
+    "negative"
+  } else {
+    "neutral"
+  }
+}
+
+// An LLM judge is just another typed function + assert.
+function judge(text: string, label: Label) -> Verdict {
+  client: "openai/gpt5.5"
+  prompt: #"
+    A classifier labeled this "{{ label }}". Text: {{ text }}
+    Would a careful reader accept that label? {{ ctx.output_format }}
+  "#
+}
+
+// Data-driven: load rows from a fixture (or fetch them), one case per row.
+testset "from_fixture" {
+  let cases = baml.json.from_string<Case[]>(#"[
+    { "name": "loved",   "text": "I love this", "expected": "positive" },
+    { "name": "hated",   "text": "I hate this", "expected": "negative" },
+    { "name": "neutral", "text": "it is okay",  "expected": "neutral" }
+  ]"#);
+
+  for (let c in cases) {
+    testset c.name {
+      test "classifier matches expected label" {
+        assert.equal(classify(c.text), c.expected);
+      }
+    }
+  }
+}`;
+
+const BAML_WITH = `// Flaky/nondeterministic results? Handle them in-language: run the function
+// many times and assert a pass-rate / quorum threshold with real asserts.
+// trial() is a deterministic stand-in for a flaky call (fails on multiples of 7).
+function trial(seed: int) -> bool {
+  seed % 7 != 0
+}
+
+function pass_count(trials: int) -> int {
+  let passed = 0;
+  for (let i = 0; i < trials; i += 1) {
+    if (trial(i)) { passed += 1; };
+  }
+  passed
+}
+
+testset "flaky_handled_deterministically" {
+  test "pass-rate over 20 runs is at least 0.8" {
+    let rate = pass_count(20) * 1.0 / 20.0;
+    assert.is_true(rate >= 0.8);
+  }
+
+  test "quorum: a majority of 5 trials agree" {
+    assert.is_true(pass_count(5) >= 3);
+  }
+}`;
 
 const BAML_TYPES = `type Label = "positive" | "negative" | "neutral";
 
-// recursive types are fine — the compiler guards the cycle:
-type JSON = int | float | string | bool
-          | JSON[] | map<string, JSON>;`;
+// type + literal unions with | ; recursive types are fine --
+// the compiler guards the cycle automatically.
+type Json = int | float | string | bool
+          | Json[] | map<string, Json>;`;
 
 const BAML_CLASSES = `class Greeting {
   message: string,
   letters: int,
 
-  function new(name: string) -> Greeting {     // static (no self)
+  // factory: no self, called as Greeting.new(...)
+  function new(name: string) -> Greeting {
     Greeting { message: "hi, " + name, letters: name.length() }
   }
-  function shout(self) -> string {             // instance (has self)
+
+  // instance method: takes self
+  function shout(self) -> string {
     self.message.to_upper_case()
   }
 }
 
-let g = Greeting.new("vaibhav");   // fully-qualified, no aliases`;
+function demo() -> string {
+  // call the factory, then the instance method
+  Greeting.new("vaibhav").shout()
+}`;
 
-const BAML_ERRORS = `function build() -> string throws string | baml.errors.Io {
-  let res = baml.sys.shell("baml generate");
-  if (res.exit_code != 0) { throw "generate failed" };
+const BAML_ERRORS = `class BuildError {
+  reason: string,
+}
+
+// throws is inferred across the call graph
+function generate(ok: bool) -> string throws BuildError {
+  if (!ok) {
+    throw BuildError { reason: "generate failed" };
+  };
   "ok"
 }
 
-let out = build() catch (e) {
-  _: string => "recovered: " + e,
-};`;
+function build(ok: bool) -> string throws BuildError {
+  generate(ok)
+}
+
+// catch by type, exhaustively, with catch_all
+function run(ok: bool) -> string {
+  build(ok) catch_all (e) {
+    BuildError => "recovered: " + e.reason,
+  }
+}`;
 
 const PY_EMBED = `from baml_sdk import b               # generated, typed client
 
@@ -662,20 +838,30 @@ export function getSlides(): Slide[] {
     {
       id: 'with-clauses',
       section: 'Evals',
-      title: 'with clauses',
+      title: 'Flaky results',
       node: (
-        <SlideShell wide kicker="Evals" title="Runners: the with clause">
+        <SlideShell
+          wide
+          kicker="Evals"
+          title="Flaky results? Assert a threshold"
+        >
           <Split
             left={
-              <Callout tone="warn">
-                {
-                  'The `with <runner>` clause is real. `PassRate` / `WithRetry` / `WithQuorum` are illustrative — today you supply your own runner lambda. (verify)'
-                }
-              </Callout>
+              <>
+                <Lead>
+                  {
+                    'No magic runner DSL — pass-rates and quorums are just code.'
+                  }
+                </Lead>
+                <Bullets
+                  items={[
+                    'Run a nondeterministic call many times in a loop',
+                    'Assert a pass-rate or quorum threshold with assert.*',
+                  ]}
+                />
+              </>
             }
-            right={
-              <BamlEditor filename="runners.baml" initialCode={BAML_WITH} />
-            }
+            right={<BamlEditor filename="flaky.baml" initialCode={BAML_WITH} />}
           />
         </SlideShell>
       ),

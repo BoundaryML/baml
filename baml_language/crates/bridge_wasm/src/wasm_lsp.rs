@@ -11,7 +11,7 @@ use crate::send_wrapper::SendWrapper;
 /// the `{ "$serde_json::private::Number": "8" }` struct. Used for outbound LSP
 /// payloads, whose `serde_json::Value` params would otherwise leak that tag and
 /// make every position read as 0 on the JS side.
-fn to_json_jsvalue<T: Serialize>(value: &T) -> JsValue {
+pub(crate) fn to_json_jsvalue<T: Serialize>(value: &T) -> JsValue {
     serde_json::to_string(value)
         .ok()
         .and_then(|s| js_sys::JSON::parse(&s).ok())

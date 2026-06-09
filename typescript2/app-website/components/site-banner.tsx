@@ -23,8 +23,12 @@ export function SiteBanner() {
     setMounted(true);
   }, []);
 
-  // The /learn2 deck is a full-screen experience — no marketing banner.
-  if (pathname?.startsWith('/learn2')) {
+  // The /learn2–/learn4 presentations are full-screen — no marketing banner.
+  if (
+    pathname?.startsWith('/learn2') ||
+    pathname?.startsWith('/learn3') ||
+    pathname?.startsWith('/learn4')
+  ) {
     return null;
   }
 

@@ -8,7 +8,13 @@ import { GeistMono } from 'geist/font/mono';
 import { GeistSans } from 'geist/font/sans';
 import { Caveat, Instrument_Serif } from 'next/font/google';
 
+// Accent fonts: applied globally as CSS variables but only used on a handful of
+// pages (serif on blog/podcast/jobs/fundraiser, caveat nowhere yet). Preloading
+// them on every page emits unused `<link rel=preload>` tags — hence the browser
+// "preloaded but not used within a few seconds" warning on e.g. /learn2. Let
+// them load on demand (still swap-rendered) instead of preloading globally.
 const instrumentSerif = Instrument_Serif({
+  preload: false,
   style: ['normal', 'italic'],
   subsets: ['latin'],
   variable: '--font-serif',
@@ -16,6 +22,7 @@ const instrumentSerif = Instrument_Serif({
 });
 
 const caveat = Caveat({
+  preload: false,
   subsets: ['latin'],
   variable: '--font-caveat',
   weight: ['400', '500'],

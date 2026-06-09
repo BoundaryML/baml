@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type FC } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type FC,
+} from 'react';
 import {
   ReactFlow,
   ReactFlowProvider,
@@ -13,7 +20,11 @@ import {
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 
-import type { ControlFlowGraph, DeserializedRuntimeEvent, RunEntry } from '../worker-protocol';
+import type {
+  ControlFlowGraph,
+  DeserializedRuntimeEvent,
+  RunEntry,
+} from '../worker-protocol';
 import type { ResultRendererProps } from '../result-renderers';
 import { cfgToGraphNodes, graphToReactflow } from './convert';
 import { collectGraphNodeRuntime } from './runtime-output';
@@ -47,7 +58,9 @@ function GraphViewInner({
 }: GraphViewProps) {
   const [nodes, setNodes, onNodesChange] = useNodesState<WorkflowNode>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<WorkflowEdge>([]);
-  const [direction, setDirection] = useState<'horizontal' | 'vertical'>('horizontal');
+  const [direction, setDirection] = useState<'horizontal' | 'vertical'>(
+    'horizontal',
+  );
   const selectedNodeIdRef = useRef(selectedNodeId);
 
   useEffect(() => {
@@ -56,7 +69,10 @@ function GraphViewInner({
 
   const graphModel = useMemo(() => {
     const { nodes: graphNodes, edges: graphEdges } = cfgToGraphNodes(graph);
-    const { nodes: rfNodes, edges: rfEdges } = graphToReactflow(graphNodes, graphEdges);
+    const { nodes: rfNodes, edges: rfEdges } = graphToReactflow(
+      graphNodes,
+      graphEdges,
+    );
     return { graphNodes, rfNodes, rfEdges };
   }, [graph]);
 
@@ -78,56 +94,64 @@ function GraphViewInner({
   const graphNodesRef = useRef(graphModel.graphNodes);
   graphNodesRef.current = graphModel.graphNodes;
 
-  const decorateNodesWithRuntime = useCallback((baseNodes: WorkflowNode[]): WorkflowNode[] => {
-    const {
-      runtimeEvents: latestRuntimeEvents,
-      runStatus: latestRunStatus,
-      runError: latestRunError,
-      runFunctionName: latestRunFunctionName,
-      customRenderers: latestCustomRenderers,
-    } = runtimeInputsRef.current;
-    const runtimeByNode = collectGraphNodeRuntime(graphNodesRef.current, latestRuntimeEvents, {
-      status: latestRunStatus,
-      error: latestRunError,
-      functionName: latestRunFunctionName,
-    });
-    const selectedId = selectedNodeIdRef.current == null
-      ? null
-      : String(selectedNodeIdRef.current);
+  const decorateNodesWithRuntime = useCallback(
+    (baseNodes: WorkflowNode[]): WorkflowNode[] => {
+      const {
+        runtimeEvents: latestRuntimeEvents,
+        runStatus: latestRunStatus,
+        runError: latestRunError,
+        runFunctionName: latestRunFunctionName,
+        customRenderers: latestCustomRenderers,
+      } = runtimeInputsRef.current;
+      const runtimeByNode = collectGraphNodeRuntime(
+        graphNodesRef.current,
+        latestRuntimeEvents,
+        {
+          status: latestRunStatus,
+          error: latestRunError,
+          functionName: latestRunFunctionName,
+        },
+      );
+      const selectedId =
+        selectedNodeIdRef.current == null
+          ? null
+          : String(selectedNodeIdRef.current);
 
-    return baseNodes.map((node) => {
-      const runtime = runtimeByNode.get(node.id);
-      if (!runtime) {
+      return baseNodes.map((node) => {
+        const runtime = runtimeByNode.get(node.id);
+        if (!runtime) {
+          return {
+            ...node,
+            data: {
+              ...node.data,
+              result: undefined,
+              hasResult: undefined,
+              imageOutputs: [],
+              executionState: 'not-started' as const,
+              errorMessage: undefined,
+              customRenderers: latestCustomRenderers,
+              selected: node.id === selectedId,
+            },
+          };
+        }
+
         return {
           ...node,
           data: {
             ...node.data,
-            result: undefined,
-            hasResult: undefined,
-            imageOutputs: [],
-            executionState: 'not-started' as const,
-            errorMessage: undefined,
+            result: runtime.result,
+            hasResult: runtime.hasResult,
+            imageOutputs: runtime.imageOutputs,
+            executionState: runtime.executionState,
+            errorMessage: runtime.errorMessage,
             customRenderers: latestCustomRenderers,
             selected: node.id === selectedId,
           },
         };
-      }
-
-      return {
-        ...node,
-        data: {
-          ...node.data,
-          result: runtime.result,
-          hasResult: runtime.hasResult,
-          imageOutputs: runtime.imageOutputs,
-          executionState: runtime.executionState,
-          errorMessage: runtime.errorMessage,
-          customRenderers: latestCustomRenderers,
-          selected: node.id === selectedId,
-        },
-      };
-    });
-  }, []);
+      });
+    },
+    [],
+  );
 
   const layoutRunIdRef = useRef(0);
 
@@ -220,15 +244,25 @@ function GraphViewInner({
     const screenY = centerY * zoom + vy;
     const pad = 60;
     const isVisible =
-      screenX >= pad && screenX <= containerWidth - pad &&
-      screenY >= pad && screenY <= containerHeight - pad;
+      screenX >= pad &&
+      screenX <= containerWidth - pad &&
+      screenY >= pad &&
+      screenY <= containerHeight - pad;
 
     if (!isVisible) {
       // Pan to the node; if over-zoomed, ease back to 1.0
       const targetZoom = Math.min(zoom, 1.0);
       setCenter(centerX, centerY, { duration: 300, zoom: targetZoom });
     }
-  }, [selectedNodeId, graph, setCenter, getNode, getViewport, containerWidth, containerHeight]);
+  }, [
+    selectedNodeId,
+    graph,
+    setCenter,
+    getNode,
+    getViewport,
+    containerWidth,
+    containerHeight,
+  ]);
 
   const handleNodeClick: NodeMouseHandler<WorkflowNode> = useCallback(
     (_event, node) => {
@@ -279,8 +313,16 @@ function GraphViewInner({
           --xy-controls-button-border-color-default: rgba(255, 255, 255, 0.10);
           --xy-controls-box-shadow-default: 0 8px 24px rgba(0, 0, 0, 0.24);
         }
+        .react-flow.light {
+          --xy-controls-button-background-color-default: rgba(255, 253, 246, 0.95);
+          --xy-controls-button-background-color-hover-default: #f4eee0;
+          --xy-controls-button-color-default: #1a1612;
+          --xy-controls-button-color-hover-default: #1a1612;
+          --xy-controls-button-border-color-default: #d8cfbd;
+          --xy-controls-box-shadow-default: 0 4px 14px rgba(26, 22, 18, 0.10);
+        }
         .react-flow__controls {
-          border: 1px solid rgba(255, 255, 255, 0.10);
+          border: 1px solid rgba(26, 22, 18, 0.14);
           border-radius: 8px;
           overflow: hidden;
           backdrop-filter: blur(8px);
@@ -311,17 +353,24 @@ function GraphViewInner({
         fitView
         fitViewOptions={{ minZoom: 0.3, maxZoom: 0.85, padding: 0.2 }}
         proOptions={{ hideAttribution: true }}
-        colorMode="dark"
+        colorMode="light"
       >
         <Controls
           position="bottom-left"
           style={{ display: 'flex', flexDirection: 'row' }}
         />
-        <Background variant={BackgroundVariant.Dots} color="rgba(255,255,255,0.10)" gap={18} size={1} />
+        <Background
+          variant={BackgroundVariant.Dots}
+          color="rgba(42,37,32,0.12)"
+          gap={18}
+          size={1}
+        />
         <ColorfulMarkerDefinitions />
       </ReactFlow>
       <button
-        onClick={() => setDirection((d) => (d === 'horizontal' ? 'vertical' : 'horizontal'))}
+        onClick={() =>
+          setDirection((d) => (d === 'horizontal' ? 'vertical' : 'horizontal'))
+        }
         style={{
           position: 'absolute',
           top: 10,
@@ -334,24 +383,25 @@ function GraphViewInner({
           justifyContent: 'center',
           padding: 0,
           borderRadius: 8,
-          border: '1px solid rgba(255,255,255,0.10)',
-          background: 'rgba(24,24,27,0.75)',
+          border: '1px solid #D8CFBD',
+          background: 'rgba(255,253,246,0.92)',
           backdropFilter: 'blur(8px)',
           WebkitBackdropFilter: 'blur(8px)',
-          color: '#e4e4e7',
+          color: '#1A1612',
           cursor: 'pointer',
           fontSize: 14,
           lineHeight: 1,
-          boxShadow: '0 1px 2px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.04)',
+          boxShadow:
+            '0 1px 2px rgba(26,22,18,0.10), inset 0 1px 0 rgba(255,255,255,0.6)',
           transition: 'background 120ms ease, border-color 120ms ease',
         }}
         onMouseEnter={(e) => {
-          e.currentTarget.style.background = 'rgba(39,39,42,0.85)';
-          e.currentTarget.style.borderColor = 'rgba(255,255,255,0.18)';
+          e.currentTarget.style.background = '#F4EEE0';
+          e.currentTarget.style.borderColor = '#C9BFA9';
         }}
         onMouseLeave={(e) => {
-          e.currentTarget.style.background = 'rgba(24,24,27,0.75)';
-          e.currentTarget.style.borderColor = 'rgba(255,255,255,0.10)';
+          e.currentTarget.style.background = 'rgba(255,253,246,0.92)';
+          e.currentTarget.style.borderColor = '#D8CFBD';
         }}
         title={`Switch to ${direction === 'horizontal' ? 'vertical' : 'horizontal'} layout`}
         aria-label="Toggle layout direction"

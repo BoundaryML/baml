@@ -19,7 +19,11 @@ export {
 export type { ResultRendererProps } from './result-renderers';
 export { ResultDisplay } from './ResultDisplay';
 export type { ResultDisplayProps } from './ResultDisplay';
-export { HttpRequestCurlRenderer, httpRequestToCurl, isHttpRequest } from './renderers/HttpRequestCurl';
+export {
+  HttpRequestCurlRenderer,
+  httpRequestToCurl,
+  isHttpRequest,
+} from './renderers/HttpRequestCurl';
 
 // Worker protocol types (needed by worker implementations and consumers)
 export type {

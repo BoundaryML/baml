@@ -31,13 +31,15 @@ export function Deck() {
 
   const go = useCallback(
     (n: number) => {
-      setIdx((cur) => {
-        const next = clamp(n, 0, total - 1);
-        if (next !== cur && typeof window !== 'undefined') {
-          window.history.replaceState(null, '', `?page=${next + 1}`);
-        }
-        return next;
-      });
+      const next = clamp(n, 0, total - 1);
+      setIdx(next);
+      // Sync the URL here in the event handler — NOT inside the setIdx updater.
+      // Next's App Router monkey-patches `history.replaceState` to dispatch a
+      // router action; running it inside the state updater fires that dispatch
+      // during React's render phase ("Cannot update Router while rendering Deck").
+      if (typeof window !== 'undefined') {
+        window.history.replaceState(null, '', `?page=${next + 1}`);
+      }
     },
     [total],
   );

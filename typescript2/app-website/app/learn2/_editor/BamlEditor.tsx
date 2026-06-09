@@ -337,6 +337,10 @@ export interface BamlEditorProps {
   readOnly?: boolean;
   /** Filename shown in a header bar, matching the deck's static code blocks. */
   filename?: string;
+  /** Cap for auto-size; taller code scrolls inside the editor (default 440). */
+  maxHeight?: number;
+  /** 1-based lines to softly emphasise (whole-line tint, like BamlCode). */
+  highlightLines?: number[];
 }
 
 /**
@@ -348,6 +352,8 @@ export function BamlEditor({
   height,
   readOnly,
   filename,
+  maxHeight = 440,
+  highlightLines,
 }: BamlEditorProps) {
   const idRef = useRef<string>('');
   if (!idRef.current) idRef.current = `cell${cellCounter++}`;
@@ -355,14 +361,53 @@ export function BamlEditor({
   const [runs, setRuns] = useState<RunLine[]>([]);
   const runIdRef = useRef(0);
 
-  // Auto-grow to fit the code unless the caller pins a height. Seeded from the
-  // line count so first paint is close, then corrected by Monaco's content-size
-  // event (wired in onMount — a library callback, not a mount effect).
+  // Auto-grow to fit the code (capped at maxHeight — taller snippets scroll
+  // inside the editor instead of blowing out the slide) unless the caller pins a
+  // height. Seeded from the line count so first paint is close, then corrected
+  // by Monaco's content-size event (wired in onMount — a library callback).
   const autoSize = height == null;
-  const [measured, setMeasured] = useState(
-    () => initialCode.split('\n').length * 20 + 20,
+  const [measured, setMeasured] = useState(() =>
+    Math.min(maxHeight, initialCode.split('\n').length * 20 + 20),
   );
   const boxHeight = height ?? measured;
+
+  // Header "Run" button: runs every test/testset in the cell via the same
+  // lens metadata the codelenses use. Heuristic visibility: only cells whose
+  // shipped code contains a test block get the button.
+  const hasTests = /\btest(set)?\s+"/.test(initialCode);
+  const [running, setRunning] = useState(false);
+  const runningRef = useRef(false);
+  const runAll = useCallback(async () => {
+    const handle = handleRef.current;
+    const out = cellOutput.get(idRef.current);
+    if (!handle || !out || runningRef.current) return;
+    runningRef.current = true;
+    setRunning(true);
+    try {
+      const items = await handle.requestCodeLens();
+      const runnable = items.filter(
+        (l) => l.command && !/playground/i.test(l.command.title),
+      );
+      // Prefer testset lenses (they run their member tests); fall back to
+      // bare test lenses for cells with top-level tests only.
+      const sets = runnable.filter((l) =>
+        /testset/i.test(l.command?.title ?? ''),
+      );
+      const picks = sets.length > 0 ? sets : runnable;
+      for (const l of picks) {
+        const a = (l.command?.arguments?.[0] ?? {}) as {
+          functionName?: string;
+        };
+        if (!a.functionName) continue;
+        const runId = out.start(a.functionName);
+        const result = await handle.runTest(a.functionName);
+        out.finish(runId, result);
+      }
+    } finally {
+      runningRef.current = false;
+      setRunning(false);
+    }
+  }, []);
 
   const handleRef = useRef<CellHandle | null>(null);
   const editorRef = useRef<EditorInstance | null>(null);
@@ -450,14 +495,26 @@ export function BamlEditor({
       const model = editor.getModel();
       if (model) modelHandles.set(model, handle);
       registerLensProvider(monaco);
+      // Showcase highlights: a static whole-line tint on the initial code.
+      // Deliberately not tracked across edits — it marks the shipped snippet.
+      if (highlightLines?.length) {
+        editor.createDecorationsCollection(
+          highlightLines.map((line) => ({
+            range: new monaco.Range(line, 1, line, 1),
+            options: { isWholeLine: true, className: 'l2-ed-hl' },
+          })),
+        );
+      }
       if (autoSize) {
         const syncHeight = () =>
-          setMeasured(Math.max(40, editor.getContentHeight()));
+          setMeasured(
+            Math.min(maxHeight, Math.max(40, editor.getContentHeight())),
+          );
         editor.onDidContentSizeChange(syncHeight);
         syncHeight();
       }
     },
-    [applyDiagnostics, autoSize],
+    [applyDiagnostics, autoSize, maxHeight, highlightLines],
   );
 
   const onChange = useCallback((value?: string) => {
@@ -472,14 +529,26 @@ export function BamlEditor({
   return (
     <div className="l2-bamled-wrap">
       <div className="l2-bamled-frame">
-        {filename ? (
+        {filename || hasTests ? (
           <div className="l2-code-head">
             <span className="l2-code-dots" aria-hidden>
               <i />
               <i />
               <i />
             </span>
-            <span className="l2-code-name font-mono">{filename}</span>
+            {filename ? (
+              <span className="l2-code-name font-mono">{filename}</span>
+            ) : null}
+            {hasTests ? (
+              <button
+                type="button"
+                className="l2-run-btn font-mono"
+                onClick={runAll}
+                disabled={running}
+              >
+                {running ? 'running…' : '▶ Run'}
+              </button>
+            ) : null}
           </div>
         ) : null}
         <div className="l2-bamled" style={{ height: boxHeight }}>
@@ -500,7 +569,13 @@ export function BamlEditor({
               renderLineHighlight: 'line',
               overviewRulerLanes: 0,
               hideCursorInOverviewRuler: true,
-              scrollbar: { verticalSliderSize: 6, horizontalSliderSize: 6 },
+              scrollbar: {
+                verticalSliderSize: 6,
+                horizontalSliderSize: 6,
+                // On scroll pages, let the wheel pass through to the page
+                // once the editor has nothing left to scroll.
+                alwaysConsumeMouseWheel: false,
+              },
               padding: { top: 10, bottom: 10 },
               tabSize: 2,
               wordWrap: 'on',
@@ -512,45 +587,47 @@ export function BamlEditor({
             }}
           />
         </div>
-      </div>
-      {runs.length > 0 ? (
-        <div className="l2-term">
-          <div className="l2-term-bar">
-            <span className="l2-term-title">output</span>
-            <button
-              type="button"
-              className="l2-term-x"
-              onClick={() => setRuns([])}
-              aria-label="Clear output"
-            >
-              ×
-            </button>
-          </div>
-          <div className="l2-term-body">
+        {runs.length > 0 ? (
+          <div className="l2-runs">
+            <div className="l2-runs-head font-mono">
+              <span className="l2-runs-title">results</span>
+              <span className="l2-runs-summary">
+                {runs.some((r) => r.status === 'running')
+                  ? 'running…'
+                  : `${runs.filter((r) => r.status === 'pass').length}/${runs.length} passed`}
+              </span>
+              <button
+                type="button"
+                className="l2-runs-clear"
+                onClick={() => setRuns([])}
+              >
+                clear
+              </button>
+            </div>
             {runs.map((r) => (
-              <div key={r.id} className={`l2-term-line l2-term-${r.status}`}>
-                <span className="l2-term-check">{statusIcon(r.status)}</span>
-                <span className="l2-term-name">{r.testName}</span>
+              <div key={r.id} className={`l2-runs-row l2-runs--${r.status}`}>
+                <span className="l2-runs-check">{statusIcon(r.status)}</span>
+                <span className="l2-runs-name">{r.testName}</span>
                 {r.status === 'running' ? (
-                  <span className="l2-term-meta">running…</span>
+                  <span className="l2-runs-meta">running…</span>
                 ) : (
                   <>
-                    {r.durationMs != null ? (
-                      <span className="l2-term-meta">{r.durationMs}ms</span>
-                    ) : null}
                     {r.summary ? (
-                      <span className="l2-term-meta">{r.summary}</span>
+                      <span className="l2-runs-meta">{r.summary}</span>
+                    ) : null}
+                    {r.durationMs != null ? (
+                      <span className="l2-runs-meta">{r.durationMs}ms</span>
                     ) : null}
                     {r.error ? (
-                      <span className="l2-term-err">{r.error}</span>
+                      <span className="l2-runs-err">{r.error}</span>
                     ) : null}
                   </>
                 )}
               </div>
             ))}
           </div>
-        </div>
-      ) : null}
+        ) : null}
+      </div>
     </div>
   );
 }

@@ -1,4 +1,3 @@
-import { AsciiBootLoader } from '@/components/ascii-boot-loader';
 import { FooterSection } from '@/components/footer-section';
 import { ForceLightTheme } from '@/components/force-light-theme';
 import { IncrementalAdoption } from '@/components/landing/incremental-adoption';
@@ -11,7 +10,6 @@ import { TestimonialSection } from '@/components/testimonial-section';
 export default async function Page() {
   return (
     <div className="w-full bg-background text-foreground">
-      <AsciiBootLoader />
       <ForceLightTheme />
       {/* Variant UI shell (Nav + Hero + Statement + Exhibit) */}
       <VariantHome />

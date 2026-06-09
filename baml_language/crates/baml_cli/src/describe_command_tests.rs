@@ -848,12 +848,12 @@ fn definition_line_range_comment_only_span_does_not_reverse() {
 
 // ── Truncation / budget tests ────────────────────────────────────────────────
 
-/// Methods are always discoverable. They are rendered after the body and
-/// bypass the body budget entirely, so even at budget 5 every method of
-/// `String` (40+) is still present, and the `methods:`/`static_methods:`
-/// sections are byte-identical regardless of budget.
+/// The soft budget bounds the whole rendering, not just the body: method
+/// sections are truncated to fit, with an explicit elision marker, while
+/// their headers stay visible so the symbol's surface remains discoverable.
+/// A generous budget still renders every method in full.
 #[test]
-fn render_describe_methods_never_truncated() {
+fn render_describe_methods_respect_budget() {
     let db = simple_project();
     let files = baml_compiler2_hir::compiler2_all_files(&db);
     let descs = baml_lsp2_actions::describe(&db, &files, "String");
@@ -862,21 +862,39 @@ fn render_describe_methods_never_truncated() {
     let tight = capture_description(&db, &descs[0], 5);
     let full = capture_description(&db, &descs[0], 1000);
 
-    for needle in [
-        "methods:",
-        "function to_json(self) -> json",
-        "static_methods:",
-        "function from_code_points(unicode: int[]) -> string",
-    ] {
+    // Section headers + elision marker are always present under a tight budget.
+    for needle in ["methods:", "more lines (re-run with a higher --budget)"] {
         assert!(
             tight.contains(needle),
             "`{needle}` missing from describe output under budget 5:\n{tight}"
         );
     }
 
-    // The method sections are unaffected by the budget (only the body block is).
-    let methods_onward = |s: &str| s[s.find("\nmethods:").expect("methods section")..].to_string();
-    assert_eq!(methods_onward(&tight), methods_onward(&full));
+    // Tight output is meaningfully bounded: the budget is soft, but elided
+    // method lists must not blow past it by more than the fixed per-section
+    // overhead (headers + markers).
+    let tight_lines = tight.lines().count();
+    let full_lines = full.lines().count();
+    assert!(
+        tight_lines < full_lines / 2 && tight_lines <= 5 + 20,
+        "budget 5 should bound output well below the full {full_lines} lines, got {tight_lines}:\n{tight}"
+    );
+
+    // A generous budget renders every method, with no elision marker.
+    for needle in [
+        "function to_json(self) -> json",
+        "static_methods:",
+        "function from_code_points(unicode: int[]) -> string",
+    ] {
+        assert!(
+            full.contains(needle),
+            "`{needle}` missing from describe output under budget 1000:\n{full}"
+        );
+    }
+    assert!(
+        !full.contains("re-run with a higher --budget"),
+        "no elision marker expected at budget 1000:\n{full}"
+    );
 }
 
 /// A class with a fields-only body (no docstring) renders identically at a tight
@@ -895,7 +913,14 @@ fn render_describe_fields_only_body_fits_tight_budget() {
         !tight.contains("[INFO] Showing"),
         "fields-only body must not truncate at budget 5:\n{tight}"
     );
-    assert_eq!(tight, full);
+    // The header + body block is identical at both budgets; only the trailing
+    // list sections (methods here) give way under the tight budget.
+    let body_part = |s: &str| s[..s.find("\nmethods:").expect("methods section")].to_string();
+    assert_eq!(body_part(&tight), body_part(&full));
+    assert!(
+        tight.contains("more lines (re-run with a higher --budget)"),
+        "methods exceeding the tight budget must be elided with a marker:\n{tight}"
+    );
 }
 
 /// Full budget shows no truncation hint.
