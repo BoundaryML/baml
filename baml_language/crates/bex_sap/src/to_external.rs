@@ -1,4 +1,4 @@
-//! Conversion from SAP types and values to `BexExternalValue` and `baml_type::Ty`.
+//! Conversion from SAP types and values to `BexExternalValue` and `baml_type::RuntimeTy`.
 //!
 //! This module provides the bridge between SAP's internal type/value representation
 //! and the external value tree used by the engine to push results back onto the VM heap.
@@ -17,10 +17,10 @@ use crate::{
 };
 
 // ============================================================================
-// Type conversion: SAP types → baml_type::Ty
+// Type conversion: SAP types → baml_type::RuntimeTy
 // ============================================================================
 
-/// Convert a SAP type back to a `baml_type::Ty`.
+/// Convert a SAP type back to a `baml_type::RuntimeTy`.
 ///
 /// # Known simplifications (not round-trip safe)
 ///
@@ -29,36 +29,38 @@ use crate::{
 /// - `EnumVariant` becomes `Enum` (variant specificity lost at the type level).
 /// - `TyAttr` annotations are not reconstructed; `TyAttr::default()` is used throughout.
 pub trait ToBamlTy {
-    fn to_baml_ty(&self) -> baml_type::Ty;
+    fn to_baml_ty(&self) -> baml_type::RuntimeTy;
 }
 
 impl ToBamlTy for TyResolvedRef<'_, TypeName> {
-    fn to_baml_ty(&self) -> baml_type::Ty {
+    fn to_baml_ty(&self) -> baml_type::RuntimeTy {
         let attr = baml_type::TyAttr::default();
         match self {
-            TyResolvedRef::Int(_) => baml_type::Ty::Int { attr },
-            TyResolvedRef::Bigint(_) => baml_type::Ty::Bigint { attr },
-            TyResolvedRef::Float(_) => baml_type::Ty::Float { attr },
-            TyResolvedRef::String(_) => baml_type::Ty::String { attr },
-            TyResolvedRef::Bool(_) => baml_type::Ty::Bool { attr },
-            TyResolvedRef::Null(_) => baml_type::Ty::Null { attr },
-            TyResolvedRef::Media(media) => baml_type::Ty::Media(media.to_baml_media_kind(), attr),
-            TyResolvedRef::LiteralInt(v) => baml_type::Ty::Literal(
+            TyResolvedRef::Int(_) => baml_type::RuntimeTy::Int { attr },
+            TyResolvedRef::Bigint(_) => baml_type::RuntimeTy::Bigint { attr },
+            TyResolvedRef::Float(_) => baml_type::RuntimeTy::Float { attr },
+            TyResolvedRef::String(_) => baml_type::RuntimeTy::String { attr },
+            TyResolvedRef::Bool(_) => baml_type::RuntimeTy::Bool { attr },
+            TyResolvedRef::Null(_) => baml_type::RuntimeTy::Null { attr },
+            TyResolvedRef::Media(media) => {
+                baml_type::RuntimeTy::Media(media.to_baml_media_kind(), attr)
+            }
+            TyResolvedRef::LiteralInt(v) => baml_type::RuntimeTy::Literal(
                 baml_type::Literal::Int(v.0),
                 baml_type::Freshness::Regular,
                 attr,
             ),
-            TyResolvedRef::LiteralBigint(v) => baml_type::Ty::Literal(
+            TyResolvedRef::LiteralBigint(v) => baml_type::RuntimeTy::Literal(
                 baml_type::Literal::Bigint(v.0.clone()),
                 baml_type::Freshness::Regular,
                 attr,
             ),
-            TyResolvedRef::LiteralString(v) => baml_type::Ty::Literal(
+            TyResolvedRef::LiteralString(v) => baml_type::RuntimeTy::Literal(
                 baml_type::Literal::String(v.0.to_string()),
                 baml_type::Freshness::Regular,
                 attr,
             ),
-            TyResolvedRef::LiteralBool(v) => baml_type::Ty::Literal(
+            TyResolvedRef::LiteralBool(v) => baml_type::RuntimeTy::Literal(
                 baml_type::Literal::Bool(v.0),
                 baml_type::Freshness::Regular,
                 attr,
@@ -75,29 +77,29 @@ impl ToBamlTy for TyResolvedRef<'_, TypeName> {
 }
 
 impl ToBamlTy for Ty<'_, TypeName> {
-    fn to_baml_ty(&self) -> baml_type::Ty {
+    fn to_baml_ty(&self) -> baml_type::RuntimeTy {
         match self {
             Ty::Resolved(resolved) => resolved.as_ref().to_baml_ty(),
             Ty::ResolvedRef(resolved_ref) => resolved_ref.to_baml_ty(),
             Ty::Unresolved(_name) => {
                 // Unresolved names are class/enum references; we can't distinguish
                 // without access to the TypeRefDb. Use unknown rather than guessing.
-                baml_type::Ty::unknown()
+                baml_type::RuntimeTy::unknown()
             }
         }
     }
 }
 
 impl ToBamlTy for ArrayTy<'_, TypeName> {
-    fn to_baml_ty(&self) -> baml_type::Ty {
+    fn to_baml_ty(&self) -> baml_type::RuntimeTy {
         let inner = self.ty.ty.to_baml_ty();
-        baml_type::Ty::List(Box::new(inner), baml_type::TyAttr::default())
+        baml_type::RuntimeTy::List(Box::new(inner), baml_type::TyAttr::default())
     }
 }
 
 impl ToBamlTy for MapTy<'_, TypeName> {
-    fn to_baml_ty(&self) -> baml_type::Ty {
-        baml_type::Ty::Map {
+    fn to_baml_ty(&self) -> baml_type::RuntimeTy {
+        baml_type::RuntimeTy::Map {
             key: Box::new(self.key.ty.to_baml_ty()),
             value: Box::new(self.value.ty.to_baml_ty()),
             attr: baml_type::TyAttr::default(),
@@ -106,34 +108,35 @@ impl ToBamlTy for MapTy<'_, TypeName> {
 }
 
 impl ToBamlTy for ClassTy<'_, TypeName> {
-    fn to_baml_ty(&self) -> baml_type::Ty {
-        baml_type::Ty::Class(self.name.clone(), Vec::new(), baml_type::TyAttr::default())
+    fn to_baml_ty(&self) -> baml_type::RuntimeTy {
+        baml_type::RuntimeTy::Class(self.name.clone(), Vec::new(), baml_type::TyAttr::default())
     }
 }
 
 impl ToBamlTy for EnumTy<'_, TypeName> {
-    fn to_baml_ty(&self) -> baml_type::Ty {
-        baml_type::Ty::Enum(self.name.clone(), baml_type::TyAttr::default())
+    fn to_baml_ty(&self) -> baml_type::RuntimeTy {
+        baml_type::RuntimeTy::Enum(self.name.clone(), baml_type::TyAttr::default())
     }
 }
 
 impl ToBamlTy for EnumVariantTy<'_, TypeName> {
     /// Loses variant specificity — maps back to the parent enum type.
-    fn to_baml_ty(&self) -> baml_type::Ty {
-        baml_type::Ty::Enum(self.name.clone(), baml_type::TyAttr::default())
+    fn to_baml_ty(&self) -> baml_type::RuntimeTy {
+        baml_type::RuntimeTy::Enum(self.name.clone(), baml_type::TyAttr::default())
     }
 }
 
 impl ToBamlTy for UnionTy<'_, TypeName> {
-    fn to_baml_ty(&self) -> baml_type::Ty {
-        let members: Vec<baml_type::Ty> = self.variants.iter().map(|v| v.ty.to_baml_ty()).collect();
-        baml_type::Ty::Union(members, baml_type::TyAttr::default())
+    fn to_baml_ty(&self) -> baml_type::RuntimeTy {
+        let members: Vec<baml_type::RuntimeTy> =
+            self.variants.iter().map(|v| v.ty.to_baml_ty()).collect();
+        baml_type::RuntimeTy::Union(members, baml_type::TyAttr::default())
     }
 }
 
 impl ToBamlTy for StreamStateTy<'_, TypeName> {
     /// `StreamState` is a value-level concept; at the type level we return the inner type.
-    fn to_baml_ty(&self) -> baml_type::Ty {
+    fn to_baml_ty(&self) -> baml_type::RuntimeTy {
         self.value.ty.to_baml_ty()
     }
 }
@@ -181,7 +184,7 @@ fn baml_value_inner_to_external(
         BamlValue::Array(arr) => {
             let element_type = match ty.ty {
                 TyResolvedRef::Array(a) => a.ty.ty.to_baml_ty(),
-                _ => baml_type::Ty::unknown(),
+                _ => baml_type::RuntimeTy::unknown(),
             };
             let items: Vec<BexExternalValue> =
                 arr.value.iter().map(baml_value_to_external).collect();
@@ -193,7 +196,10 @@ fn baml_value_inner_to_external(
         BamlValue::Map(map) => {
             let (key_type, value_type) = match ty.ty {
                 TyResolvedRef::Map(m) => (m.key.ty.to_baml_ty(), m.value.ty.to_baml_ty()),
-                _ => (baml_type::Ty::string(), baml_type::Ty::unknown()),
+                _ => (
+                    baml_type::RuntimeTy::string(),
+                    baml_type::RuntimeTy::unknown(),
+                ),
             };
             let entries: IndexMap<String, BexExternalValue> = map
                 .value

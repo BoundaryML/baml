@@ -208,7 +208,7 @@ fn owned_rust_type(
             } else {
                 match name.as_str() {
                     "unknown" => quote! { BexExternalValue },
-                    "type" => quote! { baml_type::Ty },
+                    "type" => quote! { baml_type::RuntimeTy },
                     "function" => quote! { BexExternalValue },
                     _ => quote! { BexExternalValue },
                 }
@@ -441,7 +441,7 @@ fn owned_to_external_expr(
             let inner_conv = owned_to_external_expr(&quote! { __v }, inner, class_ns_map);
             quote! {
                 BexExternalValue::Array {
-                    element_type: baml_type::Ty::unknown(),
+                    element_type: baml_type::RuntimeTy::unknown(),
                     items: #field_expr.into_iter().map(|__v| #inner_conv).collect(),
                 }
             }
@@ -450,8 +450,8 @@ fn owned_to_external_expr(
             let v_conv = owned_to_external_expr(&quote! { __v }, v, class_ns_map);
             quote! {
                 BexExternalValue::Map {
-                    key_type: baml_type::Ty::string(),
-                    value_type: baml_type::Ty::unknown(),
+                    key_type: baml_type::RuntimeTy::string(),
+                    value_type: baml_type::RuntimeTy::unknown(),
                     entries: #field_expr.into_iter().map(|(__k, __v)| (__k, #v_conv)).collect(),
                 }
             }
@@ -502,7 +502,7 @@ fn clean_rust_type(
                 quote! { #owned::#ns_ident::#name_ident }
             } else {
                 match name.as_str() {
-                    "type" => quote! { baml_type::Ty },
+                    "type" => quote! { baml_type::RuntimeTy },
                     "unknown" => quote! { BexExternalValue },
                     "function" => quote! { BexExternalValue },
                     _ => quote! { BexExternalValue },
@@ -1241,7 +1241,7 @@ fn emit_one_class_trait(
             let type_arg_params: Vec<TokenStream> = (0..fn_type_arg_count)
                 .map(|i| {
                     let p_ident = format_ident!("type_arg_{}", i);
-                    quote! { #p_ident: baml_type::Ty }
+                    quote! { #p_ident: baml_type::RuntimeTy }
                 })
                 .collect();
 
@@ -1372,7 +1372,7 @@ fn emit_glue_method(
         })
         .collect();
 
-    // Extract synthetic type-arg slots as baml_type::Ty.
+    // Extract synthetic type-arg slots as baml_type::RuntimeTy.
     let type_arg_extractions: Vec<TokenStream> = type_arg_idents
         .iter()
         .enumerate()
@@ -1517,7 +1517,7 @@ fn emit_one_namespace_trait(
                 .enumerate()
                 .map(|(i, _)| {
                     let p_ident = format_ident!("type_arg_{}", i);
-                    quote! { #p_ident: baml_type::Ty }
+                    quote! { #p_ident: baml_type::RuntimeTy }
                 })
                 .collect();
 
@@ -1638,7 +1638,7 @@ fn emit_into_result_call(
                     #call_expr
                         .into_result_mapped(SysOp::#variant_ident, |v| {
                             BexExternalValue::Array {
-                                element_type: baml_type::Ty::unknown(),
+                                element_type: baml_type::RuntimeTy::unknown(),
                                 items: v.into_iter()
                                     .map(|item| <#owned::#ns_ident::#name_ident as AsBexExternalValue>::into_bex_external_value(item))
                                     .collect(),

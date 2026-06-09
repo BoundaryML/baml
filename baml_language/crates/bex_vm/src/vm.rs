@@ -39,34 +39,34 @@ fn unlikely(b: bool) -> bool {
 
 fn guard_template_matches(
     template: &baml_type::TyTemplate,
-    frame_type_args: &[baml_type::Ty],
-    actual: &baml_type::Ty,
+    frame_type_args: &[baml_type::RuntimeTy],
+    actual: &baml_type::RuntimeTy,
 ) -> bool {
     match template {
         baml_type::TyTemplate::Wildcard => true,
         baml_type::TyTemplate::TypeArgRefOrWildcard(n) => match frame_type_args.get(*n as usize) {
-            Some(baml_type::Ty::BuiltinUnknown { .. }) | None => true,
+            Some(baml_type::RuntimeTy::BuiltinUnknown { .. }) | None => true,
             Some(expected) => actual.is_subtype_of(expected),
         },
         baml_type::TyTemplate::TypeArgRef(n) => {
             frame_type_args
                 .get(*n as usize)
                 .cloned()
-                .unwrap_or_else(baml_type::Ty::unknown)
+                .unwrap_or_else(baml_type::RuntimeTy::unknown)
                 == *actual
         }
         baml_type::TyTemplate::Concrete(expected) => expected == actual,
         baml_type::TyTemplate::Array(inner) => {
-            matches!(actual, baml_type::Ty::List(actual_inner, _) if guard_template_matches(inner, frame_type_args, actual_inner))
+            matches!(actual, baml_type::RuntimeTy::List(actual_inner, _) if guard_template_matches(inner, frame_type_args, actual_inner))
         }
         baml_type::TyTemplate::Map(k, v) => {
-            matches!(actual, baml_type::Ty::Map { key, value, .. } if guard_template_matches(k, frame_type_args, key) && guard_template_matches(v, frame_type_args, value))
+            matches!(actual, baml_type::RuntimeTy::Map { key, value, .. } if guard_template_matches(k, frame_type_args, key) && guard_template_matches(v, frame_type_args, value))
         }
         baml_type::TyTemplate::Class(name, args) => {
-            matches!(actual, baml_type::Ty::Class(actual_name, actual_args, _) if name == actual_name && args.len() == actual_args.len() && args.iter().zip(actual_args).all(|(template, actual)| guard_template_matches(template, frame_type_args, actual)))
+            matches!(actual, baml_type::RuntimeTy::Class(actual_name, actual_args, _) if name == actual_name && args.len() == actual_args.len() && args.iter().zip(actual_args).all(|(template, actual)| guard_template_matches(template, frame_type_args, actual)))
         }
         baml_type::TyTemplate::Interface(name, args, assoc) => {
-            matches!(actual, baml_type::Ty::Interface(actual_name, actual_args, actual_assoc, _) if name == actual_name
+            matches!(actual, baml_type::RuntimeTy::Interface(actual_name, actual_args, actual_assoc, _) if name == actual_name
             && args.len() == actual_args.len()
             && args.iter().zip(actual_args).all(|(template, actual)| guard_template_matches(template, frame_type_args, actual))
             && assoc.iter().all(|(name, template)| {
@@ -77,11 +77,13 @@ fn guard_template_matches(
             }))
         }
         baml_type::TyTemplate::Union(parts) => match actual {
-            baml_type::Ty::Union(actual_parts, _) => actual_parts.iter().all(|actual_part| {
-                parts
-                    .iter()
-                    .any(|part| guard_template_matches(part, frame_type_args, actual_part))
-            }),
+            baml_type::RuntimeTy::Union(actual_parts, _) => {
+                actual_parts.iter().all(|actual_part| {
+                    parts
+                        .iter()
+                        .any(|part| guard_template_matches(part, frame_type_args, actual_part))
+                })
+            }
             _ => parts
                 .iter()
                 .any(|part| guard_template_matches(part, frame_type_args, actual)),
@@ -157,7 +159,7 @@ pub struct BytecodeFrame {
     /// Populated by the `Call { ntypeargs }` instruction when the callee is
     /// generic.  Empty for non-generic calls.  Used by the `LoadType`
     /// instruction to substitute `TypeArgRef(n)` leaves in a `TyTemplate`.
-    pub type_args: Vec<baml_type::Ty>,
+    pub type_args: Vec<baml_type::RuntimeTy>,
     /// Byte offset of the most recently dispatched opcode (compact path).
     /// In the legacy path this mirrors `instruction_ptr - 1` and is kept
     /// up-to-date before each `step()` call.
@@ -227,7 +229,7 @@ mod tests {
     use std::sync::atomic::AtomicBool;
     use std::{collections::HashMap, sync::Arc};
 
-    use baml_type::{Name, Ty, TyAttr, TyTemplate, TypeName};
+    use baml_type::{Name, RuntimeTy, TyAttr, TyTemplate, TypeName};
     use bex_heap::{BexHeap, CollectionLevel, Tlab};
     use bex_vm_types::{
         EarlyYieldCheck, FunctionKind, GlobalPool, HeapPtr, Object, ObjectIndex, RootHaver, Value,
@@ -243,8 +245,8 @@ mod tests {
         watch::{NodeId, RootState, Watch, WatchFilter},
     };
 
-    fn int_ty() -> Ty {
-        Ty::Int {
+    fn int_ty() -> RuntimeTy {
+        RuntimeTy::Int {
             attr: TyAttr::default(),
         }
     }
@@ -752,7 +754,7 @@ pub struct BexVm {
     /// Saved/restored across nested `Call` instructions; native handlers that
     /// re-enter the VM (via `YieldToCall`) therefore see their own type-args
     /// even if the inner callback uses different ones.
-    pending_call_type_args: Vec<baml_type::Ty>,
+    pending_call_type_args: Vec<baml_type::RuntimeTy>,
 
     /// Per-program interface implementation registry (BEP-044). Used by the
     /// `type.implements()` / `type.implementors()` / `type.implemented_by()`
@@ -903,7 +905,7 @@ pub struct BytecodeProgram {
     /// Compiled test cases.
     pub test_cases: Vec<bex_vm_types::TestCase>,
     /// Recursive type alias definitions for output format rendering.
-    pub recursive_type_alias_defs: indexmap::IndexMap<baml_type::TypeName, baml_type::Ty>,
+    pub recursive_type_alias_defs: indexmap::IndexMap<baml_type::TypeName, baml_type::RuntimeTy>,
     /// Interface → implementors registry (BEP-044) for runtime reflection.
     pub interface_implementors: InterfaceImplementors,
 }
@@ -1164,7 +1166,7 @@ impl BexVm {
     ///
     /// Returns an empty slice for calls with `ntypeargs == 0` and from outside
     /// any call dispatch context.
-    pub fn current_call_type_args(&self) -> &[baml_type::Ty] {
+    pub fn current_call_type_args(&self) -> &[baml_type::RuntimeTy] {
         &self.pending_call_type_args
     }
 
@@ -1532,7 +1534,7 @@ impl BexVm {
         &mut self,
         function: HeapPtr,
         args: &[Value],
-        type_args: Vec<baml_type::Ty>,
+        type_args: Vec<baml_type::RuntimeTy>,
     ) {
         debug_assert!(
             matches!(
@@ -1615,7 +1617,7 @@ impl BexVm {
         &mut self,
         function: HeapPtr,
         args: &[Value],
-        type_args: Vec<baml_type::Ty>,
+        type_args: Vec<baml_type::RuntimeTy>,
         callable_kind: FunctionKind,
     ) {
         let callee_global = self
@@ -3166,8 +3168,8 @@ impl BexVm {
     /// `baml.host.call_host_value` in `sys_ops/.../io_generated.rs`):
     ///   args\[0\] = `handle`     (`Object::HostClosure` → `BexExternalValue::HostValue`)
     ///   args\[1\] = `args_array` (`Object::Array<Value>`)
-    ///   args\[2\] = `ret_ty`     (`Object::Type<Ty>`) — `type_arg_0` (`T`)
-    ///   args\[3\] = `throws_ty`  (`Object::Type<Ty>`) — `type_arg_1` (`E`)
+    ///   args\[2\] = `ret_ty`     (`Object::Type<RuntimeTy>`) — `type_arg_0` (`T`)
+    ///   args\[3\] = `throws_ty`  (`Object::Type<RuntimeTy>`) — `type_arg_1` (`E`)
     ///
     /// TODO: `throws_ty` is packed here but the engine doesn't yet read it
     /// — a future phase will validate the host's thrown value against `E`
@@ -3241,13 +3243,13 @@ impl BexVm {
         // injected into the new BytecodeFrame after it is created.
         let (is_host, closure_type_args, bound_method_class_type_args): (
             bool,
-            Box<[baml_type::Ty]>,
-            Box<[baml_type::Ty]>,
+            Box<[baml_type::RuntimeTy]>,
+            Box<[baml_type::RuntimeTy]>,
         ) = match self.get_object(callee_ptr) {
             Object::HostClosure(_) => (true, Box::new([]), Box::new([])),
             Object::Closure(c) => (false, c.captured_type_args.clone(), Box::new([])),
             Object::BoundMethod(bm) => {
-                let bm_args: Box<[baml_type::Ty]> = match bm.receiver.as_object_ptr() {
+                let bm_args: Box<[baml_type::RuntimeTy]> = match bm.receiver.as_object_ptr() {
                     Some(recv_ptr) => match self.get_object(recv_ptr) {
                         Object::Instance(inst) => inst.class_type_args.clone().into_boxed_slice(),
                         _ => Box::new([]),
@@ -3280,7 +3282,7 @@ impl BexVm {
         // (reflect.type_of<T>, json natives) resolve T at runtime. (The
         // Closure/BoundMethod type args are classified in the consolidated match
         // above; GenericFunction is specific to generic instantiation values.)
-        let gf_type_args: Box<[baml_type::Ty]> = match self.get_object(callee_ptr) {
+        let gf_type_args: Box<[baml_type::RuntimeTy]> = match self.get_object(callee_ptr) {
             Object::GenericFunction(gf) => gf.type_args.clone(),
             _ => Box::new([]),
         };
@@ -3396,7 +3398,7 @@ impl BexVm {
                 // `gf_type_args`; a closure-wrapped value
                 // (`let g = baml.json.from_string; let f = g<User>`) carries them
                 // on the closure's `captured_type_args`. Use whichever is set.
-                let native_type_args: &[baml_type::Ty] = if !gf_type_args.is_empty() {
+                let native_type_args: &[baml_type::RuntimeTy] = if !gf_type_args.is_empty() {
                     &gf_type_args
                 } else {
                     &closure_type_args
@@ -4928,7 +4930,7 @@ impl BexVm {
 
                     // Pop class-level type args from the stack (sitting below any
                     // field init instructions that follow).
-                    let class_type_args: Vec<baml_type::Ty> = if ntypeargs > 0 {
+                    let class_type_args: Vec<baml_type::RuntimeTy> = if ntypeargs > 0 {
                         let base = self
                             .stack
                             .len()
@@ -5202,9 +5204,9 @@ impl BexVm {
                     let callee_value = self.globals.get(self.proof(), callee_global);
                     let (callee_ptr, arg_count) = self.resolve_callable_target(callee_value)?;
 
-                    // Pop `ntypeargs` Object::Type values from the stack into a Vec<Ty>.
+                    // Pop `ntypeargs` Object::Type values from the stack into a Vec<RuntimeTy>.
                     // These sit below the regular value args on the stack.
-                    let type_args: Vec<baml_type::Ty> = if ntypeargs > 0 {
+                    let type_args: Vec<baml_type::RuntimeTy> = if ntypeargs > 0 {
                         let total_needed = arg_count + ntypeargs;
                         let base = self
                             .stack
@@ -5772,7 +5774,7 @@ impl BexVm {
                     captures.reverse();
 
                     // Pop type args (pushed before the captures).
-                    let captured_type_args: Vec<baml_type::Ty> = if ntypeargs > 0 {
+                    let captured_type_args: Vec<baml_type::RuntimeTy> = if ntypeargs > 0 {
                         let mut type_args = Vec::with_capacity(ntypeargs);
                         for _ in 0..ntypeargs {
                             let v = self.stack.ensure_pop();
@@ -5853,7 +5855,7 @@ impl BexVm {
                     let ntypeargs = { read_u16_unchecked(code, pc) as usize };
                     // Pop the `ntypeargs` `Object::Type` values (resolved against
                     // the current frame by the preceding LoadType instructions).
-                    let mut type_args: Vec<baml_type::Ty> = Vec::with_capacity(ntypeargs);
+                    let mut type_args: Vec<baml_type::RuntimeTy> = Vec::with_capacity(ntypeargs);
                     for _ in 0..ntypeargs {
                         let v = self.stack.ensure_pop();
                         let ptr = self.as_object_ptr(v, ObjectType::Type)?;
@@ -5882,7 +5884,7 @@ impl BexVm {
                     // The callable value was pushed last (top of stack); the
                     // resolved `Object::Type` args sit beneath it.
                     let callable = self.stack.ensure_pop();
-                    let mut type_args: Vec<baml_type::Ty> = Vec::with_capacity(ntypeargs);
+                    let mut type_args: Vec<baml_type::RuntimeTy> = Vec::with_capacity(ntypeargs);
                     for _ in 0..ntypeargs {
                         let v = self.stack.ensure_pop();
                         let ptr = self.as_object_ptr(v, ObjectType::Type)?;
@@ -5910,7 +5912,7 @@ impl BexVm {
                     // `T` at runtime, and — unlike closure-wrapping it — never
                     // crashes. (`GenericFunction` does not reach here: TIR rejects
                     // type args on an already-specialized value.)
-                    let wrap: Option<(HeapPtr, Vec<Value>, Vec<baml_type::Ty>)> =
+                    let wrap: Option<(HeapPtr, Vec<Value>, Vec<baml_type::RuntimeTy>)> =
                         match self.get_object(callable_ptr) {
                             Object::Function(_) => Some((callable_ptr, Vec::new(), Vec::new())),
                             Object::Closure(c) => Some((

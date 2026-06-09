@@ -128,7 +128,7 @@ mod tests {
     use baml_compiler2_mir::{
         BasicBlock, Constant, LocalDecl, MirFunctionBody, Operand, Place, Rvalue, Statement,
     };
-    use baml_type::Ty;
+    use baml_type::RuntimeTy;
 
     use super::*;
     use crate::analysis::AnalysisResult;
@@ -136,7 +136,7 @@ mod tests {
     fn local(name: &str) -> LocalDecl {
         LocalDecl {
             name: Some(baml_base::Name::new(name)),
-            ty: Ty::Int {
+            ty: RuntimeTy::Int {
                 attr: baml_type::TyAttr::default(),
             },
             span: None,
@@ -149,7 +149,7 @@ mod tests {
     fn local_watched(name: &str) -> LocalDecl {
         LocalDecl {
             name: Some(baml_base::Name::new(name)),
-            ty: Ty::Int {
+            ty: RuntimeTy::Int {
                 attr: baml_type::TyAttr::default(),
             },
             span: None,

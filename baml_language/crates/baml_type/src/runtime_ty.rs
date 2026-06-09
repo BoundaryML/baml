@@ -19,10 +19,14 @@
 //!   even when nested, returning [`NotRuntimeTy`].
 //! - [`Ty::from`] (`RuntimeTy`/`&RuntimeTy`) is infallible.
 
+use std::collections::{HashMap, HashSet};
+
 use borsh::{BorshDeserialize, BorshSerialize};
 use subenum::subenum;
 
-use crate::{Freshness, FunctionParamMode, Literal, MediaKind, Name, Ty, TyAttr, TypeName};
+use crate::{
+    Freshness, FunctionParamMode, Literal, MediaKind, Name, QualifiedTypeName, Ty, TyAttr, TypeName,
+};
 
 /// A single parameter of a [`RuntimeTy::Function`] — the runtime mirror of
 /// [`crate::FunctionParamTy`], holding a [`RuntimeTy`] instead of a [`Ty`].
@@ -160,6 +164,323 @@ pub enum RuntimeTy {
     /// The bottom type — an expression that never produces a value.
     #[subenum(RealizedTy)]
     Never { attr: TyAttr },
+}
+
+impl RuntimeTy {
+    // --- TyAttr accessor ---
+
+    /// Get the [`TyAttr`] for this type.
+    pub fn attr(&self) -> &TyAttr {
+        match self {
+            RuntimeTy::Int { attr }
+            | RuntimeTy::Bigint { attr }
+            | RuntimeTy::Float { attr }
+            | RuntimeTy::String { attr }
+            | RuntimeTy::Bool { attr }
+            | RuntimeTy::Null { attr }
+            | RuntimeTy::Uint8Array { attr }
+            | RuntimeTy::Map { attr, .. }
+            | RuntimeTy::Function { attr, .. }
+            | RuntimeTy::AssociatedTypeProjection { attr, .. }
+            | RuntimeTy::RustType { attr }
+            | RuntimeTy::Type { attr }
+            | RuntimeTy::Resource { attr }
+            | RuntimeTy::PromptAst { attr }
+            | RuntimeTy::Void { attr }
+            | RuntimeTy::BuiltinUnknown { attr }
+            | RuntimeTy::Never { attr } => attr,
+            RuntimeTy::Media(_, attr)
+            | RuntimeTy::Literal(_, _, attr)
+            | RuntimeTy::Class(_, _, attr)
+            | RuntimeTy::Interface(_, _, _, attr)
+            | RuntimeTy::Enum(_, attr)
+            | RuntimeTy::EnumVariant(_, _, attr)
+            | RuntimeTy::List(_, attr)
+            | RuntimeTy::Union(_, attr)
+            | RuntimeTy::Future(_, _, attr)
+            | RuntimeTy::WatchAccessor(_, attr)
+            | RuntimeTy::TypeAlias(_, attr)
+            | RuntimeTy::TypeVar(_, attr) => attr,
+        }
+    }
+
+    /// Replace the [`TyAttr`] on this type, returning a new value with `attr`.
+    pub fn with_attr(self, attr: TyAttr) -> RuntimeTy {
+        match self {
+            RuntimeTy::Int { .. } => RuntimeTy::Int { attr },
+            RuntimeTy::Bigint { .. } => RuntimeTy::Bigint { attr },
+            RuntimeTy::Float { .. } => RuntimeTy::Float { attr },
+            RuntimeTy::String { .. } => RuntimeTy::String { attr },
+            RuntimeTy::Bool { .. } => RuntimeTy::Bool { attr },
+            RuntimeTy::Null { .. } => RuntimeTy::Null { attr },
+            RuntimeTy::Uint8Array { .. } => RuntimeTy::Uint8Array { attr },
+            RuntimeTy::Media(kind, _) => RuntimeTy::Media(kind, attr),
+            RuntimeTy::Literal(lit, freshness, _) => RuntimeTy::Literal(lit, freshness, attr),
+            RuntimeTy::Class(tn, args, _) => RuntimeTy::Class(tn, args, attr),
+            RuntimeTy::Interface(tn, args, bindings, _) => {
+                RuntimeTy::Interface(tn, args, bindings, attr)
+            }
+            RuntimeTy::Enum(tn, _) => RuntimeTy::Enum(tn, attr),
+            RuntimeTy::EnumVariant(tn, v, _) => RuntimeTy::EnumVariant(tn, v, attr),
+            RuntimeTy::List(inner, _) => RuntimeTy::List(inner, attr),
+            RuntimeTy::Map { key, value, .. } => RuntimeTy::Map { key, value, attr },
+            RuntimeTy::Union(members, _) => RuntimeTy::Union(members, attr),
+            RuntimeTy::Function {
+                generic_params,
+                generic_param_bounds,
+                params,
+                ret,
+                throws,
+                ..
+            } => RuntimeTy::Function {
+                generic_params,
+                generic_param_bounds,
+                params,
+                ret,
+                throws,
+                attr,
+            },
+            RuntimeTy::Future(value, error, _) => RuntimeTy::Future(value, error, attr),
+            RuntimeTy::RustType { .. } => RuntimeTy::RustType { attr },
+            RuntimeTy::Type { .. } => RuntimeTy::Type { attr },
+            RuntimeTy::Resource { .. } => RuntimeTy::Resource { attr },
+            RuntimeTy::PromptAst { .. } => RuntimeTy::PromptAst { attr },
+            RuntimeTy::Void { .. } => RuntimeTy::Void { attr },
+            RuntimeTy::WatchAccessor(inner, _) => RuntimeTy::WatchAccessor(inner, attr),
+            RuntimeTy::TypeAlias(tn, _) => RuntimeTy::TypeAlias(tn, attr),
+            RuntimeTy::TypeVar(name, _) => RuntimeTy::TypeVar(name, attr),
+            RuntimeTy::AssociatedTypeProjection {
+                base,
+                interface,
+                member,
+                ..
+            } => RuntimeTy::AssociatedTypeProjection {
+                base,
+                interface,
+                member,
+                attr,
+            },
+            RuntimeTy::BuiltinUnknown { .. } => RuntimeTy::BuiltinUnknown { attr },
+            RuntimeTy::Never { .. } => RuntimeTy::Never { attr },
+        }
+    }
+
+    // --- Primitive constructors (default TyAttr) ---
+
+    /// `int` with default attributes.
+    pub fn int() -> Self {
+        RuntimeTy::Int {
+            attr: TyAttr::default(),
+        }
+    }
+
+    /// `bigint` with default attributes.
+    pub fn bigint() -> Self {
+        RuntimeTy::Bigint {
+            attr: TyAttr::default(),
+        }
+    }
+
+    /// `float` with default attributes.
+    pub fn float() -> Self {
+        RuntimeTy::Float {
+            attr: TyAttr::default(),
+        }
+    }
+
+    /// `string` with default attributes.
+    pub fn string() -> Self {
+        RuntimeTy::String {
+            attr: TyAttr::default(),
+        }
+    }
+
+    /// `bool` with default attributes.
+    pub fn bool() -> Self {
+        RuntimeTy::Bool {
+            attr: TyAttr::default(),
+        }
+    }
+
+    /// `null` with default attributes.
+    pub fn null() -> Self {
+        RuntimeTy::Null {
+            attr: TyAttr::default(),
+        }
+    }
+
+    /// `uint8array` with default attributes.
+    pub fn uint8array() -> Self {
+        RuntimeTy::Uint8Array {
+            attr: TyAttr::default(),
+        }
+    }
+
+    // --- Compound constructors (default TyAttr) ---
+
+    /// `T[]` (list) with default attributes.
+    pub fn list(inner: RuntimeTy) -> Self {
+        RuntimeTy::List(Box::new(inner), TyAttr::default())
+    }
+
+    /// `A | B | ...` (union) with default attributes.
+    pub fn union(members: impl IntoIterator<Item = RuntimeTy>) -> Self {
+        RuntimeTy::Union(members.into_iter().collect(), TyAttr::default())
+    }
+
+    /// `T?` (optional) — sugar for `T | null`. Mirrors [`Ty::optional`]: the
+    /// result is flattened and idempotent.
+    pub fn optional(inner: RuntimeTy) -> Self {
+        match inner {
+            RuntimeTy::Union(mut members, attr) => {
+                if !members.iter().any(RuntimeTy::is_null) {
+                    members.push(RuntimeTy::null());
+                }
+                RuntimeTy::Union(members, attr)
+            }
+            n @ RuntimeTy::Null { .. } => n,
+            other => RuntimeTy::Union(vec![other, RuntimeTy::null()], TyAttr::default()),
+        }
+    }
+
+    /// `Class(name)` with default attributes (local module path), no type args.
+    pub fn class(name: &str) -> Self {
+        RuntimeTy::Class(TypeName::local(name.into()), Vec::new(), TyAttr::default())
+    }
+
+    /// `Class(name, args)` — a parametric class instantiation.
+    pub fn class_with_args(name: TypeName, args: Vec<RuntimeTy>) -> Self {
+        RuntimeTy::Class(name, args, TyAttr::default())
+    }
+
+    /// `Class(name)` under the implicit `user` package, no type args.
+    pub fn user_class(name: &str) -> Self {
+        RuntimeTy::Class(
+            TypeName::local(Name::new(name)),
+            Vec::new(),
+            TyAttr::default(),
+        )
+    }
+
+    /// `Class(name, args)` under the implicit `user` package.
+    pub fn user_class_with_args(name: &str, args: Vec<RuntimeTy>) -> Self {
+        RuntimeTy::Class(TypeName::local(Name::new(name)), args, TyAttr::default())
+    }
+
+    /// `unknown` (the top type) with default attributes.
+    pub fn unknown() -> Self {
+        RuntimeTy::BuiltinUnknown {
+            attr: TyAttr::default(),
+        }
+    }
+
+    /// Opaque resource handle type (file, socket, HTTP response body).
+    pub fn resource() -> Self {
+        RuntimeTy::Resource {
+            attr: TyAttr::default(),
+        }
+    }
+
+    /// Opaque structured prompt tree type for LLM calls.
+    pub fn prompt_ast() -> Self {
+        RuntimeTy::PromptAst {
+            attr: TyAttr::default(),
+        }
+    }
+
+    /// Meta-type — a runtime value that wraps a [`RuntimeTy`].
+    pub fn type_type() -> Self {
+        RuntimeTy::Type {
+            attr: TyAttr::default(),
+        }
+    }
+
+    // --- Queries ---
+
+    /// True if this is exactly the `null` type.
+    pub fn is_null(&self) -> bool {
+        matches!(self, RuntimeTy::Null { .. })
+    }
+
+    /// True if this is a union that includes `null` — i.e. an optional type.
+    pub fn is_nullable_union(&self) -> bool {
+        matches!(self, RuntimeTy::Union(members, _) if members.iter().any(RuntimeTy::is_null))
+    }
+
+    /// Check if this is the void type.
+    pub fn is_void(&self) -> bool {
+        matches!(self, RuntimeTy::Void { .. })
+    }
+
+    /// Check if this is a primitive type (including literals of primitive types).
+    pub fn is_primitive(&self) -> bool {
+        matches!(
+            self,
+            RuntimeTy::Int { .. }
+                | RuntimeTy::Bigint { .. }
+                | RuntimeTy::Float { .. }
+                | RuntimeTy::String { .. }
+                | RuntimeTy::Bool { .. }
+                | RuntimeTy::Null { .. }
+                | RuntimeTy::Uint8Array { .. }
+                | RuntimeTy::Literal(..)
+        )
+    }
+
+    // --- Transforms ---
+
+    /// Remove `null` from a nullable union, collapsing the result. The inverse
+    /// of [`RuntimeTy::optional`]; mirrors [`Ty::strip_null`].
+    pub fn strip_null(&self) -> RuntimeTy {
+        match self {
+            RuntimeTy::Union(members, attr) => {
+                let non_null: Vec<RuntimeTy> =
+                    members.iter().filter(|m| !m.is_null()).cloned().collect();
+                match non_null.len() {
+                    0 => self.clone(),
+                    1 => non_null
+                        .into_iter()
+                        .next()
+                        .unwrap_or_else(|| unreachable!("len checked")),
+                    _ => RuntimeTy::Union(non_null, attr.clone()),
+                }
+            }
+            _ => self.clone(),
+        }
+    }
+
+    // --- Rendering / subtyping ---
+    //
+    // These reuse `Ty`'s implementation via the infallible upcast so the
+    // structural logic lives in exactly one place. The value remains a
+    // statically runtime-safe `RuntimeTy`; the upcast is purely to share the
+    // algorithm. None of these are on a VM-hot path.
+
+    /// User-facing rendering — see [`Ty::render_user_facing`].
+    pub fn render_user_facing(&self) -> String {
+        Ty::from(self).render_user_facing()
+    }
+
+    /// Canonical structural rendering — see [`Ty::render_canonical`].
+    pub fn render_canonical(&self) -> String {
+        Ty::from(self).render_canonical()
+    }
+
+    /// Render with a custom strategy — see [`Ty::render_with`].
+    pub fn render_with(&self, s: &dyn crate::TyRenderStrategy) -> String {
+        Ty::from(self).render_with(s)
+    }
+
+    /// Structural subtyping — see [`Ty::is_subtype_of`].
+    pub fn is_subtype_of(&self, other: &RuntimeTy) -> bool {
+        Ty::from(self).is_subtype_of(&Ty::from(other))
+    }
+}
+
+impl std::fmt::Display for RuntimeTy {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        std::fmt::Display::fmt(&Ty::from(self), f)
+    }
 }
 
 /// Error returned by [`RuntimeTy::try_from`] when a [`Ty`] (or one of its
@@ -420,6 +741,206 @@ impl From<RuntimeTy> for Ty {
 /// Infallibly convert each [`RuntimeTy`] back into a [`Ty`].
 fn from_vec(tys: &[RuntimeTy]) -> Vec<Ty> {
     tys.iter().map(Ty::from).collect()
+}
+
+// ── Ty → RuntimeTy erasure ───────────────────────────────────────────────────
+// The erasing counterpart of `RuntimeTy::try_from`: where `try_from` *rejects*
+// compiler-only variants, `convert_tir2_ty` *erases* them and additionally
+// expands non-recursive type aliases inline. This is the single boundary the
+// compiler crosses to hand a `Ty` to the runtime.
+
+/// The resolved type-alias environment needed to erase a [`Ty`] into a
+/// [`RuntimeTy`]: the alias targets to expand and the set of recursive aliases
+/// to keep opaque. Built per package by the compiler (see
+/// `baml_compiler2_mir::resolved_aliases_for_package`).
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct ResolvedAliases {
+    pub aliases: HashMap<QualifiedTypeName, Ty>,
+    pub recursive: HashSet<QualifiedTypeName>,
+}
+
+impl ResolvedAliases {
+    /// Lower a [`Ty`] into a [`RuntimeTy`] using this alias environment.
+    ///
+    /// This is the compiler's ergonomic entry point and asserts the conversion
+    /// succeeds. Per the type-system golden rule (prefer compiler errors over
+    /// type-erasure), reaching here with an `Unknown`/`Error` sentinel means an
+    /// error-recovery type slipped past type-checking into MIR lowering — a
+    /// compiler bug — so it panics loudly rather than silently producing a
+    /// degraded type. Callers that genuinely tolerate failure use
+    /// [`lower_to_runtime`] directly.
+    pub fn convert(&self, ty: &Ty) -> RuntimeTy {
+        lower_to_runtime(ty, self).unwrap_or_else(|e| {
+            unreachable!("{e}: an error-recovery type reached runtime lowering")
+        })
+    }
+}
+
+/// Lower a compiler-facing [`Ty`] into a runtime-safe [`RuntimeTy`], expanding
+/// non-recursive type aliases inline and freezing evolving containers
+/// (`EvolvingList`/`EvolvingMap` → `List`/`Map`). Every other variant —
+/// including `Never`, `TypeVar`, and `AssociatedTypeProjection` — maps
+/// faithfully to its same-named [`RuntimeTy`] variant: the runtime carries them
+/// for reflection and dynamic dispatch, and erasing them would violate the
+/// type contract.
+///
+/// Fails with [`NotRuntimeTy`] on the error-recovery sentinels `Unknown` and
+/// `Error`: those exist only during compilation, so a type-checked program can
+/// never contain one. Reaching this boundary with one is a compiler bug — we
+/// surface it instead of erasing it to a degraded runtime type.
+pub fn lower_to_runtime(ty: &Ty, resolved: &ResolvedAliases) -> Result<RuntimeTy, NotRuntimeTy> {
+    Ok(match ty {
+        // Primitives — same-named runtime variant.
+        Ty::Int { attr } => RuntimeTy::Int { attr: attr.clone() },
+        Ty::Bigint { attr } => RuntimeTy::Bigint { attr: attr.clone() },
+        Ty::Float { attr } => RuntimeTy::Float { attr: attr.clone() },
+        Ty::String { attr } => RuntimeTy::String { attr: attr.clone() },
+        Ty::Bool { attr } => RuntimeTy::Bool { attr: attr.clone() },
+        Ty::Null { attr } => RuntimeTy::Null { attr: attr.clone() },
+        Ty::Uint8Array { attr } => RuntimeTy::Uint8Array { attr: attr.clone() },
+        Ty::Media(kind, attr) => RuntimeTy::Media(*kind, attr.clone()),
+
+        // Named types
+        Ty::Class(qtn, type_args, attr) => {
+            RuntimeTy::Class(qtn.clone(), lower_vec(type_args, resolved)?, attr.clone())
+        }
+        Ty::Interface(qtn, type_args, associated_bindings, attr) => {
+            let resolved_args = lower_vec(type_args, resolved)?;
+            let resolved_bindings = associated_bindings
+                .iter()
+                .map(|(name, ty)| Ok((name.clone(), lower_to_runtime(ty, resolved)?)))
+                .collect::<Result<Vec<_>, NotRuntimeTy>>()?;
+            RuntimeTy::Interface(qtn.clone(), resolved_args, resolved_bindings, attr.clone())
+        }
+        Ty::Enum(qtn, attr) => RuntimeTy::Enum(qtn.clone(), attr.clone()),
+        Ty::TypeAlias(qtn, attr) => {
+            if resolved.recursive.contains(qtn) {
+                // Keep recursive aliases opaque — they need runtime resolution
+                RuntimeTy::TypeAlias(qtn.clone(), attr.clone())
+            } else if let Some(target) = resolved.aliases.get(qtn) {
+                // Expand non-recursive aliases inline
+                lower_to_runtime(target, resolved)?
+            } else {
+                // Unknown alias (e.g. from another package) — keep opaque
+                RuntimeTy::TypeAlias(qtn.clone(), attr.clone())
+            }
+        }
+
+        // EnumVariant → preserve variant-level type info
+        Ty::EnumVariant(qtn, variant, attr) => {
+            RuntimeTy::EnumVariant(qtn.clone(), variant.clone(), attr.clone())
+        }
+
+        // Containers
+        Ty::List(inner, attr) => {
+            RuntimeTy::List(Box::new(lower_to_runtime(inner, resolved)?), attr.clone())
+        }
+        Ty::Map {
+            key: k,
+            value: v,
+            attr,
+        } => RuntimeTy::Map {
+            key: Box::new(lower_to_runtime(k, resolved)?),
+            value: Box::new(lower_to_runtime(v, resolved)?),
+            attr: attr.clone(),
+        },
+        Ty::Union(members, attr) => RuntimeTy::Union(lower_vec(members, resolved)?, attr.clone()),
+        // Freshness is a compiler-only flag; runtime literal types are uniform,
+        // so normalize to `Regular` at the boundary.
+        Ty::Literal(lit, _freshness, attr) => {
+            RuntimeTy::Literal(lit.clone(), Freshness::Regular, attr.clone())
+        }
+
+        // Evolving containers → freeze to regular containers
+        Ty::EvolvingList(inner, attr) => {
+            RuntimeTy::List(Box::new(lower_to_runtime(inner, resolved)?), attr.clone())
+        }
+        Ty::EvolvingMap(k, v, attr) => RuntimeTy::Map {
+            key: Box::new(lower_to_runtime(k, resolved)?),
+            value: Box::new(lower_to_runtime(v, resolved)?),
+            attr: attr.clone(),
+        },
+
+        // Functions — preserve the declared generics + param metadata (kept at
+        // runtime for reflection); body type-vars are resolved faithfully by
+        // the recursive `lower_to_runtime` calls.
+        Ty::Function {
+            generic_params,
+            generic_param_bounds,
+            params,
+            ret,
+            throws,
+            attr,
+        } => RuntimeTy::Function {
+            generic_params: generic_params.clone(),
+            generic_param_bounds: generic_param_bounds
+                .iter()
+                .map(|b| {
+                    b.as_ref()
+                        .map(|t| lower_to_runtime(t, resolved))
+                        .transpose()
+                })
+                .collect::<Result<Vec<_>, NotRuntimeTy>>()?,
+            params: params
+                .iter()
+                .map(|param| {
+                    Ok(RuntimeFunctionParamTy {
+                        name: param.name.clone(),
+                        ty: lower_to_runtime(&param.ty, resolved)?,
+                        mode: param.mode,
+                    })
+                })
+                .collect::<Result<Vec<_>, NotRuntimeTy>>()?,
+            ret: Box::new(lower_to_runtime(ret, resolved)?),
+            throws: Box::new(lower_to_runtime(throws, resolved)?),
+            attr: attr.clone(),
+        },
+
+        // Bottom, opaque-leaf, and reflection types map faithfully.
+        Ty::Never { attr } => RuntimeTy::Never { attr: attr.clone() },
+        Ty::Void { attr } => RuntimeTy::Void { attr: attr.clone() },
+        Ty::BuiltinUnknown { attr } => RuntimeTy::BuiltinUnknown { attr: attr.clone() },
+        Ty::RustType { attr } => RuntimeTy::RustType { attr: attr.clone() },
+        Ty::Type { attr } => RuntimeTy::Type { attr: attr.clone() },
+        Ty::Resource { attr } => RuntimeTy::Resource { attr: attr.clone() },
+        Ty::PromptAst { attr } => RuntimeTy::PromptAst { attr: attr.clone() },
+        Ty::TypeVar(name, attr) => RuntimeTy::TypeVar(name.clone(), attr.clone()),
+        Ty::AssociatedTypeProjection {
+            base,
+            interface,
+            member,
+            attr,
+        } => RuntimeTy::AssociatedTypeProjection {
+            base: Box::new(lower_to_runtime(base, resolved)?),
+            interface: interface
+                .as_ref()
+                .map(|i| Ok::<_, NotRuntimeTy>(Box::new(lower_to_runtime(i, resolved)?)))
+                .transpose()?,
+            member: member.clone(),
+            attr: attr.clone(),
+        },
+
+        // BEP-034: future types pass through unchanged with both
+        // value and error type parameters mapped.
+        Ty::Future(value, error, attr) => RuntimeTy::Future(
+            Box::new(lower_to_runtime(value, resolved)?),
+            Box::new(lower_to_runtime(error, resolved)?),
+            attr.clone(),
+        ),
+        Ty::WatchAccessor(inner, attr) => {
+            RuntimeTy::WatchAccessor(Box::new(lower_to_runtime(inner, resolved)?), attr.clone())
+        }
+
+        // Error-recovery sentinels cannot exist in a type-checked program.
+        Ty::Unknown { .. } => return Err(NotRuntimeTy { variant: "Unknown" }),
+        Ty::Error { .. } => return Err(NotRuntimeTy { variant: "Error" }),
+    })
+}
+
+/// Lower each [`Ty`] in `tys`, short-circuiting on the first error-recovery
+/// sentinel encountered (at any nesting depth).
+fn lower_vec(tys: &[Ty], resolved: &ResolvedAliases) -> Result<Vec<RuntimeTy>, NotRuntimeTy> {
+    tys.iter().map(|t| lower_to_runtime(t, resolved)).collect()
 }
 
 // ── Subset-hierarchy upcast ──────────────────────────────────────────────────

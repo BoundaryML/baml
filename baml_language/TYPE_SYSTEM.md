@@ -42,7 +42,7 @@ Literal types (here named due to currently all corresponding to literals) repres
 As an empty set, `never` can always be omitted from union types: `int | never` is equivalent to `int`. A function that returns `never` cannot return, and a function with `throws never` can never throw an error (though it can still panic).
 
 ## Subtyping Rules
-Subtyping in BAML is subset-based, not inheritance-based. 
+Subtyping in BAML is subset-based, not inheritance-based.
 
 ### Variance
 When a type takes in type parameters (including but not limited to generics), subtyping becomes complicated. [Variance](https://en.wikipedia.org/wiki/Type_variance) describes how type parameters affect subtyping of the parameterized type.
@@ -68,7 +68,7 @@ BAML's type system has the following properties:
 	3. Example:
 	   ```baml
 	   function foo(a: int | string) -> bool throws never { 0 }
-	   
+
 	   //////// EXAMPLE CALLSITE ////////
 	   /// args of `foo` are more permissive to caller so it is valid:
 	   /// return type of `foo` is less expectant of caller so it is valid:
@@ -239,7 +239,7 @@ function good() -> void {
 	let a: int = 1;
 	let b: int = 2;
 	let c: Foo = 3; // erased to existential-type
-	
+
 	a.one(); // ok
 	a.two(b); // ok: both `int`
 	c.one(); // ok: dynamic dispatch
@@ -249,7 +249,7 @@ function bad() -> void {
 	let b: string = "b";
 	let c: Foo = a;
 	let d: Foo = b;
-	
+
 	a.two(b); // bad: `Self` is `int` but we passed `string`
 	c.two(d); // bad: both `Foo`-typed but possibly different concrete types;
 	          //      we prohibit this at compile time.

@@ -7,7 +7,7 @@ use std::fmt;
 
 use baml_base::{Name, Span};
 pub use baml_compiler2_ast::BuiltinKind;
-use baml_type::{Ty, TyTemplate};
+use baml_type::{RuntimeTy, TyTemplate};
 
 // ============================================================================
 // Optimization Level
@@ -158,7 +158,7 @@ pub struct LocalDecl {
     /// Variable name (None for compiler temporaries).
     pub name: Option<Name>,
     /// Type of this local.
-    pub ty: Ty,
+    pub ty: RuntimeTy,
     /// Source span where this local is declared.
     pub span: Option<Span>,
     /// Source span where this local is in scope.
@@ -823,7 +823,7 @@ pub enum Constant {
         /// The base generic function.
         item: ItemRef,
         /// The concrete type arguments (fully resolved, no type parameters).
-        type_args: Vec<Ty>,
+        type_args: Vec<RuntimeTy>,
     },
     /// An enum variant value.
     EnumVariant {

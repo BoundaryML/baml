@@ -1,7 +1,7 @@
 use std::collections::{HashMap, HashSet};
 
 use baml_base::{Name, TypePath};
-use baml_type::{Ty, TyAttr, TyTemplate, TypeName};
+use baml_type::{ResolvedAliases, RuntimeTy, TyAttr, TyTemplate, TypeName};
 use indexmap::IndexMap;
 
 use crate::{
@@ -49,42 +49,32 @@ struct CatchContext {
     error_local: Local,
 }
 
-// ─── Type conversion: TIR Ty → baml_type::Ty ────────────────────────────────
+// ─── Type conversion: TIR RuntimeTy → baml_type::RuntimeTy ────────────────────────────────
 
 use baml_compiler2_tir::ty::{
     FunctionParamMode, FunctionParamTy as Tir2FunctionParamTy, QualifiedTypeName, Ty as Tir2Ty,
 };
 
-/// Pre-computed type alias data for inline expansion in `convert_tir2_ty`.
-///
-/// Bundles the alias map and recursion info that are always passed together.
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
-pub struct ResolvedAliases {
-    pub aliases: HashMap<QualifiedTypeName, Tir2Ty>,
-    pub recursive: HashSet<QualifiedTypeName>,
-}
+/// Build the [`ResolvedAliases`] type-alias environment for a package,
+/// including dependency packages. The pure erasure that consumes it lives in
+/// `baml_type` ([`ResolvedAliases::convert`] / [`convert_tir2_ty`]); only this
+/// db-querying constructor stays compiler-side.
+pub fn resolved_aliases_for_package(
+    db: &dyn crate::Db,
+    pkg_id: baml_compiler2_hir::package::PackageId,
+) -> ResolvedAliases {
+    use baml_compiler2_hir::package::{package_dependencies, package_items};
 
-impl ResolvedAliases {
-    /// Build resolved aliases for a package, including dependency packages.
-    pub fn for_package(db: &dyn crate::Db, pkg_id: baml_compiler2_hir::package::PackageId) -> Self {
-        use baml_compiler2_hir::package::{package_dependencies, package_items};
-
-        let pkg_items = package_items(db, pkg_id);
-        let mut aliases = baml_compiler2_tir::inference::collect_type_aliases(db, pkg_items);
-        for &dep_id in package_dependencies(db, pkg_id) {
-            let dep_items = package_items(db, dep_id);
-            aliases.extend(baml_compiler2_tir::inference::collect_type_aliases(
-                db, dep_items,
-            ));
-        }
-        let recursive = baml_compiler2_tir::normalize::find_recursive_aliases(&aliases);
-        Self { aliases, recursive }
+    let pkg_items = package_items(db, pkg_id);
+    let mut aliases = baml_compiler2_tir::inference::collect_type_aliases(db, pkg_items);
+    for &dep_id in package_dependencies(db, pkg_id) {
+        let dep_items = package_items(db, dep_id);
+        aliases.extend(baml_compiler2_tir::inference::collect_type_aliases(
+            db, dep_items,
+        ));
     }
-
-    /// Convert a TIR type to `baml_type::Ty` using the cached alias data.
-    pub fn convert(&self, ty: &Tir2Ty) -> Ty {
-        convert_tir2_ty(ty, self)
-    }
+    let recursive = baml_compiler2_tir::normalize::find_recursive_aliases(&aliases);
+    ResolvedAliases { aliases, recursive }
 }
 
 fn interface_tir_type_args_match_preserving_typevars(
@@ -787,176 +777,17 @@ fn contains_assoc_projection(ty: &Tir2Ty) -> bool {
     }
 }
 
-pub fn convert_tir2_ty(ty: &Tir2Ty, resolved: &ResolvedAliases) -> Ty {
-    let attr = ty.attr().clone();
-    match ty {
-        // Primitives — identity now that the TIR type is `baml_type::Ty`.
-        Tir2Ty::Int { attr } => Ty::Int { attr: attr.clone() },
-        Tir2Ty::Bigint { attr } => Ty::Bigint { attr: attr.clone() },
-        Tir2Ty::Float { attr } => Ty::Float { attr: attr.clone() },
-        Tir2Ty::String { attr } => Ty::String { attr: attr.clone() },
-        Tir2Ty::Bool { attr } => Ty::Bool { attr: attr.clone() },
-        Tir2Ty::Null { attr } => Ty::Null { attr: attr.clone() },
-        Tir2Ty::Uint8Array { attr } => Ty::Uint8Array { attr: attr.clone() },
-        Tir2Ty::Media(kind, attr) => Ty::Media(*kind, attr.clone()),
+// ─── RuntimeTy → TyTemplate conversion for already-resolved RuntimeTy values ──────────────
 
-        // Named types
-        Tir2Ty::Class(qtn, type_args, attr) => {
-            let resolved_args: Vec<Ty> = type_args
-                .iter()
-                .map(|a| convert_tir2_ty(a, resolved))
-                .collect();
-            Ty::Class(qtn.clone(), resolved_args, attr.clone())
-        }
-        Tir2Ty::Interface(qtn, type_args, associated_bindings, attr) => {
-            let resolved_args: Vec<Ty> = type_args
-                .iter()
-                .map(|a| convert_tir2_ty(a, resolved))
-                .collect();
-            let resolved_bindings = associated_bindings
-                .iter()
-                .map(|(name, ty)| (name.clone(), convert_tir2_ty(ty, resolved)))
-                .collect();
-            Ty::Interface(qtn.clone(), resolved_args, resolved_bindings, attr.clone())
-        }
-        Tir2Ty::Enum(qtn, attr) => Ty::Enum(qtn.clone(), attr.clone()),
-        Tir2Ty::TypeAlias(qtn, attr) => {
-            if resolved.recursive.contains(qtn) {
-                // Keep recursive aliases opaque — they need runtime resolution
-                Ty::TypeAlias(qtn.clone(), attr.clone())
-            } else if let Some(target) = resolved.aliases.get(qtn) {
-                // Expand non-recursive aliases inline
-                convert_tir2_ty(target, resolved)
-            } else {
-                // Unknown alias (e.g. from another package) — keep opaque
-                Ty::TypeAlias(qtn.clone(), attr.clone())
-            }
-        }
-
-        // EnumVariant → preserve variant-level type info
-        Tir2Ty::EnumVariant(qtn, variant, attr) => {
-            Ty::EnumVariant(qtn.clone(), variant.clone(), attr.clone())
-        }
-
-        // Containers
-        Tir2Ty::List(inner, attr) => {
-            Ty::List(Box::new(convert_tir2_ty(inner, resolved)), attr.clone())
-        }
-        Tir2Ty::Map {
-            key: k,
-            value: v,
-            attr,
-        } => Ty::Map {
-            key: Box::new(convert_tir2_ty(k, resolved)),
-            value: Box::new(convert_tir2_ty(v, resolved)),
-            attr: attr.clone(),
-        },
-        Tir2Ty::Union(members, attr) => Ty::Union(
-            members
-                .iter()
-                .map(|m| convert_tir2_ty(m, resolved))
-                .collect(),
-            attr.clone(),
-        ),
-        // Freshness is a compiler-only flag; runtime literal types are uniform,
-        // so normalize to `Regular` at the boundary.
-        Tir2Ty::Literal(lit, _freshness, attr) => {
-            Ty::Literal(lit.clone(), baml_type::Freshness::Regular, attr.clone())
-        }
-
-        // Evolving containers → freeze to regular containers
-        Tir2Ty::EvolvingList(inner, attr) => {
-            Ty::List(Box::new(convert_tir2_ty(inner, resolved)), attr.clone())
-        }
-        Tir2Ty::EvolvingMap(k, v, attr) => Ty::Map {
-            key: Box::new(convert_tir2_ty(k, resolved)),
-            value: Box::new(convert_tir2_ty(v, resolved)),
-            attr: attr.clone(),
-        },
-
-        // Functions — preserve the declared generics + param metadata (kept at
-        // runtime for reflection); body type-vars are still erased by the
-        // recursive `convert_tir2_ty` calls.
-        Tir2Ty::Function {
-            generic_params,
-            generic_param_bounds,
-            params,
-            ret,
-            throws,
-            attr,
-        } => Ty::Function {
-            generic_params: generic_params.clone(),
-            generic_param_bounds: generic_param_bounds
-                .iter()
-                .map(|b| b.as_ref().map(|t| convert_tir2_ty(t, resolved)))
-                .collect(),
-            params: params
-                .iter()
-                .map(|param| baml_type::FunctionParamTy {
-                    name: param.name.clone(),
-                    ty: convert_tir2_ty(&param.ty, resolved),
-                    mode: match param.mode {
-                        FunctionParamMode::Required => baml_type::FunctionParamMode::Required,
-                        FunctionParamMode::Optional => baml_type::FunctionParamMode::Optional,
-                    },
-                })
-                .collect(),
-            ret: Box::new(convert_tir2_ty(ret, resolved)),
-            throws: Box::new(convert_tir2_ty(throws, resolved)),
-            attr: attr.clone(),
-        },
-
-        // Bottom / sentinel types
-        Tir2Ty::Never { attr } => Ty::Void { attr: attr.clone() },
-        Tir2Ty::Void { attr } => Ty::Void { attr: attr.clone() },
-        Tir2Ty::BuiltinUnknown { attr } => Ty::BuiltinUnknown { attr: attr.clone() },
-        // The opaque leaf types are shared between TIR and runtime; pass them
-        // through as identity (preserving the SAP attr).
-        Tir2Ty::RustType { attr } => Ty::RustType { attr: attr.clone() },
-        Tir2Ty::Type { attr } => Ty::Type { attr: attr.clone() },
-        Tir2Ty::Unknown { attr } => {
-            // Map defensively to Void as error recovery.
-            Ty::Void { attr: attr.clone() }
-        }
-        Tir2Ty::Error { attr } => {
-            // Map defensively to Void as error recovery.
-            Ty::Void { attr: attr.clone() }
-        }
-        Tir2Ty::AssociatedTypeProjection { attr, .. } => Ty::BuiltinUnknown { attr: attr.clone() },
-        // Type variables that survive to runtime-facing metadata are
-        // compile-time evidence we could not concretize. Preserve "some value"
-        // semantics with `unknown`; never collapse them to `void`, which the VM
-        // treats as "no value is produced".
-        Tir2Ty::TypeVar(..) => Ty::BuiltinUnknown { attr },
-        // BEP-034: future types pass through unchanged with both
-        // value and error type parameters mapped.
-        Tir2Ty::Future(value, error, attr) => Ty::Future(
-            Box::new(convert_tir2_ty(value, resolved)),
-            Box::new(convert_tir2_ty(error, resolved)),
-            attr.clone(),
-        ),
-        // TIR never constructs these runtime-only variants; the arms exist only
-        // so the match stays exhaustive over the shared `baml_type::Ty`. Pass
-        // them through unchanged (recursing into `WatchAccessor`'s payload).
-        Tir2Ty::Resource { attr } => Ty::Resource { attr: attr.clone() },
-        Tir2Ty::PromptAst { attr } => Ty::PromptAst { attr: attr.clone() },
-        Tir2Ty::WatchAccessor(inner, attr) => {
-            Ty::WatchAccessor(Box::new(convert_tir2_ty(inner, resolved)), attr.clone())
-        }
-    }
-}
-
-// ─── Ty → TyTemplate conversion for already-resolved Ty values ──────────────
-
-/// Convert an already-resolved `baml_type::Ty` back to a `TyTemplate`.
+/// Convert an already-resolved `baml_type::RuntimeTy` back to a `TyTemplate`.
 ///
 /// This is needed for `IsType` pattern-matching where the pattern type comes
 /// through `convert_tir2_ty` (so `TypeVars` are already erased), but we still
 /// need a `TyTemplate` to carry class-level type args for the VM to compare
 /// against `Instance::class_type_args`.
 ///
-/// For all leaf types that aren't `Ty::Class`, the result is
-/// `TyTemplate::Concrete(ty)`.  For `Ty::Class(tn, args, _)` we produce
+/// For all leaf types that aren't `RuntimeTy::Class`, the result is
+/// `TyTemplate::Concrete(ty)`.  For `RuntimeTy::Class(tn, args, _)` we produce
 /// `TyTemplate::Class(tn, args.map(Concrete))` so the VM can compare the
 /// resolved args against the instance's `class_type_args`.
 ///
@@ -1028,12 +859,12 @@ pub fn tir2_to_template(
             .map(|n| {
                 TyTemplate::TypeArgRef(u32::try_from(n).expect("generic param index fits in u32"))
             })
-            .unwrap_or_else(|| TyTemplate::Concrete(convert_tir2_ty(ty, resolved))),
+            .unwrap_or_else(|| TyTemplate::Concrete(resolved.convert(ty))),
         Tir2Ty::TypeVar(name, _) => {
             if let Some(n) = generic_params.iter().position(|p| p == name) {
                 TyTemplate::TypeArgRef(u32::try_from(n).expect("generic param index fits in u32"))
             } else {
-                TyTemplate::Concrete(Ty::Void {
+                TyTemplate::Concrete(RuntimeTy::Void {
                     attr: baml_type::TyAttr::default(),
                 })
             }
@@ -1064,11 +895,9 @@ pub fn tir2_to_template(
                     .collect();
                 TyTemplate::Class(qtn.clone(), template_args)
             } else {
-                let resolved_args: Vec<Ty> = type_args
-                    .iter()
-                    .map(|a| convert_tir2_ty(a, resolved))
-                    .collect();
-                TyTemplate::Concrete(Ty::Class(qtn.clone(), resolved_args, attr.clone()))
+                let resolved_args: Vec<RuntimeTy> =
+                    type_args.iter().map(|a| resolved.convert(a)).collect();
+                TyTemplate::Concrete(RuntimeTy::Class(qtn.clone(), resolved_args, attr.clone()))
             }
         }
         Tir2Ty::Interface(qtn, type_args, associated_bindings, attr) => {
@@ -1091,15 +920,13 @@ pub fn tir2_to_template(
                     .collect();
                 TyTemplate::Interface(qtn.clone(), template_args, template_bindings)
             } else {
-                let resolved_args: Vec<Ty> = type_args
-                    .iter()
-                    .map(|a| convert_tir2_ty(a, resolved))
-                    .collect();
+                let resolved_args: Vec<RuntimeTy> =
+                    type_args.iter().map(|a| resolved.convert(a)).collect();
                 let resolved_bindings = associated_bindings
                     .iter()
-                    .map(|(name, ty)| (name.clone(), convert_tir2_ty(ty, resolved)))
+                    .map(|(name, ty)| (name.clone(), resolved.convert(ty)))
                     .collect();
-                TyTemplate::Concrete(Ty::Interface(
+                TyTemplate::Concrete(RuntimeTy::Interface(
                     qtn.clone(),
                     resolved_args,
                     resolved_bindings,
@@ -1114,7 +941,7 @@ pub fn tir2_to_template(
             Box::new(tir2_to_template(k, resolved, generic_params)),
             Box::new(tir2_to_template(v, resolved, generic_params)),
         ),
-        other => TyTemplate::Concrete(convert_tir2_ty(other, resolved)),
+        other => TyTemplate::Concrete(resolved.convert(other)),
     }
 }
 
@@ -1177,9 +1004,9 @@ fn tir2_to_dispatch_guard_template(
     }
 }
 
-pub(crate) fn ty_to_template_from_resolved_ty(ty: &Ty) -> TyTemplate {
+pub(crate) fn ty_to_template_from_resolved_ty(ty: &RuntimeTy) -> TyTemplate {
     match ty {
-        Ty::Class(tn, args, _) if !args.is_empty() => {
+        RuntimeTy::Class(tn, args, _) if !args.is_empty() => {
             // Parametric class: produce TyTemplate::Class with Concrete leaves.
             // This allows the VM to check `expected_args == inst.class_type_args`.
             TyTemplate::Class(
@@ -1369,13 +1196,13 @@ use baml_compiler2_tir::{
 use rustc_hash::FxHashMap;
 
 type ClassFieldIndices = IndexMap<TypeName, IndexMap<String, usize>>;
-type ClassFieldTypes = IndexMap<TypeName, IndexMap<String, Ty>>;
+type ClassFieldTypes = IndexMap<TypeName, IndexMap<String, RuntimeTy>>;
 type EnumVariantIndices = IndexMap<QualifiedTypeName, IndexMap<String, usize>>;
 type InterfaceImplementors = IndexMap<TypeName, Vec<TypeName>>;
 type InterfaceTypeView = (TypeName, Vec<Tir2Ty>, Vec<(Name, Tir2Ty)>);
 #[derive(Clone, PartialEq, Eq)]
 struct InterfaceTypeImplementor {
-    runtime_ty: Ty,
+    runtime_ty: RuntimeTy,
     tir_ty: Tir2Ty,
     iface_args: Vec<Tir2Ty>,
     iface_assoc: Vec<(Name, Tir2Ty)>,
@@ -1600,7 +1427,7 @@ fn package_lowering_data<'db>(
 ) -> PackageLoweringData {
     use baml_compiler2_hir::package::{package_dependencies, package_items};
 
-    let resolved_aliases = ResolvedAliases::for_package(db, pkg_id);
+    let resolved_aliases = resolved_aliases_for_package(db, pkg_id);
 
     let mut class_fields = ClassFieldIndices::default();
     let mut class_field_types = ClassFieldTypes::default();
@@ -1694,7 +1521,7 @@ enum InterfaceDispatchGuard {
         impl_tn: TypeName,
         guard: InterfaceClassGuard,
     },
-    Type(Ty),
+    Type(RuntimeTy),
 }
 
 #[derive(Clone)]
@@ -1891,8 +1718,8 @@ impl<'db> LoweringContext<'db> {
         Self::baml_iter_qtn(name)
     }
 
-    fn baml_iter_done_ty() -> Ty {
-        Ty::Class(Self::baml_iter_type_name("Done"), vec![], TyAttr::default())
+    fn baml_iter_done_ty() -> RuntimeTy {
+        RuntimeTy::Class(Self::baml_iter_type_name("Done"), vec![], TyAttr::default())
     }
 
     fn associated_binding_ty(bindings: &[(Name, Tir2Ty)], name: &str) -> Option<Tir2Ty> {
@@ -2205,7 +2032,7 @@ impl<'db> LoweringContext<'db> {
 
         self.builder.set_current_block(bb_header);
         let next_method = Name::new("next");
-        let next_local = self.builder.temp(Ty::unknown());
+        let next_local = self.builder.temp(RuntimeTy::unknown());
         let iterator_tir_ty = Tir2Ty::Interface(
             Self::baml_iter_qtn("Iterator"),
             vec![],
@@ -2248,7 +2075,7 @@ impl<'db> LoweringContext<'db> {
             }
         }
 
-        let body_temp = self.builder.temp(Ty::Void {
+        let body_temp = self.builder.temp(RuntimeTy::Void {
             attr: TyAttr::default(),
         });
         self.lower_expr(body, Place::local(body_temp));
@@ -2305,9 +2132,9 @@ impl<'db> LoweringContext<'db> {
                              generic_params: &[Name],
                              ns: &[Name],
                              fields: &mut IndexMap<String, usize>,
-                             field_types: &mut IndexMap<String, Ty>,
+                             field_types: &mut IndexMap<String, RuntimeTy>,
                              diags: &mut Vec<_>|
-                             -> Option<(usize, Ty)> {
+                             -> Option<(usize, RuntimeTy)> {
                                 if let Some(idx) = fields.get(name).copied() {
                                     return field_types.get(name).cloned().map(|ty| (idx, ty));
                                 }
@@ -2327,7 +2154,7 @@ impl<'db> LoweringContext<'db> {
                                         );
                                         resolved_aliases.convert(&tir_ty)
                                     })
-                                    .unwrap_or(Ty::Null {
+                                    .unwrap_or(RuntimeTy::Null {
                                         attr: TyAttr::default(),
                                     });
                                 field_types.insert(name.to_string(), field_ty.clone());
@@ -2533,7 +2360,7 @@ impl<'db> LoweringContext<'db> {
                 }
 
                 let target_ty = resolved_aliases.convert(&target_ty_tir);
-                if matches!(target_ty, Ty::Class(..)) {
+                if matches!(target_ty, RuntimeTy::Class(..)) {
                     continue;
                 }
 
@@ -3394,8 +3221,8 @@ impl<'db> LoweringContext<'db> {
         }
     }
 
-    /// Get the `baml_type::Ty` for an expression by looking up in the aggregated map
-    /// and converting from TIR Ty. Uses `current_metadata_scope` as the arena namespace.
+    /// Get the `baml_type::RuntimeTy` for an expression by looking up in the aggregated map
+    /// and converting from TIR `Ty`. Uses `current_metadata_scope` as the arena namespace.
     fn expr_metadata_key(&self, expr_id: AstExprId) -> ExprMetadataKey {
         (self.current_metadata_scope, expr_id)
     }
@@ -3410,9 +3237,9 @@ impl<'db> LoweringContext<'db> {
         })
     }
 
-    fn convert_tir_ty_for_runtime(&self, ty: &Tir2Ty) -> Ty {
+    fn convert_tir_ty_for_runtime(&self, ty: &Tir2Ty) -> RuntimeTy {
         let erased = self.erase_bound_typevars_for_runtime(ty);
-        convert_tir2_ty(&erased, self.resolved_aliases)
+        self.resolved_aliases.convert(&erased)
     }
 
     fn interface_dispatch_target_for_tir_ty(&self, ty: &Tir2Ty) -> Option<InterfaceTypeView> {
@@ -3578,7 +3405,7 @@ impl<'db> LoweringContext<'db> {
         self.interface_dispatch_target_for_tir_ty(&target_ty)
     }
 
-    fn class_dispatch_target_for_tir_ty(&self, ty: &Tir2Ty) -> Option<(TypeName, Vec<Ty>)> {
+    fn class_dispatch_target_for_tir_ty(&self, ty: &Tir2Ty) -> Option<(TypeName, Vec<RuntimeTy>)> {
         match ty {
             Tir2Ty::Class(qtn, type_args, _) => Some((
                 qtn.clone(),
@@ -3710,11 +3537,11 @@ impl<'db> LoweringContext<'db> {
         })
     }
 
-    fn expr_ty(&self, expr_id: AstExprId) -> Ty {
+    fn expr_ty(&self, expr_id: AstExprId) -> RuntimeTy {
         self.expr_types
             .get(&self.expr_metadata_key(expr_id))
             .map(|ty| self.convert_tir_ty_for_runtime(ty))
-            .unwrap_or(Ty::Void {
+            .unwrap_or(RuntimeTy::Void {
                 attr: TyAttr::default(),
             })
     }
@@ -3746,23 +3573,26 @@ impl<'db> LoweringContext<'db> {
         }
     }
 
-    /// Get the `baml_type::Ty` for a pattern binding
-    fn pat_ty(&self, pat_id: AstPatId) -> Ty {
+    /// Get the `baml_type::RuntimeTy` for a pattern binding
+    fn pat_ty(&self, pat_id: AstPatId) -> RuntimeTy {
         self.pat_types
             .get(&self.pat_metadata_key(pat_id))
             .map(|ty| self.convert_tir_ty_for_runtime(ty))
-            .unwrap_or(Ty::Void {
+            .unwrap_or(RuntimeTy::Void {
                 attr: TyAttr::default(),
             })
     }
 
-    fn is_pattern_type_recovery(ty: &Ty) -> bool {
-        matches!(ty, Ty::Void { .. } | Ty::BuiltinUnknown { .. })
+    fn is_pattern_type_recovery(ty: &RuntimeTy) -> bool {
+        matches!(
+            ty,
+            RuntimeTy::Void { .. } | RuntimeTy::BuiltinUnknown { .. }
+        )
     }
 
     /// Get the TIR-inferred root segment type for a multi-segment Path expression.
     /// Returns `None` if no root type was recorded (e.g. single-segment paths).
-    fn path_root_ty(&self, expr_id: AstExprId) -> Option<Ty> {
+    fn path_root_ty(&self, expr_id: AstExprId) -> Option<RuntimeTy> {
         self.path_root_types
             .get(&self.expr_metadata_key(expr_id))
             .map(|ty| self.convert_tir_ty_for_runtime(ty))
@@ -3771,37 +3601,29 @@ impl<'db> LoweringContext<'db> {
     /// Get the TIR-inferred type of `segments[..=seg_idx]` for a multi-segment
     /// local-rooted Path expression. Returns `None` if not recorded.
     #[allow(dead_code)]
-    fn path_segment_ty(&self, expr_id: AstExprId, seg_idx: usize) -> Option<Ty> {
+    fn path_segment_ty(&self, expr_id: AstExprId, seg_idx: usize) -> Option<RuntimeTy> {
         self.path_segment_types
             .get(&(self.current_metadata_scope, expr_id, seg_idx))
             .map(|ty| self.convert_tir_ty_for_runtime(ty))
     }
 
-    /// Resolve a `TypeExpr` annotation directly to a `baml_type::Ty`.
+    /// Resolve a `TypeExpr` annotation directly to a `baml_type::RuntimeTy`.
     /// Used for `TypedBinding` patterns where TIR may not have populated the
     /// bindings map (e.g. catch arm and match arm patterns).
-    fn resolve_type_annotation(&self, ty_expr: &baml_compiler2_ast::TypeExpr) -> Ty {
-        use baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns;
-        let pkg_info = file_package(self.db, self.file);
-        let pkg_id = PackageId::new(self.db, pkg_info.package);
-        let pkg_items = package_items(self.db, pkg_id);
-        let mut diags = Vec::new();
-        let tir_ty = lower_type_expr_in_ns(
-            self.db,
-            ty_expr,
-            pkg_items,
-            &pkg_info.namespace_path,
-            &[],
-            &mut diags,
-        );
-        self.resolved_aliases.convert(&tir_ty)
+    fn resolve_type_annotation(&self, ty_expr: &baml_compiler2_ast::TypeExpr) -> RuntimeTy {
+        // Lower with the enclosing function's generic params in scope so a type
+        // variable in the annotation (`let item: T => …`) resolves faithfully
+        // to a `TypeVar` rather than an unresolved `Unknown`. Erasing generics
+        // here would make a `: T` pattern a constant-false test, violating the
+        // type contract.
+        self.resolved_aliases
+            .convert(&self.lower_type_annotation_tir(ty_expr))
     }
 
     /// Lower a pattern's type annotation to TIR with the enclosing function's
-    /// generic params in scope, so `TypeVar`s survive (unlike
-    /// [`Self::resolve_type_annotation`], which erases them). Used by typed
-    /// pattern tests, where a surviving `TypeVar` lowers to a `TypeArgRef`
-    /// template instead of a constant-false `Void` test.
+    /// generic params in scope, so `TypeVar`s survive and a typed pattern test
+    /// lowers to a `TypeArgRef` template (dynamic dispatch on the realized type
+    /// argument) instead of a constant-false `Void` test.
     fn lower_type_annotation_tir(&self, ty_expr: &baml_compiler2_ast::TypeExpr) -> Tir2Ty {
         use baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns;
         let generic_params = self.enclosing_generic_params();
@@ -3857,17 +3679,22 @@ impl<'db> LoweringContext<'db> {
             .as_ref()
             .map(|te| {
                 let mut diags = Vec::new();
+                // Lower the declared return type with the function's generic
+                // params in scope (as parameters do), so a return type that
+                // mentions a type parameter — `fn foo<T>() -> T` — resolves to
+                // that `TypeVar` rather than an unresolved `Unknown`.
+                let generic_params = self.enclosing_generic_params();
                 let tir_ty = lower_type_expr_in_ns(
                     self.db,
                     te,
                     pkg_items,
                     &pkg_info.namespace_path,
-                    &[],
+                    &generic_params,
                     &mut diags,
                 );
-                self.resolved_aliases.convert(&tir_ty)
+                self.convert_tir_ty_for_runtime(&tir_ty)
             })
-            .unwrap_or(Ty::Null {
+            .unwrap_or(RuntimeTy::Null {
                 attr: TyAttr::default(),
             });
         let ret = self
@@ -3935,7 +3762,7 @@ impl<'db> LoweringContext<'db> {
                                     self.resolved_aliases.convert(&tir_ty)
                                 })
                         })
-                        .unwrap_or(Ty::Null {
+                        .unwrap_or(RuntimeTy::Null {
                             attr: TyAttr::default(),
                         })
                 }
@@ -4020,7 +3847,7 @@ impl<'db> LoweringContext<'db> {
                 continue;
             };
 
-            let test_local = self.builder.temp(Ty::Bool {
+            let test_local = self.builder.temp(RuntimeTy::Bool {
                 attr: TyAttr::default(),
             });
             self.builder.assign(
@@ -4080,7 +3907,7 @@ impl<'db> LoweringContext<'db> {
         // Return place _0 (type unknown — let bodies don't have type annotations)
         let ret = self.builder.declare_local(
             Some(Name::new("_0")),
-            Ty::Null {
+            RuntimeTy::Null {
                 attr: TyAttr::default(),
             },
             None,
@@ -4141,11 +3968,11 @@ impl<'db> LoweringContext<'db> {
         let mut adapter_builder =
             MirBuilder::new(Name::new(&adapter_name), coercion.target_params.len());
 
-        let ret_ty = convert_tir2_ty(&coercion.target_return, self.resolved_aliases);
+        let ret_ty = self.resolved_aliases.convert(&coercion.target_return);
         let ret = adapter_builder.declare_local(Some(Name::new("_0")), ret_ty, None, false);
 
         for param in &coercion.target_params {
-            let param_ty = convert_tir2_ty(&param.ty, self.resolved_aliases);
+            let param_ty = self.resolved_aliases.convert(&param.ty);
             adapter_builder.declare_local(param.name.clone(), param_ty, None, false);
         }
 
@@ -4346,22 +4173,27 @@ impl<'db> LoweringContext<'db> {
         let pkg_items = package_items(self.db, pkg_id);
         let ret = self.builder.declare_local(
             Some(Name::new("_0")),
-            baml_type::Ty::Null {
+            baml_type::RuntimeTy::Null {
                 attr: baml_type::TyAttr::default(),
             },
             None,
             false,
         );
 
-        // Declare parameter locals _1..=_n. Lower their annotations with the
-        // enclosing generic params in scope so a parameter typed as an
-        // enclosing type variable (`(a: T) -> ...`) resolves to that variable,
-        // and record the lowered TIR type so interface dispatch on the
-        // parameter can recover its (possibly bounded) static type — TIR does
-        // not surface it via `path_segment_types` for lambda receivers.
-        // Restored after the body (`saved_lambda_param_tir_types` below).
+        // Declare parameter locals _1..=_n. A lambda param annotation may
+        // reference the enclosing function's generics or the lambda's own, so
+        // lower with both in scope; otherwise a `(x: T) => …` would resolve `T`
+        // to an unresolved `Unknown`. Record the lowered TIR type so interface
+        // dispatch on the parameter can recover its (possibly bounded) static
+        // type — TIR does not surface it via `path_segment_types` for lambda
+        // receivers. Restored after the body (`saved_lambda_param_tir_types`
+        // below).
         let saved_lambda_param_tir_types = self.lambda_param_tir_types.clone();
-        let enclosing_generics = self.enclosing_generic_params();
+        let lambda_param_generics: Vec<Name> = self
+            .enclosing_generic_params()
+            .into_iter()
+            .chain(self.lambda_generic_params.iter().cloned())
+            .collect();
         for (param_idx, param) in func_def.params.iter().enumerate() {
             let param_ty = match &param.type_expr {
                 Some(spanned_te) => {
@@ -4371,14 +4203,14 @@ impl<'db> LoweringContext<'db> {
                         &spanned_te.expr,
                         pkg_items,
                         &pkg_info.namespace_path,
-                        &enclosing_generics,
+                        &lambda_param_generics,
                         &mut diags,
                     );
                     self.lambda_param_tir_types
                         .insert(param.name.clone(), tir_ty.clone());
-                    self.resolved_aliases.convert(&tir_ty)
+                    self.convert_tir_ty_for_runtime(&tir_ty)
                 }
-                None => baml_type::Ty::Null {
+                None => baml_type::RuntimeTy::Null {
                     attr: baml_type::TyAttr::default(),
                 },
             };
@@ -4824,7 +4656,7 @@ impl LoweringContext<'_> {
         // synthetic 0-arg `Expr::Lambda`. Lowering it through the
         // standard expression path emits a `MakeClosure` rvalue, which
         // is exactly what we want as the closure operand to `Spawn`.
-        let closure_local = self.builder.temp(Ty::Null {
+        let closure_local = self.builder.temp(RuntimeTy::Null {
             attr: TyAttr::default(),
         });
         let closure_place = Place::Local(closure_local);
@@ -4849,7 +4681,7 @@ impl LoweringContext<'_> {
         let config_op = if with_exprs.is_empty() {
             None
         } else {
-            let params_local = self.builder.temp(Ty::Null {
+            let params_local = self.builder.temp(RuntimeTy::Null {
                 attr: TyAttr::default(),
             });
             self.builder.assign(
@@ -4872,7 +4704,7 @@ impl LoweringContext<'_> {
             let mut cur = params_local;
             for &with_id in with_exprs {
                 let transformer_op = self.lower_to_operand(with_id);
-                let next = self.builder.temp(Ty::Null {
+                let next = self.builder.temp(RuntimeTy::Null {
                     attr: TyAttr::default(),
                 });
                 let resume = self.builder.create_block();
@@ -4894,7 +4726,7 @@ impl LoweringContext<'_> {
         // through to runtime via the surrounding context. A follow-up
         // can plumb `Tir2Ty::Future` directly through `convert_tir2_ty`
         // here once we read it from `self.expr_types`.
-        let future_local = self.builder.temp(Ty::Null {
+        let future_local = self.builder.temp(RuntimeTy::Null {
             attr: TyAttr::default(),
         });
         let future_place = Place::Local(future_local);
@@ -4914,7 +4746,7 @@ impl LoweringContext<'_> {
     /// Lower `await expr` into a `Terminator::Await` whose destination is
     /// the awaited value.
     fn lower_await(&mut self, _expr_id: AstExprId, future: AstExprId, dest: Place) {
-        let future_local = self.builder.temp(Ty::Null {
+        let future_local = self.builder.temp(RuntimeTy::Null {
             attr: TyAttr::default(),
         });
         let future_place = Place::Local(future_local);
@@ -4927,7 +4759,7 @@ impl LoweringContext<'_> {
         let (await_dest, projection_dest) = match dest {
             Place::Local(_) => (dest, None),
             projection => {
-                let tmp = self.builder.temp(Ty::Null {
+                let tmp = self.builder.temp(RuntimeTy::Null {
                     attr: TyAttr::default(),
                 });
                 (Place::Local(tmp), Some(projection))
@@ -5300,9 +5132,13 @@ impl<'db> LoweringContext<'db> {
                     // If TIR inferred a more specific type for the root local,
                     // update the MIR local's declared type so the emitter can
                     // resolve field names for display (e.g. `load_field .index`).
-                    if matches!(self.builder.local_ty(root_local), Ty::BuiltinUnknown { .. })
-                        && !matches!(tir_root, Ty::BuiltinUnknown { .. } | Ty::Void { .. })
-                    {
+                    if matches!(
+                        self.builder.local_ty(root_local),
+                        RuntimeTy::BuiltinUnknown { .. }
+                    ) && !matches!(
+                        tir_root,
+                        RuntimeTy::BuiltinUnknown { .. } | RuntimeTy::Void { .. }
+                    ) {
                         self.builder.local_decl_mut(root_local).ty = tir_root.clone();
                     }
                     tir_root
@@ -5314,7 +5150,7 @@ impl<'db> LoweringContext<'db> {
                 let place = Place::Capture(cap_idx);
                 let ty = self
                     .path_root_ty(expr_id)
-                    .unwrap_or_else(|| Ty::BuiltinUnknown {
+                    .unwrap_or_else(|| RuntimeTy::BuiltinUnknown {
                         attr: TyAttr::default(),
                     });
                 (place, ty)
@@ -5323,7 +5159,7 @@ impl<'db> LoweringContext<'db> {
             {
                 // BEP-044 wf3 #4: `default.<field>` denotes the enclosing `self`
                 // viewed at the declaring interface. TIR typed the root as
-                // `Ty::Interface`, so reuse that and let the interface-prefix
+                // `RuntimeTy::Interface`, so reuse that and let the interface-prefix
                 // routing below resolve the field view (same path as
                 // `self.as<I>.field`). Without this the `default` root is not a
                 // local → null → `string + null` VM crash.
@@ -5357,7 +5193,7 @@ impl<'db> LoweringContext<'db> {
                         // Substitute the receiver's class type-args into the
                         // declared field type so chained access through generic
                         // positions (`b.value.name` where `b: Box<User>`)
-                        // produces `Ty::Class(User, ...)` rather than the
+                        // produces `RuntimeTy::Class(User, ...)` rather than the
                         // erased runtime metadata. Without this, the next iteration
                         // falls through to the dynamic map-key path below and the
                         // VM hits `expected Map, got Instance`.
@@ -5385,11 +5221,11 @@ impl<'db> LoweringContext<'db> {
                 }
             }
 
-            let target_ty =
-                self.path_segment_ty(expr_id, seg_idx)
-                    .unwrap_or_else(|| Ty::BuiltinUnknown {
-                        attr: TyAttr::default(),
-                    });
+            let target_ty = self.path_segment_ty(expr_id, seg_idx).unwrap_or_else(|| {
+                RuntimeTy::BuiltinUnknown {
+                    attr: TyAttr::default(),
+                }
+            });
             let target_place = if is_last {
                 dest.clone()
             } else {
@@ -5453,7 +5289,7 @@ impl<'db> LoweringContext<'db> {
             }
 
             // Dynamic map key fallback
-            let key_local = self.builder.temp(Ty::String {
+            let key_local = self.builder.temp(RuntimeTy::String {
                 attr: TyAttr::default(),
             });
             self.builder.assign(
@@ -5475,16 +5311,21 @@ impl<'db> LoweringContext<'db> {
     /// Look up the MIR type of a named field on a class, for chained field access.
     ///
     /// `class_type_args` are the type-args carried on the receiver's
-    /// `Ty::Class(tn, class_type_args, _)` (e.g. `[User]` for `Box<User>`).
+    /// `RuntimeTy::Class(tn, class_type_args, _)` (e.g. `[User]` for `Box<User>`).
     /// They are substituted into the declared field type so a generic-typed
     /// position (`item: T` in `Container<T>`) resolves to the concrete
-    /// receiver-side binding rather than `Ty::Void`.
+    /// receiver-side binding rather than `RuntimeTy::Void`.
     ///
-    /// Returns `Ty::Null` if the field is not found or the type cannot be
+    /// Returns `RuntimeTy::Null` if the field is not found or the type cannot be
     /// resolved.  Called by `lower_multi_segment_path_as_field_chain` to
     /// track the type through a chain of field projections (`a.b.c` needs
     /// the type of `b` to find `c`).
-    fn class_field_ty(&self, class_tn: &TypeName, field_name: &Name, class_type_args: &[Ty]) -> Ty {
+    fn class_field_ty(
+        &self,
+        class_tn: &TypeName,
+        field_name: &Name,
+        class_type_args: &[RuntimeTy],
+    ) -> RuntimeTy {
         use baml_compiler2_hir::{contributions::Definition, package::package_items};
         use baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns;
         let db = self.db;
@@ -5498,7 +5339,7 @@ impl<'db> LoweringContext<'db> {
         let Some(Definition::Class(class_loc)) =
             pkg_items_ref.lookup_type(&namespace, class_tn.name())
         else {
-            return Ty::Null {
+            return RuntimeTy::Null {
                 attr: TyAttr::default(),
             };
         };
@@ -5508,12 +5349,12 @@ impl<'db> LoweringContext<'db> {
 
         let field = class_data.fields.iter().find(|f| &f.name == field_name);
         let Some(field) = field else {
-            return Ty::Null {
+            return RuntimeTy::Null {
                 attr: TyAttr::default(),
             };
         };
         let Some(ref te) = field.type_expr else {
-            return Ty::Null {
+            return RuntimeTy::Null {
                 attr: TyAttr::default(),
             };
         };
@@ -5627,7 +5468,7 @@ impl LoweringContext<'_> {
 
         // Check if TIR already folded this expression to a literal constant
         if self.opt >= crate::OptLevel::Two {
-            if let Ty::Literal(ref lit, _, _) = self.expr_ty(expr_id) {
+            if let RuntimeTy::Literal(ref lit, _, _) = self.expr_ty(expr_id) {
                 let constant = Self::lower_literal(lit);
                 self.builder
                     .assign(dest, Rvalue::Use(Operand::Constant(constant)));
@@ -5673,7 +5514,7 @@ impl LoweringContext<'_> {
         let (sc_dest, projection_dest) = match dest {
             Place::Local(_) => (dest, None),
             projection => {
-                let tmp = self.builder.temp(Ty::Null {
+                let tmp = self.builder.temp(RuntimeTy::Null {
                     attr: TyAttr::default(),
                 });
                 (Place::Local(tmp), Some(projection))
@@ -5725,7 +5566,7 @@ impl LoweringContext<'_> {
             left: lhs_op,
             right: Operand::Constant(Constant::Null),
         };
-        let test_local = self.builder.temp(Ty::Bool {
+        let test_local = self.builder.temp(RuntimeTy::Bool {
             attr: TyAttr::default(),
         });
         self.builder.assign(Place::local(test_local), is_null);
@@ -5859,7 +5700,7 @@ impl LoweringContext<'_> {
             left: base_op,
             right: Operand::Constant(Constant::Null),
         };
-        let test_local = self.builder.temp(Ty::Bool {
+        let test_local = self.builder.temp(RuntimeTy::Bool {
             attr: TyAttr::default(),
         });
         self.builder.assign(Place::local(test_local), is_null);
@@ -5912,7 +5753,7 @@ impl LoweringContext<'_> {
             left: base_op,
             right: Operand::Constant(Constant::Null),
         };
-        let test_local = self.builder.temp(Ty::Bool {
+        let test_local = self.builder.temp(RuntimeTy::Bool {
             attr: TyAttr::default(),
         });
         self.builder.assign(Place::local(test_local), is_null);
@@ -5962,7 +5803,7 @@ impl LoweringContext<'_> {
             left: callee_op,
             right: Operand::Constant(Constant::Null),
         };
-        let test_local = self.builder.temp(Ty::Bool {
+        let test_local = self.builder.temp(RuntimeTy::Bool {
             attr: TyAttr::default(),
         });
         self.builder.assign(Place::local(test_local), is_null);
@@ -6000,7 +5841,7 @@ impl LoweringContext<'_> {
     fn lower_unary(&mut self, expr_id: AstExprId, op: AstUnaryOp, expr: AstExprId, dest: Place) {
         // Check if TIR already folded this expression to a literal constant
         if self.opt >= crate::OptLevel::Two {
-            if let Ty::Literal(ref lit, _, _) = self.expr_ty(expr_id) {
+            if let RuntimeTy::Literal(ref lit, _, _) = self.expr_ty(expr_id) {
                 let constant = Self::lower_literal(lit);
                 self.builder
                     .assign(dest, Rvalue::Use(Operand::Constant(constant)));
@@ -6233,7 +6074,9 @@ impl LoweringContext<'_> {
                         Some(target)
                     } else {
                         match self.builder.local_ty(recv_root_local) {
-                            Ty::Class(n, _, _) if self.interface_implementors.contains_key(&n) => {
+                            RuntimeTy::Class(n, _, _)
+                                if self.interface_implementors.contains_key(&n) =>
+                            {
                                 Some((n, Vec::new(), Vec::new()))
                             }
                             _ => None,
@@ -6606,7 +6449,7 @@ impl LoweringContext<'_> {
                     let place = match receiver_operand {
                         Operand::Copy(p) | Operand::Move(p) => p.clone(),
                         Operand::Constant(_) => {
-                            let tmp = self.builder.temp(baml_type::Ty::unknown());
+                            let tmp = self.builder.temp(baml_type::RuntimeTy::unknown());
                             self.builder
                                 .assign(Place::Local(tmp), Rvalue::Use(receiver_operand.clone()));
                             Place::Local(tmp)
@@ -6712,7 +6555,7 @@ impl LoweringContext<'_> {
                 .iter()
                 .map(|ty_arg| {
                     let template = self.ty_to_template(ty_arg, &generic_params);
-                    let temp = self.builder.temp(Ty::type_type());
+                    let temp = self.builder.temp(RuntimeTy::type_type());
                     self.builder
                         .assign(Place::local(temp), Rvalue::LoadType(template));
                     Operand::Copy(Place::local(temp))
@@ -6790,13 +6633,13 @@ impl LoweringContext<'_> {
             //     <store dest>
             let dest_local = match dest {
                 Place::Local(l) => l,
-                _ => self.builder.temp(Ty::Null {
+                _ => self.builder.temp(RuntimeTy::Null {
                     attr: TyAttr::default(),
                 }),
             };
             // For generic IO builtins (`$rust_io_function` with type params),
             // the compiler may inject synthetic trailing value-arg slots for
-            // runtime `baml_type::Ty` descriptors. The Rust glue reads them
+            // runtime `baml_type::RuntimeTy` descriptors. The Rust glue reads them
             // positionally after the regular value args, so append them here
             // instead of prepending them like regular BAML frame type args.
             let sys_op_arg_operands = if ntypeargs > 0 {
@@ -7145,7 +6988,7 @@ impl LoweringContext<'_> {
     /// Returns `Some(template)` when:
     /// - The callee is the `baml.reflect.type_of` `$compiler_intrinsic`.
     /// - The call carries exactly one type argument.
-    /// - The type argument resolves to a concrete `Ty` (no `TypeVar` leaves).
+    /// - The type argument resolves to a concrete `RuntimeTy` (no `TypeVar` leaves).
     ///
     /// Returns `None` when the callee is not `type_of` **or** when the type
     /// argument contains a `TypeVar` (generic-parameter reference).  The latter
@@ -7398,7 +7241,7 @@ impl LoweringContext<'_> {
         tys.iter()
             .map(|ty| {
                 let template = self.ty_to_template(ty, &generic_params);
-                let temp = self.builder.temp(Ty::type_type());
+                let temp = self.builder.temp(RuntimeTy::type_type());
                 self.builder
                     .assign(Place::local(temp), Rvalue::LoadType(template));
                 Operand::Copy(Place::local(temp))
@@ -7484,7 +7327,7 @@ impl LoweringContext<'_> {
         }
 
         let generic_params = self.enclosing_generic_params();
-        let type_ty = baml_type::Ty::type_type();
+        let type_ty = baml_type::RuntimeTy::type_type();
 
         let mut operands = Vec::with_capacity(ast_type_args.len());
         for type_arg in ast_type_args {
@@ -7524,7 +7367,7 @@ impl LoweringContext<'_> {
         if templates.iter().all(TyTemplate::is_fully_concrete) {
             // Concrete args → pooled, interned compile-time constant
             // (pointer-stable identity).
-            let concrete: Vec<Ty> = templates.iter().map(|t| t.substitute(&[])).collect();
+            let concrete: Vec<RuntimeTy> = templates.iter().map(|t| t.substitute(&[])).collect();
             self.builder.assign(
                 dest,
                 Rvalue::Use(Operand::Constant(Constant::GenericFunction {
@@ -7635,7 +7478,7 @@ impl<'db> LoweringContext<'db> {
             name: Name::new("panic"),
         }));
         let msg = Operand::Constant(Constant::String(message.to_string()));
-        let temp = self.builder.temp(Ty::Null {
+        let temp = self.builder.temp(RuntimeTy::Null {
             attr: TyAttr::default(),
         });
         let unreachable_block = self.builder.create_block();
@@ -7672,7 +7515,7 @@ impl<'db> LoweringContext<'db> {
             name: Name::new("set"),
         }));
         let arg = self.lower_to_operand(value);
-        let dest = self.builder.temp(Ty::String {
+        let dest = self.builder.temp(RuntimeTy::String {
             attr: TyAttr::default(),
         });
         let resume = self.builder.create_block();
@@ -7799,7 +7642,7 @@ impl<'db> LoweringContext<'db> {
         // which is keyed by `TypeName`.
         let ty = self.expr_ty(expr_id);
         let type_name_key: Option<TypeName> = match &ty {
-            Ty::Class(tn, _, _) => Some(tn.clone()),
+            RuntimeTy::Class(tn, _, _) => Some(tn.clone()),
             _ => None,
         };
         // Prefer the TIR-resolved fully-qualified name (`<package>.<ns>.<name>`)
@@ -8096,7 +7939,7 @@ impl<'db> LoweringContext<'db> {
         }
 
         // Check if this is a package path intermediate (e.g. `baml.HttpMethod` in
-        // `baml.HttpMethod.Get`). TIR marks these as Ty::Unknown. Emit null placeholder.
+        // `baml.HttpMethod.Get`). TIR marks these as RuntimeTy::Unknown. Emit null placeholder.
         // CRITICAL: only treat the expression as a namespace intermediate if the BASE
         // is also Unknown (i.e. `baml` in `baml.HttpMethod`). If the base has a
         // concrete type, this is a real field access whose field type happens to be
@@ -8127,7 +7970,7 @@ impl<'db> LoweringContext<'db> {
         let unwrapped_ty = base_ty.strip_null();
 
         // Look up field index from class_fields
-        let field_idx = if let Ty::Class(tn, _, _) = &unwrapped_ty {
+        let field_idx = if let RuntimeTy::Class(tn, _, _) = &unwrapped_ty {
             self.class_fields
                 .get(tn)
                 .and_then(|fields| fields.get(&field_str))
@@ -8177,7 +8020,7 @@ impl<'db> LoweringContext<'db> {
             if handled_union_field {
                 return;
             }
-            if let Ty::Class(tn, _, _) = &unwrapped_ty {
+            if let RuntimeTy::Class(tn, _, _) = &unwrapped_ty {
                 self.emit_panic_call(
                     &format!(
                         "internal compiler error: MIR failed to resolve field access \
@@ -8192,7 +8035,7 @@ impl<'db> LoweringContext<'db> {
                 return;
             }
             // Dynamic map access — only valid for map types, unknown, etc.
-            let key_local = self.builder.temp(Ty::String {
+            let key_local = self.builder.temp(RuntimeTy::String {
                 attr: TyAttr::default(),
             });
             self.builder.assign(
@@ -8213,17 +8056,17 @@ impl<'db> LoweringContext<'db> {
     fn interface_receiver_for_field_access(
         &self,
         base: AstExprId,
-        unwrapped_ty: &Ty,
+        unwrapped_ty: &RuntimeTy,
     ) -> Option<InterfaceTypeView> {
         if let Some(target) = self.interface_dispatch_target_for_expr(base) {
             return Some(target);
         }
 
         match unwrapped_ty {
-            Ty::Class(tn, _, _) if self.interface_implementors.contains_key(tn) => {
+            RuntimeTy::Class(tn, _, _) if self.interface_implementors.contains_key(tn) => {
                 Some((tn.clone(), Vec::new(), Vec::new()))
             }
-            Ty::Interface(tn, _, _, _) if self.interface_implementors.contains_key(tn) => {
+            RuntimeTy::Interface(tn, _, _, _) if self.interface_implementors.contains_key(tn) => {
                 Some((tn.clone(), Vec::new(), Vec::new()))
             }
             _ => None,
@@ -8234,7 +8077,7 @@ impl<'db> LoweringContext<'db> {
         &self,
         expr_id: AstExprId,
         prefix_idx: usize,
-        current_ty: &Ty,
+        current_ty: &RuntimeTy,
     ) -> Option<InterfaceTypeView> {
         if let Some(target) = self
             .path_segment_types
@@ -8253,10 +8096,10 @@ impl<'db> LoweringContext<'db> {
         }
 
         match current_ty {
-            Ty::Class(tn, _, _) if self.interface_implementors.contains_key(tn) => {
+            RuntimeTy::Class(tn, _, _) if self.interface_implementors.contains_key(tn) => {
                 Some((tn.clone(), Vec::new(), Vec::new()))
             }
-            Ty::Interface(tn, _, _, _) if self.interface_implementors.contains_key(tn) => {
+            RuntimeTy::Interface(tn, _, _, _) if self.interface_implementors.contains_key(tn) => {
                 Some((tn.clone(), Vec::new(), Vec::new()))
             }
             _ => None,
@@ -8267,8 +8110,8 @@ impl<'db> LoweringContext<'db> {
         &self,
         expr_id: AstExprId,
         prefix_idx: usize,
-        current_ty: &Ty,
-    ) -> Option<(TypeName, Vec<Ty>)> {
+        current_ty: &RuntimeTy,
+    ) -> Option<(TypeName, Vec<RuntimeTy>)> {
         let tir_prefix_ty = if prefix_idx == 0 {
             self.path_root_types.get(&self.expr_metadata_key(expr_id))
         } else {
@@ -8281,7 +8124,7 @@ impl<'db> LoweringContext<'db> {
         }
 
         match current_ty {
-            Ty::Class(tn, type_args, _) => Some((tn.clone(), type_args.clone())),
+            RuntimeTy::Class(tn, type_args, _) => Some((tn.clone(), type_args.clone())),
             _ => None,
         }
     }
@@ -8290,7 +8133,7 @@ impl<'db> LoweringContext<'db> {
         &mut self,
         _expr_id: AstExprId,
         base_local: Local,
-        base_ty: &Ty,
+        base_ty: &RuntimeTy,
         field: &Name,
         dest: &Place,
     ) -> bool {
@@ -8302,7 +8145,7 @@ impl<'db> LoweringContext<'db> {
         let bb_join = self.builder.create_block();
         let bb_otherwise = self.builder.create_block();
 
-        let tag_local = self.builder.temp(Ty::Int {
+        let tag_local = self.builder.temp(RuntimeTy::Int {
             attr: TyAttr::default(),
         });
         self.builder.assign(
@@ -8345,22 +8188,24 @@ impl<'db> LoweringContext<'db> {
 
     fn class_union_field_candidates(
         &self,
-        ty: &Ty,
+        ty: &RuntimeTy,
         field: &Name,
     ) -> Option<Vec<(i64, TypeName, usize)>> {
         // Collect candidate (class_name) entries to search for the field on.
-        // For `Ty::Union`, every member must be `Ty::Class`. For `Ty::Class`
+        // For `RuntimeTy::Union`, every member must be `RuntimeTy::Class`. For `RuntimeTy::Class`
         // whose name is actually a BEP-044 interface, use the registered
         // implementor set.
         let class_names: Vec<TypeName> = match ty {
-            Ty::Union(members, _) => members
+            RuntimeTy::Union(members, _) => members
                 .iter()
                 .filter_map(|m| match m {
-                    Ty::Class(n, _, _) => Some(n.clone()),
+                    RuntimeTy::Class(n, _, _) => Some(n.clone()),
                     _ => None,
                 })
                 .collect(),
-            Ty::Class(class_name, _, _) => self.interface_implementors.get(class_name)?.clone(),
+            RuntimeTy::Class(class_name, _, _) => {
+                self.interface_implementors.get(class_name)?.clone()
+            }
             _ => return None,
         };
         if class_names.is_empty() {
@@ -8399,7 +8244,10 @@ impl<'db> LoweringContext<'db> {
         // the base type is T? but we've already null-checked.
         let unwrapped_ty = base_ty.strip_null();
 
-        let kind = if matches!(&unwrapped_ty, Ty::List(..) | Ty::Uint8Array { .. }) {
+        let kind = if matches!(
+            &unwrapped_ty,
+            RuntimeTy::List(..) | RuntimeTy::Uint8Array { .. }
+        ) {
             IndexKind::Array
         } else {
             IndexKind::Map
@@ -8431,7 +8279,7 @@ impl<'db> LoweringContext<'db> {
     }
 
     /// Convert an operand to a local, materializing a temp if necessary.
-    fn operand_to_local(&mut self, op: Operand, ty: Ty) -> Local {
+    fn operand_to_local(&mut self, op: Operand, ty: RuntimeTy) -> Local {
         match op {
             Operand::Copy(Place::Local(l)) | Operand::Move(Place::Local(l)) => l,
             _ => {
@@ -8504,7 +8352,7 @@ impl<'db> LoweringContext<'db> {
             .get(&(self.current_metadata_scope, callee, recv_ty_idx))
             .cloned()
             .map(|t| self.convert_tir_ty_for_runtime(&t))
-            .unwrap_or_else(|| Ty::BuiltinUnknown {
+            .unwrap_or_else(|| RuntimeTy::BuiltinUnknown {
                 attr: TyAttr::default(),
             });
         let local = self.builder.temp(recv_ty);
@@ -8649,7 +8497,7 @@ impl<'db> LoweringContext<'db> {
     ) -> Vec<InterfaceMethodCandidate> {
         if let Some(item_ref) = self.class_method_item_ref_by_name(class_tn, method) {
             return vec![InterfaceMethodCandidate {
-                guard: InterfaceDispatchGuard::Type(Ty::Class(
+                guard: InterfaceDispatchGuard::Type(RuntimeTy::Class(
                     class_tn.clone(),
                     Vec::new(),
                     TyAttr::default(),
@@ -8760,7 +8608,7 @@ impl<'db> LoweringContext<'db> {
             self.builder.set_current_block(next_check);
             self.emit_is_type_branch(
                 recv_local,
-                Ty::Class(class_tn.clone(), Vec::new(), TyAttr::default()),
+                RuntimeTy::Class(class_tn.clone(), Vec::new(), TyAttr::default()),
                 bb_body,
                 bb_next,
             );
@@ -8976,7 +8824,7 @@ impl<'db> LoweringContext<'db> {
                     // the instance's `class_type_args` (class-param order) and
                     // then the method call's type args — handling `Any`/partial
                     // guards that a static seed can't name.
-                    let bm = self.builder.temp(Ty::unknown());
+                    let bm = self.builder.temp(RuntimeTy::unknown());
                     self.builder.assign(
                         Place::local(bm),
                         Rvalue::MakeBoundMethod {
@@ -10793,9 +10641,11 @@ impl<'db> LoweringContext<'db> {
         failure: BlockId,
     ) {
         let ty_template = match guard {
-            InterfaceClassGuard::Any => {
-                TyTemplate::Concrete(Ty::Class(impl_tn.clone(), Vec::new(), TyAttr::default()))
-            }
+            InterfaceClassGuard::Any => TyTemplate::Concrete(RuntimeTy::Class(
+                impl_tn.clone(),
+                Vec::new(),
+                TyAttr::default(),
+            )),
             InterfaceClassGuard::Exact(args) => {
                 let generic_params = self.enclosing_generic_params();
                 TyTemplate::Class(
@@ -10813,7 +10663,7 @@ impl<'db> LoweringContext<'db> {
                 )
             }
         };
-        let test_local = self.builder.temp(Ty::Bool {
+        let test_local = self.builder.temp(RuntimeTy::Bool {
             attr: TyAttr::default(),
         });
         self.builder.assign(
@@ -10926,7 +10776,7 @@ impl LoweringContext<'_> {
             // `let PATTERN = init else { … };` — refutable binding lowered
             // as a two-way pattern test. On match: bind into the current
             // scope (locals survive past the statement); on miss: lower the
-            // else expression (guaranteed `Ty::Never` by TIR, so no
+            // else expression (guaranteed `RuntimeTy::Never` by TIR, so no
             // successor edge is needed). Handled before the structural
             // arms below because a refutable destructure ends up here too.
             AstStmt::Let {
@@ -11236,7 +11086,7 @@ impl LoweringContext<'_> {
                         self.binding_locals.insert(binding_id, local);
                     }
                 }
-                let body_temp = self.builder.temp(Ty::Void {
+                let body_temp = self.builder.temp(RuntimeTy::Void {
                     attr: TyAttr::default(),
                 });
                 self.lower_expr(body, Place::local(body_temp));
@@ -11370,7 +11220,7 @@ impl LoweringContext<'_> {
                     name: Name::new("panic"),
                 }));
                 let msg = Operand::Constant(Constant::String("missing statement".to_string()));
-                let temp = self.builder.temp(Ty::Null {
+                let temp = self.builder.temp(RuntimeTy::Null {
                     attr: TyAttr::default(),
                 });
                 let unreachable_block = self.builder.create_block();
@@ -11437,7 +11287,7 @@ impl LoweringContext<'_> {
                         ),
                         expr_id,
                     );
-                    let temp = self.builder.temp(Ty::Null {
+                    let temp = self.builder.temp(RuntimeTy::Null {
                         attr: TyAttr::default(),
                     });
                     Place::Local(temp)
@@ -11455,19 +11305,19 @@ impl LoweringContext<'_> {
                     (Place::Local(l), ty)
                 } else if let Some(cap_idx) = self.capture_index_for_name_at(expr_id, &segments[0])
                 {
-                    let ty = self
-                        .path_root_ty(expr_id)
-                        .unwrap_or_else(|| Ty::BuiltinUnknown {
-                            attr: TyAttr::default(),
-                        });
+                    let ty =
+                        self.path_root_ty(expr_id)
+                            .unwrap_or_else(|| RuntimeTy::BuiltinUnknown {
+                                attr: TyAttr::default(),
+                            });
                     (Place::Capture(cap_idx), ty)
                 } else {
-                    let tmp = self.builder.temp(Ty::Null {
+                    let tmp = self.builder.temp(RuntimeTy::Null {
                         attr: TyAttr::default(),
                     });
                     (
                         Place::Local(tmp),
-                        Ty::Null {
+                        RuntimeTy::Null {
                             attr: TyAttr::default(),
                         },
                     )
@@ -11491,7 +11341,7 @@ impl LoweringContext<'_> {
                         }
                     }
                     // Dynamic map fallback for non-class base or unknown field
-                    let key_local = self.builder.temp(Ty::String {
+                    let key_local = self.builder.temp(RuntimeTy::String {
                         attr: TyAttr::default(),
                     });
                     self.builder.assign(
@@ -11512,7 +11362,7 @@ impl LoweringContext<'_> {
                 let member_name = member.clone();
                 let base_place = self.lower_lvalue(base_id);
                 let base_ty = self.expr_ty(base_id);
-                if let Ty::Class(ref tn, _, _) = base_ty {
+                if let RuntimeTy::Class(ref tn, _, _) = base_ty {
                     if let Some(fields) = self.class_fields.get(tn) {
                         if let Some(&idx) = fields.get(member_name.as_str()) {
                             return Place::Field {
@@ -11533,13 +11383,13 @@ impl LoweringContext<'_> {
                         base_id,
                     );
                     // Dead code after panic — return a dummy place
-                    let dead = self.builder.temp(Ty::Null {
+                    let dead = self.builder.temp(RuntimeTy::Null {
                         attr: TyAttr::default(),
                     });
                     return Place::Local(dead);
                 }
                 // Dynamic map access — only valid for map types, unknown, etc.
-                let key_local = self.builder.temp(Ty::String {
+                let key_local = self.builder.temp(RuntimeTy::String {
                     attr: TyAttr::default(),
                 });
                 self.builder.assign(
@@ -11561,7 +11411,10 @@ impl LoweringContext<'_> {
                 let index_ty = self.expr_ty(index_id);
                 let index_local = self.operand_to_local(index_op, index_ty);
                 let unwrapped_ty = base_ty.strip_null();
-                let kind = if matches!(&unwrapped_ty, Ty::List(..) | Ty::Uint8Array { .. }) {
+                let kind = if matches!(
+                    &unwrapped_ty,
+                    RuntimeTy::List(..) | RuntimeTy::Uint8Array { .. }
+                ) {
                     IndexKind::Array
                 } else {
                     IndexKind::Map
@@ -11587,7 +11440,7 @@ impl LoweringContext<'_> {
                     left: Operand::Copy(Place::Local(base_local)),
                     right: Operand::Constant(Constant::Null),
                 };
-                let test_local = self.builder.temp(Ty::Bool {
+                let test_local = self.builder.temp(RuntimeTy::Bool {
                     attr: TyAttr::default(),
                 });
                 self.builder.assign(Place::local(test_local), is_null);
@@ -11609,7 +11462,7 @@ impl LoweringContext<'_> {
                 let base_place = Place::Local(base_local);
                 // Unwrap Optional — we've already null-checked, so use the inner type.
                 let unwrapped_ty = base_ty.strip_null();
-                if let Ty::Class(tn, _, _) = &unwrapped_ty {
+                if let RuntimeTy::Class(tn, _, _) = &unwrapped_ty {
                     if let Some(fields) = self.class_fields.get(tn) {
                         if let Some(&idx) = fields.get(member_name.as_str()) {
                             return Place::Field {
@@ -11620,7 +11473,7 @@ impl LoweringContext<'_> {
                     }
                 }
                 // Dynamic map access
-                let key_local = self.builder.temp(Ty::String {
+                let key_local = self.builder.temp(RuntimeTy::String {
                     attr: TyAttr::default(),
                 });
                 self.builder.assign(
@@ -11648,7 +11501,7 @@ impl LoweringContext<'_> {
                     left: Operand::Copy(Place::Local(base_local)),
                     right: Operand::Constant(Constant::Null),
                 };
-                let test_local = self.builder.temp(Ty::Bool {
+                let test_local = self.builder.temp(RuntimeTy::Bool {
                     attr: TyAttr::default(),
                 });
                 self.builder.assign(Place::local(test_local), is_null);
@@ -11671,7 +11524,10 @@ impl LoweringContext<'_> {
                 let index_ty = self.expr_ty(index_id);
                 let index_local = self.operand_to_local(index_op, index_ty);
                 let unwrapped_ty = base_ty.strip_null();
-                let kind = if matches!(&unwrapped_ty, Ty::List(..) | Ty::Uint8Array { .. }) {
+                let kind = if matches!(
+                    &unwrapped_ty,
+                    RuntimeTy::List(..) | RuntimeTy::Uint8Array { .. }
+                ) {
                     IndexKind::Array
                 } else {
                     IndexKind::Map
@@ -11975,7 +11831,7 @@ impl LoweringContext<'_> {
         // We must do this before create_block() calls so the assignment goes into bb_entry.
         let switch_operand = match &switch_kind {
             Some(SwitchKind::EnumDiscriminant(_)) => {
-                let disc = self.builder.temp(Ty::Int {
+                let disc = self.builder.temp(RuntimeTy::Int {
                     attr: TyAttr::default(),
                 });
                 self.builder.assign(
@@ -11985,7 +11841,7 @@ impl LoweringContext<'_> {
                 Operand::Copy(Place::Local(disc))
             }
             Some(SwitchKind::TypeTag) => {
-                let tag_local = self.builder.temp(Ty::Int {
+                let tag_local = self.builder.temp(RuntimeTy::Int {
                     attr: TyAttr::default(),
                 });
                 self.builder.assign(
@@ -12289,15 +12145,15 @@ impl LoweringContext<'_> {
     fn emit_is_type_branch(
         &mut self,
         scrutinee: Local,
-        ty: Ty,
+        ty: RuntimeTy,
         success: BlockId,
         failure: BlockId,
     ) {
         // BEP-044/BEP-057: testing a value against an *interface* type means
         // "is its runtime class an implementor". Interface types used to lower
-        // to `Ty::Class`; they now lower to `Ty::Interface` so reflection can
+        // to `RuntimeTy::Class`; they now lower to `RuntimeTy::Interface` so reflection can
         // retain associated bindings. Accept both runtime shapes here.
-        if let Ty::Class(tn, _, _) | Ty::Interface(tn, _, _, _) = &ty
+        if let RuntimeTy::Class(tn, _, _) | RuntimeTy::Interface(tn, _, _, _) = &ty
             && let Some(impls) = self.interface_implementors.get(tn).cloned()
         {
             if impls.is_empty() {
@@ -12305,19 +12161,19 @@ impl LoweringContext<'_> {
                 self.builder.goto(failure);
                 return;
             }
-            let members: Vec<Ty> = impls
+            let members: Vec<RuntimeTy> = impls
                 .into_iter()
-                .map(|cn| Ty::Class(cn, Vec::new(), TyAttr::default()))
+                .map(|cn| RuntimeTy::Class(cn, Vec::new(), TyAttr::default()))
                 .collect();
             self.emit_is_type_branch(
                 scrutinee,
-                Ty::Union(members, TyAttr::default()),
+                RuntimeTy::Union(members, TyAttr::default()),
                 success,
                 failure,
             );
             return;
         }
-        if let Ty::Union(members, _) = ty {
+        if let RuntimeTy::Union(members, _) = ty {
             // For union A | B | C: check A → success, else check B → success,
             // else check C → success, else failure.
             let mut remaining = members.into_iter().peekable();
@@ -12334,8 +12190,8 @@ impl LoweringContext<'_> {
                 }
             }
         } else {
-            // Convert Ty → TyTemplate so the emitter can handle generic class
-            // checks (Ty::Class with args containing TypeVars map to
+            // Convert RuntimeTy → TyTemplate so the emitter can handle generic class
+            // checks (RuntimeTy::Class with args containing TypeVars map to
             // TyTemplate::Class with TypeArgRef leaves).  For non-generic types
             // the template is TyTemplate::Concrete(ty) — the emitter falls back
             // to the same fast path as before.
@@ -12350,7 +12206,7 @@ impl LoweringContext<'_> {
     /// pattern type still contains the enclosing function's `TypeVar`s: the
     /// caller builds the template via `ty_to_template` so those lower to
     /// `TypeArgRef` leaves resolved against `frame.type_args` at runtime,
-    /// rather than being erased to `Ty::Void` (a constant-false test).
+    /// rather than being erased to `RuntimeTy::Void` (a constant-false test).
     fn emit_is_type_template_branch(
         &mut self,
         scrutinee: Local,
@@ -12362,7 +12218,7 @@ impl LoweringContext<'_> {
             operand: Operand::Copy(Place::Local(scrutinee)),
             ty_template,
         };
-        let test_local = self.builder.temp(Ty::Bool {
+        let test_local = self.builder.temp(RuntimeTy::Bool {
             attr: TyAttr::default(),
         });
         self.builder.assign(Place::local(test_local), test);
@@ -12526,7 +12382,7 @@ impl LoweringContext<'_> {
             }
             // Singleton-valued types pin a specific runtime value, so emit
             // equality checks rather than type-tag tests. `is_type` on a
-            // literal type like `Ty::Literal("specific")` checks the value's
+            // literal type like `RuntimeTy::Literal("specific")` checks the value's
             // *type* (string) rather than its content — which is too permissive
             // and would let `let x: "specific" => …` fire on any string.
             Tir2Ty::Literal(lit, _, _) => {
@@ -12562,7 +12418,7 @@ impl LoweringContext<'_> {
             left: Operand::Copy(Place::Local(scrutinee)),
             right: rhs,
         };
-        let test_local = self.builder.temp(Ty::Bool {
+        let test_local = self.builder.temp(RuntimeTy::Bool {
             attr: TyAttr::default(),
         });
         self.builder.assign(Place::local(test_local), test);
@@ -12630,22 +12486,22 @@ impl LoweringContext<'_> {
     /// Look up the integer type tag for a type. Returns `Some(tag)` for
     /// primitives (INT=0, STRING=1, etc.) and classes (`CLASS_BASE` + index),
     /// or `None` for types that don't have a tag (unions, generics, etc.).
-    fn type_tag_for_ty(&self, ty: &Ty) -> Option<i64> {
+    fn type_tag_for_ty(&self, ty: &RuntimeTy) -> Option<i64> {
         match ty {
-            Ty::Int { .. } => Some(baml_type::typetag::INT),
-            Ty::Bigint { .. } => Some(baml_type::typetag::BIGINT),
-            Ty::String { .. } => Some(baml_type::typetag::STRING),
-            Ty::Bool { .. } => Some(baml_type::typetag::BOOL),
-            Ty::Null { .. } => Some(baml_type::typetag::NULL),
-            Ty::Float { .. } => Some(baml_type::typetag::FLOAT),
-            Ty::Uint8Array { .. } => Some(baml_type::typetag::UINT8ARRAY),
-            Ty::Enum(..) | Ty::EnumVariant(..) => Some(baml_type::typetag::ENUM),
-            Ty::List(..) => Some(baml_type::typetag::LIST),
-            Ty::Map { .. } => Some(baml_type::typetag::MAP),
-            Ty::Function { .. } => Some(baml_type::typetag::FUNCTION),
-            Ty::Future(..) => Some(baml_type::typetag::FUTURE),
-            Ty::Type { .. } => Some(baml_type::typetag::TYPE),
-            Ty::Class(tn, _, _) => self.class_type_tags.get(tn).copied(),
+            RuntimeTy::Int { .. } => Some(baml_type::typetag::INT),
+            RuntimeTy::Bigint { .. } => Some(baml_type::typetag::BIGINT),
+            RuntimeTy::String { .. } => Some(baml_type::typetag::STRING),
+            RuntimeTy::Bool { .. } => Some(baml_type::typetag::BOOL),
+            RuntimeTy::Null { .. } => Some(baml_type::typetag::NULL),
+            RuntimeTy::Float { .. } => Some(baml_type::typetag::FLOAT),
+            RuntimeTy::Uint8Array { .. } => Some(baml_type::typetag::UINT8ARRAY),
+            RuntimeTy::Enum(..) | RuntimeTy::EnumVariant(..) => Some(baml_type::typetag::ENUM),
+            RuntimeTy::List(..) => Some(baml_type::typetag::LIST),
+            RuntimeTy::Map { .. } => Some(baml_type::typetag::MAP),
+            RuntimeTy::Function { .. } => Some(baml_type::typetag::FUNCTION),
+            RuntimeTy::Future(..) => Some(baml_type::typetag::FUTURE),
+            RuntimeTy::Type { .. } => Some(baml_type::typetag::TYPE),
+            RuntimeTy::Class(tn, _, _) => self.class_type_tags.get(tn).copied(),
             _ => None,
         }
     }
@@ -12667,13 +12523,13 @@ impl LoweringContext<'_> {
 
     fn class_pattern_type_name(&self, pat_id: AstPatId) -> Option<TypeName> {
         let tir_ty = self.pat_types.get(&self.pat_metadata_key(pat_id))?;
-        match convert_tir2_ty(tir_ty, self.resolved_aliases) {
-            Ty::Class(tn, _, _) => Some(tn),
+        match self.resolved_aliases.convert(tir_ty) {
+            RuntimeTy::Class(tn, _, _) => Some(tn),
             _ => None,
         }
     }
 
-    fn class_pattern_field_ty(&self, pat_id: AstPatId, field: &Name) -> Option<Ty> {
+    fn class_pattern_field_ty(&self, pat_id: AstPatId, field: &Name) -> Option<RuntimeTy> {
         let tir_ty = self.pat_types.get(&self.pat_metadata_key(pat_id))?;
         let Tir2Ty::Class(qtn, type_args, _) = tir_ty else {
             return None;
@@ -12764,7 +12620,7 @@ impl LoweringContext<'_> {
     }
 
     fn const_int_local(&mut self, value: i64) -> Local {
-        let local = self.builder.temp(Ty::Int {
+        let local = self.builder.temp(RuntimeTy::Int {
             attr: TyAttr::default(),
         });
         self.builder.assign(
@@ -12779,7 +12635,7 @@ impl LoweringContext<'_> {
     }
 
     fn array_len_local(&mut self, scrutinee: Local) -> Local {
-        let len_local = self.builder.temp(Ty::Int {
+        let len_local = self.builder.temp(RuntimeTy::Int {
             attr: TyAttr::default(),
         });
         self.builder.assign(
@@ -12799,7 +12655,7 @@ impl LoweringContext<'_> {
     ) {
         let len_local = self.array_len_local(scrutinee);
         let expected = self.const_usize_int_local(fixed_len);
-        let test_local = self.builder.temp(Ty::Bool {
+        let test_local = self.builder.temp(RuntimeTy::Bool {
             attr: TyAttr::default(),
         });
         self.builder.assign(
@@ -12832,7 +12688,7 @@ impl LoweringContext<'_> {
     ) -> Local {
         let len_local = self.array_len_local(scrutinee);
         let offset = self.const_usize_int_local(index_from_end);
-        let index_local = self.builder.temp(Ty::Int {
+        let index_local = self.builder.temp(RuntimeTy::Int {
             attr: TyAttr::default(),
         });
         self.builder.assign(
@@ -12880,7 +12736,7 @@ impl LoweringContext<'_> {
         } else {
             let len_local = self.array_len_local(scrutinee);
             let suffix = self.const_usize_int_local(suffix_len);
-            let end = self.builder.temp(Ty::Int {
+            let end = self.builder.temp(RuntimeTy::Int {
                 attr: TyAttr::default(),
             });
             self.builder.assign(
@@ -12968,7 +12824,7 @@ impl LoweringContext<'_> {
                 // bookkeeping, not a runtime dispatch condition. Emitting a
                 // type test here is at best a tautology and at worst a
                 // miscompile: a rigid generic (e.g. the `E` of a combinator's
-                // `catch (e) { let e => … }`) erases to `Ty::Void` in
+                // `catch (e) { let e => … }`) erases to `RuntimeTy::Void` in
                 // `convert_tir2_ty`, making the test constant-false and the
                 // catch arm silently rethrow. (Panic fall-through for catch
                 // arms is handled separately by `ThrowIfPanic`.)
@@ -12987,7 +12843,7 @@ impl LoweringContext<'_> {
                         left: Operand::Copy(Place::Local(scrutinee)),
                         right: Operand::Constant(constant),
                     };
-                    let test_local = self.builder.temp(Ty::Bool {
+                    let test_local = self.builder.temp(RuntimeTy::Bool {
                         attr: TyAttr::default(),
                     });
                     self.builder.assign(Place::local(test_local), test);
@@ -13000,7 +12856,7 @@ impl LoweringContext<'_> {
                         left: Operand::Copy(Place::Local(scrutinee)),
                         right: Operand::Constant(Constant::Null),
                     };
-                    let test_local = self.builder.temp(Ty::Bool {
+                    let test_local = self.builder.temp(RuntimeTy::Bool {
                         attr: TyAttr::default(),
                     });
                     self.builder.assign(Place::local(test_local), test);
@@ -13029,7 +12885,7 @@ impl LoweringContext<'_> {
                         left: Operand::Copy(Place::Local(scrutinee)),
                         right: Operand::Constant(Constant::EnumVariant { enum_ref, variant }),
                     };
-                    let test_local = self.builder.temp(Ty::Bool {
+                    let test_local = self.builder.temp(RuntimeTy::Bool {
                         attr: TyAttr::default(),
                     });
                     self.builder.assign(Place::local(test_local), test);
@@ -13070,7 +12926,7 @@ impl LoweringContext<'_> {
                         return;
                     }
                     // Other patterns keep the erased fast path (unchanged codegen).
-                    let annotation_ty = convert_tir2_ty(&pat_tir_ty, self.resolved_aliases);
+                    let annotation_ty = self.resolved_aliases.convert(&pat_tir_ty);
                     self.emit_is_type_branch(scrutinee, annotation_ty, success, failure);
                 }
             },
@@ -13297,7 +13153,7 @@ impl LoweringContext<'_> {
                 } else {
                     self.pat_types
                         .get(&self.pat_metadata_key(pat_id))
-                        .map(|ty| convert_tir2_ty(ty, self.resolved_aliases))
+                        .map(|ty| self.resolved_aliases.convert(ty))
                         .unwrap_or_else(|| self.builder.local_ty(scrutinee))
                 };
                 let local = self
@@ -13635,15 +13491,15 @@ impl LoweringContext<'_> {
         }
     }
 
-    /// Convert a `Ty` to the list of type tag integers it corresponds to.
+    /// Convert a `RuntimeTy` to the list of type tag integers it corresponds to.
     /// Returns `None` if the type has no simple tag representation.
     ///
     /// Supports primitives (globally-stable tags) and class types (looked up
     /// from `class_type_tags`). Union types are flattened — all members must
     /// be tag-eligible.
-    fn ty_to_type_tags(&self, ty: &Ty) -> Option<Vec<i64>> {
+    fn ty_to_type_tags(&self, ty: &RuntimeTy) -> Option<Vec<i64>> {
         match ty {
-            Ty::Union(members, _) => {
+            RuntimeTy::Union(members, _) => {
                 let mut tags = Vec::new();
                 for m in members {
                     let member_tags = self.ty_to_type_tags(m)?;
@@ -13750,7 +13606,7 @@ impl LoweringContext<'_> {
         });
         let error_local = self.builder.declare_local(
             single_clause_binding_name,
-            Ty::BuiltinUnknown {
+            RuntimeTy::BuiltinUnknown {
                 attr: TyAttr::default(),
             },
             None,
@@ -13763,7 +13619,7 @@ impl LoweringContext<'_> {
             .then(|| {
                 self.builder.declare_local(
                     None,
-                    Ty::BuiltinUnknown {
+                    RuntimeTy::BuiltinUnknown {
                         attr: TyAttr::default(),
                     },
                     None,
@@ -13781,7 +13637,7 @@ impl LoweringContext<'_> {
                 Some(name) if binding_is_captured => {
                     let local = self.builder.declare_local(
                         Some(name.clone()),
-                        Ty::BuiltinUnknown {
+                        RuntimeTy::BuiltinUnknown {
                             attr: TyAttr::default(),
                         },
                         None,
@@ -13808,7 +13664,7 @@ impl LoweringContext<'_> {
                     Some(name) if is_captured => {
                         let local = self.builder.declare_local(
                             Some(name.clone()),
-                            Ty::BuiltinUnknown {
+                            RuntimeTy::BuiltinUnknown {
                                 attr: TyAttr::default(),
                             },
                             None,
@@ -14019,7 +13875,7 @@ pub fn lower_function<'db>(
             use baml_compiler2_ast::BuiltinKind;
             // For IO builtins (`$rust_io_function`), the compiler injects one
             // synthetic trailing value-arg slot for each generic type parameter
-            // (e.g. `parse<T>` gets one extra `baml_type::Ty` slot after the
+            // (e.g. `parse<T>` gets one extra `baml_type::RuntimeTy` slot after the
             // regular params).  We must include those synthetic slots in the
             // arity so that `ScheduleFuture` pops the correct number of args
             // from the stack.
@@ -14060,7 +13916,7 @@ pub fn lower_function<'db>(
                 locals: (0..=arity)
                     .map(|_| LocalDecl {
                         name: None,
-                        ty: baml_type::Ty::Void {
+                        ty: baml_type::RuntimeTy::Void {
                             attr: baml_type::TyAttr::default(),
                         },
                         is_captured: false,

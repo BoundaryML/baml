@@ -17,7 +17,7 @@ pub use bex_engine::{
 };
 pub use bex_external_types::{
     BexExternalAdt, BexExternalValue, Handle, HostReleaseFn, HostReturnTypeError, HostValueArc,
-    HostValueKind, MediaKind, Ty, TyAttr, host_release_dispatch, try_convert_rust_data,
+    HostValueKind, MediaKind, RuntimeTy, TyAttr, host_release_dispatch, try_convert_rust_data,
     validate_host_return,
 };
 pub use sys_ops::SysOps;

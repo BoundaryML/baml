@@ -4,7 +4,7 @@
 //! module provides an API that takes a `PermitProof<'_>` (obtained from any
 //! held `ActiveHeapPermit<T>`) to witness GC-exclusion at the type level.
 
-use baml_type::Ty;
+use baml_type::RuntimeTy;
 use bex_external_types::{BexExternalAdt, BexExternalValue, WeakHeapRef};
 use bex_vm_types::{HeapPtr, Object, PermitProof, Value};
 
@@ -561,8 +561,8 @@ impl<'a> BexValue<'a> {
         self,
         heap: &BexHeap,
         _permit: PermitProof<'_>,
-    ) -> Result<baml_type::Ty, AccessError> {
-        fn from_ptr(ptr: &HeapPtr) -> Result<baml_type::Ty, AccessError> {
+    ) -> Result<baml_type::RuntimeTy, AccessError> {
+        fn from_ptr(ptr: &HeapPtr) -> Result<baml_type::RuntimeTy, AccessError> {
             let obj = unsafe { ptr.get() };
             let Object::Type(ty) = obj else {
                 return Err(AccessError::TypeMismatch {
@@ -768,7 +768,7 @@ fn convert_object(
         // Deep-copy path for trace payloads: no declared type is available here,
         // so placeholder types with default attr are used.
         Object::Array(array) => Ok(BexExternalValue::Array {
-            element_type: Ty::BuiltinUnknown {
+            element_type: RuntimeTy::BuiltinUnknown {
                 attr: baml_type::TyAttr::default(),
             },
             items: array
@@ -778,10 +778,10 @@ fn convert_object(
                 .collect::<Result<_, _>>()?,
         }),
         Object::Map(map) => Ok(BexExternalValue::Map {
-            key_type: Ty::String {
+            key_type: RuntimeTy::String {
                 attr: baml_type::TyAttr::default(),
             },
-            value_type: Ty::BuiltinUnknown {
+            value_type: RuntimeTy::BuiltinUnknown {
                 attr: baml_type::TyAttr::default(),
             },
             entries: map

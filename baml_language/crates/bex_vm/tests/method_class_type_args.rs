@@ -4,7 +4,7 @@
 //! - `Object::Instance` carrying `class_type_args` (8.1)
 //! - `AllocInstance { ntypeargs }` populating `class_type_args` from the stack (8.2)
 //! - A method-like function body reading `TypeArgRef(0)` when the frame has
-//!   been seeded with `[Ty::int()]` (simulating the 8.5 path) (8.5)
+//!   been seeded with `[RuntimeTy::int()]` (simulating the 8.5 path) (8.5)
 //!
 //! The tests inject synthetic bytecode directly into a compiled `Program`
 //! (produced by `compile_source`) so no compiler pipeline is required.
@@ -12,7 +12,7 @@
 use std::sync::{Arc, atomic::AtomicBool};
 
 use baml_project::testing::compile_source;
-use baml_type::{Name, Ty, TyAttr, TyTemplate, TypeName};
+use baml_type::{Name, RuntimeTy, TyAttr, TyTemplate, TypeName};
 use bex_vm::{BexVm, VmExecState};
 use bex_vm_types::{
     ConstValue, Instruction, Object, ObjectIndex, Value,
@@ -48,7 +48,7 @@ fn inject_function(
         local_names: vec![],
         debug_locals: vec![],
         span: baml_type::Span::fake(),
-        return_type: Ty::int(),
+        return_type: RuntimeTy::int(),
         param_names: vec![],
         param_types: vec![],
         param_has_default: vec![false; arity],
@@ -108,7 +108,7 @@ fn alloc_instance_ntypeargs_stores_class_type_args() {
         ty_attr: TyAttr::default(),
     })));
 
-    // Function: push Ty::int() as a type arg, then AllocInstance with ntypeargs=1.
+    // Function: push RuntimeTy::int() as a type arg, then AllocInstance with ntypeargs=1.
     let fn_name = "user.test_alloc_typearg";
     inject_function(
         &mut program,
@@ -122,7 +122,7 @@ fn alloc_instance_ntypeargs_stores_class_type_args() {
             },
             Instruction::Return,
         ],
-        vec![ConstValue::Type(TyTemplate::Concrete(Ty::int()))],
+        vec![ConstValue::Type(TyTemplate::Concrete(RuntimeTy::int()))],
     );
 
     let (result, vm) = run_fn(program, fn_name);
@@ -134,8 +134,8 @@ fn alloc_instance_ntypeargs_stores_class_type_args() {
         Object::Instance(inst) => {
             assert_eq!(
                 inst.class_type_args,
-                vec![Ty::int()],
-                "Instance::class_type_args should equal [Ty::int()]"
+                vec![RuntimeTy::int()],
+                "Instance::class_type_args should equal [RuntimeTy::int()]"
             );
         }
         other => panic!("expected Object::Instance, got {other:?}"),
@@ -188,11 +188,11 @@ fn alloc_instance_ntypeargs_zero_gives_empty_class_type_args() {
 
 // ─── 8.5 ── frame.type_args seeded from receiver class_type_args ─────────────
 
-/// Manually seed `frame.type_args = [Ty::int()]` on a method frame and verify
+/// Manually seed `frame.type_args = [RuntimeTy::int()]` on a method frame and verify
 /// that `LoadType(TypeArgRef(0))` returns `Object::Type(int)`.
 ///
 /// This simulates what `execute_call_from_locals_offset` does in Phase 8.5
-/// when a `BoundMethod` callee has a receiver with `class_type_args = [Ty::int()]`.
+/// when a `BoundMethod` callee has a receiver with `class_type_args = [RuntimeTy::int()]`.
 #[test]
 fn method_frame_type_args_seeded_with_class_type_args() {
     let mut program = compile_source(STUB_SOURCE);
@@ -218,7 +218,7 @@ fn method_frame_type_args_seeded_with_class_type_args() {
         use bex_vm::Frame;
         let frame = vm.frames.last_mut().expect("entry frame");
         if let Frame::Bytecode(bf) = frame {
-            bf.type_args = vec![Ty::int()]; // receiver.class_type_args = [int]
+            bf.type_args = vec![RuntimeTy::int()]; // receiver.class_type_args = [int]
         } else {
             panic!("entry frame should be Bytecode");
         }
@@ -239,7 +239,7 @@ fn method_frame_type_args_seeded_with_class_type_args() {
         Object::Type(ty) => {
             assert_eq!(
                 **ty,
-                Ty::int(),
+                RuntimeTy::int(),
                 "TypeArgRef(0) with class_type_args=[int] should yield int"
             );
         }
@@ -247,7 +247,7 @@ fn method_frame_type_args_seeded_with_class_type_args() {
     }
 }
 
-/// Seed `frame.type_args = [Ty::string()]` and confirm `TypeArgRef(0)` yields string.
+/// Seed `frame.type_args = [RuntimeTy::string()]` and confirm `TypeArgRef(0)` yields string.
 #[test]
 fn method_frame_type_args_seeded_string() {
     let mut program = compile_source(STUB_SOURCE);
@@ -270,7 +270,7 @@ fn method_frame_type_args_seeded_string() {
         use bex_vm::Frame;
         let frame = vm.frames.last_mut().expect("entry frame");
         if let Frame::Bytecode(bf) = frame {
-            bf.type_args = vec![Ty::string()];
+            bf.type_args = vec![RuntimeTy::string()];
         }
     }
 
@@ -289,7 +289,7 @@ fn method_frame_type_args_seeded_string() {
         Object::Type(ty) => {
             assert_eq!(
                 **ty,
-                Ty::string(),
+                RuntimeTy::string(),
                 "TypeArgRef(0) with class_type_args=[string] should yield string"
             );
         }

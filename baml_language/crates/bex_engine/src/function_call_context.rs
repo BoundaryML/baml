@@ -9,14 +9,14 @@ pub struct FunctionCallContext {
     /// Type arguments to seed the entry frame's `type_args` slot with.
     /// Use to call generic stdlib functions like `baml.json.to_string<T>`
     /// from a host: the native handler reads its `T` from this channel.
-    pub type_args: Vec<baml_type::Ty>,
+    pub type_args: Vec<baml_type::RuntimeTy>,
 }
 
 /// Builder for `FunctionCallContext`.
 pub struct FunctionCallContextBuilder {
     call_id: CallId,
     cancel: Option<CancellationToken>,
-    type_args: Option<Vec<baml_type::Ty>>,
+    type_args: Option<Vec<baml_type::RuntimeTy>>,
 }
 
 impl FunctionCallContextBuilder {
@@ -38,7 +38,7 @@ impl FunctionCallContextBuilder {
     }
 
     #[must_use]
-    pub fn with_type_args(mut self, type_args: Vec<baml_type::Ty>) -> Self {
+    pub fn with_type_args(mut self, type_args: Vec<baml_type::RuntimeTy>) -> Self {
         self.type_args = Some(type_args);
         self
     }

@@ -182,7 +182,7 @@ mod tests {
     use std::sync::Arc;
 
     use baml_builtins2::{MediaContent, MediaValue, PromptAst, PromptAstSimple};
-    use bex_external_types::{AsBexExternalValue, Ty};
+    use bex_external_types::{AsBexExternalValue, RuntimeTy};
     use indexmap::IndexMap;
 
     use super::*;
@@ -660,7 +660,7 @@ mod tests {
                     BexExternalValue::Int(500),
                 )]),
                 allowed_role_metadata: Some(BexExternalValue::Array {
-                    element_type: Ty::String {
+                    element_type: RuntimeTy::String {
                         attr: baml_type::TyAttr::default(),
                     },
                     items: vec![BexExternalValue::String("cache_control".into())],
@@ -999,8 +999,8 @@ mod tests {
                 request_body: IndexMap::from([(
                     "generationConfig".to_string(),
                     BexExternalValue::Map {
-                        key_type: baml_type::Ty::string(),
-                        value_type: baml_type::Ty::unknown(),
+                        key_type: baml_type::RuntimeTy::string(),
+                        value_type: baml_type::RuntimeTy::unknown(),
                         entries: IndexMap::from([(
                             "temperature".to_string(),
                             BexExternalValue::Float(0.5),
@@ -1219,8 +1219,8 @@ mod tests {
                 request_body: IndexMap::from([(
                     "generationConfig".to_string(),
                     BexExternalValue::Map {
-                        key_type: baml_type::Ty::string(),
-                        value_type: baml_type::Ty::unknown(),
+                        key_type: baml_type::RuntimeTy::string(),
+                        value_type: baml_type::RuntimeTy::unknown(),
                         entries: IndexMap::from([
                             (
                                 "temperature".to_string(),
