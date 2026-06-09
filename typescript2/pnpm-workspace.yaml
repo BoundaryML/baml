@@ -7,9 +7,17 @@ packages:
 allowBuilds:
   '@bufbuild/buf': true
   '@mongodb-js/zstd': true
+  '@posthog/cli': true
+  '@scarf/scarf': true
+  '@tailwindcss/oxide': true
+  '@vercel/speed-insights': true
+  core-js: true
   esbuild: true
   msw: true
-  node-liblzma: true
+  # node-liblzma's native (gyp) build fails and isn't needed at runtime;
+  # disable it explicitly to keep installs clean.
+  node-liblzma: false
+  sharp: true
   unrs-resolver: true
 
 catalog:
