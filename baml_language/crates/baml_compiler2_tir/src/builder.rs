@@ -6577,6 +6577,19 @@ impl<'db> TypeInferenceBuilder<'db> {
                 baml_compiler2_ast::CatchClauseKind::CatchAll
                     | baml_compiler2_ast::CatchClauseKind::CatchAllPanics
             ) {
+                if !residual.is_empty() {
+                    let missing = residual
+                        .iter()
+                        .map(Ty::render_user_facing)
+                        .collect::<Vec<_>>();
+                    self.context.report_simple(
+                        TirTypeError::NonExhaustiveCatchAll {
+                            caught_type: clause_binding_ty,
+                            missing_cases: missing,
+                        },
+                        catch_expr_id,
+                    );
+                }
                 residual.clear();
             }
         }
