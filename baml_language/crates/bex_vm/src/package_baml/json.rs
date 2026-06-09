@@ -41,8 +41,8 @@ where
 /// Build the runtime registration key for a `Ty::Class(qtn, ...)` /
 /// `Ty::Enum(qtn, _)` lookup against `BexVm::resolved_class_names`.
 ///
-/// Compiler-side `qtn_to_type_name` strips the `user.` prefix from
-/// user-defined types' `display_name` for nicer diagnostic strings, but
+/// Compiler-side `display_name` strips the `user.` prefix from
+/// user-defined types for nicer diagnostic strings, but
 /// the runtime registration uses the full `package.namespace.name` form.
 /// We rebuild that form here from `module_path + name`; for builtin types
 /// (where `display_name` already encodes the full path) this also works
@@ -516,9 +516,9 @@ fn ty_value_to_serde(
             Ok(value_to_serde(vm, value))
         }
 
-        Ty::Opaque(name, _) => Err(raise_serialize(
+        Ty::Resource { .. } | Ty::PromptAst { .. } => Err(raise_serialize(
             vm,
-            format!("cannot serialize opaque type `{name}`"),
+            "cannot serialize opaque type",
             path,
             "opaque",
         )),
@@ -909,11 +909,9 @@ fn ty_serde_to_value(
             _ => Err(raise_decode(vm, "literal mismatch", path)),
         },
 
-        Ty::Opaque(name, _) => Err(raise_decode(
-            vm,
-            format!("cannot deserialize opaque type `{name}`"),
-            path,
-        )),
+        Ty::Resource { .. } | Ty::PromptAst { .. } => {
+            Err(raise_decode(vm, "cannot deserialize opaque type", path))
+        }
 
         Ty::Function { .. }
         | Ty::Future(_, _, _)

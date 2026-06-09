@@ -126,78 +126,62 @@ pub enum FunctionParamMode {
 /// variants) that holds SAP streaming annotations. All existing code uses
 /// `TyAttr::default()` — only stream type generation (HIR lowering) will populate
 /// non-default values.
-#[subenum(ConcreteTy, RuntimeTy)]
+#[subenum(
+    ConcreteTy(
+        doc = "Concrete types that have concrete memory layouts and method implementations."
+    ),
+    RealizedTy(doc = "Realized types (excludes type aliases and unrealized type args)"),
+    RuntimeTy(doc = "Types that exist outside the compiler")
+)]
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, BorshSerialize, BorshDeserialize)]
 pub enum Ty {
-    // --- Core: used by all VIR+ stages ---
-    #[subenum(ConcreteTy, RuntimeTy)]
+    #[subenum(ConcreteTy, RealizedTy, RuntimeTy)]
     Int { attr: TyAttr },
-    #[subenum(ConcreteTy, RuntimeTy)]
+    #[subenum(ConcreteTy, RealizedTy, RuntimeTy)]
     Bigint { attr: TyAttr },
-    #[subenum(ConcreteTy, RuntimeTy)]
+    #[subenum(ConcreteTy, RealizedTy, RuntimeTy)]
     Float { attr: TyAttr },
-    #[subenum(ConcreteTy, RuntimeTy)]
+    #[subenum(ConcreteTy, RealizedTy, RuntimeTy)]
     String { attr: TyAttr },
-    #[subenum(ConcreteTy, RuntimeTy)]
+    #[subenum(ConcreteTy, RealizedTy, RuntimeTy)]
     Bool { attr: TyAttr },
-    #[subenum(ConcreteTy, RuntimeTy)]
+    #[subenum(ConcreteTy, RealizedTy, RuntimeTy)]
     Null { attr: TyAttr },
-    #[subenum(ConcreteTy, RuntimeTy)]
+    #[subenum(ConcreteTy, RealizedTy, RuntimeTy)]
     Uint8Array { attr: TyAttr },
-    #[subenum(ConcreteTy, RuntimeTy)]
+    #[subenum(ConcreteTy, RealizedTy, RuntimeTy)]
     Media(MediaKind, TyAttr),
     /// A literal type — a single value (`1`, `"hi"`, `true`) as a type. The
     /// [`Freshness`] flag is compiler-only (fresh literals widen at mutable
     /// binding sites); it is normalized to `Regular` at the runtime boundary.
-    #[subenum(RuntimeTy)]
+    #[subenum(RealizedTy, RuntimeTy)]
     Literal(Literal, Freshness, TyAttr),
-    #[subenum(ConcreteTy, RuntimeTy)]
+    #[subenum(ConcreteTy, RealizedTy, RuntimeTy)]
     Class(TypeName, Vec<Ty>, TyAttr),
-    #[subenum(RuntimeTy)]
+    #[subenum(RealizedTy, RuntimeTy)]
     Interface(TypeName, Vec<Ty>, Vec<(Name, Ty)>, TyAttr),
-    #[subenum(ConcreteTy, RuntimeTy)]
+    #[subenum(ConcreteTy, RealizedTy, RuntimeTy)]
     Enum(TypeName, TyAttr),
     /// A specific enum variant — `Status.HttpError`.
-    /// Compiler-only: should not reach runtime.
-    #[subenum(RuntimeTy)]
+    #[subenum(RealizedTy, RuntimeTy)]
     EnumVariant(TypeName, Name, TyAttr),
-    #[subenum(ConcreteTy, RuntimeTy)]
+    #[subenum(ConcreteTy, RealizedTy, RuntimeTy)]
     List(Box<Ty>, TyAttr),
-    #[subenum(ConcreteTy, RuntimeTy)]
+    #[subenum(ConcreteTy, RealizedTy, RuntimeTy)]
     Map {
         key: Box<Ty>,
         value: Box<Ty>,
         attr: TyAttr,
     },
-    #[subenum(RuntimeTy)]
+    #[subenum(RealizedTy, RuntimeTy)]
     Union(Vec<Ty>, TyAttr),
 
-    // --- Runtime-only: present at runtime, not in user-facing type syntax ---
-    /// Opaque runtime-only type, identified by its qualified name.
-    ///
-    /// Used for types that the type system treats generically (nominal equality,
-    /// no structural decomposition, infinite for exhaustiveness) but whose
-    /// *values* are concrete Rust types on the VM heap.
-    ///
-    /// Well-known opaque types:
-    /// - `baml.llm.Resource` — file/socket/HTTP response handles
-    /// - `baml.llm.PromptAst` — structured prompt trees for LLM calls
-    /// - `type` — meta-type wrapping a `Ty` for reflection
-    ///
-    /// Use the convenience constructors `Ty::resource()`, `Ty::prompt_ast()`,
-    /// `Ty::type_type()` instead of constructing directly.
-    #[subenum(ConcreteTy, RuntimeTy)]
-    Opaque(TypeName, TyAttr),
-
-    // --- Compiler-specific: present in VIR/MIR, absent at runtime ---
-    /// Only recursive aliases survive lower_ty; non-recursive are expanded.
-    TypeAlias(TypeName, TyAttr),
     /// Function/arrow type: `<G…>(T1, T2, ...) -> R throws E`.
     ///
     /// `generic_params`/`generic_param_bounds` carry the function's declared
     /// type parameters and their bounds (kept at runtime for reflection, even
     /// though body `TypeVar`s are erased at the runtime boundary).
-    #[subenum(ConcreteTy, RuntimeTy)]
+    #[subenum(ConcreteTy, RealizedTy, RuntimeTy)]
     Function {
         generic_params: Vec<Name>,
         generic_param_bounds: Vec<Option<Ty>>,
@@ -206,15 +190,67 @@ pub enum Ty {
         throws: Box<Ty>,
         attr: TyAttr,
     },
+    /// A future handle — the result of `schedule_future` or `spawn`
+    /// before `await`.
+    ///
+    /// Carries both the value type the future resolves to and the error
+    /// type the future may throw. The error type approximates `never` as
+    /// `Null` when the body of the future statically cannot throw.
+    #[subenum(ConcreteTy, RealizedTy, RuntimeTy)]
+    Future(Box<Ty>, Box<Ty>, TyAttr),
+    /// Opaque Rust-managed state (`$rust_type` fields in builtin class stubs,
+    /// e.g. `Media._data`). A leaf concrete type with no inner structure.
+    ///
+    /// Renders as `$rust_type` (qualified name `baml.rust.RustType`).
+    #[subenum(ConcreteTy, RealizedTy, RuntimeTy)]
+    RustType { attr: TyAttr },
+    /// The `type` metatype keyword — a runtime value that wraps a `Ty`
+    /// (reflection). A leaf concrete type.
+    ///
+    /// Renders as the `type` keyword (qualified name `baml.reflect.Type`).
+    #[subenum(ConcreteTy, RealizedTy, RuntimeTy)]
+    Type { attr: TyAttr },
+    /// Opaque resource handle — file, socket, or HTTP response body. A leaf
+    /// concrete type whose *values* are concrete Rust types on the VM heap; the
+    /// type system treats it nominally (no structural decomposition).
+    ///
+    /// Renders as its qualified name `baml.llm.Resource`.
+    #[subenum(ConcreteTy, RealizedTy, RuntimeTy)]
+    Resource { attr: TyAttr },
+    /// Opaque structured prompt tree for LLM calls. A leaf concrete type whose
+    /// *values* are concrete Rust types on the VM heap; the type system treats
+    /// it nominally (no structural decomposition).
+    ///
+    /// Renders as its qualified name `baml.llm.PromptAst`.
+    #[subenum(ConcreteTy, RealizedTy, RuntimeTy)]
+    PromptAst { attr: TyAttr },
+
     /// Void type — the type of effectful expressions (was VIR `Unit`).
-    /// Also used for diverging expressions (return, break, continue) since
-    /// MIR encodes divergence via control flow terminators, not the type.
-    #[subenum(RuntimeTy)]
+    #[subenum(RealizedTy, RuntimeTy)]
     Void { attr: TyAttr },
     /// Watch accessor type: represents `x.$watch` on a watched variable.
-    #[subenum(RuntimeTy)]
+    #[subenum(RealizedTy, RuntimeTy)]
     WatchAccessor(Box<Ty>, TyAttr),
-    /// Internal-only type for builtin functions that accept any argument.
+
+    /// Only recursive aliases survive lower_ty; non-recursive are expanded.
+    #[subenum(RuntimeTy)]
+    TypeAlias(TypeName, TyAttr),
+    /// A type variable (generic parameter) — e.g. `T` in `Array<T>`. Bound
+    /// during inference; can survive at runtime only inside reflective generic
+    /// metadata.
+    #[subenum(RuntimeTy)]
+    TypeVar(Name, TyAttr),
+    /// Associated type projection, e.g. `P.Output` or `(T as Iterator).Item`. Bound
+    /// during inference; can survive at runtime only inside reflective generic
+    /// metadata.
+    #[subenum(RuntimeTy)]
+    AssociatedTypeProjection {
+        base: Box<Ty>,
+        interface: Option<Box<Ty>>,
+        member: Name,
+        attr: TyAttr,
+    },
+    /// The top type - may have any concrete value.
     ///
     /// Similar to TypeScript's `unknown` - any value can be passed where
     /// `BuiltinUnknown` is expected, but `BuiltinUnknown` cannot be used
@@ -224,39 +260,16 @@ pub enum Ty {
     /// ```baml
     /// function render_prompt(function_name: string, args: map<string, unknown>) -> PromptAst
     /// ```
-    ///
-    /// This is a compiler-only variant that should never reach runtime.
-    #[subenum(RuntimeTy)]
+    #[subenum(RealizedTy, RuntimeTy)]
     BuiltinUnknown { attr: TyAttr },
-    /// A future handle — the result of `schedule_future` or `spawn`
-    /// before `await`.
-    ///
-    /// Carries both the value type the future resolves to and the error
-    /// type the future may throw. The error type approximates `never` as
-    /// `Null` when the body of the future statically cannot throw.
-    #[subenum(ConcreteTy, RuntimeTy)]
-    Future(Box<Ty>, Box<Ty>, TyAttr),
+    /// The bottom type — an expression that never produces a value (`return`,
+    /// `break`, `continue`, diverging blocks). A subtype of every type.
+    #[subenum(RealizedTy, RuntimeTy)]
+    Never { attr: TyAttr },
 
     // --- TIR-only: present during type checking, erased at the runtime
     // boundary (`convert_tir2_ty`). Excluded from `ConcreteTy`; only the ones
     // that can legitimately nest in a runtime type carry `RuntimeTy`.
-    /// A type variable (generic parameter) — e.g. `T` in `Array<T>`. Bound
-    /// during inference; can survive at runtime only inside reflective generic
-    /// metadata.
-    #[subenum(RuntimeTy)]
-    TypeVar(Name, TyAttr),
-    /// Associated type projection, e.g. `P.Output` or `(T as Iterator).Item`.
-    /// Resolved before the runtime boundary.
-    AssociatedTypeProjection {
-        base: Box<Ty>,
-        interface: Option<Box<Ty>>,
-        member: Name,
-        attr: TyAttr,
-    },
-    /// The bottom type — an expression that never produces a value (`return`,
-    /// `break`, `continue`, diverging blocks). A subtype of every type.
-    #[subenum(RuntimeTy)]
-    Never { attr: TyAttr },
     /// Error-recovery sentinel: the type is structurally unknown (e.g. an
     /// unresolved name). Distinct from `BuiltinUnknown` (a well-formed top type).
     Unknown { attr: TyAttr },
@@ -267,14 +280,36 @@ pub enum Ty {
     EvolvingList(Box<Ty>, TyAttr),
     /// Evolving map — the map analogue of [`Ty::EvolvingList`].
     EvolvingMap(Box<Ty>, Box<Ty>, TyAttr),
-    /// Opaque Rust-managed state (`$rust_type` fields in builtin class stubs,
-    /// e.g. `Media._data`). A leaf concrete type with no inner structure.
-    #[subenum(ConcreteTy, RuntimeTy)]
-    RustType { attr: TyAttr },
-    /// The `type` metatype keyword — a runtime value that wraps a `Ty`
-    /// (reflection). A leaf concrete type.
-    #[subenum(ConcreteTy, RuntimeTy)]
-    Type { attr: TyAttr },
+}
+
+// ── Subset-hierarchy upcasts ─────────────────────────────────────────────────
+// `subenum` generates each subset's `From<child> for Ty` and `TryFrom<Ty> for
+// child`, but not the child→child casts. The taxonomy guarantees
+// `ConcreteTy ⊆ RealizedTy ⊆ RuntimeTy`, so these upcasts are infallible: round
+// through `Ty`; the `TryFrom` cannot fail for a value already in the subset.
+
+impl From<ConcreteTy> for RealizedTy {
+    fn from(value: ConcreteTy) -> Self {
+        Ty::from(value)
+            .try_into()
+            .unwrap_or_else(|_| unreachable!("every ConcreteTy is a RealizedTy"))
+    }
+}
+
+impl From<ConcreteTy> for RuntimeTy {
+    fn from(value: ConcreteTy) -> Self {
+        Ty::from(value)
+            .try_into()
+            .unwrap_or_else(|_| unreachable!("every ConcreteTy is a RuntimeTy"))
+    }
+}
+
+impl From<RealizedTy> for RuntimeTy {
+    fn from(value: RealizedTy) -> Self {
+        Ty::from(value)
+            .try_into()
+            .unwrap_or_else(|_| unreachable!("every RealizedTy is a RuntimeTy"))
+    }
 }
 
 /// Flatten, deduplicate, and collapse a vec of widened types into a single `Ty`.
@@ -339,7 +374,6 @@ impl Ty {
             Ty::List(inner, _) => Ty::List(inner, attr),
             Ty::Map { key, value, .. } => Ty::Map { key, value, attr },
             Ty::Union(members, _) => Ty::Union(members, attr),
-            Ty::Opaque(tn, _) => Ty::Opaque(tn, attr),
             Ty::TypeAlias(tn, _) => Ty::TypeAlias(tn, attr),
             Ty::Function {
                 generic_params,
@@ -377,6 +411,8 @@ impl Ty {
             Ty::EvolvingMap(key, value, _) => Ty::EvolvingMap(key, value, attr),
             Ty::RustType { .. } => Ty::RustType { attr },
             Ty::Type { .. } => Ty::Type { attr },
+            Ty::Resource { .. } => Ty::Resource { attr },
+            Ty::PromptAst { .. } => Ty::PromptAst { attr },
         }
     }
 
@@ -399,7 +435,9 @@ impl Ty {
             | Ty::Unknown { attr }
             | Ty::Error { attr }
             | Ty::RustType { attr }
-            | Ty::Type { attr } => attr,
+            | Ty::Type { attr }
+            | Ty::Resource { attr }
+            | Ty::PromptAst { attr } => attr,
             Ty::Media(_, attr)
             | Ty::Literal(_, _, attr)
             | Ty::Class(_, _, attr)
@@ -408,7 +446,6 @@ impl Ty {
             | Ty::EnumVariant(_, _, attr)
             | Ty::List(_, attr)
             | Ty::Union(_, attr)
-            | Ty::Opaque(_, attr)
             | Ty::TypeAlias(_, attr)
             | Ty::WatchAccessor(_, attr)
             | Ty::Future(_, _, attr)
@@ -636,47 +673,29 @@ impl Ty {
         }
     }
 
-    // --- Opaque type constructors ---
-
-    /// Helper to build an opaque type from a dotted `qualified_name` like
-    /// `"baml.llm.Resource"` (first segment = package, last = short name).
-    fn opaque_builtin(qualified_name: &str, attr: TyAttr) -> Self {
-        Ty::Opaque(QualifiedTypeName::from_dotted_path(qualified_name), attr)
-    }
+    // --- Opaque leaf-type constructors (default TyAttr) ---
 
     /// Opaque resource handle type (file, socket, HTTP response body).
-    /// NOTE: Uses TyAttr::default(). Callers with a source attr should use opaque_builtin() directly.
+    /// Renders as `baml.llm.Resource`.
     pub fn resource() -> Self {
-        Self::opaque_builtin("baml.llm.Resource", TyAttr::default())
-    }
-
-    /// Opaque structured prompt tree type for LLM calls.
-    /// NOTE: Uses TyAttr::default(). Callers with a source attr should use opaque_builtin() directly.
-    pub fn prompt_ast() -> Self {
-        Self::opaque_builtin("baml.llm.PromptAst", TyAttr::default())
-    }
-
-    /// Meta-type — a runtime value that wraps a `Ty`. Renders as the `type`
-    /// keyword (see `Display`) though its qualified name is `baml.reflect.Type`.
-    /// NOTE: Uses TyAttr::default(). Callers with a source attr should use opaque_builtin() directly.
-    pub fn type_type() -> Self {
-        Self::opaque_builtin("baml.reflect.Type", TyAttr::default())
-    }
-
-    /// Check if this is an opaque type with the given qualified name
-    /// (e.g. `"baml.llm.PromptAst"`).
-    pub fn is_opaque(&self, qualified_name: &str) -> bool {
-        match self {
-            Ty::Opaque(tn, _) => tn.render_dotted(false) == qualified_name,
-            _ => false,
+        Ty::Resource {
+            attr: TyAttr::default(),
         }
     }
 
-    /// If this is an opaque type, return its TypeName.
-    pub fn as_opaque(&self) -> Option<&TypeName> {
-        match self {
-            Ty::Opaque(tn, _) => Some(tn),
-            _ => None,
+    /// Opaque structured prompt tree type for LLM calls.
+    /// Renders as `baml.llm.PromptAst`.
+    pub fn prompt_ast() -> Self {
+        Ty::PromptAst {
+            attr: TyAttr::default(),
+        }
+    }
+
+    /// Meta-type — a runtime value that wraps a `Ty`. Renders as the `type`
+    /// keyword though its qualified name is `baml.reflect.Type`.
+    pub fn type_type() -> Self {
+        Ty::Type {
+            attr: TyAttr::default(),
         }
     }
 
@@ -776,18 +795,6 @@ impl Ty {
         }
     }
 
-    /// Returns true if this type is a compiler-only variant that should
-    /// never appear at runtime.
-    pub fn is_compiler_only(&self) -> bool {
-        matches!(
-            self,
-            Ty::Function { .. }
-                | Ty::Void { .. }
-                | Ty::WatchAccessor(..)
-                | Ty::BuiltinUnknown { .. }
-        )
-    }
-
     /// Recursively walk this type tree and return an error if any compiler-only
     /// variants are found.
     pub fn validate_runtime(&self) -> Result<(), String> {
@@ -853,9 +860,7 @@ impl Ty {
             | Ty::Unknown { .. }
             | Ty::Error { .. }
             | Ty::EvolvingList(..)
-            | Ty::EvolvingMap(..)
-            | Ty::RustType { .. }
-            | Ty::Type { .. } => Err("compiler-only type should not reach runtime".to_string()),
+            | Ty::EvolvingMap(..) => Err("compiler-only type should not reach runtime".to_string()),
             Ty::Int { .. }
             | Ty::Bigint { .. }
             | Ty::Float { .. }
@@ -867,7 +872,14 @@ impl Ty {
             | Ty::Literal(..)
             | Ty::Enum(..)
             | Ty::EnumVariant(..)
-            | Ty::Opaque(..) => Ok(()),
+            // The opaque leaf concrete types are genuine runtime types (their
+            // values live as concrete Rust types on the VM heap): `type`
+            // (reflection), `$rust_type` (Rust-managed field state), resource
+            // handles, and prompt trees.
+            | Ty::RustType { .. }
+            | Ty::Type { .. }
+            | Ty::Resource { .. }
+            | Ty::PromptAst { .. } => Ok(()),
         }
     }
 
@@ -1104,11 +1116,14 @@ impl Ty {
             Ty::BuiltinUnknown { .. } | Ty::Unknown { .. } => "unknown".to_string(),
             Ty::RustType { .. } => "$rust_type".to_string(),
             Ty::Type { .. } => "type".to_string(),
+            // Opaque leaf types render as their fixed qualified names; these
+            // strings feed canonical dumps and must stay byte-identical.
+            Ty::Resource { .. } => "baml.llm.Resource".to_string(),
+            Ty::PromptAst { .. } => "baml.llm.PromptAst".to_string(),
             Ty::Error { .. } => "!error".to_string(),
             Ty::Future(value, error, _) => {
                 format!("Future<{}, {}>", value.render_with(s), error.render_with(s))
             }
-            Ty::Opaque(qn, _) => s.qtn(qn),
             Ty::WatchAccessor(inner, _) => format!("{}.$watch", inner.render_with(s)),
         }
     }
@@ -1198,15 +1213,6 @@ impl fmt::Display for Ty {
             }
             Ty::Enum(tn, _) => write!(f, "{}", tn.display_name()),
             Ty::EnumVariant(tn, variant, _) => write!(f, "{}.{variant}", tn.display_name()),
-            Ty::Opaque(tn, _) => {
-                // The reflection meta-type renders as the `type` keyword even
-                // though its qualified name is `baml.reflect.Type`.
-                if tn.render_dotted(false) == "baml.reflect.Type" {
-                    write!(f, "type")
-                } else {
-                    write!(f, "{}", tn.display_name())
-                }
-            }
             Ty::TypeAlias(tn, _) => write!(f, "{}", tn.display_name()),
             Ty::List(inner, _) => {
                 inner.fmt_as_postfix_base(f)?;
@@ -1267,8 +1273,13 @@ impl fmt::Display for Ty {
             Ty::Error { .. } => write!(f, "<error>"),
             Ty::EvolvingList(inner, _) => write!(f, "{inner}[]"),
             Ty::EvolvingMap(key, value, _) => write!(f, "map<{key}, {value}>"),
-            Ty::RustType { .. } => write!(f, "RustType"),
+            // Opaque leaf types: render identically to `render_with` so the two
+            // renderers never diverge. (`type`/`$rust_type` are keywords; the
+            // resource/prompt handles render as their fixed qualified names.)
+            Ty::RustType { .. } => write!(f, "$rust_type"),
             Ty::Type { .. } => write!(f, "type"),
+            Ty::Resource { .. } => write!(f, "baml.llm.Resource"),
+            Ty::PromptAst { .. } => write!(f, "baml.llm.PromptAst"),
         }
     }
 }
@@ -1453,14 +1464,11 @@ mod tests {
     }
 
     #[test]
-    fn test_opaque_helpers() {
-        assert!(Ty::resource().is_opaque("baml.llm.Resource"));
-        assert!(!Ty::resource().is_opaque("baml.reflect.Type"));
-        assert_eq!(
-            Ty::prompt_ast().as_opaque().map(|tn| tn.name().as_str()),
-            Some("PromptAst"),
-        );
-        assert_eq!(ty_int().as_opaque(), None);
+    fn test_opaque_constructors_build_concrete_variants() {
+        assert!(matches!(Ty::resource(), Ty::Resource { .. }));
+        assert!(matches!(Ty::prompt_ast(), Ty::PromptAst { .. }));
+        assert!(matches!(Ty::type_type(), Ty::Type { .. }));
+        assert!(!matches!(Ty::resource(), Ty::Type { .. }));
     }
 
     #[test]

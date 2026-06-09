@@ -148,7 +148,7 @@ impl QualifiedTypeName {
 
     /// The user-facing display name (legacy `TypeName::display_name`): the
     /// reserved `user` package is elided for local types, dependency packages
-    /// are kept. Matches the previous `qtn_to_type_name` mapping.
+    /// are kept.
     pub fn display_name(&self) -> Name {
         if self.is_local() {
             let parts: Vec<String> = self

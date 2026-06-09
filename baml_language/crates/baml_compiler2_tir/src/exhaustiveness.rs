@@ -366,11 +366,11 @@ fn write_ty_identity(out: &mut String, ty: &Ty) {
             write_ty_identity(out, error);
             out.push('>');
         }
-        // `Opaque`/`WatchAccessor` are never produced by TIR; the arms exist
-        // only so the match stays exhaustive over the shared `baml_type::Ty`.
-        Ty::Opaque(qtn, _) => {
-            let _ = write!(out, "O:{qtn}");
-        }
+        // `Resource`/`PromptAst`/`WatchAccessor` are never produced by TIR; the
+        // arms exist only so the match stays exhaustive over the shared
+        // `baml_type::Ty`.
+        Ty::Resource { .. } => out.push_str("Res"),
+        Ty::PromptAst { .. } => out.push_str("PAst"),
         Ty::WatchAccessor(inner, _) => {
             out.push_str("Watch:");
             write_ty_identity(out, inner);

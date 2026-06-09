@@ -6808,13 +6808,12 @@ impl<'db> TypeInferenceBuilder<'db> {
                 Self::ty_contains_recovery_unknown(value)
                     || Self::ty_contains_recovery_unknown(error)
             }
-            // `WatchAccessor`/`Opaque` are never built by TIR; the arms exist
-            // only so the match stays exhaustive over the shared `baml_type::Ty`.
+            // `WatchAccessor` is never built by TIR; the arm exists only so the
+            // match stays exhaustive over the shared `baml_type::Ty`.
             Ty::WatchAccessor(inner, _) => Self::ty_contains_recovery_unknown(inner),
             Ty::Enum(..)
             | Ty::EnumVariant(..)
             | Ty::TypeAlias(..)
-            | Ty::Opaque(..)
             | Ty::Int { .. }
             | Ty::Bigint { .. }
             | Ty::Float { .. }
@@ -6828,7 +6827,9 @@ impl<'db> TypeInferenceBuilder<'db> {
             | Ty::Never { .. }
             | Ty::Void { .. }
             | Ty::RustType { .. }
-            | Ty::Type { .. } => false,
+            | Ty::Type { .. }
+            | Ty::Resource { .. }
+            | Ty::PromptAst { .. } => false,
         }
     }
 
@@ -15257,11 +15258,12 @@ impl crate::exhaustiveness::PatCtx for TypeInferenceBuilder<'_> {
             | Ty::Function { .. }
             | Ty::Type { .. }
             | Ty::RustType { .. }
+            | Ty::Resource { .. }
+            | Ty::PromptAst { .. }
             | Ty::Void { .. }
             | Ty::BuiltinUnknown { .. }
             | Ty::Unknown { .. }
             | Ty::Error { .. }
-            | Ty::Opaque(..)
             | Ty::WatchAccessor(..)
             | Ty::TypeVar(_, _)
             | Ty::AssociatedTypeProjection { .. } => vec![Ctor::NonExhaustive],

@@ -740,13 +740,13 @@ pub(crate) fn maybe_wrap_union(
 /// inbound `BexExternalValue::HostValue` can be bound to it as an
 /// `Object::HostClosure`.
 /// Returns `Some(())` if `ty` is the runtime representation of
-/// `$rust_type` — i.e. `Ty::Opaque("baml.rust.RustType", _)` — possibly
+/// `$rust_type` — i.e. `Ty::RustType` — possibly
 /// wrapped in a `Union` (the post-`Ty::Optional`-removal encoding of
 /// `T?` is `Ty::Union([T, Null], _)`, so nullable forms flow through
 /// the union arm). Mirrors [`peel_function_ty`] for the `$rust_type`
 /// field shape that a `HostValue` argument can land in.
 pub(crate) fn peel_to_rust_type(ty: &Ty) -> Option<()> {
-    if ty.is_opaque("baml.rust.RustType") {
+    if matches!(ty, Ty::RustType { .. }) {
         return Some(());
     }
     match ty {
@@ -846,8 +846,8 @@ fn resolve_named_object<'a>(
     if let Some(found) = objects.get(name) {
         return Some(found);
     }
-    // MIR's `qtn_to_type_name` strips the `user.` prefix from
-    // `display_name` for user-package types, so an `Instance` arriving
+    // MIR uses `display_name`, which strips the `user.` prefix for
+    // user-package types, so an `Instance` arriving
     // from `coerce_arg_to_declared_type` may carry `lorem.MyLorem` while
     // the engine registered `user.lorem.MyLorem`. Try the `user.`
     // prefix as a fallback before giving up. Builtin/vendor types keep
@@ -902,11 +902,7 @@ fn value_matches_type(value: &BexExternalValue, ty: &Ty) -> bool {
             type_name_matches_external_name(enum_name, tn)
         }
         (BexExternalValue::Adt(BexExternalAdt::Collector(_)), _) => false,
-        (BexExternalValue::Adt(BexExternalAdt::Type(_)), ty)
-            if ty.is_opaque("baml.reflect.Type") =>
-        {
-            true
-        }
+        (BexExternalValue::Adt(BexExternalAdt::Type(_)), Ty::Type { .. }) => true,
         (BexExternalValue::Union { value, .. }, ty) => value_matches_type(value, ty),
         // Handle nested unions (including nullable `T | null`) in the type.
         (value, Ty::Union(members, _)) => members.iter().any(|m| value_matches_type(value, m)),
@@ -1519,16 +1515,15 @@ pub fn test_arg_to_external(v: &bex_vm_types::TestArgValue) -> BexExternalValue 
 
 #[cfg(test)]
 mod peel_to_rust_type_tests {
-    use baml_type::{TyAttr, TypeName};
+    use baml_type::TyAttr;
 
     use super::*;
 
-    /// `Ty::Opaque("baml.rust.RustType", _)` — the canonical shape.
+    /// `Ty::RustType` — the canonical `$rust_type` shape.
     fn rust_type() -> Ty {
-        Ty::Opaque(
-            TypeName::from_dotted_path("baml.rust.RustType"),
-            TyAttr::default(),
-        )
+        Ty::RustType {
+            attr: TyAttr::default(),
+        }
     }
 
     #[test]
@@ -1609,12 +1604,11 @@ mod peel_to_rust_type_tests {
 
     #[test]
     fn unrelated_opaque_does_not_match() {
-        // A different opaque type — e.g. `baml.llm.PromptAst` — must
-        // not be confused with `baml.rust.RustType`.
-        let ty = Ty::Opaque(
-            TypeName::from_dotted_path("baml.llm.PromptAst"),
-            TyAttr::default(),
-        );
+        // A different opaque leaf type — e.g. `baml.llm.PromptAst` — must
+        // not be confused with `$rust_type`.
+        let ty = Ty::PromptAst {
+            attr: TyAttr::default(),
+        };
         assert_eq!(peel_to_rust_type(&ty), None);
     }
 

@@ -395,8 +395,8 @@ fn ty_to_field_type(ty: &Ty) -> BamlTy {
             media: media_kind_to_proto_enum(*kind).into(),
         })),
         Ty::Literal(lit, _, _) => Some(FieldType::LiteralType(literal_to_field_type_literal(lit))),
-        Ty::Opaque(tn, _) => {
-            unreachable!("runtime-only {tn} should not reach FFI type encoding")
+        Ty::Resource { .. } | Ty::PromptAst { .. } => {
+            unreachable!("runtime-only opaque type should not reach FFI type encoding")
         }
         Ty::Uint8Array { .. } => Some(FieldType::Uint8arrayType(BamlTyUint8Array {})),
         // BuiltinUnknown is used for dynamic types (e.g., map values, array elements)

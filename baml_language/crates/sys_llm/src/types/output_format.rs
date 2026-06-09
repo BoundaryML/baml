@@ -570,16 +570,16 @@ impl OutputFormatContent {
 
             Ty::Literal(lit, _, _) => Ok(Some(render_literal(lit))),
 
-            Ty::Opaque(tn, _) => {
-                // `baml.reflect.Type` surfaces as the `type` keyword (matching
-                // `Ty`'s `Display`); other opaque types are unsupported by name.
-                let name = if tn.render_dotted(false) == "baml.reflect.Type" {
-                    "type".to_string()
-                } else {
-                    tn.display_name().to_string()
-                };
-                Err(RenderError::UnsupportedType(name))
-            }
+            // Opaque leaf types have no JSON output-format schema. They surface
+            // as `UnsupportedType` named the same way `Ty`'s `Display` renders
+            // them (`type`, or the fixed qualified name).
+            Ty::Type { .. } => Err(RenderError::UnsupportedType("type".to_string())),
+            Ty::Resource { .. } => Err(RenderError::UnsupportedType(
+                "baml.llm.Resource".to_string(),
+            )),
+            Ty::PromptAst { .. } => Err(RenderError::UnsupportedType(
+                "baml.llm.PromptAst".to_string(),
+            )),
 
             Ty::TypeAlias(fqn, _) => {
                 // Recursive type aliases render as just their display name
@@ -599,8 +599,7 @@ impl OutputFormatContent {
             | Ty::Error { .. }
             | Ty::EvolvingList(..)
             | Ty::EvolvingMap(..)
-            | Ty::RustType { .. }
-            | Ty::Type { .. } => {
+            | Ty::RustType { .. } => {
                 unreachable!(
                     "compiler-only variant {:?} should not reach output_format",
                     ty

@@ -955,7 +955,7 @@ pub fn generate_project_bytecode_with_opt(
         for (qtn, tir_ty) in &cache.aliases {
             if cache.recursive.contains(qtn) {
                 let mir_ty = cache.convert(tir_ty);
-                let type_name = baml_compiler2_mir::qtn_to_type_name(qtn);
+                let type_name = qtn.clone();
                 program.recursive_type_alias_defs.insert(type_name, mir_ty);
             }
         }
@@ -999,7 +999,7 @@ pub fn generate_project_bytecode_with_opt(
                  dedup_key: String,
                  iface_args: Vec<baml_type::Ty>,
                  iface_assoc: Vec<(Name, baml_type::Ty)>| {
-                    let iface_name = baml_compiler2_mir::qtn_to_type_name(iface_qtn);
+                    let iface_name = iface_qtn.clone();
                     if seen_pairs.insert((
                         iface_qtn.to_string(),
                         dedup_key,
@@ -1051,7 +1051,7 @@ pub fn generate_project_bytecode_with_opt(
                         };
                         add_impl(
                             iface_qtn,
-                            baml_compiler2_mir::qtn_to_type_name(class_qtn),
+                            class_qtn.clone(),
                             class_qtn.to_string(),
                             iface_args,
                             iface_assoc,
@@ -1115,7 +1115,7 @@ pub fn generate_project_bytecode_with_opt(
                                 // (matches any instantiation at reflection time).
                                 add_impl(
                                     iface_qtn,
-                                    baml_compiler2_mir::qtn_to_type_name(class_qtn),
+                                    class_qtn.clone(),
                                     class_qtn.to_string(),
                                     Vec::new(),
                                     Vec::new(),

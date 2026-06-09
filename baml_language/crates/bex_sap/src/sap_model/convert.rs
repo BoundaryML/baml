@@ -492,7 +492,8 @@ impl TypeCtx {
                 )
             }
             unparsable @ (baml_type::Ty::Uint8Array { .. }
-            | baml_type::Ty::Opaque(_, _)
+            | baml_type::Ty::Resource { .. }
+            | baml_type::Ty::PromptAst { .. }
             | baml_type::Ty::Function { .. }
             | baml_type::Ty::Void { .. }
             | baml_type::Ty::WatchAccessor(_, _)
@@ -585,7 +586,8 @@ impl TypeCtx {
                 };
                 self.get_field_attrs(alias_ty, recursion_depth + 1)?
             }
-            unparsable @ (::baml_type::Ty::Opaque(_, _)
+            unparsable @ (::baml_type::Ty::Resource { .. }
+            | ::baml_type::Ty::PromptAst { .. }
             | ::baml_type::Ty::Function { .. }
             | ::baml_type::Ty::Void { .. }
             | ::baml_type::Ty::WatchAccessor(_, _)
@@ -773,7 +775,8 @@ fn is_sap_parseable(ty: &baml_type::Ty) -> Result<Vec<TypeName>, ()> {
             Ok(names)
         }
         baml_type::Ty::TypeAlias(name, _) => Ok(vec![name.clone()]),
-        baml_type::Ty::Opaque(..)
+        baml_type::Ty::Resource { .. }
+        | baml_type::Ty::PromptAst { .. }
         | baml_type::Ty::Function { .. }
         | baml_type::Ty::Void { .. }
         | baml_type::Ty::WatchAccessor(..)
