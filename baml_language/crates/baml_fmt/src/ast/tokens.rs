@@ -78,7 +78,10 @@ define_keyword_tokens! {
     "break" => SyntaxKind::KW_BREAK => Break;
     "continue" => SyntaxKind::KW_CONTINUE => Continue;
     "return" => SyntaxKind::KW_RETURN => Return;
+    "throw" => SyntaxKind::KW_THROW => Throw;
     "match" => SyntaxKind::KW_MATCH => Match;
+    "catch" => SyntaxKind::KW_CATCH => Catch;
+    "catch_all" => SyntaxKind::KW_CATCH_ALL => CatchAll;
     "watch" => SyntaxKind::KW_WATCH => Watch;
     "instanceof" => SyntaxKind::KW_INSTANCEOF => Instanceof;
     "is" => SyntaxKind::KW_IS => Is;

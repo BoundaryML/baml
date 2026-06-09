@@ -110,7 +110,9 @@ function NestedCatch(x: int) -> string {
 // Throw re-raises the caught error
 function CatchAndRethrow(x: int) -> string {
     MayFail(x) catch (e) {
-        _ => throw e
+        _ => {
+            throw e
+        }
     }
 }
 
