@@ -34,7 +34,7 @@ use crate::{
     inference::MemberResolution,
     package_interface::PackageResolutionContext,
     throws_analysis::ThrowsAnalysisContext,
-    ty::{Freshness, FunctionParamMode, FunctionParamTy, PrimitiveType, Ty, TyAttr},
+    ty::{Freshness, FunctionParamMode, FunctionParamTy, MediaKind, PrimitiveType, Ty, TyAttr},
 };
 
 // ── Well-known type constructors ──────────────────────────────────────────────
@@ -1126,14 +1126,16 @@ impl<'db> TypeInferenceBuilder<'db> {
                 let mut has_null = false;
                 for m in members {
                     match self.expand_alias_chains(m) {
-                        Ty::Primitive(PrimitiveType::Null, _) => {
+                        Ty::Null { .. } => {
                             has_null = true;
                         }
                         other => flat.push(other),
                     }
                 }
                 if has_null {
-                    flat.push(Ty::Primitive(PrimitiveType::Null, TyAttr::default()));
+                    flat.push(Ty::Null {
+                        attr: TyAttr::default(),
+                    });
                 }
                 Ty::Union(flat, attr)
             }
@@ -1153,7 +1155,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                     let mut function_member = None;
                     for member in members {
                         let expanded_member = builder.expand_alias_chains(member);
-                        if matches!(expanded_member, Ty::Primitive(PrimitiveType::Null, _)) {
+                        if matches!(expanded_member, Ty::Null { .. }) {
                             continue;
                         }
 
@@ -1602,7 +1604,12 @@ impl<'db> TypeInferenceBuilder<'db> {
             }
             (
                 Ty::Class(class_name, expected_args, _),
-                Ty::Map(actual_key, actual_val, _) | Ty::EvolvingMap(actual_key, actual_val, _),
+                Ty::Map {
+                    key: actual_key,
+                    value: actual_val,
+                    ..
+                }
+                | Ty::EvolvingMap(actual_key, actual_val, _),
             ) if class_name.is_builtin_root_type("Map") && expected_args.len() == 2 => {
                 self.container_arg_subtype_without_nominal(actual_key, &expected_args[0])
                     && self.container_arg_subtype_without_nominal(actual_val, &expected_args[1])
@@ -3708,7 +3715,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         let callee_info = self.analyze_optional_base(callee_ty);
 
         if let Some(result_ty) = self.try_container_method_call(callee_id, args, body) {
-            let final_ty = Ty::nullable(result_ty);
+            let final_ty = Ty::optional(result_ty);
             self.report_result_type_mismatch(expr_id, &final_ty, expected);
             self.record_expr_type(expr_id, final_ty.clone());
             return final_ty;
@@ -3716,7 +3723,9 @@ impl<'db> TypeInferenceBuilder<'db> {
 
         if callee_info.is_null_only() {
             self.infer_args_for_recovery(args, body);
-            let ty = Ty::Primitive(PrimitiveType::Null, TyAttr::default());
+            let ty = Ty::Null {
+                attr: TyAttr::default(),
+            };
             self.report_result_type_mismatch(expr_id, &ty, expected);
             self.record_expr_type(expr_id, ty.clone());
             return ty;
@@ -3751,7 +3760,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 .unwrap_or_default(),
             rigid_self_var: self.self_pinned_rigid_var.get(&callee_id).cloned(),
         });
-        let final_ty = Ty::nullable(checked.result);
+        let final_ty = Ty::optional(checked.result);
         if !checked.recovered_unresolved_generics {
             self.report_result_type_mismatch(expr_id, &final_ty, expected);
         }
@@ -3766,10 +3775,12 @@ impl<'db> TypeInferenceBuilder<'db> {
         let expr = &body.exprs[expr_id];
         let ty = match expr {
             Expr::Literal(lit) => Self::infer_literal(lit),
-            Expr::ByteStringLiteral(_) => {
-                Ty::Primitive(PrimitiveType::Uint8Array, TyAttr::default())
-            }
-            Expr::Null => Ty::Primitive(PrimitiveType::Null, TyAttr::default()),
+            Expr::ByteStringLiteral(_) => Ty::Uint8Array {
+                attr: TyAttr::default(),
+            },
+            Expr::Null => Ty::Null {
+                attr: TyAttr::default(),
+            },
             Expr::Path(segments) => self.infer_path(segments.as_slice(), body, expr_id),
             Expr::GenericApply { base, type_args } => {
                 self.infer_generic_apply(*base, type_args, body, expr_id)
@@ -3891,7 +3902,11 @@ impl<'db> TypeInferenceBuilder<'db> {
                 }
                 let key_ty = Self::join_all(&key_types).widen_fresh();
                 let val_ty = Self::join_all(&val_types).widen_fresh();
-                Ty::Map(Box::new(key_ty), Box::new(val_ty), TyAttr::default())
+                Ty::Map {
+                    key: Box::new(key_ty),
+                    value: Box::new(val_ty),
+                    attr: TyAttr::default(),
+                }
             }
             Expr::Binary { op, lhs, rhs } => {
                 let lhs_ty = self.infer_expr(*lhs, body);
@@ -4048,7 +4063,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         // `Primitive(Null)` is a concrete non-optional type (the null value
         // itself) with its own companion class. Treat it like any other
         // primitive — do NOT require `?.` chaining for direct method calls.
-        let is_pure_null = matches!(base_ty, Ty::Primitive(PrimitiveType::Null, _));
+        let is_pure_null = matches!(base_ty, Ty::Null { .. });
         if inner != base_ty
             && !is_pure_null
             && !matches!(base_ty, Ty::Unknown { .. } | Ty::Error { .. })
@@ -4058,7 +4073,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 // resolve the member, and re-wrap in Optional.
                 // This allows `a?.b.c` where `a?.b` returns `T?`.
                 let member_ty = self.resolve_member(&inner, member, expr_id, base_is_value);
-                Ty::nullable(member_ty)
+                Ty::optional(member_ty)
             } else {
                 // Outside any chain: accessing `.member` on a nullable type
                 // is an error (e.g. `(a?.b).c`). Use `?.` instead.
@@ -4073,7 +4088,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 );
                 // Still resolve for downstream inference
                 let member_ty = self.resolve_member(&inner, member, expr_id, base_is_value);
-                Ty::nullable(member_ty)
+                Ty::optional(member_ty)
             }
         } else {
             self.resolve_member(&base_ty, member, expr_id, base_is_value)
@@ -4205,11 +4220,13 @@ impl<'db> TypeInferenceBuilder<'db> {
         }
         if base_info.is_null_only() {
             // Base is just null — result is null
-            Ty::Primitive(PrimitiveType::Null, TyAttr::default())
+            Ty::Null {
+                attr: TyAttr::default(),
+            }
         } else {
             // OptionalMemberAccess always has a value base → bound = true.
             let member_ty = self.resolve_member(&base_info.inner, member, expr_id, true);
-            Ty::nullable(member_ty)
+            Ty::optional(member_ty)
         }
     }
 
@@ -4246,10 +4263,15 @@ impl<'db> TypeInferenceBuilder<'db> {
         };
         let elem_ty = match resolve_ty {
             Ty::List(elem_ty, _) | Ty::EvolvingList(elem_ty, _) => *elem_ty,
-            Ty::Map(_, val_ty, _) | Ty::EvolvingMap(_, val_ty, _) => *val_ty,
-            Ty::Primitive(PrimitiveType::Uint8Array, _) => {
-                Ty::Primitive(PrimitiveType::Int, TyAttr::default())
+            Ty::Map {
+                key: _,
+                value: val_ty,
+                ..
             }
+            | Ty::EvolvingMap(_, val_ty, _) => *val_ty,
+            Ty::Uint8Array { .. } => Ty::Int {
+                attr: TyAttr::default(),
+            },
             Ty::Unknown { attr: _ } | Ty::Error { attr: _ } => Ty::Unknown {
                 attr: TyAttr::default(),
             },
@@ -4266,7 +4288,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             }
         };
         if rewrap {
-            Ty::nullable(elem_ty)
+            Ty::optional(elem_ty)
         } else {
             elem_ty
         }
@@ -4297,11 +4319,18 @@ impl<'db> TypeInferenceBuilder<'db> {
             );
         }
         if base_info.is_null_only() {
-            Ty::Primitive(PrimitiveType::Null, TyAttr::default())
+            Ty::Null {
+                attr: TyAttr::default(),
+            }
         } else {
             let elem_ty = match &base_info.inner {
                 Ty::List(elem_ty, _) | Ty::EvolvingList(elem_ty, _) => elem_ty.as_ref().clone(),
-                Ty::Map(_, val_ty, _) | Ty::EvolvingMap(_, val_ty, _) => val_ty.as_ref().clone(),
+                Ty::Map {
+                    key: _,
+                    value: val_ty,
+                    ..
+                }
+                | Ty::EvolvingMap(_, val_ty, _) => val_ty.as_ref().clone(),
                 Ty::Unknown { .. } | Ty::Error { .. } => Ty::Unknown {
                     attr: TyAttr::default(),
                 },
@@ -4317,7 +4346,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                     }
                 }
             };
-            Ty::nullable(elem_ty)
+            Ty::optional(elem_ty)
         }
     }
 
@@ -4353,10 +4382,14 @@ impl<'db> TypeInferenceBuilder<'db> {
             .get(&spawn_body)
             .cloned()
             .map_or_else(
-                || Ty::Primitive(PrimitiveType::Null, TyAttr::default()),
+                || Ty::Null {
+                    attr: TyAttr::default(),
+                },
                 |t| {
                     if matches!(t, Ty::Never { .. }) {
-                        Ty::Primitive(PrimitiveType::Null, TyAttr::default())
+                        Ty::Null {
+                            attr: TyAttr::default(),
+                        }
                     } else {
                         t
                     }
@@ -5401,7 +5434,10 @@ impl<'db> TypeInferenceBuilder<'db> {
             } => self.check_object_expr(expr_id, body, expected, fields, type_name.as_ref()),
             Expr::Map { entries } => {
                 let kv = match expected {
-                    Ty::Map(k, v, _) | Ty::EvolvingMap(k, v, _) => Some((k, v)),
+                    Ty::Map {
+                        key: k, value: v, ..
+                    }
+                    | Ty::EvolvingMap(k, v, _) => Some((k, v)),
                     _ => None,
                 };
                 if let Some((key_ty, val_ty)) = kv {
@@ -6377,7 +6413,9 @@ impl<'db> TypeInferenceBuilder<'db> {
         self.finalize_pattern_lowering(pattern_id, &result, None, None, &scrutinee_ty);
         self.restore_scoped_locals(&snapshot);
 
-        Ty::Primitive(PrimitiveType::Bool, TyAttr::default())
+        Ty::Bool {
+            attr: TyAttr::default(),
+        }
     }
 
     fn infer_catch_expr(
@@ -6751,7 +6789,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             Ty::List(elem, _) | Ty::EvolvingList(elem, _) => {
                 Self::ty_contains_recovery_unknown(elem)
             }
-            Ty::Map(key, value, _) | Ty::EvolvingMap(key, value, _) => {
+            Ty::Map { key, value, .. } | Ty::EvolvingMap(key, value, _) => {
                 Self::ty_contains_recovery_unknown(key) || Self::ty_contains_recovery_unknown(value)
             }
             Ty::Function {
@@ -6770,10 +6808,21 @@ impl<'db> TypeInferenceBuilder<'db> {
                 Self::ty_contains_recovery_unknown(value)
                     || Self::ty_contains_recovery_unknown(error)
             }
+            // `WatchAccessor`/`Opaque` are never built by TIR; the arms exist
+            // only so the match stays exhaustive over the shared `baml_type::Ty`.
+            Ty::WatchAccessor(inner, _) => Self::ty_contains_recovery_unknown(inner),
             Ty::Enum(..)
             | Ty::EnumVariant(..)
             | Ty::TypeAlias(..)
-            | Ty::Primitive(..)
+            | Ty::Opaque(..)
+            | Ty::Int { .. }
+            | Ty::Bigint { .. }
+            | Ty::Float { .. }
+            | Ty::String { .. }
+            | Ty::Bool { .. }
+            | Ty::Null { .. }
+            | Ty::Uint8Array { .. }
+            | Ty::Media(..)
             | Ty::Literal(..)
             | Ty::TypeVar(..)
             | Ty::Never { .. }
@@ -7067,11 +7116,31 @@ impl<'db> TypeInferenceBuilder<'db> {
             return true;
         }
         match pattern_ty {
-            Ty::Primitive(p, _) => match fact {
-                Ty::Primitive(fp, _) => p == fp,
-                Ty::Literal(lit, _, _) => *p == PrimitiveType::from_literal(lit),
-                _ => false,
-            },
+            Ty::Int { .. } => {
+                matches!(
+                    fact,
+                    Ty::Int { .. } | Ty::Literal(baml_base::Literal::Int(_), _, _)
+                )
+            }
+            Ty::Bigint { .. } => matches!(
+                fact,
+                Ty::Bigint { .. } | Ty::Literal(baml_base::Literal::Bigint(_), _, _)
+            ),
+            Ty::Float { .. } => matches!(
+                fact,
+                Ty::Float { .. } | Ty::Literal(baml_base::Literal::Float(_), _, _)
+            ),
+            Ty::String { .. } => matches!(
+                fact,
+                Ty::String { .. } | Ty::Literal(baml_base::Literal::String(_), _, _)
+            ),
+            Ty::Bool { .. } => matches!(
+                fact,
+                Ty::Bool { .. } | Ty::Literal(baml_base::Literal::Bool(_), _, _)
+            ),
+            Ty::Null { .. } => matches!(fact, Ty::Null { .. }),
+            Ty::Uint8Array { .. } => matches!(fact, Ty::Uint8Array { .. }),
+            Ty::Media(k, _) => matches!(fact, Ty::Media(fk, _) if k == fk),
             Ty::Literal(_, _, _) => false,
             Ty::Union(parts, _) => parts.iter().any(|part| Self::ty_covers_fact(part, fact)),
             Ty::Class(qn, type_args, _) => matches!(
@@ -7093,11 +7162,13 @@ impl<'db> TypeInferenceBuilder<'db> {
 
     fn ty_may_match_fact(pattern_ty: &Ty, fact: &Ty) -> bool {
         match pattern_ty {
-            Ty::Literal(lit, _, _) => {
-                let widened = Ty::Primitive(PrimitiveType::from_literal(lit), TyAttr::default());
-                &widened == fact
-                    || matches!(fact, Ty::Primitive(p, _) if *p == PrimitiveType::from_literal(lit))
-            }
+            Ty::Literal(lit, _, _) => match lit {
+                baml_base::Literal::Int(_) => matches!(fact, Ty::Int { .. }),
+                baml_base::Literal::Bigint(_) => matches!(fact, Ty::Bigint { .. }),
+                baml_base::Literal::Float(_) => matches!(fact, Ty::Float { .. }),
+                baml_base::Literal::String(_) => matches!(fact, Ty::String { .. }),
+                baml_base::Literal::Bool(_) => matches!(fact, Ty::Bool { .. }),
+            },
             Ty::EnumVariant(qn, _, _) => {
                 matches!(fact, Ty::Enum(fqn, _) if fqn == qn)
             }
@@ -7816,7 +7887,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             // `Primitive(Null)` is a concrete non-optional type with a companion
             // class. Calling methods on it directly (e.g. `n.to_json()`) is valid
             // — do NOT require `?.` chaining.
-            let is_pure_null = matches!(current_ty, Ty::Primitive(PrimitiveType::Null, _));
+            let is_pure_null = matches!(current_ty, Ty::Null { .. });
             let is_nullable = inner != current_ty
                 && !is_pure_null
                 && !matches!(current_ty, Ty::Unknown { .. } | Ty::Error { .. });
@@ -7835,7 +7906,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                         seg_idx,
                         bound,
                     );
-                    current_ty = Ty::nullable(member_ty.clone());
+                    current_ty = Ty::optional(member_ty.clone());
                 } else {
                     // Outside any chain: null-safety violation — suggest `?.`.
                     let base_text = segments[..seg_idx]
@@ -7864,7 +7935,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                         seg_idx,
                         bound,
                     );
-                    current_ty = Ty::nullable(member_ty.clone());
+                    current_ty = Ty::optional(member_ty.clone());
                 }
             } else {
                 member_ty =
@@ -8185,7 +8256,11 @@ impl<'db> TypeInferenceBuilder<'db> {
             let ty = &binding.current_ty;
             return match ty {
                 Ty::EvolvingList(inner, attr) => Ty::List(inner.clone(), attr.clone()),
-                Ty::EvolvingMap(k, v, attr) => Ty::Map(k.clone(), v.clone(), attr.clone()),
+                Ty::EvolvingMap(k, v, attr) => Ty::Map {
+                    key: k.clone(),
+                    value: v.clone(),
+                    attr: attr.clone(),
+                },
                 other => other.clone(),
             };
         }
@@ -8301,7 +8376,7 @@ impl<'db> TypeInferenceBuilder<'db> {
     /// Resolve a member access on a known base type.
     ///
     /// For class types, checks data fields. For enum types, validates variants.
-    /// For builtin container types (`Ty::List`, `Ty::Map`) and `Ty::Primitive(String, TyAttr::default())`,
+    /// For builtin container types (`Ty::List`, `Ty::Map`) and `Ty::String { attr: TyAttr::default() }`,
     /// bridges to the `.baml`-declared builtin classes via `resolve_builtin_method`.
     /// Emits `UnresolvedMember` diagnostics when the base type is known but
     /// the member doesn't exist.
@@ -8661,7 +8736,11 @@ impl<'db> TypeInferenceBuilder<'db> {
                         }
                     })
             }
-            Ty::Map(key_ty, val_ty, _) => {
+            Ty::Map {
+                key: key_ty,
+                value: val_ty,
+                ..
+            } => {
                 // Bridge: map<string, int> → Map<string, int>
                 self.resolve_builtin_member(
                     &["Map"],
@@ -8707,8 +8786,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                     }
                 })
             }
-            Ty::Primitive(PrimitiveType::String, _)
-            | Ty::Literal(baml_base::Literal::String(_), _, _) => {
+            Ty::String { .. } | Ty::Literal(baml_base::Literal::String(_), _, _) => {
                 // Bridge: string / string-literal → String class
                 self.resolve_builtin_member(&["String"], &[], member, at)
                     .or_else(|| {
@@ -8728,8 +8806,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                     })
             }
             // int literal / int → Int companion class
-            Ty::Primitive(PrimitiveType::Int, _)
-            | Ty::Literal(baml_base::Literal::Int(_), _, _) => self
+            Ty::Int { .. } | Ty::Literal(baml_base::Literal::Int(_), _, _) => self
                 .resolve_builtin_member(&["Int"], &[], member, at)
                 .or_else(|| self.try_registry_member(base_ty, Name::new("int"), member, at, bound))
                 .unwrap_or_else(|| {
@@ -8745,8 +8822,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                     }
                 }),
             // bigint literal / bigint → Bigint companion class
-            Ty::Primitive(PrimitiveType::Bigint, _)
-            | Ty::Literal(baml_base::Literal::Bigint(_), _, _) => self
+            Ty::Bigint { .. } | Ty::Literal(baml_base::Literal::Bigint(_), _, _) => self
                 .resolve_builtin_member(&["Bigint"], &[], member, at)
                 .or_else(|| {
                     self.try_registry_member(base_ty, Name::new("bigint"), member, at, bound)
@@ -8764,8 +8840,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                     }
                 }),
             // float literal / float → Float companion class
-            Ty::Primitive(PrimitiveType::Float, _)
-            | Ty::Literal(baml_base::Literal::Float(_), _, _) => self
+            Ty::Float { .. } | Ty::Literal(baml_base::Literal::Float(_), _, _) => self
                 .resolve_builtin_member(&["Float"], &[], member, at)
                 .or_else(|| {
                     self.try_registry_member(base_ty, Name::new("float"), member, at, bound)
@@ -8783,8 +8858,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                     }
                 }),
             // bool literal / bool → Bool companion class
-            Ty::Primitive(PrimitiveType::Bool, _)
-            | Ty::Literal(baml_base::Literal::Bool(_), _, _) => self
+            Ty::Bool { .. } | Ty::Literal(baml_base::Literal::Bool(_), _, _) => self
                 .resolve_builtin_member(&["Bool"], &[], member, at)
                 .or_else(|| self.try_registry_member(base_ty, Name::new("bool"), member, at, bound))
                 .unwrap_or_else(|| {
@@ -8800,7 +8874,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                     }
                 }),
             // null / Null companion class
-            Ty::Primitive(PrimitiveType::Null, _) => self
+            Ty::Null { .. } => self
                 .resolve_builtin_member(&["Null"], &[], member, at)
                 .or_else(|| self.try_registry_member(base_ty, Name::new("null"), member, at, bound))
                 .unwrap_or_else(|| {
@@ -8834,15 +8908,16 @@ impl<'db> TypeInferenceBuilder<'db> {
                         }
                     })
             }
-            Ty::Primitive(
-                p @ (PrimitiveType::Uint8Array
-                | PrimitiveType::Image
-                | PrimitiveType::Audio
-                | PrimitiveType::Video
-                | PrimitiveType::Pdf),
-                _,
-            ) => {
+            Ty::Uint8Array { .. } | Ty::Media(_, _) => {
                 // Bridge: media / binary primitives with builtin companion classes
+                let p = match base_ty {
+                    Ty::Uint8Array { .. } => PrimitiveType::Uint8Array,
+                    Ty::Media(MediaKind::Image, _) => PrimitiveType::Image,
+                    Ty::Media(MediaKind::Audio, _) => PrimitiveType::Audio,
+                    Ty::Media(MediaKind::Video, _) => PrimitiveType::Video,
+                    Ty::Media(MediaKind::Pdf, _) => PrimitiveType::Pdf,
+                    _ => unreachable!("matched Uint8Array or Media above"),
+                };
                 self.resolve_builtin_member(p.builtin_class_path(), &[], member, at)
                     .or_else(|| {
                         self.try_registry_member(base_ty, Name::new(p.alias()), member, at, bound)
@@ -9414,7 +9489,14 @@ impl<'db> TypeInferenceBuilder<'db> {
                     self.infer_call_bindings_via_interface_views_rigid(f, a, bindings, rigid);
                 }
             }
-            (Ty::Map(fk, fv, _), Ty::Map(ak, av, _))
+            (
+                Ty::Map {
+                    key: fk, value: fv, ..
+                },
+                Ty::Map {
+                    key: ak, value: av, ..
+                },
+            )
             | (Ty::EvolvingMap(fk, fv, _), Ty::EvolvingMap(ak, av, _)) => {
                 if allow_typevar_actuals {
                     self.infer_call_bindings_via_interface_views_allow_typevars(fk, ak, bindings);
@@ -10127,7 +10209,11 @@ impl<'db> TypeInferenceBuilder<'db> {
             Ty::List(element_ty, _) => self
                 .resolve_builtin_method(&["Array"], &[element_ty.as_ref().clone()], member)
                 .map(BuiltinResolution::into_ty),
-            Ty::Map(key_ty, val_ty, _) => self
+            Ty::Map {
+                key: key_ty,
+                value: val_ty,
+                ..
+            } => self
                 .resolve_builtin_method(
                     &["Map"],
                     &[key_ty.as_ref().clone(), val_ty.as_ref().clone()],
@@ -10141,39 +10227,36 @@ impl<'db> TypeInferenceBuilder<'db> {
                     member,
                 )
                 .map(BuiltinResolution::into_ty),
-            Ty::Primitive(PrimitiveType::String, _)
-            | Ty::Literal(baml_base::Literal::String(_), _, _) => self
+            Ty::String { .. } | Ty::Literal(baml_base::Literal::String(_), _, _) => self
                 .resolve_builtin_method(&["String"], &[], member)
                 .map(BuiltinResolution::into_ty),
-            Ty::Primitive(PrimitiveType::Int, _)
-            | Ty::Literal(baml_base::Literal::Int(_), _, _) => self
+            Ty::Int { .. } | Ty::Literal(baml_base::Literal::Int(_), _, _) => self
                 .resolve_builtin_method(&["Int"], &[], member)
                 .map(BuiltinResolution::into_ty),
-            Ty::Primitive(PrimitiveType::Bigint, _)
-            | Ty::Literal(baml_base::Literal::Bigint(_), _, _) => self
+            Ty::Bigint { .. } | Ty::Literal(baml_base::Literal::Bigint(_), _, _) => self
                 .resolve_builtin_method(&["Bigint"], &[], member)
                 .map(BuiltinResolution::into_ty),
-            Ty::Primitive(PrimitiveType::Float, _)
-            | Ty::Literal(baml_base::Literal::Float(_), _, _) => self
+            Ty::Float { .. } | Ty::Literal(baml_base::Literal::Float(_), _, _) => self
                 .resolve_builtin_method(&["Float"], &[], member)
                 .map(BuiltinResolution::into_ty),
-            Ty::Primitive(PrimitiveType::Bool, _)
-            | Ty::Literal(baml_base::Literal::Bool(_), _, _) => self
+            Ty::Bool { .. } | Ty::Literal(baml_base::Literal::Bool(_), _, _) => self
                 .resolve_builtin_method(&["Bool"], &[], member)
                 .map(BuiltinResolution::into_ty),
-            Ty::Primitive(PrimitiveType::Null, _) => self
+            Ty::Null { .. } => self
                 .resolve_builtin_method(&["Null"], &[], member)
                 .map(BuiltinResolution::into_ty),
-            Ty::Primitive(
-                p @ (PrimitiveType::Uint8Array
-                | PrimitiveType::Image
-                | PrimitiveType::Audio
-                | PrimitiveType::Video
-                | PrimitiveType::Pdf),
-                _,
-            ) => self
-                .resolve_builtin_method(p.builtin_class_path(), &[], member)
-                .map(BuiltinResolution::into_ty),
+            Ty::Uint8Array { .. } | Ty::Media(_, _) => {
+                let p = match ty {
+                    Ty::Uint8Array { .. } => PrimitiveType::Uint8Array,
+                    Ty::Media(MediaKind::Image, _) => PrimitiveType::Image,
+                    Ty::Media(MediaKind::Audio, _) => PrimitiveType::Audio,
+                    Ty::Media(MediaKind::Video, _) => PrimitiveType::Video,
+                    Ty::Media(MediaKind::Pdf, _) => PrimitiveType::Pdf,
+                    _ => unreachable!("matched Uint8Array or Media above"),
+                };
+                self.resolve_builtin_method(p.builtin_class_path(), &[], member)
+                    .map(BuiltinResolution::into_ty)
+            }
             Ty::Type { .. } => self
                 .resolve_builtin_method(&["TypeValue"], &[], member)
                 .map(BuiltinResolution::into_ty),
@@ -12845,11 +12928,11 @@ impl<'db> TypeInferenceBuilder<'db> {
                     }
                 } else if type_args.len() == 2 {
                     match class_data.name.as_str() {
-                        "Map" => Ty::Map(
-                            Box::new(type_args[0].clone()),
-                            Box::new(type_args[1].clone()),
-                            TyAttr::default(),
-                        ),
+                        "Map" => Ty::Map {
+                            key: Box::new(type_args[0].clone()),
+                            value: Box::new(type_args[1].clone()),
+                            attr: TyAttr::default(),
+                        },
                         _ => {
                             let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
                             Ty::Class(
@@ -13053,7 +13136,12 @@ impl<'db> TypeInferenceBuilder<'db> {
             }
             (
                 Ty::EvolvingMap(k, v, attr),
-                Ty::Map(exp_k, exp_v, _) | Ty::EvolvingMap(exp_k, exp_v, _),
+                Ty::Map {
+                    key: exp_k,
+                    value: exp_v,
+                    ..
+                }
+                | Ty::EvolvingMap(exp_k, exp_v, _),
             ) if matches!(**k, Ty::Never { .. }) && matches!(**v, Ty::Never { .. }) => {
                 Ty::EvolvingMap(exp_k.clone(), exp_v.clone(), attr.clone())
             }
@@ -13163,7 +13251,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                     },
                 };
                 let callee_expr_ty = match &body.exprs[callee_id] {
-                    Expr::OptionalMemberAccess { .. } => Ty::nullable(method_ty),
+                    Expr::OptionalMemberAccess { .. } => Ty::optional(method_ty),
                     _ => method_ty,
                 };
 
@@ -13233,7 +13321,11 @@ impl<'db> TypeInferenceBuilder<'db> {
                 self.record_expr_type(value_id, val_ty);
                 true
             }
-            Ty::Map(key_ty, val_ty, container_attr)
+            Ty::Map {
+                key: key_ty,
+                value: val_ty,
+                attr: container_attr,
+            }
             | Ty::EvolvingMap(key_ty, val_ty, container_attr) => {
                 let is_evolving = matches!(local_ty, Ty::EvolvingMap(_, _, _));
                 let container_attr = container_attr.clone();
@@ -13250,11 +13342,11 @@ impl<'db> TypeInferenceBuilder<'db> {
                             container_attr,
                         )
                     } else {
-                        Ty::Map(
-                            Box::new(widened_key),
-                            Box::new(widened_val.clone()),
-                            container_attr,
-                        )
+                        Ty::Map {
+                            key: Box::new(widened_key),
+                            value: Box::new(widened_val.clone()),
+                            attr: container_attr,
+                        }
                     };
                     self.assign_local(local_name.clone(), new_ty.clone());
                     self.sync_let_binding_type(&local_name, new_ty);
@@ -13681,7 +13773,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             (Ty::List(..) | Ty::EvolvingList(..), Ty::List(..) | Ty::EvolvingList(..)) => {
                 Some(crate::normalize::is_subtype_of(sub, sup, &self.aliases))
             }
-            (Ty::Map(..) | Ty::EvolvingMap(..), Ty::Map(..) | Ty::EvolvingMap(..)) => {
+            (Ty::Map { .. } | Ty::EvolvingMap(..), Ty::Map { .. } | Ty::EvolvingMap(..)) => {
                 Some(crate::normalize::is_subtype_of(sub, sup, &self.aliases))
             }
             (Ty::Future(sub_value, sub_error, _), Ty::Future(sup_value, sup_error, _)) => {
@@ -13828,7 +13920,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             Ty::List(inner, _) | Ty::EvolvingList(inner, _) => {
                 self.collect_type_generic_bound_errors_inner(inner, seen_aliases, errors);
             }
-            Ty::Map(key, value, _) | Ty::EvolvingMap(key, value, _) => {
+            Ty::Map { key, value, .. } | Ty::EvolvingMap(key, value, _) => {
                 self.collect_type_generic_bound_errors_inner(key, seen_aliases, errors);
                 self.collect_type_generic_bound_errors_inner(value, seen_aliases, errors);
             }
@@ -14162,7 +14254,9 @@ impl<'db> TypeInferenceBuilder<'db> {
                         at,
                     );
                 }
-                Ty::Primitive(PrimitiveType::Bool, TyAttr::default())
+                Ty::Bool {
+                    attr: TyAttr::default(),
+                }
             }
 
             // Ordering (`<`, `<=`, `>`, `>=`): unlike equality, there is no
@@ -14186,11 +14280,15 @@ impl<'db> TypeInferenceBuilder<'db> {
                         at,
                     );
                 }
-                Ty::Primitive(PrimitiveType::Bool, TyAttr::default())
+                Ty::Bool {
+                    attr: TyAttr::default(),
+                }
             }
 
             // Logical → bool
-            BinaryOp::And | BinaryOp::Or => Ty::Primitive(PrimitiveType::Bool, TyAttr::default()),
+            BinaryOp::And | BinaryOp::Or => Ty::Bool {
+                attr: TyAttr::default(),
+            },
 
             // Arithmetic: result type depends on operands
             BinaryOp::Add | BinaryOp::Sub | BinaryOp::Mul | BinaryOp::Div | BinaryOp::Mod => {
@@ -14263,21 +14361,19 @@ impl<'db> TypeInferenceBuilder<'db> {
     fn is_non_object_primitive(ty: &Ty) -> bool {
         matches!(
             ty,
-            Ty::Primitive(
-                PrimitiveType::Int
-                    | PrimitiveType::Float
-                    | PrimitiveType::Bigint
-                    | PrimitiveType::Bool
-                    | PrimitiveType::Null,
-                _,
-            ) | Ty::Literal(
-                baml_base::Literal::Int(_)
-                    | baml_base::Literal::Float(_)
-                    | baml_base::Literal::Bigint(_)
-                    | baml_base::Literal::Bool(_),
-                _,
-                _,
-            )
+            Ty::Int { .. }
+                | Ty::Float { .. }
+                | Ty::Bigint { .. }
+                | Ty::Bool { .. }
+                | Ty::Null { .. }
+                | Ty::Literal(
+                    baml_base::Literal::Int(_)
+                        | baml_base::Literal::Float(_)
+                        | baml_base::Literal::Bigint(_)
+                        | baml_base::Literal::Bool(_),
+                    _,
+                    _,
+                )
         )
     }
 
@@ -14302,10 +14398,10 @@ impl<'db> TypeInferenceBuilder<'db> {
             // `InvalidBinaryOp` diagnostic. Adding a new `PrimitiveType` or
             // `Literal` variant forces a deliberate opt-in here.
             match ty {
-                Ty::Primitive(PrimitiveType::Int, _) => Some(PrimitiveType::Int),
-                Ty::Primitive(PrimitiveType::Bigint, _) => Some(PrimitiveType::Bigint),
-                Ty::Primitive(PrimitiveType::Float, _) => Some(PrimitiveType::Float),
-                Ty::Primitive(PrimitiveType::String, _) => Some(PrimitiveType::String),
+                Ty::Int { .. } => Some(PrimitiveType::Int),
+                Ty::Bigint { .. } => Some(PrimitiveType::Bigint),
+                Ty::Float { .. } => Some(PrimitiveType::Float),
+                Ty::String { .. } => Some(PrimitiveType::String),
                 Ty::Literal(baml_base::Literal::Int(_), _, _) => Some(PrimitiveType::Int),
                 Ty::Literal(baml_base::Literal::Bigint(_), _, _) => Some(PrimitiveType::Bigint),
                 Ty::Literal(baml_base::Literal::Float(_), _, _) => Some(PrimitiveType::Float),
@@ -14332,16 +14428,16 @@ impl<'db> TypeInferenceBuilder<'db> {
             | (Some(PrimitiveType::Bigint), Some(PrimitiveType::Float)) => Ty::Unknown {
                 attr: TyAttr::default(),
             },
-            (Some(PrimitiveType::Float), _) | (_, Some(PrimitiveType::Float)) => {
-                Ty::Primitive(PrimitiveType::Float, TyAttr::default())
-            }
+            (Some(PrimitiveType::Float), _) | (_, Some(PrimitiveType::Float)) => Ty::Float {
+                attr: TyAttr::default(),
+            },
             (Some(PrimitiveType::Bigint | PrimitiveType::Int), Some(PrimitiveType::Bigint))
-            | (Some(PrimitiveType::Bigint), Some(PrimitiveType::Int)) => {
-                Ty::Primitive(PrimitiveType::Bigint, TyAttr::default())
-            }
-            (Some(PrimitiveType::Int), Some(PrimitiveType::Int)) => {
-                Ty::Primitive(PrimitiveType::Int, TyAttr::default())
-            }
+            | (Some(PrimitiveType::Bigint), Some(PrimitiveType::Int)) => Ty::Bigint {
+                attr: TyAttr::default(),
+            },
+            (Some(PrimitiveType::Int), Some(PrimitiveType::Int)) => Ty::Int {
+                attr: TyAttr::default(),
+            },
             (Some(PrimitiveType::String), _) | (_, Some(PrimitiveType::String)) => {
                 // String concatenation, Add only. The VM concatenates any two
                 // *objects* via `as_string` (string, uint8array, …), but a
@@ -14353,7 +14449,9 @@ impl<'db> TypeInferenceBuilder<'db> {
                     && !Self::is_non_object_primitive(lhs)
                     && !Self::is_non_object_primitive(rhs)
                 {
-                    Ty::Primitive(PrimitiveType::String, TyAttr::default())
+                    Ty::String {
+                        attr: TyAttr::default(),
+                    }
                 } else {
                     Ty::Unknown {
                         attr: TyAttr::default(),
@@ -14377,7 +14475,7 @@ impl<'db> TypeInferenceBuilder<'db> {
     /// so they do not need this helper.
     fn may_be_null(ty: &Ty) -> bool {
         match ty {
-            Ty::Primitive(PrimitiveType::Null, _) => true,
+            Ty::Null { .. } => true,
             Ty::Union(members, _) => members.iter().any(Self::may_be_null),
             _ => false,
         }
@@ -14410,10 +14508,10 @@ impl<'db> TypeInferenceBuilder<'db> {
         /// via `may_be_null`).
         fn shape(ty: &Ty) -> (bool, bool) {
             match ty {
-                Ty::Primitive(PrimitiveType::Float, _)
-                | Ty::Literal(baml_base::Literal::Float(_), _, _) => (true, false),
-                Ty::Primitive(PrimitiveType::Bigint, _)
-                | Ty::Literal(baml_base::Literal::Bigint(_), _, _) => (false, true),
+                Ty::Float { .. } | Ty::Literal(baml_base::Literal::Float(_), _, _) => (true, false),
+                Ty::Bigint { .. } | Ty::Literal(baml_base::Literal::Bigint(_), _, _) => {
+                    (false, true)
+                }
                 Ty::Union(members, _) => members.iter().fold((false, false), |(f, b), m| {
                     let (mf, mb) = shape(m);
                     (f || mf, b || mb)
@@ -14439,8 +14537,8 @@ impl<'db> TypeInferenceBuilder<'db> {
             // return `None` so the outer match falls through to `Unknown`
             // (which surfaces as `InvalidBinaryOp`).
             match ty {
-                Ty::Primitive(PrimitiveType::Int, _) => Some(PrimitiveType::Int),
-                Ty::Primitive(PrimitiveType::Bigint, _) => Some(PrimitiveType::Bigint),
+                Ty::Int { .. } => Some(PrimitiveType::Int),
+                Ty::Bigint { .. } => Some(PrimitiveType::Bigint),
                 Ty::Literal(baml_base::Literal::Int(_), _, _) => Some(PrimitiveType::Int),
                 Ty::Literal(baml_base::Literal::Bigint(_), _, _) => Some(PrimitiveType::Bigint),
                 Ty::Union(members, _) => {
@@ -14466,13 +14564,13 @@ impl<'db> TypeInferenceBuilder<'db> {
         }
 
         match (base_ty(lhs), base_ty(rhs)) {
-            (Some(PrimitiveType::Int), Some(PrimitiveType::Int)) => {
-                Ty::Primitive(PrimitiveType::Int, TyAttr::default())
-            }
+            (Some(PrimitiveType::Int), Some(PrimitiveType::Int)) => Ty::Int {
+                attr: TyAttr::default(),
+            },
             (Some(PrimitiveType::Bigint | PrimitiveType::Int), Some(PrimitiveType::Bigint))
-            | (Some(PrimitiveType::Bigint), Some(PrimitiveType::Int)) => {
-                Ty::Primitive(PrimitiveType::Bigint, TyAttr::default())
-            }
+            | (Some(PrimitiveType::Bigint), Some(PrimitiveType::Int)) => Ty::Bigint {
+                attr: TyAttr::default(),
+            },
             _ => Ty::Unknown {
                 attr: TyAttr::default(),
             },
@@ -14486,17 +14584,11 @@ impl<'db> TypeInferenceBuilder<'db> {
         }
         let operand_attr = operand.attr().clone();
         match op {
-            baml_compiler2_ast::UnaryOp::Not => Ty::Primitive(PrimitiveType::Bool, operand_attr),
+            baml_compiler2_ast::UnaryOp::Not => Ty::Bool { attr: operand_attr },
             baml_compiler2_ast::UnaryOp::Neg => match operand {
-                Ty::Primitive(PrimitiveType::Int, attr) => {
-                    Ty::Primitive(PrimitiveType::Int, attr.clone())
-                }
-                Ty::Primitive(PrimitiveType::Float, attr) => {
-                    Ty::Primitive(PrimitiveType::Float, attr.clone())
-                }
-                Ty::Primitive(PrimitiveType::Bigint, attr) => {
-                    Ty::Primitive(PrimitiveType::Bigint, attr.clone())
-                }
+                Ty::Int { attr } => Ty::Int { attr: attr.clone() },
+                Ty::Float { attr } => Ty::Float { attr: attr.clone() },
+                Ty::Bigint { attr } => Ty::Bigint { attr: attr.clone() },
                 Ty::Unknown { attr } | Ty::Error { attr } => Ty::Unknown { attr: attr.clone() },
                 _ => {
                     self.context.report_simple(
@@ -15139,7 +15231,7 @@ impl crate::exhaustiveness::PatCtx for TypeInferenceBuilder<'_> {
         // `Ty::TypeAlias` as an opaque ctor when the alias has a target.
         let ty = self.expand_alias_chains(ty.clone());
         match &ty {
-            Ty::Primitive(PrimitiveType::Bool, _) => vec![
+            Ty::Bool { .. } => vec![
                 Ctor::Single(Ty::Literal(
                     baml_base::Literal::Bool(true),
                     Freshness::Regular,
@@ -15151,11 +15243,16 @@ impl crate::exhaustiveness::PatCtx for TypeInferenceBuilder<'_> {
                     TyAttr::default(),
                 )),
             ],
-            Ty::Primitive(PrimitiveType::Null, _) => vec![Ctor::Single(ty.clone())],
+            Ty::Null { .. } => vec![Ctor::Single(ty.clone())],
             // Infinite-alphabet / opaque primitives and types — all
             // require a wildcard arm for exhaustiveness.
-            Ty::Primitive(_, _)
-            | Ty::Map(..)
+            Ty::Int { .. }
+            | Ty::Bigint { .. }
+            | Ty::Float { .. }
+            | Ty::String { .. }
+            | Ty::Uint8Array { .. }
+            | Ty::Media(..)
+            | Ty::Map { .. }
             | Ty::EvolvingMap(..)
             | Ty::Function { .. }
             | Ty::Type { .. }
@@ -15164,6 +15261,8 @@ impl crate::exhaustiveness::PatCtx for TypeInferenceBuilder<'_> {
             | Ty::BuiltinUnknown { .. }
             | Ty::Unknown { .. }
             | Ty::Error { .. }
+            | Ty::Opaque(..)
+            | Ty::WatchAccessor(..)
             | Ty::TypeVar(_, _)
             | Ty::AssociatedTypeProjection { .. } => vec![Ctor::NonExhaustive],
             Ty::Never { .. } => vec![],
@@ -15748,12 +15847,25 @@ impl TypeInferenceBuilder<'_> {
         }
         match (a, b) {
             // Primitives: strict head equality (no `Int <: Float`).
-            (Ty::Primitive(p1, _), Ty::Primitive(p2, _)) => p1 == p2,
+            (Ty::Int { .. }, Ty::Int { .. })
+            | (Ty::Bigint { .. }, Ty::Bigint { .. })
+            | (Ty::Float { .. }, Ty::Float { .. })
+            | (Ty::String { .. }, Ty::String { .. })
+            | (Ty::Bool { .. }, Ty::Bool { .. })
+            | (Ty::Null { .. }, Ty::Null { .. })
+            | (Ty::Uint8Array { .. }, Ty::Uint8Array { .. }) => true,
+            (Ty::Media(k1, _), Ty::Media(k2, _)) => k1 == k2,
             // Literal vs primitive: literal's primitive head must match.
-            (Ty::Literal(lit, _, _), Ty::Primitive(p, _))
-            | (Ty::Primitive(p, _), Ty::Literal(lit, _, _)) => {
-                PrimitiveType::from_literal(lit) == *p
-            }
+            (Ty::Literal(baml_base::Literal::Int(_), _, _), Ty::Int { .. })
+            | (Ty::Int { .. }, Ty::Literal(baml_base::Literal::Int(_), _, _))
+            | (Ty::Literal(baml_base::Literal::Bigint(_), _, _), Ty::Bigint { .. })
+            | (Ty::Bigint { .. }, Ty::Literal(baml_base::Literal::Bigint(_), _, _))
+            | (Ty::Literal(baml_base::Literal::Float(_), _, _), Ty::Float { .. })
+            | (Ty::Float { .. }, Ty::Literal(baml_base::Literal::Float(_), _, _))
+            | (Ty::Literal(baml_base::Literal::String(_), _, _), Ty::String { .. })
+            | (Ty::String { .. }, Ty::Literal(baml_base::Literal::String(_), _, _))
+            | (Ty::Literal(baml_base::Literal::Bool(_), _, _), Ty::Bool { .. })
+            | (Ty::Bool { .. }, Ty::Literal(baml_base::Literal::Bool(_), _, _)) => true,
             // Two literals: same value (modulo float canonicalization).
             (Ty::Literal(l1, _, _), Ty::Literal(l2, _, _)) => l1 == l2,
             // Class: same qtn AND every type-arg pair overlaps.
@@ -15780,8 +15892,18 @@ impl TypeInferenceBuilder<'_> {
                 Ty::List(b_elem, _) | Ty::EvolvingList(b_elem, _),
             ) => self.types_overlap(a_elem, b_elem),
             (
-                Ty::Map(a_k, a_v, _) | Ty::EvolvingMap(a_k, a_v, _),
-                Ty::Map(b_k, b_v, _) | Ty::EvolvingMap(b_k, b_v, _),
+                Ty::Map {
+                    key: a_k,
+                    value: a_v,
+                    ..
+                }
+                | Ty::EvolvingMap(a_k, a_v, _),
+                Ty::Map {
+                    key: b_k,
+                    value: b_v,
+                    ..
+                }
+                | Ty::EvolvingMap(b_k, b_v, _),
             ) => self.types_overlap(a_k, b_k) && self.types_overlap(a_v, b_v),
             // Function: arities match AND every param pair overlaps AND
             // returns overlap. A `(int) -> int` pattern can never match a
@@ -16087,11 +16209,9 @@ impl TypeInferenceBuilder<'_> {
             Ty::Literal(_, _, _) | Ty::EnumVariant(_, _, _) => {
                 DPat::single(expanded.clone(), scrut_ty.clone())
             }
-            Ty::Primitive(PrimitiveType::Null, _) => {
-                DPat::single(expanded.clone(), scrut_ty.clone())
-            }
+            Ty::Null { .. } => DPat::single(expanded.clone(), scrut_ty.clone()),
             // Finite enumerations: build an Or of singletons.
-            Ty::Primitive(PrimitiveType::Bool, _) => Self::or_of_singletons(
+            Ty::Bool { .. } => Self::or_of_singletons(
                 vec![
                     Ty::Literal(
                         baml_base::Literal::Bool(true),
@@ -16683,16 +16803,28 @@ impl TypeInferenceBuilder<'_> {
 /// Returns `None` for class/enum names that need full resolution.
 fn bare_type_sugar_to_ty(name: &Name) -> Option<Ty> {
     match name.as_str() {
-        "int" => Some(Ty::Primitive(PrimitiveType::Int, TyAttr::default())),
-        "bigint" => Some(Ty::Primitive(PrimitiveType::Bigint, TyAttr::default())),
-        "float" => Some(Ty::Primitive(PrimitiveType::Float, TyAttr::default())),
-        "string" => Some(Ty::Primitive(PrimitiveType::String, TyAttr::default())),
-        "bool" => Some(Ty::Primitive(PrimitiveType::Bool, TyAttr::default())),
-        "null" => Some(Ty::Primitive(PrimitiveType::Null, TyAttr::default())),
-        "image" => Some(Ty::Primitive(PrimitiveType::Image, TyAttr::default())),
-        "audio" => Some(Ty::Primitive(PrimitiveType::Audio, TyAttr::default())),
-        "video" => Some(Ty::Primitive(PrimitiveType::Video, TyAttr::default())),
-        "pdf" => Some(Ty::Primitive(PrimitiveType::Pdf, TyAttr::default())),
+        "int" => Some(Ty::Int {
+            attr: TyAttr::default(),
+        }),
+        "bigint" => Some(Ty::Bigint {
+            attr: TyAttr::default(),
+        }),
+        "float" => Some(Ty::Float {
+            attr: TyAttr::default(),
+        }),
+        "string" => Some(Ty::String {
+            attr: TyAttr::default(),
+        }),
+        "bool" => Some(Ty::Bool {
+            attr: TyAttr::default(),
+        }),
+        "null" => Some(Ty::Null {
+            attr: TyAttr::default(),
+        }),
+        "image" => Some(Ty::Media(MediaKind::Image, TyAttr::default())),
+        "audio" => Some(Ty::Media(MediaKind::Audio, TyAttr::default())),
+        "video" => Some(Ty::Media(MediaKind::Video, TyAttr::default())),
+        "pdf" => Some(Ty::Media(MediaKind::Pdf, TyAttr::default())),
         _ => None,
     }
 }

@@ -17,7 +17,7 @@ use baml_compiler2_hir::{
 use baml_compiler2_tir::{
     lower_type_expr,
     normalize::find_recursive_aliases,
-    ty::{FunctionParamMode, PrimitiveType, QualifiedTypeName, Ty as TirTy},
+    ty::{FunctionParamMode, MediaKind, QualifiedTypeName, Ty as TirTy},
 };
 use baml_db::Name;
 
@@ -563,17 +563,19 @@ fn convert_tir_leaf(
 ) -> cg::Ty {
     match ty {
         // Primitives
-        TirTy::Primitive(PrimitiveType::Int, _) => cg::Ty::Int,
-        TirTy::Primitive(PrimitiveType::Bigint, _) => cg::Ty::Bigint,
-        TirTy::Primitive(PrimitiveType::Float, _) => cg::Ty::Float,
-        TirTy::Primitive(PrimitiveType::String, _) => cg::Ty::String,
-        TirTy::Primitive(PrimitiveType::Bool, _) => cg::Ty::Bool,
-        TirTy::Primitive(PrimitiveType::Null, _) => cg::Ty::Null,
-        TirTy::Primitive(PrimitiveType::Uint8Array, _) => cg::Ty::Uint8Array,
-        TirTy::Primitive(PrimitiveType::Image, _) => cg::Ty::Media(baml_db::MediaKind::Image),
-        TirTy::Primitive(PrimitiveType::Audio, _) => cg::Ty::Media(baml_db::MediaKind::Audio),
-        TirTy::Primitive(PrimitiveType::Video, _) => cg::Ty::Media(baml_db::MediaKind::Video),
-        TirTy::Primitive(PrimitiveType::Pdf, _) => cg::Ty::Media(baml_db::MediaKind::Pdf),
+        TirTy::Int { .. } => cg::Ty::Int,
+        TirTy::Bigint { .. } => cg::Ty::Bigint,
+        TirTy::Float { .. } => cg::Ty::Float,
+        TirTy::String { .. } => cg::Ty::String,
+        TirTy::Bool { .. } => cg::Ty::Bool,
+        TirTy::Null { .. } => cg::Ty::Null,
+        TirTy::Uint8Array { .. } => cg::Ty::Uint8Array,
+        TirTy::Media(MediaKind::Image, _) => cg::Ty::Media(baml_db::MediaKind::Image),
+        TirTy::Media(MediaKind::Audio, _) => cg::Ty::Media(baml_db::MediaKind::Audio),
+        TirTy::Media(MediaKind::Video, _) => cg::Ty::Media(baml_db::MediaKind::Video),
+        TirTy::Media(MediaKind::Pdf, _) => cg::Ty::Media(baml_db::MediaKind::Pdf),
+        // `MediaKind::Generic` is never produced by TIR; handled defensively.
+        TirTy::Media(MediaKind::Generic, _) => cg::Ty::BuiltinUnknown,
 
         // Named class types — preserve full QualifiedTypeName via name_from_qtn.
         TirTy::Class(qtn, type_args, _) => cg::Ty::Class(
@@ -608,7 +610,10 @@ fn convert_tir_leaf(
         TirTy::List(inner, _) | TirTy::EvolvingList(inner, _) => cg::Ty::List(Box::new(
             convert_tir_to_codegen_ty(inner, alias_map, recursive_aliases),
         )),
-        TirTy::Map(k, v, _) | TirTy::EvolvingMap(k, v, _) => cg::Ty::Map {
+        TirTy::Map {
+            key: k, value: v, ..
+        }
+        | TirTy::EvolvingMap(k, v, _) => cg::Ty::Map {
             key: Box::new(convert_tir_to_codegen_ty(k, alias_map, recursive_aliases)),
             value: Box::new(convert_tir_to_codegen_ty(v, alias_map, recursive_aliases)),
         },
@@ -663,6 +668,9 @@ fn convert_tir_leaf(
         // returns futures must `await` them before crossing the host
         // boundary in v1.
         TirTy::Future(_, _, _) => cg::Ty::Unit,
+        // `Opaque`/`WatchAccessor` are never produced by TIR; the arms exist
+        // only so the match stays exhaustive over the shared `baml_type::Ty`.
+        TirTy::Opaque(..) | TirTy::WatchAccessor(..) => cg::Ty::BuiltinUnknown,
     }
 }
 

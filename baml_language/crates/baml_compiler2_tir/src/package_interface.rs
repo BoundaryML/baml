@@ -510,17 +510,17 @@ fn build_self_type_for_class(
             )),
             TyAttr::default(),
         ),
-        "Map" if class_data.generic_params.len() == 2 => Ty::Map(
-            Box::new(Ty::TypeVar(
+        "Map" if class_data.generic_params.len() == 2 => Ty::Map {
+            key: Box::new(Ty::TypeVar(
                 class_data.generic_params[0].clone(),
                 TyAttr::default(),
             )),
-            Box::new(Ty::TypeVar(
+            value: Box::new(Ty::TypeVar(
                 class_data.generic_params[1].clone(),
                 TyAttr::default(),
             )),
-            TyAttr::default(),
-        ),
+            attr: TyAttr::default(),
+        },
         _ => {
             let qtn = QualifiedTypeName::new(
                 Name::new("baml"),

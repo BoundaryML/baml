@@ -1,7 +1,7 @@
 use std::collections::{HashMap, HashSet};
 
 use baml_base::{Name, TypePath};
-use baml_type::{MediaKind, Ty, TyAttr, TyTemplate, TypeName};
+use baml_type::{Ty, TyAttr, TyTemplate, TypeName};
 use indexmap::IndexMap;
 
 use crate::{
@@ -52,8 +52,7 @@ struct CatchContext {
 // ─── Type conversion: TIR Ty → baml_type::Ty ────────────────────────────────
 
 use baml_compiler2_tir::ty::{
-    FunctionParamMode, FunctionParamTy as Tir2FunctionParamTy, PrimitiveType, QualifiedTypeName,
-    Ty as Tir2Ty,
+    FunctionParamMode, FunctionParamTy as Tir2FunctionParamTy, QualifiedTypeName, Ty as Tir2Ty,
 };
 
 /// Project a TIR qualified name into the runtime name space. TIR and
@@ -133,8 +132,16 @@ fn tir_type_satisfies_dispatch_request(
             tir_type_satisfies_dispatch_request(actual, requested, aliases)
         }
         (
-            Tir2Ty::Map(actual_key, actual_value, _),
-            Tir2Ty::Map(requested_key, requested_value, _),
+            Tir2Ty::Map {
+                key: actual_key,
+                value: actual_value,
+                ..
+            },
+            Tir2Ty::Map {
+                key: requested_key,
+                value: requested_value,
+                ..
+            },
         )
         | (
             Tir2Ty::EvolvingMap(actual_key, actual_value, _),
@@ -242,13 +249,21 @@ fn rewrite_dispatch_request_ty(actual: &Tir2Ty, requested: &Tir2Ty) -> Tir2Ty {
             )
         }
         (
-            Tir2Ty::Map(actual_key, actual_value, _),
-            Tir2Ty::Map(requested_key, requested_value, attr),
-        ) => Tir2Ty::Map(
-            Box::new(rewrite_dispatch_request_ty(actual_key, requested_key)),
-            Box::new(rewrite_dispatch_request_ty(actual_value, requested_value)),
-            attr.clone(),
-        ),
+            Tir2Ty::Map {
+                key: actual_key,
+                value: actual_value,
+                ..
+            },
+            Tir2Ty::Map {
+                key: requested_key,
+                value: requested_value,
+                attr,
+            },
+        ) => Tir2Ty::Map {
+            key: Box::new(rewrite_dispatch_request_ty(actual_key, requested_key)),
+            value: Box::new(rewrite_dispatch_request_ty(actual_value, requested_value)),
+            attr: attr.clone(),
+        },
         (
             Tir2Ty::EvolvingMap(actual_key, actual_value, _),
             Tir2Ty::EvolvingMap(requested_key, requested_value, attr),
@@ -408,7 +423,14 @@ fn infer_interface_class_bindings(
         | (Tir2Ty::Future(f, _, _), Tir2Ty::Future(a, _, _)) => {
             infer_interface_class_bindings(f, a, class_params, aliases, bindings)
         }
-        (Tir2Ty::Map(fk, fv, _), Tir2Ty::Map(ak, av, _))
+        (
+            Tir2Ty::Map {
+                key: fk, value: fv, ..
+            },
+            Tir2Ty::Map {
+                key: ak, value: av, ..
+            },
+        )
         | (Tir2Ty::EvolvingMap(fk, fv, _), Tir2Ty::EvolvingMap(ak, av, _)) => {
             infer_interface_class_bindings(fk, ak, class_params, aliases, bindings)
                 && infer_interface_class_bindings(fv, av, class_params, aliases, bindings)
@@ -617,7 +639,10 @@ fn contains_assoc_projection(ty: &Tir2Ty) -> bool {
         Tir2Ty::Future(value, err, _) => {
             contains_assoc_projection(value) || contains_assoc_projection(err)
         }
-        Tir2Ty::Map(k, v, _) | Tir2Ty::EvolvingMap(k, v, _) => {
+        Tir2Ty::Map {
+            key: k, value: v, ..
+        }
+        | Tir2Ty::EvolvingMap(k, v, _) => {
             contains_assoc_projection(k) || contains_assoc_projection(v)
         }
         Tir2Ty::Union(parts, _) => parts.iter().any(contains_assoc_projection),
@@ -645,18 +670,15 @@ fn contains_assoc_projection(ty: &Tir2Ty) -> bool {
 pub fn convert_tir2_ty(ty: &Tir2Ty, resolved: &ResolvedAliases) -> Ty {
     let attr = ty.attr().clone();
     match ty {
-        // Primitives
-        Tir2Ty::Primitive(PrimitiveType::Int, attr) => Ty::Int { attr: attr.clone() },
-        Tir2Ty::Primitive(PrimitiveType::Bigint, attr) => Ty::Bigint { attr: attr.clone() },
-        Tir2Ty::Primitive(PrimitiveType::Float, attr) => Ty::Float { attr: attr.clone() },
-        Tir2Ty::Primitive(PrimitiveType::String, attr) => Ty::String { attr: attr.clone() },
-        Tir2Ty::Primitive(PrimitiveType::Bool, attr) => Ty::Bool { attr: attr.clone() },
-        Tir2Ty::Primitive(PrimitiveType::Null, attr) => Ty::Null { attr: attr.clone() },
-        Tir2Ty::Primitive(PrimitiveType::Uint8Array, attr) => Ty::Uint8Array { attr: attr.clone() },
-        Tir2Ty::Primitive(PrimitiveType::Image, attr) => Ty::Media(MediaKind::Image, attr.clone()),
-        Tir2Ty::Primitive(PrimitiveType::Audio, attr) => Ty::Media(MediaKind::Audio, attr.clone()),
-        Tir2Ty::Primitive(PrimitiveType::Video, attr) => Ty::Media(MediaKind::Video, attr.clone()),
-        Tir2Ty::Primitive(PrimitiveType::Pdf, attr) => Ty::Media(MediaKind::Pdf, attr.clone()),
+        // Primitives — identity now that the TIR type is `baml_type::Ty`.
+        Tir2Ty::Int { attr } => Ty::Int { attr: attr.clone() },
+        Tir2Ty::Bigint { attr } => Ty::Bigint { attr: attr.clone() },
+        Tir2Ty::Float { attr } => Ty::Float { attr: attr.clone() },
+        Tir2Ty::String { attr } => Ty::String { attr: attr.clone() },
+        Tir2Ty::Bool { attr } => Ty::Bool { attr: attr.clone() },
+        Tir2Ty::Null { attr } => Ty::Null { attr: attr.clone() },
+        Tir2Ty::Uint8Array { attr } => Ty::Uint8Array { attr: attr.clone() },
+        Tir2Ty::Media(kind, attr) => Ty::Media(*kind, attr.clone()),
 
         // Named types
         Tir2Ty::Class(qtn, type_args, attr) => {
@@ -705,7 +727,11 @@ pub fn convert_tir2_ty(ty: &Tir2Ty, resolved: &ResolvedAliases) -> Ty {
         Tir2Ty::List(inner, attr) => {
             Ty::List(Box::new(convert_tir2_ty(inner, resolved)), attr.clone())
         }
-        Tir2Ty::Map(k, v, attr) => Ty::Map {
+        Tir2Ty::Map {
+            key: k,
+            value: v,
+            attr,
+        } => Ty::Map {
             key: Box::new(convert_tir2_ty(k, resolved)),
             value: Box::new(convert_tir2_ty(v, resolved)),
             attr: attr.clone(),
@@ -805,6 +831,13 @@ pub fn convert_tir2_ty(ty: &Tir2Ty, resolved: &ResolvedAliases) -> Ty {
             Box::new(convert_tir2_ty(error, resolved)),
             attr.clone(),
         ),
+        // TIR never constructs these runtime-only variants; the arms exist only
+        // so the match stays exhaustive over the shared `baml_type::Ty`. Pass
+        // them through unchanged (recursing into `WatchAccessor`'s payload).
+        Tir2Ty::Opaque(tn, attr) => Ty::Opaque(tn.clone(), attr.clone()),
+        Tir2Ty::WatchAccessor(inner, attr) => {
+            Ty::WatchAccessor(Box::new(convert_tir2_ty(inner, resolved)), attr.clone())
+        }
     }
 }
 
@@ -903,7 +936,9 @@ pub fn tir2_to_template(
         Tir2Ty::List(inner, _) => {
             TyTemplate::Array(Box::new(tir2_to_template(inner, resolved, generic_params)))
         }
-        Tir2Ty::Map(k, v, _) => TyTemplate::Map(
+        Tir2Ty::Map {
+            key: k, value: v, ..
+        } => TyTemplate::Map(
             Box::new(tir2_to_template(k, resolved, generic_params)),
             Box::new(tir2_to_template(v, resolved, generic_params)),
         ),
@@ -1001,7 +1036,10 @@ fn tir2_to_dispatch_guard_template(
         Tir2Ty::List(inner, _) | Tir2Ty::EvolvingList(inner, _) => TyTemplate::Array(Box::new(
             tir2_to_dispatch_guard_template(inner, resolved, generic_params),
         )),
-        Tir2Ty::Map(k, v, _) | Tir2Ty::EvolvingMap(k, v, _) => TyTemplate::Map(
+        Tir2Ty::Map {
+            key: k, value: v, ..
+        }
+        | Tir2Ty::EvolvingMap(k, v, _) => TyTemplate::Map(
             Box::new(tir2_to_dispatch_guard_template(k, resolved, generic_params)),
             Box::new(tir2_to_dispatch_guard_template(v, resolved, generic_params)),
         ),
@@ -3480,9 +3518,16 @@ impl<'db> LoweringContext<'db> {
         if !matches!(
             recv_ty,
             Tir2Ty::Class(..)
-                | Tir2Ty::Primitive(..)
+                | Tir2Ty::Int { .. }
+                | Tir2Ty::Bigint { .. }
+                | Tir2Ty::Float { .. }
+                | Tir2Ty::String { .. }
+                | Tir2Ty::Bool { .. }
+                | Tir2Ty::Null { .. }
+                | Tir2Ty::Uint8Array { .. }
+                | Tir2Ty::Media(..)
                 | Tir2Ty::List(..)
-                | Tir2Ty::Map(..)
+                | Tir2Ty::Map { .. }
                 | Tir2Ty::Future(..)
         ) {
             return None;
@@ -6517,7 +6562,7 @@ impl LoweringContext<'_> {
                         class,
                         ..
                     })),
-                    Some(Tir2Ty::Map(key, value, _) | Tir2Ty::EvolvingMap(key, value, _)),
+                    Some(Tir2Ty::Map { key, value, .. } | Tir2Ty::EvolvingMap(key, value, _)),
                 ) if package.as_str() == "baml"
                     && namespace.is_empty()
                     && class.as_str() == "Map" =>
@@ -12277,7 +12322,7 @@ impl LoweringContext<'_> {
                 let constant = Self::lower_literal(lit);
                 self.emit_value_eq_branch(scrutinee, Operand::Constant(constant), success, failure);
             }
-            Tir2Ty::Primitive(baml_compiler2_tir::ty::PrimitiveType::Null, _) => {
+            Tir2Ty::Null { .. } => {
                 self.emit_value_eq_branch(
                     scrutinee,
                     Operand::Constant(Constant::Null),
@@ -13825,14 +13870,29 @@ pub fn lower_function<'db>(
 
 #[cfg(test)]
 mod tests {
+    use baml_compiler2_tir::ty::{MediaKind, PrimitiveType};
+
     use super::*;
 
     fn type_var(name: &str) -> Tir2Ty {
         Tir2Ty::TypeVar(Name::new(name), baml_compiler2_tir::ty::TyAttr::default())
     }
 
-    fn primitive(primitive: PrimitiveType) -> Tir2Ty {
-        Tir2Ty::Primitive(primitive, baml_compiler2_tir::ty::TyAttr::default())
+    fn primitive(primitive: &PrimitiveType) -> Tir2Ty {
+        let attr = baml_compiler2_tir::ty::TyAttr::default();
+        match primitive {
+            PrimitiveType::Int => Tir2Ty::Int { attr },
+            PrimitiveType::Bigint => Tir2Ty::Bigint { attr },
+            PrimitiveType::Float => Tir2Ty::Float { attr },
+            PrimitiveType::String => Tir2Ty::String { attr },
+            PrimitiveType::Bool => Tir2Ty::Bool { attr },
+            PrimitiveType::Null => Tir2Ty::Null { attr },
+            PrimitiveType::Uint8Array => Tir2Ty::Uint8Array { attr },
+            PrimitiveType::Image => Tir2Ty::Media(MediaKind::Image, attr),
+            PrimitiveType::Audio => Tir2Ty::Media(MediaKind::Audio, attr),
+            PrimitiveType::Video => Tir2Ty::Media(MediaKind::Video, attr),
+            PrimitiveType::Pdf => Tir2Ty::Media(MediaKind::Pdf, attr),
+        }
     }
 
     #[test]
@@ -13854,11 +13914,11 @@ mod tests {
     #[test]
     fn interface_class_guard_checks_assoc_when_request_omits_generic_args() {
         let aliases = HashMap::new();
-        let impl_args = vec![primitive(PrimitiveType::String)];
+        let impl_args = vec![primitive(&PrimitiveType::String)];
         let requested_args = Vec::new();
-        let requested_assoc = vec![(Name::new("Value"), primitive(PrimitiveType::Int))];
+        let requested_assoc = vec![(Name::new("Value"), primitive(&PrimitiveType::Int))];
 
-        let int_impl_assoc = vec![(Name::new("Value"), primitive(PrimitiveType::Int))];
+        let int_impl_assoc = vec![(Name::new("Value"), primitive(&PrimitiveType::Int))];
         assert!(matches!(
             interface_class_guard_for_args(
                 &impl_args,
@@ -13871,7 +13931,7 @@ mod tests {
             Some(InterfaceClassGuard::Any)
         ));
 
-        let string_impl_assoc = vec![(Name::new("Value"), primitive(PrimitiveType::String))];
+        let string_impl_assoc = vec![(Name::new("Value"), primitive(&PrimitiveType::String))];
         assert!(
             interface_class_guard_for_args(
                 &impl_args,

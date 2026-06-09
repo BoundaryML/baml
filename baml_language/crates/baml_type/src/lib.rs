@@ -277,6 +277,39 @@ pub enum Ty {
     Type { attr: TyAttr },
 }
 
+/// Flatten, deduplicate, and collapse a vec of widened types into a single `Ty`.
+///
+/// After `widen_fresh()` has run on each union member, multiple members may
+/// have widened to the same primitive (e.g. `[Literal(1,Fresh), Literal(2,Fresh)]`
+/// both become `Int`). This helper deduplicates and collapses:
+/// - Flattens nested unions one level
+/// - Deduplicates by `PartialEq`
+/// - Unwraps singletons
+fn dedup_and_collapse(types: Vec<Ty>, attr: TyAttr) -> Ty {
+    let mut members: Vec<Ty> = Vec::new();
+    for ty in types {
+        match ty {
+            Ty::Union(inner, _) => {
+                for m in inner {
+                    if !members.contains(&m) {
+                        members.push(m);
+                    }
+                }
+            }
+            _ => {
+                if !members.contains(&ty) {
+                    members.push(ty);
+                }
+            }
+        }
+    }
+    match members.len() {
+        0 => Ty::Never { attr },
+        1 => members.into_iter().next().unwrap(),
+        _ => Ty::Union(members, attr),
+    }
+}
+
 impl Ty {
     // --- TyAttr accessor ---
 
@@ -483,6 +516,78 @@ impl Ty {
                 }
             }
             _ => self.clone(),
+        }
+    }
+
+    /// Widen fresh literal types to their base primitive.
+    ///
+    /// Called at mutable binding sites (`let` without annotation).
+    /// Regular (non-fresh) literals pass through unchanged.
+    ///
+    /// Recurses into `Union`, `List`, `Map`, and `Optional` so that compound
+    /// types like `(1 | 2 | 3)[]` widen to `int[]` at unannotated bindings.
+    #[must_use]
+    pub fn widen_fresh(self) -> Ty {
+        match self {
+            Ty::Literal(lit, Freshness::Fresh, attr) => match PrimitiveType::from_literal(&lit) {
+                PrimitiveType::Int => Ty::Int { attr },
+                PrimitiveType::Bigint => Ty::Bigint { attr },
+                PrimitiveType::Float => Ty::Float { attr },
+                PrimitiveType::String => Ty::String { attr },
+                PrimitiveType::Bool => Ty::Bool { attr },
+                PrimitiveType::Null => Ty::Null { attr },
+                PrimitiveType::Uint8Array => Ty::Uint8Array { attr },
+                PrimitiveType::Image => Ty::Media(MediaKind::Image, attr),
+                PrimitiveType::Audio => Ty::Media(MediaKind::Audio, attr),
+                PrimitiveType::Video => Ty::Media(MediaKind::Video, attr),
+                PrimitiveType::Pdf => Ty::Media(MediaKind::Pdf, attr),
+            },
+            Ty::Union(members, attr) => {
+                let widened: Vec<Ty> = members.into_iter().map(Ty::widen_fresh).collect();
+                dedup_and_collapse(widened, attr)
+            }
+            Ty::List(inner, attr) => Ty::List(Box::new((*inner).widen_fresh()), attr),
+            Ty::Map {
+                key: k,
+                value: v,
+                attr,
+            } => Ty::Map {
+                key: Box::new((*k).widen_fresh()),
+                value: Box::new((*v).widen_fresh()),
+                attr,
+            },
+            Ty::Class(name, type_args, attr) => {
+                let widened: Vec<Ty> = type_args.into_iter().map(Ty::widen_fresh).collect();
+                Ty::Class(name, widened, attr)
+            }
+            other => other,
+        }
+    }
+
+    /// Promote empty containers to evolving containers.
+    ///
+    /// Called at mutable binding sites (`let` without annotation), right
+    /// after `widen_fresh()`. This is the mirror of `widen_fresh()`:
+    /// - `widen_fresh` *removes* literal specificity (1 → int)
+    /// - `make_evolving` *adds* container mutability (List(Never) → EvolvingList(Never))
+    ///
+    /// Only converts `List(Never)` and `Map(Never, Never)` — non-empty
+    /// container literals already have a known element type and don't need
+    /// evolving semantics.
+    #[must_use]
+    pub fn make_evolving(self) -> Ty {
+        match self {
+            Ty::List(inner, attr) if matches!(*inner, Ty::Never { .. }) => {
+                Ty::EvolvingList(inner, attr)
+            }
+            Ty::Map {
+                key: k,
+                value: v,
+                attr,
+            } if matches!(*k, Ty::Never { .. }) && matches!(*v, Ty::Never { .. }) => {
+                Ty::EvolvingMap(k, v, attr)
+            }
+            other => other,
         }
     }
 
@@ -787,6 +892,251 @@ impl Ty {
             write!(f, "({self})")
         } else {
             write!(f, "{self}")
+        }
+    }
+}
+
+// ── Strategy-based rendering ─────────────────────────────────────────────────
+
+/// Strategy controlling how a [`Ty`] renders its leaf names plus a couple of
+/// presentation choices. A single recursive renderer ([`Ty::render_with`])
+/// walks the structure; everything package-, type-var-, or context-specific
+/// lives behind this trait. This is the one place type *structure* is turned
+/// into text — the canonical dump renderer, user-facing diagnostics, and the
+/// LSP's context-aware hover all implement this trait instead of re-walking
+/// `Ty` (the former "~10 renderers").
+pub trait TyRenderStrategy {
+    /// Render a qualified name's dotted path (package/namespace/name) *without*
+    /// any `<...>` suffix; the renderer appends any type args separately.
+    fn qtn(&self, qtn: &QualifiedTypeName) -> String;
+
+    /// Render a type-variable name (`T`, or a synthetic effect param).
+    fn type_var(&self, name: &Name) -> String;
+
+    /// Whether evolving list/map types are annotated `(evolving)`.
+    /// Canonical/user-facing: yes; the LSP's hover hides it.
+    fn show_evolving(&self) -> bool {
+        true
+    }
+}
+
+impl Ty {
+    /// User-facing rendering: identical to the canonical render
+    /// ([`Ty::render_canonical`]) except the reserved implicit `user` package is
+    /// elided ([`RESERVED_USER_PACKAGE`]) and synthetic effect params show as
+    /// `callback`. This is the single structural source of the "no `user.` in
+    /// messages" rule — diagnostics render through here instead of
+    /// post-processing the canonical string.
+    pub fn render_user_facing(&self) -> String {
+        self.render_with(&CanonicalTyRender { user_facing: true })
+    }
+
+    /// Canonical structural rendering — fully-qualified leaf names (including the
+    /// implicit `user` package). This is what TIR's dump output expects.
+    pub fn render_canonical(&self) -> String {
+        self.render_with(&CanonicalTyRender { user_facing: false })
+    }
+
+    /// Render with parentheses if needed for postfix (`[]`/`?`) context.
+    fn render_as_postfix_base(&self, s: &dyn TyRenderStrategy) -> String {
+        let inner = self.render_with(s);
+        if self.needs_postfix_parens() {
+            format!("({inner})")
+        } else {
+            inner
+        }
+    }
+
+    /// Render with parentheses if needed in a function-return position.
+    fn render_as_function_result(&self, s: &dyn TyRenderStrategy) -> String {
+        let inner = self.render_with(s);
+        if self.needs_function_result_parens() {
+            format!("({inner})")
+        } else {
+            inner
+        }
+    }
+
+    /// The single structural renderer. Walks the type, delegating every
+    /// package-, type-var-, and presentation-policy decision to `s`. All type
+    /// rendering — canonical dumps, user-facing diagnostics, LSP hover —
+    /// funnels through here so the structure is described in exactly one place.
+    pub fn render_with(&self, s: &dyn TyRenderStrategy) -> String {
+        match self {
+            Ty::Class(qn, type_args, _) => {
+                let mut out = s.qtn(qn);
+                if !type_args.is_empty() {
+                    let args: Vec<_> = type_args.iter().map(|a| a.render_with(s)).collect();
+                    out.push('<');
+                    out.push_str(&args.join(", "));
+                    out.push('>');
+                }
+                out
+            }
+            Ty::Interface(qn, type_args, associated_bindings, _) => {
+                let mut out = s.qtn(qn);
+                if !type_args.is_empty() || !associated_bindings.is_empty() {
+                    let mut args: Vec<_> = type_args.iter().map(|a| a.render_with(s)).collect();
+                    args.extend(
+                        associated_bindings
+                            .iter()
+                            .map(|(name, ty)| format!("{name} = {}", ty.render_with(s))),
+                    );
+                    out.push('<');
+                    out.push_str(&args.join(", "));
+                    out.push('>');
+                }
+                out
+            }
+            Ty::Enum(qn, _) | Ty::TypeAlias(qn, _) => s.qtn(qn),
+            Ty::EnumVariant(qn, v, _) => format!("{}.{v}", s.qtn(qn)),
+            Ty::Int { .. } => PrimitiveType::Int.to_string(),
+            Ty::Bigint { .. } => PrimitiveType::Bigint.to_string(),
+            Ty::Float { .. } => PrimitiveType::Float.to_string(),
+            Ty::String { .. } => PrimitiveType::String.to_string(),
+            Ty::Bool { .. } => PrimitiveType::Bool.to_string(),
+            Ty::Null { .. } => PrimitiveType::Null.to_string(),
+            Ty::Uint8Array { .. } => PrimitiveType::Uint8Array.to_string(),
+            Ty::Media(kind, _) => kind.to_string(),
+            Ty::List(inner, _) => format!("{}[]", inner.render_as_postfix_base(s)),
+            Ty::Map {
+                key: k, value: v, ..
+            } => format!("map<{}, {}>", k.render_with(s), v.render_with(s)),
+            Ty::EvolvingList(inner, _) => {
+                if matches!(**inner, Ty::Never { .. }) {
+                    "_[]".to_string()
+                } else if s.show_evolving() {
+                    format!("{}[] (evolving)", inner.render_as_postfix_base(s))
+                } else {
+                    format!("{}[]", inner.render_as_postfix_base(s))
+                }
+            }
+            Ty::EvolvingMap(k, v, _) => {
+                if matches!(**k, Ty::Never { .. }) && matches!(**v, Ty::Never { .. }) {
+                    "map<_, _>".to_string()
+                } else if s.show_evolving() {
+                    format!("map<{}, {}> (evolving)", k.render_with(s), v.render_with(s))
+                } else {
+                    format!("map<{}, {}>", k.render_with(s), v.render_with(s))
+                }
+            }
+            Ty::Union(members, _) => {
+                // `?` is sugar that exists only in source/lowering; after that a
+                // nullable type is a plain union and renders as `T | null`.
+                // Function members are parenthesized so a nullable callback reads
+                // as `((..) -> ..) | null`, not a function with `throws .. | null`.
+                members
+                    .iter()
+                    .map(|m| {
+                        let rendered = m.render_with(s);
+                        if matches!(m, Ty::Function { .. }) {
+                            format!("({rendered})")
+                        } else {
+                            rendered
+                        }
+                    })
+                    .collect::<Vec<_>>()
+                    .join(" | ")
+            }
+            Ty::Literal(lit, _freshness, _) => lit.to_string(),
+            Ty::Function {
+                generic_params,
+                generic_param_bounds,
+                params,
+                ret,
+                throws,
+                ..
+            } => {
+                use std::fmt::Write as _;
+
+                let mut out = String::new();
+                if !generic_params.is_empty() {
+                    out.push('<');
+                    for (i, param) in generic_params.iter().enumerate() {
+                        if i > 0 {
+                            out.push_str(", ");
+                        }
+                        out.push_str(param.as_ref());
+                        if let Some(bound) = generic_param_bounds.get(i).and_then(Option::as_ref) {
+                            let _ = write!(out, " extends {}", bound.render_with(s));
+                        }
+                    }
+                    out.push('>');
+                }
+                let ps: Vec<String> = params
+                    .iter()
+                    .map(|param| {
+                        let ty = param.ty.render_with(s);
+                        match (&param.name, param.mode) {
+                            (Some(name), FunctionParamMode::Optional) => format!("{name}?: {ty}"),
+                            (Some(name), FunctionParamMode::Required) => format!("{name}: {ty}"),
+                            (None, _) => ty,
+                        }
+                    })
+                    .collect();
+                format!(
+                    "{out}({}) -> {} throws {}",
+                    ps.join(", "),
+                    ret.render_as_function_result(s),
+                    throws.render_with(s),
+                )
+            }
+            Ty::TypeVar(name, _) => s.type_var(name),
+            Ty::AssociatedTypeProjection {
+                base,
+                interface,
+                member,
+                ..
+            } => {
+                if let Some(interface) = interface {
+                    format!(
+                        "({} as {}).{}",
+                        base.render_with(s),
+                        interface.render_with(s),
+                        member
+                    )
+                } else {
+                    format!("{}.{}", base.render_with(s), member)
+                }
+            }
+            Ty::Never { .. } => "never".to_string(),
+            Ty::Void { .. } => "void".to_string(),
+            Ty::BuiltinUnknown { .. } | Ty::Unknown { .. } => "unknown".to_string(),
+            Ty::RustType { .. } => "$rust_type".to_string(),
+            Ty::Type { .. } => "type".to_string(),
+            Ty::Error { .. } => "!error".to_string(),
+            Ty::Future(value, error, _) => {
+                format!("Future<{}, {}>", value.render_with(s), error.render_with(s))
+            }
+            Ty::Opaque(qn, _) => s.qtn(qn),
+            Ty::WatchAccessor(inner, _) => format!("{}.$watch", inner.render_with(s)),
+        }
+    }
+}
+
+/// The built-in strategy for canonical and user-facing rendering. When
+/// `user_facing`, the reserved implicit `user` package is elided and synthetic
+/// effect params show as `callback`; otherwise everything renders verbatim (for
+/// dumps and identity). Both keep `(evolving)` annotations and `<_>`
+/// placeholders. [`Ty::render_canonical`] uses `user_facing = false`;
+/// [`Ty::render_user_facing`] uses `true`.
+pub struct CanonicalTyRender {
+    pub user_facing: bool,
+}
+
+impl TyRenderStrategy for CanonicalTyRender {
+    fn qtn(&self, qtn: &QualifiedTypeName) -> String {
+        qtn.render_dotted(self.user_facing)
+    }
+
+    fn type_var(&self, name: &Name) -> String {
+        // A synthetic effect parameter (`__effect_param_N`) is an implementation
+        // detail of effect-polymorphic callbacks; show it as `callback` in
+        // user-facing output.
+        if self.user_facing && is_synthetic_effect_param(name) {
+            "callback".to_string()
+        } else {
+            name.to_string()
         }
     }
 }

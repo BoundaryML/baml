@@ -9,9 +9,7 @@ use rustc_hash::FxHashSet;
 
 use crate::{
     infer_context::TirTypeError,
-    ty::{
-        Freshness, FunctionParamMode, FunctionParamTy, PrimitiveType, QualifiedTypeName, Ty, TyAttr,
-    },
+    ty::{Freshness, FunctionParamMode, FunctionParamTy, MediaKind, QualifiedTypeName, Ty, TyAttr},
 };
 
 /// Resolve an AST `TypeExpr` to a `Ty` using package-level name resolution.
@@ -824,36 +822,45 @@ pub fn lower_type_expr_in_ns(
                 }
             }
         }
-        TypeExpr::Int { .. } => Ty::Primitive(PrimitiveType::Int, TyAttr::default()),
-        TypeExpr::Bigint { .. } => Ty::Primitive(PrimitiveType::Bigint, TyAttr::default()),
-        TypeExpr::Float { .. } => Ty::Primitive(PrimitiveType::Float, TyAttr::default()),
-        TypeExpr::String { .. } => Ty::Primitive(PrimitiveType::String, TyAttr::default()),
-        TypeExpr::Bool { .. } => Ty::Primitive(PrimitiveType::Bool, TyAttr::default()),
-        TypeExpr::Null { .. } => Ty::Primitive(PrimitiveType::Null, TyAttr::default()),
+        TypeExpr::Int { .. } => Ty::Int {
+            attr: TyAttr::default(),
+        },
+        TypeExpr::Bigint { .. } => Ty::Bigint {
+            attr: TyAttr::default(),
+        },
+        TypeExpr::Float { .. } => Ty::Float {
+            attr: TyAttr::default(),
+        },
+        TypeExpr::String { .. } => Ty::String {
+            attr: TyAttr::default(),
+        },
+        TypeExpr::Bool { .. } => Ty::Bool {
+            attr: TyAttr::default(),
+        },
+        TypeExpr::Null { .. } => Ty::Null {
+            attr: TyAttr::default(),
+        },
         TypeExpr::Never { .. } => Ty::Never {
             attr: TyAttr::default(),
         },
         TypeExpr::Void { .. } => Ty::Void {
             attr: TyAttr::default(),
         },
-        TypeExpr::Uint8Array { .. } => Ty::Primitive(PrimitiveType::Uint8Array, TyAttr::default()),
-        TypeExpr::Media { kind, .. } => Ty::Primitive(
-            match kind {
-                baml_base::MediaKind::Image => PrimitiveType::Image,
-                baml_base::MediaKind::Audio => PrimitiveType::Audio,
-                baml_base::MediaKind::Video => PrimitiveType::Video,
-                baml_base::MediaKind::Pdf => PrimitiveType::Pdf,
-                // Generic media — treated as unknown for type resolution purposes
-                baml_base::MediaKind::Generic => {
-                    return Ty::Unknown {
-                        attr: TyAttr::default(),
-                    };
-                }
+        TypeExpr::Uint8Array { .. } => Ty::Uint8Array {
+            attr: TyAttr::default(),
+        },
+        TypeExpr::Media { kind, .. } => match kind {
+            baml_base::MediaKind::Image => Ty::Media(MediaKind::Image, TyAttr::default()),
+            baml_base::MediaKind::Audio => Ty::Media(MediaKind::Audio, TyAttr::default()),
+            baml_base::MediaKind::Video => Ty::Media(MediaKind::Video, TyAttr::default()),
+            baml_base::MediaKind::Pdf => Ty::Media(MediaKind::Pdf, TyAttr::default()),
+            // Generic media — treated as unknown for type resolution purposes
+            baml_base::MediaKind::Generic => Ty::Unknown {
+                attr: TyAttr::default(),
             },
-            TyAttr::default(),
-        ),
+        },
         // `T?` is sugar for `T | null` — lower it directly to a nullable union.
-        TypeExpr::Optional { inner, .. } => Ty::nullable(lower_type_expr_in_ns(
+        TypeExpr::Optional { inner, .. } => Ty::optional(lower_type_expr_in_ns(
             db,
             inner,
             package_items,
@@ -872,8 +879,8 @@ pub fn lower_type_expr_in_ns(
             )),
             TyAttr::default(),
         ),
-        TypeExpr::Map { key, value, .. } => Ty::Map(
-            Box::new(lower_type_expr_in_ns(
+        TypeExpr::Map { key, value, .. } => Ty::Map {
+            key: Box::new(lower_type_expr_in_ns(
                 db,
                 key,
                 package_items,
@@ -881,7 +888,7 @@ pub fn lower_type_expr_in_ns(
                 generic_params,
                 diagnostics,
             )),
-            Box::new(lower_type_expr_in_ns(
+            value: Box::new(lower_type_expr_in_ns(
                 db,
                 value,
                 package_items,
@@ -889,8 +896,8 @@ pub fn lower_type_expr_in_ns(
                 generic_params,
                 diagnostics,
             )),
-            TyAttr::default(),
-        ),
+            attr: TyAttr::default(),
+        },
         TypeExpr::Union {
             variants: members, ..
         } => Ty::Union(

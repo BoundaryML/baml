@@ -1,6 +1,6 @@
 //! Phase 6 tests: Generic type variable binding and builtin method resolution.
 //!
-//! Verifies that `Ty::List`, `Ty::Map`, and `Ty::Primitive(String)` correctly
+//! Verifies that `Ty::List`, `Ty::Map`, and `Ty::String` correctly
 //! resolve methods to the builtin `.baml` stub declarations with type variable
 //! substitution applied.
 

@@ -62,9 +62,11 @@ fn contains_tir_type_var(ty: &baml_compiler2_tir::ty::Ty) -> bool {
                     .any(|(_, ty)| contains_tir_type_var(ty))
         }
         Ty::List(inner, _) | Ty::EvolvingList(inner, _) => contains_tir_type_var(inner),
-        Ty::Map(k, v, _) | Ty::EvolvingMap(k, v, _) | Ty::Future(k, v, _) => {
-            contains_tir_type_var(k) || contains_tir_type_var(v)
+        Ty::Map {
+            key: k, value: v, ..
         }
+        | Ty::EvolvingMap(k, v, _)
+        | Ty::Future(k, v, _) => contains_tir_type_var(k) || contains_tir_type_var(v),
         Ty::Function {
             generic_param_bounds,
             params,
@@ -1058,27 +1060,30 @@ pub fn generate_project_bytecode_with_opt(
                     // BEP-044 wf3 #G19: an out-of-body `implements I for <primitive>`
                     // is visible to reflection via a synthetic primitive TypeName
                     // (the name MUST match `bex_vm`'s `primitive_type_name`).
-                    baml_compiler2_tir::ty::Ty::Primitive(prim, _) => {
-                        use baml_compiler2_tir::ty::PrimitiveType;
-                        let prim_name = match prim {
-                            PrimitiveType::Int => Some("int"),
-                            PrimitiveType::Bigint => Some("bigint"),
-                            PrimitiveType::Float => Some("float"),
-                            PrimitiveType::String => Some("string"),
-                            PrimitiveType::Bool => Some("bool"),
-                            PrimitiveType::Null => Some("null"),
-                            _ => None,
+                    baml_compiler2_tir::ty::Ty::Int { .. }
+                    | baml_compiler2_tir::ty::Ty::Bigint { .. }
+                    | baml_compiler2_tir::ty::Ty::Float { .. }
+                    | baml_compiler2_tir::ty::Ty::String { .. }
+                    | baml_compiler2_tir::ty::Ty::Bool { .. }
+                    | baml_compiler2_tir::ty::Ty::Null { .. } => {
+                        use baml_compiler2_tir::ty::Ty as Tir2Ty;
+                        let prim_name = match &rule.for_ty_pattern {
+                            Tir2Ty::Int { .. } => "int",
+                            Tir2Ty::Bigint { .. } => "bigint",
+                            Tir2Ty::Float { .. } => "float",
+                            Tir2Ty::String { .. } => "string",
+                            Tir2Ty::Bool { .. } => "bool",
+                            Tir2Ty::Null { .. } => "null",
+                            _ => unreachable!("matched scalar primitive above"),
                         };
-                        if let Some(prim_name) = prim_name {
-                            let tn = baml_type::QualifiedTypeName::local(Name::new(prim_name));
-                            add_impl(
-                                iface_qtn,
-                                tn,
-                                format!("prim:{prim_name}"),
-                                converted_iface_args,
-                                converted_iface_assoc.clone(),
-                            );
-                        }
+                        let tn = baml_type::QualifiedTypeName::local(Name::new(prim_name));
+                        add_impl(
+                            iface_qtn,
+                            tn,
+                            format!("prim:{prim_name}"),
+                            converted_iface_args,
+                            converted_iface_assoc.clone(),
+                        );
                     }
                     baml_compiler2_tir::ty::Ty::TypeVar(type_var, _) => {
                         let Some(bound) = rule
