@@ -3811,6 +3811,27 @@ fn baml.http.Request.from_json(j: baml.json.json) -> baml.http.Request {
     }
 }
 
+fn baml.http.Response.from_json(j: baml.json.json) -> baml.http.Response {
+    // Locals:
+    let _0: baml.http.Response // _0 // return
+    let _1: baml.json.json // j // param
+    let _2: string
+    let _3: type
+
+    bb0: {
+        _2 = call const fn baml.json.stringify(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _3 = load_type(baml.http.Response);
+        _0 = call const fn baml.json.from_string<copy _3>(copy _2) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
+
 fn baml.http.SseStream.from_json(j: baml.json.json) -> baml.http.SseStream {
     // Locals:
     let _0: baml.http.SseStream // _0 // return
@@ -3832,26 +3853,7 @@ fn baml.http.SseStream.from_json(j: baml.json.json) -> baml.http.SseStream {
     }
 }
 
-fn baml.http.Response.from_json(j: baml.json.json) -> baml.http.Response {
-    // Locals:
-    let _0: baml.http.Response // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: string
-    let _3: type
-
-    bb0: {
-        _2 = call const fn baml.json.stringify(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        _3 = load_type(baml.http.Response);
-        _0 = call const fn baml.json.from_string<copy _3>(copy _2) -> [bb2];
-    }
-
-    bb2: {
-        return;
-    }
-}
+fn baml.http.Response.new = builtin(io)
 
 fn baml.http.SseStream.next = builtin(io)
 
@@ -3883,27 +3885,6 @@ fn baml.http.Response.ok(self: baml.http.Response) -> bool {
 fn baml.http.send = builtin(io)
 
 fn baml.http.Response.text = builtin(io)
-
-fn baml.http.Response.to_json(self: baml.http.Response) -> baml.json.json {
-    // Locals:
-    let _0: baml.json.json // _0 // return
-    let _1: baml.http.Response // self // param
-    let _2: string
-    let _3: type
-
-    bb0: {
-        _3 = load_type(baml.http.Response);
-        _2 = call const fn baml.json.to_string<copy _3>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        _0 = call const fn baml.json.parse(copy _2) -> [bb2];
-    }
-
-    bb2: {
-        return;
-    }
-}
 
 fn baml.http.Request.to_json(self: baml.http.Request) -> baml.json.json {
     // Locals:
@@ -3960,6 +3941,27 @@ fn baml.http.Request.to_json(self: baml.http.Request) -> baml.json.json {
     }
 }
 
+fn baml.http.Response.to_json(self: baml.http.Response) -> baml.json.json {
+    // Locals:
+    let _0: baml.json.json // _0 // return
+    let _1: baml.http.Response // self // param
+    let _2: string
+    let _3: type
+
+    bb0: {
+        _3 = load_type(baml.http.Response);
+        _2 = call const fn baml.json.to_string<copy _3>(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _0 = call const fn baml.json.parse(copy _2) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
+
 fn baml.http.SseStream.to_json(self: baml.http.SseStream) -> baml.json.json {
     // Locals:
     let _0: baml.json.json // _0 // return
@@ -3969,6 +3971,230 @@ fn baml.http.SseStream.to_json(self: baml.http.SseStream) -> baml.json.json {
 
     bb0: {
         _3 = load_type(baml.http.SseStream);
+        _2 = call const fn baml.json.to_string<copy _3>(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _0 = call const fn baml.json.parse(copy _2) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn baml.http.TlsConfig._new = builtin(io)
+
+fn baml.http.Server._serve = builtin(io)
+
+fn baml.http.Server.bind = builtin(io)
+
+fn baml.http.Server.from_json(j: baml.json.json) -> baml.http.Server {
+    // Locals:
+    let _0: baml.http.Server // _0 // return
+    let _1: baml.json.json // j // param
+    let _2: string
+    let _3: type
+
+    bb0: {
+        _2 = call const fn baml.json.stringify(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _3 = load_type(baml.http.Server);
+        _0 = call const fn baml.json.from_string<copy _3>(copy _2) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn baml.http.TlsConfig.from_json(j: baml.json.json) -> baml.http.TlsConfig {
+    // Locals:
+    let _0: baml.http.TlsConfig // _0 // return
+    let _1: baml.json.json // j // param
+    let _2: string
+    let _3: type
+
+    bb0: {
+        _2 = call const fn baml.json.stringify(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _3 = load_type(baml.http.TlsConfig);
+        _0 = call const fn baml.json.from_string<copy _3>(copy _2) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn baml.http.TlsConfig.new(cert_pem: uint8array, key_pem: uint8array, allow_tls1_2: bool, handshake_timeout: baml.time.Duration) -> baml.http.TlsConfig {
+    // Locals:
+    let _0: baml.http.TlsConfig // _0 // return
+    let _1: uint8array // cert_pem // param
+    let _2: uint8array // key_pem // param
+    let _3: bool // allow_tls1_2 // param
+    let _4: baml.time.Duration // handshake_timeout // param
+    let _5: bool
+    let _6: bool
+    let _7: bigint
+
+    bb0: {
+        _5 = copy _3 == const <omitted>;
+        branch copy _5 -> [bb1, bb2];
+    }
+
+    bb1: {
+        _3 = const true;
+        goto -> bb2;
+    }
+
+    bb2: {
+        _6 = copy _4 == const <omitted>;
+        branch copy _6 -> [bb3, bb4];
+    }
+
+    bb3: {
+        _4 = call const fn baml.time.Duration.from_seconds(const 10n) -> [bb4];
+    }
+
+    bb4: {
+        _7 = call const fn baml.time.Duration.to_nanoseconds(copy _4) -> [bb5];
+    }
+
+    bb5: {
+        _0 = sys_op const fn baml.http.TlsConfig._new(copy _1, copy _2, copy _3, copy _7) -> bb6;
+    }
+
+    bb6: {
+        return;
+    }
+}
+
+fn baml.http.Server.serve(self: baml.http.Server, handler: (baml.http.Request) -> baml.http.Response throws never, tls_config: baml.http.TlsConfig | null, allow_http1: bool, allow_http2: bool, max_body_size: int, max_connections: int, header_read_timeout: baml.time.Duration) -> void {
+    // Locals:
+    let _0: void // _0 // return
+    let _1: baml.http.Server // self // param
+    let _2: (baml.http.Request) -> baml.http.Response throws never // handler // param
+    let _3: baml.http.TlsConfig | null // tls_config // param
+    let _4: bool // allow_http1 // param
+    let _5: bool // allow_http2 // param
+    let _6: int // max_body_size // param
+    let _7: int // max_connections // param
+    let _8: baml.time.Duration // header_read_timeout // param
+    let _9: bool
+    let _10: bool
+    let _11: bool
+    let _12: bool
+    let _13: bool
+    let _14: bool
+    let _15: bigint
+
+    bb0: {
+        _9 = copy _3 == const <omitted>;
+        branch copy _9 -> [bb1, bb2];
+    }
+
+    bb1: {
+        _3 = const null;
+        goto -> bb2;
+    }
+
+    bb2: {
+        _10 = copy _4 == const <omitted>;
+        branch copy _10 -> [bb3, bb4];
+    }
+
+    bb3: {
+        _4 = const true;
+        goto -> bb4;
+    }
+
+    bb4: {
+        _11 = copy _5 == const <omitted>;
+        branch copy _11 -> [bb5, bb6];
+    }
+
+    bb5: {
+        _5 = const true;
+        goto -> bb6;
+    }
+
+    bb6: {
+        _12 = copy _6 == const <omitted>;
+        branch copy _12 -> [bb7, bb8];
+    }
+
+    bb7: {
+        _6 = const 104857600_i64;
+        goto -> bb8;
+    }
+
+    bb8: {
+        _13 = copy _7 == const <omitted>;
+        branch copy _13 -> [bb9, bb10];
+    }
+
+    bb9: {
+        _7 = const 1024_i64;
+        goto -> bb10;
+    }
+
+    bb10: {
+        _14 = copy _8 == const <omitted>;
+        branch copy _14 -> [bb11, bb12];
+    }
+
+    bb11: {
+        _8 = call const fn baml.time.Duration.from_seconds(const 30n) -> [bb12];
+    }
+
+    bb12: {
+        _15 = call const fn baml.time.Duration.to_nanoseconds(copy _8) -> [bb13];
+    }
+
+    bb13: {
+        _0 = sys_op const fn baml.http.Server._serve(copy _1, copy _2, copy _3, copy _4, copy _5, copy _6, copy _7, copy _15) -> bb14;
+    }
+
+    bb14: {
+        return;
+    }
+}
+
+fn baml.http.TlsConfig.to_json(self: baml.http.TlsConfig) -> baml.json.json {
+    // Locals:
+    let _0: baml.json.json // _0 // return
+    let _1: baml.http.TlsConfig // self // param
+    let _2: string
+    let _3: type
+
+    bb0: {
+        _3 = load_type(baml.http.TlsConfig);
+        _2 = call const fn baml.json.to_string<copy _3>(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _0 = call const fn baml.json.parse(copy _2) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn baml.http.Server.to_json(self: baml.http.Server) -> baml.json.json {
+    // Locals:
+    let _0: baml.json.json // _0 // return
+    let _1: baml.http.Server // self // param
+    let _2: string
+    let _3: type
+
+    bb0: {
+        _3 = load_type(baml.http.Server);
         _2 = call const fn baml.json.to_string<copy _3>(copy _1) -> [bb1];
     }
 

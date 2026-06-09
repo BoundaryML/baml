@@ -546,6 +546,50 @@ class baml.http.SseStream$stream {
   _handle: $rust_type
 }
 
+--- <builtin>/baml/ns_http/server.baml ---
+class baml.http.Server {
+  addr: string
+  _state: $rust_type
+}
+function baml.http.Server.serve(self: baml.http.Server, handler: (req: baml.http.Request) -> baml.http.Response throws never, tls_config: baml.http.TlsConfig | null = null, allow_http1: bool = true, allow_http2: bool = true, max_body_size: int = 104857600, max_connections: int = 1024, header_read_timeout: baml.time.Duration = root.time.Duration.from_seconds(30n)) -> never throws baml.errors.Io {
+  { : never
+    self._serve(handler, tls_config, allow_http1, allow_http2, max_body_size, max_connections, header_read_timeout.to_nanoseconds()) : never
+  }
+}
+function baml.http.Server.to_json(self: baml.http.Server) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  baml.json.parse(baml.json.to_string<Server>(self)) : baml.json.json
+}
+function baml.http.Server.from_json(j: baml.json.json) -> baml.http.Server throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  baml.json.from_string<T>(baml.json.stringify(j)) : baml.http.Server
+}
+class baml.http.TlsConfig {
+  allow_tls1_2: bool
+  _certificate: $rust_type
+  _private_key: $rust_type
+  _handshake_timeout_nanos: bigint
+}
+function baml.http.TlsConfig.new(cert_pem: uint8array, key_pem: uint8array, allow_tls1_2: bool = true, handshake_timeout: baml.time.Duration = root.time.Duration.from_seconds(10n)) -> baml.http.TlsConfig throws baml.errors.Io {
+  { : baml.http.TlsConfig
+    TlsConfig._new(cert_pem, key_pem, allow_tls1_2, handshake_timeout.to_nanoseconds()) : baml.http.TlsConfig
+  }
+}
+function baml.http.TlsConfig.to_json(self: baml.http.TlsConfig) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  baml.json.parse(baml.json.to_string<TlsConfig>(self)) : baml.json.json
+}
+function baml.http.TlsConfig.from_json(j: baml.json.json) -> baml.http.TlsConfig throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  baml.json.from_string<T>(baml.json.stringify(j)) : baml.http.TlsConfig
+}
+class baml.http.Server$stream {
+  addr: string | null
+  _state: $rust_type
+}
+class baml.http.TlsConfig$stream {
+  allow_tls1_2: bool | null
+  _certificate: $rust_type
+  _private_key: $rust_type
+  _handshake_timeout_nanos: bigint | null
+}
+
 --- <builtin>/baml/ns_io/io.baml ---
 
 --- <builtin>/baml/ns_iter/iter.baml ---
