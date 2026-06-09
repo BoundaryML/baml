@@ -95,11 +95,11 @@ impl BexHeap {
     }
 
     pub(crate) fn placeholder_object(&self) -> Object {
-        Object::String(String::new())
+        Object::String(bex_str::BexStr::empty())
     }
 
     pub(crate) fn tlab_canary_object(&self, _chunk_start: usize, _chunk_end: usize) -> Object {
-        Object::String(String::new())
+        Object::String(bex_str::BexStr::empty())
     }
 
     pub(crate) fn finalize_inactive_space(&self) {

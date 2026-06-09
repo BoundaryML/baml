@@ -43,8 +43,10 @@ SOURCE_FILE
       BLOCK_EXPR
         L_BRACE "{"
         LET_STMT
-          KW_LET "let"
-          WORD "result"
+          PATTERN
+            BINDING_PATTERN "let result"
+              KW_LET "let"
+              WORD "result"
           EQUALS "="
           CALL_EXPR
             FIELD_ACCESS_EXPR
@@ -56,22 +58,23 @@ SOURCE_FILE
               WORD "map"
             CALL_ARGS
               L_PAREN "("
-              LAMBDA_EXPR
-                PARAMETER_LIST
-                  L_PAREN "("
-                  PARAMETER "x"
-                    WORD "x"
-                  R_PAREN ")"
-                ARROW "->"
-                BLOCK_EXPR
-                  L_BRACE "{"
-                  PATH_EXPR "outer.inner.value"
-                    WORD "outer"
-                    DOT "."
-                    WORD "inner"
-                    DOT "."
-                    WORD "value"
-                  R_BRACE "}"
+              CALL_ARG
+                LAMBDA_EXPR
+                  PARAMETER_LIST
+                    L_PAREN "("
+                    PARAMETER "x"
+                      WORD "x"
+                    R_PAREN ")"
+                  ARROW "->"
+                  BLOCK_EXPR
+                    L_BRACE "{"
+                    PATH_EXPR "outer.inner.value"
+                      WORD "outer"
+                      DOT "."
+                      WORD "inner"
+                      DOT "."
+                      WORD "value"
+                    R_BRACE "}"
               R_PAREN ")"
         INDEX_EXPR "result[0]"
           WORD "result"
@@ -97,8 +100,10 @@ SOURCE_FILE
       BLOCK_EXPR
         L_BRACE "{"
         LET_STMT
-          KW_LET "let"
-          WORD "result"
+          PATTERN
+            BINDING_PATTERN "let result"
+              KW_LET "let"
+              WORD "result"
           EQUALS "="
           CALL_EXPR
             FIELD_ACCESS_EXPR
@@ -110,20 +115,21 @@ SOURCE_FILE
               WORD "map"
             CALL_ARGS
               L_PAREN "("
-              LAMBDA_EXPR
-                PARAMETER_LIST
-                  L_PAREN "("
-                  PARAMETER "x"
-                    WORD "x"
-                  R_PAREN ")"
-                ARROW "->"
-                BLOCK_EXPR
-                  L_BRACE "{"
-                  PATH_EXPR "outer.name"
-                    WORD "outer"
-                    DOT "."
-                    WORD "name"
-                  R_BRACE "}"
+              CALL_ARG
+                LAMBDA_EXPR
+                  PARAMETER_LIST
+                    L_PAREN "("
+                    PARAMETER "x"
+                      WORD "x"
+                    R_PAREN ")"
+                  ARROW "->"
+                  BLOCK_EXPR
+                    L_BRACE "{"
+                    PATH_EXPR "outer.name"
+                      WORD "outer"
+                      DOT "."
+                      WORD "name"
+                    R_BRACE "}"
               R_PAREN ")"
         INDEX_EXPR "result[0]"
           WORD "result"

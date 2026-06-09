@@ -45,6 +45,16 @@ pub enum TokenKind {
     Class,
     #[token("enum")]
     Enum,
+    #[token("interface")]
+    Interface,
+    #[token("implements")]
+    Implements,
+    #[token("implement")]
+    Implement,
+    #[token("extends")]
+    Extends,
+    #[token("requires")]
+    Requires,
     #[token("function")]
     Function,
     #[token("client")]
@@ -91,12 +101,18 @@ pub enum TokenKind {
     CatchAll,
     #[token("throws")]
     Throws,
+    #[token("spawn")]
+    Spawn,
+    #[token("await")]
+    Await,
 
     // Other keywords
     #[token("watch")]
     Watch,
     #[token("instanceof")]
     Instanceof,
+    #[token("is")]
+    Is,
     #[token("dynamic")]
     Dynamic,
 
@@ -118,6 +134,10 @@ pub enum TokenKind {
     /// E.g., #"hello"# → Hash, Quote, Word("hello"), Quote, Hash
     #[token("#")]
     Hash,
+
+    /// Bigint literal (must come before Integer so the longer `42n` match wins)
+    #[regex(r"[0-9]+n")]
+    BigintLiteral,
 
     /// Integer literal
     #[regex(r"[0-9]+")]
@@ -154,6 +174,8 @@ pub enum TokenKind {
     Semicolon,
     #[token("...")]
     DotDotDot,
+    #[token("..")]
+    DotDot,
     #[token(".")]
     Dot,
     #[token("$")]
@@ -270,6 +292,11 @@ impl std::fmt::Display for TokenKind {
             // Keywords
             TokenKind::Class => "class",
             TokenKind::Enum => "enum",
+            TokenKind::Interface => "interface",
+            TokenKind::Implements => "implements",
+            TokenKind::Implement => "implement",
+            TokenKind::Extends => "extends",
+            TokenKind::Requires => "requires",
             TokenKind::Function => "function",
             TokenKind::Client => "client",
             TokenKind::Generator => "generator",
@@ -292,14 +319,18 @@ impl std::fmt::Display for TokenKind {
             TokenKind::Catch => "catch",
             TokenKind::CatchAll => "catch_all",
             TokenKind::Throws => "throws",
+            TokenKind::Spawn => "spawn",
+            TokenKind::Await => "await",
             TokenKind::Watch => "watch",
             TokenKind::Instanceof => "instanceof",
+            TokenKind::Is => "is",
             TokenKind::Dynamic => "dynamic",
 
             // Identifiers and literals
             TokenKind::Word => "identifier",
             TokenKind::Quote => "'\"'",
             TokenKind::Hash => "'#'",
+            TokenKind::BigintLiteral => "bigint",
             TokenKind::IntegerLiteral => "integer",
             TokenKind::FloatLiteral => "float",
 
@@ -382,6 +413,7 @@ impl std::fmt::Display for TokenKind {
 
             // Spread/Ellipsis
             TokenKind::DotDotDot => "'...'",
+            TokenKind::DotDot => "'..'",
         };
         write!(f, "{s}")
     }
@@ -821,7 +853,7 @@ mod tests {
                 TokenKind::Quote,
                 TokenKind::Word, // This
                 TokenKind::Whitespace,
-                TokenKind::Word, // is
+                TokenKind::Is, // is (now a keyword, even inside strings — the parser assembles string literals from raw tokens)
                 TokenKind::Whitespace,
                 TokenKind::Word, // a
                 TokenKind::Whitespace,
@@ -853,13 +885,13 @@ mod tests {
                 TokenKind::Whitespace, //
                 TokenKind::Word,       // This
                 TokenKind::Whitespace, //
-                TokenKind::Word,       // is
+                TokenKind::Is, // is (keyword; the parser, not the lexer, recognises this as comment content)
                 TokenKind::Whitespace, //
-                TokenKind::Word,       // a
+                TokenKind::Word, // a
                 TokenKind::Whitespace, //
-                TokenKind::Word,       // comment
-                TokenKind::Newline,    // \n
-                TokenKind::Word,       // code
+                TokenKind::Word, // comment
+                TokenKind::Newline, // \n
+                TokenKind::Word, // code
             ]
         );
 
@@ -989,5 +1021,41 @@ mod tests {
 
         // Verify lossless
         assert_eq!(reconstruct_source(&lex(source)), source);
+    }
+
+    #[test]
+    fn lex_bigint_literal() {
+        // Plain bigint literals
+        assert_eq!(lex_no_whitespace("42n"), vec![TokenKind::BigintLiteral]);
+        assert_eq!(lex_no_whitespace("0n"), vec![TokenKind::BigintLiteral]);
+        assert_eq!(
+            lex_no_whitespace("99999999999999999999n"),
+            vec![TokenKind::BigintLiteral]
+        );
+
+        // Bigint followed by an identifier — must not consume the identifier part
+        assert_eq!(
+            lex_no_whitespace("42na"),
+            vec![TokenKind::BigintLiteral, TokenKind::Word]
+        );
+
+        // `42n.5` — the `42n` is consumed as BigintLiteral, leaving `.5`
+        // which splits into Dot then IntegerLiteral (not FloatLiteral because the
+        // integer part was already consumed).
+        assert_eq!(
+            lex_no_whitespace("42n.5"),
+            vec![
+                TokenKind::BigintLiteral,
+                TokenKind::Dot,
+                TokenKind::IntegerLiteral
+            ]
+        );
+
+        // Verify that plain integers still lex as IntegerLiteral (no regression)
+        assert_eq!(lex_no_whitespace("42"), vec![TokenKind::IntegerLiteral]);
+
+        // Lossless reconstruction
+        assert_eq!(reconstruct_source(&lex("42n")), "42n");
+        assert_eq!(reconstruct_source(&lex("0n")), "0n");
     }
 }

@@ -1,0 +1,15 @@
+---
+source: crates/baml_tests/src/compiler2_tir/phase3a.rs
+expression: tir
+---
+function user.search(query: string, max: int = 10) -> string throws never {
+  { : string
+    query : string
+  }
+}
+function user.f() -> string throws never {
+  { : never
+    let a = search("cats") : string
+    return search("dogs", max = 5) : string
+  }
+}

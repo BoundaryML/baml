@@ -1,0 +1,25 @@
+---
+source: crates/baml_cli/src/describe_command_tests.rs
+expression: output
+---
+class            TestRegistration                 <builtin>/testing/registry.baml:5
+class            TestSetRegistration              <builtin>/testing/registry.baml:17
+class            TestCollector                    <builtin>/testing/registry.baml:29
+function         $invoke_collector                <builtin>/testing/registry.baml:72
+class            SerializedTest                   <builtin>/testing/registry.baml:78
+class            SerializedTestSet                <builtin>/testing/registry.baml:83
+type             SerializedTestDef                <builtin>/testing/registry.baml:89
+class            TestRegistry                     <builtin>/testing/registry.baml:93
+function         run_test                         <builtin>/testing/registry.baml:184
+function         run_testset                      <builtin>/testing/registry.baml:210
+type             Outcome                          <builtin>/testing/types.baml:4
+class            RunReport                        <builtin>/testing/types.baml:7
+class            TestReport                       <builtin>/testing/types.baml:18
+class            TestSetReport                    <builtin>/testing/types.baml:25
+type             ChildReport                      <builtin>/testing/types.baml:35
+type             TestBody                         <builtin>/testing/types.baml:39
+type             TestSetBody                      <builtin>/testing/types.baml:40
+type             TestReportThunk                  <builtin>/testing/types.baml:41
+type             TestSetReportThunk               <builtin>/testing/types.baml:42
+type             TestRunner                       <builtin>/testing/types.baml:43
+type             TestSetRunner                    <builtin>/testing/types.baml:46

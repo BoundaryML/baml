@@ -2,7 +2,7 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === COMPILER2 DIAGNOSTICS ===
-  [parse] Error: Expected function name, found integer
+  [parse] error: Expected function name, found integer
    ╭─[ syntax_errors.baml:6:10 ]
    │
  6 │ function 123Invalid() {}
@@ -12,7 +12,7 @@ source: crates/baml_tests/src/generated_tests.rs
    │ Note: Error code: E0010
 ───╯
 
-  [parse] Error: Expected return type (->), found '{'
+  [parse] error: Expected return type (->), found '{'
    ╭─[ syntax_errors.baml:6:23 ]
    │
  6 │ function 123Invalid() {}
@@ -22,53 +22,12 @@ source: crates/baml_tests/src/generated_tests.rs
    │ Note: Error code: E0010
 ───╯
 
-  [type] Error: unresolved type: b
-    ╭─[ syntax_errors.baml:17:16 ]
+  [parse] error: Expected '}', found EOF
+    ╭─[ syntax_errors.baml:13:78 ]
     │
- 17 │ ╭─▶     match (x) {
- 18 │ ├─▶         a: int | b: bool => "bad"
-    │ │                                       
-    │ ╰─────────────────────────────────────── unresolved type: b
-    │     
-    │     Note: Error code: E0002
-────╯
-
-  [parse] Error: Expected '=>' after pattern, found ':'
-    ╭─[ syntax_errors.baml:18:19 ]
-    │
- 18 │         a: int | b: bool => "bad"
-    │                   ┬  
-    │                   ╰── Expected '=>' after pattern, found ':'
-    │ 
-    │ Note: Error code: E0010
-────╯
-
-  [parse] Error: Expected expression, found ':'
-    ╭─[ syntax_errors.baml:18:19 ]
-    │
- 18 │         a: int | b: bool => "bad"
-    │                   ┬  
-    │                   ╰── Expected expression, found ':'
-    │ 
-    │ Note: Error code: E0010
-────╯
-
-  [type] Error: unreachable arm
-    ╭─[ syntax_errors.baml:18:29 ]
-    │
- 18 │         a: int | b: bool => "bad"
-    │                             ──┬──  
-    │                               ╰──── unreachable arm
-    │ 
-    │ Note: Error code: E0063
-────╯
-
-  [parse] Error: Expected '}', found EOF
-    ╭─[ syntax_errors.baml:27:1 ]
-    │
- 27 │ }
-    │ ┬  
-    │ ╰── Expected '}', found EOF
+ 13 │ // ============================================================================
+    │                                                                              ─┬  
+    │                                                                               ╰── Expected '}', found EOF
     │ 
     │ Note: Error code: E0010
 ────╯

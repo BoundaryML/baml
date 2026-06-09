@@ -1,0 +1,78 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== SYNTAX TREE ===
+SOURCE_FILE
+  CLIENT_DEF
+    KW_CLIENT "client"
+    CLIENT_TYPE "<llm>"
+      LESS "<"
+      WORD "llm"
+      GREATER ">"
+    WORD "TestClient"
+    CONFIG_BLOCK
+      L_BRACE "{"
+      CONFIG_ITEM
+        WORD "provider"
+        CONFIG_VALUE "openai"
+          WORD "openai"
+      CONFIG_ITEM
+        WORD "options"
+        CONFIG_BLOCK
+          L_BRACE "{"
+          CONFIG_ITEM
+            WORD "model"
+            CONFIG_VALUE
+              STRING_LITERAL "gpt-4o-mini"
+                QUOTE """
+                WORD "gpt-4o-mini"
+                QUOTE """
+          CONFIG_ITEM
+            WORD "api_key"
+            CONFIG_VALUE
+              STRING_LITERAL "test-key"
+                QUOTE """
+                WORD "test-key"
+                QUOTE """
+          R_BRACE "}"
+      R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "ExtractAny"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "json"
+      WORD "json"
+    LLM_FUNCTION_BODY
+      L_BRACE "{"
+      CLIENT_FIELD "client TestClient"
+        KW_CLIENT "client"
+        WORD "TestClient"
+      PROMPT_FIELD
+        WORD "prompt"
+        RAW_STRING_LITERAL
+          HASH "#"
+          QUOTE """
+          PROMPT_TEXT "Return whatever JSON you like."
+            WORD "Return"
+            WORD "whatever"
+            WORD "JSON"
+            WORD "you"
+            WORD "like"
+            DOT "."
+          TEMPLATE_INTERPOLATION "{{ ctx.output_format }}"
+            L_BRACE "{"
+            L_BRACE "{"
+            WORD "ctx"
+            DOT "."
+            WORD "output_format"
+            R_BRACE "}"
+            R_BRACE "}"
+          QUOTE """
+          HASH "#"
+      R_BRACE "}"
+
+=== ERRORS ===
+None

@@ -6,9 +6,9 @@ fn user.Gpt4oClient$new() -> null {
     // Locals:
     let _0: null // _0 // return
     let _1: baml.llm.PrimitiveClientOptions
-    let _2: map<void, void>
-    let _3: map<void, void>
-    let _4: map<void, void>
+    let _2: map<string, string>
+    let _3: map<string, string>
+    let _4: map<string, unknown>
 
     bb0: {
         _2 = {  };
@@ -28,9 +28,9 @@ fn user.O1Client$new() -> null {
     // Locals:
     let _0: null // _0 // return
     let _1: baml.llm.PrimitiveClientOptions
-    let _2: map<void, void>
-    let _3: map<void, void>
-    let _4: map<void, void>
+    let _2: map<string, string>
+    let _3: map<string, string>
+    let _4: map<string, unknown>
 
     bb0: {
         _2 = {  };
@@ -50,9 +50,9 @@ fn user.O1MiniClient$new() -> null {
     // Locals:
     let _0: null // _0 // return
     let _1: baml.llm.PrimitiveClientOptions
-    let _2: map<void, void>
-    let _3: map<void, void>
-    let _4: map<void, void>
+    let _2: map<string, string>
+    let _3: map<string, string>
+    let _4: map<string, unknown>
 
     bb0: {
         _2 = {  };
@@ -73,9 +73,9 @@ fn user.O1WithExplicitRoles$new() -> null {
     let _0: null // _0 // return
     let _1: baml.llm.PrimitiveClientOptions
     let _2: string[]
-    let _3: map<void, void>
-    let _4: map<void, void>
-    let _5: map<void, void>
+    let _3: map<string, string>
+    let _4: map<string, string>
+    let _5: map<string, unknown>
 
     bb0: {
         _2 = [const "system", const "user", const "assistant"];

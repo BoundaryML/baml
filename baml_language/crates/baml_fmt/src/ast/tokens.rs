@@ -55,6 +55,11 @@ macro_rules! define_keyword_tokens {
 define_keyword_tokens! {
     "class" => SyntaxKind::KW_CLASS => Class;
     "enum" => SyntaxKind::KW_ENUM => Enum;
+    "interface" => SyntaxKind::KW_INTERFACE => Interface;
+    "implements" => SyntaxKind::KW_IMPLEMENTS => Implements;
+    "implement" => SyntaxKind::KW_IMPLEMENT => Implement;
+    "extends" => SyntaxKind::KW_EXTENDS => Extends;
+    "requires" => SyntaxKind::KW_REQUIRES => Requires;
     "function" => SyntaxKind::KW_FUNCTION => Function;
     "client" => SyntaxKind::KW_CLIENT => Client;
     "generator" => SyntaxKind::KW_GENERATOR => Generator;
@@ -68,16 +73,59 @@ define_keyword_tokens! {
     "for" => SyntaxKind::KW_FOR => For;
     "while" => SyntaxKind::KW_WHILE => While;
     "let" => SyntaxKind::KW_LET => Let;
+    "const" => SyntaxKind::KW_CONST => Const;
     "in" => SyntaxKind::KW_IN => In;
     "break" => SyntaxKind::KW_BREAK => Break;
     "continue" => SyntaxKind::KW_CONTINUE => Continue;
     "return" => SyntaxKind::KW_RETURN => Return;
+    "throw" => SyntaxKind::KW_THROW => Throw;
     "match" => SyntaxKind::KW_MATCH => Match;
+    "catch" => SyntaxKind::KW_CATCH => Catch;
+    "catch_all" => SyntaxKind::KW_CATCH_ALL => CatchAll;
     "watch" => SyntaxKind::KW_WATCH => Watch;
     "instanceof" => SyntaxKind::KW_INSTANCEOF => Instanceof;
+    "is" => SyntaxKind::KW_IS => Is;
     "dynamic" => SyntaxKind::KW_DYNAMIC => Dynamic;
     "with" => SyntaxKind::KW_WITH => With;
     "throws" => SyntaxKind::KW_THROWS => Throws;
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum BindingKeyword {
+    Let(Let),
+    Const(Const),
+}
+
+impl Token for BindingKeyword {
+    fn span(&self) -> TextRange {
+        match self {
+            Self::Let(token) => token.span(),
+            Self::Const(token) => token.span(),
+        }
+    }
+}
+
+impl FromCST for BindingKeyword {
+    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
+        match elem.kind() {
+            SyntaxKind::KW_LET => Ok(Self::Let(Let::from_cst(elem)?)),
+            SyntaxKind::KW_CONST => Ok(Self::Const(Const::from_cst(elem)?)),
+            found => Err(StrongAstError::UnexpectedKindDesc {
+                expected_desc: "KW_LET or KW_CONST".into(),
+                found,
+                at: elem.text_range(),
+            }),
+        }
+    }
+}
+
+impl std::fmt::Display for BindingKeyword {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Let(token) => token.fmt(f),
+            Self::Const(token) => token.fmt(f),
+        }
+    }
 }
 
 pub trait PunctuationToken: Token {}
@@ -134,6 +182,7 @@ define_punctuation_tokens! {
     "," => SyntaxKind::COMMA => Comma;
     ";" => SyntaxKind::SEMICOLON => Semicolon;
     "..." => SyntaxKind::DOT_DOT_DOT => DotDotDot;
+    ".." => SyntaxKind::DOT_DOT => DotDot;
     "." => SyntaxKind::DOT => Dot;
     "$" => SyntaxKind::DOLLAR => Dollar;
     "->" => SyntaxKind::ARROW => Arrow;
@@ -640,9 +689,11 @@ impl Printable for RawString {
 
         let interior = &text[start_quote + 1..end_quote].trim();
         let mut lines = interior.lines();
-        let first_line = lines
-            .next()
-            .unwrap_or_else(|| unreachable!("split always has at least one element"));
+        let Some(first_line) = lines.next() else {
+            // Interior is empty after trim (e.g. `#"\n"#`) — print as-is.
+            printer.print_raw_token(self);
+            return PrintInfo { multi_lined };
+        };
         let min_indent = lines
             .clone()
             .map(|line| {

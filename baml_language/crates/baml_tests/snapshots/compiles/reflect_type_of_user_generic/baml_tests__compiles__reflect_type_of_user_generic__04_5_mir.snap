@@ -1,0 +1,112 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== MIR2 ===
+fn user.Person.from_json(j: baml.json.json) -> Person {
+    // Locals:
+    let _0: Person // _0 // return
+    let _1: baml.json.json // j // param
+    let _2: string
+    let _3: baml.json.json
+    let _4: type
+
+    bb0: {
+        _3 = call const fn baml.json.field(copy _1, const "name") -> [bb1];
+    }
+
+    bb1: {
+        _4 = load_type(string);
+        _2 = call const fn baml.json.from_json<copy _4>(copy _3) -> [bb2];
+    }
+
+    bb2: {
+        _0 = user.Person { copy _2 };
+        goto -> bb3;
+    }
+
+    bb3: {
+        return;
+    }
+}
+
+fn user.reflect_array() -> type {
+    // Locals:
+    let _0: type // _0 // return
+
+    bb0: {
+        _0 = load_type(#0[]);
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.reflect_int_array() -> type {
+    // Locals:
+    let _0: type // _0 // return
+    let _1: type
+
+    bb0: {
+        _1 = load_type(int);
+        _0 = call const fn user.reflect_array<copy _1>() -> [bb1];
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.reflect_person() -> type {
+    // Locals:
+    let _0: type // _0 // return
+    let _1: type
+
+    bb0: {
+        _1 = load_type(Person);
+        _0 = call const fn user.reflect_type<copy _1>() -> [bb1];
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.reflect_type() -> type {
+    // Locals:
+    let _0: type // _0 // return
+
+    bb0: {
+        _0 = load_type(#0);
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.Person.to_json(self: Person) -> baml.json.json {
+    // Locals:
+    let _0: baml.json.json // _0 // return
+    let _1: Person // self // param
+    let _2: baml.json.json
+    let _3: string
+    let _4: Person
+
+    bb0: {
+        _4 = copy _1;
+        _3 = copy _4.0;
+        _2 = call const fn baml.String.to_json(copy _3) -> [bb1];
+    }
+
+    bb1: {
+        _0 = { const "name": copy _2 };
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}

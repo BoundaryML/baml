@@ -2,7 +2,7 @@ use std::borrow::Cow;
 
 use super::{ParsingContext, ParsingError};
 use crate::{
-    baml_value::{BamlBool, BamlInt, BamlString, BamlValue},
+    baml_value::{BamlBigint, BamlBool, BamlInt, BamlString},
     deserializer::{
         coercer::{TypeCoercer, match_string::match_string},
         deserialize_flags::{DeserializerConditions, Flag},
@@ -11,8 +11,9 @@ use crate::{
     jsonish,
     jsonish::CompletionState,
     sap_model::{
-        AttrLiteral, BoolLiteralTy, BoolTy, FromLiteral as _, IntLiteralTy, IntTy, LiteralTy,
-        StringLiteralTy, StringTy, TyResolvedRef, TyWithMeta, TypeAnnotations, TypeIdent,
+        AttrLiteral, BigintLiteralTy, BigintTy, BoolLiteralTy, BoolTy, FromLiteral as _,
+        IntLiteralTy, IntTy, LiteralTy, StringLiteralTy, StringTy, TyResolvedRef, TyWithMeta,
+        TypeAnnotations, TypeIdent,
     },
 };
 
@@ -73,12 +74,12 @@ where
         target: TyWithMeta<&'t Self, &'t TypeAnnotations<'t, N>>,
         value: &'v jsonish::Value<'s>,
     ) -> Result<Option<ValueWithFlags<'s, 'v, 't, Self::Value, N>>, ParsingError> {
-        let ret = match value {
+        match value {
             jsonish::Value::Null => Err(ctx.error_unexpected_null(target.ty)),
             jsonish::Value::Object(_, CompletionState::Incomplete) => {
                 // The object could be more than one key
                 match &target.meta.in_progress {
-                    Some(AttrLiteral::Never) => return Ok(None),
+                    Some(AttrLiteral::Never) => Ok(None),
                     Some(lit) => {
                         let ret = target.ty.from_literal(lit, ctx).map(|ret| {
                             ValueWithFlags::new(
@@ -130,17 +131,93 @@ where
                     Err(e) => Err(e),
                 }
             }
-        };
+        }
+    }
+}
 
-        match ret {
-            Ok(Some(ret)) => {
-                target
-                    .meta
-                    .expect_asserts(&BamlValue::Int(ret.value), ctx)?;
-                Ok(Some(ret))
+impl<'s, 'v, 't, N: TypeIdent> TypeCoercer<'s, 'v, 't, N> for BigintLiteralTy
+where
+    't: 's,
+    's: 'v,
+{
+    fn try_cast(
+        ctx: &ParsingContext<'s, 'v, 't, N>,
+        target: TyWithMeta<&'t Self, &'t TypeAnnotations<'t, N>>,
+        value: &'v jsonish::Value<'s>,
+    ) -> Option<ValueWithFlags<'s, 'v, 't, Self::Value, N>> {
+        // Delegate to `BigintTy::try_cast` (exact JSON integer numbers only)
+        // and then check exact value equality.
+        let inner = BigintTy::try_cast(ctx, TyWithMeta::new(&BigintTy, target.meta), value)?;
+        if inner.value.value != target.ty.0 {
+            return None;
+        }
+        Some(inner)
+    }
+
+    fn coerce(
+        ctx: &ParsingContext<'s, 'v, 't, N>,
+        target: TyWithMeta<&'t Self, &'t TypeAnnotations<'t, N>>,
+        value: &'v jsonish::Value<'s>,
+    ) -> Result<Option<ValueWithFlags<'s, 'v, 't, Self::Value, N>>, ParsingError> {
+        match value {
+            jsonish::Value::Null => Err(ctx.error_unexpected_null(target.ty)),
+            jsonish::Value::Object(_, CompletionState::Incomplete) => {
+                match &target.meta.in_progress {
+                    Some(AttrLiteral::Never) => Ok(None),
+                    Some(lit) => {
+                        let ret = target.ty.from_literal(lit, ctx).map(|ret| {
+                            ValueWithFlags::new(
+                                ret,
+                                DeserializerMeta {
+                                    flags: DeserializerConditions::new().with_flag(
+                                        Flag::DefaultFromInProgress(Cow::Borrowed(value)),
+                                    ),
+                                    ty: target.clone().map_ty(|_| TyResolvedRef::Bigint(BigintTy)),
+                                },
+                            )
+                        });
+                        ret.map(Some)
+                    }
+                    None => {
+                        let flags = DeserializerConditions::new()
+                            .with_flag(Flag::DefaultFromInProgress(Cow::Borrowed(value)))
+                            .with_flag(Flag::ObjectToPrimitive(Cow::Borrowed(value)));
+                        Ok(Some(ValueWithFlags::new(
+                            BamlBigint {
+                                value: target.ty.0.clone(),
+                            },
+                            DeserializerMeta {
+                                flags,
+                                ty: target.clone().map_ty(|_| TyResolvedRef::Bigint(BigintTy)),
+                            },
+                        )))
+                    }
+                }
             }
-            Ok(None) => Ok(None),
-            Err(e) => Err(e),
+            jsonish::Value::Object(obj, CompletionState::Complete) => match obj.as_slice() {
+                [
+                    (
+                        _,
+                        v @ (jsonish::Value::Number(_, _)
+                        | jsonish::Value::Boolean(_)
+                        | jsonish::Value::String(_, _)),
+                    ),
+                ] => Self::coerce(ctx, target.clone(), v).map(|ret| {
+                    ret.map(|ret| ret.with_flag(Flag::ObjectToPrimitive(Cow::Borrowed(value))))
+                }),
+                _ => Err(ctx.error_unexpected_type(target.ty, value)),
+            },
+            _ => {
+                // Inner coerce handles completion state and all conversion paths;
+                // we then check that the resulting BigInt matches the literal value.
+                let bigint_target = TyWithMeta::new(&BigintTy, target.meta);
+                match BigintTy::coerce(ctx, bigint_target, value) {
+                    Ok(Some(ret)) if ret.value.value == target.ty.0 => Ok(Some(ret)),
+                    Ok(Some(_ret)) => Err(ctx.error_unexpected_type(&target, value)),
+                    Ok(None) => Ok(None),
+                    Err(e) => Err(e),
+                }
+            }
         }
     }
 }
@@ -178,11 +255,11 @@ where
         target: TyWithMeta<&'t Self, &'t TypeAnnotations<'t, N>>,
         value: &'v jsonish::Value<'s>,
     ) -> Result<Option<ValueWithFlags<'s, 'v, 't, Self::Value, N>>, ParsingError> {
-        let ret = match value {
+        match value {
             jsonish::Value::Null => Err(ctx.error_unexpected_null(target.ty)),
             jsonish::Value::Object(_, CompletionState::Incomplete) => {
                 match &target.meta.in_progress {
-                    Some(AttrLiteral::Never) => return Ok(None),
+                    Some(AttrLiteral::Never) => Ok(None),
                     Some(lit) => {
                         let ret = target.ty.from_literal(lit, ctx).map(|ret| {
                             ValueWithFlags::new(
@@ -233,17 +310,6 @@ where
                     Err(e) => Err(e),
                 }
             }
-        };
-
-        match ret {
-            Ok(Some(ret)) => {
-                target
-                    .meta
-                    .expect_asserts(&BamlValue::Bool(ret.value), ctx)?;
-                Ok(Some(ret))
-            }
-            Ok(None) => Ok(None),
-            Err(e) => Err(e),
         }
     }
 }
@@ -306,11 +372,11 @@ where
         target: TyWithMeta<&'t Self, &'t TypeAnnotations<'t, N>>,
         value: &'v jsonish::Value<'s>,
     ) -> Result<Option<ValueWithFlags<'s, 'v, 't, Self::Value, N>>, ParsingError> {
-        let ret = match value {
+        match value {
             jsonish::Value::Null => Err(ctx.error_unexpected_null(target.ty)),
             jsonish::Value::Object(_, CompletionState::Incomplete) => {
                 match &target.meta.in_progress {
-                    Some(AttrLiteral::Never) => return Ok(None),
+                    Some(AttrLiteral::Never) => Ok(None),
                     Some(lit) => {
                         let ret = target.ty.from_literal(lit, ctx).map(|ret| {
                             ValueWithFlags::new(
@@ -367,17 +433,6 @@ where
                     literal_match.map_value(|s| BamlString { value: s.into() }),
                 ))
             }
-        };
-
-        match ret {
-            Ok(Some(ret)) => {
-                target
-                    .meta
-                    .expect_asserts(&BamlValue::String(ret.value.clone()), ctx)?;
-                Ok(Some(ret))
-            }
-            Ok(None) => Ok(None),
-            Err(e) => Err(e),
         }
     }
 }
@@ -397,6 +452,14 @@ where
                 let result = IntLiteralTy::try_cast(ctx, TyWithMeta::new(lit, target.meta), value)?;
                 Some(ValueWithFlags::new(
                     Self::Value::Int(result.value),
+                    result.meta,
+                ))
+            }
+            LiteralTy::Bigint(lit) => {
+                let result =
+                    BigintLiteralTy::try_cast(ctx, TyWithMeta::new(lit, target.meta), value)?;
+                Some(ValueWithFlags::new(
+                    Self::Value::Bigint(result.value),
                     result.meta,
                 ))
             }
@@ -428,6 +491,11 @@ where
             LiteralTy::Int(lit) => {
                 IntLiteralTy::coerce(ctx, TyWithMeta::new(lit, target.meta), value)
                     .map(|opt| opt.map(|v| ValueWithFlags::new(Self::Value::Int(v.value), v.meta)))
+            }
+            LiteralTy::Bigint(lit) => {
+                BigintLiteralTy::coerce(ctx, TyWithMeta::new(lit, target.meta), value).map(|opt| {
+                    opt.map(|v| ValueWithFlags::new(Self::Value::Bigint(v.value), v.meta))
+                })
             }
             LiteralTy::Bool(lit) => {
                 BoolLiteralTy::coerce(ctx, TyWithMeta::new(lit, target.meta), value)

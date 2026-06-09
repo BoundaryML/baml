@@ -8,7 +8,7 @@ use std::sync::Arc;
 
 use js_sys::{Function, Promise};
 use sys_ops::io::IoNamespaceIo;
-use sys_types::{BexHeap, CallId, OpErrorKind, SysOpContext, SysOpOutput};
+use sys_types::{BexHeap, CallId, SysOpContext, SysOpOutput, VmBamlError, VmRustFnError};
 use wasm_bindgen::JsCast;
 use wasm_bindgen_futures::JsFuture;
 
@@ -52,7 +52,9 @@ impl IoNamespaceIo for WasmIo {
             .call2(&wasm_bindgen::JsValue::NULL, &js_call_id, &js_prompt)
             .map_err(|e| {
                 let msg = e.as_string().unwrap_or_else(|| format!("{e:?}"));
-                OpErrorKind::Other(format!("Failed to call input function: {msg}"))
+                VmBamlError::Io {
+                    message: format!("Failed to call input function: {msg}"),
+                }
             });
         let result = match result {
             Ok(result) => result,
@@ -61,22 +63,72 @@ impl IoNamespaceIo for WasmIo {
 
         if result.is_instance_of::<Promise>() {
             let promise: Promise = result.unchecked_into();
-            return SysOpOutput::Async(Box::pin(SendFuture(async move {
+            return SysOpOutput::async_op(SendFuture(async move {
                 let result = JsFuture::from(promise).await.map_err(|e| {
                     let msg = e.as_string().unwrap_or_else(|| format!("{e:?}"));
-                    OpErrorKind::Other(format!("Input callback promise rejected: {msg}"))
+                    VmBamlError::Io {
+                        message: format!("Input callback promise rejected: {msg}"),
+                    }
                 })?;
-                result.as_string().ok_or_else(|| {
-                    OpErrorKind::Other("Input callback did not return a string".into())
-                })
-            })));
+                result
+                    .as_string()
+                    .ok_or_else(|| VmBamlError::DevOther {
+                        message: "Input callback did not return a string".into(),
+                    })
+                    .map_err(VmRustFnError::from)
+            }));
         }
 
         match result.as_string() {
             Some(s) => SysOpOutput::ok(s),
-            None => SysOpOutput::err(OpErrorKind::Other(
-                "Input callback did not return a string".into(),
-            )),
+            None => SysOpOutput::err(VmBamlError::DevOther {
+                message: "Input callback did not return a string".into(),
+            }),
         }
+    }
+
+    fn print(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        _s: String,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        SysOpOutput::err(VmBamlError::Unsupported {
+            message: "Operation not supported on this platform".to_string(),
+        })
+    }
+    fn println(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        _s: String,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        SysOpOutput::err(VmBamlError::Unsupported {
+            message: "Operation not supported on this platform".to_string(),
+        })
+    }
+    fn eprint(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        _s: String,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        SysOpOutput::err(VmBamlError::Unsupported {
+            message: "Operation not supported on this platform".to_string(),
+        })
+    }
+    fn eprintln(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        _s: String,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        SysOpOutput::err(VmBamlError::Unsupported {
+            message: "Operation not supported on this platform".to_string(),
+        })
     }
 }

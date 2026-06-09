@@ -7,7 +7,7 @@ use std::fmt;
 
 use baml_base::{Name, Span};
 pub use baml_compiler2_ast::BuiltinKind;
-use baml_type::Ty;
+use baml_type::{Ty, TyTemplate};
 
 // ============================================================================
 // Optimization Level
@@ -352,7 +352,18 @@ pub enum Terminator {
         /// The function to call.
         callee: Operand,
         /// Arguments to pass.
+        ///
+        /// The first `ntypeargs` operands are type-argument values (`Object::Type`)
+        /// followed by the `nargs` regular value arguments.  The `ntypeargs`
+        /// count tells the emitter how many leading slots to account for in
+        /// the `Instruction::Call { ntypeargs }` bytecode instruction.
         args: Vec<Operand>,
+        /// Number of leading `args` entries that carry type arguments.
+        ///
+        /// Zero for non-generic calls (the common case).  Non-zero for
+        /// calls to generic functions where at least one type argument is
+        /// threaded at the call site (explicit `<T>` or type-arg forwarding).
+        ntypeargs: usize,
         /// Where to store the result.
         destination: Place,
         /// Block to jump to after call returns normally.
@@ -367,17 +378,46 @@ pub enum Terminator {
     /// an Unreachable terminator, it's a compiler bug.
     Unreachable,
 
-    /// Dispatch an async operation (LLM call) without blocking.
+    /// BEP-034 phase D′: invoke a sys-op and bind its return value
+    /// directly into `destination`. Replaces the old `ScheduleFuture` +
+    /// `Await` pair that allocated a `Future` heap object just to
+    /// consume it on the next instruction.
     ///
-    /// This is a suspend point - control returns to the embedder.
-    DispatchFuture {
-        /// The LLM function to call.
+    /// Suspend point — control returns to the embedder.
+    SysOp {
+        /// The sys-op global to invoke.
         callee: Operand,
-        /// Arguments to the function.
+        /// Arguments to the sys-op.
         args: Vec<Operand>,
-        /// Where to store the future handle.
+        /// Where to store the sys-op's return value.
+        destination: Place,
+        /// Block to resume at after the sys-op returns.
+        target: BlockId,
+        /// Block to jump to if the sys-op throws (catch context).
+        unwind: Option<BlockId>,
+    },
+
+    /// BEP-034 `spawn name? { body }` — schedules a fresh BAML thread to
+    /// run `closure`'s body and yields a `Future<T, E>` handle.
+    ///
+    /// `closure` carries the body packaged via `MakeClosure` (a 0-arg
+    /// lambda that captures the surrounding bindings); `name` is an
+    /// optional human-readable label.
+    Spawn {
+        /// Closure object representing the spawn body.
+        closure: Operand,
+        /// Optional name expression (string or null).
+        name: Operand,
+        /// Optional `baml.spawn.options(...)` config value from a `with`
+        /// clause (BEP-034 spawn options). `None` when there is no `with`
+        /// clause; the engine reads the config's `cancel` (and later
+        /// `group`/`detach`) to derive the spawn's effective cancel token.
+        /// Boxed to keep `Terminator`'s footprint down (clippy
+        /// `large_enum_variant`): `Spawn` is rare relative to `Call`/`Goto`.
+        config: Option<Box<Operand>>,
+        /// Where to store the resulting Future handle.
         future: Place,
-        /// Block to resume at after dispatch.
+        /// Block to resume after the spawn schedules.
         resume: BlockId,
     },
 
@@ -392,6 +432,25 @@ pub enum Terminator {
         /// Block to continue at after result is ready.
         target: BlockId,
         /// Block to jump to if the future fails (for catch).
+        unwind: Option<BlockId>,
+    },
+
+    /// BEP-034 `baml.future.__await_any(futures)` — suspend until the FIRST
+    /// of an array of futures settles, then bind the `int` index (in input
+    /// order) of the first-settled future.
+    ///
+    /// Like `Await`, this is a suspend point. The `race`/`any` combinators
+    /// are pure BAML built on top of it. `__await_any` is declared `throws
+    /// never` (it only reports *which* future settled, never re-throws), so
+    /// `unwind` is normally `None`; it is kept for shape-parity with `Await`.
+    AwaitAny {
+        /// The array of futures to wait on (a read operand).
+        futures: Operand,
+        /// Where to store the winning index (`int`).
+        destination: Place,
+        /// Block to continue at after the first future settles.
+        target: BlockId,
+        /// Catch context (unused — `__await_any` throws never).
         unwind: Option<BlockId>,
     },
 
@@ -448,16 +507,12 @@ impl Terminator {
                 succs
             }
             Terminator::Return => vec![],
-            Terminator::Call { target, unwind, .. } => {
-                let mut succs = vec![*target];
-                if let Some(u) = unwind {
-                    succs.push(*u);
-                }
-                succs
-            }
             Terminator::Unreachable => vec![],
-            Terminator::DispatchFuture { resume, .. } => vec![*resume],
-            Terminator::Await { target, unwind, .. } => {
+            Terminator::Spawn { resume, .. } => vec![*resume],
+            Terminator::Call { target, unwind, .. }
+            | Terminator::SysOp { target, unwind, .. }
+            | Terminator::Await { target, unwind, .. }
+            | Terminator::AwaitAny { target, unwind, .. } => {
                 let mut succs = vec![*target];
                 if let Some(u) = unwind {
                     succs.push(*u);
@@ -610,15 +665,31 @@ pub enum Rvalue {
     Len(Place),
 
     /// Type check for pattern matching: `is_type(_1, Type)`
-    IsType { operand: Operand, ty: Ty },
+    ///
+    /// The type is stored as a `TyTemplate` so that generic class checks like
+    /// `value is Foo<T>` (where `T` is a type parameter in scope) resolve
+    /// correctly at runtime via `TypeArgRef` substitution.  For fully-concrete
+    /// types the template is `TyTemplate::Concrete(ty)`, which the emitter
+    /// handles on the same fast path as before.
+    IsType {
+        operand: Operand,
+        ty_template: TyTemplate,
+    },
 
     /// Allocate a closure object from a child lambda function.
     ///
     /// `lambda_idx` indexes into `MirFunction::lambdas` of the enclosing function.
     /// `captures` is the ordered list of captured values (each will become a Cell).
+    /// `type_arg_templates` carries one `TyTemplate` per enclosing generic type
+    /// parameter; the emitter pushes `LoadType` instructions for each before
+    /// the cell captures so the VM's `MakeClosure { ntypeargs }` instruction
+    /// can pop them into `Closure::captured_type_args`.
     MakeClosure {
         lambda_idx: usize,
         captures: Vec<Operand>,
+        /// Templates for enclosing generic type params captured by this closure.
+        /// Empty (the common case) when the enclosing function has no type params.
+        type_arg_templates: Vec<TyTemplate>,
     },
 
     /// Create a bound method value from a method reference and its receiver.
@@ -629,6 +700,44 @@ pub enum Rvalue {
         item_ref: ItemRef,
         receiver: Operand,
     },
+
+    /// Create a generic-function value (`foo<T>`) whose type arguments depend on
+    /// the enclosing frame's type params, so they cannot be a compile-time
+    /// constant. The emitter pushes a `LoadType` for each template (resolved
+    /// against `frame.type_args` at runtime) before the `MakeGenericFunction`
+    /// instruction, which builds an `Object::GenericFunction`. The
+    /// fully-concrete case uses the pooled, interned `Constant::GenericFunction`
+    /// instead.
+    MakeGenericFunction {
+        item: ItemRef,
+        /// One template per type argument; may contain `TypeArgRef(N)`.
+        type_arg_templates: Vec<TyTemplate>,
+    },
+
+    /// Specialize a runtime callable *value* with explicit type arguments
+    /// (`g<int>` where `g` is a local/captured function value, not a
+    /// compile-time-resolvable function reference). The emitter pushes a
+    /// `LoadType` for each template then a `MakeGenericFunctionFromValue`
+    /// instruction, which wraps the evaluated `value` in a `Closure` carrying
+    /// the types as `captured_type_args`. Used when `lower_generic_apply`'s base
+    /// is not an `ItemRef`; the `ItemRef` cases use `Constant::GenericFunction`
+    /// (concrete) or `MakeGenericFunction` (param-dependent) instead.
+    MakeGenericFunctionFromValue {
+        /// The callable value to specialize.
+        value: Operand,
+        /// One template per type argument; may contain `TypeArgRef(N)`.
+        type_arg_templates: Vec<TyTemplate>,
+    },
+
+    /// Materialize a `Ty` from a `TyTemplate`.
+    ///
+    /// For concrete templates (`TyTemplate::Concrete`), the `Ty` is baked in
+    /// at compile time. For templates containing `TypeArgRef(N)`, the VM
+    /// substitutes `frame.type_args[N]` at execution time.
+    ///
+    /// Emitted by the `reflect.type_of<T>()` intrinsic.
+    /// Lowers to `Instruction::LoadType(const_idx)` in bytecode.
+    LoadType(TyTemplate),
 }
 
 /// The kind of aggregate being constructed.
@@ -636,8 +745,17 @@ pub enum Rvalue {
 pub enum AggregateKind {
     /// An array.
     Array,
-    /// A class instance.
-    Class(String),
+    /// A class instance with optional type-arg templates.
+    ///
+    /// `type_arg_templates` is non-empty only for generic class instantiations:
+    /// each element corresponds to one class-level type parameter in De Bruijn
+    /// order (matching `enclosing_generic_params()`).  These templates are
+    /// emitted as `LoadType` instructions before `AllocInstance` so the VM can
+    /// store resolved `Ty` values in `Instance::class_type_args`.
+    Class {
+        name: String,
+        type_arg_templates: Vec<baml_type::TyTemplate>,
+    },
     /// An enum variant.
     EnumVariant { enum_name: String, variant: String },
 }
@@ -684,15 +802,31 @@ impl Operand {
 #[derive(Debug, Clone)]
 pub enum Constant {
     Int(i64),
+    Bigint(num_bigint::BigInt),
     Float(f64),
     String(String),
     Bool(bool),
     Null,
+    /// Internal sentinel used for omitted defaulted function parameters.
+    ///
+    /// User BAML code cannot construct this value. Callee-entry default
+    /// prologues replace it before user body code observes the parameter.
+    OmittedArg,
     /// A function reference with structured item identification.
     ///
     /// Carried from TIR resolution through lowering. Converted to a
     /// runtime string only in the emit phase.
     Function(ItemRef),
+    /// A generic function instantiated with concrete type arguments
+    /// (`foo<int>` referenced as a value). Emitted as a pooled, interned
+    /// `Object::GenericFunction` so identical instantiations share one object
+    /// (pointer-stable identity) and calling it seeds `frame.type_args`.
+    GenericFunction {
+        /// The base generic function.
+        item: ItemRef,
+        /// The concrete type arguments (fully resolved, no type parameters).
+        type_args: Vec<Ty>,
+    },
     /// An enum variant value.
     EnumVariant {
         /// Structured reference to the enum type.

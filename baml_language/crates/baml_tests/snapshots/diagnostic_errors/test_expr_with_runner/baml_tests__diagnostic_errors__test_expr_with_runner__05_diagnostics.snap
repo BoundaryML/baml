@@ -2,7 +2,7 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === COMPILER2 DIAGNOSTICS ===
-  [type] Error: unresolved name: Quorum
+  [type] error: unresolved name: Quorum
    ╭─[ main.baml:1:24 ]
    │
  1 │ test "with quorum" with testing.Quorum(5, 3) {

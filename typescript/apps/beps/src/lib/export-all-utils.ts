@@ -598,6 +598,57 @@ Downloads all BEPs as a ZIP archive. No authentication required.
 | \`versionMode\` | No | \`"new"\` (default) or \`"current"\` |
 
 *At least one of \`title\`, \`content\`, or \`pages\` must be provided.
+
+---
+
+## Comments API
+
+### Get Comments (GET /api/agent/beps/{number}/comments)
+
+Fetch all comments for a BEP's current version. No authentication required.
+
+\`\`\`bash
+# JSON format (default)
+curl "${apiBaseUrl}/api/agent/beps/41/comments"
+
+# Markdown format (agent-friendly)
+curl "${apiBaseUrl}/api/agent/beps/41/comments?format=markdown"
+
+# Include resolved comments
+curl "${apiBaseUrl}/api/agent/beps/41/comments?includeResolved=true"
+\`\`\`
+
+| Param | Type | Description |
+|-------|------|-------------|
+| \`format\` | string | \`json\` (default) or \`markdown\` |
+| \`includeResolved\` | boolean | Include resolved comments (default: false) |
+
+Response includes:
+- Comment threads with author, type, content, and context
+- Anchored text (what the comment references)
+- Surrounding markdown context
+- Reply threads
+
+### Reply to Comment (POST /api/agent/beps/{number}/comments/reply)
+
+Reply to an existing comment. Requires authentication.
+
+\`\`\`bash
+curl -X POST "${apiBaseUrl}/api/agent/beps/41/comments/reply" \\
+  -H "Authorization: Bearer <your-api-token>" \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "commentId": "<comment-id-from-comments-endpoint>",
+    "content": "Your reply here",
+    "type": "discussion"
+  }'
+\`\`\`
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| \`commentId\` | Yes | ID of the comment to reply to |
+| \`content\` | Yes | Markdown content of your reply |
+| \`type\` | No | \`discussion\` (default), \`concern\`, or \`question\` |
 `;
 
   return md;

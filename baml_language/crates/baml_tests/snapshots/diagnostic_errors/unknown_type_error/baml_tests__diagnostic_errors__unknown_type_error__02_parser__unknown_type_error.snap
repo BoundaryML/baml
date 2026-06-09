@@ -57,6 +57,38 @@ SOURCE_FILE
         L_BRACE "{"
         WORD "null"
         R_BRACE "}"
+  ENUM_DEF
+    KW_ENUM "enum"
+    WORD "Status"
+    L_BRACE "{"
+    ENUM_VARIANT "Active"
+      WORD "Active"
+    ENUM_VARIANT "Inactive"
+      WORD "Inactive"
+    R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "StatusTypoInTypePosition"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "s"
+        COLON ":"
+        TYPE_EXPR "Status.Typo"
+          WORD "Status"
+          DOT "."
+          WORD "Typo"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "int"
+      WORD "int"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR "{
+  1
+}"
+        L_BRACE "{"
+        INTEGER_LITERAL "1"
+        R_BRACE "}"
 
 === ERRORS ===
 None

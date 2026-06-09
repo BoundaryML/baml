@@ -511,7 +511,7 @@ SOURCE_FILE
           STRING_LITERAL "this is a long string element"
             QUOTE """
             WORD "this"
-            WORD "is"
+            KW_IS "is"
             WORD "a"
             WORD "long"
             WORD "string"
@@ -533,7 +533,7 @@ SOURCE_FILE
             WORD "another"
             WORD "one"
             WORD "that"
-            WORD "is"
+            KW_IS "is"
             WORD "quite"
             WORD "long"
             QUOTE """
@@ -788,7 +788,7 @@ SOURCE_FILE
           STRING_LITERAL "this is a long string"
             QUOTE """
             WORD "this"
-            WORD "is"
+            KW_IS "is"
             WORD "a"
             WORD "long"
             WORD "string"
@@ -807,7 +807,7 @@ SOURCE_FILE
             WORD "yet"
             WORD "another"
             WORD "that"
-            WORD "is"
+            KW_IS "is"
             WORD "quite"
             WORD "long"
             QUOTE """
@@ -827,7 +827,7 @@ SOURCE_FILE
           STRING_LITERAL "this is a long string"
             QUOTE """
             WORD "this"
-            WORD "is"
+            KW_IS "is"
             WORD "a"
             WORD "long"
             WORD "string"
@@ -846,7 +846,7 @@ SOURCE_FILE
             WORD "yet"
             WORD "another"
             WORD "that"
-            WORD "is"
+            KW_IS "is"
             WORD "quite"
             WORD "long"
             QUOTE """
@@ -1412,9 +1412,11 @@ SOURCE_FILE
         SEMICOLON ";"
         BLOCK_EXPR
           L_BRACE "{"
-          LET_STMT "let x = 1;"
-            KW_LET "let"
-            WORD "x"
+          LET_STMT
+            PATTERN
+              BINDING_PATTERN "let x"
+                KW_LET "let"
+                WORD "x"
             EQUALS "="
             INTEGER_LITERAL "1"
             SEMICOLON ";"
@@ -1427,8 +1429,10 @@ SOURCE_FILE
         BLOCK_EXPR
           L_BRACE "{"
           LET_STMT
-            KW_LET "let"
-            WORD "x"
+            PATTERN
+              BINDING_PATTERN "let x"
+                KW_LET "let"
+                WORD "x"
             EQUALS "="
             BINARY_EXPR "a + b"
               WORD "a"
@@ -1436,8 +1440,10 @@ SOURCE_FILE
               WORD "b"
             SEMICOLON ";"
           LET_STMT
-            KW_LET "let"
-            WORD "y"
+            PATTERN
+              BINDING_PATTERN "let y"
+                KW_LET "let"
+                WORD "y"
             EQUALS "="
             BINARY_EXPR "x * 2"
               WORD "x"
@@ -1450,20 +1456,26 @@ SOURCE_FILE
         BLOCK_EXPR
           L_BRACE "{"
           LET_STMT
-            KW_LET "let"
-            WORD "x"
+            PATTERN
+              BINDING_PATTERN "let x"
+                KW_LET "let"
+                WORD "x"
             EQUALS "="
             BLOCK_EXPR
               L_BRACE "{"
               LET_STMT
-                KW_LET "let"
-                WORD "y"
+                PATTERN
+                  BINDING_PATTERN "let y"
+                    KW_LET "let"
+                    WORD "y"
                 EQUALS "="
                 BLOCK_EXPR
                   L_BRACE "{"
                   LET_STMT
-                    KW_LET "let"
-                    WORD "z"
+                    PATTERN
+                      BINDING_PATTERN "let z"
+                        KW_LET "let"
+                        WORD "z"
                     EQUALS "="
                     BINARY_EXPR "a + b"
                       WORD "a"
@@ -1491,8 +1503,10 @@ SOURCE_FILE
         BLOCK_EXPR
           L_BRACE "{"
           LET_STMT
-            KW_LET "let"
-            WORD "x"
+            PATTERN
+              BINDING_PATTERN "let x"
+                KW_LET "let"
+                WORD "x"
             EQUALS "="
             IF_EXPR
               KW_IF "if"
@@ -1512,14 +1526,18 @@ SOURCE_FILE
                   R_PAREN ")"
                   L_BRACE "{"
                   MATCH_ARM
-                    MATCH_PATTERN "0"
-                      INTEGER_LITERAL "0"
+                    PATTERN
+                      TYPE_PATTERN
+                        TYPE_EXPR "0"
+                          INTEGER_LITERAL "0"
                     FAT_ARROW "=>"
                     BLOCK_EXPR
                       L_BRACE "{"
                       LET_STMT
-                        KW_LET "let"
-                        WORD "inner"
+                        PATTERN
+                          BINDING_PATTERN "let inner"
+                            KW_LET "let"
+                            WORD "inner"
                         EQUALS "="
                         BINARY_EXPR "b * 2"
                           WORD "b"
@@ -1533,8 +1551,9 @@ SOURCE_FILE
                       R_BRACE "}"
                     COMMA ","
                   MATCH_ARM
-                    MATCH_PATTERN "_"
-                      WORD "_"
+                    PATTERN
+                      WILDCARD_PATTERN "_"
+                        WORD "_"
                     FAT_ARROW "=>"
                     WORD "a"
                   R_BRACE "}"

@@ -11,10 +11,11 @@ description = "Includes core types needed for defining and implementing sys ops"
 baml_type = { workspace = true }
 bex_external_types = { workspace = true }
 bex_heap = { workspace = true }
+bex_str = { workspace = true }
 bex_vm_types = { workspace = true }
 async-trait = { workspace = true }
 indexmap = { workspace = true }
-thiserror = { workspace = true }
+num-bigint = { workspace = true }
 tokio = { workspace = true, features = [ "sync" ] }
 tokio-util = { workspace = true }
 
@@ -26,3 +27,6 @@ tokio = { workspace = true, features = [ "rt", "macros" ] }
 
 [lints]
 workspace = true
+
+[package.metadata.cargo-shear]
+ignored = [ "bex_str", "num-bigint" ]

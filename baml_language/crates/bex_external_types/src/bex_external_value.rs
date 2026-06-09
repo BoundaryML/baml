@@ -62,7 +62,6 @@ impl UnionMetadata {
                     .count();
                 (has_null, non_null_count == 1)
             }
-            Ty::Optional(..) => (true, true),
             _ => (false, false),
         };
 
@@ -90,6 +89,21 @@ pub enum BexExternalAdt {
     PromptAst(std::sync::Arc<baml_builtins2::PromptAst>),
     /// A media value (image, audio, etc.) passed as a function argument.
     Media(std::sync::Arc<baml_builtins2::MediaValue>),
+    /// GC-rooted reference to a heap instance, paired with the full
+    /// type identity of the instance (class FQN + concrete generic args).
+    ///
+    /// `ty` is canonically a `Ty::Class { name, args }` — the same shape
+    /// the wire encoder projects to `BamlTyName`. The `heap_handle` keeps
+    /// the instance alive on the heap so the engine can re-enter it for
+    /// instance-method calls (`Stream.next`, `Stream.final`, …).
+    ///
+    /// Currently used by `baml.llm.Stream`; any future stdlib generic
+    /// class that wants typed-handle round-trip treatment uses this same
+    /// variant.
+    TaggedHeapHandle {
+        ty: baml_type::Ty,
+        heap_handle: crate::Handle,
+    },
 }
 
 /// A deep-copied value tree with no heap references.
@@ -114,6 +128,9 @@ pub enum BexExternalValue {
     /// 64-bit signed integer.
     Int(i64),
 
+    /// Arbitrary-precision signed integer.
+    Bigint(num_bigint::BigInt),
+
     /// 64-bit floating point.
     Float(f64),
 
@@ -121,7 +138,7 @@ pub enum BexExternalValue {
     Bool(bool),
 
     /// Owned string.
-    String(String),
+    String(bex_str::BexStr),
 
     /// Owned array of values with element type.
     Array {
@@ -187,6 +204,12 @@ pub enum BexExternalValue {
     // and use instances of ADT variants directly similar to how we handle
     // builtin classes and enums.
     Adt(BexExternalAdt),
+
+    /// Reference to a value owned by the host language.
+    ///
+    /// `Drop` of the last clone fires the registered `HostReleaseFn`.
+    /// See [`bex_resource_types::HostValueArc`].
+    HostValue(std::sync::Arc<bex_resource_types::HostValueArc>),
 }
 
 impl std::fmt::Debug for BexExternalValue {
@@ -194,6 +217,7 @@ impl std::fmt::Debug for BexExternalValue {
         match self {
             Self::Null => write!(f, "Null"),
             Self::Int(v) => f.debug_tuple("Int").field(v).finish(),
+            Self::Bigint(v) => f.debug_tuple("Bigint").field(v).finish(),
             Self::Float(v) => f.debug_tuple("Float").field(v).finish(),
             Self::Bool(v) => f.debug_tuple("Bool").field(v).finish(),
             Self::String(v) => f.debug_tuple("String").field(v).finish(),
@@ -241,6 +265,11 @@ impl std::fmt::Debug for BexExternalValue {
                 .finish(),
             Self::Handle(v) => f.debug_tuple("Handle").field(v).finish(),
             Self::Adt(v) => f.debug_tuple("Adt").field(v).finish(),
+            Self::HostValue(v) => f
+                .debug_struct("HostValue")
+                .field("key", &v.key)
+                .field("kind", &v.kind)
+                .finish(),
         }
     }
 }
@@ -250,6 +279,7 @@ impl PartialEq for BexExternalValue {
         match (self, other) {
             (Self::Null, Self::Null) => true,
             (Self::Int(a), Self::Int(b)) => a == b,
+            (Self::Bigint(a), Self::Bigint(b)) => a == b,
             (Self::Float(a), Self::Float(b)) => a == b,
             (Self::Bool(a), Self::Bool(b)) => a == b,
             (Self::String(a), Self::String(b)) => a == b,
@@ -312,6 +342,7 @@ impl PartialEq for BexExternalValue {
             }
             (Self::Handle(a), Self::Handle(b)) => a == b,
             (Self::Adt(a), Self::Adt(b)) => a == b,
+            (Self::HostValue(a), Self::HostValue(b)) => a.key == b.key && a.kind == b.kind,
             _ => false,
         }
     }
@@ -324,6 +355,7 @@ impl BexExternalAdt {
             BexExternalAdt::Type(_) => "type",
             BexExternalAdt::PromptAst(_) => "prompt_ast",
             BexExternalAdt::Media(_) => "media",
+            BexExternalAdt::TaggedHeapHandle { .. } => "tagged_heap_handle",
         }
     }
 }
@@ -355,7 +387,7 @@ impl BexExternalValue {
         } else {
             inner.clone()
         };
-        let optional_type = Ty::Optional(Box::new(inner), TyAttr::default());
+        let optional_type = Ty::optional(inner);
         BexExternalValue::Union {
             value: Box::new(value),
             metadata: UnionMetadata::new(optional_type, selected),
@@ -389,6 +421,7 @@ impl BexExternalValue {
         match self {
             BexExternalValue::Null => "null",
             BexExternalValue::Int(_) => "int",
+            BexExternalValue::Bigint(_) => "bigint",
             BexExternalValue::Float(_) => "float",
             BexExternalValue::Bool(_) => "bool",
             BexExternalValue::String(_) => "string",
@@ -402,6 +435,7 @@ impl BexExternalValue {
             BexExternalValue::Adt(adt) => adt.type_name(),
             BexExternalValue::FunctionRef { .. } => "function",
             BexExternalValue::Handle(_) => "handle",
+            BexExternalValue::HostValue(_) => "host_value",
         }
     }
 
@@ -413,9 +447,9 @@ impl BexExternalValue {
     /// `Union { value: String(...), .. }` for static-typed inputs and as
     /// `String(...)` for ad-hoc literals, and consumers don't usually care
     /// about that distinction.
-    pub fn as_string(&self) -> Option<String> {
+    pub fn as_string(&self) -> Option<bex_str::BexStr> {
         match self {
-            BexExternalValue::String(value) => Some(value.clone()),
+            BexExternalValue::String(value) => Some(value.clone()), // O(1) now
             BexExternalValue::Union { value, .. } => value.as_string(),
             _ => None,
         }
@@ -429,6 +463,10 @@ impl BexExternalValue {
             BexExternalValue::Union { value, .. } => value.as_bool(),
             _ => None,
         }
+    }
+
+    pub fn is_host_value(&self) -> bool {
+        matches!(self, Self::HostValue(_))
     }
 }
 
@@ -458,13 +496,13 @@ impl From<crate::Handle> for BexExternalValue {
 
 impl From<String> for BexExternalValue {
     fn from(value: String) -> Self {
-        BexExternalValue::String(value)
+        BexExternalValue::String(bex_str::BexStr::from(value))
     }
 }
 
 impl From<&str> for BexExternalValue {
     fn from(value: &str) -> Self {
-        BexExternalValue::String(value.to_string())
+        BexExternalValue::String(bex_str::BexStr::from(value))
     }
 }
 
@@ -505,13 +543,19 @@ impl AsBexExternalValue for f64 {
 
 impl AsBexExternalValue for String {
     fn into_bex_external_value(self) -> BexExternalValue {
-        BexExternalValue::String(self)
+        BexExternalValue::String(bex_str::BexStr::from(self))
     }
 }
 
 impl AsBexExternalValue for bool {
     fn into_bex_external_value(self) -> BexExternalValue {
         BexExternalValue::Bool(self)
+    }
+}
+
+impl AsBexExternalValue for std::sync::Arc<num_bigint::BigInt> {
+    fn into_bex_external_value(self) -> BexExternalValue {
+        BexExternalValue::Bigint(std::sync::Arc::unwrap_or_clone(self))
     }
 }
 
@@ -559,7 +603,10 @@ impl AsBexExternalValue for Vec<String> {
     fn into_bex_external_value(self) -> BexExternalValue {
         BexExternalValue::Array {
             element_type: baml_type::Ty::string(),
-            items: self.into_iter().map(BexExternalValue::String).collect(),
+            items: self
+                .into_iter()
+                .map(|s| BexExternalValue::String(bex_str::BexStr::from(s)))
+                .collect(),
         }
         .into_bex_external_value()
     }
@@ -606,6 +653,15 @@ pub fn try_convert_rust_data(
     }
     if let Ok(typed) = arc.clone().downcast::<baml_builtins2::MediaValue>() {
         return Some(typed.to_bex_external_value());
+    }
+    // A `HostValueArc` wrapped into `Object::RustData` (e.g. the `_handle`
+    // slot of a `baml.errors.HostCallable` inbound from the host bridge):
+    // convert back to a `BexExternalValue::HostValue` so the outbound
+    // encoder emits a `Handle(HOST_VALUE_{CALLABLE,ERROR})` carrying the
+    // same `(key, kind)` — letting the originating bridge resolve the
+    // handle back to the original native object on round-trip.
+    if let Ok(typed) = arc.clone().downcast::<bex_resource_types::HostValueArc>() {
+        return Some(BexExternalValue::HostValue(typed));
     }
     None
 }

@@ -7,21 +7,28 @@
 
 use baml_base::{Literal, Name};
 use baml_compiler_syntax::{SyntaxKind, ast as cst};
+use rowan::ast::AstNode;
 
-use crate::ast::{Expr, ExprId};
+use crate::{
+    ast::{CallArg, Expr, ExprId},
+    lower_expr_body::EnvVarRef,
+};
 
 /// Lower a config item's value to an `Expr`, allocating into the caller's arena.
 ///
 /// Handles: integers, floats, quoted strings, `env.VAR` references,
 /// bare words (as strings), nested blocks (as untyped objects),
 /// and array literals.
-pub(crate) fn lower_config_value(
+///
+/// Also collects env var references (`env.X`) into `env_var_refs`.
+pub(crate) fn lower_config_value_with_env_refs(
     item: &cst::ConfigItem,
     alloc: &mut impl FnMut(Expr) -> ExprId,
+    env_var_refs: &mut Vec<EnvVarRef>,
 ) -> ExprId {
     // 1. Nested block → Expr::Map (untyped) with recursively lowered children
     if let Some(nested) = item.nested_block() {
-        return lower_config_block_to_map(&nested, alloc);
+        return lower_config_block_to_map_with_env_refs(&nested, alloc, env_var_refs);
     }
 
     // 2. Array literal
@@ -72,6 +79,10 @@ pub(crate) fn lower_config_value(
 
     // env.VAR_NAME → baml.env.get_or_panic("VAR_NAME")
     if let Some(var_name) = text.strip_prefix("env.") {
+        env_var_refs.push(EnvVarRef {
+            name: var_name.to_string(),
+            range: item.syntax().text_range(),
+        });
         let callee = alloc(Expr::Path(vec![
             Name::new("baml"),
             Name::new("env"),
@@ -80,7 +91,8 @@ pub(crate) fn lower_config_value(
         let arg = alloc(Expr::Literal(Literal::String(var_name.to_string())));
         return alloc(Expr::Call {
             callee,
-            args: vec![arg],
+            type_args: vec![],
+            args: vec![CallArg::positional(arg)],
         });
     }
 
@@ -102,16 +114,17 @@ pub(crate) fn lower_config_value(
 /// Nested config blocks are untyped key-value structures (not class instances),
 /// so they are lowered as maps. This ensures they work correctly when stored in
 /// `map<string, unknown>` fields like `request_body`.
-fn lower_config_block_to_map(
+fn lower_config_block_to_map_with_env_refs(
     block: &cst::ConfigBlock,
     alloc: &mut impl FnMut(Expr) -> ExprId,
+    env_var_refs: &mut Vec<EnvVarRef>,
 ) -> ExprId {
     let entries: Vec<(ExprId, ExprId)> = block
         .items()
         .filter_map(|item| {
             let key = item.key()?;
             let k = alloc(Expr::Literal(Literal::String(key.text().to_string())));
-            let v = lower_config_value(&item, alloc);
+            let v = lower_config_value_with_env_refs(&item, alloc, env_var_refs);
             Some((k, v))
         })
         .collect();
@@ -191,7 +204,8 @@ client MyClient {
         let mut exprs: la_arena::Arena<Expr> = la_arena::Arena::new();
         let mut alloc = |expr: Expr| -> ExprId { exprs.alloc(expr) };
 
-        let result_id = lower_config_value(&options_item, &mut alloc);
+        let result_id =
+            lower_config_value_with_env_refs(&options_item, &mut alloc, &mut Vec::new());
         let result_expr = &exprs[result_id];
 
         match result_expr {
@@ -240,7 +254,8 @@ client MyClient {
         let mut exprs: la_arena::Arena<Expr> = la_arena::Arena::new();
         let mut alloc = |expr: Expr| -> ExprId { exprs.alloc(expr) };
 
-        let result_id = lower_config_value(&options_item, &mut alloc);
+        let result_id =
+            lower_config_value_with_env_refs(&options_item, &mut alloc, &mut Vec::new());
         let outer_map = &exprs[result_id];
 
         let entries = match outer_map {

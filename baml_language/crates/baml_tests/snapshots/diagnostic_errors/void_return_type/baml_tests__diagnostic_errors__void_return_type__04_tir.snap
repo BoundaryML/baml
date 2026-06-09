@@ -20,9 +20,9 @@ function user.forward_direct(handler: (value: int) -> string throws never, value
     handler<__effect_param_0>(value) : string
   }
 }
-function user.forward_optional(handler: ((value: int) -> string throws never)?, value: int) -> string? throws never {
-  { : string?
-    handler?.(value) : string?
+function user.forward_optional(handler: ((value: int) -> string throws never) | null, value: int) -> string | null throws never {
+  { : string | null
+    handler?.(value) : string | null
   }
 }
 function user.run_hidden(handler: user.HiddenHandler, value: int) -> string throws never {
@@ -139,17 +139,17 @@ function user.bad_param(x: void) -> int throws never {
 }
 function user.bad_let() -> int throws never {
   { : 1
-    let x = 1 : 1
-    let y = : "string"
-      { : "string"
-        let z = "string" : "string"
-        z : "string"
+    let x: void = 1 : 1 -> void
+    let y: void = : int -> void
+      { : int
+        let z: int = "string" : "string" -> int
+        z : int
       }
     1 : 1
   }
   !! 230..238: type mismatch: expected int, got "string"
 }
-function user.bad_optional() -> void? throws never {
+function user.bad_optional() -> void | null throws never {
   { : null
     null : null
   }

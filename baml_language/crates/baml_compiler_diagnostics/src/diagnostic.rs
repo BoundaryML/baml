@@ -66,6 +66,19 @@ pub enum DiagnosticId {
     DuplicateVariant,
     DuplicateMethod,
     DuplicateBinding,
+    RefutablePatternInLet,
+    /// `if let` pattern that always matches — the `else` branch is dead.
+    IrrefutablePatternInIfLet,
+    /// `let … else` whose else block has a non-`!` type. The else must
+    /// diverge (return / throw / break / continue / panic / infinite loop)
+    /// so that fall-through past the binding is unreachable.
+    LetElseMustDiverge,
+    /// `let … else` pattern that covers every value — the else branch is
+    /// dead. Suggest replacing with a plain `let` binding.
+    IrrefutablePatternInLetElse,
+    /// `while let` pattern that always matches — the loop never exits via
+    /// pattern failure. Suggest a plain `while`/`loop`.
+    IrrefutablePatternInWhileLet,
     DuplicateAttribute,
     UnknownAttribute,
     InvalidAttributeContext,
@@ -201,6 +214,70 @@ pub enum DiagnosticId {
 
     // Void type position errors (E0110)
     VoidInNonReturnPosition,
+
+    // Interface diagnostics (BEP-044; E0112-E0120)
+    /// `implements I {}` references an interface that does not exist.
+    UnknownInterface,
+    /// A class is missing the body of a required interface method.
+    MissingInterfaceMethod,
+    /// A class implements the same interface in two blocks.
+    DuplicateImplementsBlock,
+    /// A method declared in an `implements` block does not exist on the target interface.
+    UnknownInterfaceMember,
+    /// A class field's type does not match the interface field it satisfies.
+    InterfaceFieldTypeMismatch,
+    /// Two interfaces contribute conflicting types for the same field.
+    ConflictingInterfaceFieldTypes,
+    /// An interface's `extends` chain forms a cycle.
+    InterfaceExtendsCycle,
+    /// `extends Foo` references a type that is not an interface.
+    NotAnInterface,
+    /// A method body in `implements I {}` has a signature that doesn't match
+    /// the interface's declared signature for that method.
+    InterfaceMethodSignatureMismatch,
+    /// Two `implements` blocks on the same class declare methods with the
+    /// same name — unqualified calls would be ambiguous (BEP-044
+    /// §"Method Disambiguation").
+    AmbiguousInterfaceMethod,
+    /// An interface's `extends` list inherits conflicting types for the same
+    /// field from two parent interfaces.
+    InterfaceExtendsFieldConflict,
+    /// `default.method()` references a required method that has no default body.
+    DefaultOnRequiredMethod,
+    /// Bare `default` used as a value rather than `default.method(...)`.
+    BareDefaultKeyword,
+    /// An out-of-body `implements<T> …` declares a generic parameter not
+    /// determined by the implementor (`for`) type — an unconstrained/phantom param.
+    UnconstrainedImplTypeParam,
+    /// `Self` used in an interface FIELD type (only valid in method signatures).
+    SelfInInterfaceField,
+    /// An `implements … for <target>` whose `for` target is not a single concrete
+    /// type — a union, optional, interface ("dyn"), or `unknown`. Interfaces can
+    /// only be implemented for a concrete type (or a concrete type constructor
+    /// such as `T[]` / `map<K, V>`, or a blanket type parameter).
+    ImplTargetNotConcrete,
+    /// An `implements` block is missing a required interface field.
+    MissingInterfaceField,
+    /// A class implements an interface that `requires` other interfaces,
+    /// but doesn't explicitly implement them.
+    MissingRequiredInterface,
+    /// Top-level `implements I for T` attempted to implement an interface
+    /// that declares fields.
+    OutOfBodyImplementsFieldInterface,
+    /// A field declaration appeared inside an `implements` block.
+    InterfaceFieldDeclaredInImplementsBlock,
+    /// The left side of `field as class_field` is not an interface field.
+    UnknownInterfaceFieldLink,
+    /// The right side of `field as class_field` is not a class field.
+    UnknownClassFieldInInterfaceLink,
+    /// The same interface field is linked more than once in one impl block.
+    DuplicateInterfaceFieldLink,
+    /// Interface field access is ambiguous.
+    AmbiguousInterfaceField,
+    /// Two interface implementation rules can apply to the same receiver/interface.
+    OverlappingImplements,
+    /// An interface `requires` a type that is not an interface (e.g. a class or enum).
+    InterfaceRequiresNonInterface,
 }
 
 impl DiagnosticId {
@@ -231,6 +308,11 @@ impl DiagnosticId {
             DiagnosticId::DuplicateVariant => "E0013",
             DiagnosticId::DuplicateMethod => "E0093",
             DiagnosticId::DuplicateBinding => "E0094",
+            DiagnosticId::RefutablePatternInLet => "E0111",
+            DiagnosticId::IrrefutablePatternInIfLet => "E0112",
+            DiagnosticId::LetElseMustDiverge => "E0113",
+            DiagnosticId::IrrefutablePatternInLetElse => "E0114",
+            DiagnosticId::IrrefutablePatternInWhileLet => "E0137",
             DiagnosticId::DuplicateAttribute => "E0014",
             DiagnosticId::UnknownAttribute => "E0015",
             DiagnosticId::InvalidAttributeContext => "E0016",
@@ -355,6 +437,35 @@ impl DiagnosticId {
 
             // Void type position errors
             DiagnosticId::VoidInNonReturnPosition => "E0110",
+
+            // Interface diagnostics
+            DiagnosticId::UnknownInterface => "E0112",
+            DiagnosticId::MissingInterfaceMethod => "E0113",
+            DiagnosticId::DuplicateImplementsBlock => "E0114",
+            DiagnosticId::UnknownInterfaceMember => "E0115",
+            DiagnosticId::InterfaceFieldTypeMismatch => "E0116",
+            DiagnosticId::ConflictingInterfaceFieldTypes => "E0117",
+            DiagnosticId::InterfaceExtendsCycle => "E0118",
+            DiagnosticId::NotAnInterface => "E0119",
+            DiagnosticId::InterfaceMethodSignatureMismatch => "E0120",
+            DiagnosticId::AmbiguousInterfaceMethod => "E0121",
+            DiagnosticId::InterfaceExtendsFieldConflict => "E0122",
+            DiagnosticId::DefaultOnRequiredMethod => "E0123",
+            DiagnosticId::MissingInterfaceField => "E0124",
+            DiagnosticId::MissingRequiredInterface => "E0125",
+            DiagnosticId::OutOfBodyImplementsFieldInterface => "E0126",
+            DiagnosticId::InterfaceFieldDeclaredInImplementsBlock => "E0127",
+            DiagnosticId::UnknownInterfaceFieldLink => "E0128",
+            DiagnosticId::UnknownClassFieldInInterfaceLink => "E0129",
+            DiagnosticId::DuplicateInterfaceFieldLink => "E0130",
+            DiagnosticId::AmbiguousInterfaceField => "E0131",
+            DiagnosticId::OverlappingImplements => "E0132",
+            DiagnosticId::InterfaceRequiresNonInterface => "E0133",
+            DiagnosticId::BareDefaultKeyword => "E0134",
+            DiagnosticId::UnconstrainedImplTypeParam => "E0135",
+            DiagnosticId::SelfInInterfaceField => "E0136",
+            // E0137 is taken by `IrrefutablePatternInWhileLet`; use the next free code.
+            DiagnosticId::ImplTargetNotConcrete => "E0138",
         }
     }
 }

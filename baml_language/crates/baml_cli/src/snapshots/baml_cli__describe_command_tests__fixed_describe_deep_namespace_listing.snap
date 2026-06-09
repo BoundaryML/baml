@@ -1,0 +1,5 @@
+---
+source: crates/baml_cli/src/describe_command_tests.rs
+expression: output
+---
+class            foo.bar.Baz                      ns_foo/ns_bar/types.baml:2

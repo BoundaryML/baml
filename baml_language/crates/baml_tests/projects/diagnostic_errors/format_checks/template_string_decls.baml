@@ -147,11 +147,6 @@ template_string DeepGenericParams(data: map<string, map<string, map<string, int 
     {{ data }}
 "#
 
-// ===== Params with constrained types =====
-template_string ConstrainedParams(value: int @check("positive", {{ this > 0 }}), name: string) #"
-    {{ value }} {{ name }}
-"#
-
 // ===== Params with union types =====
 template_string UnionParams(result: string | int | bool | null, items: (string | int)[]) #"
     {{ result }} {{ items }}

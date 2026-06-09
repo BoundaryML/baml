@@ -1,0 +1,163 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== SYNTAX TREE ===
+SOURCE_FILE
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "level1"
+    GENERIC_PARAM_LIST
+      LESS "<"
+      GENERIC_PARAM "T"
+        WORD "T"
+      GREATER ">"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "s"
+        COLON ":"
+        TYPE_EXPR "string"
+          WORD "string"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "T"
+      WORD "T"
+    THROWS_CLAUSE
+      KW_THROWS "throws"
+      TYPE_EXPR "baml.json.JsonParseError | baml.json.JsonDecodeError"
+        WORD "baml"
+        DOT "."
+        WORD "json"
+        DOT "."
+        WORD "JsonParseError"
+        PIPE "|"
+        WORD "baml"
+        DOT "."
+        WORD "json"
+        DOT "."
+        WORD "JsonDecodeError"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        CALL_EXPR
+          PATH_EXPR
+            PATH_EXPR "baml.json.from_string"
+              WORD "baml"
+              DOT "."
+              WORD "json"
+              DOT "."
+              WORD "from_string"
+            GENERIC_ARGS
+              LESS "<"
+              TYPE_EXPR "T"
+                WORD "T"
+              GREATER ">"
+          CALL_ARGS
+            L_PAREN "("
+            CALL_ARG "s"
+              WORD "s"
+            R_PAREN ")"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "level2"
+    GENERIC_PARAM_LIST
+      LESS "<"
+      GENERIC_PARAM "T"
+        WORD "T"
+      GREATER ">"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "s"
+        COLON ":"
+        TYPE_EXPR "string"
+          WORD "string"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "T"
+      WORD "T"
+    THROWS_CLAUSE
+      KW_THROWS "throws"
+      TYPE_EXPR "baml.json.JsonParseError | baml.json.JsonDecodeError"
+        WORD "baml"
+        DOT "."
+        WORD "json"
+        DOT "."
+        WORD "JsonParseError"
+        PIPE "|"
+        WORD "baml"
+        DOT "."
+        WORD "json"
+        DOT "."
+        WORD "JsonDecodeError"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        CALL_EXPR
+          PATH_EXPR
+            WORD "level1"
+            GENERIC_ARGS
+              LESS "<"
+              TYPE_EXPR "T"
+                WORD "T"
+              GREATER ">"
+          CALL_ARGS
+            L_PAREN "("
+            CALL_ARG "s"
+              WORD "s"
+            R_PAREN ")"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "level3"
+    GENERIC_PARAM_LIST
+      LESS "<"
+      GENERIC_PARAM "T"
+        WORD "T"
+      GREATER ">"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "s"
+        COLON ":"
+        TYPE_EXPR "string"
+          WORD "string"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "T"
+      WORD "T"
+    THROWS_CLAUSE
+      KW_THROWS "throws"
+      TYPE_EXPR "baml.json.JsonParseError | baml.json.JsonDecodeError"
+        WORD "baml"
+        DOT "."
+        WORD "json"
+        DOT "."
+        WORD "JsonParseError"
+        PIPE "|"
+        WORD "baml"
+        DOT "."
+        WORD "json"
+        DOT "."
+        WORD "JsonDecodeError"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        CALL_EXPR
+          PATH_EXPR
+            WORD "level2"
+            GENERIC_ARGS
+              LESS "<"
+              TYPE_EXPR "T"
+                WORD "T"
+              GREATER ">"
+          CALL_ARGS
+            L_PAREN "("
+            CALL_ARG "s"
+              WORD "s"
+            R_PAREN ")"
+        R_BRACE "}"
+
+=== ERRORS ===
+None

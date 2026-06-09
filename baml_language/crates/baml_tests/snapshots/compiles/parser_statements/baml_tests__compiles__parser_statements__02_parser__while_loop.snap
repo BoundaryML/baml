@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 16424
 ---
 === SYNTAX TREE ===
 SOURCE_FILE
@@ -15,9 +16,11 @@ SOURCE_FILE
     EXPR_FUNCTION_BODY
       BLOCK_EXPR
         L_BRACE "{"
-        LET_STMT "let i = 0;"
-          KW_LET "let"
-          WORD "i"
+        LET_STMT
+          PATTERN
+            BINDING_PATTERN "let i"
+              KW_LET "let"
+              WORD "i"
           EQUALS "="
           INTEGER_LITERAL "0"
           SEMICOLON ";"
@@ -59,9 +62,11 @@ SOURCE_FILE
     EXPR_FUNCTION_BODY
       BLOCK_EXPR
         L_BRACE "{"
-        LET_STMT "let i = 0;"
-          KW_LET "let"
-          WORD "i"
+        LET_STMT
+          PATTERN
+            BINDING_PATTERN "let i"
+              KW_LET "let"
+              WORD "i"
           EQUALS "="
           INTEGER_LITERAL "0"
           SEMICOLON ";"
@@ -76,9 +81,11 @@ SOURCE_FILE
             R_PAREN ")"
           BLOCK_EXPR
             L_BRACE "{"
-            LET_STMT "let j = 0;"
-              KW_LET "let"
-              WORD "j"
+            LET_STMT
+              PATTERN
+                BINDING_PATTERN "let j"
+                  KW_LET "let"
+                  WORD "j"
               EQUALS "="
               INTEGER_LITERAL "0"
               SEMICOLON ";"

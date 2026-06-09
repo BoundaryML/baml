@@ -1,0 +1,80 @@
+syntax = "proto3";
+package baml_core.cffi.v1;
+
+import "baml_core/cffi/v1/baml_outbound.proto";
+
+option go_package = "./cffi";
+
+// -----------------------------------------------------------------------------
+// Runtime Events — emitted during BAML execution for observability
+// -----------------------------------------------------------------------------
+
+/// A single runtime event emitted during BAML execution.
+message RuntimeEvent {
+  string span_id = 1;
+  optional string parent_span_id = 2;
+  string root_span_id = 3;
+  uint64 timestamp_ms = 4;
+  repeated string call_stack = 5;
+  EventKind event = 6;
+  uint64 call_id = 7;
+}
+
+/// The kind of event.
+message EventKind {
+  oneof kind {
+    FunctionStartEvent function_start = 1;
+    FunctionEndEvent function_end = 2;
+    SetTagsEvent set_tags = 3;
+    LogEvent log = 4;
+    CustomEvent custom = 5;
+  }
+}
+
+/// Emitted when a traced function begins execution.
+message FunctionStartEvent {
+  string name = 1;
+  repeated BamlOutboundValue args = 2;
+  repeated TagEntry tags = 3;
+}
+
+/// Emitted when a traced function finishes execution.
+message FunctionEndEvent {
+  string name = 1;
+  BamlOutboundValue result = 2;
+  uint64 duration_ms = 3;
+  optional string error = 4;
+}
+
+/// Metadata tag updates on the current span.
+message SetTagsEvent {
+  repeated TagEntry tags = 1;
+}
+
+/// Source location for a log or custom event.
+message SourceLocation {
+  uint32 file_id = 1;
+  uint32 line = 2;
+  uint32 column = 3;
+  uint32 start_offset = 4;
+  uint32 end_offset = 5;
+}
+
+/// A structured log event emitted via `log.info()`, `log.debug()`, etc.
+message LogEvent {
+  string level = 1;
+  BamlOutboundValue data = 2;
+  optional SourceLocation source = 3;
+}
+
+/// A custom user-defined event emitted via `baml.events.send()`.
+message CustomEvent {
+  string name = 1;
+  BamlOutboundValue data = 2;
+}
+
+/// A key-value tag entry.
+message TagEntry {
+  string key = 1;
+  string value = 2;
+}

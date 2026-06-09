@@ -2,7 +2,7 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === COMPILER2 DIAGNOSTICS ===
-  [parse] Error: Unmatched '>' in type expression (found 1 extra)
+  [parse] error: Unmatched '>' in type expression (found 1 extra)
    ╭─[ extra_greater.baml:7:29 ]
    │
  7 │   bad_field map<string, int>>
@@ -12,7 +12,7 @@ source: crates/baml_tests/src/generated_tests.rs
    │ Note: Error code: E0010
 ───╯
 
-  [type] Error: unresolved name: GPT4
+  [type] error: unresolved name: GPT4
     ╭─[ extra_greater.baml:20:2 ]
     │
  20 │ ╭─▶ }
@@ -24,7 +24,7 @@ source: crates/baml_tests/src/generated_tests.rs
     │     Note: Error code: E0003
 ────╯
 
-  [parse] Error: Unmatched '>' in type expression (found 1 extra)
+  [parse] error: Unmatched '>' in type expression (found 1 extra)
     ╭─[ extra_greater.baml:23:38 ]
     │
  23 │ function BadParam(x: map<string, int>>) -> string {
@@ -34,7 +34,7 @@ source: crates/baml_tests/src/generated_tests.rs
     │ Note: Error code: E0010
 ────╯
 
-  [type] Error: unresolved name: GPT4
+  [type] error: unresolved name: GPT4
     ╭─[ extra_greater.baml:23:50 ]
     │
  23 │ ╭─▶ function BadParam(x: map<string, int>>) -> string {
@@ -46,7 +46,7 @@ source: crates/baml_tests/src/generated_tests.rs
     │     Note: Error code: E0003
 ────╯
 
-  [type] Error: unresolved name: GPT4
+  [type] error: unresolved name: GPT4
     ╭─[ extra_greater.baml:26:2 ]
     │
  26 │ ╭─▶ }
@@ -58,7 +58,7 @@ source: crates/baml_tests/src/generated_tests.rs
     │     Note: Error code: E0003
 ────╯
 
-  [parse] Error: Unmatched '>' in type expression (found 1 extra)
+  [parse] error: Unmatched '>' in type expression (found 1 extra)
     ╭─[ extra_greater.baml:29:45 ]
     │
  29 │ function BadReturnType() -> map<string, int>> {
@@ -68,7 +68,7 @@ source: crates/baml_tests/src/generated_tests.rs
     │ Note: Error code: E0010
 ────╯
 
-  [type] Error: unresolved name: GPT4
+  [type] error: unresolved name: GPT4
     ╭─[ extra_greater.baml:29:46 ]
     │
  29 │ ╭─▶ function BadReturnType() -> map<string, int>> {
@@ -80,7 +80,7 @@ source: crates/baml_tests/src/generated_tests.rs
     │     Note: Error code: E0003
 ────╯
 
-  [parse] Error: Unmatched '>' in type expression (found 1 extra)
+  [parse] error: Unmatched '>' in type expression (found 1 extra)
     ╭─[ extra_greater.baml:35:33 ]
     │
  35 │ type BadAlias = map<string, int>>

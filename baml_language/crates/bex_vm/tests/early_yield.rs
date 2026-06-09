@@ -1,7 +1,7 @@
 //! Tests for the VM's `EarlyYield` emission.
 //!
-//! The VM increments an internal counter on every control-flow instruction
-//! and polls an atomic `park_requested` flag every ~4K increments. When the
+//! The VM decrements an internal counter on every control-flow instruction
+//! and polls an atomic `park_requested` flag every ~32M decrements. When the
 //! flag is set, the VM emits `VmExecState::EarlyYield` at the next poll.
 //! These tests verify:
 //!
@@ -22,9 +22,10 @@ use std::sync::{
 
 use baml_project::testing::compile_source;
 use bex_vm::{BexVm, VmExecState};
-use bex_vm_types::Value;
 
 const LOOP_ITERATIONS: i64 = 10_000;
+/// Small interval for testing — production uses 1 << 25 (~32M).
+const TEST_YIELD_INTERVAL: u64 = 1 << 10;
 const SPIN_FUNCTION: &str = "user.spin";
 /// Cap exec-loop iterations so regressions fail fast instead of hanging CI.
 const MAX_EXEC_CALLS: usize = 32;
@@ -48,12 +49,16 @@ fn spin_source() -> String {
 }
 
 /// Compile the `spin` program and build a VM whose entry point is set to `spin`.
+/// Uses a small yield interval so tests complete quickly.
 fn make_vm(park_requested: Arc<AtomicBool>) -> BexVm {
     let program = compile_source(&spin_source());
     let function_index = program
         .function_index(SPIN_FUNCTION)
         .unwrap_or_else(|| panic!("function {SPIN_FUNCTION} not found in compiled program"));
-    let mut vm = BexVm::from_program(program, park_requested).expect("from_program");
+    let mut vm = BexVm::from_program(program, Arc::clone(&park_requested)).expect("from_program");
+    // Override the default interval with a small one for fast tests.
+    vm.early_yield =
+        bex_vm_types::EarlyYieldCheck::with_interval(park_requested, TEST_YIELD_INTERVAL);
     let function_ptr = vm.heap.compile_time_ptr(function_index);
     vm.set_entry_point(function_ptr, &[]);
     vm
@@ -69,7 +74,9 @@ fn flag_unset_completes_without_early_yield() {
 
     let state = vm.exec().expect("exec");
     match state {
-        VmExecState::Complete(Value::Int(n)) => assert_eq!(n, LOOP_ITERATIONS),
+        VmExecState::Complete(v) if v.is_int() => {
+            assert_eq!(v.as_int().unwrap(), LOOP_ITERATIONS);
+        }
         other => panic!("expected Complete(Int({LOOP_ITERATIONS})), got {other:?}"),
     }
 }
@@ -114,8 +121,8 @@ fn yield_then_resume_completes() {
     // the final Complete, bounded by MAX_EXEC_CALLS.
     for _ in 0..MAX_EXEC_CALLS {
         match vm.exec().expect("exec") {
-            VmExecState::Complete(Value::Int(n)) => {
-                assert_eq!(n, LOOP_ITERATIONS);
+            VmExecState::Complete(v) if v.is_int() => {
+                assert_eq!(v.as_int().unwrap(), LOOP_ITERATIONS);
                 return;
             }
             VmExecState::EarlyYield => continue,

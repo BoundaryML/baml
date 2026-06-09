@@ -20,14 +20,13 @@ workspace = true
 [dependencies]
 baml_base = { workspace = true }
 baml_builtins2 = { workspace = true }
-baml_compiler2_emit = { workspace = true }
 baml_compiler2_visualization = { workspace = true }
 baml_compiler_diagnostics = { workspace = true }
 baml_db = { workspace = true }
 baml_fmt = { workspace = true }
 baml_lsp2_actions = { workspace = true }
 baml_project = { workspace = true }
-baml_type = { workspace = true }
+baml_version = { workspace = true }
 baml_workspace = { workspace = true }
 bex_engine = { workspace = true }
 bex_events = { workspace = true }
@@ -37,7 +36,7 @@ bex_vm_types = { workspace = true }
 sys_ops = { workspace = true }
 sys_types = { workspace = true }
 async-trait = { workspace = true }
-crossbeam = { workspace = true }
+borsh = { workspace = true }
 log = { workspace = true }
 lsp-server = { workspace = true }
 lsp-types = { workspace = true }
@@ -50,10 +49,14 @@ text-size = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
 vfs = { workspace = true }
-web-time = { workspace = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 tokio = { workspace = true, features = [ "sync", "rt" ] }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 wasm-bindgen-futures = { workspace = true }
+
+[features]
+default = [ "aws-crypto" ]
+aws-crypto = [ "bex_engine/aws-crypto" ]
+ring-crypto = [ "bex_engine/ring-crypto" ]

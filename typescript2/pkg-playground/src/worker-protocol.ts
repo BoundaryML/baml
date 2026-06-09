@@ -20,7 +20,7 @@ export interface DeserializedRuntimeEvent {
 
 export type DeserializedEventKind =
   | { $case: 'functionStart'; functionStart: { name: string; args: BamlJsValue[] } }
-  | { $case: 'functionEnd'; functionEnd: { name: string; durationMs: number; result: BamlJsValue | null } }
+  | { $case: 'functionEnd'; functionEnd: { name: string; durationMs: number; result: BamlJsValue | null; error?: string | null } }
   | { $case: 'log'; log: { data: BamlJsValue | null; level: string; source?: SourceLocation } }
   | { $case: 'custom'; custom: { name: string; data: BamlJsValue | null } }
   | { $case: 'setTags'; setTags: { tags: TagEntry[] } };
@@ -41,6 +41,20 @@ export interface LogDecoration {
   count: number;
 }
 
+interface SourceNavigationTargetBase {
+  line: number;
+  column: number;
+  endLine?: number;
+  endColumn?: number;
+  startOffset?: number;
+  endOffset?: number;
+}
+
+export type SourceNavigationTarget = SourceNavigationTargetBase & (
+  | { fileId: number; filePath?: string }
+  | { filePath: string; fileId?: number }
+);
+
 // ---------------------------------------------------------------------------
 // Shared domain types
 // ---------------------------------------------------------------------------
@@ -51,11 +65,12 @@ export interface DiagnosticEntry {
 }
 
 export type FunctionKind = 'llm' | 'expr';
+export type FunctionOrigin = 'userDefined' | 'companion' | 'internal';
 
 export interface LlmCapabilities {
-  /** Whether render_prompt sub-function exists. Call via `callFunction("${name}.render_prompt", args)`. */
+  /** Whether render_prompt sub-function exists. Call via `callFunction("${name}$render_prompt", args)`. */
   renderPrompt: boolean;
-  /** Whether build_request sub-function exists. Call via `callFunction("${name}.build_request", args)`. */
+  /** Whether build_request sub-function exists. Call via `callFunction("${name}$build_request", args)`. */
   buildRequest: boolean;
   /** The LLM client name (e.g., "MyClient"). */
   clientName?: string;
@@ -72,6 +87,7 @@ export interface LlmCapabilities {
 export interface FunctionInfo {
   name: string;
   kind: FunctionKind;
+  origin: FunctionOrigin;
   capabilities?: LlmCapabilities;
 }
 
@@ -96,6 +112,7 @@ export type PlaygroundNotification =
 
 export type CfgNodeType =
   | 'functionRoot'
+  | 'llmFunction'
   | 'headerContextEnter'
   | 'branchGroup'
   | 'branchArm'
@@ -108,7 +125,10 @@ export interface CfgNode {
   logFilterKey: string;
   label: string;
   sourceExpr: number | null;
+  sourceSpan?: SourceNavigationTarget;
   nodeType: CfgNodeType;
+  llmClient?: string;
+  calleeName?: string;
   isContainer: boolean;
 }
 
@@ -140,6 +160,9 @@ export interface CursorContext {
    *  (smallest span) to least specific (largest span). The TS side tries each
    *  in order, highlighting the first that matches a CFG node. */
   sourceExprCandidates?: number[];
+  /** Function body that owns sourceExprId/sourceExprCandidates. This can differ
+   *  from functionName at call sites, where functionName is the callee. */
+  sourceExprFunctionName?: string | null;
   testName: string | null;
   /** Byte offset of the cursor position for cursor ↔ event matching. */
   cursorOffset?: number | null;
@@ -196,7 +219,11 @@ export type WorkerOutMessage =
   | { type: 'runtimeEventNew'; event: DeserializedRuntimeEvent; callId: number | null }
   | { type: 'runtimeEventError'; error: string }
   | { type: 'envVarRequest'; id: number; variable: string }
+  | { type: 'processEnvVars'; vars: Record<string, string> }
+  | { type: 'envVarFromShell'; variable: string; value: string }
+  | { type: 'knownEnvVarNames'; names: string[] }
   | { type: 'inputRequest'; id: number; prompt: string | undefined; callId: number }
+  | { type: 'inputResolved'; id: number; callId: number }
   | { type: 'vfsFileChanged'; path: string; content: string }
   | { type: 'vfsFileDeleted'; path: string }
   | { type: 'buildTime'; value: string }
@@ -215,7 +242,7 @@ export type WorkerInMessage =
   | { type: 'cancelCall'; id: number; project: string }
   | { type: 'clearHandles'; runIds: number[] }
   | { type: 'envVarResponse'; id: number; value: string | undefined; variable?: string }
-  | { type: 'inputResponse'; id: number; value: string }
+  | { type: 'inputResponse'; id: number; value: string; callId: number }
   | { type: 'setEnvVar'; key: string; value: string }
   | { type: 'deleteEnvVar'; key: string }
   | { type: 'selectProject'; root: string }

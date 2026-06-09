@@ -163,7 +163,7 @@ async fn expand_testset(
     engine
         .call_function(
             "testing.TestRegistry.expand_set",
-            vec![registry, BexExternalValue::String(name.to_string())],
+            vec![registry, BexExternalValue::String(name.to_string().into())],
             bex_engine::FunctionCallContextBuilder::new(CallId::next()).build(),
             true,
         )
@@ -179,7 +179,7 @@ async fn run_named_test(
     engine
         .call_function(
             "testing.TestRegistry.run_test",
-            vec![registry, BexExternalValue::String(name.to_string())],
+            vec![registry, BexExternalValue::String(name.to_string().into())],
             bex_engine::FunctionCallContextBuilder::new(CallId::next()).build(),
             true,
         )
@@ -236,7 +236,7 @@ async fn collect_tests_run_test_catches_typed_throwing_body() {
 async fn collect_tests_testset_inline_for_loop_expands() {
     let source = r#"
         testset "dynamic" {
-            for (case in ["a", "b", "c"]) {
+            for (let case in ["a", "b", "c"]) {
                 test "check" {
                     assert.not_null(case)
                 }
@@ -267,7 +267,7 @@ async fn collect_tests_testset_let_then_for_loop_expands() {
     let source = r#"
         testset "dynamic" {
             let cases: string[] = ["a", "b", "c"];
-            for (case in cases) {
+            for (let case in cases) {
                 test "check" {
                     assert.not_null(case)
                 }
@@ -483,7 +483,7 @@ async fn collect_tests_testset_for_loop_with_nested_testset_variable_name() {
     let source = r#"
         testset "vibes" {
             let topics: string[] = ["happy", "sad"];
-            for (topic in topics) {
+            for (let topic in topics) {
                 testset topic {
                     test "check" {
                         assert.not_null(topic)
@@ -521,7 +521,7 @@ async fn collect_tests_testset_for_loop_test_uses_loop_var() {
     let source = r#"
         testset "suite" {
             let items: string[] = ["a", "b"];
-            for (item in items) {
+            for (let item in items) {
                 test item {
                     assert.not_null(item)
                 }
@@ -556,7 +556,7 @@ async fn collect_tests_top_level_testset_with_string_concat_name() {
     let source = r#"
         testset "test" {
             let topics: string[] = ["happy", "sad"];
-            for (topic in topics) {
+            for (let topic in topics) {
                 testset topic {
                     test "basic " + topic {
                         assert.not_null(topic)
@@ -612,7 +612,7 @@ async fn collect_tests_testset_with_function_call_and_field_access() {
 
         testset "vibes" {
             let topics: string[] = ["happy", "sad"];
-            for (topic in topics) {
+            for (let topic in topics) {
                 testset topic {
                     test "basic" {
                         let result = ClassifySentiment("hi");
@@ -783,7 +783,7 @@ async fn collect_tests_expand_nested_testsets_full_depth() {
     let source = r#"
         testset "outer" {
             let items: string[] = ["alpha", "beta"];
-            for (item in items) {
+            for (let item in items) {
                 testset item {
                     test "check" {
                         assert.not_null(item)

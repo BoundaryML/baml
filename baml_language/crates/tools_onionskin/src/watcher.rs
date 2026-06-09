@@ -11,7 +11,6 @@ use notify::{RecommendedWatcher, RecursiveMode, Watcher as NotifyWatcher};
 /// Compiler crates that should trigger a hot-reload when changed
 const COMPILER_CRATES: &[&str] = &[
     "baml_base",
-    "baml_builtins",
     "baml_compiler_diagnostics",
     "baml_compiler2_ast",
     "baml_compiler2_emit",

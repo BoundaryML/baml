@@ -8,7 +8,7 @@
 
 use bridge_wasm::{
     BamlWasmRuntime, LspNotification,
-    baml::cffi::{
+    baml_core::cffi::{
         BamlOutboundValue, CallFunctionArgs, baml_outbound_value::Value as OutboundValue,
     },
 };
@@ -287,6 +287,14 @@ fn callbacks() -> JsValue {
         &obj,
         &JsValue::from_str("playground_send_notification"),
         &noop,
+    )
+    .unwrap();
+    // host_dispatch: invoked when BAML calls a host-registered JS callable.
+    // The fs/glob tests don't exercise host callables; a noop is sufficient.
+    js_sys::Reflect::set(
+        &obj,
+        &JsValue::from_str("host_dispatch"),
+        &js_sys::Function::new_with_args("key, callId, argsBytes", ""),
     )
     .unwrap();
 

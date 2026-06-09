@@ -18,6 +18,4 @@ workspace = true
 
 [dependencies]
 baml_base = { workspace = true }
-
-[dev-dependencies]
-anyhow = { workspace = true }
+strum = { workspace = true }

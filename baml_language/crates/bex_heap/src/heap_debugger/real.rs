@@ -7,7 +7,7 @@ use std::{
 };
 
 use bex_vm_types::{
-    Future, HeapPtr, Object, ObjectIndex, Value,
+    FutureRead, HeapPtr, Object, ObjectIndex, Value,
     types::{ObjectType, SentinelKind},
 };
 
@@ -290,13 +290,18 @@ impl BexHeap {
 
     fn verify_object_invariants(&self, idx: HeapPtr, obj: &Object, _ct_len: usize) {
         match obj {
+            // SAFETY: heap-debugger verification runs under STW (it's
+            // called from the GC verifier path); no mutator is concurrently
+            // active.
             Object::Array(values) => {
-                for value in values {
+                let data = unsafe { values.data_unchecked() };
+                for value in data.iter() {
                     self.debug_assert_valid_value(value);
                 }
             }
             Object::Map(values) => {
-                for value in values.values() {
+                let data = unsafe { values.data_unchecked() };
+                for value in data.values() {
                     self.debug_assert_valid_value(value);
                 }
             }
@@ -313,8 +318,8 @@ impl BexHeap {
                     instance.fields.len(),
                     class.fields.len()
                 );
-                for value in &instance.fields {
-                    self.debug_assert_valid_value(value);
+                for slot in &instance.fields {
+                    self.debug_assert_valid_value(&slot.load());
                 }
             }
             Object::Variant(variant) => {
@@ -331,16 +336,21 @@ impl BexHeap {
                     enm.variants.len()
                 );
             }
-            Object::Future(fut) => match fut {
-                Future::Pending(pending) => {
-                    for value in &pending.args {
-                        self.debug_assert_valid_value(value);
-                    }
+            Object::Future(fut) => match fut.read() {
+                FutureRead::Ready(value) | FutureRead::Error(value) => {
+                    self.debug_assert_valid_value(&value);
                 }
-                Future::Ready(value) => {
-                    self.debug_assert_valid_value(value);
-                }
+                FutureRead::Pending(_)
+                | FutureRead::ErrorPending(_)
+                | FutureRead::Cancelled
+                | FutureRead::InternalError(_) => {}
             },
+            Object::UnscheduledFuture(future) => {
+                if let Some(name_ptr) = future.name {
+                    self.debug_assert_valid_index(name_ptr);
+                }
+                self.debug_assert_valid_index(future.closure);
+            }
             Object::Closure(closure) => {
                 self.debug_assert_valid_index(closure.function);
                 for value in &closure.captures {
@@ -352,24 +362,29 @@ impl BexHeap {
                 self.debug_assert_valid_value(&bm.receiver);
             }
             Object::Cell(cell) => {
-                self.debug_assert_valid_value(&cell.value);
+                self.debug_assert_valid_value(&cell.load());
             }
             Object::Function(_)
+            | Object::GenericFunction(_)
             | Object::Class(_)
             | Object::Enum(_)
             | Object::String(_)
+            | Object::Bigint(_)
             | Object::Uint8Array(_)
             | Object::RustData(_)
             | Object::Collector(_)
-            | Object::Type(_) => {}
+            | Object::Type(_)
+            | Object::Float(_)
+            // `HostClosure` carries no heap references.
+            | Object::HostClosure(_) => {}
             #[cfg(feature = "heap_debug")]
             Object::Sentinel(_) => {}
         }
     }
 
     fn debug_assert_valid_value(&self, value: &Value) {
-        if let Value::Object(idx) = value {
-            let _ = unsafe { self.get_object(*idx) };
+        if let Some(idx) = value.as_object_ptr() {
+            let _ = unsafe { self.get_object(idx) };
         }
     }
 

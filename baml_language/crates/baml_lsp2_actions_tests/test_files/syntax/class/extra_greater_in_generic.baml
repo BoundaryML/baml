@@ -10,7 +10,7 @@ class TestClass {
 
 //----
 //- diagnostics
-// Error: Unmatched '>' in type expression (found 1 extra)
+// error: Unmatched '>' in type expression (found 1 extra)
 //    ╭─[ class_extra_greater_in_generic.baml:6:29 ]
 //    │
 //  6 │   bad_field map<string, int>>

@@ -1,0 +1,31 @@
+function namespaced_generic_class_type_pattern_requires_type_args(boxed: root.llm.openai.Box<int>) -> int {
+    match (boxed) {
+        root.llm.openai.Box => 1
+    }
+}
+
+function namespace_relative_generic_class_type_pattern_requires_type_args(boxed: llm.openai.Box<int>) -> int {
+    match (boxed) {
+        llm.openai.Box => 1
+    }
+}
+
+function namespaced_generic_class_type_pattern_rejects_extra_type_args(boxed: root.llm.openai.Box<int>) -> int {
+    match (boxed) {
+        root.llm.openai.Box<int, string> => 1,
+        _ => 0
+    }
+}
+
+function namespaced_non_generic_class_type_pattern_rejects_type_args(response: root.llm.openai.Response) -> int {
+    match (response) {
+        root.llm.openai.Response<int> => 1
+    }
+}
+
+function namespaced_class_destructure_unknown_field(response: root.llm.openai.Response) -> int {
+    match (response) {
+        root.llm.openai.Response { missing } => 1,
+        _ => 0
+    }
+}

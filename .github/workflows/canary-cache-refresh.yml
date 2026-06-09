@@ -1,0 +1,54 @@
+name: Canary cache refresh
+
+# To understand why this workflow exists, see the cache strategy
+# explanation at the top of cargo-tests.reusable.yaml.
+
+on:
+  schedule:
+    # 13:00 UTC = 5am PST / 6am PDT. GHA cron is UTC-only and does
+    # not honor DST, so the local hour shifts by one across the
+    # spring/fall transitions.
+    - cron: '0 13 * * *'
+  # Hand-trigger for testing the purge + repopulate flow without
+  # waiting for the daily cron.
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  actions: write
+
+jobs:
+  purge:
+    name: "purge canary rust caches"
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: "Delete rust-cache entries on canary"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+        run: |
+          # `gh cache list --key` is a *prefix* match. Swatinem/rust-cache@v2
+          # prepends `prefix-key` (default `v0-rust`) to every entry, so
+          # actual keys look like `v0-rust-linux-cargo-<toolchain>-<hash>`.
+          # Without the `v0-rust-` lead, the prefix match never hits and
+          # the loop silently deletes nothing.
+          for sk in linux-cargo linux-wasm linux-msrv macos-cargo windows-cargo; do
+            gh cache list -R "$REPO" --ref refs/heads/canary --key "v0-rust-$sk" \
+              --limit 200 --json id --jq '.[].id' | while read -r id; do
+              [ -n "$id" ] || continue
+              echo "Deleting cache id=$id (key prefix v0-rust-$sk)"
+              gh cache delete -R "$REPO" "$id"
+            done
+          done
+
+  cargo-tests:
+    needs: purge
+    uses: ./.github/workflows/cargo-tests.reusable.yaml
+    # Drop `actions: write` for the called workflow — its jobs run
+    # cargo build / test code that we don't want touching the cache
+    # API. cargo-tests.reusable.yaml also declares `contents: read`
+    # at its workflow level as defense in depth.
+    permissions:
+      contents: read
+    secrets: inherit

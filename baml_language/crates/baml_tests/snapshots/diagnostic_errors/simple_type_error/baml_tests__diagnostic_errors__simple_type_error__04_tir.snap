@@ -3,8 +3,8 @@ source: crates/baml_tests/src/generated_tests.rs
 ---
 === TIR2 ===
 function user.Foo() -> int throws never {
-  { : string
-    1 + "foo" : string
+  { : unknown
+    1 + "foo" : unknown
   }
-  !! 26..35: type mismatch: expected int, got string
+  !! 26..35: operator `Add` cannot be applied to `1` and `"foo"`
 }

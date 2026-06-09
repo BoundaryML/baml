@@ -4,44 +4,35 @@ function MayFail(x: int) -> string {
 
 function InvalidArmSyntax(x: int) -> string {
   MayFail(x) catch (e) {
-    _: string => "ok",
+    string => "ok",
     let y = "hi";
   }
 }
 
 //----
 //- diagnostics
-// Error: Expected pattern, found let
-//    ╭─[ catch_invalid_arm_syntax.baml:8:5 ]
+// error: Expected '=>' after catch pattern, found '='
+//    ╭─[ catch_invalid_arm_syntax.baml:8:11 ]
 //    │
 //  8 │     let y = "hi";
-//    │     ─┬─  
-//    │      ╰─── Expected pattern, found let
+//    │           ┬  
+//    │           ╰── Expected '=>' after catch pattern, found '='
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯
-// Error: Expected '=>' after catch pattern, found identifier
-//    ╭─[ catch_invalid_arm_syntax.baml:8:9 ]
+// warning: unreachable arm
+//    ╭─[ catch_invalid_arm_syntax.baml:7:15 ]
 //    │
-//  8 │     let y = "hi";
-//    │         ┬  
-//    │         ╰── Expected '=>' after catch pattern, found identifier
-//    │ 
-//    │ Note: Error code: E0010
-// ───╯
-// Warning: unreachable arm
-//    ╭─[ catch_invalid_arm_syntax.baml:7:18 ]
-//    │
-//  7 │     _: string => "ok",
-//    │                  ──┬─  
-//    │                    ╰─── unreachable arm
+//  7 │     string => "ok",
+//    │               ──┬─  
+//    │                 ╰─── unreachable arm
 //    │ 
 //    │ Note: Error code: E0063
 // ───╯
-// Warning: unreachable arm
-//    ╭─[ catch_invalid_arm_syntax.baml:7:23 ]
+// warning: unreachable arm
+//    ╭─[ catch_invalid_arm_syntax.baml:7:20 ]
 //    │
-//  7 │ ╭─▶     _: string => "ok",
+//  7 │ ╭─▶     string => "ok",
 //  8 │ ├─▶     let y = "hi";
 //    │ │                       
 //    │ ╰─────────────────────── unreachable arm

@@ -63,15 +63,6 @@ impl BexProject {
         self.event_sink.clone()
     }
 
-    #[allow(dead_code)]
-    pub(crate) fn update_single_source(&self, path: &vfs::VfsPath, source: &str) {
-        let mut db = self.db.lock().unwrap();
-        db.add_or_update_file(crate::fs::FsPath::from_vfs(path).as_path(), source);
-        drop(db);
-
-        let _ = self.update_bex();
-    }
-
     /// Update all sources in the project (removes any sources that are not in the new sources)
     pub(crate) fn update_all_sources(
         &self,
@@ -106,15 +97,6 @@ impl BexProject {
         drop(db);
 
         let _ = self.update_bex();
-    }
-
-    #[allow(dead_code)]
-    pub(crate) fn remove_source(&self, path: &vfs::VfsPath) -> Result<(), RuntimeError> {
-        let mut db = self.db.lock().unwrap();
-        db.remove_file(crate::fs::FsPath::from_vfs(path).as_path());
-        drop(db);
-
-        self.update_bex()
     }
 
     pub(crate) fn take(self) -> Result<std::sync::Arc<BexEngine>, RuntimeError> {

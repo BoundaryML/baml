@@ -34,7 +34,7 @@ fn union_normalization_alias() {
       { : never
         return x : user.A
       }
-      !! 58..59: type mismatch: expected string, got user.A
+      !! 58..59: type mismatch: expected string, got A
     }
     type user.A$stream = int | string
     ");
@@ -110,6 +110,220 @@ fn unresolved_variable_in_let() {
     ");
 }
 
+// ── Optional function parameters ─────────────────────────────────────────
+
+#[test]
+fn optional_params_accept_omission_and_named_override() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+function search(query: string, max: int = 10) -> string { query }
+function f() -> string {
+    let a = search("cats")
+    return search("dogs", max = 5)
+}
+"#,
+    );
+    let tir = render_tir(&db, file);
+    insta::assert_snapshot!("optional_params_accept_omission_and_named_override", tir);
+    assert!(
+        tir.contains("function user.search(query: string, max: int = 10) -> string"),
+        "{tir}"
+    );
+    assert!(tir.contains("let a = search(\"cats\") : string"), "{tir}");
+    assert!(
+        tir.contains("return search(\"dogs\", max = 5) : string"),
+        "{tir}"
+    );
+    assert!(!tir.contains("!!"), "unexpected diagnostics:\n{tir}");
+}
+
+#[test]
+fn llm_client_override_argument_is_callable_on_function_and_build_request() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r##"
+client<llm> DefaultClient {
+  provider "openai"
+  options {
+    model "gpt-4o-mini"
+    api_key "default-key"
+  }
+}
+
+client<llm> OverrideClient {
+  provider "openai"
+  options {
+    model "gpt-4o-mini"
+    api_key "override-key"
+  }
+}
+
+function Ask(input: string) -> string {
+  client DefaultClient
+  prompt #"{{ input }}"#
+}
+
+function call_overrides() -> string {
+  let answer = Ask("hello", client = OverrideClient)
+  let request_url = Ask$build_request("hello", client = OverrideClient).url
+  answer + request_url
+}
+"##,
+    );
+    let tir = render_tir(&db, file);
+
+    assert!(
+        tir.contains("function user.Ask(input: string, client: baml.llm.Client = DefaultClient)"),
+        "{tir}"
+    );
+    assert!(
+        tir.contains(
+            "function user.Ask$build_request(input: string, client: baml.llm.Client = DefaultClient) -> baml.http.Request"
+        ),
+        "{tir}"
+    );
+    assert!(
+        tir.contains(r#"Ask("hello", client = OverrideClient) : string"#),
+        "{tir}"
+    );
+    assert!(
+        tir.contains(r#"Ask$build_request("hello", client = OverrideClient).url : string"#),
+        "{tir}"
+    );
+    assert!(!tir.contains("!!"), "unexpected diagnostics:\n{tir}");
+}
+
+#[test]
+fn raw_generic_constructor_infers_typevar_from_field_value() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+class Box<T> {
+  value T
+  function unwrap(self) -> T { self.value }
+}
+
+function f() -> int {
+  let b = Box { value: 42 }
+  let get = b.unwrap
+  get()
+}
+"#,
+    );
+    let tir = render_tir(&db, file);
+    assert!(
+        tir.contains("let b = Box { value: 42 } : user.Box"),
+        "{tir}"
+    );
+    assert!(tir.contains("get() : int"), "{tir}");
+    assert!(!tir.contains("!!"), "unexpected diagnostics:\n{tir}");
+}
+
+#[test]
+fn optional_param_call_binding_diagnostics() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+function search(query: string, max: int = 10) -> string { query }
+function positional_default() -> string { search("cats", 5) }
+function positional_after_named() -> string { search(query = "cats", 5) }
+function duplicate_named() -> string { search(query = "cats", max = 1, max = 2) }
+function unknown_named() -> string { search(q = "cats") }
+"#,
+    );
+    let tir = render_tir(&db, file);
+    insta::assert_snapshot!("optional_param_call_binding_diagnostics", tir);
+    assert!(tir.contains("defaulted parameter `max` must be passed by name"));
+    assert!(tir.contains("positional arguments cannot appear after named arguments"));
+    assert!(tir.contains("duplicate named argument `max`"));
+    assert!(tir.contains("unknown named argument `q`"));
+    assert!(tir.contains("missing required argument `query`"));
+}
+
+#[test]
+fn optional_param_default_declaration_diagnostics() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+function type_mismatch(a: int = "bad") -> int { a }
+function forward_ref(a: int = b, b: int = 1) -> int { a }
+function forward_ref_in_match(seed: int, a: int = match (seed) { 1 => b, _ => 0 }, b: int = 1) -> int { a }
+function required_after_default(a: int = 1, b: int) -> int { b }
+"#,
+    );
+    let tir = render_tir(&db, file);
+    insta::assert_snapshot!("optional_param_default_declaration_diagnostics", tir);
+    assert!(tir.contains("type mismatch: expected int, got \"bad\""));
+    assert!(tir.contains("default for parameter `a` cannot reference later parameter `b`"));
+    assert!(tir.contains("function user.forward_ref_in_match"));
+    assert!(tir.contains("required parameter `b` cannot appear after a defaulted parameter"));
+}
+
+#[test]
+fn optional_param_default_forward_reference_is_scope_aware() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+function shadow_later_param(a: int = { let b = 1; b }, b: int = 2) -> int { a }
+"#,
+    );
+    let tir = render_tir(&db, file);
+    assert!(
+        !tir.contains("default for parameter `a` cannot reference later parameter `b`"),
+        "{tir}"
+    );
+}
+
+#[test]
+fn optional_param_default_forward_reference_checks_lambda_bodies() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+function lambda_capture_later_param(a: int = { let f = () -> int { b }; f() }, b: int = 1) -> int { a }
+"#,
+    );
+    let tir = render_tir(&db, file);
+    insta::assert_snapshot!(
+        "optional_param_default_forward_reference_checks_lambda_bodies",
+        tir.as_str()
+    );
+    assert!(
+        tir.contains("default for parameter `a` cannot reference later parameter `b`"),
+        "{tir}"
+    );
+}
+
+#[test]
+fn self_param_default_reports_single_semantic_error() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+class Counter {
+  value int
+
+  function Current(self = null) -> int {
+    self.value
+  }
+}
+"#,
+    );
+    let tir = render_tir(&db, file);
+    assert_eq!(tir.matches("`self` cannot have a default value").count(), 1);
+    assert!(
+        !tir.contains("type mismatch: expected user.Counter, got null"),
+        "{tir}"
+    );
+}
+
 // ── 3A-4. ArgumentCountMismatch diagnostic ───────────────────────────────
 
 #[test]
@@ -183,20 +397,26 @@ fn calling_class_as_function() {
         "test.baml",
         "class Foo { name string }\nfunction f() -> int { return Foo(1); }",
     );
-    insta::assert_snapshot!(render_tir(&db, file), @"
+    insta::assert_snapshot!(render_tir(&db, file), @r#"
     class user.Foo {
       name: string
+    }
+    function user.Foo.to_json(self: user.Foo) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+      map { "name": self.name.to_json() } : map<string, baml.json.json>
+    }
+    function user.Foo.from_json(j: baml.json.json) -> user.Foo throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+      Foo { name: baml.json.from_json<string>(baml.json.field(j, "name")) } : user.Foo
     }
     function user.f() -> int throws never {
       { : never
         return Foo(1) : unknown
       }
-      !! 55..61: `user.Foo` is not a function — it cannot be called
+      !! 55..61: `Foo` is not a function — it cannot be called
     }
     class user.Foo$stream {
-      name: null | string
+      name: string | null
     }
-    ");
+    "#);
 }
 
 // ── 3A-6. MissingReturnExpression diagnostic ─────────────────────────────
@@ -257,6 +477,99 @@ fn invalid_binary_op_bool_add() {
       !! 29..41: operator `Add` cannot be applied to `true` and `false`
     }
     ");
+}
+
+#[test]
+fn invalid_binary_op_float_plus_bigint() {
+    let mut db = make_db();
+    let file = db.add_file("test.baml", "function f() -> bigint { return 1.5 + 100n; }");
+    insta::assert_snapshot!(render_tir(&db, file), @r"
+    function user.f() -> bigint throws never {
+      { : never
+        return 1.5 + 100n : unknown
+      }
+      !! 32..42: operator `Add` cannot be applied to `1.5` and `100n`
+    }
+    ");
+}
+
+#[test]
+fn invalid_binary_op_bigint_plus_float() {
+    let mut db = make_db();
+    let file = db.add_file("test.baml", "function f() -> bigint { return 100n + 1.5; }");
+    insta::assert_snapshot!(render_tir(&db, file), @r"
+    function user.f() -> bigint throws never {
+      { : never
+        return 100n + 1.5 : unknown
+      }
+      !! 32..42: operator `Add` cannot be applied to `100n` and `1.5`
+    }
+    ");
+}
+
+#[test]
+fn invalid_binary_op_float_lt_bigint() {
+    let mut db = make_db();
+    let file = db.add_file("test.baml", "function f() -> bool { return 1.5 < 100n; }");
+    insta::assert_snapshot!(render_tir(&db, file), @r"
+    function user.f() -> bool throws never {
+      { : never
+        return 1.5 < 100n : bool
+      }
+      !! 30..40: operator `Lt` cannot be applied to `1.5` and `100n`
+    }
+    ");
+}
+
+#[test]
+fn invalid_binary_op_bigint_eq_float() {
+    let mut db = make_db();
+    let file = db.add_file("test.baml", "function f() -> bool { return 100n == 1.5; }");
+    insta::assert_snapshot!(render_tir(&db, file), @r"
+    function user.f() -> bool throws never {
+      { : never
+        return 100n == 1.5 : bool
+      }
+      !! 30..41: operator `Eq` cannot be applied to `100n` and `1.5`
+    }
+    ");
+}
+
+#[test]
+fn aliased_float_plus_bigint_is_rejected() {
+    // Aliases on either side must still trip the float×bigint reject —
+    // `infer_binary_op` peels them at entry before classifying.
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        "type FF = float\nfunction f(x: FF) -> bigint { return x + 100n; }",
+    );
+    let tir = render_tir(&db, file);
+    assert!(
+        tir.contains("operator `Add` cannot be applied"),
+        "expected InvalidBinaryOp diagnostic, got:\n{tir}"
+    );
+}
+
+#[test]
+fn aliased_int_arithmetic_resolves_to_int() {
+    // Plain aliased arithmetic must not get rejected just because the alias
+    // wraps the primitive — `infer_arithmetic` should classify aliased
+    // operands the same as bare ones after entry-level peeling.
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        "type II = int\nfunction f(x: II, y: int) -> int { return x + y; }",
+    );
+    let tir = render_tir(&db, file);
+    assert!(
+        !tir.contains("!!"),
+        "aliased int arithmetic should compile cleanly, got:\n{tir}"
+    );
+    assert!(
+        tir.contains("return x + y : int"),
+        "expected `int` result type, got:\n{tir}"
+    );
 }
 
 #[test]
@@ -331,7 +644,7 @@ fn if_without_else_optional() {
         "function f(x: bool) -> int? { return if (x) { 5 }; }",
     );
     insta::assert_snapshot!(render_tir(&db, file), @"
-    function user.f(x: bool) -> int? throws never {
+    function user.f(x: bool) -> int | null throws never {
       { : never
         return : void
           if (x : bool) : void
@@ -410,7 +723,7 @@ fn match_catch_all() {
         "test.baml",
         r#"function f(x: int) -> int {
   return match (x) {
-    y => y + 1
+    let y => y + 1
   };
 }"#,
     );
@@ -439,14 +752,26 @@ class Dog { name string
 legs int }
 function f(x: Cat | Dog) -> string { return x.name; }"#,
     );
-    insta::assert_snapshot!(render_tir(&db, file), @"
+    insta::assert_snapshot!(render_tir(&db, file), @r#"
     class user.Cat {
       name: string
       legs: int
     }
+    function user.Cat.to_json(self: user.Cat) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+      map { "name": self.name.to_json(), "legs": self.legs.to_json() } : map<string, baml.json.json>
+    }
+    function user.Cat.from_json(j: baml.json.json) -> user.Cat throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+      Cat { name: baml.json.from_json<string>(baml.json.field(j, "name")), legs: baml.json.from_json<int>(baml.json.field(j, "legs")) } : user.Cat
+    }
     class user.Dog {
       name: string
       legs: int
+    }
+    function user.Dog.to_json(self: user.Dog) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+      map { "name": self.name.to_json(), "legs": self.legs.to_json() } : map<string, baml.json.json>
+    }
+    function user.Dog.from_json(j: baml.json.json) -> user.Dog throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+      Dog { name: baml.json.from_json<string>(baml.json.field(j, "name")), legs: baml.json.from_json<int>(baml.json.field(j, "legs")) } : user.Dog
     }
     function user.f(x: user.Cat | user.Dog) -> string throws never {
       { : never
@@ -454,14 +779,14 @@ function f(x: Cat | Dog) -> string { return x.name; }"#,
       }
     }
     class user.Cat$stream {
-      name: null | string
-      legs: null | int
+      name: string | null
+      legs: int | null
     }
     class user.Dog$stream {
-      name: null | string
-      legs: null | int
+      name: string | null
+      legs: int | null
     }
-    ");
+    "#);
 }
 
 #[test]
@@ -475,30 +800,42 @@ class Dog { name string
 tail bool }
 function f(x: Cat | Dog) -> int { return x.whiskers; }"#,
     );
-    insta::assert_snapshot!(render_tir(&db, file), @"
+    insta::assert_snapshot!(render_tir(&db, file), @r#"
     class user.Cat {
       name: string
       whiskers: int
+    }
+    function user.Cat.to_json(self: user.Cat) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+      map { "name": self.name.to_json(), "whiskers": self.whiskers.to_json() } : map<string, baml.json.json>
+    }
+    function user.Cat.from_json(j: baml.json.json) -> user.Cat throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+      Cat { name: baml.json.from_json<string>(baml.json.field(j, "name")), whiskers: baml.json.from_json<int>(baml.json.field(j, "whiskers")) } : user.Cat
     }
     class user.Dog {
       name: string
       tail: bool
     }
+    function user.Dog.to_json(self: user.Dog) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+      map { "name": self.name.to_json(), "tail": self.tail.to_json() } : map<string, baml.json.json>
+    }
+    function user.Dog.from_json(j: baml.json.json) -> user.Dog throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+      Dog { name: baml.json.from_json<string>(baml.json.field(j, "name")), tail: baml.json.from_json<bool>(baml.json.field(j, "tail")) } : user.Dog
+    }
     function user.f(x: user.Cat | user.Dog) -> int throws never {
       { : never
         return x.whiskers : unknown
       }
-      !! 118..126: type `user.Dog` has no member `whiskers`
+      !! 118..126: type `Dog` has no member `whiskers`
     }
     class user.Cat$stream {
-      name: null | string
-      whiskers: null | int
+      name: string | null
+      whiskers: int | null
     }
     class user.Dog$stream {
-      name: null | string
-      tail: null | bool
+      name: string | null
+      tail: bool | null
     }
-    ");
+    "#);
 }
 
 #[test]
@@ -512,32 +849,50 @@ class C { age int }
 function f(x: A | B | C) -> string { return x.name; }"#,
     );
     // C has no `name` field → error on the whole union
-    insta::assert_snapshot!(render_tir(&db, file), @"
+    insta::assert_snapshot!(render_tir(&db, file), @r#"
     class user.A {
       name: string
+    }
+    function user.A.to_json(self: user.A) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+      map { "name": self.name.to_json() } : map<string, baml.json.json>
+    }
+    function user.A.from_json(j: baml.json.json) -> user.A throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+      A { name: baml.json.from_json<string>(baml.json.field(j, "name")) } : user.A
     }
     class user.B {
       name: string
     }
+    function user.B.to_json(self: user.B) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+      map { "name": self.name.to_json() } : map<string, baml.json.json>
+    }
+    function user.B.from_json(j: baml.json.json) -> user.B throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+      B { name: baml.json.from_json<string>(baml.json.field(j, "name")) } : user.B
+    }
     class user.C {
       age: int
+    }
+    function user.C.to_json(self: user.C) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+      map { "age": self.age.to_json() } : map<string, baml.json.json>
+    }
+    function user.C.from_json(j: baml.json.json) -> user.C throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+      C { age: baml.json.from_json<int>(baml.json.field(j, "age")) } : user.C
     }
     function user.f(x: user.A | user.B | user.C) -> string throws never {
       { : never
         return x.name : unknown
       }
-      !! 114..118: type `user.C` has no member `name`
+      !! 114..118: type `C` has no member `name`
     }
     class user.A$stream {
-      name: null | string
+      name: string | null
     }
     class user.B$stream {
-      name: null | string
+      name: string | null
     }
     class user.C$stream {
-      age: null | int
+      age: int | null
     }
-    ");
+    "#);
 }
 
 #[test]
@@ -551,33 +906,51 @@ class C { age int }
 function f(x: A | B | C) -> string { return x.name; }"#,
     );
     // C has no `name` field → error on the whole union
-    insta::assert_snapshot!(render_tir(&db, file), @"
+    insta::assert_snapshot!(render_tir(&db, file), @r#"
     class user.A {
       name: string
+    }
+    function user.A.to_json(self: user.A) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+      map { "name": self.name.to_json() } : map<string, baml.json.json>
+    }
+    function user.A.from_json(j: baml.json.json) -> user.A throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+      A { name: baml.json.from_json<string>(baml.json.field(j, "name")) } : user.A
     }
     class user.B {
       age: string
     }
+    function user.B.to_json(self: user.B) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+      map { "age": self.age.to_json() } : map<string, baml.json.json>
+    }
+    function user.B.from_json(j: baml.json.json) -> user.B throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+      B { age: baml.json.from_json<string>(baml.json.field(j, "age")) } : user.B
+    }
     class user.C {
       age: int
+    }
+    function user.C.to_json(self: user.C) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+      map { "age": self.age.to_json() } : map<string, baml.json.json>
+    }
+    function user.C.from_json(j: baml.json.json) -> user.C throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+      C { age: baml.json.from_json<int>(baml.json.field(j, "age")) } : user.C
     }
     function user.f(x: user.A | user.B | user.C) -> string throws never {
       { : never
         return x.name : unknown
       }
-      !! 113..117: type `user.B` has no member `name`
-      !! 113..117: type `user.C` has no member `name`
+      !! 113..117: type `B` has no member `name`
+      !! 113..117: type `C` has no member `name`
     }
     class user.A$stream {
-      name: null | string
+      name: string | null
     }
     class user.B$stream {
-      age: null | string
+      age: string | null
     }
     class user.C$stream {
-      age: null | int
+      age: int | null
     }
-    ");
+    "#);
 }
 
 #[test]
@@ -590,12 +963,24 @@ class B { value string }
 function f(x: A | B) -> string { return x.value; }"#,
     );
     // Both have `value` but different types → union of field types
-    insta::assert_snapshot!(render_tir(&db, file), @"
+    insta::assert_snapshot!(render_tir(&db, file), @r#"
     class user.A {
       value: int
     }
+    function user.A.to_json(self: user.A) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+      map { "value": self.value.to_json() } : map<string, baml.json.json>
+    }
+    function user.A.from_json(j: baml.json.json) -> user.A throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+      A { value: baml.json.from_json<int>(baml.json.field(j, "value")) } : user.A
+    }
     class user.B {
       value: string
+    }
+    function user.B.to_json(self: user.B) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+      map { "value": self.value.to_json() } : map<string, baml.json.json>
+    }
+    function user.B.from_json(j: baml.json.json) -> user.B throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+      B { value: baml.json.from_json<string>(baml.json.field(j, "value")) } : user.B
     }
     function user.f(x: user.A | user.B) -> string throws never {
       { : never
@@ -604,12 +989,12 @@ function f(x: A | B) -> string { return x.value; }"#,
       !! 86..94: type mismatch: expected string, got int | string
     }
     class user.A$stream {
-      value: null | int
+      value: int | null
     }
     class user.B$stream {
-      value: null | string
+      value: string | null
     }
-    ");
+    "#);
 }
 
 #[test]
@@ -622,27 +1007,39 @@ class B { name string }
 function f(x: A | B | null) -> string { return x.name; }"#,
     );
     // null in union → can't access field (needs narrowing first)
-    insta::assert_snapshot!(render_tir(&db, file), @"
+    insta::assert_snapshot!(render_tir(&db, file), @r#"
     class user.A {
       name: string
+    }
+    function user.A.to_json(self: user.A) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+      map { "name": self.name.to_json() } : map<string, baml.json.json>
+    }
+    function user.A.from_json(j: baml.json.json) -> user.A throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+      A { name: baml.json.from_json<string>(baml.json.field(j, "name")) } : user.A
     }
     class user.B {
       name: string
     }
+    function user.B.to_json(self: user.B) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+      map { "name": self.name.to_json() } : map<string, baml.json.json>
+    }
+    function user.B.from_json(j: baml.json.json) -> user.B throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+      B { name: baml.json.from_json<string>(baml.json.field(j, "name")) } : user.B
+    }
     function user.f(x: user.A | user.B | null) -> string throws never {
       { : never
-        return x.name : (string | string)?
+        return x.name : string | string | null
       }
       !! 94..101: did you mean `x?.name`? `x.name` does not handle the case when `x` is null
-      !! 94..101: type mismatch: expected string, got (string | string)?
+      !! 94..101: type mismatch: expected string, got string | string | null
     }
     class user.A$stream {
-      name: null | string
+      name: string | null
     }
     class user.B$stream {
-      name: null | string
+      name: string | null
     }
-    ");
+    "#);
 }
 
 // ── Null coalescing operator (??) ──────────────────────────────────────────
@@ -652,7 +1049,7 @@ fn null_coalesce_unwraps_optional() {
     let mut db = make_db();
     let file = db.add_file("test.baml", "function f(x: int?) -> int { x ?? 0 }");
     insta::assert_snapshot!(render_tir(&db, file), @"
-    function user.f(x: int?) -> int throws never {
+    function user.f(x: int | null) -> int throws never {
       { : int
         x ?? 0 : int
       }
@@ -665,7 +1062,7 @@ fn null_coalesce_with_variable_default() {
     let mut db = make_db();
     let file = db.add_file("test.baml", "function f(x: int?, y: int) -> int { x ?? y }");
     insta::assert_snapshot!(render_tir(&db, file), @"
-    function user.f(x: int?, y: int) -> int throws never {
+    function user.f(x: int | null, y: int) -> int throws never {
       { : int
         x ?? y : int
       }
@@ -681,7 +1078,7 @@ fn null_coalesce_with_string() {
         r#"function f(name: string?) -> string { let x = "Anonymous"; name ?? x }"#,
     );
     insta::assert_snapshot!(render_tir(&db, file), @r#"
-    function user.f(name: string?) -> string throws never {
+    function user.f(name: string | null) -> string throws never {
       { : string
         let x = "Anonymous" : "Anonymous" -> string
         name ?? x : string

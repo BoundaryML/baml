@@ -81,13 +81,6 @@ function DeepParamTypes(nested: map<string, map<string, map<string, int[]>>>, ca
 
 
 
-// ===== Params with constrained types exceeding limit =====
-function ConstrainedParams(name: string, score: int @check({{ this > 0 }})) -> string {
-    "done"
-}
-
-
-
 // ===== Trivia on function declaration (line comments) =====
 // 1 function keyword leading
 function // 2 function keyword trailing

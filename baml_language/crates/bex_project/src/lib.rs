@@ -11,10 +11,15 @@ use std::{collections::HashMap, sync::Arc};
 
 pub use baml_builtins2::{MediaContent, MediaValue, PromptAst, PromptAstSimple};
 pub use bex::Bex;
-pub use bex_engine::{EngineError, FunctionCallContextBuilder};
+pub use bex_engine::{
+    CANCELLED_PANIC_CLASS, EngineError, FunctionCallContext, FunctionCallContextBuilder,
+    is_cancelled_engine_error,
+};
 pub use bex_events::EventSink;
 pub use bex_external_types::{
-    BexExternalAdt, BexExternalValue, Handle, MediaKind, Ty, TyAttr, try_convert_rust_data,
+    BexExternalAdt, BexExternalValue, Handle, HostReleaseFn, HostReturnTypeError, HostValueArc,
+    HostValueKind, MediaKind, Ty, TyAttr, host_release_dispatch, try_convert_rust_data,
+    validate_host_return,
 };
 pub use sys_ops::SysOps;
 pub use sys_types::{CallId, CancellationToken};
@@ -58,6 +63,14 @@ pub enum RuntimeError {
     Access(#[from] bex_heap::AccessError),
 }
 
+/// True iff `err` wraps an engine cancellation panic.
+///
+/// Centralizes the cancellation-classification logic that bridges and the
+/// LSP server need to distinguish cancellation from other runtime errors.
+pub fn is_cancelled_runtime_error(err: &RuntimeError) -> bool {
+    matches!(err, RuntimeError::Engine(e) if is_cancelled_engine_error(e))
+}
+
 /// Keep pass-by-value so the returned `Arc<impl Bex>` does not capture caller locals;
 /// taking `&VfsPath` / `&HashMap` would require returning a value that references them.
 #[allow(clippy::needless_pass_by_value)]
@@ -73,9 +86,30 @@ pub fn new(
     Ok(engine)
 }
 
+/// Initialize a runtime from a serialized BAML program — the borsh-encoded
+/// `bex_vm_types::Program` that `baml pack` embeds — rather than from source
+/// files. Mirrors [`new`] but skips compilation, decoding the program and
+/// instantiating the engine directly.
+///
+/// This is the blessed seam for running pre-packed bytecode: bridge crates call
+/// it instead of reaching into `bex_engine` / `bex_vm_types` themselves.
+#[allow(clippy::needless_pass_by_value)]
+pub fn new_from_bytecode(
+    bytecode: &[u8],
+    sys_ops: SysOps,
+    event_sink: Option<Arc<dyn EventSink>>,
+) -> Result<Arc<dyn Bex>, RuntimeError> {
+    let program: bex_vm_types::Program =
+        borsh::from_slice(bytecode).map_err(|e| RuntimeError::Compilation {
+            message: format!("Failed to deserialize BAML bytecode: {e}"),
+        })?;
+    let engine = bex_engine::BexEngine::new(program, Arc::new(sys_ops), event_sink, Vec::new())?;
+    Ok(Arc::new(engine))
+}
+
 pub use bex_lsp::{
-    BackgroundSpawner, BexLsp, FunctionInfo, FunctionKind, LlmCapabilities, LspClientSenderTrait,
-    LspError, PlaygroundNotification, PlaygroundSender, ProjectDiagnostic, ProjectUpdate,
-    TestExpandError, new_lsp,
+    BackgroundSpawner, BexLsp, FunctionInfo, FunctionKind, FunctionOrigin, LlmCapabilities,
+    LspClientSenderTrait, LspError, PlaygroundNotification, PlaygroundSender, ProjectDiagnostic,
+    ProjectUpdate, TestExpandError, new_lsp,
 };
 pub use fs::{BamlVFS, BulkReadFileSystem, DefaultBulkReadFileSystem, FsPath};

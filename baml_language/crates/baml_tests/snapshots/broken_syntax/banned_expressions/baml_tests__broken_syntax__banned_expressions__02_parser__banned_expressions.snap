@@ -15,9 +15,11 @@ SOURCE_FILE
     EXPR_FUNCTION_BODY
       BLOCK_EXPR
         L_BRACE "{"
-        LET_STMT "let a = let"
-          KW_LET "let"
-          WORD "a"
+        LET_STMT
+          PATTERN
+            BINDING_PATTERN "let a"
+              KW_LET "let"
+              WORD "a"
           EQUALS "="
           KW_LET "let"
         BINARY_EXPR "b = 42"
@@ -38,9 +40,11 @@ SOURCE_FILE
     EXPR_FUNCTION_BODY
       BLOCK_EXPR
         L_BRACE "{"
-        LET_STMT "let b = 42"
-          KW_LET "let"
-          WORD "b"
+        LET_STMT
+          PATTERN
+            BINDING_PATTERN "let b"
+              KW_LET "let"
+              WORD "b"
           EQUALS "="
           INTEGER_LITERAL "42"
         R_BRACE "}"
@@ -56,9 +60,11 @@ SOURCE_FILE
     EXPR_FUNCTION_BODY
       BLOCK_EXPR
         L_BRACE "{"
-        LET_STMT "let x = 10;"
-          KW_LET "let"
-          WORD "x"
+        LET_STMT
+          PATTERN
+            BINDING_PATTERN "let x"
+              KW_LET "let"
+              WORD "x"
           EQUALS "="
           INTEGER_LITERAL "10"
           SEMICOLON ";"
@@ -82,9 +88,11 @@ SOURCE_FILE
     EXPR_FUNCTION_BODY
       BLOCK_EXPR
         L_BRACE "{"
-        LET_STMT "let x = 10;"
-          KW_LET "let"
-          WORD "x"
+        LET_STMT
+          PATTERN
+            BINDING_PATTERN "let x"
+              KW_LET "let"
+              WORD "x"
           EQUALS "="
           INTEGER_LITERAL "10"
           SEMICOLON ";"
@@ -108,15 +116,19 @@ SOURCE_FILE
     EXPR_FUNCTION_BODY
       BLOCK_EXPR
         L_BRACE "{"
-        LET_STMT "let x = 10;"
-          KW_LET "let"
-          WORD "x"
+        LET_STMT
+          PATTERN
+            BINDING_PATTERN "let x"
+              KW_LET "let"
+              WORD "x"
           EQUALS "="
           INTEGER_LITERAL "10"
           SEMICOLON ";"
         LET_STMT
-          KW_LET "let"
-          WORD "y"
+          PATTERN
+            BINDING_PATTERN "let y"
+              KW_LET "let"
+              WORD "y"
           EQUALS "="
           PAREN_EXPR
             L_PAREN "("
@@ -230,8 +242,10 @@ SOURCE_FILE
       BLOCK_EXPR
         L_BRACE "{"
         LET_STMT
-          KW_LET "let"
-          WORD "result"
+          PATTERN
+            BINDING_PATTERN "let result"
+              KW_LET "let"
+              WORD "result"
           EQUALS "="
           PAREN_EXPR
             L_PAREN "("
@@ -274,8 +288,10 @@ SOURCE_FILE
       BLOCK_EXPR
         L_BRACE "{"
         LET_STMT
-          KW_LET "let"
-          WORD "result"
+          PATTERN
+            BINDING_PATTERN "let result"
+              KW_LET "let"
+              WORD "result"
           EQUALS "="
           PAREN_EXPR
             L_PAREN "("
@@ -312,8 +328,10 @@ SOURCE_FILE
       BLOCK_EXPR
         L_BRACE "{"
         LET_STMT
-          KW_LET "let"
-          WORD "result"
+          PATTERN
+            BINDING_PATTERN "let result"
+              KW_LET "let"
+              WORD "result"
           EQUALS "="
           PAREN_EXPR
             L_PAREN "("
@@ -384,8 +402,10 @@ SOURCE_FILE
       BLOCK_EXPR
         L_BRACE "{"
         LET_STMT
-          KW_LET "let"
-          WORD "result"
+          PATTERN
+            BINDING_PATTERN "let result"
+              KW_LET "let"
+              WORD "result"
           EQUALS "="
           PAREN_EXPR
             L_PAREN "("
@@ -428,8 +448,10 @@ SOURCE_FILE
       BLOCK_EXPR
         L_BRACE "{"
         LET_STMT
-          KW_LET "let"
-          WORD "result"
+          PATTERN
+            BINDING_PATTERN "let result"
+              KW_LET "let"
+              WORD "result"
           EQUALS "="
           PAREN_EXPR
             L_PAREN "("
@@ -457,7 +479,7 @@ SOURCE_FILE
         R_BRACE "}"
 
 === ERRORS ===
-Error: Expected expression, found let
+error: Expected expression, found let
    ╭─[ banned_expressions.baml:3:11 ]
    │
  3 │   let a = let b = 42

@@ -144,6 +144,9 @@ function TestTreeNode({ def, depth = 0, onRunTest, testRunResults, failedExpands
 
 export interface FunctionSidebarProps {
   functions: FunctionInfo[];
+  showInternalFunctions: boolean;
+  onShowInternalFunctionsChange: (show: boolean) => void;
+  internalFunctionCount: number;
   testTree?: any; // SerializedTestDef[] from BAML TestRegistry.serialize()
   selectedFn: string | null;
   onSelectFn: (name: string | null) => void;
@@ -168,6 +171,9 @@ export interface FunctionSidebarProps {
 
 export const FunctionSidebar: FC<FunctionSidebarProps> = ({
   functions,
+  showInternalFunctions,
+  onShowInternalFunctionsChange,
+  internalFunctionCount,
   testTree,
   selectedFn,
   onSelectFn,
@@ -191,6 +197,12 @@ export const FunctionSidebar: FC<FunctionSidebarProps> = ({
   });
 
   const treeItems: SerializedTestDef[] = Array.isArray(testTree) ? testTree : [];
+  let emptyFunctionMessage = 'No matches';
+  if (functions.length === 0) {
+    emptyFunctionMessage = internalFunctionCount > 0 && !showInternalFunctions
+      ? 'No user functions'
+      : 'No functions yet';
+  }
 
   return (
     <div className="flex flex-col h-full">
@@ -205,18 +217,31 @@ export const FunctionSidebar: FC<FunctionSidebarProps> = ({
             className="flex-1 h-6 border-none bg-transparent text-xs"
           />
         </div>
+        {internalFunctionCount > 0 && (
+          <label className="mt-1.5 flex items-center gap-1.5 text-[10px] text-vsc-text-faint cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={showInternalFunctions}
+              onChange={(e) => onShowInternalFunctionsChange(e.currentTarget.checked)}
+              className="h-3 w-3 accent-vsc-accent"
+            />
+            <span>Show internal functions</span>
+            <span className="ml-auto font-vsc-mono">{internalFunctionCount}</span>
+          </label>
+        )}
       </div>
 
       {/* Function list */}
       <div className="flex-1 overflow-y-auto py-0.5">
         {filteredFns.length === 0 && (
           <div className="px-2 py-3 text-center text-vsc-text-faint text-[11px]">
-            {functions.length === 0 ? 'No functions yet' : 'No matches'}
+            {emptyFunctionMessage}
           </div>
         )}
 
         {filteredFns.map((fn) => {
           const isSelected = selectedFn === fn.name;
+          const isInternal = fn.origin !== 'userDefined';
           const Icon = fn.kind === 'llm' ? Bot : FunctionSquare;
 
           return (
@@ -233,6 +258,11 @@ export const FunctionSidebar: FC<FunctionSidebarProps> = ({
               <span className="w-4 shrink-0" />
               <Icon className="h-3.5 w-3.5 shrink-0 text-vsc-text-faint" />
               <span className="truncate">{fn.name}</span>
+              {isInternal && (
+                <span className="ml-auto shrink-0 rounded border border-vsc-border px-1 py-0 text-[9px] text-vsc-text-faint">
+                  {fn.origin}
+                </span>
+              )}
             </button>
           );
         })}

@@ -13,8 +13,8 @@ function RethrowError(x: int) -> string {
 // Conditional rethrow
 function ConditionalRethrow(x: int) -> string {
   MayFail(x) catch (e) {
-    _: string => "handled string",
-    other => throw other
+    string => "handled string",
+    let other => throw other
   }
 }
 
@@ -27,7 +27,7 @@ function ThrowNewInCatch(x: int) -> string {
 
 //----
 //- diagnostics
-// Warning: unreachable arm
+// warning: unreachable arm
 //    ╭─[ throw_throw_in_catch.baml:9:9 ]
 //    │
 //  9 │     _ => throw e
@@ -36,25 +36,25 @@ function ThrowNewInCatch(x: int) -> string {
 //    │ 
 //    │ Note: Error code: E0063
 // ───╯
-// Warning: unreachable arm
-//     ╭─[ throw_throw_in_catch.baml:16:18 ]
+// warning: unreachable arm
+//     ╭─[ throw_throw_in_catch.baml:16:15 ]
 //     │
-//  16 │     _: string => "handled string",
-//     │                  ────────┬───────  
-//     │                          ╰───────── unreachable arm
+//  16 │     string => "handled string",
+//     │               ────────┬───────  
+//     │                       ╰───────── unreachable arm
 //     │ 
 //     │ Note: Error code: E0063
 // ────╯
-// Warning: unreachable arm
-//     ╭─[ throw_throw_in_catch.baml:17:13 ]
+// warning: unreachable arm
+//     ╭─[ throw_throw_in_catch.baml:17:17 ]
 //     │
-//  17 │     other => throw other
-//     │             ──────┬─────  
-//     │                   ╰─────── unreachable arm
+//  17 │     let other => throw other
+//     │                 ──────┬─────  
+//     │                       ╰─────── unreachable arm
 //     │ 
 //     │ Note: Error code: E0063
 // ────╯
-// Warning: unreachable arm
+// warning: unreachable arm
 //     ╭─[ throw_throw_in_catch.baml:24:9 ]
 //     │
 //  24 │     _ => throw "wrapped: original error"

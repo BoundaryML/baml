@@ -1,0 +1,299 @@
+// See crates/bridge_ctypes/README.md for the list of consumers and the
+// commands used to regenerate each language's proto client.
+syntax = "proto3";
+package baml_core.cffi.v1;
+
+import "baml_core/cffi/v1/baml_inbound.proto";
+
+option go_package = "./cffi";
+
+// -----------------------------------------------------------------------------
+// Outbound values — engine to host (type-rich)
+// -----------------------------------------------------------------------------
+
+// Result envelope for a top-level function call — engine to host. Wraps
+// the bare `BamlOutboundValue` so a thrown value (error) or panic crosses
+// the boundary as structured data alongside the ok value. Every result
+// decoder parses this (breaking change vs. the old bare `BamlOutboundValue`
+// — see 31c-phase2 / bridge_ctypes/README.md).
+message BamlOutboundResult {
+  oneof result {
+    BamlOutboundValue ok = 1;
+    BamlOutboundError error = 2;
+    BamlOutboundPanic panic = 3;
+  }
+}
+
+// A thrown error value (a `baml.errors.*` or user error type), decoded by
+// the normal value decoder into the codegen'd Python type. Raised host-side
+// as `BamlError` with `.value` = the decoded value.
+message BamlOutboundError {
+  BamlOutboundValue value = 1;
+  // Pre-rendered traceback lines, most-recent-call-last, e.g.
+  //   File "resume.baml", line 12, in user.extract
+  // Produced host-side from bex_vm::errors::StackFrame via
+  // format_traceback_lines (one rendered line per frame; never \n-joined).
+  repeated string trace = 2;
+}
+
+// A panic value (a `baml.panics.*` type). Raised host-side as `BamlPanic`
+// with `.value` = the decoded value — unless `is_exit_panic` is set.
+message BamlOutboundPanic {
+  BamlOutboundValue value = 1;
+  repeated string trace = 2;
+  // Exit discriminator. When `is_exit_panic` is true this panic is a clean
+  // baml.sys.exit: the host should terminate the process with `exit_code`
+  // (os._exit(code) in Python — not SystemExit; see 31f) rather than surface
+  // a catchable BamlPanic. A bool is used — not just `exit_code` — because
+  // proto3 cannot distinguish "exit with code 0" from an absent int64.
+  bool is_exit_panic = 3;
+  int64 exit_code = 4;
+}
+
+message BamlOutboundValue {
+  // we must include this because we might be a "string"
+  // but in a container type like (string | int) and some languages
+  // require we decode this.
+  //
+  // Required for BAML -> CFFI
+  // But not for CFFI -> BAML (BAML always does type validation again at
+  // boundaries)
+  oneof value {
+    BamlValueNull null_value = 2;
+    string string_value = 3;
+    int64 int_value = 4;
+    double float_value = 5;
+    bool bool_value = 6;
+    BamlValueClass class_value = 7;
+    BamlValueEnum enum_value = 8;
+    BamlTyLiteral literal_value = 9;
+    BamlValueList list_value = 11;
+    BamlValueMap map_value = 12;
+    BamlValueUnionVariant union_variant_value = 13;
+    BamlOutboundHandle handle_value = 16;
+    BamlValueMedia media_value = 17;
+    BamlValuePromptAst prompt_ast_value = 18;
+    bytes uint8array_value = 19;
+    string bigint_value = 20;
+  }
+}
+
+// Outbound handle envelope. Mirrors `BamlHandle` (inbound) but carries
+// an extra `BamlTyName` naming the underlying class + concrete generic
+// args. Currently only `ADT_TAGGED_HEAP_HANDLE` populates `name`
+// meaningfully; other handle types leave it as the default empty name.
+message BamlOutboundHandle {
+  uint64 key = 1;
+  BamlHandleType handle_type = 2;
+  BamlTyName name = 3;
+}
+
+// wrapper for the name of a type
+message BamlTyName {
+  // the name of the type
+  string name = 2;
+  repeated BamlTyGenericArg generic_args = 3;
+}
+
+message BamlTyGenericArg {
+  string name = 1;
+  BamlTy ty = 2;
+}
+
+message BamlValueNull {}
+
+// Each variant as a message.
+message BamlValueList {
+  BamlTy item_type = 1;
+  repeated BamlOutboundValue items = 2;
+}
+
+// A helper message to represent map entries (used also in Class).
+message BamlOutboundMapEntry {
+  string key = 1;
+  BamlOutboundValue value = 2;
+}
+
+message BamlValueMap {
+  BamlTy key_type = 1;
+  BamlTy value_type = 2;
+  repeated BamlOutboundMapEntry entries = 3;
+}
+
+message BamlValueClass {
+  BamlTyName name = 1;
+  repeated BamlOutboundMapEntry fields = 2;
+}
+
+message BamlValueEnum {
+  BamlTyName name = 1;
+  string value = 2;
+  bool is_dynamic = 3;
+}
+
+// For the Rust variant `Union(Vec<BamlTy>, Box<BamlOutboundValue>)`
+message BamlValueUnionVariant {
+  BamlTyName name = 1;
+  bool is_optional = 2;
+  bool is_single_pattern = 3;
+  BamlTy self_type = 4;
+  string value_option_name = 5;
+  BamlOutboundValue value = 6;
+}
+
+// -----------------------------------------------------------------------------
+// BamlMedia definitions
+// -----------------------------------------------------------------------------
+
+// We need to handle BamlMediaType. Since one variant is "Other(String)",
+// we represent it as a message with an enum tag and an optional string.
+enum MediaTypeEnum {
+  MEDIA_TYPE_UNSPECIFIED = 0;
+  IMAGE = 1;
+  AUDIO = 2;
+  PDF = 3;
+  VIDEO = 4;
+  OTHER = 5;
+}
+
+message BamlValueMedia {
+  MediaTypeEnum media = 1;
+  optional string mime_type = 2;
+  oneof value {
+    string url = 3;
+    string base64 = 4;
+    string file = 5;
+  }
+}
+
+message BamlValuePromptAst {
+  oneof value {
+    BamlValuePromptAstSimple simple = 1;
+    BamlValuePromptAstMessage message = 2;
+    BamlValuePromptAstMultiple multiple = 3;
+  }
+}
+
+message BamlValuePromptAstMessage {
+  string role = 1;
+  BamlValuePromptAstSimple content = 2;
+  string metadata_as_json = 3;
+}
+
+message BamlValuePromptAstMultiple {
+  repeated BamlValuePromptAst items = 1;
+}
+
+message BamlValuePromptAstSimple {
+  oneof value {
+    string string = 1;
+    BamlValueMedia media = 2;
+    BamlValuePromptAstSimpleMultiple multiple = 3;
+  }
+}
+
+message BamlValuePromptAstSimpleMultiple {
+  repeated BamlValuePromptAstSimple items = 1;
+}
+
+// -----------------------------------------------------------------------------
+// BamlTy definition
+// -----------------------------------------------------------------------------
+
+// The wrapper message for BamlTy.
+message BamlTy {
+  oneof type {
+    BamlTyString string_type = 1;
+    BamlTyInt int_type = 2;
+    BamlTyFloat float_type = 3;
+    BamlTyBool bool_type = 4;
+    BamlTyNull null_type = 5;
+    BamlTyLiteral literal_type = 6;
+    BamlTyMedia media_type = 7;
+    BamlTyEnum enum_type = 8;
+    BamlTyClass class_type = 9;
+    BamlTyTypeAlias type_alias_type = 10;
+    BamlTyList list_type = 11;
+    BamlTyMap map_type = 12;
+    BamlTyUnionVariant union_variant_type = 14;
+    BamlTyOptional optional_type = 15;
+    BamlTyAny any_type = 18;
+    BamlTyUint8Array uint8array_type = 19;
+    BamlTyUnknown unknown_type = 20;
+    BamlTyBigint bigint_type = 21;
+  }
+}
+
+// Simple marker messages for primitive types.
+message BamlTyString {}
+message BamlTyInt {}
+message BamlTyFloat {}
+message BamlTyBool {}
+message BamlTyNull {}
+message BamlTyUint8Array {}
+message BamlTyAny {}
+message BamlTyUnknown {}
+message BamlTyBigint {}
+
+// Literal: wraps a literal oneof.
+message BamlLiteralString {
+  string value = 1;
+}
+
+message BamlLiteralInt {
+  int64 value = 1;
+}
+
+message BamlLiteralBool {
+  bool value = 1;
+}
+
+// `value` is a base-sixteen hex string with an optional leading minus sign
+// (matches the wire format used for runtime bigint values via
+// `BamlOutboundValue.bigint_value`).
+message BamlLiteralBigint {
+  string value = 1;
+}
+
+message BamlTyLiteral {
+  oneof literal {
+    BamlLiteralString string_literal = 1;
+    BamlLiteralInt int_literal = 2;
+    BamlLiteralBool bool_literal = 3;
+    BamlLiteralBigint bigint_literal = 4;
+  }
+}
+
+// For Media, reuse the BamlMediaType message.
+message BamlTyMedia {
+  MediaTypeEnum media = 1;
+}
+
+message BamlTyEnum {
+  string name = 1;
+}
+
+message BamlTyClass {
+  BamlTyName name = 1;
+}
+
+message BamlTyTypeAlias {
+  BamlTyName name = 1;
+}
+
+message BamlTyList {
+  BamlTy item_type = 1;
+}
+
+message BamlTyMap {
+  BamlTy key_type = 1;
+  BamlTy value_type = 2;
+}
+
+message BamlTyUnionVariant {
+  BamlTyName name = 1;
+}
+
+message BamlTyOptional {
+  BamlTy value = 1;
+}

@@ -3,10 +3,12 @@
 //! Union / Optional / Null invariance guaranteed
 
 mod errors;
+mod generator_fields;
 mod symbols;
 mod ty;
 
 pub use errors::*;
+pub use generator_fields::*;
 pub use symbols::*;
 pub use ty::*;
 

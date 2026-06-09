@@ -1,8 +1,9 @@
 //! Playground env var resolution via WebSocket.
 //!
-//! When the playground needs an env var, it broadcasts an `EnvVarRequest`
-//! to all connected WebSocket clients. The first client to respond resolves
-//! the pending oneshot.
+//! Resolution order:
+//! 1. User overrides (manual entries from the playground UI)
+//! 2. Process environment (`std::env::var`) — e.g. from direnv / .envrc
+//! 3. WebSocket roundtrip to the webview (shows dialog if needed)
 
 use std::{
     collections::HashMap,
@@ -13,6 +14,7 @@ use std::{
 };
 
 use bex_heap::BexHeap;
+use parking_lot::Mutex;
 use sys_types::{CallId, SysOpContext, SysOpOutput};
 use tokio::sync::{broadcast, oneshot};
 
@@ -24,7 +26,9 @@ const ENV_REQUEST_TIMEOUT: std::time::Duration =
 
 /// Shared state for resolving env var requests from the webview.
 pub struct PlaygroundEnvState {
-    pending: std::sync::Mutex<HashMap<u64, oneshot::Sender<Option<String>>>>,
+    pending: Mutex<HashMap<u64, oneshot::Sender<Option<String>>>>,
+    /// User overrides set from the playground UI (take priority over process env).
+    overrides: Mutex<HashMap<String, String>>,
     broadcast_tx: broadcast::Sender<WsOutMessage>,
     next_id: AtomicU64,
 }
@@ -32,7 +36,8 @@ pub struct PlaygroundEnvState {
 impl PlaygroundEnvState {
     pub fn new(broadcast_tx: broadcast::Sender<WsOutMessage>) -> Self {
         Self {
-            pending: std::sync::Mutex::new(HashMap::new()),
+            pending: Mutex::new(HashMap::new()),
+            overrides: Mutex::new(HashMap::new()),
             broadcast_tx,
             next_id: AtomicU64::new(1),
         }
@@ -40,14 +45,25 @@ impl PlaygroundEnvState {
 
     /// Resolve a pending env var request (called by WS handler on envVarResponse).
     pub fn resolve(&self, id: u64, value: Option<String>) {
-        let sender = self.pending.lock().unwrap().remove(&id);
+        let sender = self.pending.lock().remove(&id);
         if let Some(sender) = sender {
             let _ = sender.send(value);
         }
     }
+
+    /// Store a user override from the playground UI.
+    pub fn set_override(&self, key: String, value: String) {
+        self.overrides.lock().insert(key, value);
+    }
+
+    /// Remove a user override (reverts to process env / WS fallback).
+    pub fn remove_override(&self, key: &str) {
+        self.overrides.lock().remove(key);
+    }
 }
 
-/// `IoNamespaceEnv` implementation that asks the webview for every env var.
+/// `IoNamespaceEnv` implementation with three-tier resolution:
+/// user overrides → process env → WebSocket roundtrip.
 pub struct PlaygroundEnv(pub Arc<PlaygroundEnvState>);
 
 impl sys_ops::io::IoNamespaceEnv for PlaygroundEnv {
@@ -58,18 +74,34 @@ impl sys_ops::io::IoNamespaceEnv for PlaygroundEnv {
         key: String,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<Option<String>> {
+        // 1. Check user overrides (manual entries from the playground dialog).
+        if let Some(value) = self.0.overrides.lock().get(&key).cloned() {
+            return SysOpOutput::ok(Some(value));
+        }
+
+        // 2. Check process environment (direnv, .envrc, .env, etc.).
+        if let Ok(value) = std::env::var(&key) {
+            // Notify the UI so it can display the shell-provided value.
+            let _ = self.0.broadcast_tx.send(WsOutMessage::EnvVarFromShell {
+                variable: key,
+                value: value.clone(),
+            });
+            return SysOpOutput::ok(Some(value));
+        }
+
+        // 3. Fall back to the WebSocket roundtrip (may show dialog in the UI).
         let state = self.0.clone();
         SysOpOutput::async_op(async move {
             let (tx, rx) = oneshot::channel();
             let id = state.next_id.fetch_add(1, Ordering::Relaxed);
-            state.pending.lock().unwrap().insert(id, tx);
+            state.pending.lock().insert(id, tx);
             let _ = state
                 .broadcast_tx
                 .send(WsOutMessage::EnvVarRequest { id, variable: key });
             let value: Option<String> = match tokio::time::timeout(ENV_REQUEST_TIMEOUT, rx).await {
                 Ok(Ok(value)) => value,
                 Ok(Err(_)) | Err(_) => {
-                    state.pending.lock().unwrap().remove(&id);
+                    state.pending.lock().remove(&id);
                     None
                 }
             };

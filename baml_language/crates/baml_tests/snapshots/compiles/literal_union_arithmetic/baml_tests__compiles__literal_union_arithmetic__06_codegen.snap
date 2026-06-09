@@ -30,8 +30,7 @@ function user.bothSidesUnion() -> int {
     store_var _2
 
   L5:
-    load_var _1
-    load_var _2
+    load_var2 1 2
     bin_op +
     return
 }
@@ -66,7 +65,7 @@ function user.loopMatchAccum() -> int {
   L0:
     load_var i
     load_const 3
-    cmp_op <
+    cmp_int_op <
     pop_jump_if_false L1
     jump L2
 
@@ -79,14 +78,14 @@ function user.loopMatchAccum() -> int {
     store_var _5
     load_var i
     load_const 0
-    cmp_op ==
+    cmp_int_op ==
     pop_jump_if_false L3
     jump L6
 
   L3:
     load_var i
     load_const 1
-    cmp_op ==
+    cmp_int_op ==
     pop_jump_if_false L4
     jump L5
 
@@ -105,13 +104,12 @@ function user.loopMatchAccum() -> int {
     store_var _6
 
   L7:
-    load_var _5
-    load_var _6
+    load_var2 3 4
     bin_op +
     store_var sum
     load_var i
     load_const 1
-    bin_op +
+    add_int
     store_var i
     jump L0
 }
@@ -119,14 +117,14 @@ function user.loopMatchAccum() -> int {
 function user.matchAdd(x: int) -> int {
     load_var x
     load_const 1
-    cmp_op ==
+    cmp_int_op ==
     pop_jump_if_false L0
     jump L3
 
   L0:
     load_var x
     load_const 2
-    cmp_op ==
+    cmp_int_op ==
     pop_jump_if_false L1
     jump L2
 

@@ -16,7 +16,7 @@ class Failure {
 function UnreachableAfterCatchAll(x: int) -> string {
     match (x) {
         _ => "catch all",
-        n: int => "never reached"
+        let n: int => "never reached"
     }
 }
 
@@ -24,8 +24,8 @@ function UnreachableAfterCatchAll(x: int) -> string {
 function UnreachableMultiple(x: int) -> string {
     match (x) {
         _ => "catch all",
-        n: int => "unreachable 1",
-        m: int => "unreachable 2"
+        let n: int => "unreachable 1",
+        let m: int => "unreachable 2"
     }
 }
 
@@ -47,7 +47,7 @@ function ExhaustiveWithUnderscore(x: int) -> int {
 function ExhaustiveWithNamedCatchAll(x: int) -> int {
     match (x) {
         1 => 100,
-        other => other + 1
+        let other => other + 1
     }
 }
 
@@ -58,15 +58,15 @@ function ExhaustiveWithNamedCatchAll(x: int) -> int {
 // Non-exhaustive: only guarded patterns (guards don't guarantee coverage)
 function GuardedOnlyNonExhaustive(x: int) -> int {
     match (x) {
-        n: int if n > 0 => n * 2,
-        n: int if n < 0 => n * -1
+        let n: int if n > 0 => n * 2,
+        let n: int if n < 0 => n * -1
     }
 }
 
 // Exhaustive: guarded patterns followed by unguarded catch-all
 function GuardedWithFallback(x: int) -> int {
     match (x) {
-        n: int if n > 0 => n * 2,
+        let n: int if n > 0 => n * 2,
         _ => 0
     }
 }
@@ -81,15 +81,15 @@ type Result = Success | Failure
 // Exhaustive: type alias union with all members covered
 function ExhaustiveTypeAlias(r: Result) -> string {
     match (r) {
-        s: Success => s.data,
-        f: Failure => f.reason
+        let s: Success => s.data,
+        let f: Failure => f.reason
     }
 }
 
 // Exhaustive: type alias with catch-all
 function ExhaustiveTypeAliasWithCatchAll(r: Result) -> string {
     match (r) {
-        s: Success => s.data,
+        let s: Success => s.data,
         _ => "fallback"
     }
 }
@@ -131,7 +131,7 @@ function ExhaustiveEnumWithCatchAll(s: Status) -> string {
 function ExhaustiveLiteralWithBaseType(x: int) -> string {
     match (x) {
         200 => "ok",
-        n: int => "other"
+        let n: int => "other"
     }
 }
 
@@ -144,16 +144,16 @@ function ExhaustiveLiteralWithBaseType(x: int) -> string {
 // The second arm SHOULD NOT be flagged as unreachable because it still covers B
 function OverlappingTypedPatterns(r: Result) -> string {
     match (r) {
-        _: Success => "success",
-        _: Success | Failure => "covers failure only (success already handled)"
+        Success => "success",
+        Success | Failure => "covers failure only (success already handled)"
     }
 }
 
 // Exhaustive: similar but with bindings
 function OverlappingWithBindings(r: Result) -> string {
     match (r) {
-        s: Success => s.data,
-        x: Success | Failure => "remaining"
+        let s: Success => s.data,
+        let x: Success | Failure => "remaining"
     }
 }
 
@@ -165,7 +165,7 @@ function OverlappingWithBindings(r: Result) -> string {
 // Exhaustive: single union pattern covers entire type alias
 function UnionPatternCoversAll(r: Result) -> string {
     match (r) {
-        x: Success | Failure => "covered"
+        let x: Success | Failure => "covered"
     }
 }
 
@@ -178,8 +178,8 @@ type FullResult = Success | Failure | Pending
 // Exhaustive: partial union + remaining covered
 function PartialUnionPlusCatchAll(r: FullResult) -> string {
     match (r) {
-        x: Success | Failure => "success or failure",
-        _: Pending => "pending"
+        let x: Success | Failure => "success or failure",
+        Pending => "pending"
     }
 }
 
@@ -313,7 +313,7 @@ function NonExhaustiveCustomBoolMissing(b: CustomBool) -> string {
 // Exhaustive: optional fully covered
 function ExhaustiveOptional(x: int?) -> string {
     match (x) {
-        n: int => "has value",
+        let n: int => "has value",
         null => "no value"
     }
 }
@@ -418,8 +418,8 @@ type MaybeResult = Result?
 // Exhaustive: nested type alias (Result? = Success | Failure | null)
 function NestedTypeAlias(mr: MaybeResult) -> string {
     match (mr) {
-        s: Success => s.data,
-        f: Failure => f.reason,
+        let s: Success => s.data,
+        let f: Failure => f.reason,
         null => "nothing"
     }
 }
@@ -442,7 +442,7 @@ function MixedPatterns(x: int) -> string {
     match (x) {
         0 => "zero",
         1 => "one",
-        n: int if n > 0 => "positive",
+        let n: int if n > 0 => "positive",
         _ => "negative"
     }
 }
@@ -597,8 +597,8 @@ type DoubleMaybe = MaybeResult?
 // Note: T?? typically flattens to T? since (T | null) | null = T | null
 function ExhaustiveDoubleMaybe(dm: DoubleMaybe) -> string {
     match (dm) {
-        s: Success => s.data,
-        f: Failure => f.reason,
+        let s: Success => s.data,
+        let f: Failure => f.reason,
         null => "nothing"
     }
 }
@@ -606,8 +606,8 @@ function ExhaustiveDoubleMaybe(dm: DoubleMaybe) -> string {
 // Non-exhaustive: double optional missing null
 function NonExhaustiveDoubleMaybeMissingNull(dm: DoubleMaybe) -> string {
     match (dm) {
-        s: Success => s.data,
-        f: Failure => f.reason
+        let s: Success => s.data,
+        let f: Failure => f.reason
     }
 }
 
@@ -619,15 +619,15 @@ function NonExhaustiveDoubleMaybeMissingNull(dm: DoubleMaybe) -> string {
 // Non-exhaustive: type alias missing one member
 function NonExhaustiveTypeAliasMissingOne(r: Result) -> string {
     match (r) {
-        s: Success => s.data
+        let s: Success => s.data
     }
 }
 
 // Non-exhaustive: FullResult (3 members) missing one
 function NonExhaustiveFullResultMissingOne(r: FullResult) -> string {
     match (r) {
-        s: Success => s.data,
-        f: Failure => f.reason
+        let s: Success => s.data,
+        let f: Failure => f.reason
     }
 }
 
@@ -639,7 +639,7 @@ function NonExhaustiveFullResultMissingOne(r: FullResult) -> string {
 // Unreachable: string literal after string type pattern
 function StringLiteralAfterStringType(s: string) -> string {
     match (s) {
-        x: string => "any string",
+        let x: string => "any string",
         "hello" => "unreachable"
     }
 }
@@ -662,7 +662,7 @@ function ExhaustiveNullableEnum(s: Status?) -> string {
 // Exhaustive: nullable enum with typed pattern + null
 function ExhaustiveNullableEnumWithTypedPattern(s: Status?) -> string {
     match (s) {
-        x: Status => "some status",
+        let x: Status => "some status",
         null => "no status"
     }
 }
@@ -695,7 +695,7 @@ type SuccessOr200 = Success | 200
 // Exhaustive: class + int literal union
 function ExhaustiveClassPlusLiteral(x: SuccessOr200) -> string {
     match (x) {
-        s: Success => s.data,
+        let s: Success => s.data,
         200 => "http ok"
     }
 }
@@ -703,7 +703,7 @@ function ExhaustiveClassPlusLiteral(x: SuccessOr200) -> string {
 // Non-exhaustive: class + int literal union missing literal
 function NonExhaustiveClassPlusLiteralMissingLiteral(x: SuccessOr200) -> string {
     match (x) {
-        s: Success => s.data
+        let s: Success => s.data
     }
 }
 
@@ -716,20 +716,20 @@ function NonExhaustiveClassPlusLiteralMissingClass(x: SuccessOr200) -> string {
 
 // ============================================================================
 // EDGE CASE: TYPED PATTERN COVERING ENTIRE ENUM
-// _: Status should cover all Status variants
+// Status should cover all Status variants
 // ============================================================================
 
 // Exhaustive: typed pattern covers all enum variants
 function ExhaustiveEnumWithTypedPattern(s: Status) -> string {
     match (s) {
-        x: Status => "any status"
+        let x: Status => "any status"
     }
 }
 
 // Unreachable: variant after typed enum pattern
 function EnumVariantAfterTypedEnum(s: Status) -> string {
     match (s) {
-        x: Status => "any status",
+        let x: Status => "any status",
         Status.Active => "unreachable"
     }
 }
@@ -762,7 +762,7 @@ function WrongLiteralTypeIntWithString(x: int) -> string {
 // Non-exhaustive: union pattern missing one from 3-member union
 function PartialUnionPatternCoverage(r: FullResult) -> string {
     match (r) {
-        x: Success | Failure => "not pending"
+        let x: Success | Failure => "not pending"
     }
 }
 
@@ -781,7 +781,7 @@ function PartialUnionPatternCoverage(r: FullResult) -> string {
 // Unreachable: literal after typed pattern
 function LiteralAfterTypedPattern(x: int) -> string {
     match (x) {
-        n: int => "int",
+        let n: int => "int",
         42 => "unreachable"
     }
 }
@@ -789,7 +789,7 @@ function LiteralAfterTypedPattern(x: int) -> string {
 // Unreachable: bool literal after typed bool pattern
 function BoolLiteralAfterTypedBool(b: bool) -> string {
     match (b) {
-        x: bool => "any bool",
+        let x: bool => "any bool",
         true => "unreachable"
     }
 }
@@ -803,8 +803,8 @@ function BoolLiteralAfterTypedBool(b: bool) -> string {
 // Exhaustive: nested type bindings with parenthesized union types
 function NestedTypeBindings(r: Result) -> int {
     match (r) {
-        s: Success | (Failure) => 0,
-        f: Failure => 1
+        let s: Success | (Failure) => 0,
+        let f: Failure => 1
     }
 }
 
@@ -969,10 +969,10 @@ function JumpTableEnumDiscriminant(state: DispatchState) -> int {
 // 4 typed arms with dense type tags (int/string/bool/float) should use JumpTable.
 function JumpTableTypeTag(value: int | string | bool | float) -> string {
     match (value) {
-        i: int => "int",
-        s: string => "string",
-        b: bool => "bool",
-        f: float => "float"
+        let i: int => "int",
+        let s: string => "string",
+        let b: bool => "bool",
+        let f: float => "float"
     }
 }
 
@@ -995,9 +995,9 @@ class Fish {
 // 4 user-defined classes should use JumpTable with CLASS_BASE tags.
 function JumpTableClassTypeTag(pet: Cat | Dog | Bird | Fish) -> string {
     match (pet) {
-        c: Cat => "cat",
-        d: Dog => "dog",
-        b: Bird => "bird",
-        f: Fish => "fish"
+        let c: Cat => "cat",
+        let d: Dog => "dog",
+        let b: Bird => "bird",
+        let f: Fish => "fish"
     }
 }

@@ -16,14 +16,17 @@ SOURCE_FILE
       BLOCK_EXPR
         L_BRACE "{"
         LET_STMT
-          KW_LET "let"
-          WORD "x"
+          PATTERN
+            BINDING_PATTERN "let x"
+              KW_LET "let"
+              WORD "x"
           EQUALS "="
           CALL_EXPR
             WORD "Foo"
-            CALL_ARGS "(1)"
+            CALL_ARGS
               L_PAREN "("
-              INTEGER_LITERAL "1"
+              CALL_ARG "1"
+                INTEGER_LITERAL "1"
               R_PAREN ")"
           SEMICOLON ";"
         WORD "x"
@@ -68,8 +71,10 @@ SOURCE_FILE
       BLOCK_EXPR
         L_BRACE "{"
         LET_STMT
-          KW_LET "let"
-          WORD "baz"
+          PATTERN
+            BINDING_PATTERN "let baz"
+              KW_LET "let"
+              WORD "baz"
           EQUALS "="
           OBJECT_LITERAL
             WORD "Baz"

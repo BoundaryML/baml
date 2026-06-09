@@ -5,8 +5,20 @@ source: crates/baml_tests/src/generated_tests.rs
 class user.Success {
   data: string
 }
+function user.Success.to_json(self: user.Success) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  map { "data": self.data.to_json() } : map<string, baml.json.json>
+}
+function user.Success.from_json(j: baml.json.json) -> user.Success throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  Success { data: baml.json.from_json<string>(baml.json.field(j, "data")) } : user.Success
+}
 class user.Failure {
   reason: string
+}
+function user.Failure.to_json(self: user.Failure) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  map { "reason": self.reason.to_json() } : map<string, baml.json.json>
+}
+function user.Failure.from_json(j: baml.json.json) -> user.Failure throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  Failure { reason: baml.json.from_json<string>(baml.json.field(j, "reason")) } : user.Failure
 }
 function user.UnreachableAfterCatchAll(x: int) -> string throws never {
   { : "catch all" | "never reached"
@@ -16,7 +28,7 @@ function user.UnreachableAfterCatchAll(x: int) -> string throws never {
       n: int =>
         "never reached" : "never reached"
   }
-  !! 562..577: unreachable arm
+  !! 566..581: unreachable arm
 }
 function user.UnreachableMultiple(x: int) -> string throws never {
   { : "catch all" | "unreachable 1" | "unreachable 2"
@@ -28,8 +40,8 @@ function user.UnreachableMultiple(x: int) -> string throws never {
       m: int =>
         "unreachable 2" : "unreachable 2"
   }
-  !! 746..761: unreachable arm
-  !! 781..796: unreachable arm
+  !! 754..769: unreachable arm
+  !! 793..808: unreachable arm
 }
 function user.ExhaustiveWithUnderscore(x: int) -> int throws never {
   { : 100 | 200 | 0
@@ -59,6 +71,7 @@ function user.GuardedOnlyNonExhaustive(x: int) -> int throws never {
       n: int if n < 0 =>
         n * Neg 1 : int
   }
+  !! 1733..1831: non-exhaustive match on `int`; missing: _
 }
 function user.GuardedWithFallback(x: int) -> int throws never {
   { : int | 0
@@ -121,9 +134,9 @@ function user.ExhaustiveLiteralWithBaseType(x: int) -> string throws never {
 function user.OverlappingTypedPatterns(r: user.Result) -> string throws never {
   { : "success" | "covers failure only (success already handled)"
     match (r : user.Result) : "success" | "covers failure only (success already handled)"
-      _: Success =>
+      Success =>
         "success" : "success"
-      _: Success | Failure =>
+      Success | Failure =>
         "covers failure on..." : "covers failure only (success already handled)"
   }
 }
@@ -146,13 +159,19 @@ function user.UnionPatternCoversAll(r: user.Result) -> string throws never {
 class user.Pending {
   eta: int
 }
+function user.Pending.to_json(self: user.Pending) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  map { "eta": self.eta.to_json() } : map<string, baml.json.json>
+}
+function user.Pending.from_json(j: baml.json.json) -> user.Pending throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  Pending { eta: baml.json.from_json<int>(baml.json.field(j, "eta")) } : user.Pending
+}
 type user.FullResult = user.Success | user.Failure | user.Pending
 function user.PartialUnionPlusCatchAll(r: user.FullResult) -> string throws never {
   { : "success or failure" | "pending"
     match (r : user.FullResult) : "success or failure" | "pending"
       x: Success | Failure =>
         "success or failure" : "success or failure"
-      _: Pending =>
+      Pending =>
         "pending" : "pending"
   }
 }
@@ -209,7 +228,7 @@ function user.NonExhaustiveBoolMissingFalse(b: bool) -> string throws never {
       true =>
         "yes" : "yes"
   }
-  !! 7236..7280: non-exhaustive match on `bool`; missing: false
+  !! 7287..7331: non-exhaustive match on `bool`; missing: false
 }
 function user.NonExhaustiveBoolMissingTrue(b: bool) -> string throws never {
   { : "no"
@@ -217,7 +236,7 @@ function user.NonExhaustiveBoolMissingTrue(b: bool) -> string throws never {
       false =>
         "no" : "no"
   }
-  !! 7395..7439: non-exhaustive match on `bool`; missing: true
+  !! 7446..7490: non-exhaustive match on `bool`; missing: true
 }
 function user.BoolUnionPattern(b: bool) -> string throws never {
   { : "covered"
@@ -258,6 +277,9 @@ function user.NonExhaustiveTrueTypeWrongLiteral(t: user.AlwaysTrue) -> string th
       false =>
         "wrong!" : "wrong!"
   }
+  !! 8595..8609: type mismatch: expected AlwaysTrue, got false
+  !! 8579..8627: non-exhaustive match on `AlwaysTrue`; missing: true
+  !! 8613..8621: unreachable arm
 }
 function user.NonExhaustiveCustomBoolMissing(b: user.CustomBool) -> string throws never {
   { : "yes"
@@ -265,19 +287,20 @@ function user.NonExhaustiveCustomBoolMissing(b: user.CustomBool) -> string throw
       true =>
         "yes" : "yes"
   }
+  !! 8748..8792: non-exhaustive match on `CustomBool`; missing: false
 }
-function user.ExhaustiveOptional(x: int?) -> string throws never {
+function user.ExhaustiveOptional(x: int | null) -> string throws never {
   { : "has value" | "no value"
-    match (x : int?) : "has value" | "no value"
+    match (x : int | null) : "has value" | "no value"
       n: int =>
         "has value" : "has value"
       null =>
         "no value" : "no value"
   }
 }
-function user.OptionalWithCatchAll(x: int?) -> string throws never {
+function user.OptionalWithCatchAll(x: int | null) -> string throws never {
   { : "no value" | "has value"
-    match (x : int?) : "no value" | "has value"
+    match (x : int | null) : "no value" | "has value"
       null =>
         "no value" : "no value"
       _ =>
@@ -315,6 +338,7 @@ function user.NonExhaustiveStringLiteral(role: user.Role) -> string throws never
       "assistant" =>
         "Assistant" : "Assistant"
   }
+  !! 10191..10277: non-exhaustive match on `Role`; missing: "system"
 }
 function user.StringLiteralUnionPattern(role: user.Role) -> string throws never {
   { : "chat participant" | "system"
@@ -354,6 +378,7 @@ function user.NonExhaustiveIntLiteral(code: user.SuccessCode) -> string throws n
       201 =>
         "Created" : "Created"
   }
+  !! 11263..11334: non-exhaustive match on `SuccessCode`; missing: 204
 }
 function user.IntLiteralUnionPattern(code: user.SuccessCode) -> string throws never {
   { : "success with body" | "no content"
@@ -364,7 +389,7 @@ function user.IntLiteralUnionPattern(code: user.SuccessCode) -> string throws ne
         "no content" : "no content"
   }
 }
-type user.MaybeResult = user.Result?
+type user.MaybeResult = user.Result | null
 function user.NestedTypeAlias(mr: user.MaybeResult) -> string throws never {
   { : string | "nothing"
     match (mr : user.MaybeResult) : string | "nothing"
@@ -397,7 +422,7 @@ function user.NonExhaustiveEnumMissingOne(s: user.Status) -> string throws never
       Status.Inactive =>
         "inactive" : "inactive"
   }
-  !! 13227..13322: non-exhaustive match on `user.Status`; missing: user.Status.Pending
+  !! 13294..13389: non-exhaustive match on `Status`; missing: user.Status.Pending
 }
 function user.NonExhaustiveEnumMissingMultiple(s: user.Status) -> string throws never {
   { : "active"
@@ -405,7 +430,7 @@ function user.NonExhaustiveEnumMissingMultiple(s: user.Status) -> string throws 
       Status.Active =>
         "active" : "active"
   }
-  !! 13440..13496: non-exhaustive match on `user.Status`; missing: user.Status.Inactive, user.Status.Pending
+  !! 13507..13563: non-exhaustive match on `Status`; missing: user.Status.Inactive, user.Status.Pending
 }
 function user.DuplicateEnumVariant(s: user.Status) -> string throws never {
   { : "first" | "second" | "inactive" | "pending"
@@ -419,7 +444,7 @@ function user.DuplicateEnumVariant(s: user.Status) -> string throws never {
       Status.Pending =>
         "pending" : "pending"
   }
-  !! 13912..13920: unreachable arm
+  !! 13979..13987: unreachable arm
 }
 function user.DuplicateIntLiteral(x: int) -> string throws never {
   { : "first one" | "second one" | "other"
@@ -431,6 +456,7 @@ function user.DuplicateIntLiteral(x: int) -> string throws never {
       _ =>
         "other" : "other"
   }
+  !! 14215..14227: unreachable arm
 }
 function user.DuplicateBoolLiteral(b: bool) -> string throws never {
   { : "first true" | "second true" | "false"
@@ -442,7 +468,7 @@ function user.DuplicateBoolLiteral(b: bool) -> string throws never {
       false =>
         "false" : "false"
   }
-  !! 14347..14360: unreachable arm
+  !! 14414..14427: unreachable arm
 }
 function user.DuplicateStringLiteral(role: user.Role) -> string throws never {
   { : "first user" | "second user" | "assistant" | "system"
@@ -456,8 +482,9 @@ function user.DuplicateStringLiteral(role: user.Role) -> string throws never {
       "system" =>
         "system" : "system"
   }
+  !! 14629..14642: unreachable arm
 }
-type user.MaybeOk = 200?
+type user.MaybeOk = 200 | null
 function user.ExhaustiveOptionalSingleton(code: user.MaybeOk) -> string throws never {
   { : "OK" | "no code"
     match (code : user.MaybeOk) : "OK" | "no code"
@@ -473,6 +500,7 @@ function user.NonExhaustiveOptionalMissingNull(code: user.MaybeOk) -> string thr
       200 =>
         "OK" : "OK"
   }
+  !! 15267..15312: non-exhaustive match on `MaybeOk`; missing: null
 }
 function user.NonExhaustiveOptionalMissingValue(code: user.MaybeOk) -> string throws never {
   { : "no code"
@@ -480,6 +508,7 @@ function user.NonExhaustiveOptionalMissingValue(code: user.MaybeOk) -> string th
       null =>
         "no code" : "no code"
   }
+  !! 15437..15488: non-exhaustive match on `MaybeOk`; missing: 200
 }
 type user.MixedLiterals = 200 | "success" | true
 function user.ExhaustiveMixedLiterals(x: user.MixedLiterals) -> string throws never {
@@ -501,6 +530,7 @@ function user.NonExhaustiveMixedLiterals(x: user.MixedLiterals) -> string throws
       "success" =>
         "string success" : "string success"
   }
+  !! 16119..16205: non-exhaustive match on `MixedLiterals`; missing: true
 }
 type user.OkCode = 200
 type user.OkOrCreated = user.OkCode | 201
@@ -519,8 +549,9 @@ function user.NonExhaustiveAliasOfLiterals(code: user.OkOrCreated) -> string thr
       200 =>
         "ok" : "ok"
   }
+  !! 16810..16855: non-exhaustive match on `OkOrCreated`; missing: 201
 }
-type user.DoubleMaybe = user.MaybeResult?
+type user.DoubleMaybe = user.MaybeResult | null
 function user.ExhaustiveDoubleMaybe(dm: user.DoubleMaybe) -> string throws never {
   { : string | "nothing"
     match (dm : user.DoubleMaybe) : string | "nothing"
@@ -531,6 +562,9 @@ function user.ExhaustiveDoubleMaybe(dm: user.DoubleMaybe) -> string throws never
       null =>
         "nothing" : "nothing"
   }
+  !! 17329..17448: non-exhaustive match on `DoubleMaybe`; missing: Success, Failure, null
+  !! 17372..17379: unreachable arm
+  !! 17406..17415: unreachable arm
 }
 function user.NonExhaustiveDoubleMaybeMissingNull(dm: user.DoubleMaybe) -> string throws never {
   { : string
@@ -540,6 +574,9 @@ function user.NonExhaustiveDoubleMaybeMissingNull(dm: user.DoubleMaybe) -> strin
       f: Failure =>
         f.reason : string
   }
+  !! 17573..17665: non-exhaustive match on `DoubleMaybe`; missing: Success, Failure, null, null
+  !! 17616..17623: unreachable arm
+  !! 17650..17659: unreachable arm
 }
 function user.NonExhaustiveTypeAliasMissingOne(r: user.Result) -> string throws never {
   { : string
@@ -547,6 +584,7 @@ function user.NonExhaustiveTypeAliasMissingOne(r: user.Result) -> string throws 
       s: Success =>
         s.data : string
   }
+  !! 18033..18088: non-exhaustive match on `Result`; missing: Failure { reason: _ }
 }
 function user.NonExhaustiveFullResultMissingOne(r: user.FullResult) -> string throws never {
   { : string
@@ -556,6 +594,7 @@ function user.NonExhaustiveFullResultMissingOne(r: user.FullResult) -> string th
       f: Failure =>
         f.reason : string
   }
+  !! 18215..18306: non-exhaustive match on `FullResult`; missing: Pending { eta: _ }
 }
 function user.StringLiteralAfterStringType(s: string) -> string throws never {
   { : "any string" | "unreachable"
@@ -565,11 +604,11 @@ function user.StringLiteralAfterStringType(s: string) -> string throws never {
       "hello" =>
         "unreachable" : "unreachable"
   }
-  !! 18678..18691: unreachable arm
+  !! 18777..18790: unreachable arm
 }
-function user.ExhaustiveNullableEnum(s: user.Status?) -> string throws never {
+function user.ExhaustiveNullableEnum(s: user.Status | null) -> string throws never {
   { : "active" | "inactive" | "pending" | "no status"
-    match (s : user.Status?) : "active" | "inactive" | "pending" | "no status"
+    match (s : user.Status | null) : "active" | "inactive" | "pending" | "no status"
       Status.Active =>
         "active" : "active"
       Status.Inactive =>
@@ -579,23 +618,19 @@ function user.ExhaustiveNullableEnum(s: user.Status?) -> string throws never {
       null =>
         "no status" : "no status"
   }
-  !! 19078..19086: unreachable arm
-  !! 19115..19125: unreachable arm
-  !! 19153..19162: unreachable arm
-  !! 19036..19197: non-exhaustive match on `user.Status?`; missing: user.Status.Active, user.Status.Inactive, user.Status.Pending
 }
-function user.ExhaustiveNullableEnumWithTypedPattern(s: user.Status?) -> string throws never {
+function user.ExhaustiveNullableEnumWithTypedPattern(s: user.Status | null) -> string throws never {
   { : "some status" | "no status"
-    match (s : user.Status?) : "some status" | "no status"
+    match (s : user.Status | null) : "some status" | "no status"
       x: Status =>
         "some status" : "some status"
       null =>
         "no status" : "no status"
   }
 }
-function user.NonExhaustiveNullableEnumMissingNull(s: user.Status?) -> string throws never {
+function user.NonExhaustiveNullableEnumMissingNull(s: user.Status | null) -> string throws never {
   { : "active" | "inactive" | "pending"
-    match (s : user.Status?) : "active" | "inactive" | "pending"
+    match (s : user.Status | null) : "active" | "inactive" | "pending"
       Status.Active =>
         "active" : "active"
       Status.Inactive =>
@@ -603,14 +638,11 @@ function user.NonExhaustiveNullableEnumMissingNull(s: user.Status?) -> string th
       Status.Pending =>
         "pending" : "pending"
   }
-  !! 19574..19582: unreachable arm
-  !! 19611..19621: unreachable arm
-  !! 19649..19658: unreachable arm
-  !! 19532..19664: non-exhaustive match on `user.Status?`; missing: null, user.Status.Active, user.Status.Inactive, user.Status.Pending
+  !! 19635..19767: non-exhaustive match on `Status | null`; missing: null
 }
-function user.NonExhaustiveNullableEnumMissingVariant(s: user.Status?) -> string throws never {
+function user.NonExhaustiveNullableEnumMissingVariant(s: user.Status | null) -> string throws never {
   { : "active" | "inactive" | "no status"
-    match (s : user.Status?) : "active" | "inactive" | "no status"
+    match (s : user.Status | null) : "active" | "inactive" | "no status"
       Status.Active =>
         "active" : "active"
       Status.Inactive =>
@@ -618,9 +650,7 @@ function user.NonExhaustiveNullableEnumMissingVariant(s: user.Status?) -> string
       null =>
         "no status" : "no status"
   }
-  !! 19831..19839: unreachable arm
-  !! 19868..19878: unreachable arm
-  !! 19789..19913: non-exhaustive match on `user.Status?`; missing: user.Status.Active, user.Status.Inactive, user.Status.Pending
+  !! 19892..20016: non-exhaustive match on `Status | null`; missing: user.Status.Pending
 }
 type user.SuccessOr200 = user.Success | 200
 function user.ExhaustiveClassPlusLiteral(x: user.SuccessOr200) -> string throws never {
@@ -638,6 +668,7 @@ function user.NonExhaustiveClassPlusLiteralMissingLiteral(x: user.SuccessOr200) 
       s: Success =>
         s.data : string
   }
+  !! 20630..20685: non-exhaustive match on `SuccessOr200`; missing: 200
 }
 function user.NonExhaustiveClassPlusLiteralMissingClass(x: user.SuccessOr200) -> string throws never {
   { : "http ok"
@@ -645,6 +676,7 @@ function user.NonExhaustiveClassPlusLiteralMissingClass(x: user.SuccessOr200) ->
       200 =>
         "http ok" : "http ok"
   }
+  !! 20827..20874: non-exhaustive match on `SuccessOr200`; missing: Success { data: _ }
 }
 function user.ExhaustiveEnumWithTypedPattern(s: user.Status) -> string throws never {
   { : "any status"
@@ -661,7 +693,7 @@ function user.EnumVariantAfterTypedEnum(s: user.Status) -> string throws never {
       Status.Active =>
         "unreachable" : "unreachable"
   }
-  !! 21382..21395: unreachable arm
+  !! 21498..21511: unreachable arm
 }
 function user.WrongLiteralTypeBoolWithInt(b: bool) -> string throws never {
   { : "wrong type"
@@ -669,8 +701,9 @@ function user.WrongLiteralTypeBoolWithInt(b: bool) -> string throws never {
       42 =>
         "wrong type" : "wrong type"
   }
-  !! 21872..21884: unreachable arm
-  !! 21841..21890: non-exhaustive match on `bool`; missing: false, true
+  !! 21973..21984: type mismatch: expected bool, got 42
+  !! 21957..22006: non-exhaustive match on `bool`; missing: true, false
+  !! 21988..22000: unreachable arm
 }
 function user.WrongLiteralTypeIntWithString(x: int) -> string throws never {
   { : "wrong type"
@@ -678,6 +711,8 @@ function user.WrongLiteralTypeIntWithString(x: int) -> string throws never {
       "hello" =>
         "wrong type" : "wrong type"
   }
+  !! 22135..22151: type mismatch: expected int, got "hello"
+  !! 22119..22173: non-exhaustive match on `int`; missing: _
 }
 function user.PartialUnionPatternCoverage(r: user.FullResult) -> string throws never {
   { : "not pending"
@@ -685,6 +720,7 @@ function user.PartialUnionPatternCoverage(r: user.FullResult) -> string throws n
       x: Success | Failure =>
         "not pending" : "not pending"
   }
+  !! 22561..22633: non-exhaustive match on `FullResult`; missing: Pending { eta: _ }
 }
 function user.LiteralAfterTypedPattern(x: int) -> string throws never {
   { : "int" | "unreachable"
@@ -694,7 +730,7 @@ function user.LiteralAfterTypedPattern(x: int) -> string throws never {
       42 =>
         "unreachable" : "unreachable"
   }
-  !! 23358..23371: unreachable arm
+  !! 23482..23495: unreachable arm
 }
 function user.BoolLiteralAfterTypedBool(b: bool) -> string throws never {
   { : "any bool" | "unreachable"
@@ -704,7 +740,7 @@ function user.BoolLiteralAfterTypedBool(b: bool) -> string throws never {
       true =>
         "unreachable" : "unreachable"
   }
-  !! 23554..23567: unreachable arm
+  !! 23682..23695: unreachable arm
 }
 function user.NestedTypeBindings(r: user.Result) -> int throws never {
   { : 0 | 1
@@ -714,7 +750,7 @@ function user.NestedTypeBindings(r: user.Result) -> int throws never {
       f: Failure =>
         1 : 1
   }
-  !! 24087..24088: unreachable arm
+  !! 24223..24224: unreachable arm
 }
 function user.NestedLiteralUnions(code: int) -> string throws never {
   { : "success" | "client error" | "other"
@@ -764,7 +800,7 @@ function user.NestedMatchSpans(x: int, y: bool) -> string throws never {
       _ =>
         "other" : "other"
   }
-  !! 25648..25668: unreachable arm
+  !! 25784..25804: unreachable arm
 }
 function user.MultipleUnreachableSpans(s: user.Status) -> string throws never {
   { : "active" | "duplicate 1" | "inactive" | "duplicate 2" | "pending"
@@ -780,8 +816,8 @@ function user.MultipleUnreachableSpans(s: user.Status) -> string throws never {
       Status.Pending =>
         "pending" : "pending"
   }
-  !! 25968..25981: unreachable arm
-  !! 26047..26060: unreachable arm
+  !! 26104..26117: unreachable arm
+  !! 26183..26196: unreachable arm
 }
 function user.HighLineNumberNonExhaustive(s: user.Status) -> string throws never {
   { : "active only"
@@ -789,7 +825,7 @@ function user.HighLineNumberNonExhaustive(s: user.Status) -> string throws never
       Status.Active =>
         "active only" : "active only"
   }
-  !! 26292..26353: non-exhaustive match on `user.Status`; missing: user.Status.Inactive, user.Status.Pending
+  !! 26428..26489: non-exhaustive match on `Status`; missing: user.Status.Inactive, user.Status.Pending
 }
 function user.GetStatus() -> user.Status throws never {
   { : user.Status.Active
@@ -893,14 +929,38 @@ function user.JumpTableTypeTag(value: int | string | bool | float) -> string thr
 class user.Cat {
   name: string
 }
+function user.Cat.to_json(self: user.Cat) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  map { "name": self.name.to_json() } : map<string, baml.json.json>
+}
+function user.Cat.from_json(j: baml.json.json) -> user.Cat throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  Cat { name: baml.json.from_json<string>(baml.json.field(j, "name")) } : user.Cat
+}
 class user.Dog {
   name: string
+}
+function user.Dog.to_json(self: user.Dog) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  map { "name": self.name.to_json() } : map<string, baml.json.json>
+}
+function user.Dog.from_json(j: baml.json.json) -> user.Dog throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  Dog { name: baml.json.from_json<string>(baml.json.field(j, "name")) } : user.Dog
 }
 class user.Bird {
   name: string
 }
+function user.Bird.to_json(self: user.Bird) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  map { "name": self.name.to_json() } : map<string, baml.json.json>
+}
+function user.Bird.from_json(j: baml.json.json) -> user.Bird throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  Bird { name: baml.json.from_json<string>(baml.json.field(j, "name")) } : user.Bird
+}
 class user.Fish {
   name: string
+}
+function user.Fish.to_json(self: user.Fish) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  map { "name": self.name.to_json() } : map<string, baml.json.json>
+}
+function user.Fish.from_json(j: baml.json.json) -> user.Fish throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  Fish { name: baml.json.from_json<string>(baml.json.field(j, "name")) } : user.Fish
 }
 function user.JumpTableClassTypeTag(pet: user.Cat | user.Dog | user.Bird | user.Fish) -> string throws never {
   { : "cat" | "dog" | "bird" | "fish"
@@ -916,14 +976,14 @@ function user.JumpTableClassTypeTag(pet: user.Cat | user.Dog | user.Bird | user.
   }
 }
 class user.Success$stream {
-  data: null | string
+  data: string | null
 }
 class user.Failure$stream {
-  reason: null | string
+  reason: string | null
 }
 type user.Result$stream = user.Success$stream | user.Failure$stream
 class user.Pending$stream {
-  eta: null | int
+  eta: int | null
 }
 type user.FullResult$stream = user.Success$stream | user.Failure$stream | user.Pending$stream
 type user.AlwaysTrue$stream = true
@@ -933,22 +993,22 @@ type user.Role$stream = "user" | "assistant" | "system"
 type user.HttpOk$stream = 200
 type user.HttpCreated$stream = 201
 type user.SuccessCode$stream = 200 | 201 | 204
-type user.MaybeResult$stream = null | user.Result$stream
-type user.MaybeOk$stream = null | 200
+type user.MaybeResult$stream = user.Result$stream | null
+type user.MaybeOk$stream = 200 | null
 type user.MixedLiterals$stream = 200 | "success" | true
 type user.OkCode$stream = 200
 type user.OkOrCreated$stream = user.OkCode$stream | 201
-type user.DoubleMaybe$stream = null | user.MaybeResult$stream
+type user.DoubleMaybe$stream = user.MaybeResult$stream | null
 type user.SuccessOr200$stream = user.Success$stream | 200
 class user.Cat$stream {
-  name: null | string
+  name: string | null
 }
 class user.Dog$stream {
-  name: null | string
+  name: string | null
 }
 class user.Bird$stream {
-  name: null | string
+  name: string | null
 }
 class user.Fish$stream {
-  name: null | string
+  name: string | null
 }

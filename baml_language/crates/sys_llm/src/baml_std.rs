@@ -161,6 +161,7 @@ fn apply_provider_defaults(provider: LlmProvider, options: &mut PrimitiveClientO
             LlmProvider::OpenAi | LlmProvider::OpenAiGeneric | LlmProvider::OpenAiResponses => {
                 Some("https://api.openai.com/v1".into())
             }
+            LlmProvider::AiGatewayImages => Some("https://ai-gateway.vercel.sh/v4/ai".into()),
             LlmProvider::Ollama => Some("http://localhost:11434".into()),
             LlmProvider::OpenRouter => Some("https://openrouter.ai/api/v1".into()),
             LlmProvider::GoogleAi => {
@@ -184,6 +185,7 @@ fn apply_provider_defaults(provider: LlmProvider, options: &mut PrimitiveClientO
             LlmProvider::OpenAi
             | LlmProvider::OpenAiGeneric
             | LlmProvider::OpenAiResponses
+            | LlmProvider::AiGatewayImages
             | LlmProvider::OpenRouter
             | LlmProvider::AzureOpenAi => "system",
             _ => "user",
@@ -229,7 +231,8 @@ fn apply_provider_defaults(provider: LlmProvider, options: &mut PrimitiveClientO
             | LlmProvider::AzureOpenAi
             | LlmProvider::Ollama
             | LlmProvider::OpenRouter
-            | LlmProvider::OpenAiResponses => sys_types::generated::owned::llm::MediaUrlHandler {
+            | LlmProvider::OpenAiResponses
+            | LlmProvider::AiGatewayImages => sys_types::generated::owned::llm::MediaUrlHandler {
                 image: Some("send_url".into()),
                 audio: Some("send_base64".into()),
                 video: Some("send_url".into()),

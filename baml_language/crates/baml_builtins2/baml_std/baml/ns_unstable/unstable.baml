@@ -1,4 +1,7 @@
-//baml:mut_vm
-function string<T>(value: T) -> string {
+/// Converts a value of type `T` to its string representation using BAML's default formatting.
+/// This is an unstable API and may change in future versions.
+//baml:vm
+//baml:fallible
+function string<T>(value: T) -> string throws never {
   $rust_function
 }

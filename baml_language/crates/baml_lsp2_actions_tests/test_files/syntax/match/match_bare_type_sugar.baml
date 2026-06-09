@@ -25,7 +25,7 @@ function MatchBareClass(r: Ok | Err) -> string {
 // Mixed bare types and explicit typed bindings
 function MatchMixed(r: Ok | Err) -> string {
   match (r) {
-    o: Ok => o.value,
+    let o: Ok => o.value,
     Err => "error"
   }
 }

@@ -29,6 +29,11 @@ fn token_kind_to_syntax_kind(kind: TokenKind) -> SyntaxKind {
         // Keywords
         TokenKind::Class => SyntaxKind::KW_CLASS,
         TokenKind::Enum => SyntaxKind::KW_ENUM,
+        TokenKind::Interface => SyntaxKind::KW_INTERFACE,
+        TokenKind::Implements => SyntaxKind::KW_IMPLEMENTS,
+        TokenKind::Implement => SyntaxKind::KW_IMPLEMENT,
+        TokenKind::Extends => SyntaxKind::KW_EXTENDS,
+        TokenKind::Requires => SyntaxKind::KW_REQUIRES,
         TokenKind::Function => SyntaxKind::KW_FUNCTION,
         TokenKind::Client => SyntaxKind::KW_CLIENT,
         TokenKind::Generator => SyntaxKind::KW_GENERATOR,
@@ -49,16 +54,20 @@ fn token_kind_to_syntax_kind(kind: TokenKind) -> SyntaxKind {
         TokenKind::Throw => SyntaxKind::KW_THROW,
         TokenKind::Watch => SyntaxKind::KW_WATCH,
         TokenKind::Instanceof => SyntaxKind::KW_INSTANCEOF,
+        TokenKind::Is => SyntaxKind::KW_IS,
         TokenKind::Dynamic => SyntaxKind::KW_DYNAMIC,
         TokenKind::Match => SyntaxKind::KW_MATCH,
         TokenKind::Catch => SyntaxKind::KW_CATCH,
         TokenKind::CatchAll => SyntaxKind::KW_CATCH_ALL,
         TokenKind::Throws => SyntaxKind::KW_THROWS,
+        TokenKind::Spawn => SyntaxKind::KW_SPAWN,
+        TokenKind::Await => SyntaxKind::KW_AWAIT,
 
         // Literals
         TokenKind::Word => SyntaxKind::WORD,
         TokenKind::Quote => SyntaxKind::QUOTE,
         TokenKind::Hash => SyntaxKind::HASH,
+        TokenKind::BigintLiteral => SyntaxKind::BIGINT_LITERAL,
         TokenKind::IntegerLiteral => SyntaxKind::INTEGER_LITERAL,
         TokenKind::FloatLiteral => SyntaxKind::FLOAT_LITERAL,
 
@@ -76,6 +85,7 @@ fn token_kind_to_syntax_kind(kind: TokenKind) -> SyntaxKind {
         TokenKind::Comma => SyntaxKind::COMMA,
         TokenKind::Semicolon => SyntaxKind::SEMICOLON,
         TokenKind::DotDotDot => SyntaxKind::DOT_DOT_DOT,
+        TokenKind::DotDot => SyntaxKind::DOT_DOT,
         TokenKind::Dot => SyntaxKind::DOT,
         TokenKind::Dollar => SyntaxKind::DOLLAR,
 
@@ -186,6 +196,20 @@ pub(crate) struct Parser<'a> {
     /// Track nesting depth inside testset bodies where `test`/`testset` statements
     /// are valid. Incremented by `parse_testset_body`, checked by `parse_stmt`.
     testset_body_depth: u32,
+    /// Track contexts where a postfix `{ … }` must NOT be consumed as an
+    /// object-literal constructor. Set while parsing the optional name
+    /// expression of `spawn name { body }` so the body's brace stays
+    /// available to `parse_spawn_expr`. Counter so nested spawns nest
+    /// correctly.
+    suppress_object_literal_depth: u32,
+    /// Suppresses destructure patterns (`Class { fields }`) in pattern
+    /// position, mirroring Rust's `Restrictions::NO_STRUCT_LITERAL` for
+    /// struct literals in `if` / `while` condition expressions. Bumped
+    /// around `parse_expr` calls in those condition positions; reset
+    /// (`mem::take` + restore) when entering a `PAREN_PATTERN` or
+    /// `ARRAY_PATTERN` so nested patterns regain normal destructure
+    /// parsing. Counter so nested conditions nest correctly.
+    suppress_destructure_pattern_depth: u32,
 }
 
 impl<'a> Parser<'a> {
@@ -199,6 +223,8 @@ impl<'a> Parser<'a> {
             type_args_depth: 0,
             suppress_catch_depth: 0,
             testset_body_depth: 0,
+            suppress_object_literal_depth: 0,
+            suppress_destructure_pattern_depth: 0,
         }
     }
 
@@ -313,17 +339,28 @@ impl<'a> Parser<'a> {
         self.current_raw().map(|t| t.kind == kind).unwrap_or(false)
     }
 
-    /// Check if the current token is a `Word` with the given text.
-    /// Used for contextual keywords like `with` that should not be reserved globally.
-    fn at_contextual_kw(&self, kw: &str) -> bool {
-        self.current()
+    fn token_is_contextual_kw(token: Option<&Token>, kw: &str) -> bool {
+        token
             .map(|t| t.kind == TokenKind::Word && t.text == kw)
             .unwrap_or(false)
     }
 
-    /// Consume the current `Word("with")` token, re-labelling it as `KW_WITH`
-    /// in the syntax tree. Handles leading trivia just like [`Self::bump`].
-    fn bump_contextual_with(&mut self) {
+    /// Check if the current token is a `Word` with the given text.
+    /// Used for contextual keywords like `with` and binding-position `const`
+    /// that should not be reserved globally.
+    fn at_contextual_kw(&self, kw: &str) -> bool {
+        Self::token_is_contextual_kw(self.current(), kw)
+    }
+
+    fn peek_is_contextual_kw(&self, n: usize, kw: &str) -> bool {
+        Self::token_is_contextual_kw(self.peek(n), kw)
+    }
+
+    /// Consume the current contextual keyword token, re-labelling it as
+    /// `syntax_kind` in the syntax tree. Handles leading trivia just like
+    /// [`Self::bump`].
+    fn bump_contextual_kw_as(&mut self, kw: &str, syntax_kind: SyntaxKind) {
+        debug_assert!(self.at_contextual_kw(kw));
         // Emit leading trivia (whitespace, newlines, comments) before the keyword,
         // matching the same pattern as `bump_impl`.
         while self.current < self.tokens.len() {
@@ -346,25 +383,92 @@ impl<'a> Parser<'a> {
             }
             break;
         }
-        // Emit the Word("with") token as KW_WITH
+        // Emit the contextual Word token as the requested keyword kind.
         if self.current < self.tokens.len() {
             self.events.push(Event::Token {
-                kind: SyntaxKind::KW_WITH,
+                kind: syntax_kind,
                 text: self.tokens[self.current].text.clone(),
             });
             self.current += 1;
         }
     }
 
+    /// Consume the current `Word("with")` token, re-labelling it as `KW_WITH`
+    /// in the syntax tree.
+    fn bump_contextual_with(&mut self) {
+        self.bump_contextual_kw_as("with", SyntaxKind::KW_WITH);
+    }
+
+    fn binding_intro_follower(kind: Option<TokenKind>) -> bool {
+        matches!(kind, Some(TokenKind::Word | TokenKind::LBracket))
+    }
+
+    /// True at either `let` or contextual `const`.
+    fn at_binding_intro(&self) -> bool {
+        self.at(TokenKind::Let) || self.at_contextual_kw("const")
+    }
+
+    /// True for positions that dispatch to a binding statement or
+    /// statement-like binding head. `let` stays a real keyword; contextual
+    /// `const` only claims the position when a pattern-shaped token follows.
+    fn at_binding_intro_stmt(&self) -> bool {
+        self.at(TokenKind::Let)
+            || (self.at_contextual_kw("const")
+                && Self::binding_intro_follower(self.peek(1).map(|t| t.kind)))
+    }
+
+    fn at_binding_intro_pattern(&self) -> bool {
+        self.at(TokenKind::Let)
+            || (self.at_contextual_kw("const")
+                && Self::binding_intro_follower(self.peek(1).map(|t| t.kind)))
+    }
+
+    fn peek_is_binding_intro(&self, n: usize) -> bool {
+        self.peek(n).map(|t| t.kind) == Some(TokenKind::Let)
+            || self.peek_is_contextual_kw(n, "const")
+    }
+
+    fn peek_is_binding_intro_stmt(&self, n: usize) -> bool {
+        self.peek(n).map(|t| t.kind) == Some(TokenKind::Let)
+            || (self.peek_is_binding_intro(n)
+                && Self::binding_intro_follower(self.peek(n + 1).map(|t| t.kind)))
+    }
+
+    fn binding_intro_is_followed_by_array_pattern(&self) -> bool {
+        self.peek(1).map(|t| t.kind) == Some(TokenKind::LBracket)
+    }
+
+    fn bump_binding_intro(&mut self) {
+        if self.at(TokenKind::Let) {
+            self.bump();
+        } else if self.at_contextual_kw("const") {
+            self.bump_contextual_kw_as("const", SyntaxKind::KW_CONST);
+        } else {
+            self.error_unexpected_token("'let' or 'const'".to_string());
+        }
+    }
+
     /// Check if the current token can start a type expression.
-    /// Valid type starts: Word (type name), string literal, integer/float literal, `LParen` (tuple).
+    /// Valid type starts: Word (type name), string literal, integer/float literal,
+    /// `-` followed by an integer/float literal (negative literal type), `LParen` (tuple).
     fn is_at_type_start(&self) -> bool {
         self.at(TokenKind::Word)
             || self.at(TokenKind::Quote) // string literal type
             || self.at(TokenKind::Hash) // raw string literal type
+            || self.at(TokenKind::BigintLiteral)
             || self.at(TokenKind::IntegerLiteral)
             || self.at(TokenKind::FloatLiteral)
             || self.at(TokenKind::LParen) // tuple/parenthesized type
+            || self.at(TokenKind::Less) // generic function type: <T>(T) -> U
+            || (self.at(TokenKind::Minus)
+                && matches!(
+                    self.peek(1).map(|t| t.kind),
+                    Some(
+                        TokenKind::BigintLiteral
+                            | TokenKind::IntegerLiteral
+                            | TokenKind::FloatLiteral
+                    )
+                ))
     }
 
     /// Check if a token kind is basic trivia (whitespace/newlines, not comments).
@@ -372,6 +476,135 @@ impl<'a> Parser<'a> {
     #[allow(clippy::unused_self)]
     fn is_basic_trivia(&self, kind: TokenKind) -> bool {
         matches!(kind, TokenKind::Whitespace | TokenKind::Newline)
+    }
+
+    /// True when the current token can serve as a member name after `.`.
+    ///
+    /// `interface`/`implements`/`extends` are keywords for declarations but
+    /// remain valid as member names — e.g. `dog_t.implements(animal_t)` on the
+    /// reflection `type` value.
+    fn at_member_name(&self) -> bool {
+        self.at(TokenKind::Word)
+            || self.at(TokenKind::Implements)
+            || self.at(TokenKind::Implement)
+            || self.at(TokenKind::Extends)
+            || self.at(TokenKind::Requires)
+            || self.at(TokenKind::Interface)
+    }
+
+    /// True for `field as class_field` inside an `implements` block.
+    fn looks_like_interface_field_link(&self) -> bool {
+        let first = self.skip_trivia_and_comments_from(self.current);
+        let Some(first_token) = self.tokens.get(first) else {
+            return false;
+        };
+        if !matches!(
+            first_token.kind,
+            TokenKind::Word
+                | TokenKind::Implements
+                | TokenKind::Implement
+                | TokenKind::Extends
+                | TokenKind::Requires
+                | TokenKind::Interface
+        ) {
+            return false;
+        }
+        let second = self.skip_trivia_and_comments_from(first + 1);
+        self.tokens
+            .get(second)
+            .is_some_and(|t| t.kind == TokenKind::Word && t.text == "as")
+    }
+
+    /// True for the BEP-044 projection operator `.as<T>`.
+    fn looks_like_as_projection(&self) -> bool {
+        let dot = self.skip_trivia_and_comments_from(self.current);
+        if self
+            .tokens
+            .get(dot)
+            .is_none_or(|t| t.kind != TokenKind::Dot)
+        {
+            return false;
+        }
+        let as_idx = self.skip_trivia_and_comments_from(dot + 1);
+        if self
+            .tokens
+            .get(as_idx)
+            .is_none_or(|t| !(t.kind == TokenKind::Word && t.text == "as"))
+        {
+            return false;
+        }
+        let less_idx = self.skip_trivia_and_comments_from(as_idx + 1);
+        self.tokens
+            .get(less_idx)
+            .is_some_and(|t| t.kind == TokenKind::Less)
+    }
+
+    /// True for a type-level associated type projection: `(T as I).Item`.
+    fn looks_like_associated_type_projection(&self) -> bool {
+        let mut i = self.skip_trivia_and_comments_from(self.current);
+        if self
+            .tokens
+            .get(i)
+            .is_none_or(|t| t.kind != TokenKind::LParen)
+        {
+            return false;
+        }
+        i += 1;
+
+        let mut paren_depth = 1_i32;
+        let mut angle_depth = 0_i32;
+        let mut saw_as = false;
+        let mut rparen_idx = None;
+
+        while i < self.tokens.len() {
+            let new_i = self.skip_comment_at(i);
+            if new_i != i {
+                i = new_i;
+                continue;
+            }
+            let token = &self.tokens[i];
+            if self.is_basic_trivia(token.kind) {
+                i += 1;
+                continue;
+            }
+            match token.kind {
+                TokenKind::LParen => paren_depth += 1,
+                TokenKind::RParen => {
+                    if paren_depth == 1 && angle_depth == 0 {
+                        rparen_idx = Some(i);
+                        break;
+                    }
+                    paren_depth -= 1;
+                }
+                TokenKind::Less => angle_depth += 1,
+                TokenKind::Greater => angle_depth -= 1,
+                TokenKind::GreaterGreater => angle_depth -= 2,
+                TokenKind::Word if token.text == "as" && paren_depth == 1 && angle_depth == 0 => {
+                    saw_as = true;
+                }
+                _ => {}
+            }
+            i += 1;
+        }
+
+        if !saw_as {
+            return false;
+        }
+        let Some(rparen_idx) = rparen_idx else {
+            return false;
+        };
+        let dot_idx = self.skip_trivia_and_comments_from(rparen_idx + 1);
+        if self
+            .tokens
+            .get(dot_idx)
+            .is_none_or(|t| t.kind != TokenKind::Dot)
+        {
+            return false;
+        }
+        let member_idx = self.skip_trivia_and_comments_from(dot_idx + 1);
+        self.tokens
+            .get(member_idx)
+            .is_some_and(|t| t.kind == TokenKind::Word)
     }
 
     /// Check if there's a newline before the next non-trivia token.
@@ -416,6 +649,52 @@ impl<'a> Parser<'a> {
         }
 
         i
+    }
+
+    fn skip_header_comment_at(&self, mut i: usize) -> usize {
+        if !self.is_header_comment_at(i) {
+            return i;
+        }
+
+        while i < self.tokens.len() && self.tokens[i].kind != TokenKind::Newline {
+            i += 1;
+        }
+        i
+    }
+
+    fn previous_non_trivia_span(&self) -> Option<Span> {
+        let mut i = self.current;
+        while i > 0 {
+            i -= 1;
+            let token = &self.tokens[i];
+            if !self.is_basic_trivia(token.kind) {
+                return Some(token.span);
+            }
+        }
+        None
+    }
+
+    fn span_from_to(start: Span, end: Span) -> Span {
+        if start.file_id != end.file_id {
+            return start;
+        }
+        Span::new(
+            start.file_id,
+            TextRange::new(start.range.start(), end.range.end()),
+        )
+    }
+
+    fn parse_default_expr(&mut self) -> Span {
+        let start = self.current().map(|token| token.span);
+        // Same invariant as let initializers: assignment-like operators do not
+        // bind inside parameter default expressions.
+        self.parse_expr_bp(3);
+        match (start, self.previous_non_trivia_span()) {
+            (Some(start), Some(end)) => Self::span_from_to(start, end),
+            (Some(start), None) => start,
+            (None, Some(end)) => end,
+            (None, None) => Span::default(),
+        }
     }
 
     /// Skip a parenthesized argument list starting at `(`, returning the index after it.
@@ -765,7 +1044,10 @@ impl<'a> Parser<'a> {
             Some(
                 TokenKind::Class
                     | TokenKind::Enum
+                    | TokenKind::Interface
                     | TokenKind::Function
+                    | TokenKind::Implements
+                    | TokenKind::Implement
                     | TokenKind::Client
                     | TokenKind::Generator
                     | TokenKind::Test
@@ -775,6 +1057,52 @@ impl<'a> Parser<'a> {
                     | TokenKind::TypeBuilder
             )
         )
+    }
+
+    fn looks_like_interface_declaration_start(&self) -> bool {
+        let current = self.skip_trivia_and_comments_from(self.current);
+        if self
+            .tokens
+            .get(current)
+            .is_none_or(|t| t.kind != TokenKind::Interface)
+        {
+            return false;
+        }
+
+        let name = self.skip_trivia_and_comments_from(current + 1);
+        if self
+            .tokens
+            .get(name)
+            .is_none_or(|t| t.kind != TokenKind::Word)
+        {
+            return false;
+        }
+
+        let mut i = name + 1;
+        while i < self.tokens.len() {
+            let new_i = self.skip_comment_at(i);
+            if new_i != i {
+                i = new_i;
+                continue;
+            }
+            let new_i = self.skip_header_comment_at(i);
+            if new_i != i {
+                i = new_i;
+                continue;
+            }
+            let token = &self.tokens[i];
+            match token.kind {
+                TokenKind::Whitespace | TokenKind::Newline => {
+                    i += 1;
+                }
+                TokenKind::LBrace => return true,
+                TokenKind::RBrace | TokenKind::Semicolon => return false,
+                _ => {
+                    i += 1;
+                }
+            }
+        }
+        false
     }
 
     /// [`at_top_level_keyword`] minus tokens that are valid in statement position:
@@ -795,6 +1123,23 @@ impl<'a> Parser<'a> {
             return false;
         }
         true
+    }
+
+    fn at_statement_recovery_boundary(&self) -> bool {
+        self.at_top_level_keyword_except_client()
+            || self.at_binding_intro_stmt()
+            || matches!(
+                self.current().map(|t| t.kind),
+                Some(
+                    TokenKind::Watch
+                        | TokenKind::Return
+                        | TokenKind::While
+                        | TokenKind::For
+                        | TokenKind::Break
+                        | TokenKind::Continue
+                        | TokenKind::Throw
+                )
+            )
     }
 
     /// Expect a '>' token, but also accept '>>' and consume only one '>'.
@@ -1784,7 +2129,7 @@ impl<'a> Parser<'a> {
         // Attribute argument can be:
         // - String: @alias("user_name")
         // - Raw string: @description(#"Multi-line\ndescription"#)
-        // - Expression: @check({{ this > 0 }})
+        // - Expression: @some_attr({{ this > 0 }})
         // - Unquoted string: @alias(my_alias) - one WORD token
 
         if self.parse_any_string() {
@@ -1836,8 +2181,15 @@ impl<'a> Parser<'a> {
     /// Examples: string, int, User, string[], map<string, int>, string | int
     /// Can also use string literals: "user", "assistant"
     pub(crate) fn parse_type(&mut self) {
+        self.parse_type_with(true);
+    }
+
+    /// Parse a type expression. When `consume_union` is `false`, top-level
+    /// `|` is left for the caller (used by pattern atoms, where `|` belongs
+    /// to `UNION_PATTERN`).
+    pub(crate) fn parse_type_with(&mut self, consume_union: bool) {
         self.with_node(SyntaxKind::TYPE_EXPR, |p| {
-            p.parse_type_primary();
+            p.parse_type_primary(consume_union);
 
             if p.pending_greaters > 0 {
                 // Don't parse modifiers until we've used all
@@ -1853,10 +2205,10 @@ impl<'a> Parser<'a> {
                 } else if p.at(TokenKind::Question) {
                     // Optional type: string?
                     p.bump();
-                } else if p.at(TokenKind::Pipe) {
+                } else if consume_union && p.at(TokenKind::Pipe) {
                     // Union type: string | int | "user" | "assistant"
                     p.bump();
-                    p.parse_type_primary();
+                    p.parse_type_primary(consume_union);
                 } else if p.at(TokenKind::At) {
                     // All attributes (both type and field) are consumed inside TYPE_EXPR.
                     // Disambiguation happens during lowering, which has the structural
@@ -1872,9 +2224,54 @@ impl<'a> Parser<'a> {
         });
     }
 
-    fn parse_type_primary(&mut self) {
+    fn parse_type_primary(&mut self, consume_union: bool) {
+        // Generic function type: `<T extends I>(T) -> R`.
+        if self.at(TokenKind::Less) {
+            self.parse_generic_param_list();
+            if self.at(TokenKind::LParen) {
+                self.parse_paren_or_function_type(consume_union);
+            } else {
+                self.error_unexpected_token("function type parameter list".to_string());
+            }
+            return;
+        }
+
         // Check for string literal types: "user" | "assistant"
         if self.parse_any_string() {
+            return;
+        }
+
+        // Negative numeric literal type: `-42`, `-3.14`, `-7n`. Recognised before
+        // the unary-`-` falls through to the generic error path so literal
+        // unions like `-1 | 0 | 1` and pattern atoms like `match { -42 => ... }`
+        // parse uniformly. Floats still error to match the positive case.
+        if self.at(TokenKind::Minus)
+            && matches!(
+                self.peek(1).map(|t| t.kind),
+                Some(
+                    TokenKind::BigintLiteral | TokenKind::IntegerLiteral | TokenKind::FloatLiteral
+                )
+            )
+        {
+            let next_kind = self.peek(1).map(|t| t.kind);
+            if next_kind == Some(TokenKind::FloatLiteral)
+                && let Some(token) = self.peek(1)
+            {
+                let span = token.span;
+                let text = token.text.clone();
+                self.error(
+                    format!("Float literal values are not supported: -{text}"),
+                    span,
+                );
+            }
+            self.bump(); // -
+            self.bump(); // number
+            return;
+        }
+
+        // Check for bigint literal types: 42n | 0n | 99999999999999999999n
+        if self.at(TokenKind::BigintLiteral) {
+            self.bump();
             return;
         }
 
@@ -1902,10 +2299,16 @@ impl<'a> Parser<'a> {
             // Note: true/false are Word tokens, and they become BoolLiteral types
             self.bump();
 
-            // Consume dot-separated path segments (e.g., baml.http.Request)
+            // Consume dot-separated path segments (e.g., baml.http.Request).
+            // `spawn`/`await` are reserved keywords but valid as namespace
+            // segments after a `.` (e.g. `baml.spawn.SpawnParams` in a type
+            // annotation), mirroring `parse_path_or_ident`'s segment set.
             while self.at(TokenKind::Dot) {
                 self.bump(); // dot
-                if self.at(TokenKind::Word) {
+                if self.at(TokenKind::Word)
+                    || self.at(TokenKind::Spawn)
+                    || self.at(TokenKind::Await)
+                {
                     self.bump(); // next segment
                 } else {
                     self.error_unexpected_token("type name segment after '.'".to_string());
@@ -1915,51 +2318,74 @@ impl<'a> Parser<'a> {
 
             // Check for generic arguments: map<K, V>
             if self.at(TokenKind::Less) {
-                self.type_args_depth += 1;
-                self.with_node(SyntaxKind::TYPE_ARGS, |p| {
-                    p.bump(); // <
-
-                    p.parse_type();
-
-                    while p.pending_greaters == 0 && p.eat(TokenKind::Comma) {
-                        p.parse_type();
-                    }
-
-                    p.expect_greater();
-                });
-                self.type_args_depth -= 1;
-
-                // If we just exited the outermost generic and have pending '>', report error
-                if self.type_args_depth == 0 && self.pending_greaters > 0 {
-                    if let Some(span) = self.pending_greater_span {
-                        self.error(
-                            format!(
-                                "Unmatched '>' in type expression (found {} extra)",
-                                self.pending_greaters
-                            ),
-                            span,
-                        );
-                    }
-                    for _ in 0..self.pending_greaters {
-                        self.events.push(Event::Token {
-                            kind: SyntaxKind::GREATER,
-                            text: ">".to_string(),
-                        });
-                    }
-                    self.pending_greaters = 0;
-                    self.pending_greater_span = None;
-                }
+                self.parse_type_args();
             }
         } else if self.at(TokenKind::LParen) {
             // Could be:
             // 1. Parenthesized type: (int | string)
             // 2. Function type: (x: int, y: int) -> bool  OR  (int, int) -> bool
+            // 3. Associated type projection: (T as Iterator<T>).Item
             //
-            // We parse the contents as function type parameters (which can be either
-            // `name: type` or just `type`), then check for `->` to determine which case.
-            self.parse_paren_or_function_type();
+            // Projections have their own `as` separator and trailing `.Member`,
+            // so parse those before the general paren/function path.
+            if self.looks_like_associated_type_projection() {
+                self.parse_associated_type_projection();
+            } else {
+                // We parse the contents as function type parameters (which can be either
+                // `name: type` or just `type`), then check for `->` to determine which case.
+                self.parse_paren_or_function_type(consume_union);
+            }
         } else {
             self.error_unexpected_token("type".to_string());
+        }
+    }
+
+    fn looks_like_named_type_arg_binding(&self) -> bool {
+        let current = self.skip_trivia_and_comments_from(self.current);
+        if self
+            .tokens
+            .get(current)
+            .is_none_or(|token| token.kind != TokenKind::Word)
+        {
+            return false;
+        }
+        let next = self.skip_trivia_and_comments_from(current + 1);
+        self.tokens
+            .get(next)
+            .is_some_and(|t| t.kind == TokenKind::Equals)
+    }
+
+    fn parse_type_arg_or_associated_binding(&mut self) {
+        if self.looks_like_named_type_arg_binding() {
+            self.with_node(SyntaxKind::ASSOCIATED_TYPE_DECL, |p| {
+                // Named associated binding inside a type application:
+                // `Iterator<Item = int>`. There is no contextual `type`
+                // token here; the name is the associated type being bound.
+                p.bump(); // name
+                p.expect(TokenKind::Equals);
+                p.parse_type();
+            });
+        } else {
+            self.parse_type();
+        }
+    }
+
+    /// Parse `(Base as Interface).Member` inside the surrounding `TYPE_EXPR`.
+    fn parse_associated_type_projection(&mut self) {
+        self.expect(TokenKind::LParen);
+        self.parse_type();
+        if self.at_contextual_kw("as") {
+            self.bump();
+        } else {
+            self.error_unexpected_token("`as`".to_string());
+        }
+        self.parse_type();
+        self.expect(TokenKind::RParen);
+        self.expect(TokenKind::Dot);
+        if self.at(TokenKind::Word) {
+            self.bump();
+        } else {
+            self.error_unexpected_token("associated type name".to_string());
         }
     }
 
@@ -1970,7 +2396,7 @@ impl<'a> Parser<'a> {
     /// - Function type: `(x: int, y: int) -> bool` or `(int, int) -> bool`
     ///
     /// The key distinguisher is the presence of `->` after the closing `)`.
-    fn parse_paren_or_function_type(&mut self) {
+    fn parse_paren_or_function_type(&mut self, consume_union: bool) {
         // We'll parse the content first, then decide based on whether `->` follows.
         // For function types, we wrap in FUNCTION_TYPE; for parens, we just have the inner type.
 
@@ -2007,7 +2433,10 @@ impl<'a> Parser<'a> {
             // This is a function type: wrap everything in FUNCTION_TYPE node
             // Note: The tokens are already emitted, we just need to parse the return type
             self.bump(); // ->
-            self.parse_type(); // return type
+            // Forward `consume_union` so that pattern-atom callers (which
+            // pass `false`) leave a trailing `|` to the surrounding
+            // `UNION_PATTERN` instead of swallowing it into the return type.
+            self.parse_type_with(consume_union); // return type
             if self.at(TokenKind::Throws) {
                 self.with_node(SyntaxKind::THROWS_CLAUSE, |p| {
                     p.bump(); // throws
@@ -2042,14 +2471,25 @@ impl<'a> Parser<'a> {
         // Check if this is `name: type` by looking ahead
         // If we see WORD followed by COLON (skipping trivia), it's a named param
         let is_named = (self.at(TokenKind::Word) || self.at(TokenKind::Client))
-            && self.peek(1).map(|t| t.kind) == Some(TokenKind::Colon);
+            && matches!(
+                (self.peek(1).map(|t| t.kind), self.peek(2).map(|t| t.kind)),
+                (Some(TokenKind::Colon), _) | (Some(TokenKind::Question), Some(TokenKind::Colon))
+            );
 
         if is_named {
             // Named parameter: `name: type`
             self.with_node(SyntaxKind::FUNCTION_TYPE_PARAM, |p| {
                 p.bump(); // name
-                p.bump(); // :
+                p.eat(TokenKind::Question); // optional parameter marker: `name?: T`
+                p.expect(TokenKind::Colon);
                 p.parse_type();
+                if p.eat(TokenKind::Equals) {
+                    let span = p.parse_default_expr();
+                    p.error(
+                        "default expressions are not allowed in function types".to_string(),
+                        span,
+                    );
+                }
             });
             true
         } else {
@@ -2144,6 +2584,7 @@ impl<'a> Parser<'a> {
                 // These can't be variant names, so they must be type annotations
                 p.at(TokenKind::Quote)
                     || p.at(TokenKind::Hash)
+                    || p.at(TokenKind::BigintLiteral)
                     || p.at(TokenKind::IntegerLiteral)
                     || p.at(TokenKind::FloatLiteral)
                     || p.at(TokenKind::LParen)
@@ -2215,10 +2656,20 @@ impl<'a> Parser<'a> {
                 return;
             }
 
-            // Parse fields, methods, and attributes
+            // Parse fields, methods, implements blocks, and attributes
             while !p.at(TokenKind::RBrace) && !p.at_end() {
-                // Error recovery: if we see a top-level keyword (except function), assume we missed a closing brace
-                if p.at_top_level_keyword() && !p.at(TokenKind::Function) {
+                // Error recovery: if we see a top-level keyword (except class-local members),
+                // assume we missed a closing brace
+                let recover_top_level_item = if p.at(TokenKind::Interface) {
+                    p.looks_like_interface_declaration_start()
+                } else {
+                    p.at_top_level_keyword()
+                };
+                if recover_top_level_item
+                    && !p.at(TokenKind::Function)
+                    && !p.at(TokenKind::Implements)
+                    && !p.at(TokenKind::Implement)
+                {
                     break;
                 }
 
@@ -2233,7 +2684,10 @@ impl<'a> Parser<'a> {
                 } else if p.at(TokenKind::Function) {
                     // Method definition
                     p.parse_function();
-                } else if p.at(TokenKind::Word) {
+                } else if p.at(TokenKind::Implements) || p.at(TokenKind::Implement) {
+                    // Interface implementation block
+                    p.parse_implements_block();
+                } else if p.at_member_name() {
                     // Field declaration
                     p.parse_field();
                     if !p.eat(TokenKind::Comma) {
@@ -2251,17 +2705,468 @@ impl<'a> Parser<'a> {
         });
     }
 
+    // ============ Interface Parsing ============
+
+    /// Parse an interface declaration.
+    ///
+    /// Syntax:
+    /// ```text
+    /// interface Name<T> requires I1, I2 {
+    ///   field: Type
+    ///   function method(p: T) -> R
+    ///   function with_default(p: T) -> R { ... }
+    /// }
+    /// ```
+    pub(crate) fn parse_interface(&mut self) {
+        self.with_node(SyntaxKind::INTERFACE_DEF, |p| {
+            while p.at(TokenKind::AtAt) {
+                p.parse_atat_attribute();
+            }
+
+            p.expect(TokenKind::Interface);
+
+            if p.at(TokenKind::Word) {
+                p.bump(); // name
+            } else {
+                p.error_unexpected_token("interface name".to_string());
+            }
+
+            // Optional generic parameters: <T> or <K, V>
+            if p.at(TokenKind::Less) {
+                p.parse_generic_param_list();
+            }
+
+            // Optional requires clause. Interfaces do not extend each other:
+            // `requires` says implementors must also implement the listed interfaces.
+            if p.at(TokenKind::Requires) {
+                p.parse_requires_clause();
+            }
+
+            // Opening brace
+            if !p.expect(TokenKind::LBrace) {
+                return;
+            }
+
+            while !p.at(TokenKind::RBrace) && !p.at_end() {
+                if p.at_top_level_keyword() && !p.at(TokenKind::Function) {
+                    break;
+                }
+
+                if p.at(TokenKind::AtAt)
+                    && p.item_keyword_after_leading_block_attributes() == Some(TokenKind::Function)
+                {
+                    p.parse_interface_method();
+                } else if p.at(TokenKind::AtAt) {
+                    p.parse_atat_attribute();
+                } else if p.at(TokenKind::Function) {
+                    p.parse_interface_method();
+                } else if p.at_contextual_kw("type") {
+                    p.parse_associated_type_decl(false);
+                    if !p.eat(TokenKind::Comma) {
+                        p.eat(TokenKind::Semicolon);
+                    }
+                } else if p.at(TokenKind::Word) {
+                    p.parse_field();
+                    if !p.eat(TokenKind::Comma) {
+                        p.eat(TokenKind::Semicolon);
+                    }
+                } else {
+                    p.error_unexpected_token("Unexpected token in interface body".to_string());
+                    p.bump();
+                }
+            }
+
+            p.expect(TokenKind::RBrace);
+        });
+    }
+
+    /// Parse a `requires I1, I2, ...` clause inside an interface declaration (BEP-044).
+    fn parse_requires_clause(&mut self) {
+        self.with_node(SyntaxKind::REQUIRES_CLAUSE, |p| {
+            p.expect(TokenKind::Requires);
+
+            if p.is_at_type_start() {
+                p.parse_type();
+            } else {
+                p.error_unexpected_token("interface name".to_string());
+            }
+
+            while p.eat(TokenKind::Comma) {
+                if p.at(TokenKind::LBrace) {
+                    break;
+                }
+                if p.is_at_type_start() {
+                    p.parse_type();
+                } else {
+                    p.error_unexpected_token("interface name".to_string());
+                    break;
+                }
+            }
+        });
+    }
+
+    /// Parse a method declaration inside an interface body.
+    ///
+    /// Two forms:
+    /// - Required: `function name(params) -> ReturnType` (no body)
+    /// - Default:  `function name(params) -> ReturnType { ... }`
+    ///
+    /// When there is no body we record a `METHOD_SIG` node so lowering can
+    /// distinguish required from default methods syntactically.
+    fn parse_interface_method(&mut self) {
+        // Speculative scan: does this method have a body?
+        let has_body = self.interface_method_has_body();
+
+        if has_body {
+            // Full FUNCTION_DEF — reuse existing parser so default methods are
+            // structurally identical to regular methods downstream.
+            self.parse_function();
+            return;
+        }
+
+        self.with_node(SyntaxKind::METHOD_SIG, |p| {
+            while p.at(TokenKind::AtAt) {
+                p.parse_atat_attribute();
+            }
+
+            p.expect(TokenKind::Function);
+
+            // Accept BEP-044 keyword tokens as method names — see
+            // the matching block in `parse_function`.
+            if p.at(TokenKind::Word)
+                || p.at(TokenKind::Implements)
+                || p.at(TokenKind::Implement)
+                || p.at(TokenKind::Extends)
+                || p.at(TokenKind::Requires)
+                || p.at(TokenKind::Interface)
+            {
+                p.bump();
+            } else {
+                p.error_unexpected_token("method name".to_string());
+            }
+
+            // Optional generic parameters
+            if p.at(TokenKind::Less) {
+                p.parse_generic_param_list();
+            }
+
+            p.parse_parameter_list();
+
+            if p.eat(TokenKind::Arrow) {
+                p.parse_type();
+            } else {
+                p.error_unexpected_token("return type (->)".to_string());
+            }
+
+            if p.at(TokenKind::Throws) {
+                p.with_node(SyntaxKind::THROWS_CLAUSE, |p| {
+                    p.bump();
+                    p.parse_type();
+                });
+            }
+        });
+    }
+
+    /// Look ahead from the current `function` token to see whether the
+    /// declaration ends in `{ ... }` (default impl) or just at the next
+    /// declaration boundary (required signature only).
+    ///
+    /// `self.current` may point at trivia before the `function` keyword
+    /// (because `at()` skips trivia). We therefore find the first non-trivia
+    /// token (expected to be `function`), then scan from the *next* token
+    /// looking for an `LBrace` at brace/paren/bracket/angle depth 0.
+    fn interface_method_has_body(&self) -> bool {
+        // Locate the `function` token we're about to consume.
+        let mut i = self.current;
+        loop {
+            let next = self.skip_trivia_and_comments_from(i);
+            if next == i {
+                break;
+            }
+            i = next;
+        }
+
+        while self.tokens.get(i).map(|t| t.kind) == Some(TokenKind::AtAt) {
+            let Some(next) = self.skip_block_attribute_from(i) else {
+                break;
+            };
+            i = next;
+        }
+
+        i = self.skip_trivia_and_comments_from(i);
+        // Skip past the `function` keyword if present.
+        if i < self.tokens.len() && self.tokens[i].kind == TokenKind::Function {
+            i += 1;
+        }
+
+        let mut paren_depth: i32 = 0;
+        let mut bracket_depth: i32 = 0;
+        let mut angle_depth: i32 = 0;
+
+        while i < self.tokens.len() {
+            let new_i = self.skip_comment_at(i);
+            if new_i != i {
+                i = new_i;
+                continue;
+            }
+            let new_i = self.skip_header_comment_at(i);
+            if new_i != i {
+                i = new_i;
+                continue;
+            }
+            let token = &self.tokens[i];
+            if self.is_basic_trivia(token.kind) {
+                i += 1;
+                continue;
+            }
+            match token.kind {
+                TokenKind::LParen => paren_depth += 1,
+                TokenKind::RParen => paren_depth -= 1,
+                TokenKind::LBracket => bracket_depth += 1,
+                TokenKind::RBracket => bracket_depth -= 1,
+                TokenKind::Less => angle_depth += 1,
+                TokenKind::Greater => angle_depth -= 1,
+                TokenKind::GreaterGreater => angle_depth -= 2,
+                TokenKind::LBrace if paren_depth == 0 && bracket_depth == 0 && angle_depth == 0 => {
+                    return true;
+                }
+                TokenKind::RBrace if paren_depth == 0 && bracket_depth == 0 && angle_depth == 0 => {
+                    // End of the interface body without finding a body for
+                    // this method — it's a required signature.
+                    return false;
+                }
+                // Encountering the start of another interface member at the
+                // outer level means we're done with this signature.
+                TokenKind::Function
+                | TokenKind::Implements
+                | TokenKind::Implement
+                | TokenKind::AtAt
+                    if paren_depth == 0 && bracket_depth == 0 && angle_depth == 0 =>
+                {
+                    return false;
+                }
+                _ => {}
+            }
+            i += 1;
+        }
+        false
+    }
+
+    /// Parse an `implements I { ... }` (or `implement I { ... }`) block inside a class body.
+    fn parse_implements_block(&mut self) {
+        self.with_node(SyntaxKind::IMPLEMENTS_BLOCK, |p| {
+            if p.at(TokenKind::Implement) {
+                p.bump();
+            } else {
+                p.expect(TokenKind::Implements);
+            }
+
+            // Target interface — capture as IMPLEMENTS_TARGET so lowering
+            // can address it directly even when the type is generic.
+            p.with_node(SyntaxKind::IMPLEMENTS_TARGET, |p| {
+                if p.is_at_type_start() {
+                    p.parse_type();
+                } else {
+                    p.error_unexpected_token("interface name".to_string());
+                }
+            });
+
+            if !p.expect(TokenKind::LBrace) {
+                return;
+            }
+
+            while !p.at(TokenKind::RBrace) && !p.at_end() {
+                if p.at_top_level_keyword() && !p.at(TokenKind::Function) {
+                    break;
+                }
+                if p.at(TokenKind::Function)
+                    || (p.at(TokenKind::AtAt)
+                        && p.item_keyword_after_leading_block_attributes()
+                            == Some(TokenKind::Function))
+                {
+                    p.parse_function();
+                } else if p.at_contextual_kw("type") {
+                    p.parse_associated_type_decl(true);
+                    if !p.eat(TokenKind::Comma) {
+                        p.eat(TokenKind::Semicolon);
+                    }
+                } else if p.looks_like_interface_field_link() {
+                    p.parse_interface_field_link();
+                    if !p.eat(TokenKind::Comma) {
+                        p.eat(TokenKind::Semicolon);
+                    }
+                } else if p.at_member_name() {
+                    p.parse_field();
+                    if !p.eat(TokenKind::Comma) {
+                        p.eat(TokenKind::Semicolon);
+                    }
+                } else {
+                    p.error_unexpected_token(
+                        "field or method definition expected in `implements` block".to_string(),
+                    );
+                    p.bump();
+                }
+            }
+
+            p.expect(TokenKind::RBrace);
+        });
+    }
+
+    /// Parse an explicit interface-field link inside an `implements` block:
+    /// `interface_field as class_field`.
+    fn parse_interface_field_link(&mut self) {
+        self.with_node(SyntaxKind::INTERFACE_FIELD_LINK, |p| {
+            if p.at_member_name() {
+                p.bump();
+            } else {
+                p.error_unexpected_token("interface field name".to_string());
+            }
+
+            if p.at_contextual_kw("as") {
+                p.bump();
+            } else {
+                p.error_unexpected_token("`as`".to_string());
+            }
+
+            if p.at_member_name() {
+                p.bump();
+            } else {
+                p.error_unexpected_token("class field name".to_string());
+            }
+        });
+    }
+
+    /// Parse a top-level `implements I for T { ... }` block.
+    fn parse_implements_for(&mut self) {
+        self.with_node(SyntaxKind::IMPLEMENTS_FOR, |p| {
+            if p.at(TokenKind::Implement) {
+                p.bump();
+            } else {
+                p.expect(TokenKind::Implements);
+            }
+
+            if p.at(TokenKind::Less) {
+                p.parse_generic_param_list();
+            }
+
+            // Interface target (reuse IMPLEMENTS_TARGET).
+            p.with_node(SyntaxKind::IMPLEMENTS_TARGET, |p| {
+                if p.is_at_type_start() {
+                    p.parse_type();
+                } else {
+                    p.error_unexpected_token("interface name".to_string());
+                }
+            });
+
+            p.expect(TokenKind::For);
+
+            // Target type.
+            p.with_node(SyntaxKind::IMPLEMENTS_FOR_TARGET, |p| {
+                if p.is_at_type_start() {
+                    p.parse_type();
+                } else {
+                    p.error_unexpected_token("target type".to_string());
+                }
+            });
+
+            if !p.expect(TokenKind::LBrace) {
+                return;
+            }
+
+            while !p.at(TokenKind::RBrace) && !p.at_end() {
+                if p.at_top_level_keyword() && !p.at(TokenKind::Function) {
+                    break;
+                }
+                if p.at(TokenKind::Function)
+                    || (p.at(TokenKind::AtAt)
+                        && p.item_keyword_after_leading_block_attributes()
+                            == Some(TokenKind::Function))
+                {
+                    p.parse_function();
+                } else if p.at_contextual_kw("type") {
+                    p.parse_associated_type_decl(true);
+                    if !p.eat(TokenKind::Comma) {
+                        p.eat(TokenKind::Semicolon);
+                    }
+                } else if p.looks_like_interface_field_link() {
+                    p.parse_interface_field_link();
+                    if !p.eat(TokenKind::Comma) {
+                        p.eat(TokenKind::Semicolon);
+                    }
+                } else if p.at_member_name() {
+                    p.parse_field();
+                    if !p.eat(TokenKind::Comma) {
+                        p.eat(TokenKind::Semicolon);
+                    }
+                } else {
+                    p.error_unexpected_token(
+                        "field or method definition expected in `implements` block".to_string(),
+                    );
+                    p.bump();
+                }
+            }
+
+            p.expect(TokenKind::RBrace);
+        });
+    }
+
+    /// Parse BEP-057 associated type declarations and bindings:
+    /// - interface body: `type Item`, `type Item extends Bound`, `type Item = Default`
+    /// - implements body: `type Item = Concrete`
+    fn parse_associated_type_decl(&mut self, require_binding: bool) {
+        self.with_node(SyntaxKind::ASSOCIATED_TYPE_DECL, |p| {
+            if p.at_contextual_kw("type") {
+                p.bump();
+            } else {
+                p.error_unexpected_token("`type`".to_string());
+            }
+
+            if p.at(TokenKind::Word) {
+                p.bump();
+            } else {
+                p.error_unexpected_token("associated type name".to_string());
+            }
+
+            if p.at(TokenKind::Extends) {
+                if require_binding && let Some(span) = p.current().map(|t| t.span) {
+                    p.error(
+                        "associated type bounds are only allowed on interface declarations"
+                            .to_string(),
+                        span,
+                    );
+                }
+                p.bump();
+                if p.is_at_type_start() {
+                    p.parse_type();
+                } else {
+                    p.error_unexpected_token("associated type bound".to_string());
+                }
+            }
+
+            if p.eat(TokenKind::Equals) {
+                if p.is_at_type_start() {
+                    p.parse_type();
+                } else {
+                    p.error_unexpected_token("associated type binding".to_string());
+                }
+            } else if require_binding {
+                p.error_unexpected_token("associated type binding (`= Type`)".to_string());
+            }
+        });
+    }
+
     /// Parse declaration-site generic parameter list: `<T>` or `<K, V>`.
     ///
     /// This is different from `GENERIC_ARGS` (call-site: `fetch<Response>(url)`).
     /// This produces `GENERIC_PARAM_LIST` containing `GENERIC_PARAM` children.
     fn parse_generic_param_list(&mut self) {
+        self.type_args_depth += 1;
         self.with_node(SyntaxKind::GENERIC_PARAM_LIST, |p| {
             p.expect(TokenKind::Less); // <
 
             // Parse comma-separated type parameter names
             loop {
-                if p.at(TokenKind::Greater) || p.at_end() {
+                if p.at(TokenKind::Greater) || p.at(TokenKind::GreaterGreater) || p.at_end() {
                     break;
                 }
                 p.with_node(SyntaxKind::GENERIC_PARAM, |p| {
@@ -2270,14 +3175,66 @@ impl<'a> Parser<'a> {
                     } else {
                         p.error_unexpected_token("type parameter name".to_string());
                     }
+
+                    // BEP-044 generic bounds: `<T extends Iface>` or
+                    // intersection `<T extends A & B>`. The bounds are
+                    // captured as a `GENERIC_PARAM_BOUNDS` wrapper holding
+                    // one or more `TYPE_EXPR` children, separated by `&`.
+                    if p.at(TokenKind::Extends) {
+                        p.with_node(SyntaxKind::GENERIC_PARAM_BOUNDS, |p| {
+                            p.expect(TokenKind::Extends);
+                            // First bound type.
+                            p.parse_type();
+                            // Optional `& Other & ...` intersection.
+                            while p.eat(TokenKind::And) {
+                                p.parse_type();
+                            }
+                            if p.at_contextual_kw("as") {
+                                if let Some(token) = p.current() {
+                                    p.error(
+                                        "generic bound aliases are not supported; use `.as<Interface<...>>()` at call sites".to_string(),
+                                        token.span,
+                                    );
+                                }
+                                p.bump();
+                                if p.at(TokenKind::Word) {
+                                    p.bump();
+                                } else {
+                                    p.error_unexpected_token("alias name".to_string());
+                                }
+                            }
+                        });
+                    }
                 });
                 if !p.eat(TokenKind::Comma) {
                     break;
                 }
             }
 
-            p.expect(TokenKind::Greater); // >
+            p.expect_greater(); // >
         });
+        self.type_args_depth -= 1;
+
+        // If we just exited the outermost generic and have pending '>', report error.
+        if self.type_args_depth == 0 && self.pending_greaters > 0 {
+            if let Some(span) = self.pending_greater_span {
+                self.error(
+                    format!(
+                        "Unmatched '>' in type expression (found {} extra)",
+                        self.pending_greaters
+                    ),
+                    span,
+                );
+            }
+            for _ in 0..self.pending_greaters {
+                self.events.push(Event::Token {
+                    kind: SyntaxKind::GREATER,
+                    text: ">".to_string(),
+                });
+            }
+            self.pending_greaters = 0;
+            self.pending_greater_span = None;
+        }
     }
 
     fn parse_field(&mut self) {
@@ -2320,8 +3277,16 @@ impl<'a> Parser<'a> {
             // 'function' keyword
             p.expect(TokenKind::Function);
 
-            // Function name
-            if p.at(TokenKind::Word) {
+            // Function name. The lexer produces dedicated keyword tokens for
+            // BEP-044 syntax, but those words remain valid as method names —
+            // notably on the `TypeValue` reflection class. Accept them here.
+            if p.at(TokenKind::Word)
+                || p.at(TokenKind::Implements)
+                || p.at(TokenKind::Implement)
+                || p.at(TokenKind::Extends)
+                || p.at(TokenKind::Requires)
+                || p.at(TokenKind::Interface)
+            {
                 p.bump();
             } else {
                 p.error_unexpected_token("function name".to_string());
@@ -2353,7 +3318,7 @@ impl<'a> Parser<'a> {
                 p.start_node(SyntaxKind::PARAMETER_LIST);
                 p.finish_node();
                 // Parse the body
-                p.parse_function_body();
+                p.parse_function_body(false);
                 return;
             }
 
@@ -2361,9 +3326,18 @@ impl<'a> Parser<'a> {
             p.parse_parameter_list();
 
             // Return type
+            let mut allow_llm_body = true;
             if p.eat(TokenKind::Arrow) {
+                if p.at(TokenKind::LBrace) {
+                    // The `{` belongs to the function body, not a return type.
+                    // Keep recovery in expression-body mode so `client` text
+                    // inside the broken body does not masquerade as an LLM
+                    // directive.
+                    allow_llm_body = false;
+                }
                 p.parse_type();
             } else {
+                allow_llm_body = false;
                 p.error_unexpected_token("return type (->)".to_string());
             }
 
@@ -2377,7 +3351,7 @@ impl<'a> Parser<'a> {
 
             // Body
             if p.at(TokenKind::LBrace) {
-                p.parse_function_body();
+                p.parse_function_body(allow_llm_body);
             } else {
                 p.error_unexpected_token("function body".to_string());
             }
@@ -2418,7 +3392,11 @@ impl<'a> Parser<'a> {
             // Type annotation - colon is optional per BEP-019
             // 'self' parameter does not have a type annotation
             if is_self {
-                // No type annotation for self
+                // No type annotation for self, but consume an optional default
+                // for recovery so lowering can emit a context-specific diagnostic.
+                if p.eat(TokenKind::Equals) {
+                    p.parse_default_expr();
+                }
                 return;
             }
 
@@ -2433,12 +3411,16 @@ impl<'a> Parser<'a> {
             } else {
                 p.error_unexpected_token("type annotation".to_string());
             }
+
+            if p.eat(TokenKind::Equals) {
+                p.parse_default_expr();
+            }
         });
     }
 
-    fn parse_function_body(&mut self) {
+    fn parse_function_body(&mut self, allow_llm_body: bool) {
         // Scan tokens to determine function type before parsing (single pass)
-        if self.looks_like_llm_function_body() {
+        if allow_llm_body && self.looks_like_llm_function_body() {
             self.parse_llm_function_body();
         } else {
             self.parse_expr_function_body();
@@ -2453,13 +3435,33 @@ impl<'a> Parser<'a> {
         let mut brace_depth = 0;
 
         while i < self.tokens.len() {
+            let new_i = self.skip_comment_at(i);
+            if new_i != i {
+                i = new_i;
+                continue;
+            }
+
+            let new_i = self.skip_header_comment_at(i);
+            if new_i != i {
+                i = new_i;
+                continue;
+            }
+
             let token = &self.tokens[i];
+            if self.is_basic_trivia(token.kind) {
+                i += 1;
+                continue;
+            }
+
             match token.kind {
                 TokenKind::LBrace => brace_depth += 1,
                 TokenKind::RBrace if brace_depth == 1 => break,
                 TokenKind::RBrace => brace_depth -= 1,
                 TokenKind::Word if brace_depth == 1 => {
                     let text = &token.text;
+                    if text == "const" {
+                        return false;
+                    }
                     if text == "client" || text == "prompt" {
                         return true;
                     }
@@ -2684,6 +3686,10 @@ impl<'a> Parser<'a> {
             if p.eat(TokenKind::Colon) {
                 p.parse_type();
             }
+
+            if p.eat(TokenKind::Equals) {
+                p.parse_default_expr();
+            }
         });
     }
 
@@ -2723,7 +3729,7 @@ impl<'a> Parser<'a> {
 
         if self.at(TokenKind::Watch) {
             self.parse_watch_let_stmt();
-        } else if self.at(TokenKind::Let) {
+        } else if self.at_binding_intro_stmt() {
             self.parse_let_stmt();
         } else if self.at(TokenKind::Return) {
             self.parse_return_stmt();
@@ -2772,18 +3778,18 @@ impl<'a> Parser<'a> {
 
     fn parse_let_stmt(&mut self) {
         self.with_node(SyntaxKind::LET_STMT, |p| {
-            p.expect(TokenKind::Let);
-
-            // Variable name
-            if p.at(TokenKind::Word) {
-                p.bump();
-            } else {
-                p.error_unexpected_token("variable name".to_string());
+            // A let statement's pattern must start with `let`. parse_pattern
+            // itself is permissive (it parses any pattern shape, including
+            // ones with no binding), so we enforce the `let` keyword here
+            // before delegating. The keyword is consumed inside parse_pattern.
+            if !p.at_binding_intro_stmt() {
+                p.error_unexpected_token("'let'".to_string());
             }
-
-            // Optional type annotation
-            if p.eat(TokenKind::Colon) {
-                p.parse_type();
+            if p.binding_intro_is_followed_by_array_pattern() {
+                p.bump_binding_intro(); // statement-level binding introducer
+                p.parse_pattern();
+            } else {
+                p.parse_pattern();
             }
 
             // Initializer
@@ -2795,6 +3801,28 @@ impl<'a> Parser<'a> {
                 p.error_unexpected_token("initializer (=)".to_string());
             }
 
+            // Optional `let … else { … }` — refutable binding whose else
+            // branch must diverge. Allowed in every position `parse_let_stmt`
+            // is called from, including C-style for-init (a diverging init
+            // just makes the loop unreachable — same kind of dead code we
+            // already accept elsewhere, not a parse-time concern).
+            if p.at(TokenKind::Else) {
+                p.bump(); // else
+                if p.at(TokenKind::If) {
+                    // `else if` after `let … else` has no value to chain
+                    // through (unlike `if let`, which produces a value), so
+                    // reject. The `if` token is left in place so recovery can
+                    // parse it as the next statement.
+                    p.error_unexpected_token(
+                        "block after 'else' (`else if` is not valid in let-else)".to_string(),
+                    );
+                } else if p.at(TokenKind::LBrace) {
+                    p.parse_block_expr();
+                } else {
+                    p.error_unexpected_token("block after 'else'".to_string());
+                }
+            }
+
             // Consume trailing semicolon
             p.eat(TokenKind::Semicolon);
         });
@@ -2803,18 +3831,15 @@ impl<'a> Parser<'a> {
     fn parse_watch_let_stmt(&mut self) {
         self.with_node(SyntaxKind::WATCH_LET, |p| {
             p.expect(TokenKind::Watch);
-            p.expect(TokenKind::Let);
-
-            // Variable name
-            if p.at(TokenKind::Word) {
-                p.bump();
-            } else {
-                p.error_unexpected_token("variable name".to_string());
+            // Same invariant as parse_let_stmt: pattern must start with `let`.
+            if !p.at_binding_intro_stmt() {
+                p.error_unexpected_token("'let'".to_string());
             }
-
-            // Optional type annotation
-            if p.eat(TokenKind::Colon) {
-                p.parse_type();
+            if p.binding_intro_is_followed_by_array_pattern() {
+                p.bump_binding_intro(); // statement-level binding introducer
+                p.parse_pattern();
+            } else {
+                p.parse_pattern();
             }
 
             // Initializer
@@ -2822,6 +3847,20 @@ impl<'a> Parser<'a> {
                 p.parse_expr_bp(3);
             } else {
                 p.error_unexpected_token("initializer (=)".to_string());
+            }
+
+            // Reject `watch let … else { … }` — the divergence semantics of
+            // let-else don't compose with the auto-rerun semantics of a
+            // watched binding. Emit a parse error but eat the else block so
+            // recovery proceeds cleanly past it.
+            if p.at(TokenKind::Else) {
+                p.error_unexpected_token(
+                    "';' (`watch let` cannot have an `else` clause)".to_string(),
+                );
+                p.bump(); // else
+                if p.at(TokenKind::LBrace) {
+                    p.parse_block_expr();
+                }
             }
 
             // Consume trailing semicolon
@@ -2872,11 +3911,26 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_if_expr(&mut self) {
+        // `if let PATTERN = SCRUTINEE { ... }` is a distinct refutable form.
+        // Decided here by peeking past `if` for a `let` token — patterns
+        // always start with `let` (BAML's binding marker), and no normal
+        // expression starts with `let`, so this is unambiguous.
+        if self.peek_is_binding_intro_stmt(1) {
+            self.parse_if_let_expr();
+            return;
+        }
+
         self.with_node(SyntaxKind::IF_EXPR, |p| {
             p.expect(TokenKind::If);
 
-            // Condition
+            // Condition: suppress destructure patterns (`Class { … }`) so
+            // they don't eat the then-block. Mirrors Rust's
+            // `NO_STRUCT_LITERAL` restriction. Users who want a
+            // destructure here must wrap it in parens — parens reset the
+            // suppression in `parse_pattern_atom`.
+            p.suppress_destructure_pattern_depth += 1;
             p.parse_expr();
+            p.suppress_destructure_pattern_depth -= 1;
 
             // Then block
             if p.at(TokenKind::LBrace) {
@@ -2894,6 +3948,60 @@ impl<'a> Parser<'a> {
                     p.parse_if_expr();
                 } else if p.at(TokenKind::LBrace) {
                     // else block
+                    p.parse_block_expr();
+                } else {
+                    p.error_unexpected_token("'if' or block after 'else'".to_string());
+                }
+            }
+        });
+    }
+
+    /// Parse `if let PATTERN = SCRUTINEE { ... } else { ... }`.
+    ///
+    /// Caller has already verified the token sequence starts with `if let`.
+    /// The `let` itself is consumed by `parse_pattern` (BAML patterns carry
+    /// their own leading `let` binding marker), matching how `let` statements
+    /// parse.
+    fn parse_if_let_expr(&mut self) {
+        self.with_node(SyntaxKind::IF_LET_EXPR, |p| {
+            p.expect(TokenKind::If);
+            // Pattern. For top-level array patterns (`let [a, b]`), the
+            // `let` keyword has to be consumed at the statement level
+            // because `parse_let_pattern` only handles binding /
+            // destructure shapes after `let`. Mirrors `parse_let_stmt`.
+            if p.binding_intro_is_followed_by_array_pattern() {
+                p.bump_binding_intro(); // statement-level binding introducer
+                p.parse_pattern();
+            } else {
+                // The introducer is consumed inside parse_pattern → parse_let_pattern.
+                p.parse_pattern();
+            }
+
+            if !p.eat(TokenKind::Equals) {
+                p.error_unexpected_token("'=' after if-let pattern".to_string());
+            }
+
+            // Scrutinee — exclude assignment operators (same as let-stmt),
+            // and apply condition-position destructure suppression so a
+            // trailing `is Class { ... }` doesn't eat the then-block.
+            p.suppress_destructure_pattern_depth += 1;
+            p.parse_expr_bp(3);
+            p.suppress_destructure_pattern_depth -= 1;
+
+            // Then block
+            if p.at(TokenKind::LBrace) {
+                p.parse_block_expr();
+            } else {
+                p.error_unexpected_token("block after if-let scrutinee".to_string());
+            }
+
+            // Optional else, with `else if` / `else if let` chaining.
+            if p.at(TokenKind::Else) {
+                p.bump(); // else
+
+                if p.at(TokenKind::If) {
+                    p.parse_if_expr();
+                } else if p.at(TokenKind::LBrace) {
                     p.parse_block_expr();
                 } else {
                     p.error_unexpected_token("'if' or block after 'else'".to_string());
@@ -2963,7 +4071,7 @@ impl<'a> Parser<'a> {
     fn parse_match_arm(&mut self) {
         self.with_node(SyntaxKind::MATCH_ARM, |p| {
             // Parse the pattern
-            p.parse_match_pattern();
+            p.parse_pattern();
 
             // Optional guard: if expr
             if p.at(TokenKind::If) {
@@ -2989,109 +4097,6 @@ impl<'a> Parser<'a> {
         });
     }
 
-    /// Parse a match pattern.
-    ///
-    /// Grammar (from BEP-002):
-    ///
-    /// ```text
-    /// pattern         := binding_pattern | literal_pattern | union_pattern
-    /// binding_pattern := IDENT (':' type_expr)?
-    /// literal_pattern := 'null' | 'true' | 'false' | INTEGER | FLOAT | STRING
-    /// union_pattern   := (literal_pattern | enum_variant) ('|' (literal_pattern | enum_variant))*
-    /// enum_variant    := IDENT '.' IDENT
-    /// ```
-    ///
-    /// Note: `_` is parsed as a regular identifier (binding pattern) - semantic
-    /// analysis will treat it as a wildcard/discard.
-    fn parse_match_pattern(&mut self) {
-        self.with_node(SyntaxKind::MATCH_PATTERN, |p| {
-            // First, parse the initial pattern element
-            p.parse_pattern_element();
-
-            // Check for union pattern: element | element | ...
-            while p.at(TokenKind::Pipe) {
-                p.bump(); // |
-                p.parse_pattern_element();
-            }
-        });
-    }
-
-    /// Parse a single pattern element (used in patterns and union patterns).
-    ///
-    /// This can be:
-    /// - A literal: null, true, false, integer, float, string
-    /// - An enum variant: Ident.Ident
-    /// - A binding: ident or ident: Type
-    /// - A parenthesized pattern group: (pattern)
-    fn parse_pattern_element(&mut self) {
-        // Handle parenthesized pattern group (for nested unions like `200 | (201 | 202)`)
-        if self.at(TokenKind::LParen) {
-            self.bump(); // (
-            self.parse_match_pattern(); // Recursive - creates nested MATCH_PATTERN
-            self.expect(TokenKind::RParen);
-            return;
-        }
-
-        // Check for literals first (including negative literals)
-        // Handle negative numeric literals: -42, -3.14
-        if self.at(TokenKind::Minus) {
-            // Peek ahead to see if this is a negative numeric literal
-            let is_negative_number = self.peek(1).is_some_and(|t| {
-                matches!(t.kind, TokenKind::IntegerLiteral | TokenKind::FloatLiteral)
-            });
-            if is_negative_number {
-                self.bump(); // consume the minus
-                self.bump(); // consume the number
-            } else {
-                self.error_unexpected_token("pattern".to_string());
-                self.bump();
-            }
-        } else if self.at(TokenKind::IntegerLiteral) || self.at(TokenKind::FloatLiteral) {
-            self.bump();
-        } else if self.parse_any_string() {
-            // String literal handled
-        } else if self.at(TokenKind::Word) {
-            let text = self.current().map(|t| t.text.as_str()).unwrap_or("");
-
-            if text == "null" || text == "true" || text == "false" {
-                // Literal keywords
-                self.bump();
-            } else {
-                // Could be:
-                // 1. Enum variant: Ident.Ident (e.g., Status.Active)
-                // 2. Binding without type: ident (including _ as wildcard)
-                // 3. Binding with type: ident: Type
-
-                self.bump(); // First identifier
-
-                if self.at(TokenKind::Dot) {
-                    // Dotted path pattern: Ident.Ident or Ident.Ident.Ident...
-                    // (e.g., Status.Active or baml.llm.ClientType.Primitive)
-                    while self.at(TokenKind::Dot) {
-                        self.bump(); // .
-                        if self.at(TokenKind::Word) {
-                            self.bump(); // next segment
-                        } else {
-                            self.error_unexpected_token("identifier after '.'".to_string());
-                            break;
-                        }
-                    }
-                } else if self.at(TokenKind::Colon) {
-                    // Typed binding pattern: ident: Type
-                    self.bump(); // :
-                    self.parse_type();
-                }
-                // else: simple binding pattern (just the identifier)
-            }
-        } else {
-            self.error_unexpected_token("pattern".to_string());
-            // Consume unexpected token to avoid infinite loop
-            if !self.at_end() {
-                self.bump();
-            }
-        }
-    }
-
     /// Parse a match guard.
     ///
     /// Grammar: guard := 'if' expr
@@ -3099,6 +4104,532 @@ impl<'a> Parser<'a> {
         self.with_node(SyntaxKind::MATCH_GUARD, |p| {
             p.expect(TokenKind::If);
             p.parse_expr();
+        });
+    }
+
+    // ============ Patterns ============
+    //
+    // Grammar:
+    //   PATTERN     := CHAIN
+    //   CHAIN       := UNION (':' UNION)*
+    //   UNION       := ATOM ('|' ATOM)*
+    //   ATOM        := BINDING_PATTERN
+    //                | DESTRUCTURE_PATTERN
+    //                | ARRAY_PATTERN
+    //                | TYPE_PATTERN
+    //                | PAREN_PATTERN
+    //
+    // `:` splits before `|`, so `let x: int | string` is `let x : (int | string)`.
+
+    /// Parse a pattern. Always wraps the result in a `PATTERN` node.
+    /// Patterns are `union ('|' union)*` of atoms. The `:` type-ascription
+    /// is a grammar property of the `BINDING_PATTERN` and `ARRAY_PATTERN`
+    /// atoms (handled inside `parse_let_pattern` / `parse_array_pattern`),
+    /// not a separate combinator.
+    fn parse_pattern(&mut self) {
+        self.with_node(SyntaxKind::PATTERN, |p| {
+            p.parse_pattern_union();
+        });
+    }
+
+    /// Parse a `|`-separated union. Wraps in `UNION_PATTERN` only if at least
+    /// one `|` is present.
+    fn parse_pattern_union(&mut self) {
+        let union_start = self.events.len();
+        self.parse_pattern_atom();
+        if !self.at(TokenKind::Pipe) {
+            return;
+        }
+        while self.at(TokenKind::Pipe) {
+            self.bump(); // |
+            self.parse_pattern_atom();
+        }
+        self.wrap_events_in_node(union_start, SyntaxKind::UNION_PATTERN);
+        self.finish_node();
+    }
+
+    /// Parse a single atomic pattern.
+    fn parse_pattern_atom(&mut self) {
+        if self.at(TokenKind::LParen) {
+            // `(` may start either a parenthesized pattern OR a parenthesized
+            // type expression. Type expression iff the matching `)` is
+            // followed by `->` (function type) or `[` / `?` (array / optional
+            // suffix on a paren'd type, e.g. `(int | string)[]`).
+            //
+            // Function-type paren keeps `|` for the surrounding `UNION_PATTERN`
+            // (so `(int) -> int | string` parses as `Or([fn, string])`).
+            // Paren-type-suffix paren consumes `|` because the whole
+            // expression is unambiguously one type — `(int | string)[] | float`
+            // parses as the union type `(int | string)[] | float`.
+            if self.looks_like_associated_type_projection() {
+                self.with_node(SyntaxKind::TYPE_PATTERN, |p| {
+                    p.parse_type_with(/* consume_union = */ false);
+                });
+            } else if self.looks_like_function_type_paren() {
+                self.with_node(SyntaxKind::TYPE_PATTERN, |p| {
+                    p.parse_type_with(/* consume_union = */ false);
+                });
+            } else if self.looks_like_paren_type_suffix() {
+                self.with_node(SyntaxKind::TYPE_PATTERN, |p| {
+                    p.parse_type_with(/* consume_union = */ true);
+                });
+            } else {
+                self.with_node(SyntaxKind::PAREN_PATTERN, |p| {
+                    p.bump(); // (
+                    // Parens reset destructure suppression: `if (x is Foo
+                    // { f })` should still allow the destructure.
+                    let saved = std::mem::take(&mut p.suppress_destructure_pattern_depth);
+                    p.parse_pattern();
+                    p.suppress_destructure_pattern_depth = saved;
+                    p.expect(TokenKind::RParen);
+                });
+            }
+            return;
+        }
+
+        if self.at_binding_intro_pattern() {
+            self.parse_let_pattern();
+            return;
+        }
+
+        if self.at(TokenKind::LBracket) {
+            // Arrays use `[` / `]` so the closing bracket terminates the
+            // atom cleanly — sub-patterns inside should regain normal
+            // destructure parsing.
+            let saved = std::mem::take(&mut self.suppress_destructure_pattern_depth);
+            self.parse_array_pattern();
+            self.suppress_destructure_pattern_depth = saved;
+            return;
+        }
+
+        // Bare `_` is a wildcard. Recognise before the destructure check so
+        // `_ { ... }` doesn't parse as a destructure on a class literally
+        // named `_`.
+        if self.at_wildcard_word() {
+            self.with_node(SyntaxKind::WILDCARD_PATTERN, |p| {
+                p.bump();
+            });
+            return;
+        }
+
+        // A bare WORD may start a destructure (`Class { ... }`,
+        // `Class<int> { ... }`) or a type/path pattern. Look ahead through
+        // dotted segments and optional trailing generic args for a `{`.
+        // In condition position (`if x is Class { … }`) we suppress this
+        // so the `{` stays available for the outer block; users can still
+        // write destructure via `(x is Class { f })`.
+        if self.at(TokenKind::Word)
+            && self.suppress_destructure_pattern_depth == 0
+            && self.looks_like_destructure_pattern()
+        {
+            self.parse_destructure_pattern(false);
+            return;
+        }
+
+        // Anything else is a bare type-expression pattern: literals (`1`,
+        // `"user"`, `true`), paths (`Status.Active`), generics (`Foo<T>`),
+        // arrays (`int[]`), etc. `consume_union = false` leaves top-level `|`
+        // for the surrounding `UNION_PATTERN`.
+        if !self.is_at_pattern_atom_start() {
+            self.error_unexpected_token("pattern".to_string());
+            if !self.at_end() {
+                self.bump();
+            }
+            return;
+        }
+
+        self.with_node(SyntaxKind::TYPE_PATTERN, |p| {
+            p.parse_type_with(/* consume_union = */ false);
+        });
+    }
+
+    /// Called when at `(`. Returns `true` if the matching `)` is followed by
+    /// `->`, indicating this opens a function-type pattern atom rather than a
+    /// parenthesized pattern.
+    ///
+    /// Walks forward via `peek()` with a stack of expected closers, so
+    /// `(MyScores { f: int }) -> Result` and `(int[]) -> int` are recognised
+    /// correctly. On any mismatch (unbalanced or out-of-order closers) we
+    /// bail out and let the caller treat it as a paren pattern; the real
+    /// error will surface during the actual parse.
+    /// True if `(...)` is followed by a type-expression suffix (`[` or `?`),
+    /// indicating a parenthesized type like `(int | string)[]` rather than a
+    /// parenthesized pattern.
+    fn looks_like_paren_type_suffix(&self) -> bool {
+        debug_assert!(self.at(TokenKind::LParen));
+        let mut stack: Vec<TokenKind> = vec![TokenKind::RParen];
+        let mut i: usize = 1;
+        loop {
+            let Some(tok) = self.peek(i) else {
+                return false;
+            };
+            match tok.kind {
+                TokenKind::LParen => stack.push(TokenKind::RParen),
+                TokenKind::LBracket => stack.push(TokenKind::RBracket),
+                TokenKind::LBrace => stack.push(TokenKind::RBrace),
+                close @ (TokenKind::RParen | TokenKind::RBracket | TokenKind::RBrace) => {
+                    let Some(expected) = stack.pop() else {
+                        return false;
+                    };
+                    if expected != close {
+                        return false;
+                    }
+                    if stack.is_empty() {
+                        return matches!(
+                            self.peek(i + 1).map(|t| t.kind),
+                            Some(TokenKind::LBracket | TokenKind::Question)
+                        );
+                    }
+                }
+                _ => {}
+            }
+            i += 1;
+        }
+    }
+
+    fn looks_like_function_type_paren(&self) -> bool {
+        debug_assert!(self.at(TokenKind::LParen));
+        let mut stack: Vec<TokenKind> = vec![TokenKind::RParen];
+        let mut i: usize = 1;
+        loop {
+            let Some(tok) = self.peek(i) else {
+                return false;
+            };
+            match tok.kind {
+                TokenKind::LParen => stack.push(TokenKind::RParen),
+                TokenKind::LBracket => stack.push(TokenKind::RBracket),
+                TokenKind::LBrace => stack.push(TokenKind::RBrace),
+                close @ (TokenKind::RParen | TokenKind::RBracket | TokenKind::RBrace) => {
+                    let Some(expected) = stack.pop() else {
+                        return false;
+                    };
+                    if expected != close {
+                        return false;
+                    }
+                    if stack.is_empty() {
+                        // We just closed the outermost `(`. Function type iff
+                        // the next non-trivia token is `->`.
+                        return self.peek(i + 1).map(|t| t.kind) == Some(TokenKind::Arrow);
+                    }
+                }
+                _ => {}
+            }
+            i += 1;
+        }
+    }
+
+    /// True if the current token can start a pattern atom (used for
+    /// error-recovery sniffing).
+    fn is_at_pattern_atom_start(&self) -> bool {
+        matches!(
+            self.current().map(|t| t.kind),
+            Some(
+                TokenKind::Word
+                    | TokenKind::BigintLiteral
+                    | TokenKind::IntegerLiteral
+                    | TokenKind::FloatLiteral
+                    | TokenKind::Quote
+                    | TokenKind::Hash
+                    | TokenKind::Minus
+                    | TokenKind::LParen
+                    | TokenKind::LBracket
+                    | TokenKind::Less
+                    | TokenKind::Let
+            )
+        ) || self.at_contextual_kw("const")
+    }
+
+    /// Look ahead from the current position (which should be at `WORD`) past
+    /// any dotted path segments. Returns true if the next non-trivia token is
+    /// `{`, signalling a class destructure pattern.
+    fn looks_like_destructure_pattern(&self) -> bool {
+        // We're at a WORD. Walk forward over `(WORD)('.' WORD)*`, optional
+        // trailing generic args, and check for `{` at the end.
+        let Some(mut idx) = self.current_non_trivia_index() else {
+            return false;
+        };
+        // Skip first WORD.
+        idx = self.skip_trivia_and_comments_from(idx + 1);
+        loop {
+            if idx >= self.tokens.len() {
+                return false;
+            }
+            match self.tokens[idx].kind {
+                TokenKind::Dot => {
+                    let next = self.skip_trivia_and_comments_from(idx + 1);
+                    if next < self.tokens.len() && self.tokens[next].kind == TokenKind::Word {
+                        idx = self.skip_trivia_and_comments_from(next + 1);
+                    } else {
+                        return false;
+                    }
+                }
+                TokenKind::LBrace => return true,
+                TokenKind::Less if self.looks_like_generic_args_from(idx) => {
+                    let Some(close) = self.find_matching_generic_args_close_from(idx) else {
+                        return false;
+                    };
+                    idx = self.skip_trivia_and_comments_from(close + 1);
+                    if idx < self.tokens.len() && self.tokens[idx].kind == TokenKind::LBrace {
+                        return true;
+                    }
+                    return false;
+                }
+                _ => return false,
+            }
+        }
+    }
+
+    fn looks_like_generic_args_from(&self, start: usize) -> bool {
+        if self.tokens.get(start).map(|t| t.kind) != Some(TokenKind::Less) {
+            return false;
+        }
+        let Some(close) = self.find_matching_generic_args_close_from(start) else {
+            return false;
+        };
+        let follow = self.skip_trivia_and_comments_from(close + 1);
+        let preceded_by_newline = self.newline_before_next_non_trivia(close + 1);
+        Self::is_generic_args_follow(self.tokens.get(follow).map(|t| t.kind), preceded_by_newline)
+    }
+
+    fn find_matching_generic_args_close_from(&self, start: usize) -> Option<usize> {
+        let mut depth: i32 = 1;
+        let mut i = self.skip_trivia_and_comments_from(start + 1);
+        while i < self.tokens.len() {
+            match self.tokens[i].kind {
+                TokenKind::Less => depth += 1,
+                TokenKind::Greater => {
+                    depth -= 1;
+                    if depth == 0 {
+                        return Some(i);
+                    }
+                }
+                TokenKind::GreaterGreater => {
+                    if depth < 2 {
+                        return None;
+                    }
+                    depth -= 2;
+                    if depth == 0 {
+                        return Some(i);
+                    }
+                }
+                TokenKind::Word
+                | TokenKind::Dot
+                | TokenKind::Comma
+                | TokenKind::Equals
+                | TokenKind::LBracket
+                | TokenKind::RBracket
+                | TokenKind::Question
+                | TokenKind::Pipe
+                | TokenKind::BigintLiteral
+                | TokenKind::IntegerLiteral
+                | TokenKind::FloatLiteral
+                | TokenKind::Minus
+                | TokenKind::Quote
+                | TokenKind::Hash
+                | TokenKind::LParen
+                | TokenKind::RParen
+                // `spawn`/`await` are valid namespace segments inside type
+                // args (`foo<baml.spawn.SpawnParams<T, E>>(x)`), mirroring
+                // the type-path parser's segment set.
+                | TokenKind::Spawn
+                | TokenKind::Await => {}
+                _ => return None,
+            }
+            i = self.skip_trivia_and_comments_from(i + 1);
+        }
+        None
+    }
+
+    /// Parse a binding-introducer-prefixed pattern. Either:
+    /// - `let _` / `const _` — `WILDCARD_PATTERN`
+    /// - `let WORD` / `const WORD` — simple `BINDING_PATTERN`
+    /// - `let PATH { fields }` / `const PATH { fields }` — `DESTRUCTURE_PATTERN`
+    fn parse_let_pattern(&mut self) {
+        debug_assert!(self.at_binding_intro());
+        let start = self.events.len();
+        self.bump_binding_intro();
+
+        if !self.at(TokenKind::Word) {
+            self.error_unexpected_token("identifier after 'let'".to_string());
+            self.wrap_events_in_node(start, SyntaxKind::BINDING_PATTERN);
+            self.finish_node();
+            return;
+        }
+
+        // `let _` is a wildcard, not a binding to a name called `_`.
+        if self.at_wildcard_word() {
+            self.bump(); // _
+            self.wrap_events_in_node(start, SyntaxKind::WILDCARD_PATTERN);
+            self.finish_node();
+            return;
+        }
+
+        // Decide between simple binding (`let x`) and destructure
+        // (`let Class { ... }`) by peeking past dotted segments for `{`.
+        // Same condition-position suppression as `parse_pattern_atom` —
+        // `if x is let Class { f }` would otherwise eat the then-block.
+        if self.suppress_destructure_pattern_depth == 0 && self.looks_like_destructure_pattern() {
+            self.parse_path();
+            if self.at(TokenKind::Less) && self.looks_like_generic_args() {
+                self.parse_type_args();
+            }
+            self.parse_destructure_field_list();
+            self.wrap_events_in_node(start, SyntaxKind::DESTRUCTURE_PATTERN);
+            self.finish_node();
+            return;
+        }
+
+        self.bump(); // WORD
+        // Optional `: <pattern>` sub-pattern. Folded directly into the
+        // BINDING_PATTERN node. The right side is any pattern — type
+        // ascription (`let x: int`), aliasing chain (`let x: let y`),
+        // structural destructure (`let x: [a, b]`, `let x: Class { f }`),
+        // etc. `let x: int | string` consumes `|` as type-union syntax
+        // (use explicit parens for `(let x: int) | (let y: string)`).
+        if self.at(TokenKind::Colon) {
+            self.bump(); // :
+            self.parse_pattern();
+        }
+        self.wrap_events_in_node(start, SyntaxKind::BINDING_PATTERN);
+        self.finish_node();
+    }
+
+    /// True if the current token is a `WORD` whose text is exactly `_`.
+    /// Used to recognise the wildcard atom (`_` or `let _`).
+    fn at_wildcard_word(&self) -> bool {
+        self.at(TokenKind::Word) && self.current().map(|t| t.text.as_str()) == Some("_")
+    }
+
+    /// Parse a class destructure pattern: `PATH '{' field_list '}'`.
+    /// `has_let` is informational; if the caller already consumed `let`, this
+    /// function still works because the `let` token was emitted before the
+    /// wrapper begins (callers use `wrap_events_in_node` themselves in that
+    /// case — see `parse_let_pattern`). For pattern atoms with no `let`, this
+    /// emits a self-contained `DESTRUCTURE_PATTERN`.
+    fn parse_destructure_pattern(&mut self, _has_let: bool) {
+        self.with_node(SyntaxKind::DESTRUCTURE_PATTERN, |p| {
+            p.parse_path();
+            if p.at(TokenKind::Less) && p.looks_like_generic_args() {
+                p.parse_type_args();
+            }
+            p.parse_destructure_field_list();
+        });
+    }
+
+    /// Parse a dotted path: `WORD ('.' WORD)*`. Tokens are emitted into the
+    /// current node — no wrapper node is added.
+    fn parse_path(&mut self) {
+        if !self.at(TokenKind::Word) {
+            self.error_unexpected_token("identifier".to_string());
+            return;
+        }
+        self.bump(); // first WORD
+        while self.at(TokenKind::Dot) && self.peek(1).map(|t| t.kind) == Some(TokenKind::Word) {
+            self.bump(); // .
+            self.bump(); // WORD
+        }
+    }
+
+    /// Parse `'{' field_pattern (',' field_pattern)* ','? '}'`.
+    fn parse_destructure_field_list(&mut self) {
+        if !self.expect(TokenKind::LBrace) {
+            return;
+        }
+
+        while !self.at(TokenKind::RBrace) && !self.at_end() {
+            if self.at_top_level_keyword_except_client() {
+                break;
+            }
+            self.parse_field_pattern();
+
+            if self.at(TokenKind::RBrace) {
+                break;
+            }
+            if !self.eat(TokenKind::Comma) {
+                self.error_unexpected_token("',' or '}' after field pattern".to_string());
+                // Avoid infinite loop on garbage.
+                if !self.at(TokenKind::Word) && !self.at(TokenKind::RBrace) && !self.at_end() {
+                    self.bump();
+                }
+            }
+        }
+
+        self.expect(TokenKind::RBrace);
+    }
+
+    /// Parse a single field pattern: `WORD` (shorthand) or `WORD ':' PATTERN`.
+    fn parse_field_pattern(&mut self) {
+        self.with_node(SyntaxKind::FIELD_PATTERN, |p| {
+            if !p.at(TokenKind::Word) {
+                p.error_unexpected_token("field name".to_string());
+                if !p.at_end() && !p.at(TokenKind::Comma) && !p.at(TokenKind::RBrace) {
+                    p.bump();
+                }
+                return;
+            }
+            p.bump(); // field name
+
+            if p.eat(TokenKind::Colon) {
+                p.parse_pattern();
+            }
+        });
+    }
+
+    /// Parse an array destructure pattern:
+    /// `'[' (PATTERN | '..' PATTERN?) (',' ...)* ','? ']'`.
+    ///
+    /// Array slots are normal pattern positions. A binding must therefore be
+    /// written with `let`, e.g. `[let first, ..let rest]`.
+    fn parse_array_pattern(&mut self) {
+        self.with_node(SyntaxKind::ARRAY_PATTERN, |p| {
+            if !p.expect(TokenKind::LBracket) {
+                return;
+            }
+
+            let mut seen_rest = false;
+            while !p.at(TokenKind::RBracket) && !p.at_end() {
+                if p.at(TokenKind::DotDot) {
+                    if seen_rest {
+                        p.error_unexpected_token(
+                            "only one '..' rest pattern is allowed in an array pattern".to_string(),
+                        );
+                    }
+                    seen_rest = true;
+                }
+                p.parse_array_pattern_element();
+
+                if p.at(TokenKind::RBracket) {
+                    break;
+                }
+                if !p.eat(TokenKind::Comma) {
+                    p.error_unexpected_token("',' or ']' after array pattern element".to_string());
+                    if !p.at(TokenKind::RBracket) && !p.at_end() {
+                        p.bump();
+                    }
+                }
+            }
+
+            p.expect(TokenKind::RBracket);
+
+            // Optional `: T` type ascription — folded into the
+            // ARRAY_PATTERN node. Consumes `|` as type-union syntax.
+            if p.at(TokenKind::Colon) {
+                p.bump(); // :
+                p.parse_type_with(/* consume_union = */ true);
+            }
+        });
+    }
+
+    fn parse_array_pattern_element(&mut self) {
+        self.with_node(SyntaxKind::ARRAY_PATTERN_ELEMENT, |p| {
+            if p.eat(TokenKind::DotDot) {
+                if !p.at(TokenKind::Comma) && !p.at(TokenKind::RBracket) && !p.at_end() {
+                    p.parse_pattern();
+                }
+                return;
+            }
+
+            p.parse_pattern();
         });
     }
 
@@ -3127,7 +4658,15 @@ impl<'a> Parser<'a> {
             if !p.expect(TokenKind::LParen) {
                 return;
             }
-            p.parse_catch_pattern();
+            // The catch binding is always a bare identifier (like a function
+            // parameter), not a full pattern.
+            p.with_node(SyntaxKind::CATCH_BINDING, |p| {
+                if p.at(TokenKind::Word) {
+                    p.bump();
+                } else {
+                    p.error_unexpected_token("catch binding identifier".to_string());
+                }
+            });
             // Optional second binding: catch (e, stack_trace)
             if p.at(TokenKind::Comma) {
                 p.bump(); // consume ','
@@ -3162,7 +4701,7 @@ impl<'a> Parser<'a> {
 
     fn parse_catch_arm(&mut self) {
         self.with_node(SyntaxKind::CATCH_ARM, |p| {
-            p.parse_catch_pattern();
+            p.parse_pattern();
 
             if p.at(TokenKind::FatArrow) {
                 p.bump(); // =>
@@ -3179,16 +4718,6 @@ impl<'a> Parser<'a> {
             }
 
             p.eat(TokenKind::Comma);
-        });
-    }
-
-    fn parse_catch_pattern(&mut self) {
-        self.with_node(SyntaxKind::CATCH_PATTERN, |p| {
-            p.parse_pattern_element();
-            while p.at(TokenKind::Pipe) {
-                p.bump(); // |
-                p.parse_pattern_element();
-            }
         });
     }
 
@@ -3265,17 +4794,71 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_while_stmt(&mut self) {
+        // `while let PATTERN = SCRUTINEE { ... }` is a distinct refutable form.
+        // Decided here by peeking past `while` for a `let` token — patterns
+        // always start with `let` (BAML's binding marker), and no normal
+        // expression starts with `let`, so this is unambiguous. Mirrors
+        // `parse_if_expr`'s `if` vs `if let` decision.
+        if self.peek_is_binding_intro_stmt(1) {
+            self.parse_while_let_stmt();
+            return;
+        }
+
         self.with_node(SyntaxKind::WHILE_STMT, |p| {
             p.expect(TokenKind::While);
 
-            // Condition
+            // Condition: same destructure suppression as `if` — see
+            // `parse_if_expr` for rationale.
+            p.suppress_destructure_pattern_depth += 1;
             p.parse_expr();
+            p.suppress_destructure_pattern_depth -= 1;
 
             // Body
             if p.at(TokenKind::LBrace) {
                 p.parse_block_expr();
             } else {
                 p.error_unexpected_token("block after while condition".to_string());
+            }
+        });
+    }
+
+    /// Parse `while let PATTERN = SCRUTINEE { ... }`.
+    ///
+    /// Caller (`parse_while_stmt`) has already verified the sequence starts
+    /// with `while let`. Mirrors `parse_if_let_expr` (the `let` is consumed by
+    /// `parse_pattern`, BAML patterns carry their own leading `let` binding
+    /// marker), but with NO `else` branch — a loop produces unit.
+    fn parse_while_let_stmt(&mut self) {
+        self.with_node(SyntaxKind::WHILE_LET_STMT, |p| {
+            p.expect(TokenKind::While);
+            // Pattern. For top-level array patterns (`while let [a, b] = xs`),
+            // the `let` keyword has to be consumed at the statement level
+            // because `parse_let_pattern` only handles binding / destructure
+            // shapes after `let`. Mirrors `parse_if_let_expr`.
+            if p.binding_intro_is_followed_by_array_pattern() {
+                p.bump_binding_intro(); // statement-level binding introducer
+                p.parse_pattern();
+            } else {
+                // The introducer is consumed inside parse_pattern → parse_let_pattern.
+                p.parse_pattern();
+            }
+
+            if !p.eat(TokenKind::Equals) {
+                p.error_unexpected_token("'=' after while-let pattern".to_string());
+            }
+
+            // Scrutinee — exclude assignment operators (same as let-stmt and
+            // if-let), and apply condition-position destructure suppression so
+            // a trailing `is Class { ... }` doesn't eat the loop body block.
+            p.suppress_destructure_pattern_depth += 1;
+            p.parse_expr_bp(3);
+            p.suppress_destructure_pattern_depth -= 1;
+
+            // Body
+            if p.at(TokenKind::LBrace) {
+                p.parse_block_expr();
+            } else {
+                p.error_unexpected_token("block after while-let scrutinee".to_string());
             }
         });
     }
@@ -3289,17 +4872,20 @@ impl<'a> Parser<'a> {
                 p.bump(); // (
 
                 // Check if this is iterator-style: for (let var in expr) or C-style: for (init; cond; update)
-                if p.at(TokenKind::Let) {
+                if p.at_binding_intro_stmt() {
                     // Peek ahead to check if this is iterator-style (has 'in' keyword)
-                    // For iterator-style: for (let i in expr)
-                    // For C-style: for (let i = 0; ...)
+                    // For iterator-style: for (let i in expr) / for (const i in expr)
+                    // For C-style: for (let i = 0; ...) / for (const i = 0; ...)
                     if p.looks_like_for_in_loop() {
-                        // Iterator-style: for (let var in expr)
+                        // Iterator-style: for (let var in expr) / for (const var in expr)
                         p.parse_for_in_pattern();
                         p.expect(TokenKind::In);
                         p.parse_expr(); // iterator expression
                     } else {
-                        // C-style: for (let i = 0; cond; update)
+                        // C-style: for (let i = 0; cond; update). A
+                        // `let … else` here is unusual but legal — it
+                        // makes the loop unreachable, same as any other
+                        // diverging statement before the loop.
                         p.parse_let_stmt();
                         // The let statement already consumed the semicolon
                         // Now parse condition
@@ -3314,35 +4900,24 @@ impl<'a> Parser<'a> {
                         }
                     }
                 } else if p.at(TokenKind::Word) {
-                    // Could be iterator-style: for (i in expr)
-                    // Or could be C-style starting with expression: for (i = 0; ...)
-                    // Look ahead to determine
-                    if p.peek(1).map(|t| t.kind == TokenKind::In).unwrap_or(false) {
-                        // Simple iterator-style without let: for (i in expr)
-                        p.bump(); // variable name
-                        p.bump(); // in
-                        p.parse_expr(); // iterator expression
-                    } else {
-                        // C-style without initializer starting with expression
-                        // Just parse as expression-based C-style
-                        p.parse_c_style_for_body();
-                    }
+                    // Bare WORD inside parens may be a C-style header starting
+                    // with an expression (`for (i = 0; cond; update)`). It
+                    // can NOT be a let-less iterator form like `for (i in
+                    // expr)` — bindings always require `let`. Defer to the
+                    // C-style path.
+                    p.parse_c_style_for_body();
                 } else if p.at(TokenKind::Semicolon) {
                     // C-style with empty initializer: for (; cond; update)
                     p.parse_c_style_for_body();
                 } else {
-                    p.error_unexpected_token("loop variable, 'let', or ';'".to_string());
+                    p.error_unexpected_token("'let' or ';'".to_string());
                 }
 
                 p.expect(TokenKind::RParen);
             } else {
-                // Non-parenthesized form: for var in expr { }
-                if p.at(TokenKind::Word) {
-                    p.bump();
-                } else {
-                    p.error_unexpected_token("loop variable".to_string());
-                }
-
+                // Non-parenthesized form: `for let <pattern> in <expr> { }`.
+                // The `let` is required — bindings always require it.
+                p.parse_for_in_pattern();
                 p.expect(TokenKind::In);
                 p.parse_expr();
             }
@@ -3356,13 +4931,45 @@ impl<'a> Parser<'a> {
         });
     }
 
-    /// Check if this looks like a for-in loop (has 'in' keyword after variable name)
+    /// Check if this looks like a for-in loop. We're at a binding introducer.
+    /// Scan forward
+    /// past the (possibly complex) pattern that follows: bindings, paths,
+    /// destructures (`{ ... }`), parenthesised groups, type annotations
+    /// after `:`. Whichever of `in` / `=` / `;` we hit at the top level
+    /// (no open brackets/parens/braces) decides the form: `in` →
+    /// iterator-style, `=` or `;` → C-style.
+    ///
+    /// Uses a stack of expected closers so out-of-order delimiters (e.g.
+    /// `( [ ) ]`) bail out rather than mis-classify.
     fn looks_like_for_in_loop(&self) -> bool {
-        // We're at 'let', look for pattern: let WORD in
-        // Skip: let (0), WORD (1), check for 'in' (2)
-        self.peek(2)
-            .map(|t| t.kind == TokenKind::In)
-            .unwrap_or(false)
+        debug_assert!(self.at_binding_intro());
+        let mut stack: Vec<TokenKind> = Vec::new();
+        let mut i: usize = 1; // start after the binding introducer
+        loop {
+            let Some(tok) = self.peek(i) else {
+                return false;
+            };
+            match tok.kind {
+                TokenKind::LParen => stack.push(TokenKind::RParen),
+                TokenKind::LBracket => stack.push(TokenKind::RBracket),
+                TokenKind::LBrace => stack.push(TokenKind::RBrace),
+                close @ (TokenKind::RParen | TokenKind::RBracket | TokenKind::RBrace) => {
+                    let Some(expected) = stack.pop() else {
+                        // Unbalanced closer at top level — we've walked off
+                        // the end of the for-header. Whatever this is,
+                        // it's not an iterator form.
+                        return false;
+                    };
+                    if expected != close {
+                        return false;
+                    }
+                }
+                TokenKind::In if stack.is_empty() => return true,
+                TokenKind::Equals | TokenKind::Semicolon if stack.is_empty() => return false,
+                _ => {}
+            }
+            i += 1;
+        }
     }
 
     /// Parse C-style for loop body (condition and update parts): ; cond; update
@@ -3388,21 +4995,17 @@ impl<'a> Parser<'a> {
     /// Parse a for-in loop pattern: let var (without initializer)
     fn parse_for_in_pattern(&mut self) {
         self.with_node(SyntaxKind::LET_STMT, |p| {
-            p.expect(TokenKind::Let);
-
-            // Variable name
-            if p.at(TokenKind::Word) {
-                p.bump();
+            // For-in pattern shares the let-statement shape: must start with
+            // `let`/`const`. No initializer.
+            if !p.at_binding_intro_stmt() {
+                p.error_unexpected_token("'let'".to_string());
+            }
+            if p.binding_intro_is_followed_by_array_pattern() {
+                p.bump_binding_intro(); // statement-level binding introducer
+                p.parse_pattern();
             } else {
-                p.error_unexpected_token("variable name".to_string());
+                p.parse_pattern();
             }
-
-            // Optional type annotation
-            if p.eat(TokenKind::Colon) {
-                p.parse_type();
-            }
-
-            // No initializer for for-in loops - don't emit error
         });
     }
 
@@ -3530,7 +5133,7 @@ impl<'a> Parser<'a> {
                     // obj?.field — optional field access
                     self.wrap_events_in_node(lhs_start, SyntaxKind::OPTIONAL_FIELD_ACCESS_EXPR);
                     self.bump(); // ?.
-                    if self.at(TokenKind::Word) {
+                    if self.at_member_name() {
                         self.bump();
                     } else {
                         self.error_unexpected_token(
@@ -3539,6 +5142,13 @@ impl<'a> Parser<'a> {
                     }
                     self.finish_node();
                 }
+            } else if op == TokenKind::Dot && self.looks_like_as_projection() {
+                let lhs_start = self.find_previous_expr_start_after(expr_start);
+                self.wrap_events_in_node(lhs_start, SyntaxKind::UPCAST_EXPR);
+                self.bump(); // .
+                self.bump(); // contextual `as`
+                self.parse_generic_args();
+                self.finish_node();
             } else if op == TokenKind::Dot || op == TokenKind::Dollar {
                 // Field access on a complex expression.
                 //
@@ -3556,7 +5166,7 @@ impl<'a> Parser<'a> {
                 let lhs_start = self.find_previous_expr_start_after(expr_start);
                 self.wrap_events_in_node(lhs_start, SyntaxKind::FIELD_ACCESS_EXPR);
                 self.bump(); // . or $
-                if self.at(TokenKind::Word) {
+                if self.at_member_name() {
                     self.bump();
                 } else {
                     let punct = if op == TokenKind::Dollar {
@@ -3570,8 +5180,16 @@ impl<'a> Parser<'a> {
             } else if op == TokenKind::LBrace {
                 // Object literal/constructor
                 // Check if we have a preceding expression (constructor name/expression)
-                // by checking if we've emitted any events since expr_start
-                if self.events.len() > expr_start && self.looks_like_object_constructor() {
+                // by checking if we've emitted any events since expr_start.
+                //
+                // `suppress_object_literal_depth > 0` is set by `parse_spawn_expr`
+                // while parsing the optional name expression — without it,
+                // `spawn nm { y: 1 }` would consume the body's `{ y: 1 }` as
+                // a struct literal and then fail to find a body brace.
+                if self.suppress_object_literal_depth == 0
+                    && self.events.len() > expr_start
+                    && self.looks_like_object_constructor()
+                {
                     // We have a preceding expression that looks like a type/constructor,
                     // treat as object literal/constructor
                     let lhs_start = self.find_previous_expr_start_after(expr_start);
@@ -3584,6 +5202,18 @@ impl<'a> Parser<'a> {
                     // Don't consume the brace - it's likely a block/body for an outer construct
                     break;
                 }
+            } else if op == TokenKind::Is {
+                // `<expr> is <pattern>` — Rust `matches!`-style pattern test.
+                // Same binding power as comparison operators (18, 19).
+                let left_bp = 18u8;
+                if left_bp < min_bp {
+                    break;
+                }
+                let lhs_start = self.find_previous_expr_start_after(expr_start);
+                self.bump(); // is
+                self.parse_pattern();
+                self.wrap_events_in_node(lhs_start, SyntaxKind::IS_EXPR);
+                self.finish_node();
             } else if let Some((left_bp, right_bp)) = Self::infix_binding_power(op) {
                 // General infix operators (including < when it's not generic args)
                 if left_bp < min_bp {
@@ -3707,8 +5337,13 @@ impl<'a> Parser<'a> {
             Some(t) if t.kind == TokenKind::DotDotDot => true, // spread
             Some(t) if t.kind == TokenKind::RBrace => true,    // empty braces
             Some(t) if t.kind == TokenKind::Word => {
-                // Check for `<word> :` pattern
-                self.peek(2)
+                let mut i = 2;
+                while self.peek(i).map(|t| t.kind) == Some(TokenKind::Dot)
+                    && self.peek(i + 1).map(|t| t.kind) == Some(TokenKind::Word)
+                {
+                    i += 2;
+                }
+                self.peek(i)
                     .map(|t| t.kind == TokenKind::Colon)
                     .unwrap_or(false)
             }
@@ -3754,15 +5389,80 @@ impl<'a> Parser<'a> {
                 p.bump(); // operator
                 p.parse_expr_bp(PREFIX_BP); // operand: postfix ops bind tighter
             });
+        } else if self.at(TokenKind::Await) {
+            // BEP-034 `await expr` — prefix operator binding like other
+            // prefixes so postfix `.`/`()`/`[]` still attach to the
+            // awaited value. The operand is parsed *no-catch* (like the
+            // payload of `throw`, see `parse_throw_expr`) so a trailing
+            // `catch` binds to the whole `await expr` — i.e.
+            // `await f catch (e) {…}` is `(await f) catch (e) {…}`, catching
+            // the error `await` re-throws — not `await (f catch …)`, which
+            // would attach the handler to the never-throwing future handle.
+            self.with_node(SyntaxKind::AWAIT_EXPR, |p| {
+                p.bump(); // `await`
+                p.parse_expr_bp_no_catch(PREFIX_BP);
+            });
+        } else if self.at(TokenKind::Spawn) {
+            // BEP-034 `spawn name_expr? block`.
+            self.parse_spawn_expr();
         } else {
             self.parse_primary_expr();
         }
     }
 
+    /// Parse `spawn name_expr? (with expr (, expr)*)? { body }`. The name
+    /// expression is optional and is parsed until we see `with` or `{`. The
+    /// optional `with` clause (BEP-034 spawn options) is a comma-separated
+    /// list of expressions; in v1 the only accepted form is a single
+    /// `baml.spawn.options(...)` call, enforced later in TIR. The body is
+    /// always a brace-delimited block.
+    fn parse_spawn_expr(&mut self) {
+        self.with_node(SyntaxKind::SPAWN_EXPR, |p| {
+            p.bump(); // `spawn`
+            // Optional name expression: anything that can lead an
+            // expression and is not `{` or `with`. We parse the name with a
+            // binding power of 1 (`with` is a bare Word with no infix binding
+            // power, so the name naturally terminates before it), then the
+            // optional `with` clause, then the brace-block.
+            if !p.at(TokenKind::LBrace) && !p.at_contextual_kw("with") {
+                // Suppress object-literal postfix so the body brace
+                // isn't consumed as a struct constructor — without
+                // this, `spawn nm { y: 1 }` parses `nm { y: 1 }` as
+                // an OBJECT_LITERAL and the body is missing.
+                p.suppress_object_literal_depth += 1;
+                p.parse_expr_bp(1);
+                p.suppress_object_literal_depth -= 1;
+            }
+            // Optional `with expr (, expr)*` clause. Suppress object literals
+            // for the same reason as the name: keep the body brace available.
+            if p.at_contextual_kw("with") {
+                p.bump_contextual_with();
+                p.suppress_object_literal_depth += 1;
+                p.parse_expr_bp(1);
+                while p.eat(TokenKind::Comma) {
+                    // Tolerate a trailing comma before the body brace.
+                    if p.at(TokenKind::LBrace) {
+                        break;
+                    }
+                    p.parse_expr_bp(1);
+                }
+                p.suppress_object_literal_depth -= 1;
+            }
+            if p.at(TokenKind::LBrace) {
+                p.parse_block_expr();
+            } else {
+                p.error_unexpected_token("'{' after spawn".to_string());
+            }
+        });
+    }
+
     /// Parse primary expression (literals, identifiers, parentheses)
     fn parse_primary_expr(&mut self) {
-        if self.at(TokenKind::IntegerLiteral) || self.at(TokenKind::FloatLiteral) {
-            // Numeric literal
+        if self.at(TokenKind::BigintLiteral)
+            || self.at(TokenKind::IntegerLiteral)
+            || self.at(TokenKind::FloatLiteral)
+        {
+            // Numeric literal (bigint, integer, or float)
             self.bump();
         } else if self.parse_any_string() {
             // String literal
@@ -3798,10 +5498,15 @@ impl<'a> Parser<'a> {
             // Lambda expression: (params) -> [RetType] { body }
             self.parse_lambda_expr();
         } else if self.at(TokenKind::LParen) {
-            // Parenthesized expression
+            // Parenthesized expression. Parens reset the destructure
+            // suppression: `if (x is Foo { f })` lets the user opt back
+            // into a destructure that condition-position would otherwise
+            // forbid.
             self.with_node(SyntaxKind::PAREN_EXPR, |p| {
                 p.bump(); // (
+                let saved = std::mem::take(&mut p.suppress_destructure_pattern_depth);
                 p.parse_expr();
+                p.suppress_destructure_pattern_depth = saved;
                 p.expect(TokenKind::RParen);
             });
         } else if self.at(TokenKind::LBracket) {
@@ -3865,17 +5570,29 @@ impl<'a> Parser<'a> {
             p.expect(TokenKind::LParen);
 
             if !p.at(TokenKind::RParen) {
-                p.parse_expr();
+                p.parse_call_arg();
 
                 while p.eat(TokenKind::Comma) {
                     if p.at(TokenKind::RParen) {
                         break; // Trailing comma
                     }
-                    p.parse_expr();
+                    p.parse_call_arg();
                 }
             }
 
             p.expect(TokenKind::RParen);
+        });
+    }
+
+    fn parse_call_arg(&mut self) {
+        self.with_node(SyntaxKind::CALL_ARG, |p| {
+            if (p.at(TokenKind::Word) || p.at(TokenKind::Client))
+                && p.peek(1).map(|t| t.kind) == Some(TokenKind::Equals)
+            {
+                p.bump();
+                p.expect(TokenKind::Equals);
+            }
+            p.parse_expr();
         });
     }
 
@@ -3933,7 +5650,7 @@ impl<'a> Parser<'a> {
                 TokenKind::Greater => {
                     depth -= 1;
                     if depth == 0 {
-                        return Self::is_generic_args_follow(self.peek(i + 1).map(|t| t.kind));
+                        return self.generic_args_follow_at_peek(i);
                     }
                 }
                 // `>>` closes two levels at once. Only treat it as a dual
@@ -3945,7 +5662,7 @@ impl<'a> Parser<'a> {
                     }
                     depth -= 2;
                     if depth == 0 {
-                        return Self::is_generic_args_follow(self.peek(i + 1).map(|t| t.kind));
+                        return self.generic_args_follow_at_peek(i);
                     }
                 }
                 // Tokens that can legally appear inside a type-argument
@@ -3956,7 +5673,10 @@ impl<'a> Parser<'a> {
                 // - `LBracket` / `RBracket` for array suffix `T[]`
                 // - `Question` for optional `T?`
                 // - `Pipe` for unions `A | B`
-                // - `IntegerLiteral` / `FloatLiteral` for literal-union members
+                // - `BigintLiteral` / `IntegerLiteral` / `FloatLiteral` for
+                //   literal-union members
+                // - `Minus` to allow negative numeric literal types (`-1`)
+                //   that `parse_type_primary` accepts as type atoms
                 // - `Quote` / `Hash` for string-literal types (`"a"`,
                 //   `#"raw"#`)
                 // - `LParen` / `RParen` for parenthesized union types
@@ -3964,16 +5684,24 @@ impl<'a> Parser<'a> {
                 TokenKind::Word
                 | TokenKind::Dot
                 | TokenKind::Comma
+                | TokenKind::Equals
                 | TokenKind::LBracket
                 | TokenKind::RBracket
                 | TokenKind::Question
                 | TokenKind::Pipe
+                | TokenKind::BigintLiteral
                 | TokenKind::IntegerLiteral
                 | TokenKind::FloatLiteral
+                | TokenKind::Minus
                 | TokenKind::Quote
                 | TokenKind::Hash
                 | TokenKind::LParen
-                | TokenKind::RParen => {}
+                | TokenKind::RParen
+                // `spawn`/`await` are valid namespace segments inside type
+                // args (`foo<baml.spawn.SpawnParams<T, E>>(x)`), mirroring
+                // the type-path parser's segment set.
+                | TokenKind::Spawn
+                | TokenKind::Await => {}
                 // Anything else — operators, braces, EOF-ish tokens — can't
                 // appear in a type, so this `<` is a comparison.
                 _ => return false,
@@ -3982,11 +5710,179 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn is_generic_args_follow(kind: Option<TokenKind>) -> bool {
+    /// Decide whether a balanced `<...>` is a generic-argument list (vs. a `<`
+    /// comparison) based on the token that follows the closing `>`.
+    ///
+    /// This ports TypeScript's `canFollowTypeArgumentsInExpression`
+    /// (typescript-go internal/parser/parser.go) so that generic callables can
+    /// be referenced as values (`let f = foo<int>;`), not only called
+    /// (`foo<int>(x)`). `preceded_by_newline` is whether a line break sits
+    /// between the closing `>` and `follow`.
+    fn is_generic_args_follow(follow: Option<TokenKind>, preceded_by_newline: bool) -> bool {
+        use TokenKind::{
+            Dot, Greater, GreaterGreater, LBrace, LParen, Less, LessLess, Minus, Plus,
+        };
+        match follow {
+            // Definitely type args: a call `(`, a generic constructor
+            // `Box<int> { ... }`, or a qualified path `Wrapper<T>.of(x)`.
+            Some(LParen | LBrace | Dot) => true,
+            // Ambiguous with comparison/shift — favor the comparison reading.
+            // Mirrors TS's false-set (`<`, `>`, `+`, `-`); `+`/`-` here are
+            // unary, and `<<`/`>>` are BAML's compound shift tokens.
+            Some(Less | LessLess | Greater | GreaterGreater | Plus | Minus) => false,
+            // End of input cannot start an expression → favor type args.
+            None => true,
+            // TS fallback: favor the type-argument interpretation when the
+            // closing `>` is followed by a line break, a binary operator, or
+            // anything that cannot start an expression.
+            Some(kind) => {
+                preceded_by_newline
+                    || Self::is_binary_operator(kind)
+                    || !Self::is_start_of_expression(kind)
+            }
+        }
+    }
+
+    /// Follow-check for the peek-based scan: `gt_peek` is the peek index of the
+    /// closing `>`/`>>` token; the follow token is `peek(gt_peek + 1)`.
+    fn generic_args_follow_at_peek(&self, gt_peek: usize) -> bool {
+        let follow = self.peek(gt_peek + 1).map(|t| t.kind);
+        let preceded_by_newline = self
+            .raw_index_of_peek(gt_peek)
+            .is_some_and(|gt_raw| self.newline_before_next_non_trivia(gt_raw + 1));
+        Self::is_generic_args_follow(follow, preceded_by_newline)
+    }
+
+    /// Whether `kind` is an infix/binary operator (mirrors TS `isBinaryOperator`).
+    fn is_binary_operator(kind: TokenKind) -> bool {
+        Self::infix_binding_power(kind).is_some()
+    }
+
+    /// Whether `kind` can begin an expression (mirrors TS `isStartOfExpression`).
+    /// Covers the primary-expression starts of `parse_primary_expr` and the
+    /// unary/prefix starts of `parse_prefix`.
+    fn is_start_of_expression(kind: TokenKind) -> bool {
+        use TokenKind::{
+            Await, BigintLiteral, Client, FloatLiteral, Hash, If, IntegerLiteral, LBrace, LBracket,
+            LParen, Less, Match, Minus, MinusMinus, Not, PlusPlus, Quote, Spawn, Throw, Tilde,
+            Word,
+        };
         matches!(
             kind,
-            Some(TokenKind::LParen | TokenKind::LBrace | TokenKind::Dot)
+            // primary expression starts
+            BigintLiteral
+                | IntegerLiteral
+                | FloatLiteral
+                | Quote   // string literal
+                | Hash    // raw string literal `#"..."#`
+                | Word
+                | Client
+                | LParen
+                | LBracket
+                | LBrace
+                | If
+                | Match
+                | Throw
+                | Less    // generic lambda `<T>(...)`
+                // unary / prefix expression starts
+                | Minus
+                | Not
+                | Tilde
+                | PlusPlus
+                | MinusMinus
+                | Await
+                | Spawn
         )
+    }
+
+    /// Raw token index of the `n`-th non-trivia token at/after the cursor,
+    /// mirroring `peek`'s comment/whitespace skipping. Used to recover line-break
+    /// information that `peek` discards.
+    fn raw_index_of_peek(&self, n: usize) -> Option<usize> {
+        let mut count = 0;
+        let mut i = self.current;
+        while i < self.tokens.len() {
+            let new_i = self.skip_comment_at(i);
+            if new_i != i {
+                i = new_i;
+                continue;
+            }
+            if !self.is_basic_trivia(self.tokens[i].kind) {
+                if count == n {
+                    return Some(i);
+                }
+                count += 1;
+            }
+            i += 1;
+        }
+        None
+    }
+
+    /// Whether a `Newline` token sits between raw index `after` and the next
+    /// non-trivia token (comments count as trivia).
+    fn newline_before_next_non_trivia(&self, after: usize) -> bool {
+        let mut i = after;
+        while i < self.tokens.len() {
+            let new_i = self.skip_comment_at(i);
+            if new_i != i {
+                i = new_i;
+                continue;
+            }
+            let kind = self.tokens[i].kind;
+            if kind == TokenKind::Newline {
+                return true;
+            }
+            if !self.is_basic_trivia(kind) {
+                return false;
+            }
+            i += 1;
+        }
+        false
+    }
+
+    /// Parse type arguments in a type context: `<Type, Assoc = Type, ...>`.
+    fn parse_type_args(&mut self) {
+        self.type_args_depth += 1;
+        self.with_node(SyntaxKind::TYPE_ARGS, |p| {
+            p.expect(TokenKind::Less);
+
+            if !p.at(TokenKind::Greater) && !p.at(TokenKind::GreaterGreater) {
+                p.parse_type_arg_or_associated_binding();
+
+                while p.pending_greaters == 0 && p.eat(TokenKind::Comma) {
+                    if p.at(TokenKind::Greater) || p.at(TokenKind::GreaterGreater) {
+                        break; // Trailing comma
+                    }
+                    p.parse_type_arg_or_associated_binding();
+                }
+            } else {
+                p.error_unexpected_token("type".to_string());
+            }
+
+            p.expect_greater();
+        });
+        self.type_args_depth -= 1;
+
+        // If we just exited the outermost generic and have pending '>', report error.
+        if self.type_args_depth == 0 && self.pending_greaters > 0 {
+            if let Some(span) = self.pending_greater_span {
+                self.error(
+                    format!(
+                        "Unmatched '>' in type expression (found {} extra)",
+                        self.pending_greaters
+                    ),
+                    span,
+                );
+            }
+            for _ in 0..self.pending_greaters {
+                self.events.push(Event::Token {
+                    kind: SyntaxKind::GREATER,
+                    text: ">".to_string(),
+                });
+            }
+            self.pending_greaters = 0;
+            self.pending_greater_span = None;
+        }
     }
 
     /// Parse generic arguments: <Type1, Type2, ...>
@@ -4073,12 +5969,16 @@ impl<'a> Parser<'a> {
                     return false; // It's a block with a statement
                 }
 
-                // Check if word is followed by colon (map field)
+                // Check if word or qualified word path is followed by colon.
                 // Config-style (word value) is only allowed in config contexts, not expressions
-                if let Some(token_after_word) = self.peek(2) {
-                    if token_after_word.kind == TokenKind::Colon {
-                        return true; // word: pattern indicates a map
-                    }
+                let mut i = 2;
+                while self.peek(i).map(|t| t.kind) == Some(TokenKind::Dot)
+                    && self.peek(i + 1).map(|t| t.kind) == Some(TokenKind::Word)
+                {
+                    i += 2;
+                }
+                if self.peek(i).map(|t| t.kind) == Some(TokenKind::Colon) {
+                    return true; // word: pattern indicates a map
                 }
             }
         }
@@ -4191,12 +6091,19 @@ impl<'a> Parser<'a> {
 
             // Parse map entries
             while !p.at(TokenKind::RBrace) && !p.at_end() {
+                if p.at_statement_recovery_boundary() {
+                    break;
+                }
+
                 // Check for valid entry start
                 if p.at(TokenKind::Word) || p.at(TokenKind::Quote) || p.at(TokenKind::Hash) {
                     p.parse_map_entry();
 
                     // Handle comma between entries
                     if !p.at(TokenKind::RBrace) {
+                        if p.at_statement_recovery_boundary() {
+                            break;
+                        }
                         if !p.eat(TokenKind::Comma) {
                             // Missing comma - error but try to continue
                             p.error_unexpected_token("',' or '}' after map entry".to_string());
@@ -4255,19 +6162,34 @@ impl<'a> Parser<'a> {
             return;
         }
 
-        let segment = |k: TokenKind| matches!(k, TokenKind::Word | TokenKind::Client);
+        // `spawn` / `await` are reserved keywords but are valid as path
+        // segments after a `.` (e.g. the `baml.spawn` namespace). They are
+        // unambiguous in segment position — a leading `spawn`/`await` is
+        // handled before this point. `is_ident_token` in
+        // `baml_compiler2_ast::lower_expr_body` must mirror this set.
+        let segment = |k: TokenKind| {
+            matches!(
+                k,
+                TokenKind::Word | TokenKind::Client | TokenKind::Spawn | TokenKind::Await
+            )
+        };
 
         // Check if this looks like a path (ident.client followed by dot and another ident)
         if self.peek(1).map(|t| t.kind) == Some(TokenKind::Dot)
             && self.peek(2).map(|t| segment(t.kind)).unwrap_or(false)
+            && !(self
+                .peek(2)
+                .is_some_and(|t| t.kind == TokenKind::Word && t.text == "as")
+                && self.peek(3).map(|t| t.kind) == Some(TokenKind::Less))
         {
             // It's a path - all segments are identifiers
             self.with_node(SyntaxKind::PATH_EXPR, |p| {
                 p.bump(); // First segment
 
                 // Parse remaining segments
-                while p.eat(TokenKind::Dot) {
-                    if p.at(TokenKind::Word) || p.at(TokenKind::Client) {
+                while p.at(TokenKind::Dot) && !p.looks_like_as_projection() {
+                    p.bump();
+                    if p.current().map(|t| segment(t.kind)).unwrap_or(false) {
                         p.bump(); // Next segment
                     } else {
                         p.error_unexpected_token("path segment after '.'".to_string());
@@ -4285,9 +6207,15 @@ impl<'a> Parser<'a> {
     /// Requires colon between key and value (JSON-style)
     fn parse_map_entry(&mut self) {
         self.with_node(SyntaxKind::OBJECT_FIELD, |p| {
-            // Key - can be identifier or string literal
+            // Key - can be identifier, qualified identifier, or string literal.
             if p.at(TokenKind::Word) {
                 p.bump(); // identifier key
+                while p.at(TokenKind::Dot) {
+                    p.bump();
+                    if !p.expect(TokenKind::Word) {
+                        return;
+                    }
+                }
             } else if !p.parse_any_string() {
                 p.error_unexpected_token("map key".to_string());
                 return;
@@ -4299,6 +6227,10 @@ impl<'a> Parser<'a> {
             }
 
             // Value - any expression (including nested maps)
+            if p.at_statement_recovery_boundary() {
+                p.error_unexpected_token("map value".to_string());
+                return;
+            }
             p.parse_expr();
         });
     }
@@ -4309,12 +6241,19 @@ impl<'a> Parser<'a> {
 
         // Parse fields until we hit the closing brace
         while !self.at(TokenKind::RBrace) && !self.at_end() {
+            if self.at_statement_recovery_boundary() {
+                break;
+            }
+
             // Check for spread element: ...expr
             if self.at(TokenKind::DotDotDot) {
                 self.parse_spread_element();
 
                 // Handle comma between elements
                 if !self.at(TokenKind::RBrace) {
+                    if self.at_statement_recovery_boundary() {
+                        break;
+                    }
                     if !self.eat(TokenKind::Comma) {
                         // Missing comma - error but try to continue
                         self.error_unexpected_token("',' or '}' after spread element".to_string());
@@ -4338,6 +6277,9 @@ impl<'a> Parser<'a> {
 
                 // Handle comma between fields
                 if !self.at(TokenKind::RBrace) {
+                    if self.at_statement_recovery_boundary() {
+                        break;
+                    }
                     if !self.eat(TokenKind::Comma) {
                         // Missing comma - error but try to continue
                         self.error_unexpected_token("',' or '}' after object field".to_string());
@@ -4378,9 +6320,15 @@ impl<'a> Parser<'a> {
     /// Parse a single object field: name: value
     fn parse_object_field(&mut self) {
         self.with_node(SyntaxKind::OBJECT_FIELD, |p| {
-            // Field name - can be identifier or string literal
+            // Field name - can be identifier, qualified identifier, or string literal.
             if p.at(TokenKind::Word) {
                 p.bump(); // identifier field name
+                while p.at(TokenKind::Dot) {
+                    p.bump();
+                    if !p.expect(TokenKind::Word) {
+                        return;
+                    }
+                }
             } else if !p.parse_any_string() {
                 p.error_unexpected_token("field name".to_string());
                 return;
@@ -4392,6 +6340,10 @@ impl<'a> Parser<'a> {
             }
 
             // Field value - any expression (including nested constructors)
+            if p.at_statement_recovery_boundary() {
+                p.error_unexpected_token("field value".to_string());
+                return;
+            }
             p.parse_expr();
         });
     }
@@ -4526,7 +6478,7 @@ impl<'a> Parser<'a> {
                     break;
                 }
 
-                // Block attributes like @@check(...) inside config blocks
+                // Block attributes (e.g. `@@some_attr(...)`) inside config blocks
                 if p.at(TokenKind::AtAt) {
                     p.parse_atat_attribute();
                 } else {
@@ -4600,7 +6552,7 @@ impl<'a> Parser<'a> {
                 p.parse_config_value();
             }
 
-            // Optional field attributes after config value (e.g., args { ... } @check(...))
+            // Optional field attributes after config value (e.g., args { ... } @some_attr(...))
             while p.at(TokenKind::At) && !p.at(TokenKind::AtAt) {
                 p.parse_at_attribute();
             }
@@ -4725,12 +6677,18 @@ impl<'a> Parser<'a> {
         }
 
         // Number literals
-        if self.at(TokenKind::IntegerLiteral) || self.at(TokenKind::FloatLiteral) {
+        if self.at(TokenKind::BigintLiteral)
+            || self.at(TokenKind::IntegerLiteral)
+            || self.at(TokenKind::FloatLiteral)
+        {
             return true;
         }
         if self.at(TokenKind::Minus)
             && self.peek(1).is_some_and(|t| {
-                matches!(t.kind, TokenKind::IntegerLiteral | TokenKind::FloatLiteral)
+                matches!(
+                    t.kind,
+                    TokenKind::BigintLiteral | TokenKind::IntegerLiteral | TokenKind::FloatLiteral
+                )
             })
         {
             return true;
@@ -5076,8 +7034,61 @@ impl<'a> Parser<'a> {
 /// Parse tokens into a green tree.
 ///
 /// Returns the green tree and any parse errors encountered.
+/// Emit a `SyntaxHint` event for any adjacent token pair that visually
+/// resembles a bigint literal but isn't a valid one — `42N` (uppercase suffix),
+/// `42.5n`, `42.5N` (float-with-suffix). The lexer splits these into two
+/// tokens (e.g. `IntegerLiteral("42")` + `Word("N")`) and the user gets a
+/// confusing downstream error otherwise.
+///
+/// Adjacency is checked via source-range endpoints (no intervening whitespace
+/// or comment trivia) so `42 N` or `42.5 n` (with a separator) don't fire.
+fn scan_malformed_bigint_literals(tokens: &[Token], events: &mut Vec<Event>) {
+    for window in tokens.windows(2) {
+        let (a, b) = (&window[0], &window[1]);
+        if b.kind != TokenKind::Word {
+            continue;
+        }
+        if a.span.range.end() != b.span.range.start() {
+            // Separated by whitespace / comment trivia — not "stuck together".
+            continue;
+        }
+        let combined_span = baml_base::Span {
+            file_id: a.span.file_id,
+            range: TextRange::new(a.span.range.start(), b.span.range.end()),
+        };
+        match (a.kind, b.text.as_str()) {
+            (TokenKind::IntegerLiteral, "N") => {
+                events.push(Event::SyntaxHint {
+                    message: format!(
+                        "bigint literal suffix must be lowercase 'n' — did you mean `{}n`?",
+                        a.text
+                    ),
+                    span: combined_span,
+                });
+            }
+            (TokenKind::FloatLiteral, "n" | "N") => {
+                events.push(Event::SyntaxHint {
+                    message: format!(
+                        "bigint literals are integer-only — `{}` is not a valid bigint",
+                        format_args!("{}{}", a.text, b.text)
+                    ),
+                    span: combined_span,
+                });
+            }
+            _ => {}
+        }
+    }
+}
+
 fn parse_impl(tokens: &[Token], cache: Option<&mut NodeCache>) -> (GreenNode, Vec<ParseError>) {
     let mut parser = Parser::new(tokens);
+
+    // Pre-scan for malformed bigint-shaped literals — adjacent tokens that
+    // *look* like a bigint to the user but the lexer split apart. Emits
+    // `SyntaxHint` events so the diagnostics show alongside other parse
+    // errors. Runs before structural parsing so the hints aren't lost if the
+    // surrounding code has additional errors.
+    scan_malformed_bigint_literals(tokens, &mut parser.events);
 
     parser.start_node(SyntaxKind::SOURCE_FILE);
 
@@ -5093,8 +7104,12 @@ fn parse_impl(tokens: &[Token], cache: Option<&mut NodeCache>) -> (GreenNode, Ve
             parser.parse_enum();
         } else if parser.at(TokenKind::Class) || attributed_item == Some(TokenKind::Class) {
             parser.parse_class();
+        } else if parser.at(TokenKind::Interface) || attributed_item == Some(TokenKind::Interface) {
+            parser.parse_interface();
         } else if parser.at(TokenKind::Function) || attributed_item == Some(TokenKind::Function) {
             parser.parse_function();
+        } else if parser.at(TokenKind::Implements) || parser.at(TokenKind::Implement) {
+            parser.parse_implements_for();
         } else if parser.at(TokenKind::Client) {
             parser.parse_client();
         } else if parser.at(TokenKind::Generator) {
@@ -5115,7 +7130,7 @@ fn parse_impl(tokens: &[Token], cache: Option<&mut NodeCache>) -> (GreenNode, Ve
             && parser.current().map(|t| t.text == "type").unwrap_or(false)
         {
             parser.parse_type_alias();
-        } else if parser.at(TokenKind::Let) {
+        } else if parser.at_binding_intro_stmt() {
             parser.parse_let_stmt();
         } else if parser.at_header_comment_start() {
             parser.consume_header_comment();
@@ -5158,7 +7173,8 @@ fn parse_impl(tokens: &[Token], cache: Option<&mut NodeCache>) -> (GreenNode, Ve
 mod tests {
     use baml_base::FileId;
     use baml_compiler_lexer::lex_lossless;
-    use baml_compiler_syntax::{SyntaxKind, SyntaxNode};
+    use baml_compiler_syntax::{Item, SourceFile, SyntaxKind, SyntaxNode};
+    use rowan::ast::AstNode;
 
     use super::{ParseError, parse_file};
 
@@ -5172,6 +7188,587 @@ mod tests {
         assert!(
             errors.is_empty(),
             "expected no parse errors, got: {errors:#?}"
+        );
+    }
+
+    fn assert_diag_message(errors: &[ParseError], needle: &str) {
+        let has = errors.iter().any(|e| match e {
+            ParseError::InvalidSyntax { message, .. } => message.contains(needle),
+            _ => false,
+        });
+        assert!(
+            has,
+            "expected diagnostic containing {needle:?}, got: {errors:#?}"
+        );
+    }
+
+    #[test]
+    fn diagnoses_bigint_with_uppercase_n_suffix() {
+        // `42N` lexes as `[Integer, Word]`. Without the scan, the user sees
+        // no specific guidance about the wrong-case suffix.
+        let source = "function main() -> bigint { 42N }";
+        let (_root, errors) = parse_source(source);
+        assert_diag_message(&errors, "bigint literal suffix must be lowercase 'n'");
+        assert_diag_message(&errors, "did you mean `42n`?");
+    }
+
+    #[test]
+    fn diagnoses_float_with_bigint_suffix() {
+        // `42.5n` lexes as `[Float, Word("n")]`.
+        let source = "function main() -> bigint { 42.5n }";
+        let (_root, errors) = parse_source(source);
+        assert_diag_message(&errors, "bigint literals are integer-only");
+        assert_diag_message(&errors, "`42.5n` is not a valid bigint");
+    }
+
+    #[test]
+    fn diagnoses_float_with_uppercase_bigint_suffix() {
+        let source = "function main() -> bigint { 42.5N }";
+        let (_root, errors) = parse_source(source);
+        assert_diag_message(&errors, "bigint literals are integer-only");
+    }
+
+    #[test]
+    fn accepts_separated_integer_and_word() {
+        // `42 N` is a normal integer followed by an identifier — no diagnostic.
+        let source = "function main(x N) -> int { 42 }";
+        let (_root, errors) = parse_source(source);
+        let has_bigint_diag = errors.iter().any(|e| match e {
+            ParseError::InvalidSyntax { message, .. } => {
+                message.contains("bigint literal suffix") || message.contains("integer-only")
+            }
+            _ => false,
+        });
+        assert!(
+            !has_bigint_diag,
+            "should not emit bigint-shape diagnostic for separated tokens, got: {errors:#?}"
+        );
+    }
+
+    #[test]
+    fn accepts_valid_bigint_literal() {
+        let source = "function main() -> bigint { 42n }";
+        let (_root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+    }
+
+    #[test]
+    fn const_bindings_parse_as_existing_binding_shapes() {
+        let source = r#"
+function Demo(user: User, xs: int[], value: int | string, items: int[]) -> int {
+  const x = 1;
+  const y: int = x;
+  const _ = y;
+  const User { name } = user;
+  const [first] = xs;
+  if const narrowed: int = value {
+    narrowed
+  } else {
+    0
+  };
+  while const loop_value: int = value {
+    break;
+  }
+  for (const i = 0; i < 3; i += 1) {
+    x += i;
+  }
+  for (const item in items) {
+    x += item;
+  }
+  for const item in items {
+    x += item;
+  }
+  x
+}
+"#;
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+
+        let const_keywords = root
+            .descendants_with_tokens()
+            .filter(|elem| {
+                matches!(
+                    elem,
+                    rowan::NodeOrToken::Token(token) if token.kind() == SyntaxKind::KW_CONST
+                )
+            })
+            .count();
+        assert_eq!(const_keywords, 10);
+
+        assert!(
+            root.descendants()
+                .any(|node| node.kind() == SyntaxKind::IF_LET_EXPR),
+            "`if const` should keep using IF_LET_EXPR"
+        );
+        assert!(
+            root.descendants()
+                .any(|node| node.kind() == SyntaxKind::WHILE_LET_STMT),
+            "`while const` should keep using WHILE_LET_STMT"
+        );
+        assert!(
+            root.descendants()
+                .any(|node| node.kind() == SyntaxKind::WILDCARD_PATTERN),
+            "`const _` should keep using WILDCARD_PATTERN"
+        );
+        assert!(
+            root.descendants()
+                .any(|node| node.kind() == SyntaxKind::DESTRUCTURE_PATTERN),
+            "`const User {{ ... }}` should keep using DESTRUCTURE_PATTERN"
+        );
+        assert!(
+            root.descendants()
+                .any(|node| node.kind() == SyntaxKind::ARRAY_PATTERN),
+            "`const [x]` should keep using ARRAY_PATTERN"
+        );
+    }
+
+    #[test]
+    fn is_class_in_condition_does_not_eat_then_block() {
+        // Regression: `if x is Class { body }` used to be parsed as
+        // `if x is Class { body }` where `{ body }` was the destructure
+        // pattern's body — the if-block was eaten. We follow Rust's
+        // approach for struct literals in condition position: in
+        // `if`/`while` conditions, `Path {` is parsed as just the path,
+        // leaving `{` for the outer block.
+        let source = r#"
+function f(x: int | string) -> string {
+  if x is string {
+    "str"
+  } else {
+    "other"
+  }
+}
+"#;
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+
+        // The IF_EXPR should have a BLOCK_EXPR child (the then-block).
+        let if_expr = root
+            .descendants()
+            .find(|n| n.kind() == SyntaxKind::IF_EXPR)
+            .expect("expected IF_EXPR node");
+        let block_count = if_expr
+            .children()
+            .filter(|n| n.kind() == SyntaxKind::BLOCK_EXPR)
+            .count();
+        assert_eq!(
+            block_count, 2,
+            "IF_EXPR should have two BLOCK_EXPR children (then + else); destructure must not consume the then-block"
+        );
+    }
+
+    #[test]
+    fn is_class_destructure_in_condition_with_user_class() {
+        // Same as above but with a user class, which is the case the
+        // chained if-let test originally tripped over.
+        let source = r#"
+class Empty {}
+
+function f(r: int | Empty) -> string {
+  if r is Empty {
+    "empty"
+  } else {
+    "other"
+  }
+}
+"#;
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+
+        let if_expr = root
+            .descendants()
+            .find(|n| n.kind() == SyntaxKind::IF_EXPR)
+            .expect("expected IF_EXPR node");
+        let block_count = if_expr
+            .children()
+            .filter(|n| n.kind() == SyntaxKind::BLOCK_EXPR)
+            .count();
+        assert_eq!(block_count, 2);
+
+        // The IS_EXPR's pattern is just the type `Empty`, no destructure.
+        let dest_count = root
+            .descendants()
+            .filter(|n| n.kind() == SyntaxKind::DESTRUCTURE_PATTERN)
+            .count();
+        assert_eq!(
+            dest_count, 0,
+            "no destructure pattern should be produced in condition position"
+        );
+    }
+
+    #[test]
+    fn is_class_destructure_with_parens_in_condition_still_works() {
+        // Escape hatch: parens reset the destructure suppression. The
+        // user can still write a destructure inside `is` by wrapping the
+        // whole pattern in parens (even though `is`-bindings don't
+        // escape, the parser must not reject this form).
+        let source = r#"
+class User { name string }
+
+function f(r: int | User) -> string {
+  if (r is User { name }) {
+    "user"
+  } else {
+    "other"
+  }
+}
+"#;
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+        let dest_count = root
+            .descendants()
+            .filter(|n| n.kind() == SyntaxKind::DESTRUCTURE_PATTERN)
+            .count();
+        assert_eq!(
+            dest_count, 1,
+            "parens-wrapped destructure in condition should still parse as DESTRUCTURE_PATTERN"
+        );
+    }
+
+    #[test]
+    fn if_let_scrutinee_suppresses_destructure() {
+        // Regression (CodeRabbit on #3579): the if-let scrutinee is in
+        // condition position; a trailing `is Class { ... }` in the
+        // scrutinee must not consume the then-block as a destructure
+        // pattern body.
+        let source = r#"
+class Empty {}
+
+function f(b: bool, r: int | Empty) -> string {
+  if let v: bool = r is Empty {
+    "yes"
+  } else {
+    "no"
+  }
+}
+"#;
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+
+        // The if-let must have two BLOCK_EXPR children (then + else); no
+        // DESTRUCTURE_PATTERN should be produced.
+        let if_let = root
+            .descendants()
+            .find(|n| n.kind() == SyntaxKind::IF_LET_EXPR)
+            .expect("expected IF_LET_EXPR");
+        let block_count = if_let
+            .children()
+            .filter(|n| n.kind() == SyntaxKind::BLOCK_EXPR)
+            .count();
+        assert_eq!(
+            block_count, 2,
+            "IF_LET_EXPR should have two BLOCK_EXPR children (scrutinee's `is Empty {{ ... }}` must not eat the then-block)"
+        );
+        let dest_count = if_let
+            .descendants()
+            .filter(|n| n.kind() == SyntaxKind::DESTRUCTURE_PATTERN)
+            .count();
+        assert_eq!(dest_count, 0);
+    }
+
+    #[test]
+    fn if_let_accepts_top_level_array_pattern() {
+        // Regression (CodeRabbit on #3579): `if let [a, b] = xs { ... }`
+        // used to error because `parse_let_pattern` demanded an identifier
+        // after `let`. Mirror the let-stmt handling — when `let` is
+        // followed by `[`, consume the keyword and parse an array pattern.
+        let source = r#"
+function f(xs: int[]) -> int {
+  if let [a, b] = xs {
+    a + b
+  } else {
+    0
+  }
+}
+"#;
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+
+        // We should have exactly one IF_LET_EXPR with an ARRAY_PATTERN
+        // somewhere inside it (under the PATTERN wrapper).
+        let if_let = root
+            .descendants()
+            .find(|n| n.kind() == SyntaxKind::IF_LET_EXPR)
+            .expect("expected IF_LET_EXPR");
+        let array_count = if_let
+            .descendants()
+            .filter(|n| n.kind() == SyntaxKind::ARRAY_PATTERN)
+            .count();
+        assert_eq!(
+            array_count, 1,
+            "expected exactly one ARRAY_PATTERN in the if-let"
+        );
+    }
+
+    #[test]
+    fn if_let_expr_parses() {
+        // `if let PATTERN = SCRUTINEE { ... } else { ... }` produces an
+        // IF_LET_EXPR node (distinct from IF_EXPR), with PATTERN as a child.
+        let source = r#"
+function f(r: int | string) -> string {
+  if let v: int = r {
+    "int"
+  } else {
+    "other"
+  }
+}
+"#;
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+
+        let if_let_count = root
+            .descendants()
+            .filter(|n| n.kind() == SyntaxKind::IF_LET_EXPR)
+            .count();
+        assert_eq!(if_let_count, 1, "expected one IF_LET_EXPR node");
+
+        // No plain IF_EXPR should sneak in.
+        let if_count = root
+            .descendants()
+            .filter(|n| n.kind() == SyntaxKind::IF_EXPR)
+            .count();
+        assert_eq!(if_count, 0, "expected no IF_EXPR nodes for if-let form");
+
+        // The IF_LET_EXPR should have a PATTERN child.
+        let if_let = root
+            .descendants()
+            .find(|n| n.kind() == SyntaxKind::IF_LET_EXPR)
+            .unwrap();
+        let pat_count = if_let
+            .children()
+            .filter(|n| n.kind() == SyntaxKind::PATTERN)
+            .count();
+        assert_eq!(
+            pat_count, 1,
+            "IF_LET_EXPR should have exactly one PATTERN child"
+        );
+    }
+
+    #[test]
+    fn while_let_stmt_parses() {
+        // `while let PATTERN = SCRUTINEE { ... }` produces a WHILE_LET_STMT
+        // node (distinct from WHILE_STMT), with a PATTERN child and a single
+        // BLOCK_EXPR body (no else).
+        let source = r#"
+function f(r: int | string) -> int {
+  while let v: int = r {
+    break;
+  }
+  0
+}
+"#;
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+
+        let while_let_count = root
+            .descendants()
+            .filter(|n| n.kind() == SyntaxKind::WHILE_LET_STMT)
+            .count();
+        assert_eq!(while_let_count, 1, "expected one WHILE_LET_STMT node");
+
+        // No plain WHILE_STMT should sneak in.
+        let while_count = root
+            .descendants()
+            .filter(|n| n.kind() == SyntaxKind::WHILE_STMT)
+            .count();
+        assert_eq!(
+            while_count, 0,
+            "expected no WHILE_STMT nodes for while-let form"
+        );
+
+        let while_let = root
+            .descendants()
+            .find(|n| n.kind() == SyntaxKind::WHILE_LET_STMT)
+            .unwrap();
+        let pat_count = while_let
+            .children()
+            .filter(|n| n.kind() == SyntaxKind::PATTERN)
+            .count();
+        assert_eq!(
+            pat_count, 1,
+            "WHILE_LET_STMT should have exactly one PATTERN child"
+        );
+        let block_count = while_let
+            .children()
+            .filter(|n| n.kind() == SyntaxKind::BLOCK_EXPR)
+            .count();
+        assert_eq!(
+            block_count, 1,
+            "WHILE_LET_STMT should have exactly one BLOCK_EXPR body (no else)"
+        );
+    }
+
+    #[test]
+    fn while_let_scrutinee_suppresses_destructure() {
+        // The while-let scrutinee is in condition position; a trailing
+        // `is Class { ... }` must not consume the loop body as a destructure
+        // pattern body. Mirrors `if_let_scrutinee_suppresses_destructure`.
+        let source = r#"
+class Empty {}
+
+function f(b: bool, r: int | Empty) -> int {
+  while let v: bool = r is Empty {
+    break;
+  }
+  0
+}
+"#;
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+
+        let while_let = root
+            .descendants()
+            .find(|n| n.kind() == SyntaxKind::WHILE_LET_STMT)
+            .expect("expected WHILE_LET_STMT");
+        let block_count = while_let
+            .children()
+            .filter(|n| n.kind() == SyntaxKind::BLOCK_EXPR)
+            .count();
+        assert_eq!(block_count, 1);
+        let dest_count = while_let
+            .descendants()
+            .filter(|n| n.kind() == SyntaxKind::DESTRUCTURE_PATTERN)
+            .count();
+        assert_eq!(dest_count, 0);
+    }
+
+    #[test]
+    fn while_let_accepts_top_level_array_pattern() {
+        // `while let [a, b] = xs { ... }` — the `let` followed by `[` must be
+        // consumed at statement level so the array pattern parses. Mirrors
+        // `if_let_accepts_top_level_array_pattern`.
+        let source = r#"
+function f(xs: int[]) -> int {
+  while let [a, b] = xs {
+    break;
+  }
+  0
+}
+"#;
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+
+        let while_let = root
+            .descendants()
+            .find(|n| n.kind() == SyntaxKind::WHILE_LET_STMT)
+            .expect("expected WHILE_LET_STMT");
+        let array_count = while_let
+            .descendants()
+            .filter(|n| n.kind() == SyntaxKind::ARRAY_PATTERN)
+            .count();
+        assert_eq!(
+            array_count, 1,
+            "expected exactly one ARRAY_PATTERN in the while-let"
+        );
+    }
+
+    #[test]
+    fn while_stmt_still_parses_without_pattern() {
+        // A plain `while cond { }` still produces a WHILE_STMT, not a
+        // WHILE_LET_STMT — the `let` lookahead must not misfire.
+        let source = r#"
+function f(b: bool) -> int {
+  while b {
+    break;
+  }
+  0
+}
+"#;
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+
+        let while_count = root
+            .descendants()
+            .filter(|n| n.kind() == SyntaxKind::WHILE_STMT)
+            .count();
+        assert_eq!(while_count, 1, "expected one WHILE_STMT node");
+        let while_let_count = root
+            .descendants()
+            .filter(|n| n.kind() == SyntaxKind::WHILE_LET_STMT)
+            .count();
+        assert_eq!(
+            while_let_count, 0,
+            "plain while must not produce WHILE_LET_STMT"
+        );
+    }
+
+    #[test]
+    fn is_expr_parses_at_comparison_precedence() {
+        // `<expr> is <pattern>` should produce an IS_EXPR node, parsed at the
+        // same binding power as comparison operators. Verifies the parser
+        // accepts a bare type-pattern RHS, an or-pattern RHS, and `is` chained
+        // with `&&` (where `&&` is lower precedence so wraps both `is` nodes).
+        let source =
+            "function f() -> bool {\n  let v: int | string = 1\n  v is int && v is int | bool\n}\n";
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+        let is_count = root
+            .descendants()
+            .filter(|n| n.kind() == SyntaxKind::IS_EXPR)
+            .count();
+        assert_eq!(is_count, 2, "expected two IS_EXPR nodes");
+    }
+
+    #[test]
+    fn as_projection_parses_in_local_rooted_chain() {
+        let source = r#"
+function f(i: Item) -> string {
+  i.as<Named>.name
+}
+"#;
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+
+        let upcast_count = root
+            .descendants()
+            .filter(|n| n.kind() == SyntaxKind::UPCAST_EXPR)
+            .count();
+        assert_eq!(upcast_count, 1, "expected one UPCAST_EXPR");
+    }
+
+    #[test]
+    fn nested_generic_bound_closes_function_generic_list() {
+        let source = r#"
+interface Converter<T> {
+  function convert(self) -> T
+}
+
+function read_int<T extends Converter<int>>(m: T) -> int {
+  m.as<Converter<int>>.convert()
+}
+"#;
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+
+        let generic_param_lists = root
+            .descendants()
+            .filter(|n| n.kind() == SyntaxKind::GENERIC_PARAM_LIST)
+            .count();
+        assert_eq!(
+            generic_param_lists, 2,
+            "expected interface and function generic params"
+        );
+    }
+
+    #[test]
+    fn generic_bound_alias_syntax_is_not_supported() {
+        let source = r#"
+interface Converter<T> {
+  function convert(self) -> T
+}
+
+function read_int<T extends Converter<int> as Ints>(m: T) -> int {
+  return m.as<Converter<int>>.convert()
+}
+"#;
+        let (_root, errors) = parse_source(source);
+        assert!(
+            errors.iter().any(|error| matches!(
+                error,
+                ParseError::InvalidSyntax { message, .. }
+                    if message.contains("generic bound aliases are not supported")
+            )),
+            "expected alias syntax to be rejected at the generic bound, got: {errors:#?}"
         );
     }
 
@@ -5258,6 +7855,169 @@ class Response {
     }
 
     #[test]
+    fn source_file_items_include_interfaces_and_out_of_body_implements() {
+        let source = r#"
+interface Named {
+  name string
+}
+
+implements Named for int {
+  function name(self) -> string {
+    "int"
+  }
+}
+"#;
+
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+
+        let source_file = SourceFile::cast(root).expect("expected SOURCE_FILE");
+        let item_kinds: Vec<_> = source_file
+            .items()
+            .map(|item| match item {
+                Item::Interface(_) => "interface",
+                Item::ImplementsFor(_) => "implements_for",
+                other => panic!("unexpected item: {other:?}"),
+            })
+            .collect();
+
+        assert_eq!(item_kinds, vec!["interface", "implements_for"]);
+    }
+
+    #[test]
+    fn parses_interface_method_with_leading_block_attributes() {
+        let source = r#"
+interface Response {
+  @@internal.throws(NetworkError)
+  function text(self) -> string
+}
+"#;
+
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+
+        let method = root
+            .descendants()
+            .find(|n| n.kind() == SyntaxKind::METHOD_SIG)
+            .expect("expected METHOD_SIG");
+        let attrs: Vec<_> = method
+            .children()
+            .filter(|n| n.kind() == SyntaxKind::BLOCK_ATTRIBUTE)
+            .collect();
+
+        assert_eq!(attrs.len(), 1, "expected interface method block attribute");
+    }
+
+    #[test]
+    fn parses_interface_default_method_body_after_comments() {
+        let source = r#"
+interface Response {
+  function text(self) -> string
+    // This comment mentions } but should not end the method.
+    /* This one mentions { and also should be ignored. */
+  {
+    "ok"
+  }
+}
+"#;
+
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+
+        let interface = root
+            .descendants()
+            .find(|n| n.kind() == SyntaxKind::INTERFACE_DEF)
+            .expect("expected INTERFACE_DEF");
+        assert!(
+            interface
+                .children()
+                .any(|n| n.kind() == SyntaxKind::FUNCTION_DEF),
+            "default interface method should parse as FUNCTION_DEF"
+        );
+        assert!(
+            !interface
+                .children()
+                .any(|n| n.kind() == SyntaxKind::METHOD_SIG),
+            "commented default method must not parse as a required signature"
+        );
+    }
+
+    #[test]
+    fn interface_keyword_recovers_as_top_level_after_missing_class_brace() {
+        let source = r#"
+class Person {
+  name string
+
+interface Named {
+  name string
+}
+"#;
+
+        let (root, errors) = parse_source(source);
+        assert!(
+            !errors.is_empty(),
+            "missing class brace should still produce a parse error"
+        );
+
+        assert!(
+            root.children()
+                .any(|n| n.kind() == SyntaxKind::INTERFACE_DEF),
+            "interface should recover as a top-level item, not be swallowed by the class"
+        );
+    }
+
+    #[test]
+    fn multiline_interface_keyword_recovers_as_top_level_after_missing_class_brace() {
+        let source = r#"
+class Person {
+  name string
+
+interface Named
+requires Base
+{
+  name string
+}
+"#;
+
+        let (root, errors) = parse_source(source);
+        assert!(
+            !errors.is_empty(),
+            "missing class brace should still produce a parse error"
+        );
+
+        assert!(
+            root.children()
+                .any(|n| n.kind() == SyntaxKind::INTERFACE_DEF),
+            "multiline interface should recover as a top-level item"
+        );
+    }
+
+    #[test]
+    fn interface_keyword_can_be_class_field_name() {
+        let source = r#"
+class InterfaceTwo {
+  interface strin
+}
+"#;
+
+        let (root, _errors) = parse_source(source);
+        let class = root
+            .descendants()
+            .find(|n| n.kind() == SyntaxKind::CLASS_DEF)
+            .expect("expected CLASS_DEF");
+        assert!(
+            class.children().any(|n| n.kind() == SyntaxKind::FIELD),
+            "`interface strin` should parse as a class field, not as a recovered top-level interface"
+        );
+        assert!(
+            !root
+                .children()
+                .any(|n| n.kind() == SyntaxKind::INTERFACE_DEF),
+            "field named `interface` must not create a top-level interface"
+        );
+    }
+
+    #[test]
     fn raw_string_keeps_comment_markers_as_text() {
         for marker in ["//", "*/"] {
             let source = format!(
@@ -5280,6 +8040,35 @@ function Demo() -> string {{
                 "raw string should retain marker {marker:?}: {raw_string:?}"
             );
         }
+    }
+
+    #[test]
+    fn incomplete_map_field_value_stops_before_watch_let() {
+        let (root, _errors) = parse_source(
+            r#"
+function GuessGameAgent() -> string {
+  log.info({"famous_person_name":
+  watch let user_input = SimulateHumanGuess(history)
+  user_input
+}
+"#,
+        );
+
+        let map = root
+            .descendants()
+            .find(|node| node.kind() == SyntaxKind::MAP_LITERAL)
+            .expect("map literal should still be parsed");
+        assert!(
+            !map.text().to_string().contains("watch let"),
+            "unterminated map literal swallowed the following watched statement: {}",
+            map.text()
+        );
+
+        assert!(
+            root.descendants()
+                .any(|node| node.kind() == SyntaxKind::WATCH_LET),
+            "`watch let` should recover as its own statement"
+        );
     }
 
     #[test]
@@ -5326,6 +8115,51 @@ function f() -> int {
 
         let (root, errors) = parse_source(source);
         assert_no_errors(&errors);
+
+        let func = root
+            .descendants()
+            .find(|n| n.kind() == SyntaxKind::FUNCTION_DEF)
+            .expect("expected FUNCTION_DEF");
+        assert!(
+            func.children()
+                .any(|n| n.kind() == SyntaxKind::EXPR_FUNCTION_BODY),
+            "expected expression body, not LLM body"
+        );
+    }
+
+    #[test]
+    fn expression_body_header_comment_with_prompt_word_is_not_llm_body() {
+        let source = r#"
+function f() -> string {
+  //# Generate an image from the user prompt.
+  let value = "ok"
+  value
+}
+"#;
+
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+
+        let func = root
+            .descendants()
+            .find(|n| n.kind() == SyntaxKind::FUNCTION_DEF)
+            .expect("expected FUNCTION_DEF");
+        assert!(
+            func.children()
+                .any(|n| n.kind() == SyntaxKind::EXPR_FUNCTION_BODY),
+            "expected expression body, not LLM body"
+        );
+    }
+
+    #[test]
+    fn missing_return_type_body_with_client_word_is_not_llm_body() {
+        let source = r#"
+function Foo() -> {
+  client GPT4
+}
+"#;
+
+        let (root, _errors) = parse_source(source);
 
         let func = root
             .descendants()
@@ -5439,76 +8273,6 @@ function Demo(x 200) -> int {
     }
 
     #[test]
-    fn parses_chained_catch_clauses_with_typed_arms() {
-        let source = r#"
-function Demo() -> int {
-  foo() catch (e) {
-    _ => { throw e; }
-  } catch (e2) {
-    _: ValidationError => { 1 }
-    other => { throw other; }
-  } catch (e3) {
-    _: Panic => { throw e3; }
-    other => 2
-  }
-}
-"#;
-
-        let (root, errors) = parse_source(source);
-        assert_no_errors(&errors);
-
-        let catch_expr = root
-            .descendants()
-            .find(|n| n.kind() == SyntaxKind::CATCH_EXPR)
-            .expect("expected CATCH_EXPR node");
-
-        let child_kinds: Vec<_> = catch_expr.children().map(|n| n.kind()).collect();
-        assert_eq!(child_kinds[0], SyntaxKind::CALL_EXPR);
-        assert_eq!(child_kinds[1], SyntaxKind::CATCH_CLAUSE);
-        assert_eq!(child_kinds[2], SyntaxKind::CATCH_CLAUSE);
-        assert_eq!(child_kinds[3], SyntaxKind::CATCH_CLAUSE);
-
-        let clauses: Vec<_> = catch_expr
-            .children()
-            .filter(|n| n.kind() == SyntaxKind::CATCH_CLAUSE)
-            .collect();
-        assert_eq!(clauses.len(), 3);
-
-        let keywords: Vec<_> = clauses
-            .iter()
-            .filter_map(|clause| {
-                clause
-                    .children_with_tokens()
-                    .filter_map(rowan::NodeOrToken::into_token)
-                    .find(|t| t.kind() == SyntaxKind::KW_CATCH)
-                    .map(|t| t.kind())
-            })
-            .collect();
-
-        assert_eq!(
-            keywords,
-            vec![
-                SyntaxKind::KW_CATCH,
-                SyntaxKind::KW_CATCH,
-                SyntaxKind::KW_CATCH,
-            ]
-        );
-
-        let second_clause_arms: Vec<_> = clauses[1]
-            .children()
-            .filter(|n| n.kind() == SyntaxKind::CATCH_ARM)
-            .collect();
-        assert_eq!(second_clause_arms.len(), 2);
-        assert!(
-            second_clause_arms[0]
-                .text()
-                .to_string()
-                .contains("ValidationError")
-        );
-        assert!(second_clause_arms[1].text().to_string().contains("other"));
-    }
-
-    #[test]
     fn parses_throw_statement_and_throw_expression_in_catch_arm() {
         let source = r#"
 function Demo() -> int {
@@ -5537,34 +8301,6 @@ function Demo() -> int {
             .filter(|n| n.kind() == SyntaxKind::THROW_EXPR)
             .count();
         assert_eq!(throw_expr_count, 2);
-    }
-
-    #[test]
-    fn reports_missing_fat_arrow_in_catch_arm_and_recovers_next_arm() {
-        let source = r#"
-function Demo() -> int {
-  foo() catch (e) {
-    _: ValidationError
-    other => 1
-  }
-}
-"#;
-
-        let (root, errors) = parse_source(source);
-
-        assert!(errors.iter().any(|error| {
-            matches!(
-                error,
-                ParseError::UnexpectedToken { expected, .. }
-                    if expected == "'=>' after catch pattern"
-            )
-        }));
-
-        let arm_count = root
-            .descendants()
-            .filter(|n| n.kind() == SyntaxKind::CATCH_ARM)
-            .count();
-        assert_eq!(arm_count, 2);
     }
 
     #[test]
@@ -5648,5 +8384,1370 @@ type Callback = (value: int) -> string throws Foo
             "expected function type throws clause text, got {:?}",
             throws.text().to_string()
         );
+    }
+
+    // ============ Pattern parsing ============
+
+    /// Find the first `PATTERN` node directly under any `LET_STMT` in the tree.
+    fn first_let_pattern(root: &SyntaxNode) -> SyntaxNode {
+        root.descendants()
+            .find(|n| n.kind() == SyntaxKind::LET_STMT)
+            .expect("expected LET_STMT")
+            .children()
+            .find(|n| n.kind() == SyntaxKind::PATTERN)
+            .expect("expected PATTERN under LET_STMT")
+    }
+
+    /// Direct child node-kinds of `node` (tokens stripped).
+    fn child_kinds(node: &SyntaxNode) -> Vec<SyntaxKind> {
+        node.children().map(|n| n.kind()).collect()
+    }
+
+    #[test]
+    fn pattern_destructure_basic_with_let() {
+        // `let Class { field } = ...` — destructure with a `let` prefix at
+        // the let-statement level. The chain link is a single
+        // DESTRUCTURE_PATTERN containing the `let` token.
+        let source = r#"
+function Demo() -> int {
+  let Class { field } = obj;
+  1
+}
+"#;
+
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+
+        let pattern = first_let_pattern(&root);
+        // No chain — single atom.
+        assert_eq!(child_kinds(&pattern), vec![SyntaxKind::DESTRUCTURE_PATTERN]);
+
+        let destructure = pattern
+            .children()
+            .find(|n| n.kind() == SyntaxKind::DESTRUCTURE_PATTERN)
+            .unwrap();
+
+        // The `let` keyword should be inside the destructure node.
+        let has_let = destructure.children_with_tokens().any(|c| {
+            matches!(
+                c,
+                rowan::NodeOrToken::Token(t) if t.kind() == SyntaxKind::KW_LET
+            )
+        });
+        assert!(has_let, "destructure should contain a leading KW_LET");
+
+        let fields: Vec<_> = destructure
+            .children()
+            .filter(|n| n.kind() == SyntaxKind::FIELD_PATTERN)
+            .collect();
+        assert_eq!(fields.len(), 1);
+        assert!(fields[0].text().to_string().contains("field"));
+    }
+
+    #[test]
+    fn pattern_destructure_many_fields() {
+        let source = r#"
+function Demo() -> int {
+  let Class { a, b, c, d, e } = obj;
+  1
+}
+"#;
+
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+
+        let pattern = first_let_pattern(&root);
+        let destructure = pattern
+            .children()
+            .find(|n| n.kind() == SyntaxKind::DESTRUCTURE_PATTERN)
+            .expect("expected DESTRUCTURE_PATTERN");
+
+        let fields: Vec<_> = destructure
+            .children()
+            .filter(|n| n.kind() == SyntaxKind::FIELD_PATTERN)
+            .collect();
+        assert_eq!(fields.len(), 5);
+    }
+
+    #[test]
+    fn pattern_destructure_with_inner_let_rename() {
+        // `Class { field: let renamed }` — explicit rename via inner `let`.
+        // The field's value is a PATTERN containing a BINDING_PATTERN.
+        let source = r#"
+function Demo() -> int {
+  let Class { field: let renamed } = obj;
+  1
+}
+"#;
+
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+
+        let pattern = first_let_pattern(&root);
+        let destructure = pattern
+            .children()
+            .find(|n| n.kind() == SyntaxKind::DESTRUCTURE_PATTERN)
+            .unwrap();
+        let field = destructure
+            .children()
+            .find(|n| n.kind() == SyntaxKind::FIELD_PATTERN)
+            .expect("expected FIELD_PATTERN");
+
+        let inner_pattern = field
+            .children()
+            .find(|n| n.kind() == SyntaxKind::PATTERN)
+            .expect("expected PATTERN inside FIELD_PATTERN");
+        assert_eq!(
+            child_kinds(&inner_pattern),
+            vec![SyntaxKind::BINDING_PATTERN],
+            "field value should be a single BINDING_PATTERN (`let renamed`)"
+        );
+    }
+
+    #[test]
+    fn pattern_destructure_field_typed() {
+        // `Class { field: int }` — field value is a TYPE_PATTERN. Field-level
+        // `:` is consumed by parse_field_pattern, NOT by the chain parser, so
+        // the inner pattern has no CHAIN_PATTERN wrapper.
+        let source = r#"
+function Demo() -> int {
+  let Class { field: int } = obj;
+  1
+}
+"#;
+
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+
+        let pattern = first_let_pattern(&root);
+        let field = pattern
+            .descendants()
+            .find(|n| n.kind() == SyntaxKind::FIELD_PATTERN)
+            .unwrap();
+        let inner_pattern = field
+            .children()
+            .find(|n| n.kind() == SyntaxKind::PATTERN)
+            .unwrap();
+        assert_eq!(child_kinds(&inner_pattern), vec![SyntaxKind::TYPE_PATTERN],);
+    }
+
+    #[test]
+    fn pattern_destructure_nested() {
+        // `Class { field: Class2 { field2 } }` — nested destructure.
+        let source = r#"
+function Demo() -> int {
+  let Class { field: Class2 { field2 } } = obj;
+  1
+}
+"#;
+
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+
+        let pattern = first_let_pattern(&root);
+        let destructures: Vec<_> = pattern
+            .descendants()
+            .filter(|n| n.kind() == SyntaxKind::DESTRUCTURE_PATTERN)
+            .collect();
+        assert_eq!(destructures.len(), 2, "expected outer + inner destructure");
+
+        // The inner destructure should be reachable through a FIELD_PATTERN
+        // > PATTERN inside the outer one.
+        let outer = &destructures[0];
+        let inner_via_field = outer
+            .descendants()
+            .find(|n| n.kind() == SyntaxKind::FIELD_PATTERN)
+            .and_then(|f| f.children().find(|n| n.kind() == SyntaxKind::PATTERN))
+            .and_then(|p| {
+                p.children()
+                    .find(|n| n.kind() == SyntaxKind::DESTRUCTURE_PATTERN)
+            })
+            .expect("inner destructure should sit under outer FIELD_PATTERN > PATTERN");
+        assert!(inner_via_field.text().to_string().contains("field2"));
+    }
+
+    #[test]
+    fn pattern_destructure_in_match_arm_no_let() {
+        // In match arms, `Class { field }` does NOT require `let` — the
+        // ambiguity-with-expressions argument doesn't apply there.
+        let source = r#"
+function Demo() -> int {
+  match (x) {
+    Class { field } => field,
+    _ => 0,
+  }
+}
+"#;
+
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+
+        let arms: Vec<_> = root
+            .descendants()
+            .filter(|n| n.kind() == SyntaxKind::MATCH_ARM)
+            .collect();
+        assert_eq!(arms.len(), 2);
+
+        // First arm's pattern is a DESTRUCTURE_PATTERN with no KW_LET token.
+        let first_pattern = arms[0]
+            .children()
+            .find(|n| n.kind() == SyntaxKind::PATTERN)
+            .expect("expected PATTERN in match arm");
+        let destructure = first_pattern
+            .children()
+            .find(|n| n.kind() == SyntaxKind::DESTRUCTURE_PATTERN)
+            .expect("expected DESTRUCTURE_PATTERN");
+        let has_let = destructure.children_with_tokens().any(|c| {
+            matches!(
+                c,
+                rowan::NodeOrToken::Token(t) if t.kind() == SyntaxKind::KW_LET
+            )
+        });
+        assert!(
+            !has_let,
+            "match-arm destructure should NOT have a leading `let`"
+        );
+    }
+
+    #[test]
+    fn pattern_array_slots_are_normal_patterns() {
+        let source = r#"
+function Demo() -> int {
+  match (x) {
+    [let first, string, ..let rest] => 1
+  }
+}
+"#;
+
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+
+        let arm = root
+            .descendants()
+            .find(|n| n.kind() == SyntaxKind::MATCH_ARM)
+            .expect("expected MATCH_ARM");
+        let pattern = arm
+            .children()
+            .find(|n| n.kind() == SyntaxKind::PATTERN)
+            .expect("expected PATTERN");
+        let array = pattern
+            .children()
+            .find(|n| n.kind() == SyntaxKind::ARRAY_PATTERN)
+            .expect("expected ARRAY_PATTERN");
+        let elements: Vec<_> = array
+            .children()
+            .filter(|n| n.kind() == SyntaxKind::ARRAY_PATTERN_ELEMENT)
+            .collect();
+        assert_eq!(elements.len(), 3);
+
+        let first_inner = elements[0]
+            .children()
+            .find(|n| n.kind() == SyntaxKind::PATTERN)
+            .expect("first element should contain a PATTERN");
+        assert_eq!(child_kinds(&first_inner), vec![SyntaxKind::BINDING_PATTERN]);
+
+        let second_inner = elements[1]
+            .children()
+            .find(|n| n.kind() == SyntaxKind::PATTERN)
+            .expect("second element should contain a PATTERN");
+        assert_eq!(child_kinds(&second_inner), vec![SyntaxKind::TYPE_PATTERN]);
+
+        assert!(
+            elements[2].children_with_tokens().any(|c| {
+                matches!(
+                    c,
+                    rowan::NodeOrToken::Token(t) if t.kind() == SyntaxKind::DOT_DOT
+                )
+            }),
+            "rest element should contain DOT_DOT"
+        );
+    }
+
+    #[test]
+    fn pattern_array_destructure_in_let_statement() {
+        let source = r#"
+function Demo() -> int {
+  let [..let rest] = xs;
+  1
+}
+"#;
+
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+
+        let pattern = first_let_pattern(&root);
+        assert_eq!(child_kinds(&pattern), vec![SyntaxKind::ARRAY_PATTERN]);
+    }
+
+    #[test]
+    fn pattern_array_rejects_multiple_rest_markers() {
+        let source = r#"
+function Demo() -> int {
+  match (x) {
+    [..let left, ..let right] => 1
+  }
+}
+"#;
+
+        let (_root, errors) = parse_source(source);
+        assert!(
+            !errors.is_empty(),
+            "expected parse error for multiple array rest markers"
+        );
+    }
+
+    #[test]
+    fn pattern_match_bare_identifier_is_type_pattern() {
+        // In match arms, bare `Foo` is a type/path pattern, NOT a binding.
+        // Per the spec: "Type Expressions: `let` is explicitly not allowed,
+        // always bare." Bindings always require `let` — so `Foo` must be a
+        // TYPE_PATTERN, not a BINDING_PATTERN.
+        let source = r#"
+function Demo() -> int {
+  match (x) {
+    Foo => 1,
+    _ => 0,
+  }
+}
+"#;
+
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+
+        let arms: Vec<_> = root
+            .descendants()
+            .filter(|n| n.kind() == SyntaxKind::MATCH_ARM)
+            .collect();
+        assert_eq!(arms.len(), 2);
+
+        let first_pattern = arms[0]
+            .children()
+            .find(|n| n.kind() == SyntaxKind::PATTERN)
+            .unwrap();
+        assert_eq!(
+            child_kinds(&first_pattern),
+            vec![SyntaxKind::TYPE_PATTERN],
+            "bare identifier in match arm must be a TYPE_PATTERN"
+        );
+
+        // And explicitly: NO BINDING_PATTERN should appear under the arm.
+        assert!(
+            arms[0]
+                .descendants()
+                .all(|n| n.kind() != SyntaxKind::BINDING_PATTERN),
+            "bare identifier should NOT produce a BINDING_PATTERN"
+        );
+    }
+
+    #[test]
+    fn pattern_destructure_namespaced_class() {
+        // `name.space.Class { ... }` — destructure on a dotted-path class
+        // name. The path goes through parse_path inside the destructure,
+        // which walks `WORD ('.' WORD)*` before the `{`.
+        let source = r#"
+function Demo() -> int {
+  let name.space.Class { field } = obj;
+  1
+}
+"#;
+
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+
+        let pattern = first_let_pattern(&root);
+        let destructure = pattern
+            .children()
+            .find(|n| n.kind() == SyntaxKind::DESTRUCTURE_PATTERN)
+            .expect("expected DESTRUCTURE_PATTERN");
+
+        // The destructure should contain three WORD tokens for the path
+        // segments and one or more DOT tokens.
+        let words: Vec<String> = destructure
+            .children_with_tokens()
+            .filter_map(|c| match c {
+                rowan::NodeOrToken::Token(t) if t.kind() == SyntaxKind::WORD => {
+                    Some(t.text().to_string())
+                }
+                _ => None,
+            })
+            .collect();
+        // First three WORDs are path segments — `field` lives inside a
+        // FIELD_PATTERN, not as a direct token of the destructure.
+        assert_eq!(
+            words,
+            vec!["name".to_string(), "space".to_string(), "Class".to_string()],
+            "destructure path tokens should be the dotted segments"
+        );
+
+        let dot_count = destructure
+            .children_with_tokens()
+            .filter(|c| {
+                matches!(
+                    c,
+                    rowan::NodeOrToken::Token(t) if t.kind() == SyntaxKind::DOT
+                )
+            })
+            .count();
+        assert_eq!(dot_count, 2, "expected 2 dots between 3 segments");
+
+        // And the field is still recognised.
+        let fields: Vec<_> = destructure
+            .children()
+            .filter(|n| n.kind() == SyntaxKind::FIELD_PATTERN)
+            .collect();
+        assert_eq!(fields.len(), 1);
+        assert!(fields[0].text().to_string().contains("field"));
+    }
+
+    #[test]
+    fn pattern_dotted_path_in_match_arm() {
+        // Dotted path like `name.space.Enum.Variant` in a match arm. With no
+        // `{` afterwards, this is a TYPE_PATTERN — the path tokens land
+        // inside a TYPE_EXPR. Note: there's no separate "enum variant"
+        // pattern kind; an enum variant is just a singleton type, so it
+        // structurally IS a TYPE_PATTERN with a dotted path. (Same logic as
+        // literals being types.)
+        let source = r#"
+function Demo() -> int {
+  match (x) {
+    name.space.Enum.Variant => 1,
+    _ => 0,
+  }
+}
+"#;
+
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+
+        let arm = root
+            .descendants()
+            .find(|n| n.kind() == SyntaxKind::MATCH_ARM)
+            .expect("expected MATCH_ARM");
+        let pattern = arm
+            .children()
+            .find(|n| n.kind() == SyntaxKind::PATTERN)
+            .unwrap();
+        assert_eq!(
+            child_kinds(&pattern),
+            vec![SyntaxKind::TYPE_PATTERN],
+            "enum variant path must be a TYPE_PATTERN"
+        );
+
+        let type_pat = pattern
+            .children()
+            .find(|n| n.kind() == SyntaxKind::TYPE_PATTERN)
+            .unwrap();
+
+        // Path segments inside the TYPE_PATTERN: 4 WORDs joined by 3 DOTs.
+        let words: Vec<String> = type_pat
+            .descendants_with_tokens()
+            .filter_map(|c| match c {
+                rowan::NodeOrToken::Token(t) if t.kind() == SyntaxKind::WORD => {
+                    Some(t.text().to_string())
+                }
+                _ => None,
+            })
+            .collect();
+        assert_eq!(
+            words,
+            vec![
+                "name".to_string(),
+                "space".to_string(),
+                "Enum".to_string(),
+                "Variant".to_string(),
+            ],
+        );
+        let dot_count = type_pat
+            .descendants_with_tokens()
+            .filter(|c| {
+                matches!(
+                    c,
+                    rowan::NodeOrToken::Token(t) if t.kind() == SyntaxKind::DOT
+                )
+            })
+            .count();
+        assert_eq!(dot_count, 3);
+    }
+
+    #[test]
+    fn pattern_dotted_paths_in_union() {
+        // Multiple dotted paths in a UNION_PATTERN — exercises the union
+        // loop not getting confused by paths. (Enum-variant-style input,
+        // but structurally just three TYPE_PATTERN atoms.)
+        let source = r#"
+function Demo() -> int {
+  match (x) {
+    Status.Active | Status.Pending | other.pkg.Result.Ok => 1,
+    _ => 0,
+  }
+}
+"#;
+
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+
+        let arm = root
+            .descendants()
+            .find(|n| n.kind() == SyntaxKind::MATCH_ARM)
+            .expect("expected MATCH_ARM");
+        let pattern = arm
+            .children()
+            .find(|n| n.kind() == SyntaxKind::PATTERN)
+            .unwrap();
+        let union = pattern
+            .children()
+            .find(|n| n.kind() == SyntaxKind::UNION_PATTERN)
+            .expect("expected UNION_PATTERN");
+
+        let atoms: Vec<_> = union
+            .children()
+            .filter(|n| n.kind() == SyntaxKind::TYPE_PATTERN)
+            .collect();
+        assert_eq!(atoms.len(), 3, "expected three enum-variant atoms");
+        assert!(atoms[0].text().to_string().contains("Status.Active"));
+        assert!(atoms[1].text().to_string().contains("Status.Pending"));
+        assert!(atoms[2].text().to_string().contains("other.pkg.Result.Ok"));
+    }
+
+    #[test]
+    fn pattern_bare_underscore_is_wildcard() {
+        // `_` in a match arm should be a WILDCARD_PATTERN, not a TYPE_PATTERN
+        // with a WORD(_) inside. The new pattern parser distinguishes these
+        // structurally so downstream code doesn't text-match `_`.
+        let source = r#"
+function Demo() -> int {
+  match (x) {
+    _ => 0,
+  }
+}
+"#;
+
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+
+        let arm = root
+            .descendants()
+            .find(|n| n.kind() == SyntaxKind::MATCH_ARM)
+            .expect("expected MATCH_ARM");
+        let pattern = arm
+            .children()
+            .find(|n| n.kind() == SyntaxKind::PATTERN)
+            .unwrap();
+        assert_eq!(
+            child_kinds(&pattern),
+            vec![SyntaxKind::WILDCARD_PATTERN],
+            "bare `_` must be a WILDCARD_PATTERN"
+        );
+
+        // No TYPE_PATTERN should appear under the arm.
+        assert!(
+            arm.descendants()
+                .all(|n| n.kind() != SyntaxKind::TYPE_PATTERN),
+            "bare `_` should NOT produce a TYPE_PATTERN"
+        );
+    }
+
+    #[test]
+    fn pattern_let_underscore_is_wildcard() {
+        // `let _ = ...` — the `let _` form is also a WILDCARD_PATTERN, NOT a
+        // BINDING_PATTERN to a name called `_`. The wildcard node contains
+        // both the `let` keyword and the `_` token.
+        let source = r#"
+function Demo() -> int {
+  let _ = 1;
+  1
+}
+"#;
+
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+
+        let pattern = first_let_pattern(&root);
+        assert_eq!(
+            child_kinds(&pattern),
+            vec![SyntaxKind::WILDCARD_PATTERN],
+            "`let _` must be a WILDCARD_PATTERN, not a BINDING_PATTERN"
+        );
+
+        let wildcard = pattern
+            .children()
+            .find(|n| n.kind() == SyntaxKind::WILDCARD_PATTERN)
+            .unwrap();
+        let has_let = wildcard.children_with_tokens().any(|c| {
+            matches!(
+                c,
+                rowan::NodeOrToken::Token(t) if t.kind() == SyntaxKind::KW_LET
+            )
+        });
+        assert!(has_let, "`let _` wildcard must keep the KW_LET token");
+    }
+
+    #[test]
+    fn pattern_negative_integer_literal_in_match_arm() {
+        // `-42` as a match-arm pattern. Structurally a TYPE_PATTERN whose
+        // inner TYPE_EXPR carries a MINUS token followed by an INTEGER_LITERAL.
+        let source = r#"
+function Demo() -> int {
+  match (x) {
+    -42 => 1,
+    _ => 0,
+  }
+}
+"#;
+
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+
+        let arm = root
+            .descendants()
+            .find(|n| n.kind() == SyntaxKind::MATCH_ARM)
+            .unwrap();
+        let pattern = arm
+            .children()
+            .find(|n| n.kind() == SyntaxKind::PATTERN)
+            .unwrap();
+        let type_pat = pattern
+            .children()
+            .find(|n| n.kind() == SyntaxKind::TYPE_PATTERN)
+            .expect("expected TYPE_PATTERN for `-42`");
+        assert!(type_pat.text().to_string().contains("-42"));
+
+        // The structural shape should be MINUS then INTEGER_LITERAL.
+        let kinds: Vec<SyntaxKind> = type_pat
+            .descendants_with_tokens()
+            .filter_map(|c| match c {
+                rowan::NodeOrToken::Token(t)
+                    if matches!(t.kind(), SyntaxKind::MINUS | SyntaxKind::INTEGER_LITERAL) =>
+                {
+                    Some(t.kind())
+                }
+                _ => None,
+            })
+            .collect();
+        assert_eq!(kinds, vec![SyntaxKind::MINUS, SyntaxKind::INTEGER_LITERAL]);
+    }
+
+    #[test]
+    fn generic_args_with_negative_integer_literal() {
+        // `Factory<-1>(x)` — `<-1>` should disambiguate as GENERIC_ARGS, not as
+        // a comparison with a unary-minus literal. Without `Minus` in
+        // `looks_like_generic_args`'s allow-list, the parser falls back to
+        // comparison parsing and `(x)` becomes detached.
+        let source = r#"
+function Demo() -> int {
+  let y = Factory<-1>(x);
+  1
+}
+"#;
+
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+
+        let generic_args = root
+            .descendants()
+            .find(|n| n.kind() == SyntaxKind::GENERIC_ARGS)
+            .expect("expected GENERIC_ARGS for `Factory<-1>(x)`");
+        let text = generic_args.text().to_string();
+        assert!(
+            text.contains("-1"),
+            "expected `-1` inside GENERIC_ARGS, got `{text}`"
+        );
+    }
+
+    /// Helper: does the parse tree contain a `GENERIC_ARGS` node?
+    fn has_generic_args(root: &SyntaxNode) -> bool {
+        root.descendants()
+            .any(|n| n.kind() == SyntaxKind::GENERIC_ARGS)
+    }
+
+    #[test]
+    fn bare_generic_instantiation_in_value_position() {
+        // `let f = foo<int>;` — a generic function referenced with explicit type
+        // args but NOT called. Ported from TS instantiation expressions: the
+        // closing `>` followed by `;` (which cannot start an expression) must
+        // disambiguate as GENERIC_ARGS, not `foo < int` comparison.
+        let source = r#"
+function Demo() -> int {
+  let f = foo<int>;
+  1
+}
+"#;
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+        assert!(
+            has_generic_args(&root),
+            "expected GENERIC_ARGS for bare `foo<int>` in value position"
+        );
+    }
+
+    #[test]
+    fn bare_generic_instantiation_followed_by_terminators() {
+        // Closing `>` followed by `,`, `)`, `]`, `}` (none can start an
+        // expression) → all GENERIC_ARGS.
+        for source in [
+            "function Demo() -> int { let xs = [foo<int>, bar<string>]; 1 }",
+            "function Demo() -> int { g(foo<int>); 1 }",
+            "function Demo() -> int { foo<int> }",
+        ] {
+            let (root, errors) = parse_source(source);
+            assert_no_errors(&errors);
+            assert!(
+                has_generic_args(&root),
+                "expected GENERIC_ARGS for terminator-followed instantiation in: {source}"
+            );
+        }
+    }
+
+    #[test]
+    fn bare_generic_instantiation_followed_by_member_access() {
+        // `foo<int>.bar` — `.` is in the true follow-set.
+        let source = r#"
+function Demo() -> int {
+  let x = foo<int>.bar;
+  1
+}
+"#;
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+        assert!(
+            has_generic_args(&root),
+            "expected GENERIC_ARGS for `foo<int>.bar`"
+        );
+    }
+
+    #[test]
+    fn comparison_chain_is_not_generic_args() {
+        // `a < b > c` — the token after `>` is `c`, which CAN start an
+        // expression and is not a binary operator, so this stays a comparison
+        // (TS canFollowTypeArgumentsInExpression fallback → false).
+        let source = r#"
+function Demo() -> bool {
+  let r = a < b > c;
+  r
+}
+"#;
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+        assert!(
+            !has_generic_args(&root),
+            "expected NO GENERIC_ARGS for comparison chain `a < b > c`"
+        );
+    }
+
+    #[test]
+    fn simple_comparison_is_not_generic_args() {
+        // `a < b` with no closing `>` fails the type-token scan → comparison.
+        let source = r#"
+function Demo() -> bool {
+  let r = a < b;
+  r
+}
+"#;
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+        assert!(
+            !has_generic_args(&root),
+            "expected NO GENERIC_ARGS for simple comparison `a < b`"
+        );
+    }
+
+    #[test]
+    fn class_field_negative_integer_literal_type_with_colon() {
+        // `field: -1` — `is_at_type_start` must accept `Minus` followed by an
+        // integer literal so the class-field gate doesn't reject negative
+        // literal types and fall through to "missing a type annotation".
+        let source = r#"
+class Foo {
+  literal_neg_one: -1
+}
+"#;
+
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+
+        let field = root
+            .descendants()
+            .find(|n| n.kind() == SyntaxKind::FIELD)
+            .expect("expected FIELD node");
+        let type_expr = field
+            .descendants()
+            .find(|n| n.kind() == SyntaxKind::TYPE_EXPR)
+            .expect("expected TYPE_EXPR inside FIELD");
+        assert!(
+            type_expr.text().to_string().contains("-1"),
+            "expected field type to contain `-1`, got: {}",
+            type_expr.text()
+        );
+    }
+
+    #[test]
+    fn class_field_negative_integer_literal_type_no_colon() {
+        // BEP-019 colon-less form: `field -1`. Same gate, exercises the path
+        // where `has_colon == false` so the type must start on the same line.
+        let source = r#"
+class Foo {
+  literal_neg_one -1
+}
+"#;
+
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+
+        let field = root
+            .descendants()
+            .find(|n| n.kind() == SyntaxKind::FIELD)
+            .expect("expected FIELD node");
+        let type_expr = field
+            .descendants()
+            .find(|n| n.kind() == SyntaxKind::TYPE_EXPR)
+            .expect("expected TYPE_EXPR inside FIELD");
+        assert!(
+            type_expr.text().to_string().contains("-1"),
+            "expected field type to contain `-1`, got: {}",
+            type_expr.text()
+        );
+    }
+
+    #[test]
+    fn class_field_negative_literal_in_union_type() {
+        // `-1 | 0 | 1` in field position — combines the field-start gate with
+        // the union-continuation path inside `parse_type_with`.
+        let source = r#"
+class Foo {
+  bounded: -1 | 0 | 1
+}
+"#;
+
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+
+        let field = root
+            .descendants()
+            .find(|n| n.kind() == SyntaxKind::FIELD)
+            .expect("expected FIELD node");
+        let type_expr = field
+            .descendants()
+            .find(|n| n.kind() == SyntaxKind::TYPE_EXPR)
+            .expect("expected TYPE_EXPR inside FIELD");
+        let text = type_expr.text().to_string();
+        assert!(
+            text.contains("-1") && text.contains('0') && text.contains('1'),
+            "expected union to contain -1, 0, 1; got: {text}"
+        );
+    }
+
+    #[test]
+    fn function_parameter_negative_integer_literal_type() {
+        // `(x: -1) -> int` — same gate is consulted by `parse_parameter`.
+        let source = r#"
+function Demo(x: -1) -> int {
+  0
+}
+"#;
+
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+
+        let param = root
+            .descendants()
+            .find(|n| n.kind() == SyntaxKind::PARAMETER)
+            .expect("expected PARAMETER node");
+        let type_expr = param
+            .descendants()
+            .find(|n| n.kind() == SyntaxKind::TYPE_EXPR)
+            .expect("expected TYPE_EXPR inside PARAMETER");
+        assert!(
+            type_expr.text().to_string().contains("-1"),
+            "expected parameter type to contain `-1`, got: {}",
+            type_expr.text()
+        );
+    }
+
+    // ============ for-in: `let` is required ============
+    //
+    // `for ... in ...` always requires a `let`-prefixed pattern; the variable
+    // binding lives inside `LET_STMT > PATTERN`. Bare-WORD forms (`for (i in
+    // xs)` or `for i in xs`) are rejected.
+
+    /// Find the `FOR_EXPR`'s iterator-style binding: a `LET_STMT` child of `FOR_EXPR`
+    /// containing a single PATTERN child.
+    fn first_for_in_pattern(root: &SyntaxNode) -> SyntaxNode {
+        let for_expr = root
+            .descendants()
+            .find(|n| n.kind() == SyntaxKind::FOR_EXPR)
+            .expect("expected FOR_EXPR");
+        let let_stmt = for_expr
+            .children()
+            .find(|n| n.kind() == SyntaxKind::LET_STMT)
+            .expect("for-in should expose its binding as a LET_STMT child");
+        let_stmt
+            .children()
+            .find(|n| n.kind() == SyntaxKind::PATTERN)
+            .expect("LET_STMT under for-in should contain a PATTERN")
+    }
+
+    #[test]
+    fn for_in_paren_with_let_binding() {
+        let source = r#"
+function Demo() -> int {
+  for (let i in xs) {
+    1
+  }
+  1
+}
+"#;
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+
+        let pattern = first_for_in_pattern(&root);
+        assert_eq!(
+            child_kinds(&pattern),
+            vec![SyntaxKind::BINDING_PATTERN],
+            "for (let i in xs) should produce a BINDING_PATTERN inside PATTERN"
+        );
+    }
+
+    #[test]
+    fn for_in_no_paren_with_let_binding() {
+        // The non-parenthesized form still requires `let`.
+        let source = r#"
+function Demo() -> int {
+  for let i in xs {
+    1
+  }
+  1
+}
+"#;
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+
+        let pattern = first_for_in_pattern(&root);
+        assert_eq!(child_kinds(&pattern), vec![SyntaxKind::BINDING_PATTERN],);
+    }
+
+    #[test]
+    fn for_in_with_wildcard() {
+        let source = r#"
+function Demo() -> int {
+  for (let _ in xs) {
+    1
+  }
+  1
+}
+"#;
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+
+        let pattern = first_for_in_pattern(&root);
+        assert_eq!(
+            child_kinds(&pattern),
+            vec![SyntaxKind::WILDCARD_PATTERN],
+            "for (let _ in xs) should produce a WILDCARD_PATTERN, not a BINDING"
+        );
+    }
+
+    #[test]
+    fn for_in_with_destructure_pattern() {
+        // The for-in binding accepts arbitrary patterns — including
+        // destructures — so long as `let` is present.
+        let source = r#"
+function Demo() -> int {
+  for (let Pair { a, b } in xs) {
+    1
+  }
+  1
+}
+"#;
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+
+        let pattern = first_for_in_pattern(&root);
+        assert_eq!(child_kinds(&pattern), vec![SyntaxKind::DESTRUCTURE_PATTERN],);
+    }
+
+    #[test]
+    fn for_in_paren_without_let_is_rejected() {
+        // `for (i in xs)` — bare WORD inside parens. Used to be a valid
+        // iterator form; with the unified pattern model, bindings always
+        // require `let`, so this now lands on the C-style path which
+        // immediately mis-parses, producing diagnostics.
+        let source = r#"
+function Demo() -> int {
+  for (i in xs) {
+    1
+  }
+  1
+}
+"#;
+        let (_root, errors) = parse_source(source);
+        assert!(
+            !errors.is_empty(),
+            "expected parse errors for let-less for-in form, got none"
+        );
+    }
+
+    #[test]
+    fn for_in_no_paren_without_let_is_rejected() {
+        // `for i in xs` (non-parenthesized) used to also be valid as a
+        // bare-WORD iterator form. Now it requires `let` — the parser sees
+        // the bare WORD where it expects `let`, errors, and produces
+        // diagnostics.
+        let source = r#"
+function Demo() -> int {
+  for i in xs {
+    1
+  }
+  1
+}
+"#;
+        let (_root, errors) = parse_source(source);
+        assert!(
+            !errors.is_empty(),
+            "expected parse errors for let-less non-paren for-in, got none"
+        );
+    }
+
+    #[test]
+    fn for_c_style_still_works() {
+        // C-style for loops are unaffected by the iterator-form changes.
+        let source = r#"
+function Demo() -> int {
+  for (let i = 0; i < 10; i = i + 1) {
+    1
+  }
+  1
+}
+"#;
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+
+        let for_expr = root
+            .descendants()
+            .find(|n| n.kind() == SyntaxKind::FOR_EXPR)
+            .expect("expected FOR_EXPR");
+        // C-style has no `KW_IN` — distinguishes it from the iterator form.
+        let has_in = for_expr.children_with_tokens().any(|c| {
+            matches!(
+                c,
+                rowan::NodeOrToken::Token(t) if t.kind() == SyntaxKind::KW_IN
+            )
+        });
+        assert!(!has_in, "C-style for must not contain KW_IN");
+    }
+
+    #[test]
+    fn function_parameter_defaults_parse() {
+        let source = r#"
+function Search(query: string, max_results: int = 10, filter: string = "none") -> int {
+  1
+}
+"#;
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+
+        let params: Vec<_> = root
+            .descendants()
+            .filter(|n| n.kind() == SyntaxKind::PARAMETER)
+            .collect();
+        assert_eq!(params.len(), 3);
+        assert!(
+            params[1].children_with_tokens().any(
+                |it| matches!(it, rowan::NodeOrToken::Token(t) if t.kind() == SyntaxKind::EQUALS)
+            ),
+            "expected second parameter to preserve default equals token"
+        );
+        assert!(
+            params[2].children_with_tokens().any(
+                |it| matches!(it, rowan::NodeOrToken::Token(t) if t.kind() == SyntaxKind::EQUALS)
+            ),
+            "expected third parameter to preserve default equals token"
+        );
+    }
+
+    #[test]
+    fn self_parameter_default_recovery_parse() {
+        let source = r#"
+class Response {
+  function text(self = default_self()) -> string {
+    "ok"
+  }
+}
+"#;
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+
+        let self_param = root
+            .descendants()
+            .find(|n| n.kind() == SyntaxKind::PARAMETER && n.text().to_string().contains("self"))
+            .expect("expected self PARAMETER node");
+        assert!(
+            self_param.children_with_tokens().any(
+                |it| matches!(it, rowan::NodeOrToken::Token(t) if t.kind() == SyntaxKind::EQUALS)
+            ),
+            "expected self parameter recovery to preserve default equals token"
+        );
+    }
+
+    #[test]
+    fn lambda_parameter_defaults_parse_for_recovery() {
+        let source = r#"
+function Demo() -> int {
+  let f = (x: int = 1) -> int {
+    x
+  }
+  f()
+}
+"#;
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+
+        let lambda_param = root
+            .descendants()
+            .find(|n| n.kind() == SyntaxKind::LAMBDA_EXPR)
+            .and_then(|lambda| {
+                lambda
+                    .descendants()
+                    .find(|n| n.kind() == SyntaxKind::PARAMETER)
+            })
+            .expect("expected lambda PARAMETER node");
+        assert!(
+            lambda_param.children_with_tokens().any(
+                |it| matches!(it, rowan::NodeOrToken::Token(t) if t.kind() == SyntaxKind::EQUALS)
+            ),
+            "expected lambda parameter default equals token"
+        );
+    }
+
+    #[test]
+    fn function_type_parameter_default_reports_error_and_recovers() {
+        let source = r#"
+type Searcher = (query: string = make_default("cats"), limit?: int) -> int
+"#;
+        let (root, errors) = parse_source(source);
+
+        let default_error_span = errors.iter().find_map(|error| match error {
+            ParseError::InvalidSyntax { message, span }
+                if message == "default expressions are not allowed in function types" =>
+            {
+                Some(span.range)
+            }
+            _ => None,
+        });
+        assert!(
+            default_error_span.is_some(),
+            "expected function type default diagnostic, got: {errors:#?}"
+        );
+        let default_error_span = default_error_span.unwrap();
+        let default_start = source.find("make_default").unwrap();
+        let default_end = source.find(", limit").unwrap();
+        assert_eq!(
+            u32::from(default_error_span.start()) as usize,
+            default_start
+        );
+        assert_eq!(u32::from(default_error_span.end()) as usize, default_end);
+        assert!(
+            root.descendants()
+                .any(|n| n.kind() == SyntaxKind::TYPE_ALIAS_DEF),
+            "expected parser to recover through the type alias"
+        );
+        assert_eq!(
+            root.descendants()
+                .filter(|n| n.kind() == SyntaxKind::FUNCTION_TYPE_PARAM)
+                .count(),
+            2,
+            "expected parser to recover and keep both function type params"
+        );
+    }
+
+    #[test]
+    fn named_call_arguments_parse_as_call_args() {
+        let source = r#"
+function Demo() -> int {
+  Search(query = "cats", max_results = 5)
+}
+"#;
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+
+        let call_args: Vec<_> = root
+            .descendants()
+            .filter(|n| n.kind() == SyntaxKind::CALL_ARG)
+            .collect();
+        assert_eq!(call_args.len(), 2);
+        assert!(call_args.iter().all(|arg| arg.children_with_tokens().any(
+            |it| matches!(it, rowan::NodeOrToken::Token(t) if t.kind() == SyntaxKind::EQUALS)
+        )));
+    }
+
+    #[test]
+    fn function_type_optional_params_parse() {
+        let source = r#"
+type Searcher = (query: string, max_results?: int) -> int
+"#;
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+
+        let optional_param = root
+            .descendants()
+            .filter(|n| n.kind() == SyntaxKind::FUNCTION_TYPE_PARAM)
+            .nth(1)
+            .expect("expected second function type parameter");
+        assert!(optional_param.children_with_tokens().any(
+            |it| matches!(it, rowan::NodeOrToken::Token(t) if t.kind() == SyntaxKind::QUESTION)
+        ));
+    }
+
+    // ============ let-else ============
+
+    #[test]
+    fn let_else_basic_parses() {
+        // `let Pattern = scrutinee else { ... };` — refutable binding with a
+        // diverging else clause. The LET_STMT should carry both an EQUALS
+        // initializer and a trailing KW_ELSE + BLOCK_EXPR.
+        let source = r#"
+function f(r: int | string) -> int {
+  let v: int = r else { return 0; };
+  v
+}
+"#;
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+
+        let let_stmt = root
+            .descendants()
+            .find(|n| n.kind() == SyntaxKind::LET_STMT)
+            .expect("expected LET_STMT");
+        let has_else = let_stmt.children_with_tokens().any(
+            |elem| matches!(elem, rowan::NodeOrToken::Token(t) if t.kind() == SyntaxKind::KW_ELSE),
+        );
+        assert!(has_else, "LET_STMT should have a KW_ELSE token");
+        let block_count = let_stmt
+            .children()
+            .filter(|n| n.kind() == SyntaxKind::BLOCK_EXPR)
+            .count();
+        assert_eq!(
+            block_count, 1,
+            "LET_STMT should have one BLOCK_EXPR (the else body)"
+        );
+    }
+
+    #[test]
+    fn let_else_rejects_else_if() {
+        // `let X = y else if z { ... }` — `else if` is meaningless without a
+        // value being produced (unlike `if let`). Reject at parse time.
+        let source = r#"
+function f(r: int | string) -> int {
+  let v: int = r else if true { return 0; };
+  v
+}
+"#;
+        let (_, errors) = parse_source(source);
+        assert!(
+            !errors.is_empty(),
+            "expected parse error for `let ... else if ...`"
+        );
+    }
+
+    #[test]
+    fn let_else_rejected_in_watch_let() {
+        // `watch let X = y else { ... };` — combining watched bindings with
+        // let-else divergence is rejected at parse time.
+        let source = r#"
+function f(r: int | string) -> int {
+  watch let v: int = r else { return 0; };
+  v
+}
+"#;
+        let (_, errors) = parse_source(source);
+        assert!(
+            !errors.is_empty(),
+            "expected parse error for `watch let ... else {{ ... }}`"
+        );
+    }
+
+    #[test]
+    fn let_else_destructure_pattern_parses() {
+        // `let Class { f } = expr else { ... };` — destructure pattern with
+        // an else branch; verifies parser handles the structural pattern in
+        // combination with the trailing else block.
+        let source = r#"
+class User { name string }
+
+function f(u: User) -> string {
+  let User { name } = u else { return ""; };
+  name
+}
+"#;
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+
+        let let_stmt = root
+            .descendants()
+            .find(|n| n.kind() == SyntaxKind::LET_STMT)
+            .expect("expected LET_STMT");
+        let has_destructure = let_stmt
+            .descendants()
+            .any(|n| n.kind() == SyntaxKind::DESTRUCTURE_PATTERN);
+        assert!(has_destructure, "should contain a destructure pattern");
+        let has_else = let_stmt.children_with_tokens().any(
+            |elem| matches!(elem, rowan::NodeOrToken::Token(t) if t.kind() == SyntaxKind::KW_ELSE),
+        );
+        assert!(has_else, "LET_STMT should have a KW_ELSE token");
+    }
+
+    #[test]
+    fn let_else_accepted_in_c_style_for_init() {
+        // C-style `for (let i = 0; cond; update)` accepts a let-else in the
+        // init slot. Makes the loop unreachable (the else diverges), which
+        // is silly but not a parse error — same kind of dead code we
+        // already allow elsewhere.
+        let source = r#"
+function f() -> int {
+  for (let i: int = 0 else { return 0; }; i < 3; i += 1) {
+    let _ = i;
+  }
+  0
+}
+"#;
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+
+        let for_expr = root
+            .descendants()
+            .find(|n| n.kind() == SyntaxKind::FOR_EXPR)
+            .expect("expected FOR_EXPR");
+        let let_stmt = for_expr
+            .descendants()
+            .find(|n| n.kind() == SyntaxKind::LET_STMT)
+            .expect("for-init should expose a LET_STMT");
+        let has_else = let_stmt.children_with_tokens().any(
+            |elem| matches!(elem, rowan::NodeOrToken::Token(t) if t.kind() == SyntaxKind::KW_ELSE),
+        );
+        assert!(has_else, "for-init LET_STMT should carry the else branch");
+    }
+
+    #[test]
+    fn let_without_else_unchanged() {
+        // Regression: plain `let x = …;` continues to parse with no else
+        // sibling — the new else handling must not turn surrounding tokens
+        // into a phantom else block.
+        let source = r#"
+function f() -> int {
+  let x: int = 1;
+  x
+}
+"#;
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+
+        let let_stmt = root
+            .descendants()
+            .find(|n| n.kind() == SyntaxKind::LET_STMT)
+            .expect("expected LET_STMT");
+        let block_count = let_stmt
+            .children()
+            .filter(|n| n.kind() == SyntaxKind::BLOCK_EXPR)
+            .count();
+        assert_eq!(block_count, 0, "plain let-stmt should have no BLOCK_EXPR");
     }
 }

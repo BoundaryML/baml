@@ -57,9 +57,42 @@ pub enum DefinitionSite {
 // ── BindingId ────────────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum BindingKind {
+    /// A local binding row in `scope_bindings[scope].bindings`.
+    Local(u32),
+    /// A parameter index in `scope_bindings[scope].params`.
+    Parameter(usize),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct BindingId {
     pub scope: FileScopeId,
-    pub site: DefinitionSite,
+    pub kind: BindingKind,
+}
+
+impl BindingId {
+    pub fn local(scope: FileScopeId, binding_index: usize) -> Self {
+        Self {
+            scope,
+            kind: BindingKind::Local(
+                u32::try_from(binding_index).expect("local binding index overflow"),
+            ),
+        }
+    }
+
+    pub fn parameter(scope: FileScopeId, param_idx: usize) -> Self {
+        Self {
+            scope,
+            kind: BindingKind::Parameter(param_idx),
+        }
+    }
+
+    pub fn local_index(self) -> Option<usize> {
+        match self.kind {
+            BindingKind::Local(idx) => Some(idx as usize),
+            BindingKind::Parameter(_) => None,
+        }
+    }
 }
 
 // ── ScopeBindings ────────────────────────────────────────────────────────────
@@ -132,20 +165,14 @@ pub(crate) fn visible_binding_at_in_scopes(
         }
 
         let bindings = &scope_bindings[ancestor_id.index() as usize];
-        for binding in bindings.bindings.iter().rev() {
+        for (binding_idx, binding) in bindings.bindings.iter().enumerate().rev() {
             if &binding.name == name && binding.visible_from <= at_offset {
-                return Some(BindingId {
-                    scope: ancestor_id,
-                    site: binding.site,
-                });
+                return Some(BindingId::local(ancestor_id, binding_idx));
             }
         }
         for (param_name, param_idx) in &bindings.params {
             if param_name == name {
-                return Some(BindingId {
-                    scope: ancestor_id,
-                    site: DefinitionSite::Parameter(*param_idx),
-                });
+                return Some(BindingId::parameter(ancestor_id, *param_idx));
             }
         }
         current = scope.parent;
@@ -213,6 +240,9 @@ pub struct FileSemanticIndex<'db> {
     /// Package-item resolution (namespace, split point) is deferred to TIR
     /// since it requires cross-file `package_items` queries.
     pub path_resolutions: Vec<(ExprId, PathResolution)>,
+
+    /// Environment variable references (`env.X`) found in this file's expression bodies.
+    pub env_var_refs: Vec<baml_compiler2_ast::EnvVarRef>,
 }
 
 // ── salsa::Update impl ────────────────────────────────────────────────────────
@@ -348,6 +378,21 @@ impl FileSemanticIndex<'_> {
             at_offset,
             name,
         )
+    }
+
+    pub fn local_binding(&self, binding_id: BindingId) -> Option<&LocalBinding> {
+        let idx = binding_id.local_index()?;
+        self.scope_bindings
+            .get(binding_id.scope.index() as usize)?
+            .bindings
+            .get(idx)
+    }
+
+    pub fn binding_site(&self, binding_id: BindingId) -> Option<DefinitionSite> {
+        match binding_id.kind {
+            BindingKind::Local(_) => self.local_binding(binding_id).map(|binding| binding.site),
+            BindingKind::Parameter(param_idx) => Some(DefinitionSite::Parameter(param_idx)),
+        }
     }
 
     pub fn diagnostics(&self) -> &[Hir2Diagnostic] {

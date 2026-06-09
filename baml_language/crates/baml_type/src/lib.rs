@@ -12,20 +12,46 @@ use std::{
 // Re-export core baml_base types so downstream crates can depend on baml_type
 // instead of baml_base directly.
 pub use baml_base::{Literal, MediaKind, Name, Span};
+use borsh::{BorshDeserialize, BorshSerialize};
 
 mod attr;
 mod defs;
 pub mod simplify_sap;
+pub mod template;
 pub mod typetag;
 pub use attr::*;
 pub use defs::*;
+pub use template::TyTemplate;
+
+/// Upper bound on the bit-length of a `bigint` value we are willing to
+/// materialize at runtime. ~268 million bits ≈ 80 million decimal digits ≈ 32
+/// MiB of digits. Operations that would produce a larger result raise
+/// `baml.panics.AllocFailure` instead of either succeeding (and starving the
+/// rest of the runtime) or aborting the process outright.
+///
+/// Shared by the VM's allocation guard (`bex_vm::package_baml::bigint`),
+/// the FFI decoder's pre-allocation cap
+/// (`bridge_ctypes::value_decode::MAX_BIGINT_HEX_LEN`), and TIR's
+/// constant-folding refusal threshold.
+pub const MAX_BIGINT_BITS: u64 = 1 << 28;
+
+/// Permissive upper bound on the number of base-ten digits a `bigint` may
+/// have before it cannot possibly fit in [`MAX_BIGINT_BITS`].
+///
+/// Each base-ten digit carries `log2(10) ≈ 3.32` bits, so any decimal string
+/// longer than `MAX_BIGINT_BITS / 3 + 2` is guaranteed to overflow the cap.
+/// Used as a cheap pre-flight reject before `BigInt::parse_bytes`; callers
+/// follow up with an exact `bits()` check for borderline inputs. Shared by
+/// SAP deserialization, the jsonish number visitor, and `bigint.parse`.
+#[allow(clippy::cast_possible_truncation)] // MAX_BIGINT_BITS is 2^28; fits in usize on 32/64-bit
+pub const MAX_BIGINT_DECIMAL_DIGITS: usize = (MAX_BIGINT_BITS / 3 + 2) as usize;
 
 /// A lightweight name type for class/enum/type-alias references.
 ///
 /// Replaces both `QualifiedName` (VIR+) and plain `String` keys.
 /// `display_name` is pre-computed from the source FQN and does NOT participate
 /// in equality/hashing — it's a cache for display purposes.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, BorshSerialize, BorshDeserialize)]
 pub struct TypeName {
     /// Short name: "Response", "User"
     pub name: Name,
@@ -105,10 +131,13 @@ impl fmt::Display for TypeName {
 /// variants) that holds SAP streaming annotations. All existing code uses
 /// `TyAttr::default()` — only stream type generation (HIR lowering) will populate
 /// non-default values.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, BorshSerialize, BorshDeserialize)]
 pub enum Ty {
     // --- Core: used by all VIR+ stages ---
     Int {
+        attr: TyAttr,
+    },
+    Bigint {
         attr: TyAttr,
     },
     Float {
@@ -128,12 +157,12 @@ pub enum Ty {
     },
     Media(MediaKind, TyAttr),
     Literal(Literal, TyAttr),
-    Class(TypeName, TyAttr),
+    Class(TypeName, Vec<Ty>, TyAttr),
+    Interface(TypeName, Vec<Ty>, Vec<(Name, Ty)>, TyAttr),
     Enum(TypeName, TyAttr),
     /// A specific enum variant — `Status.HttpError`.
     /// Compiler-only: should not reach runtime.
     EnumVariant(TypeName, Name, TyAttr),
-    Optional(Box<Ty>, TyAttr),
     List(Box<Ty>, TyAttr),
     Map {
         key: Box<Ty>,
@@ -191,11 +220,13 @@ pub enum Ty {
     BuiltinUnknown {
         attr: TyAttr,
     },
-    /// A future handle — the result of `dispatch_future` before `await`.
+    /// A future handle — the result of `schedule_future` or `spawn`
+    /// before `await`.
     ///
-    /// The inner type is the type the future resolves to upon `await`.
-    /// Compiler-only: should never reach runtime (futures are awaited in MIR).
-    Future(Box<Ty>, TyAttr),
+    /// Carries both the value type the future resolves to and the error
+    /// type the future may throw. The error type approximates `never` as
+    /// `Null` when the body of the future statically cannot throw.
+    Future(Box<Ty>, Box<Ty>, TyAttr),
 }
 
 // NOTE: `Unknown`, `Error`, and `Never` are intentionally excluded from this enum.
@@ -216,6 +247,7 @@ impl Ty {
     pub fn with_attr(self, attr: TyAttr) -> Ty {
         match self {
             Ty::Int { .. } => Ty::Int { attr },
+            Ty::Bigint { .. } => Ty::Bigint { attr },
             Ty::Float { .. } => Ty::Float { attr },
             Ty::String { .. } => Ty::String { attr },
             Ty::Bool { .. } => Ty::Bool { attr },
@@ -225,10 +257,12 @@ impl Ty {
             Ty::Uint8Array { .. } => Ty::Uint8Array { attr },
             Ty::Media(kind, _) => Ty::Media(kind, attr),
             Ty::Literal(lit, _) => Ty::Literal(lit, attr),
-            Ty::Class(tn, _) => Ty::Class(tn, attr),
+            Ty::Class(tn, args, _) => Ty::Class(tn, args, attr),
+            Ty::Interface(tn, args, associated_bindings, _) => {
+                Ty::Interface(tn, args, associated_bindings, attr)
+            }
             Ty::Enum(tn, _) => Ty::Enum(tn, attr),
             Ty::EnumVariant(tn, v, _) => Ty::EnumVariant(tn, v, attr),
-            Ty::Optional(inner, _) => Ty::Optional(inner, attr),
             Ty::List(inner, _) => Ty::List(inner, attr),
             Ty::Map { key, value, .. } => Ty::Map { key, value, attr },
             Ty::Union(members, _) => Ty::Union(members, attr),
@@ -246,7 +280,7 @@ impl Ty {
                 attr,
             },
             Ty::WatchAccessor(inner, _) => Ty::WatchAccessor(inner, attr),
-            Ty::Future(inner, _) => Ty::Future(inner, attr),
+            Ty::Future(value, error, _) => Ty::Future(value, error, attr),
         }
     }
 
@@ -254,6 +288,7 @@ impl Ty {
     pub fn attr(&self) -> &TyAttr {
         match self {
             Ty::Int { attr }
+            | Ty::Bigint { attr }
             | Ty::Float { attr }
             | Ty::String { attr }
             | Ty::Bool { attr }
@@ -265,16 +300,16 @@ impl Ty {
             | Ty::Function { attr, .. } => attr,
             Ty::Media(_, attr)
             | Ty::Literal(_, attr)
-            | Ty::Class(_, attr)
+            | Ty::Class(_, _, attr)
+            | Ty::Interface(_, _, _, attr)
             | Ty::Enum(_, attr)
             | Ty::EnumVariant(_, _, attr)
-            | Ty::Optional(_, attr)
             | Ty::List(_, attr)
             | Ty::Union(_, attr)
             | Ty::Opaque(_, attr)
             | Ty::TypeAlias(_, attr)
             | Ty::WatchAccessor(_, attr)
-            | Ty::Future(_, attr) => attr,
+            | Ty::Future(_, _, attr) => attr,
         }
     }
 
@@ -283,6 +318,13 @@ impl Ty {
     /// `int` with default attributes.
     pub fn int() -> Self {
         Ty::Int {
+            attr: TyAttr::default(),
+        }
+    }
+
+    /// `bigint` with default attributes.
+    pub fn bigint() -> Self {
+        Ty::Bigint {
             attr: TyAttr::default(),
         }
     }
@@ -324,9 +366,52 @@ impl Ty {
 
     // --- Compound constructors (default TyAttr) ---
 
-    /// `T?` (optional) with default attributes.
+    /// `T?` (optional) — sugar for `T | null`.
+    ///
+    /// `?` is not its own type: it lowers to a union that includes `null`.
+    /// The result is flattened and idempotent — `(A | B)?` becomes a flat
+    /// `A | B | null`, `T??` stays `T?`, and `null?` is just `null`.
     pub fn optional(inner: Ty) -> Self {
-        Ty::Optional(Box::new(inner), TyAttr::default())
+        match inner {
+            Ty::Union(mut members, attr) => {
+                if !members.iter().any(Ty::is_null) {
+                    members.push(Ty::null());
+                }
+                Ty::Union(members, attr)
+            }
+            n @ Ty::Null { .. } => n,
+            other => Ty::Union(vec![other, Ty::null()], TyAttr::default()),
+        }
+    }
+
+    /// True if this is exactly the `null` type.
+    pub fn is_null(&self) -> bool {
+        matches!(self, Ty::Null { .. })
+    }
+
+    /// True if this is a union that includes `null` — i.e. an optional type
+    /// after `?` lowering. This is the canonical "is this nullable" predicate;
+    /// it replaces matching on the old `Ty::Optional` variant.
+    pub fn is_nullable_union(&self) -> bool {
+        matches!(self, Ty::Union(members, _) if members.iter().any(Ty::is_null))
+    }
+
+    /// Remove `null` from a nullable union, collapsing the result: `T | null`
+    /// → `T`, `A | B | null` → `A | B`, a non-nullable type → unchanged. The
+    /// inverse direction of [`Ty::optional`]; used where the non-null payload
+    /// of an optional is needed (e.g. union-member metadata).
+    pub fn strip_null(&self) -> Ty {
+        match self {
+            Ty::Union(members, attr) => {
+                let non_null: Vec<Ty> = members.iter().filter(|m| !m.is_null()).cloned().collect();
+                match non_null.len() {
+                    0 => self.clone(),
+                    1 => non_null.into_iter().next().expect("len checked"),
+                    _ => Ty::Union(non_null, attr.clone()),
+                }
+            }
+            _ => self.clone(),
+        }
     }
 
     /// `T[]` (list) with default attributes.
@@ -339,9 +424,14 @@ impl Ty {
         Ty::Union(members.into_iter().collect(), TyAttr::default())
     }
 
-    /// `Class(name)` with default attributes (local module path).
+    /// `Class(name)` with default attributes (local module path), no type args.
     pub fn class(name: &str) -> Self {
-        Ty::Class(TypeName::local(name.into()), TyAttr::default())
+        Ty::Class(TypeName::local(name.into()), Vec::new(), TyAttr::default())
+    }
+
+    /// `Class(name, args)` — a parametric class instantiation.
+    pub fn class_with_args(name: TypeName, args: Vec<Ty>) -> Self {
+        Ty::Class(name, args, TyAttr::default())
     }
 
     /// `Class(name)` under the `"user"` package (matches compiler2 output for user-defined classes).
@@ -352,6 +442,20 @@ impl Ty {
                 name: Name::new(name),
                 module_path: vec![Name::new("user")],
             },
+            Vec::new(),
+            TyAttr::default(),
+        )
+    }
+
+    /// `Class(name, args)` under the `"user"` package (matches compiler2 output for user-defined classes).
+    pub fn user_class_with_args(name: &str, args: Vec<Ty>) -> Self {
+        Ty::Class(
+            TypeName {
+                display_name: Name::new(name),
+                name: Name::new(name),
+                module_path: vec![Name::new("user")],
+            },
+            args,
             TyAttr::default(),
         )
     }
@@ -444,6 +548,7 @@ impl Ty {
         matches!(
             self,
             Ty::Int { .. }
+                | Ty::Bigint { .. }
                 | Ty::Float { .. }
                 | Ty::String { .. }
                 | Ty::Bool { .. }
@@ -466,6 +571,15 @@ impl Ty {
     /// - Unknown/Error are mapped to Null during TIR→baml_type conversion
     /// - Never is mapped to Void during VIR lowering
     /// - All real type checking (where those variants matter) happens in TIR
+    ///
+    /// Structural subtyping for `Ty`. This is the runtime / SAP analogue of
+    /// `baml_compiler2_tir::normalize::is_subtype_of`. The relation is purely
+    /// structural — only representation-preserving widenings are allowed.
+    /// Representation-changing numeric coercions (`int → bigint`, `int → float`,
+    /// and their literal forms) are not subtype relations: `int → bigint`
+    /// happens only at the FFI boundary (`bex_engine::conversion`), and
+    /// `int → float` requires an explicit `float` literal. Keep behaviour
+    /// aligned with `crate::normalize::is_subtype_of` in TIR.
     pub fn is_subtype_of(&self, other: &Ty) -> bool {
         // Same types are subtypes
         if self == other {
@@ -478,30 +592,31 @@ impl Ty {
         }
 
         match (self, other) {
-            // Literal types are subtypes of their corresponding primitives
+            // Literal types are subtypes of their corresponding primitives.
+            // (Same representation — these are free widenings, like
+            // `Literal(Int 42) <: Int`.)
             (Ty::Literal(Literal::Int(_), _), Ty::Int { .. }) => true,
             (Ty::Literal(Literal::Float(_), _), Ty::Float { .. }) => true,
             (Ty::Literal(Literal::String(_), _), Ty::String { .. }) => true,
             (Ty::Literal(Literal::Bool(_), _), Ty::Bool { .. }) => true,
-            // Literal int widens to float
-            (Ty::Literal(Literal::Int(_), _), Ty::Float { .. }) => true,
+            (Ty::Literal(Literal::Bigint(_), _), Ty::Bigint { .. }) => true,
 
-            // Null is a subtype of Optional<T>
-            (Ty::Null { .. }, Ty::Optional(..)) => true,
-
-            // T is a subtype of Optional<T>
-            (inner, Ty::Optional(opt_inner, _)) => inner.is_subtype_of(opt_inner),
-
-            // T is a subtype of T | U (union containing T)
+            // T is a subtype of T | U (union containing T). Subsumes the former
+            // `Optional` rules: `?` is now `T | null`, so `null <: T | null` and
+            // `T <: T | null` both fall out of union membership.
             (inner, Ty::Union(types, _)) => types.iter().any(|t| inner.is_subtype_of(t)),
 
             // Union<T1, T2> is a subtype of U if all Ti are subtypes of U
             (Ty::Union(types, _), other) => types.iter().all(|t| t.is_subtype_of(other)),
 
-            // List covariance
+            // List: structural recursion. Since this impl is coercion-free,
+            // recursion via `is_subtype_of` only admits free widenings —
+            // `int[]` is **not** a subtype of `bigint[]`/`float[]`.
             (Ty::List(inner1, _), Ty::List(inner2, _)) => inner1.is_subtype_of(inner2),
 
-            // Map covariance in value (key invariant)
+            // Map: structural recursion in both key and value. Same coercion-
+            // free semantics as `List` — values cannot widen across
+            // representation boundaries.
             (
                 Ty::Map {
                     key: k1, value: v1, ..
@@ -509,11 +624,12 @@ impl Ty {
                 Ty::Map {
                     key: k2, value: v2, ..
                 },
-            ) => k1 == k2 && v1.is_subtype_of(v2),
+            ) => k1.is_subtype_of(k2) && v1.is_subtype_of(v2),
 
-            // Int is a subtype of Float (numeric widening)
-            (Ty::Int { .. }, Ty::Float { .. }) => true,
-
+            // Note: `int <: bigint`, `int <: float`, and the literal-int
+            // widenings to bigint/float are intentionally absent — numeric
+            // types do not widen across representations in the type system (TIR
+            // matches this). `int → bigint` is an FFI-boundary coercion only.
             _ => false,
         }
     }
@@ -527,7 +643,6 @@ impl Ty {
                 | Ty::Void { .. }
                 | Ty::WatchAccessor(..)
                 | Ty::BuiltinUnknown { .. }
-                | Ty::Future(..)
         )
     }
 
@@ -542,7 +657,6 @@ impl Ty {
             Ty::WatchAccessor(inner, _) => inner.validate_runtime(),
             Ty::BuiltinUnknown { .. } => Ok(()),
             // Recurse into containers
-            Ty::Optional(inner, _) => inner.validate_runtime(),
             Ty::List(inner, _) => inner.validate_runtime(),
             Ty::Map { key, value, .. } => {
                 key.validate_runtime()?;
@@ -571,10 +685,27 @@ impl Ty {
                     throws.validate_runtime()
                 }
             }
-            Ty::Future(_, _) => {
-                Err("Future type should not reach runtime (must be awaited)".to_string())
+            Ty::Future(value, error, _) => {
+                value.validate_runtime()?;
+                error.validate_runtime()
+            }
+            Ty::Class(_, args, _) => {
+                for a in args {
+                    a.validate_runtime()?;
+                }
+                Ok(())
+            }
+            Ty::Interface(_, args, associated_bindings, _) => {
+                for a in args {
+                    a.validate_runtime()?;
+                }
+                for (_, ty) in associated_bindings {
+                    ty.validate_runtime()?;
+                }
+                Ok(())
             }
             Ty::Int { .. }
+            | Ty::Bigint { .. }
             | Ty::Float { .. }
             | Ty::String { .. }
             | Ty::Bool { .. }
@@ -582,7 +713,6 @@ impl Ty {
             | Ty::Media(..)
             | Ty::Uint8Array { .. }
             | Ty::Literal(..)
-            | Ty::Class(..)
             | Ty::Enum(..)
             | Ty::EnumVariant(..)
             | Ty::Opaque(..) => Ok(()),
@@ -626,27 +756,74 @@ impl fmt::Display for Ty {
             Ty::Media(kind, _) => write!(f, "{kind}"),
             Ty::Literal(lit, _) => match lit {
                 Literal::Int(i) => write!(f, "{i}"),
+                Literal::Bigint(n) => write!(f, "{n}n"),
                 Literal::Float(s) => write!(f, "{s}"),
                 Literal::String(s) => write!(f, "{s:?}"),
                 Literal::Bool(b) => write!(f, "{b}"),
             },
-            Ty::Class(tn, _) => write!(f, "{tn}"),
+            Ty::Bigint { .. } => write!(f, "bigint"),
+            Ty::Class(tn, args, _) => {
+                write!(f, "{tn}")?;
+                if !args.is_empty() {
+                    write!(f, "<")?;
+                    for (i, arg) in args.iter().enumerate() {
+                        if i > 0 {
+                            write!(f, ", ")?;
+                        }
+                        write!(f, "{arg}")?;
+                    }
+                    write!(f, ">")?;
+                }
+                Ok(())
+            }
+            Ty::Interface(tn, args, associated_bindings, _) => {
+                write!(f, "{tn}")?;
+                if !args.is_empty() || !associated_bindings.is_empty() {
+                    write!(f, "<")?;
+                    let mut first = true;
+                    for arg in args {
+                        if !first {
+                            write!(f, ", ")?;
+                        }
+                        first = false;
+                        write!(f, "{arg}")?;
+                    }
+                    for (name, ty) in associated_bindings {
+                        if !first {
+                            write!(f, ", ")?;
+                        }
+                        first = false;
+                        write!(f, "{name} = {ty}")?;
+                    }
+                    write!(f, ">")?;
+                }
+                Ok(())
+            }
             Ty::Enum(tn, _) => write!(f, "{tn}"),
             Ty::EnumVariant(tn, variant, _) => write!(f, "{tn}.{variant}"),
             Ty::Opaque(tn, _) => write!(f, "{tn}"),
             Ty::TypeAlias(tn, _) => write!(f, "{tn}"),
-            Ty::Optional(inner, _) => {
-                inner.fmt_as_postfix_base(f)?;
-                write!(f, "?")
-            }
             Ty::List(inner, _) => {
                 inner.fmt_as_postfix_base(f)?;
                 write!(f, "[]")
             }
             Ty::Map { key, value, .. } => write!(f, "map<{key}, {value}>"),
             Ty::Union(types, _) => {
-                let parts: Vec<std::string::String> =
-                    types.iter().map(std::string::ToString::to_string).collect();
+                // `?` is sugar that exists only in source/lowering; after that a
+                // nullable type is a plain union and renders as `T | null`.
+                // Function members are parenthesized so a nullable callback reads
+                // as `((..) -> ..) | null`, not a function with `throws .. | null`.
+                let parts: Vec<std::string::String> = types
+                    .iter()
+                    .map(|ty| {
+                        let rendered = ty.to_string();
+                        if matches!(ty, Ty::Function { .. }) {
+                            format!("({rendered})")
+                        } else {
+                            rendered
+                        }
+                    })
+                    .collect();
                 write!(f, "{}", parts.join(" | "))
             }
             Ty::Function {
@@ -671,7 +848,7 @@ impl fmt::Display for Ty {
             Ty::Void { .. } => write!(f, "void"),
             Ty::WatchAccessor(inner, _) => write!(f, "{inner}.$watch"),
             Ty::BuiltinUnknown { .. } => write!(f, "unknown"),
-            Ty::Future(inner, _) => write!(f, "future<{inner}>"),
+            Ty::Future(value, error, _) => write!(f, "future<{value}, {error}>"),
         }
     }
 }
@@ -720,9 +897,13 @@ mod tests {
     }
 
     #[test]
-    fn test_literal_int_widens_to_float() {
+    fn test_literal_int_does_not_widen_to_float() {
+        // `baml_type::Ty::is_subtype_of` is coercion-free; the int-literal
+        // → float widening is a representation change, not a structural
+        // subtype. TIR keeps the scalar widening as a runtime coercion
+        // (MIR-level), not as a subtype relation modeled here.
         let lit_42 = Ty::Literal(Literal::Int(42), TyAttr::default());
-        assert!(lit_42.is_subtype_of(&ty_float()));
+        assert!(!lit_42.is_subtype_of(&ty_float()));
     }
 
     #[test]
@@ -754,19 +935,45 @@ mod tests {
     #[test]
     fn test_literal_in_optional() {
         let lit_42 = Ty::Literal(Literal::Int(42), TyAttr::default());
-        let opt_int = Ty::Optional(Box::new(ty_int()), TyAttr::default());
+        let opt_int = Ty::optional(ty_int());
         assert!(lit_42.is_subtype_of(&opt_int));
     }
 
     #[test]
     fn test_null_subtype_of_optional() {
-        let opt_string = Ty::Optional(Box::new(ty_string()), TyAttr::default());
+        let opt_string = Ty::optional(ty_string());
         assert!(ty_null().is_subtype_of(&opt_string));
     }
 
     #[test]
-    fn test_int_subtype_of_float() {
-        assert!(ty_int().is_subtype_of(&ty_float()));
+    fn test_int_not_subtype_of_float() {
+        // Coercion-free: `int` is i64, `float` is f64. Values past 2^53 lose
+        // precision; TIR removed this scalar rule, and `baml_type` mirrors it.
+        assert!(!ty_int().is_subtype_of(&ty_float()));
+    }
+
+    #[test]
+    fn test_int_not_subtype_of_bigint() {
+        // Scalar int→bigint widening is a representation change (i64 → heap
+        // BigInt) and is not a subtype relation in either `baml_type` or TIR;
+        // it happens only at the FFI boundary.
+        assert!(!ty_int().is_subtype_of(&Ty::Bigint {
+            attr: TyAttr::default()
+        }));
+    }
+
+    #[test]
+    fn test_int_array_not_subtype_of_bigint_array() {
+        // Regression: container invariance. `int[]` must not be a subtype
+        // of `bigint[]`.
+        let int_arr = Ty::List(Box::new(ty_int()), TyAttr::default());
+        let bigint_arr = Ty::List(
+            Box::new(Ty::Bigint {
+                attr: TyAttr::default(),
+            }),
+            TyAttr::default(),
+        );
+        assert!(!int_arr.is_subtype_of(&bigint_arr));
     }
 
     #[test]
@@ -817,9 +1024,10 @@ mod tests {
     }
 
     #[test]
-    fn test_display_optional_union_parenthesized() {
+    fn test_display_nullable_union_is_plain_union() {
+        // `?` does not survive lowering; a nullable type displays as a union.
         let ty = Ty::optional(Ty::union([ty_int(), ty_string()]));
-        assert_eq!(ty.to_string(), "(int | string)?");
+        assert_eq!(ty.to_string(), "int | string | null");
     }
 
     #[test]
@@ -897,7 +1105,7 @@ mod tests {
 
         assert_eq!(
             Ty::optional(callback.clone()).to_string(),
-            "((int) -> string throws never)?"
+            "((int) -> string throws never) | null"
         );
         assert_eq!(
             Ty::list(callback).to_string(),

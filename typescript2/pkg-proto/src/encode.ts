@@ -2,10 +2,10 @@ import type {
   InboundValue,
   InboundMapEntry,
   CallFunctionArgs as CallFunctionArgsType,
-} from './generated/baml/cffi/v1/baml_inbound';
+} from './generated/baml_core/cffi/v1/baml_inbound';
 import {
   CallFunctionArgs,
-} from './generated/baml/cffi/v1/baml_inbound';
+} from './generated/baml_core/cffi/v1/baml_inbound';
 import type { BamlSerializable } from './types';
 
 function isBamlSerializable(val: unknown): val is BamlSerializable {
@@ -41,6 +41,11 @@ function serializeValue(val: unknown): InboundValue {
       return { value: { $case: 'intValue', intValue: val } };
     }
     return { value: { $case: 'floatValue', floatValue: val } };
+  }
+  if (typeof val === 'bigint') {
+    // Base-sixteen hex on the wire (no `0x` prefix, leading `-` for
+    // negatives) — matches Rust's `format!("{:x}")` / `parse_bytes(_, 16)`.
+    return { value: { $case: 'bigintValue', bigintValue: val.toString(16) } };
   }
   if (typeof val === 'boolean') {
     return { value: { $case: 'boolValue', boolValue: val } };

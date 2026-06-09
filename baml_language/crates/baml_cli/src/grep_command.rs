@@ -10,7 +10,7 @@ use baml_lsp2_actions::{
 use baml_project::ProjectDatabase;
 use clap::Args;
 
-use crate::project_load::load_project_from;
+use crate::project_load::load_project_or_default;
 
 #[derive(Args, Clone, Debug)]
 pub struct GrepArgs {
@@ -66,11 +66,11 @@ pub struct GrepArgs {
 
 impl GrepArgs {
     pub fn run(&self) -> Result<crate::ExitCode> {
-        let (db, from, baml_files) = load_project_from(&self.from)?;
-        if baml_files.is_empty() {
-            eprintln!("No .baml files found in {}", from.display());
-            return Ok(crate::ExitCode::Other);
-        }
+        // Introspection never requires a `baml.toml`. With no project we
+        // get a stdlib-only default state and an empty user-file set;
+        // each grep mode already surfaces "no matches" / "no symbol found"
+        // gracefully below, so there's no need to bail up front.
+        let (db, from, _baml_files) = load_project_or_default(&self.from)?;
 
         let source_files = db.get_source_files();
         let kind_filter = parse_kind_filter(&self.kind)?;
@@ -279,12 +279,12 @@ fn render_description(
     db: &ProjectDatabase,
     desc: &SymbolDescription,
     budget: usize,
-    history: &std::collections::HashSet<&str>,
-    no_hints: bool,
+    _history: &std::collections::HashSet<&str>,
+    _no_hints: bool,
     project_root: &std::path::Path,
 ) {
     // Delegate to the describe_command renderer.
-    crate::describe_command::render_description(db, desc, budget, history, no_hints, project_root);
+    crate::describe_command::render_description(db, desc, budget, project_root);
 }
 
 /// Render only the references section for a symbol.
@@ -444,6 +444,30 @@ fn text_match_to_json(
     })
 }
 
+/// Serialize a class's methods (instance or static) to JSON, carrying the
+/// canonical signature, first-line docstring, and full definition line range.
+fn method_json(
+    db: &ProjectDatabase,
+    project_root: &std::path::Path,
+    methods: &[describe::MethodRef],
+) -> Vec<serde_json::Value> {
+    methods
+        .iter()
+        .map(|m| {
+            let m_path = relative_path(&m.file.path(db), project_root);
+            let text = m.file.text(db);
+            serde_json::json!({
+                "name": m.name,
+                "signature": m.signature,
+                "docstring": m.docstring,
+                "file": m_path.to_string_lossy(),
+                "line_start": line_number_at_offset(text, m.item_range.start().into()),
+                "line_end": line_number_at_offset(text, m.item_range.end().into()),
+            })
+        })
+        .collect()
+}
+
 /// Build a budget-aware JSON value for a `SymbolDescription`.
 pub fn description_to_json(
     db: &ProjectDatabase,
@@ -479,5 +503,16 @@ pub fn description_to_json(
                 "text": r.line_text.trim(),
             })
         }).collect::<Vec<_>>(),
+        "instance_methods": method_json(db, project_root, &desc.instance_methods),
+        "static_methods": method_json(db, project_root, &desc.static_methods),
+        "container": desc.container.as_ref().map(|c| {
+            let c_path = relative_path(&c.file.path(db), project_root);
+            serde_json::json!({
+                "name": c.name,
+                "kind": c.kind.as_str(),
+                "file": c_path.to_string_lossy(),
+                "line": line_number_at_offset(c.file.text(db), c.name_span.start().into()),
+            })
+        }),
     })
 }

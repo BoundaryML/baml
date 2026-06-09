@@ -9,3 +9,15 @@ class user.A {
   field: string
 }
 type user.A = int
+function user.from_json(j: baml.json.json) -> user.A  [expr] {
+  user.A { field: baml.json.from_json(baml.json.field(j, "field")) }
+}
+function user.from_json(j: baml.json.json) -> user.A  [expr] {
+  user.A { field: baml.json.from_json(baml.json.field(j, "field")) }
+}
+function user.to_json(self: ?) -> baml.json.json  [expr] {
+  map { "field": self.field.to_json() }
+}
+function user.to_json(self: ?) -> baml.json.json  [expr] {
+  map { "field": self.field.to_json() }
+}

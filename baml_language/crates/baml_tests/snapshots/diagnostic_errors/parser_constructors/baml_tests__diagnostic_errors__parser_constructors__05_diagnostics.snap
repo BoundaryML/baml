@@ -2,7 +2,7 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === COMPILER2 DIAGNOSTICS ===
-  [validation] Error: Duplicate class `Point`
+  [validation] error: Duplicate class `Point`
    ╭─[ array_constructor.baml:1:7 ]
    │
  1 │ class Point {

@@ -181,6 +181,7 @@ fn owned_rust_type(
     match ty {
         BamlType::String => quote! { String },
         BamlType::Int => quote! { i64 },
+        BamlType::Bigint => quote! { std::sync::Arc<num_bigint::BigInt> },
         BamlType::Float => quote! { f64 },
         BamlType::Bool => quote! { bool },
         BamlType::Null => quote! { () },
@@ -222,11 +223,23 @@ fn owned_rust_type(
 fn view_return_type(ty: &BamlType, needs_heap: &mut bool) -> TokenStream {
     match ty {
         BamlType::Int => quote! { Result<i64, AccessError> },
-        BamlType::Float => quote! { Result<f64, AccessError> },
+        // Float is heap-boxed (`Object::Float`); the accessor needs a
+        // `PermitProof` to deref the pointer soundly.
+        BamlType::Float => {
+            *needs_heap = true;
+            quote! { Result<f64, AccessError> }
+        }
         BamlType::Bool => quote! { Result<bool, AccessError> },
+        // Bigints live behind a heap pointer (`Object::Bigint`) or by value in
+        // an external value; either way `as_bigint` hands back an owned `Arc`,
+        // so the accessor needs a `PermitProof` to deref the pointer soundly.
+        BamlType::Bigint => {
+            *needs_heap = true;
+            quote! { Result<std::sync::Arc<num_bigint::BigInt>, AccessError> }
+        }
         BamlType::String => {
             *needs_heap = true;
-            quote! { Result<&'a String, AccessError> }
+            quote! { Result<&'a bex_str::BexStr, AccessError> }
         }
         BamlType::RustType => {
             *needs_heap = true;
@@ -244,8 +257,9 @@ fn view_accessor_body(field_name: &str, ty: &BamlType) -> TokenStream {
     let field_lit = field_name;
     match ty {
         BamlType::Int => quote! { self.cls.field(#field_lit)?.as_int() },
-        BamlType::Float => quote! { self.cls.field(#field_lit)?.as_float() },
+        BamlType::Float => quote! { self.cls.field(#field_lit)?.as_float(heap, permit) },
         BamlType::Bool => quote! { self.cls.field(#field_lit)?.as_bool() },
+        BamlType::Bigint => quote! { self.cls.field(#field_lit)?.as_bigint(heap, permit) },
         BamlType::String => quote! { self.cls.field(#field_lit)?.as_string(heap, permit) },
         BamlType::RustType => quote! { self.cls.field(#field_lit)?.as_rust_data(heap, permit) },
         _ => quote! { self.cls.field(#field_lit)?.as_owned_but_very_slow(heap, permit) },
@@ -263,7 +277,7 @@ fn external_to_typed_expr(
     match ty {
         BamlType::String => quote! {
             match #val_expr {
-                BexExternalValue::String(v) => Ok(v),
+                BexExternalValue::String(v) => Ok(v.to_string()),
                 other => Err(AccessError::TypeMismatch {
                     expected: "string",
                     actual: other.type_name().to_string(),
@@ -275,6 +289,15 @@ fn external_to_typed_expr(
                 BexExternalValue::Int(v) => Ok(v),
                 other => Err(AccessError::TypeMismatch {
                     expected: "int",
+                    actual: other.type_name().to_string(),
+                }),
+            }
+        },
+        BamlType::Bigint => quote! {
+            match #val_expr {
+                BexExternalValue::Bigint(v) => Ok(std::sync::Arc::new(v)),
+                other => Err(AccessError::TypeMismatch {
+                    expected: "bigint",
                     actual: other.type_name().to_string(),
                 }),
             }
@@ -376,10 +399,12 @@ fn into_owned_expr(
 ) -> TokenStream {
     let field_ident = format_ident!("{}", field_name);
     match ty {
-        BamlType::Int | BamlType::Float | BamlType::Bool => {
+        BamlType::Int | BamlType::Bool => {
             quote! { self.#field_ident()? }
         }
-        BamlType::String => quote! { self.#field_ident(heap, permit)?.clone() },
+        // Float accessor is now heap-aware (`Object::Float` deref).
+        BamlType::Float => quote! { self.#field_ident(heap, permit)? },
+        BamlType::String => quote! { self.#field_ident(heap, permit)?.to_string() },
         BamlType::RustType => quote! { self.#field_ident(heap, permit)? },
         BamlType::Uint8Array | BamlType::List(_) | BamlType::Map(_, _) | BamlType::Optional(_) => {
             let val = quote! { self.#field_ident(heap, permit)? };
@@ -404,9 +429,12 @@ fn owned_to_external_expr(
 ) -> TokenStream {
     match ty {
         BamlType::Int => quote! { BexExternalValue::Int(#field_expr) },
+        BamlType::Bigint => quote! {
+            BexExternalValue::Bigint(std::sync::Arc::unwrap_or_clone(#field_expr))
+        },
         BamlType::Float => quote! { BexExternalValue::Float(#field_expr) },
         BamlType::Bool => quote! { BexExternalValue::Bool(#field_expr) },
-        BamlType::String => quote! { BexExternalValue::String(#field_expr) },
+        BamlType::String => quote! { BexExternalValue::String((#field_expr).into()) },
         BamlType::RustType => quote! { BexExternalValue::RustData(#field_expr) },
         BamlType::Null => quote! { BexExternalValue::Null },
         BamlType::List(inner) => {
@@ -448,6 +476,7 @@ fn clean_rust_type(
     match ty {
         BamlType::String => quote! { String },
         BamlType::Int => quote! { i64 },
+        BamlType::Bigint => quote! { std::sync::Arc<num_bigint::BigInt> },
         BamlType::Float => quote! { f64 },
         BamlType::Bool => quote! { bool },
         BamlType::Null => quote! { () },
@@ -499,7 +528,8 @@ fn glue_extract_expr(
     match ty {
         BamlType::String => quote! { #arg_ident.as_string(heap.as_ref(), permit)?.to_string() },
         BamlType::Int => quote! { #arg_ident.as_int()? },
-        BamlType::Float => quote! { #arg_ident.as_float()? },
+        BamlType::Bigint => quote! { #arg_ident.as_bigint(heap.as_ref(), permit)? },
+        BamlType::Float => quote! { #arg_ident.as_float(heap.as_ref(), permit)? },
         BamlType::Bool => quote! { #arg_ident.as_bool()? },
         BamlType::Named(name) => {
             if let Some(ns) = class_ns_map.get(name.as_str()) {
@@ -561,11 +591,35 @@ pub fn generate_sys_op_enum(io_builtins: &[NativeBuiltin]) -> String {
         .iter()
         .map(|b| {
             let variant = format_ident!("{}", b.sys_op_variant_name());
-            if b.throws.is_empty() {
-                quote! { SysOp::#variant => &[] }
-            } else {
-                let cats: Vec<_> = b.throws.iter().map(|t| format_ident!("{}", t)).collect();
-                quote! { SysOp::#variant => &[#(SysOpErrorCategory::#cats),*] }
+            // `None` (no clause) is rejected during extraction; `Some([])`
+            // (`throws never`) and `None` both map to no error categories.
+            // A `throws` entry that names one of the builtin's generic params
+            // (e.g. `call_host_value<T, E> ... throws E`) is a *dynamic* error
+            // contract, not a fixed `SysOpErrorCategory`. The static category
+            // list cannot represent a mix of "concrete X" + "dynamic E" — the
+            // dynamic component would be silently dropped, leaving
+            // `validate_sys_op_error` to wrongly reject any `E`-shaped throw
+            // as off-contract. Apply an all-or-nothing rule: if *any* throws
+            // entry is generic, emit an empty list ("accept any category")
+            // and defer the entire contract check to runtime. Concrete-only
+            // contracts still emit a precise category list. (The `throws`
+            // clause stays non-empty either way, so the builtin remains
+            // `is_fallible`.)
+            match &b.throws {
+                Some(cats) => {
+                    let has_generic_throw = cats.iter().any(|t| b.generics.iter().any(|g| g == t));
+                    if has_generic_throw {
+                        quote! { SysOp::#variant => &[] }
+                    } else {
+                        let cats: Vec<_> = cats.iter().map(|t| format_ident!("{}", t)).collect();
+                        if cats.is_empty() {
+                            quote! { SysOp::#variant => &[] }
+                        } else {
+                            quote! { SysOp::#variant => &[#(SysOpErrorCategory::#cats),*] }
+                        }
+                    }
+                }
+                None => quote! { SysOp::#variant => &[] },
             }
         })
         .collect();
@@ -592,7 +646,15 @@ pub fn generate_sys_op_enum(io_builtins: &[NativeBuiltin]) -> String {
         .collect();
 
     let tokens = quote! {
-        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        #[derive(
+            Clone,
+            Copy,
+            Debug,
+            PartialEq,
+            Eq,
+            ::borsh::BorshSerialize,
+            ::borsh::BorshDeserialize,
+        )]
         pub enum SysOp {
             #(#variant_idents,)*
         }
@@ -1059,6 +1121,29 @@ fn emit_class_traits(
     quote! { #(#traits)* }
 }
 
+/// Returns the count of *function-level* generic type parameters for a builtin.
+///
+/// For IO class methods, the `NativeBuiltin.generics` list merges the enclosing
+/// class's generics with the function's own generics.  Only the function-level
+/// ones (those NOT contributed by the class) generate synthetic type-arg value
+/// slots on the operand stack: class-level generics are part of the instance
+/// type and are not threaded as extra stack args.
+///
+/// For free functions (no receiver), every generic is function-level, so this
+/// just returns `generics.len()`.
+fn fn_only_generic_count(builtin: &NativeBuiltin) -> usize {
+    let class_generics: &[String] = builtin
+        .receiver
+        .as_ref()
+        .map(|r| r.class_generics.as_slice())
+        .unwrap_or(&[]);
+    builtin
+        .generics
+        .iter()
+        .filter(|g| !class_generics.contains(g))
+        .count()
+}
+
 fn emit_one_class_trait(
     ns: &str,
     class_name: &str,
@@ -1106,6 +1191,18 @@ fn emit_one_class_trait(
                 })
                 .collect();
 
+            // Synthetic type-arg params appended after value params.
+            // Only function-level generics (those NOT from the enclosing
+            // class) generate type-arg slots — class-level generics are
+            // part of the instance type and are not threaded as stack args.
+            let fn_type_arg_count = fn_only_generic_count(m);
+            let type_arg_params: Vec<TokenStream> = (0..fn_type_arg_count)
+                .map(|i| {
+                    let p_ident = format_ident!("type_arg_{}", i);
+                    quote! { #p_ident: baml_type::Ty }
+                })
+                .collect();
+
             quote! {
                 fn #method_ident(
                     &self,
@@ -1113,6 +1210,7 @@ fn emit_one_class_trait(
                     call_id: CallId,
                     #receiver_param
                     #(#extra_params,)*
+                    #(#type_arg_params,)*
                     ctx: &SysOpContext,
                 ) -> SysOpOutput<#ret_ty>;
             }
@@ -1197,6 +1295,18 @@ fn emit_glue_method(
         .map(|id| quote! { let #id = __args.next().unwrap(); })
         .collect();
 
+    // Synthetic type-arg slots: appended after all value args by the compiler.
+    // Only function-level generics generate these slots; class-level generics
+    // (from the enclosing class definition) do not.
+    let fn_type_arg_count = fn_only_generic_count(builtin);
+    let type_arg_idents: Vec<syn::Ident> = (0..fn_type_arg_count)
+        .map(|i| format_ident!("__type_arg{}", i))
+        .collect();
+    let type_arg_lets: Vec<TokenStream> = type_arg_idents
+        .iter()
+        .map(|id| quote! { let #id = __args.next().unwrap(); })
+        .collect();
+
     let receiver_extraction = if receiver.receiver_type.is_static() {
         None
     } else {
@@ -1220,6 +1330,19 @@ fn emit_glue_method(
         })
         .collect();
 
+    // Extract synthetic type-arg slots as baml_type::Ty.
+    let type_arg_extractions: Vec<TokenStream> = type_arg_idents
+        .iter()
+        .enumerate()
+        .map(|(i, raw_id)| {
+            let extracted_ident = format_ident!("__type_arg_val{}", i);
+            quote! { let #extracted_ident = #raw_id.as_baml_type_owned(heap.as_ref(), permit)?; }
+        })
+        .collect();
+    let type_arg_val_idents: Vec<syn::Ident> = (0..fn_type_arg_count)
+        .map(|i| format_ident!("__type_arg_val{}", i))
+        .collect();
+
     // Tuple elements for Ok return
     let receiver_ident = if receiver.receiver_type.is_static() {
         None
@@ -1239,6 +1362,18 @@ fn emit_glue_method(
         .map(|p| format_ident!("__{}", p.name))
         .collect();
 
+    // Clean method type-arg call params (positional: type_arg_0, type_arg_1, ...)
+    let clean_type_arg_call_idents: Vec<syn::Ident> = (0..fn_type_arg_count)
+        .map(|i| format_ident!("type_arg_{}", i))
+        .collect();
+
+    // Bind extracted type-arg vals to the clean param names inside the match arm.
+    let type_arg_bind_stmts: Vec<TokenStream> = type_arg_val_idents
+        .iter()
+        .zip(clean_type_arg_call_idents.iter())
+        .map(|(val_id, param_id)| quote! { let #param_id = #val_id; })
+        .collect();
+
     quote! {
         fn #glue_ident<'a>(
             &self,
@@ -1251,21 +1386,25 @@ fn emit_glue_method(
             let mut __args = args.into_iter();
             #arg_self
             #(#arg_lets)*
+            // Synthetic type-arg slots (appended by lower_call for generic IO functions).
+            #(#type_arg_lets)*
 
             let __extraction = (|| {
                 #receiver_extraction
                 #(#param_extractions)*
-                Ok::<_, AccessError>((#receiver_ident #(#tuple_idents),*))
+                #(#type_arg_extractions)*
+                Ok::<_, AccessError>((#receiver_ident #(#tuple_idents,)* #(#type_arg_val_idents),*))
             })();
 
             match __extraction {
-                Ok((#receiver_ident #(#tuple_idents),*)) => {
-                    self.#clean_method_ident(heap, call_id, #receiver_ident #(#call_param_idents,)* ctx)
+                Ok((#receiver_ident #(#tuple_idents,)* #(#type_arg_val_idents),*)) => {
+                    #(#type_arg_bind_stmts)*
+                    self.#clean_method_ident(heap, call_id, #receiver_ident #(#call_param_idents,)* #(#clean_type_arg_call_idents,)* ctx)
                         .into_result(SysOp::#variant_ident)
                 }
                 Err(e) => SysOpResult::Ready(Err(OpError::new(
                     SysOp::#variant_ident,
-                    OpErrorKind::AccessError(e),
+                    bex_vm_types::errors::VmBamlError::AccessError { message: e.to_string() },
                 ))),
             }
         }
@@ -1329,12 +1468,24 @@ fn emit_one_namespace_trait(
                 })
                 .collect();
 
+            // Synthetic type-arg params appended after value params.
+            let type_arg_params: Vec<TokenStream> = f
+                .generics
+                .iter()
+                .enumerate()
+                .map(|(i, _)| {
+                    let p_ident = format_ident!("type_arg_{}", i);
+                    quote! { #p_ident: baml_type::Ty }
+                })
+                .collect();
+
             quote! {
                 fn #fn_ident(
                     &self,
                     heap: &std::sync::Arc<BexHeap>,
                     call_id: CallId,
                     #(#extra_params,)*
+                    #(#type_arg_params,)*
                     ctx: &SysOpContext,
                 ) -> SysOpOutput<#ret_ty>;
             }
@@ -1470,7 +1621,36 @@ fn emit_free_fn_glue(
     let variant_ident = format_ident!("{}", builtin.sys_op_variant_name());
     let clean_ident = format_ident!("{}", io_method_name(builtin));
 
-    if builtin.params.is_empty() {
+    // Synthetic type-arg slots (appended after value args by the compiler).
+    let type_arg_idents: Vec<syn::Ident> = (0..builtin.generics.len())
+        .map(|i| format_ident!("__type_arg{}", i))
+        .collect();
+    let type_arg_lets: Vec<TokenStream> = type_arg_idents
+        .iter()
+        .map(|id| quote! { let #id = __args.next().unwrap(); })
+        .collect();
+    let type_arg_extractions: Vec<TokenStream> = type_arg_idents
+        .iter()
+        .enumerate()
+        .map(|(i, raw_id)| {
+            let extracted_ident = format_ident!("__type_arg_val{}", i);
+            quote! { let #extracted_ident = #raw_id.as_baml_type_owned(heap.as_ref(), permit)?; }
+        })
+        .collect();
+    let type_arg_val_idents: Vec<syn::Ident> = (0..builtin.generics.len())
+        .map(|i| format_ident!("__type_arg_val{}", i))
+        .collect();
+    // Named params as passed to clean method: type_arg_0, type_arg_1, ...
+    let clean_type_arg_params: Vec<syn::Ident> = (0..builtin.generics.len())
+        .map(|i| format_ident!("type_arg_{}", i))
+        .collect();
+    let type_arg_bind_stmts: Vec<TokenStream> = type_arg_val_idents
+        .iter()
+        .zip(clean_type_arg_params.iter())
+        .map(|(val_id, param_id)| quote! { let #param_id = #val_id; })
+        .collect();
+
+    if builtin.params.is_empty() && builtin.generics.is_empty() {
         let call_expr = quote! {
             #ns_trait_ident::#clean_ident(self, heap, call_id, ctx)
         };
@@ -1521,22 +1701,29 @@ fn emit_free_fn_glue(
         .map(|p| format_ident!("__{}", p.name))
         .collect();
 
-    let ok_pattern = if param_idents.len() == 1 {
-        let id = &param_idents[0];
+    // Build ok_pattern and extraction_return accounting for type args.
+    let all_extracted_idents: Vec<syn::Ident> = param_idents
+        .iter()
+        .chain(type_arg_val_idents.iter())
+        .cloned()
+        .collect();
+
+    let ok_pattern = if all_extracted_idents.len() == 1 {
+        let id = &all_extracted_idents[0];
         quote! { #id }
     } else {
-        quote! { (#(#param_idents),*) }
+        quote! { (#(#all_extracted_idents),*) }
     };
 
-    let extraction_return = if param_idents.len() == 1 {
-        let id = &param_idents[0];
+    let extraction_return = if all_extracted_idents.len() == 1 {
+        let id = &all_extracted_idents[0];
         quote! { Ok::<_, AccessError>(#id) }
     } else {
-        quote! { Ok::<_, AccessError>((#(#param_idents),*)) }
+        quote! { Ok::<_, AccessError>((#(#all_extracted_idents),*)) }
     };
 
     let call_expr = quote! {
-        #ns_trait_ident::#clean_ident(self, heap, call_id, #(#param_idents,)* ctx)
+        #ns_trait_ident::#clean_ident(self, heap, call_id, #(#param_idents,)* #(#clean_type_arg_params,)* ctx)
     };
     let into_result = emit_into_result_call(
         &builtin.return_type,
@@ -1557,19 +1744,23 @@ fn emit_free_fn_glue(
         ) -> SysOpResult {
             let mut __args = args.into_iter();
             #(#arg_lets)*
+            // Synthetic type-arg slots (appended by lower_call for generic IO functions).
+            #(#type_arg_lets)*
 
             let __extraction = (|| {
                 #(#param_extractions)*
+                #(#type_arg_extractions)*
                 #extraction_return
             })();
 
             match __extraction {
                 Ok(#ok_pattern) => {
+                    #(#type_arg_bind_stmts)*
                     #into_result
                 }
                 Err(e) => SysOpResult::Ready(Err(OpError::new(
                     SysOp::#variant_ident,
-                    OpErrorKind::AccessError(e),
+                    bex_vm_types::errors::VmBamlError::AccessError { message: e.to_string() },
                 ))),
             }
         }
@@ -1646,7 +1837,9 @@ fn emit_sys_ops_struct(io_builtins: &[NativeBuiltin]) -> TokenStream {
                         t.get_sys_op_fn(#path_str, heap, permit, args, ctx, call_id)
                             .unwrap_or_else(|| SysOpResult::Ready(Err(OpError::new(
                                 SysOp::#variant_ident,
-                                OpErrorKind::Unsupported,
+                                bex_vm_types::errors::VmBamlError::Unsupported {
+                                    message: "Operation not supported on this platform".to_string(),
+                                },
                             ))))
                     })
                 }
@@ -1671,7 +1864,9 @@ fn emit_sys_ops_struct(io_builtins: &[NativeBuiltin]) -> TokenStream {
                 std::sync::Arc::new(move |_, _, _, _, _| {
                     SysOpResult::Ready(Err(OpError::new(
                         operation,
-                        OpErrorKind::Unsupported,
+                        bex_vm_types::errors::VmBamlError::Unsupported {
+                            message: "Operation not supported on this platform".to_string(),
+                        },
                     )))
                 })
             }
@@ -1938,6 +2133,9 @@ pub fn generate_io_adapter(
     let resolve_fn = emit_resolve_helper();
 
     let tokens = quote! {
+        // Bring `HeapPermit::proof()` into scope for the adapter impl below.
+        use ::bex_heap::HeapPermit as _;
+
         #resolve_fn
         #adapter_struct
         #adapter_impl
@@ -2107,7 +2305,7 @@ fn emit_result_conversion_for_ty(
             let msg = format!("expected string{ctx}, got {{}}");
             quote! {
                 match __val {
-                    BexExternalValue::String(s) => Ok(s),
+                    BexExternalValue::String(s) => Ok(s.to_string()),
                     other => Err(RuntimeIoError::Other(
                         format!(#msg, other.type_name()),
                     )),
@@ -2119,6 +2317,17 @@ fn emit_result_conversion_for_ty(
             quote! {
                 match __val {
                     BexExternalValue::Int(v) => Ok(v),
+                    other => Err(RuntimeIoError::Other(
+                        format!(#msg, other.type_name()),
+                    )),
+                }
+            }
+        }
+        BamlType::Bigint => {
+            let msg = format!("expected bigint{ctx}, got {{}}");
+            quote! {
+                match __val {
+                    BexExternalValue::Bigint(v) => Ok(std::sync::Arc::new(v)),
                     other => Err(RuntimeIoError::Other(
                         format!(#msg, other.type_name()),
                     )),

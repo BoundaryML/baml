@@ -14,8 +14,8 @@
 //!   fields, methods, or enum variants.
 //!
 //! - **Value position** (token inside an expression in an
-//!   `EXPR_FUNCTION_BODY`): suggest local variables in scope, then all
-//!   package-level functions and template strings.
+//!   `EXPR_FUNCTION_BODY`): suggest local variables in scope, builtin package
+//!   roots, then all package-level functions and template strings.
 //!
 //! - **Top-level** (token at the source file root): suggest declaration
 //!   keywords (`class`, `function`, `enum`, …).
@@ -42,8 +42,8 @@ use baml_compiler2_hir::{
     semantic_index::ScopeBindings,
     signature::function_signature,
 };
-use baml_compiler2_tir::ty::Ty;
-use rowan::NodeOrToken;
+use baml_compiler2_tir::ty::{PrimitiveType, Ty};
+use rowan::{NodeOrToken, ast::AstNode};
 use text_size::TextSize;
 
 use crate::{Db, utils};
@@ -54,7 +54,56 @@ fn format_function_signature(db: &dyn Db, func_loc: FunctionLoc<'_>) -> String {
     let params: Vec<String> = sig
         .params
         .iter()
-        .map(|(name, te)| format!("{}: {}", name.as_str(), utils::display_type_expr(te)))
+        .map(|param| {
+            let optional = if param.has_default { "?" } else { "" };
+            format!(
+                "{}{}: {}",
+                param.name.as_str(),
+                optional,
+                utils::display_type_expr(&param.ty)
+            )
+        })
+        .collect();
+    let ret = sig
+        .return_type
+        .as_ref()
+        .map(utils::display_type_expr)
+        .unwrap_or_else(|| "null".to_string());
+    format!("({}) -> {}", params.join(", "), ret)
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum BuiltinMethodMode {
+    Instance,
+    Static,
+    All,
+}
+
+/// Format a builtin class method signature for completion details.
+///
+/// Instance completions hide the synthetic `self` parameter because the receiver
+/// is already present in source (`img.base64()`, not `img.base64(img)`).
+fn format_builtin_method_signature(
+    db: &dyn Db,
+    func_loc: FunctionLoc<'_>,
+    mode: BuiltinMethodMode,
+) -> String {
+    let sig = function_signature(db, func_loc);
+    let params: Vec<String> = sig
+        .params
+        .iter()
+        .enumerate()
+        .filter_map(|(idx, param)| {
+            if mode == BuiltinMethodMode::Instance && idx == 0 && param.name.as_str() == "self" {
+                None
+            } else {
+                Some(format!(
+                    "{}: {}",
+                    param.name.as_str(),
+                    utils::display_type_expr(&param.ty)
+                ))
+            }
+        })
         .collect();
     let ret = sig
         .return_type
@@ -103,6 +152,8 @@ pub enum CompletionKind {
     Method,
     /// A namespace (module) containing other definitions.
     Module,
+    /// A named function parameter in a call argument list.
+    Parameter,
 }
 
 // ── Completion ────────────────────────────────────────────────────────────────
@@ -145,6 +196,11 @@ impl Completion {
         self.sort_text = Some(sort.into());
         self
     }
+
+    fn with_insert_text(mut self, insert_text: impl Into<String>) -> Self {
+        self.insert_text = Some(insert_text.into());
+        self
+    }
 }
 
 // ── CompletionContext ─────────────────────────────────────────────────────────
@@ -158,6 +214,8 @@ enum CompletionContext {
     MemberAccess,
     /// Cursor is in a value expression inside a function body.
     ValuePosition,
+    /// Cursor is inside a function call argument list.
+    CallArguments,
     /// Cursor is at the top level (not inside any item body).
     TopLevel,
     /// Context cannot be determined (e.g., cursor in a comment or string).
@@ -183,6 +241,9 @@ pub fn completions_at(db: &dyn Db, file: SourceFile, offset: TextSize) -> Vec<Co
         CompletionContext::TypePosition => completions_for_type_position(db, file, offset),
         CompletionContext::MemberAccess => completions_for_field_access(db, file, &token, offset),
         CompletionContext::ValuePosition => completions_for_value_position(db, file, offset),
+        CompletionContext::CallArguments => {
+            completions_for_call_arguments(db, file, &token, offset)
+        }
         CompletionContext::TopLevel => completions_for_top_level(),
         CompletionContext::Unknown => Vec::new(),
     }
@@ -206,6 +267,10 @@ fn detect_context(
     // Walk prev_sibling_or_token to find the token just before the cursor's token.
     if is_field_access_position(token) {
         return CompletionContext::MemberAccess;
+    }
+
+    if find_call_args_completion_ancestor(token).is_some() {
+        return CompletionContext::CallArguments;
     }
 
     // Walk ancestors to detect the structural context.
@@ -236,11 +301,11 @@ fn detect_context(
             | SyntaxKind::BINARY_EXPR
             | SyntaxKind::UNARY_EXPR
             | SyntaxKind::CALL_EXPR
-            | SyntaxKind::CALL_ARGS
             | SyntaxKind::PATH_EXPR
             | SyntaxKind::PAREN_EXPR
             | SyntaxKind::BLOCK_EXPR
             | SyntaxKind::IF_EXPR
+            | SyntaxKind::IF_LET_EXPR
             | SyntaxKind::FOR_EXPR
             | SyntaxKind::LET_STMT
             | SyntaxKind::RETURN_STMT => {
@@ -375,6 +440,217 @@ fn is_in_type_annotation(node: &SyntaxNode) -> bool {
     false
 }
 
+// ── Call-argument completions ─────────────────────────────────────────────────
+
+#[derive(Debug, Clone)]
+struct CallParamCompletion {
+    name: String,
+    ty: String,
+    optional: bool,
+}
+
+fn find_call_args_completion_ancestor(
+    token: &baml_compiler_syntax::SyntaxToken,
+) -> Option<SyntaxNode> {
+    let parent = token.parent()?;
+    match parent.kind() {
+        SyntaxKind::CALL_ARGS => Some(parent),
+        SyntaxKind::CALL_ARG => parent
+            .parent()
+            .filter(|node| node.kind() == SyntaxKind::CALL_ARGS),
+        _ => None,
+    }
+}
+
+fn completions_for_call_arguments(
+    db: &dyn Db,
+    file: SourceFile,
+    token: &baml_compiler_syntax::SyntaxToken,
+    offset: TextSize,
+) -> Vec<Completion> {
+    let Some(args_node) = find_call_args_completion_ancestor(token) else {
+        return Vec::new();
+    };
+    let Some(call_node) = args_node.parent().filter(|node| {
+        matches!(
+            node.kind(),
+            SyntaxKind::CALL_EXPR | SyntaxKind::OPTIONAL_CALL_EXPR
+        )
+    }) else {
+        return Vec::new();
+    };
+
+    let provided = provided_call_args(&args_node, offset);
+    let Some(params) = call_params_for_call_node(db, file, offset, &call_node, &args_node) else {
+        return completions_for_value_position(db, file, offset);
+    };
+
+    let mut items = Vec::new();
+    for (idx, param) in params.into_iter().enumerate() {
+        if idx < provided.positional_count || provided.named.contains(&param.name) {
+            continue;
+        }
+        let detail = if param.optional {
+            format!("{} (optional)", param.ty)
+        } else {
+            param.ty.clone()
+        };
+        let sort_group = usize::from(param.optional);
+        items.push(
+            Completion::new(param.name.as_str(), CompletionKind::Parameter)
+                .with_detail(detail)
+                .with_insert_text(format!("{} = ", param.name))
+                .with_sort(format!("{sort_group}_{}", param.name)),
+        );
+    }
+
+    items
+}
+
+struct ProvidedCallArgs {
+    named: HashSet<String>,
+    positional_count: usize,
+}
+
+fn provided_call_args(args_node: &SyntaxNode, offset: TextSize) -> ProvidedCallArgs {
+    let mut named = HashSet::new();
+    let mut positional_count = 0;
+
+    for node in args_node
+        .children()
+        .filter(|node| node.kind() == SyntaxKind::CALL_ARG)
+    {
+        let Some(arg) = baml_compiler_syntax::ast::CallArg::cast(node.clone()) else {
+            continue;
+        };
+        if let Some(label) = arg.label() {
+            named.insert(label.text().to_string());
+        } else if node.text_range().end() <= offset {
+            positional_count += 1;
+        }
+    }
+
+    ProvidedCallArgs {
+        named,
+        positional_count,
+    }
+}
+
+fn call_params_for_call_node(
+    db: &dyn Db,
+    file: SourceFile,
+    offset: TextSize,
+    call_node: &SyntaxNode,
+    args_node: &SyntaxNode,
+) -> Option<Vec<CallParamCompletion>> {
+    let callee_name = callee_name_token(call_node, args_node)?;
+    let name = Name::new(callee_name.text());
+    let method_like = callee_has_dot_before_args(call_node, args_node);
+
+    match baml_compiler2_tir::resolve::resolve_name_at(
+        db,
+        file,
+        callee_name.text_range().start(),
+        &name,
+    ) {
+        baml_compiler2_tir::resolve::ResolvedName::Item(Definition::Function(func_loc))
+        | baml_compiler2_tir::resolve::ResolvedName::Builtin(Definition::Function(func_loc)) => {
+            Some(function_params_for_completion(db, func_loc, method_like))
+        }
+        baml_compiler2_tir::resolve::ResolvedName::Local {
+            definition_site: Some(site),
+            ..
+        } => local_variable_ty(db, file, offset, site)
+            .and_then(|ty| params_from_function_ty(db, file, &ty)),
+        _ => None,
+    }
+}
+
+fn callee_name_token(
+    call_node: &SyntaxNode,
+    args_node: &SyntaxNode,
+) -> Option<baml_compiler_syntax::SyntaxToken> {
+    let args_start = args_node.text_range().start();
+    call_node
+        .descendants_with_tokens()
+        .filter_map(rowan::NodeOrToken::into_token)
+        .filter(|token| token.text_range().end() <= args_start)
+        .filter(|token| matches!(token.kind(), SyntaxKind::WORD | SyntaxKind::KW_CLIENT))
+        .last()
+}
+
+fn callee_has_dot_before_args(call_node: &SyntaxNode, args_node: &SyntaxNode) -> bool {
+    let args_start = args_node.text_range().start();
+    call_node
+        .descendants_with_tokens()
+        .filter_map(rowan::NodeOrToken::into_token)
+        .any(|token| token.kind() == SyntaxKind::DOT && token.text_range().end() <= args_start)
+}
+
+fn function_params_for_completion(
+    db: &dyn Db,
+    func_loc: FunctionLoc<'_>,
+    method_like: bool,
+) -> Vec<CallParamCompletion> {
+    let file = func_loc.file(db);
+    let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
+    let pkg_id = PackageId::new(db, pkg_info.package.clone());
+    let iface = baml_compiler2_tir::package_interface::package_interface(db, pkg_id);
+    let sig = function_signature(db, func_loc);
+
+    let mut params: Vec<CallParamCompletion> =
+        if let Some(exported) = iface.lookup_function(&pkg_info.namespace_path, &sig.name) {
+            exported
+                .params
+                .iter()
+                .filter_map(|param| {
+                    param.name.as_ref().map(|name| CallParamCompletion {
+                        name: name.as_str().to_string(),
+                        ty: utils::display_ty_for_file(db, file, &param.ty),
+                        optional: param.is_optional(),
+                    })
+                })
+                .collect()
+        } else {
+            sig.params
+                .iter()
+                .map(|param| CallParamCompletion {
+                    name: param.name.as_str().to_string(),
+                    ty: utils::display_type_expr(&param.ty),
+                    optional: param.has_default,
+                })
+                .collect()
+        };
+
+    if method_like && params.first().is_some_and(|param| param.name == "self") {
+        params.remove(0);
+    }
+
+    params
+}
+
+fn params_from_function_ty(
+    db: &dyn Db,
+    file: SourceFile,
+    ty: &Ty,
+) -> Option<Vec<CallParamCompletion>> {
+    let Ty::Function { params, .. } = ty else {
+        return None;
+    };
+    Some(
+        params
+            .iter()
+            .filter_map(|param| {
+                param.name.as_ref().map(|name| CallParamCompletion {
+                    name: name.as_str().to_string(),
+                    ty: utils::display_ty_for_file(db, file, &param.ty),
+                    optional: param.is_optional(),
+                })
+            })
+            .collect(),
+    )
+}
+
 // ── Type-position completions ─────────────────────────────────────────────────
 
 /// Completions for a type annotation position.
@@ -390,7 +666,16 @@ fn completions_for_type_position(
 
     // ── Builtin primitives ────────────────────────────────────────────────────
     for prim in &[
-        "int", "float", "string", "bool", "null", "image", "audio", "video", "pdf",
+        "int",
+        "float",
+        "string",
+        "bool",
+        "null",
+        "uint8array",
+        "image",
+        "audio",
+        "video",
+        "pdf",
     ] {
         items
             .push(Completion::new(*prim, CompletionKind::Primitive).with_sort(format!("0_{prim}")));
@@ -486,6 +771,16 @@ fn completions_for_field_access(
         if let Some(completions) = completions_for_package_path(db, file, &segments) {
             return completions;
         }
+
+        if segments.len() == 1 {
+            if let Some(class_path) = builtin_static_class_path_for_root(&segments[0]) {
+                return completions_for_builtin_class_methods(
+                    db,
+                    class_path,
+                    BuiltinMethodMode::Static,
+                );
+            }
+        }
     }
 
     // Chain through intermediate segments to get the type at the last segment.
@@ -493,7 +788,7 @@ fn completions_for_field_access(
         ty = ty.and_then(|t| resolve_field_type(db, &t, seg));
     }
 
-    ty.map(|t| completions_for_ty_members(db, &t))
+    ty.map(|t| completions_for_ty_members(db, file, &t))
         .unwrap_or_default()
 }
 
@@ -594,7 +889,123 @@ fn completions_for_package_path(
         }
     }
 
+    if let Some(class_completions) = completions_for_package_class_path(db, pkg_items, segments) {
+        for completion in class_completions {
+            if seen.insert(completion.label.clone()) {
+                items.push(completion);
+            }
+        }
+    }
+
     if items.is_empty() { None } else { Some(items) }
+}
+
+fn completions_for_package_class_path(
+    db: &dyn Db,
+    pkg_items: &baml_compiler2_hir::package::PackageItems<'_>,
+    segments: &[String],
+) -> Option<Vec<Completion>> {
+    if segments.len() < 2 {
+        return None;
+    }
+
+    let path: Vec<Name> = segments[1..].iter().map(Name::new).collect();
+    let (class_name, namespace) = path.split_last()?;
+    let Some(Definition::Class(class_loc)) = pkg_items.lookup_type(namespace, class_name) else {
+        return None;
+    };
+
+    Some(completions_for_class_methods(
+        db,
+        class_loc,
+        BuiltinMethodMode::All,
+    ))
+}
+
+fn builtin_static_class_path_for_root(root: &str) -> Option<&'static [&'static str]> {
+    match root {
+        "image" => Some(&["media", "Image"]),
+        "audio" => Some(&["media", "Audio"]),
+        "video" => Some(&["media", "Video"]),
+        "pdf" => Some(&["media", "Pdf"]),
+        "string" => Some(&["String"]),
+        _ => None,
+    }
+}
+
+fn builtin_instance_class_path_for_primitive(
+    primitive: &PrimitiveType,
+) -> Option<&'static [&'static str]> {
+    match primitive {
+        PrimitiveType::String => Some(&["String"]),
+        PrimitiveType::Uint8Array
+        | PrimitiveType::Image
+        | PrimitiveType::Audio
+        | PrimitiveType::Video
+        | PrimitiveType::Pdf => Some(primitive.builtin_class_path()),
+        _ => None,
+    }
+}
+
+fn method_has_self_param(db: &dyn Db, func_loc: FunctionLoc<'_>) -> bool {
+    function_signature(db, func_loc)
+        .params
+        .first()
+        .is_some_and(|param| param.name.as_str() == "self")
+}
+
+fn completions_for_builtin_class_methods(
+    db: &dyn Db,
+    class_path: &[&str],
+    mode: BuiltinMethodMode,
+) -> Vec<Completion> {
+    if class_path.is_empty() {
+        return Vec::new();
+    }
+
+    let builtin_id = PackageId::new(db, Name::new("baml"));
+    let builtin = package_items(db, builtin_id);
+    let path: Vec<Name> = class_path.iter().map(Name::new).collect();
+    let Some((class_name, namespace)) = path.split_last() else {
+        return Vec::new();
+    };
+    let Some(Definition::Class(class_loc)) = builtin.lookup_type(namespace, class_name) else {
+        return Vec::new();
+    };
+
+    completions_for_class_methods(db, class_loc, mode)
+}
+
+fn completions_for_class_methods(
+    db: &dyn Db,
+    class_loc: baml_compiler2_hir::loc::ClassLoc<'_>,
+    mode: BuiltinMethodMode,
+) -> Vec<Completion> {
+    let item_tree = baml_compiler2_hir::file_item_tree(db, class_loc.file(db));
+    let class_data = &item_tree[class_loc.id(db)];
+    let mut items = Vec::new();
+
+    for method_id in &class_data.methods {
+        let func_loc = FunctionLoc::new(db, class_loc.file(db), *method_id);
+        let has_self = method_has_self_param(db, func_loc);
+        if mode != BuiltinMethodMode::All
+            && !matches!(
+                (mode, has_self),
+                (BuiltinMethodMode::Instance, true) | (BuiltinMethodMode::Static, false)
+            )
+        {
+            continue;
+        }
+
+        let method = &item_tree[*method_id];
+        items.push(
+            Completion::new(method.name.as_str(), CompletionKind::Method)
+                .with_detail(format_builtin_method_signature(db, func_loc, mode))
+                .with_sort(format!("1_{}", method.name.as_str())),
+        );
+    }
+
+    items
 }
 
 /// Resolve the type of a field/member on a given type.
@@ -706,7 +1117,7 @@ fn find_path_segments_for_word_after_dot(token: &baml_compiler_syntax::SyntaxTok
 }
 
 /// Returns completions for the members of `ty`.
-fn completions_for_ty_members(db: &dyn Db, ty: &Ty) -> Vec<Completion> {
+fn completions_for_ty_members(db: &dyn Db, file: SourceFile, ty: &Ty) -> Vec<Completion> {
     match ty {
         Ty::Class(qn, _, _) => {
             // Find the class definition and return its fields and methods.
@@ -726,7 +1137,7 @@ fn completions_for_ty_members(db: &dyn Db, ty: &Ty) -> Vec<Completion> {
             for (field_name, field_ty, _field_attrs) in &resolved.fields {
                 items.push(
                     Completion::new(field_name.as_str(), CompletionKind::Field)
-                        .with_detail(utils::display_ty(field_ty))
+                        .with_detail(utils::display_ty_for_file(db, file, field_ty))
                         .with_sort(format!("0_{}", field_name.as_str())),
                 );
             }
@@ -770,61 +1181,25 @@ fn completions_for_ty_members(db: &dyn Db, ty: &Ty) -> Vec<Completion> {
         }
 
         Ty::List(..) | Ty::EvolvingList(..) => {
-            // Built-in list methods.
-            builtin_list_completions()
+            completions_for_builtin_class_methods(db, &["Array"], BuiltinMethodMode::Instance)
         }
 
         Ty::Map(..) | Ty::EvolvingMap(..) => {
-            // Built-in map methods.
-            builtin_map_completions()
+            completions_for_builtin_class_methods(db, &["Map"], BuiltinMethodMode::Instance)
         }
 
-        Ty::Primitive(baml_compiler2_tir::ty::PrimitiveType::String, _) => {
-            // Built-in string methods.
-            builtin_string_completions()
+        Ty::Primitive(primitive, _) => builtin_instance_class_path_for_primitive(primitive)
+            .map(|class_path| {
+                completions_for_builtin_class_methods(db, class_path, BuiltinMethodMode::Instance)
+            })
+            .unwrap_or_default(),
+
+        Ty::Literal(baml_base::Literal::String(_), _, _) => {
+            completions_for_builtin_class_methods(db, &["String"], BuiltinMethodMode::Instance)
         }
 
         _ => Vec::new(),
     }
-}
-
-/// Built-in methods for list types.
-fn builtin_list_completions() -> Vec<Completion> {
-    vec![
-        Completion::new("length", CompletionKind::Method).with_detail("int"),
-        Completion::new("map", CompletionKind::Method).with_detail("(f: (T) -> U) -> U[]"),
-        Completion::new("filter", CompletionKind::Method).with_detail("(f: (T) -> bool) -> T[]"),
-        Completion::new("reduce", CompletionKind::Method)
-            .with_detail("(f: (U, T) -> U, init: U) -> U"),
-        Completion::new("find", CompletionKind::Method).with_detail("(f: (T) -> bool) -> T?"),
-        Completion::new("any", CompletionKind::Method).with_detail("(f: (T) -> bool) -> bool"),
-        Completion::new("all", CompletionKind::Method).with_detail("(f: (T) -> bool) -> bool"),
-    ]
-}
-
-/// Built-in methods for map types.
-fn builtin_map_completions() -> Vec<Completion> {
-    vec![
-        Completion::new("keys", CompletionKind::Method).with_detail("K[]"),
-        Completion::new("values", CompletionKind::Method).with_detail("V[]"),
-        Completion::new("entries", CompletionKind::Method).with_detail("{ key: K, value: V }[]"),
-    ]
-}
-
-/// Built-in methods for string types.
-fn builtin_string_completions() -> Vec<Completion> {
-    vec![
-        Completion::new("length", CompletionKind::Method).with_detail("int"),
-        Completion::new("upper", CompletionKind::Method).with_detail("string"),
-        Completion::new("lower", CompletionKind::Method).with_detail("string"),
-        Completion::new("trim", CompletionKind::Method).with_detail("string"),
-        Completion::new("split", CompletionKind::Method).with_detail("(sep: string) -> string[]"),
-        Completion::new("contains", CompletionKind::Method).with_detail("(sub: string) -> bool"),
-        Completion::new("starts_with", CompletionKind::Method)
-            .with_detail("(prefix: string) -> bool"),
-        Completion::new("ends_with", CompletionKind::Method)
-            .with_detail("(suffix: string) -> bool"),
-    ]
 }
 
 /// Convert a `Definition` to its representative `Ty`.
@@ -904,14 +1279,14 @@ fn local_variable_ty(
                     let func_loc =
                         baml_compiler2_hir::loc::FunctionLoc::new(db, file, *func_local_id);
                     let sig = baml_compiler2_hir::signature::function_signature(db, func_loc);
-                    sig.params.get(param_idx).map(|(_, te)| {
+                    sig.params.get(param_idx).map(|param| {
                         let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
                         let pkg_id = PackageId::new(db, pkg_info.package);
                         let pkg = package_items(db, pkg_id);
                         let mut diags = Vec::new();
                         baml_compiler2_tir::lower_type_expr::lower_type_expr(
                             db,
-                            te,
+                            &param.ty,
                             pkg,
                             &[],
                             &mut diags,
@@ -1092,42 +1467,53 @@ fn completions_for_value_position(
     offset: TextSize,
 ) -> Vec<Completion> {
     let mut items: Vec<Completion> = Vec::new();
+    let mut sort_prefix = 0usize;
 
     // ── Locals (innermost scope first) ───────────────────────────────────────
-    let index = baml_compiler2_hir::file_semantic_index(db, file);
-    let scope_id = index.scope_at_offset(offset, None);
+    {
+        let index = baml_compiler2_hir::file_semantic_index(db, file);
+        let scope_id = index.scope_at_offset(offset, None);
 
-    let mut emitted_locals: HashSet<Name> = HashSet::new();
-    let mut sort_prefix = 0usize;
-    for ancestor_id in index.ancestor_scopes(scope_id) {
-        let bindings: &ScopeBindings = &index.scope_bindings[ancestor_id.index() as usize];
+        let mut emitted_locals: HashSet<Name> = HashSet::new();
+        for ancestor_id in index.ancestor_scopes(scope_id) {
+            let bindings: &ScopeBindings = &index.scope_bindings[ancestor_id.index() as usize];
 
-        // Let bindings (reverse source order so most-recent is first).
-        for binding in bindings.bindings.iter().rev() {
-            // Only show bindings that are visible at the cursor position.
-            if index.binding_visible_at(binding, offset)
-                && emitted_locals.insert(binding.name.clone())
-            {
+            // Let bindings (reverse source order so most-recent is first).
+            for binding in bindings.bindings.iter().rev() {
+                // Only show bindings that are visible at the cursor position.
+                if index.binding_visible_at(binding, offset)
+                    && emitted_locals.insert(binding.name.clone())
+                {
+                    items.push(
+                        Completion::new(binding.name.as_str(), CompletionKind::Variable)
+                            .with_sort(format!("{:03}_{}", sort_prefix, binding.name.as_str())),
+                    );
+                    sort_prefix += 1;
+                }
+            }
+
+            // Parameters.
+            for (name, _idx) in &bindings.params {
+                if !emitted_locals.insert(name.clone()) {
+                    continue;
+                }
                 items.push(
-                    Completion::new(binding.name.as_str(), CompletionKind::Variable)
-                        .with_sort(format!("{:03}_{}", sort_prefix, binding.name.as_str())),
+                    Completion::new(name.as_str(), CompletionKind::Variable)
+                        .with_detail("parameter")
+                        .with_sort(format!("{:03}_{}", sort_prefix, name.as_str())),
                 );
                 sort_prefix += 1;
             }
         }
+    }
 
-        // Parameters.
-        for (name, _idx) in &bindings.params {
-            if !emitted_locals.insert(name.clone()) {
-                continue;
-            }
-            items.push(
-                Completion::new(name.as_str(), CompletionKind::Variable)
-                    .with_detail("parameter")
-                    .with_sort(format!("{:03}_{}", sort_prefix, name.as_str())),
-            );
-            sort_prefix += 1;
-        }
+    // ── Accessible package roots (`baml`, `reflect`, `log`, etc.) ─────────────
+    for package_name in crate::listing::non_user_package_names(db) {
+        items.push(
+            Completion::new(package_name.as_str(), CompletionKind::Module)
+                .with_detail("package")
+                .with_sort(format!("{:03}_{}", sort_prefix + 500, package_name)),
+        );
     }
 
     // ── Package-level values (functions, template strings, clients) ───────────
@@ -1228,6 +1614,12 @@ fn completions_for_top_level() -> Vec<Completion> {
         Completion::new("type", CompletionKind::Keyword)
             .with_detail("type alias declaration")
             .with_sort("08_type"),
+        Completion::new("interface", CompletionKind::Keyword)
+            .with_detail("interface declaration")
+            .with_sort("09_interface"),
+        Completion::new("implements", CompletionKind::Keyword)
+            .with_detail("out-of-body interface implementation")
+            .with_sort("10_implements"),
     ]
 }
 

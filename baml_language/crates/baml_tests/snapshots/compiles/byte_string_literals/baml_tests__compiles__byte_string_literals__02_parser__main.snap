@@ -16,8 +16,10 @@ SOURCE_FILE
       BLOCK_EXPR
         L_BRACE "{"
         LET_STMT
-          KW_LET "let"
-          WORD "data"
+          PATTERN
+            BINDING_PATTERN "let data"
+              KW_LET "let"
+              WORD "data"
           EQUALS "="
           BYTE_STRING_LITERAL "b"hello""
             WORD "b"
@@ -47,8 +49,10 @@ SOURCE_FILE
       BLOCK_EXPR
         L_BRACE "{"
         LET_STMT
-          KW_LET "let"
-          WORD "data"
+          PATTERN
+            BINDING_PATTERN "let data"
+              KW_LET "let"
+              WORD "data"
           EQUALS "="
           BYTE_STRING_LITERAL "b"""
             WORD "b"
@@ -77,8 +81,10 @@ SOURCE_FILE
       BLOCK_EXPR
         L_BRACE "{"
         LET_STMT
-          KW_LET "let"
-          WORD "data"
+          PATTERN
+            BINDING_PATTERN "let data"
+              KW_LET "let"
+              WORD "data"
           EQUALS "="
           BYTE_STRING_LITERAL "b"\x48\x65\x6c\x6c\x6f""
             WORD "b"
@@ -117,8 +123,10 @@ SOURCE_FILE
       BLOCK_EXPR
         L_BRACE "{"
         LET_STMT
-          KW_LET "let"
-          WORD "data"
+          PATTERN
+            BINDING_PATTERN "let data"
+              KW_LET "let"
+              WORD "data"
           EQUALS "="
           BYTE_STRING_LITERAL "b"\n\t\r\0\\\"""
             WORD "b"
@@ -160,8 +168,10 @@ SOURCE_FILE
       BLOCK_EXPR
         L_BRACE "{"
         LET_STMT
-          KW_LET "let"
-          WORD "data"
+          PATTERN
+            BINDING_PATTERN "let data"
+              KW_LET "let"
+              WORD "data"
           EQUALS "="
           BYTE_STRING_LITERAL "b"\x41\x42\x43""
             WORD "b"
@@ -179,9 +189,10 @@ SOURCE_FILE
             WORD "data"
             DOT "."
             WORD "at"
-          CALL_ARGS "(0)"
+          CALL_ARGS
             L_PAREN "("
-            INTEGER_LITERAL "0"
+            CALL_ARG "0"
+              INTEGER_LITERAL "0"
             R_PAREN ")"
         R_BRACE "}"
   FUNCTION_DEF
@@ -295,8 +306,10 @@ SOURCE_FILE
       BLOCK_EXPR
         L_BRACE "{"
         LET_STMT
-          KW_LET "let"
-          WORD "data"
+          PATTERN
+            BINDING_PATTERN "let data"
+              KW_LET "let"
+              WORD "data"
           EQUALS "="
           BYTE_STRING_LITERAL "b"\x00\x00\x00""
             WORD "b"
@@ -323,9 +336,10 @@ SOURCE_FILE
             WORD "data"
             DOT "."
             WORD "at"
-          CALL_ARGS "(0)"
+          CALL_ARGS
             L_PAREN "("
-            INTEGER_LITERAL "0"
+            CALL_ARG "0"
+              INTEGER_LITERAL "0"
             R_PAREN ")"
         R_BRACE "}"
   FUNCTION_DEF
@@ -341,8 +355,10 @@ SOURCE_FILE
       BLOCK_EXPR
         L_BRACE "{"
         LET_STMT
-          KW_LET "let"
-          WORD "data"
+          PATTERN
+            BINDING_PATTERN "let data"
+              KW_LET "let"
+              WORD "data"
           EQUALS "="
           BYTE_STRING_LITERAL "b"\x41\x42\x43""
             WORD "b"
@@ -377,11 +393,12 @@ SOURCE_FILE
           WORD "ByteStringPassAndReturn"
           CALL_ARGS
             L_PAREN "("
-            BYTE_STRING_LITERAL "b"abc""
-              WORD "b"
-              QUOTE """
-              WORD "abc"
-              QUOTE """
+            CALL_ARG
+              BYTE_STRING_LITERAL "b"abc""
+                WORD "b"
+                QUOTE """
+                WORD "abc"
+                QUOTE """
             R_PAREN ")"
         R_BRACE "}"
 

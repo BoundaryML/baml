@@ -22,7 +22,7 @@ function user.nestedArray() -> int[][] throws never {
 }
 function user.annotatedLiteralUnion() -> int throws never {
   { : never
-    let x = 1 : 1
-    return x : 1
+    let x: 1 | 2 = 1 : 1 -> 1 | 2
+    return x : 1 | 2
   }
 }

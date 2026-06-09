@@ -42,6 +42,7 @@ pub(crate) async fn build_request(
         | LlmProvider::Ollama
         | LlmProvider::OpenRouter => openai::chat_completions::build_request(client, &prompt),
         LlmProvider::OpenAiResponses => openai::responses::build_request(client, &prompt),
+        LlmProvider::AiGatewayImages => openai::images::build_request(client, &prompt),
         LlmProvider::Anthropic => anthropic::build_request(client, &prompt),
         LlmProvider::AwsBedrock => bedrock::build_request(client, &prompt, io.clone()).await,
         LlmProvider::GoogleAi => google::build_request(client, &prompt, provider),
@@ -147,9 +148,11 @@ pub(crate) fn bex_value_to_json(value: &BexExternalValue) -> Option<serde_json::
     match value {
         BexExternalValue::Null => Some(serde_json::Value::Null),
         BexExternalValue::Int(i) => Some(serde_json::json!(i)),
+        // Bigints can exceed JSON number precision; emit as a decimal string.
+        BexExternalValue::Bigint(b) => Some(serde_json::json!(b.to_string())),
         BexExternalValue::Float(f) => Some(serde_json::json!(f)),
         BexExternalValue::Bool(b) => Some(serde_json::json!(b)),
-        BexExternalValue::String(s) => Some(serde_json::json!(s)),
+        BexExternalValue::String(s) => Some(serde_json::json!(s.as_str())),
         BexExternalValue::Array { items, .. } => {
             let arr: Vec<serde_json::Value> = items.iter().filter_map(bex_value_to_json).collect();
             Some(serde_json::Value::Array(arr))
@@ -167,6 +170,7 @@ pub(crate) fn bex_value_to_json(value: &BexExternalValue) -> Option<serde_json::
         | BexExternalValue::Handle(_)
         | BexExternalValue::FunctionRef { .. }
         | BexExternalValue::Adt(_)
+        | BexExternalValue::HostValue(_)
         | BexExternalValue::Instance { .. }
         | BexExternalValue::Variant { .. }
         | BexExternalValue::Union { .. } => None,
@@ -177,7 +181,7 @@ pub(crate) fn bex_value_to_json(value: &BexExternalValue) -> Option<serde_json::
 mod tests {
     use std::sync::Arc;
 
-    use baml_builtins2::PromptAst;
+    use baml_builtins2::{MediaContent, MediaValue, PromptAst, PromptAstSimple};
     use bex_external_types::{AsBexExternalValue, Ty};
     use indexmap::IndexMap;
 
@@ -210,6 +214,26 @@ mod tests {
             content: Arc::new(text.to_string().into()),
             metadata: serde_json::Value::Null,
         })
+    }
+
+    fn image_media() -> Arc<MediaValue> {
+        Arc::new(MediaValue::new(
+            baml_base::MediaKind::Image,
+            MediaContent::Url {
+                url: "https://example.com/image.png".to_string(),
+                base64_data: None,
+            },
+            Some("image/png".to_string()),
+        ))
+    }
+
+    fn simple_image_prompt() -> Arc<PromptAst> {
+        Arc::new(PromptAst::Simple(Arc::new(PromptAstSimple::Multiple(
+            vec![
+                Arc::new(PromptAstSimple::String("Describe this image:".to_string())),
+                Arc::new(PromptAstSimple::Media(image_media())),
+            ],
+        ))))
     }
 
     /// Parse the body JSON from an `HttpRequest`.
@@ -368,6 +392,76 @@ mod tests {
                     {"role": "user", "content": [{"type": "text", "text": "Hello world"}]}
                 ]
             })
+        );
+    }
+
+    #[tokio::test]
+    async fn test_openai_responses_unrole_tagged_image_prompt_becomes_user_request() {
+        let client = crate::baml_std::PrimitiveClient::new(
+            "test-client".to_string(),
+            "openai-responses".to_string(),
+            crate::baml_std::PrimitiveClientOptions {
+                model: Some("gpt-5".to_string()),
+                api_key: Some("sk-test-key".to_string()),
+                ..crate::baml_std::PrimitiveClientOptions::default()
+            },
+        )
+        .unwrap();
+        assert_eq!(client.default_role, "system");
+
+        let specialized =
+            crate::execute_specialize_prompt_from_owned(&client, simple_image_prompt()).unwrap();
+        let result = build_request(
+            &client,
+            specialized,
+            Arc::new(::sys_types::runtime_io::NoopRuntimeIo),
+        )
+        .await
+        .unwrap();
+
+        let body = parse_body(&result);
+        assert_eq!(body["input"][0]["role"], "user");
+        assert_eq!(
+            body["input"][0]["content"],
+            serde_json::json!([
+                {"type": "input_text", "text": "Describe this image:"},
+                {"type": "input_image", "image_url": "https://example.com/image.png"}
+            ])
+        );
+    }
+
+    #[tokio::test]
+    async fn test_openai_chat_unrole_tagged_image_prompt_becomes_user_request() {
+        let client = crate::baml_std::PrimitiveClient::new(
+            "test-client".to_string(),
+            "openai".to_string(),
+            crate::baml_std::PrimitiveClientOptions {
+                model: Some("gpt-4o".to_string()),
+                api_key: Some("sk-test-key".to_string()),
+                ..crate::baml_std::PrimitiveClientOptions::default()
+            },
+        )
+        .unwrap();
+        assert_eq!(client.default_role, "system");
+
+        let specialized =
+            crate::execute_specialize_prompt_from_owned(&client, simple_image_prompt()).unwrap();
+        let result = build_request(
+            &client,
+            specialized,
+            Arc::new(::sys_types::runtime_io::NoopRuntimeIo),
+        )
+        .await
+        .unwrap();
+
+        let body = parse_body(&result);
+        assert_eq!(body["messages"][0]["role"], "user");
+        assert_eq!(
+            body["messages"][0]["content"],
+            serde_json::json!([
+                {"type": "text", "text": "Describe this image:"},
+                {"type": "image_url", "image_url": {"url": "https://example.com/image.png"}}
+            ])
         );
     }
 

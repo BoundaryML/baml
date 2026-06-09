@@ -43,6 +43,7 @@ pub fn write_function(f: &mut impl Write, func: &MirFunction) -> fmt::Result {
                 BuiltinKind::Io => "io",
                 BuiltinKind::Vm => "vm",
                 BuiltinKind::Intrinsic => "intrinsic",
+                BuiltinKind::AwaitAny => "await_any",
             };
             writeln!(f, "fn {} = builtin({kind_str})", func.item_ref)
         }
@@ -255,14 +256,25 @@ fn write_terminator(f: &mut impl Write, term: &Terminator) -> fmt::Result {
         Terminator::Call {
             callee,
             args,
+            ntypeargs,
             destination,
             target,
             unwind,
         } => {
             write!(f, "{destination} = call ")?;
             write_operand(f, callee)?;
+            if *ntypeargs > 0 {
+                write!(f, "<")?;
+                for (i, arg) in args.iter().take(*ntypeargs).enumerate() {
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
+                    write_operand(f, arg)?;
+                }
+                write!(f, ">")?;
+            }
             write!(f, "(")?;
-            for (i, arg) in args.iter().enumerate() {
+            for (i, arg) in args.iter().skip(*ntypeargs).enumerate() {
                 if i > 0 {
                     write!(f, ", ")?;
                 }
@@ -277,13 +289,14 @@ fn write_terminator(f: &mut impl Write, term: &Terminator) -> fmt::Result {
         Terminator::Unreachable => {
             write!(f, "unreachable;")
         }
-        Terminator::DispatchFuture {
+        Terminator::SysOp {
             callee,
             args,
-            future,
-            resume,
+            destination,
+            target,
+            unwind,
         } => {
-            write!(f, "{future} = dispatch_future ")?;
+            write!(f, "{destination} = sys_op ")?;
             write_operand(f, callee)?;
             write!(f, "(")?;
             for (i, arg) in args.iter().enumerate() {
@@ -292,7 +305,28 @@ fn write_terminator(f: &mut impl Write, term: &Terminator) -> fmt::Result {
                 }
                 write_operand(f, arg)?;
             }
-            write!(f, ") -> {resume};")
+            write!(f, ") -> {target}")?;
+            if let Some(u) = unwind {
+                write!(f, " unwind {u}")?;
+            }
+            write!(f, ";")
+        }
+        Terminator::Spawn {
+            closure,
+            name,
+            config,
+            future,
+            resume,
+        } => {
+            write!(f, "{future} = spawn ")?;
+            write_operand(f, closure)?;
+            write!(f, " name=")?;
+            write_operand(f, name)?;
+            if let Some(config) = config {
+                write!(f, " config=")?;
+                write_operand(f, config)?;
+            }
+            write!(f, " -> {resume};")
         }
         Terminator::Await {
             future,
@@ -301,6 +335,20 @@ fn write_terminator(f: &mut impl Write, term: &Terminator) -> fmt::Result {
             unwind,
         } => {
             write!(f, "{destination} = await {future} -> [{target}")?;
+            if let Some(u) = unwind {
+                write!(f, ", unwind: {u}")?;
+            }
+            write!(f, "];")
+        }
+        Terminator::AwaitAny {
+            futures,
+            destination,
+            target,
+            unwind,
+        } => {
+            write!(f, "{destination} = await_any ")?;
+            write_operand(f, futures)?;
+            write!(f, " -> [{target}")?;
             if let Some(u) = unwind {
                 write!(f, ", unwind: {u}")?;
             }
@@ -369,7 +417,22 @@ fn write_rvalue(f: &mut impl Write, rvalue: &Rvalue) -> fmt::Result {
         Rvalue::Aggregate { kind, fields } => {
             match kind {
                 AggregateKind::Array => write!(f, "array")?,
-                AggregateKind::Class(name) => write!(f, "{name}")?,
+                AggregateKind::Class {
+                    name,
+                    type_arg_templates,
+                } => {
+                    write!(f, "{name}")?;
+                    if !type_arg_templates.is_empty() {
+                        write!(f, "<")?;
+                        for (i, t) in type_arg_templates.iter().enumerate() {
+                            if i > 0 {
+                                write!(f, ", ")?;
+                            }
+                            write!(f, "{t}")?;
+                        }
+                        write!(f, ">")?;
+                    }
+                }
                 AggregateKind::EnumVariant { enum_name, variant } => {
                     write!(f, "{enum_name}::{variant}")?;
                 }
@@ -392,16 +455,24 @@ fn write_rvalue(f: &mut impl Write, rvalue: &Rvalue) -> fmt::Result {
         Rvalue::Len(place) => {
             write!(f, "len({place})")
         }
-        Rvalue::IsType { operand, ty } => {
+        Rvalue::IsType {
+            operand,
+            ty_template,
+        } => {
             write!(f, "is_type(")?;
             write_operand(f, operand)?;
-            write!(f, ", {ty:?})")
+            write!(f, ", {ty_template})")
         }
         Rvalue::MakeClosure {
             lambda_idx,
             captures,
+            type_arg_templates,
         } => {
-            write!(f, "make_closure lambda[{lambda_idx}](")?;
+            write!(f, "make_closure lambda[{lambda_idx}]")?;
+            if !type_arg_templates.is_empty() {
+                write!(f, "<{} type_args>", type_arg_templates.len())?;
+            }
+            write!(f, "(")?;
             for (i, cap) in captures.iter().enumerate() {
                 if i > 0 {
                     write!(f, ", ")?;
@@ -414,6 +485,25 @@ fn write_rvalue(f: &mut impl Write, rvalue: &Rvalue) -> fmt::Result {
             write!(f, "make_bound_method {item_ref}(")?;
             write_operand(f, receiver)?;
             write!(f, ")")
+        }
+        Rvalue::LoadType(template) => {
+            write!(f, "load_type({template})")
+        }
+        Rvalue::MakeGenericFunction {
+            item,
+            type_arg_templates,
+        } => {
+            let args: Vec<String> = type_arg_templates.iter().map(ToString::to_string).collect();
+            write!(f, "make_generic_function {item}<{}>", args.join(", "))
+        }
+        Rvalue::MakeGenericFunctionFromValue {
+            value,
+            type_arg_templates,
+        } => {
+            write!(f, "make_generic_function_from_value(")?;
+            write_operand(f, value)?;
+            let args: Vec<String> = type_arg_templates.iter().map(ToString::to_string).collect();
+            write!(f, ")<{}>", args.join(", "))
         }
     }
 }
@@ -429,11 +519,17 @@ fn write_operand(f: &mut impl Write, operand: &Operand) -> fmt::Result {
 fn write_constant(f: &mut impl Write, constant: &Constant) -> fmt::Result {
     match constant {
         Constant::Int(n) => write!(f, "const {n}_i64"),
+        Constant::Bigint(n) => write!(f, "const {n}n"),
         Constant::Float(n) => write!(f, "const {n}_f64"),
         Constant::String(s) => write!(f, "const {s:?}"),
         Constant::Bool(b) => write!(f, "const {b}"),
         Constant::Null => write!(f, "const null"),
+        Constant::OmittedArg => write!(f, "const <omitted>"),
         Constant::Function(qn) => write!(f, "const fn {qn}"),
+        Constant::GenericFunction { item, type_args } => {
+            let args: Vec<String> = type_args.iter().map(ToString::to_string).collect();
+            write!(f, "const fn {item}<{}>", args.join(", "))
+        }
         Constant::EnumVariant { enum_ref, variant } => write!(f, "const {enum_ref}.{variant}"),
     }
 }

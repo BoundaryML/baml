@@ -11,24 +11,34 @@
 //! The instructions that the VM runs are defined in [`Instruction`] enum.
 
 pub mod bytecode;
+pub mod errors;
 pub mod heap_ptr;
 pub mod indexable;
+pub mod lazy_biased_mutex;
 mod roots;
+pub mod task_group;
 pub mod types;
 
+pub use bex_str::BexStr;
 pub use bytecode::{
     BinOp, Bytecode, CmpOp, Instruction, JumpTableData, UnaryOp, VizExecDelta, VizExecEvent,
     VizNodeMeta, VizNodeType,
 };
 pub use heap_ptr::HeapPtr;
-pub use indexable::{GlobalIndex, GlobalPool, ObjectIndex, ObjectPool, StackIndex};
-pub use roots::RootHaver;
+pub use indexable::{
+    GlobalIndex, GlobalPool, ObjectIndex, ObjectPool, SharedGlobals, StackIndex, VmGlobals,
+};
+pub use roots::{PermitProof, RootHaver, WriteBarrier};
+pub use task_group::{TaskGroupInner, TaskGroupPermit, TaskGroupTicket};
 pub use types::{
-    Class, ClassField, ClientBuildMeta, ClientBuildType, CollectorRef, ConstValue, Enum,
-    EnumVariant, Function, FunctionKind, FunctionMeta, FunctionOrigin, Future, Instance,
-    MediaValue, Object, ObjectType, PanicClass, PendingFuture, Program, PromptAst, RetryPolicyMeta,
-    SysOp, SysOpErrorCategory, SysOpPanicCategory, TestArgValue, TestCase, Value, Variant,
-    format_float, sys_op_for_path, type_tags,
+    ArrayContainer, ArrayReadGuard, ArrayWriteGuard, AtomicValueSlot, BoundMethod, Class,
+    ClassField, ClientBuildMeta, ClientBuildType, CollectorRef, ConstValue, Enum, EnumVariant,
+    Function, FunctionKind, FunctionMeta, FunctionOrigin, Future, FutureRead, GenericFunction,
+    HostClosure, Instance, LockedContainer, LockedReadGuard, LockedWriteGuard, MapContainer,
+    MapReadGuard, MapWriteGuard, MediaValue, Object, ObjectType, PanicClass, Program, PromptAst,
+    RetryPolicyMeta, SysOp, SysOpErrorCategory, SysOpPanicCategory, TestArgValue, TestCase,
+    Uint8ArrayContainer, Uint8ArrayReadGuard, Uint8ArrayWriteGuard, UnscheduledFuture, Value,
+    ValueKind, Variant, format_float, sys_op_for_path, type_tags,
 };
 
 /// Used to check if the VM should yield early.
@@ -55,43 +65,77 @@ pub use types::{
 ///   The flag should be set by another thread that wants to park the VM.
 pub struct EarlyYieldCheck {
     counter: u64,
+    interval: u64,
     /// Only used in non-WASM targets, since WASM currently doesn't support threads.
     /// If another thread wants us to park (e.g. for a GC) they will set this to true.
     #[cfg(not(target_arch = "wasm32"))]
     park_requested: ::std::sync::Arc<::std::sync::atomic::AtomicBool>,
 }
+
+/// Default poll interval: ~32M instructions (~1.5s at typical IPC).
+pub const EARLY_YIELD_INTERVAL: u64 = 1 << 25;
+
 impl EarlyYieldCheck {
     #[cfg(target_arch = "wasm32")]
     #[expect(clippy::new_without_default)]
     pub const fn new() -> Self {
-        Self { counter: 0 }
+        Self {
+            counter: EARLY_YIELD_INTERVAL,
+            interval: EARLY_YIELD_INTERVAL,
+        }
     }
     #[cfg(not(target_arch = "wasm32"))]
-    pub const fn new(park_requested: ::std::sync::Arc<::std::sync::atomic::AtomicBool>) -> Self {
+    pub fn new(park_requested: ::std::sync::Arc<::std::sync::atomic::AtomicBool>) -> Self {
         Self {
-            counter: 0,
+            counter: EARLY_YIELD_INTERVAL,
+            interval: EARLY_YIELD_INTERVAL,
             park_requested,
         }
     }
-    /// Update the counter and return true if we should yield.
+    /// Create with a custom interval (for testing).
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn with_interval(
+        park_requested: ::std::sync::Arc<::std::sync::atomic::AtomicBool>,
+        interval: u64,
+    ) -> Self {
+        assert!(
+            interval > 0,
+            "early-yield interval must be greater than zero"
+        );
+        Self {
+            counter: interval,
+            interval,
+            park_requested,
+        }
+    }
+    /// Decrement and return true if we should yield.
+    ///
+    /// Checks every ~32M calls (~1.5s at typical IPC). GC parks at async
+    /// yield points anyway; this is just a fallback for tight compute loops.
+    ///
+    /// Counts down to zero so the check is a single `subs` + `b.ne` on ARM —
+    /// the subtraction sets the zero flag, no separate compare needed.
+    #[allow(clippy::inline_always)]
+    #[inline(always)]
     pub fn should_early_yield(&mut self) -> bool {
-        self.counter += 1;
+        self.counter -= 1;
+        if self.counter != 0 {
+            return false;
+        }
+        self.counter = self.interval;
+
         #[cfg(target_arch = "wasm32")]
         {
-            // there are no other threads, so always yield after about ~65K times
             self.counter > (1 << 16)
         }
         #[cfg(not(target_arch = "wasm32"))]
         {
-            // other threads can request a park, so check if they've requested every ~4K times
-            (self.counter.trailing_zeros() >= 12)
-                && self
-                    .park_requested
-                    .load(::core::sync::atomic::Ordering::Relaxed)
+            self.park_requested
+                .load(::core::sync::atomic::Ordering::Relaxed)
         }
     }
     pub const fn reset(&mut self) {
-        self.counter = 0;
+        self.counter = self.interval;
     }
 }
 
@@ -104,12 +148,14 @@ mod tests {
 
     use super::EarlyYieldCheck;
 
-    const POLL_WINDOW: u64 = 4_100;
+    /// Small interval for fast tests.
+    const TEST_INTERVAL: u64 = 1 << 10;
+    const POLL_WINDOW: u64 = TEST_INTERVAL + 100;
 
     #[test]
     fn flag_false_never_yields() {
         let flag = Arc::new(AtomicBool::new(false));
-        let mut check = EarlyYieldCheck::new(flag);
+        let mut check = EarlyYieldCheck::with_interval(flag, TEST_INTERVAL);
         for _ in 0..10_000 {
             assert!(!check.should_early_yield());
         }
@@ -118,7 +164,7 @@ mod tests {
     #[test]
     fn flag_true_yields_within_poll_window() {
         let flag = Arc::new(AtomicBool::new(true));
-        let mut check = EarlyYieldCheck::new(flag);
+        let mut check = EarlyYieldCheck::with_interval(flag, TEST_INTERVAL);
         let mut yielded_at = None;
         for i in 0..POLL_WINDOW {
             if check.should_early_yield() {
@@ -135,7 +181,7 @@ mod tests {
     #[test]
     fn flag_set_mid_execution_is_observed() {
         let flag = Arc::new(AtomicBool::new(false));
-        let mut check = EarlyYieldCheck::new(Arc::clone(&flag));
+        let mut check = EarlyYieldCheck::with_interval(Arc::clone(&flag), TEST_INTERVAL);
 
         for _ in 0..2_000 {
             assert!(!check.should_early_yield());
@@ -159,7 +205,7 @@ mod tests {
     #[test]
     fn reset_clears_counter() {
         let flag = Arc::new(AtomicBool::new(true));
-        let mut check = EarlyYieldCheck::new(Arc::clone(&flag));
+        let mut check = EarlyYieldCheck::with_interval(Arc::clone(&flag), TEST_INTERVAL);
 
         let mut saw_yield = false;
         for _ in 0..POLL_WINDOW {

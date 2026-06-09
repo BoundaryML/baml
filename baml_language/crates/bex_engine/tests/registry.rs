@@ -40,7 +40,7 @@ async fn registry_new_copy_objects_true_returns_instance() {
     let result = engine
         .call_function(
             "testing.TestCollector.new",
-            vec![BexExternalValue::String(String::new())],
+            vec![BexExternalValue::String("".into())],
             FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
             true, // copy_objects: deep-extract to BexExternalValue
         )
@@ -90,7 +90,7 @@ async fn registry_new_copy_objects_false_returns_handle() {
     let result = engine
         .call_function(
             "testing.TestCollector.new",
-            vec![BexExternalValue::String(String::new())],
+            vec![BexExternalValue::String("".into())],
             FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
             false, // copy_objects: return Handle instead of deep-extracting
         )

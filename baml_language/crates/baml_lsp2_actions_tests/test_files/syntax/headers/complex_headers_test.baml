@@ -66,7 +66,7 @@ function ForLoopWithHeaders() -> int {
 
 //----
 //- diagnostics
-// Error: type mismatch: expected string, got int
+// error: type mismatch: expected string, got int
 //     ╭─[ headers_complex_headers_test.baml:43:5 ]
 //     │
 //  43 │     final_result

@@ -41,7 +41,10 @@
 //! - The argument count != param count (variadic / error cases)
 
 use baml_base::SourceFile;
-use baml_compiler2_ast::{Expr, Stmt};
+use baml_compiler2_ast::{
+    Expr, Stmt,
+    ast::{DeclarativeMeta, FunctionOrigin},
+};
 use baml_compiler2_hir::{body::FunctionBody, loc::FunctionLoc, scope::ScopeKind};
 use baml_compiler2_tir::ty::Ty;
 use text_size::TextSize;
@@ -91,6 +94,12 @@ pub fn annotations(db: &dyn Db, file: SourceFile) -> Vec<InlineAnnotation> {
     let mut out: Vec<InlineAnnotation> = Vec::new();
 
     for (func_local_id, func_data) in &item_tree.functions {
+        if func_data.origin != FunctionOrigin::UserDefined
+            || matches!(func_data.declarative_meta, Some(DeclarativeMeta::Llm(_)))
+        {
+            continue;
+        }
+
         let func_loc = FunctionLoc::new(db, file, *func_local_id);
 
         // Only expression-body functions have type information we can display.
@@ -126,23 +135,34 @@ pub fn annotations(db: &dyn Db, file: SourceFile) -> Vec<InlineAnnotation> {
         // ── Type hints for let bindings without annotations ───────────────────
 
         for (stmt_id, stmt) in expr_body.stmts.iter() {
-            let Stmt::Let {
-                pattern,
-                type_annotation,
-                ..
-            } = stmt
-            else {
+            let Stmt::Let { pattern, .. } = stmt else {
                 continue;
             };
 
-            // Skip if the user already wrote a type annotation.
-            if type_annotation.is_some() {
+            // Skip if the pattern itself encodes an annotation (a `Chain`
+            // with at least one `Type` link). Plain `Pattern::Bind` means
+            // the user wrote no annotation — that's where we want hints.
+            //
+            // STUB(patterns/phase2): a more accurate check would walk the
+            // chain looking for Type links. For now we just check if the
+            // outermost pattern is a Chain — any chain is treated as
+            // "has annotation."
+            let pat = &expr_body.patterns[*pattern];
+            // A `let x: <pattern>` binding (Bind with sub-pattern) or a
+            // bare type pattern already carries an explicit annotation
+            // — skip.
+            if matches!(
+                pat,
+                baml_compiler2_ast::Pattern::Bind {
+                    subpat: Some(_),
+                    ..
+                } | baml_compiler2_ast::Pattern::Type(_)
+            ) {
                 continue;
             }
 
             // Get the binding name to suppress hints for `_`.
-            let pat = &expr_body.patterns[*pattern];
-            let Some(binding_name) = pat.binding_name() else {
+            let Some(binding_name) = pat.binding_name(&expr_body.patterns) else {
                 continue; // Not a simple binding (or `_` wildcard) — skip
             };
             let _binding_name = binding_name.as_str();
@@ -150,7 +170,7 @@ pub fn annotations(db: &dyn Db, file: SourceFile) -> Vec<InlineAnnotation> {
             // Look up the inferred type.
             let Some(ty) = inference.binding_type(*pattern) else {
                 // Try other scopes for nested blocks.
-                let ty_str = find_binding_ty_any_scope(db, index, *pattern);
+                let ty_str = find_binding_ty_any_scope(db, file, index, *pattern);
                 if let Some(ty_str) = ty_str {
                     // Emit hint: position at end of pattern span.
                     let pat_span = source_map.pattern_span(*pattern);
@@ -172,7 +192,7 @@ pub fn annotations(db: &dyn Db, file: SourceFile) -> Vec<InlineAnnotation> {
                 continue;
             }
 
-            let ty_str = utils::display_ty(ty);
+            let ty_str = utils::display_ty_for_file(db, file, ty);
 
             // Position the hint at the end of the pattern span (after the var name).
             let pat_span = source_map.pattern_span(*pattern);
@@ -199,7 +219,7 @@ pub fn annotations(db: &dyn Db, file: SourceFile) -> Vec<InlineAnnotation> {
         // ── Parameter-name hints on call expressions ──────────────────────────
 
         for (_expr_id, expr) in expr_body.exprs.iter() {
-            let Expr::Call { callee, args } = expr else {
+            let Expr::Call { callee, args, .. } = expr else {
                 continue;
             };
 
@@ -218,9 +238,13 @@ pub fn annotations(db: &dyn Db, file: SourceFile) -> Vec<InlineAnnotation> {
                 continue;
             }
 
-            for (arg_expr_id, (param_name, _param_ty)) in args.iter().zip(params.iter()) {
+            for (arg, param) in args.iter().zip(params.iter()) {
+                if arg.label.is_some() {
+                    continue;
+                }
+
                 // Only emit hints for named parameters.
-                let Some(name) = param_name else {
+                let Some(name) = &param.name else {
                     continue;
                 };
 
@@ -232,7 +256,7 @@ pub fn annotations(db: &dyn Db, file: SourceFile) -> Vec<InlineAnnotation> {
                 }
 
                 // Position hint at the start of the argument's span.
-                let arg_span = source_map.expr_span(*arg_expr_id);
+                let arg_span = source_map.expr_span(arg.expr);
                 if arg_span.is_empty() {
                     continue;
                 }
@@ -275,6 +299,7 @@ fn should_suppress_type(ty: &Ty) -> bool {
 /// string directly to avoid allocating a `Ty`.
 fn find_binding_ty_any_scope(
     db: &dyn Db,
+    file: SourceFile,
     index: &baml_compiler2_hir::semantic_index::FileSemanticIndex<'_>,
     pat_id: baml_compiler2_ast::PatId,
 ) -> Option<String> {
@@ -284,8 +309,51 @@ fn find_binding_ty_any_scope(
             if should_suppress_type(ty) {
                 return None;
             }
-            return Some(utils::display_ty(ty));
+            return Some(utils::display_ty_for_file(db, file, ty));
         }
     }
     None
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::testing::ProjectTest;
+
+    #[test]
+    fn annotations_skip_declarative_llm_synthetic_call_hints() {
+        let mut builder = ProjectTest::builder();
+        builder.source(
+            "main.baml",
+            r##"
+function Summarize(input: string) -> string {
+    client GPT4
+    prompt #"Summarize {{ input }}"#
+}
+
+function Echo(x: string) -> string {
+    x
+}
+
+function UseEcho() -> string {
+    Echo("hi")
+}
+"##,
+        );
+        let project = builder.build();
+
+        let hints = annotations(&project.db, project.files[0]);
+        let labels: Vec<_> = hints.iter().map(|hint| hint.label.as_str()).collect();
+
+        assert!(
+            labels.contains(&"x: "),
+            "expected regular function call parameter hints to remain, got {labels:?}"
+        );
+        assert!(
+            labels
+                .iter()
+                .all(|label| !matches!(*label, "client: " | "function_name: " | "args: ")),
+            "LLM synthetic call hints should be suppressed, got {labels:?}"
+        );
+    }
 }

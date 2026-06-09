@@ -6,7 +6,7 @@
 use std::sync::Weak;
 
 use bex_project::LspError;
-use crossbeam::channel::Sender;
+use crossbeam_channel::Sender;
 use lsp_server::Message;
 
 #[derive(Clone)]

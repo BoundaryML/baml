@@ -22,8 +22,8 @@ async fn net_connect_and_read() {
 
     let output = baml_test!(&format!(
         r#"
-            function main() -> string {{
-                let sock = baml.net.connect("{addr}");
+            function main() -> uint8array {{
+                let sock = baml.net.TcpStream.connect("{addr}");
                 sock.read()
             }}
         "#
@@ -31,18 +31,16 @@ async fn net_connect_and_read() {
     server.await.unwrap();
 
     insta::assert_snapshot!(stabilize_bytecode(&output.bytecode, &addr), @r#"
-    function main() -> string {
+    function main() -> uint8array {
         load_const "{ADDR}"
-        dispatch_future baml.net.connect
-        await
-        dispatch_future baml.net.Socket.read
-        await
+        sys_op baml.net.TcpStream.connect
+        sys_op baml.net.TcpStream.read
         return
     }
     "#);
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("Hello from server!".to_string()))
+        Ok(BexExternalValue::Uint8Array(b"Hello from server!".to_vec()))
     );
 }
 
@@ -50,20 +48,18 @@ async fn net_connect_and_read() {
 async fn net_connect_failure() {
     let output = baml_test!(
         r#"
-            function main() -> string {
-                let sock = baml.net.connect("127.0.0.1:1");
+            function main() -> uint8array {
+                let sock = baml.net.TcpStream.connect("127.0.0.1:1");
                 sock.read()
             }
         "#
     );
 
     insta::assert_snapshot!(output.bytecode, @r#"
-    function main() -> string {
+    function main() -> uint8array {
         load_const "127.0.0.1:1"
-        dispatch_future baml.net.connect
-        await
-        dispatch_future baml.net.Socket.read
-        await
+        sys_op baml.net.TcpStream.connect
+        sys_op baml.net.TcpStream.read
         return
     }
     "#);
@@ -87,8 +83,8 @@ async fn net_multiple_reads() {
 
     let output = baml_test!(&format!(
         r#"
-            function main() -> string {{
-                let sock = baml.net.connect("{addr}");
+            function main() -> uint8array {{
+                let sock = baml.net.TcpStream.connect("{addr}");
                 let first = sock.read();
                 let second = sock.read();
                 first
@@ -98,18 +94,15 @@ async fn net_multiple_reads() {
     server.await.unwrap();
 
     insta::assert_snapshot!(stabilize_bytecode(&output.bytecode, &addr), @r#"
-    function main() -> string {
+    function main() -> uint8array {
         load_const "{ADDR}"
-        dispatch_future baml.net.connect
-        await
+        sys_op baml.net.TcpStream.connect
         store_var sock
         load_var sock
-        dispatch_future baml.net.Socket.read
-        await
+        sys_op baml.net.TcpStream.read
         store_var first
         load_var sock
-        dispatch_future baml.net.Socket.read
-        await
+        sys_op baml.net.TcpStream.read
         store_var second
         load_var first
         return
@@ -117,6 +110,104 @@ async fn net_multiple_reads() {
     "#);
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("chunk1".to_string()))
+        Ok(BexExternalValue::Uint8Array(b"chunk1".to_vec()))
+    );
+}
+
+#[tokio::test]
+async fn net_udp_send_recv() {
+    // A peer that echoes back whatever datagram it receives, to the sender.
+    let peer = tokio::net::UdpSocket::bind("127.0.0.1:0").await.unwrap();
+    let peer_addr = peer.local_addr().unwrap().to_string();
+
+    let server = tokio::spawn(async move {
+        let mut buf = vec![0u8; 1024];
+        let (n, from) = peer.recv_from(&mut buf).await.unwrap();
+        assert_eq!(&buf[..n], b"ping");
+        peer.send_to(b"pong", from).await.unwrap();
+    });
+
+    let output = baml_test!(&format!(
+        r#"
+            function main() -> uint8array {{
+                let sock = baml.net.UdpSocket.bind("127.0.0.1:0");
+                sock.send_to("ping".to_utf8(), "{peer_addr}");
+                let dgram = sock.recv_from();
+                dgram.data
+            }}
+        "#
+    ));
+    server.await.unwrap();
+
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::Uint8Array(b"pong".to_vec()))
+    );
+}
+
+#[tokio::test]
+async fn net_tcp_read_after_close_errors() {
+    // Connect succeeds, then close() invalidates the shared handle so a
+    // subsequent read() on the same socket fails deterministically.
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap().to_string();
+    let server = tokio::spawn(async move {
+        // Accept and hold the connection open so connect() succeeds.
+        let _conn = listener.accept().await.unwrap();
+        tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
+    });
+
+    let output = baml_test!(&format!(
+        r#"
+            function main() -> uint8array {{
+                let sock = baml.net.TcpStream.connect("{addr}");
+                sock.close();
+                sock.read()
+            }}
+        "#
+    ));
+    server.await.unwrap();
+
+    assert!(
+        output.result.is_err(),
+        "read after close should fail, got {:?}",
+        output.result
+    );
+}
+
+#[tokio::test]
+async fn net_tcp_listener_accept_after_close_errors() {
+    let output = baml_test!(
+        r#"
+            function main() -> uint8array {
+                let listener = baml.net.TcpListener.bind("127.0.0.1:0");
+                listener.close();
+                let sock = listener.accept();
+                sock.read()
+            }
+        "#
+    );
+    assert!(
+        output.result.is_err(),
+        "accept after close should fail, got {:?}",
+        output.result
+    );
+}
+
+#[tokio::test]
+async fn net_udp_send_after_close_errors() {
+    let output = baml_test!(
+        r#"
+            function main() -> int {
+                let sock = baml.net.UdpSocket.bind("127.0.0.1:0");
+                sock.close();
+                sock.send_to("x".to_utf8(), "127.0.0.1:9")
+            }
+        "#
+    );
+    assert!(
+        output.result.is_err(),
+        "send_to after close should fail, got {:?}",
+        output.result
     );
 }

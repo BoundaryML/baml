@@ -10,10 +10,10 @@ function user.CatchAllStatusVariants(n: int) -> string  [expr] {
   {  } ThrowsAllStatusVariants(n) catch (e) { user.Status.HttpError => "http!" } catch (e) { user.Status.IndexError => "index!" } catch (e) { user.Status.AuthError => "auth!" } catch (e) { user.Status.SomeOtherError => "other!" }
 }
 function user.CatchAlwaysThrows(n: int) -> string  [expr] {
-  {  } WrapperAlwaysThrows(n) catch (e) { _: string => "http!" } catch (e2) { _: int => "index!" }
+  {  } WrapperAlwaysThrows(n) catch (e) { string => "http!" } catch (e2) { int => "index!" }
 }
 function user.CatchRecursiveThrow(n: int) -> string  [expr] {
-  {  } RecB(n) catch (e) { _: string => "handled" }
+  {  } RecB(n) catch (e) { string => "handled" }
 }
 function user.RecA(n: int) -> string  [expr] {
   {  } match (n) { 0 => throw "boom", _ => RecB(n) }

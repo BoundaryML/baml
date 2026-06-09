@@ -1,0 +1,33 @@
+// Phase 6 known-limitation pin.
+//
+// `stream_llm_function<T, S>` is generic, but real-world call sites rely on
+// type inference (via the let-binding annotation) to fill `<T, S>` rather
+// than spelling them explicitly. Inferred type-args don't reach MIR
+// lowering today, so __make_stream<T, S> in the stdlib keeps a registry-
+// lookup fallback (`get_return_type(function_name)`) instead of using
+// `reflect.type_of<T>()`.
+//
+// This project locks in the *call shape* — the stdlib must continue to
+// accept `stream_llm_function(client, name, args)` without explicit type
+// args. The runtime regression test that proves the workaround still
+// works end-to-end is `streaming_parsing::stream_string_final_value`.
+// If anyone removes the workaround, that test will start crashing with
+// `Non-parsable type: BuiltinUnknown` from the sys-op layer.
+
+client<llm> TestClient {
+    provider openai
+    options {
+        model "gpt-4o-mini"
+        api_key "test-key"
+        base_url "http://localhost:1234"
+    }
+}
+
+function TestFunc(input: string) -> string {
+    client TestClient
+    prompt #"hi {{ input }}"#
+}
+
+function call_stream_inferred() -> baml.llm.Stream<null | string, string> {
+    baml.llm.stream_llm_function(TestClient, "TestFunc", { "input": "world" })
+}

@@ -91,7 +91,7 @@ function test_diverging_if_with_plain_else(x: int?) -> int {
 
 //----
 //- diagnostics
-// Error: `instanceof` is no longer supported. Use a `match` expression for type checking instead.
+// error: `instanceof` is no longer supported. Use a `match` expression for type checking instead.
 //     ╭─[ expr_early_return_narrowing.baml:31:11 ]
 //     │
 //  31 │     if (x instanceof NarrowBar) {
@@ -100,7 +100,7 @@ function test_diverging_if_with_plain_else(x: int?) -> int {
 //     │ 
 //     │ Note: Error code: E0098
 // ────╯
-// Error: `instanceof` is no longer supported. Use a `match` expression for type checking instead.
+// error: `instanceof` is no longer supported. Use a `match` expression for type checking instead.
 //     ╭─[ expr_early_return_narrowing.baml:62:11 ]
 //     │
 //  62 │     if (x instanceof NarrowBar) {
@@ -109,39 +109,39 @@ function test_diverging_if_with_plain_else(x: int?) -> int {
 //     │ 
 //     │ Note: Error code: E0098
 // ────╯
-// Error: type `user.NarrowBar` has no member `field`
+// error: type `NarrowBar` has no member `field`
 //     ╭─[ expr_early_return_narrowing.baml:35:14 ]
 //     │
 //  35 │     return x.field;
 //     │              ──┬──  
-//     │                ╰──── type `user.NarrowBar` has no member `field`
+//     │                ╰──── type `NarrowBar` has no member `field`
 //     │ 
 //     │ Note: Error code: E0007
 // ────╯
-// Error: type `user.NarrowBar` has no member `field`
+// error: type `NarrowBar` has no member `field`
 //     ╭─[ expr_early_return_narrowing.baml:66:14 ]
 //     │
 //  66 │     return x.field;
 //     │              ──┬──  
-//     │                ╰──── type `user.NarrowBar` has no member `field`
+//     │                ╰──── type `NarrowBar` has no member `field`
 //     │ 
 //     │ Note: Error code: E0007
 // ────╯
-// Error: type `user.NarrowBar` has no member `field`
+// error: type `NarrowBar` has no member `field`
 //     ╭─[ expr_early_return_narrowing.baml:72:14 ]
 //     │
 //  72 │     return x.field;
 //     │              ──┬──  
-//     │                ╰──── type `user.NarrowBar` has no member `field`
+//     │                ╰──── type `NarrowBar` has no member `field`
 //     │ 
 //     │ Note: Error code: E0007
 // ────╯
-// Error: type `user.NarrowFoo` has no member `other`
+// error: type `NarrowFoo` has no member `other`
 //     ╭─[ expr_early_return_narrowing.baml:74:5 ]
 //     │
 //  74 │   x.other
 //     │     ──┬──  
-//     │       ╰──── type `user.NarrowFoo` has no member `other`
+//     │       ╰──── type `NarrowFoo` has no member `other`
 //     │ 
 //     │ Note: Error code: E0007
 // ────╯

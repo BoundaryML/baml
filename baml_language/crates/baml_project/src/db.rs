@@ -7,7 +7,7 @@
 //! has direct ownership of the storage, removing a layer of indirection.
 
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     path::PathBuf,
     sync::{Arc, atomic::AtomicU32},
 };
@@ -35,6 +35,12 @@ pub struct CursorContext {
     /// highlights the branch group.
     #[serde(default)]
     pub source_expr_candidates: Vec<u32>,
+    /// Function body that owns `source_expr_id` / `source_expr_candidates`.
+    ///
+    /// This differs from `function_name` at call sites: the token resolves to
+    /// the callee, but the expression span belongs to the caller.
+    #[serde(default)]
+    pub source_expr_function_name: Option<String>,
     pub test_name: Option<String>,
     /// Byte offset of the cursor position in the source file.
     /// Used for cursor ↔ event matching via span containment.
@@ -390,10 +396,24 @@ impl ProjectDatabase {
         &self,
         function_name: &str,
     ) -> Option<baml_compiler2_visualization::control_flow::ControlFlowGraph> {
+        let mut expanding = HashSet::new();
+        self.ast_control_flow_graph_impl(function_name, &mut expanding)
+    }
+
+    fn ast_control_flow_graph_impl(
+        &self,
+        function_name: &str,
+        expanding: &mut HashSet<String>,
+    ) -> Option<baml_compiler2_visualization::control_flow::ControlFlowGraph> {
         use baml_compiler2_visualization::control_flow::{
             build_control_flow_graph_from_ast, build_llm_control_flow_graph,
         };
 
+        if !expanding.insert(function_name.to_string()) {
+            return None;
+        }
+
+        let mut result = None;
         for source_file in self.file_map.values().copied() {
             let index = baml_compiler2_ppir::file_semantic_index(self, source_file);
             for (local_id, func_data) in &index.item_tree.functions {
@@ -413,7 +433,7 @@ impl ProjectDatabase {
                     Some(baml_compiler2_ast::ast::DeclarativeMeta::Llm(_))
                 );
 
-                return if is_llm {
+                result = if is_llm {
                     let client_name =
                         if let Some(baml_compiler2_ast::ast::DeclarativeMeta::Llm(ref llm)) =
                             func_data.declarative_meta
@@ -425,21 +445,259 @@ impl ProjectDatabase {
                         } else {
                             "unknown".to_string()
                         };
-                    Some(build_llm_control_flow_graph(function_name, &client_name))
+                    let mut graph = build_llm_control_flow_graph(function_name, &client_name);
+                    if let Some(source_span) =
+                        self.source_span_for_range(source_file, func_data.span)
+                    {
+                        if let Some(node) = graph.nodes.values_mut().next() {
+                            node.source_span = Some(source_span);
+                        }
+                    }
+                    Some(graph)
                 } else {
                     match body.as_ref() {
                         baml_compiler2_hir::body::FunctionBody::Expr(expr_body) => {
-                            let graph = build_control_flow_graph_from_ast(function_name, expr_body);
+                            let mut graph =
+                                build_control_flow_graph_from_ast(function_name, expr_body);
+                            if let Some(source_map) =
+                                baml_compiler2_ppir::function_body_source_map(self, func_loc)
+                            {
+                                self.attach_source_spans_to_graph(
+                                    &mut graph,
+                                    source_file,
+                                    &source_map,
+                                );
+                            }
+                            self.expand_user_function_calls_in_graph(
+                                &mut graph, expr_body, expanding,
+                            );
                             Some(graph)
                         }
                         baml_compiler2_hir::body::FunctionBody::Builtin(_)
                         | baml_compiler2_hir::body::FunctionBody::Missing => None,
                     }
                 };
+                break;
+            }
+            if result.is_some() {
+                break;
             }
         }
 
-        None
+        expanding.remove(function_name);
+        result
+    }
+
+    fn expand_user_function_calls_in_graph(
+        &self,
+        graph: &mut baml_compiler2_visualization::control_flow::ControlFlowGraph,
+        body: &baml_compiler2_ast::ExprBody,
+        expanding: &mut HashSet<String>,
+    ) {
+        for (call_expr, callee_name) in Self::call_sites_by_source_expr(body) {
+            let Some(call_node_id) = graph
+                .nodes
+                .values()
+                .find(|node| node.source_expr == Some(call_expr))
+                .map(|node| node.id)
+            else {
+                continue;
+            };
+
+            let Some(callee_graph) = self.ast_control_flow_graph_impl(&callee_name, expanding)
+            else {
+                continue;
+            };
+            if Self::is_single_llm_graph(&callee_graph) {
+                continue;
+            }
+
+            Self::merge_callee_graph_under_call_node(graph, call_node_id, &callee_graph);
+        }
+    }
+
+    fn call_sites_by_source_expr(body: &baml_compiler2_ast::ExprBody) -> Vec<(u32, String)> {
+        use baml_compiler2_ast::Expr;
+
+        let mut calls = Vec::new();
+        for (expr_id, expr) in body.exprs.iter() {
+            let (Expr::Call { callee, .. } | Expr::OptionalCall { callee, .. }) = expr else {
+                continue;
+            };
+
+            let Expr::Path(segments) = &body.exprs[*callee] else {
+                continue;
+            };
+            if segments.len() != 1 {
+                continue;
+            }
+
+            calls.push((
+                expr_id.into_raw().into_u32(),
+                segments[0].as_str().to_string(),
+            ));
+        }
+        calls
+    }
+
+    fn is_single_llm_graph(
+        graph: &baml_compiler2_visualization::control_flow::ControlFlowGraph,
+    ) -> bool {
+        graph.nodes.len() == 1
+            && graph.nodes.values().any(|node| {
+                matches!(
+                    node.node_type,
+                    baml_compiler2_visualization::control_flow::NodeType::LlmFunction
+                )
+            })
+    }
+
+    fn merge_callee_graph_under_call_node(
+        graph: &mut baml_compiler2_visualization::control_flow::ControlFlowGraph,
+        call_node_id: baml_compiler2_visualization::control_flow::NodeId,
+        callee_graph: &baml_compiler2_visualization::control_flow::ControlFlowGraph,
+    ) {
+        use baml_compiler2_visualization::control_flow::{Edge, NodeId};
+
+        let Some(root_id) = callee_graph
+            .nodes
+            .values()
+            .find(|node| node.parent_node_id.is_none())
+            .map(|node| node.id)
+        else {
+            return;
+        };
+
+        let mut next_raw = graph
+            .nodes
+            .keys()
+            .map(NodeId::raw)
+            .max()
+            .unwrap_or(0)
+            .saturating_add(1);
+        let mut remap: HashMap<NodeId, NodeId> = HashMap::new();
+        for node in callee_graph.nodes.values() {
+            if node.id == root_id {
+                continue;
+            }
+            let new_id = NodeId::new(next_raw);
+            next_raw = next_raw.saturating_add(1);
+            remap.insert(node.id, new_id);
+        }
+
+        if remap.is_empty() {
+            return;
+        }
+
+        for node in callee_graph.nodes.values() {
+            if node.id == root_id {
+                continue;
+            }
+
+            let mut node = node.clone();
+            node.id = remap[&node.id];
+            node.parent_node_id = match node.parent_node_id {
+                Some(parent) if parent == root_id => Some(call_node_id),
+                Some(parent) => remap.get(&parent).copied().or(Some(call_node_id)),
+                None => Some(call_node_id),
+            };
+            graph.nodes.insert(node.id, node);
+        }
+
+        for edges in callee_graph.edges_by_src.values() {
+            for edge in edges {
+                let src = if edge.src == root_id {
+                    call_node_id
+                } else if let Some(src) = remap.get(&edge.src).copied() {
+                    src
+                } else {
+                    continue;
+                };
+                let Some(dst) = (if edge.dst == root_id {
+                    None
+                } else {
+                    remap.get(&edge.dst).copied()
+                }) else {
+                    continue;
+                };
+
+                graph.edges_by_src.entry(src).or_default().push(Edge {
+                    src,
+                    dst,
+                    label: edge.label.clone(),
+                });
+            }
+        }
+    }
+
+    fn attach_source_spans_to_graph(
+        &self,
+        graph: &mut baml_compiler2_visualization::control_flow::ControlFlowGraph,
+        source_file: SourceFile,
+        source_map: &baml_compiler2_ast::AstSourceMap,
+    ) {
+        for node in graph.nodes.values_mut() {
+            let Some(source_expr) = node.source_expr else {
+                continue;
+            };
+            if let Some(source_span) =
+                self.source_span_for_source_expr(source_file, source_map, source_expr)
+            {
+                node.source_span = Some(source_span);
+            }
+        }
+    }
+
+    fn source_span_for_source_expr(
+        &self,
+        source_file: SourceFile,
+        source_map: &baml_compiler2_ast::AstSourceMap,
+        source_expr: u32,
+    ) -> Option<baml_compiler2_visualization::control_flow::SourceSpan> {
+        let tag = baml_compiler2_visualization::control_flow::STMT_SOURCE_EXPR_TAG;
+        let (raw, spans) = if source_expr & tag != 0 {
+            (source_expr & !tag, &source_map.stmt_spans)
+        } else {
+            (source_expr, &source_map.expr_spans)
+        };
+
+        let idx = raw as usize;
+        if idx >= spans.len() {
+            return None;
+        }
+
+        let span_idx =
+            la_arena::Idx::<text_size::TextRange>::from_raw(la_arena::RawIdx::from_u32(raw));
+        self.source_span_for_range(source_file, spans[span_idx])
+    }
+
+    fn source_span_for_range(
+        &self,
+        source_file: SourceFile,
+        range: text_size::TextRange,
+    ) -> Option<baml_compiler2_visualization::control_flow::SourceSpan> {
+        let text = source_file.text(self);
+        let len = u32::try_from(text.len()).ok()?;
+        let start_offset: u32 = range.start().into();
+        if start_offset > len {
+            return None;
+        }
+        let end_offset: u32 = range.end().into();
+        let end_offset = end_offset.min(len);
+        let line_index = crate::position::LineIndex::new(text);
+        let start = line_index.offset_to_position(start_offset)?;
+        let end = line_index.offset_to_position(end_offset).unwrap_or(start);
+
+        Some(baml_compiler2_visualization::control_flow::SourceSpan {
+            file_id: source_file.file_id(self).as_u32(),
+            file_path: source_file.path(self).to_string_lossy().into_owned(),
+            start_offset,
+            end_offset,
+            line: start.line,
+            column: start.character,
+            end_line: end.line,
+            end_column: end.character,
+        })
     }
 
     /// Given a file path and byte offset, return context about what entity
@@ -453,6 +711,7 @@ impl ProjectDatabase {
             workflow_memberships: vec![],
             source_expr_id: None,
             source_expr_candidates: vec![],
+            source_expr_function_name: None,
             test_name: None,
             cursor_offset: Some(byte_offset),
         };
@@ -541,11 +800,12 @@ impl ProjectDatabase {
             self.find_source_expr_ids_at(source_file, offset);
 
         CursorContext {
-            function_name: func_name,
+            function_name: func_name.clone(),
             is_workflow,
             workflow_memberships,
             source_expr_id,
             source_expr_candidates,
+            source_expr_function_name: func_name,
             test_name: None,
             cursor_offset: Some(u32::from(offset)),
         }
@@ -576,6 +836,9 @@ impl ProjectDatabase {
                 // Find source_expr_id if cursor is inside a function body
                 let (source_expr_id, source_expr_candidates) =
                     self.find_source_expr_ids_at(source_file, offset);
+                let source_expr_function_name = self
+                    .find_enclosing_function(source_file, offset)
+                    .map(|(name, _)| name);
 
                 CursorContext {
                     function_name: Some(func_name),
@@ -583,6 +846,7 @@ impl ProjectDatabase {
                     workflow_memberships,
                     source_expr_id,
                     source_expr_candidates,
+                    source_expr_function_name,
                     test_name: None,
                     cursor_offset: Some(u32::from(offset)),
                 }
@@ -595,6 +859,7 @@ impl ProjectDatabase {
                     workflow_memberships: vec![],
                     source_expr_id: None,
                     source_expr_candidates: vec![],
+                    source_expr_function_name: None,
                     test_name: None,
                     cursor_offset: Some(u32::from(offset)),
                 }
@@ -623,11 +888,12 @@ impl ProjectDatabase {
             self.find_source_expr_ids_at(source_file, offset);
 
         CursorContext {
-            function_name: func_name,
+            function_name: func_name.clone(),
             is_workflow,
             workflow_memberships,
             source_expr_id,
             source_expr_candidates,
+            source_expr_function_name: func_name,
             test_name: None,
             cursor_offset: Some(u32::from(offset)),
         }
@@ -661,6 +927,7 @@ impl ProjectDatabase {
         source_file: SourceFile,
         offset: text_size::TextSize,
     ) -> Option<(String, bool)> {
+        use baml_compiler2_ast::ast::FunctionOrigin;
         use baml_compiler2_hir::scope::ScopeKind;
 
         let index = baml_compiler2_ppir::file_semantic_index(self, source_file);
@@ -677,20 +944,25 @@ impl ProjectDatabase {
 
         // Match against item tree functions by span
         let item_tree = &index.item_tree;
-        for (local_id, func_data) in &item_tree.functions {
-            if func_data.span == func_scope_range {
-                let func_loc =
-                    baml_compiler2_hir::loc::FunctionLoc::new(self, source_file, *local_id);
-                let sig = baml_compiler2_ppir::function_signature(self, func_loc);
-                let body = baml_compiler2_ppir::function_body(self, func_loc);
-                let is_workflow = matches!(
-                    body.as_ref(),
-                    baml_compiler2_hir::body::FunctionBody::Expr(_)
-                );
-                return Some((sig.name.to_string(), is_workflow));
-            }
-        }
-        None
+        let (local_id, _) = item_tree
+            .functions
+            .iter()
+            .filter(|(_, func_data)| func_data.span == func_scope_range)
+            .min_by_key(|(_, func_data)| match func_data.origin {
+                FunctionOrigin::UserDefined => 0,
+                FunctionOrigin::Companion => 1,
+                FunctionOrigin::Internal => 2,
+                FunctionOrigin::AutoDerive => 3,
+            })?;
+
+        let func_loc = baml_compiler2_hir::loc::FunctionLoc::new(self, source_file, *local_id);
+        let sig = baml_compiler2_ppir::function_signature(self, func_loc);
+        let body = baml_compiler2_ppir::function_body(self, func_loc);
+        let is_workflow = matches!(
+            body.as_ref(),
+            baml_compiler2_hir::body::FunctionBody::Expr(_)
+        );
+        Some((sig.name.to_string(), is_workflow))
     }
 
     /// Find workflows that call the given function by scanning all function bodies.
@@ -764,6 +1036,7 @@ impl ProjectDatabase {
         source_file: SourceFile,
         offset: text_size::TextSize,
     ) -> (Option<u32>, Vec<u32>) {
+        use baml_compiler2_ast::ast::FunctionOrigin;
         use baml_compiler2_hir::scope::ScopeKind;
 
         let index = baml_compiler2_ppir::file_semantic_index(self, source_file);
@@ -780,14 +1053,19 @@ impl ProjectDatabase {
         let func_scope_range = index.scopes[func_scope_id.index() as usize].range;
 
         let item_tree = &index.item_tree;
-        for (local_id, func_data) in &item_tree.functions {
-            if func_data.span != func_scope_range {
-                continue;
-            }
-
+        if let Some((local_id, _)) = item_tree
+            .functions
+            .iter()
+            .filter(|(_, func_data)| func_data.span == func_scope_range)
+            .min_by_key(|(_, func_data)| match func_data.origin {
+                FunctionOrigin::UserDefined => 0,
+                FunctionOrigin::Companion => 1,
+                FunctionOrigin::Internal => 2,
+                FunctionOrigin::AutoDerive => 3,
+            })
+        {
             let func_loc = baml_compiler2_hir::loc::FunctionLoc::new(self, source_file, *local_id);
-            let Some(source_map) =
-                baml_compiler2_hir::body::function_body_source_map(self, func_loc)
+            let Some(source_map) = baml_compiler2_ppir::function_body_source_map(self, func_loc)
             else {
                 return (None, vec![]);
             };
@@ -935,6 +1213,14 @@ function Workflow(input: string) -> string {
             header_count >= 2,
             "expected at least 2 HeaderContextEnter nodes, got {header_count}"
         );
+        assert!(
+            graph
+                .nodes
+                .values()
+                .filter(|n| matches!(n.node_type, NodeType::HeaderContextEnter))
+                .all(|n| n.source_span.is_some()),
+            "header graph nodes should include source spans"
+        );
 
         // Edges should be non-empty.
         assert!(!graph.edges_by_src.is_empty(), "graph should have edges");
@@ -952,6 +1238,174 @@ function Workflow(input: string) -> string {
         // Non-existent function should return None.
         let graph = db.ast_control_flow_graph("DoesNotExist");
         assert!(graph.is_none(), "should return None for unknown function");
+    }
+
+    #[test]
+    fn test_ast_control_flow_graph_llm_is_single_semantic_node() {
+        use baml_compiler2_visualization::control_flow::NodeType;
+
+        let mut db = ProjectDatabase::new();
+        db.set_project_root(std::path::Path::new("/tmp"));
+        db.add_or_update_file(
+            std::path::Path::new("/tmp/llm.baml"),
+            r##"
+function Summarize(input: string) -> string {
+    client GPT4
+    prompt #"Summarize {{ input }}"#
+}
+"##,
+        );
+
+        let graph = db
+            .ast_control_flow_graph("Summarize")
+            .expect("expected graph for LLM function");
+
+        assert_eq!(graph.nodes.len(), 1);
+        let node = graph.nodes.values().next().unwrap();
+        assert!(matches!(node.node_type, NodeType::LlmFunction));
+        assert_eq!(node.label, "Summarize");
+        assert_eq!(node.llm_client.as_deref(), Some("GPT4"));
+        let source_span = node.source_span.as_ref().expect("LLM node has source span");
+        assert_eq!(source_span.file_path, "/tmp/llm.baml");
+        assert!(source_span.end_offset > source_span.start_offset);
+        assert!(graph.edges_by_src.is_empty());
+    }
+
+    #[test]
+    fn test_ast_control_flow_graph_expands_user_function_match_at_call_site() {
+        use baml_compiler2_visualization::control_flow::{
+            NodeType, prepare_control_flow_graph_for_visualization,
+        };
+
+        let mut db = ProjectDatabase::new();
+        db.set_project_root(std::path::Path::new("/tmp"));
+        let path = std::path::Path::new("/tmp/game.baml");
+        let source = r#"
+function ScoreGuess(outcome: string) -> string {
+    match (outcome) {
+        "hit" => {
+            //# matched correct
+            "correct"
+        }
+        _ => {
+            //# matched default
+            "wrong"
+        }
+    }
+}
+
+function GuessingGame() -> string {
+    let outcome = "hit";
+    ScoreGuess(outcome)
+}
+"#;
+        db.add_or_update_file(path, source);
+
+        let call_offset =
+            u32::try_from(source.rfind("ScoreGuess(outcome)").expect("call exists")).unwrap();
+        let call_ctx = db.playground_cursor_context(path.to_str().unwrap(), call_offset);
+        assert_eq!(call_ctx.function_name.as_deref(), Some("ScoreGuess"));
+        assert_eq!(
+            call_ctx.source_expr_function_name.as_deref(),
+            Some("GuessingGame"),
+            "call-site expression ids should be owned by the caller"
+        );
+
+        let match_offset = u32::try_from(source.find("match (outcome)").expect("match exists"))
+            .expect("offset fits");
+        let match_ctx = db.playground_cursor_context(path.to_str().unwrap(), match_offset);
+        assert_eq!(match_ctx.function_name.as_deref(), Some("ScoreGuess"));
+        assert_eq!(
+            match_ctx.source_expr_function_name.as_deref(),
+            Some("ScoreGuess"),
+            "callee body expression ids should be owned by the callee"
+        );
+
+        let graph = db
+            .ast_control_flow_graph("GuessingGame")
+            .expect("expected graph for GuessingGame");
+
+        let call_node = graph
+            .nodes
+            .values()
+            .find(|node| node.label == "ScoreGuess(outcome)")
+            .expect("caller graph should contain the ScoreGuess call node");
+        let match_node = graph
+            .nodes
+            .values()
+            .find(|node| {
+                matches!(node.node_type, NodeType::BranchGroup)
+                    && node.label == "match (outcome)"
+                    && node.log_filter_key.starts_with("ScoreGuess|")
+            })
+            .expect("callee match should be expanded under the call node");
+        assert_eq!(match_node.parent_node_id, Some(call_node.id));
+        assert!(
+            graph.nodes.values().any(|node| {
+                matches!(node.node_type, NodeType::HeaderContextEnter)
+                    && node.label == "matched correct"
+                    && node.log_filter_key.starts_with("ScoreGuess|")
+            }),
+            "expanded match arms should keep their branch header nodes"
+        );
+
+        let prepared = prepare_control_flow_graph_for_visualization(&graph);
+        let call_node = prepared
+            .nodes
+            .get(&call_node.id)
+            .expect("call node should remain visible");
+        assert!(
+            call_node.is_container,
+            "call node should become a visualization container for the expanded callee graph"
+        );
+        let match_node = prepared
+            .nodes
+            .values()
+            .find(|node| {
+                matches!(node.node_type, NodeType::BranchGroup)
+                    && node.label == "match (outcome)"
+                    && node.log_filter_key.starts_with("ScoreGuess|")
+            })
+            .expect("prepared graph should keep the expanded match group");
+        let edge_labels: Vec<_> = prepared
+            .edges_by_src
+            .get(&match_node.id)
+            .map(|edges| {
+                edges
+                    .iter()
+                    .filter_map(|edge| edge.label.as_deref())
+                    .collect()
+            })
+            .unwrap_or_default();
+        assert!(
+            edge_labels.contains(&r#""hit""#) && edge_labels.contains(&"default"),
+            "prepared match fan-out edges should preserve match arm labels, got {edge_labels:?}"
+        );
+    }
+
+    #[test]
+    fn test_playground_cursor_context_inside_llm_prefers_parent_function() {
+        let mut db = ProjectDatabase::new();
+        db.set_project_root(std::path::Path::new("/tmp"));
+        let path = std::path::Path::new("/tmp/llm.baml");
+        let source = r##"
+function Summarize(input: string) -> string {
+    client GPT4
+    prompt #"Summarize {{ input }}"#
+}
+"##;
+        db.add_or_update_file(path, source);
+
+        for needle in ["client", "GPT4", "prompt", "Summarize {{ input }}"] {
+            let offset = u32::try_from(source.find(needle).expect("needle exists")).unwrap();
+            let ctx = db.playground_cursor_context(path.to_str().unwrap(), offset);
+
+            assert_eq!(
+                ctx.function_name.as_deref(),
+                Some("Summarize"),
+                "cursor on {needle:?} should select the top-level LLM function"
+            );
+        }
     }
 
     #[test]

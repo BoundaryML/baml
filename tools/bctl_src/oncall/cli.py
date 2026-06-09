@@ -131,3 +131,76 @@ def notify(
             console.print(f"[bold]→ {channel}[/]")
             console.print(body)
             console.print()
+
+
+@app.command(name="notify-failure")
+def notify_failure(
+    jobs: str = typer.Option(..., "--jobs", help="Comma- or space-separated failed job names"),
+    run_url: str = typer.Option(..., "--run-url", help="URL of the failed workflow run"),
+    channel: str = typer.Option("", "--channel", help="Slack channel (default: schedule's notification_channel)"),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Print the message instead of posting"),
+) -> None:
+    """Post a workflow-failure alert to Slack, @-mentioning the current oncaller(s).
+
+    If no current shift covers today, posts to the channel without an @-mention.
+    """
+    from oncall.notify import _current_shift
+    from oncall.slack import client as slack_client
+    from oncall.slack import email_for, lookup_user_id
+    from oncall.slack import post as slack_post
+
+    job_list = ", ".join(j for j in jobs.replace(",", " ").split() if j)
+    if not job_list:
+        console.print("[red]error[/]: --jobs is empty")
+        raise typer.Exit(1)
+
+    path = _schedule_path()
+    # An unparseable schedule is a likely cause of `review` failing, so don't
+    # let it silence the alert — fall back to the channel default and skip the
+    # @-mention (we can't know the current oncaller without a valid schedule).
+    sched: ScheduleFile | None = None
+    parse_error: str | None = None
+    try:
+        sched = parse(path.read_text())
+    except (OSError, ValueError) as e:
+        parse_error = str(e)
+        console.print(f"[yellow]warn[/]: schedule unparseable ({e}); posting without @-mention")
+
+    target_channel = channel or (sched.slack_config.notification_channel if sched else "#oncall")
+
+    # `oncall-founders` is the escalation rotation — skip it for routine
+    # workflow-failure pings; only the primary oncaller(s) get notified.
+    escalation_rotations = {"oncall-founders"}
+
+    oncall_names: list[str] = []
+    if sched is not None:
+        current = _current_shift(sched, datetime.date.today())
+        if current is not None:
+            for rot in sched.roster.rotations_in_order():
+                if rot in escalation_rotations:
+                    continue
+                name = current.assignments.get(rot)
+                if name:
+                    oncall_names.append(name)
+
+    def _build(mentions: list[str]) -> str:
+        prefix = (" ".join(mentions) + " ") if mentions else ""
+        suffix = f" (schedule.oncall is unparseable: {parse_error})" if parse_error else ""
+        return f"{prefix}oncall workflow failed: {job_list} — needs a fix. <{run_url}|View run>{suffix}"
+
+    if dry_run:
+        text = _build([f"@{n}" for n in oncall_names])
+        console.print(f"[bold]→ {target_channel}[/]")
+        console.print(text)
+        return
+
+    wc = slack_client()
+    mentions: list[str] = []
+    for name in oncall_names:
+        try:
+            mentions.append(f"<@{lookup_user_id(wc, email_for(name))}>")
+        except Exception as e:
+            console.print(f"[yellow]warn[/]: failed to look up Slack user for {name}: {e}")
+
+    slack_post(wc, target_channel, _build(mentions))
+    console.print(f"[green]posted to {target_channel}[/]")

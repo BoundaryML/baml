@@ -1,7 +1,62 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
 ---
-function user.test_generic_capture(box: Box) -> string {
+function user.Box.from_json(j: baml.json.json) -> Box<unknown> {
+    load_var j
+    load_const "value"
+    call baml.json.field
+    store_var _3
+    load_type #0
+    load_var _3
+    call baml.json.from_json
+    load_type #0
+    init_instance<1> user.Box .value
+    return
+}
+
+function user.Box.to_json(self: Box<unknown>) -> baml.json.json {
+    load_type #0
+    load_var self
+    load_field .value
+    call baml.json.to_json
+    load_const "value"
+    alloc_map 1
+    return
+}
+
+function user.User.from_json(j: baml.json.json) -> User {
+    load_var j
+    load_const "name"
+    call baml.json.field
+    store_var _3
+    load_type string
+    load_var _3
+    call baml.json.from_json
+    load_var j
+    load_const "age"
+    call baml.json.field
+    store_var _6
+    load_type int
+    load_var _6
+    call baml.json.from_json
+    init_instance user.User .name, .age
+    return
+}
+
+function user.User.to_json(self: User) -> baml.json.json {
+    load_var self
+    load_field .name
+    call baml.String.to_json
+    load_var self
+    load_field .age
+    call baml.Int.to_json
+    load_const "name"
+    load_const "age"
+    alloc_map 2
+    return
+}
+
+function user.test_generic_capture(box: Box<User>) -> string {
     load_var ?1
     make_cell
     store_var ?1
@@ -11,18 +66,17 @@ function user.test_generic_capture(box: Box) -> string {
     return
 }
 
-function user.test_generic_chain(box: Box) -> string {
+function user.test_generic_chain(box: Box<User>) -> string {
     load_var box
     load_field .value
-    load_const "name"
-    load_map_element
+    load_field .0
     return
 }
 
-function user.test_nested_generic_chain(box: Box) -> string {
+function user.test_nested_generic_chain(box: Box<Box<User>>) -> string {
     load_var box
     load_field .value
-    load_const "value"
-    load_map_element
+    load_field .0
+    load_field .0
     return
 }

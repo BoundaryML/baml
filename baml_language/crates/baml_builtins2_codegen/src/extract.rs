@@ -98,7 +98,7 @@ pub fn extract_native_builtins()
         let cst_root = SyntaxNode::new_root(green);
 
         // Lower CST → AST items.
-        let (items, diags) = baml_compiler2_ast::lower_file(&cst_root);
+        let (items, diags, _) = baml_compiler2_ast::lower_file(&cst_root);
         for ld in &diags {
             let d = ld.to_diagnostic(FileId::new(0));
             let location = d
@@ -154,6 +154,19 @@ pub fn extract_native_builtins()
                 }
                 _ => {}
             }
+        }
+    }
+
+    // Every host-bound builtin must declare a `throws` clause (use `throws never`
+    // if it cannot fail). A missing clause is a contract gap, not a silent
+    // "infallible" default — reject it so fallibility is always explicit.
+    for b in vm_builtins.iter().chain(io_builtins.iter()) {
+        if b.throws.is_none() {
+            diagnostic_lines.push(format!(
+                "  {}: builtin `{}` is missing a `throws` clause \
+                 (declare `throws never` if it cannot fail)",
+                b.source_file, b.path
+            ));
         }
     }
 
@@ -218,6 +231,7 @@ fn extract_from_class(
         let has_vm = has_method_directive(cst_root, class_name, method_name, "//baml:vm");
         let has_mut_vm = has_method_directive(cst_root, class_name, method_name, "//baml:mut_vm");
         let may_yield = has_method_directive(cst_root, class_name, method_name, "//baml:may_yield");
+        let fallible = has_method_directive(cst_root, class_name, method_name, "//baml:fallible");
 
         assert!(
             !(has_vm && has_mut_vm),
@@ -225,9 +239,9 @@ fn extract_from_class(
              -- these are mutually exclusive"
         );
         assert!(
-            !(is_mut && (has_vm || has_mut_vm)),
-            "baml codegen error: {path} has //baml:mut_self with //baml:vm or //baml:mut_vm \
-             -- these are mutually exclusive (mutable receiver already borrows vm)"
+            !(is_mut && has_vm || is_mut && has_mut_vm && !may_yield),
+            "baml codegen error: {path} has //baml:mut_self with //baml:vm, or non-yielding //baml:mut_vm \
+             -- mutable receiver and VM access are only supported for //baml:may_yield glue"
         );
         assert!(
             !may_yield || has_mut_vm,
@@ -243,11 +257,7 @@ fn extract_from_class(
             VmUsage::None
         };
 
-        let throws = if pipeline == BuiltinPipeline::Io {
-            extract_throws(method)
-        } else {
-            vec![]
-        };
+        let throws = extract_throws(method);
 
         // Always set receiver for class methods — even static methods (no `self`)
         // need it for dispatch routing. The runtime path is
@@ -261,6 +271,14 @@ fn extract_from_class(
         };
         let receiver = Some(Receiver {
             class_name: class_name.to_string(),
+            namespace: namespace_prefix
+                .strip_prefix("baml.")
+                .unwrap_or("")
+                .to_string(),
+            // Mirrors `extract_class_fields`: dedicated-variant types and
+            // field-less (opaque/marker) classes get no `view::` struct.
+            instance_backed: !matches!(class_name, "Array" | "Map" | "String" | "Uint8Array")
+                && !class_def.fields.is_empty(),
             class_generics: class_generics.clone(),
             receiver_type,
         });
@@ -296,6 +314,7 @@ fn extract_from_class(
             receiver,
             vm_usage,
             may_yield,
+            fallible,
             pipeline,
             throws,
             source_file: source_file.to_string(),
@@ -387,6 +406,7 @@ fn extract_from_free_function(
     let has_vm = has_free_fn_directive(cst_root, func_def.name.as_str(), "//baml:vm");
     let has_mut_vm = has_free_fn_directive(cst_root, func_def.name.as_str(), "//baml:mut_vm");
     let may_yield = has_free_fn_directive(cst_root, func_def.name.as_str(), "//baml:may_yield");
+    let fallible = has_free_fn_directive(cst_root, func_def.name.as_str(), "//baml:fallible");
 
     assert!(
         !(has_vm && has_mut_vm),
@@ -407,11 +427,7 @@ fn extract_from_free_function(
         VmUsage::None
     };
 
-    let throws = if pipeline == BuiltinPipeline::Io {
-        extract_throws(func_def)
-    } else {
-        vec![]
-    };
+    let throws = extract_throws(func_def);
 
     let params: Vec<Param> = func_def
         .params
@@ -441,6 +457,7 @@ fn extract_from_free_function(
         receiver: None,
         vm_usage,
         may_yield,
+        fallible,
         pipeline,
         throws,
         source_file: source_file.to_string(),
@@ -467,11 +484,14 @@ fn extract_builtin_pipeline(func: &FunctionDef) -> Option<BuiltinPipeline> {
 /// `throws root.errors.Io`, it's `TypeExpr::Path(["root", "errors", "Io"])`.
 /// For multiple errors like `throws root.errors.Io | root.errors.Timeout`,
 /// it's `TypeExpr::Union([Path(...), Path(...)])`.
-fn extract_throws(func: &FunctionDef) -> Vec<String> {
-    let Some(throws_expr) = &func.throws else {
-        return vec![];
-    };
-    extract_throw_categories(&throws_expr.expr)
+/// Extract the `throws` clause of a builtin.
+///
+/// - `None` — no `throws` clause (rejected by the missing-throws check).
+/// - `Some([])` — `throws never` (the `Never` type yields no categories).
+/// - `Some([cats])` — one or more error categories; the builtin is fallible.
+fn extract_throws(func: &FunctionDef) -> Option<Vec<String>> {
+    let throws_expr = func.throws.as_ref()?;
+    Some(extract_throw_categories(&throws_expr.expr))
 }
 
 #[allow(clippy::redundant_closure_for_method_calls)]
@@ -532,6 +552,7 @@ fn extract_params_skip_self(func: &FunctionDef, generics: &[String]) -> Vec<Para
 fn type_expr_to_baml_type(ty: &TypeExpr, generics: &[String]) -> BamlType {
     match ty {
         TypeExpr::Int { .. } => BamlType::Int,
+        TypeExpr::Bigint { .. } => BamlType::Bigint,
         TypeExpr::Float { .. } => BamlType::Float,
         TypeExpr::String { .. } => BamlType::String,
         TypeExpr::Bool { .. } => BamlType::Bool,
@@ -599,9 +620,10 @@ fn type_expr_to_baml_type(ty: &TypeExpr, generics: &[String]) -> BamlType {
         }
         TypeExpr::Literal { .. } => BamlType::Named("literal".to_string()),
         TypeExpr::Function { .. } => BamlType::Named("function".to_string()),
-        TypeExpr::BuiltinUnknown { .. } | TypeExpr::Unknown { .. } | TypeExpr::Error { .. } => {
-            BamlType::Named("unknown".to_string())
-        }
+        TypeExpr::AssociatedTypeProjection { .. }
+        | TypeExpr::BuiltinUnknown { .. }
+        | TypeExpr::Unknown { .. }
+        | TypeExpr::Error { .. } => BamlType::Named("unknown".to_string()),
         TypeExpr::Type { .. } => BamlType::Named("type".to_string()),
         TypeExpr::Rust { .. } => BamlType::RustType,
     }
@@ -686,8 +708,22 @@ fn func_node_has_name(func_node: &SyntaxNode, method_name: &str) -> bool {
             if tok.kind().is_trivia() || tok.kind() == SyntaxKind::KW_FUNCTION {
                 continue;
             }
-            // First non-trivia, non-keyword token should be the function name.
-            return tok.kind() == SyntaxKind::WORD && tok.text() == method_name;
+            // First non-trivia, non-`function` token is the function name.
+            // BEP-044 introduced `implements`, `extends`, and `interface` as
+            // top-level keywords; the parser still accepts them as method
+            // names so reflection methods like `TypeValue.implements(...)`
+            // can keep their natural spelling.
+            let kind = tok.kind();
+            let is_name_token = matches!(
+                kind,
+                SyntaxKind::WORD
+                    | SyntaxKind::KW_IMPLEMENTS
+                    | SyntaxKind::KW_IMPLEMENT
+                    | SyntaxKind::KW_EXTENDS
+                    | SyntaxKind::KW_REQUIRES
+                    | SyntaxKind::KW_INTERFACE
+            );
+            return is_name_token && tok.text() == method_name;
         }
         // Encountered a child node — past the name.
         break;
@@ -730,6 +766,16 @@ fn function_node_has_leading_directive(func_node: &SyntaxNode, directive: &str) 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Build the expected `throws` value (`Some([cats])`) for assertions.
+    /// `throws(&[])` is `throws never`.
+    #[expect(
+        clippy::unnecessary_wraps,
+        reason = "mirrors the Option<Vec<String>> `throws` field so assertions read naturally"
+    )]
+    fn throws(cats: &[&str]) -> Option<Vec<String>> {
+        Some(cats.iter().map(|s| (*s).to_string()).collect())
+    }
 
     #[test]
     fn test_extract_class_fields() {
@@ -783,12 +829,27 @@ mod tests {
 
         let socket = class_defs
             .iter()
-            .find(|c| c.name == "Socket")
-            .expect("missing Socket");
+            .find(|c| c.name == "TcpStream")
+            .expect("missing TcpStream");
         assert_eq!(socket.namespace_prefix, "baml.net");
         assert_eq!(socket.fields.len(), 1);
         assert_eq!(socket.fields[0].name, "_handle");
         assert!(matches!(socket.fields[0].field_type, BamlType::RustType));
+
+        // UDP datagram is a plain data class (payload + sender address).
+        let datagram = class_defs
+            .iter()
+            .find(|c| c.name == "Datagram")
+            .expect("missing Datagram");
+        assert_eq!(datagram.namespace_prefix, "baml.net");
+        assert_eq!(datagram.fields.len(), 2);
+        assert_eq!(datagram.fields[0].name, "data");
+        assert!(matches!(
+            datagram.fields[0].field_type,
+            BamlType::Uint8Array
+        ));
+        assert_eq!(datagram.fields[1].name, "addr");
+        assert!(matches!(datagram.fields[1].field_type, BamlType::String));
 
         let response = class_defs
             .iter()
@@ -852,8 +913,9 @@ mod tests {
             receiver: None,
             vm_usage: VmUsage::None,
             may_yield: false,
+            fallible: false,
             pipeline: BuiltinPipeline::Io,
-            throws: vec![],
+            throws: Some(vec![]),
             source_file: String::new(),
         };
         assert_eq!(make("baml.fs.open").sys_op_variant_name(), "BamlFsOpen");
@@ -886,10 +948,12 @@ mod tests {
             vm_builtins.len()
         );
 
-        // All VM builtins should have pipeline == Vm
+        // All VM builtins should have pipeline == Vm. They MAY declare a `throws`
+        // clause (e.g. `Array.map<U, E>(... throws E)` carries `E` through, and
+        // `Uint8Array.from_hex` throws `InvalidArgument`). Codegen consumes the
+        // declared throws to decide whether the trait method returns a `Result`.
         for b in &vm_builtins {
             assert_eq!(b.pipeline, BuiltinPipeline::Vm, "{} should be Vm", b.path);
-            assert!(b.throws.is_empty(), "{} should have no throws", b.path);
         }
 
         let array_length = vm_builtins
@@ -899,6 +963,27 @@ mod tests {
         assert_eq!(array_length.fn_name, "baml_array_length");
         assert!(array_length.receiver.is_some());
         assert_eq!(array_length.params.len(), 0);
+        // Infallible builtin declares `throws never` -> `Some([])` (otherwise
+        // codegen would wrap it in a spurious `Result`).
+        assert_eq!(array_length.throws, throws(&[]));
+
+        // Concrete-error throws: `Uint8Array.from_hex` rejects malformed input
+        // with `InvalidArgument`. Pin this so a regression in throws extraction
+        // (or in the .baml signature) trips this test instead of silently
+        // dropping the `Result` wrapper from the generated trait method.
+        let from_hex = vm_builtins
+            .iter()
+            .find(|b| b.path == "baml.Uint8Array.from_hex")
+            .expect("missing Uint8Array.from_hex");
+        assert_eq!(from_hex.throws, throws(&["InvalidArgument"]));
+
+        // Generic-throws: `Array.map<U, E>(... throws E)` carries the callback's
+        // error type through. The extractor records the generic name verbatim.
+        let array_map = vm_builtins
+            .iter()
+            .find(|b| b.path == "baml.Array.map")
+            .expect("missing Array.map");
+        assert_eq!(array_map.throws, throws(&["E"]));
 
         let deep_copy = vm_builtins
             .iter()
@@ -950,7 +1035,7 @@ mod tests {
             .iter()
             .find(|b| b.path == "baml.String.split")
             .expect("missing String.split");
-        assert_eq!(string_split.vm_usage, VmUsage::MutRef);
+        assert_eq!(string_split.vm_usage, VmUsage::None);
     }
 
     #[test]
@@ -961,30 +1046,30 @@ mod tests {
             .iter()
             .find(|b| b.path == "baml.fs.open")
             .unwrap();
-        assert_eq!(fs_open.throws, vec!["Io"]);
+        assert_eq!(fs_open.throws, throws(&["Io", "InvalidArgument"]));
 
         let net_connect = io_builtins
             .iter()
-            .find(|b| b.path == "baml.net.connect")
+            .find(|b| b.path == "baml.net.TcpStream.connect")
             .unwrap();
-        assert_eq!(net_connect.throws, vec!["Io", "Timeout"]);
+        assert_eq!(net_connect.throws, throws(&["Io", "Timeout"]));
 
         let http_fetch = io_builtins
             .iter()
             .find(|b| b.path == "baml.http.fetch")
             .unwrap();
-        assert_eq!(http_fetch.throws, vec!["Io", "Timeout"]);
+        assert_eq!(http_fetch.throws, throws(&["Io", "Timeout"]));
 
         let render_prompt = io_builtins
             .iter()
             .find(|b| b.path == "baml.llm.PrimitiveClient.render_prompt")
             .unwrap();
-        assert_eq!(render_prompt.throws, vec!["RenderPrompt"]);
+        assert_eq!(render_prompt.throws, throws(&["RenderPrompt"]));
 
         let specialize = io_builtins
             .iter()
             .find(|b| b.path == "baml.llm.PrimitiveClient.specialize_prompt")
             .unwrap();
-        assert_eq!(specialize.throws, vec!["RenderPrompt", "LlmClient"]);
+        assert_eq!(specialize.throws, throws(&["RenderPrompt", "LlmClient"]));
     }
 }

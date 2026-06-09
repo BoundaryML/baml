@@ -1,16 +1,14 @@
 //! WASM handle lifecycle — auto-released via `FinalizationRegistry`.
 
-use bridge_ctypes::{HANDLE_TABLE, baml::cffi::BamlHandleType};
+use bridge_ctypes::{HANDLE_TABLE, baml_core::cffi::BamlHandleType};
 use js_sys::{Object, Reflect};
 use wasm_bindgen::prelude::*;
 
 fn type_name(ht: BamlHandleType) -> &'static str {
     match ht {
         BamlHandleType::HandleUnspecified => "unspecified",
-        BamlHandleType::HandleUnknown => "unknown",
-        BamlHandleType::ResourceFile => "file",
-        BamlHandleType::ResourceSocket => "socket",
-        BamlHandleType::ResourceHttpResponse => "http_response",
+        BamlHandleType::UntaggedRustData => "rust_data",
+        BamlHandleType::UntaggedBexHeap => "bex_heap",
         BamlHandleType::FunctionRef => "function_ref",
         BamlHandleType::AdtMediaImage => "image",
         BamlHandleType::AdtMediaAudio => "audio",
@@ -20,6 +18,12 @@ fn type_name(ht: BamlHandleType) -> &'static str {
         BamlHandleType::AdtPromptAst => "prompt_ast",
         BamlHandleType::AdtCollector => "collector",
         BamlHandleType::AdtType => "type",
+        BamlHandleType::AdtTaggedHeapHandle => "tagged_heap_handle",
+        // Host-owned callables are tracked per-bridge, not in HANDLE_TABLE.
+        // The key here is the bridge-side identity passed in from the host.
+        BamlHandleType::HostValueCallable => "host_value_callable",
+        // Host-owned opaque error values: same per-bridge tracking as callables.
+        BamlHandleType::HostValueError => "host_value_error",
     }
 }
 
@@ -48,7 +52,7 @@ impl BamlHandle {
         BamlHandle {
             key,
             handle_type: BamlHandleType::try_from(handle_type)
-                .unwrap_or(BamlHandleType::HandleUnknown),
+                .unwrap_or(BamlHandleType::HandleUnspecified),
         }
     }
 
@@ -105,6 +109,19 @@ impl BamlHandle {
 
 impl Drop for BamlHandle {
     fn drop(&mut self) {
-        HANDLE_TABLE.release(self.key);
+        // Host-owned handles (`HostValueCallable`, `HostValueError`) are
+        // *not* tracked in HANDLE_TABLE — their lifetime is managed
+        // per-bridge via the `HostReleaseFn` dispatch. Releasing them here
+        // would call into the global HANDLE_TABLE with a key that may
+        // collide with an unrelated engine-side entry (the two keyspaces
+        // are disjoint by design but share the `u64` value space), evicting
+        // it. Skip the table release for those variants; their owners drop
+        // them through their own release path.
+        match self.handle_type {
+            BamlHandleType::HostValueCallable | BamlHandleType::HostValueError => {}
+            _ => {
+                let _ = HANDLE_TABLE.release(self.key);
+            }
+        }
     }
 }

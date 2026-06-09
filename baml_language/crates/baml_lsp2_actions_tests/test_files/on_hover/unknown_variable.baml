@@ -4,7 +4,7 @@ function UseUnknown() -> int {
 
 //----
 //- diagnostics
-// Error: unresolved name: unknown_var
+// error: unresolved name: unknown_var
 //    ╭─[ unknown_variable.baml:2:3 ]
 //    │
 //  2 │   unknown_var + 1

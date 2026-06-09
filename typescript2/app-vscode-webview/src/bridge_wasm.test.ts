@@ -44,6 +44,25 @@ function makeMinimalVfs() {
 
   return {
     readDir,
+    readDirEntries: (path: string) => {
+      const prefix = path.endsWith('/') ? path : path + '/';
+      const out = new Map<string, { file_type: string; is_symlink: boolean }>();
+      for (const p of files.keys()) {
+        if (p.startsWith(prefix)) {
+          const rest = p.slice(prefix.length);
+          const slash = rest.indexOf('/');
+          const name = slash >= 0 ? rest.slice(0, slash) : rest;
+          out.set(name, { file_type: slash >= 0 ? 'directory' : 'file', is_symlink: false });
+        }
+      }
+      for (const d of dirs) {
+        if (d.startsWith(prefix) && d !== path) {
+          const rest = d.slice(prefix.length);
+          if (rest && !rest.includes('/')) out.set(rest, { file_type: 'directory', is_symlink: false });
+        }
+      }
+      return Array.from(out, ([name, meta]) => ({ name, ...meta }));
+    },
     createDir: (path: string) => {
       dirs.add(path);
     },
@@ -69,7 +88,7 @@ function makeMinimalVfs() {
     copyFile: () => {},
     moveFile: () => {},
     moveDir: () => {},
-    readMany: (): [string, Uint8Array][] => Array.from(files.entries()),
+    readMany: (_glob: string): [string, Uint8Array][] => Array.from(files.entries()),
   };
 }
 
@@ -114,6 +133,7 @@ describe('BamlWasmRuntime', () => {
         lsp_send_response: () => {},
         lsp_make_request: () => {},
         playground_send_notification: () => {},
+        host_dispatch: () => {},
       };
       const runtime = BamlWasmRuntime.create(callbacks, makeMinimalVfs());
 
@@ -162,6 +182,7 @@ describe('BamlWasmRuntime', () => {
         lsp_send_response: () => {},
         lsp_make_request: () => {},
         playground_send_notification: () => {},
+        host_dispatch: () => {},
       };
       const runtime = BamlWasmRuntime.create(callbacks, makeMinimalVfs());
       expect(runtime).toBeDefined();

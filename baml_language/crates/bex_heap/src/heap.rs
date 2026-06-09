@@ -21,8 +21,9 @@ use std::{
     },
 };
 
+use ::bex_vm_types::Value;
 use bex_external_types::{Handle, WeakHeapRef};
-use bex_vm_types::{HeapPtr, Object, ObjectIndex};
+use bex_vm_types::{HeapPtr, Object, ObjectIndex, WriteBarrier};
 
 use crate::{
     HeapDebuggerConfig, HeapDebuggerState, card_table::CardTable, chunked_vec::ChunkedVec,
@@ -219,6 +220,17 @@ pub struct BexHeap {
 unsafe impl Send for BexHeap {}
 unsafe impl Sync for BexHeap {}
 
+// Forward `bex_vm_types::WriteBarrier` to the inherent `BexHeap::write_barrier`
+// so heap-mutation sites in upstream crates (e.g. `Future::set_ready` in
+// `bex_vm_types`, which can't name `BexHeap` directly because of dep
+// direction) can fire the barrier through a small trait.
+impl WriteBarrier for BexHeap {
+    #[inline]
+    fn write_barrier(&self, container: HeapPtr, value: Value) {
+        BexHeap::write_barrier(self, container, value);
+    }
+}
+
 // Implement WeakHeapRef trait from bex_external_types
 impl WeakHeapRef for BexHeap {
     fn release_handle(&self, handle_key: usize) {
@@ -307,12 +319,24 @@ impl BexHeap {
 
         for obj in objects.iter_mut() {
             if let Object::Function(func) = obj {
-                // Resolve each constant, converting ObjectIndex to HeapPtr
+                // Resolve each constant, converting ObjectIndex to HeapPtr.
+                // ConstValue::Type is NOT pre-resolved here — it must be
+                // materialised at runtime by the LoadType instruction, which
+                // reads directly from `bytecode.constants`.  We store a Null
+                // placeholder so the resolved_constants vec stays index-aligned.
                 func.bytecode.resolved_constants = func
                     .bytecode
                     .constants
                     .iter()
-                    .map(|cv| cv.to_value(resolve_idx))
+                    .map(|cv| match cv {
+                        bex_vm_types::ConstValue::Type(_) => bex_vm_types::Value::NULL,
+                        // ClassWithTypeArgs is NOT pre-resolved: `IsType` reads it
+                        // directly from `constants` at execution time.
+                        bex_vm_types::ConstValue::ClassWithTypeArgs { .. } => {
+                            bex_vm_types::Value::NULL
+                        }
+                        other => other.to_value(resolve_idx),
+                    })
                     .collect();
             }
         }
@@ -462,6 +486,42 @@ impl BexHeap {
         unsafe { &mut *self.inactive.get() }
     }
 
+    /// Write barrier for field/element/cell writes.
+    ///
+    /// Called *before* the actual field write at each mutation site. If `container_ptr`
+    /// is in an older generation than the object being written (`written_value`), the
+    /// card containing `container_ptr` is marked dirty so partial GC can discover
+    /// the cross-generation reference.
+    ///
+    /// This is a no-op when either side is not a heap object, or when the container
+    /// is in Gen0 (no card table for Gen0).
+    #[inline]
+    pub fn write_barrier(&self, container_ptr: HeapPtr, written_value: Value) {
+        if let Some(ref_ptr) = written_value.as_object_ptr() {
+            let container_gen = self.generation_of(container_ptr);
+            let ref_gen = self.generation_of(ref_ptr);
+            if container_gen > ref_gen {
+                self.mark_card_for_ptr(container_ptr);
+            }
+        }
+    }
+
+    /// Conservative write barrier for mutable accessor paths (builtin dispatch).
+    ///
+    /// Unconditionally marks the card dirty if `container_ptr` is in an older
+    /// generation. Used by `as_array_mut` / `as_map_mut` where the actual written
+    /// value is not yet known (it's supplied by the callee trait method).
+    ///
+    /// This over-marks (any mutable access to an older-gen object dirties the card),
+    /// but it is always safe and the cost is negligible since most objects are Gen0.
+    #[inline]
+    pub fn conservative_write_barrier(&self, container_ptr: HeapPtr) {
+        let container_gen = self.generation_of(container_ptr);
+        if container_gen > Generation::Gen0 {
+            self.mark_card_for_ptr(container_ptr);
+        }
+    }
+
     /// Determine which generation an object pointer belongs to.
     ///
     /// Only compile-time, Gen2, and Gen1 are checked directly; anything else is
@@ -509,10 +569,11 @@ impl BexHeap {
     /// or while holding exclusive access to the space being scanned.
     #[inline]
     unsafe fn ptr_in_chunked_vec(vec: &ChunkedVec<Object>, raw_ptr: *const Object) -> bool {
-        // SAFETY: `num_chunks` and `chunk_start_ptr` require the chunks `Vec`
-        // to not be growing concurrently; the caller of `ptr_in_chunked_vec`
-        // upholds that (only called for Gen1/Gen2, which grow at safepoints).
-        let num_chunks = unsafe { vec.num_chunks() };
+        // `num_chunks` and `chunk_start_ptr` now serialize on the
+        // ChunkedVec's internal RwLock, so the brief window is safe even
+        // under a concurrent grower. `chunk_start_ptr` is still `unsafe`
+        // for the bounds precondition.
+        let num_chunks = vec.num_chunks();
         for chunk_idx in 0..num_chunks {
             // SAFETY: `chunk_idx < num_chunks` by loop bound.
             let chunk_start = unsafe { vec.chunk_start_ptr(chunk_idx) };
@@ -522,6 +583,22 @@ impl BexHeap {
             }
         }
         false
+    }
+
+    /// Bug H, check 3 helper (heap_debug only): is `ptr` inside the
+    /// inactive (former active) space?
+    ///
+    /// Used by the engine's post-`forward_roots` integrity sweep to detect
+    /// stale references the GC failed to forward. The inactive space's
+    /// chunks still exist (their slots have been overwritten with
+    /// `Sentinel::FromSpacePoison` in heap_debug builds), so checking
+    /// `ptr_in_chunked_vec` against `inactive` is safe even after
+    /// `finalize_inactive_space` has run.
+    #[cfg(feature = "heap_debug")]
+    pub fn debug_ptr_in_inactive(&self, ptr: HeapPtr) -> bool {
+        let raw = ptr.as_ptr() as *const Object;
+        // SAFETY: GC has parked all permits before the engine calls this.
+        unsafe { Self::ptr_in_chunked_vec(&*self.inactive.get(), raw) }
     }
 
     /// Mark the card dirty for the card containing `container_ptr` in Gen2.
@@ -563,9 +640,9 @@ impl BexHeap {
         vec: &ChunkedVec<Object>,
         raw_ptr: *const Object,
     ) -> Option<(usize, usize)> {
-        // SAFETY: Caller of `locate_in_chunked_vec` ensures the chunks `Vec`
-        // is not being grown concurrently (safepoint-only / exclusive access).
-        let num_chunks = unsafe { vec.num_chunks() };
+        // `num_chunks` and `chunk_start_ptr` now serialize on the
+        // ChunkedVec's internal RwLock; concurrent growers are excluded.
+        let num_chunks = vec.num_chunks();
         for chunk_idx in 0..num_chunks {
             // SAFETY: `chunk_idx < num_chunks` by loop bound.
             let chunk_start = unsafe { vec.chunk_start_ptr(chunk_idx) };
@@ -695,27 +772,33 @@ impl BexHeap {
         let runtime_end = runtime_start + self.tlab_size;
         let reserve_end = runtime_end + canary_slots;
 
-        // Lock only for growth (serializes chunk allocation)
+        // The chunk-allocation policy mutex still serializes the
+        // fetch_add → resize → canary-write critical section as a unit.
+        // (`ChunkedVec::resize_with` now self-synchronizes against
+        // concurrent `set` callers, so this is no longer load-bearing for
+        // memory safety — but keeping it preserves the existing "one
+        // grower at a time" policy and keeps the canary write paired with
+        // the resize that produced its slot.)
         let _guard = self.growth_lock.lock().unwrap();
 
         let ct_len = self.compile_time.len();
-        // SAFETY: We hold the growth_lock, so no other thread is resizing.
-        // ChunkedVec's resize_with never moves existing elements, and takes &self
-        // so we don't need a mutable reference - which avoids the data race.
+        // SAFETY: `&*self.gen0.get()` produces a `&ChunkedVec<Object>`.
+        // The ChunkedVec's own RwLock now gates outer-Vec mutation, so this
+        // shared reference is sound to hold concurrently with other readers
+        // and growers; per-element exclusivity is gated separately by
+        // `UnsafeCell` + caller-side TLAB regions.
         let gen0 = unsafe { &*self.gen0.get() };
         if gen0.len() < reserve_end {
-            // SAFETY: We hold the growth_lock, ensuring only one thread resizes at a time.
-            unsafe {
-                gen0.resize_with(reserve_end, || {
-                    // Placeholder object - will be overwritten by TLAB alloc
-                    self.placeholder_object()
-                });
-            }
+            gen0.resize_with(reserve_end, || {
+                // Placeholder object - will be overwritten by TLAB alloc
+                self.placeholder_object()
+            });
         }
         if use_canary {
             let chunk_start = ct_len + runtime_start;
             let chunk_end = ct_len + runtime_end;
-            // SAFETY: We hold the growth_lock, index is within bounds
+            // SAFETY: `runtime_end` is within the freshly-grown range; the
+            // canary slot is exclusive to this chunk reservation.
             unsafe {
                 gen0.set(runtime_end, self.tlab_canary_object(chunk_start, chunk_end));
             }
@@ -979,8 +1062,8 @@ mod tests {
     #[test]
     fn test_new_heap_with_objects() {
         let objects: Vec<Object> = vec![
-            Object::String("hello".to_string()),
-            Object::String("world".to_string()),
+            Object::String("hello".into()),
+            Object::String("world".into()),
         ];
         let heap = BexHeap::new(objects);
         assert_eq!(heap.len(), 2);
@@ -1006,10 +1089,8 @@ mod tests {
 
     #[test]
     fn test_alloc_tlab_chunk_with_compile_time() {
-        let compile_time: Vec<Object> = vec![
-            Object::String("ct1".to_string()),
-            Object::String("ct2".to_string()),
-        ];
+        let compile_time: Vec<Object> =
+            vec![Object::String("ct1".into()), Object::String("ct2".into())];
         let heap = BexHeap::with_tlab_size(compile_time, 100);
 
         // With 2 compile-time objects, global indices start at 2
@@ -1024,7 +1105,7 @@ mod tests {
 
     #[test]
     fn test_heap_stats() {
-        let compile_time: Vec<Object> = vec![Object::String("builtin".to_string())];
+        let compile_time: Vec<Object> = vec![Object::String("builtin".into())];
         let heap = BexHeap::with_tlab_size(compile_time, 50);
 
         let stats = heap.stats();

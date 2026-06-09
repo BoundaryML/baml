@@ -17,7 +17,7 @@ function BasicIf() -> string {
 
 //----
 //- diagnostics
-// Error: type mismatch: expected string, got int
+// error: type mismatch: expected string, got int
 //     ╭─[ headers_basic_if.baml:14:5 ]
 //     │
 //  14 │     z

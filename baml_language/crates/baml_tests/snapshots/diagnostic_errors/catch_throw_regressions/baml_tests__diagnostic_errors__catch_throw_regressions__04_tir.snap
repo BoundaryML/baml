@@ -21,13 +21,13 @@ function user.CatchAlwaysThrows(n: int) -> string throws never {
   { : user.Status | "http!" | "index!"
     catch (WrapperAlwaysThrows(n) : user.Status) : unknown
       catch (e)
-        _: string =>
+        string =>
           "http!" : "http!"
       catch (e2)
-        _: int =>
+        int =>
           "index!" : "index!"
   }
-  !! 622..644: type mismatch: expected string, got user.Status
+  !! 622..644: type mismatch: expected string, got Status
 }
 function user.ThrowsAllStatusVariants(n: int) -> user.Status throws never {
   { : never
@@ -58,7 +58,7 @@ function user.CatchAllStatusVariants(n: int) -> string throws never {
         Status.SomeOtherError =>
           "other!" : "other!"
   }
-  !! 1115..1141: type mismatch: expected string, got user.Status
+  !! 1109..1135: type mismatch: expected string, got Status
 }
 function user.RecA(n: int) -> string throws never {
   { : string
@@ -78,7 +78,7 @@ function user.CatchRecursiveThrow(n: int) -> string throws never {
   { : string | "handled"
     catch (RecB(n) : string) : unknown
       catch (e)
-        _: string =>
+        string =>
           "handled" : "handled"
   }
 }
@@ -90,5 +90,5 @@ function user.UnreachableTailStillChecked() -> string throws never {
       x.missing : unknown
     }
   }
-  ?? 1900..1922: unreachable code: 2 statement(s) after diverging statement
+  ?? 1891..1913: unreachable code: 2 statement(s) after diverging statement
 }

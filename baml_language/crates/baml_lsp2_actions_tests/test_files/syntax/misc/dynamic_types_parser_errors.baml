@@ -102,7 +102,7 @@ test IncompleteSyntax {
 
 //----
 //- diagnostics
-// Error: Expected Incomplete 'dynamic' type definition. Use 'dynamic class' or 'dynamic enum' to add properties to types that contain the `@@dynamic` attribute., found identifier
+// error: Expected Incomplete 'dynamic' type definition. Use 'dynamic class' or 'dynamic enum' to add properties to types that contain the `@@dynamic` attribute., found identifier
 //     ╭─[ misc_dynamic_types_parser_errors.baml:40:13 ]
 //     │
 //  40 │     dynamic Bar {
@@ -111,7 +111,7 @@ test IncompleteSyntax {
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected class, enum, dynamic class, dynamic enum, or type alias, found identifier
+// error: Expected class, enum, dynamic class, dynamic enum, or type alias, found identifier
 //     ╭─[ misc_dynamic_types_parser_errors.baml:40:13 ]
 //     │
 //  40 │     dynamic Bar {
@@ -120,7 +120,7 @@ test IncompleteSyntax {
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected class, enum, dynamic class, dynamic enum, or type alias, found '{'
+// error: Expected class, enum, dynamic class, dynamic enum, or type alias, found '{'
 //     ╭─[ misc_dynamic_types_parser_errors.baml:40:17 ]
 //     │
 //  40 │     dynamic Bar {
@@ -129,7 +129,7 @@ test IncompleteSyntax {
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected class, enum, dynamic class, dynamic enum, or type alias, found identifier
+// error: Expected class, enum, dynamic class, dynamic enum, or type alias, found identifier
 //     ╭─[ misc_dynamic_types_parser_errors.baml:41:7 ]
 //     │
 //  41 │       bar int
@@ -138,7 +138,7 @@ test IncompleteSyntax {
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected class, enum, dynamic class, dynamic enum, or type alias, found identifier
+// error: Expected class, enum, dynamic class, dynamic enum, or type alias, found identifier
 //     ╭─[ misc_dynamic_types_parser_errors.baml:41:11 ]
 //     │
 //  41 │       bar int
@@ -147,7 +147,7 @@ test IncompleteSyntax {
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected top-level declaration, found identifier
+// error: Expected top-level declaration, found identifier
 //     ╭─[ misc_dynamic_types_parser_errors.baml:44:3 ]
 //     │
 //  44 │   args {
@@ -156,7 +156,7 @@ test IncompleteSyntax {
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected top-level declaration, found '{'
+// error: Expected top-level declaration, found '{'
 //     ╭─[ misc_dynamic_types_parser_errors.baml:44:8 ]
 //     │
 //  44 │   args {
@@ -165,7 +165,7 @@ test IncompleteSyntax {
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected top-level declaration, found identifier
+// error: Expected top-level declaration, found identifier
 //     ╭─[ misc_dynamic_types_parser_errors.baml:45:5 ]
 //     │
 //  45 │     from_text "Test"
@@ -174,7 +174,7 @@ test IncompleteSyntax {
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected top-level declaration, found '"'
+// error: Expected top-level declaration, found '"'
 //     ╭─[ misc_dynamic_types_parser_errors.baml:45:15 ]
 //     │
 //  45 │     from_text "Test"
@@ -183,7 +183,7 @@ test IncompleteSyntax {
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected top-level declaration, found identifier
+// error: Expected top-level declaration, found identifier
 //     ╭─[ misc_dynamic_types_parser_errors.baml:45:16 ]
 //     │
 //  45 │     from_text "Test"
@@ -192,7 +192,7 @@ test IncompleteSyntax {
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected top-level declaration, found '"'
+// error: Expected top-level declaration, found '"'
 //     ╭─[ misc_dynamic_types_parser_errors.baml:45:20 ]
 //     │
 //  45 │     from_text "Test"
@@ -201,7 +201,7 @@ test IncompleteSyntax {
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected top-level declaration, found '}'
+// error: Expected top-level declaration, found '}'
 //     ╭─[ misc_dynamic_types_parser_errors.baml:46:3 ]
 //     │
 //  46 │   }
@@ -210,7 +210,7 @@ test IncompleteSyntax {
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected top-level declaration, found '}'
+// error: Expected top-level declaration, found '}'
 //     ╭─[ misc_dynamic_types_parser_errors.baml:47:1 ]
 //     │
 //  47 │ }
@@ -219,7 +219,7 @@ test IncompleteSyntax {
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected type alias name, found dynamic
+// error: Expected type alias name, found dynamic
 //     ╭─[ misc_dynamic_types_parser_errors.baml:54:5 ]
 //     │
 //  54 │     dynamic class Bar {
@@ -228,7 +228,7 @@ test IncompleteSyntax {
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected '=', found dynamic
+// error: Expected '=', found dynamic
 //     ╭─[ misc_dynamic_types_parser_errors.baml:54:5 ]
 //     │
 //  54 │     dynamic class Bar {
@@ -237,7 +237,7 @@ test IncompleteSyntax {
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected type, found dynamic
+// error: Expected type, found dynamic
 //     ╭─[ misc_dynamic_types_parser_errors.baml:54:5 ]
 //     │
 //  54 │     dynamic class Bar {
@@ -246,7 +246,27 @@ test IncompleteSyntax {
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: unresolved type: Resume
+// error: unresolved type: Resume
+//    ╭─[ misc_dynamic_types_parser_errors.baml:1:45 ]
+//    │
+//  1 │ function TypeBuilderFn(from_text: string) -> Resume {
+//    │                                             ───┬───  
+//    │                                                ╰───── unresolved type: Resume
+//    │ 
+//    │ Note: Error code: E0002
+// ───╯
+// error: unresolved type: Resume
+//     ╭─[ misc_dynamic_types_parser_errors.baml:1:52 ]
+//     │
+//   1 │ ╭─▶ function TypeBuilderFn(from_text: string) -> Resume {
+//     ┆ ┆   
+//  12 │ ├─▶ }
+//     │ │       
+//     │ ╰─────── unresolved type: Resume
+//     │     
+//     │     Note: Error code: E0002
+// ────╯
+// error: unresolved type: Resume
 //    ╭─[ misc_dynamic_types_parser_errors.baml:1:45 ]
 //    │
 //  1 │ function TypeBuilderFn(from_text: string) -> Resume {

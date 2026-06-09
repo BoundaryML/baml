@@ -22,15 +22,19 @@ SOURCE_FILE
     EXPR_FUNCTION_BODY
       BLOCK_EXPR
         L_BRACE "{"
-        LET_STMT "let sum = 0;"
-          KW_LET "let"
-          WORD "sum"
+        LET_STMT
+          PATTERN
+            BINDING_PATTERN "let sum"
+              KW_LET "let"
+              WORD "sum"
           EQUALS "="
           INTEGER_LITERAL "0"
           SEMICOLON ";"
         LET_STMT
-          KW_LET "let"
-          WORD "total"
+          PATTERN
+            BINDING_PATTERN "let total"
+              KW_LET "let"
+              WORD "total"
           EQUALS "="
           ARRAY_LITERAL "[]"
             L_BRACKET "["
@@ -39,9 +43,11 @@ SOURCE_FILE
         FOR_EXPR
           KW_FOR "for"
           L_PAREN "("
-          LET_STMT "let i"
-            KW_LET "let"
-            WORD "i"
+          LET_STMT
+            PATTERN
+              BINDING_PATTERN "let i"
+                KW_LET "let"
+                WORD "i"
           KW_IN "in"
           WORD "arr"
           R_PAREN ")"
@@ -54,27 +60,30 @@ SOURCE_FILE
                 WORD "push"
               CALL_ARGS
                 L_PAREN "("
-                LAMBDA_EXPR
-                  PARAMETER_LIST "()"
-                    L_PAREN "("
-                    R_PAREN ")"
-                  ARROW "->"
-                  BLOCK_EXPR
-                    L_BRACE "{"
-                    BINARY_EXPR "sum += i"
-                      WORD "sum"
-                      PLUS_EQUALS "+="
-                      WORD "i"
-                    SEMICOLON ";"
-                    R_BRACE "}"
+                CALL_ARG
+                  LAMBDA_EXPR
+                    PARAMETER_LIST "()"
+                      L_PAREN "("
+                      R_PAREN ")"
+                    ARROW "->"
+                    BLOCK_EXPR
+                      L_BRACE "{"
+                      BINARY_EXPR "sum += i"
+                        WORD "sum"
+                        PLUS_EQUALS "+="
+                        WORD "i"
+                      SEMICOLON ";"
+                      R_BRACE "}"
                 R_PAREN ")"
             R_BRACE "}"
         FOR_EXPR
           KW_FOR "for"
           L_PAREN "("
-          LET_STMT "let cb"
-            KW_LET "let"
-            WORD "cb"
+          LET_STMT
+            PATTERN
+              BINDING_PATTERN "let cb"
+                KW_LET "let"
+                WORD "cb"
           KW_IN "in"
           WORD "total"
           R_PAREN ")"

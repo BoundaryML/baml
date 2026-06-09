@@ -7,12 +7,15 @@ source: crates/baml_tests/src/generated_tests.rs
 class EFoo {
     x: int,
 }
+
 class EA {
     x: int,
 }
+
 class EB {
     x: int,
 }
+
 class EC {
     x: int,
 }

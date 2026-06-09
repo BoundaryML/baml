@@ -67,21 +67,21 @@ function NominalTypingAssignments() -> int {
 
 //----
 //- diagnostics
-// Error: type mismatch: expected user.Person[], got user.Human[]
+// error: type mismatch: expected Person[], got Human[]
 //     ╭─[ invalid_assignment_nominal_typing.baml:59:10 ]
 //     │
 //  59 │     people = [Human { name: "J", age: 10 }];
 //     │             ───────────────┬───────────────  
-//     │                            ╰───────────────── type mismatch: expected user.Person[], got user.Human[]
+//     │                            ╰───────────────── type mismatch: expected Person[], got Human[]
 //     │ 
 //     │ Note: Error code: E0001
 // ────╯
-// Error: type mismatch: expected user.Human[], got user.Person[]
+// error: type mismatch: expected Human[], got Person[]
 //     ╭─[ invalid_assignment_nominal_typing.baml:63:10 ]
 //     │
 //  63 │     humans = [Person { name: "L", age: 12 }];
 //     │             ────────────────┬───────────────  
-//     │                             ╰───────────────── type mismatch: expected user.Human[], got user.Person[]
+//     │                             ╰───────────────── type mismatch: expected Human[], got Person[]
 //     │ 
 //     │ Note: Error code: E0001
 // ────╯

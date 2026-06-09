@@ -2,7 +2,7 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === COMPILER2 DIAGNOSTICS ===
-  [type] Error: type `map<string, map<string, int>>` has no member `a`
+  [type] error: type `map<string, map<string, int>>` has no member `a`
     ╭─[ captured_field_chain.baml:31:70 ]
     │
  31 │ ╭─▶ function test_map_chain(data: map<string, map<string, int>>) -> int {
@@ -13,7 +13,7 @@ source: crates/baml_tests/src/generated_tests.rs
     │     Note: Error code: E0007
 ────╯
 
-  [type] Error: type `map<string, map<string, map<string, int>>>` has no member `a`
+  [type] error: type `map<string, map<string, map<string, int>>>` has no member `a`
     ╭─[ captured_field_chain.baml:36:88 ]
     │
  36 │ ╭─▶ function test_deep_map_chain(data: map<string, map<string, map<string, int>>>) -> int {

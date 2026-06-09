@@ -7,9 +7,7 @@
 
 use std::collections::{HashMap, HashSet};
 
-use baml_type::{
-    Literal, Span, Ty, TyAssert, TyAttr, TyAttrValue, TypeName, simplify_sap::simplify,
-};
+use baml_type::{Literal, Ty, TyAttr, TyAttrValue, TypeName, simplify_sap::simplify};
 
 // =========================================================================
 // Markdown → TestCase parser
@@ -163,10 +161,11 @@ fn collect_alias_refs(ty: &Ty) -> Vec<TypeName> {
 fn collect_alias_refs_inner(ty: &Ty, out: &mut Vec<TypeName>) {
     match ty {
         Ty::TypeAlias(name, _) => out.push(name.clone()),
-        Ty::Optional(inner, _)
-        | Ty::List(inner, _)
-        | Ty::WatchAccessor(inner, _)
-        | Ty::Future(inner, _) => collect_alias_refs_inner(inner, out),
+        Ty::List(inner, _) | Ty::WatchAccessor(inner, _) => collect_alias_refs_inner(inner, out),
+        Ty::Future(value, error, _) => {
+            collect_alias_refs_inner(value, out);
+            collect_alias_refs_inner(error, out);
+        }
         Ty::Union(members, _) => {
             for m in members {
                 collect_alias_refs_inner(m, out);
@@ -199,7 +198,6 @@ fn collect_alias_refs_inner(ty: &Ty, out: &mut Vec<TypeName>) {
 //   attr        := '@sap.parse_without_null'
 //                | '@sap.pending_never'
 //                | '@sap.in_progress_never'
-//                | '@assert(' balanced ')'
 
 struct Parser {
     chars: Vec<char>,
@@ -321,7 +319,7 @@ impl Parser {
                 ty = Ty::List(Box::new(ty), TyAttr::default());
             } else if self.peek() == Some('?') {
                 self.advance();
-                ty = Ty::Optional(Box::new(ty), TyAttr::default());
+                ty = Ty::optional(ty);
             } else {
                 break;
             }
@@ -374,7 +372,7 @@ impl Parser {
                         }
                     }
                     // Capitalized or otherwise — treat as class name.
-                    name => Ty::Class(TypeName::local(name.into()), TyAttr::default()),
+                    name => Ty::Class(TypeName::local(name.into()), Vec::new(), TyAttr::default()),
                 }
             }
             other => panic!("unexpected {:?} at pos {} in type DSL", other, self.pos),
@@ -398,54 +396,12 @@ impl Parser {
             } else if self.starts_with("@sap.in_progress_never") {
                 self.consume_str("@sap.in_progress_never");
                 attr.sap_in_progress_never = TyAttrValue::Set;
-            } else if self.starts_with("@assert(") {
-                self.consume_str("@assert(");
-                let content = self.read_balanced_parens();
-                let func_idx = extract_func_idx(&content);
-                attr.asserts.push(TyAssert {
-                    func_idx,
-                    span: Span::default(),
-                });
             } else {
                 break;
             }
         }
         attr
     }
-
-    /// Read content inside balanced parens (the opening `(` already consumed).
-    /// Consumes the closing `)`.
-    fn read_balanced_parens(&mut self) -> String {
-        let mut content = String::new();
-        let mut depth = 1u32;
-        while depth > 0 {
-            let c = self.advance();
-            match c {
-                '(' => depth += 1,
-                ')' => depth -= 1,
-                _ => {}
-            }
-            if depth > 0 {
-                content.push(c);
-            }
-        }
-        content
-    }
-}
-
-/// Extract func_idx from assert content like `(_) => f1` or bare `f1`.
-fn extract_func_idx(content: &str) -> u32 {
-    let trimmed = content.trim();
-    // Try "(_) => fN" form first.
-    if let Some(rest) = trimmed.strip_prefix("(_) => f") {
-        return rest.parse().expect("expected number after `f` in @assert");
-    }
-    // Bare "fN".
-    if let Some(rest) = trimmed.strip_prefix('f') {
-        return rest.parse().expect("expected number after `f` in @assert");
-    }
-    // Bare number.
-    trimmed.parse().expect("expected func_idx in @assert")
 }
 
 /// Apply a parsed attr to a Ty. If the attr is all-default, return ty unchanged.

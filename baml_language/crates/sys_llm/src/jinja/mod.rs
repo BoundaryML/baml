@@ -7,7 +7,6 @@
 //! - Magic delimiter handling for chat messages and media
 
 mod error;
-mod filters;
 mod output_format_object;
 mod render;
 mod value_conversion;

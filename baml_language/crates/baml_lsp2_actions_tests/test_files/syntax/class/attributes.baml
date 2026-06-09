@@ -6,8 +6,7 @@ class TestClassAlias {
    "#)
   key2 string @alias("key21") @alias("key22")
   key3 string @alias("key with space")
-  key4 string @alias("key.with.punctuation/123") @check(trivial, {{this == "Homo sapiens"}}) @check(regex_good, {{this|regex_match("Homo")}})
-  key5 int @assert(positive, {{this > 0}}) @assert(small, {{this < 100}})
+  key4 string @alias("key.with.punctuation/123")
 }
 
 class HasTwoBlockAttributes {

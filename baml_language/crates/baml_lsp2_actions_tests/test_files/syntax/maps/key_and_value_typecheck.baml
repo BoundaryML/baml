@@ -45,7 +45,7 @@ function UseMapTypecheck() -> int {
 
 //----
 //- diagnostics
-// Error: Expected expression, found ':'
+// error: Expected expression, found ':'
 //    ╭─[ maps_key_and_value_typecheck.baml:3:14 ]
 //    │
 //  3 │     { (1 + 1): "2" }
@@ -54,7 +54,7 @@ function UseMapTypecheck() -> int {
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯
-// Error: type mismatch: expected map<int, string>, got "2"
+// error: type mismatch: expected map<int, string>, got "2"
 //    ╭─[ maps_key_and_value_typecheck.baml:3:16 ]
 //    │
 //  3 │     { (1 + 1): "2" }
@@ -63,7 +63,7 @@ function UseMapTypecheck() -> int {
 //    │ 
 //    │ Note: Error code: E0001
 // ───╯
-// Error: type mismatch: expected int, got string
+// error: type mismatch: expected int, got string
 //     ╭─[ maps_key_and_value_typecheck.baml:18:5 ]
 //     │
 //  18 │     map["string"]

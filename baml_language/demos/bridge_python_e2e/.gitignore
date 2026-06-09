@@ -1,7 +1,0 @@
-app/baml_sdk/
-app/.venv/
-app/.uv-cache/
-app/uv.lock
-app/__pycache__/
-app/**/__pycache__/
-app/baml_bridge_python_e2e_demo.egg-info/

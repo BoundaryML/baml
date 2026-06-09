@@ -17,9 +17,8 @@ sys_ops = { workspace = true }
 sys_types = { workspace = true }
 async-trait = { workspace = true }
 futures = { workspace = true }
-futures-timer = { workspace = true }
 indexmap = { workspace = true }
-log = { workspace = true }
+num-bigint = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = [ "sync", "macros" ] }
 tokio-util = { workspace = true }
@@ -37,11 +36,13 @@ wasm-bindgen-futures = { workspace = true }
 [dev-dependencies]
 baml_builtins2 = { workspace = true }
 baml_project = { workspace = true, features = [ "testing" ] }
+bex_resource_types = { workspace = true }
+bridge_ctypes = { workspace = true }
 sys_llm = { workspace = true }
-sys_native = { workspace = true, features = [ "bundle-http" ] }
+sys_native = { workspace = true, features = [ "bundle-http", "aws-crypto" ] }
 anyhow = { workspace = true }
 indexmap = { workspace = true }
-insta = { workspace = true }
+prost = { workspace = true }
 serde_json = { workspace = true }
 tempfile = { workspace = true }
 tokio = { workspace = true, features = [ "rt-multi-thread", "macros" ] }
@@ -51,7 +52,12 @@ wiremock = { workspace = true }
 workspace = true
 
 [features]
-default = [  ]
+default = [ "aws-crypto" ]
+# `sys_native` is a dev-dependency only, so feature propagation here would
+# be a no-op for downstream consumers; its crypto feature is set directly
+# on the `[dev-dependencies]` entry above.
+aws-crypto = [ "sys_ops/aws-crypto" ]
+ring-crypto = [ "sys_ops/ring-crypto" ]
 heap_debug = [
   "bex_vm/heap_debug",
   "bex_heap/heap_debug",

@@ -8,6 +8,12 @@ class user.A {
 class user.B {
   label: string
 }
+function user.from_json(j: baml.json.json) -> user.B  [expr] {
+  user.B { label: baml.json.from_json(baml.json.field(j, "label")) }
+}
+function user.from_json(j: baml.json.json) -> user.A  [expr] {
+  user.A { b: baml.json.from_json(baml.json.field(j, "b")) }
+}
 function user.greet(self: ?) -> string  [expr] {
   {  } self.label
 }
@@ -19,4 +25,10 @@ function user.test_deep_method(a: user.A) -> string  [expr] {
 }
 function user.test_direct_method(b: user.B) -> string  [expr] {
   {  } b.greet()
+}
+function user.to_json(self: ?) -> baml.json.json  [expr] {
+  map { "b": self.b.to_json() }
+}
+function user.to_json(self: ?) -> baml.json.json  [expr] {
+  map { "label": self.label.to_json() }
 }

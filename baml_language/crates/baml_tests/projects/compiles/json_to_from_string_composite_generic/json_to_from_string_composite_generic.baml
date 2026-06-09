@@ -1,0 +1,14 @@
+// Phase 5 fixture: composite generic type-arg `from_string<Container<User>>`.
+// MIR must lower `LoadType(Class("Container", [Class("User")]))` and dispatch
+// the call with `ntypeargs=1`.
+
+class User {
+  name string
+}
+class Container<T> {
+  item T
+}
+
+function decode_container(s: string) -> Container<User> throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  baml.json.from_string<Container<User>>(s)
+}

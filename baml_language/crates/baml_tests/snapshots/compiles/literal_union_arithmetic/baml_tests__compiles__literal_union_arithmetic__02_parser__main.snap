@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 10955
 ---
 === SYNTAX TREE ===
 SOURCE_FILE
@@ -59,20 +60,25 @@ SOURCE_FILE
             R_PAREN ")"
             L_BRACE "{"
             MATCH_ARM
-              MATCH_PATTERN "1"
-                INTEGER_LITERAL "1"
+              PATTERN
+                TYPE_PATTERN
+                  TYPE_EXPR "1"
+                    INTEGER_LITERAL "1"
               FAT_ARROW "=>"
               INTEGER_LITERAL "10"
               COMMA ","
             MATCH_ARM
-              MATCH_PATTERN "2"
-                INTEGER_LITERAL "2"
+              PATTERN
+                TYPE_PATTERN
+                  TYPE_EXPR "2"
+                    INTEGER_LITERAL "2"
               FAT_ARROW "=>"
               INTEGER_LITERAL "20"
               COMMA ","
             MATCH_ARM
-              MATCH_PATTERN "_"
-                WORD "_"
+              PATTERN
+                WILDCARD_PATTERN "_"
+                  WORD "_"
               FAT_ARROW "=>"
               INTEGER_LITERAL "0"
             R_BRACE "}"
@@ -173,15 +179,19 @@ SOURCE_FILE
     EXPR_FUNCTION_BODY
       BLOCK_EXPR
         L_BRACE "{"
-        LET_STMT "let sum = 0;"
-          KW_LET "let"
-          WORD "sum"
+        LET_STMT
+          PATTERN
+            BINDING_PATTERN "let sum"
+              KW_LET "let"
+              WORD "sum"
           EQUALS "="
           INTEGER_LITERAL "0"
           SEMICOLON ";"
-        LET_STMT "let i = 0;"
-          KW_LET "let"
-          WORD "i"
+        LET_STMT
+          PATTERN
+            BINDING_PATTERN "let i"
+              KW_LET "let"
+              WORD "i"
           EQUALS "="
           INTEGER_LITERAL "0"
           SEMICOLON ";"
@@ -209,20 +219,25 @@ SOURCE_FILE
                   R_PAREN ")"
                   L_BRACE "{"
                   MATCH_ARM
-                    MATCH_PATTERN "0"
-                      INTEGER_LITERAL "0"
+                    PATTERN
+                      TYPE_PATTERN
+                        TYPE_EXPR "0"
+                          INTEGER_LITERAL "0"
                     FAT_ARROW "=>"
                     INTEGER_LITERAL "10"
                     COMMA ","
                   MATCH_ARM
-                    MATCH_PATTERN "1"
-                      INTEGER_LITERAL "1"
+                    PATTERN
+                      TYPE_PATTERN
+                        TYPE_EXPR "1"
+                          INTEGER_LITERAL "1"
                     FAT_ARROW "=>"
                     INTEGER_LITERAL "20"
                     COMMA ","
                   MATCH_ARM
-                    MATCH_PATTERN "_"
-                      WORD "_"
+                    PATTERN
+                      WILDCARD_PATTERN "_"
+                        WORD "_"
                     FAT_ARROW "=>"
                     INTEGER_LITERAL "30"
                   R_BRACE "}"

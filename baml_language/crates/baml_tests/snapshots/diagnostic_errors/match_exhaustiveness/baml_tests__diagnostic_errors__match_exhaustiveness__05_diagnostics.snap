@@ -2,85 +2,166 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === COMPILER2 DIAGNOSTICS ===
-  [type] Error: unreachable arm
-    ╭─[ match_exhaustiveness.baml:19:19 ]
+  [type] error: unreachable arm
+    ╭─[ match_exhaustiveness.baml:19:23 ]
     │
- 19 │         n: int => "never reached"
-    │                   ───────┬───────  
-    │                          ╰───────── unreachable arm
+ 19 │         let n: int => "never reached"
+    │                       ───────┬───────  
+    │                              ╰───────── unreachable arm
     │ 
     │ Note: Error code: E0063
 ────╯
 
-  [type] Error: unreachable arm
-    ╭─[ match_exhaustiveness.baml:27:19 ]
+  [type] error: unreachable arm
+    ╭─[ match_exhaustiveness.baml:27:23 ]
     │
- 27 │         n: int => "unreachable 1",
-    │                   ───────┬───────  
-    │                          ╰───────── unreachable arm
+ 27 │         let n: int => "unreachable 1",
+    │                       ───────┬───────  
+    │                              ╰───────── unreachable arm
     │ 
     │ Note: Error code: E0063
 ────╯
 
-  [type] Error: unreachable arm
-    ╭─[ match_exhaustiveness.baml:28:19 ]
+  [type] error: unreachable arm
+    ╭─[ match_exhaustiveness.baml:28:23 ]
     │
- 28 │         m: int => "unreachable 2"
-    │                   ───────┬───────  
-    │                          ╰───────── unreachable arm
+ 28 │         let m: int => "unreachable 2"
+    │                       ───────┬───────  
+    │                              ╰───────── unreachable arm
     │ 
     │ Note: Error code: E0063
 ────╯
 
-  [type] Error: non-exhaustive match on `bool`; missing: false
+  [type] error: non-exhaustive match on type int; missing: _
+    ╭─[ match_exhaustiveness.baml:59:51 ]
+    │
+ 59 │ ╭─▶ function GuardedOnlyNonExhaustive(x: int) -> int {
+    ┆ ┆   
+ 63 │ ├─▶     }
+    │ │           
+    │ ╰─────────── non-exhaustive match on type int; missing: _
+    │     
+    │     Note: Error code: E0062
+────╯
+
+  [type] error: non-exhaustive match on type bool; missing: false
      ╭─[ match_exhaustiveness.baml:243:60 ]
      │
  243 │ ╭─▶ function NonExhaustiveBoolMissingFalse(b: bool) -> string {
      ┆ ┆   
  246 │ ├─▶     }
      │ │           
-     │ ╰─────────── non-exhaustive match on `bool`; missing: false
+     │ ╰─────────── non-exhaustive match on type bool; missing: false
      │     
      │     Note: Error code: E0062
 ─────╯
 
-  [type] Error: non-exhaustive match on `bool`; missing: true
+  [type] error: non-exhaustive match on type bool; missing: true
      ╭─[ match_exhaustiveness.baml:250:59 ]
      │
  250 │ ╭─▶ function NonExhaustiveBoolMissingTrue(b: bool) -> string {
      ┆ ┆   
  253 │ ├─▶     }
      │ │           
-     │ ╰─────────── non-exhaustive match on `bool`; missing: true
+     │ ╰─────────── non-exhaustive match on type bool; missing: true
      │     
      │     Note: Error code: E0062
 ─────╯
 
-  [type] Error: non-exhaustive match on `user.Status`; missing: user.Status.Pending
+  [type] error: non-exhaustive match on type AlwaysTrue; missing: true
+     ╭─[ match_exhaustiveness.baml:295:70 ]
+     │
+ 295 │ ╭─▶ function NonExhaustiveTrueTypeWrongLiteral(t: AlwaysTrue) -> string {
+     ┆ ┆   
+ 298 │ ├─▶     }
+     │ │           
+     │ ╰─────────── non-exhaustive match on type AlwaysTrue; missing: true
+     │     
+     │     Note: Error code: E0062
+─────╯
+
+  [type] error: type mismatch: expected AlwaysTrue, got false
+     ╭─[ match_exhaustiveness.baml:296:16 ]
+     │
+ 296 │ ╭─▶     match (t) {
+ 297 │ ├─▶         false => "wrong!"
+     │ │                               
+     │ ╰─────────────────────────────── type mismatch: expected AlwaysTrue, got false
+     │     
+     │     Note: Error code: E0001
+─────╯
+
+  [type] error: unreachable arm
+     ╭─[ match_exhaustiveness.baml:297:18 ]
+     │
+ 297 │         false => "wrong!"
+     │                  ────┬───  
+     │                      ╰───── unreachable arm
+     │ 
+     │ Note: Error code: E0063
+─────╯
+
+  [type] error: non-exhaustive match on type CustomBool; missing: false
+     ╭─[ match_exhaustiveness.baml:302:67 ]
+     │
+ 302 │ ╭─▶ function NonExhaustiveCustomBoolMissing(b: CustomBool) -> string {
+     ┆ ┆   
+ 305 │ ├─▶     }
+     │ │           
+     │ ╰─────────── non-exhaustive match on type CustomBool; missing: false
+     │     
+     │     Note: Error code: E0062
+─────╯
+
+  [type] error: non-exhaustive match on type Role; missing: "system"
+     ╭─[ match_exhaustiveness.baml:355:60 ]
+     │
+ 355 │ ╭─▶ function NonExhaustiveStringLiteral(role: Role) -> string {
+     ┆ ┆   
+ 359 │ ├─▶     }
+     │ │           
+     │ ╰─────────── non-exhaustive match on type Role; missing: "system"
+     │     
+     │     Note: Error code: E0062
+─────╯
+
+  [type] error: non-exhaustive match on type SuccessCode; missing: 204
+     ╭─[ match_exhaustiveness.baml:396:64 ]
+     │
+ 396 │ ╭─▶ function NonExhaustiveIntLiteral(code: SuccessCode) -> string {
+     ┆ ┆   
+ 400 │ ├─▶     }
+     │ │           
+     │ ╰─────────── non-exhaustive match on type SuccessCode; missing: 204
+     │     
+     │     Note: Error code: E0062
+─────╯
+
+  [type] error: non-exhaustive match on type Status; missing: user.Status.Pending
      ╭─[ match_exhaustiveness.baml:456:60 ]
      │
  456 │ ╭─▶ function NonExhaustiveEnumMissingOne(s: Status) -> string {
      ┆ ┆   
  460 │ ├─▶     }
      │ │           
-     │ ╰─────────── non-exhaustive match on `user.Status`; missing: user.Status.Pending
+     │ ╰─────────── non-exhaustive match on type Status; missing: user.Status.Pending
      │     
      │     Note: Error code: E0062
 ─────╯
 
-  [type] Error: non-exhaustive match on `user.Status`; missing: user.Status.Inactive, user.Status.Pending
+  [type] error: non-exhaustive match on type Status; missing: user.Status.Inactive, user.Status.Pending
      ╭─[ match_exhaustiveness.baml:464:65 ]
      │
  464 │ ╭─▶ function NonExhaustiveEnumMissingMultiple(s: Status) -> string {
      ┆ ┆   
  467 │ ├─▶     }
      │ │           
-     │ ╰─────────── non-exhaustive match on `user.Status`; missing: user.Status.Inactive, user.Status.Pending
+     │ ╰─────────── non-exhaustive match on type Status; missing: user.Status.Inactive, user.Status.Pending
      │     
      │     Note: Error code: E0062
 ─────╯
 
-  [type] Error: unreachable arm
+  [type] error: unreachable arm
      ╭─[ match_exhaustiveness.baml:479:26 ]
      │
  479 │         Status.Active => "second",
@@ -90,7 +171,17 @@ source: crates/baml_tests/src/generated_tests.rs
      │ Note: Error code: E0063
 ─────╯
 
-  [type] Error: unreachable arm
+  [type] error: unreachable arm
+     ╭─[ match_exhaustiveness.baml:489:14 ]
+     │
+ 489 │         1 => "second one",
+     │              ──────┬─────  
+     │                    ╰─────── unreachable arm
+     │ 
+     │ Note: Error code: E0063
+─────╯
+
+  [type] error: unreachable arm
      ╭─[ match_exhaustiveness.baml:498:17 ]
      │
  498 │         true => "second true",
@@ -100,7 +191,153 @@ source: crates/baml_tests/src/generated_tests.rs
      │ Note: Error code: E0063
 ─────╯
 
-  [type] Error: unreachable arm
+  [type] error: unreachable arm
+     ╭─[ match_exhaustiveness.baml:507:19 ]
+     │
+ 507 │         "user" => "second user",
+     │                   ──────┬──────  
+     │                         ╰──────── unreachable arm
+     │ 
+     │ Note: Error code: E0063
+─────╯
+
+  [type] error: non-exhaustive match on type MaybeOk; missing: null
+     ╭─[ match_exhaustiveness.baml:529:69 ]
+     │
+ 529 │ ╭─▶ function NonExhaustiveOptionalMissingNull(code: MaybeOk) -> string {
+     ┆ ┆   
+ 532 │ ├─▶     }
+     │ │           
+     │ ╰─────────── non-exhaustive match on type MaybeOk; missing: null
+     │     
+     │     Note: Error code: E0062
+─────╯
+
+  [type] error: non-exhaustive match on type MaybeOk; missing: 200
+     ╭─[ match_exhaustiveness.baml:536:70 ]
+     │
+ 536 │ ╭─▶ function NonExhaustiveOptionalMissingValue(code: MaybeOk) -> string {
+     ┆ ┆   
+ 539 │ ├─▶     }
+     │ │           
+     │ ╰─────────── non-exhaustive match on type MaybeOk; missing: 200
+     │     
+     │     Note: Error code: E0062
+─────╯
+
+  [type] error: non-exhaustive match on type MixedLiterals; missing: true
+     ╭─[ match_exhaustiveness.baml:559:66 ]
+     │
+ 559 │ ╭─▶ function NonExhaustiveMixedLiterals(x: MixedLiterals) -> string {
+     ┆ ┆   
+ 563 │ ├─▶     }
+     │ │           
+     │ ╰─────────── non-exhaustive match on type MixedLiterals; missing: true
+     │     
+     │     Note: Error code: E0062
+─────╯
+
+  [type] error: non-exhaustive match on type OkOrCreated; missing: 201
+     ╭─[ match_exhaustiveness.baml:583:69 ]
+     │
+ 583 │ ╭─▶ function NonExhaustiveAliasOfLiterals(code: OkOrCreated) -> string {
+     ┆ ┆   
+ 586 │ ├─▶     }
+     │ │           
+     │ ╰─────────── non-exhaustive match on type OkOrCreated; missing: 201
+     │     
+     │     Note: Error code: E0062
+─────╯
+
+  [type] error: non-exhaustive match on type DoubleMaybe; missing: Success, Failure, null
+     ╭─[ match_exhaustiveness.baml:598:60 ]
+     │
+ 598 │ ╭─▶ function ExhaustiveDoubleMaybe(dm: DoubleMaybe) -> string {
+     ┆ ┆   
+ 603 │ ├─▶     }
+     │ │           
+     │ ╰─────────── non-exhaustive match on type DoubleMaybe; missing: Success, Failure, null
+     │     
+     │     Note: Error code: E0062
+─────╯
+
+  [type] error: unreachable arm
+     ╭─[ match_exhaustiveness.baml:600:26 ]
+     │
+ 600 │         let s: Success => s.data,
+     │                          ───┬───  
+     │                             ╰───── unreachable arm
+     │ 
+     │ Note: Error code: E0063
+─────╯
+
+  [type] error: unreachable arm
+     ╭─[ match_exhaustiveness.baml:601:26 ]
+     │
+ 601 │         let f: Failure => f.reason,
+     │                          ────┬────  
+     │                              ╰────── unreachable arm
+     │ 
+     │ Note: Error code: E0063
+─────╯
+
+  [type] error: non-exhaustive match on type DoubleMaybe; missing: Success, Failure, null, null
+     ╭─[ match_exhaustiveness.baml:607:74 ]
+     │
+ 607 │ ╭─▶ function NonExhaustiveDoubleMaybeMissingNull(dm: DoubleMaybe) -> string {
+     ┆ ┆   
+ 611 │ ├─▶     }
+     │ │           
+     │ ╰─────────── non-exhaustive match on type DoubleMaybe; missing: Success, Failure, null, null
+     │     
+     │     Note: Error code: E0062
+─────╯
+
+  [type] error: unreachable arm
+     ╭─[ match_exhaustiveness.baml:609:26 ]
+     │
+ 609 │         let s: Success => s.data,
+     │                          ───┬───  
+     │                             ╰───── unreachable arm
+     │ 
+     │ Note: Error code: E0063
+─────╯
+
+  [type] error: unreachable arm
+     ╭─[ match_exhaustiveness.baml:610:26 ]
+     │
+ 610 │         let f: Failure => f.reason
+     │                          ────┬────  
+     │                              ╰────── unreachable arm
+     │ 
+     │ Note: Error code: E0063
+─────╯
+
+  [type] error: non-exhaustive match on type Result; missing: Failure { reason: _ }
+     ╭─[ match_exhaustiveness.baml:620:65 ]
+     │
+ 620 │ ╭─▶ function NonExhaustiveTypeAliasMissingOne(r: Result) -> string {
+     ┆ ┆   
+ 623 │ ├─▶     }
+     │ │           
+     │ ╰─────────── non-exhaustive match on type Result; missing: Failure { reason: _ }
+     │     
+     │     Note: Error code: E0062
+─────╯
+
+  [type] error: non-exhaustive match on type FullResult; missing: Pending { eta: _ }
+     ╭─[ match_exhaustiveness.baml:627:70 ]
+     │
+ 627 │ ╭─▶ function NonExhaustiveFullResultMissingOne(r: FullResult) -> string {
+     ┆ ┆   
+ 631 │ ├─▶     }
+     │ │           
+     │ ╰─────────── non-exhaustive match on type FullResult; missing: Pending { eta: _ }
+     │     
+     │     Note: Error code: E0062
+─────╯
+
+  [type] error: unreachable arm
      ╭─[ match_exhaustiveness.baml:643:20 ]
      │
  643 │         "hello" => "unreachable"
@@ -110,123 +347,55 @@ source: crates/baml_tests/src/generated_tests.rs
      │ Note: Error code: E0063
 ─────╯
 
-  [type] Error: non-exhaustive match on `user.Status?`; missing: user.Status.Active, user.Status.Inactive, user.Status.Pending
-     ╭─[ match_exhaustiveness.baml:653:56 ]
-     │
- 653 │ ╭─▶ function ExhaustiveNullableEnum(s: Status?) -> string {
-     ┆ ┆   
- 659 │ ├─▶     }
-     │ │           
-     │ ╰─────────── non-exhaustive match on `user.Status?`; missing: user.Status.Active, user.Status.Inactive, user.Status.Pending
-     │     
-     │     Note: Error code: E0062
-─────╯
-
-  [type] Error: unreachable arm
-     ╭─[ match_exhaustiveness.baml:655:26 ]
-     │
- 655 │         Status.Active => "active",
-     │                          ────┬───  
-     │                              ╰───── unreachable arm
-     │ 
-     │ Note: Error code: E0063
-─────╯
-
-  [type] Error: unreachable arm
-     ╭─[ match_exhaustiveness.baml:656:28 ]
-     │
- 656 │         Status.Inactive => "inactive",
-     │                            ─────┬────  
-     │                                 ╰────── unreachable arm
-     │ 
-     │ Note: Error code: E0063
-─────╯
-
-  [type] Error: unreachable arm
-     ╭─[ match_exhaustiveness.baml:657:27 ]
-     │
- 657 │         Status.Pending => "pending",
-     │                           ────┬────  
-     │                               ╰────── unreachable arm
-     │ 
-     │ Note: Error code: E0063
-─────╯
-
-  [type] Error: non-exhaustive match on `user.Status?`; missing: null, user.Status.Active, user.Status.Inactive, user.Status.Pending
+  [type] error: non-exhaustive match on type Status | null; missing: null
      ╭─[ match_exhaustiveness.baml:671:70 ]
      │
  671 │ ╭─▶ function NonExhaustiveNullableEnumMissingNull(s: Status?) -> string {
      ┆ ┆   
  676 │ ├─▶     }
      │ │           
-     │ ╰─────────── non-exhaustive match on `user.Status?`; missing: null, user.Status.Active, user.Status.Inactive, user.Status.Pending
+     │ ╰─────────── non-exhaustive match on type Status | null; missing: null
      │     
      │     Note: Error code: E0062
 ─────╯
 
-  [type] Error: unreachable arm
-     ╭─[ match_exhaustiveness.baml:673:26 ]
-     │
- 673 │         Status.Active => "active",
-     │                          ────┬───  
-     │                              ╰───── unreachable arm
-     │ 
-     │ Note: Error code: E0063
-─────╯
-
-  [type] Error: unreachable arm
-     ╭─[ match_exhaustiveness.baml:674:28 ]
-     │
- 674 │         Status.Inactive => "inactive",
-     │                            ─────┬────  
-     │                                 ╰────── unreachable arm
-     │ 
-     │ Note: Error code: E0063
-─────╯
-
-  [type] Error: unreachable arm
-     ╭─[ match_exhaustiveness.baml:675:27 ]
-     │
- 675 │         Status.Pending => "pending"
-     │                           ────┬────  
-     │                               ╰────── unreachable arm
-     │ 
-     │ Note: Error code: E0063
-─────╯
-
-  [type] Error: non-exhaustive match on `user.Status?`; missing: user.Status.Active, user.Status.Inactive, user.Status.Pending
+  [type] error: non-exhaustive match on type Status | null; missing: user.Status.Pending
      ╭─[ match_exhaustiveness.baml:680:73 ]
      │
  680 │ ╭─▶ function NonExhaustiveNullableEnumMissingVariant(s: Status?) -> string {
      ┆ ┆   
  685 │ ├─▶     }
      │ │           
-     │ ╰─────────── non-exhaustive match on `user.Status?`; missing: user.Status.Active, user.Status.Inactive, user.Status.Pending
+     │ ╰─────────── non-exhaustive match on type Status | null; missing: user.Status.Pending
      │     
      │     Note: Error code: E0062
 ─────╯
 
-  [type] Error: unreachable arm
-     ╭─[ match_exhaustiveness.baml:682:26 ]
+  [type] error: non-exhaustive match on type SuccessOr200; missing: 200
+     ╭─[ match_exhaustiveness.baml:704:82 ]
      │
- 682 │         Status.Active => "active",
-     │                          ────┬───  
-     │                              ╰───── unreachable arm
-     │ 
-     │ Note: Error code: E0063
+ 704 │ ╭─▶ function NonExhaustiveClassPlusLiteralMissingLiteral(x: SuccessOr200) -> string {
+     ┆ ┆   
+ 707 │ ├─▶     }
+     │ │           
+     │ ╰─────────── non-exhaustive match on type SuccessOr200; missing: 200
+     │     
+     │     Note: Error code: E0062
 ─────╯
 
-  [type] Error: unreachable arm
-     ╭─[ match_exhaustiveness.baml:683:28 ]
+  [type] error: non-exhaustive match on type SuccessOr200; missing: Success { data: _ }
+     ╭─[ match_exhaustiveness.baml:711:80 ]
      │
- 683 │         Status.Inactive => "inactive",
-     │                            ─────┬────  
-     │                                 ╰────── unreachable arm
-     │ 
-     │ Note: Error code: E0063
+ 711 │ ╭─▶ function NonExhaustiveClassPlusLiteralMissingClass(x: SuccessOr200) -> string {
+     ┆ ┆   
+ 714 │ ├─▶     }
+     │ │           
+     │ ╰─────────── non-exhaustive match on type SuccessOr200; missing: Success { data: _ }
+     │     
+     │     Note: Error code: E0062
 ─────╯
 
-  [type] Error: unreachable arm
+  [type] error: unreachable arm
      ╭─[ match_exhaustiveness.baml:733:26 ]
      │
  733 │         Status.Active => "unreachable"
@@ -236,19 +405,30 @@ source: crates/baml_tests/src/generated_tests.rs
      │ Note: Error code: E0063
 ─────╯
 
-  [type] Error: non-exhaustive match on `bool`; missing: false, true
+  [type] error: non-exhaustive match on type bool; missing: true, false
      ╭─[ match_exhaustiveness.baml:744:58 ]
      │
  744 │ ╭─▶ function WrongLiteralTypeBoolWithInt(b: bool) -> string {
      ┆ ┆   
  747 │ ├─▶     }
      │ │           
-     │ ╰─────────── non-exhaustive match on `bool`; missing: false, true
+     │ ╰─────────── non-exhaustive match on type bool; missing: true, false
      │     
      │     Note: Error code: E0062
 ─────╯
 
-  [type] Error: unreachable arm
+  [type] error: type mismatch: expected bool, got 42
+     ╭─[ match_exhaustiveness.baml:745:16 ]
+     │
+ 745 │ ╭─▶     match (b) {
+ 746 │ ├─▶         42 => "wrong type"
+     │ │                                
+     │ ╰──────────────────────────────── type mismatch: expected bool, got 42
+     │     
+     │     Note: Error code: E0001
+─────╯
+
+  [type] error: unreachable arm
      ╭─[ match_exhaustiveness.baml:746:15 ]
      │
  746 │         42 => "wrong type"
@@ -258,7 +438,42 @@ source: crates/baml_tests/src/generated_tests.rs
      │ Note: Error code: E0063
 ─────╯
 
-  [type] Error: unreachable arm
+  [type] error: non-exhaustive match on type int; missing: _
+     ╭─[ match_exhaustiveness.baml:751:59 ]
+     │
+ 751 │ ╭─▶ function WrongLiteralTypeIntWithString(x: int) -> string {
+     ┆ ┆   
+ 754 │ ├─▶     }
+     │ │           
+     │ ╰─────────── non-exhaustive match on type int; missing: _
+     │     
+     │     Note: Error code: E0062
+─────╯
+
+  [type] error: type mismatch: expected int, got "hello"
+     ╭─[ match_exhaustiveness.baml:752:16 ]
+     │
+ 752 │ ╭─▶     match (x) {
+ 753 │ ├─▶         "hello" => "wrong type"
+     │ │                                     
+     │ ╰───────────────────────────────────── type mismatch: expected int, got "hello"
+     │     
+     │     Note: Error code: E0001
+─────╯
+
+  [type] error: non-exhaustive match on type FullResult; missing: Pending { eta: _ }
+     ╭─[ match_exhaustiveness.baml:763:64 ]
+     │
+ 763 │ ╭─▶ function PartialUnionPatternCoverage(r: FullResult) -> string {
+     ┆ ┆   
+ 766 │ ├─▶     }
+     │ │           
+     │ ╰─────────── non-exhaustive match on type FullResult; missing: Pending { eta: _ }
+     │     
+     │     Note: Error code: E0062
+─────╯
+
+  [type] error: unreachable arm
      ╭─[ match_exhaustiveness.baml:785:15 ]
      │
  785 │         42 => "unreachable"
@@ -268,7 +483,7 @@ source: crates/baml_tests/src/generated_tests.rs
      │ Note: Error code: E0063
 ─────╯
 
-  [type] Error: unreachable arm
+  [type] error: unreachable arm
      ╭─[ match_exhaustiveness.baml:793:17 ]
      │
  793 │         true => "unreachable"
@@ -278,17 +493,17 @@ source: crates/baml_tests/src/generated_tests.rs
      │ Note: Error code: E0063
 ─────╯
 
-  [type] Error: unreachable arm
-     ╭─[ match_exhaustiveness.baml:807:23 ]
+  [type] error: unreachable arm
+     ╭─[ match_exhaustiveness.baml:807:27 ]
      │
- 807 │         f: Failure => 1
-     │                       ┬  
-     │                       ╰── unreachable arm
+ 807 │         let f: Failure => 1
+     │                           ┬  
+     │                           ╰── unreachable arm
      │ 
      │ Note: Error code: E0063
 ─────╯
 
-  [type] Error: unreachable arm
+  [type] error: unreachable arm
      ╭─[ match_exhaustiveness.baml:855:21 ]
      │
  855 │             true => "unreachable nested"
@@ -298,7 +513,7 @@ source: crates/baml_tests/src/generated_tests.rs
      │ Note: Error code: E0063
 ─────╯
 
-  [type] Error: unreachable arm
+  [type] error: unreachable arm
      ╭─[ match_exhaustiveness.baml:866:26 ]
      │
  866 │         Status.Active => "duplicate 1",
@@ -308,7 +523,7 @@ source: crates/baml_tests/src/generated_tests.rs
      │ Note: Error code: E0063
 ─────╯
 
-  [type] Error: unreachable arm
+  [type] error: unreachable arm
      ╭─[ match_exhaustiveness.baml:868:26 ]
      │
  868 │         Status.Active => "duplicate 2",
@@ -318,14 +533,14 @@ source: crates/baml_tests/src/generated_tests.rs
      │ Note: Error code: E0063
 ─────╯
 
-  [type] Error: non-exhaustive match on `user.Status`; missing: user.Status.Inactive, user.Status.Pending
+  [type] error: non-exhaustive match on type Status; missing: user.Status.Inactive, user.Status.Pending
      ╭─[ match_exhaustiveness.baml:875:60 ]
      │
  875 │ ╭─▶ function HighLineNumberNonExhaustive(s: Status) -> string {
      ┆ ┆   
  878 │ ├─▶     }
      │ │           
-     │ ╰─────────── non-exhaustive match on `user.Status`; missing: user.Status.Inactive, user.Status.Pending
+     │ ╰─────────── non-exhaustive match on type Status; missing: user.Status.Inactive, user.Status.Pending
      │     
      │     Note: Error code: E0062
 ─────╯

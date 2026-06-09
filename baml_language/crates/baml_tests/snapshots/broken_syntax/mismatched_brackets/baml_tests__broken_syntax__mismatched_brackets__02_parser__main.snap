@@ -54,12 +54,14 @@ SOURCE_FILE
           WORD "f"
           CALL_ARGS
             L_PAREN "("
-            INTEGER_LITERAL "1"
+            CALL_ARG "1"
+              INTEGER_LITERAL "1"
             COMMA ","
-            STRING_LITERAL "two"
-              QUOTE """
-              WORD "two"
-              QUOTE """
+            CALL_ARG
+              STRING_LITERAL "two"
+                QUOTE """
+                WORD "two"
+                QUOTE """
         R_BRACE "}"
   FUNCTION_DEF
     KW_FUNCTION "function"
@@ -77,12 +79,14 @@ SOURCE_FILE
           WORD "f"
           CALL_ARGS
             L_PAREN "("
-            INTEGER_LITERAL "1"
+            CALL_ARG "1"
+              INTEGER_LITERAL "1"
             COMMA ","
-            STRING_LITERAL "two"
-              QUOTE """
-              WORD "two"
-              QUOTE """
+            CALL_ARG
+              STRING_LITERAL "two"
+                QUOTE """
+                WORD "two"
+                QUOTE """
             R_PAREN ")"
         R_PAREN ")"
         R_BRACE "}"
@@ -107,12 +111,14 @@ SOURCE_FILE
           WORD "string"
           CALL_ARGS
             L_PAREN "("
-            INTEGER_LITERAL "1"
+            CALL_ARG "1"
+              INTEGER_LITERAL "1"
             COMMA ","
-            STRING_LITERAL "two"
-              QUOTE """
-              WORD "two"
-              QUOTE """
+            CALL_ARG
+              STRING_LITERAL "two"
+                QUOTE """
+                WORD "two"
+                QUOTE """
             R_PAREN ")"
         R_BRACE "}"
   FUNCTION_DEF
@@ -206,16 +212,18 @@ SOURCE_FILE
               WORD "string"
               CALL_ARGS
                 L_PAREN "("
-                INTEGER_LITERAL "1"
+                CALL_ARG "1"
+                  INTEGER_LITERAL "1"
                 COMMA ","
-                STRING_LITERAL "two"
-                  QUOTE """
-                  WORD "two"
-                  QUOTE """
+                CALL_ARG
+                  STRING_LITERAL "two"
+                    QUOTE """
+                    WORD "two"
+                    QUOTE """
             R_BRACE "}"
 
 === ERRORS ===
-Error: Expected ')', found '}'
+error: Expected ')', found '}'
     ╭─[ main.baml:13:1 ]
     │
  13 │ }
@@ -225,7 +233,7 @@ Error: Expected ')', found '}'
     │ Note: Error code: E0010
 ────╯
 
-Error: Expected expression, found ')'
+error: Expected expression, found ')'
     ╭─[ main.baml:17:16 ]
     │
  17 │     f(1, "two"))
@@ -235,7 +243,7 @@ Error: Expected expression, found ')'
     │ Note: Error code: E0010
 ────╯
 
-Error: Expected expression, found ','
+error: Expected expression, found ','
     ╭─[ main.baml:22:10 ]
     │
  22 │     f<int, string(1, "two")
@@ -245,7 +253,7 @@ Error: Expected expression, found ','
     │ Note: Error code: E0010
 ────╯
 
-Error: Expected expression, found ','
+error: Expected expression, found ','
     ╭─[ main.baml:27:10 ]
     │
  27 │     f<int, string>>(1, "two")
@@ -255,7 +263,7 @@ Error: Expected expression, found ','
     │ Note: Error code: E0010
 ────╯
 
-Error: Expected ')', found ','
+error: Expected ')', found ','
     ╭─[ main.baml:27:22 ]
     │
  27 │     f<int, string>>(1, "two")
@@ -265,7 +273,7 @@ Error: Expected ')', found ','
     │ Note: Error code: E0010
 ────╯
 
-Error: Expected expression, found ','
+error: Expected expression, found ','
     ╭─[ main.baml:27:22 ]
     │
  27 │     f<int, string>>(1, "two")
@@ -275,7 +283,7 @@ Error: Expected expression, found ','
     │ Note: Error code: E0010
 ────╯
 
-Error: Expected expression, found ')'
+error: Expected expression, found ')'
     ╭─[ main.baml:27:29 ]
     │
  27 │     f<int, string>>(1, "two")
@@ -285,7 +293,7 @@ Error: Expected expression, found ')'
     │ Note: Error code: E0010
 ────╯
 
-Error: Expected ')', found ']'
+error: Expected ')', found ']'
     ╭─[ main.baml:32:11 ]
     │
  32 │     (1 + 2]
@@ -295,7 +303,7 @@ Error: Expected ')', found ']'
     │ Note: Error code: E0010
 ────╯
 
-Error: Expected expression, found ']'
+error: Expected expression, found ']'
     ╭─[ main.baml:32:11 ]
     │
  32 │     (1 + 2]
@@ -305,7 +313,7 @@ Error: Expected expression, found ']'
     │ Note: Error code: E0010
 ────╯
 
-Error: Expected expression, found '}'
+error: Expected expression, found '}'
     ╭─[ main.baml:38:1 ]
     │
  38 │ }
@@ -315,7 +323,7 @@ Error: Expected expression, found '}'
     │ Note: Error code: E0010
 ────╯
 
-Error: Expected expression, found function
+error: Expected expression, found function
     ╭─[ main.baml:41:1 ]
     │
  41 │ function NestedUnclosed() -> string {
@@ -325,7 +333,7 @@ Error: Expected expression, found function
     │ Note: Error code: E0010
 ────╯
 
-Error: Expected expression, found '->'
+error: Expected expression, found '->'
     ╭─[ main.baml:41:27 ]
     │
  41 │ function NestedUnclosed() -> string {
@@ -335,7 +343,7 @@ Error: Expected expression, found '->'
     │ Note: Error code: E0010
 ────╯
 
-Error: Expected expression, found ','
+error: Expected expression, found ','
     ╭─[ main.baml:42:10 ]
     │
  42 │     f<int, string(1, "two"
@@ -345,7 +353,7 @@ Error: Expected expression, found ','
     │ Note: Error code: E0010
 ────╯
 
-Error: Expected ')', found '}'
+error: Expected ')', found '}'
     ╭─[ main.baml:43:1 ]
     │
  43 │ }
@@ -355,7 +363,7 @@ Error: Expected ')', found '}'
     │ Note: Error code: E0010
 ────╯
 
-Error: Expected ']', found EOF
+error: Expected ']', found EOF
     ╭─[ main.baml:43:2 ]
     │
  43 │ }
@@ -365,7 +373,7 @@ Error: Expected ']', found EOF
     │ Note: Error code: E0010
 ────╯
 
-Error: Expected '}', found EOF
+error: Expected '}', found EOF
     ╭─[ main.baml:43:2 ]
     │
  43 │ }

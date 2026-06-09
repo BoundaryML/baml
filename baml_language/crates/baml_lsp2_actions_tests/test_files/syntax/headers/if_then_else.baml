@@ -49,7 +49,7 @@ function ComplexHeaderTest(x: int) -> int {
 
 //----
 //- diagnostics
-// Error: unresolved name: y
+// error: unresolved name: y
 //     ╭─[ headers_if_then_else.baml:17:5 ]
 //     │
 //  17 │     y

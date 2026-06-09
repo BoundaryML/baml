@@ -15,9 +15,11 @@ SOURCE_FILE
     EXPR_FUNCTION_BODY
       BLOCK_EXPR
         L_BRACE "{"
-        LET_STMT "let x = 1;"
-          KW_LET "let"
-          WORD "x"
+        LET_STMT
+          PATTERN
+            BINDING_PATTERN "let x"
+              KW_LET "let"
+              WORD "x"
           EQUALS "="
           INTEGER_LITERAL "1"
           SEMICOLON ";"
@@ -43,9 +45,11 @@ SOURCE_FILE
     EXPR_FUNCTION_BODY
       BLOCK_EXPR
         L_BRACE "{"
-        LET_STMT "let x = 10;"
-          KW_LET "let"
-          WORD "x"
+        LET_STMT
+          PATTERN
+            BINDING_PATTERN "let x"
+              KW_LET "let"
+              WORD "x"
           EQUALS "="
           INTEGER_LITERAL "10"
           SEMICOLON ";"
@@ -71,9 +75,11 @@ SOURCE_FILE
     EXPR_FUNCTION_BODY
       BLOCK_EXPR
         L_BRACE "{"
-        LET_STMT "let x = 10;"
-          KW_LET "let"
-          WORD "x"
+        LET_STMT
+          PATTERN
+            BINDING_PATTERN "let x"
+              KW_LET "let"
+              WORD "x"
           EQUALS "="
           INTEGER_LITERAL "10"
           SEMICOLON ";"
@@ -99,9 +105,11 @@ SOURCE_FILE
     EXPR_FUNCTION_BODY
       BLOCK_EXPR
         L_BRACE "{"
-        LET_STMT "let x = 3;"
-          KW_LET "let"
-          WORD "x"
+        LET_STMT
+          PATTERN
+            BINDING_PATTERN "let x"
+              KW_LET "let"
+              WORD "x"
           EQUALS "="
           INTEGER_LITERAL "3"
           SEMICOLON ";"
@@ -127,15 +135,19 @@ SOURCE_FILE
     EXPR_FUNCTION_BODY
       BLOCK_EXPR
         L_BRACE "{"
-        LET_STMT "let a = 1;"
-          KW_LET "let"
-          WORD "a"
+        LET_STMT
+          PATTERN
+            BINDING_PATTERN "let a"
+              KW_LET "let"
+              WORD "a"
           EQUALS "="
           INTEGER_LITERAL "1"
           SEMICOLON ";"
-        LET_STMT "let b = 2;"
-          KW_LET "let"
-          WORD "b"
+        LET_STMT
+          PATTERN
+            BINDING_PATTERN "let b"
+              KW_LET "let"
+              WORD "b"
           EQUALS "="
           INTEGER_LITERAL "2"
           SEMICOLON ";"
@@ -169,15 +181,19 @@ SOURCE_FILE
     EXPR_FUNCTION_BODY
       BLOCK_EXPR
         L_BRACE "{"
-        LET_STMT "let sum = 0;"
-          KW_LET "let"
-          WORD "sum"
+        LET_STMT
+          PATTERN
+            BINDING_PATTERN "let sum"
+              KW_LET "let"
+              WORD "sum"
           EQUALS "="
           INTEGER_LITERAL "0"
           SEMICOLON ";"
-        LET_STMT "let i = 0;"
-          KW_LET "let"
-          WORD "i"
+        LET_STMT
+          PATTERN
+            BINDING_PATTERN "let i"
+              KW_LET "let"
+              WORD "i"
           EQUALS "="
           INTEGER_LITERAL "0"
           SEMICOLON ";"
@@ -222,20 +238,26 @@ SOURCE_FILE
       BLOCK_EXPR
         L_BRACE "{"
         LET_STMT
-          KW_LET "let"
-          WORD "x"
+          PATTERN
+            BINDING_PATTERN "let x"
+              KW_LET "let"
+              WORD "x"
           EQUALS "="
           BLOCK_EXPR
             L_BRACE "{"
-            LET_STMT "let y = 1;"
-              KW_LET "let"
-              WORD "y"
+            LET_STMT
+              PATTERN
+                BINDING_PATTERN "let y"
+                  KW_LET "let"
+                  WORD "y"
               EQUALS "="
               INTEGER_LITERAL "1"
               SEMICOLON ";"
-            LET_STMT "let z = 2;"
-              KW_LET "let"
-              WORD "z"
+            LET_STMT
+              PATTERN
+                BINDING_PATTERN "let z"
+                  KW_LET "let"
+                  WORD "z"
               EQUALS "="
               INTEGER_LITERAL "2"
               SEMICOLON ";"
@@ -262,14 +284,18 @@ SOURCE_FILE
     EXPR_FUNCTION_BODY
       BLOCK_EXPR
         L_BRACE "{"
-        LET_STMT "let x = 1"
-          KW_LET "let"
-          WORD "x"
+        LET_STMT
+          PATTERN
+            BINDING_PATTERN "let x"
+              KW_LET "let"
+              WORD "x"
           EQUALS "="
           INTEGER_LITERAL "1"
-        LET_STMT "let y = 2"
-          KW_LET "let"
-          WORD "y"
+        LET_STMT
+          PATTERN
+            BINDING_PATTERN "let y"
+              KW_LET "let"
+              WORD "y"
           EQUALS "="
           INTEGER_LITERAL "2"
         RETURN_STMT
@@ -291,26 +317,34 @@ SOURCE_FILE
     EXPR_FUNCTION_BODY
       BLOCK_EXPR
         L_BRACE "{"
-        LET_STMT "let a = 1;"
-          KW_LET "let"
-          WORD "a"
+        LET_STMT
+          PATTERN
+            BINDING_PATTERN "let a"
+              KW_LET "let"
+              WORD "a"
           EQUALS "="
           INTEGER_LITERAL "1"
           SEMICOLON ";"
-        LET_STMT "let b = 2"
-          KW_LET "let"
-          WORD "b"
+        LET_STMT
+          PATTERN
+            BINDING_PATTERN "let b"
+              KW_LET "let"
+              WORD "b"
           EQUALS "="
           INTEGER_LITERAL "2"
-        LET_STMT "let c = 3;"
-          KW_LET "let"
-          WORD "c"
+        LET_STMT
+          PATTERN
+            BINDING_PATTERN "let c"
+              KW_LET "let"
+              WORD "c"
           EQUALS "="
           INTEGER_LITERAL "3"
           SEMICOLON ";"
-        LET_STMT "let d = 4"
-          KW_LET "let"
-          WORD "d"
+        LET_STMT
+          PATTERN
+            BINDING_PATTERN "let d"
+              KW_LET "let"
+              WORD "d"
           EQUALS "="
           INTEGER_LITERAL "4"
         RETURN_STMT
@@ -360,9 +394,10 @@ SOURCE_FILE
             CALL_ARGS "()"
               L_PAREN "("
               R_PAREN ")"
-          CALL_ARGS "(1)"
+          CALL_ARGS
             L_PAREN "("
-            INTEGER_LITERAL "1"
+            CALL_ARG "1"
+              INTEGER_LITERAL "1"
             R_PAREN ")"
         INTEGER_LITERAL "2"
         R_BRACE "}"
@@ -459,8 +494,10 @@ SOURCE_FILE
       BLOCK_EXPR
         L_BRACE "{"
         LET_STMT
-          KW_LET "let"
-          WORD "x"
+          PATTERN
+            BINDING_PATTERN "let x"
+              KW_LET "let"
+              WORD "x"
           EQUALS "="
           INDEX_EXPR
             CALL_EXPR

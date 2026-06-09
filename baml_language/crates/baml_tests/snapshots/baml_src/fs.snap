@@ -1,0 +1,1046 @@
+---
+source: crates/baml_tests/tests/baml_src.rs
+---
+function fs.$init_test_ns_fs_fs(registry: testing.TestCollector) -> null {
+    load_var registry
+    load_const "fs_open_and_read"
+    make_closure .<lambda($init_test_ns_fs_fs, 0)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "fs_open_and_read_bytes"
+    make_closure .<lambda($init_test_ns_fs_fs, 1)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "fs_write_string"
+    make_closure .<lambda($init_test_ns_fs_fs, 2)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "fs_write_bytes"
+    make_closure .<lambda($init_test_ns_fs_fs, 3)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "fs_write_creates_parent_dirs"
+    make_closure .<lambda($init_test_ns_fs_fs, 4)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "fs_write_overwrites_existing"
+    make_closure .<lambda($init_test_ns_fs_fs, 5)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "fs_roundtrip_write_and_read"
+    make_closure .<lambda($init_test_ns_fs_fs, 6)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "fs_file_rw_seek_and_read"
+    make_closure .<lambda($init_test_ns_fs_fs, 7)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "fs_file_rw_write_and_read_back"
+    make_closure .<lambda($init_test_ns_fs_fs, 8)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "fs_file_rw_write_bytes"
+    make_closure .<lambda($init_test_ns_fs_fs, 9)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "fs_exists_returns_true"
+    make_closure .<lambda($init_test_ns_fs_fs, 10)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "fs_exists_returns_false"
+    make_closure .<lambda($init_test_ns_fs_fs, 11)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "fs_remove_deletes_file"
+    make_closure .<lambda($init_test_ns_fs_fs, 12)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "fs_size_returns_length"
+    make_closure .<lambda($init_test_ns_fs_fs, 13)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "fs_file_read_n_bytes"
+    make_closure .<lambda($init_test_ns_fs_fs, 14)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "fs_file_read_truncates_at_eof"
+    make_closure .<lambda($init_test_ns_fs_fs, 15)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "fs_file_read_bytes_n"
+    make_closure .<lambda($init_test_ns_fs_fs, 16)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "fs_file_read_advances_cursor"
+    make_closure .<lambda($init_test_ns_fs_fs, 17)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "fs_open_append_creates_and_appends"
+    make_closure .<lambda($init_test_ns_fs_fs, 18)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "fs_open_append_creates_missing_file"
+    make_closure .<lambda($init_test_ns_fs_fs, 19)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "fs_open_append_plus_can_read"
+    make_closure .<lambda($init_test_ns_fs_fs, 20)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "fs_file_close_is_idempotent"
+    make_closure .<lambda($init_test_ns_fs_fs, 21)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "fs_read_returns_contents"
+    make_closure .<lambda($init_test_ns_fs_fs, 22)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "fs_open_w_truncates_existing"
+    make_closure .<lambda($init_test_ns_fs_fs, 23)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "fs_open_w_creates_missing_file"
+    make_closure .<lambda($init_test_ns_fs_fs, 24)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "fs_open_w_plus_reads_after_write"
+    make_closure .<lambda($init_test_ns_fs_fs, 25)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "fs_open_w_creates_parent_dirs"
+    make_closure .<lambda($init_test_ns_fs_fs, 26)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "fs_read_dir_returns_entries"
+    make_closure .<lambda($init_test_ns_fs_fs, 27)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "fs_read_dir_type_flags"
+    make_closure .<lambda($init_test_ns_fs_fs, 28)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "fs_read_dir_empty_dir"
+    make_closure .<lambda($init_test_ns_fs_fs, 29)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "fs_mkdir_creates_directory"
+    make_closure .<lambda($init_test_ns_fs_fs, 30)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "fs_mkdir_recursive_creates_parents"
+    make_closure .<lambda($init_test_ns_fs_fs, 31)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "fs_mkdir_recursive_is_idempotent"
+    make_closure .<lambda($init_test_ns_fs_fs, 32)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_const null
+    return
+}
+
+function fs.fs_exists_returns_false_fn() -> bool {
+    load_const "/tmp/baml_fs_exists_false_NOPE_12345.txt"
+    sys_op baml.fs.exists
+    return
+}
+
+function fs.fs_exists_returns_true_fn() -> bool {
+    load_const "/tmp/baml_fs_exists_true.txt"
+    load_const "x"
+    sys_op baml.fs.write
+    pop 1
+    load_const "/tmp/baml_fs_exists_true.txt"
+    sys_op baml.fs.exists
+    store_var result
+    load_const "/tmp/baml_fs_exists_true.txt"
+    sys_op baml.fs.remove
+    pop 1
+    load_var result
+    return
+}
+
+function fs.fs_file_close_is_idempotent_fn() -> null {
+    load_const "/tmp/baml_fs_close_idempotent.txt"
+    load_const "x"
+    sys_op baml.fs.write
+    pop 1
+    load_const "/tmp/baml_fs_close_idempotent.txt"
+    load_const "r"
+    sys_op baml.fs.open
+    store_var f
+    load_var f
+    sys_op baml.fs.File.close
+    pop 1
+    load_var f
+    sys_op baml.fs.File.close
+    pop 1
+    load_const "/tmp/baml_fs_close_idempotent.txt"
+    sys_op baml.fs.remove
+    pop 1
+    load_const null
+    return
+}
+
+function fs.fs_file_read_advances_cursor_fn() -> string {
+    load_const "/tmp/baml_fs_read_advances.txt"
+    load_const "ABCDEFGH"
+    sys_op baml.fs.write
+    pop 1
+    load_const "/tmp/baml_fs_read_advances.txt"
+    load_const "r"
+    sys_op baml.fs.open
+    store_var f
+    load_var f
+    load_const 3
+    sys_op baml.fs.File.read
+    pop 1
+    load_var f
+    load_const 3
+    sys_op baml.fs.File.read
+    store_var result
+    load_const "/tmp/baml_fs_read_advances.txt"
+    sys_op baml.fs.remove
+    pop 1
+    load_var result
+    return
+}
+
+function fs.fs_file_read_bytes_n_fn() -> bool {
+    load_const "/tmp/baml_fs_read_bytes_n.bin"
+    load_const "ABCDE"
+    sys_op baml.fs.write
+    pop 1
+    load_const "/tmp/baml_fs_read_bytes_n.bin"
+    load_const "r"
+    sys_op baml.fs.open
+    load_const 3
+    sys_op baml.fs.File.read_bytes
+    store_var data
+    load_const "/tmp/baml_fs_read_bytes_n.bin"
+    sys_op baml.fs.remove
+    pop 1
+    load_type int
+    load_var data
+    container_len
+    load_const 3
+    call baml.deep_equals
+    return
+}
+
+function fs.fs_file_read_n_bytes_fn() -> string {
+    load_const "/tmp/baml_fs_read_n.txt"
+    load_const "Hello, world!"
+    sys_op baml.fs.write
+    pop 1
+    load_const "/tmp/baml_fs_read_n.txt"
+    load_const "r"
+    sys_op baml.fs.open
+    load_const 5
+    sys_op baml.fs.File.read
+    store_var result
+    load_const "/tmp/baml_fs_read_n.txt"
+    sys_op baml.fs.remove
+    pop 1
+    load_var result
+    return
+}
+
+function fs.fs_file_read_truncates_at_eof_fn() -> string {
+    load_const "/tmp/baml_fs_read_eof.txt"
+    load_const "abc"
+    sys_op baml.fs.write
+    pop 1
+    load_const "/tmp/baml_fs_read_eof.txt"
+    load_const "r"
+    sys_op baml.fs.open
+    load_const 100
+    sys_op baml.fs.File.read
+    store_var result
+    load_const "/tmp/baml_fs_read_eof.txt"
+    sys_op baml.fs.remove
+    pop 1
+    load_var result
+    return
+}
+
+function fs.fs_file_rw_seek_and_read_fn() -> string {
+    load_const "/tmp/baml_fs_seek_and_read.txt"
+    load_const "Hello from BAML!"
+    sys_op baml.fs.write
+    pop 1
+    load_const "/tmp/baml_fs_seek_and_read.txt"
+    load_const "r+"
+    sys_op baml.fs.open
+    store_var file
+    load_var file
+    load_const "start"
+    load_const 6
+    sys_op baml.fs.File.seek_from
+    pop 1
+    load_var file
+    sys_op baml.fs.File.text
+    store_var result
+    load_const "/tmp/baml_fs_seek_and_read.txt"
+    sys_op baml.fs.remove
+    pop 1
+    load_var result
+    return
+}
+
+function fs.fs_file_rw_write_and_read_back_fn() -> string {
+    load_const "/tmp/baml_fs_rw_write_read.txt"
+    load_const "Hello from BAML!"
+    sys_op baml.fs.write
+    pop 1
+    load_const "/tmp/baml_fs_rw_write_read.txt"
+    load_const "r+"
+    sys_op baml.fs.open
+    store_var file
+    load_var file
+    load_const "start"
+    load_const 6
+    sys_op baml.fs.File.seek_from
+    pop 1
+    load_var file
+    load_const "to Rust!!"
+    sys_op baml.fs.File.write
+    pop 1
+    load_var file
+    load_const "start"
+    load_const 0
+    sys_op baml.fs.File.seek_from
+    pop 1
+    load_var file
+    sys_op baml.fs.File.text
+    store_var result
+    load_const "/tmp/baml_fs_rw_write_read.txt"
+    sys_op baml.fs.remove
+    pop 1
+    load_var result
+    return
+}
+
+function fs.fs_file_rw_write_bytes_fn() -> bool {
+    load_const "/tmp/baml_fs_file_write_bytes_src.bin"
+    load_const "AB"
+    sys_op baml.fs.write
+    pop 1
+    load_const "/tmp/baml_fs_file_write_bytes_dst.bin"
+    load_const "____"
+    sys_op baml.fs.write
+    pop 1
+    load_const "/tmp/baml_fs_file_write_bytes_src.bin"
+    load_const "r"
+    sys_op baml.fs.open
+    sys_op baml.fs.File.bytes
+    store_var bytes
+    load_const "/tmp/baml_fs_file_write_bytes_dst.bin"
+    load_const "r+"
+    sys_op baml.fs.open
+    store_var file
+    load_var file
+    load_const "start"
+    load_const 0
+    sys_op baml.fs.File.seek_from
+    pop 1
+    load_var2 2 1
+    sys_op baml.fs.File.write_bytes
+    store_var n
+    load_const "/tmp/baml_fs_file_write_bytes_src.bin"
+    sys_op baml.fs.remove
+    pop 1
+    load_const "/tmp/baml_fs_file_write_bytes_dst.bin"
+    sys_op baml.fs.remove
+    pop 1
+    load_type int
+    load_var n
+    load_const 2
+    call baml.deep_equals
+    return
+}
+
+function fs.fs_mkdir_creates_directory_fn() -> bool {
+    load_const "/tmp/baml_fs_mkdir_new_abc"
+    load_const true
+    init_instance baml.fs.MkdirOptions .recursive
+    sys_op baml.fs.mkdir
+    pop 1
+    load_const "/tmp/baml_fs_mkdir_new_abc"
+    sys_op baml.fs.exists
+    return
+}
+
+function fs.fs_mkdir_recursive_creates_parents_fn() -> bool {
+    load_const "/tmp/baml_fs_mkdir_recursive_abc/a/b/c"
+    load_const true
+    init_instance baml.fs.MkdirOptions .recursive
+    sys_op baml.fs.mkdir
+    pop 1
+    load_const "/tmp/baml_fs_mkdir_recursive_abc/a/b/c"
+    sys_op baml.fs.exists
+    return
+}
+
+function fs.fs_mkdir_recursive_is_idempotent_fn() -> bool {
+    load_const "/tmp/baml_fs_mkdir_idempotent_abc"
+    load_const true
+    init_instance baml.fs.MkdirOptions .recursive
+    sys_op baml.fs.mkdir
+    pop 1
+    load_const "/tmp/baml_fs_mkdir_idempotent_abc"
+    load_const true
+    init_instance baml.fs.MkdirOptions .recursive
+    sys_op baml.fs.mkdir
+    pop 1
+    load_const "/tmp/baml_fs_mkdir_idempotent_abc"
+    sys_op baml.fs.exists
+    return
+}
+
+function fs.fs_open_and_read_bytes_fn() -> bool {
+    load_const "/tmp/baml_fs_open_and_read_bytes.txt"
+    load_const "Hello from BAML!"
+    sys_op baml.fs.write
+    pop 1
+    load_const "/tmp/baml_fs_open_and_read_bytes.txt"
+    load_const "r"
+    sys_op baml.fs.open
+    sys_op baml.fs.File.bytes
+    store_var data
+    load_const "/tmp/baml_fs_open_and_read_bytes.txt"
+    sys_op baml.fs.remove
+    pop 1
+    load_type int
+    load_var data
+    container_len
+    load_const 16
+    call baml.deep_equals
+    return
+}
+
+function fs.fs_open_and_read_fn() -> string {
+    load_const "/tmp/baml_fs_open_and_read.txt"
+    load_const "Hello from BAML!"
+    sys_op baml.fs.write
+    pop 1
+    load_const "/tmp/baml_fs_open_and_read.txt"
+    load_const "r"
+    sys_op baml.fs.open
+    sys_op baml.fs.File.text
+    store_var result
+    load_const "/tmp/baml_fs_open_and_read.txt"
+    sys_op baml.fs.remove
+    pop 1
+    load_var result
+    return
+}
+
+function fs.fs_open_append_creates_and_appends_fn() -> bool {
+    load_const "/tmp/baml_fs_append.txt"
+    load_const "start!"
+    sys_op baml.fs.write
+    pop 1
+    load_const "/tmp/baml_fs_append.txt"
+    load_const "a"
+    sys_op baml.fs.open
+    load_const "more!"
+    sys_op baml.fs.File.write
+    store_var n
+    load_const "/tmp/baml_fs_append.txt"
+    sys_op baml.fs.read
+    store_var readback
+    load_const "/tmp/baml_fs_append.txt"
+    sys_op baml.fs.remove
+    pop 1
+    load_type int
+    load_var n
+    load_const 5
+    call baml.deep_equals
+    jump_if_false L0
+    pop 1
+    load_type string
+    load_var readback
+    load_const "start!more!"
+    call baml.deep_equals
+
+  L0:
+    return
+}
+
+function fs.fs_open_append_creates_missing_file_fn() -> bool {
+    load_const "/tmp/baml_fs_append_new.txt"
+    load_const "w"
+    sys_op baml.fs.open
+    load_const ""
+    sys_op baml.fs.File.write
+    pop 1
+    load_const "/tmp/baml_fs_append_new.txt"
+    load_const "a"
+    sys_op baml.fs.open
+    load_const "hi"
+    sys_op baml.fs.File.write
+    store_var n
+    load_const "/tmp/baml_fs_append_new.txt"
+    sys_op baml.fs.read
+    store_var readback
+    load_const "/tmp/baml_fs_append_new.txt"
+    sys_op baml.fs.remove
+    pop 1
+    load_type int
+    load_var n
+    load_const 2
+    call baml.deep_equals
+    jump_if_false L0
+    pop 1
+    load_type string
+    load_var readback
+    load_const "hi"
+    call baml.deep_equals
+
+  L0:
+    return
+}
+
+function fs.fs_open_append_plus_can_read_fn() -> string {
+    load_const "/tmp/baml_fs_append_plus.txt"
+    load_const "existing"
+    sys_op baml.fs.write
+    pop 1
+    load_const "/tmp/baml_fs_append_plus.txt"
+    load_const "a+"
+    sys_op baml.fs.open
+    store_var f
+    load_var f
+    load_const " more"
+    sys_op baml.fs.File.write
+    pop 1
+    load_var f
+    load_const "start"
+    load_const 0
+    sys_op baml.fs.File.seek_from
+    pop 1
+    load_var f
+    sys_op baml.fs.File.text
+    store_var result
+    load_const "/tmp/baml_fs_append_plus.txt"
+    sys_op baml.fs.remove
+    pop 1
+    load_var result
+    return
+}
+
+function fs.fs_open_w_creates_missing_file_fn() -> bool {
+    load_const "/tmp/baml_fs_open_w_new.txt"
+    load_const "w"
+    sys_op baml.fs.open
+    load_const "hi"
+    sys_op baml.fs.File.write
+    store_var n
+    load_const "/tmp/baml_fs_open_w_new.txt"
+    sys_op baml.fs.read
+    store_var readback
+    load_const "/tmp/baml_fs_open_w_new.txt"
+    sys_op baml.fs.remove
+    pop 1
+    load_type int
+    load_var n
+    load_const 2
+    call baml.deep_equals
+    jump_if_false L0
+    pop 1
+    load_type string
+    load_var readback
+    load_const "hi"
+    call baml.deep_equals
+
+  L0:
+    return
+}
+
+function fs.fs_open_w_creates_parent_dirs_fn() -> bool {
+    load_const "/tmp/baml_fs_open_w_parent/nested/dir/new.txt"
+    load_const "w"
+    sys_op baml.fs.open
+    load_const "nested"
+    sys_op baml.fs.File.write
+    store_var n
+    load_const "/tmp/baml_fs_open_w_parent/nested/dir/new.txt"
+    sys_op baml.fs.read
+    store_var readback
+    load_const "/tmp/baml_fs_open_w_parent/nested/dir/new.txt"
+    sys_op baml.fs.remove
+    pop 1
+    load_type int
+    load_var n
+    load_const 6
+    call baml.deep_equals
+    jump_if_false L0
+    pop 1
+    load_type string
+    load_var readback
+    load_const "nested"
+    call baml.deep_equals
+
+  L0:
+    return
+}
+
+function fs.fs_open_w_plus_reads_after_write_fn() -> string {
+    load_const "/tmp/baml_fs_open_w_plus.txt"
+    load_const "original"
+    sys_op baml.fs.write
+    pop 1
+    load_const "/tmp/baml_fs_open_w_plus.txt"
+    load_const "w+"
+    sys_op baml.fs.open
+    store_var f
+    load_var f
+    load_const "fresh"
+    sys_op baml.fs.File.write
+    pop 1
+    load_var f
+    load_const "start"
+    load_const 0
+    sys_op baml.fs.File.seek_from
+    pop 1
+    load_var f
+    sys_op baml.fs.File.text
+    store_var result
+    load_const "/tmp/baml_fs_open_w_plus.txt"
+    sys_op baml.fs.remove
+    pop 1
+    load_var result
+    return
+}
+
+function fs.fs_open_w_truncates_existing_fn() -> bool {
+    load_const "/tmp/baml_fs_open_w_truncate.txt"
+    load_const "original content"
+    sys_op baml.fs.write
+    pop 1
+    load_const "/tmp/baml_fs_open_w_truncate.txt"
+    load_const "w"
+    sys_op baml.fs.open
+    load_const "new"
+    sys_op baml.fs.File.write
+    store_var n
+    load_const "/tmp/baml_fs_open_w_truncate.txt"
+    sys_op baml.fs.read
+    store_var readback
+    load_const "/tmp/baml_fs_open_w_truncate.txt"
+    sys_op baml.fs.remove
+    pop 1
+    load_type int
+    load_var n
+    load_const 3
+    call baml.deep_equals
+    jump_if_false L0
+    pop 1
+    load_type string
+    load_var readback
+    load_const "new"
+    call baml.deep_equals
+
+  L0:
+    return
+}
+
+function fs.fs_read_dir_empty_dir_fn() -> bool {
+    load_const "/tmp/baml_fs_read_dir_empty_abc"
+    load_const true
+    init_instance baml.fs.MkdirOptions .recursive
+    sys_op baml.fs.mkdir
+    pop 1
+    load_const "/tmp/baml_fs_read_dir_empty_abc"
+    sys_op baml.fs.read_dir
+    store_var entries
+    load_type int
+    load_var entries
+    container_len
+    load_const 0
+    call baml.deep_equals
+    return
+}
+
+function fs.fs_read_dir_returns_entries_fn() -> bool {
+    load_const "/tmp/baml_fs_read_dir_entries"
+    load_const true
+    init_instance baml.fs.MkdirOptions .recursive
+    sys_op baml.fs.mkdir
+    pop 1
+    load_const "/tmp/baml_fs_read_dir_entries"
+    load_const "/a.txt"
+    bin_op +
+    load_const "aaa"
+    sys_op baml.fs.write
+    pop 1
+    load_const "/tmp/baml_fs_read_dir_entries"
+    load_const "/b.txt"
+    bin_op +
+    load_const "bbb"
+    sys_op baml.fs.write
+    pop 1
+    load_const "/tmp/baml_fs_read_dir_entries"
+    load_const "/subdir"
+    bin_op +
+    load_const true
+    init_instance baml.fs.MkdirOptions .recursive
+    sys_op baml.fs.mkdir
+    pop 1
+    load_const "/tmp/baml_fs_read_dir_entries"
+    sys_op baml.fs.read_dir
+    store_var entries
+    load_const "/tmp/baml_fs_read_dir_entries"
+    load_const "/a.txt"
+    bin_op +
+    sys_op baml.fs.remove
+    pop 1
+    load_const "/tmp/baml_fs_read_dir_entries"
+    load_const "/b.txt"
+    bin_op +
+    sys_op baml.fs.remove
+    pop 1
+    load_type int
+    load_var entries
+    container_len
+    load_const 3
+    call baml.deep_equals
+    store_var count_ok
+    load_type baml.fs.DirEntry
+    load_type void
+    load_var entries
+    make_closure .<lambda(fs_read_dir_returns_entries_fn, 0)>, 0
+    call baml.Array.some
+    store_var has_a
+    load_type baml.fs.DirEntry
+    load_type void
+    load_var entries
+    make_closure .<lambda(fs_read_dir_returns_entries_fn, 1)>, 0
+    call baml.Array.some
+    store_var has_b
+    load_type baml.fs.DirEntry
+    load_type void
+    load_var entries
+    make_closure .<lambda(fs_read_dir_returns_entries_fn, 2)>, 0
+    call baml.Array.some
+    store_var has_sub
+    load_var count_ok
+    jump_if_false L0
+    pop 1
+    load_var has_a
+
+  L0:
+    jump_if_false L1
+    pop 1
+    load_var has_b
+
+  L1:
+    jump_if_false L2
+    pop 1
+    load_var has_sub
+
+  L2:
+    return
+}
+
+function fs.fs_read_dir_type_flags_fn() -> bool {
+    load_const "/tmp/baml_fs_read_dir_flags"
+    load_const true
+    init_instance baml.fs.MkdirOptions .recursive
+    sys_op baml.fs.mkdir
+    pop 1
+    load_const "/tmp/baml_fs_read_dir_flags"
+    load_const "/file.txt"
+    bin_op +
+    load_const "content"
+    sys_op baml.fs.write
+    pop 1
+    load_const "/tmp/baml_fs_read_dir_flags"
+    load_const "/subdir"
+    bin_op +
+    load_const true
+    init_instance baml.fs.MkdirOptions .recursive
+    sys_op baml.fs.mkdir
+    pop 1
+    load_const "/tmp/baml_fs_read_dir_flags"
+    sys_op baml.fs.read_dir
+    store_var entries
+    load_const "/tmp/baml_fs_read_dir_flags"
+    load_const "/file.txt"
+    bin_op +
+    sys_op baml.fs.remove
+    pop 1
+    load_type baml.fs.DirEntry
+    load_type void
+    load_var entries
+    make_closure .<lambda(fs_read_dir_type_flags_fn, 0)>, 0
+    call baml.Array.some
+    store_var file_ok
+    load_type baml.fs.DirEntry
+    load_type void
+    load_var entries
+    make_closure .<lambda(fs_read_dir_type_flags_fn, 1)>, 0
+    call baml.Array.some
+    store_var dir_ok
+    load_var file_ok
+    jump_if_false L0
+    pop 1
+    load_var dir_ok
+
+  L0:
+    return
+}
+
+function fs.fs_read_returns_contents_fn() -> string {
+    load_const "/tmp/baml_fs_read_shorthand.txt"
+    load_const "Hello from fs.read!"
+    sys_op baml.fs.write
+    pop 1
+    load_const "/tmp/baml_fs_read_shorthand.txt"
+    sys_op baml.fs.read
+    store_var result
+    load_const "/tmp/baml_fs_read_shorthand.txt"
+    sys_op baml.fs.remove
+    pop 1
+    load_var result
+    return
+}
+
+function fs.fs_remove_deletes_file_fn() -> bool {
+    load_const "/tmp/baml_fs_remove_deletes.txt"
+    load_const "bye"
+    sys_op baml.fs.write
+    pop 1
+    load_const "/tmp/baml_fs_remove_deletes.txt"
+    sys_op baml.fs.remove
+    pop 1
+    load_const "/tmp/baml_fs_remove_deletes.txt"
+    sys_op baml.fs.exists
+    store_var _6
+    load_type bool
+    load_var _6
+    load_const false
+    call baml.deep_equals
+    return
+}
+
+function fs.fs_roundtrip_write_and_read_fn() -> string {
+    load_const "/tmp/baml_fs_roundtrip.txt"
+    load_const "roundtrip data"
+    sys_op baml.fs.write
+    pop 1
+    load_const "/tmp/baml_fs_roundtrip.txt"
+    load_const "r"
+    sys_op baml.fs.open
+    sys_op baml.fs.File.text
+    store_var result
+    load_const "/tmp/baml_fs_roundtrip.txt"
+    sys_op baml.fs.remove
+    pop 1
+    load_var result
+    return
+}
+
+function fs.fs_size_returns_length_fn() -> int {
+    load_const "/tmp/baml_fs_size.bin"
+    load_const "0123456789"
+    sys_op baml.fs.write
+    pop 1
+    load_const "/tmp/baml_fs_size.bin"
+    sys_op baml.fs.size
+    store_var n
+    load_const "/tmp/baml_fs_size.bin"
+    sys_op baml.fs.remove
+    pop 1
+    load_var n
+    return
+}
+
+function fs.fs_write_bytes_fn() -> bool {
+    load_const "/tmp/baml_fs_write_bytes_src.bin"
+    load_const "binary data"
+    sys_op baml.fs.write
+    pop 1
+    load_const "/tmp/baml_fs_write_bytes_src.bin"
+    load_const "r"
+    sys_op baml.fs.open
+    sys_op baml.fs.File.bytes
+    store_var data
+    load_const "/tmp/baml_fs_write_bytes_dst.bin"
+    load_var data
+    sys_op baml.fs.write_bytes
+    store_var n
+    load_const "/tmp/baml_fs_write_bytes_dst.bin"
+    load_const "r"
+    sys_op baml.fs.open
+    sys_op baml.fs.File.bytes
+    store_var readback
+    load_const "/tmp/baml_fs_write_bytes_src.bin"
+    sys_op baml.fs.remove
+    pop 1
+    load_const "/tmp/baml_fs_write_bytes_dst.bin"
+    sys_op baml.fs.remove
+    pop 1
+    load_type int
+    load_var n
+    load_const 11
+    call baml.deep_equals
+    jump_if_false L0
+    pop 1
+    load_type int
+    load_var readback
+    container_len
+    load_const 11
+    call baml.deep_equals
+
+  L0:
+    return
+}
+
+function fs.fs_write_creates_parent_dirs_fn() -> bool {
+    load_const "/tmp/baml_fs_write_parent/nested/dir/file.txt"
+    load_const "nested content"
+    sys_op baml.fs.write
+    store_var n
+    load_const "/tmp/baml_fs_write_parent/nested/dir/file.txt"
+    sys_op baml.fs.read
+    store_var readback
+    load_const "/tmp/baml_fs_write_parent/nested/dir/file.txt"
+    sys_op baml.fs.remove
+    pop 1
+    load_type int
+    load_var n
+    load_const 14
+    call baml.deep_equals
+    jump_if_false L0
+    pop 1
+    load_type string
+    load_var readback
+    load_const "nested content"
+    call baml.deep_equals
+
+  L0:
+    return
+}
+
+function fs.fs_write_overwrites_existing_fn() -> bool {
+    load_const "/tmp/baml_fs_write_overwrite.txt"
+    load_const "old content"
+    sys_op baml.fs.write
+    pop 1
+    load_const "/tmp/baml_fs_write_overwrite.txt"
+    load_const "new content"
+    sys_op baml.fs.write
+    store_var n
+    load_const "/tmp/baml_fs_write_overwrite.txt"
+    sys_op baml.fs.read
+    store_var readback
+    load_const "/tmp/baml_fs_write_overwrite.txt"
+    sys_op baml.fs.remove
+    pop 1
+    load_type int
+    load_var n
+    load_const 11
+    call baml.deep_equals
+    jump_if_false L0
+    pop 1
+    load_type string
+    load_var readback
+    load_const "new content"
+    call baml.deep_equals
+
+  L0:
+    return
+}
+
+function fs.fs_write_string_fn() -> bool {
+    load_const "/tmp/baml_fs_write_string.txt"
+    load_const "Hello, world!"
+    sys_op baml.fs.write
+    store_var n
+    load_const "/tmp/baml_fs_write_string.txt"
+    sys_op baml.fs.read
+    store_var readback
+    load_const "/tmp/baml_fs_write_string.txt"
+    sys_op baml.fs.remove
+    pop 1
+    load_type int
+    load_var n
+    load_const 13
+    call baml.deep_equals
+    jump_if_false L0
+    pop 1
+    load_type string
+    load_var readback
+    load_const "Hello, world!"
+    call baml.deep_equals
+
+  L0:
+    return
+}

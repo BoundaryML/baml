@@ -1,0 +1,225 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== MIR2 ===
+fn user.MakeWrapper() -> Wrapper {
+    // Locals:
+    let _0: Wrapper // _0 // return
+
+    bb0: {
+        _0 = user.Wrapper { const null };
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.MatchJson(j: baml.json.json) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: baml.json.json // j // param
+    let _2: int
+
+    bb0: {
+        _2 = type_tag(_1);
+        switch copy _2 [null: bb8, bool: bb7, int: bb6, float: bb5, string: bb4, list: bb3, map: bb2, otherwise: bb1] (exhaustive);
+    }
+
+    bb1: {
+        unreachable;
+    }
+
+    bb2: {
+        _0 = const "map";
+        goto -> bb9;
+    }
+
+    bb3: {
+        _0 = const "array";
+        goto -> bb9;
+    }
+
+    bb4: {
+        _0 = const "string";
+        goto -> bb9;
+    }
+
+    bb5: {
+        _0 = const "float";
+        goto -> bb9;
+    }
+
+    bb6: {
+        _0 = const "int";
+        goto -> bb9;
+    }
+
+    bb7: {
+        _0 = const "bool";
+        goto -> bb9;
+    }
+
+    bb8: {
+        _0 = const "null";
+        goto -> bb9;
+    }
+
+    bb9: {
+        return;
+    }
+}
+
+fn user.ReturnArray() -> baml.json.json {
+    // Locals:
+    let _0: baml.json.json // _0 // return
+
+    bb0: {
+        _0 = [const 1_i64, const 2_i64, const 3_i64];
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.ReturnBool() -> baml.json.json {
+    // Locals:
+    let _0: baml.json.json // _0 // return
+
+    bb0: {
+        _0 = const true;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.ReturnFloat() -> baml.json.json {
+    // Locals:
+    let _0: baml.json.json // _0 // return
+
+    bb0: {
+        _0 = const 3.14_f64;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.ReturnInt() -> baml.json.json {
+    // Locals:
+    let _0: baml.json.json // _0 // return
+
+    bb0: {
+        _0 = const 42_i64;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.ReturnMap() -> baml.json.json {
+    // Locals:
+    let _0: baml.json.json // _0 // return
+
+    bb0: {
+        _0 = { const "key": const "value" };
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.ReturnNull() -> baml.json.json {
+    // Locals:
+    let _0: baml.json.json // _0 // return
+
+    bb0: {
+        _0 = const null;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.ReturnString() -> baml.json.json {
+    // Locals:
+    let _0: baml.json.json // _0 // return
+
+    bb0: {
+        _0 = const "hello";
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.Wrapper.from_json(j: baml.json.json) -> Wrapper {
+    // Locals:
+    let _0: Wrapper // _0 // return
+    let _1: baml.json.json // j // param
+    let _2: baml.json.json
+    let _3: baml.json.json
+    let _4: type
+
+    bb0: {
+        _3 = call const fn baml.json.field(copy _1, const "data") -> [bb1];
+    }
+
+    bb1: {
+        _4 = load_type(baml.json.json);
+        _2 = call const fn baml.json.from_json<copy _4>(copy _3) -> [bb2];
+    }
+
+    bb2: {
+        _0 = user.Wrapper { copy _2 };
+        goto -> bb3;
+    }
+
+    bb3: {
+        return;
+    }
+}
+
+fn user.Wrapper.to_json(self: Wrapper) -> baml.json.json {
+    // Locals:
+    let _0: baml.json.json // _0 // return
+    let _1: Wrapper // self // param
+    let _2: baml.json.json
+    let _3: ((baml.Null) -> baml.json.json throws never) | ((baml.Bool) -> baml.json.json throws never) | ((baml.Int) -> baml.json.json throws never) | ((baml.Float) -> baml.json.json throws never) | ((baml.String) -> baml.json.json throws never) | ((baml.json.json[]) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError) | ((map<string, baml.json.json>) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError)
+    let _4: baml.json.json
+    let _5: Wrapper
+    let _6: string
+
+    bb0: {
+        _5 = copy _1;
+        _4 = copy _5.0;
+        _6 = const "to_json";
+        _3 = copy _4[_6];
+        _2 = call copy _3() -> [bb1];
+    }
+
+    bb1: {
+        _0 = { const "data": copy _2 };
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}

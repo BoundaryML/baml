@@ -4,6 +4,7 @@ generator lang_python {
   output_type "python/pydantic"
   output_dir "../python"
   version "0.68.0"
+  naming_convention "preserve-case"
 }
 
 generator lang_typescript {

@@ -32,9 +32,9 @@ fn array_at_returns_element_type_int() {
         "function f(arr: int[]) -> int? { return arr.at(0); }",
     );
     insta::assert_snapshot!(render_tir(&db, file), @"
-    function user.f(arr: int[]) -> int? throws never {
+    function user.f(arr: int[]) -> int | null throws never {
       { : never
-        return arr.at(0) : int?
+        return arr.at(0) : int | null
       }
     }
     ");
@@ -48,9 +48,9 @@ fn array_at_returns_element_type_string() {
         "function f(arr: string[]) -> string? { return arr.at(0); }",
     );
     insta::assert_snapshot!(render_tir(&db, file), @"
-    function user.f(arr: string[]) -> string? throws never {
+    function user.f(arr: string[]) -> string | null throws never {
       { : never
-        return arr.at(0) : string?
+        return arr.at(0) : string | null
       }
     }
     ");
@@ -92,7 +92,7 @@ function f(xs: int[]) -> int {
 
     let tir = render_tir(&db, file);
     assert!(
-        tir.contains("type mismatch: expected user.Array<int>, got int[]"),
+        tir.contains("type mismatch: expected Array<int>, got int[]"),
         "expected nominal user.Array<T> to stay distinct from builtin int[], got:\n{tir}"
     );
 }
@@ -218,12 +218,12 @@ fn string_to_lower_case_returns_string() {
     let mut db = make_db();
     let file = db.add_file(
         "test.baml",
-        "function f(s: string) -> string { return s.toLowerCase(); }",
+        "function f(s: string) -> string { return s.to_lower_case(); }",
     );
     insta::assert_snapshot!(render_tir(&db, file), @"
     function user.f(s: string) -> string throws never {
       { : never
-        return s.toLowerCase() : string
+        return s.to_lower_case() : string
       }
     }
     ");
@@ -256,10 +256,10 @@ fn let_inferred_from_array_at() {
         "function f(arr: int[]) -> int? { let x = arr.at(0); return x; }",
     );
     insta::assert_snapshot!(render_tir(&db, file), @"
-    function user.f(arr: int[]) -> int? throws never {
+    function user.f(arr: int[]) -> int | null throws never {
       { : never
-        let x = arr.at(0) : int?
-        return x : int?
+        let x = arr.at(0) : int | null
+        return x : int | null
       }
     }
     ");
@@ -292,9 +292,9 @@ fn image_url_returns_optional_string() {
         "function f(img: image) -> string? { return img.url(); }",
     );
     insta::assert_snapshot!(render_tir(&db, file), @"
-    function user.f(img: image) -> string? throws never {
+    function user.f(img: image) -> string | null throws never {
       { : never
-        return img.url() : string?
+        return img.url() : string | null
       }
     }
     ");
@@ -324,9 +324,9 @@ fn image_mime_type_returns_optional_string() {
         "function f(img: image) -> string? { return img.mime_type(); }",
     );
     insta::assert_snapshot!(render_tir(&db, file), @"
-    function user.f(img: image) -> string? throws never {
+    function user.f(img: image) -> string | null throws never {
       { : never
-        return img.mime_type() : string?
+        return img.mime_type() : string | null
       }
     }
     ");
@@ -340,9 +340,9 @@ fn pdf_url_returns_optional_string() {
         "function f(doc: pdf) -> string? { return doc.url(); }",
     );
     insta::assert_snapshot!(render_tir(&db, file), @"
-    function user.f(doc: pdf) -> string? throws never {
+    function user.f(doc: pdf) -> string | null throws never {
       { : never
-        return doc.url() : string?
+        return doc.url() : string | null
       }
     }
     ");
@@ -372,9 +372,9 @@ fn video_file_returns_optional_string() {
         "function f(v: video) -> string? { return v.file(); }",
     );
     insta::assert_snapshot!(render_tir(&db, file), @"
-    function user.f(v: video) -> string? throws never {
+    function user.f(v: video) -> string | null throws never {
       { : never
-        return v.file() : string?
+        return v.file() : string | null
       }
     }
     ");
@@ -535,13 +535,13 @@ function f(callback: ((x: int) -> int)?) -> int? {
 }
 "#,
     );
-    insta::assert_snapshot!(render_tir(&db, file), @r#"
-    function user.f(callback: ((x: int) -> int throws never)?) -> int? throws never {
+    insta::assert_snapshot!(render_tir(&db, file), @"
+    function user.f(callback: ((x: int) -> int throws never) | null) -> int | null throws never {
       { : never
-        return callback?.(42) : int?
+        return callback?.(42) : int | null
       }
     }
-    "#);
+    ");
 }
 
 #[test]
@@ -555,10 +555,10 @@ function f(arr: int[]?) -> int[]? {
 }
 "#,
     );
-    insta::assert_snapshot!(render_tir(&db, file), @r"
-    function user.f(arr: int[]?) -> int[]? throws never {
+    insta::assert_snapshot!(render_tir(&db, file), @"
+    function user.f(arr: int[] | null) -> int[] | null throws never {
       { : never
-        return arr?.map?.((x: int) -> int { ... }) : int[]?
+        return arr?.map?.((x: int) -> int { ... }) : int[] | null
       }
     }
     lambda user.f {
@@ -577,15 +577,15 @@ function f(arr: int[]?) -> int[]? {
 }
 "#,
     );
-    insta::assert_snapshot!(render_tir(&db, file), @r#"
-    function user.f(arr: int[]?) -> int[]? throws never {
+    insta::assert_snapshot!(render_tir(&db, file), @"
+    function user.f(arr: int[] | null) -> int[] | null throws never {
       { : never
-        return arr?.map((x) -> { ... }) : int[]?
+        return arr?.map((x) -> { ... }) : int[] | null
       }
     }
     lambda user.f {
     }
-    "#);
+    ");
 }
 
 #[test]
@@ -600,9 +600,9 @@ function f(callback: ((x: int) -> int)?) -> int? {
 "#,
     );
     insta::assert_snapshot!(render_tir(&db, file), @r#"
-    function user.f(callback: ((x: int) -> int throws never)?) -> int? throws never {
+    function user.f(callback: ((x: int) -> int throws never) | null) -> int | null throws never {
       { : never
-        return callback?.("wrong") : int?
+        return callback?.("wrong") : int | null
       }
       !! 74..81: type mismatch: expected int, got "wrong"
     }
@@ -625,14 +625,14 @@ function demo(cb: (((x: int) -> int) -> int)?) -> int? throws never {
 "#,
     );
     insta::assert_snapshot!(render_tir(&db, file), @r#"
-    function user.demo(cb: (((x: int) -> int throws never) -> int throws never)?) -> int? throws never {
-      { : int?
+    function user.demo(cb: (((x: int) -> int throws never) -> int throws never) | null) -> int | null throws never {
+      { : int | null
         let risky = : (x: int) -> int throws string
           (x: int) -> int throws string { ... } : (x: int) -> int throws string
             {
               throw "boom"
             }
-        cb?.(risky) : int?
+        cb?.(risky) : int | null
       }
       !! 146..151: type mismatch: expected (x: int) -> int throws never, got (x: int) -> int throws string
     }
@@ -653,14 +653,14 @@ function f(callback: MaybeFn) -> int? {
 }
 "#,
     );
-    insta::assert_snapshot!(render_tir(&db, file), @r"
-    type user.MaybeFn = ((x: int) -> int throws never)?
-    function user.f(callback: user.MaybeFn) -> int? throws never {
+    insta::assert_snapshot!(render_tir(&db, file), @"
+    type user.MaybeFn = ((x: int) -> int throws never) | null
+    function user.f(callback: user.MaybeFn) -> int | null throws never {
       { : never
-        return callback?.(42) : int?
+        return callback?.(42) : int | null
       }
     }
-    type user.MaybeFn$stream = null | unknown
+    type user.MaybeFn$stream = unknown | null
     ");
 }
 
@@ -681,16 +681,22 @@ function f(u: MaybeUser) -> string? {
     class user.User {
       name: string
     }
-    type user.MaybeUser = user.User?
-    function user.f(u: user.MaybeUser) -> string? throws never {
+    function user.User.to_json(self: user.User) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+      map { "name": self.name.to_json() } : map<string, baml.json.json>
+    }
+    function user.User.from_json(j: baml.json.json) -> user.User throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+      User { name: baml.json.from_json<string>(baml.json.field(j, "name")) } : user.User
+    }
+    type user.MaybeUser = user.User | null
+    function user.f(u: user.MaybeUser) -> string | null throws never {
       { : never
-        return u?.name : string?
+        return u?.name : string | null
       }
     }
     class user.User$stream {
-      name: null | string
+      name: string | null
     }
-    type user.MaybeUser$stream = null | user.User$stream
+    type user.MaybeUser$stream = user.User$stream | null
     "#);
 }
 
@@ -706,15 +712,15 @@ function f(xs: MaybeInts) -> int? {
 }
 "#,
     );
-    insta::assert_snapshot!(render_tir(&db, file), @r#"
-    type user.MaybeInts = int[]?
-    function user.f(xs: user.MaybeInts) -> int? throws never {
+    insta::assert_snapshot!(render_tir(&db, file), @"
+    type user.MaybeInts = int[] | null
+    function user.f(xs: user.MaybeInts) -> int | null throws never {
       { : never
-        return xs?.[0] : int?
+        return xs?.[0] : int | null
       }
     }
-    type user.MaybeInts$stream = null | int[]
-    "#);
+    type user.MaybeInts$stream = int[] | null
+    ");
 }
 
 #[test]
@@ -728,14 +734,14 @@ function f(cb: ((x: int) -> int)?) -> int {
 }
 "#,
     );
-    insta::assert_snapshot!(render_tir(&db, file), @r#"
-    function user.f(cb: ((x: int) -> int throws never)?) -> int throws never {
+    insta::assert_snapshot!(render_tir(&db, file), @"
+    function user.f(cb: ((x: int) -> int throws never) | null) -> int throws never {
       { : never
-        return cb?.(1) : int?
+        return cb?.(1) : int | null
       }
-      !! 56..63: type mismatch: expected int, got int?
+      !! 56..63: type mismatch: expected int, got int | null
     }
-    "#);
+    ");
 }
 
 #[test]
@@ -749,13 +755,13 @@ function f(cb: ((x: int) -> string?)?) -> string? {
 }
 "#,
     );
-    insta::assert_snapshot!(render_tir(&db, file), @r#"
-    function user.f(cb: ((x: int) -> string? throws never)?) -> string? throws never {
+    insta::assert_snapshot!(render_tir(&db, file), @"
+    function user.f(cb: ((x: int) -> string | null throws never) | null) -> string | null throws never {
       { : never
-        return cb?.(1) : string?
+        return cb?.(1) : string | null
       }
     }
-    "#);
+    ");
 }
 
 #[test]
@@ -837,7 +843,7 @@ function f() -> null {
     function user.f() -> null throws never {
       { : never
         let xs = [] : never[] -> int[] (evolving)
-        xs?.push?.(1) : int?
+        xs?.push?.(1) : int | null
         xs.push("a") : int
         return null : null
       }
@@ -865,7 +871,7 @@ function f() -> null {
     function user.f() -> null throws never {
       { : never
         let xs = [] : never[] -> int[] (evolving)
-        xs?.push(1) : int?
+        xs?.push(1) : int | null
         xs.push("a") : int
         return null : null
       }
@@ -886,13 +892,13 @@ function f(xs: int[]?) -> int? {
 }
 "#,
     );
-    insta::assert_snapshot!(render_tir(&db, file), @r#"
-    function user.f(xs: int[]?) -> int? throws never {
+    insta::assert_snapshot!(render_tir(&db, file), @"
+    function user.f(xs: int[] | null) -> int | null throws never {
       { : never
-        return xs?.push?.(2) : int?
+        return xs?.push?.(2) : int | null
       }
     }
-    "#);
+    ");
 }
 
 #[test]
@@ -941,7 +947,7 @@ function f(xs: int[]?) -> int? {
     );
     assert_eq!(
         expr_type_in_function(&db, file, "f", "xs?.push"),
-        "((self: int[], item: int) -> int throws never)?"
+        "((self: int[], item: int) -> int throws never) | null"
     );
 }
 
@@ -1160,7 +1166,12 @@ function f() -> null {
 }
 
 #[test]
-fn stored_lambda_with_omitted_throws_stays_closed_in_expr_type() {
+fn stored_lambda_with_omitted_throws_infers_throws_in_expr_type() {
+    // An UNANNOTATED lambda infers its throws surface from its body — a
+    // lambda throws what it throws (BEP-034 middleware relies on this for
+    // body wraps like `() -> { original() }` where the throws is the
+    // enclosing fn's generic `E`). The stored value's type carries the
+    // inferred, concrete surface instead of a blanket `never`.
     let mut db = make_db();
     let file = db.add_file(
         "test.baml",
@@ -1176,7 +1187,7 @@ function f() -> null {
     );
     assert_eq!(
         expr_type_in_function(&db, file, "f", "risky"),
-        "(x: int) -> int throws never"
+        "(x: int) -> int throws string"
     );
 }
 
@@ -1330,14 +1341,14 @@ function f(xs: int[]?) -> string {
 }
 "#,
     );
-    insta::assert_snapshot!(render_tir(&db, file), @r#"
-    function user.f(xs: int[]?) -> string throws never {
+    insta::assert_snapshot!(render_tir(&db, file), @"
+    function user.f(xs: int[] | null) -> string throws never {
       { : never
-        return xs?.push?.(1) : int?
+        return xs?.push?.(1) : int | null
       }
-      !! 46..60: type mismatch: expected string, got int?
+      !! 46..60: type mismatch: expected string, got int | null
     }
-    "#);
+    ");
 }
 
 #[test]
@@ -1351,10 +1362,10 @@ function f(arr: int[]?) -> int[]? {
 }
 "#,
     );
-    insta::assert_snapshot!(render_tir(&db, file), @r"
-    function user.f(arr: int[]?) -> int[]? throws never {
+    insta::assert_snapshot!(render_tir(&db, file), @"
+    function user.f(arr: int[] | null) -> int[] | null throws never {
       { : never
-        return arr?.map?.((x) -> { ... }) : int[]?
+        return arr?.map?.((x) -> { ... }) : int[] | null
       }
     }
     lambda user.f {
@@ -1373,10 +1384,10 @@ function f(arr: int[]?) -> int[]? {
 }
 "#,
     );
-    insta::assert_snapshot!(render_tir(&db, file), @r"
-    function user.f(arr: int[]?) -> int[]? throws never {
+    insta::assert_snapshot!(render_tir(&db, file), @"
+    function user.f(arr: int[] | null) -> int[] | null throws never {
       { : never
-        return arr?.map?.((x: int) -> int { ... }) : int[]?
+        return arr?.map?.((x: int) -> int { ... }) : int[] | null
       }
     }
     lambda user.f {
@@ -1396,9 +1407,9 @@ function f(s: string?) -> string[]? {
 "#,
     );
     insta::assert_snapshot!(render_tir(&db, file), @r#"
-    function user.f(s: string?) -> string[]? throws never {
+    function user.f(s: string | null) -> string[] | null throws never {
       { : never
-        return s?.split?.(",") : string[]?
+        return s?.split?.(",") : string[] | null
       }
     }
     "#);
@@ -1415,13 +1426,13 @@ function f(m: map<string, int>?) -> string[]? {
 }
 "#,
     );
-    insta::assert_snapshot!(render_tir(&db, file), @r#"
-    function user.f(m: map<string, int>?) -> string[]? throws never {
+    insta::assert_snapshot!(render_tir(&db, file), @"
+    function user.f(m: map<string, int> | null) -> string[] | null throws never {
       { : never
-        return m?.keys?.() : string[]?
+        return m?.keys?.() : string[] | null
       }
     }
-    "#);
+    ");
 }
 
 #[test]
@@ -1435,14 +1446,14 @@ function f(callback: (x: int) -> int) -> int? {
 }
 "#,
     );
-    insta::assert_snapshot!(render_tir(&db, file), @r#"
-    function user.f(callback: (x: int) -> int throws never) -> int? throws never {
+    insta::assert_snapshot!(render_tir(&db, file), @"
+    function user.f(callback: (x: int) -> int throws never) -> int | null throws never {
       { : never
-        return callback?.(42) : int?
+        return callback?.(42) : int | null
       }
       !! 60..74: did you mean `callback(42)`? `callback?.(42)` is unnecessary, because `callback` cannot be null
     }
-    "#);
+    ");
 }
 
 #[test]
@@ -1483,14 +1494,14 @@ function f(callback: ((x: int) -> int)?) -> int? {
 }
 "#,
     );
-    insta::assert_snapshot!(render_tir(&db, file), @r#"
-    function user.f(callback: ((x: int) -> int throws never)?) -> int? throws never {
+    insta::assert_snapshot!(render_tir(&db, file), @"
+    function user.f(callback: ((x: int) -> int throws never) | null) -> int | null throws never {
       { : never
-        return callback?.(1, 2) : int?
+        return callback?.(1, 2) : int | null
       }
       !! 63..79: expected 1 argument(s), got 2
     }
-    "#);
+    ");
 }
 
 #[test]
@@ -1573,5 +1584,195 @@ function f() -> int {
     assert!(
         output.contains("type mismatch: expected string, got int"),
         "post-loop push should be checked against the loop-established element type, got:\n{output}"
+    );
+}
+
+#[test]
+fn array_rest_binding_annotation_must_be_array_type() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+function f() -> int {
+    let [..let rest: int] = [1, 2]
+    return 0
+}
+"#,
+    );
+    let output = render_tir(&db, file);
+
+    assert!(
+        output.contains("rest pattern `..` cannot carry a sub-pattern"),
+        "rest with sub-pattern should be rejected (only bare `..` allowed), got:\n{output}"
+    );
+}
+
+#[test]
+fn array_rest_binding_array_annotation_is_valid() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+function f() -> int {
+    let [..let rest: int[]] = [1, 2]
+    return rest[0]
+}
+"#,
+    );
+    let output = render_tir(&db, file);
+
+    assert!(
+        output.contains("let [..rest: int[]] = [1, 2] : int[]"),
+        "rest pattern annotation should be checked against the rest slice type, got:\n{output}"
+    );
+    assert!(
+        !output.contains("type mismatch"),
+        "array rest annotation should be valid, got:\n{output}"
+    );
+}
+
+#[test]
+fn array_rest_cannot_use_class_destructure_for_rest_slice() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+class Box {
+    value int
+}
+
+function f(boxes: Box[]) -> int {
+    let [..Box { value }] = boxes
+    return value
+}
+"#,
+    );
+    let output = render_tir(&db, file);
+
+    assert!(
+        output.contains("rest pattern `..` cannot carry a sub-pattern"),
+        "rest with sub-pattern should be rejected (only bare `..` allowed), got:\n{output}"
+    );
+}
+
+#[test]
+fn array_nested_rest_annotation_must_match_rest_slice() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+function f(xs: int[]) -> int {
+    match (xs) {
+        [..[let x]: int] => x,
+        _ => 0
+    }
+}
+"#,
+    );
+    let output = render_tir(&db, file);
+
+    assert!(
+        output.contains("rest pattern `..` cannot carry a sub-pattern"),
+        "rest with sub-pattern should be rejected (only bare `..` allowed), got:\n{output}"
+    );
+}
+
+#[test]
+fn nested_refutable_array_under_rest_is_rejected_in_let() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+function f(xs: int[]) -> int {
+    let [..[let x]] = xs
+    return x
+}
+"#,
+    );
+    let output = render_tir(&db, file);
+
+    assert!(
+        output.contains("refutable pattern in let binding"),
+        "nested exact array under rest should still make the let refutable, got:\n{output}"
+    );
+}
+
+#[test]
+fn refutable_array_pattern_is_rejected_in_for_binding() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+function f(rows: int[][]) -> int {
+    let total = 0
+    for (let [let x] in rows) {
+        total += x
+    }
+    return total
+}
+"#,
+    );
+    let output = render_tir(&db, file);
+
+    assert!(
+        output.contains("refutable pattern in for-let binding"),
+        "exact array pattern in for-let should be rejected as refutable, got:\n{output}"
+    );
+}
+
+#[test]
+fn or_pattern_same_binding_with_conflicting_types_is_rejected() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+class A {
+    field int
+}
+
+class B {
+    field string
+}
+
+function f(value: A | B) -> int {
+    match (value) {
+        A { field: let x } | B { field: let x } => 1
+    }
+}
+"#,
+    );
+    let output = render_tir(&db, file);
+
+    assert!(
+        output.contains("Or-pattern alternatives bind `x` with conflicting types"),
+        "same or-pattern binding name with incompatible types should be rejected, got:\n{output}"
+    );
+}
+
+#[test]
+fn mixed_or_pattern_preserves_partial_expected_type_for_generic_return() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+class A {
+    field int
+}
+
+function produce<T>() -> T {
+    throw "boom"
+}
+
+function f() -> int {
+    let A { field } | [..let field] = produce()
+    return field
+}
+"#,
+    );
+    let output = render_tir(&db, file);
+
+    assert!(
+        output.contains("produce<T>() : user.A"),
+        "mixed OR should preserve the informative class branch as a partial expected type for generic return inference, got:\n{output}"
     );
 }

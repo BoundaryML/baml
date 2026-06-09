@@ -31,7 +31,7 @@ function FooBar(arg) -> bar {
 
 //----
 //- diagnostics
-// Error: Expected type, found '{'
+// error: Expected type, found '{'
 //    ╭─[ functions_v2_invalid.baml:1:19 ]
 //    │
 //  1 │ function Foo() -> {
@@ -40,7 +40,7 @@ function FooBar(arg) -> bar {
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯
-// Error: Expected type annotation, found ')'
+// error: Expected type annotation, found ')'
 //    ╭─[ functions_v2_invalid.baml:6:20 ]
 //    │
 //  6 │ function FooBar(arg) -> bar {
@@ -49,7 +49,7 @@ function FooBar(arg) -> bar {
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯
-// Error: could not parse type expression for return type of `Foo`
+// error: could not parse type expression for return type of `Foo`
 //    ╭─[ functions_v2_invalid.baml:1:18 ]
 //    │
 //  1 │ function Foo() -> {
@@ -58,29 +58,25 @@ function FooBar(arg) -> bar {
 //    │ 
 //    │ Note: Error code: E0108
 // ───╯
-// Error: unresolved name: Bar
-//    ╭─[ functions_v2_invalid.baml:1:18 ]
+// error: unresolved name: Bar
+//    ╭─[ functions_v2_invalid.baml:2:10 ]
 //    │
-//  1 │ ╭─▶ function Foo() -> {
-//    ┆ ┆   
-//  4 │ ├─▶ }
-//    │ │       
-//    │ ╰─────── unresolved name: Bar
-//    │     
-//    │     Note: Error code: E0003
+//  2 │   client Bar
+//    │          ─┬─  
+//    │           ╰─── unresolved name: Bar
+//    │ 
+//    │ Note: Error code: E0003
 // ───╯
-// Error: unresolved name: Bar
-//    ╭─[ functions_v2_invalid.baml:1:1 ]
+// error: unresolved name: prompt
+//    ╭─[ functions_v2_invalid.baml:3:3 ]
 //    │
-//  1 │ ╭─▶ function Foo() -> {
-//    ┆ ┆   
-//  4 │ ├─▶ }
-//    │ │       
-//    │ ╰─────── unresolved name: Bar
-//    │     
-//    │     Note: Error code: E0003
+//  3 │   prompt #"fa"#
+//    │   ───┬──  
+//    │      ╰──── unresolved name: prompt
+//    │ 
+//    │ Note: Error code: E0003
 // ───╯
-// Error: unresolved type: bar
+// error: unresolved type: bar
 //    ╭─[ functions_v2_invalid.baml:6:24 ]
 //    │
 //  6 │ function FooBar(arg) -> bar {

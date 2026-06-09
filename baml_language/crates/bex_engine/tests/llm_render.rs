@@ -19,7 +19,7 @@ async fn test_render_prompt_directly() {
     let mut args = IndexMap::new();
     args.insert(
         "name".to_string(),
-        BexExternalValue::String("Alice".to_string()),
+        BexExternalValue::String("Alice".to_string().into()),
     );
     args.insert("age".to_string(), BexExternalValue::Int(30));
 
@@ -78,7 +78,7 @@ You are a helpful assistant.
     let mut args = IndexMap::new();
     args.insert(
         "question".to_string(),
-        BexExternalValue::String("What is 2+2?".to_string()),
+        BexExternalValue::String("What is 2+2?".to_string().into()),
     );
 
     let client =
@@ -204,6 +204,32 @@ async fn test_render_prompt_with_enums() {
 }
 
 mod common;
+
+#[tokio::test]
+async fn test_render_prompt_e2e_includes_output_format_schema() {
+    let rendered = common::render_output_format(
+        r#"
+class Sentiment {
+    feeling string @description("The detected sentiment")
+    confidence float @description("Confidence score between 0 and 1")
+    reasoning string @description("Brief explanation")
+}
+"#,
+        "Sentiment",
+    )
+    .await;
+
+    assert!(
+        rendered.contains("Answer in JSON using this schema:"),
+        "prompt did not include output format prefix:\n{rendered}"
+    );
+    assert!(
+        rendered.contains("feeling")
+            && rendered.contains("confidence")
+            && rendered.contains("reasoning"),
+        "prompt did not include return class fields:\n{rendered}"
+    );
+}
 
 /// Test the full `render_prompt` flow through the engine.
 ///
@@ -535,7 +561,7 @@ function Greet(name: string) -> string {
     let result = engine
         .call_function(
             "Greet",
-            vec![BexExternalValue::String("World".to_string())],
+            vec![BexExternalValue::String("World".to_string().into())],
             FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
             true,
         )
@@ -893,5 +919,84 @@ function get_prompt() -> baml.llm.PromptAst {
     assert_eq!(
         result,
         prompt_ast_message("system", "=== HEADER ===\nContent here")
+    );
+}
+
+// ============================================================================
+// Phase 3: json alias LLM-path sentinel
+// ============================================================================
+
+/// Verify that `function F() -> json { ... prompt #"{{ ctx.output_format }}"# }`
+/// renders a prompt containing "Respond with valid JSON." — the static literal
+/// required by BEP-038 Phase 3 — and does NOT contain the union-arm enumeration
+/// (`null or bool or int ...`).
+#[tokio::test]
+async fn test_json_return_type_renders_valid_json_literal() {
+    use bex_engine::BexEngine;
+    use sys_native::SysOpsExt;
+
+    let source = r##"
+client TestClient {
+    provider openai
+    options {
+        model "gpt-4"
+    }
+}
+
+function ExtractAny() -> json {
+    client TestClient
+    prompt #"
+        Return whatever JSON you like.
+
+        {{ ctx.output_format }}
+    "#
+}
+
+function get_prompt() -> baml.llm.PromptAst {
+    baml.llm.render_prompt(TestClient, "ExtractAny", {})
+}
+"##;
+
+    let snapshot = common::compile_for_engine(source);
+    let engine = std::sync::Arc::new(
+        BexEngine::new(
+            snapshot,
+            sys_native::SysOps::native().into(),
+            None,
+            Vec::new(),
+        )
+        .expect("Failed to create engine"),
+    );
+
+    let result = engine
+        .call_function(
+            "get_prompt",
+            vec![],
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+            true,
+        )
+        .await
+        .expect("failed to render prompt for json return type");
+
+    // Extract the rendered text from the PromptAst.
+    let rendered_text = match &result {
+        BexExternalValue::Instance { class_name, fields } => {
+            assert_eq!(class_name, "baml.llm.PromptAst");
+            match fields.get("_data") {
+                Some(BexExternalValue::Adt(adt)) => format!("{adt:?}"),
+                other => format!("{other:?}"),
+            }
+        }
+        other => format!("{other:?}"),
+    };
+
+    assert!(
+        rendered_text.contains("Respond with valid JSON."),
+        "rendered prompt must contain 'Respond with valid JSON.' — got: {rendered_text}"
+    );
+    // The union-arm enumeration must NOT appear in the rendered output.
+    assert!(
+        !rendered_text.contains("null or bool or int"),
+        "rendered prompt must not contain union-arm enumeration — got: {rendered_text}"
     );
 }

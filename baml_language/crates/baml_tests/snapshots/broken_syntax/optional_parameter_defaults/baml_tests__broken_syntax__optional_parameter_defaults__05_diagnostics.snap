@@ -1,0 +1,13 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [parse] error: default expressions are not allowed in function types
+   ╭─[ function_type_defaults.baml:1:68 ]
+   │
+ 1 │ type BadDefaultInFunctionType = (query: string, max_results: int = 10) -> int
+   │                                                                    ─┬  
+   │                                                                     ╰── default expressions are not allowed in function types
+   │ 
+   │ Note: Error code: E0010
+───╯

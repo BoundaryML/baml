@@ -10,6 +10,12 @@ function user.Formatter.format(self: user.Formatter, text: string) -> string thr
     self.prefix + text : string
   }
 }
+function user.Formatter.to_json(self: user.Formatter) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  map { "prefix": self.prefix.to_json() } : map<string, baml.json.json>
+}
+function user.Formatter.from_json(j: baml.json.json) -> user.Formatter throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  Formatter { prefix: baml.json.from_json<string>(baml.json.field(j, "prefix")) } : user.Formatter
+}
 class user.RangeCheck {
   min: int
   max: int
@@ -19,6 +25,12 @@ function user.RangeCheck.is_valid(self: user.RangeCheck, n: int) -> bool throws 
     n >= self.min && n <= self.max : bool
   }
 }
+function user.RangeCheck.to_json(self: user.RangeCheck) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  map { "min": self.min.to_json(), "max": self.max.to_json() } : map<string, baml.json.json>
+}
+function user.RangeCheck.from_json(j: baml.json.json) -> user.RangeCheck throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  RangeCheck { min: baml.json.from_json<int>(baml.json.field(j, "min")), max: baml.json.from_json<int>(baml.json.field(j, "max")) } : user.RangeCheck
+}
 class user.Counter {
   value: int
 }
@@ -27,6 +39,12 @@ function user.Counter.increment(self: user.Counter) -> int throws never {
     self.value Add= 1 : int
     self.value : int
   }
+}
+function user.Counter.to_json(self: user.Counter) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  map { "value": self.value.to_json() } : map<string, baml.json.json>
+}
+function user.Counter.from_json(j: baml.json.json) -> user.Counter throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  Counter { value: baml.json.from_json<int>(baml.json.field(j, "value")) } : user.Counter
 }
 class user.Employee {
   first: string
@@ -42,8 +60,20 @@ function user.Employee.greet(self: user.Employee, greeting: string) -> string th
     greeting + ", " + self.first : string
   }
 }
+function user.Employee.to_json(self: user.Employee) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  map { "first": self.first.to_json(), "last": self.last.to_json() } : map<string, baml.json.json>
+}
+function user.Employee.from_json(j: baml.json.json) -> user.Employee throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  Employee { first: baml.json.from_json<string>(baml.json.field(j, "first")), last: baml.json.from_json<string>(baml.json.field(j, "last")) } : user.Employee
+}
 class user.Config {
   encoder: user.Encoder
+}
+function user.Config.to_json(self: user.Config) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  map { "encoder": self.encoder.to_json() } : map<string, baml.json.json>
+}
+function user.Config.from_json(j: baml.json.json) -> user.Config throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  Config { encoder: baml.json.from_json<Encoder>(baml.json.field(j, "encoder")) } : user.Config
 }
 class user.Encoder {
   charset: string
@@ -53,6 +83,12 @@ function user.Encoder.encode(self: user.Encoder, data: string) -> string throws 
     "[" + self.charset + "]" + data : string
   }
 }
+function user.Encoder.to_json(self: user.Encoder) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  map { "charset": self.charset.to_json() } : map<string, baml.json.json>
+}
+function user.Encoder.from_json(j: baml.json.json) -> user.Encoder throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  Encoder { charset: baml.json.from_json<string>(baml.json.field(j, "charset")) } : user.Encoder
+}
 class user.Box {
   value: T
 }
@@ -60,6 +96,12 @@ function user.Box.unwrap(self: user.Box) -> unknown throws never {
   { : T
     self.value : T
   }
+}
+function user.Box.to_json(self: user.Box) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  map { "value": baml.json.to_json(self.value) } : map<string, baml.json.json>
+}
+function user.Box.from_json(j: baml.json.json) -> user.Box<unknown> throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  Box { value: baml.json.from_json<T>(baml.json.field(j, "value")) } : user.Box<T>
 }
 class user.Calculator {
   op: string
@@ -75,6 +117,12 @@ function user.Calculator.compute(self: user.Calculator, a: int, b: int) -> int t
         a * b : int
       }
   }
+}
+function user.Calculator.to_json(self: user.Calculator) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  map { "op": self.op.to_json() } : map<string, baml.json.json>
+}
+function user.Calculator.from_json(j: baml.json.json) -> user.Calculator throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  Calculator { op: baml.json.from_json<string>(baml.json.field(j, "op")) } : user.Calculator
 }
 function user.test_bound_mapper() -> string[] throws never {
   { : string[]
@@ -137,9 +185,9 @@ function user.test_mutation_after_bind() -> int throws never {
 }
 function user.test_generic_bind() -> int throws never {
   { : int
-    let b = Box { value: 42 } : user.Box
-    let get = b.unwrap : () -> T throws never
-    get<T>() : int
+    let b = Box { value: 42 } : user.Box<int>
+    let get = b.unwrap : () -> int throws never
+    get() : int
   }
 }
 function user.test_bound_in_lambda() -> string throws never {
@@ -166,28 +214,28 @@ function user.test_repeated_bound_calls() -> int throws never {
   }
 }
 class user.Formatter$stream {
-  prefix: null | string
+  prefix: string | null
 }
 class user.RangeCheck$stream {
-  min: null | int
-  max: null | int
+  min: int | null
+  max: int | null
 }
 class user.Counter$stream {
-  value: null | int
+  value: int | null
 }
 class user.Employee$stream {
-  first: null | string
-  last: null | string
+  first: string | null
+  last: string | null
 }
 class user.Config$stream {
-  encoder: null | user.Encoder$stream
+  encoder: user.Encoder$stream | null
 }
 class user.Encoder$stream {
-  charset: null | string
+  charset: string | null
 }
 class user.Box$stream {
-  value: null | unknown
+  value: T | null
 }
 class user.Calculator$stream {
-  op: null | string
+  op: string | null
 }

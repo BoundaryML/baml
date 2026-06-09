@@ -12,9 +12,6 @@ mod match_string;
 
 use std::{borrow::Cow, collections::HashSet, marker::PhantomData};
 
-// use baml_types::{BamlValue, Constraint, JinjaExpression};
-// use internal_baml_core::ir::jinja_helpers::evaluate_predicate;
-// use internal_baml_jinja::types::OutputFormatContent;
 use super::types::BamlValueWithFlags;
 use crate::{
     baml_value::ValueWithMeta,
@@ -339,14 +336,6 @@ impl<'s, 'v, 't, N: TypeIdent> ParsingContext<'s, 'v, 't, N> {
     pub fn error_type_resolution(&self, ident: &N) -> ParsingError {
         ParsingError {
             reason: format!("Failed to resolve type {ident}"),
-            scope: self.scope.clone(),
-            causes: Vec::new(),
-        }
-    }
-
-    pub(crate) fn error_assertion_failure(&self) -> ParsingError {
-        ParsingError {
-            reason: "Assertion failed".to_string(),
             scope: self.scope.clone(),
             causes: Vec::new(),
         }

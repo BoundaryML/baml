@@ -209,9 +209,6 @@ test_deserializer!(
     }
 );
 
-// test_phone_number_regex: skipped (@check/Assertion::evaluate is todo!())
-// test_email_regex: skipped (@check/Assertion::evaluate is todo!())
-
 test_deserializer!(
     test_ignore_float_in_string_if_string_in_union,
     "1 cup unsalted butter, room temperature",

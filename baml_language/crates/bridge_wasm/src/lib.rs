@@ -45,6 +45,7 @@
 
 mod error;
 mod handle;
+mod host_value;
 mod registry;
 mod send_wrapper;
 mod wasm_env;
@@ -56,9 +57,15 @@ mod wasm_io_glob;
 mod wasm_lsp;
 mod wasm_playground;
 mod wasm_sys;
+mod wasm_time;
 
-pub use bridge_ctypes::{HANDLE_TABLE, baml, external_to_baml_value, kwargs_to_bex_values};
+pub use bridge_ctypes::{HANDLE_TABLE, baml_core, external_to_outbound, kwargs_to_bex_values};
 pub use error::BridgeError;
+// Re-export host-callable wasm-bindgen exports so JS test glue and Rust
+// integration tests can resolve them by their original Rust names. The
+// `#[wasm_bindgen]` attribute already exposes them as `registerHostCallable`
+// and `completeHostCall` in the generated `.d.ts` / module exports.
+pub use host_value::{complete_host_call, register_host_callable};
 use js_sys::Function;
 use prost::Message;
 use wasm_bindgen::prelude::*;
@@ -84,7 +91,7 @@ pub fn start() {
 /// Get the version of the `bridge_wasm` crate.
 #[wasm_bindgen]
 pub fn version() -> String {
-    env!("CARGO_PKG_VERSION").to_string()
+    baml_version::CANONICAL_VERSION.to_string()
 }
 
 /// Returns the build timestamp (unix seconds) for hot-reload / build-identity checks.
@@ -128,6 +135,34 @@ export type WasmShellCallback = (
   optionsJson: string | undefined,
 ) => Promise<{ stdout: string; stderr: string; exit_code: number;
                stdout_bytes: Uint8Array; stderr_bytes: Uint8Array }>;
+
+/// Dispatch a BAML→host invocation of a host-registered JS callable.
+///
+/// Called when BAML code invokes a value previously registered via
+/// `registerHostCallable`. The wrapper is expected to:
+///
+///   1. Decode `argsBytes` (a protobuf-encoded `BamlOutboundValue` list)
+///      into JS positional arguments.
+///   2. Invoke the user callable (awaiting a returned Promise if any).
+///   3. Encode the outcome as an `InboundValue` protobuf payload:
+///      - **Return:** the returned value itself.
+///      - **Throw:** *any* `InboundValue` describing the thrown value.
+///        A typed BAML error class (when the wrapper unwraps a
+///        `BamlError(value=...)` whose inner value is a codegenned
+///        BAML class) round-trips as that class so the BAML caller's
+///        typed `catch (e: MyError)` matches structurally. An opaque
+///        native JS exception is wrapped as an `Instance` of
+///        `baml.errors.HostCallable` carrying the exception's metadata
+///        (`message`, `class_name`, `language`, optional `traceback`),
+///        with an optional same-host rehydration handle in `_handle`.
+///   4. Call `completeHostCall(callId, isError, content)` (the wasm-bindgen
+///      export from this module) to resolve the in-flight call — `isError`
+///      is `0` for the return path and `1` for the throw path.
+export type WasmHostDispatchCallback = (
+  key: bigint,
+  callId: number,
+  argsBytes: Uint8Array,
+) => void;
 "#;
 
 #[wasm_bindgen]
@@ -144,7 +179,8 @@ extern "C" {
         lsp_send_notification: WasmSendNotificationCallback;
         lsp_send_response: WasmSendResponseCallback;
         lsp_make_request: WasmMakeRequestCallback;
-        playground_send_notification: WasmPlaygroundNotificationCallback
+        playground_send_notification: WasmPlaygroundNotificationCallback;
+        host_dispatch: WasmHostDispatchCallback
 }"#)]
     pub type WasmCallbacks;
 
@@ -174,6 +210,9 @@ extern "C" {
 
     #[wasm_bindgen(method, getter, structural, js_name = "playground_send_notification")]
     fn playground_send_notification(this: &WasmCallbacks) -> Function;
+
+    #[wasm_bindgen(method, getter, structural, js_name = "host_dispatch")]
+    fn host_dispatch(this: &WasmCallbacks) -> Function;
 }
 
 /// A BAML runtime for WASM environments.
@@ -213,6 +252,7 @@ impl BamlWasmRuntime {
         let send_response_fn = callbacks.send_response();
         let make_request_fn = callbacks.make_request();
         let playground_send_notification_fn = callbacks.playground_send_notification();
+        let host_dispatch_fn = callbacks.host_dispatch();
 
         // Wrap wasm_vfs in Arc so it can be shared across the VFS filesystem,
         // the fs IO namespace, and the glob IO namespace without cloning the
@@ -232,6 +272,14 @@ impl BamlWasmRuntime {
             )))
             .with_glob_instance(std::sync::Arc::new(wasm_io_glob::WasmIoGlob::new(
                 std::sync::Arc::clone(&wasm_vfs_arc),
+            )))
+            .with_time_instance(std::sync::Arc::new(wasm_time::WasmTime))
+            // One `WasmHost` per runtime, holding *this* runtime's JS
+            // `host_dispatch` callback so a BAML→host call dispatches through
+            // the correct wrapper (a process-global callback would let a second
+            // runtime clobber the first's).
+            .with_host_instance(std::sync::Arc::new(host_value::WasmHost::new(
+                host_dispatch_fn,
             )))
             .build();
         let sys_ops = std::sync::Arc::new(sys_ops);
@@ -278,7 +326,7 @@ impl BamlWasmRuntime {
         args_proto: &[u8],
     ) -> Result<Vec<u8>, JsValue> {
         // Decode protobuf arguments
-        let args = baml::cffi::CallFunctionArgs::decode(args_proto)
+        let args = baml_core::cffi::CallFunctionArgs::decode(args_proto)
             .map_err(|e| JsError::new(&format!("Failed to decode arguments: {e}")))?;
 
         let kwargs = kwargs_to_bex_values(args.kwargs, &HANDLE_TABLE)
@@ -300,10 +348,7 @@ impl BamlWasmRuntime {
 
         // Handle cancellation error.
         let result = result.map_err(|e| -> JsValue {
-            if matches!(
-                e,
-                bex_project::RuntimeError::Engine(bex_project::EngineError::Cancelled)
-            ) {
+            if bex_project::is_cancelled_runtime_error(&e) {
                 let err = js_sys::Error::new("Operation cancelled");
                 err.set_name("BamlCancelledError");
                 err.into()
@@ -312,8 +357,8 @@ impl BamlWasmRuntime {
             }
         })?;
 
-        let handle_options = bridge_ctypes::HandleTableOptions::for_wire();
-        let baml_value = external_to_baml_value(&result, &handle_options)
+        let handle_options = bridge_ctypes::CffiHandleTableOptions::for_wire();
+        let baml_value = external_to_outbound(&result, &handle_options)
             .map_err(|e| JsError::new(&format!("Failed to encode result: {e}")))?;
 
         Ok(baml_value.encode_to_vec())
@@ -429,12 +474,12 @@ impl BamlWasmRuntime {
 
         match result {
             Ok(result) => {
-                let handle_options = bridge_ctypes::HandleTableOptions::for_wire();
-                let baml_value = external_to_baml_value(&result, &handle_options)
+                let handle_options = bridge_ctypes::CffiHandleTableOptions::for_wire();
+                let baml_value = external_to_outbound(&result, &handle_options)
                     .map_err(|e| JsError::new(&format!("Failed to encode result: {e}")))?;
                 Ok(baml_value.encode_to_vec())
             }
-            Err(bex_project::EngineError::Cancelled) => {
+            Err(e) if bex_project::is_cancelled_engine_error(&e) => {
                 let error = js_sys::Error::new("Function call was cancelled");
                 error.set_name("BamlCancelledError");
                 Err(error.into())

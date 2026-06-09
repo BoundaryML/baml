@@ -7,6 +7,7 @@
 
 use std::collections::{HashMap, HashSet, VecDeque};
 
+#[cfg(debug_assertions)]
 use baml_base::Name;
 
 use crate::{
@@ -140,15 +141,12 @@ fn rewrite_block_ids_in_terminator(term: &mut Terminator, map: &[Option<BlockId>
             remap(otherwise);
         }
         Terminator::Return => {}
-        Terminator::Call { target, unwind, .. } => {
-            remap(target);
-            if let Some(u) = unwind {
-                remap(u);
-            }
-        }
         Terminator::Unreachable => {}
-        Terminator::DispatchFuture { resume, .. } => remap(resume),
-        Terminator::Await { target, unwind, .. } => {
+        Terminator::Spawn { resume, .. } => remap(resume),
+        Terminator::Call { target, unwind, .. }
+        | Terminator::SysOp { target, unwind, .. }
+        | Terminator::Await { target, unwind, .. }
+        | Terminator::AwaitAny { target, unwind, .. } => {
             remap(target);
             if let Some(u) = unwind {
                 remap(u);
@@ -212,15 +210,12 @@ fn rewrite_block_ids_in_terminator_with_map(
             remap(otherwise);
         }
         Terminator::Return => {}
-        Terminator::Call { target, unwind, .. } => {
-            remap(target);
-            if let Some(u) = unwind {
-                remap(u);
-            }
-        }
         Terminator::Unreachable => {}
-        Terminator::DispatchFuture { resume, .. } => remap(resume),
-        Terminator::Await { target, unwind, .. } => {
+        Terminator::Spawn { resume, .. } => remap(resume),
+        Terminator::Call { target, unwind, .. }
+        | Terminator::SysOp { target, unwind, .. }
+        | Terminator::Await { target, unwind, .. }
+        | Terminator::AwaitAny { target, unwind, .. } => {
             remap(target);
             if let Some(u) = unwind {
                 remap(u);
@@ -376,6 +371,12 @@ fn collect_place_index_locals(body: &MirFunctionBody) -> HashSet<Local> {
             crate::Rvalue::MakeBoundMethod { receiver, .. } => {
                 scan_operand(receiver, set);
             }
+            crate::Rvalue::MakeGenericFunctionFromValue { value, .. } => {
+                scan_operand(value, set);
+            }
+            crate::Rvalue::LoadType(_) | crate::Rvalue::MakeGenericFunction { .. } => {
+                // LoadType takes no local operands.
+            }
         }
     }
 
@@ -405,15 +406,29 @@ fn collect_place_index_locals(body: &MirFunctionBody) -> HashSet<Local> {
                     }
                     scan_place(destination, &mut set);
                 }
-                Terminator::DispatchFuture {
+                Terminator::SysOp {
                     callee,
                     args,
-                    future,
+                    destination,
                     ..
                 } => {
                     scan_operand(callee, &mut set);
                     for a in args {
                         scan_operand(a, &mut set);
+                    }
+                    scan_place(destination, &mut set);
+                }
+                Terminator::Spawn {
+                    closure,
+                    name,
+                    config,
+                    future,
+                    ..
+                } => {
+                    scan_operand(closure, &mut set);
+                    scan_operand(name, &mut set);
+                    if let Some(config) = config {
+                        scan_operand(config, &mut set);
                     }
                     scan_place(future, &mut set);
                 }
@@ -424,7 +439,25 @@ fn collect_place_index_locals(body: &MirFunctionBody) -> HashSet<Local> {
                 Terminator::Throw { value } | Terminator::ThrowIfPanic { value, .. } => {
                     scan_operand(value, &mut set);
                 }
-                Terminator::Await { destination, .. } => scan_place(destination, &mut set),
+                Terminator::Await {
+                    future,
+                    destination,
+                    ..
+                } => {
+                    // The awaited place can be a `Place::Index` (e.g.
+                    // `await xs[_i]`): its index local is typed `Local` in the
+                    // bytecode and cannot be rewritten to a constant.
+                    scan_place(future, &mut set);
+                    scan_place(destination, &mut set);
+                }
+                Terminator::AwaitAny {
+                    futures,
+                    destination,
+                    ..
+                } => {
+                    scan_operand(futures, &mut set);
+                    scan_place(destination, &mut set);
+                }
                 Terminator::ShortCircuit {
                     operand,
                     destination,
@@ -462,8 +495,10 @@ fn count_local_defs(body: &MirFunctionBody) -> Vec<usize> {
         // Terminator destinations also count as definitions.
         if let Some(dest) = match &block.terminator {
             Some(Terminator::Call { destination, .. }) => Some(destination),
-            Some(Terminator::DispatchFuture { future, .. }) => Some(future),
+            Some(Terminator::SysOp { destination, .. }) => Some(destination),
+            Some(Terminator::Spawn { future, .. }) => Some(future),
             Some(Terminator::Await { destination, .. }) => Some(destination),
+            Some(Terminator::AwaitAny { destination, .. }) => Some(destination),
             Some(Terminator::ShortCircuit { destination, .. }) => Some(destination),
             _ => None,
         } {
@@ -561,6 +596,12 @@ fn count_in_rvalue(rv: &crate::Rvalue, uses: &mut [usize]) {
         crate::Rvalue::MakeBoundMethod { receiver, .. } => {
             count_in_operand(receiver, uses);
         }
+        crate::Rvalue::MakeGenericFunctionFromValue { value, .. } => {
+            count_in_operand(value, uses);
+        }
+        crate::Rvalue::LoadType(_) | crate::Rvalue::MakeGenericFunction { .. } => {
+            // No local operands.
+        }
     }
 }
 
@@ -604,7 +645,7 @@ fn count_in_statement(stmt: &crate::Statement, uses: &mut [usize]) {
 
 fn count_in_terminator(term: &Terminator, uses: &mut [usize]) {
     // For terminator destination places (Call::destination, Await::destination,
-    // DispatchFuture::future): these are writes, so don't count plain Local
+    // SysOp::destination): these are writes, so don't count plain Local
     // destinations. But if the destination is a projection (Field/Index), the
     // base local IS being read (partial update), so count it.
     let count_dest_place = |p: &Place, uses: &mut [usize]| {
@@ -628,15 +669,29 @@ fn count_in_terminator(term: &Terminator, uses: &mut [usize]) {
             }
             count_dest_place(destination, uses);
         }
-        Terminator::DispatchFuture {
+        Terminator::SysOp {
             callee,
             args,
-            future,
+            destination,
             ..
         } => {
             count_in_operand(callee, uses);
             for arg in args {
                 count_in_operand(arg, uses);
+            }
+            count_dest_place(destination, uses);
+        }
+        Terminator::Spawn {
+            closure,
+            name,
+            config,
+            future,
+            ..
+        } => {
+            count_in_operand(closure, uses);
+            count_in_operand(name, uses);
+            if let Some(config) = config {
+                count_in_operand(config, uses);
             }
             count_dest_place(future, uses);
         }
@@ -648,6 +703,16 @@ fn count_in_terminator(term: &Terminator, uses: &mut [usize]) {
             // future is a READ — the future handle being consumed
             count_in_place(future, uses);
             // destination is a write
+            count_dest_place(destination, uses);
+        }
+        Terminator::AwaitAny {
+            futures,
+            destination,
+            ..
+        } => {
+            // futures is a READ — the array of handles being consumed
+            count_in_operand(futures, uses);
+            // destination is a write (the winning index)
             count_dest_place(destination, uses);
         }
         Terminator::Throw { value } | Terminator::ThrowIfPanic { value, .. } => {
@@ -698,6 +763,12 @@ fn propagate_copies(body: &mut MirFunctionBody, arity: usize) {
             {
                 // Skip named locals — they may be reassigned
                 if body.locals[dest.0].name.is_some() {
+                    continue;
+                }
+
+                // Captured locals need a stable slot so emit can wrap them in a
+                // cell and closure construction can pass that cell pointer.
+                if body.locals[dest.0].is_captured {
                     continue;
                 }
 
@@ -863,6 +934,12 @@ fn apply_subst_to_rvalue(rv: &mut crate::Rvalue, subst: &HashMap<Local, Operand>
         crate::Rvalue::MakeBoundMethod { receiver, .. } => {
             apply_subst_to_operand(receiver, subst);
         }
+        crate::Rvalue::MakeGenericFunctionFromValue { value, .. } => {
+            apply_subst_to_operand(value, subst);
+        }
+        crate::Rvalue::LoadType(_) | crate::Rvalue::MakeGenericFunction { .. } => {
+            // No local operands — nothing to substitute.
+        }
     }
 }
 
@@ -887,16 +964,22 @@ fn apply_subst_to_terminator(term: &mut Terminator, subst: &HashMap<Local, Opera
     match term {
         Terminator::Branch { condition, .. } => apply_subst_to_operand(condition, subst),
         Terminator::Switch { discriminant, .. } => apply_subst_to_operand(discriminant, subst),
-        Terminator::Call { callee, args, .. } => {
+        Terminator::Call { callee, args, .. } | Terminator::SysOp { callee, args, .. } => {
             apply_subst_to_operand(callee, subst);
             for arg in args {
                 apply_subst_to_operand(arg, subst);
             }
         }
-        Terminator::DispatchFuture { callee, args, .. } => {
-            apply_subst_to_operand(callee, subst);
-            for arg in args {
-                apply_subst_to_operand(arg, subst);
+        Terminator::Spawn {
+            closure,
+            name,
+            config,
+            ..
+        } => {
+            apply_subst_to_operand(closure, subst);
+            apply_subst_to_operand(name, subst);
+            if let Some(config) = config {
+                apply_subst_to_operand(config, subst);
             }
         }
         Terminator::Throw { value } | Terminator::ThrowIfPanic { value, .. } => {
@@ -905,10 +988,21 @@ fn apply_subst_to_terminator(term: &mut Terminator, subst: &HashMap<Local, Opera
         Terminator::ShortCircuit { operand, .. } => {
             apply_subst_to_operand(operand, subst);
         }
-        Terminator::Goto { .. }
-        | Terminator::Return
-        | Terminator::Unreachable
-        | Terminator::Await { .. } => {}
+        // `future` is the awaited operand (a `Place::Local`); it must be
+        // substituted like any other read so a propagated copy-of-param
+        // (`_tmp = copy param; await _tmp`) doesn't leave the await pointing at
+        // a local whose defining copy was just dead-eliminated. `destination`
+        // is a write target and is intentionally left untouched.
+        Terminator::Await { future, .. } => {
+            apply_subst_to_place_locals(future, subst);
+        }
+        // `futures` is the awaited array operand (a read); substitute it like
+        // any other read so a propagated copy isn't left dangling after dead-
+        // code elimination. `destination` (the index write) is left untouched.
+        Terminator::AwaitAny { futures, .. } => {
+            apply_subst_to_operand(futures, subst);
+        }
+        Terminator::Goto { .. } | Terminator::Return | Terminator::Unreachable => {}
     }
 }
 
@@ -921,14 +1015,15 @@ fn eliminate_dead_locals(body: &mut MirFunctionBody, arity: usize) {
     let mut uses = count_local_uses(body);
 
     // Force-alive: terminator destination locals can't be removed because
-    // the terminator has side effects (Call, Await, DispatchFuture).
+    // the terminator has side effects (Call, Await, SysOp, Spawn).
     // Even if the destination local has 0 read-uses, we must keep it.
     for block in &body.blocks {
         if let Some(term) = &block.terminator {
             let dest_local = match term {
                 Terminator::Call { destination, .. } => Some(destination.base_local()),
                 Terminator::Await { destination, .. } => Some(destination.base_local()),
-                Terminator::DispatchFuture { future, .. } => Some(future.base_local()),
+                Terminator::AwaitAny { destination, .. } => Some(destination.base_local()),
+                Terminator::SysOp { destination, .. } => Some(destination.base_local()),
                 // ShortCircuit is side-effect-free (pure control flow), so its
                 // destination can be dead-eliminated like any other local.
                 _ => None,
@@ -1078,6 +1173,12 @@ fn remap_rvalue(rv: &mut crate::Rvalue, map: &[Option<Local>]) {
         crate::Rvalue::MakeBoundMethod { receiver, .. } => {
             remap_operand(receiver, map);
         }
+        crate::Rvalue::MakeGenericFunctionFromValue { value, .. } => {
+            remap_operand(value, map);
+        }
+        crate::Rvalue::LoadType(_) | crate::Rvalue::MakeGenericFunction { .. } => {
+            // No local operands — nothing to remap.
+        }
     }
 }
 
@@ -1116,6 +1217,12 @@ fn rewrite_locals_in_terminator(term: &mut Terminator, map: &[Option<Local>]) {
             args,
             destination,
             ..
+        }
+        | Terminator::SysOp {
+            callee,
+            args,
+            destination,
+            ..
         } => {
             remap_operand(callee, map);
             for arg in args {
@@ -1123,15 +1230,17 @@ fn rewrite_locals_in_terminator(term: &mut Terminator, map: &[Option<Local>]) {
             }
             remap_place(destination, map);
         }
-        Terminator::DispatchFuture {
-            callee,
-            args,
+        Terminator::Spawn {
+            closure,
+            name,
+            config,
             future,
             ..
         } => {
-            remap_operand(callee, map);
-            for arg in args {
-                remap_operand(arg, map);
+            remap_operand(closure, map);
+            remap_operand(name, map);
+            if let Some(config) = config {
+                remap_operand(config, map);
             }
             remap_place(future, map);
         }
@@ -1141,6 +1250,14 @@ fn rewrite_locals_in_terminator(term: &mut Terminator, map: &[Option<Local>]) {
             ..
         } => {
             remap_place(future, map);
+            remap_place(destination, map);
+        }
+        Terminator::AwaitAny {
+            futures,
+            destination,
+            ..
+        } => {
+            remap_operand(futures, map);
             remap_place(destination, map);
         }
         Terminator::Throw { value } | Terminator::ThrowIfPanic { value, .. } => {
@@ -1287,6 +1404,12 @@ fn verify_mir(body: &MirFunctionBody, name: &crate::ItemRef) {
                         crate::Rvalue::MakeBoundMethod { receiver, .. } => {
                             check_operand(receiver, &blk);
                         }
+                        crate::Rvalue::MakeGenericFunctionFromValue { value, .. } => {
+                            check_operand(value, &blk);
+                        }
+                        crate::Rvalue::LoadType(_) | crate::Rvalue::MakeGenericFunction { .. } => {
+                            // LoadType takes no local operands — nothing to check.
+                        }
                     }
                 }
                 crate::StatementKind::Drop(p) => check_place(p, &blk),
@@ -1321,15 +1444,29 @@ fn verify_mir(body: &MirFunctionBody, name: &crate::ItemRef) {
                     }
                     check_place(destination, &blk);
                 }
-                Terminator::DispatchFuture {
+                Terminator::SysOp {
                     callee,
                     args,
-                    future,
+                    destination,
                     ..
                 } => {
                     check_operand(callee, &blk);
                     for a in args {
                         check_operand(a, &blk);
+                    }
+                    check_place(destination, &blk);
+                }
+                Terminator::Spawn {
+                    closure,
+                    name,
+                    config,
+                    future,
+                    ..
+                } => {
+                    check_operand(closure, &blk);
+                    check_operand(name, &blk);
+                    if let Some(config) = config {
+                        check_operand(config, &blk);
                     }
                     check_place(future, &blk);
                 }
@@ -1339,6 +1476,14 @@ fn verify_mir(body: &MirFunctionBody, name: &crate::ItemRef) {
                     ..
                 } => {
                     check_place(future, &blk);
+                    check_place(destination, &blk);
+                }
+                Terminator::AwaitAny {
+                    futures,
+                    destination,
+                    ..
+                } => {
+                    check_operand(futures, &blk);
                     check_place(destination, &blk);
                 }
                 Terminator::Throw { value } | Terminator::ThrowIfPanic { value, .. } => {

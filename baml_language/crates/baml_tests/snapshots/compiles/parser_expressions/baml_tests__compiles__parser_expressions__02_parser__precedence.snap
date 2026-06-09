@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 15330
 ---
 === SYNTAX TREE ===
 SOURCE_FILE
@@ -16,8 +17,11 @@ SOURCE_FILE
       BLOCK_EXPR
         L_BRACE "{"
         LET_STMT
-          KW_LET "let"
-          WORD "a"
+          PATTERN
+            BINDING_PATTERN "// Multiplication before addition
+  let a"
+              KW_LET "let"
+              WORD "a"
           EQUALS "="
           BINARY_EXPR
             INTEGER_LITERAL "2"
@@ -28,8 +32,11 @@ SOURCE_FILE
               INTEGER_LITERAL "4"
           SEMICOLON ";"
         LET_STMT
-          KW_LET "let"
-          WORD "c"
+          PATTERN
+            BINDING_PATTERN "// Should be 14, not 20
+  let c"
+              KW_LET "let"
+              WORD "c"
           EQUALS "="
           BINARY_EXPR
             BINARY_EXPR "2 * 3"
@@ -40,8 +47,13 @@ SOURCE_FILE
             INTEGER_LITERAL "4"
           SEMICOLON ";"
         LET_STMT
-          KW_LET "let"
-          WORD "b"
+          PATTERN
+            BINDING_PATTERN "// Should be 10, not 14
+
+  // Comparison after arithmetic
+  let b"
+              KW_LET "let"
+              WORD "b"
           EQUALS "="
           BINARY_EXPR
             WORD "a"
@@ -52,8 +64,13 @@ SOURCE_FILE
               INTEGER_LITERAL "2"
           SEMICOLON ";"
         LET_STMT
-          KW_LET "let"
-          WORD "d"
+          PATTERN
+            BINDING_PATTERN "// Should be a > 12
+
+  // Logical operators
+  let d"
+              KW_LET "let"
+              WORD "d"
           EQUALS "="
           BINARY_EXPR
             WORD "true"

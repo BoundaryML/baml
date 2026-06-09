@@ -3,8 +3,28 @@
 use std::fmt;
 
 use ariadne;
+use borsh::{BorshDeserialize, BorshSerialize};
 use smol_str::SmolStr;
 use text_size::{TextRange, TextSize};
+
+/// Borsh adapters for `num_bigint::BigInt`, which has no native borsh impl.
+/// Encoded as a length-prefixed little-endian two's-complement byte string —
+/// `BigInt::to_signed_bytes_le` / `from_signed_bytes_le` are the canonical
+/// binary form and round-trip without loss.
+pub mod borsh_bigint {
+    use borsh::{BorshDeserialize, BorshSerialize};
+    use num_bigint::BigInt;
+
+    pub fn serialize<W: std::io::Write>(value: &BigInt, writer: &mut W) -> std::io::Result<()> {
+        let bytes = value.to_signed_bytes_le();
+        BorshSerialize::serialize(&bytes, writer)
+    }
+
+    pub fn deserialize<R: std::io::Read>(reader: &mut R) -> std::io::Result<BigInt> {
+        let bytes = Vec::<u8>::deserialize_reader(reader)?;
+        Ok(BigInt::from_signed_bytes_le(&bytes))
+    }
+}
 
 /// Unique identifier for a source file.
 ///
@@ -32,7 +52,7 @@ use text_size::{TextRange, TextSize};
 ///
 /// - **Roslyn** (C#): synthetic `SyntaxTree`s constructed with a virtual file path.
 /// - **Clang**: bit 31 of `SourceLocation` distinguishes file vs macro-expansion locs.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, BorshSerialize, BorshDeserialize)]
 pub struct FileId(u32);
 
 impl FileId {
@@ -88,6 +108,40 @@ impl fmt::Display for FileId {
 pub struct Span {
     pub file_id: FileId,
     pub range: TextRange,
+}
+
+// `TextRange` (from the `text-size` crate) doesn't impl `BorshSerialize` /
+// `BorshDeserialize`, so we write the impls by hand as `(start_u32, end_u32)`
+// — the same shape `text-size`'s serde impl uses.
+impl BorshSerialize for Span {
+    fn serialize<W: std::io::Write>(&self, writer: &mut W) -> std::io::Result<()> {
+        BorshSerialize::serialize(&self.file_id, writer)?;
+        let start: u32 = self.range.start().into();
+        let end: u32 = self.range.end().into();
+        BorshSerialize::serialize(&start, writer)?;
+        BorshSerialize::serialize(&end, writer)?;
+        Ok(())
+    }
+}
+
+impl BorshDeserialize for Span {
+    fn deserialize_reader<R: std::io::Read>(reader: &mut R) -> std::io::Result<Self> {
+        let file_id = FileId::deserialize_reader(reader)?;
+        let start = u32::deserialize_reader(reader)?;
+        let end = u32::deserialize_reader(reader)?;
+        // `TextRange::new` panics on `end < start`. A malformed envelope
+        // should surface as a clean borsh error rather than a thread crash.
+        if start > end {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                format!("invalid Span range: start ({start}) > end ({end})"),
+            ));
+        }
+        Ok(Span {
+            file_id,
+            range: TextRange::new(TextSize::new(start), TextSize::new(end)),
+        })
+    }
 }
 
 impl Default for Span {
@@ -203,7 +257,7 @@ impl fmt::Display for TypePath {
 }
 
 /// The types of media we support
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Copy)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Copy, BorshSerialize, BorshDeserialize)]
 pub enum MediaKind {
     Image,
     Audio,
@@ -212,21 +266,41 @@ pub enum MediaKind {
     Generic, // could be any of the media types
 }
 
+impl MediaKind {
+    /// Tag value used in the BEP-038 `{ kind, source, value, mime }` JSON
+    /// shape. `Generic` collapses to `"media"` (any media subtype).
+    pub fn tag_str(self) -> &'static str {
+        match self {
+            MediaKind::Image => "image",
+            MediaKind::Audio => "audio",
+            MediaKind::Video => "video",
+            MediaKind::Pdf => "pdf",
+            MediaKind::Generic => "media",
+        }
+    }
+}
+
 impl fmt::Display for MediaKind {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            MediaKind::Image => write!(f, "image"),
-            MediaKind::Audio => write!(f, "audio"),
-            MediaKind::Video => write!(f, "video"),
-            MediaKind::Pdf => write!(f, "pdf"),
+            MediaKind::Image | MediaKind::Audio | MediaKind::Video | MediaKind::Pdf => {
+                write!(f, "{}", self.tag_str())
+            }
             MediaKind::Generic => write!(f, "image | audio | video | pdf"),
         }
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, BorshSerialize, BorshDeserialize)]
 pub enum Literal {
     Int(i64),
+    Bigint(
+        #[borsh(
+            serialize_with = "borsh_bigint::serialize",
+            deserialize_with = "borsh_bigint::deserialize"
+        )]
+        num_bigint::BigInt,
+    ),
     Float(String),
     String(String),
     Bool(bool),
@@ -237,6 +311,7 @@ impl fmt::Display for Literal {
         match self {
             Literal::String(s) => write!(f, "{s:?}"),
             Literal::Int(i) => write!(f, "{i}"),
+            Literal::Bigint(n) => write!(f, "{n}n"),
             Literal::Float(s) => write!(f, "{s}"),
             Literal::Bool(b) => write!(f, "{b}"),
         }

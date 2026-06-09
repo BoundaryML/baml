@@ -403,11 +403,11 @@ function LoopStmts(items: int[], flag: bool) -> int {
                     break;
                     0
                 },
-                n: int if n > 100 => {
+                let n: int if n > 100 => {
                     continue;
                     n
                 },
-                n: int => n
+                let n: int => n
             };
             result += val;
         };

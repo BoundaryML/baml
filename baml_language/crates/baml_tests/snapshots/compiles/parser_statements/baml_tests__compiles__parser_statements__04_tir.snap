@@ -93,6 +93,12 @@ function user.edge_call_then_index(foo: () -> int[] throws never) -> int throws 
 class user.EdgeFoo {
   x: int
 }
+function user.EdgeFoo.to_json(self: user.EdgeFoo) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  map { "x": self.x.to_json() } : map<string, baml.json.json>
+}
+function user.EdgeFoo.from_json(j: baml.json.json) -> user.EdgeFoo throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  EdgeFoo { x: baml.json.from_json<int>(baml.json.field(j, "x")) } : user.EdgeFoo
+}
 function user.edge_type_then_object() -> int throws never {
   { : int
     EdgeFoo { x: 1 }.x : int
@@ -112,7 +118,7 @@ function user.edge_semicolon_forces_boundary(bar: () -> int[] throws never) -> i
   }
 }
 class user.EdgeFoo$stream {
-  x: null | int
+  x: int | null
 }
 function user.simple_break() -> int throws never {
   { : never
@@ -253,9 +259,9 @@ function user.ConditionalLogic(age: int) -> string throws never {
 function user.let_statements() -> int throws never {
   { : never
     let x = 1 : 1 -> int
-    let y = 2 : 2
-    let z = [1, 2, 3] : int[]
-    let point = Point { x: 1, y: 2 } : user.Point
+    let y: int = 2 : 2 -> int
+    let z: int[] = [1, 2, 3] : int[]
+    let point: Point = Point { x: 1, y: 2 } : user.Point
     return point.x + point.y : int
   }
 }
@@ -263,9 +269,15 @@ class user.Point {
   x: int
   y: int
 }
+function user.Point.to_json(self: user.Point) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  map { "x": self.x.to_json(), "y": self.y.to_json() } : map<string, baml.json.json>
+}
+function user.Point.from_json(j: baml.json.json) -> user.Point throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  Point { x: baml.json.from_json<int>(baml.json.field(j, "x")), y: baml.json.from_json<int>(baml.json.field(j, "y")) } : user.Point
+}
 class user.Point$stream {
-  x: null | int
-  y: null | int
+  x: int | null
+  y: int | null
 }
 function user.simple_while_loop() -> int throws never {
   { : never

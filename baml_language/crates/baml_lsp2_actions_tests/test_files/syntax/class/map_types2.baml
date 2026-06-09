@@ -59,7 +59,7 @@ function InputAndOutput(i1: map<string, string>, i2: map<MapDummy, string>) -> m
 
 //----
 //- diagnostics
-// Error: Expected type, found '>'
+// error: Expected type, found '>'
 //     ╭─[ class_map_types2.baml:26:10 ]
 //     │
 //  26 │   d1 map<>
@@ -68,7 +68,7 @@ function InputAndOutput(i1: map<string, string>, i2: map<MapDummy, string>) -> m
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: unresolved type: map
+// error: unresolved type: map
 //     ╭─[ class_map_types2.baml:26:5 ]
 //     │
 //  26 │   d1 map<>
@@ -77,7 +77,7 @@ function InputAndOutput(i1: map<string, string>, i2: map<MapDummy, string>) -> m
 //     │ 
 //     │ Note: Error code: E0002
 // ────╯
-// Error: unresolved type: map
+// error: unresolved type: map
 //     ╭─[ class_map_types2.baml:27:5 ]
 //     │
 //  27 │   d2 map<string>
@@ -86,7 +86,7 @@ function InputAndOutput(i1: map<string, string>, i2: map<MapDummy, string>) -> m
 //     │ 
 //     │ Note: Error code: E0002
 // ────╯
-// Error: unresolved type: map
+// error: unresolved type: map
 //     ╭─[ class_map_types2.baml:28:5 ]
 //     │
 //  28 │   d3 map<string, string, string>

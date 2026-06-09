@@ -9,12 +9,28 @@ source: crates/baml_tests/src/generated_tests.rs
 class testing.TestRegistration {
   name: string
   body: testing.TestBody
-  runner: testing.TestRunner?
+  runner: testing.TestRunner | null
+}
+function testing.TestRegistration.to_json(self: testing.TestRegistration) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  { : baml.json.json
+    baml.json.parse(baml.json.to_string<TestRegistration>(self)) : baml.json.json
+  }
+}
+function testing.TestRegistration.from_json(j: baml.json.json) -> testing.TestRegistration throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  TestRegistration { name: baml.json.from_json<string>(baml.json.field(j, "name")), body: baml.json.from_json<TestBody>(baml.json.field(j, "body")), runner: baml.json.from_json<TestRunner?>(baml.json.field(j, "runner")) } : testing.TestRegistration
 }
 class testing.TestSetRegistration {
   name: string
   collector: testing.TestSetBody
-  runner: testing.TestSetRunner?
+  runner: testing.TestSetRunner | null
+}
+function testing.TestSetRegistration.to_json(self: testing.TestSetRegistration) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  { : baml.json.json
+    baml.json.parse(baml.json.to_string<TestSetRegistration>(self)) : baml.json.json
+  }
+}
+function testing.TestSetRegistration.from_json(j: baml.json.json) -> testing.TestSetRegistration throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  TestSetRegistration { name: baml.json.from_json<string>(baml.json.field(j, "name")), collector: baml.json.from_json<TestSetBody>(baml.json.field(j, "collector")), runner: baml.json.from_json<TestSetRunner?>(baml.json.field(j, "runner")) } : testing.TestSetRegistration
 }
 class testing.TestCollector {
   prefix: string
@@ -26,7 +42,7 @@ function testing.TestCollector.new(prefix: string) -> testing.TestCollector thro
     TestCollector { prefix: prefix, tests: [], testsets: [] } : testing.TestCollector
   }
 }
-function testing.TestCollector.register_test(self: testing.TestCollector, name: string, body: testing.TestBody, runner: testing.TestRunner?) -> void throws never {
+function testing.TestCollector.register_test(self: testing.TestCollector, name: string, body: testing.TestBody, runner: testing.TestRunner | null) -> void throws never {
   { : void
     let full_name = : string
       if (self.prefix == "" : bool) : string
@@ -41,7 +57,7 @@ function testing.TestCollector.register_test(self: testing.TestCollector, name: 
     let hash_prefix = full_name + "#" : string
     for t in self.tests
       { : void
-        if (t.name == full_name || t.name.startsWith(hash_prefix) : bool) : void
+        if (t.name == full_name || t.name.starts_with(hash_prefix) : bool) : void
           { : void
             count Add= 1 : int
           }
@@ -62,7 +78,7 @@ function testing.TestCollector.register_test(self: testing.TestCollector, name: 
     let _ = self.tests.push(TestRegistration { name: final_name, body: body, runner: runner }) : int
   }
 }
-function testing.TestCollector.register_test_set(self: testing.TestCollector, name: string, collector: testing.TestSetBody, runner: testing.TestSetRunner?) -> void throws never {
+function testing.TestCollector.register_test_set(self: testing.TestCollector, name: string, collector: testing.TestSetBody, runner: testing.TestSetRunner | null) -> void throws never {
   { : void
     let full_name = : string
       if (self.prefix == "" : bool) : string
@@ -77,7 +93,7 @@ function testing.TestCollector.register_test_set(self: testing.TestCollector, na
     let hash_prefix = full_name + "#" : string
     for ts in self.testsets
       { : void
-        if (ts.name == full_name || ts.name.startsWith(hash_prefix) : bool) : void
+        if (ts.name == full_name || ts.name.starts_with(hash_prefix) : bool) : void
           { : void
             count Add= 1 : int
           }
@@ -110,6 +126,12 @@ function testing.TestCollector.find_testset(self: testing.TestCollector, name: s
     throw "TestSet not found: " + name : string
   }
 }
+function testing.TestCollector.to_json(self: testing.TestCollector) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  map { "prefix": self.prefix.to_json(), "tests": self.tests.to_json(), "testsets": self.testsets.to_json() } : map<string, baml.json.json>
+}
+function testing.TestCollector.from_json(j: baml.json.json) -> testing.TestCollector throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  TestCollector { prefix: baml.json.from_json<string>(baml.json.field(j, "prefix")), tests: baml.json.from_json<TestRegistration[]>(baml.json.field(j, "tests")), testsets: baml.json.from_json<TestSetRegistration[]>(baml.json.field(j, "testsets")) } : testing.TestCollector
+}
 function testing.$invoke_collector(collector: testing.TestSetBody, c: testing.TestCollector) -> void throws never {
   { : void
     collector(c) : void
@@ -119,10 +141,22 @@ class testing.SerializedTest {
   type: string
   name: string
 }
+function testing.SerializedTest.to_json(self: testing.SerializedTest) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  map { "type": self.type.to_json(), "name": self.name.to_json() } : map<string, baml.json.json>
+}
+function testing.SerializedTest.from_json(j: baml.json.json) -> testing.SerializedTest throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  SerializedTest { type: baml.json.from_json<string>(baml.json.field(j, "type")), name: baml.json.from_json<string>(baml.json.field(j, "name")) } : testing.SerializedTest
+}
 class testing.SerializedTestSet {
   name: string
   items: testing.SerializedTestDef[]
   loadingTimeMs: int
+}
+function testing.SerializedTestSet.to_json(self: testing.SerializedTestSet) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  map { "name": self.name.to_json(), "items": self.items.to_json(), "loadingTimeMs": self.loadingTimeMs.to_json() } : map<string, baml.json.json>
+}
+function testing.SerializedTestSet.from_json(j: baml.json.json) -> testing.SerializedTestSet throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  SerializedTestSet { name: baml.json.from_json<string>(baml.json.field(j, "name")), items: baml.json.from_json<SerializedTestDef[]>(baml.json.field(j, "items")), loadingTimeMs: baml.json.from_json<int>(baml.json.field(j, "loadingTimeMs")) } : testing.SerializedTestSet
 }
 type testing.SerializedTestDef = testing.SerializedTest | testing.SerializedTestSet
 class testing.TestRegistry {
@@ -137,15 +171,15 @@ function testing.TestRegistry.new(collector: testing.TestCollector) -> testing.T
 }
 function testing.TestRegistry.serialize(self: testing.TestRegistry) -> testing.SerializedTestDef[] throws never {
   { : never
-    let items = [] : testing.SerializedTestDef[]
+    let items: SerializedTestDef[] = [] : testing.SerializedTestDef[]
     for t in self.collector.tests
       { : int
         items.push(SerializedTest { type: "test", name: t.name }) : int
       }
     for ts in self.collector.testsets
       { : int
-        let expanded = self.expansions.get(ts.name) : testing.TestRegistry?
-        match (expanded : testing.TestRegistry?) : int
+        let expanded = self.expansions.get(ts.name) : testing.TestRegistry | null
+        match (expanded : testing.TestRegistry | null) : int
           sub: TestRegistry =>
             { : int
               items.push(SerializedTestSet { name: ts.name, items: sub.serialize(), loadingTimeMs: sub.loading_time_ms }) : int
@@ -170,7 +204,7 @@ function testing.TestRegistry.run_test(self: testing.TestRegistry, name: string)
     for k in self.expansions.keys()
       { : void
         let sub = self.expansions[k] : testing.TestRegistry
-        if (name.startsWith(k + "/") : bool) : void
+        if (name.starts_with(k + "/") : bool) : void
           { : never
             return sub.run_test(name) : testing.TestReport
           }
@@ -189,14 +223,14 @@ function testing.TestRegistry.expand_set(self: testing.TestRegistry, name: strin
             ts.collector(sub_collector) : void
             let elapsed = baml.sys.now_ms() - start : int
             let sub_registry = TestRegistry { collector: sub_collector, expansions: map {  }, loading_time_ms: elapsed } : testing.TestRegistry
-            self.expansions.set(name, sub_registry) : null
+            self.expansions.set(name, sub_registry) : testing.TestRegistry | null
             return self.serialize() : testing.SerializedTestDef[]
           }
       }
     for k in self.expansions.keys()
       { : void
         let sub = self.expansions[k] : testing.TestRegistry
-        if (name.startsWith(k + "/") : bool) : void
+        if (name.starts_with(k + "/") : bool) : void
           { : never
             return sub.expand_set(name) : testing.SerializedTestDef[]
           }
@@ -204,9 +238,15 @@ function testing.TestRegistry.expand_set(self: testing.TestRegistry, name: strin
     throw "TestSet not found..." + name : string
   }
 }
-function testing.run_test(body: testing.TestBody, runner: testing.TestRunner?) -> testing.TestReport throws never {
+function testing.TestRegistry.to_json(self: testing.TestRegistry) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  map { "collector": self.collector.to_json(), "expansions": self.expansions.to_json(), "loading_time_ms": self.loading_time_ms.to_json() } : map<string, baml.json.json>
+}
+function testing.TestRegistry.from_json(j: baml.json.json) -> testing.TestRegistry throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  TestRegistry { collector: baml.json.from_json<TestCollector>(baml.json.field(j, "collector")), expansions: baml.json.from_json<map<string, TestRegistry>>(baml.json.field(j, "expansions")), loading_time_ms: baml.json.from_json<int>(baml.json.field(j, "loading_time_ms")) } : testing.TestRegistry
+}
+function testing.run_test(body: testing.TestBody, runner: testing.TestRunner | null) -> testing.TestReport throws never {
   { : testing.TestReport
-    let base_run = : () -> testing.TestReport throws never
+    let base_run: TestReportThunk = : () -> testing.TestReport throws never
       () -> TestReport { ... } : () -> testing.TestReport throws never
         {
           let start = baml.sys.now_ms()
@@ -214,59 +254,59 @@ function testing.run_test(body: testing.TestBody, runner: testing.TestRunner?) -
             { 1 stmts + tail } catch_all (e) { _ => { 0 stmts + tail } }
           TestReport { outcome: result.outcome, runs: [RunReport { outcome: result.outcome, duration_ms: baml.sys.now_ms() - start }] }
         }
-    match (runner : testing.TestRunner?) : testing.TestReport
+    match (runner : testing.TestRunner | null) : testing.TestReport
       null =>
         base_run() : testing.TestReport
       r: TestRunner =>
         { : testing.TestReport
-          let wrapped = r(base_run) : testing.TestReportThunk
+          let wrapped: TestReportThunk = r(base_run) : testing.TestReportThunk -> () -> testing.TestReport throws never
           wrapped() : testing.TestReport
         }
   }
 }
 lambda testing.run_test {
 }
-function testing.run_testset(run_children: testing.TestSetReportThunk, runner: testing.TestSetRunner?) -> testing.TestSetReport throws never {
+function testing.run_testset(run_children: testing.TestSetReportThunk, runner: testing.TestSetRunner | null) -> testing.TestSetReport throws never {
   { : testing.TestSetReport
-    match (runner : testing.TestSetRunner?) : testing.TestSetReport
+    match (runner : testing.TestSetRunner | null) : testing.TestSetReport
       null =>
         run_children() : testing.TestSetReport
       r: TestSetRunner =>
         { : testing.TestSetReport
-          let wrapped = r(run_children) : testing.TestSetReportThunk
+          let wrapped: TestSetReportThunk = r(run_children) : testing.TestSetReportThunk -> () -> testing.TestSetReport throws never
           wrapped() : testing.TestSetReport
         }
   }
 }
 class testing.TestRegistration$stream {
-  name: null | string
-  body: null | testing.TestBody$stream
-  runner: null | testing.TestRunner$stream
+  name: string | null
+  body: testing.TestBody$stream | null
+  runner: testing.TestRunner$stream | null
 }
 class testing.TestSetRegistration$stream {
-  name: null | string
-  collector: null | testing.TestSetBody$stream
-  runner: null | testing.TestSetRunner$stream
+  name: string | null
+  collector: testing.TestSetBody$stream | null
+  runner: testing.TestSetRunner$stream | null
 }
 class testing.TestCollector$stream {
-  prefix: null | string
+  prefix: string | null
   tests: testing.TestRegistration$stream[]
   testsets: testing.TestSetRegistration$stream[]
 }
 class testing.SerializedTest$stream {
-  type: null | string
-  name: null | string
+  type: string | null
+  name: string | null
 }
 class testing.SerializedTestSet$stream {
-  name: null | string
+  name: string | null
   items: testing.SerializedTestDef$stream[]
-  loadingTimeMs: null | int
+  loadingTimeMs: int | null
 }
 type testing.SerializedTestDef$stream = testing.SerializedTest$stream | testing.SerializedTestSet$stream
 class testing.TestRegistry$stream {
-  collector: null | testing.TestCollector$stream
+  collector: testing.TestCollector$stream | null
   expansions: map<string, testing.TestRegistry$stream>
-  loading_time_ms: null | int
+  loading_time_ms: int | null
 }
 
 --- <builtin>/testing/types.baml ---
@@ -275,9 +315,21 @@ class testing.RunReport {
   outcome: testing.Outcome
   duration_ms: int
 }
+function testing.RunReport.to_json(self: testing.RunReport) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  map { "outcome": self.outcome.to_json(), "duration_ms": self.duration_ms.to_json() } : map<string, baml.json.json>
+}
+function testing.RunReport.from_json(j: baml.json.json) -> testing.RunReport throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  RunReport { outcome: baml.json.from_json<Outcome>(baml.json.field(j, "outcome")), duration_ms: baml.json.from_json<int>(baml.json.field(j, "duration_ms")) } : testing.RunReport
+}
 class testing.TestReport {
   outcome: testing.Outcome
   runs: testing.RunReport[]
+}
+function testing.TestReport.to_json(self: testing.TestReport) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  map { "outcome": self.outcome.to_json(), "runs": self.runs.to_json() } : map<string, baml.json.json>
+}
+function testing.TestReport.from_json(j: baml.json.json) -> testing.TestReport throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  TestReport { outcome: baml.json.from_json<Outcome>(baml.json.field(j, "outcome")), runs: baml.json.from_json<RunReport[]>(baml.json.field(j, "runs")) } : testing.TestReport
 }
 class testing.TestSetReport {
   outcome: testing.Outcome
@@ -285,6 +337,12 @@ class testing.TestSetReport {
   failed: int
   total: int
   results: testing.ChildReport[]
+}
+function testing.TestSetReport.to_json(self: testing.TestSetReport) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  map { "outcome": self.outcome.to_json(), "passed": self.passed.to_json(), "failed": self.failed.to_json(), "total": self.total.to_json(), "results": self.results.to_json() } : map<string, baml.json.json>
+}
+function testing.TestSetReport.from_json(j: baml.json.json) -> testing.TestSetReport throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  TestSetReport { outcome: baml.json.from_json<Outcome>(baml.json.field(j, "outcome")), passed: baml.json.from_json<int>(baml.json.field(j, "passed")), failed: baml.json.from_json<int>(baml.json.field(j, "failed")), total: baml.json.from_json<int>(baml.json.field(j, "total")), results: baml.json.from_json<ChildReport[]>(baml.json.field(j, "results")) } : testing.TestSetReport
 }
 type testing.ChildReport = testing.TestReport | testing.TestSetReport
 type testing.TestBody = () -> void throws unknown
@@ -295,18 +353,18 @@ type testing.TestRunner = (testing.TestReportThunk) -> testing.TestReportThunk t
 type testing.TestSetRunner = (testing.TestSetReportThunk) -> testing.TestSetReportThunk throws never
 type testing.Outcome$stream = "pass" | "fail" | "error"
 class testing.RunReport$stream {
-  outcome: null | testing.Outcome$stream
-  duration_ms: null | int
+  outcome: testing.Outcome$stream | null
+  duration_ms: int | null
 }
 class testing.TestReport$stream {
-  outcome: null | testing.Outcome$stream
+  outcome: testing.Outcome$stream | null
   runs: testing.RunReport$stream[]
 }
 class testing.TestSetReport$stream {
-  outcome: null | testing.Outcome$stream
-  passed: null | int
-  failed: null | int
-  total: null | int
+  outcome: testing.Outcome$stream | null
+  passed: int | null
+  failed: int | null
+  total: int | null
   results: testing.ChildReport$stream[]
 }
 type testing.ChildReport$stream = testing.TestReport$stream | testing.TestSetReport$stream

@@ -1,0 +1,269 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== SYNTAX TREE ===
+SOURCE_FILE
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "namespaced_generic_class_type_pattern_requires_type_args"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "boxed"
+        COLON ":"
+        TYPE_EXPR
+          WORD "root"
+          DOT "."
+          WORD "llm"
+          DOT "."
+          WORD "openai"
+          DOT "."
+          WORD "Box"
+          TYPE_ARGS
+            LESS "<"
+            TYPE_EXPR "int"
+              WORD "int"
+            GREATER ">"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "int"
+      WORD "int"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        MATCH_EXPR
+          KW_MATCH "match"
+          L_PAREN "("
+          WORD "boxed"
+          R_PAREN ")"
+          L_BRACE "{"
+          MATCH_ARM
+            PATTERN
+              TYPE_PATTERN
+                TYPE_EXPR "root.llm.openai.Box"
+                  WORD "root"
+                  DOT "."
+                  WORD "llm"
+                  DOT "."
+                  WORD "openai"
+                  DOT "."
+                  WORD "Box"
+            FAT_ARROW "=>"
+            INTEGER_LITERAL "1"
+          R_BRACE "}"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "namespace_relative_generic_class_type_pattern_requires_type_args"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "boxed"
+        COLON ":"
+        TYPE_EXPR
+          WORD "llm"
+          DOT "."
+          WORD "openai"
+          DOT "."
+          WORD "Box"
+          TYPE_ARGS
+            LESS "<"
+            TYPE_EXPR "int"
+              WORD "int"
+            GREATER ">"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "int"
+      WORD "int"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        MATCH_EXPR
+          KW_MATCH "match"
+          L_PAREN "("
+          WORD "boxed"
+          R_PAREN ")"
+          L_BRACE "{"
+          MATCH_ARM
+            PATTERN
+              TYPE_PATTERN
+                TYPE_EXPR "llm.openai.Box"
+                  WORD "llm"
+                  DOT "."
+                  WORD "openai"
+                  DOT "."
+                  WORD "Box"
+            FAT_ARROW "=>"
+            INTEGER_LITERAL "1"
+          R_BRACE "}"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "namespaced_generic_class_type_pattern_rejects_extra_type_args"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "boxed"
+        COLON ":"
+        TYPE_EXPR
+          WORD "root"
+          DOT "."
+          WORD "llm"
+          DOT "."
+          WORD "openai"
+          DOT "."
+          WORD "Box"
+          TYPE_ARGS
+            LESS "<"
+            TYPE_EXPR "int"
+              WORD "int"
+            GREATER ">"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "int"
+      WORD "int"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        MATCH_EXPR
+          KW_MATCH "match"
+          L_PAREN "("
+          WORD "boxed"
+          R_PAREN ")"
+          L_BRACE "{"
+          MATCH_ARM
+            PATTERN
+              TYPE_PATTERN
+                TYPE_EXPR
+                  WORD "root"
+                  DOT "."
+                  WORD "llm"
+                  DOT "."
+                  WORD "openai"
+                  DOT "."
+                  WORD "Box"
+                  TYPE_ARGS
+                    LESS "<"
+                    TYPE_EXPR "int"
+                      WORD "int"
+                    COMMA ","
+                    TYPE_EXPR "string"
+                      WORD "string"
+                    GREATER ">"
+            FAT_ARROW "=>"
+            INTEGER_LITERAL "1"
+            COMMA ","
+          MATCH_ARM
+            PATTERN
+              WILDCARD_PATTERN "_"
+                WORD "_"
+            FAT_ARROW "=>"
+            INTEGER_LITERAL "0"
+          R_BRACE "}"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "namespaced_non_generic_class_type_pattern_rejects_type_args"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "response"
+        COLON ":"
+        TYPE_EXPR "root.llm.openai.Response"
+          WORD "root"
+          DOT "."
+          WORD "llm"
+          DOT "."
+          WORD "openai"
+          DOT "."
+          WORD "Response"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "int"
+      WORD "int"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        MATCH_EXPR
+          KW_MATCH "match"
+          L_PAREN "("
+          WORD "response"
+          R_PAREN ")"
+          L_BRACE "{"
+          MATCH_ARM
+            PATTERN
+              TYPE_PATTERN
+                TYPE_EXPR
+                  WORD "root"
+                  DOT "."
+                  WORD "llm"
+                  DOT "."
+                  WORD "openai"
+                  DOT "."
+                  WORD "Response"
+                  TYPE_ARGS
+                    LESS "<"
+                    TYPE_EXPR "int"
+                      WORD "int"
+                    GREATER ">"
+            FAT_ARROW "=>"
+            INTEGER_LITERAL "1"
+          R_BRACE "}"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "namespaced_class_destructure_unknown_field"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "response"
+        COLON ":"
+        TYPE_EXPR "root.llm.openai.Response"
+          WORD "root"
+          DOT "."
+          WORD "llm"
+          DOT "."
+          WORD "openai"
+          DOT "."
+          WORD "Response"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "int"
+      WORD "int"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        MATCH_EXPR
+          KW_MATCH "match"
+          L_PAREN "("
+          WORD "response"
+          R_PAREN ")"
+          L_BRACE "{"
+          MATCH_ARM
+            PATTERN
+              DESTRUCTURE_PATTERN
+                WORD "root"
+                DOT "."
+                WORD "llm"
+                DOT "."
+                WORD "openai"
+                DOT "."
+                WORD "Response"
+                L_BRACE "{"
+                FIELD_PATTERN "missing"
+                  WORD "missing"
+                R_BRACE "}"
+            FAT_ARROW "=>"
+            INTEGER_LITERAL "1"
+            COMMA ","
+          MATCH_ARM
+            PATTERN
+              WILDCARD_PATTERN "_"
+                WORD "_"
+            FAT_ARROW "=>"
+            INTEGER_LITERAL "0"
+          R_BRACE "}"
+        R_BRACE "}"
+
+=== ERRORS ===
+None

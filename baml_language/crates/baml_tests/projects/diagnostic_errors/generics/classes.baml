@@ -193,8 +193,8 @@ class MaybeBox<T> {
 
     function get_or_default(self, default: T) -> T {
         match (self.value) {
-            v: T => v,
-            _: null => default,
+            let v: T => v,
+            null => default,
         }
     }
 }
@@ -219,4 +219,21 @@ class Stack<T> {
 function use_stack() -> string {
     let s = Stack<string> { items: ["a", "b", "c"] }
     s.peek()
+}
+
+// ============================================================
+// Bare generic class (no type args) in union + match-arm
+// (error: every reference to a generic class must supply its
+// type args at the type-expression level — there is no raw form)
+// ============================================================
+
+class Foo<T> {
+    value T
+}
+
+function bare_in_union_param(f: Foo<int> | Foo) -> string {
+    match (f) {
+        Foo<int> => "specific",
+        Foo      => "bare",
+    }
 }

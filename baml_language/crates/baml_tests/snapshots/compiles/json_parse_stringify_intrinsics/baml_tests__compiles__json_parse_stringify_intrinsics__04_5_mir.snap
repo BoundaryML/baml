@@ -1,0 +1,113 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== MIR2 ===
+fn user.match_parsed(s: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // s // param
+    let _2: bool | int | float | string | baml.json.json[] | map<string, baml.json.json> | null // j
+    let _3: int
+    let _4: baml.json.json[] // arr
+    let _5: baml.json.json[]
+    let _6: map<string, baml.json.json> // m
+    let _7: map<string, baml.json.json>
+    let _8: string // st
+
+    bb0: {
+        _2 = call const fn baml.json.parse(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _3 = type_tag(_2);
+        switch copy _3 [list: bb9, map: bb8, int: bb7, float: bb6, bool: bb5, string: bb4, null: bb3, otherwise: bb2] (exhaustive);
+    }
+
+    bb2: {
+        unreachable;
+    }
+
+    bb3: {
+        _0 = const "null";
+        goto -> bb10;
+    }
+
+    bb4: {
+        _8 = copy _2;
+        _0 = copy _8;
+        goto -> bb10;
+    }
+
+    bb5: {
+        _0 = const "bool";
+        goto -> bb10;
+    }
+
+    bb6: {
+        _0 = const "float";
+        goto -> bb10;
+    }
+
+    bb7: {
+        _0 = const "int";
+        goto -> bb10;
+    }
+
+    bb8: {
+        _6 = copy _2;
+        _7 = copy _6;
+        _0 = call const fn baml.json.stringify(copy _7) -> [bb10];
+    }
+
+    bb9: {
+        _4 = copy _2;
+        _5 = copy _4;
+        _0 = call const fn baml.json.stringify(copy _5) -> [bb10];
+    }
+
+    bb10: {
+        return;
+    }
+}
+
+fn user.parse_and_roundtrip(s: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // s // param
+    let _2: bool | int | float | string | baml.json.json[] | map<string, baml.json.json> | null // j
+    let _3: bool | int | float | string | baml.json.json[] | map<string, baml.json.json> | null
+
+    bb0: {
+        _2 = call const fn baml.json.parse(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _3 = copy _2;
+        _0 = call const fn baml.json.stringify(copy _3) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn user.parse_and_roundtrip_pretty(s: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // s // param
+    let _2: bool | int | float | string | baml.json.json[] | map<string, baml.json.json> | null // j
+    let _3: bool | int | float | string | baml.json.json[] | map<string, baml.json.json> | null
+
+    bb0: {
+        _2 = call const fn baml.json.parse(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _3 = copy _2;
+        _0 = call const fn baml.json.stringify_pretty(copy _3) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}

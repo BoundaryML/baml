@@ -648,48 +648,6 @@ SOURCE_FILE
         R_BRACE "}"
   FUNCTION_DEF
     KW_FUNCTION "function"
-    WORD "ConstrainedParams"
-    PARAMETER_LIST
-      L_PAREN "("
-      PARAMETER
-        WORD "name"
-        COLON ":"
-        TYPE_EXPR "string"
-          WORD "string"
-      COMMA ","
-      PARAMETER
-        WORD "score"
-        COLON ":"
-        TYPE_EXPR
-          WORD "int"
-          ATTRIBUTE
-            AT "@"
-            WORD "check"
-            ATTRIBUTE_ARGS
-              L_PAREN "("
-              EXPR "{{ this > 0 }}"
-                L_BRACE "{"
-                L_BRACE "{"
-                WORD "this"
-                GREATER ">"
-                INTEGER_LITERAL "0"
-                R_BRACE "}"
-                R_BRACE "}"
-              R_PAREN ")"
-      R_PAREN ")"
-    ARROW "->"
-    TYPE_EXPR "string"
-      WORD "string"
-    EXPR_FUNCTION_BODY
-      BLOCK_EXPR
-        L_BRACE "{"
-        STRING_LITERAL "done"
-          QUOTE """
-          WORD "done"
-          QUOTE """
-        R_BRACE "}"
-  FUNCTION_DEF
-    KW_FUNCTION "function"
     WORD "TriviaFunc"
     PARAMETER_LIST
       L_PAREN "("
@@ -1148,8 +1106,10 @@ string"
       BLOCK_EXPR
         L_BRACE "{"
         LET_STMT
-          KW_LET "let"
-          WORD "x"
+          PATTERN
+            BINDING_PATTERN "let x"
+              KW_LET "let"
+              WORD "x"
           EQUALS "="
           BINARY_EXPR "a + b"
             WORD "a"
@@ -1157,8 +1117,10 @@ string"
             WORD "b"
           SEMICOLON ";"
         LET_STMT
-          KW_LET "let"
-          WORD "y"
+          PATTERN
+            BINDING_PATTERN "let y"
+              KW_LET "let"
+              WORD "y"
           EQUALS "="
           BINARY_EXPR "x * 2"
             WORD "x"
@@ -1277,8 +1239,10 @@ string"
                   BLOCK_EXPR
                     L_BRACE "{"
                     LET_STMT
-                      KW_LET "let"
-                      WORD "x"
+                      PATTERN
+                        BINDING_PATTERN "let x"
+                          KW_LET "let"
+                          WORD "x"
                       EQUALS "="
                       BINARY_EXPR
                         BINARY_EXPR "a + b"
@@ -1389,8 +1353,10 @@ string"
       BLOCK_EXPR
         L_BRACE "{"
         LET_STMT
-          KW_LET "let"
-          WORD "a"
+          PATTERN
+            BINDING_PATTERN "let a"
+              KW_LET "let"
+              WORD "a"
           EQUALS "="
           INDEX_EXPR "items[0]"
             WORD "items"
@@ -1399,8 +1365,10 @@ string"
             R_BRACKET "]"
           SEMICOLON ";"
         LET_STMT
-          KW_LET "let"
-          WORD "b"
+          PATTERN
+            BINDING_PATTERN "let b"
+              KW_LET "let"
+              WORD "b"
           EQUALS "="
           INDEX_EXPR "items[1]"
             WORD "items"
@@ -1409,8 +1377,10 @@ string"
             R_BRACKET "]"
           SEMICOLON ";"
         LET_STMT
-          KW_LET "let"
-          WORD "c"
+          PATTERN
+            BINDING_PATTERN "let c"
+              KW_LET "let"
+              WORD "c"
           EQUALS "="
           IF_EXPR
             KW_IF "if"
@@ -1432,8 +1402,10 @@ string"
               R_BRACE "}"
           SEMICOLON ";"
         LET_STMT
-          KW_LET "let"
-          WORD "d"
+          PATTERN
+            BINDING_PATTERN "let d"
+              KW_LET "let"
+              WORD "d"
           EQUALS "="
           MATCH_EXPR
             KW_MATCH "match"
@@ -1442,14 +1414,17 @@ string"
             R_PAREN ")"
             L_BRACE "{"
             MATCH_ARM
-              MATCH_PATTERN "0"
-                INTEGER_LITERAL "0"
+              PATTERN
+                TYPE_PATTERN
+                  TYPE_EXPR "0"
+                    INTEGER_LITERAL "0"
               FAT_ARROW "=>"
               INTEGER_LITERAL "1"
               COMMA ","
             MATCH_ARM
-              MATCH_PATTERN "_"
-                WORD "_"
+              PATTERN
+                WILDCARD_PATTERN "_"
+                  WORD "_"
               FAT_ARROW "=>"
               BINARY_EXPR "c * 2"
                 WORD "c"
@@ -1458,14 +1433,18 @@ string"
             R_BRACE "}"
           SEMICOLON ";"
         LET_STMT
-          KW_LET "let"
-          WORD "e"
+          PATTERN
+            BINDING_PATTERN "let e"
+              KW_LET "let"
+              WORD "e"
           EQUALS "="
           BLOCK_EXPR
             L_BRACE "{"
             LET_STMT
-              KW_LET "let"
-              WORD "inner"
+              PATTERN
+                BINDING_PATTERN "let inner"
+                  KW_LET "let"
+                  WORD "inner"
               EQUALS "="
               BINARY_EXPR "d + a"
                 WORD "d"
@@ -1513,18 +1492,22 @@ string"
     EXPR_FUNCTION_BODY
       BLOCK_EXPR
         L_BRACE "{"
-        LET_STMT "let total = 0;"
-          KW_LET "let"
-          WORD "total"
+        LET_STMT
+          PATTERN
+            BINDING_PATTERN "let total"
+              KW_LET "let"
+              WORD "total"
           EQUALS "="
           INTEGER_LITERAL "0"
           SEMICOLON ";"
         FOR_EXPR
           KW_FOR "for"
           L_PAREN "("
-          LET_STMT "let row"
-            KW_LET "let"
-            WORD "row"
+          LET_STMT
+            PATTERN
+              BINDING_PATTERN "let row"
+                KW_LET "let"
+                WORD "row"
           KW_IN "in"
           WORD "matrix"
           R_PAREN ")"
@@ -1533,9 +1516,11 @@ string"
             FOR_EXPR
               KW_FOR "for"
               L_PAREN "("
-              LET_STMT "let val"
-                KW_LET "let"
-                WORD "val"
+              LET_STMT
+                PATTERN
+                  BINDING_PATTERN "let val"
+                    KW_LET "let"
+                    WORD "val"
               KW_IN "in"
               WORD "row"
               R_PAREN ")"
@@ -1572,8 +1557,10 @@ string"
                       SEMICOLON ";"
                     R_BRACE "}"
                 LET_STMT
-                  KW_LET "let"
-                  WORD "processed"
+                  PATTERN
+                    BINDING_PATTERN "let processed"
+                      KW_LET "let"
+                      WORD "processed"
                   EQUALS "="
                   MATCH_EXPR
                     KW_MATCH "match"
@@ -1585,8 +1572,10 @@ string"
                     R_PAREN ")"
                     L_BRACE "{"
                     MATCH_ARM
-                      MATCH_PATTERN "0"
-                        INTEGER_LITERAL "0"
+                      PATTERN
+                        TYPE_PATTERN
+                          TYPE_EXPR "0"
+                            INTEGER_LITERAL "0"
                       FAT_ARROW "=>"
                       BINARY_EXPR "val * 2"
                         WORD "val"
@@ -1594,8 +1583,10 @@ string"
                         INTEGER_LITERAL "2"
                       COMMA ","
                     MATCH_ARM
-                      MATCH_PATTERN "1"
-                        INTEGER_LITERAL "1"
+                      PATTERN
+                        TYPE_PATTERN
+                          TYPE_EXPR "1"
+                            INTEGER_LITERAL "1"
                       FAT_ARROW "=>"
                       BINARY_EXPR "val + 1"
                         WORD "val"
@@ -1603,8 +1594,9 @@ string"
                         INTEGER_LITERAL "1"
                       COMMA ","
                     MATCH_ARM
-                      MATCH_PATTERN "_"
-                        WORD "_"
+                      PATTERN
+                        WILDCARD_PATTERN "_"
+                          WORD "_"
                       FAT_ARROW "=>"
                       WORD "val"
                     R_BRACE "}"

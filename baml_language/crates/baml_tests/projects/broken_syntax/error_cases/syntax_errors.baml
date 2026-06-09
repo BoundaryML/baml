@@ -11,17 +11,3 @@ function 123Invalid() {}
 // The grammar parses `:` tighter than `|`, so `a: int | b: bool` becomes
 // `a: (int | b)` with `: bool` as garbage, producing a confusing error.
 // ============================================================================
-
-// Invalid: multiple typed bindings in union pattern
-function BadUnionPattern(x: int | bool) -> string {
-    match (x) {
-        a: int | b: bool => "bad"
-    }
-}
-
-// Invalid: typed binding after literal in union
-function MixedLiteralAndTyped(x: int) -> string {
-    match (x) {
-        42 | n: int => "mixed"
-    }
-}

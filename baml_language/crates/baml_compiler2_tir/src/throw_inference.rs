@@ -8,7 +8,7 @@
 use std::collections::{BTreeMap, BTreeSet, HashSet};
 
 use baml_base::Name;
-use baml_compiler2_ast::{Expr, ExprBody, Literal, TypeExpr};
+use baml_compiler2_ast::{Expr, ExprBody, Literal};
 use baml_compiler2_hir::{
     contributions::Definition,
     package::{PackageId, PackageItems, package_dependencies},
@@ -461,7 +461,7 @@ fn collect_catch_binding_names(body: &ExprBody) -> HashSet<&str> {
     for (_, expr) in body.exprs.iter() {
         if let Expr::Catch { clauses, .. } = expr {
             for clause in clauses {
-                if let Some(name) = body.patterns[clause.binding].binding_name() {
+                if let Some(name) = body.patterns[clause.binding].binding_name(&body.patterns) {
                     names.insert(name.as_str());
                 }
             }
@@ -483,7 +483,8 @@ fn expr_to_path(expr_id: baml_compiler2_ast::ExprId, body: &ExprBody) -> Option<
 }
 
 /// Flatten a compound `Ty` into its leaf throw facts.
-/// Unions and optionals are decomposed; leaf types are kept as-is.
+/// Unions (including a nullable `T | null`) are decomposed; leaf types are
+/// kept as-is.
 pub fn flatten_ty_to_facts(ty: &Ty) -> BTreeSet<ThrowFact> {
     let mut out = BTreeSet::new();
     collect_leaf_types(ty, &mut out);
@@ -493,10 +494,6 @@ pub fn flatten_ty_to_facts(ty: &Ty) -> BTreeSet<ThrowFact> {
 fn collect_leaf_types(ty: &Ty, out: &mut BTreeSet<Ty>) {
     match ty {
         // Compound types: decompose
-        Ty::Optional(inner, _) => {
-            collect_leaf_types(inner, out);
-            out.insert(Ty::Primitive(PrimitiveType::Null, TyAttr::default()));
-        }
         Ty::Union(members, _) => {
             for member in members {
                 collect_leaf_types(member, out);
@@ -531,12 +528,18 @@ fn lookup_dep_throw_set<'a>(
     None
 }
 
-pub fn is_banned_catch_binding_type(ty: &TypeExpr) -> Option<&'static str> {
-    match ty {
-        TypeExpr::BuiltinUnknown { .. } => Some("unknown"),
-        TypeExpr::Path { segments, .. } if segments.len() == 1 && segments[0].as_str() == "any" => {
-            Some("any")
-        }
-        _ => None,
+/// Reject catch-everything binding types — `unknown` and unresolved `any`.
+///
+/// Operates on the resolved `Ty` produced by TIR's `pattern_type`. Both
+/// `unknown` (an explicit `unknown` type) and `any` (an unresolved path that
+/// the user typed expecting it to mean "anything") collapse to
+/// `Ty::BuiltinUnknown` / `Ty::Unknown` after resolution. We can't
+/// distinguish between them at this point, so the diagnostic just says
+/// "unknown".
+pub fn is_banned_catch_binding_type(ty: &Ty) -> Option<&'static str> {
+    if matches!(ty, Ty::BuiltinUnknown { .. } | Ty::Unknown { .. }) {
+        Some("unknown")
+    } else {
+        None
     }
 }

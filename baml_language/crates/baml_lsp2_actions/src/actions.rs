@@ -19,7 +19,8 @@
 //!   the Playground.
 
 use baml_base::SourceFile;
-use baml_compiler2_hir::{contributions::Definition, file_symbol_contributions};
+use baml_compiler2_ast::ast::FunctionOrigin;
+use baml_compiler2_hir::{contributions::Definition, file_item_tree, file_symbol_contributions};
 use text_size::TextRange;
 
 use crate::Db;
@@ -71,7 +72,13 @@ pub fn file_actions(db: &dyn Db, file: SourceFile) -> Vec<FileAction> {
     // clients, generators, retry policies all live here.
     for (name, contrib) in &contribs.values {
         match contrib.definition {
-            Definition::Function(_) => {
+            Definition::Function(loc) => {
+                let item_tree = file_item_tree(db, loc.file(db));
+                let func = &item_tree[loc.id(db)];
+                if !matches!(func.origin, FunctionOrigin::UserDefined) {
+                    continue;
+                }
+
                 actions.push(FileAction {
                     name: name.to_string(),
                     name_span: contrib.name_span,
@@ -92,4 +99,34 @@ pub fn file_actions(db: &dyn Db, file: SourceFile) -> Vec<FileAction> {
     }
 
     actions
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::testing::ProjectTest;
+
+    #[test]
+    fn file_actions_include_only_user_defined_functions() {
+        let mut builder = ProjectTest::builder();
+        builder.source(
+            "main.baml",
+            r##"
+function Summarize(input: string) -> string {
+    client GPT4
+    prompt #"Summarize {{ input }}"#
+}
+"##,
+        );
+        let project = builder.build();
+
+        let actions = file_actions(&project.db, project.files[0]);
+        let playground_actions: Vec<_> = actions
+            .iter()
+            .filter(|action| action.kind == FileActionKind::RunInPlayground)
+            .collect();
+
+        assert_eq!(playground_actions.len(), 1);
+        assert_eq!(playground_actions[0].name, "Summarize");
+    }
 }

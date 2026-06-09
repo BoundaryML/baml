@@ -5,9 +5,21 @@
 use anyhow::Result;
 use clap::{CommandFactory, Parser, Subcommand};
 
+pub(crate) const fn release_version() -> &'static str {
+    baml_version::CANONICAL_VERSION
+}
+
 #[derive(Parser, Debug)]
-#[command(author, version, about = "A CLI tool for working with BAML. Learn more at https://docs.boundaryml.com.", long_about = None)]
-#[command(styles = clap_cargo::style::CLAP_STYLING)]
+#[command(
+    name = "baml-cli",
+    bin_name = "baml",
+    author,
+    version = release_version(),
+    about = "A CLI tool for working with BAML. Learn more at https://docs.boundaryml.com.",
+    long_about = None,
+    after_help = "Manage installed BAML toolchains:\n  baml toolchain --help"
+)]
+#[command(styles = crate::reporter::CLAP_STYLING)]
 #[command(propagate_version = true)]
 pub(crate) struct RuntimeCli {
     /// Enable specific features (can be specified multiple times)
@@ -34,6 +46,8 @@ pub(crate) enum Commands {
 
     // #[command(about = "Checks for errors and warnings in the baml_src directory")]
     // Check(baml_runtime::cli::check::CheckArgs),
+    #[command(about = "Check BAML source files for compiler errors")]
+    Check(crate::check_command::CheckArgs),
 
     // #[command(about = "Starts a server that translates LLM responses to BAML responses")]
     // Serve(baml_runtime::cli::serve::ServeArgs),
@@ -69,8 +83,23 @@ pub(crate) enum Commands {
     #[command(about = "Run BAML tests")]
     Test(crate::test_command::TestArgs),
 
+    #[command(about = "Initialize a new BAML project (creates baml.toml)")]
+    Init(crate::init_command::InitArgs),
+
+    #[command(about = "Create a new BAML project directory")]
+    New(crate::init_command::NewArgs),
+
     #[command(about = "Run a BAML function or script", disable_help_flag = true)]
     Run(crate::run_command::RunArgs),
+
+    #[command(about = "Package a BAML target as a standalone executable")]
+    Pack(crate::pack_command::PackArgs),
+
+    #[command(about = "Install or manage IDE integration assets")]
+    Ide(crate::ide_command::IdeArgs),
+
+    #[command(about = "Install BAML agent skills for this project")]
+    Agent(crate::agent_command::AgentArgs),
 
     #[command(about = "Starts a language server", name = "lsp")]
     LanguageServer(crate::lsp::LanguageServerArgs),
@@ -105,6 +134,11 @@ impl RuntimeCli {
             }
         }
 
+        // BEP-027 §"`--` separator" — note: clap already prints a
+        // helpful "to pass '<flag>' as a value, use '-- <flag>'" tip on
+        // `ErrorKind::UnknownArgument`, so we don't need to add our own.
+        // The error format ships with `[-- <TARGET_ARGS>...]` in the
+        // usage line as further reinforcement.
         let matches = match command.try_get_matches_from_mut(argv) {
             Ok(matches) => matches,
             Err(err) => err.exit(),
@@ -124,7 +158,13 @@ impl RuntimeCli {
 
     pub fn run(&self) -> Result<crate::ExitCode> {
         match &self.command {
+            Commands::Init(args) => args.run(),
+            Commands::New(args) => args.run(),
+            Commands::Check(args) => args.run(),
             Commands::Run(args) => args.run(),
+            Commands::Pack(args) => args.run(),
+            Commands::Ide(args) => args.run(),
+            Commands::Agent(args) => args.run(),
             Commands::Describe(args) => args.run(),
             Commands::Generate(args) => args.run(),
             Commands::Grep(args) => args.run(),
@@ -132,10 +172,7 @@ impl RuntimeCli {
             Commands::LanguageServer(args) => match args.run() {
                 Ok(()) => Ok(crate::ExitCode::Success),
                 Err(e) => {
-                    #[allow(clippy::print_stderr)]
-                    {
-                        eprintln!("Error: {e}");
-                    }
+                    crate::reporter::print_error(e);
                     Ok(crate::ExitCode::Other)
                 }
             },
@@ -148,4 +185,69 @@ fn baml_internal_env_is_truthy() -> bool {
     std::env::var("BAML_INTERNAL")
         .map(|value| matches!(value.trim().to_ascii_lowercase().as_str(), "1" | "true"))
         .unwrap_or(false)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn release_version_matches_compile_time_setting() {
+        assert_eq!(release_version(), baml_version::CANONICAL_VERSION);
+    }
+
+    fn help_for(args: &[&str]) -> String {
+        let mut command = RuntimeCli::command();
+        command
+            .try_get_matches_from_mut(args)
+            .expect_err("help request should render clap help")
+            .to_string()
+    }
+
+    #[test]
+    fn root_help_presents_public_baml_command() {
+        let help = help_for(&["baml-cli", "--help"]);
+        assert!(help.contains("Usage: baml [OPTIONS] <COMMAND>"), "{help}");
+        assert!(!help.contains("Usage: baml-cli"), "{help}");
+    }
+
+    #[test]
+    fn pack_help_presents_public_baml_command() {
+        let help = help_for(&["baml-cli", "pack", "--help"]);
+        assert!(
+            help.contains("Usage: baml pack [OPTIONS] [TARGET]"),
+            "{help}"
+        );
+        assert!(!help.contains("Usage: baml-cli pack"), "{help}");
+    }
+
+    #[test]
+    fn ide_help_presents_public_baml_command() {
+        let help = help_for(&["baml-cli", "ide", "--help"]);
+        assert!(
+            help.contains("Usage: baml ide [OPTIONS] <COMMAND>"),
+            "{help}"
+        );
+        assert!(!help.contains("Usage: baml-cli ide"), "{help}");
+    }
+
+    #[test]
+    fn root_help_lists_check_command() {
+        let help = help_for(&["baml-cli", "--help"]);
+        assert!(help.contains("check"), "{help}");
+        assert!(
+            help.contains("Check BAML source files for compiler errors"),
+            "{help}"
+        );
+    }
+
+    #[test]
+    fn check_help_mentions_default_from_directory() {
+        let help = help_for(&["baml-cli", "check", "--help"]);
+        assert!(help.contains("Usage: baml check [OPTIONS]"), "{help}");
+        assert!(
+            help.contains("Project root to check. Defaults to the current directory"),
+            "{help}"
+        );
+    }
 }

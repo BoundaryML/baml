@@ -12,8 +12,8 @@ doctest = false
 baml_type = { workspace = true }
 bex_events = { workspace = true }
 bex_project = { workspace = true }
-bex_resource_types = { workspace = true }
 indexmap = { workspace = true }
+num-bigint = { workspace = true }
 prost = { workspace = true }
 thiserror = { workspace = true }
 web-time = { workspace = true }
@@ -21,6 +21,11 @@ web-time = { workspace = true }
 [build-dependencies]
 prost-build = { workspace = true }
 protoc-bin-vendored = { workspace = true }
+
+[features]
+default = [ "aws-crypto" ]
+aws-crypto = [ "bex_project/aws-crypto" ]
+ring-crypto = [ "bex_project/ring-crypto" ]
 
 [lints]
 workspace = true

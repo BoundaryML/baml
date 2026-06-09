@@ -4,15 +4,21 @@ use rowan::TextRange;
 use super::tokens as t;
 use crate::{
     ast::{
-        BlockExpr, Expression, FromCST, HeaderComment, KnownKind, ParenExpr, StrongAstError,
-        SyntaxNodeIter, TestExprDecl, TestSetDecl, Token, Type,
+        BlockExpr, Expression, FromCST, HeaderComment, KnownKind, MatchPattern, ParenExpr,
+        StrongAstError, SyntaxNodeIter, TestExprDecl, TestSetDecl, Token,
     },
     printer::{PrintInfo, PrintMultiLine, Printable, Printer, Shape},
     trivia_classifier::TriviaSliceExt,
 };
 
 /// Does not correspond to a specific [`SyntaxKind`], but contains all possible statements.
+//
+// `For(ForStmt)` is the largest variant (~720 bytes); the next-largest sits
+// well below it. The size difference is acknowledged here rather than
+// boxed because `Statement` is constructed transiently during formatting,
+// not stored at scale.
 #[derive(Debug)]
+#[allow(clippy::large_enum_variant)]
 pub enum Statement {
     /// Assignment operations are parsed as binary expressions.
     ///
@@ -21,6 +27,7 @@ pub enum Statement {
     Expr(ExpressionStmt),
     Let(LetStmt),
     While(WhileStmt),
+    WhileLet(WhileLetStmt),
     Return(ReturnStmt),
     Break(BreakStmt),
     Continue(ContinueStmt),
@@ -43,6 +50,7 @@ impl FromCST for Statement {
             }
             SyntaxKind::RETURN_STMT => ReturnStmt::from_cst(elem).map(Statement::Return),
             SyntaxKind::WHILE_STMT => WhileStmt::from_cst(elem).map(Statement::While),
+            SyntaxKind::WHILE_LET_STMT => WhileLetStmt::from_cst(elem).map(Statement::WhileLet),
             SyntaxKind::FOR_EXPR => ForStmt::from_cst(elem).map(Statement::For),
             SyntaxKind::BREAK_STMT => BreakStmt::from_cst(elem).map(Statement::Break),
             SyntaxKind::CONTINUE_STMT => ContinueStmt::from_cst(elem).map(Statement::Continue),
@@ -63,6 +71,7 @@ impl Printable for Statement {
             Statement::Expr(expression_stmt) => expression_stmt.print(shape, printer),
             Statement::Let(let_stmt) => let_stmt.print(shape, printer),
             Statement::While(while_stmt) => while_stmt.print(shape, printer),
+            Statement::WhileLet(while_let_stmt) => while_let_stmt.print(shape, printer),
             Statement::Return(return_stmt) => return_stmt.print(shape, printer),
             Statement::Break(break_stmt) => break_stmt.print(shape, printer),
             Statement::Continue(continue_stmt) => continue_stmt.print(shape, printer),
@@ -88,6 +97,7 @@ impl Printable for Statement {
             Statement::Expr(expr) => expr.leftmost_token(),
             Statement::Let(let_stmt) => let_stmt.leftmost_token(),
             Statement::While(while_stmt) => while_stmt.leftmost_token(),
+            Statement::WhileLet(while_let_stmt) => while_let_stmt.leftmost_token(),
             Statement::Return(return_stmt) => return_stmt.leftmost_token(),
             Statement::Break(break_stmt) => break_stmt.leftmost_token(),
             Statement::Continue(continue_stmt) => continue_stmt.leftmost_token(),
@@ -104,6 +114,7 @@ impl Printable for Statement {
             Statement::Expr(expr) => expr.rightmost_token(),
             Statement::Let(let_stmt) => let_stmt.rightmost_token(),
             Statement::While(while_stmt) => while_stmt.rightmost_token(),
+            Statement::WhileLet(while_let_stmt) => while_let_stmt.rightmost_token(),
             Statement::Return(return_stmt) => return_stmt.rightmost_token(),
             Statement::Break(break_stmt) => break_stmt.rightmost_token(),
             Statement::Continue(continue_stmt) => continue_stmt.rightmost_token(),
@@ -170,13 +181,24 @@ impl Printable for ExpressionStmt {
 }
 
 /// Corresponds to a [`SyntaxKind::LET_STMT`] node or a [`SyntaxKind::WATCH_LET`] node.
+///
+/// Post-pattern-rewrite shape: `KW_WATCH? (KW_LET|KW_CONST)? PATTERN EQUALS? <expr>? (KW_ELSE BLOCK_EXPR)? SEMICOLON?`.
+/// Simple bindings carry the introducer inside the [`super::MatchPattern`] (e.g.
+/// `let x: int` parses as a `Chain([Bind, Type])`). Array destructuring uses
+/// the statement-level introducer before an `ARRAY_PATTERN`. The optional
+/// `else BLOCK_EXPR` tail is the `let … else` form: a refutable binding
+/// whose else branch must diverge.
 #[derive(Debug)]
 pub struct LetStmt {
     pub watch: Option<t::Watch>,
-    pub keyword: t::Let,
-    pub name: t::Word,
-    pub type_annotation: Option<(t::Colon, Type)>,
+    pub let_keyword: Option<t::BindingKeyword>,
+    pub pattern: super::MatchPattern,
     pub initializer: Option<(t::Equals, Expression)>,
+    /// `else { … }` tail for `let … else`. None for plain `let`. Boxed
+    /// to keep `LetStmt` (and the enclosing `Statement` enum) small — the
+    /// else branch is rare and a `BlockExpr` carries a full statement
+    /// vector.
+    pub else_branch: Option<Box<(t::Else, super::BlockExpr)>>,
     /// Not required in some contexts like for-let loops
     pub semicolon: Option<t::Semicolon>,
 }
@@ -200,19 +222,26 @@ impl FromCST for LetStmt {
             None
         };
 
-        let keyword = it.expect_parse()?;
+        let let_keyword = it
+            .next_if(|elem| matches!(elem.kind(), SyntaxKind::KW_LET | SyntaxKind::KW_CONST))
+            .map(t::BindingKeyword::from_cst)
+            .transpose()?;
 
-        let name = it.expect_parse()?;
-
-        let type_annotation = if let Some(colon) = it.next_if_kind(SyntaxKind::COLON) {
-            Some((t::Colon::from_cst(colon)?, it.expect_parse()?))
-        } else {
-            None
-        };
+        let pattern: super::MatchPattern = it.expect_parse()?;
 
         let initializer = if let Some(equals) = it.next_if_kind(SyntaxKind::EQUALS) {
             let value = it.expect_next("an expression")?;
             Some((t::Equals::from_cst(equals)?, Expression::from_cst(value)?))
+        } else {
+            None
+        };
+
+        let else_branch = if let Some(else_kw) = it.next_if_kind(SyntaxKind::KW_ELSE) {
+            let block_elem = it.expect_next("block after `else`")?;
+            Some(Box::new((
+                t::Else::from_cst(else_kw)?,
+                super::BlockExpr::from_cst(block_elem)?,
+            )))
         } else {
             None
         };
@@ -222,10 +251,10 @@ impl FromCST for LetStmt {
 
         Ok(LetStmt {
             watch,
-            keyword,
-            name,
-            type_annotation,
+            let_keyword,
+            pattern,
             initializer,
+            else_branch,
             semicolon,
         })
     }
@@ -235,33 +264,24 @@ impl Printable for LetStmt {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
         let mut multi_lined = false;
 
-        // Structural frame: no trivia between watch/let/name/`:`
         if let Some(watch) = &self.watch {
             printer.print_raw_token(watch);
             printer.print_str(" ");
         }
-        printer.print_raw_token(&self.keyword);
-        printer.print_str(" ");
-        printer.print_raw_token(&self.name);
-
-        if let Some((colon, ty)) = &self.type_annotation {
-            // No trivia between name and `:`, but YES between `:` and Type
-            let (_, colon_trailing) = printer.trivia.get_for_range_split(colon.span());
-            printer.print_raw_token(colon);
+        if let Some(let_keyword) = &self.let_keyword {
+            printer.print_raw_token(let_keyword);
             printer.print_str(" ");
-            printer.print_trivia_squished(colon_trailing);
-            let ty_leading = printer.trivia.get_leading_for_element(ty);
-            printer.print_trivia_squished(ty_leading);
-            multi_lined |= printer.print(ty, shape.clone()).multi_lined;
-            // Type trailing trivia: only if more children follow
-            if self.initializer.is_some() || self.semicolon.is_some() {
-                let ty_trailing = printer.trivia.get_trailing_for_element(ty);
-                printer.print_trivia_squished(ty_trailing);
+            // Preserve trivia between the introducer and the pattern — e.g.
+            // `let /*keep*/ [x]` would otherwise lose the comment.
+            let (_, let_trailing) = printer.trivia.get_for_range_split(let_keyword.span());
+            if printer.print_trivia_squished(let_trailing) > 0 {
+                printer.print_str(" ");
             }
         }
+        // Simple binding patterns carry `let`, the binding name, and any `: T` narrow.
+        multi_lined |= printer.print(&self.pattern, shape.clone()).multi_lined;
 
         if let Some((equals, expr)) = &self.initializer {
-            // Trivia between `=` and expr
             let (_, equals_trailing) = printer.trivia.get_for_range_split(equals.span());
             printer.print_str(" ");
             printer.print_raw_token(equals);
@@ -269,12 +289,31 @@ impl Printable for LetStmt {
             printer.print_trivia_squished(equals_trailing);
             let expr_leading = printer.trivia.get_leading_for_element(expr);
             printer.print_trivia_squished(expr_leading);
-            multi_lined |= printer.print(expr, shape).multi_lined;
-            // Expr trailing trivia: only if semicolon follows
-            if self.semicolon.is_some() {
+            multi_lined |= printer.print(expr, shape.clone()).multi_lined;
+            // Trailing trivia between the initializer expression and what
+            // follows: a semicolon, or an `else { … }` tail. Either way,
+            // print it so inline comments aren't dropped.
+            if (self.else_branch.is_none() && self.semicolon.is_some())
+                || self.else_branch.is_some()
+            {
                 let expr_trailing = printer.trivia.get_trailing_for_element(expr);
                 printer.print_trivia_squished(expr_trailing);
             }
+        }
+
+        if let Some(else_branch) = self.else_branch.as_deref() {
+            let (else_kw, block) = else_branch;
+            // Preserve trivia adjacent to the `else` keyword instead of
+            // hardcoding bare spaces — a `// note` between the init and
+            // `else`, or between `else` and the block, would otherwise be
+            // dropped.
+            let (else_leading, else_trailing) = printer.trivia.get_for_range_split(else_kw.span());
+            printer.print_str(" ");
+            printer.print_trivia_squished(else_leading);
+            printer.print_raw_token(else_kw);
+            printer.print_str(" ");
+            printer.print_trivia_squished(else_trailing);
+            multi_lined |= printer.print(block, shape).multi_lined;
         }
 
         if let Some(semicolon) = &self.semicolon {
@@ -289,21 +328,23 @@ impl Printable for LetStmt {
     fn leftmost_token(&self) -> TextRange {
         if let Some(watch) = &self.watch {
             watch.span()
+        } else if let Some(let_keyword) = &self.let_keyword {
+            let_keyword.span()
         } else {
-            self.keyword.span()
+            self.pattern.leftmost_token()
         }
     }
     fn rightmost_token(&self) -> TextRange {
         if let Some(semicolon) = &self.semicolon {
             return semicolon.span();
         }
+        if let Some(else_branch) = self.else_branch.as_deref() {
+            return else_branch.1.rightmost_token();
+        }
         if let Some((_, expr)) = &self.initializer {
             return expr.rightmost_token();
         }
-        if let Some((_, ty)) = &self.type_annotation {
-            return ty.rightmost_token();
-        }
-        self.name.span()
+        self.pattern.rightmost_token()
     }
 }
 
@@ -359,6 +400,115 @@ impl Printable for WhileStmt {
         };
         printer.print(&self.condition, condition_shape);
 
+        printer.print_str(" ");
+
+        let body_shape = Shape {
+            width: shape.width,
+            indent: shape.indent,
+            first_line_offset: 0, // irrelevant since body new-lines immediately after `{`
+        };
+        printer.print(&self.body, body_shape);
+        PrintInfo::default_multi_lined()
+    }
+    fn leftmost_token(&self) -> TextRange {
+        self.keyword.span()
+    }
+    fn rightmost_token(&self) -> TextRange {
+        self.body.rightmost_token()
+    }
+}
+
+/// Corresponds to a [`SyntaxKind::WHILE_LET_STMT`] node.
+///
+/// `while let PATTERN = SCRUTINEE { BODY }`. Combines `WhileStmt`'s statement
+/// framing with `if let`'s `pattern = scrutinee` head, but — like `if let` and
+/// unlike plain `while` — emits no parens around the scrutinee, and has no
+/// `else` clause (loops produce unit).
+#[derive(Debug)]
+pub struct WhileLetStmt {
+    pub keyword: t::While,
+    /// Standalone leading binding introducer, present only for top-level
+    /// array-pattern heads (`while let [x] = xs`), where the parser keeps the
+    /// introducer at the statement level instead of inside the pattern. For
+    /// binding / class / type heads the introducer lives inside `pattern` and
+    /// this is `None`. Mirrors
+    /// `LetStmt::let_keyword`.
+    pub let_keyword: Option<t::BindingKeyword>,
+    pub pattern: MatchPattern,
+    pub equals: t::Equals,
+    pub scrutinee: Box<Expression>,
+    pub body: BlockExpr,
+}
+
+impl FromCST for WhileLetStmt {
+    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
+        let node = StrongAstError::assert_is_node(elem)?;
+        StrongAstError::assert_kind_node(&node, SyntaxKind::WHILE_LET_STMT)?;
+
+        let mut it = SyntaxNodeIter::new(&node);
+
+        // KW_WHILE
+        let keyword = it.expect_parse()?;
+
+        // Optional standalone KW_LET/KW_CONST for top-level array-pattern heads
+        // (`while let [x] = xs`); for other heads `let` is inside the pattern.
+        let let_keyword = it
+            .next_if(|elem| matches!(elem.kind(), SyntaxKind::KW_LET | SyntaxKind::KW_CONST))
+            .map(t::BindingKeyword::from_cst)
+            .transpose()?;
+
+        // PATTERN (carries its own leading `let` unless consumed above)
+        let pattern = it.expect_parse()?;
+
+        // `=` separator between pattern and scrutinee
+        let equals = it.expect_parse()?;
+
+        // Scrutinee: any expression
+        let scrutinee_elem = it.expect_next("while-let scrutinee expression")?;
+        let scrutinee = Box::new(Expression::from_cst(scrutinee_elem)?);
+
+        // BLOCK_EXPR body (no else clause)
+        let body: BlockExpr = it.expect_parse()?;
+
+        it.expect_end()?;
+
+        Ok(WhileLetStmt {
+            keyword,
+            let_keyword,
+            pattern,
+            equals,
+            scrutinee,
+            body,
+        })
+    }
+}
+
+impl KnownKind for WhileLetStmt {
+    fn kind() -> SyntaxKind {
+        SyntaxKind::WHILE_LET_STMT
+    }
+}
+
+impl Printable for WhileLetStmt {
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        printer.print_raw_token(&self.keyword);
+        printer.print_str(" ");
+        // A standalone `let` is present only for array-pattern heads; for other
+        // heads the `let` lives inside the pattern. No parens around the pattern
+        // or scrutinee (mirrors `if let`, unlike plain `while`).
+        if let Some(let_keyword) = &self.let_keyword {
+            printer.print_raw_token(let_keyword);
+            printer.print_str(" ");
+            let (_, trailing) = printer.trivia.get_for_range_split(let_keyword.span());
+            if printer.print_trivia_squished(trailing) > 0 {
+                printer.print_str(" ");
+            }
+        }
+        printer.print(&self.pattern, shape.clone());
+        printer.print_str(" ");
+        printer.print_raw_token(&self.equals);
+        printer.print_str(" ");
+        printer.print(&*self.scrutinee, shape.clone());
         printer.print_str(" ");
 
         let body_shape = Shape {
@@ -717,14 +867,16 @@ impl PrintMultiLine for ForIteratorArgs {
                     printer.print_raw_token(watch);
                     printer.print_spaces(1);
                 }
-                printer.print_raw_token(&let_stmt.keyword);
-                printer.print_str(" ");
-                printer.print_raw_token(&let_stmt.name);
-                if let Some((colon, ty)) = &let_stmt.type_annotation {
-                    printer.print_raw_token(colon);
-                    printer.print_str(" ");
-                    printer.print(ty, inner_shape.clone());
+                if let Some(let_keyword) = &let_stmt.let_keyword {
+                    printer.print_raw_token(let_keyword);
+                    printer.print_spaces(1);
+                    // Preserve trivia between `let` and the pattern.
+                    let (_, let_trailing) = printer.trivia.get_for_range_split(let_keyword.span());
+                    if printer.print_trivia_squished(let_trailing) > 0 {
+                        printer.print_spaces(1);
+                    }
                 }
+                printer.print(&let_stmt.pattern, inner_shape.clone());
             }
             ForBinding::Bare(word) => {
                 printer.print_raw_token(word);
@@ -773,18 +925,20 @@ impl ForIteratorArgs {
                     printer.print_raw_token(watch);
                     printer.print_spaces(1);
                 }
-                printer.print_raw_token(&let_stmt.keyword);
-                printer.print_str(" ");
-                printer.print_raw_token(&let_stmt.name);
-                if let Some((colon, ty)) = &let_stmt.type_annotation {
-                    printer.print_raw_token(colon);
-                    printer.print_str(" ");
-                    if printer
-                        .print(ty, Shape::unlimited_single_line())
-                        .multi_lined
-                    {
-                        return None;
+                if let Some(let_keyword) = &let_stmt.let_keyword {
+                    printer.print_raw_token(let_keyword);
+                    printer.print_spaces(1);
+                    // Preserve trivia between `let` and the pattern.
+                    let (_, let_trailing) = printer.trivia.get_for_range_split(let_keyword.span());
+                    if printer.print_trivia_squished(let_trailing) > 0 {
+                        printer.print_spaces(1);
                     }
+                }
+                if printer
+                    .print(&let_stmt.pattern, Shape::unlimited_single_line())
+                    .multi_lined
+                {
+                    return None;
                 }
             }
             ForBinding::Bare(word) => {
@@ -835,7 +989,9 @@ impl Printable for ForIteratorArgs {
             ForBinding::Let(let_stmt) => let_stmt
                 .watch
                 .as_ref()
-                .map_or_else(|| let_stmt.keyword.span(), Token::span),
+                .map(Token::span)
+                .or_else(|| let_stmt.let_keyword.as_ref().map(Token::span))
+                .unwrap_or_else(|| let_stmt.pattern.leftmost_token()),
             ForBinding::Bare(word) => word.span(),
         }
     }

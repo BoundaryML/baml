@@ -60,6 +60,12 @@ pub const PACKAGE_ASSERT: &str = "assert";
 /// generated code or committed artifacts).
 pub const BAML_STD_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/baml_std");
 
+/// YAML documentation for BAML keywords, embedded at compile time.
+pub const BAML_KEYWORDS_YAML: &str = include_str!("../keyword_docs/baml_keywords.yaml");
+
+/// YAML crosswalk documentation for TypeScript/JS keywords, embedded at compile time.
+pub const TS_KEYWORDS_YAML: &str = include_str!("../keyword_docs/ts_keywords.yaml");
+
 /// Builtin registration macro: package, relative virtual path, filesystem include path.
 macro_rules! builtin {
     ($pkg:literal, $fs_path:literal) => {
@@ -77,8 +83,14 @@ pub const ALL: &[BuiltinFile] = &[
     // --- Root namespace (no ns_* prefix) ---
     builtin!("baml", "containers.baml"),
     builtin!("baml", "core.baml"),
+    builtin!("baml", "int.baml"),
+    builtin!("baml", "bigint.baml"),
+    builtin!("baml", "float.baml"),
+    builtin!("baml", "bool.baml"),
+    builtin!("baml", "null.baml"),
     builtin!("baml", "string.baml"),
     builtin!("baml", "uint8array.baml"),
+    builtin!("baml", "type_class.baml"),
     // --- Namespaced (ns_* folders) ---
     builtin!("baml", "ns_errors/errors.baml"),
     builtin!("baml", "ns_errors/stack_trace.baml"),
@@ -93,10 +105,25 @@ pub const ALL: &[BuiltinFile] = &[
     builtin!("baml", "ns_glob/glob.baml"),
     builtin!("baml", "ns_net/net.baml"),
     builtin!("baml", "ns_media/media.baml"),
+    builtin!("baml", "ns_json/json.baml"),
+    builtin!("baml", "ns_toml/toml.baml"),
     builtin!("baml", "ns_unstable/unstable.baml"),
     builtin!("baml", "ns_llm/llm_types.baml"),
     builtin!("baml", "ns_llm/llm.baml"),
     builtin!("baml", "ns_stream/stream.baml"),
+    builtin!("baml", "ns_iter/iter.baml"),
+    builtin!("baml", "ns_future/future.baml"),
+    builtin!("baml", "ns_spawn/spawn.baml"),
+    builtin!("baml", "ns_host/host.baml"),
+    builtin!("baml", "ns_time/duration.baml"),
+    builtin!("baml", "ns_time/instant.baml"),
+    builtin!("baml", "ns_time/timezone.baml"),
+    builtin!("baml", "ns_time/plaintime.baml"),
+    builtin!("baml", "ns_time/plaindate.baml"),
+    builtin!("baml", "ns_time/plaindatetime.baml"),
+    builtin!("baml", "ns_time/zoneddatetime.baml"),
+    // --- reflect package (standalone, accessible as `reflect.type_of(...)`) ---
+    builtin!("reflect", "reflect.baml"),
     // --- testing package ---
     builtin!("testing", "registry.baml"),
     builtin!("testing", "types.baml"),
@@ -107,4 +134,6 @@ pub const ALL: &[BuiltinFile] = &[
 ];
 
 mod adt;
+mod media;
 pub use adt::*;
+pub use media::{MediaContent, MediaValue};

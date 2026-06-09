@@ -1,0 +1,29 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== SYNTAX TREE ===
+SOURCE_FILE
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "BadAssign"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "j"
+        COLON ":"
+        TYPE_EXPR "json"
+          WORD "json"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "int"
+      WORD "int"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR "{
+  j
+}"
+        L_BRACE "{"
+        WORD "j"
+        R_BRACE "}"
+
+=== ERRORS ===
+None

@@ -52,8 +52,12 @@ sources = ["**/*.rs", "**/Cargo.toml"]
 description = "Check artifact sizes against baseline"
 run = "cargo run -p cargo-size-gate -- size-gate check"
 
+[tasks.size-gate-update]
+description = "Adopt the latest CI-measured sizes from canary as the baseline (no rebuild)"
+run = "cargo run -p cargo-size-gate -- size-gate bake --branch canary"
+
 [tasks.size-gate-record]
-description = "Record new size baseline"
+description = "Record a new size baseline by building locally (bootstrap a brand-new platform)"
 run = "cargo run -p cargo-size-gate -- size-gate record"
 
 [tasks.insta-update]

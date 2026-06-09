@@ -23,9 +23,9 @@ function WrapperAlwaysThrows(n: int) -> Status {
 // Catch chain should not include phantom `Status` in result type.
 function CatchAlwaysThrows(n: int) -> string {
     WrapperAlwaysThrows(n) catch (e) {
-        _: string => "http!"
+        string => "http!"
     } catch (e2) {
-        _: int => "index!"
+        int => "index!"
     }
 }
 
@@ -65,7 +65,7 @@ function RecB(n: int) -> string {
 
 function CatchRecursiveThrow(n: int) -> string {
     RecB(n) catch (e) {
-        _: string => "handled"
+        string => "handled"
     }
 }
 

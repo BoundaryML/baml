@@ -68,9 +68,10 @@ SOURCE_FILE
         L_BRACE "{"
         CALL_EXPR
           WORD "cb"
-          CALL_ARGS "(1)"
+          CALL_ARGS
             L_PAREN "("
-            INTEGER_LITERAL "1"
+            CALL_ARG "1"
+              INTEGER_LITERAL "1"
             R_PAREN ")"
         R_BRACE "}"
   FUNCTION_DEF
@@ -101,9 +102,10 @@ SOURCE_FILE
         L_BRACE "{"
         CALL_EXPR
           WORD "direct"
-          CALL_ARGS "(cb)"
+          CALL_ARGS
             L_PAREN "("
-            WORD "cb"
+            CALL_ARG "cb"
+              WORD "cb"
             R_PAREN ")"
         R_BRACE "}"
   FUNCTION_DEF
@@ -132,16 +134,19 @@ SOURCE_FILE
     EXPR_FUNCTION_BODY
       BLOCK_EXPR
         L_BRACE "{"
-        LET_STMT "let h = forward"
-          KW_LET "let"
-          WORD "h"
+        LET_STMT
+          PATTERN
+            BINDING_PATTERN "let h"
+              KW_LET "let"
+              WORD "h"
           EQUALS "="
           WORD "forward"
         CALL_EXPR
           WORD "h"
-          CALL_ARGS "(cb)"
+          CALL_ARGS
             L_PAREN "("
-            WORD "cb"
+            CALL_ARG "cb"
+              WORD "cb"
             R_PAREN ")"
         R_BRACE "}"
   FUNCTION_DEF
@@ -185,9 +190,10 @@ SOURCE_FILE
             WORD "values"
             DOT "."
             WORD "map"
-          CALL_ARGS "(cb)"
+          CALL_ARGS
             L_PAREN "("
-            WORD "cb"
+            CALL_ARG "cb"
+              WORD "cb"
             R_PAREN ")"
         R_BRACE "}"
   FUNCTION_DEF
@@ -224,10 +230,11 @@ SOURCE_FILE
             WORD "map"
           CALL_ARGS
             L_PAREN "("
-            PATH_EXPR "worker.scale"
-              WORD "worker"
-              DOT "."
-              WORD "scale"
+            CALL_ARG
+              PATH_EXPR "worker.scale"
+                WORD "worker"
+                DOT "."
+                WORD "scale"
             R_PAREN ")"
         R_BRACE "}"
 

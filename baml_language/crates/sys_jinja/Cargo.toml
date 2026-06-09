@@ -1,0 +1,16 @@
+[package]
+name = "sys_jinja"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+minijinja = { workspace = true }
+minijinja-contrib = { workspace = true }
+regex = { workspace = true }
+thiserror = { workspace = true }
+
+[lints]
+workspace = true

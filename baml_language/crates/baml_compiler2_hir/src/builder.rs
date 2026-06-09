@@ -21,8 +21,8 @@ use crate::{
     ids::{FunctionMarker, LocalItemId},
     item_tree::ItemTree,
     loc::{
-        ClassLoc, ClientLoc, EnumLoc, FunctionLoc, GeneratorLoc, LetLoc, RetryPolicyLoc,
-        TemplateStringLoc, TestLoc, TypeAliasLoc,
+        ClassLoc, ClientLoc, EnumLoc, FunctionLoc, GeneratorLoc, InterfaceLoc, LetLoc,
+        RetryPolicyLoc, TemplateStringLoc, TestLoc, TypeAliasLoc,
     },
     scope::{FileScopeId, Scope, ScopeId, ScopeKind},
     semantic_index::{
@@ -69,6 +69,7 @@ pub struct SemanticIndexBuilder<'db> {
     value_contributions: Vec<(Name, Contribution<'db>)>,
     diagnostics: Vec<Hir2Diagnostic>,
     lowering_diagnostics: Vec<LoweringDiagnostic>,
+    env_var_refs: Vec<baml_compiler2_ast::EnvVarRef>,
 }
 
 impl<'db> SemanticIndexBuilder<'db> {
@@ -90,6 +91,7 @@ impl<'db> SemanticIndexBuilder<'db> {
             value_contributions: Vec::new(),
             diagnostics: Vec::new(),
             lowering_diagnostics: Vec::new(),
+            env_var_refs: Vec::new(),
         }
     }
 
@@ -97,6 +99,13 @@ impl<'db> SemanticIndexBuilder<'db> {
     #[must_use]
     pub fn with_lowering_diagnostics(mut self, diags: Vec<LoweringDiagnostic>) -> Self {
         self.lowering_diagnostics = diags;
+        self
+    }
+
+    /// Set env var references collected during CST → AST lowering.
+    #[must_use]
+    pub fn with_env_var_refs(mut self, refs: Vec<baml_compiler2_ast::EnvVarRef>) -> Self {
+        self.env_var_refs = refs;
         self
     }
 
@@ -174,6 +183,7 @@ impl<'db> SemanticIndexBuilder<'db> {
             }),
             extra,
             path_resolutions: self.path_resolutions,
+            env_var_refs: self.env_var_refs,
         }
     }
 
@@ -234,6 +244,24 @@ impl<'db> SemanticIndexBuilder<'db> {
         } else {
             Some(Name::new(parts.join(".")))
         }
+    }
+
+    /// Emit a `DuplicateDefinition` diagnostic for any parameter name that
+    /// appears more than once in a function or lambda signature. Applies
+    /// uniformly to positional and defaulted parameters — both share the
+    /// same `params` vector, and any name collision among them would make
+    /// later references to the name ambiguous within the body.
+    fn emit_duplicate_param_diagnostics(&mut self, params: &[ast::Param]) {
+        let mut seen: FxHashMap<Name, Vec<MemberSite>> = FxHashMap::default();
+        for param in params {
+            seen.entry(param.name.clone())
+                .or_default()
+                .push(MemberSite {
+                    range: param.name_span,
+                    kind: DefinitionKind::Parameter,
+                });
+        }
+        self.emit_duplicate_diagnostics(seen);
     }
 
     /// Emit `DuplicateDefinition` diagnostics for any name with more than one site.
@@ -320,10 +348,19 @@ impl<'db> SemanticIndexBuilder<'db> {
             ast::Stmt::Let {
                 pattern,
                 initializer,
+                else_branch,
                 ..
             } => {
                 if let Some(initializer) = initializer {
                     self.walk_expr(*initializer, body, source_map, true);
+                }
+                if let Some(else_expr) = else_branch {
+                    // `let … else { … }` — the else block runs in the
+                    // enclosing scope BEFORE the pattern's names are
+                    // registered, so walk it before `register_local_pattern`.
+                    // The block-expr's own push_scope/pop_scope keeps any
+                    // inner bindings from leaking out.
+                    self.walk_expr(*else_expr, body, source_map, true);
                 }
                 self.register_local_pattern(
                     *pattern,
@@ -378,6 +415,33 @@ impl<'db> SemanticIndexBuilder<'db> {
                 }
                 self.pop_scope();
             }
+            ast::Stmt::WhileLet {
+                pattern,
+                scrutinee,
+                body: loop_body,
+            } => {
+                // Scrutinee is evaluated in the enclosing scope (re-evaluated
+                // each iteration, but lexically outside the loop body) —
+                // mirrors `Stmt::While`'s condition and `Stmt::For`'s
+                // collection. Walk it BEFORE pushing the body scope so its
+                // paths don't falsely resolve to the loop's own bindings.
+                self.walk_expr(*scrutinee, body, source_map, true);
+
+                // Push ONE Block scope spanning the whole while-let statement,
+                // mirroring `Stmt::While` / `Stmt::For`. The pattern bindings
+                // live in THIS scope and are visible to the body (which adds
+                // its own nested block scope); they vanish after the loop.
+                self.push_scope(ScopeKind::Block, None, source_map.stmt_span(stmt_id));
+                self.register_local_pattern(
+                    *pattern,
+                    DefinitionSite::Statement(stmt_id),
+                    body,
+                    source_map,
+                    source_map.pattern_span(*pattern).start(),
+                );
+                self.walk_expr(*loop_body, body, source_map, true);
+                self.pop_scope();
+            }
             ast::Stmt::Return(expr) => {
                 if let Some(expr) = expr {
                     self.walk_expr(*expr, body, source_map, true);
@@ -419,6 +483,35 @@ impl<'db> SemanticIndexBuilder<'db> {
                     self.walk_expr(*else_branch, body, source_map, true);
                 }
             }
+            ast::Expr::IfLet {
+                pattern,
+                scrutinee,
+                then_branch,
+                else_branch,
+            } => {
+                // Scrutinee is evaluated in the enclosing scope.
+                self.walk_expr(*scrutinee, body, source_map, true);
+
+                // Then-branch sees pattern bindings; push a fresh scope and
+                // register them before walking. Mirrors `walk_match_arm`.
+                let then_span = source_map.expr_span(*then_branch);
+                self.push_scope(ScopeKind::MatchArm, None, then_span);
+                let visible_from = source_map.pattern_span(*pattern).start();
+                self.register_local_pattern(
+                    *pattern,
+                    DefinitionSite::PatternBinding(*pattern),
+                    body,
+                    source_map,
+                    visible_from,
+                );
+                self.walk_expr(*then_branch, body, source_map, true);
+                self.pop_scope();
+
+                if let Some(else_branch) = else_branch {
+                    // Else-branch never sees pattern bindings.
+                    self.walk_expr(*else_branch, body, source_map, true);
+                }
+            }
             ast::Expr::Match {
                 scrutinee, arms, ..
             } => {
@@ -426,6 +519,13 @@ impl<'db> SemanticIndexBuilder<'db> {
                 for &arm_id in arms {
                     self.walk_match_arm(arm_id, body, source_map);
                 }
+            }
+            ast::Expr::Is { scrutinee, .. } => {
+                // `<expr> is <pattern>` is a one-shot pattern test that yields
+                // `bool`. Pattern bindings do NOT escape into the surrounding
+                // scope (use `match` / `let` if you need that). Type
+                // references inside the pattern are resolved later by TIR.
+                self.walk_expr(*scrutinee, body, source_map, true);
             }
             ast::Expr::Catch { base, clauses } => {
                 self.walk_expr(*base, body, source_map, true);
@@ -441,6 +541,22 @@ impl<'db> SemanticIndexBuilder<'db> {
             ast::Expr::Throw { value } => {
                 self.walk_expr(*value, body, source_map, true);
             }
+            ast::Expr::Spawn {
+                name,
+                with_exprs,
+                body: spawn_body,
+            } => {
+                if let Some(name) = name {
+                    self.walk_expr(*name, body, source_map, true);
+                }
+                for with_expr in with_exprs {
+                    self.walk_expr(*with_expr, body, source_map, true);
+                }
+                self.walk_expr(*spawn_body, body, source_map, true);
+            }
+            ast::Expr::Await { future } => {
+                self.walk_expr(*future, body, source_map, true);
+            }
             ast::Expr::Binary { lhs, rhs, .. } => {
                 self.walk_expr(*lhs, body, source_map, true);
                 self.walk_expr(*rhs, body, source_map, true);
@@ -448,10 +564,10 @@ impl<'db> SemanticIndexBuilder<'db> {
             ast::Expr::Unary { expr, .. } | ast::Expr::OptionalChain { expr } => {
                 self.walk_expr(*expr, body, source_map, true);
             }
-            ast::Expr::Call { callee, args } | ast::Expr::OptionalCall { callee, args } => {
+            ast::Expr::Call { callee, args, .. } | ast::Expr::OptionalCall { callee, args } => {
                 self.walk_expr(*callee, body, source_map, true);
-                for &arg in args {
-                    self.walk_expr(arg, body, source_map, true);
+                for arg in args {
+                    self.walk_expr(arg.expr, body, source_map, true);
                 }
             }
             ast::Expr::Object {
@@ -475,7 +591,9 @@ impl<'db> SemanticIndexBuilder<'db> {
                     self.walk_expr(value, body, source_map, true);
                 }
             }
-            ast::Expr::MemberAccess { base, .. } | ast::Expr::OptionalMemberAccess { base, .. } => {
+            ast::Expr::MemberAccess { base, .. }
+            | ast::Expr::Upcast { base, .. }
+            | ast::Expr::OptionalMemberAccess { base, .. } => {
                 self.walk_expr(*base, body, source_map, true);
             }
             ast::Expr::Index { base, index } | ast::Expr::OptionalIndex { base, index } => {
@@ -491,6 +609,12 @@ impl<'db> SemanticIndexBuilder<'db> {
                         self.classify_path_expr(expr_id, segments, use_scope, use_offset);
                     }
                 }
+            }
+            ast::Expr::GenericApply { base, .. } => {
+                // `foo<int>` references the base callable; walk it so the path
+                // root is recorded for name resolution. Type args are types,
+                // not value references, so they need no walking here.
+                self.walk_expr(*base, body, source_map, true);
             }
             ast::Expr::Literal(_)
             | ast::Expr::ByteStringLiteral(_)
@@ -509,18 +633,171 @@ impl<'db> SemanticIndexBuilder<'db> {
         source_map: &ast::AstSourceMap,
         visible_from: TextSize,
     ) {
-        if let Some(name) = Self::local_binding_name(&body.patterns, pat_id) {
-            let name_range = source_map.pattern_span(pat_id);
+        // Walk the pattern structurally. `collect_pattern_names` returns the
+        // set of names introduced and emits diagnostics for duplicate names
+        // and Or-alternative mismatches as it goes.
+        let names =
+            Self::collect_pattern_names(&body.patterns, pat_id, source_map, &mut self.diagnostics);
+
+        for (name, name_range) in names {
             let scope_id = self.current_scope_id();
             self.scope_bindings[scope_id.index() as usize]
                 .bindings
                 .push(LocalBinding {
-                    name: name.clone(),
+                    name,
                     site,
                     pattern: pat_id,
                     name_range,
                     visible_from,
                 });
+        }
+    }
+
+    /// Recursively walk a pattern and return the set of names it introduces
+    /// into scope, paired with the source range of each binding's first
+    /// occurrence. Emits diagnostics in two situations:
+    ///
+    /// 1. **Duplicate names within a single pattern.** Within `Class { a, a }`
+    ///    or a chain like `let Foo { x }: let x = ...`, the same name binding
+    ///    appears twice — illegal.
+    ///
+    /// 2. **`Or` alternatives that don't bind the same names.** Each `Or`
+    ///    alternative is its own scope, so duplicates *across* alternatives
+    ///    are fine. But if alternatives bind *different* names, the arm body
+    ///    would only sometimes see a given name — illegal.
+    fn collect_pattern_names(
+        patterns: &la_arena::Arena<ast::Pattern>,
+        pat_id: ast::PatId,
+        source_map: &ast::AstSourceMap,
+        diagnostics: &mut Vec<Hir2Diagnostic>,
+    ) -> FxHashMap<Name, TextRange> {
+        match &patterns[pat_id] {
+            ast::Pattern::Wildcard | ast::Pattern::Type(_) => FxHashMap::default(),
+            ast::Pattern::Bind { name, subpat } => {
+                let mut m = FxHashMap::default();
+                m.insert(name.clone(), source_map.pattern_span(pat_id));
+                if let Some(sp) = subpat {
+                    let inner = Self::collect_pattern_names(patterns, *sp, source_map, diagnostics);
+                    Self::merge_with_dup_check(&mut m, inner, diagnostics);
+                }
+                m
+            }
+            ast::Pattern::Class { fields, .. } => {
+                let mut m: FxHashMap<Name, TextRange> = FxHashMap::default();
+                let mut seen_fields: FxHashMap<Name, Vec<TextRange>> = FxHashMap::default();
+                for f in fields {
+                    seen_fields
+                        .entry(f.field.clone())
+                        .or_default()
+                        .push(f.field_span);
+                    let inner =
+                        Self::collect_pattern_names(patterns, f.pat, source_map, diagnostics);
+                    Self::merge_with_dup_check(&mut m, inner, diagnostics);
+                }
+                for (name, sites) in seen_fields {
+                    if sites.len() > 1 {
+                        diagnostics.push(Hir2Diagnostic::DuplicatePatternField { name, sites });
+                    }
+                }
+                m
+            }
+            ast::Pattern::Array {
+                prefix,
+                rest,
+                suffix,
+                ascription: _,
+            } => {
+                let mut m: FxHashMap<Name, TextRange> = FxHashMap::default();
+                for id in prefix {
+                    let inner = Self::collect_pattern_names(patterns, *id, source_map, diagnostics);
+                    Self::merge_with_dup_check(&mut m, inner, diagnostics);
+                }
+                if let Some(rest) = rest
+                    && let Some(id) = rest.pat
+                {
+                    let inner = Self::collect_pattern_names(patterns, id, source_map, diagnostics);
+                    Self::merge_with_dup_check(&mut m, inner, diagnostics);
+                }
+                for id in suffix {
+                    let inner = Self::collect_pattern_names(patterns, *id, source_map, diagnostics);
+                    Self::merge_with_dup_check(&mut m, inner, diagnostics);
+                }
+                m
+            }
+            ast::Pattern::Or(parts) => {
+                // Each alternative is its own branch. Collect them
+                // independently; duplicates are checked per-branch (already
+                // done by the recursive call), and across-branch parity is
+                // checked here.
+                let branch_sets: Vec<FxHashMap<Name, TextRange>> = parts
+                    .iter()
+                    .map(|id| Self::collect_pattern_names(patterns, *id, source_map, diagnostics))
+                    .collect();
+
+                let mut has_mismatch = false;
+                if let Some(first) = branch_sets.first() {
+                    let first_names: std::collections::BTreeSet<&Name> = first.keys().collect();
+                    let mut mismatched: std::collections::BTreeSet<Name> =
+                        std::collections::BTreeSet::new();
+                    for branch in &branch_sets[1..] {
+                        let branch_names: std::collections::BTreeSet<&Name> =
+                            branch.keys().collect();
+                        for n in first_names.symmetric_difference(&branch_names) {
+                            mismatched.insert((*n).clone());
+                        }
+                    }
+                    if !mismatched.is_empty() {
+                        has_mismatch = true;
+                        // Tighten the span to cover just the Or's branches
+                        // rather than the whole containing pattern (which can
+                        // pull in surrounding trivia and span multiple lines).
+                        let or_span = match (parts.first(), parts.last()) {
+                            (Some(first), Some(last)) => {
+                                let first_range = source_map.pattern_span(*first);
+                                let last_range = source_map.pattern_span(*last);
+                                TextRange::new(first_range.start(), last_range.end())
+                            }
+                            _ => source_map.pattern_span(pat_id),
+                        };
+                        diagnostics.push(Hir2Diagnostic::OrPatternBindingMismatch {
+                            or_span,
+                            mismatched_names: mismatched.into_iter().collect(),
+                        });
+                    }
+                }
+
+                if has_mismatch {
+                    // On mismatch, suppress the Or's bindings entirely so
+                    // downstream scopes don't depend on branch order
+                    // (`let x | _` vs `_ | let x` would otherwise behave
+                    // differently). The primary diagnostic above captures
+                    // the error.
+                    FxHashMap::default()
+                } else {
+                    // Every branch introduces the same set, so the first
+                    // branch's contribution is representative.
+                    branch_sets.into_iter().next().unwrap_or_default()
+                }
+            }
+        }
+    }
+
+    /// Merge `source` into `target`. Any name already present in `target`
+    /// produces a `DuplicatePatternBinding` diagnostic.
+    fn merge_with_dup_check(
+        target: &mut FxHashMap<Name, TextRange>,
+        source: FxHashMap<Name, TextRange>,
+        diagnostics: &mut Vec<Hir2Diagnostic>,
+    ) {
+        for (name, range) in source {
+            if let Some(prev) = target.get(&name) {
+                diagnostics.push(Hir2Diagnostic::DuplicatePatternBinding {
+                    name: name.clone(),
+                    sites: vec![*prev, range],
+                });
+            } else {
+                target.insert(name, range);
+            }
         }
     }
 
@@ -635,12 +912,23 @@ impl<'db> SemanticIndexBuilder<'db> {
                 .params
                 .push((param.name.clone(), idx));
         }
+        self.emit_duplicate_param_diagnostics(&func_def.params);
+        self.lambda_stack.push(scope_id);
+        for param in &func_def.params {
+            if let Some(default) = param.default {
+                self.walk_expr(
+                    default.expr(),
+                    &func_def.defaults.exprs,
+                    &func_def.defaults.source_map,
+                    true,
+                );
+            }
+        }
         if let Some(ast::FunctionBodyDef::Expr(lambda_body, lambda_source_map)) = &func_def.body {
-            self.lambda_stack.push(scope_id);
             self.walk_expr_body(lambda_body, lambda_source_map);
             self.analyze_lambda_captures(scope_id, lambda_body, lambda_source_map);
-            self.lambda_stack.pop();
         }
+        self.lambda_stack.pop();
         self.pop_scope();
     }
 
@@ -738,19 +1026,6 @@ impl<'db> SemanticIndexBuilder<'db> {
         });
     }
 
-    /// Extract the binding name from a pattern, if it has one.
-    ///
-    /// The AST canonicalizes `_` to `Wildcard` at construction time
-    /// (`Pattern::binding`), so `_` never reaches us as a `Bind` regardless of
-    /// the surface form. `let`/`for` patterns and `match`/`catch` arm
-    /// patterns therefore use the same extraction.
-    fn local_binding_name(
-        patterns: &la_arena::Arena<ast::Pattern>,
-        pat_id: ast::PatId,
-    ) -> Option<&Name> {
-        patterns[pat_id].binding_name()
-    }
-
     // ── Item lowering ────────────────────────────────────────────────────────
 
     fn lower_item(&mut self, item: &ast::Item) {
@@ -767,6 +1042,8 @@ impl<'db> SemanticIndexBuilder<'db> {
             ast::Item::TemplateString(ts) => self.lower_template_string(ts),
             ast::Item::RetryPolicy(rp) => self.lower_retry_policy(rp),
             ast::Item::Let(l) => self.lower_let(l),
+            ast::Item::Interface(i) => self.lower_interface(i),
+            ast::Item::ImplementsFor(imp) => self.lower_implements_for(imp),
         }
     }
 
@@ -794,6 +1071,17 @@ impl<'db> SemanticIndexBuilder<'db> {
             self.scope_bindings[scope_id.index() as usize]
                 .params
                 .push((param.name.clone(), idx));
+        }
+        self.emit_duplicate_param_diagnostics(&f.params);
+        for param in &f.params {
+            if let Some(default) = param.default {
+                self.walk_expr(
+                    default.expr(),
+                    &f.defaults.exprs,
+                    &f.defaults.source_map,
+                    true,
+                );
+            }
         }
 
         if let Some(ast::FunctionBodyDef::Expr(ref body, ref source_map)) = f.body {
@@ -842,12 +1130,137 @@ impl<'db> SemanticIndexBuilder<'db> {
         self.emit_duplicate_diagnostics(seen);
 
         // Walk class methods — inside class scope, so methods won't be
-        // contributed as top-level symbols.
+        // contributed as top-level symbols. We collapse class-level methods
+        // and all `implements I { ... }` method overrides into a single id
+        // list so downstream code (which queries `Class::methods`) sees them
+        // uniformly. Disambiguation of which interface a method satisfies
+        // happens in TIR via `class.implements`.
         self.class_depth += 1;
-        let method_ids: Vec<_> = c.methods.iter().map(|m| self.lower_function(m)).collect();
+        let mut method_ids: Vec<_> = c.methods.iter().map(|m| self.lower_function(m)).collect();
+        for impl_block in &c.implements {
+            for m in &impl_block.methods {
+                let fid = self.lower_function(m);
+                // BEP-044: remember which interface this method came from so
+                // `default.<name>()` calls inside the body can resolve back
+                // to the interface's default function.
+                self.item_tree
+                    .method_to_iface_target
+                    .insert(fid, impl_block.target.clone());
+                self.item_tree
+                    .method_to_iface_associated_type_bindings
+                    .insert(fid, impl_block.associated_type_bindings.clone());
+                method_ids.push(fid);
+            }
+        }
         self.class_depth -= 1;
 
         self.item_tree.set_class_methods(local_id, method_ids);
+        self.pop_scope();
+    }
+
+    fn lower_implements_for(&mut self, imp: &ast::ImplementsForDef) {
+        self.class_depth += 1;
+        // For blanket impls (implements<T> I for C<T>), push a class-like scope
+        // so TIR can resolve `self` and type variables in method bodies.
+        let has_generic_params = !imp.generic_params.is_empty();
+        if has_generic_params {
+            // Derive a synthetic scope name from the for_target for `self` resolution.
+            // Use the for_target's root name (e.g. "Container" from "Container<T>").
+            let scope_name = match &imp.for_target.expr {
+                baml_compiler2_ast::TypeExpr::Path { segments, .. } => segments.first().cloned(),
+                _ => None,
+            };
+            self.push_scope(ScopeKind::Class, scope_name, imp.span);
+        }
+        let mut method_ids = Vec::new();
+        for method in &imp.methods {
+            let fid = self.lower_function(method);
+            self.item_tree
+                .method_to_iface_target
+                .insert(fid, imp.interface_target.clone());
+            self.item_tree
+                .method_to_iface_associated_type_bindings
+                .insert(fid, imp.associated_type_bindings.clone());
+            method_ids.push(fid);
+        }
+        if has_generic_params {
+            self.pop_scope();
+        }
+        self.class_depth -= 1;
+        self.item_tree.add_implements_for(imp, method_ids);
+    }
+
+    /// Lower an `interface I { ... }` declaration (BEP-044).
+    ///
+    /// Mirrors `lower_class`: contributes the interface name to the type
+    /// namespace, pushes a member scope, walks default-method bodies so their
+    /// expressions get HIR scope coverage, and stores everything in the item
+    /// tree via `alloc_interface`.
+    fn lower_interface(&mut self, i: &ast::InterfaceDef) {
+        // Contribute the interface's name to the type namespace first so
+        // that within its own scope (and inside the bodies of its default
+        // methods) `Self`-style references resolve back to this interface.
+        // The interface's `local_id` is allocated only after the default
+        // methods so we can record their `FunctionMarker` ids on the
+        // interface.
+        self.push_scope(ScopeKind::Class, Some(i.name.clone()), i.span);
+
+        // BEP-044: default methods are lowered inside the interface's
+        // `Class`-kind scope so the semantic index reports the interface
+        // as their enclosing type. Without that, MIR can't resolve `self`
+        // back to the interface and field/method dispatch inside a default
+        // body falls through to dynamic map lookup.
+        self.class_depth += 1;
+        let default_method_ids: Vec<_> = i
+            .default_methods
+            .iter()
+            .map(|m| self.lower_function(m))
+            .collect();
+        self.class_depth -= 1;
+
+        let local_id = self.item_tree.alloc_interface(i, default_method_ids);
+        let loc = InterfaceLoc::new(self.db, self.file, local_id);
+        self.type_contributions.push((
+            i.name.clone(),
+            Contribution {
+                name_span: i.name_span,
+                definition: Definition::Interface(loc),
+            },
+        ));
+
+        // Member duplicate detection — interface fields and method names share
+        // a single namespace (just like classes).
+        let mut seen: FxHashMap<Name, Vec<MemberSite>> = FxHashMap::default();
+        for field in &i.fields {
+            seen.entry(field.name.clone())
+                .or_default()
+                .push(MemberSite {
+                    range: field.name_span,
+                    kind: DefinitionKind::Field,
+                });
+        }
+        for assoc in &i.associated_types {
+            seen.entry(assoc.name.clone())
+                .or_default()
+                .push(MemberSite {
+                    range: assoc.name_span,
+                    kind: DefinitionKind::AssociatedType,
+                });
+        }
+        for sig in &i.required_methods {
+            seen.entry(sig.name.clone()).or_default().push(MemberSite {
+                range: sig.name_span,
+                kind: DefinitionKind::Method,
+            });
+        }
+        for m in &i.default_methods {
+            seen.entry(m.name.clone()).or_default().push(MemberSite {
+                range: m.name_span,
+                kind: DefinitionKind::Method,
+            });
+        }
+        self.emit_duplicate_diagnostics(seen);
+
         self.pop_scope();
     }
 
@@ -927,6 +1340,7 @@ impl<'db> SemanticIndexBuilder<'db> {
 
     fn lower_generator(&mut self, g: &ast::GeneratorDef) {
         let local_id = self.item_tree.alloc_generator(g);
+        ItemTree::collect_generator_spans(&mut self.item_tree_source_map, local_id, g);
         let loc = GeneratorLoc::new(self.db, self.file, local_id);
         self.value_contributions.push((
             g.name.clone(),
@@ -1083,6 +1497,7 @@ impl<'db> SemanticIndexBuilder<'db> {
                     ast::BuiltinKind::Vm => "$rust_function",
                     ast::BuiltinKind::Io => "$rust_io_function",
                     ast::BuiltinKind::Intrinsic => "$compiler_intrinsic",
+                    ast::BuiltinKind::AwaitAny => "$await_any",
                 };
                 self.diagnostics.push(Hir2Diagnostic::BuiltinOnlySyntax {
                     feature: feature.to_string(),
@@ -1248,15 +1663,14 @@ impl<'db> SemanticIndexBuilder<'db> {
                         });
                     }
                 }
-                "skip" => {
-                    if !attr.args.is_empty() {
-                        self.diagnostics.push(Hir2Diagnostic::DiagnosticMessage {
-                            diagnostic_id: DiagnosticId::UnexpectedAttributeArg,
-                            message: "`@skip` does not take any arguments".to_string(),
-                            span: attr.span,
-                        });
-                    }
+                "skip" if !attr.args.is_empty() => {
+                    self.diagnostics.push(Hir2Diagnostic::DiagnosticMessage {
+                        diagnostic_id: DiagnosticId::UnexpectedAttributeArg,
+                        message: "`@skip` does not take any arguments".to_string(),
+                        span: attr.span,
+                    });
                 }
+                "skip" => {}
                 _ => {
                     // Unknown attributes passed through silently (e.g. @stream.*)
                 }
@@ -1286,13 +1700,8 @@ impl<'db> SemanticIndexBuilder<'db> {
 
     /// Known type-level attribute names (not field attrs, which are handled by
     /// `disambiguate::validate_field_attrs`).
-    const KNOWN_TYPE_ATTRS: &'static [&'static str] = &[
-        "stream.done",
-        "stream.must_exist",
-        "stream.with_state",
-        "check",
-        "assert",
-    ];
+    const KNOWN_TYPE_ATTRS: &'static [&'static str] =
+        &["stream.done", "stream.must_exist", "stream.with_state"];
 
     fn collect_unknown_type_attrs(
         type_expr: &ast::TypeExpr,
@@ -1365,6 +1774,14 @@ impl<'db> SemanticIndexBuilder<'db> {
                         .as_ref()
                         .is_some_and(|throws| Self::type_expr_contains_rust(throws))
             }
+            ast::TypeExpr::AssociatedTypeProjection {
+                base, interface, ..
+            } => {
+                Self::type_expr_contains_rust(base)
+                    || interface
+                        .as_ref()
+                        .is_some_and(|interface| Self::type_expr_contains_rust(interface))
+            }
             _ => false,
         }
     }
@@ -1380,15 +1797,32 @@ impl<'db> SemanticIndexBuilder<'db> {
                 generic_args,
                 ..
             } => {
+                // Allow `baml.errors.*`, `root.errors.*`, and `baml.json.*` (fully qualified).
+                // `baml.json.JsonParseError` / `baml.json.JsonDecodeError` /
+                // `baml.json.JsonSerializationError` are stdlib error types just like
+                // `baml.errors.*` ones; they need the same exemption.
                 let is_builtin_error = segments.len() >= 3
                     && (segments[0].as_str() == "baml" || segments[0].as_str() == "root")
-                    && segments[1].as_str() == "errors";
+                    && (segments[1].as_str() == "errors" || segments[1].as_str() == "json");
+                // Allow single-segment class names (e.g. `JsonParseError`) in
+                // builtin files — the class is resolvable in the current namespace
+                // and TIR will type-check it.  This allows builtin functions to
+                // declare `throws` for classes defined in the same stdlib namespace
+                // without requiring the full `baml.json.JsonParseError` path.
+                let is_builtin_class_ref = segments.len() == 1
+                    && generic_args.is_empty()
+                    && segments[0]
+                        .as_str()
+                        .chars()
+                        .next()
+                        .is_some_and(char::is_uppercase);
                 let is_allowed_generic = segments.len() == 1
                     && generic_args.is_empty()
+                    && !is_builtin_class_ref
                     && allowed_generic_params
                         .iter()
                         .any(|name| name == &segments[0]);
-                if !is_builtin_error && !is_allowed_generic {
+                if !is_builtin_error && !is_builtin_class_ref && !is_allowed_generic {
                     invalid.push(Self::render_type_expr(type_expr));
                 }
             }
@@ -1397,6 +1831,8 @@ impl<'db> SemanticIndexBuilder<'db> {
                     Self::collect_invalid_builtin_throw_types(ty, allowed_generic_params, invalid);
                 }
             }
+            // `throws never` is the explicit "infallible" marker — always valid.
+            ast::TypeExpr::Never { .. } => {}
             _ => invalid.push(Self::render_type_expr(type_expr)),
         }
     }
@@ -1408,7 +1844,9 @@ impl<'db> SemanticIndexBuilder<'db> {
                 .map(Name::as_str)
                 .collect::<Vec<_>>()
                 .join("."),
+            ast::TypeExpr::AssociatedTypeProjection { .. } => type_expr.to_string(),
             ast::TypeExpr::Int { .. } => "int".to_string(),
+            ast::TypeExpr::Bigint { .. } => "bigint".to_string(),
             ast::TypeExpr::Float { .. } => "float".to_string(),
             ast::TypeExpr::String { .. } => "string".to_string(),
             ast::TypeExpr::Bool { .. } => "bool".to_string(),

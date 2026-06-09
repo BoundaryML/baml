@@ -59,9 +59,17 @@ impl fmt::Display for Name {
     }
 }
 
-pub enum DefaultValue {
-    Null,
-    Literal(baml_base::Literal),
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct CallableParam {
+    pub name: Option<baml_base::Name>,
+    pub ty: Ty,
+    pub mode: CodegenFunctionParamMode,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum CodegenFunctionParamMode {
+    Required,
+    Optional,
 }
 
 /// A resolved type in BAML.
@@ -72,6 +80,7 @@ pub enum DefaultValue {
 pub enum Ty {
     // Primitive types
     Int,
+    Bigint,
     Float,
     String,
     Bool,
@@ -103,7 +112,6 @@ pub enum Ty {
     TypeVar(baml_base::Name),
 
     // Type constructors
-    Optional(Box<Ty>),
     List(Box<Ty>),
     Map {
         key: Box<Ty>,
@@ -119,7 +127,7 @@ pub enum Ty {
 
     /// Callable type, e.g. `callable<[int, string], bool>`.
     Callable {
-        params: Vec<Ty>,
+        params: Vec<CallableParam>,
         ret: Box<Ty>,
     },
 
@@ -127,37 +135,19 @@ pub enum Ty {
     /// Void/Unit type - the type of effectful expressions.
     Unit,
     BamlOptions,
+    /// Opaque Rust-managed state — `$rust_type` fields in stdlib stubs
+    /// (e.g. `Response._body`, `SseStream._handle`). Generators render
+    /// this as the host-language opaque-handle type (Python:
+    /// `baml.baml_core.BamlPyHandle`).
+    RustType,
 }
 
 impl Ty {
-    pub fn default_value(&self) -> Option<DefaultValue> {
-        match self {
-            Ty::BamlOptions => None,
-            Ty::Int => None,
-            Ty::Float => None,
-            Ty::String => None,
-            Ty::Bool => None,
-            Ty::Uint8Array => None,
-            Ty::Media(_) => None,
-            Ty::Class(_, _) => None,
-            Ty::Enum(_) => None,
-            Ty::TypeAlias(_) => None,
-            Ty::TypeVar(_) => None,
-            Ty::List(_) => None,
-            Ty::Map { .. } => None,
-            Ty::Union(_) => None,
-            Ty::BuiltinUnknown => None,
-            Ty::Callable { .. } => None,
-            Ty::Unit => None,
-            Ty::Literal(lit) => Some(DefaultValue::Literal(lit.clone())),
-            Ty::Optional(_) | Ty::Null => Some(DefaultValue::Null),
-        }
-    }
-
     pub(crate) fn validate(&self) -> Result<(), super::CodegenTypeError> {
         match self {
             Ty::BamlOptions => Ok(()),
             Ty::Int
+            | Ty::Bigint
             | Ty::Float
             | Ty::String
             | Ty::Bool
@@ -166,21 +156,14 @@ impl Ty {
             | Ty::Enum(_)
             | Ty::TypeAlias(_)
             | Ty::TypeVar(_)
+            | Ty::RustType
             | Ty::BuiltinUnknown => Ok(()),
             Ty::Class(_, args) => args.iter().try_for_each(Ty::validate),
             Ty::Callable { params, ret } => {
-                params.iter().try_for_each(Ty::validate)?;
+                params.iter().try_for_each(|param| param.ty.validate())?;
                 ret.validate()
             }
             Ty::Null => Ok(()),
-            Ty::Optional(ty) => {
-                ty.validate()?;
-                if matches!(ty.as_ref(), Ty::Optional(_) | Ty::Null | Ty::Unit) {
-                    Err(super::CodegenTypeError::InvalidOptionalUsage(self.clone()))
-                } else {
-                    Ok(())
-                }
-            }
             Ty::Literal(_) => Ok(()),
             Ty::List(ty) => {
                 if matches!(ty.as_ref(), Ty::Unit) {
@@ -211,11 +194,11 @@ impl Ty {
                     })
                     .expect("Union is guaranteed to have atleast 1 item")?;
 
-                // Check if any inner type is a union or a null, if so, nope
-                if items
-                    .iter()
-                    .any(|ty| matches!(ty, Ty::Union(_) | Ty::Optional(_) | Ty::Null | Ty::Unit))
-                {
+                // A single `null` member encodes optionality (`T | null` ==
+                // `T?`) and is allowed. Nested unions/optionals, `Unit`, and
+                // more than one `null` are still rejected.
+                let null_count = items.iter().filter(|ty| matches!(ty, Ty::Null)).count();
+                if null_count > 1 || items.iter().any(|ty| matches!(ty, Ty::Union(_) | Ty::Unit)) {
                     Err(super::CodegenTypeError::InvalidUnionUsage(self.clone()))
                 } else {
                     Ok(())
@@ -231,6 +214,7 @@ impl fmt::Display for Ty {
         match self {
             Ty::BamlOptions => write!(f, "baml.Options"),
             Ty::Int => write!(f, "int"),
+            Ty::Bigint => write!(f, "bigint"),
             Ty::Float => write!(f, "float"),
             Ty::String => write!(f, "string"),
             Ty::Bool => write!(f, "bool"),
@@ -248,16 +232,19 @@ impl fmt::Display for Ty {
             }
             Ty::Enum(name) | Ty::TypeAlias(name) => write!(f, "{name}"),
             Ty::TypeVar(name) => write!(f, "{name}"),
-            Ty::Optional(inner) => write!(f, "{inner}?"),
             Ty::List(inner) => write!(f, "{inner}[]"),
             Ty::Map { key, value } => write!(f, "map<{key}, {value}>"),
             Ty::Union(types) => {
+                // `?` is sugar that exists only in source/lowering; after that a
+                // nullable type is a plain union.
                 let parts: Vec<std::string::String> =
                     types.iter().map(std::string::ToString::to_string).collect();
                 write!(f, "({})", parts.join(" | "))
             }
+            Ty::RustType => write!(f, "$rust_type"),
             Ty::Literal(lit) => match lit {
                 baml_base::Literal::Int(v) => write!(f, "int({v})"),
+                baml_base::Literal::Bigint(n) => write!(f, "bigint({n})"),
                 baml_base::Literal::Float(s) => write!(f, "float({s})"),
                 baml_base::Literal::String(v) => write!(f, "string({v:?})"),
                 baml_base::Literal::Bool(v) => write!(f, "bool({v})"),
@@ -267,7 +254,18 @@ impl fmt::Display for Ty {
             Ty::Callable { params, ret } => {
                 let param_strs: Vec<std::string::String> = params
                     .iter()
-                    .map(std::string::ToString::to_string)
+                    .map(|param| {
+                        let ty = &param.ty;
+                        match (&param.name, param.mode) {
+                            (Some(name), CodegenFunctionParamMode::Optional) => {
+                                format!("{name}?: {ty}")
+                            }
+                            (Some(name), CodegenFunctionParamMode::Required) => {
+                                format!("{name}: {ty}")
+                            }
+                            (None, _) => ty.to_string(),
+                        }
+                    })
                     .collect();
                 write!(f, "callable<[{}], {ret}>", param_strs.join(", "))
             }

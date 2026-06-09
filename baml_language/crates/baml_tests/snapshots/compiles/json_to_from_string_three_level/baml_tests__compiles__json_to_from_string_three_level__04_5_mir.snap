@@ -1,0 +1,51 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== MIR2 ===
+fn user.level1(s: string) -> void {
+    // Locals:
+    let _0: void // _0 // return
+    let _1: string // s // param
+    let _2: type
+
+    bb0: {
+        _2 = load_type(#0);
+        _0 = call const fn baml.json.from_string<copy _2>(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.level2(s: string) -> void {
+    // Locals:
+    let _0: void // _0 // return
+    let _1: string // s // param
+    let _2: type
+
+    bb0: {
+        _2 = load_type(#0);
+        _0 = call const fn user.level1<copy _2>(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.level3(s: string) -> void {
+    // Locals:
+    let _0: void // _0 // return
+    let _1: string // s // param
+    let _2: type
+
+    bb0: {
+        _2 = load_type(#0);
+        _0 = call const fn user.level2<copy _2>(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        return;
+    }
+}

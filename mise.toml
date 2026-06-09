@@ -9,6 +9,9 @@ node = "22"         # For pnpm
 java = "temurin-23"
 
 uv = "0.11.3"
+direnv = "2.37.1"
+sccache = "0.10.0"
+clang = "22.1.7" # LLVM tools for CI, including llvm-strip
 
 # Rust tools
 "cargo:bacon" = "latest"
@@ -17,27 +20,28 @@ uv = "0.11.3"
 "cargo:wasm-pack" = "0.14.0"
 "cargo:ripgrep" = "latest"
 "cargo:just" = "latest"
-"cargo:prek" = "latest"
+"cargo:prek" = "0.3.13"
+"cargo:cargo-nextest" = "latest"
+"cargo:cargo-insta" = "latest"
+"cargo:cargo-shear" = "latest"
 
 # Go tools
 # locked to match the version in .github/actions/setup-go/action.yml
 "protoc-gen-go" = "1.34.1"
 "go:golang.org/x/tools/cmd/goimports" = "0.36.0"
 
+# Protobuf compiler — needed by sdks/go/bridge_go/build.sh (bridge_ctypes uses vendored protoc).
+protoc = "27.1"
+
 # Python tools
 "pipx:ruff" = "latest"
 "pipx:maturin" = "latest"
 
 # Node tools
-"npm:pnpm" = "10.14.0"
+"npm:pnpm" = "11.1.3"
 "npm:@infisical/cli" = "latest"
 
-[tasks]
-"bep:readme" = "./beps/scripts/update_bep_readme.py"
-"bep:new" = "./beps/scripts/new_bep.py"
-"bep:update" = "./beps/scripts/update_bep.py"
-"bep:check" = "./beps/scripts/update_bep_readme.py --check"
-"bep:serve" = "cd beps && uv run --with mkdocs-material --with mkdocs-awesome-pages-plugin --with click==8.2.1 --with mkdocs-git-revision-date-localized-plugin --with mkdocs-git-committers-plugin-2 mkdocs serve"
+actionlint = "latest"
 
 [tasks.pr-unresolved]
 run = "./scripts/pr-unresolved"

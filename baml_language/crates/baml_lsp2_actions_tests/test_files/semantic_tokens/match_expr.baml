@@ -17,8 +17,8 @@ type Pet = Cat | Dog | Lizard;
 
 function Describe(pet: Pet) -> string {
   match (pet) {
-    cat: Cat => cat.name,
-    dog: Dog => dog.name,
+    let cat: Cat => cat.name,
+    let dog: Dog => dog.name,
     _ => "other pet",
   }
 }
@@ -67,10 +67,14 @@ function Describe(pet: Pet) -> string {
 // match_expr.baml:18:32 (type) len=6 "string"
 // match_expr.baml:19:3 (keyword) len=5 "match"
 // match_expr.baml:19:10 (type) len=3 "pet"
-// match_expr.baml:20:10 (class) len=3 "Cat"
-// match_expr.baml:20:21 (property) len=4 "name"
-// match_expr.baml:21:10 (class) len=3 "Dog"
-// match_expr.baml:21:21 (property) len=4 "name"
+// match_expr.baml:20:5 (keyword) len=3 "let"
+// match_expr.baml:20:9 (variable) len=3 "cat"
+// match_expr.baml:20:14 (class) len=3 "Cat"
+// match_expr.baml:20:25 (property) len=4 "name"
+// match_expr.baml:21:5 (keyword) len=3 "let"
+// match_expr.baml:21:9 (variable) len=3 "dog"
+// match_expr.baml:21:14 (class) len=3 "Dog"
+// match_expr.baml:21:25 (property) len=4 "name"
 // match_expr.baml:22:10 (string) len=1 "\""
 // match_expr.baml:22:11 (string) len=5 "other"
 // match_expr.baml:22:17 (string) len=3 "pet"

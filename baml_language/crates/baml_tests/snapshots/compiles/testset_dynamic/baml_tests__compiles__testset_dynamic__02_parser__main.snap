@@ -13,8 +13,10 @@ SOURCE_FILE
     BLOCK_EXPR
       L_BRACE "{"
       LET_STMT
-        KW_LET "let"
-        WORD "cases"
+        PATTERN
+          BINDING_PATTERN "let cases"
+            KW_LET "let"
+            WORD "cases"
         EQUALS "="
         ARRAY_LITERAL
           L_BRACKET "["
@@ -36,7 +38,11 @@ SOURCE_FILE
       FOR_EXPR
         KW_FOR "for"
         L_PAREN "("
-        WORD "case"
+        LET_STMT
+          PATTERN
+            BINDING_PATTERN "let case"
+              KW_LET "let"
+              WORD "case"
         KW_IN "in"
         WORD "cases"
         R_PAREN ")"
@@ -56,9 +62,10 @@ SOURCE_FILE
                   WORD "assert"
                   DOT "."
                   WORD "not_null"
-                CALL_ARGS "(case)"
+                CALL_ARGS
                   L_PAREN "("
-                  WORD "case"
+                  CALL_ARG "case"
+                    WORD "case"
                   R_PAREN ")"
               R_BRACE "}"
           R_BRACE "}"
@@ -72,9 +79,11 @@ SOURCE_FILE
       QUOTE """
     BLOCK_EXPR
       L_BRACE "{"
-      LET_STMT "let run_slow = false"
-        KW_LET "let"
-        WORD "run_slow"
+      LET_STMT
+        PATTERN
+          BINDING_PATTERN "let run_slow"
+            KW_LET "let"
+            WORD "run_slow"
         EQUALS "="
         WORD "false"
       TEST_EXPR_DEF
@@ -91,9 +100,10 @@ SOURCE_FILE
               WORD "assert"
               DOT "."
               WORD "is_true"
-            CALL_ARGS "(true)"
+            CALL_ARGS
               L_PAREN "("
-              WORD "true"
+              CALL_ARG "true"
+                WORD "true"
               R_PAREN ")"
           R_BRACE "}"
       IF_EXPR
@@ -119,9 +129,10 @@ SOURCE_FILE
                   WORD "assert"
                   DOT "."
                   WORD "is_true"
-                CALL_ARGS "(true)"
+                CALL_ARGS
                   L_PAREN "("
-                  WORD "true"
+                  CALL_ARG "true"
+                    WORD "true"
                   R_PAREN ")"
               R_BRACE "}"
           R_BRACE "}"

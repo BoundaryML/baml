@@ -1,7 +1,11 @@
 {
+  "editor.accessibilitySupport": "off",
   "editor.codeActionsOnSave": {
     "quickfix.biome": "explicit",
     "source.organizeImports.biome": "explicit"
+  },
+  "search.exclude": {
+    "**/*.snap": true
   },
   "[rust]": {
     "editor.defaultFormatter": "rust-lang.rust-analyzer",

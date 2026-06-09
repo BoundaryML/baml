@@ -5,18 +5,18 @@ function MayFail(x: int) -> string {
 
 function ChainedCatchBasic(x: int) -> string {
   MayFail(x) catch (e) {
-    _: string => "string error"
+    string => "string error"
   } catch (e2) {
-    _: int => "int error"
+    int => "int error"
   }
 }
 
 // Three chained catches
 function TripleChainedCatch(x: int) -> string {
   MayFail(x) catch (e) {
-    _: string => "first"
+    string => "first"
   } catch (e2) {
-    _: int => "second"
+    int => "second"
   } catch (e3) {
     _ => "third"
   }
@@ -24,43 +24,43 @@ function TripleChainedCatch(x: int) -> string {
 
 //----
 //- diagnostics
-// Warning: unreachable arm
-//    ╭─[ catch_chained_catch.baml:8:18 ]
+// warning: unreachable arm
+//    ╭─[ catch_chained_catch.baml:8:15 ]
 //    │
-//  8 │     _: string => "string error"
-//    │                  ───────┬──────  
-//    │                         ╰──────── unreachable arm
+//  8 │     string => "string error"
+//    │               ───────┬──────  
+//    │                      ╰──────── unreachable arm
 //    │ 
 //    │ Note: Error code: E0063
 // ───╯
-// Warning: unreachable arm
-//     ╭─[ catch_chained_catch.baml:10:15 ]
+// warning: unreachable arm
+//     ╭─[ catch_chained_catch.baml:10:12 ]
 //     │
-//  10 │     _: int => "int error"
-//     │               ─────┬─────  
-//     │                    ╰─────── unreachable arm
+//  10 │     int => "int error"
+//     │            ─────┬─────  
+//     │                 ╰─────── unreachable arm
 //     │ 
 //     │ Note: Error code: E0063
 // ────╯
-// Warning: unreachable arm
-//     ╭─[ catch_chained_catch.baml:17:18 ]
+// warning: unreachable arm
+//     ╭─[ catch_chained_catch.baml:17:15 ]
 //     │
-//  17 │     _: string => "first"
-//     │                  ───┬───  
-//     │                     ╰───── unreachable arm
+//  17 │     string => "first"
+//     │               ───┬───  
+//     │                  ╰───── unreachable arm
 //     │ 
 //     │ Note: Error code: E0063
 // ────╯
-// Warning: unreachable arm
-//     ╭─[ catch_chained_catch.baml:19:15 ]
+// warning: unreachable arm
+//     ╭─[ catch_chained_catch.baml:19:12 ]
 //     │
-//  19 │     _: int => "second"
-//     │               ────┬───  
-//     │                   ╰───── unreachable arm
+//  19 │     int => "second"
+//     │            ────┬───  
+//     │                ╰───── unreachable arm
 //     │ 
 //     │ Note: Error code: E0063
 // ────╯
-// Warning: unreachable arm
+// warning: unreachable arm
 //     ╭─[ catch_chained_catch.baml:21:10 ]
 //     │
 //  21 │     _ => "third"

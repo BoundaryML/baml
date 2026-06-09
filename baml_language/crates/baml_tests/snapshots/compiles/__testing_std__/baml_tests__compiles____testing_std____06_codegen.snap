@@ -2,69 +2,474 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 function testing.$invoke_collector(collector: (testing.TestCollector) -> void throws unknown, c: testing.TestCollector) -> void {
-    load_var c
-    load_var collector
+    load_var2 2 1
     call_indirect
     return
 }
 
-function testing.TestCollector.find_testset(self: null, name: string) -> testing.TestSetRegistration {
+function testing.RunReport.from_json(j: baml.json.json) -> testing.RunReport {
+    load_var j
+    load_const "outcome"
+    call baml.json.field
+    store_var _3
+    load_type "pass" | "fail" | "error"
+    load_var _3
+    call baml.json.from_json
+    load_var j
+    load_const "duration_ms"
+    call baml.json.field
+    store_var _6
+    load_type int
+    load_var _6
+    call baml.json.from_json
+    init_instance testing.RunReport .outcome, .duration_ms
+    return
+}
+
+function testing.RunReport.to_json(self: testing.RunReport) -> baml.json.json {
+    load_var self
+    load_field .outcome
+    load_const "to_json"
+    load_map_element
+    call_indirect
+    load_var self
+    load_field .duration_ms
+    call baml.Int.to_json
+    load_const "outcome"
+    load_const "duration_ms"
+    alloc_map 2
+    return
+}
+
+function testing.SerializedTest.from_json(j: baml.json.json) -> testing.SerializedTest {
+    load_var j
+    load_const "type"
+    call baml.json.field
+    store_var _3
+    load_type string
+    load_var _3
+    call baml.json.from_json
+    load_var j
+    load_const "name"
+    call baml.json.field
+    store_var _6
+    load_type string
+    load_var _6
+    call baml.json.from_json
+    init_instance testing.SerializedTest .type, .name
+    return
+}
+
+function testing.SerializedTest.to_json(self: testing.SerializedTest) -> baml.json.json {
+    load_var self
+    load_field .type
+    call baml.String.to_json
+    load_var self
+    load_field .name
+    call baml.String.to_json
+    load_const "type"
+    load_const "name"
+    alloc_map 2
+    return
+}
+
+function testing.SerializedTestSet.from_json(j: baml.json.json) -> testing.SerializedTestSet {
+    load_var j
+    load_const "name"
+    call baml.json.field
+    store_var _3
+    load_type string
+    load_var _3
+    call baml.json.from_json
+    load_var j
+    load_const "items"
+    call baml.json.field
+    store_var _6
+    load_type testing.SerializedTest | testing.SerializedTestSet[]
+    load_var _6
+    call baml.json.from_json
+    load_var j
+    load_const "loadingTimeMs"
+    call baml.json.field
+    store_var _9
+    load_type int
+    load_var _9
+    call baml.json.from_json
+    init_instance testing.SerializedTestSet .name, .items, .loadingTimeMs
+    return
+}
+
+function testing.SerializedTestSet.to_json(self: testing.SerializedTestSet) -> baml.json.json {
+    load_var self
+    load_field .name
+    call baml.String.to_json
+    load_type testing.SerializedTest | testing.SerializedTestSet
+    load_var self
+    load_field .items
+    call baml.Array.to_json
+    load_var self
+    load_field .loadingTimeMs
+    call baml.Int.to_json
+    load_const "name"
+    load_const "items"
+    load_const "loadingTimeMs"
+    alloc_map 3
+    return
+}
+
+function testing.TestCollector.find_testset(self: testing.TestCollector, name: string) -> testing.TestSetRegistration {
     load_var self
     load_field .testsets
-    store_var _3
-    load_const 0
-    store_var __for_idx
+    store_var_load_var _3
+    is_type baml.iter.Flatten<...>
+    pop_jump_if_false L0
+    jump L21
 
   L0:
-    load_var __for_idx
     load_var _3
-    call baml.Array.length
-    cmp_op <
+    is_type baml.iter.ArrayIterator<...>
     pop_jump_if_false L1
-    jump L2
+    jump L20
 
   L1:
+    load_var _3
+    is_type baml.iter.StepBy<...>
+    pop_jump_if_false L2
+    jump L19
+
+  L2:
+    load_var _3
+    is_type baml.iter.Chain<...>
+    pop_jump_if_false L3
+    jump L18
+
+  L3:
+    load_var _3
+    is_type baml.iter.Repeat<...>
+    pop_jump_if_false L4
+    jump L17
+
+  L4:
+    load_var _3
+    is_type baml.iter.Map<...>
+    pop_jump_if_false L5
+    jump L16
+
+  L5:
+    load_var _3
+    is_type baml.iter.Filter<...>
+    pop_jump_if_false L6
+    jump L15
+
+  L6:
+    load_var _3
+    is_type baml.iter.FilterMap<...>
+    pop_jump_if_false L7
+    jump L14
+
+  L7:
+    load_var _3
+    is_type baml.iter.FlatMap<...>
+    pop_jump_if_false L8
+    jump L13
+
+  L8:
+    load_var _3
+    is_type baml.iter.Peekable<...>
+    pop_jump_if_false L9
+    jump L12
+
+  L9:
+    load_var _3
+    is_type unknown[]
+    pop_jump_if_false L10
+    jump L11
+
+  L10:
+    load_var _3
+    is_type testing.TestSetRegistration[]
+    pop_jump_if_false L44
+    load_type testing.TestSetRegistration
+    load_var _3
+    call baml.iter.Iterable$for$T[].iter
+    store_var _4
+    jump L22
+
+  L11:
+    load_type testing.TestSetRegistration
+    load_var _3
+    call baml.iter.Iterable$for$T[].iter
+    store_var _4
+    jump L22
+
+  L12:
+    load_type testing.TestSetRegistration
+    load_type void
+    load_var _3
+    call baml.iter.Peekable.Iterable.iter
+    store_var _4
+    jump L22
+
+  L13:
+    load_var _3
+    make_bound_method baml.iter.FlatMap.Iterable.iter
+    call_indirect
+    store_var _4
+    jump L22
+
+  L14:
+    load_var _3
+    make_bound_method baml.iter.FilterMap.Iterable.iter
+    call_indirect
+    store_var _4
+    jump L22
+
+  L15:
+    load_type testing.TestSetRegistration
+    load_type void
+    load_type void
+    load_var _3
+    call baml.iter.Filter.Iterable.iter
+    store_var _4
+    jump L22
+
+  L16:
+    load_var _3
+    make_bound_method baml.iter.Map.Iterable.iter
+    call_indirect
+    store_var _4
+    jump L22
+
+  L17:
+    load_type testing.TestSetRegistration
+    load_var _3
+    call baml.iter.Repeat.Iterable.iter
+    store_var _4
+    jump L22
+
+  L18:
+    load_type testing.TestSetRegistration
+    load_type void
+    load_type void
+    load_var _3
+    call baml.iter.Chain.Iterable.iter
+    store_var _4
+    jump L22
+
+  L19:
+    load_type testing.TestSetRegistration
+    load_type void
+    load_var _3
+    call baml.iter.StepBy.Iterable.iter
+    store_var _4
+    jump L22
+
+  L20:
+    load_type testing.TestSetRegistration
+    load_var _3
+    call baml.iter.ArrayIterator.Iterable.iter
+    store_var _4
+    jump L22
+
+  L21:
+    load_var _3
+    make_bound_method baml.iter.Flatten.Iterable.iter
+    call_indirect
+    store_var _4
+
+  L22:
+    load_var _4
+    is_type baml.iter.Flatten<...>
+    pop_jump_if_false L23
+    jump L40
+
+  L23:
+    load_var _4
+    is_type baml.iter.ArrayIterator<...>
+    pop_jump_if_false L24
+    jump L39
+
+  L24:
+    load_var _4
+    is_type baml.iter.StepBy<...>
+    pop_jump_if_false L25
+    jump L38
+
+  L25:
+    load_var _4
+    is_type baml.iter.Chain<...>
+    pop_jump_if_false L26
+    jump L37
+
+  L26:
+    load_var _4
+    is_type baml.iter.Repeat<...>
+    pop_jump_if_false L27
+    jump L36
+
+  L27:
+    load_var _4
+    is_type baml.iter.Map<...>
+    pop_jump_if_false L28
+    jump L35
+
+  L28:
+    load_var _4
+    is_type baml.iter.Filter<...>
+    pop_jump_if_false L29
+    jump L34
+
+  L29:
+    load_var _4
+    is_type baml.iter.FilterMap<...>
+    pop_jump_if_false L30
+    jump L33
+
+  L30:
+    load_var _4
+    is_type baml.iter.FlatMap<...>
+    pop_jump_if_false L31
+    jump L32
+
+  L31:
+    load_var _4
+    is_type baml.iter.Peekable<...>
+    pop_jump_if_false L44
+    load_type testing.TestSetRegistration
+    load_type void
+    load_var _4
+    call baml.iter.Peekable.Iterator.next
+    store_var _35
+    jump L41
+
+  L32:
+    load_var _4
+    make_bound_method baml.iter.FlatMap.Iterator.next
+    call_indirect
+    store_var _35
+    jump L41
+
+  L33:
+    load_var _4
+    make_bound_method baml.iter.FilterMap.Iterator.next
+    call_indirect
+    store_var _35
+    jump L41
+
+  L34:
+    load_type testing.TestSetRegistration
+    load_type void
+    load_type void
+    load_var _4
+    call baml.iter.Filter.Iterator.next
+    store_var _35
+    jump L41
+
+  L35:
+    load_var _4
+    make_bound_method baml.iter.Map.Iterator.next
+    call_indirect
+    store_var _35
+    jump L41
+
+  L36:
+    load_type testing.TestSetRegistration
+    load_var _4
+    call baml.iter.Repeat.Iterator.next
+    store_var _35
+    jump L41
+
+  L37:
+    load_type testing.TestSetRegistration
+    load_type void
+    load_type void
+    load_var _4
+    call baml.iter.Chain.Iterator.next
+    store_var _35
+    jump L41
+
+  L38:
+    load_type testing.TestSetRegistration
+    load_type void
+    load_var _4
+    call baml.iter.StepBy.Iterator.next
+    store_var _35
+    jump L41
+
+  L39:
+    load_type testing.TestSetRegistration
+    load_var _4
+    call baml.iter.ArrayIterator.Iterator.next
+    store_var _35
+    jump L41
+
+  L40:
+    load_var _4
+    make_bound_method baml.iter.Flatten.Iterator.next
+    call_indirect
+    store_var _35
+
+  L41:
+    load_var _35
+    is_type baml.iter.Done
+    pop_jump_if_false L42
+    jump L43
+
+  L42:
+    load_var _35
+    store_var_load_var ts
+    load_field .name
+    load_var name
+    cmp_op ==
+    pop_jump_if_false L22
+    load_var ts
+    return
+
+  L43:
     load_const "TestSet not found: "
     load_var name
     bin_op +
     throw
 
-  L2:
+  L44:
+    unreachable
+}
+
+function testing.TestCollector.from_json(j: baml.json.json) -> testing.TestCollector {
+    load_var j
+    load_const "prefix"
+    call baml.json.field
+    store_var _3
+    load_type string
     load_var _3
-    load_var __for_idx
-    load_array_element
-    store_var ts
-    load_var ts
-    load_field .name
-    load_var name
-    cmp_op ==
-    pop_jump_if_false L3
-    jump L4
-
-  L3:
-    load_var __for_idx
-    load_const 1
-    bin_op +
-    store_var __for_idx
-    jump L0
-
-  L4:
-    load_var ts
+    call baml.json.from_json
+    load_var j
+    load_const "tests"
+    call baml.json.field
+    store_var _6
+    load_type testing.TestRegistration[]
+    load_var _6
+    call baml.json.from_json
+    load_var j
+    load_const "testsets"
+    call baml.json.field
+    store_var _9
+    load_type testing.TestSetRegistration[]
+    load_var _9
+    call baml.json.from_json
+    init_instance testing.TestCollector .prefix, .tests, .testsets
     return
 }
 
 function testing.TestCollector.new(prefix: string) -> testing.TestCollector {
-    alloc_instance testing.TestCollector
     load_var prefix
-    init_field .prefix
     alloc_array 0
-    init_field .tests
     alloc_array 0
-    init_field .testsets
+    init_instance testing.TestCollector .prefix, .tests, .testsets
     return
 }
 
-function testing.TestCollector.register_test(self: null, name: string, body: () -> void throws unknown, runner: ((() -> testing.TestReport throws never) -> (() -> testing.TestReport throws never) throws never)?) -> void {
+function testing.TestCollector.register_test(self: testing.TestCollector, name: string, body: () -> void throws unknown, runner: ((() -> testing.TestReport throws never) -> (() -> testing.TestReport throws never) throws never) | null) -> void {
     load_var self
     load_field .prefix
     load_const ""
@@ -95,95 +500,369 @@ function testing.TestCollector.register_test(self: null, name: string, body: () 
     store_var hash_prefix
     load_var self
     load_field .tests
-    store_var _13
-    load_const 0
-    store_var __for_idx
+    store_var_load_var _13
+    is_type baml.iter.Flatten<...>
+    pop_jump_if_false L3
+    jump L24
 
   L3:
-    load_var __for_idx
     load_var _13
-    call baml.Array.length
-    cmp_op <
+    is_type baml.iter.ArrayIterator<...>
     pop_jump_if_false L4
-    jump L8
+    jump L23
 
   L4:
-    load_var count
-    load_const 0
-    cmp_op >
+    load_var _13
+    is_type baml.iter.StepBy<...>
     pop_jump_if_false L5
-    jump L6
+    jump L22
 
   L5:
-    load_var full_name
-    store_var final_name
-    jump L7
+    load_var _13
+    is_type baml.iter.Chain<...>
+    pop_jump_if_false L6
+    jump L21
 
   L6:
+    load_var _13
+    is_type baml.iter.Repeat<...>
+    pop_jump_if_false L7
+    jump L20
+
+  L7:
+    load_var _13
+    is_type baml.iter.Map<...>
+    pop_jump_if_false L8
+    jump L19
+
+  L8:
+    load_var _13
+    is_type baml.iter.Filter<...>
+    pop_jump_if_false L9
+    jump L18
+
+  L9:
+    load_var _13
+    is_type baml.iter.FilterMap<...>
+    pop_jump_if_false L10
+    jump L17
+
+  L10:
+    load_var _13
+    is_type baml.iter.FlatMap<...>
+    pop_jump_if_false L11
+    jump L16
+
+  L11:
+    load_var _13
+    is_type baml.iter.Peekable<...>
+    pop_jump_if_false L12
+    jump L15
+
+  L12:
+    load_var _13
+    is_type unknown[]
+    pop_jump_if_false L13
+    jump L14
+
+  L13:
+    load_var _13
+    is_type testing.TestRegistration[]
+    pop_jump_if_false L52
+    load_type testing.TestRegistration
+    load_var _13
+    call baml.iter.Iterable$for$T[].iter
+    store_var _14
+    jump L25
+
+  L14:
+    load_type testing.TestRegistration
+    load_var _13
+    call baml.iter.Iterable$for$T[].iter
+    store_var _14
+    jump L25
+
+  L15:
+    load_type testing.TestRegistration
+    load_type void
+    load_var _13
+    call baml.iter.Peekable.Iterable.iter
+    store_var _14
+    jump L25
+
+  L16:
+    load_var _13
+    make_bound_method baml.iter.FlatMap.Iterable.iter
+    call_indirect
+    store_var _14
+    jump L25
+
+  L17:
+    load_var _13
+    make_bound_method baml.iter.FilterMap.Iterable.iter
+    call_indirect
+    store_var _14
+    jump L25
+
+  L18:
+    load_type testing.TestRegistration
+    load_type void
+    load_type void
+    load_var _13
+    call baml.iter.Filter.Iterable.iter
+    store_var _14
+    jump L25
+
+  L19:
+    load_var _13
+    make_bound_method baml.iter.Map.Iterable.iter
+    call_indirect
+    store_var _14
+    jump L25
+
+  L20:
+    load_type testing.TestRegistration
+    load_var _13
+    call baml.iter.Repeat.Iterable.iter
+    store_var _14
+    jump L25
+
+  L21:
+    load_type testing.TestRegistration
+    load_type void
+    load_type void
+    load_var _13
+    call baml.iter.Chain.Iterable.iter
+    store_var _14
+    jump L25
+
+  L22:
+    load_type testing.TestRegistration
+    load_type void
+    load_var _13
+    call baml.iter.StepBy.Iterable.iter
+    store_var _14
+    jump L25
+
+  L23:
+    load_type testing.TestRegistration
+    load_var _13
+    call baml.iter.ArrayIterator.Iterable.iter
+    store_var _14
+    jump L25
+
+  L24:
+    load_var _13
+    make_bound_method baml.iter.Flatten.Iterable.iter
+    call_indirect
+    store_var _14
+
+  L25:
+    load_var _14
+    is_type baml.iter.Flatten<...>
+    pop_jump_if_false L26
+    jump L43
+
+  L26:
+    load_var _14
+    is_type baml.iter.ArrayIterator<...>
+    pop_jump_if_false L27
+    jump L42
+
+  L27:
+    load_var _14
+    is_type baml.iter.StepBy<...>
+    pop_jump_if_false L28
+    jump L41
+
+  L28:
+    load_var _14
+    is_type baml.iter.Chain<...>
+    pop_jump_if_false L29
+    jump L40
+
+  L29:
+    load_var _14
+    is_type baml.iter.Repeat<...>
+    pop_jump_if_false L30
+    jump L39
+
+  L30:
+    load_var _14
+    is_type baml.iter.Map<...>
+    pop_jump_if_false L31
+    jump L38
+
+  L31:
+    load_var _14
+    is_type baml.iter.Filter<...>
+    pop_jump_if_false L32
+    jump L37
+
+  L32:
+    load_var _14
+    is_type baml.iter.FilterMap<...>
+    pop_jump_if_false L33
+    jump L36
+
+  L33:
+    load_var _14
+    is_type baml.iter.FlatMap<...>
+    pop_jump_if_false L34
+    jump L35
+
+  L34:
+    load_var _14
+    is_type baml.iter.Peekable<...>
+    pop_jump_if_false L52
+    load_type testing.TestRegistration
+    load_type void
+    load_var _14
+    call baml.iter.Peekable.Iterator.next
+    store_var _45
+    jump L44
+
+  L35:
+    load_var _14
+    make_bound_method baml.iter.FlatMap.Iterator.next
+    call_indirect
+    store_var _45
+    jump L44
+
+  L36:
+    load_var _14
+    make_bound_method baml.iter.FilterMap.Iterator.next
+    call_indirect
+    store_var _45
+    jump L44
+
+  L37:
+    load_type testing.TestRegistration
+    load_type void
+    load_type void
+    load_var _14
+    call baml.iter.Filter.Iterator.next
+    store_var _45
+    jump L44
+
+  L38:
+    load_var _14
+    make_bound_method baml.iter.Map.Iterator.next
+    call_indirect
+    store_var _45
+    jump L44
+
+  L39:
+    load_type testing.TestRegistration
+    load_var _14
+    call baml.iter.Repeat.Iterator.next
+    store_var _45
+    jump L44
+
+  L40:
+    load_type testing.TestRegistration
+    load_type void
+    load_type void
+    load_var _14
+    call baml.iter.Chain.Iterator.next
+    store_var _45
+    jump L44
+
+  L41:
+    load_type testing.TestRegistration
+    load_type void
+    load_var _14
+    call baml.iter.StepBy.Iterator.next
+    store_var _45
+    jump L44
+
+  L42:
+    load_type testing.TestRegistration
+    load_var _14
+    call baml.iter.ArrayIterator.Iterator.next
+    store_var _45
+    jump L44
+
+  L43:
+    load_var _14
+    make_bound_method baml.iter.Flatten.Iterator.next
+    call_indirect
+    store_var _45
+
+  L44:
+    load_var _45
+    is_type baml.iter.Done
+    pop_jump_if_false L45
+    jump L48
+
+  L45:
+    load_var _45
+    store_var_load_var t
+    load_field .name
+    load_var full_name
+    cmp_op ==
+    jump_if_false L46
+    jump L47
+
+  L46:
+    pop 1
+    load_var t
+    load_field .name
+    load_var hash_prefix
+    call baml.String.starts_with
+
+  L47:
+    pop_jump_if_false L25
+    load_var count
+    load_const 1
+    add_int
+    store_var count
+    jump L25
+
+  L48:
+    load_var count
+    load_const 0
+    cmp_int_op >
+    pop_jump_if_false L49
+    jump L50
+
+  L49:
+    load_var full_name
+    store_var final_name
+    jump L51
+
+  L50:
     load_var full_name
     load_const "#"
     bin_op +
-    store_var _28
+    store_var _84
+    load_type int
     load_var count
     load_const 1
-    bin_op +
+    add_int
     call baml.unstable.string
-    store_var _30
-    load_var _28
-    load_var _30
+    store_var _86
+    load_var2 13 14
     bin_op +
     store_var final_name
 
-  L7:
+  L51:
+    load_type testing.TestRegistration
     load_var self
     load_field .tests
-    alloc_instance testing.TestRegistration
-    load_var final_name
-    init_field .name
-    load_var body
-    init_field .body
+    load_var2 12 3
     load_var runner
-    init_field .runner
+    init_instance testing.TestRegistration .name, .body, .runner
     call baml.Array.push
     pop 1
     load_const null
     return
 
-  L8:
-    load_var _13
-    load_var __for_idx
-    load_array_element
-    store_var t
-    load_var t
-    load_field .name
-    load_var full_name
-    cmp_op ==
-    jump_if_false L9
-    jump L10
-
-  L9:
-    pop 1
-    load_var t
-    load_field .name
-    load_var hash_prefix
-    call baml.String.startsWith
-
-  L10:
-    pop_jump_if_false L11
-    load_var count
-    load_const 1
-    bin_op +
-    store_var count
-
-  L11:
-    load_var __for_idx
-    load_const 1
-    bin_op +
-    store_var __for_idx
-    jump L3
+  L52:
+    unreachable
 }
 
-function testing.TestCollector.register_test_set(self: null, name: string, collector: (testing.TestCollector) -> void throws unknown, runner: ((() -> testing.TestSetReport throws never) -> (() -> testing.TestSetReport throws never) throws never)?) -> void {
+function testing.TestCollector.register_test_set(self: testing.TestCollector, name: string, collector: (testing.TestCollector) -> void throws unknown, runner: ((() -> testing.TestSetReport throws never) -> (() -> testing.TestSetReport throws never) throws never) | null) -> void {
     load_var self
     load_field .prefix
     load_const ""
@@ -214,374 +893,2379 @@ function testing.TestCollector.register_test_set(self: null, name: string, colle
     store_var hash_prefix
     load_var self
     load_field .testsets
-    store_var _13
-    load_const 0
-    store_var __for_idx
+    store_var_load_var _13
+    is_type baml.iter.Flatten<...>
+    pop_jump_if_false L3
+    jump L24
 
   L3:
-    load_var __for_idx
     load_var _13
-    call baml.Array.length
-    cmp_op <
+    is_type baml.iter.ArrayIterator<...>
     pop_jump_if_false L4
-    jump L8
+    jump L23
 
   L4:
-    load_var count
-    load_const 0
-    cmp_op >
+    load_var _13
+    is_type baml.iter.StepBy<...>
     pop_jump_if_false L5
-    jump L6
+    jump L22
 
   L5:
-    load_var full_name
-    store_var final_name
-    jump L7
+    load_var _13
+    is_type baml.iter.Chain<...>
+    pop_jump_if_false L6
+    jump L21
 
   L6:
+    load_var _13
+    is_type baml.iter.Repeat<...>
+    pop_jump_if_false L7
+    jump L20
+
+  L7:
+    load_var _13
+    is_type baml.iter.Map<...>
+    pop_jump_if_false L8
+    jump L19
+
+  L8:
+    load_var _13
+    is_type baml.iter.Filter<...>
+    pop_jump_if_false L9
+    jump L18
+
+  L9:
+    load_var _13
+    is_type baml.iter.FilterMap<...>
+    pop_jump_if_false L10
+    jump L17
+
+  L10:
+    load_var _13
+    is_type baml.iter.FlatMap<...>
+    pop_jump_if_false L11
+    jump L16
+
+  L11:
+    load_var _13
+    is_type baml.iter.Peekable<...>
+    pop_jump_if_false L12
+    jump L15
+
+  L12:
+    load_var _13
+    is_type unknown[]
+    pop_jump_if_false L13
+    jump L14
+
+  L13:
+    load_var _13
+    is_type testing.TestSetRegistration[]
+    pop_jump_if_false L52
+    load_type testing.TestSetRegistration
+    load_var _13
+    call baml.iter.Iterable$for$T[].iter
+    store_var _14
+    jump L25
+
+  L14:
+    load_type testing.TestSetRegistration
+    load_var _13
+    call baml.iter.Iterable$for$T[].iter
+    store_var _14
+    jump L25
+
+  L15:
+    load_type testing.TestSetRegistration
+    load_type void
+    load_var _13
+    call baml.iter.Peekable.Iterable.iter
+    store_var _14
+    jump L25
+
+  L16:
+    load_var _13
+    make_bound_method baml.iter.FlatMap.Iterable.iter
+    call_indirect
+    store_var _14
+    jump L25
+
+  L17:
+    load_var _13
+    make_bound_method baml.iter.FilterMap.Iterable.iter
+    call_indirect
+    store_var _14
+    jump L25
+
+  L18:
+    load_type testing.TestSetRegistration
+    load_type void
+    load_type void
+    load_var _13
+    call baml.iter.Filter.Iterable.iter
+    store_var _14
+    jump L25
+
+  L19:
+    load_var _13
+    make_bound_method baml.iter.Map.Iterable.iter
+    call_indirect
+    store_var _14
+    jump L25
+
+  L20:
+    load_type testing.TestSetRegistration
+    load_var _13
+    call baml.iter.Repeat.Iterable.iter
+    store_var _14
+    jump L25
+
+  L21:
+    load_type testing.TestSetRegistration
+    load_type void
+    load_type void
+    load_var _13
+    call baml.iter.Chain.Iterable.iter
+    store_var _14
+    jump L25
+
+  L22:
+    load_type testing.TestSetRegistration
+    load_type void
+    load_var _13
+    call baml.iter.StepBy.Iterable.iter
+    store_var _14
+    jump L25
+
+  L23:
+    load_type testing.TestSetRegistration
+    load_var _13
+    call baml.iter.ArrayIterator.Iterable.iter
+    store_var _14
+    jump L25
+
+  L24:
+    load_var _13
+    make_bound_method baml.iter.Flatten.Iterable.iter
+    call_indirect
+    store_var _14
+
+  L25:
+    load_var _14
+    is_type baml.iter.Flatten<...>
+    pop_jump_if_false L26
+    jump L43
+
+  L26:
+    load_var _14
+    is_type baml.iter.ArrayIterator<...>
+    pop_jump_if_false L27
+    jump L42
+
+  L27:
+    load_var _14
+    is_type baml.iter.StepBy<...>
+    pop_jump_if_false L28
+    jump L41
+
+  L28:
+    load_var _14
+    is_type baml.iter.Chain<...>
+    pop_jump_if_false L29
+    jump L40
+
+  L29:
+    load_var _14
+    is_type baml.iter.Repeat<...>
+    pop_jump_if_false L30
+    jump L39
+
+  L30:
+    load_var _14
+    is_type baml.iter.Map<...>
+    pop_jump_if_false L31
+    jump L38
+
+  L31:
+    load_var _14
+    is_type baml.iter.Filter<...>
+    pop_jump_if_false L32
+    jump L37
+
+  L32:
+    load_var _14
+    is_type baml.iter.FilterMap<...>
+    pop_jump_if_false L33
+    jump L36
+
+  L33:
+    load_var _14
+    is_type baml.iter.FlatMap<...>
+    pop_jump_if_false L34
+    jump L35
+
+  L34:
+    load_var _14
+    is_type baml.iter.Peekable<...>
+    pop_jump_if_false L52
+    load_type testing.TestSetRegistration
+    load_type void
+    load_var _14
+    call baml.iter.Peekable.Iterator.next
+    store_var _45
+    jump L44
+
+  L35:
+    load_var _14
+    make_bound_method baml.iter.FlatMap.Iterator.next
+    call_indirect
+    store_var _45
+    jump L44
+
+  L36:
+    load_var _14
+    make_bound_method baml.iter.FilterMap.Iterator.next
+    call_indirect
+    store_var _45
+    jump L44
+
+  L37:
+    load_type testing.TestSetRegistration
+    load_type void
+    load_type void
+    load_var _14
+    call baml.iter.Filter.Iterator.next
+    store_var _45
+    jump L44
+
+  L38:
+    load_var _14
+    make_bound_method baml.iter.Map.Iterator.next
+    call_indirect
+    store_var _45
+    jump L44
+
+  L39:
+    load_type testing.TestSetRegistration
+    load_var _14
+    call baml.iter.Repeat.Iterator.next
+    store_var _45
+    jump L44
+
+  L40:
+    load_type testing.TestSetRegistration
+    load_type void
+    load_type void
+    load_var _14
+    call baml.iter.Chain.Iterator.next
+    store_var _45
+    jump L44
+
+  L41:
+    load_type testing.TestSetRegistration
+    load_type void
+    load_var _14
+    call baml.iter.StepBy.Iterator.next
+    store_var _45
+    jump L44
+
+  L42:
+    load_type testing.TestSetRegistration
+    load_var _14
+    call baml.iter.ArrayIterator.Iterator.next
+    store_var _45
+    jump L44
+
+  L43:
+    load_var _14
+    make_bound_method baml.iter.Flatten.Iterator.next
+    call_indirect
+    store_var _45
+
+  L44:
+    load_var _45
+    is_type baml.iter.Done
+    pop_jump_if_false L45
+    jump L48
+
+  L45:
+    load_var _45
+    store_var_load_var ts
+    load_field .name
+    load_var full_name
+    cmp_op ==
+    jump_if_false L46
+    jump L47
+
+  L46:
+    pop 1
+    load_var ts
+    load_field .name
+    load_var hash_prefix
+    call baml.String.starts_with
+
+  L47:
+    pop_jump_if_false L25
+    load_var count
+    load_const 1
+    add_int
+    store_var count
+    jump L25
+
+  L48:
+    load_var count
+    load_const 0
+    cmp_int_op >
+    pop_jump_if_false L49
+    jump L50
+
+  L49:
+    load_var full_name
+    store_var final_name
+    jump L51
+
+  L50:
     load_var full_name
     load_const "#"
     bin_op +
-    store_var _28
+    store_var _84
+    load_type int
     load_var count
     load_const 1
-    bin_op +
+    add_int
     call baml.unstable.string
-    store_var _30
-    load_var _28
-    load_var _30
+    store_var _86
+    load_var2 13 14
     bin_op +
     store_var final_name
 
-  L7:
+  L51:
+    load_type testing.TestSetRegistration
     load_var self
     load_field .testsets
-    alloc_instance testing.TestSetRegistration
-    load_var final_name
-    init_field .name
-    load_var collector
-    init_field .collector
+    load_var2 12 3
     load_var runner
-    init_field .runner
+    init_instance testing.TestSetRegistration .name, .collector, .runner
     call baml.Array.push
     pop 1
     load_const null
     return
 
-  L8:
-    load_var _13
-    load_var __for_idx
-    load_array_element
-    store_var ts
-    load_var ts
-    load_field .name
-    load_var full_name
-    cmp_op ==
-    jump_if_false L9
-    jump L10
-
-  L9:
-    pop 1
-    load_var ts
-    load_field .name
-    load_var hash_prefix
-    call baml.String.startsWith
-
-  L10:
-    pop_jump_if_false L11
-    load_var count
-    load_const 1
-    bin_op +
-    store_var count
-
-  L11:
-    load_var __for_idx
-    load_const 1
-    bin_op +
-    store_var __for_idx
-    jump L3
+  L52:
+    unreachable
 }
 
-function testing.TestRegistry.expand_set(self: null, name: string) -> (testing.SerializedTest | testing.SerializedTestSet)[] {
+function testing.TestCollector.to_json(self: testing.TestCollector) -> baml.json.json {
+    load_var self
+    load_field .prefix
+    call baml.String.to_json
+    load_type testing.TestRegistration
+    load_var self
+    load_field .tests
+    call baml.Array.to_json
+    load_type testing.TestSetRegistration
+    load_var self
+    load_field .testsets
+    call baml.Array.to_json
+    load_const "prefix"
+    load_const "tests"
+    load_const "testsets"
+    alloc_map 3
+    return
+}
+
+function testing.TestRegistration.from_json(j: baml.json.json) -> testing.TestRegistration {
+    load_var j
+    load_const "name"
+    call baml.json.field
+    store_var _3
+    load_type string
+    load_var _3
+    call baml.json.from_json
+    load_var j
+    load_const "body"
+    call baml.json.field
+    store_var _6
+    load_type () -> void throws unknown
+    load_var _6
+    call baml.json.from_json
+    load_var j
+    load_const "runner"
+    call baml.json.field
+    store_var _9
+    load_type ((() -> testing.TestReport throws never) -> (() -> testing.TestReport throws never) throws never) | null
+    load_var _9
+    call baml.json.from_json
+    init_instance testing.TestRegistration .name, .body, .runner
+    return
+}
+
+function testing.TestRegistration.to_json(self: testing.TestRegistration) -> baml.json.json {
+    load_type testing.TestRegistration
+    load_var self
+    call baml.json.to_string
+    call baml.json.parse
+    return
+}
+
+function testing.TestRegistry.expand_set(self: testing.TestRegistry, name: string) -> (testing.SerializedTest | testing.SerializedTestSet)[] {
     load_var self
     load_field .collector
     load_field .testsets
-    store_var _3
-    load_const 0
-    store_var __for_idx
+    store_var_load_var _3
+    is_type baml.iter.Flatten<...>
+    pop_jump_if_false L0
+    jump L21
 
   L0:
-    load_var __for_idx
     load_var _3
-    call baml.Array.length
-    cmp_op <
+    is_type baml.iter.ArrayIterator<...>
     pop_jump_if_false L1
-    jump L7
+    jump L20
 
   L1:
-    load_var self
-    load_field .expansions
-    call baml.Map.keys
-    store_var _28
-    load_const 0
-    store_var __for_idx_1
+    load_var _3
+    is_type baml.iter.StepBy<...>
+    pop_jump_if_false L2
+    jump L19
 
   L2:
-    load_var __for_idx_1
-    load_var _28
-    call baml.Array.length
-    cmp_op <
+    load_var _3
+    is_type baml.iter.Chain<...>
     pop_jump_if_false L3
-    jump L4
+    jump L18
 
   L3:
-    load_const "TestSet not found for expansion: "
-    load_var name
-    bin_op +
-    throw
+    load_var _3
+    is_type baml.iter.Repeat<...>
+    pop_jump_if_false L4
+    jump L17
 
   L4:
-    load_var _28
-    load_var __for_idx_1
-    load_array_element
-    store_var k
-    load_var self
-    load_field .expansions
-    load_var k
-    load_map_element
-    store_var sub
-    load_var name
-    load_var k
-    load_const "/"
-    bin_op +
-    call baml.String.startsWith
+    load_var _3
+    is_type baml.iter.Map<...>
     pop_jump_if_false L5
-    jump L6
+    jump L16
 
   L5:
-    load_var __for_idx_1
-    load_const 1
-    bin_op +
-    store_var __for_idx_1
-    jump L2
+    load_var _3
+    is_type baml.iter.Filter<...>
+    pop_jump_if_false L6
+    jump L15
 
   L6:
-    load_var sub
-    load_var name
-    call testing.TestRegistry.expand_set
-    jump L10
+    load_var _3
+    is_type baml.iter.FilterMap<...>
+    pop_jump_if_false L7
+    jump L14
 
   L7:
     load_var _3
-    load_var __for_idx
-    load_array_element
-    store_var ts
-    load_var ts
+    is_type baml.iter.FlatMap<...>
+    pop_jump_if_false L8
+    jump L13
+
+  L8:
+    load_var _3
+    is_type baml.iter.Peekable<...>
+    pop_jump_if_false L9
+    jump L12
+
+  L9:
+    load_var _3
+    is_type unknown[]
+    pop_jump_if_false L10
+    jump L11
+
+  L10:
+    load_var _3
+    is_type testing.TestSetRegistration[]
+    pop_jump_if_false L89
+    load_type testing.TestSetRegistration
+    load_var _3
+    call baml.iter.Iterable$for$T[].iter
+    store_var _4
+    jump L22
+
+  L11:
+    load_type testing.TestSetRegistration
+    load_var _3
+    call baml.iter.Iterable$for$T[].iter
+    store_var _4
+    jump L22
+
+  L12:
+    load_type testing.TestSetRegistration
+    load_type void
+    load_var _3
+    call baml.iter.Peekable.Iterable.iter
+    store_var _4
+    jump L22
+
+  L13:
+    load_var _3
+    make_bound_method baml.iter.FlatMap.Iterable.iter
+    call_indirect
+    store_var _4
+    jump L22
+
+  L14:
+    load_var _3
+    make_bound_method baml.iter.FilterMap.Iterable.iter
+    call_indirect
+    store_var _4
+    jump L22
+
+  L15:
+    load_type testing.TestSetRegistration
+    load_type void
+    load_type void
+    load_var _3
+    call baml.iter.Filter.Iterable.iter
+    store_var _4
+    jump L22
+
+  L16:
+    load_var _3
+    make_bound_method baml.iter.Map.Iterable.iter
+    call_indirect
+    store_var _4
+    jump L22
+
+  L17:
+    load_type testing.TestSetRegistration
+    load_var _3
+    call baml.iter.Repeat.Iterable.iter
+    store_var _4
+    jump L22
+
+  L18:
+    load_type testing.TestSetRegistration
+    load_type void
+    load_type void
+    load_var _3
+    call baml.iter.Chain.Iterable.iter
+    store_var _4
+    jump L22
+
+  L19:
+    load_type testing.TestSetRegistration
+    load_type void
+    load_var _3
+    call baml.iter.StepBy.Iterable.iter
+    store_var _4
+    jump L22
+
+  L20:
+    load_type testing.TestSetRegistration
+    load_var _3
+    call baml.iter.ArrayIterator.Iterable.iter
+    store_var _4
+    jump L22
+
+  L21:
+    load_var _3
+    make_bound_method baml.iter.Flatten.Iterable.iter
+    call_indirect
+    store_var _4
+
+  L22:
+    load_var _4
+    is_type baml.iter.Flatten<...>
+    pop_jump_if_false L23
+    jump L40
+
+  L23:
+    load_var _4
+    is_type baml.iter.ArrayIterator<...>
+    pop_jump_if_false L24
+    jump L39
+
+  L24:
+    load_var _4
+    is_type baml.iter.StepBy<...>
+    pop_jump_if_false L25
+    jump L38
+
+  L25:
+    load_var _4
+    is_type baml.iter.Chain<...>
+    pop_jump_if_false L26
+    jump L37
+
+  L26:
+    load_var _4
+    is_type baml.iter.Repeat<...>
+    pop_jump_if_false L27
+    jump L36
+
+  L27:
+    load_var _4
+    is_type baml.iter.Map<...>
+    pop_jump_if_false L28
+    jump L35
+
+  L28:
+    load_var _4
+    is_type baml.iter.Filter<...>
+    pop_jump_if_false L29
+    jump L34
+
+  L29:
+    load_var _4
+    is_type baml.iter.FilterMap<...>
+    pop_jump_if_false L30
+    jump L33
+
+  L30:
+    load_var _4
+    is_type baml.iter.FlatMap<...>
+    pop_jump_if_false L31
+    jump L32
+
+  L31:
+    load_var _4
+    is_type baml.iter.Peekable<...>
+    pop_jump_if_false L89
+    load_type testing.TestSetRegistration
+    load_type void
+    load_var _4
+    call baml.iter.Peekable.Iterator.next
+    store_var _35
+    jump L41
+
+  L32:
+    load_var _4
+    make_bound_method baml.iter.FlatMap.Iterator.next
+    call_indirect
+    store_var _35
+    jump L41
+
+  L33:
+    load_var _4
+    make_bound_method baml.iter.FilterMap.Iterator.next
+    call_indirect
+    store_var _35
+    jump L41
+
+  L34:
+    load_type testing.TestSetRegistration
+    load_type void
+    load_type void
+    load_var _4
+    call baml.iter.Filter.Iterator.next
+    store_var _35
+    jump L41
+
+  L35:
+    load_var _4
+    make_bound_method baml.iter.Map.Iterator.next
+    call_indirect
+    store_var _35
+    jump L41
+
+  L36:
+    load_type testing.TestSetRegistration
+    load_var _4
+    call baml.iter.Repeat.Iterator.next
+    store_var _35
+    jump L41
+
+  L37:
+    load_type testing.TestSetRegistration
+    load_type void
+    load_type void
+    load_var _4
+    call baml.iter.Chain.Iterator.next
+    store_var _35
+    jump L41
+
+  L38:
+    load_type testing.TestSetRegistration
+    load_type void
+    load_var _4
+    call baml.iter.StepBy.Iterator.next
+    store_var _35
+    jump L41
+
+  L39:
+    load_type testing.TestSetRegistration
+    load_var _4
+    call baml.iter.ArrayIterator.Iterator.next
+    store_var _35
+    jump L41
+
+  L40:
+    load_var _4
+    make_bound_method baml.iter.Flatten.Iterator.next
+    call_indirect
+    store_var _35
+
+  L41:
+    load_var _35
+    is_type baml.iter.Done
+    pop_jump_if_false L42
+    jump L43
+
+  L42:
+    load_var _35
+    store_var_load_var ts
     load_field .name
     load_var name
     cmp_op ==
-    pop_jump_if_false L8
-    jump L9
-
-  L8:
-    load_var __for_idx
-    load_const 1
-    bin_op +
-    store_var __for_idx
-    jump L0
-
-  L9:
+    pop_jump_if_false L22
     call baml.sys.now_ms
     store_var start
-    alloc_instance testing.TestCollector
     load_var name
-    init_field .prefix
     alloc_array 0
-    init_field .tests
     alloc_array 0
-    init_field .testsets
-    store_var sub_collector
-    load_var sub_collector
+    init_instance testing.TestCollector .prefix, .tests, .testsets
+    store_var_load_var sub_collector
     load_var ts
     load_field .collector
     call_indirect
     pop 1
     call baml.sys.now_ms
-    store_var _19
+    store_var _75
+    load_type string
+    load_type testing.TestRegistry
     load_var self
     load_field .expansions
-    load_var name
-    alloc_instance testing.TestRegistry
-    load_var sub_collector
-    init_field .collector
+    load_var2 2 8
     alloc_map 0
-    init_field .expansions
-    load_var _19
-    load_var start
-    bin_op -
-    init_field .loading_time_ms
+    load_var2 9 7
+    sub_int
+    init_instance testing.TestRegistry .collector, .expansions, .loading_time_ms
     call baml.Map.set
     pop 1
     load_var self
     call testing.TestRegistry.serialize
+    jump L87
 
-  L10:
-    return
-}
-
-function testing.TestRegistry.new(collector: testing.TestCollector) -> testing.TestRegistry {
-    alloc_instance testing.TestRegistry
-    load_var collector
-    init_field .collector
-    alloc_map 0
-    init_field .expansions
-    load_const 0
-    init_field .loading_time_ms
-    return
-}
-
-function testing.TestRegistry.run_test(self: null, name: string) -> testing.TestReport {
-    load_var self
-    load_field .collector
-    load_field .tests
-    store_var _3
-    load_const 0
-    store_var __for_idx
-
-  L0:
-    load_var __for_idx
-    load_var _3
-    call baml.Array.length
-    cmp_op <
-    pop_jump_if_false L1
-    jump L7
-
-  L1:
+  L43:
+    load_type string
+    load_type testing.TestRegistry
     load_var self
     load_field .expansions
     call baml.Map.keys
-    store_var _13
-    load_const 0
-    store_var __for_idx_1
+    store_var _86
+    load_var _86
+    is_type baml.iter.Flatten<...>
+    pop_jump_if_false L44
+    jump L65
 
-  L2:
-    load_var __for_idx_1
-    load_var _13
-    call baml.Array.length
-    cmp_op <
-    pop_jump_if_false L3
-    jump L4
+  L44:
+    load_var _86
+    is_type baml.iter.ArrayIterator<...>
+    pop_jump_if_false L45
+    jump L64
 
-  L3:
-    load_const "Test not found: "
-    load_var name
-    bin_op +
-    throw
+  L45:
+    load_var _86
+    is_type baml.iter.StepBy<...>
+    pop_jump_if_false L46
+    jump L63
 
-  L4:
-    load_var _13
-    load_var __for_idx_1
-    load_array_element
+  L46:
+    load_var _86
+    is_type baml.iter.Chain<...>
+    pop_jump_if_false L47
+    jump L62
+
+  L47:
+    load_var _86
+    is_type baml.iter.Repeat<...>
+    pop_jump_if_false L48
+    jump L61
+
+  L48:
+    load_var _86
+    is_type baml.iter.Map<...>
+    pop_jump_if_false L49
+    jump L60
+
+  L49:
+    load_var _86
+    is_type baml.iter.Filter<...>
+    pop_jump_if_false L50
+    jump L59
+
+  L50:
+    load_var _86
+    is_type baml.iter.FilterMap<...>
+    pop_jump_if_false L51
+    jump L58
+
+  L51:
+    load_var _86
+    is_type baml.iter.FlatMap<...>
+    pop_jump_if_false L52
+    jump L57
+
+  L52:
+    load_var _86
+    is_type baml.iter.Peekable<...>
+    pop_jump_if_false L53
+    jump L56
+
+  L53:
+    load_var _86
+    is_type unknown[]
+    pop_jump_if_false L54
+    jump L55
+
+  L54:
+    load_var _86
+    is_type string[]
+    pop_jump_if_false L89
+    load_type string
+    load_var _86
+    call baml.iter.Iterable$for$T[].iter
+    store_var _90
+    jump L66
+
+  L55:
+    load_type string
+    load_var _86
+    call baml.iter.Iterable$for$T[].iter
+    store_var _90
+    jump L66
+
+  L56:
+    load_type string
+    load_type void
+    load_var _86
+    call baml.iter.Peekable.Iterable.iter
+    store_var _90
+    jump L66
+
+  L57:
+    load_var _86
+    make_bound_method baml.iter.FlatMap.Iterable.iter
+    call_indirect
+    store_var _90
+    jump L66
+
+  L58:
+    load_var _86
+    make_bound_method baml.iter.FilterMap.Iterable.iter
+    call_indirect
+    store_var _90
+    jump L66
+
+  L59:
+    load_type string
+    load_type void
+    load_type void
+    load_var _86
+    call baml.iter.Filter.Iterable.iter
+    store_var _90
+    jump L66
+
+  L60:
+    load_var _86
+    make_bound_method baml.iter.Map.Iterable.iter
+    call_indirect
+    store_var _90
+    jump L66
+
+  L61:
+    load_type string
+    load_var _86
+    call baml.iter.Repeat.Iterable.iter
+    store_var _90
+    jump L66
+
+  L62:
+    load_type string
+    load_type void
+    load_type void
+    load_var _86
+    call baml.iter.Chain.Iterable.iter
+    store_var _90
+    jump L66
+
+  L63:
+    load_type string
+    load_type void
+    load_var _86
+    call baml.iter.StepBy.Iterable.iter
+    store_var _90
+    jump L66
+
+  L64:
+    load_type string
+    load_var _86
+    call baml.iter.ArrayIterator.Iterable.iter
+    store_var _90
+    jump L66
+
+  L65:
+    load_var _86
+    make_bound_method baml.iter.Flatten.Iterable.iter
+    call_indirect
+    store_var _90
+
+  L66:
+    load_var _90
+    is_type baml.iter.Flatten<...>
+    pop_jump_if_false L67
+    jump L84
+
+  L67:
+    load_var _90
+    is_type baml.iter.ArrayIterator<...>
+    pop_jump_if_false L68
+    jump L83
+
+  L68:
+    load_var _90
+    is_type baml.iter.StepBy<...>
+    pop_jump_if_false L69
+    jump L82
+
+  L69:
+    load_var _90
+    is_type baml.iter.Chain<...>
+    pop_jump_if_false L70
+    jump L81
+
+  L70:
+    load_var _90
+    is_type baml.iter.Repeat<...>
+    pop_jump_if_false L71
+    jump L80
+
+  L71:
+    load_var _90
+    is_type baml.iter.Map<...>
+    pop_jump_if_false L72
+    jump L79
+
+  L72:
+    load_var _90
+    is_type baml.iter.Filter<...>
+    pop_jump_if_false L73
+    jump L78
+
+  L73:
+    load_var _90
+    is_type baml.iter.FilterMap<...>
+    pop_jump_if_false L74
+    jump L77
+
+  L74:
+    load_var _90
+    is_type baml.iter.FlatMap<...>
+    pop_jump_if_false L75
+    jump L76
+
+  L75:
+    load_var _90
+    is_type baml.iter.Peekable<...>
+    pop_jump_if_false L89
+    load_type string
+    load_type void
+    load_var _90
+    call baml.iter.Peekable.Iterator.next
+    store_var _121
+    jump L85
+
+  L76:
+    load_var _90
+    make_bound_method baml.iter.FlatMap.Iterator.next
+    call_indirect
+    store_var _121
+    jump L85
+
+  L77:
+    load_var _90
+    make_bound_method baml.iter.FilterMap.Iterator.next
+    call_indirect
+    store_var _121
+    jump L85
+
+  L78:
+    load_type string
+    load_type void
+    load_type void
+    load_var _90
+    call baml.iter.Filter.Iterator.next
+    store_var _121
+    jump L85
+
+  L79:
+    load_var _90
+    make_bound_method baml.iter.Map.Iterator.next
+    call_indirect
+    store_var _121
+    jump L85
+
+  L80:
+    load_type string
+    load_var _90
+    call baml.iter.Repeat.Iterator.next
+    store_var _121
+    jump L85
+
+  L81:
+    load_type string
+    load_type void
+    load_type void
+    load_var _90
+    call baml.iter.Chain.Iterator.next
+    store_var _121
+    jump L85
+
+  L82:
+    load_type string
+    load_type void
+    load_var _90
+    call baml.iter.StepBy.Iterator.next
+    store_var _121
+    jump L85
+
+  L83:
+    load_type string
+    load_var _90
+    call baml.iter.ArrayIterator.Iterator.next
+    store_var _121
+    jump L85
+
+  L84:
+    load_var _90
+    make_bound_method baml.iter.Flatten.Iterator.next
+    call_indirect
+    store_var _121
+
+  L85:
+    load_var _121
+    is_type baml.iter.Done
+    pop_jump_if_false L86
+    jump L88
+
+  L86:
+    load_var _121
     store_var k
     load_var self
     load_field .expansions
     load_var k
     load_map_element
     store_var sub
-    load_var name
-    load_var k
+    load_var2 2 13
     load_const "/"
     bin_op +
-    call baml.String.startsWith
+    call baml.String.starts_with
+    pop_jump_if_false L66
+    load_var2 14 2
+    call testing.TestRegistry.expand_set
+
+  L87:
+    return
+
+  L88:
+    load_const "TestSet not found for expansion: "
+    load_var name
+    bin_op +
+    throw
+
+  L89:
+    unreachable
+}
+
+function testing.TestRegistry.from_json(j: baml.json.json) -> testing.TestRegistry {
+    load_var j
+    load_const "collector"
+    call baml.json.field
+    store_var _3
+    load_type testing.TestCollector
+    load_var _3
+    call baml.json.from_json
+    load_var j
+    load_const "expansions"
+    call baml.json.field
+    store_var _6
+    load_type map<string, testing.TestRegistry>
+    load_var _6
+    call baml.json.from_json
+    load_var j
+    load_const "loading_time_ms"
+    call baml.json.field
+    store_var _9
+    load_type int
+    load_var _9
+    call baml.json.from_json
+    init_instance testing.TestRegistry .collector, .expansions, .loading_time_ms
+    return
+}
+
+function testing.TestRegistry.new(collector: testing.TestCollector) -> testing.TestRegistry {
+    load_var collector
+    alloc_map 0
+    load_const 0
+    init_instance testing.TestRegistry .collector, .expansions, .loading_time_ms
+    return
+}
+
+function testing.TestRegistry.run_test(self: testing.TestRegistry, name: string) -> testing.TestReport {
+    load_var self
+    load_field .collector
+    load_field .tests
+    store_var_load_var _3
+    is_type baml.iter.Flatten<...>
+    pop_jump_if_false L0
+    jump L21
+
+  L0:
+    load_var _3
+    is_type baml.iter.ArrayIterator<...>
+    pop_jump_if_false L1
+    jump L20
+
+  L1:
+    load_var _3
+    is_type baml.iter.StepBy<...>
+    pop_jump_if_false L2
+    jump L19
+
+  L2:
+    load_var _3
+    is_type baml.iter.Chain<...>
+    pop_jump_if_false L3
+    jump L18
+
+  L3:
+    load_var _3
+    is_type baml.iter.Repeat<...>
+    pop_jump_if_false L4
+    jump L17
+
+  L4:
+    load_var _3
+    is_type baml.iter.Map<...>
     pop_jump_if_false L5
-    jump L6
+    jump L16
 
   L5:
-    load_var __for_idx_1
-    load_const 1
-    bin_op +
-    store_var __for_idx_1
-    jump L2
+    load_var _3
+    is_type baml.iter.Filter<...>
+    pop_jump_if_false L6
+    jump L15
 
   L6:
-    load_var sub
-    load_var name
-    call testing.TestRegistry.run_test
-    jump L10
+    load_var _3
+    is_type baml.iter.FilterMap<...>
+    pop_jump_if_false L7
+    jump L14
 
   L7:
     load_var _3
-    load_var __for_idx
-    load_array_element
-    store_var t
-    load_var t
+    is_type baml.iter.FlatMap<...>
+    pop_jump_if_false L8
+    jump L13
+
+  L8:
+    load_var _3
+    is_type baml.iter.Peekable<...>
+    pop_jump_if_false L9
+    jump L12
+
+  L9:
+    load_var _3
+    is_type unknown[]
+    pop_jump_if_false L10
+    jump L11
+
+  L10:
+    load_var _3
+    is_type testing.TestRegistration[]
+    pop_jump_if_false L89
+    load_type testing.TestRegistration
+    load_var _3
+    call baml.iter.Iterable$for$T[].iter
+    store_var _4
+    jump L22
+
+  L11:
+    load_type testing.TestRegistration
+    load_var _3
+    call baml.iter.Iterable$for$T[].iter
+    store_var _4
+    jump L22
+
+  L12:
+    load_type testing.TestRegistration
+    load_type void
+    load_var _3
+    call baml.iter.Peekable.Iterable.iter
+    store_var _4
+    jump L22
+
+  L13:
+    load_var _3
+    make_bound_method baml.iter.FlatMap.Iterable.iter
+    call_indirect
+    store_var _4
+    jump L22
+
+  L14:
+    load_var _3
+    make_bound_method baml.iter.FilterMap.Iterable.iter
+    call_indirect
+    store_var _4
+    jump L22
+
+  L15:
+    load_type testing.TestRegistration
+    load_type void
+    load_type void
+    load_var _3
+    call baml.iter.Filter.Iterable.iter
+    store_var _4
+    jump L22
+
+  L16:
+    load_var _3
+    make_bound_method baml.iter.Map.Iterable.iter
+    call_indirect
+    store_var _4
+    jump L22
+
+  L17:
+    load_type testing.TestRegistration
+    load_var _3
+    call baml.iter.Repeat.Iterable.iter
+    store_var _4
+    jump L22
+
+  L18:
+    load_type testing.TestRegistration
+    load_type void
+    load_type void
+    load_var _3
+    call baml.iter.Chain.Iterable.iter
+    store_var _4
+    jump L22
+
+  L19:
+    load_type testing.TestRegistration
+    load_type void
+    load_var _3
+    call baml.iter.StepBy.Iterable.iter
+    store_var _4
+    jump L22
+
+  L20:
+    load_type testing.TestRegistration
+    load_var _3
+    call baml.iter.ArrayIterator.Iterable.iter
+    store_var _4
+    jump L22
+
+  L21:
+    load_var _3
+    make_bound_method baml.iter.Flatten.Iterable.iter
+    call_indirect
+    store_var _4
+
+  L22:
+    load_var _4
+    is_type baml.iter.Flatten<...>
+    pop_jump_if_false L23
+    jump L40
+
+  L23:
+    load_var _4
+    is_type baml.iter.ArrayIterator<...>
+    pop_jump_if_false L24
+    jump L39
+
+  L24:
+    load_var _4
+    is_type baml.iter.StepBy<...>
+    pop_jump_if_false L25
+    jump L38
+
+  L25:
+    load_var _4
+    is_type baml.iter.Chain<...>
+    pop_jump_if_false L26
+    jump L37
+
+  L26:
+    load_var _4
+    is_type baml.iter.Repeat<...>
+    pop_jump_if_false L27
+    jump L36
+
+  L27:
+    load_var _4
+    is_type baml.iter.Map<...>
+    pop_jump_if_false L28
+    jump L35
+
+  L28:
+    load_var _4
+    is_type baml.iter.Filter<...>
+    pop_jump_if_false L29
+    jump L34
+
+  L29:
+    load_var _4
+    is_type baml.iter.FilterMap<...>
+    pop_jump_if_false L30
+    jump L33
+
+  L30:
+    load_var _4
+    is_type baml.iter.FlatMap<...>
+    pop_jump_if_false L31
+    jump L32
+
+  L31:
+    load_var _4
+    is_type baml.iter.Peekable<...>
+    pop_jump_if_false L89
+    load_type testing.TestRegistration
+    load_type void
+    load_var _4
+    call baml.iter.Peekable.Iterator.next
+    store_var _35
+    jump L41
+
+  L32:
+    load_var _4
+    make_bound_method baml.iter.FlatMap.Iterator.next
+    call_indirect
+    store_var _35
+    jump L41
+
+  L33:
+    load_var _4
+    make_bound_method baml.iter.FilterMap.Iterator.next
+    call_indirect
+    store_var _35
+    jump L41
+
+  L34:
+    load_type testing.TestRegistration
+    load_type void
+    load_type void
+    load_var _4
+    call baml.iter.Filter.Iterator.next
+    store_var _35
+    jump L41
+
+  L35:
+    load_var _4
+    make_bound_method baml.iter.Map.Iterator.next
+    call_indirect
+    store_var _35
+    jump L41
+
+  L36:
+    load_type testing.TestRegistration
+    load_var _4
+    call baml.iter.Repeat.Iterator.next
+    store_var _35
+    jump L41
+
+  L37:
+    load_type testing.TestRegistration
+    load_type void
+    load_type void
+    load_var _4
+    call baml.iter.Chain.Iterator.next
+    store_var _35
+    jump L41
+
+  L38:
+    load_type testing.TestRegistration
+    load_type void
+    load_var _4
+    call baml.iter.StepBy.Iterator.next
+    store_var _35
+    jump L41
+
+  L39:
+    load_type testing.TestRegistration
+    load_var _4
+    call baml.iter.ArrayIterator.Iterator.next
+    store_var _35
+    jump L41
+
+  L40:
+    load_var _4
+    make_bound_method baml.iter.Flatten.Iterator.next
+    call_indirect
+    store_var _35
+
+  L41:
+    load_var _35
+    is_type baml.iter.Done
+    pop_jump_if_false L42
+    jump L43
+
+  L42:
+    load_var _35
+    store_var_load_var t
     load_field .name
     load_var name
     cmp_op ==
-    pop_jump_if_false L8
-    jump L9
-
-  L8:
-    load_var __for_idx
-    load_const 1
-    bin_op +
-    store_var __for_idx
-    jump L0
-
-  L9:
+    pop_jump_if_false L22
     load_var t
     load_field .body
     load_var t
     load_field .runner
     call testing.run_test
+    jump L87
 
-  L10:
+  L43:
+    load_type string
+    load_type testing.TestRegistry
+    load_var self
+    load_field .expansions
+    call baml.Map.keys
+    store_var _69
+    load_var _69
+    is_type baml.iter.Flatten<...>
+    pop_jump_if_false L44
+    jump L65
+
+  L44:
+    load_var _69
+    is_type baml.iter.ArrayIterator<...>
+    pop_jump_if_false L45
+    jump L64
+
+  L45:
+    load_var _69
+    is_type baml.iter.StepBy<...>
+    pop_jump_if_false L46
+    jump L63
+
+  L46:
+    load_var _69
+    is_type baml.iter.Chain<...>
+    pop_jump_if_false L47
+    jump L62
+
+  L47:
+    load_var _69
+    is_type baml.iter.Repeat<...>
+    pop_jump_if_false L48
+    jump L61
+
+  L48:
+    load_var _69
+    is_type baml.iter.Map<...>
+    pop_jump_if_false L49
+    jump L60
+
+  L49:
+    load_var _69
+    is_type baml.iter.Filter<...>
+    pop_jump_if_false L50
+    jump L59
+
+  L50:
+    load_var _69
+    is_type baml.iter.FilterMap<...>
+    pop_jump_if_false L51
+    jump L58
+
+  L51:
+    load_var _69
+    is_type baml.iter.FlatMap<...>
+    pop_jump_if_false L52
+    jump L57
+
+  L52:
+    load_var _69
+    is_type baml.iter.Peekable<...>
+    pop_jump_if_false L53
+    jump L56
+
+  L53:
+    load_var _69
+    is_type unknown[]
+    pop_jump_if_false L54
+    jump L55
+
+  L54:
+    load_var _69
+    is_type string[]
+    pop_jump_if_false L89
+    load_type string
+    load_var _69
+    call baml.iter.Iterable$for$T[].iter
+    store_var _73
+    jump L66
+
+  L55:
+    load_type string
+    load_var _69
+    call baml.iter.Iterable$for$T[].iter
+    store_var _73
+    jump L66
+
+  L56:
+    load_type string
+    load_type void
+    load_var _69
+    call baml.iter.Peekable.Iterable.iter
+    store_var _73
+    jump L66
+
+  L57:
+    load_var _69
+    make_bound_method baml.iter.FlatMap.Iterable.iter
+    call_indirect
+    store_var _73
+    jump L66
+
+  L58:
+    load_var _69
+    make_bound_method baml.iter.FilterMap.Iterable.iter
+    call_indirect
+    store_var _73
+    jump L66
+
+  L59:
+    load_type string
+    load_type void
+    load_type void
+    load_var _69
+    call baml.iter.Filter.Iterable.iter
+    store_var _73
+    jump L66
+
+  L60:
+    load_var _69
+    make_bound_method baml.iter.Map.Iterable.iter
+    call_indirect
+    store_var _73
+    jump L66
+
+  L61:
+    load_type string
+    load_var _69
+    call baml.iter.Repeat.Iterable.iter
+    store_var _73
+    jump L66
+
+  L62:
+    load_type string
+    load_type void
+    load_type void
+    load_var _69
+    call baml.iter.Chain.Iterable.iter
+    store_var _73
+    jump L66
+
+  L63:
+    load_type string
+    load_type void
+    load_var _69
+    call baml.iter.StepBy.Iterable.iter
+    store_var _73
+    jump L66
+
+  L64:
+    load_type string
+    load_var _69
+    call baml.iter.ArrayIterator.Iterable.iter
+    store_var _73
+    jump L66
+
+  L65:
+    load_var _69
+    make_bound_method baml.iter.Flatten.Iterable.iter
+    call_indirect
+    store_var _73
+
+  L66:
+    load_var _73
+    is_type baml.iter.Flatten<...>
+    pop_jump_if_false L67
+    jump L84
+
+  L67:
+    load_var _73
+    is_type baml.iter.ArrayIterator<...>
+    pop_jump_if_false L68
+    jump L83
+
+  L68:
+    load_var _73
+    is_type baml.iter.StepBy<...>
+    pop_jump_if_false L69
+    jump L82
+
+  L69:
+    load_var _73
+    is_type baml.iter.Chain<...>
+    pop_jump_if_false L70
+    jump L81
+
+  L70:
+    load_var _73
+    is_type baml.iter.Repeat<...>
+    pop_jump_if_false L71
+    jump L80
+
+  L71:
+    load_var _73
+    is_type baml.iter.Map<...>
+    pop_jump_if_false L72
+    jump L79
+
+  L72:
+    load_var _73
+    is_type baml.iter.Filter<...>
+    pop_jump_if_false L73
+    jump L78
+
+  L73:
+    load_var _73
+    is_type baml.iter.FilterMap<...>
+    pop_jump_if_false L74
+    jump L77
+
+  L74:
+    load_var _73
+    is_type baml.iter.FlatMap<...>
+    pop_jump_if_false L75
+    jump L76
+
+  L75:
+    load_var _73
+    is_type baml.iter.Peekable<...>
+    pop_jump_if_false L89
+    load_type string
+    load_type void
+    load_var _73
+    call baml.iter.Peekable.Iterator.next
+    store_var _104
+    jump L85
+
+  L76:
+    load_var _73
+    make_bound_method baml.iter.FlatMap.Iterator.next
+    call_indirect
+    store_var _104
+    jump L85
+
+  L77:
+    load_var _73
+    make_bound_method baml.iter.FilterMap.Iterator.next
+    call_indirect
+    store_var _104
+    jump L85
+
+  L78:
+    load_type string
+    load_type void
+    load_type void
+    load_var _73
+    call baml.iter.Filter.Iterator.next
+    store_var _104
+    jump L85
+
+  L79:
+    load_var _73
+    make_bound_method baml.iter.Map.Iterator.next
+    call_indirect
+    store_var _104
+    jump L85
+
+  L80:
+    load_type string
+    load_var _73
+    call baml.iter.Repeat.Iterator.next
+    store_var _104
+    jump L85
+
+  L81:
+    load_type string
+    load_type void
+    load_type void
+    load_var _73
+    call baml.iter.Chain.Iterator.next
+    store_var _104
+    jump L85
+
+  L82:
+    load_type string
+    load_type void
+    load_var _73
+    call baml.iter.StepBy.Iterator.next
+    store_var _104
+    jump L85
+
+  L83:
+    load_type string
+    load_var _73
+    call baml.iter.ArrayIterator.Iterator.next
+    store_var _104
+    jump L85
+
+  L84:
+    load_var _73
+    make_bound_method baml.iter.Flatten.Iterator.next
+    call_indirect
+    store_var _104
+
+  L85:
+    load_var _104
+    is_type baml.iter.Done
+    pop_jump_if_false L86
+    jump L88
+
+  L86:
+    load_var _104
+    store_var k
+    load_var self
+    load_field .expansions
+    load_var k
+    load_map_element
+    store_var sub
+    load_var2 2 10
+    load_const "/"
+    bin_op +
+    call baml.String.starts_with
+    pop_jump_if_false L66
+    load_var2 11 2
+    call testing.TestRegistry.run_test
+
+  L87:
     return
+
+  L88:
+    load_const "Test not found: "
+    load_var name
+    bin_op +
+    throw
+
+  L89:
+    unreachable
 }
 
-function testing.TestRegistry.serialize(self: null) -> (testing.SerializedTest | testing.SerializedTestSet)[] {
+function testing.TestRegistry.serialize(self: testing.TestRegistry) -> (testing.SerializedTest | testing.SerializedTestSet)[] {
     alloc_array 0
     store_var items
     load_var self
     load_field .collector
     load_field .tests
-    store_var _3
-    load_const 0
-    store_var __for_idx
+    store_var_load_var _3
+    is_type baml.iter.Flatten<...>
+    pop_jump_if_false L0
+    jump L21
 
   L0:
-    load_var __for_idx
     load_var _3
-    call baml.Array.length
-    cmp_op <
+    is_type baml.iter.ArrayIterator<...>
     pop_jump_if_false L1
-    jump L8
+    jump L20
 
   L1:
+    load_var _3
+    is_type baml.iter.StepBy<...>
+    pop_jump_if_false L2
+    jump L19
+
+  L2:
+    load_var _3
+    is_type baml.iter.Chain<...>
+    pop_jump_if_false L3
+    jump L18
+
+  L3:
+    load_var _3
+    is_type baml.iter.Repeat<...>
+    pop_jump_if_false L4
+    jump L17
+
+  L4:
+    load_var _3
+    is_type baml.iter.Map<...>
+    pop_jump_if_false L5
+    jump L16
+
+  L5:
+    load_var _3
+    is_type baml.iter.Filter<...>
+    pop_jump_if_false L6
+    jump L15
+
+  L6:
+    load_var _3
+    is_type baml.iter.FilterMap<...>
+    pop_jump_if_false L7
+    jump L14
+
+  L7:
+    load_var _3
+    is_type baml.iter.FlatMap<...>
+    pop_jump_if_false L8
+    jump L13
+
+  L8:
+    load_var _3
+    is_type baml.iter.Peekable<...>
+    pop_jump_if_false L9
+    jump L12
+
+  L9:
+    load_var _3
+    is_type unknown[]
+    pop_jump_if_false L10
+    jump L11
+
+  L10:
+    load_var _3
+    is_type testing.TestRegistration[]
+    pop_jump_if_false L90
+    load_type testing.TestRegistration
+    load_var _3
+    call baml.iter.Iterable$for$T[].iter
+    store_var _4
+    jump L22
+
+  L11:
+    load_type testing.TestRegistration
+    load_var _3
+    call baml.iter.Iterable$for$T[].iter
+    store_var _4
+    jump L22
+
+  L12:
+    load_type testing.TestRegistration
+    load_type void
+    load_var _3
+    call baml.iter.Peekable.Iterable.iter
+    store_var _4
+    jump L22
+
+  L13:
+    load_var _3
+    make_bound_method baml.iter.FlatMap.Iterable.iter
+    call_indirect
+    store_var _4
+    jump L22
+
+  L14:
+    load_var _3
+    make_bound_method baml.iter.FilterMap.Iterable.iter
+    call_indirect
+    store_var _4
+    jump L22
+
+  L15:
+    load_type testing.TestRegistration
+    load_type void
+    load_type void
+    load_var _3
+    call baml.iter.Filter.Iterable.iter
+    store_var _4
+    jump L22
+
+  L16:
+    load_var _3
+    make_bound_method baml.iter.Map.Iterable.iter
+    call_indirect
+    store_var _4
+    jump L22
+
+  L17:
+    load_type testing.TestRegistration
+    load_var _3
+    call baml.iter.Repeat.Iterable.iter
+    store_var _4
+    jump L22
+
+  L18:
+    load_type testing.TestRegistration
+    load_type void
+    load_type void
+    load_var _3
+    call baml.iter.Chain.Iterable.iter
+    store_var _4
+    jump L22
+
+  L19:
+    load_type testing.TestRegistration
+    load_type void
+    load_var _3
+    call baml.iter.StepBy.Iterable.iter
+    store_var _4
+    jump L22
+
+  L20:
+    load_type testing.TestRegistration
+    load_var _3
+    call baml.iter.ArrayIterator.Iterable.iter
+    store_var _4
+    jump L22
+
+  L21:
+    load_var _3
+    make_bound_method baml.iter.Flatten.Iterable.iter
+    call_indirect
+    store_var _4
+
+  L22:
+    load_var _4
+    is_type baml.iter.Flatten<...>
+    pop_jump_if_false L23
+    jump L40
+
+  L23:
+    load_var _4
+    is_type baml.iter.ArrayIterator<...>
+    pop_jump_if_false L24
+    jump L39
+
+  L24:
+    load_var _4
+    is_type baml.iter.StepBy<...>
+    pop_jump_if_false L25
+    jump L38
+
+  L25:
+    load_var _4
+    is_type baml.iter.Chain<...>
+    pop_jump_if_false L26
+    jump L37
+
+  L26:
+    load_var _4
+    is_type baml.iter.Repeat<...>
+    pop_jump_if_false L27
+    jump L36
+
+  L27:
+    load_var _4
+    is_type baml.iter.Map<...>
+    pop_jump_if_false L28
+    jump L35
+
+  L28:
+    load_var _4
+    is_type baml.iter.Filter<...>
+    pop_jump_if_false L29
+    jump L34
+
+  L29:
+    load_var _4
+    is_type baml.iter.FilterMap<...>
+    pop_jump_if_false L30
+    jump L33
+
+  L30:
+    load_var _4
+    is_type baml.iter.FlatMap<...>
+    pop_jump_if_false L31
+    jump L32
+
+  L31:
+    load_var _4
+    is_type baml.iter.Peekable<...>
+    pop_jump_if_false L90
+    load_type testing.TestRegistration
+    load_type void
+    load_var _4
+    call baml.iter.Peekable.Iterator.next
+    store_var _35
+    jump L41
+
+  L32:
+    load_var _4
+    make_bound_method baml.iter.FlatMap.Iterator.next
+    call_indirect
+    store_var _35
+    jump L41
+
+  L33:
+    load_var _4
+    make_bound_method baml.iter.FilterMap.Iterator.next
+    call_indirect
+    store_var _35
+    jump L41
+
+  L34:
+    load_type testing.TestRegistration
+    load_type void
+    load_type void
+    load_var _4
+    call baml.iter.Filter.Iterator.next
+    store_var _35
+    jump L41
+
+  L35:
+    load_var _4
+    make_bound_method baml.iter.Map.Iterator.next
+    call_indirect
+    store_var _35
+    jump L41
+
+  L36:
+    load_type testing.TestRegistration
+    load_var _4
+    call baml.iter.Repeat.Iterator.next
+    store_var _35
+    jump L41
+
+  L37:
+    load_type testing.TestRegistration
+    load_type void
+    load_type void
+    load_var _4
+    call baml.iter.Chain.Iterator.next
+    store_var _35
+    jump L41
+
+  L38:
+    load_type testing.TestRegistration
+    load_type void
+    load_var _4
+    call baml.iter.StepBy.Iterator.next
+    store_var _35
+    jump L41
+
+  L39:
+    load_type testing.TestRegistration
+    load_var _4
+    call baml.iter.ArrayIterator.Iterator.next
+    store_var _35
+    jump L41
+
+  L40:
+    load_var _4
+    make_bound_method baml.iter.Flatten.Iterator.next
+    call_indirect
+    store_var _35
+
+  L41:
+    load_var _35
+    is_type baml.iter.Done
+    pop_jump_if_false L42
+    jump L43
+
+  L42:
+    load_var items
+    load_const "test"
+    load_var _35
+    load_field .name
+    init_instance testing.SerializedTest .type, .name
+    call baml.Array.push
+    pop 1
+    jump L22
+
+  L43:
     load_var self
     load_field .collector
     load_field .testsets
-    store_var _12
-    load_const 0
-    store_var __for_idx_1
+    store_var_load_var _68
+    is_type baml.iter.Flatten<...>
+    pop_jump_if_false L44
+    jump L65
 
-  L2:
-    load_var __for_idx_1
-    load_var _12
-    call baml.Array.length
-    cmp_op <
-    pop_jump_if_false L3
-    jump L4
+  L44:
+    load_var _68
+    is_type baml.iter.ArrayIterator<...>
+    pop_jump_if_false L45
+    jump L64
 
-  L3:
-    load_var items
-    return
+  L45:
+    load_var _68
+    is_type baml.iter.StepBy<...>
+    pop_jump_if_false L46
+    jump L63
 
-  L4:
-    load_var _12
-    load_var __for_idx_1
-    load_array_element
+  L46:
+    load_var _68
+    is_type baml.iter.Chain<...>
+    pop_jump_if_false L47
+    jump L62
+
+  L47:
+    load_var _68
+    is_type baml.iter.Repeat<...>
+    pop_jump_if_false L48
+    jump L61
+
+  L48:
+    load_var _68
+    is_type baml.iter.Map<...>
+    pop_jump_if_false L49
+    jump L60
+
+  L49:
+    load_var _68
+    is_type baml.iter.Filter<...>
+    pop_jump_if_false L50
+    jump L59
+
+  L50:
+    load_var _68
+    is_type baml.iter.FilterMap<...>
+    pop_jump_if_false L51
+    jump L58
+
+  L51:
+    load_var _68
+    is_type baml.iter.FlatMap<...>
+    pop_jump_if_false L52
+    jump L57
+
+  L52:
+    load_var _68
+    is_type baml.iter.Peekable<...>
+    pop_jump_if_false L53
+    jump L56
+
+  L53:
+    load_var _68
+    is_type unknown[]
+    pop_jump_if_false L54
+    jump L55
+
+  L54:
+    load_var _68
+    is_type testing.TestSetRegistration[]
+    pop_jump_if_false L90
+    load_type testing.TestSetRegistration
+    load_var _68
+    call baml.iter.Iterable$for$T[].iter
+    store_var _69
+    jump L66
+
+  L55:
+    load_type testing.TestSetRegistration
+    load_var _68
+    call baml.iter.Iterable$for$T[].iter
+    store_var _69
+    jump L66
+
+  L56:
+    load_type testing.TestSetRegistration
+    load_type void
+    load_var _68
+    call baml.iter.Peekable.Iterable.iter
+    store_var _69
+    jump L66
+
+  L57:
+    load_var _68
+    make_bound_method baml.iter.FlatMap.Iterable.iter
+    call_indirect
+    store_var _69
+    jump L66
+
+  L58:
+    load_var _68
+    make_bound_method baml.iter.FilterMap.Iterable.iter
+    call_indirect
+    store_var _69
+    jump L66
+
+  L59:
+    load_type testing.TestSetRegistration
+    load_type void
+    load_type void
+    load_var _68
+    call baml.iter.Filter.Iterable.iter
+    store_var _69
+    jump L66
+
+  L60:
+    load_var _68
+    make_bound_method baml.iter.Map.Iterable.iter
+    call_indirect
+    store_var _69
+    jump L66
+
+  L61:
+    load_type testing.TestSetRegistration
+    load_var _68
+    call baml.iter.Repeat.Iterable.iter
+    store_var _69
+    jump L66
+
+  L62:
+    load_type testing.TestSetRegistration
+    load_type void
+    load_type void
+    load_var _68
+    call baml.iter.Chain.Iterable.iter
+    store_var _69
+    jump L66
+
+  L63:
+    load_type testing.TestSetRegistration
+    load_type void
+    load_var _68
+    call baml.iter.StepBy.Iterable.iter
+    store_var _69
+    jump L66
+
+  L64:
+    load_type testing.TestSetRegistration
+    load_var _68
+    call baml.iter.ArrayIterator.Iterable.iter
+    store_var _69
+    jump L66
+
+  L65:
+    load_var _68
+    make_bound_method baml.iter.Flatten.Iterable.iter
+    call_indirect
+    store_var _69
+
+  L66:
+    load_var _69
+    is_type baml.iter.Flatten<...>
+    pop_jump_if_false L67
+    jump L84
+
+  L67:
+    load_var _69
+    is_type baml.iter.ArrayIterator<...>
+    pop_jump_if_false L68
+    jump L83
+
+  L68:
+    load_var _69
+    is_type baml.iter.StepBy<...>
+    pop_jump_if_false L69
+    jump L82
+
+  L69:
+    load_var _69
+    is_type baml.iter.Chain<...>
+    pop_jump_if_false L70
+    jump L81
+
+  L70:
+    load_var _69
+    is_type baml.iter.Repeat<...>
+    pop_jump_if_false L71
+    jump L80
+
+  L71:
+    load_var _69
+    is_type baml.iter.Map<...>
+    pop_jump_if_false L72
+    jump L79
+
+  L72:
+    load_var _69
+    is_type baml.iter.Filter<...>
+    pop_jump_if_false L73
+    jump L78
+
+  L73:
+    load_var _69
+    is_type baml.iter.FilterMap<...>
+    pop_jump_if_false L74
+    jump L77
+
+  L74:
+    load_var _69
+    is_type baml.iter.FlatMap<...>
+    pop_jump_if_false L75
+    jump L76
+
+  L75:
+    load_var _69
+    is_type baml.iter.Peekable<...>
+    pop_jump_if_false L90
+    load_type testing.TestSetRegistration
+    load_type void
+    load_var _69
+    call baml.iter.Peekable.Iterator.next
+    store_var _100
+    jump L85
+
+  L76:
+    load_var _69
+    make_bound_method baml.iter.FlatMap.Iterator.next
+    call_indirect
+    store_var _100
+    jump L85
+
+  L77:
+    load_var _69
+    make_bound_method baml.iter.FilterMap.Iterator.next
+    call_indirect
+    store_var _100
+    jump L85
+
+  L78:
+    load_type testing.TestSetRegistration
+    load_type void
+    load_type void
+    load_var _69
+    call baml.iter.Filter.Iterator.next
+    store_var _100
+    jump L85
+
+  L79:
+    load_var _69
+    make_bound_method baml.iter.Map.Iterator.next
+    call_indirect
+    store_var _100
+    jump L85
+
+  L80:
+    load_type testing.TestSetRegistration
+    load_var _69
+    call baml.iter.Repeat.Iterator.next
+    store_var _100
+    jump L85
+
+  L81:
+    load_type testing.TestSetRegistration
+    load_type void
+    load_type void
+    load_var _69
+    call baml.iter.Chain.Iterator.next
+    store_var _100
+    jump L85
+
+  L82:
+    load_type testing.TestSetRegistration
+    load_type void
+    load_var _69
+    call baml.iter.StepBy.Iterator.next
+    store_var _100
+    jump L85
+
+  L83:
+    load_type testing.TestSetRegistration
+    load_var _69
+    call baml.iter.ArrayIterator.Iterator.next
+    store_var _100
+    jump L85
+
+  L84:
+    load_var _69
+    make_bound_method baml.iter.Flatten.Iterator.next
+    call_indirect
+    store_var _100
+
+  L85:
+    load_var _100
+    is_type baml.iter.Done
+    pop_jump_if_false L86
+    jump L89
+
+  L86:
+    load_var _100
     store_var ts
+    load_type string
+    load_type testing.TestRegistry
     load_var self
     load_field .expansions
     load_var ts
@@ -590,73 +3274,201 @@ function testing.TestRegistry.serialize(self: null) -> (testing.SerializedTest |
     store_var expanded
     load_var expanded
     is_type testing.TestRegistry
-    pop_jump_if_false L5
-    jump L6
+    pop_jump_if_false L87
+    jump L88
 
-  L5:
-    load_var expanded
-    load_const null
-    cmp_op ==
-    pop_jump_if_false L7
+  L87:
     load_var items
-    alloc_instance testing.SerializedTest
     load_const "lazyTestSet"
-    init_field .type
     load_var ts
     load_field .name
-    init_field .name
+    init_instance testing.SerializedTest .type, .name
     call baml.Array.push
     pop 1
-    jump L7
+    jump L66
 
-  L6:
+  L88:
     load_var expanded
     store_var sub
     load_var ts
     load_field .name
-    store_var _25
+    store_var _139
     load_var sub
     call testing.TestRegistry.serialize
-    store_var _26
-    load_var items
-    alloc_instance testing.SerializedTestSet
-    load_var _25
-    init_field .name
-    load_var _26
-    init_field .items
-    load_var sub
+    store_var _140
+    load_var2 2 12
+    load_var2 13 11
     load_field .loading_time_ms
-    init_field .loadingTimeMs
+    init_instance testing.SerializedTestSet .name, .items, .loadingTimeMs
     call baml.Array.push
     pop 1
+    jump L66
 
-  L7:
-    load_var __for_idx_1
-    load_const 1
-    bin_op +
-    store_var __for_idx_1
-    jump L2
-
-  L8:
+  L89:
     load_var items
-    alloc_instance testing.SerializedTest
-    load_const "test"
-    init_field .type
-    load_var _3
-    load_var __for_idx
-    load_array_element
-    load_field .name
-    init_field .name
-    call baml.Array.push
-    pop 1
-    load_var __for_idx
-    load_const 1
-    bin_op +
-    store_var __for_idx
-    jump L0
+    return
+
+  L90:
+    unreachable
 }
 
-function testing.run_test(body: () -> void throws unknown, runner: ((() -> testing.TestReport throws never) -> (() -> testing.TestReport throws never) throws never)?) -> testing.TestReport {
+function testing.TestRegistry.to_json(self: testing.TestRegistry) -> baml.json.json {
+    load_var self
+    load_field .collector
+    call testing.TestCollector.to_json
+    load_type string
+    load_type testing.TestRegistry
+    load_var self
+    load_field .expansions
+    call baml.Map.to_json
+    load_var self
+    load_field .loading_time_ms
+    call baml.Int.to_json
+    load_const "collector"
+    load_const "expansions"
+    load_const "loading_time_ms"
+    alloc_map 3
+    return
+}
+
+function testing.TestReport.from_json(j: baml.json.json) -> testing.TestReport {
+    load_var j
+    load_const "outcome"
+    call baml.json.field
+    store_var _3
+    load_type "pass" | "fail" | "error"
+    load_var _3
+    call baml.json.from_json
+    load_var j
+    load_const "runs"
+    call baml.json.field
+    store_var _6
+    load_type testing.RunReport[]
+    load_var _6
+    call baml.json.from_json
+    init_instance testing.TestReport .outcome, .runs
+    return
+}
+
+function testing.TestReport.to_json(self: testing.TestReport) -> baml.json.json {
+    load_var self
+    load_field .outcome
+    load_const "to_json"
+    load_map_element
+    call_indirect
+    load_type testing.RunReport
+    load_var self
+    load_field .runs
+    call baml.Array.to_json
+    load_const "outcome"
+    load_const "runs"
+    alloc_map 2
+    return
+}
+
+function testing.TestSetRegistration.from_json(j: baml.json.json) -> testing.TestSetRegistration {
+    load_var j
+    load_const "name"
+    call baml.json.field
+    store_var _3
+    load_type string
+    load_var _3
+    call baml.json.from_json
+    load_var j
+    load_const "collector"
+    call baml.json.field
+    store_var _6
+    load_type (testing.TestCollector) -> void throws unknown
+    load_var _6
+    call baml.json.from_json
+    load_var j
+    load_const "runner"
+    call baml.json.field
+    store_var _9
+    load_type ((() -> testing.TestSetReport throws never) -> (() -> testing.TestSetReport throws never) throws never) | null
+    load_var _9
+    call baml.json.from_json
+    init_instance testing.TestSetRegistration .name, .collector, .runner
+    return
+}
+
+function testing.TestSetRegistration.to_json(self: testing.TestSetRegistration) -> baml.json.json {
+    load_type testing.TestSetRegistration
+    load_var self
+    call baml.json.to_string
+    call baml.json.parse
+    return
+}
+
+function testing.TestSetReport.from_json(j: baml.json.json) -> testing.TestSetReport {
+    load_var j
+    load_const "outcome"
+    call baml.json.field
+    store_var _3
+    load_type "pass" | "fail" | "error"
+    load_var _3
+    call baml.json.from_json
+    load_var j
+    load_const "passed"
+    call baml.json.field
+    store_var _6
+    load_type int
+    load_var _6
+    call baml.json.from_json
+    load_var j
+    load_const "failed"
+    call baml.json.field
+    store_var _9
+    load_type int
+    load_var _9
+    call baml.json.from_json
+    load_var j
+    load_const "total"
+    call baml.json.field
+    store_var _12
+    load_type int
+    load_var _12
+    call baml.json.from_json
+    load_var j
+    load_const "results"
+    call baml.json.field
+    store_var _15
+    load_type testing.TestReport | testing.TestSetReport[]
+    load_var _15
+    call baml.json.from_json
+    init_instance testing.TestSetReport .outcome, .passed, .failed, .total, .results
+    return
+}
+
+function testing.TestSetReport.to_json(self: testing.TestSetReport) -> baml.json.json {
+    load_var self
+    load_field .outcome
+    load_const "to_json"
+    load_map_element
+    call_indirect
+    load_var self
+    load_field .passed
+    call baml.Int.to_json
+    load_var self
+    load_field .failed
+    call baml.Int.to_json
+    load_var self
+    load_field .total
+    call baml.Int.to_json
+    load_type testing.TestReport | testing.TestSetReport
+    load_var self
+    load_field .results
+    call baml.Array.to_json
+    load_const "outcome"
+    load_const "passed"
+    load_const "failed"
+    load_const "total"
+    load_const "results"
+    alloc_map 5
+    return
+}
+
+function testing.run_test(body: () -> void throws unknown, runner: ((() -> testing.TestReport throws never) -> (() -> testing.TestReport throws never) throws never) | null) -> testing.TestReport {
     load_var ?1
     make_cell
     store_var ?1
@@ -670,11 +3482,7 @@ function testing.run_test(body: () -> void throws unknown, runner: ((() -> testi
     jump L1
 
   L0:
-    load_var runner
-    is_type (() -> testing.TestReport throws never) -> (() -> testing.TestReport throws never) throws never
-    pop_jump_if_false L2
-    load_var base_run
-    load_var runner
+    load_var2 3 2
     call_indirect
     call_indirect
     jump L2
@@ -687,7 +3495,7 @@ function testing.run_test(body: () -> void throws unknown, runner: ((() -> testi
     return
 }
 
-function testing.run_testset(run_children: () -> testing.TestSetReport throws never, runner: ((() -> testing.TestSetReport throws never) -> (() -> testing.TestSetReport throws never) throws never)?) -> testing.TestSetReport {
+function testing.run_testset(run_children: () -> testing.TestSetReport throws never, runner: ((() -> testing.TestSetReport throws never) -> (() -> testing.TestSetReport throws never) throws never) | null) -> testing.TestSetReport {
     load_var runner
     load_const null
     cmp_op ==
@@ -695,11 +3503,7 @@ function testing.run_testset(run_children: () -> testing.TestSetReport throws ne
     jump L1
 
   L0:
-    load_var runner
-    is_type (() -> testing.TestSetReport throws never) -> (() -> testing.TestSetReport throws never) throws never
-    pop_jump_if_false L2
-    load_var run_children
-    load_var runner
+    load_var2 1 2
     call_indirect
     call_indirect
     jump L2

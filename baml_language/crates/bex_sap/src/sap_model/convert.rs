@@ -11,9 +11,10 @@ use ::sys_types::{ClassDefinition, EnumDefinition};
 use indexmap::IndexMap;
 
 use crate::sap_model::{
-    self, AnnotatedEnumVariant, AnnotatedField, AnnotatedTy, ArrayTy, AttrLiteral, BoolLiteralTy,
-    BoolTy, ClassTy, EnumTy, EnumVariantTy, FloatTy, IntLiteralTy, IntTy, MapTy, MediaTy, NullTy,
-    StringLiteralTy, StringTy, TyResolved, TyWithMeta, TypeAnnotations, TypeRefDb, UnionTy,
+    self, AnnotatedEnumVariant, AnnotatedField, AnnotatedTy, ArrayTy, AttrLiteral, BigintLiteralTy,
+    BigintTy, BoolLiteralTy, BoolTy, ClassTy, EnumTy, EnumVariantTy, FloatTy, IntLiteralTy, IntTy,
+    MapTy, MediaTy, NullTy, StringLiteralTy, StringTy, TyResolved, TyWithMeta, TypeAnnotations,
+    TypeRefDb, UnionTy,
 };
 
 impl crate::sap_model::TypeIdent for TypeName {}
@@ -316,23 +317,27 @@ impl TypeCtx {
         let ty = match ty {
             baml_type::Ty::Int { attr } => TyWithMeta::new(
                 sap_model::Ty::Resolved(TyResolved::Int(IntTy)),
-                convert_ty_attrs(attr)?,
+                convert_ty_attrs(attr),
+            ),
+            baml_type::Ty::Bigint { attr } => TyWithMeta::new(
+                sap_model::Ty::Resolved(TyResolved::Bigint(BigintTy)),
+                convert_ty_attrs(attr),
             ),
             baml_type::Ty::Float { attr } => TyWithMeta::new(
                 sap_model::Ty::Resolved(TyResolved::Float(FloatTy)),
-                convert_ty_attrs(attr)?,
+                convert_ty_attrs(attr),
             ),
             baml_type::Ty::String { attr } => TyWithMeta::new(
                 sap_model::Ty::Resolved(TyResolved::String(StringTy)),
-                convert_ty_attrs(attr)?,
+                convert_ty_attrs(attr),
             ),
             baml_type::Ty::Bool { attr } => TyWithMeta::new(
                 sap_model::Ty::Resolved(TyResolved::Bool(BoolTy)),
-                convert_ty_attrs(attr)?,
+                convert_ty_attrs(attr),
             ),
             baml_type::Ty::Null { attr } => TyWithMeta::new(
                 sap_model::Ty::Resolved(TyResolved::Null(NullTy)),
-                convert_ty_attrs(attr)?,
+                convert_ty_attrs(attr),
             ),
             baml_type::Ty::Media(media_kind, ty_attr) => {
                 let media_kind = match media_kind {
@@ -346,12 +351,16 @@ impl TypeCtx {
                 };
                 TyWithMeta::new(
                     sap_model::Ty::Resolved(TyResolved::Media(media_kind)),
-                    convert_ty_attrs(ty_attr)?,
+                    convert_ty_attrs(ty_attr),
                 )
             }
             baml_type::Ty::Literal(baml_type::Literal::Int(i), attr) => TyWithMeta::new(
                 sap_model::Ty::Resolved(TyResolved::LiteralInt(IntLiteralTy(*i))),
-                convert_ty_attrs(attr)?,
+                convert_ty_attrs(attr),
+            ),
+            baml_type::Ty::Literal(baml_type::Literal::Bigint(bi), attr) => TyWithMeta::new(
+                sap_model::Ty::Resolved(TyResolved::LiteralBigint(BigintLiteralTy(bi.clone()))),
+                convert_ty_attrs(attr),
             ),
             baml_type::Ty::Literal(baml_type::Literal::Float(..), ..) => {
                 return Err(ConvertError::FloatLiteral);
@@ -360,13 +369,14 @@ impl TypeCtx {
                 sap_model::Ty::Resolved(TyResolved::LiteralString(StringLiteralTy(Cow::Borrowed(
                     s,
                 )))),
-                convert_ty_attrs(attr)?,
+                convert_ty_attrs(attr),
             ),
             baml_type::Ty::Literal(baml_type::Literal::Bool(b), attr) => TyWithMeta::new(
                 sap_model::Ty::Resolved(TyResolved::LiteralBool(BoolLiteralTy(*b))),
-                convert_ty_attrs(attr)?,
+                convert_ty_attrs(attr),
             ),
-            baml_type::Ty::Class(type_name, attr) => {
+            baml_type::Ty::Class(type_name, _, attr)
+            | baml_type::Ty::Interface(type_name, _, _, attr) => {
                 if self.sap_parseable.get(type_name).is_some_and(|v| !v) {
                     return Err(ConvertError::NonParsableType(Box::new(ty.clone())));
                 }
@@ -374,12 +384,12 @@ impl TypeCtx {
                     // currently [`ClassDefinition`] does not have attributes attached to it.
                     // They will probably get lifted earlier in the conversion process, but if not then we would do it here.
                     sap_model::Ty::Unresolved(type_name.clone()),
-                    convert_ty_attrs(attr)?,
+                    convert_ty_attrs(attr),
                 )
             }
             baml_type::Ty::Enum(type_name, attr) => TyWithMeta::new(
                 sap_model::Ty::Unresolved(type_name.clone()),
-                convert_ty_attrs(attr)?,
+                convert_ty_attrs(attr),
             ),
             baml_type::Ty::EnumVariant(type_name, variant, attr) => {
                 let enum_def = self
@@ -406,33 +416,14 @@ impl TypeCtx {
                 };
                 TyWithMeta::new(
                     sap_model::Ty::Resolved(TyResolved::EnumVariant(enum_variant_ty)),
-                    convert_ty_attrs(attr)?,
-                )
-            }
-            baml_type::Ty::Optional(ty, attr) => {
-                if self.is_union_like(ty) {
-                    return Err(ConvertError::UnflattenedUnion);
-                }
-                // becomes a union
-                let ty = self.convert_ty(ty)?;
-                TyWithMeta::new(
-                    sap_model::Ty::Resolved(TyResolved::Union(UnionTy {
-                        variants: vec![
-                            TyWithMeta::new(
-                                sap_model::Ty::Resolved(TyResolved::Null(NullTy)),
-                                TypeAnnotations::default(),
-                            ),
-                            ty,
-                        ],
-                    })),
-                    convert_ty_attrs(attr)?,
+                    convert_ty_attrs(attr),
                 )
             }
             baml_type::Ty::List(ty, attr) => TyWithMeta::new(
                 sap_model::Ty::Resolved(TyResolved::Array(ArrayTy {
                     ty: Box::new(self.convert_ty(ty)?),
                 })),
-                convert_ty_attrs(attr)?,
+                convert_ty_attrs(attr),
             ),
             baml_type::Ty::Map { key, value, attr } => {
                 let key = self.convert_ty(key)?;
@@ -442,7 +433,7 @@ impl TypeCtx {
                         key: Box::new(key),
                         value: Box::new(value),
                     })),
-                    convert_ty_attrs(attr)?,
+                    convert_ty_attrs(attr),
                 )
             }
             baml_type::Ty::Union(items, ty_attr) => {
@@ -455,7 +446,7 @@ impl TypeCtx {
                     .collect::<Result<Vec<_>, _>>()?;
                 TyWithMeta::new(
                     sap_model::Ty::Resolved(TyResolved::Union(UnionTy { variants: items })),
-                    convert_ty_attrs(ty_attr)?,
+                    convert_ty_attrs(ty_attr),
                 )
             }
             baml_type::Ty::TypeAlias(type_name, attr) => {
@@ -481,7 +472,8 @@ impl TypeCtx {
                             attr = merge_ty_attrs(&attr, inner_attr);
                             innermost_name = name;
                         }
-                        baml_type::Ty::Class(name, inner_attr)
+                        baml_type::Ty::Class(name, _, inner_attr)
+                        | baml_type::Ty::Interface(name, _, _, inner_attr)
                         | baml_type::Ty::Enum(name, inner_attr) => {
                             attr = merge_ty_attrs(&attr, inner_attr);
                             innermost_name = name;
@@ -496,7 +488,7 @@ impl TypeCtx {
 
                 TyWithMeta::new(
                     sap_model::Ty::Unresolved(innermost_name.clone()),
-                    convert_ty_attrs(&attr)?,
+                    convert_ty_attrs(&attr),
                 )
             }
             unparsable @ (baml_type::Ty::Uint8Array { .. }
@@ -505,7 +497,7 @@ impl TypeCtx {
             | baml_type::Ty::Void { .. }
             | baml_type::Ty::WatchAccessor(_, _)
             | baml_type::Ty::BuiltinUnknown { .. }
-            | baml_type::Ty::Future(_, _)) => {
+            | baml_type::Ty::Future(_, _, _)) => {
                 return Err(ConvertError::NonParsableType(Box::new(unparsable.clone())));
             }
         };
@@ -514,7 +506,7 @@ impl TypeCtx {
 
     fn is_union_like(&self, ty: &baml_type::Ty) -> bool {
         match ty {
-            baml_type::Ty::Union(..) | baml_type::Ty::Optional(..) => true,
+            baml_type::Ty::Union(..) => true,
             baml_type::Ty::TypeAlias(name, ..) => self
                 .type_alias_definitions
                 .get(name)
@@ -551,6 +543,7 @@ impl TypeCtx {
 
         let field_attrs = match field_type {
             ::baml_type::Ty::Int { .. }
+            | ::baml_type::Ty::Bigint { .. }
             | ::baml_type::Ty::Float { .. }
             | ::baml_type::Ty::String { .. }
             | ::baml_type::Ty::Bool { .. }
@@ -558,9 +551,10 @@ impl TypeCtx {
             | ::baml_type::Ty::Media(..)
             | ::baml_type::Ty::Literal(..)
             | ::baml_type::Ty::Class(..)
+            | ::baml_type::Ty::Interface(..)
             | ::baml_type::Ty::Enum(..)
             | ::baml_type::Ty::EnumVariant(..) => (AttrLiteral::Never, AttrLiteral::Never),
-            ::baml_type::Ty::Null { .. } | ::baml_type::Ty::Optional(..) => {
+            ::baml_type::Ty::Null { .. } => {
                 unreachable!("nullable fields should be returned before field attr derivation")
             }
             ::baml_type::Ty::List(..) => (
@@ -587,7 +581,7 @@ impl TypeCtx {
             | ::baml_type::Ty::Void { .. }
             | ::baml_type::Ty::WatchAccessor(_, _)
             | ::baml_type::Ty::BuiltinUnknown { .. }
-            | ::baml_type::Ty::Future(_, _)) => {
+            | ::baml_type::Ty::Future(_, _, _)) => {
                 return Err(ConvertError::NonParsableType(Box::new(unparsable.clone())));
             }
         };
@@ -611,7 +605,7 @@ impl TypeCtx {
         }
 
         Ok(match field_type {
-            ::baml_type::Ty::Null { .. } | ::baml_type::Ty::Optional(..) => true,
+            ::baml_type::Ty::Null { .. } => true,
             ::baml_type::Ty::Union(members, ..) => {
                 let mut is_nullable = false;
                 for member in members {
@@ -649,24 +643,17 @@ impl TypeCtx {
     }
 }
 
-#[expect(
-    clippy::unnecessary_wraps,
-    reason = "Converting assertions will be done in a future PR."
-)]
-fn convert_ty_attrs(
-    attrs: &baml_type::TyAttr,
-) -> Result<TypeAnnotations<'static, TypeName>, ConvertError> {
+fn convert_ty_attrs(attrs: &baml_type::TyAttr) -> TypeAnnotations<'static, TypeName> {
     let in_progress = match attrs.sap_pending_never {
         TyAttrValue::Set => Some(AttrLiteral::Never),
         TyAttrValue::Unset => None,
     };
     let parse_without_null = attrs.sap_parse_without_null == TyAttrValue::Set;
 
-    Ok(TypeAnnotations {
+    TypeAnnotations {
         in_progress,
         parse_without_null,
-        asserts: Vec::new(), // TODO: assertions
-    })
+    }
 }
 /// Merges two type attributes.
 /// May return one of the inputs if the output would be identical.
@@ -677,12 +664,6 @@ fn merge_ty_attrs(outer: &baml_type::TyAttr, inner: &baml_type::TyAttr) -> baml_
             .sap_parse_without_null
             .or(inner.sap_parse_without_null),
         sap_pending_never: outer.sap_pending_never.or(inner.sap_pending_never),
-        asserts: outer
-            .asserts
-            .iter()
-            .chain(inner.asserts.iter())
-            .cloned()
-            .collect(),
     }
 }
 
@@ -749,15 +730,17 @@ fn check_parseable(
 fn is_sap_parseable(ty: &baml_type::Ty) -> Result<Vec<TypeName>, ()> {
     match ty {
         baml_type::Ty::Int { .. }
+        | baml_type::Ty::Bigint { .. }
         | baml_type::Ty::Float { .. }
         | baml_type::Ty::String { .. }
         | baml_type::Ty::Bool { .. }
         | baml_type::Ty::Null { .. }
         | baml_type::Ty::Literal(..) => Ok(Vec::new()),
         baml_type::Ty::Uint8Array { .. } | baml_type::Ty::Media(..) => Err(()),
-        baml_type::Ty::Class(name, _) => Ok(vec![name.clone()]),
+        baml_type::Ty::Class(name, _, _) | baml_type::Ty::Interface(name, _, _, _) => {
+            Ok(vec![name.clone()])
+        }
         baml_type::Ty::Enum(..) | baml_type::Ty::EnumVariant(..) => Ok(Vec::new()),
-        baml_type::Ty::Optional(inner, _) => is_sap_parseable(inner),
         baml_type::Ty::List(inner, _) => is_sap_parseable(inner),
         baml_type::Ty::Map { key, value, .. } => {
             let keys = is_sap_parseable(key)?;

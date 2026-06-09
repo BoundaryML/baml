@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 1810
 ---
 === SYNTAX TREE ===
 SOURCE_FILE
@@ -34,8 +35,10 @@ SOURCE_FILE
       BLOCK_EXPR
         L_BRACE "{"
         LET_STMT
-          KW_LET "let"
-          WORD "result"
+          PATTERN
+            BINDING_PATTERN "let result"
+              KW_LET "let"
+              WORD "result"
           EQUALS "="
           BINARY_EXPR
             PATH_EXPR "data.field1"

@@ -8,7 +8,7 @@ use std::sync::Arc;
 
 use js_sys::{Function, Promise};
 use sys_ops::io::IoNamespaceEnv;
-use sys_types::{BexHeap, CallId, OpErrorKind, SysOpContext, SysOpOutput};
+use sys_types::{BexHeap, CallId, SysOpContext, SysOpOutput, VmBamlError, VmRustFnError};
 use wasm_bindgen::JsCast;
 use wasm_bindgen_futures::JsFuture;
 
@@ -34,12 +34,12 @@ impl WasmEnv {
     }
 }
 
-fn js_to_env_value(value: &wasm_bindgen::JsValue) -> Result<Option<String>, OpErrorKind> {
+fn js_to_env_value(value: &wasm_bindgen::JsValue) -> Result<Option<String>, VmBamlError> {
     if value.is_undefined() || value.is_null() {
         return Ok(None);
     }
-    let s = value.as_string().ok_or_else(|| {
-        OpErrorKind::Other("Env function did not return a string or undefined".into())
+    let s = value.as_string().ok_or_else(|| VmBamlError::Io {
+        message: "Env function did not return a string or undefined".into(),
     })?;
     Ok(Some(s))
 }
@@ -57,7 +57,9 @@ impl IoNamespaceEnv for WasmEnv {
             .call1(&wasm_bindgen::JsValue::NULL, &key.into())
             .map_err(|e| {
                 let msg = e.as_string().unwrap_or_else(|| format!("{e:?}"));
-                OpErrorKind::Other(format!("Failed to call env function: {msg}"))
+                VmBamlError::Io {
+                    message: format!("Failed to call env function: {msg}"),
+                }
             });
         let result = match result {
             Ok(result) => result,
@@ -66,13 +68,15 @@ impl IoNamespaceEnv for WasmEnv {
 
         if result.is_instance_of::<Promise>() {
             let promise: Promise = result.unchecked_into();
-            return SysOpOutput::Async(Box::pin(SendFuture(async move {
+            return SysOpOutput::async_op(SendFuture(async move {
                 let result = JsFuture::from(promise).await.map_err(|e| {
                     let msg = e.as_string().unwrap_or_else(|| format!("{e:?}"));
-                    OpErrorKind::Other(format!("Env callback promise rejected: {msg}"))
+                    VmBamlError::Io {
+                        message: format!("Env callback promise rejected: {msg}"),
+                    }
                 })?;
-                js_to_env_value(&result)
-            })));
+                js_to_env_value(&result).map_err(VmRustFnError::from)
+            }));
         }
 
         match js_to_env_value(&result) {

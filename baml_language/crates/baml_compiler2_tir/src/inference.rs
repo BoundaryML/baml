@@ -15,15 +15,17 @@ use std::{
     sync::Arc,
 };
 
-use baml_base::Name;
-use baml_compiler2_ast::{AstSourceMap, Expr as AstExpr, ExprBody, ExprId, FunctionDef, PatId};
+use baml_base::{Name, SourceFile};
+use baml_compiler2_ast::{
+    self as ast, AstSourceMap, Expr as AstExpr, ExprBody, ExprId, FunctionDef, PatId,
+};
 use baml_compiler2_hir::{
     body::{FunctionBody, LetBody},
     contributions::Definition,
-    loc::{ClassLoc, EnumLoc, FunctionLoc, LetLoc, TypeAliasLoc},
+    loc::{ClassLoc, EnumLoc, FunctionLoc, InterfaceLoc, LetLoc, TypeAliasLoc},
     package::{PackageId, PackageItems},
     scope::{FileScopeId, ScopeId, ScopeKind},
-    semantic_index::{BindingId, DefinitionSite},
+    semantic_index::{BindingId, BindingKind},
 };
 use rustc_hash::{FxHashMap, FxHashSet};
 use text_size::TextRange;
@@ -31,8 +33,76 @@ use text_size::TextRange;
 use crate::{
     builder::TypeInferenceBuilder,
     infer_context::{InferContext, TypeCheckDiagnostics},
-    ty::{Ty, TyAttr},
+    ty::{FunctionParamTy, Ty, TyAttr},
 };
+
+#[derive(Debug, Clone, Default)]
+struct GenericEnv {
+    params: Vec<Name>,
+    bound_param_names: Vec<Name>,
+    bound_exprs: Vec<Option<ast::TypeExpr>>,
+    concrete_bounds: Vec<(Name, Ty)>,
+}
+
+impl GenericEnv {
+    fn from_params(params: Vec<Name>) -> Self {
+        Self {
+            params,
+            bound_param_names: Vec::new(),
+            bound_exprs: Vec::new(),
+            concrete_bounds: Vec::new(),
+        }
+    }
+
+    fn prepend_declared(&mut self, params: &[Name], bounds: &[Option<ast::TypeExpr>]) {
+        let mut merged_params = params.to_vec();
+        merged_params.extend(std::mem::take(&mut self.params));
+        self.params = merged_params;
+
+        let mut merged_bound_names = params.to_vec();
+        merged_bound_names.extend(std::mem::take(&mut self.bound_param_names));
+        self.bound_param_names = merged_bound_names;
+
+        let mut merged_bounds = bounds.to_vec();
+        merged_bounds.extend(std::mem::take(&mut self.bound_exprs));
+        self.bound_exprs = merged_bounds;
+    }
+
+    fn add_bounds_for_declared_params(
+        &mut self,
+        params: &[Name],
+        bounds: &[Option<ast::TypeExpr>],
+    ) {
+        self.bound_param_names.extend(params.iter().cloned());
+        self.bound_exprs.extend(
+            params
+                .iter()
+                .enumerate()
+                .map(|(idx, _)| bounds.get(idx).cloned().unwrap_or(None)),
+        );
+    }
+
+    fn append_declared(&mut self, params: &[Name], bounds: &[Option<ast::TypeExpr>]) {
+        self.params.extend(params.iter().cloned());
+        self.add_bounds_for_declared_params(params, bounds);
+    }
+
+    fn append_unique_declared(&mut self, params: &[Name], bounds: &[Option<ast::TypeExpr>]) {
+        for (idx, param) in params.iter().enumerate() {
+            if self.params.contains(param) {
+                continue;
+            }
+            self.params.push(param.clone());
+            self.bound_param_names.push(param.clone());
+            self.bound_exprs
+                .push(bounds.get(idx).cloned().unwrap_or(None));
+        }
+    }
+
+    fn add_concrete_bound(&mut self, param: Name, bound: Ty) {
+        self.concrete_bounds.push((param, bound));
+    }
+}
 
 fn inference_owner_scope(
     index: &baml_compiler2_hir::semantic_index::FileSemanticIndex<'_>,
@@ -50,6 +120,378 @@ fn inference_owner_scope(
             return scope_id;
         };
         scope_id = parent;
+    }
+}
+
+fn enclosing_type_generics(
+    db: &dyn crate::Db,
+    file: SourceFile,
+    item_tree: &baml_compiler2_hir::item_tree::ItemTree,
+    pkg_items: &PackageItems<'_>,
+    ns_context: &[Name],
+    type_name: &Name,
+) -> Option<(Vec<Name>, Vec<Option<ast::TypeExpr>>)> {
+    for class_data in item_tree.classes.values() {
+        if class_data.name == *type_name {
+            return Some((
+                class_data.generic_params.clone(),
+                class_data.generic_param_bounds.clone(),
+            ));
+        }
+    }
+
+    for (local_id, iface_data) in &item_tree.interfaces {
+        if iface_data.name == *type_name {
+            let iface_loc = InterfaceLoc::new(db, file, *local_id);
+            return Some(interface_type_level_params_and_bounds(
+                db, iface_loc, iface_data, pkg_items, ns_context,
+            ));
+        }
+    }
+
+    None
+}
+
+fn interface_type_level_params_and_bounds(
+    db: &dyn crate::Db,
+    iface_loc: InterfaceLoc<'_>,
+    iface_data: &baml_compiler2_hir::item_tree::Interface,
+    pkg_items: &PackageItems<'_>,
+    ns_context: &[Name],
+) -> (Vec<Name>, Vec<Option<ast::TypeExpr>>) {
+    let mut params = iface_data.generic_params.clone();
+    params.extend(
+        iface_data
+            .associated_types
+            .iter()
+            .map(|assoc| assoc.name.clone()),
+    );
+
+    let mut bounds = iface_data.generic_param_bounds.clone();
+    bounds.extend(
+        iface_data
+            .associated_types
+            .iter()
+            .map(|assoc| assoc.bound.as_ref().map(|bound| bound.expr.clone())),
+    );
+
+    let own_associated: FxHashSet<Name> = iface_data
+        .associated_types
+        .iter()
+        .map(|assoc| assoc.name.clone())
+        .collect();
+    let inherited = inherited_interface_associated_type_names(db, iface_loc, pkg_items, ns_context);
+    let mut counts: FxHashMap<Name, usize> = FxHashMap::default();
+    for name in &inherited {
+        *counts.entry(name.clone()).or_default() += 1;
+    }
+    for name in inherited {
+        if counts.get(&name).copied().unwrap_or_default() == 1
+            && !own_associated.contains(&name)
+            && !params.contains(&name)
+        {
+            params.push(name);
+            bounds.push(None);
+        }
+    }
+
+    (params, bounds)
+}
+
+fn inherited_interface_associated_type_names(
+    db: &dyn crate::Db,
+    iface_loc: InterfaceLoc<'_>,
+    pkg_items: &PackageItems<'_>,
+    ns_context: &[Name],
+) -> Vec<Name> {
+    type InterfaceVisitKey = (
+        SourceFile,
+        baml_compiler2_hir::ids::LocalItemId<baml_compiler2_hir::ids::InterfaceMarker>,
+    );
+
+    fn walk(
+        db: &dyn crate::Db,
+        iface_loc: InterfaceLoc<'_>,
+        pkg_items: &PackageItems<'_>,
+        ns_context: &[Name],
+        seen: &mut FxHashSet<InterfaceVisitKey>,
+        out: &mut Vec<Name>,
+    ) {
+        if !seen.insert((iface_loc.file(db), iface_loc.id(db))) {
+            return;
+        }
+        let item_tree = baml_compiler2_hir::file_item_tree(db, iface_loc.file(db));
+        let Some(iface_data) = item_tree.interfaces.get(&iface_loc.id(db)) else {
+            return;
+        };
+        for required in &iface_data.requires {
+            let Some(required_loc) = crate::interfaces::resolve_path_to_interface(
+                db,
+                &required.expr,
+                pkg_items,
+                ns_context,
+            ) else {
+                continue;
+            };
+            let required_tree = baml_compiler2_hir::file_item_tree(db, required_loc.file(db));
+            if let Some(required_iface) = required_tree.interfaces.get(&required_loc.id(db)) {
+                out.extend(
+                    required_iface
+                        .associated_types
+                        .iter()
+                        .map(|assoc| assoc.name.clone()),
+                );
+            }
+            let required_pkg =
+                baml_compiler2_hir::file_package::file_package(db, required_loc.file(db));
+            let required_pkg_id = PackageId::new(db, required_pkg.package.clone());
+            let required_pkg_items = baml_compiler2_ppir::package_items(db, required_pkg_id);
+            walk(
+                db,
+                required_loc,
+                required_pkg_items,
+                &required_pkg.namespace_path,
+                seen,
+                out,
+            );
+        }
+    }
+
+    let mut seen = FxHashSet::default();
+    let mut out = Vec::new();
+    walk(db, iface_loc, pkg_items, ns_context, &mut seen, &mut out);
+    out
+}
+
+fn type_bindings_for_params(params: &[Name]) -> FxHashMap<Name, Ty> {
+    params
+        .iter()
+        .map(|param| (param.clone(), Ty::TypeVar(param.clone(), TyAttr::default())))
+        .collect()
+}
+
+fn install_generic_param_bounds(
+    db: &dyn crate::Db,
+    builder: &mut TypeInferenceBuilder<'_>,
+    pkg_items: &PackageItems<'_>,
+    ns_context: &[Name],
+    env: &GenericEnv,
+    span: TextRange,
+) {
+    let mut bounds: FxHashMap<Name, Ty> = FxHashMap::default();
+    let type_bindings = type_bindings_for_params(&env.params);
+    for (name, bound) in env.bound_param_names.iter().zip(env.bound_exprs.iter()) {
+        let Some(bound_te) = bound else {
+            continue;
+        };
+        let mut diags = Vec::new();
+        let bound_ty = crate::generics::lower_type_expr_with_generics(
+            db,
+            bound_te,
+            pkg_items,
+            ns_context,
+            &type_bindings,
+            &mut diags,
+        );
+        for diag in diags {
+            builder.report_at_span(diag, span);
+        }
+        bounds.insert(name.clone(), bound_ty);
+    }
+    bounds.extend(env.concrete_bounds.iter().cloned());
+    builder.set_generic_param_bounds(bounds);
+}
+
+fn apply_generic_env(
+    db: &dyn crate::Db,
+    builder: &mut TypeInferenceBuilder<'_>,
+    pkg_items: &PackageItems<'_>,
+    ns_context: &[Name],
+    env: &GenericEnv,
+    span: TextRange,
+) {
+    builder.set_generic_params(env.params.clone());
+    install_generic_param_bounds(db, builder, pkg_items, ns_context, env, span);
+}
+
+#[derive(Clone, Copy)]
+struct GenericLookupContext<'a, 'db> {
+    db: &'a dyn crate::Db,
+    file: SourceFile,
+    index: &'a baml_compiler2_hir::semantic_index::FileSemanticIndex<'db>,
+    item_tree: &'a baml_compiler2_hir::item_tree::ItemTree,
+    pkg_items: &'a PackageItems<'db>,
+    ns_context: &'a [Name],
+}
+
+fn parent_type_generic_env(
+    ctx: GenericLookupContext<'_, '_>,
+    parent_scope_id: Option<FileScopeId>,
+) -> Option<(Name, Vec<Name>, Vec<Option<ast::TypeExpr>>)> {
+    let parent = &ctx.index.scopes[parent_scope_id?.index() as usize];
+    if !matches!(parent.kind, ScopeKind::Class) {
+        return None;
+    }
+    let type_name = parent.name.clone()?;
+    let (params, bounds) = enclosing_type_generics(
+        ctx.db,
+        ctx.file,
+        ctx.item_tree,
+        ctx.pkg_items,
+        ctx.ns_context,
+        &type_name,
+    )?;
+    Some((type_name, params, bounds))
+}
+
+fn prepend_parent_type_generics(
+    ctx: GenericLookupContext<'_, '_>,
+    env: &mut GenericEnv,
+    parent_scope_id: Option<FileScopeId>,
+) -> Option<Name> {
+    let (type_name, parent_generics, parent_bounds) =
+        parent_type_generic_env(ctx, parent_scope_id)?;
+    env.prepend_declared(&parent_generics, &parent_bounds);
+    Some(type_name)
+}
+
+fn generic_env_for_function_data(
+    ctx: GenericLookupContext<'_, '_>,
+    function_scope: &baml_compiler2_hir::scope::Scope,
+    func_data: &baml_compiler2_hir::item_tree::Function,
+) -> GenericEnv {
+    let mut env = GenericEnv::from_params(func_data.generic_params.clone());
+    env.add_bounds_for_declared_params(&func_data.generic_params, &func_data.generic_param_bounds);
+    prepend_parent_type_generics(ctx, &mut env, function_scope.parent);
+    env
+}
+
+fn enclosing_function_generic_env_from_let(
+    ctx: GenericLookupContext<'_, '_>,
+    let_scope: &baml_compiler2_hir::scope::Scope,
+) -> Option<GenericEnv> {
+    let mut current = let_scope.parent;
+    while let Some(fsi) = current {
+        let scope = &ctx.index.scopes[fsi.index() as usize];
+        match scope.kind {
+            ScopeKind::Function => {
+                let func_data =
+                    ctx.item_tree.functions.values().find(|fd| {
+                        fd.span == scope.range && scope.name.as_ref() == Some(&fd.name)
+                    })?;
+                return Some(generic_env_for_function_data(ctx, scope, func_data));
+            }
+            ScopeKind::Let => current = scope.parent,
+            _ => current = scope.parent,
+        }
+    }
+    None
+}
+
+#[derive(Clone, Copy)]
+struct TypeExprLoweringOptions<'a> {
+    span: TextRange,
+    self_replacement: Option<&'a ast::TypeExpr>,
+}
+
+fn lower_type_expr_at_span_in_env(
+    db: &dyn crate::Db,
+    builder: &mut TypeInferenceBuilder<'_>,
+    pkg_items: &PackageItems<'_>,
+    ns_context: &[Name],
+    env: &GenericEnv,
+    type_expr: &ast::TypeExpr,
+    options: TypeExprLoweringOptions<'_>,
+) -> Ty {
+    let mut diags = Vec::new();
+    let resolved_expr = if let Some(replacement) = options.self_replacement {
+        crate::lower_type_expr::substitute_self_in(type_expr, replacement)
+    } else {
+        type_expr.clone()
+    };
+    let type_bindings = type_bindings_for_params(&env.params);
+    let ty = crate::generics::lower_type_expr_with_generics(
+        db,
+        &resolved_expr,
+        pkg_items,
+        ns_context,
+        &type_bindings,
+        &mut diags,
+    );
+    for diag in diags {
+        builder.report_at_span(diag, options.span);
+    }
+    builder.validate_type_generic_bounds_at_span(options.span, &ty);
+    ty
+}
+
+fn validate_spanned_type_expr_generic_bounds(
+    db: &dyn crate::Db,
+    builder: &mut TypeInferenceBuilder<'_>,
+    pkg_items: &PackageItems<'_>,
+    ns_context: &[Name],
+    env: &GenericEnv,
+    type_expr: &ast::SpannedTypeExpr,
+    self_replacement: Option<&ast::TypeExpr>,
+) {
+    lower_type_expr_at_span_in_env(
+        db,
+        builder,
+        pkg_items,
+        ns_context,
+        env,
+        &type_expr.expr,
+        TypeExprLoweringOptions {
+            span: type_expr.span,
+            self_replacement,
+        },
+    );
+}
+
+fn extend_env_with_lambda_generics(mut env: GenericEnv, func_def: &FunctionDef) -> GenericEnv {
+    env.append_unique_declared(&func_def.generic_params, &func_def.generic_param_bounds);
+    env
+}
+
+fn add_lambda_params_to_builder(
+    db: &dyn crate::Db,
+    builder: &mut TypeInferenceBuilder<'_>,
+    pkg_items: &PackageItems<'_>,
+    ns_context: &[Name],
+    env: &GenericEnv,
+    func_def: &FunctionDef,
+    contextual_param_tys: Option<&[FunctionParamTy]>,
+) {
+    let type_bindings = type_bindings_for_params(&env.params);
+    for (i, param) in func_def.params.iter().enumerate() {
+        let param_ty = param
+            .type_expr
+            .as_ref()
+            // The parent scope already lowers and validates the lambda
+            // function type. Here we only need local parameter types for the
+            // lambda body; reporting again would duplicate diagnostics in the
+            // child lambda scope.
+            .map(|ste| {
+                let mut diags = Vec::new();
+                crate::generics::lower_type_expr_with_generics(
+                    db,
+                    &ste.expr,
+                    pkg_items,
+                    ns_context,
+                    &type_bindings,
+                    &mut diags,
+                )
+            })
+            .or_else(|| {
+                contextual_param_tys
+                    .and_then(|pts| pts.get(i))
+                    .map(|param| param.ty.clone())
+            })
+            .unwrap_or(Ty::Unknown {
+                attr: TyAttr::default(),
+            });
+        builder.add_local(param.name.clone(), param_ty.clone());
+        builder.param_types.push((param.name.clone(), param_ty));
     }
 }
 
@@ -87,6 +529,12 @@ pub enum MemberResolution<'db> {
         class_loc: ClassLoc<'db>,
         func_loc: FunctionLoc<'db>,
     },
+    /// An interface default method referenced through the interface type
+    /// itself, e.g. `Named.describe(value)`.
+    InterfaceDefaultMethod {
+        iface_loc: InterfaceLoc<'db>,
+        func_loc: FunctionLoc<'db>,
+    },
 }
 
 // ── Per-Scope Inference Result ─────────────────────────────────────────────
@@ -102,10 +550,10 @@ pub enum MemberResolution<'db> {
 pub struct ScopeInference<'db> {
     /// Type of every expression within this scope (NOT nested child scopes).
     expressions: FxHashMap<ExprId, Ty>,
-    /// Binding types: the type a variable is bound to after widening/annotation.
-    /// May differ from the initializer expression type (e.g. `let x = 1` has
-    /// expression type `Literal(1, Fresh)` but binding type `int`).
-    bindings: FxHashMap<PatId, Ty>,
+    /// Pattern types: the type each pattern is associated with. Used both for
+    /// `Pattern::Bind` (the variable's bound type, post widening) and for
+    /// `Pattern::Type` / `Pattern::Class` (the type to runtime-test against).
+    pattern_types: FxHashMap<PatId, Ty>,
     /// Member resolutions: for field-access expressions that resolved to a
     /// class field, enum variant, method, or free function — records the
     /// structural path so MIR can emit the correct `QualifiedName` and LSP
@@ -123,6 +571,12 @@ pub struct ScopeInference<'db> {
     /// are declared as `BuiltinUnknown` by `lower_catch` before `bind_pattern`
     /// has a chance to refine them).
     path_root_types: FxHashMap<ExprId, Ty>,
+    /// TIR-inferred type of every prefix `segments[..=i]` for multi-segment
+    /// local-rooted `Path` expressions. Index `0` mirrors `path_root_types`;
+    /// later indices are produced by chaining `resolve_member` over each
+    /// segment. MIR uses this to thread receiver-prefix class type-args
+    /// through method-call paths of depth ≥ 3 (e.g. `holder.box.describe()`).
+    path_segment_types: FxHashMap<(ExprId, usize), Ty>,
     /// Per-segment member resolutions for multi-segment local-rooted `Path` expressions.
     ///
     /// For `obj.a.b` (`Path(["obj", "a", "b"])`), contains resolutions for segments
@@ -140,8 +594,127 @@ pub struct ScopeInference<'db> {
     /// Populated for lambda scopes so LSP can resolve unannotated lambda
     /// parameter types (e.g. `items.map((item) -> { item. })`).
     param_types: Vec<(Name, Ty)>,
+    /// Full parameter binding plan for checked calls.
+    call_plans: FxHashMap<ExprId, CallPlan>,
+    /// Generic instantiation for checked calls whose callee declares type
+    /// params, in declared De Bruijn order ([class params...] ++ [fn
+    /// params...]). Values may contain the *caller's* rigid `TypeVar`s
+    /// (generic→generic calls); MIR lowers those to `TypeArgRef` templates
+    /// resolved against the caller's `frame.type_args` at runtime.
+    call_type_instantiations: FxHashMap<ExprId, Vec<Ty>>,
+    /// Function value adapters required after structural function subtyping.
+    ///
+    /// Optional parameters are matched by name in TIR types, but runtime calls
+    /// are positional and exact-arity. MIR uses this metadata to synthesize a
+    /// wrapper that drops/reorders optional parameters before the VM sees the
+    /// call.
+    function_coercions: FxHashMap<ExprId, FunctionCoercion>,
+    /// Expression metadata produced while checking parameter defaults.
+    ///
+    /// Defaults live in a separate AST arena from the function body, so their
+    /// `ExprId`s and `PatId`s are not safe to merge into the normal per-scope
+    /// maps above.
+    parameter_defaults: DefaultParameterInference<'db>,
     /// Diagnostics and other rare data. Heap-allocated only when non-empty.
     extra: Option<Box<ScopeInferenceExtra<'db>>>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DefaultParameterInference<'db> {
+    pub(crate) expressions: FxHashMap<ExprId, Ty>,
+    pub(crate) pattern_types: FxHashMap<PatId, Ty>,
+    pub(crate) resolutions: FxHashMap<ExprId, MemberResolution<'db>>,
+    pub(crate) catch_residual_throws: FxHashMap<ExprId, BTreeSet<Ty>>,
+    pub(crate) exhaustive_matches: FxHashSet<ExprId>,
+    pub(crate) path_root_types: FxHashMap<ExprId, Ty>,
+    pub(crate) path_segment_types: FxHashMap<(ExprId, usize), Ty>,
+    pub(crate) path_member_resolutions: FxHashMap<ExprId, Vec<MemberResolution<'db>>>,
+    pub(crate) call_plans: FxHashMap<ExprId, CallPlan>,
+    pub(crate) call_type_instantiations: FxHashMap<ExprId, Vec<Ty>>,
+    pub(crate) function_coercions: FxHashMap<ExprId, FunctionCoercion>,
+}
+
+impl DefaultParameterInference<'_> {
+    pub(crate) fn empty() -> Self {
+        Self {
+            expressions: FxHashMap::default(),
+            pattern_types: FxHashMap::default(),
+            resolutions: FxHashMap::default(),
+            catch_residual_throws: FxHashMap::default(),
+            exhaustive_matches: FxHashSet::default(),
+            path_root_types: FxHashMap::default(),
+            path_segment_types: FxHashMap::default(),
+            path_member_resolutions: FxHashMap::default(),
+            call_plans: FxHashMap::default(),
+            call_type_instantiations: FxHashMap::default(),
+            function_coercions: FxHashMap::default(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CallPlan {
+    pub bindings: Vec<ParamBinding>,
+    pub type_args: Vec<Ty>,
+}
+
+impl CallPlan {
+    pub fn provided_arg_count(&self) -> usize {
+        self.bindings
+            .iter()
+            .filter(|binding| matches!(binding, ParamBinding::Provided { .. }))
+            .count()
+    }
+
+    pub fn provided_args(&self) -> impl Iterator<Item = ExprId> + '_ {
+        self.bindings.iter().filter_map(|binding| match binding {
+            ParamBinding::Provided { arg, .. } => Some(*arg),
+            ParamBinding::OmittedDefault { .. } => None,
+        })
+    }
+
+    pub fn provided_param_args(&self) -> impl Iterator<Item = (usize, ExprId)> + '_ {
+        self.bindings.iter().filter_map(|binding| match binding {
+            ParamBinding::Provided { param_index, arg } => Some((*param_index, *arg)),
+            ParamBinding::OmittedDefault { .. } => None,
+        })
+    }
+
+    pub fn provided_arg_for_param(&self, param_index: usize) -> Option<ExprId> {
+        self.bindings.iter().find_map(|binding| match binding {
+            ParamBinding::Provided {
+                param_index: binding_param_index,
+                arg,
+            } if *binding_param_index == param_index => Some(*arg),
+            ParamBinding::Provided { .. } | ParamBinding::OmittedDefault { .. } => None,
+        })
+    }
+
+    pub fn matches_provided_args(&self, args: &[ExprId]) -> bool {
+        self.provided_arg_count() == args.len()
+            && args
+                .iter()
+                .all(|arg| self.provided_args().any(|provided| provided == *arg))
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ParamBinding {
+    Provided {
+        param_index: usize,
+        arg: ExprId,
+    },
+    OmittedDefault {
+        param_index: usize,
+        param_name: Name,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FunctionCoercion {
+    pub source_params: Vec<FunctionParamTy>,
+    pub target_params: Vec<FunctionParamTy>,
+    pub target_return: Ty,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -186,12 +759,97 @@ impl<'db> ScopeInference<'db> {
     /// Look up the binding type for a pattern (the type the variable is bound to,
     /// which may differ from the initializer expression type due to widening).
     pub fn binding_type(&self, pat_id: PatId) -> Option<&Ty> {
-        self.bindings.get(&pat_id)
+        self.pattern_types.get(&pat_id)
     }
 
     /// Look up the type of a parameter by index.
     pub fn param_type(&self, param_idx: usize) -> Option<&Ty> {
         self.param_types.get(param_idx).map(|(_, ty)| ty)
+    }
+
+    /// Look up the full argument binding plan for a call expression.
+    pub fn call_plan(&self, expr_id: ExprId) -> Option<&CallPlan> {
+        self.call_plans.get(&expr_id)
+    }
+
+    pub fn call_plan_for_provided_args(&self, args: &[ExprId]) -> Option<&CallPlan> {
+        self.call_plans
+            .values()
+            .find(|plan| plan.matches_provided_args(args))
+    }
+
+    /// Iterate over all call binding plans in this scope.
+    pub fn iter_call_plans(&self) -> impl Iterator<Item = (&ExprId, &CallPlan)> {
+        self.call_plans.iter()
+    }
+
+    /// Iterate over the generic instantiations recorded for checked calls
+    /// (callee's declared type params, in De Bruijn order).
+    pub fn iter_call_type_instantiations(&self) -> impl Iterator<Item = (&ExprId, &Vec<Ty>)> {
+        self.call_type_instantiations.iter()
+    }
+
+    /// Iterate over all function adapters required by checked coercions.
+    pub fn iter_function_coercions(&self) -> impl Iterator<Item = (&ExprId, &FunctionCoercion)> {
+        self.function_coercions.iter()
+    }
+
+    /// Iterate over all default-parameter expression types for this scope.
+    pub fn iter_default_expressions(&self) -> impl Iterator<Item = (&ExprId, &Ty)> {
+        self.parameter_defaults.expressions.iter()
+    }
+
+    /// Iterate over all default-parameter pattern types for this scope.
+    pub fn iter_default_bindings(&self) -> impl Iterator<Item = (&PatId, &Ty)> {
+        self.parameter_defaults.pattern_types.iter()
+    }
+
+    /// Iterate over all default-parameter member resolutions for this scope.
+    pub fn iter_default_resolutions(
+        &self,
+    ) -> impl Iterator<Item = (&ExprId, &MemberResolution<'db>)> {
+        self.parameter_defaults.resolutions.iter()
+    }
+
+    /// Iterate over all exhaustive default-parameter match expressions.
+    pub fn iter_default_exhaustive_matches(&self) -> impl Iterator<Item = &ExprId> {
+        self.parameter_defaults.exhaustive_matches.iter()
+    }
+
+    /// Iterate over all default-parameter path root types.
+    pub fn iter_default_path_root_types(&self) -> impl Iterator<Item = (&ExprId, &Ty)> {
+        self.parameter_defaults.path_root_types.iter()
+    }
+
+    /// Iterate over all default-parameter path prefix types.
+    pub fn iter_default_path_segment_types(&self) -> impl Iterator<Item = (&(ExprId, usize), &Ty)> {
+        self.parameter_defaults.path_segment_types.iter()
+    }
+
+    /// Iterate over all default-parameter per-segment path member resolutions.
+    pub fn iter_default_path_member_resolutions(
+        &self,
+    ) -> impl Iterator<Item = (&ExprId, &Vec<MemberResolution<'db>>)> {
+        self.parameter_defaults.path_member_resolutions.iter()
+    }
+
+    /// Iterate over all default-parameter call binding plans.
+    pub fn iter_default_call_plans(&self) -> impl Iterator<Item = (&ExprId, &CallPlan)> {
+        self.parameter_defaults.call_plans.iter()
+    }
+
+    /// Iterate over all default-parameter call generic instantiations.
+    pub fn iter_default_call_type_instantiations(
+        &self,
+    ) -> impl Iterator<Item = (&ExprId, &Vec<Ty>)> {
+        self.parameter_defaults.call_type_instantiations.iter()
+    }
+
+    /// Iterate over all default-parameter function adapters.
+    pub fn iter_default_function_coercions(
+        &self,
+    ) -> impl Iterator<Item = (&ExprId, &FunctionCoercion)> {
+        self.parameter_defaults.function_coercions.iter()
     }
 
     /// Iterate over all (`ExprId`, Ty) pairs for expressions in this scope.
@@ -201,7 +859,7 @@ impl<'db> ScopeInference<'db> {
 
     /// Iterate over all (`PatId`, Ty) pairs for pattern bindings in this scope.
     pub fn iter_bindings(&self) -> impl Iterator<Item = (&PatId, &Ty)> {
-        self.bindings.iter()
+        self.pattern_types.iter()
     }
 
     /// Look up the member resolution for an expression in this scope.
@@ -238,6 +896,18 @@ impl<'db> ScopeInference<'db> {
     /// Iterate over all (`ExprId`, root `Ty`) pairs for multi-segment paths in this scope.
     pub fn iter_path_root_types(&self) -> impl Iterator<Item = (&ExprId, &Ty)> {
         self.path_root_types.iter()
+    }
+
+    /// Look up the type of `segments[..=seg_idx]` for a multi-segment
+    /// local-rooted `Path` expression. Index `0` mirrors `path_root_type`.
+    pub fn path_segment_type(&self, expr_id: ExprId, seg_idx: usize) -> Option<&Ty> {
+        self.path_segment_types.get(&(expr_id, seg_idx))
+    }
+
+    /// Iterate over all `((ExprId, seg_idx), Ty)` entries for multi-segment
+    /// local-rooted paths in this scope.
+    pub fn iter_path_segment_types(&self) -> impl Iterator<Item = (&(ExprId, usize), &Ty)> {
+        self.path_segment_types.iter()
     }
 
     /// Look up per-segment member resolutions for a multi-segment local-rooted
@@ -333,14 +1003,19 @@ fn infer_scope_types_cycle_initial<'db>(
 ) -> ScopeInference<'db> {
     ScopeInference {
         expressions: FxHashMap::default(),
-        bindings: FxHashMap::default(),
+        pattern_types: FxHashMap::default(),
         resolutions: FxHashMap::default(),
         catch_residual_throws: FxHashMap::default(),
         exhaustive_matches: FxHashSet::default(),
         path_root_types: FxHashMap::default(),
+        path_segment_types: FxHashMap::default(),
         path_member_resolutions: FxHashMap::default(),
         nested_lambda_types: FxHashMap::default(),
         param_types: Vec::new(),
+        call_plans: FxHashMap::default(),
+        call_type_instantiations: FxHashMap::default(),
+        function_coercions: FxHashMap::default(),
+        parameter_defaults: DefaultParameterInference::empty(),
         extra: None,
     }
 }
@@ -392,76 +1067,148 @@ pub fn infer_scope_types<'db>(
                     let body = baml_compiler2_ppir::function_body(db, func_loc);
                     let sig = baml_compiler2_ppir::elaborated_function_signature(db, func_loc);
 
-                    // Compute the generic params for this function scope.
-                    // If this is a method inside a class, also include the class's generic params.
-                    let mut generic_params = sig.user_generic_params.clone();
-                    generic_params.extend(sig.synthetic_effect_params.iter().cloned());
-                    if let Some(parent_idx) = scope.parent {
-                        let parent = &index.scopes[parent_idx.index() as usize];
-                        if matches!(parent.kind, ScopeKind::Class) {
-                            if let Some(class_name) = &parent.name {
-                                for class_data in item_tree.classes.values() {
-                                    if class_data.name == *class_name {
-                                        // Check for method-level type params that shadow class-level ones.
-                                        for mp in &sig.user_generic_params {
-                                            if class_data.generic_params.iter().any(|cp| cp == mp) {
-                                                builder.report_at_span(
-                                                    crate::infer_context::TirTypeError::TypeParamShadowed {
-                                                        param_name: mp.clone(),
-                                                        class_name: class_name.clone(),
-                                                    },
-                                                    func_data.span,
-                                                );
-                                            }
-                                        }
-                                        let mut merged = class_data.generic_params.clone();
-                                        merged.extend(generic_params);
-                                        generic_params = merged;
-                                        break;
-                                    }
-                                }
+                    let enclosing_impl = item_tree
+                        .implements_for
+                        .iter()
+                        .find(|imp| imp.methods.contains(local_id));
+
+                    let mut env = GenericEnv::from_params(sig.user_generic_params.clone());
+                    env.params
+                        .extend(sig.synthetic_effect_params.iter().cloned());
+                    if let Some(imp) = enclosing_impl {
+                        env.prepend_declared(&imp.generic_params, &imp.generic_param_bounds);
+                    } else if let Some((type_name, parent_generics, parent_bounds)) =
+                        parent_type_generic_env(
+                            GenericLookupContext {
+                                db,
+                                file,
+                                index,
+                                item_tree: &item_tree,
+                                pkg_items,
+                                ns_context: &pkg_info.namespace_path,
+                            },
+                            scope.parent,
+                        )
+                    {
+                        for mp in &sig.user_generic_params {
+                            if parent_generics.iter().any(|cp| cp == mp) {
+                                builder.report_at_span(
+                                    crate::infer_context::TirTypeError::TypeParamShadowed {
+                                        param_name: mp.clone(),
+                                        class_name: type_name.clone(),
+                                    },
+                                    func_data.span,
+                                );
                             }
+                        }
+                        env.prepend_declared(&parent_generics, &parent_bounds);
+                    }
+                    // BEP-044 (Self-as-type-variable): inside an interface's own
+                    // method, `self` is a `Self` type variable bound by the
+                    // interface instead of the interface existential. Register it
+                    // in the shared generic env so the normal bound-aware member
+                    // resolution path handles `Self`.
+                    let interface_self_bound: Option<Ty> = if enclosing_impl.is_none() {
+                        scope.parent.and_then(|parent_idx| {
+                            let parent = &index.scopes[parent_idx.index() as usize];
+                            if !matches!(parent.kind, ScopeKind::Class) {
+                                return None;
+                            }
+                            let cn = parent.name.as_ref()?;
+                            let def = pkg_items.lookup_type(&pkg_info.namespace_path, cn)?;
+                            if !matches!(
+                                def,
+                                baml_compiler2_hir::contributions::Definition::Interface(_)
+                            ) {
+                                return None;
+                            }
+                            let qtn = crate::lower_type_expr::qualify_def(db, def, cn);
+                            let iface = item_tree.interfaces.values().find(|i| &i.name == cn)?;
+                            let args = iface
+                                .generic_params
+                                .iter()
+                                .map(|p| Ty::TypeVar(p.clone(), TyAttr::default()))
+                                .collect();
+                            let associated_bindings = iface
+                                .associated_types
+                                .iter()
+                                .map(|assoc| {
+                                    (
+                                        assoc.name.clone(),
+                                        Ty::AssociatedTypeProjection {
+                                            base: Box::new(Ty::TypeVar(
+                                                Name::new("Self"),
+                                                TyAttr::default(),
+                                            )),
+                                            interface: None,
+                                            member: assoc.name.clone(),
+                                            attr: TyAttr::default(),
+                                        },
+                                    )
+                                })
+                                .collect();
+                            Some(Ty::Interface(
+                                qtn,
+                                args,
+                                associated_bindings,
+                                TyAttr::default(),
+                            ))
+                        })
+                    } else {
+                        None
+                    };
+                    if let Some(bound) = interface_self_bound.clone() {
+                        let self_param = Name::new("Self");
+                        if !env.params.iter().any(|p| p == &self_param) {
+                            env.params.push(self_param.clone());
+                        }
+                        env.add_concrete_bound(self_param, bound);
+                    }
+                    env.add_bounds_for_declared_params(
+                        &func_data.generic_params,
+                        &func_data.generic_param_bounds,
+                    );
+                    apply_generic_env(
+                        db,
+                        &mut builder,
+                        pkg_items,
+                        &pkg_info.namespace_path,
+                        &env,
+                        func_data.span,
+                    );
+                    if let Some(sm) = baml_compiler2_ppir::function_body_source_map(db, func_loc) {
+                        builder.set_body_source_map(sm);
+                    }
+                    builder.set_auto_derived(matches!(
+                        func_data.origin,
+                        ast::FunctionOrigin::AutoDerive
+                    ));
+                    // BEP-044: if this function lives inside an
+                    // `implements I { ... }` block, attach `I`'s QTN so
+                    // `default.<method>(...)` resolves against I's
+                    // contract.
+                    if let Some(target) = item_tree.method_to_iface_target.get(local_id)
+                        && let baml_compiler2_ast::TypeExpr::Path { segments, .. } = &target.expr
+                        && let Some((head, name)) = segments
+                            .split_last()
+                            .map(|(last, head)| (head, last.clone()))
+                    {
+                        let lookup_ns: &[Name] = if head.is_empty() {
+                            &pkg_info.namespace_path
+                        } else {
+                            head
+                        };
+                        if let Some(def) = pkg_items.lookup_type(lookup_ns, &name)
+                            && let baml_compiler2_hir::contributions::Definition::Interface(_) = def
+                        {
+                            let qtn = crate::lower_type_expr::qualify_def(db, def, &name);
+                            builder.set_implements_block_interface(Some(qtn));
                         }
                     }
-                    builder.set_generic_params(generic_params.clone());
 
                     if let FunctionBody::Expr(expr_body) = body.as_ref() {
-                        // Get declared return type
-                        let mut diags = Vec::new();
-                        let return_ty = sig
-                            .return_type
-                            .as_ref()
-                            .map(|te| {
-                                crate::lower_type_expr::lower_type_expr_in_ns(
-                                    db,
-                                    te,
-                                    pkg_items,
-                                    &pkg_info.namespace_path,
-                                    &generic_params,
-                                    &mut diags,
-                                )
-                            })
-                            .unwrap_or(Ty::Unknown {
-                                attr: TyAttr::default(),
-                            });
-
-                        // Report unresolved type diagnostics for return type
-                        if !diags.is_empty() {
-                            let sig_sm =
-                                baml_compiler2_ppir::elaborated_function_signature_source_map(
-                                    db, func_loc,
-                                );
-                            if let Some(ret_span) = sig_sm.return_type_span {
-                                for diag in diags.drain(..) {
-                                    builder.report_at_span(diag, ret_span);
-                                }
-                            }
-                        }
-
-                        // Set declared return type for return statement checking
-                        builder.set_return_type(return_ty.clone());
-
-                        // Determine enclosing class name for `self` parameter resolution
+                        // Determine enclosing class name for `self` parameter
+                        // resolution and BEP-044 `Self`-type substitution.
                         let enclosing_class_name: Option<Name> =
                             scope.parent.and_then(|parent_idx| {
                                 let parent = &index.scopes[parent_idx.index() as usize];
@@ -471,58 +1218,383 @@ pub fn infer_scope_types<'db>(
                                     None
                                 }
                             });
-
-                        // Add parameter bindings as locals
+                        // BEP-044 `Self` substitution: inside an out-of-body
+                        // implementation, `Self` is the rule receiver pattern
+                        // (`Box<T>` or `T`). Otherwise it is the enclosing
+                        // class/interface type.
+                        let self_replacement = if interface_self_bound.is_some() {
+                            // Interface method: `Self` is the bound type variable,
+                            // not the interface existential.
+                            Some(crate::lower_type_expr::type_expr_for_name(Name::new(
+                                "Self",
+                            )))
+                        } else {
+                            enclosing_impl
+                                .map(|imp| imp.for_target.expr.clone())
+                                .or_else(|| {
+                                    enclosing_class_name.as_ref().map(|cn| {
+                                        crate::lower_type_expr::type_expr_for_name(cn.clone())
+                                    })
+                                })
+                        };
                         let sig_sm = baml_compiler2_ppir::elaborated_function_signature_source_map(
                             db, func_loc,
                         );
-                        for (i, (param_name, param_te)) in sig.params.iter().enumerate() {
-                            let param_ty = if param_name.as_str() == "self"
-                                && matches!(param_te, baml_compiler2_ast::TypeExpr::Unknown { .. })
-                            {
-                                // `self` parameter with no type annotation — infer from enclosing class
-                                enclosing_class_name
-                                    .as_ref()
-                                    .and_then(|cn| {
-                                        let ns_path = &pkg_info.namespace_path;
-                                        pkg_items.lookup_type(ns_path, cn).map(|def| {
-                                            Ty::Class(
-                                                crate::lower_type_expr::qualify_def(db, def, cn),
-                                                vec![],
-                                                TyAttr::default(),
-                                            )
-                                        })
-                                    })
-                                    .unwrap_or(Ty::Unknown {
-                                        attr: TyAttr::default(),
-                                    })
-                            } else {
-                                let mut param_diags = Vec::new();
-                                let ty = crate::lower_type_expr::lower_type_expr_in_ns(
-                                    db,
-                                    param_te,
-                                    pkg_items,
-                                    &pkg_info.namespace_path,
-                                    &generic_params,
-                                    &mut param_diags,
-                                );
-                                if !param_diags.is_empty() {
-                                    let span = sig_sm
-                                        .param_type_spans
-                                        .get(i)
-                                        .copied()
-                                        .flatten()
-                                        .or_else(|| sig_sm.param_spans.get(i).copied())
-                                        .unwrap_or_default();
-                                    for diag in param_diags {
-                                        builder.report_at_span(diag, span);
+                        let mut type_bindings: FxHashMap<Name, Ty> = FxHashMap::default();
+                        for param in &env.params {
+                            type_bindings.insert(
+                                param.clone(),
+                                Ty::TypeVar(param.clone(), TyAttr::default()),
+                            );
+                        }
+                        if let Some(target) = item_tree.method_to_iface_target.get(local_id)
+                            && let Some(iface_loc) = crate::interfaces::resolve_path_to_interface(
+                                db,
+                                &target.expr,
+                                pkg_items,
+                                &pkg_info.namespace_path,
+                            )
+                        {
+                            let iface_file = iface_loc.file(db);
+                            let iface_tree = baml_compiler2_hir::file_item_tree(db, iface_file);
+                            if let Some(iface_data) = iface_tree.interfaces.get(&iface_loc.id(db)) {
+                                let iface_ns =
+                                    baml_compiler2_hir::file_package::file_package(db, iface_file)
+                                        .namespace_path;
+                                let mut iface_type_bindings = type_bindings.clone();
+                                if let baml_compiler2_ast::TypeExpr::Path { generic_args, .. } =
+                                    &target.expr
+                                {
+                                    for (param, arg) in
+                                        iface_data.generic_params.iter().zip(generic_args)
+                                    {
+                                        let mut arg_diags = Vec::new();
+                                        let ty = crate::generics::lower_type_expr_with_generics(
+                                            db,
+                                            arg,
+                                            pkg_items,
+                                            &pkg_info.namespace_path,
+                                            &type_bindings,
+                                            &mut arg_diags,
+                                        );
+                                        for diag in arg_diags {
+                                            builder.report_at_span(diag, target.span);
+                                        }
+                                        iface_type_bindings.insert(param.clone(), ty.clone());
+                                        type_bindings.entry(param.clone()).or_insert(ty);
                                     }
                                 }
+                                let explicit_bindings = item_tree
+                                    .method_to_iface_associated_type_bindings
+                                    .get(local_id)
+                                    .cloned()
+                                    .unwrap_or_default();
+                                for assoc in &iface_data.associated_types {
+                                    if let Some(binding) =
+                                        explicit_bindings.iter().find(|b| b.name == assoc.name)
+                                        && let Some(te) = &binding.type_expr
+                                    {
+                                        let resolved = if let Some(replacement) = &self_replacement
+                                        {
+                                            crate::lower_type_expr::substitute_self_in(
+                                                &te.expr,
+                                                replacement,
+                                            )
+                                        } else {
+                                            te.expr.clone()
+                                        };
+                                        let mut binding_diags = Vec::new();
+                                        let ty = crate::generics::lower_type_expr_with_generics(
+                                            db,
+                                            &resolved,
+                                            pkg_items,
+                                            &pkg_info.namespace_path,
+                                            &type_bindings,
+                                            &mut binding_diags,
+                                        );
+                                        for diag in binding_diags {
+                                            builder.report_at_span(diag, te.span);
+                                        }
+                                        type_bindings.insert(assoc.name.clone(), ty.clone());
+                                        iface_type_bindings.insert(assoc.name.clone(), ty);
+                                        continue;
+                                    }
+                                    if let Some(default) = &assoc.default {
+                                        let mut default_diags = Vec::new();
+                                        let ty = crate::generics::lower_type_expr_with_generics(
+                                            db,
+                                            &default.expr,
+                                            pkg_items,
+                                            &iface_ns,
+                                            &iface_type_bindings,
+                                            &mut default_diags,
+                                        );
+                                        for diag in default_diags {
+                                            builder.report_at_span(diag, default.span);
+                                        }
+                                        type_bindings.insert(assoc.name.clone(), ty.clone());
+                                        iface_type_bindings.insert(assoc.name.clone(), ty);
+                                    }
+                                }
+                            }
+                        } else if let Some(iface_name) = &enclosing_class_name
+                            && let Some(def) =
+                                pkg_items.lookup_type(&pkg_info.namespace_path, iface_name)
+                            && let baml_compiler2_hir::contributions::Definition::Interface(
+                                iface_loc,
+                            ) = def
+                        {
+                            let iface_file = iface_loc.file(db);
+                            let iface_tree = baml_compiler2_hir::file_item_tree(db, iface_file);
+                            if let Some(iface_data) = iface_tree.interfaces.get(&iface_loc.id(db)) {
+                                let iface_ns =
+                                    baml_compiler2_hir::file_package::file_package(db, iface_file)
+                                        .namespace_path;
+                                let self_assoc_projection =
+                                    |member: Name| Ty::AssociatedTypeProjection {
+                                        base: Box::new(Ty::TypeVar(
+                                            Name::new("Self"),
+                                            TyAttr::default(),
+                                        )),
+                                        interface: None,
+                                        member,
+                                        attr: TyAttr::default(),
+                                    };
+                                for assoc in &iface_data.associated_types {
+                                    if let Some(default) = &assoc.default {
+                                        let mut default_diags = Vec::new();
+                                        let _ = crate::generics::lower_type_expr_with_generics(
+                                            db,
+                                            &default.expr,
+                                            pkg_items,
+                                            &iface_ns,
+                                            &type_bindings,
+                                            &mut default_diags,
+                                        );
+                                        for diag in default_diags {
+                                            builder.report_at_span(diag, default.span);
+                                        }
+                                    }
+                                    // Inside the interface's own (default) method, `Self` is the
+                                    // rigid type variable bound by the interface, not an existential
+                                    // interface value. Associated types therefore project onto `Self`
+                                    // even when they have defaults. Defaults are for omitted bindings
+                                    // at interface type-use sites; a default body must stay
+                                    // polymorphic over implementors that override the associated type.
+                                    // This also matches how `self.method()` resolves the same
+                                    // associated type via `SelfReceiver::RigidVar`.
+                                    type_bindings.insert(
+                                        assoc.name.clone(),
+                                        self_assoc_projection(assoc.name.clone()),
+                                    );
+                                }
+                                let own_associated: FxHashSet<Name> = iface_data
+                                    .associated_types
+                                    .iter()
+                                    .map(|assoc| assoc.name.clone())
+                                    .collect();
+                                let inherited = inherited_interface_associated_type_names(
+                                    db, iface_loc, pkg_items, &iface_ns,
+                                );
+                                let mut inherited_counts: FxHashMap<Name, usize> =
+                                    FxHashMap::default();
+                                for name in &inherited {
+                                    *inherited_counts.entry(name.clone()).or_default() += 1;
+                                }
+                                for inherited_name in inherited {
+                                    if inherited_counts
+                                        .get(&inherited_name)
+                                        .copied()
+                                        .unwrap_or_default()
+                                        == 1
+                                        && !own_associated.contains(&inherited_name)
+                                    {
+                                        type_bindings.insert(
+                                            inherited_name.clone(),
+                                            self_assoc_projection(inherited_name),
+                                        );
+                                    }
+                                }
+                            }
+                        }
+                        builder.set_type_bindings(type_bindings.clone());
+                        let lower_with_self = |te: &baml_compiler2_ast::TypeExpr,
+                                               diags: &mut Vec<
+                            crate::infer_context::TirTypeError,
+                        >| {
+                            let resolved = if let Some(replacement) = &self_replacement {
+                                crate::lower_type_expr::substitute_self_in(te, replacement)
+                            } else {
+                                te.clone()
+                            };
+                            crate::generics::lower_type_expr_with_generics(
+                                db,
+                                &resolved,
+                                pkg_items,
+                                &pkg_info.namespace_path,
+                                &type_bindings,
+                                diags,
+                            )
+                        };
+
+                        // Get declared return type
+                        let return_ty = sig
+                            .return_type
+                            .as_ref()
+                            .map(|te| {
+                                let span = sig_sm.return_type_span.unwrap_or(func_data.span);
+                                let mut diags = Vec::new();
+                                let ty = lower_with_self(te, &mut diags);
+                                for diag in diags {
+                                    builder.report_at_span(diag, span);
+                                }
+                                builder.validate_type_generic_bounds_at_span(span, &ty);
+                                ty
+                            })
+                            .unwrap_or(Ty::Unknown {
+                                attr: TyAttr::default(),
+                            });
+
+                        // Set declared return type for return statement checking
+                        builder.set_return_type(return_ty.clone());
+
+                        // Add parameter bindings as locals
+                        for (i, param) in sig.params.iter().enumerate() {
+                            let param_type_span = sig_sm
+                                .param_type_spans
+                                .get(i)
+                                .copied()
+                                .flatten()
+                                .or_else(|| sig_sm.param_spans.get(i).copied())
+                                .unwrap_or_default();
+                            let mut param_ty_validated = false;
+                            let param_ty = if param.name.as_str() == "self"
+                                && matches!(param.ty, baml_compiler2_ast::TypeExpr::Unknown { .. })
+                            {
+                                if let Some(imp) = enclosing_impl {
+                                    param_ty_validated = true;
+                                    lower_type_expr_at_span_in_env(
+                                        db,
+                                        &mut builder,
+                                        pkg_items,
+                                        &pkg_info.namespace_path,
+                                        &env,
+                                        &imp.for_target.expr,
+                                        TypeExprLoweringOptions {
+                                            span: param_type_span,
+                                            self_replacement: None,
+                                        },
+                                    )
+                                } else if interface_self_bound.is_some() {
+                                    // BEP-044 Self-as-type-variable: inside an
+                                    // interface's own method `self` is the `Self`
+                                    // type variable (bound by this interface), not
+                                    // the interface existential — so `self.method(
+                                    // other: Self)` resolves with `Self` pinned.
+                                    // Member resolution walks the registered bound
+                                    // to reach the interface contract.
+                                    Ty::TypeVar(Name::new("Self"), TyAttr::default())
+                                } else {
+                                    // `self` parameter with no type annotation — infer from
+                                    // enclosing class.
+                                    enclosing_class_name
+                                        .as_ref()
+                                        .and_then(|cn| {
+                                            let ns_path = &pkg_info.namespace_path;
+                                            pkg_items.lookup_type(ns_path, cn).map(|def| {
+                                                let qtn =
+                                                    crate::lower_type_expr::qualify_def(db, def, cn);
+                                                match def {
+                                                    baml_compiler2_hir::contributions::Definition::Interface(_) => {
+                                                        // BEP-044 wf3 #1/#5: a generic interface's
+                                                        // default method must type `self` as
+                                                        // `Interface<T..>` carrying its own params as
+                                                        // TypeVars — empty args dropped `T`, so a
+                                                        // `self.method()` call lost the reached view's
+                                                        // concrete arg (first impl block wins) and
+                                                        // cross-`requires` calls found no MIR candidate.
+                                                        let iface_args: Vec<Ty> = item_tree
+                                                            .interfaces
+                                                            .values()
+                                                            .find(|i| &i.name == cn)
+                                                            .map(|i| {
+                                                                i.generic_params
+                                                                    .iter()
+                                                                    .map(|p| Ty::TypeVar(
+                                                                        p.clone(),
+                                                                        TyAttr::default(),
+                                                                    ))
+                                                                    .collect()
+                                                            })
+                                                            .unwrap_or_default();
+                                                        Ty::Interface(
+                                                            qtn,
+                                                            iface_args,
+                                                            vec![],
+                                                            TyAttr::default(),
+                                                        )
+                                                    }
+                                                    _ => {
+                                                        // Mirror the interface arm: a generic class's
+                                                        // method must type `self` as `Class<T..>`
+                                                        // carrying the class's own params as TypeVars.
+                                                        // Empty args left `self` as a bare `Class`, so
+                                                        // the auto-derived `to_json`'s
+                                                        // `to_string<Self>(self)` saw `self: StreamCache`
+                                                        // against `Self = StreamCache<TStream, TFinal>`,
+                                                        // and more generally a bare-class `self` leaked
+                                                        // into every generic-class method body.
+                                                        let class_args: Vec<Ty> = item_tree
+                                                            .classes
+                                                            .values()
+                                                            .find(|c| &c.name == cn)
+                                                            .map(|c| {
+                                                                c.generic_params
+                                                                    .iter()
+                                                                    .map(|p| Ty::TypeVar(
+                                                                        p.clone(),
+                                                                        TyAttr::default(),
+                                                                    ))
+                                                                    .collect()
+                                                            })
+                                                            .unwrap_or_default();
+                                                        Ty::Class(qtn, class_args, TyAttr::default())
+                                                    }
+                                                }
+                                            })
+                                        })
+                                        .unwrap_or(Ty::Unknown {
+                                            attr: TyAttr::default(),
+                                        })
+                                }
+                            } else {
+                                param_ty_validated = true;
+                                let mut param_diags = Vec::new();
+                                let ty = lower_with_self(&param.ty, &mut param_diags);
+                                for diag in param_diags {
+                                    builder.report_at_span(diag, param_type_span);
+                                }
+                                builder.validate_type_generic_bounds_at_span(param_type_span, &ty);
                                 ty
                             };
-                            builder.add_local(param_name.clone(), param_ty.clone());
-                            builder.param_types.push((param_name.clone(), param_ty));
+                            if !param_ty_validated {
+                                builder.validate_type_generic_bounds_at_span(
+                                    param_type_span,
+                                    &param_ty,
+                                );
+                            }
+                            builder.add_local(param.name.clone(), param_ty.clone());
+                            builder.param_types.push((param.name.clone(), param_ty));
                         }
+
+                        let param_types = builder.param_types.clone();
+                        let parameter_defaults =
+                            baml_compiler2_ppir::function_parameter_defaults(db, func_loc);
+                        builder.check_function_parameter_defaults(
+                            &func_data.params,
+                            &parameter_defaults,
+                            &param_types,
+                        );
 
                         // Check root expression against declared return type
                         if let Some(root_expr) = expr_body.root_expr {
@@ -530,12 +1602,23 @@ pub fn infer_scope_types<'db>(
                         }
 
                         // Validate declared `throws` against effective escaping throws.
-                        builder.check_throws_contract(
-                            expr_body,
-                            sig.throws.as_ref(),
-                            sig_sm.throws_type_span,
-                            func_data.span,
-                        );
+                        // Auto-derived methods (synthesized `to_json` /
+                        // `from_json`) use a conservative pre-baked throws
+                        // clause; the body's actual escaping throws can be
+                        // wider when fields have malformed/unknown types.
+                        // The user can't fix the synthesized contract, so
+                        // skip the entire check for auto-derive bodies.
+                        let is_auto_derive =
+                            matches!(func_data.origin, ast::FunctionOrigin::AutoDerive);
+                        if !is_auto_derive {
+                            builder.check_throws_contract(
+                                expr_body,
+                                sig.throws.as_ref(),
+                                sig_sm.throws_type_span,
+                                func_data.span,
+                                true,
+                            );
+                        }
                     }
                     found = true;
                     break;
@@ -597,23 +1680,14 @@ pub fn infer_scope_types<'db>(
                     let inference_scope_id = index.scope_ids[inference_fsi.index() as usize];
                     let capture_declared_in_ancestor =
                         |_capture_name: &Name, binding_id: &BindingId| -> bool {
-                            // Under the (scope, site) constraint, a same-name
-                            // distinct binding cannot co-exist: parameter
-                            // indices are unique within their scope and
-                            // DefinitionSite::Statement/PatternBinding carry
-                            // the scope-unique AST id directly. Capture
-                            // resolution is identity-keyed; `capture_name` is
-                            // not load-bearing here.
                             binding_id.scope == ancestor_fsi
-                                && match binding_id.site {
-                                    DefinitionSite::Parameter(idx) => {
+                                && match binding_id.kind {
+                                    BindingKind::Parameter(idx) => {
                                         anc_bindings.params.iter().any(|(_, i)| *i == idx)
                                     }
-                                    DefinitionSite::Statement(_)
-                                    | DefinitionSite::PatternBinding(_) => anc_bindings
-                                        .bindings
-                                        .iter()
-                                        .any(|binding| binding.site == binding_id.site),
+                                    BindingKind::Local(idx) => {
+                                        anc_bindings.bindings.get(idx as usize).is_some()
+                                    }
                                 }
                         };
                     // Only call infer_scope_types if this ancestor has any of
@@ -636,27 +1710,17 @@ pub fn infer_scope_types<'db>(
                         inference
                     };
                     for (capture_name, binding_id) in captures {
-                        let def_site = binding_id.site;
                         let is_declared_here =
                             capture_declared_in_ancestor(capture_name, binding_id);
                         if !is_declared_here {
                             continue;
                         }
-                        let actual_ty = match def_site {
-                            DefinitionSite::Parameter(idx) => {
-                                anc_inference.param_type(idx).cloned()
-                            }
-                            DefinitionSite::Statement(_) | DefinitionSite::PatternBinding(_) => {
-                                // `binding.site == def_site` uniquely
-                                // identifies the binding under shadowing —
-                                // a name tiebreaker would be redundant.
-                                anc_bindings
-                                    .bindings
-                                    .iter()
-                                    .find(|binding| binding.site == def_site)
-                                    .and_then(|binding| {
-                                        anc_inference.binding_type(binding.pattern).cloned()
-                                    })
+                        let actual_ty = match binding_id.kind {
+                            BindingKind::Parameter(idx) => anc_inference.param_type(idx).cloned(),
+                            BindingKind::Local(idx) => {
+                                anc_bindings.bindings.get(idx as usize).and_then(|binding| {
+                                    anc_inference.binding_type(binding.pattern).cloned()
+                                })
                             }
                         };
                         if let Some(ty) = actual_ty {
@@ -706,36 +1770,38 @@ pub fn infer_scope_types<'db>(
                                             }
                                         });
 
-                                    // Seed builder with lambda params
-                                    let generic_params: Vec<Name> = func_def.generic_params.clone();
-                                    builder.set_generic_params(generic_params.clone());
-                                    for (i, param) in func_def.params.iter().enumerate() {
-                                        let param_ty = param
-                                            .type_expr
-                                            .as_ref()
-                                            .map(|ste| {
-                                                crate::lower_type_expr::lower_type_expr_in_ns(
-                                                    db,
-                                                    &ste.expr,
-                                                    pkg_items,
-                                                    &pkg_info.namespace_path,
-                                                    &generic_params,
-                                                    &mut Vec::new(),
-                                                )
-                                            })
-                                            .or_else(|| {
-                                                // Fall back to contextual type from parent inference
-                                                contextual_param_tys
-                                                    .as_ref()
-                                                    .and_then(|pts| pts.get(i))
-                                                    .map(|(_, ty)| ty.clone())
-                                            })
-                                            .unwrap_or(Ty::Unknown {
-                                                attr: TyAttr::default(),
-                                            });
-                                        builder.add_local(param.name.clone(), param_ty.clone());
-                                        builder.param_types.push((param.name.clone(), param_ty));
-                                    }
+                                    let env = extend_env_with_lambda_generics(
+                                        generic_env_for_function_data(
+                                            GenericLookupContext {
+                                                db,
+                                                file,
+                                                index,
+                                                item_tree: &item_tree,
+                                                pkg_items,
+                                                ns_context: &pkg_info.namespace_path,
+                                            },
+                                            ancestor_scope,
+                                            func_data,
+                                        ),
+                                        func_def,
+                                    );
+                                    apply_generic_env(
+                                        db,
+                                        &mut builder,
+                                        pkg_items,
+                                        &pkg_info.namespace_path,
+                                        &env,
+                                        lambda_span,
+                                    );
+                                    add_lambda_params_to_builder(
+                                        db,
+                                        &mut builder,
+                                        pkg_items,
+                                        &pkg_info.namespace_path,
+                                        &env,
+                                        func_def,
+                                        contextual_param_tys.as_deref(),
+                                    );
                                     // Infer the lambda body
                                     if let Some(root_expr) = lambda_body.root_expr {
                                         builder.infer_expr(root_expr, lambda_body);
@@ -778,35 +1844,38 @@ pub fn infer_scope_types<'db>(
                                             }
                                         });
 
-                                    // Seed builder with lambda params
-                                    let generic_params: Vec<Name> = func_def.generic_params.clone();
-                                    builder.set_generic_params(generic_params.clone());
-                                    for (i, param) in func_def.params.iter().enumerate() {
-                                        let param_ty = param
-                                            .type_expr
-                                            .as_ref()
-                                            .map(|ste| {
-                                                crate::lower_type_expr::lower_type_expr_in_ns(
-                                                    db,
-                                                    &ste.expr,
-                                                    pkg_items,
-                                                    &pkg_info.namespace_path,
-                                                    &generic_params,
-                                                    &mut Vec::new(),
-                                                )
-                                            })
-                                            .or_else(|| {
-                                                contextual_param_tys
-                                                    .as_ref()
-                                                    .and_then(|pts| pts.get(i))
-                                                    .map(|(_, ty)| ty.clone())
-                                            })
-                                            .unwrap_or(Ty::Unknown {
-                                                attr: TyAttr::default(),
-                                            });
-                                        builder.add_local(param.name.clone(), param_ty.clone());
-                                        builder.param_types.push((param.name.clone(), param_ty));
-                                    }
+                                    let env = extend_env_with_lambda_generics(
+                                        enclosing_function_generic_env_from_let(
+                                            GenericLookupContext {
+                                                db,
+                                                file,
+                                                index,
+                                                item_tree: &item_tree,
+                                                pkg_items,
+                                                ns_context: &pkg_info.namespace_path,
+                                            },
+                                            ancestor_scope,
+                                        )
+                                        .unwrap_or_default(),
+                                        func_def,
+                                    );
+                                    apply_generic_env(
+                                        db,
+                                        &mut builder,
+                                        pkg_items,
+                                        &pkg_info.namespace_path,
+                                        &env,
+                                        lambda_span,
+                                    );
+                                    add_lambda_params_to_builder(
+                                        db,
+                                        &mut builder,
+                                        pkg_items,
+                                        &pkg_info.namespace_path,
+                                        &env,
+                                        func_def,
+                                        contextual_param_tys.as_deref(),
+                                    );
                                     if let Some(root_expr) = lambda_body.root_expr {
                                         builder.infer_expr(root_expr, lambda_body);
                                     }
@@ -816,15 +1885,125 @@ pub fn infer_scope_types<'db>(
                         }
                     }
                     _ => {
-                        // Continue walking up ancestors (e.g., nested lambda inside lambda)
+                        continue;
                     }
                 }
             }
         }
         ScopeKind::Class => {
-            // Class scope: no expressions to type-check.
-            // Fields are resolved by resolve_class_fields.
-            // Methods are child Function scopes with their own infer_scope_types.
+            let item_tree = baml_compiler2_ppir::file_item_tree(db, file);
+            for (local_id, class_data) in &item_tree.classes {
+                if class_data.span != scope.range || scope.name.as_ref() != Some(&class_data.name) {
+                    continue;
+                }
+                let mut env = GenericEnv::from_params(class_data.generic_params.clone());
+                env.add_bounds_for_declared_params(
+                    &class_data.generic_params,
+                    &class_data.generic_param_bounds,
+                );
+                apply_generic_env(
+                    db,
+                    &mut builder,
+                    pkg_items,
+                    &pkg_info.namespace_path,
+                    &env,
+                    class_data.span,
+                );
+                let class_loc = ClassLoc::new(db, file, *local_id);
+                let resolved = resolve_class_fields(db, class_loc);
+                for (field, (_, ty, _)) in class_data.fields.iter().zip(resolved.fields.iter()) {
+                    if let Some(type_expr) = &field.type_expr {
+                        builder.validate_type_generic_bounds_at_span(type_expr.span, ty);
+                    }
+                }
+                break;
+            }
+            for (local_id, iface_data) in &item_tree.interfaces {
+                if iface_data.span != scope.range || scope.name.as_ref() != Some(&iface_data.name) {
+                    continue;
+                }
+                let iface_loc = InterfaceLoc::new(db, file, *local_id);
+                let (iface_params, iface_bounds) = interface_type_level_params_and_bounds(
+                    db,
+                    iface_loc,
+                    iface_data,
+                    pkg_items,
+                    &pkg_info.namespace_path,
+                );
+                let mut iface_env = GenericEnv::from_params(iface_params.clone());
+                iface_env.add_bounds_for_declared_params(&iface_params, &iface_bounds);
+                let self_replacement =
+                    crate::lower_type_expr::type_expr_for_name(iface_data.name.clone());
+                apply_generic_env(
+                    db,
+                    &mut builder,
+                    pkg_items,
+                    &pkg_info.namespace_path,
+                    &iface_env,
+                    iface_data.span,
+                );
+                for field in &iface_data.fields {
+                    if let Some(type_expr) = &field.type_expr {
+                        validate_spanned_type_expr_generic_bounds(
+                            db,
+                            &mut builder,
+                            pkg_items,
+                            &pkg_info.namespace_path,
+                            &iface_env,
+                            type_expr,
+                            Some(&self_replacement),
+                        );
+                    }
+                }
+                for sig in &iface_data.required_methods {
+                    let mut sig_env = iface_env.clone();
+                    sig_env.append_declared(&sig.generic_params, &sig.generic_param_bounds);
+                    apply_generic_env(
+                        db,
+                        &mut builder,
+                        pkg_items,
+                        &pkg_info.namespace_path,
+                        &sig_env,
+                        sig.span,
+                    );
+                    for param in &sig.params {
+                        if let Some(type_expr) = &param.type_expr {
+                            validate_spanned_type_expr_generic_bounds(
+                                db,
+                                &mut builder,
+                                pkg_items,
+                                &pkg_info.namespace_path,
+                                &sig_env,
+                                type_expr,
+                                Some(&self_replacement),
+                            );
+                        }
+                    }
+                    if let Some(return_type) = &sig.return_type {
+                        validate_spanned_type_expr_generic_bounds(
+                            db,
+                            &mut builder,
+                            pkg_items,
+                            &pkg_info.namespace_path,
+                            &sig_env,
+                            return_type,
+                            Some(&self_replacement),
+                        );
+                    }
+                    if let Some(throws) = &sig.throws {
+                        validate_spanned_type_expr_generic_bounds(
+                            db,
+                            &mut builder,
+                            pkg_items,
+                            &pkg_info.namespace_path,
+                            &sig_env,
+                            throws,
+                            Some(&self_replacement),
+                        );
+                    }
+                }
+                break;
+            }
         }
         ScopeKind::Let => {
             // Top-level let binding — find the matching let in the item tree
@@ -845,23 +2024,42 @@ pub fn infer_scope_types<'db>(
                 }
             }
         }
+        ScopeKind::TypeAlias => {
+            let item_tree = baml_compiler2_ppir::file_item_tree(db, file);
+            for (local_id, alias_data) in &item_tree.type_aliases {
+                if alias_data.span != scope.range || scope.name.as_ref() != Some(&alias_data.name) {
+                    continue;
+                }
+                let alias_loc = TypeAliasLoc::new(db, file, *local_id);
+                let resolved = resolve_type_alias(db, alias_loc);
+                if let Some(type_expr) = &alias_data.type_expr {
+                    builder.validate_type_generic_bounds_at_span(type_expr.span, &resolved.ty);
+                }
+                break;
+            }
+        }
         _ => {
-            // Project, Package, Namespace, File, Enum, TypeAlias, Block, Item:
+            // Project, Package, Namespace, File, Enum, Block, Item:
             // typically no expressions to infer at these scope levels.
         }
     }
 
     let (
         expressions,
-        bindings,
+        pattern_types,
         resolutions,
         catch_residual_throws,
         exhaustive_matches,
         diagnostics,
         path_root_types,
+        path_segment_types,
         path_member_resolutions,
         param_types,
+        call_plans,
+        call_type_instantiations,
+        function_coercions,
         nested_lambda_types,
+        parameter_defaults,
     ) = builder.finish();
 
     let extra = if diagnostics.is_empty() {
@@ -872,14 +2070,19 @@ pub fn infer_scope_types<'db>(
 
     ScopeInference {
         expressions,
-        bindings,
+        pattern_types,
         resolutions,
         catch_residual_throws,
         exhaustive_matches,
         path_root_types,
+        path_segment_types,
         path_member_resolutions,
         nested_lambda_types,
         param_types,
+        call_plans,
+        call_type_instantiations,
+        function_coercions,
+        parameter_defaults,
         extra,
     }
 }

@@ -16,8 +16,10 @@ SOURCE_FILE
       BLOCK_EXPR
         L_BRACE "{"
         LET_STMT
-          KW_LET "let"
-          WORD "double"
+          PATTERN
+            BINDING_PATTERN "let double"
+              KW_LET "let"
+              WORD "double"
           EQUALS "="
           LAMBDA_EXPR
             PARAMETER_LIST
@@ -40,9 +42,10 @@ SOURCE_FILE
               R_BRACE "}"
         CALL_EXPR
           WORD "double"
-          CALL_ARGS "(21)"
+          CALL_ARGS
             L_PAREN "("
-            INTEGER_LITERAL "21"
+            CALL_ARG "21"
+              INTEGER_LITERAL "21"
             R_PAREN ")"
         R_BRACE "}"
   FUNCTION_DEF
@@ -58,8 +61,10 @@ SOURCE_FILE
       BLOCK_EXPR
         L_BRACE "{"
         LET_STMT
-          KW_LET "let"
-          WORD "constant"
+          PATTERN
+            BINDING_PATTERN "let constant"
+              KW_LET "let"
+              WORD "constant"
           EQUALS "="
           LAMBDA_EXPR
             PARAMETER_LIST "()"
@@ -91,8 +96,10 @@ SOURCE_FILE
       BLOCK_EXPR
         L_BRACE "{"
         LET_STMT
-          KW_LET "let"
-          WORD "double"
+          PATTERN
+            BINDING_PATTERN "let double"
+              KW_LET "let"
+              WORD "double"
           EQUALS "="
           LAMBDA_EXPR
             PARAMETER_LIST
@@ -113,9 +120,10 @@ SOURCE_FILE
               R_BRACE "}"
         CALL_EXPR
           WORD "double"
-          CALL_ARGS "(21)"
+          CALL_ARGS
             L_PAREN "("
-            INTEGER_LITERAL "21"
+            CALL_ARG "21"
+              INTEGER_LITERAL "21"
             R_PAREN ")"
         R_BRACE "}"
   FUNCTION_DEF
@@ -131,8 +139,10 @@ SOURCE_FILE
       BLOCK_EXPR
         L_BRACE "{"
         LET_STMT
-          KW_LET "let"
-          WORD "add"
+          PATTERN
+            BINDING_PATTERN "let add"
+              KW_LET "let"
+              WORD "add"
           EQUALS "="
           LAMBDA_EXPR
             PARAMETER_LIST
@@ -161,11 +171,13 @@ SOURCE_FILE
               R_BRACE "}"
         CALL_EXPR
           WORD "add"
-          CALL_ARGS "(20, 22)"
+          CALL_ARGS
             L_PAREN "("
-            INTEGER_LITERAL "20"
+            CALL_ARG "20"
+              INTEGER_LITERAL "20"
             COMMA ","
-            INTEGER_LITERAL "22"
+            CALL_ARG "22"
+              INTEGER_LITERAL "22"
             R_PAREN ")"
         R_BRACE "}"
   FUNCTION_DEF
@@ -181,8 +193,10 @@ SOURCE_FILE
       BLOCK_EXPR
         L_BRACE "{"
         LET_STMT
-          KW_LET "let"
-          WORD "identity"
+          PATTERN
+            BINDING_PATTERN "let identity"
+              KW_LET "let"
+              WORD "identity"
           EQUALS "="
           LAMBDA_EXPR
             GENERIC_PARAM_LIST
@@ -207,9 +221,10 @@ SOURCE_FILE
               R_BRACE "}"
         CALL_EXPR
           WORD "identity"
-          CALL_ARGS "(42)"
+          CALL_ARGS
             L_PAREN "("
-            INTEGER_LITERAL "42"
+            CALL_ARG "42"
+              INTEGER_LITERAL "42"
             R_PAREN ")"
         R_BRACE "}"
   FUNCTION_DEF
@@ -236,14 +251,18 @@ SOURCE_FILE
           R_PAREN ")"
           L_BRACE "{"
           MATCH_ARM
-            MATCH_PATTERN "0"
-              INTEGER_LITERAL "0"
+            PATTERN
+              TYPE_PATTERN
+                TYPE_EXPR "0"
+                  INTEGER_LITERAL "0"
             FAT_ARROW "=>"
             BLOCK_EXPR
               L_BRACE "{"
               LET_STMT
-                KW_LET "let"
-                WORD "inc"
+                PATTERN
+                  BINDING_PATTERN "let inc"
+                    KW_LET "let"
+                    WORD "inc"
                 EQUALS "="
                 LAMBDA_EXPR
                   PARAMETER_LIST
@@ -266,14 +285,16 @@ SOURCE_FILE
                     R_BRACE "}"
               CALL_EXPR
                 WORD "inc"
-                CALL_ARGS "(10)"
+                CALL_ARGS
                   L_PAREN "("
-                  INTEGER_LITERAL "10"
+                  CALL_ARG "10"
+                    INTEGER_LITERAL "10"
                   R_PAREN ")"
               R_BRACE "}"
           MATCH_ARM
-            MATCH_PATTERN "_"
-              WORD "_"
+            PATTERN
+              WILDCARD_PATTERN "_"
+                WORD "_"
             FAT_ARROW "=>"
             INTEGER_LITERAL "0"
           R_BRACE "}"
@@ -291,8 +312,10 @@ SOURCE_FILE
       BLOCK_EXPR
         L_BRACE "{"
         LET_STMT
-          KW_LET "let"
-          WORD "a"
+          PATTERN
+            BINDING_PATTERN "let a"
+              KW_LET "let"
+              WORD "a"
           EQUALS "="
           LAMBDA_EXPR
             PARAMETER_LIST
@@ -314,8 +337,10 @@ SOURCE_FILE
                 INTEGER_LITERAL "1"
               R_BRACE "}"
         LET_STMT
-          KW_LET "let"
-          WORD "b"
+          PATTERN
+            BINDING_PATTERN "let b"
+              KW_LET "let"
+              WORD "b"
           EQUALS "="
           LAMBDA_EXPR
             PARAMETER_LIST
@@ -339,16 +364,18 @@ SOURCE_FILE
         BINARY_EXPR
           CALL_EXPR
             WORD "a"
-            CALL_ARGS "(0)"
+            CALL_ARGS
               L_PAREN "("
-              INTEGER_LITERAL "0"
+              CALL_ARG "0"
+                INTEGER_LITERAL "0"
               R_PAREN ")"
           PLUS "+"
           CALL_EXPR
             WORD "b"
-            CALL_ARGS "(0)"
+            CALL_ARGS
               L_PAREN "("
-              INTEGER_LITERAL "0"
+              CALL_ARG "0"
+                INTEGER_LITERAL "0"
               R_PAREN ")"
         R_BRACE "}"
 

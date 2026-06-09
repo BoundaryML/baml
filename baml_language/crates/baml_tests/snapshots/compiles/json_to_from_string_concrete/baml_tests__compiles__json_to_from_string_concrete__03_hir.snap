@@ -1,0 +1,20 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== HIR2 ===
+class user.User {
+  name: string
+  age: int
+}
+function user.deserialize_user(s: string) -> user.User  [expr] {
+  {  } baml.json.from_string(s)
+}
+function user.from_json(j: baml.json.json) -> user.User  [expr] {
+  user.User { name: baml.json.from_json(baml.json.field(j, "name")), age: baml.json.from_json(baml.json.field(j, "age")) }
+}
+function user.serialize_user(u: user.User) -> string  [expr] {
+  {  } baml.json.to_string(u)
+}
+function user.to_json(self: ?) -> baml.json.json  [expr] {
+  map { "name": self.name.to_json(), "age": self.age.to_json() }
+}

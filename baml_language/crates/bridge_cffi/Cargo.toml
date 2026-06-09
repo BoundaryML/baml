@@ -13,12 +13,15 @@ name = "bridge_cffi"
 crate-type = [ "cdylib", "lib" ]
 
 [features]
-default = [ "bundle-http" ]
+default = [ "bundle-http", "aws-crypto" ]
+aws-crypto = [ "bex_project/aws-crypto", "bridge_ctypes/aws-crypto", "sys_native/aws-crypto" ]
+ring-crypto = [ "bex_project/ring-crypto", "bridge_ctypes/ring-crypto", "sys_native/ring-crypto" ]
 native-tls = [ "sys_native/native-tls" ]
 rustls = [ "sys_native/rustls" ]
 bundle-http = [ "sys_native/bundle-http" ]
 
 [dependencies]
+baml_version = { workspace = true }
 bex_events = { workspace = true }
 bex_events_native = { workspace = true }
 bex_project = { workspace = true }
@@ -33,11 +36,7 @@ prost = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = [ "rt", "rt-multi-thread" ] }
-tokio-util = { workspace = true }
 vfs = { workspace = true }
-
-[build-dependencies]
-cbindgen = { workspace = true }
 
 [package.metadata.ci]
 wasm_support = false

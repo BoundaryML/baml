@@ -47,9 +47,15 @@ pub struct PpirTypeAttrs {
 pub enum PpirTy {
     Named {
         path: Vec<Name>,
+        /// Generic args passed at the use site (e.g. `Box<int>` → `[int]`).
+        /// Empty for non-generic types and references that omit args.
+        generic_args: Vec<PpirTy>,
         attrs: PpirTypeAttrs,
     },
     Int {
+        attrs: PpirTypeAttrs,
+    },
+    Bigint {
         attrs: PpirTypeAttrs,
     },
     Float {
@@ -102,6 +108,7 @@ impl PpirTy {
         match self {
             Self::Named { attrs, .. }
             | Self::Int { attrs }
+            | Self::Bigint { attrs }
             | Self::Float { attrs }
             | Self::String { attrs }
             | Self::Bool { attrs }
@@ -120,6 +127,7 @@ impl PpirTy {
         match self {
             Self::Named { attrs, .. }
             | Self::Int { attrs }
+            | Self::Bigint { attrs }
             | Self::Float { attrs }
             | Self::String { attrs }
             | Self::Bool { attrs }
@@ -139,11 +147,15 @@ impl PpirTy {
     pub fn clone_without_attrs(&self) -> Self {
         let d = PpirTypeAttrs::default();
         match self {
-            Self::Named { path, .. } => Self::Named {
+            Self::Named {
+                path, generic_args, ..
+            } => Self::Named {
                 path: path.clone(),
+                generic_args: generic_args.clone(),
                 attrs: d,
             },
             Self::Int { .. } => Self::Int { attrs: d },
+            Self::Bigint { .. } => Self::Bigint { attrs: d },
             Self::Float { .. } => Self::Float { attrs: d },
             Self::String { .. } => Self::String { attrs: d },
             Self::Bool { .. } => Self::Bool { attrs: d },
@@ -182,6 +194,7 @@ impl PpirTy {
     pub fn named(name: impl Into<Name>) -> Self {
         PpirTy::Named {
             path: vec![name.into()],
+            generic_args: vec![],
             attrs: PpirTypeAttrs::default(),
         }
     }
@@ -234,14 +247,20 @@ impl PpirTy {
         let attrs = Self::extract_type_attrs(type_expr.attrs());
         match type_expr {
             TypeExpr::Int { .. } => PpirTy::Int { attrs },
+            TypeExpr::Bigint { .. } => PpirTy::Bigint { attrs },
             TypeExpr::Float { .. } => PpirTy::Float { attrs },
             TypeExpr::String { .. } => PpirTy::String { attrs },
             TypeExpr::Bool { .. } => PpirTy::Bool { attrs },
             TypeExpr::Null { .. } => PpirTy::Null { attrs },
             TypeExpr::Never { .. } => PpirTy::Never { attrs },
             TypeExpr::Void { .. } => PpirTy::Never { attrs },
-            TypeExpr::Path { segments, .. } => PpirTy::Named {
+            TypeExpr::Path {
+                segments,
+                generic_args,
+                ..
+            } => PpirTy::Named {
                 path: segments.clone(),
+                generic_args: generic_args.iter().map(Self::convert_type_expr).collect(),
                 attrs,
             },
             TypeExpr::Optional { inner, .. } => PpirTy::Optional {
@@ -288,6 +307,7 @@ impl PpirTy {
                 attrs,
             },
             TypeExpr::BuiltinUnknown { .. }
+            | TypeExpr::AssociatedTypeProjection { .. }
             | TypeExpr::Type { .. }
             | TypeExpr::Function { .. }
             | TypeExpr::Unknown { .. } => PpirTy::CannotBeStreamed {
@@ -300,12 +320,16 @@ impl PpirTy {
     /// Convert a `PpirTy` back to a `TypeExpr` for synthesized AST items.
     pub fn to_type_expr(&self) -> TypeExpr {
         match self {
-            PpirTy::Named { path, .. } => TypeExpr::Path {
+            PpirTy::Named {
+                path, generic_args, ..
+            } => TypeExpr::Path {
                 segments: path.clone(),
-                generic_args: vec![],
+                generic_args: generic_args.iter().map(PpirTy::to_type_expr).collect(),
+                associated_type_bindings: vec![],
                 attrs: vec![],
             },
             PpirTy::Int { .. } => TypeExpr::Int { attrs: vec![] },
+            PpirTy::Bigint { .. } => TypeExpr::Bigint { attrs: vec![] },
             PpirTy::Float { .. } => TypeExpr::Float { attrs: vec![] },
             PpirTy::String { .. } => TypeExpr::String { attrs: vec![] },
             PpirTy::Bool { .. } => TypeExpr::Bool { attrs: vec![] },
@@ -386,6 +410,7 @@ mod tests {
         let type_expr = TypeExpr::Path {
             segments: vec![Name::new("Fizz")],
             generic_args: vec![],
+            associated_type_bindings: vec![],
             attrs: vec![make_attr("stream.done")],
         };
         let ppir_ty = PpirTy::from_type_expr(&type_expr);

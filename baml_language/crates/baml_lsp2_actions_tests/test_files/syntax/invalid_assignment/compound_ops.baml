@@ -35,7 +35,25 @@ function CompoundAssignments() -> int {
 
 //----
 //- diagnostics
-// Error: operator `Add` cannot be applied to `int` and `true`
+// error: operator `Add` cannot be applied to `int` and `"five"`
+//     ╭─[ invalid_assignment_compound_ops.baml:15:2 ]
+//     │
+//  15 │     c += "five";
+//     │     ┬
+//     │     ╰── operator `Add` cannot be applied to `int` and `"five"`
+//     │
+//     │ Note: Error code: E0004
+// ────╯
+// error: operator `Add` cannot be applied to `string` and `100`
+//     ╭─[ invalid_assignment_compound_ops.baml:19:2 ]
+//     │
+//  19 │     d += 100;
+//     │     ┬
+//     │     ╰── operator `Add` cannot be applied to `string` and `100`
+//     │
+//     │ Note: Error code: E0004
+// ────╯
+// error: operator `Add` cannot be applied to `int` and `true`
 //     ╭─[ invalid_assignment_compound_ops.baml:23:2 ]
 //     │
 //  23 │     e += true;
@@ -44,7 +62,7 @@ function CompoundAssignments() -> int {
 //     │ 
 //     │ Note: Error code: E0004
 // ────╯
-// Error: operator `Add` cannot be applied to `bool` and `1`
+// error: operator `Add` cannot be applied to `bool` and `1`
 //     ╭─[ invalid_assignment_compound_ops.baml:27:2 ]
 //     │
 //  27 │     f += 1;

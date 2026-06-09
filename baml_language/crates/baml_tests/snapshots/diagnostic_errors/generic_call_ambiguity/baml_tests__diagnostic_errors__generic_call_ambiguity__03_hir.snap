@@ -17,7 +17,7 @@ function user.y() -> int  [expr] {
 function user.GenericCallInArray(k: int, v: string) -> string[]  [expr] {
   {  } [f(k, v)]
 }
-function user.f(k: user.K, v: user.V) -> user.V  [expr] {
+function user.f(k: K, v: V) -> V  [expr] {
   {  } v
 }
 function user.literal_arg() -> string  [expr] {

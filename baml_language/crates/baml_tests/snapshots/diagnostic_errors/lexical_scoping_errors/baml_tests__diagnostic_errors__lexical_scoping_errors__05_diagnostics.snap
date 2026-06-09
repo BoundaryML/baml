@@ -2,7 +2,7 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === COMPILER2 DIAGNOSTICS ===
-  [type] Error: unresolved name: a
+  [type] error: unresolved name: a
    ╭─[ lexical_scoping_errors.baml:5:3 ]
    │
  5 │   a
@@ -12,7 +12,7 @@ source: crates/baml_tests/src/generated_tests.rs
    │ Note: Error code: E0003
 ───╯
 
-  [type] Error: unresolved name: x
+  [type] error: unresolved name: x
     ╭─[ lexical_scoping_errors.baml:12:3 ]
     │
  12 │   x
@@ -22,7 +22,7 @@ source: crates/baml_tests/src/generated_tests.rs
     │ Note: Error code: E0003
 ────╯
 
-  [type] Error: unresolved name: x
+  [type] error: unresolved name: x
     ╭─[ lexical_scoping_errors.baml:19:3 ]
     │
  19 │   x

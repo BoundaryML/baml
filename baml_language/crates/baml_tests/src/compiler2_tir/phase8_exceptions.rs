@@ -2,6 +2,12 @@
 
 use super::support::{make_db, render_tir};
 
+fn assert_declared_throws_violation(output: &str, declared: &str, thrown: &str, message: &str) {
+    let expected =
+        format!("declared throws is `{declared}`, but this function may also throw `{thrown}`");
+    assert!(output.contains(&expected), "{message}, got:\n{output}");
+}
+
 #[test]
 fn throw_expr_is_never_and_marks_following_code_dead() {
     let mut db = make_db();
@@ -70,13 +76,11 @@ function f() -> int throws never {
     );
 
     let output = render_tir(&db, file);
-    assert!(
-        output.contains("throws contract violation"),
-        "expected throws-contract violation, got:\n{output}"
-    );
-    assert!(
-        output.contains("string"),
-        "expected escaping throw type to include string, got:\n{output}"
+    assert_declared_throws_violation(
+        &output,
+        "never",
+        "string",
+        "expected escaping throw type to include string",
     );
 }
 
@@ -166,6 +170,100 @@ function f(e: TimeoutError | OtherError) -> int {
 }
 
 #[test]
+fn impossible_typed_match_binding_is_unreachable() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"function f(x: int) -> string {
+  return match (x) {
+    let s: string => s,
+    _ => "fallback"
+  }
+}"#,
+    );
+
+    let output = render_tir(&db, file);
+    assert!(
+        output.contains("unreachable arm"),
+        "expected `let s: string` against int scrutinee to be unreachable, got:\n{output}"
+    );
+    assert!(
+        output.contains("s: string =>"),
+        "expected diagnostic output to include the impossible string arm, got:\n{output}"
+    );
+}
+
+#[test]
+fn impossible_array_chain_match_arm_is_unreachable() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"function f(xs: int[]) -> string {
+  return match (xs) {
+    []: string[] => "bad",
+    _ => "fallback"
+  }
+}"#,
+    );
+
+    let output = render_tir(&db, file);
+    assert!(
+        output.contains("type mismatch"),
+        "expected `[]: string[]` against int[] scrutinee to produce a type mismatch, got:\n{output}"
+    );
+    assert!(
+        output.contains("string[]"),
+        "expected type-mismatch diagnostic to mention string[], got:\n{output}"
+    );
+}
+
+// `[]: int` ascribes a non-array type to an array pattern. The pattern's
+// natural shape is "an array", so the ascription must itself be an array
+// type — otherwise the pattern can never match any value of any scrut.
+#[test]
+fn array_pattern_with_non_array_ascription_is_rejected() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"function f(xs: int[]) -> string {
+  return match (xs) {
+    []: int => "bad",
+    _ => "fallback"
+  }
+}"#,
+    );
+
+    let output = render_tir(&db, file);
+    assert!(
+        output.contains("type mismatch"),
+        "expected `[]: int` against int[] scrutinee to produce a type mismatch, got:\n{output}"
+    );
+}
+
+#[test]
+fn typed_pattern_without_widening_does_not_make_union_match_exhaustive() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"function f(v: int | string) -> string {
+  return match (v) {
+    let x: int => "int"
+  }
+}"#,
+    );
+
+    let output = render_tir(&db, file);
+    assert!(
+        output.contains("non-exhaustive match"),
+        "expected plain int arm to leave string branch uncovered, got:\n{output}"
+    );
+    assert!(
+        output.contains("missing:"),
+        "expected non-exhaustive diagnostic to include missing case details, got:\n{output}"
+    );
+}
+
+#[test]
 fn catch_binding_is_narrowed_per_arm() {
     let mut db = make_db();
     let file = db.add_file(
@@ -205,6 +303,7 @@ function f(which: int) -> int {
 }
 
 #[test]
+#[ignore = "catch bindings are now bare identifiers; typed `catch (e: any)` no longer parses"]
 fn typed_any_and_unknown_catch_bindings_are_rejected() {
     let mut db = make_db();
     let file = db.add_file(
@@ -310,7 +409,7 @@ function fail() -> int {
 function f() -> int {
   return fail() catch (e) {
     _ => 1
-    _: AppError | baml.panics.DivisionByZero => 2
+    AppError | baml.panics.DivisionByZero => 2
   }
 }"#,
     );
@@ -387,21 +486,24 @@ function f() -> int throws never {
     );
 
     let output = render_tir(&db, file);
-    assert!(
-        output
-            .contains("this body may throw through callback `cb`, but declared throws is `never`."),
-        "expected omitted inline lambda to inherit callback throws context, got:\n{output}"
-    );
-    assert!(
-        output.contains(
-            "Add `throws string` to the callback, catch the call, or make the callback non-throwing."
-        ),
-        "expected actionable callback-specific fix text, got:\n{output}"
+    // The inline lambda's effective throws (`string`) binds the callee's
+    // effect param, so the checker reports the precise violation — not the
+    // older "may throw through callback" fallback that couldn't name the type.
+    assert_declared_throws_violation(
+        &output,
+        "never",
+        "string",
+        "expected omitted inline lambda throws to propagate through the callback param",
     );
 }
 
 #[test]
-fn omitted_inline_lambda_current_limitation_gets_callback_aware_primary_message() {
+fn omitted_inline_lambda_covered_by_declared_throws_is_clean() {
+    // Historically a "current limitation": the checker could not see that the
+    // callback's throw was covered by `demo`'s declared `throws string` and
+    // reported a callback-aware violation anyway. The lambda's effective
+    // throws now binds the callee's effect param, so a covered throw is
+    // accepted silently.
     let mut db = make_db();
     let file = db.add_file(
         "test.baml",
@@ -418,14 +520,8 @@ function demo() -> int throws string {
 
     let output = render_tir(&db, file);
     assert!(
-        output.contains(
-            "this body may throw through callback `cb`, but declared throws is `string`."
-        ),
-        "expected callback-aware primary message for current limitation, got:\n{output}"
-    );
-    assert!(
-        output.contains("Add `throws string` to the callback, catch the call, or make the callback non-throwing."),
-        "expected callback-specific fix text for current limitation, got:\n{output}"
+        !output.contains("declared throws"),
+        "expected no throws violation when the callback throw is covered by the declared throws, got:\n{output}"
     );
 }
 
@@ -443,13 +539,11 @@ fn explicit_lambda_throws_annotation_is_checked_against_body() {
     );
 
     let output = render_tir(&db, file);
-    assert!(
-        output.contains("throws contract violation"),
-        "expected explicit lambda throws annotation to be validated, got:\n{output}"
-    );
-    assert!(
-        output.contains("missing string"),
-        "expected lambda throws validation to report the concrete escaping throw, got:\n{output}"
+    assert_declared_throws_violation(
+        &output,
+        "never",
+        "string",
+        "expected explicit lambda throws annotation to report the concrete escaping throw",
     );
 }
 
@@ -497,9 +591,11 @@ function f() -> int throws never {
     );
 
     let output = render_tir(&db, file);
-    assert!(
-        output.contains("throws contract violation: `never` is missing string"),
-        "expected omitted inline lambda to inherit optional function throws context, got:\n{output}"
+    assert_declared_throws_violation(
+        &output,
+        "never",
+        "string",
+        "expected omitted inline lambda to inherit optional function throws context",
     );
 }
 
@@ -514,9 +610,69 @@ fn function_type_throws_optional_call_propagates_callback_surface() {
     );
 
     let output = render_tir(&db, file);
-    assert!(
-        output.contains("throws contract violation: `never` is missing string"),
-        "expected optional call to propagate the callee throws surface into the contract check, got:\n{output}"
+    assert_declared_throws_violation(
+        &output,
+        "never",
+        "string",
+        "expected optional call to propagate the callee throws surface into the contract check",
+    );
+}
+
+#[test]
+fn named_reordered_callback_arg_instantiates_throws_from_call_plan() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"function invoke(cb: (value: int) -> int, value: int = 1) -> int {
+  cb(value)
+}
+
+function risky(value: int) -> int throws string {
+  throw "boom"
+}
+
+function f() -> int throws never {
+  invoke(value = 1, cb = risky)
+}"#,
+    );
+
+    let output = render_tir(&db, file);
+    assert_declared_throws_violation(
+        &output,
+        "never",
+        "string",
+        "expected reordered named callback arg to instantiate concrete throws",
+    );
+}
+
+#[test]
+fn callable_throws_uses_call_plan_for_named_reordered_args() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"function invoke(cb: (value: int) -> int, value: int = 1) -> int {
+  cb(value)
+}
+
+function forward(cb: (value: int) -> int) -> int {
+  invoke(value = 1, cb = cb)
+}
+
+function risky(value: int) -> int throws string {
+  throw "boom"
+}
+
+function f() -> int throws never {
+  forward(risky)
+}"#,
+    );
+
+    let output = render_tir(&db, file);
+    assert_declared_throws_violation(
+        &output,
+        "never",
+        "string",
+        "expected callable throws summary to use reordered named call binding",
     );
 }
 
@@ -541,13 +697,11 @@ function f(box: Box) -> int throws never {
     );
 
     let output = render_tir(&db, file);
-    assert!(
-        output.contains("throws contract violation"),
-        "expected unbound method call to propagate callback throws into the contract check, got:\n{output}"
-    );
-    assert!(
-        output.contains("missing string"),
-        "expected unbound method call to report the concrete escaping throw, got:\n{output}"
+    assert_declared_throws_violation(
+        &output,
+        "never",
+        "string",
+        "expected unbound method call to report the concrete escaping throw",
     );
     assert!(
         !output.contains("missing unknown"),
@@ -568,13 +722,18 @@ fn omitted_lambda_throws_inherits_builtin_map_callback_context() {
     );
 
     let output = render_tir(&db, file);
-    assert!(
-        output.contains("throws contract violation"),
-        "expected builtin map to propagate omitted inline lambda throws, got:\n{output}"
+    // The lambda's EFFECTIVE throws (`string`, from its body) feeds `map`'s
+    // throws generic, so the violation names the concrete type rather than a
+    // symbolic `E` or a collapsed `unknown`.
+    assert_declared_throws_violation(
+        &output,
+        "never",
+        "string",
+        "expected builtin map to propagate omitted inline lambda throws",
     );
     assert!(
         !output.contains("missing unknown"),
-        "expected builtin map omitted lambda path to stay symbolic/concrete rather than collapsing to unknown, got:\n{output}"
+        "expected builtin map omitted lambda path to stay concrete rather than collapsing to unknown, got:\n{output}"
     );
 }
 
@@ -591,14 +750,16 @@ fn function_type_throws_builtin_map_propagates_callback_surface() {
     );
 
     let output = render_tir(&db, file);
-    assert!(
-        output.contains("throws contract violation: `never` is missing string"),
-        "expected builtin map to propagate callback throws into the enclosing contract check, got:\n{output}"
+    assert_declared_throws_violation(
+        &output,
+        "never",
+        "string",
+        "expected builtin map to propagate callback throws into the enclosing contract check",
     );
 }
 
 #[test]
-fn stored_lambda_with_omitted_throws_reports_local_violation() {
+fn stored_lambda_with_omitted_throws_is_inferred_not_violation() {
     let mut db = make_db();
     let file = db.add_file(
         "test.baml",
@@ -612,13 +773,12 @@ fn stored_lambda_with_omitted_throws_reports_local_violation() {
     );
 
     let output = render_tir(&db, file);
+    // The unannotated lambda's surface is INFERRED (`throws string`), so the
+    // throw inside it is not a local violation — it becomes part of the
+    // lambda's type and is checked wherever the lambda is invoked.
     assert!(
-        output.contains("throws contract violation"),
-        "expected stored lambda with omitted throws to fail locally, got:\n{output}"
-    );
-    assert!(
-        output.contains("missing string"),
-        "expected local closed-lambda violation to report the concrete escaping throw, got:\n{output}"
+        !output.contains("declared throws"),
+        "expected no local violation for an unannotated lambda (throws are inferred), got:\n{output}"
     );
 }
 
@@ -641,13 +801,11 @@ function f() -> int {
     );
 
     let output = render_tir(&db, file);
-    assert!(
-        output.contains("throws contract violation"),
-        "expected alias-hidden omitted lambda to fail locally, got:\n{output}"
-    );
-    assert!(
-        output.contains("missing string"),
-        "expected alias-hidden local violation to report the escaping throw, got:\n{output}"
+    assert_declared_throws_violation(
+        &output,
+        "never",
+        "string",
+        "expected alias-hidden local violation to report the escaping throw",
     );
 }
 
@@ -664,13 +822,11 @@ fn returned_omitted_lambda_reports_local_violation() {
     );
 
     let output = render_tir(&db, file);
-    assert!(
-        output.contains("throws contract violation"),
-        "expected returned omitted lambda to fail locally, got:\n{output}"
-    );
-    assert!(
-        output.contains("missing string"),
-        "expected returned omitted lambda violation to report the escaping throw, got:\n{output}"
+    assert_declared_throws_violation(
+        &output,
+        "never",
+        "string",
+        "expected returned omitted lambda violation to report the escaping throw",
     );
 }
 
@@ -764,7 +920,7 @@ fn literal_catch_arm_does_not_consume_entire_type_from_residual() {
 function f() -> int {
   return fail() catch (e) {
     42 => 1,
-    _: int => 2,
+    int => 2,
     _ => 3
   }
 }"#,
@@ -773,7 +929,7 @@ function f() -> int {
     let output = render_tir(&db, file);
     let unreachable_count = output.matches("unreachable arm").count();
     // Only the trailing wildcard `_ => 3` should be unreachable (int is fully
-    // handled by the literal + typed arms). The `_: int` arm must stay reachable.
+    // handled by the literal + typed arms). The `int` arm must stay reachable.
     assert!(
         unreachable_count <= 1,
         "typed int arm after literal 42 arm should NOT be unreachable, got:\n{output}"
@@ -800,7 +956,7 @@ function fail(which: int) -> int {
 function f() -> int {
   return fail(0) catch (e) {
     Status.Active => 1,
-    _: Status => 2,
+    Status => 2,
     _ => 3
   }
 }"#,
@@ -808,10 +964,115 @@ function f() -> int {
 
     let output = render_tir(&db, file);
     let unreachable_count = output.matches("unreachable arm").count();
-    // Only the trailing wildcard should be unreachable. The `_: Status` arm
+    // Only the trailing wildcard should be unreachable. The `Status` arm
     // must stay reachable since Status.Active doesn't cover all variants.
     assert!(
         unreachable_count <= 1,
         "typed Status arm after Status.Active arm should NOT be unreachable, got:\n{output}"
+    );
+}
+
+// ── BEP-034 `spawn ... with` middleware diagnostics ──────────────────────
+// Every wrong shape must produce a CONCRETE, actionable message (the chain's
+// actual input type, never `T, E` placeholders or silence).
+
+#[test]
+fn spawn_with_non_callable_reports_concrete_mismatch() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"function f() -> int { let x = spawn with 42 { 1 }; await x }"#,
+    );
+    let output = render_tir(&db, file);
+    assert!(
+        output.contains(
+            "expected (baml.spawn.SpawnParams<int, null>) -> baml.spawn.SpawnParams<unknown, unknown> throws unknown, got 42"
+        ),
+        "non-callable `with` must report the concrete transformer shape, got:\n{output}"
+    );
+}
+
+#[test]
+fn spawn_with_wrong_shape_fn_names_the_contract() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"function g(n: int) -> int { n }
+function f() -> int { let x = spawn with g { 1 }; await x }"#,
+    );
+    let output = render_tir(&db, file);
+    assert!(
+        output.contains("must return a `baml.spawn.SpawnParams`")
+            && output.contains("got `(n: int) -> int throws never`"),
+        "wrong-shape `with` must name the middleware contract, got:\n{output}"
+    );
+}
+
+#[test]
+fn spawn_with_wrong_return_reports_link_input() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"function h<T, E>() -> (baml.spawn.SpawnParams<T, E>) -> int throws never { (p) -> { 7 } }
+function f() -> int { let x = spawn with h() { 1 }; await x }"#,
+    );
+    let output = render_tir(&db, file);
+    assert!(
+        output.contains("this link receives `baml.spawn.SpawnParams<int, null>`")
+            && output.contains("must return a `baml.spawn.SpawnParams`"),
+        "wrong-return transformer must report the link's concrete input, got:\n{output}"
+    );
+}
+
+#[test]
+fn spawn_with_chain_input_mismatch_is_concrete() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"function fix() -> (baml.spawn.SpawnParams<string, null>) -> baml.spawn.SpawnParams<string, null> throws never { (p) -> { p } }
+function f() -> int { let x = spawn with fix() { 1 }; await x }"#,
+    );
+    let output = render_tir(&db, file);
+    assert!(
+        output.contains("got (baml.spawn.SpawnParams<string, null>)")
+            && output.contains("expected (baml.spawn.SpawnParams<int, null>)"),
+        "chain input mismatch must show both concrete SpawnParams types, got:\n{output}"
+    );
+}
+
+#[test]
+fn spawn_with_non_fn_variable_reports() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"function f() -> int {
+  let nope = 7;
+  let x = spawn with nope { 1 };
+  await x
+}"#,
+    );
+    let output = render_tir(&db, file);
+    assert!(
+        output.contains("takes middleware transformer functions") && output.contains("got `int`"),
+        "non-function variable in `with` must report, got:\n{output}"
+    );
+}
+
+#[test]
+fn spawn_with_wrong_param_variable_reports() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"function g(n: int) -> int { n }
+function f() -> int {
+  let t = g;
+  let x = spawn with t { 1 };
+  await x
+}"#,
+    );
+    let output = render_tir(&db, file);
+    assert!(
+        output.contains("this link receives `baml.spawn.SpawnParams<int, null>`"),
+        "wrong-param variable transformer must report the link input, got:\n{output}"
     );
 }

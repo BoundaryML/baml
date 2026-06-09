@@ -4,8 +4,10 @@ use baml_base::Name;
 use baml_compiler2_hir::{package::PackageId, scope::ScopeKind};
 use baml_compiler2_tir::{
     inference::infer_scope_types,
-    package_interface::package_interface,
+    interfaces::package_implements_registry,
+    package_interface::{ExportedType, package_interface, package_resolution_context},
     resolve::{ResolvedName, resolve_name_at_in_scope},
+    ty::{FunctionParamMode, QualifiedTypeName, Ty},
 };
 use text_size::TextSize;
 
@@ -105,9 +107,15 @@ fn class_field_access() {
         "test.baml",
         "class Foo { name string }\nfunction f(x: Foo) -> string { return x.name; }",
     );
-    insta::assert_snapshot!(render_tir(&db, file), @"
+    insta::assert_snapshot!(render_tir(&db, file), @r#"
     class user.Foo {
       name: string
+    }
+    function user.Foo.to_json(self: user.Foo) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+      map { "name": self.name.to_json() } : map<string, baml.json.json>
+    }
+    function user.Foo.from_json(j: baml.json.json) -> user.Foo throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+      Foo { name: baml.json.from_json<string>(baml.json.field(j, "name")) } : user.Foo
     }
     function user.f(x: user.Foo) -> string throws never {
       { : never
@@ -115,9 +123,9 @@ fn class_field_access() {
       }
     }
     class user.Foo$stream {
-      name: null | string
+      name: string | null
     }
-    ");
+    "#);
 }
 
 #[test]
@@ -141,20 +149,26 @@ fn unresolved_field() {
         "test.baml",
         "class Foo { name string }\nfunction f(x: Foo) -> string { return x.missing; }",
     );
-    insta::assert_snapshot!(render_tir(&db, file), @"
+    insta::assert_snapshot!(render_tir(&db, file), @r#"
     class user.Foo {
       name: string
+    }
+    function user.Foo.to_json(self: user.Foo) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+      map { "name": self.name.to_json() } : map<string, baml.json.json>
+    }
+    function user.Foo.from_json(j: baml.json.json) -> user.Foo throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+      Foo { name: baml.json.from_json<string>(baml.json.field(j, "name")) } : user.Foo
     }
     function user.f(x: user.Foo) -> string throws never {
       { : never
         return x.missing : unknown
       }
-      !! 66..73: type `user.Foo` has no member `missing`
+      !! 66..73: type `Foo` has no member `missing`
     }
     class user.Foo$stream {
-      name: null | string
+      name: string | null
     }
-    ");
+    "#);
 }
 
 #[test]
@@ -172,20 +186,26 @@ function f(data: Data) -> string {
   return data.inner.foo;
 }",
     );
-    insta::assert_snapshot!(render_tir(&db, file), @"
+    insta::assert_snapshot!(render_tir(&db, file), @r#"
     class user.Data {
       name: string
+    }
+    function user.Data.to_json(self: user.Data) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+      map { "name": self.name.to_json() } : map<string, baml.json.json>
+    }
+    function user.Data.from_json(j: baml.json.json) -> user.Data throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+      Data { name: baml.json.from_json<string>(baml.json.field(j, "name")) } : user.Data
     }
     function user.f(data: user.Data) -> string throws never {
       { : never
         return data.inner.foo : unknown
       }
-      !! 78..83: type `user.Data` has no member `inner`
+      !! 78..83: type `Data` has no member `inner`
     }
     class user.Data$stream {
-      name: null | string
+      name: string | null
     }
-    ");
+    "#);
 }
 
 #[test]
@@ -203,20 +223,26 @@ function f(s: Sentiment) -> string {
   return s.feelin;
 }",
     );
-    insta::assert_snapshot!(render_tir(&db, file), @"
+    insta::assert_snapshot!(render_tir(&db, file), @r#"
     class user.Sentiment {
       feeling: string
+    }
+    function user.Sentiment.to_json(self: user.Sentiment) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+      map { "feeling": self.feeling.to_json() } : map<string, baml.json.json>
+    }
+    function user.Sentiment.from_json(j: baml.json.json) -> user.Sentiment throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+      Sentiment { feeling: baml.json.from_json<string>(baml.json.field(j, "feeling")) } : user.Sentiment
     }
     function user.f(s: user.Sentiment) -> string throws never {
       { : never
         return s.feelin : unknown
       }
-      !! 85..91: type `user.Sentiment` has no member `feelin`
+      !! 85..91: type `Sentiment` has no member `feelin`
     }
     class user.Sentiment$stream {
-      feeling: null | string
+      feeling: string | null
     }
-    ");
+    "#);
 }
 
 #[test]
@@ -280,18 +306,24 @@ fn enum_variant_resolution() {
 fn resolve_class_fields_query() {
     let mut db = make_db();
     let file = db.add_file("test.baml", "class Point { x int\ny float\nlabel string }");
-    insta::assert_snapshot!(render_tir(&db, file), @"
+    insta::assert_snapshot!(render_tir(&db, file), @r#"
     class user.Point {
       x: int
       y: float
       label: string
     }
-    class user.Point$stream {
-      x: null | int
-      y: null | float
-      label: null | string
+    function user.Point.to_json(self: user.Point) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+      map { "x": self.x.to_json(), "y": self.y.to_json(), "label": self.label.to_json() } : map<string, baml.json.json>
     }
-    ");
+    function user.Point.from_json(j: baml.json.json) -> user.Point throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+      Point { x: baml.json.from_json<int>(baml.json.field(j, "x")), y: baml.json.from_json<float>(baml.json.field(j, "y")), label: baml.json.from_json<string>(baml.json.field(j, "label")) } : user.Point
+    }
+    class user.Point$stream {
+      x: int | null
+      y: float | null
+      label: string | null
+    }
+    "#);
 }
 
 #[test]
@@ -302,6 +334,30 @@ fn resolve_type_alias_query() {
     type user.MyStr = string
     type user.MyStr$stream = string
     ");
+}
+
+#[test]
+fn class_field_bigint() {
+    // Asserts that `class Foo { x bigint }` lowers the field type to
+    // `Ty::Primitive(PrimitiveType::Bigint, _)`, displayed as `bigint`.
+    // Note: to_json returns `map<string, unknown>` for bigint until Phase 2
+    // wires up the bigint.to_json() method.
+    let mut db = make_db();
+    let file = db.add_file("test.baml", "class Foo { x bigint }");
+    insta::assert_snapshot!(render_tir(&db, file), @r#"
+    class user.Foo {
+      x: bigint
+    }
+    function user.Foo.to_json(self: user.Foo) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+      map { "x": self.x.to_json() } : map<string, baml.json.json>
+    }
+    function user.Foo.from_json(j: baml.json.json) -> user.Foo throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+      Foo { x: baml.json.from_json<bigint>(baml.json.field(j, "x")) } : user.Foo
+    }
+    class user.Foo$stream {
+      x: bigint | null
+    }
+    "#);
 }
 
 #[test]
@@ -403,8 +459,131 @@ fn function_type_throws_package_interface_exports_effect_params() {
 
     assert_eq!(exported.generic_params, vec![Name::new("__effect_param_0")]);
     assert_eq!(
-        format!("{}", exported.params[0].1),
+        format!("{}", exported.params[0].ty),
         "(value: int) -> string throws __effect_param_0"
+    );
+}
+
+#[test]
+fn package_interface_exports_optional_param_mode() {
+    let mut db = make_db();
+    db.add_file(
+        "search.baml",
+        "function Search(query: string, limit: int = 10) -> int { limit }",
+    );
+
+    let iface = package_interface(&db, PackageId::new(&db, Name::new("user")));
+    let exported = iface
+        .lookup_function(&[], &Name::new("Search"))
+        .expect("exported function");
+
+    assert_eq!(
+        exported.params[0].name.as_ref().map(|name| name.as_str()),
+        Some("query")
+    );
+    assert_eq!(exported.params[0].mode, FunctionParamMode::Required);
+    assert_eq!(
+        exported.params[1].name.as_ref().map(|name| name.as_str()),
+        Some("limit")
+    );
+    assert_eq!(exported.params[1].mode, FunctionParamMode::Optional);
+}
+
+#[test]
+fn cross_file_out_of_body_implements_class_target_is_registered() {
+    let mut db = make_db();
+    db.add_file(
+        "types.baml",
+        r#"
+class Dog {
+    breed: string
+}
+"#,
+    );
+    let impl_file = db.add_file(
+        "impl.baml",
+        r#"
+interface ToJson {
+    function to_json(self) -> string
+}
+
+implements ToJson for Dog {
+    function to_json(self) -> string {
+        return "dog"
+    }
+}
+"#,
+    );
+
+    let item_tree = baml_compiler2_hir::file_item_tree(&db, impl_file);
+    assert_eq!(
+        item_tree.implements_for.len(),
+        1,
+        "cross-file class target must remain a first-class ImplementsFor record"
+    );
+
+    let diagnostics = baml_project::collect_compiler2_diagnostics(&db);
+    assert!(
+        diagnostics.is_empty(),
+        "cross-file class target should not produce diagnostics: {diagnostics:#?}"
+    );
+
+    let registry = package_implements_registry(&db, PackageId::new(&db, Name::new("user")));
+    let dog = QualifiedTypeName::new(Name::new("user"), vec![], Name::new("Dog"));
+    let to_json = QualifiedTypeName::new(Name::new("user"), vec![], Name::new("ToJson"));
+    assert!(
+        registry.implements(&dog, &to_json),
+        "out-of-body implementation in another file should register Dog <: ToJson"
+    );
+}
+
+#[test]
+fn own_class_method_lookup_matches_exported_implicit_self_type() {
+    let mut db = make_db();
+    db.add_file(
+        "service.baml",
+        r#"
+class SearchService {
+    base string
+
+    function Run(self, query: string, limit: int = 20) -> int {
+        limit
+    }
+}
+"#,
+    );
+
+    let pkg_id = PackageId::new(&db, Name::new("user"));
+    let iface = package_interface(&db, pkg_id);
+    let Some(ExportedType::Class { methods, .. }) =
+        iface.lookup_type(&[], &Name::new("SearchService"))
+    else {
+        panic!("exported class");
+    };
+    let exported_method = methods
+        .iter()
+        .find(|method| method.name.as_str() == "Run")
+        .expect("exported method");
+
+    let res_ctx = package_resolution_context(&db, pkg_id);
+    let own_method = res_ctx
+        .lookup_class_method(
+            &db,
+            &QualifiedTypeName::new(Name::new("user"), vec![], Name::new("SearchService")),
+            &Name::new("Run"),
+        )
+        .expect("own method");
+
+    assert_eq!(&own_method.function.params, &exported_method.params);
+    assert!(
+        !matches!(own_method.function.params[0].ty, Ty::Unknown { .. }),
+        "implicit self should be reified before lowering"
+    );
+    assert_eq!(own_method.function.params[1].ty.to_string(), "string");
+    assert_eq!(own_method.function.params[2].ty.to_string(), "int");
+    assert_eq!(
+        own_method.function.params[2].mode,
+        FunctionParamMode::Optional
     );
 }
 

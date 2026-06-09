@@ -201,6 +201,15 @@ impl<'a> AstGraphBuilder<'a> {
                 self.visit_loop(*condition, *body, *origin);
             }
 
+            // `while let` renders as a loop node gated on its scrutinee. We
+            // reuse `visit_loop` (with the `While` keyword) so the loop frame
+            // is present and nested `break`/`continue` render under it.
+            ast::Stmt::WhileLet {
+                scrutinee, body, ..
+            } => {
+                self.visit_loop(*scrutinee, *body, ast::LoopOrigin::While);
+            }
+
             ast::Stmt::Let {
                 initializer: Some(init),
                 pattern,
@@ -210,8 +219,18 @@ impl<'a> AstGraphBuilder<'a> {
                 let needs_scope =
                     matches!(init_expr, ast::Expr::If { .. } | ast::Expr::Match { .. });
                 if needs_scope {
+                    // `format_pattern` prefixes top-level `Bind` patterns
+                    // with `let ` so they don't collapse with bare path arms;
+                    // for non-Bind patterns (`_`, type patterns, class
+                    // destructures, …) we still need the keyword to render
+                    // the let-statement as a declaration rather than an
+                    // assignment.
                     let pat_name = self.format_pattern(*pattern);
-                    let label = format!("let {pat_name} = ...");
+                    let label = if pat_name.starts_with("let ") {
+                        format!("{pat_name} = ...")
+                    } else {
+                        format!("let {pat_name} = ...")
+                    };
                     self.emit_other_scope(*init, Some(label));
                 } else {
                     self.visit_expr(*init);
@@ -545,6 +564,7 @@ impl<'a> AstGraphBuilder<'a> {
     // -- Call scope (leaf node — no recursion into the call's arguments) --
 
     fn emit_call_scope(&mut self, call_expr: ast::ExprId, label: &str) {
+        let callee_name = call_callee_name(self.body, call_expr);
         let ordinal = {
             let frame = self
                 .frames
@@ -569,7 +589,8 @@ impl<'a> AstGraphBuilder<'a> {
             label.to_string(),
             Some(call_expr.into_raw().into_u32()),
             NodeType::OtherScope,
-        );
+        )
+        .with_callee_name(callee_name);
         self.graph.add_node(node);
         let parent_index = self.current_parent_index();
         self.register_child_with_parent(parent_index, node_id);
@@ -653,44 +674,98 @@ impl<'a> AstGraphBuilder<'a> {
 
     fn format_pattern(&self, pat_id: ast::PatId) -> String {
         let pat = &self.body.patterns[pat_id];
-        let base = match &pat.kind {
-            ast::PatternKind::Wildcard => "_".to_string(),
-            // TODO: render inner pattern when bind-with-pattern syntax lands
-            ast::PatternKind::Bind {
-                name,
-                inner: _inner,
-            } => name.to_string(),
-            ast::PatternKind::Literal(lit) => format_literal_ast(lit),
-            ast::PatternKind::Null => "null".to_string(),
-            ast::PatternKind::EnumVariant { enum_name, variant } => {
-                let path: Vec<_> = enum_name.iter().map(baml_base::Name::as_str).collect();
-                format!("{}.{variant}", path.join("."))
-            }
-            ast::PatternKind::Or(pats) => {
-                let parts: Vec<_> = pats.iter().map(|p| self.format_pattern(*p)).collect();
-                parts.join(" | ")
-            }
-            ast::PatternKind::Type(ty) => ty.to_string(),
-            ast::PatternKind::Class { class, fields } => {
+        match pat {
+            ast::Pattern::Wildcard => "_".to_string(),
+            // Render as `let x` so it doesn't collapse into a path/type label
+            // (the new grammar requires the keyword for bindings).
+            ast::Pattern::Bind { name, subpat } => match subpat {
+                Some(sp) => format!("let {name}: {}", self.format_pattern(*sp)),
+                None => format!("let {name}"),
+            },
+            ast::Pattern::Type(ty) => ty.to_string(),
+            ast::Pattern::Class {
+                class,
+                generic_args,
+                fields,
+                ..
+            } => {
+                let class_path: Vec<_> = class.iter().map(baml_base::Name::as_str).collect();
+                let generic_args = if generic_args.is_empty() {
+                    String::new()
+                } else {
+                    format!(
+                        "<{}>",
+                        generic_args
+                            .iter()
+                            .map(ToString::to_string)
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    )
+                };
                 let field_strs: Vec<_> = fields
                     .iter()
-                    .map(|f| {
-                        if let Some(inner) = f.pat {
-                            format!("{}: {}", f.field, self.format_pattern(inner))
-                        } else {
-                            f.field.to_string()
-                        }
-                    })
+                    .map(|f| format!("{}: {}", f.field, self.format_pattern(f.pat)))
                     .collect();
-                format!("{} {{ {} }}", class, field_strs.join(", "))
+                format!(
+                    "{}{} {{ {} }}",
+                    class_path.join("."),
+                    generic_args,
+                    field_strs.join(", ")
+                )
             }
-        };
-        if let Some(narrow) = &pat.narrow {
-            format!("{base}: {narrow}")
-        } else {
-            base
+            ast::Pattern::Array {
+                prefix,
+                rest,
+                suffix,
+                ascription,
+            } => {
+                let mut parts: Vec<String> =
+                    prefix.iter().map(|p| self.format_pattern(*p)).collect();
+                if let Some(rest) = rest {
+                    parts.push(match rest.pat {
+                        Some(p) => format!("..{}", self.format_pattern(p)),
+                        None => "..".to_string(),
+                    });
+                }
+                parts.extend(suffix.iter().map(|p| self.format_pattern(*p)));
+                let arr = format!("[{}]", parts.join(", "));
+                match ascription {
+                    Some(ty) => format!("{arr}: {ty}"),
+                    None => arr,
+                }
+            }
+            ast::Pattern::Or(pats) => pats
+                .iter()
+                .map(|p| self.format_pattern_child(*p, ChildContext::Or))
+                .collect::<Vec<_>>()
+                .join(" | "),
         }
     }
+
+    /// Format a child pattern, parenthesizing when its variant has lower or
+    /// equal precedence than the parent combinator.
+    fn format_pattern_child(&self, pat_id: ast::PatId, parent: ChildContext) -> String {
+        let s = self.format_pattern(pat_id);
+        let needs_parens = matches!(
+            (&self.body.patterns[pat_id], parent),
+            (ast::Pattern::Or(_), ChildContext::Or)
+        );
+        if needs_parens { format!("({s})") } else { s }
+    }
+}
+
+fn call_callee_name(body: &ast::ExprBody, id: ast::ExprId) -> String {
+    match &body.exprs[id] {
+        ast::Expr::Call { callee, .. } | ast::Expr::OptionalCall { callee, .. } => {
+            render_expr_compact_ast(body, *callee)
+        }
+        _ => render_expr_compact_ast(body, id),
+    }
+}
+
+#[derive(Clone, Copy)]
+enum ChildContext {
+    Or,
 }
 
 // ---------------------------------------------------------------------------
@@ -762,11 +837,17 @@ fn render_expr_compact_ast(body: &ast::ExprBody, id: ast::ExprId) -> String {
                 render_expr_compact_ast(body, *index)
             )
         }
-        ast::Expr::Call { callee, args } => {
+        ast::Expr::Call { callee, args, .. } => {
             let callee_str = render_expr_compact_ast(body, *callee);
             let args_str: Vec<_> = args
                 .iter()
-                .map(|a| render_expr_compact_ast(body, *a))
+                .map(|a| {
+                    let expr = render_expr_compact_ast(body, a.expr);
+                    match &a.label {
+                        Some(label) => format!("{label} = {expr}"),
+                        None => expr,
+                    }
+                })
                 .collect();
             format!("{}({})", callee_str, args_str.join(", "))
         }
@@ -774,7 +855,13 @@ fn render_expr_compact_ast(body: &ast::ExprBody, id: ast::ExprId) -> String {
             let callee_str = render_expr_compact_ast(body, *callee);
             let args_str: Vec<_> = args
                 .iter()
-                .map(|a| render_expr_compact_ast(body, *a))
+                .map(|a| {
+                    let expr = render_expr_compact_ast(body, a.expr);
+                    match &a.label {
+                        Some(label) => format!("{label} = {expr}"),
+                        None => expr,
+                    }
+                })
                 .collect();
             format!("{}?.({})", callee_str, args_str.join(", "))
         }
@@ -816,6 +903,7 @@ fn render_expr_compact_ast(body: &ast::ExprBody, id: ast::ExprId) -> String {
 fn format_literal_ast(lit: &ast::Literal) -> String {
     match lit {
         ast::Literal::Int(n) => n.to_string(),
+        ast::Literal::Bigint(n) => format!("{n}n"),
         ast::Literal::Float(s) => s.clone(),
         ast::Literal::String(s) => format!("{s:?}"),
         ast::Literal::Bool(b) => b.to_string(),
@@ -1025,8 +1113,14 @@ mod tests {
     fn match_creates_branch_group_with_arms() {
         let body = make_ast_body(|exprs, _, patterns, match_arms| {
             let scrutinee = exprs.alloc(ast::Expr::Path(vec!["x".into()]));
-            let pat1 = patterns.alloc(ast::Pattern::literal(ast::Literal::Int(1)));
-            let pat2 = patterns.alloc(ast::Pattern::literal(ast::Literal::Int(2)));
+            let pat1 = patterns.alloc(ast::Pattern::Type(ast::TypeExpr::Literal {
+                value: ast::Literal::Int(1),
+                attrs: vec![],
+            }));
+            let pat2 = patterns.alloc(ast::Pattern::Type(ast::TypeExpr::Literal {
+                value: ast::Literal::Int(2),
+                attrs: vec![],
+            }));
             let body1 = exprs.alloc(ast::Expr::Null);
             let body2 = exprs.alloc(ast::Expr::Null);
             let arm1 = match_arms.alloc(ast::MatchArm {
@@ -1055,6 +1149,42 @@ mod tests {
             .collect();
         assert_eq!(groups.len(), 1);
         assert!(groups[0].label.starts_with("match"));
+    }
+
+    #[test]
+    fn format_pattern_bind_renders_with_let_keyword() {
+        let body = make_ast_body(|_, _, patterns, _| {
+            patterns.alloc(ast::Pattern::Bind {
+                name: "x".into(),
+                subpat: None,
+            });
+            None
+        });
+        let builder = AstGraphBuilder::new("Func", &body);
+        let pat = body.patterns.iter().next().unwrap().0;
+        assert_eq!(builder.format_pattern(pat), "let x");
+    }
+
+    #[test]
+    fn format_pattern_bind_with_ascription_renders_chain() {
+        // `let x: int` is now Bind { name: x, subpat: Some(Type(int)) }.
+        let body = make_ast_body(|_, _, patterns, _| {
+            let int_ty = ast::TypeExpr::Path {
+                segments: vec!["int".into()],
+                generic_args: vec![],
+                associated_type_bindings: vec![],
+                attrs: vec![],
+            };
+            let inner = patterns.alloc(ast::Pattern::Type(int_ty));
+            patterns.alloc(ast::Pattern::Bind {
+                name: "x".into(),
+                subpat: Some(inner),
+            });
+            None
+        });
+        let builder = AstGraphBuilder::new("Func", &body);
+        let pat = body.patterns.iter().last().unwrap().0;
+        assert_eq!(builder.format_pattern(pat), "let x: int");
     }
 
     #[test]
@@ -1127,13 +1257,16 @@ mod tests {
                 then_branch: then_b,
                 else_branch: Some(else_b),
             });
-            let pat = patterns.alloc(ast::Pattern::binding("x".into()));
+            let pat = patterns.alloc(ast::Pattern::Bind {
+                name: "x".into(),
+                subpat: None,
+            });
             let let_stmt = stmts.alloc(ast::Stmt::Let {
                 pattern: pat,
-                type_annotation: None,
                 initializer: Some(if_expr),
                 is_watched: false,
                 origin: ast::LetOrigin::Source,
+                else_branch: None,
             });
             Some(exprs.alloc(ast::Expr::Block {
                 stmts: vec![let_stmt],
@@ -1152,13 +1285,53 @@ mod tests {
     }
 
     #[test]
+    fn let_with_wildcard_pattern_keeps_let_keyword() {
+        // Non-Bind let-stmt patterns (Wildcard, Type, Class destructure)
+        // need the explicit `let ` keyword in CFG labels — without it the
+        // node renders like an assignment (`_ = ...`) instead of a
+        // declaration. Regression: previously `format_pattern` was assumed
+        // to prefix every let pattern with `let `, but it only does so for
+        // top-level Binds.
+        let body = make_ast_body(|exprs, stmts, patterns, _| {
+            let cond = exprs.alloc(ast::Expr::Literal(ast::Literal::Bool(true)));
+            let then_b = exprs.alloc(ast::Expr::Literal(ast::Literal::Int(1)));
+            let else_b = exprs.alloc(ast::Expr::Literal(ast::Literal::Int(2)));
+            let if_expr = exprs.alloc(ast::Expr::If {
+                condition: cond,
+                then_branch: then_b,
+                else_branch: Some(else_b),
+            });
+            let pat = patterns.alloc(ast::Pattern::Wildcard);
+            let let_stmt = stmts.alloc(ast::Stmt::Let {
+                pattern: pat,
+                initializer: Some(if_expr),
+                is_watched: false,
+                origin: ast::LetOrigin::Source,
+                else_branch: None,
+            });
+            Some(exprs.alloc(ast::Expr::Block {
+                stmts: vec![let_stmt],
+                tail_expr: None,
+            }))
+        });
+        let graph = build_control_flow_graph_from_ast("Func", &body);
+        let scope = graph
+            .nodes
+            .values()
+            .find(|n| matches!(n.node_type, NodeType::OtherScope))
+            .expect("should have OtherScope");
+        assert_eq!(scope.label, "let _ = ...");
+    }
+
+    #[test]
     fn call_scope_has_source_expr() {
         let body = make_ast_body(|exprs, _, _, _| {
             let callee = exprs.alloc(ast::Expr::Path(vec!["Summarize".into()]));
             let arg = exprs.alloc(ast::Expr::Path(vec!["text".into()]));
             let call = exprs.alloc(ast::Expr::Call {
                 callee,
-                args: vec![arg],
+                type_args: vec![],
+                args: vec![ast::CallArg::positional(arg)],
             });
             Some(call)
         });
@@ -1173,6 +1346,49 @@ mod tests {
             call_node.source_expr.is_some(),
             "call scope should have source_expr set"
         );
+    }
+
+    #[test]
+    fn named_call_scope_preserves_label() {
+        let body = make_ast_body(|exprs, _, _, _| {
+            let callee = exprs.alloc(ast::Expr::Path(vec!["Summarize".into()]));
+            let arg = exprs.alloc(ast::Expr::Path(vec!["text".into()]));
+            let call = exprs.alloc(ast::Expr::Call {
+                callee,
+                args: vec![ast::CallArg::named("query", arg)],
+                type_args: vec![],
+            });
+            Some(call)
+        });
+        let graph = build_control_flow_graph_from_ast("Func", &body);
+        let call_node = graph
+            .nodes
+            .values()
+            .find(|n| matches!(n.node_type, NodeType::OtherScope))
+            .expect("should have OtherScope for call");
+        assert!(call_node.source_expr.is_some());
+        assert_eq!(call_node.label, "Summarize(query = text)");
+    }
+
+    #[test]
+    fn named_optional_call_scope_preserves_label() {
+        let body = make_ast_body(|exprs, _, _, _| {
+            let callee = exprs.alloc(ast::Expr::Path(vec!["client".into()]));
+            let arg = exprs.alloc(ast::Expr::Path(vec!["text".into()]));
+            let call = exprs.alloc(ast::Expr::OptionalCall {
+                callee,
+                args: vec![ast::CallArg::named("query", arg)],
+            });
+            Some(call)
+        });
+        let graph = build_control_flow_graph_from_ast("Func", &body);
+        let call_node = graph
+            .nodes
+            .values()
+            .find(|n| matches!(n.node_type, NodeType::OtherScope))
+            .expect("should have OtherScope for optional call");
+        assert!(call_node.source_expr.is_some());
+        assert_eq!(call_node.label, "client?.(query = text)");
     }
 
     #[test]
@@ -1285,6 +1501,7 @@ mod tests {
             let field_val = exprs.alloc(ast::Expr::Literal(ast::Literal::Bool(true)));
             let obj = exprs.alloc(ast::Expr::Object {
                 type_name: Some(TypePath::bare("MyResponse".into())),
+                type_args: vec![],
                 fields: vec![("ok".into(), field_val)],
                 spreads: vec![],
             });
@@ -1321,7 +1538,8 @@ mod tests {
             let arg = exprs.alloc(ast::Expr::Path(vec!["input".into()]));
             let call = exprs.alloc(ast::Expr::Call {
                 callee,
-                args: vec![arg],
+                type_args: vec![],
+                args: vec![ast::CallArg::positional(arg)],
             });
             let ret = stmts.alloc(ast::Stmt::Return(Some(call)));
             Some(exprs.alloc(ast::Expr::Block {
@@ -1346,6 +1564,7 @@ mod tests {
             let cond = exprs.alloc(ast::Expr::Literal(ast::Literal::Bool(true)));
             let obj_true = exprs.alloc(ast::Expr::Object {
                 type_name: Some(TypePath::bare("Result".into())),
+                type_args: vec![],
                 fields: vec![],
                 spreads: vec![],
             });
@@ -1358,6 +1577,7 @@ mod tests {
             let err_val = exprs.alloc(ast::Expr::Literal(ast::Literal::Bool(false)));
             let obj_false = exprs.alloc(ast::Expr::Object {
                 type_name: Some(TypePath::bare("Result".into())),
+                type_args: vec![],
                 fields: vec![("err".into(), err_val)],
                 spreads: vec![],
             });
@@ -1397,6 +1617,7 @@ mod tests {
         let field_val = exprs.alloc(ast::Expr::Literal(ast::Literal::Bool(true)));
         let obj = exprs.alloc(ast::Expr::Object {
             type_name: Some(TypePath::bare("Resp".into())),
+            type_args: vec![],
             fields: vec![("ok".into(), field_val)],
             spreads: vec![],
         });

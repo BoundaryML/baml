@@ -89,12 +89,11 @@ fn validate_expr_body(body: &ExprBody, diagnostics: &mut Vec<(String, text_size:
         validate_type_expr_tree(ty, diagnostics);
     }
 
-    // Check typed patterns (e.g. `let x: string @alias("n") = ...`).
+    // Check typed patterns (e.g. `let x: string @alias("n") = ...`). Type
+    // information lives in `Pattern::Type` atoms, including those that appear
+    // as later links of a `Chain`. The arena iteration covers all of them.
     for (_, pat) in body.patterns.iter() {
-        if let Some(ty) = &pat.narrow {
-            validate_type_expr_tree(ty, diagnostics);
-        }
-        if let crate::ast::PatternKind::Type(ty) = &pat.kind {
+        if let crate::ast::Pattern::Type(ty) = pat {
             validate_type_expr_tree(ty, diagnostics);
         }
     }

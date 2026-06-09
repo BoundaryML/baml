@@ -6,6 +6,12 @@ type user.HiddenHandler = (value: int) -> int throws never
 class user.Holder {
   cb: (value: int) -> int throws never
 }
+function user.Holder.to_json(self: user.Holder) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  baml.json.parse(baml.json.to_string<Holder>(self)) : baml.json.json
+}
+function user.Holder.from_json(j: baml.json.json) -> user.Holder throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  baml.json.from_string<T>(baml.json.stringify(j)) : user.Holder
+}
 function user.accept_hidden(cb: user.HiddenHandler) -> int throws never {
   { : int
     cb(1) : int
@@ -33,7 +39,7 @@ function user.fail_hidden() -> int throws never {
   { : int
     accept_hidden(risky) : int
   }
-  !! 417..422: type mismatch: expected user.HiddenHandler, got (value: int) -> int throws string
+  !! 417..422: type mismatch: expected HiddenHandler, got (value: int) -> int throws string
 }
 function user.fail_stored() -> user.Holder throws never {
   { : user.Holder
@@ -66,6 +72,12 @@ function user.Worker.scale(self: user.Worker, value: int) -> int throws never {
     self.factor * value : int
   }
 }
+function user.Worker.to_json(self: user.Worker) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  map { "factor": self.factor.to_json() } : map<string, baml.json.json>
+}
+function user.Worker.from_json(j: baml.json.json) -> user.Worker throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  Worker { factor: baml.json.from_json<int>(baml.json.field(j, "factor")) } : user.Worker
+}
 function user.direct(cb: (value: int) -> int throws never) -> int throws never {
   { : int
     cb<__effect_param_0>(1) : int
@@ -93,5 +105,5 @@ function user.member_map(worker: user.Worker, values: int[]) -> int[] throws nev
   }
 }
 class user.Worker$stream {
-  factor: null | int
+  factor: int | null
 }

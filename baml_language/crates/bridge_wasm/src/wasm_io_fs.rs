@@ -12,7 +12,7 @@
 use std::sync::Arc;
 
 use js_sys::Uint8Array;
-use sys_ops::io::{self, BexExternalValue, CallId, OpErrorKind, SysOpContext, SysOpOutput, owned};
+use sys_ops::io::{self, BexExternalValue, CallId, SysOpContext, SysOpOutput, VmBamlError, owned};
 use sys_types::BexHeap;
 
 use crate::{send_wrapper::SendWrapper, wasm_fs::WasmVfs};
@@ -76,8 +76,10 @@ fn ancestor_paths(path: &str) -> Vec<String> {
     ancestors
 }
 
-fn js_err(e: &wasm_bindgen::JsValue) -> OpErrorKind {
-    OpErrorKind::Other(e.as_string().unwrap_or_else(|| format!("{e:?}")))
+fn js_err(e: &wasm_bindgen::JsValue) -> VmBamlError {
+    VmBamlError::Io {
+        message: e.as_string().unwrap_or_else(|| format!("{e:?}")),
+    }
 }
 
 // ============================================================================
@@ -94,7 +96,9 @@ impl io::IoClassFsFile for WasmIoFs {
         _f: owned::fs::File,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<String> {
-        SysOpOutput::err(OpErrorKind::Unsupported)
+        SysOpOutput::err(VmBamlError::Unsupported {
+            message: "Operation not supported on this platform".to_string(),
+        })
     }
 
     fn bytes(
@@ -104,7 +108,9 @@ impl io::IoClassFsFile for WasmIoFs {
         _f: owned::fs::File,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<Vec<u8>> {
-        SysOpOutput::err(OpErrorKind::Unsupported)
+        SysOpOutput::err(VmBamlError::Unsupported {
+            message: "Operation not supported on this platform".to_string(),
+        })
     }
 
     fn read(
@@ -115,7 +121,9 @@ impl io::IoClassFsFile for WasmIoFs {
         _n: i64,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<String> {
-        SysOpOutput::err(OpErrorKind::Unsupported)
+        SysOpOutput::err(VmBamlError::Unsupported {
+            message: "Operation not supported on this platform".to_string(),
+        })
     }
 
     fn read_bytes(
@@ -126,7 +134,9 @@ impl io::IoClassFsFile for WasmIoFs {
         _n: i64,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<Vec<u8>> {
-        SysOpOutput::err(OpErrorKind::Unsupported)
+        SysOpOutput::err(VmBamlError::Unsupported {
+            message: "Operation not supported on this platform".to_string(),
+        })
     }
 
     fn close(
@@ -136,7 +146,9 @@ impl io::IoClassFsFile for WasmIoFs {
         _f: owned::fs::File,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
-        SysOpOutput::err(OpErrorKind::Unsupported)
+        SysOpOutput::err(VmBamlError::Unsupported {
+            message: "Operation not supported on this platform".to_string(),
+        })
     }
 
     fn seek_from(
@@ -148,7 +160,9 @@ impl io::IoClassFsFile for WasmIoFs {
         _o: i64,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<i64> {
-        SysOpOutput::err(OpErrorKind::Unsupported)
+        SysOpOutput::err(VmBamlError::Unsupported {
+            message: "Operation not supported on this platform".to_string(),
+        })
     }
 
     fn write(
@@ -159,7 +173,9 @@ impl io::IoClassFsFile for WasmIoFs {
         _d: String,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<i64> {
-        SysOpOutput::err(OpErrorKind::Unsupported)
+        SysOpOutput::err(VmBamlError::Unsupported {
+            message: "Operation not supported on this platform".to_string(),
+        })
     }
 
     fn write_bytes(
@@ -170,7 +186,9 @@ impl io::IoClassFsFile for WasmIoFs {
         _d: Vec<u8>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<i64> {
-        SysOpOutput::err(OpErrorKind::Unsupported)
+        SysOpOutput::err(VmBamlError::Unsupported {
+            message: "Operation not supported on this platform".to_string(),
+        })
     }
 }
 
@@ -188,7 +206,9 @@ impl io::IoNamespaceFs for WasmIoFs {
         _ctx: &SysOpContext,
     ) -> SysOpOutput<owned::fs::File> {
         // File handle operations not supported in WASM.
-        SysOpOutput::err(OpErrorKind::Unsupported)
+        SysOpOutput::err(VmBamlError::Unsupported {
+            message: "Operation not supported on this platform".to_string(),
+        })
     }
 
     fn exists(
@@ -200,7 +220,9 @@ impl io::IoNamespaceFs for WasmIoFs {
     ) -> SysOpOutput<bool> {
         match self.vfs().vfs_exists(&path) {
             Ok(v) => SysOpOutput::ok(v),
-            Err(e) => SysOpOutput::err(OpErrorKind::Other(format!("{e:?}"))),
+            Err(e) => SysOpOutput::err(VmBamlError::Io {
+                message: format!("{e:?}"),
+            }),
         }
     }
 
@@ -213,7 +235,9 @@ impl io::IoNamespaceFs for WasmIoFs {
     ) -> SysOpOutput<()> {
         match self.vfs().vfs_remove_file(&path) {
             Ok(()) => SysOpOutput::ok(()),
-            Err(e) => SysOpOutput::err(OpErrorKind::Other(format!("{e:?}"))),
+            Err(e) => SysOpOutput::err(VmBamlError::Io {
+                message: format!("{e:?}"),
+            }),
         }
     }
 
@@ -227,11 +251,13 @@ impl io::IoNamespaceFs for WasmIoFs {
         match self.vfs().vfs_metadata(&path) {
             Ok(meta) => match i64::try_from(meta.len) {
                 Ok(n) => SysOpOutput::ok(n),
-                Err(_) => SysOpOutput::err(OpErrorKind::Other(format!(
-                    "File '{path}' size exceeds i64::MAX"
-                ))),
+                Err(_) => SysOpOutput::err(VmBamlError::Io {
+                    message: format!("File '{path}' size exceeds i64::MAX"),
+                }),
             },
-            Err(e) => SysOpOutput::err(OpErrorKind::Other(format!("{e:?}"))),
+            Err(e) => SysOpOutput::err(VmBamlError::Io {
+                message: format!("{e:?}"),
+            }),
         }
     }
 
@@ -245,9 +271,13 @@ impl io::IoNamespaceFs for WasmIoFs {
         match self.vfs().vfs_read_file(&path) {
             Ok(bytes) => match String::from_utf8(bytes.to_vec()) {
                 Ok(s) => SysOpOutput::ok(s),
-                Err(e) => SysOpOutput::err(OpErrorKind::Other(format!("UTF-8 error: {e}"))),
+                Err(e) => SysOpOutput::err(VmBamlError::ParseError {
+                    message: format!("UTF-8 error: {e}"),
+                }),
             },
-            Err(e) => SysOpOutput::err(OpErrorKind::Other(format!("{e:?}"))),
+            Err(e) => SysOpOutput::err(VmBamlError::Io {
+                message: format!("{e:?}"),
+            }),
         }
     }
 
@@ -261,15 +291,16 @@ impl io::IoNamespaceFs for WasmIoFs {
     ) -> SysOpOutput<i64> {
         let data = content.into_bytes();
         let Ok(len) = i64::try_from(data.len()) else {
-            return SysOpOutput::err(OpErrorKind::Other(format!(
-                "write size {} exceeds i64::MAX",
-                data.len()
-            )));
+            return SysOpOutput::err(VmBamlError::InvalidArgument {
+                message: format!("write size {} exceeds i64::MAX", data.len()),
+            });
         };
         let uint8 = Uint8Array::from(data.as_slice());
         match self.vfs().vfs_write_file(&path, &uint8) {
             Ok(()) => SysOpOutput::ok(len),
-            Err(e) => SysOpOutput::err(OpErrorKind::Other(format!("{e:?}"))),
+            Err(e) => SysOpOutput::err(VmBamlError::Io {
+                message: format!("{e:?}"),
+            }),
         }
     }
 
@@ -282,15 +313,16 @@ impl io::IoNamespaceFs for WasmIoFs {
         _ctx: &SysOpContext,
     ) -> SysOpOutput<i64> {
         let Ok(len) = i64::try_from(content.len()) else {
-            return SysOpOutput::err(OpErrorKind::Other(format!(
-                "write size {} exceeds i64::MAX",
-                content.len()
-            )));
+            return SysOpOutput::err(VmBamlError::InvalidArgument {
+                message: format!("write size {} exceeds i64::MAX", content.len()),
+            });
         };
         let uint8 = Uint8Array::from(content.as_slice());
         match self.vfs().vfs_write_file(&path, &uint8) {
             Ok(()) => SysOpOutput::ok(len),
-            Err(e) => SysOpOutput::err(OpErrorKind::Other(format!("{e:?}"))),
+            Err(e) => SysOpOutput::err(VmBamlError::Io {
+                message: format!("{e:?}"),
+            }),
         }
     }
 
@@ -313,9 +345,9 @@ impl io::IoNamespaceFs for WasmIoFs {
                         match serde_wasm_bindgen::from_value(v) {
                             Ok(e) => e,
                             Err(e) => {
-                                return SysOpOutput::err(OpErrorKind::Other(format!(
-                                    "readDirEntries returned invalid entry: {e}"
-                                )));
+                                return SysOpOutput::err(VmBamlError::ParseError {
+                                    message: format!("readDirEntries returned invalid entry: {e}"),
+                                });
                             }
                         };
                     entries.push(owned::fs::DirEntry {
@@ -335,9 +367,9 @@ impl io::IoNamespaceFs for WasmIoFs {
                 let mut entries = Vec::with_capacity(arr.length() as usize);
                 for v in arr.iter() {
                     let Some(name) = v.as_string() else {
-                        return SysOpOutput::err(OpErrorKind::Other(
-                            "readDir entry is not a string".into(),
-                        ));
+                        return SysOpOutput::err(VmBamlError::DevOther {
+                            message: "readDir entry is not a string".into(),
+                        });
                     };
                     // Legacy readDir doesn't expose type info. Probe metadata
                     // per entry. Hosts that care about read_dir performance
@@ -356,7 +388,9 @@ impl io::IoNamespaceFs for WasmIoFs {
                 }
                 SysOpOutput::ok(entries)
             }
-            Err(e) => SysOpOutput::err(OpErrorKind::Other(format!("{e:?}"))),
+            Err(e) => SysOpOutput::err(VmBamlError::Io {
+                message: format!("{e:?}"),
+            }),
         }
     }
 
@@ -371,9 +405,9 @@ impl io::IoNamespaceFs for WasmIoFs {
         if !options.recursive {
             match self.vfs().vfs_exists(&path) {
                 Ok(true) => {
-                    return SysOpOutput::err(OpErrorKind::Other(format!(
-                        "Directory already exists: {path}"
-                    )));
+                    return SysOpOutput::err(VmBamlError::Io {
+                        message: format!("Directory already exists: {path}"),
+                    });
                 }
                 Ok(false) => {}
                 Err(e) => return SysOpOutput::err(js_err(&e)),
@@ -383,9 +417,9 @@ impl io::IoNamespaceFs for WasmIoFs {
                 match self.vfs().vfs_exists(&parent) {
                     Ok(true) => {}
                     Ok(false) => {
-                        return SysOpOutput::err(OpErrorKind::Other(format!(
-                            "Parent directory does not exist: {parent}"
-                        )));
+                        return SysOpOutput::err(VmBamlError::Io {
+                            message: format!("Parent directory does not exist: {parent}"),
+                        });
                     }
                     Err(e) => return SysOpOutput::err(js_err(&e)),
                 }
@@ -401,9 +435,9 @@ impl io::IoNamespaceFs for WasmIoFs {
             Ok(true) => match self.vfs().vfs_metadata(&path) {
                 Ok(meta) if meta.file_type == "directory" => return SysOpOutput::ok(()),
                 Ok(_) => {
-                    return SysOpOutput::err(OpErrorKind::Other(format!(
-                        "Path exists and is not a directory: {path}"
-                    )));
+                    return SysOpOutput::err(VmBamlError::Io {
+                        message: format!("Path exists and is not a directory: {path}"),
+                    });
                 }
                 Err(e) => return SysOpOutput::err(js_err(&e)),
             },

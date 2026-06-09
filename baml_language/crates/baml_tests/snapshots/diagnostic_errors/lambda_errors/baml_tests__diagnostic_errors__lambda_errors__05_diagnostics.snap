@@ -2,7 +2,7 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === COMPILER2 DIAGNOSTICS ===
-  [type] Error: type mismatch: expected string, got int
+  [type] error: type mismatch: expected string, got int
    ╭─[ lambda_errors.baml:2:39 ]
    │
  2 │ ╭─▶ function test_return_mismatch() -> int {
@@ -14,7 +14,7 @@ source: crates/baml_tests/src/generated_tests.rs
    │     Note: Error code: E0001
 ───╯
 
-  [type] Error: cannot infer type of lambda parameter `x` — add a type annotation or provide context
+  [type] error: cannot infer type of lambda parameter `x` — add a type annotation or provide context
    ╭─[ lambda_errors.baml:9:14 ]
    │
  9 │     let bad = (x) -> { x * 2 }
@@ -24,7 +24,7 @@ source: crates/baml_tests/src/generated_tests.rs
    │ Note: Error code: E0002
 ───╯
 
-  [type] Error: expected 1 argument(s), got 2
+  [type] error: expected 1 argument(s), got 2
     ╭─[ lambda_errors.baml:16:15 ]
     │
  16 │     items.map((x, y) -> { x })
@@ -34,7 +34,7 @@ source: crates/baml_tests/src/generated_tests.rs
     │ Note: Error code: E0005
 ────╯
 
-  [type] Error: type mismatch: expected int, got string
+  [type] error: type mismatch: expected int, got string
     ╭─[ lambda_errors.baml:21:25 ]
     │
  21 │     let items: int[] = [1, 2, 3]
@@ -44,7 +44,7 @@ source: crates/baml_tests/src/generated_tests.rs
     │ Note: Error code: E0001
 ────╯
 
-  [type] Error: type mismatch: expected int, got string
+  [type] error: type mismatch: expected int, got string
     ╭─[ lambda_errors.baml:22:15 ]
     │
  22 │     items.map((x: string) -> { x })
@@ -54,7 +54,7 @@ source: crates/baml_tests/src/generated_tests.rs
     │ Note: Error code: E0001
 ────╯
 
-  [type] Error: unresolved type: NonExistentType
+  [type] error: unresolved type: NonExistentType
     ╭─[ lambda_errors.baml:27:16 ]
     │
  27 │     let f = (x: NonExistentType) -> { 0 }
@@ -64,7 +64,7 @@ source: crates/baml_tests/src/generated_tests.rs
     │ Note: Error code: E0002
 ────╯
 
-  [type] Error: unresolved type: NonExistentType
+  [type] error: unresolved type: NonExistentType
     ╭─[ lambda_errors.baml:33:24 ]
     │
  33 │     let f = (x: int) -> NonExistentType { x }

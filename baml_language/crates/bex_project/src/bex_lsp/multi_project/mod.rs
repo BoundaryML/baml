@@ -38,8 +38,6 @@ struct BexMulitProject {
         std::sync::Arc<std::sync::Mutex<HashMap<crate::fs::FsPath, std::sync::Arc<LiveProject>>>>,
     sys_op_factory: SysOpFactory,
     event_sink: Option<std::sync::Arc<dyn bex_events::EventSink>>,
-    #[allow(dead_code)] // TODO: reserved for upcoming playground integration
-    playground_state: std::sync::Arc<std::sync::Mutex<PlaygroundState>>,
     sender: std::sync::Arc<dyn LspClientSenderTrait + Send + Sync>,
     playground_sender: std::sync::Arc<dyn crate::bex_lsp::PlaygroundSender>,
 
@@ -85,84 +83,6 @@ pub trait LspClientSenderTrait {
     fn make_request(&self, msg: lsp_server::Request) -> Result<(), LspError>;
 }
 
-// #[derive(Clone, Debug)]
-// struct LspClientSender {
-//     weak_sender: std::sync::Weak<crossbeam::channel::Sender<lsp_server::Message>>,
-// }
-
-// impl LspClientSenderTrait for LspClientSender {
-//     fn send_notification(&self, msg: lsp_server::Notification) -> Result<(), LspError> {
-//         let Some(sender) = self.weak_sender.upgrade() else {
-//             return Err(LspError::ClientClosed);
-//         };
-//         sender
-//             .send(lsp_server::Message::Notification(msg))
-//             .map_err(|_| LspError::ClientClosed)
-//     }
-
-//     #[allow(dead_code)]
-//     fn make_request(&self, msg: lsp_server::Request) -> Result<(), LspError> {
-//         let Some(sender) = self.weak_sender.upgrade() else {
-//             return Err(LspError::ClientClosed);
-//         };
-//         sender
-//             .send(lsp_server::Message::Request(msg))
-//             .map_err(|_| LspError::ClientClosed)
-//     }
-
-//     fn send_response_impl(&self, response: lsp_server::Response) -> Result<(), LspError> {
-//         let Some(sender) = self.weak_sender.upgrade() else {
-//             return Err(LspError::ClientClosed);
-//         };
-
-//         sender
-//             .send(lsp_server::Message::Response(response))
-//             .map_err(|_| LspError::ClientClosed)
-//     }
-// }
-
-#[allow(dead_code)]
-enum SelectionReason {
-    UserSelection,
-    AutomaticSelection,
-}
-
-#[allow(dead_code)]
-struct Selection<T> {
-    value: Option<T>,
-    reason: SelectionReason,
-}
-
-impl<T> Default for Selection<T> {
-    fn default() -> Self {
-        Self {
-            value: None,
-            reason: SelectionReason::AutomaticSelection,
-        }
-    }
-}
-
-#[allow(dead_code)]
-impl<T> Selection<T> {
-    fn set_user_selection(&mut self, value: T) {
-        self.value = Some(value);
-        self.reason = SelectionReason::UserSelection;
-    }
-
-    fn set_automatic_selection(&mut self, value: T) {
-        self.value = Some(value);
-        self.reason = SelectionReason::AutomaticSelection;
-    }
-}
-
-#[allow(dead_code, clippy::struct_field_names)]
-#[derive(Default)]
-struct PlaygroundState {
-    last_selected_project: Selection<vfs::VfsPath>,
-    last_selected_function: Selection<String>,
-    last_selected_test: Selection<String>,
-}
-
 enum ProjectRefreshMode {
     Full,
     InMemoryChangesOnly,
@@ -182,9 +102,6 @@ impl BexMulitProject {
             projects: std::sync::Arc::new(std::sync::Mutex::new(HashMap::new())),
             sys_op_factory,
             event_sink,
-            playground_state: std::sync::Arc::new(
-                std::sync::Mutex::new(PlaygroundState::default()),
-            ),
             sender,
             playground_sender,
             position_encoding: PositionEncoding::UTF8,
@@ -533,6 +450,7 @@ impl BexMulitProject {
                 } else {
                     crate::bex_lsp::FunctionKind::Expr
                 },
+                origin: f.origin.into(),
                 capabilities: if f.is_llm {
                     Some(crate::bex_lsp::LlmCapabilities {
                         render_prompt: true,
@@ -766,7 +684,7 @@ impl BexMulitProject {
                 "testing.TestRegistry.run_test",
                 vec![
                     registry_value,
-                    bex_engine::BexExternalValue::String(test_name.to_string()),
+                    bex_engine::BexExternalValue::String(test_name.into()),
                 ],
                 ctx,
                 true, // deep copy TestReport for wire
@@ -824,7 +742,7 @@ impl BexMulitProject {
                     "testing.TestRegistry.expand_set",
                     vec![
                         registry_value.clone(),
-                        bex_engine::BexExternalValue::String(name.clone()),
+                        bex_engine::BexExternalValue::String(name.as_str().into()),
                     ],
                     ctx,
                     true,
@@ -925,9 +843,11 @@ fn bex_value_to_json(v: &bex_engine::BexExternalValue) -> serde_json::Value {
     match v {
         bex_engine::BexExternalValue::Null => serde_json::Value::Null,
         bex_engine::BexExternalValue::Int(i) => serde_json::json!(i),
+        // Bigints can exceed JSON number precision; emit as a decimal string.
+        bex_engine::BexExternalValue::Bigint(b) => serde_json::json!(b.to_string()),
         bex_engine::BexExternalValue::Float(f) => serde_json::json!(f),
         bex_engine::BexExternalValue::Bool(b) => serde_json::json!(b),
-        bex_engine::BexExternalValue::String(s) => serde_json::json!(s),
+        bex_engine::BexExternalValue::String(s) => serde_json::json!(s.as_str()),
         bex_engine::BexExternalValue::Array { items, .. } => {
             serde_json::Value::Array(items.iter().map(bex_value_to_json).collect())
         }
@@ -964,6 +884,19 @@ impl super::BexLsp for BexMulitProject {
         project_root: &crate::fs::FsPath,
     ) -> Result<Arc<dyn crate::Bex>, crate::RuntimeError> {
         self.get_bex_for_project(project_root)
+    }
+
+    fn all_env_var_names(&self) -> Vec<String> {
+        let projects = self.projects.lock().unwrap();
+        let mut names = std::collections::BTreeSet::new();
+        for project in projects.values() {
+            let db_guard = project.project.db.lock().unwrap();
+            let db = db_guard.db();
+            for name in baml_lsp2_actions::all_env_var_names(db) {
+                names.insert(name);
+            }
+        }
+        names.into_iter().collect()
     }
 
     fn request_playground_state(&self) {
@@ -1023,6 +956,7 @@ impl super::BexLsp for BexMulitProject {
             workflow_memberships: vec![],
             source_expr_id: None,
             source_expr_candidates: vec![],
+            source_expr_function_name: None,
             test_name: None,
             cursor_offset: None,
         };

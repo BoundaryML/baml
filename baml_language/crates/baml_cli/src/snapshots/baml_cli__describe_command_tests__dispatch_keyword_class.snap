@@ -1,0 +1,14 @@
+---
+source: crates/baml_cli/src/describe_command_tests.rs
+expression: output
+---
+class — Defines a structured data type with named fields.
+
+Syntax:
+  class MyClass {
+    field1 string
+    field2: int
+    implements Printable {}
+  }
+
+Class fields can be written as `field Type` or `field: Type`. Fields can have default values, docstrings, attributes, methods, and `implements` blocks for interface contracts. Interface fields use the colon form.

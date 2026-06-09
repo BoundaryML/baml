@@ -7,6 +7,12 @@ class user.User {
   name: string
   email: string
 }
+function user.User.to_json(self: user.User) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  map { "id": self.id.to_json(), "name": self.name.to_json(), "email": self.email.to_json() } : map<string, baml.json.json>
+}
+function user.User.from_json(j: baml.json.json) -> user.User throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  User { id: baml.json.from_json<int>(baml.json.field(j, "id")), name: baml.json.from_json<string>(baml.json.field(j, "name")), email: baml.json.from_json<string>(baml.json.field(j, "email")) } : user.User
+}
 function user.simple_function() -> int throws never {
   { : 42
     42 : 42
@@ -54,7 +60,7 @@ function user.process_with_logging(input: string) -> string throws never {
   }
 }
 class user.User$stream {
-  id: null | int
-  name: null | string
-  email: null | string
+  id: int | null
+  name: string | null
+  email: string | null
 }

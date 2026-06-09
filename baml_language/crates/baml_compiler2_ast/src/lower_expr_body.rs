@@ -8,26 +8,83 @@ use baml_base::{Name, TypePath};
 use baml_compiler_syntax::{SyntaxKind, SyntaxNode};
 use la_arena::Arena;
 use rowan::ast::AstNode;
-use text_size::{TextRange, TextSize};
+use text_size::TextRange;
 
 use crate::{
     LoweringDiagnostic,
     ast::{
-        AssignOp, AstSourceMap, BinaryOp, CatchArm, CatchArmId, CatchClause, CatchClauseKind, Expr,
-        ExprBody, ExprId, FunctionBodyDef, FunctionDef, LetOrigin, Literal, LoopOrigin, MatchArm,
-        MatchArmId, Param, PatId, Pattern, SpannedTypeExpr, SpreadField, Stmt, StmtId, TypeAnnotId,
-        TypeExpr, UnaryOp,
+        ArrayRestPat, AssignOp, AstSourceMap, BinaryOp, CallArg, CatchArm, CatchArmId, CatchClause,
+        CatchClauseKind, DefaultExprId, Expr, ExprBody, ExprId, FieldPat, FunctionBodyDef,
+        FunctionDef, FunctionDefaults, LetOrigin, Literal, LoopOrigin, MatchArm, MatchArmId, Param,
+        PatId, Pattern, SpannedTypeExpr, SpreadField, Stmt, StmtId, TypeAnnotId, TypeExpr, UnaryOp,
     },
 };
+
+/// A reference to an environment variable found in source code (`env.VAR_NAME`).
+#[derive(Debug, Clone)]
+pub struct EnvVarRef {
+    /// The variable name (e.g., `"OPENAI_API_KEY"`).
+    pub name: String,
+    /// The text range of the entire `env.VAR_NAME` expression in the source.
+    pub range: TextRange,
+}
 
 /// Returns true if `kind` can serve as an identifier token in expression position.
 ///
 /// The parser allows `KW_CLIENT` (and `WORD`) inside `PATH_EXPR` / `FIELD_ACCESS_EXPR`
-/// nodes when `client` is used as a variable or field name. This must match
-/// exactly what `parse_path_or_ident` accepts; adding a new keyword there
-/// requires adding it here too.
+/// nodes when `client` is used as a variable or field name. It likewise allows
+/// `KW_SPAWN` / `KW_AWAIT` as path segments (e.g. the `baml.spawn` namespace),
+/// since they are unambiguous after a `.`, and the interface-related keywords
+/// (`implements`, `interface`, `extends`) as member names — e.g.
+/// `dog_t.implements(animal_t)` on the reflection `type` value. This must
+/// match exactly what `parse_path_or_ident` / `at_member_name` accept in the
+/// parser; adding a new keyword there requires adding it here too.
 fn is_ident_token(kind: SyntaxKind) -> bool {
-    kind == SyntaxKind::WORD || kind == SyntaxKind::KW_CLIENT
+    matches!(
+        kind,
+        SyntaxKind::WORD
+            | SyntaxKind::KW_CLIENT
+            | SyntaxKind::KW_SPAWN
+            | SyntaxKind::KW_AWAIT
+            | SyntaxKind::KW_IMPLEMENTS
+            | SyntaxKind::KW_IMPLEMENT
+            | SyntaxKind::KW_INTERFACE
+            | SyntaxKind::KW_EXTENDS
+            | SyntaxKind::KW_REQUIRES
+    )
+}
+
+/// Locate the `GENERIC_ARGS` node that should be treated as the *call-site*
+/// type-args for a `CALL_EXPR` whose callee is `callee_node`.
+///
+/// Direct child case (`foo<T>(args)`): the `GENERIC_ARGS` sits inside the
+/// callee `PATH_EXPR`. For static-method-on-generic-class calls
+/// (`Box<Secret>.from_json(j)`) the parser emits a `FIELD_ACCESS_EXPR` whose
+/// base `PATH_EXPR` carries the receiver's `GENERIC_ARGS` — that's also a
+/// call-site type-arg from a semantic standpoint, so we walk into the base.
+///
+/// We don't merge `GENERIC_ARGS` from both positions: if both are present
+/// (e.g. `Container<int>.method<U>(args)`) the *method-level* args (direct
+/// child) win, since they're attached to the call itself.
+fn find_callee_generic_args(callee_node: &SyntaxNode) -> Option<SyntaxNode> {
+    if let Some(args) = callee_node
+        .children()
+        .find(|n| n.kind() == SyntaxKind::GENERIC_ARGS)
+    {
+        return Some(args);
+    }
+    match callee_node.kind() {
+        SyntaxKind::FIELD_ACCESS_EXPR | SyntaxKind::OPTIONAL_FIELD_ACCESS_EXPR => {
+            // Base is the first child node — it carries the receiver type's
+            // `GENERIC_ARGS` for `<Type<...>>.method(args)` shape.
+            let base = callee_node.children().next()?;
+            if base.kind() == SyntaxKind::UPCAST_EXPR {
+                return None;
+            }
+            find_callee_generic_args(&base)
+        }
+        _ => None,
+    }
 }
 
 /// Lower a CST `ExprFunctionBody` to an owned `ExprBody` + parallel `AstSourceMap`.
@@ -35,6 +92,7 @@ pub(crate) fn lower(
     expr_body: &baml_compiler_syntax::ast::ExprFunctionBody,
     param_names: &[Name],
     diags: &mut Vec<LoweringDiagnostic>,
+    env_var_refs: &mut Vec<EnvVarRef>,
 ) -> (ExprBody, AstSourceMap) {
     let mut ctx = LoweringContext::new();
 
@@ -50,8 +108,9 @@ pub(crate) fn lower(
         .find_map(baml_compiler_syntax::ast::BlockExpr::cast)
         .map(|block| ctx.lower_block_expr(&block));
 
-    let (body, source_map, ctx_diags) = ctx.finish(root_expr);
+    let (body, source_map, ctx_diags, ctx_env_refs) = ctx.finish(root_expr);
     diags.extend(ctx_diags);
+    env_var_refs.extend(ctx_env_refs);
     (body, source_map)
 }
 
@@ -62,7 +121,12 @@ pub(crate) fn lower(
 pub(crate) fn lower_block_node(
     block_node: &SyntaxNode,
     param_names: &[Name],
-) -> (ExprBody, AstSourceMap, Vec<LoweringDiagnostic>) {
+) -> (
+    ExprBody,
+    AstSourceMap,
+    Vec<LoweringDiagnostic>,
+    Vec<EnvVarRef>,
+) {
     let mut ctx = LoweringContext::new();
     for name in param_names {
         ctx.names_in_scope.insert(name.to_string());
@@ -70,6 +134,35 @@ pub(crate) fn lower_block_node(
     let root_expr = baml_compiler_syntax::ast::BlockExpr::cast(block_node.clone())
         .map(|block| ctx.lower_block_expr(&block));
     ctx.finish(root_expr)
+}
+
+pub(crate) fn lower_default_expr_nodes(
+    defaults: &[(usize, baml_compiler_syntax::SyntaxElement)],
+    param_names: &[Name],
+    diags: &mut Vec<LoweringDiagnostic>,
+    env_var_refs: &mut Vec<EnvVarRef>,
+) -> (FunctionDefaults, Vec<(usize, DefaultExprId)>) {
+    let mut ctx = LoweringContext::new();
+    for name in param_names {
+        ctx.names_in_scope.insert(name.to_string());
+    }
+
+    let mut lowered = Vec::with_capacity(defaults.len());
+    for (idx, element) in defaults {
+        let expr = match element {
+            rowan::NodeOrToken::Node(node) => ctx.lower_expr(node),
+            rowan::NodeOrToken::Token(token) => ctx.alloc_expr(
+                lower_bare_token_expr(token.kind(), token.text()),
+                token.text_range(),
+            ),
+        };
+        lowered.push((*idx, DefaultExprId::new(expr)));
+    }
+
+    let (exprs, source_map, ctx_diags, ctx_env_refs) = ctx.finish(None);
+    diags.extend(ctx_diags);
+    env_var_refs.extend(ctx_env_refs);
+    (FunctionDefaults { exprs, source_map }, lowered)
 }
 
 /// Lower a testset `BLOCK_EXPR` body node to an owned `ExprBody` + `AstSourceMap`.
@@ -88,7 +181,12 @@ pub(crate) fn lower_testset_block_node(
     block_node: &SyntaxNode,
     collector_var: &Name,
     param_names: &[Name],
-) -> (ExprBody, AstSourceMap, Vec<LoweringDiagnostic>) {
+) -> (
+    ExprBody,
+    AstSourceMap,
+    Vec<LoweringDiagnostic>,
+    Vec<EnvVarRef>,
+) {
     let mut ctx = LoweringContext::new_testset_collector(collector_var.clone());
     ctx.names_in_scope.insert(collector_var.to_string());
     for name in param_names {
@@ -97,9 +195,6 @@ pub(crate) fn lower_testset_block_node(
     let range = block_node.text_range();
     let root_expr = baml_compiler_syntax::ast::BlockExpr::cast(block_node.clone()).map(|block| {
         let inner_block_id = ctx.lower_block_expr(&block);
-        // Ensure the body ends with `null` so the collector lambda always returns null.
-        // We extract the statements from the inner block and rebuild with a null tail.
-        // If the inner block already has a tail expression, wrap everything in a new block.
         ctx.ensure_null_tail(inner_block_id, range)
     });
     ctx.finish(root_expr)
@@ -113,6 +208,9 @@ pub(crate) fn lower_testset_block_node(
 /// Used for runner expressions that are simple literals or identifiers.
 fn lower_bare_token_expr(kind: SyntaxKind, text: &str) -> Expr {
     match kind {
+        SyntaxKind::BIGINT_LITERAL => {
+            Expr::Literal(Literal::Bigint(crate::parse_bigint_literal_token(text)))
+        }
         SyntaxKind::INTEGER_LITERAL => {
             if let Ok(v) = text.parse::<i64>() {
                 Expr::Literal(Literal::Int(v))
@@ -197,19 +295,14 @@ impl InitTestContext {
     pub(crate) fn finish(
         self,
         root_expr: Option<ExprId>,
-    ) -> (ExprBody, AstSourceMap, Vec<LoweringDiagnostic>) {
+    ) -> (
+        ExprBody,
+        AstSourceMap,
+        Vec<LoweringDiagnostic>,
+        Vec<EnvVarRef>,
+    ) {
         self.inner.finish(root_expr)
     }
-}
-
-/// Helper enum for building pattern elements during lowering.
-enum PatternElement {
-    /// Accumulated dotted path segments.
-    Segments(Vec<Name>, TextSize),
-    /// After seeing DOT: waiting for next word to add to the path.
-    SegmentsAwaitingWord(Vec<Name>, TextSize),
-    /// Seen `name:` - waiting for type expression
-    TypedBindingStart(Name, TextSize),
 }
 
 struct LoweringContext {
@@ -230,9 +323,17 @@ struct LoweringContext {
     testset_collector_var: Option<Name>,
     /// Diagnostics accumulated during lowering.
     diags: Vec<LoweringDiagnostic>,
+    /// Environment variable references (`env.X`) found during lowering.
+    env_var_refs: Vec<EnvVarRef>,
     /// Expressions that contain unwrapped `?.` operators and need an `OptionalChain` wrapper.
     /// Propagated up through chain-continuing nodes (`FieldAccess`, Index, Call, Optional*).
     needs_chain_wrap: std::collections::HashSet<ExprId>,
+    /// Text ranges of `GENERIC_ARGS` nodes that an enclosing call has already
+    /// consumed as call-site `type_args` (e.g. the `<int>` in `foo<int>(x)`).
+    /// `lower_path_expr` skips wrapping these into an `Expr::GenericApply` so the
+    /// args aren't double-counted. Only standalone, value-position `<...>` (e.g.
+    /// `let f = foo<int>`) becomes a `GenericApply`.
+    consumed_generic_args: std::collections::HashSet<TextRange>,
 }
 
 impl LoweringContext {
@@ -248,7 +349,9 @@ impl LoweringContext {
             names_in_scope: std::collections::HashSet::new(),
             testset_collector_var: None,
             diags: Vec::new(),
+            env_var_refs: Vec::new(),
             needs_chain_wrap: std::collections::HashSet::new(),
+            consumed_generic_args: std::collections::HashSet::new(),
         }
     }
 
@@ -256,6 +359,23 @@ impl LoweringContext {
         let mut ctx = Self::new();
         ctx.testset_collector_var = Some(collector_var);
         ctx
+    }
+
+    fn warn_const_introducer(&mut self, span: TextRange) {
+        self.diags
+            .push(LoweringDiagnostic::ConstBindingIntroducer { span });
+    }
+
+    fn warn_direct_const_introducers(&mut self, node: &SyntaxNode) {
+        let spans: Vec<TextRange> = node
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .filter(|token| token.kind() == SyntaxKind::KW_CONST)
+            .map(|token| token.text_range())
+            .collect();
+        for span in spans {
+            self.warn_const_introducer(span);
+        }
     }
 
     fn alloc_expr(&mut self, expr: Expr, range: TextRange) -> ExprId {
@@ -315,6 +435,10 @@ impl LoweringContext {
                     _ => Expr::Path(vec![Name::new(text)]),
                 };
                 Some(self.alloc_expr(expr, span))
+            }
+            SyntaxKind::BIGINT_LITERAL => {
+                let value = crate::parse_bigint_literal_token(token.text());
+                Some(self.alloc_expr(Expr::Literal(Literal::Bigint(value)), span))
             }
             SyntaxKind::INTEGER_LITERAL => {
                 let value = token.text().parse::<i64>().unwrap_or(0);
@@ -385,7 +509,12 @@ impl LoweringContext {
     fn finish(
         self,
         root_expr: Option<ExprId>,
-    ) -> (ExprBody, AstSourceMap, Vec<LoweringDiagnostic>) {
+    ) -> (
+        ExprBody,
+        AstSourceMap,
+        Vec<LoweringDiagnostic>,
+        Vec<EnvVarRef>,
+    ) {
         let body = ExprBody {
             exprs: self.exprs,
             stmts: self.stmts,
@@ -395,7 +524,7 @@ impl LoweringContext {
             type_annotations: self.type_annotations,
             root_expr,
         };
-        (body, self.source_map, self.diags)
+        (body, self.source_map, self.diags, self.env_var_refs)
     }
 
     fn lower_block_expr(&mut self, block: &baml_compiler_syntax::ast::BlockExpr) -> ExprId {
@@ -416,6 +545,7 @@ impl LoweringContext {
                         SyntaxKind::RETURN_STMT => self.lower_return_stmt(node),
                         SyntaxKind::THROW_STMT => self.lower_throw_stmt(node),
                         SyntaxKind::WHILE_STMT => self.lower_while_stmt(node),
+                        SyntaxKind::WHILE_LET_STMT => self.lower_while_let_stmt(node),
                         SyntaxKind::FOR_EXPR => self.lower_for_stmt(node),
                         SyntaxKind::BREAK_STMT => self.alloc_stmt(Stmt::Break, node.text_range()),
                         SyntaxKind::CONTINUE_STMT => {
@@ -471,6 +601,10 @@ impl LoweringContext {
                                 _ => Expr::Path(vec![Name::new(text)]),
                             };
                             self.alloc_expr(e, span)
+                        }
+                        SyntaxKind::BIGINT_LITERAL => {
+                            let value = crate::parse_bigint_literal_token(token.text());
+                            self.alloc_expr(Expr::Literal(Literal::Bigint(value)), span)
                         }
                         SyntaxKind::INTEGER_LITERAL => {
                             let value = token.text().parse::<i64>().unwrap_or(0);
@@ -528,9 +662,11 @@ impl LoweringContext {
     fn lower_expr_inner(&mut self, node: &SyntaxNode) -> ExprId {
         match node.kind() {
             SyntaxKind::BINARY_EXPR => self.lower_binary_expr(node),
+            SyntaxKind::IS_EXPR => self.lower_is_expr(node),
             SyntaxKind::UNARY_EXPR => self.lower_unary_expr(node),
             SyntaxKind::CALL_EXPR => self.lower_call_expr(node),
             SyntaxKind::IF_EXPR => self.lower_if_expr(node),
+            SyntaxKind::IF_LET_EXPR => self.lower_if_let_expr(node),
             SyntaxKind::MATCH_EXPR => self.lower_match_expr(node),
             SyntaxKind::CATCH_EXPR => self.lower_catch_expr(node),
             SyntaxKind::THROW_EXPR => self.lower_throw_expr(node),
@@ -543,6 +679,7 @@ impl LoweringContext {
             }
             SyntaxKind::PATH_EXPR => self.lower_path_expr(node),
             SyntaxKind::FIELD_ACCESS_EXPR => self.lower_field_access_expr(node),
+            SyntaxKind::UPCAST_EXPR => self.lower_upcast_expr(node),
             SyntaxKind::OPTIONAL_FIELD_ACCESS_EXPR => self.lower_optional_field_access_expr(node),
             SyntaxKind::ENV_ACCESS_EXPR => self.lower_env_access_expr(node),
             SyntaxKind::INDEX_EXPR => self.lower_index_expr(node),
@@ -564,6 +701,8 @@ impl LoweringContext {
             SyntaxKind::OBJECT_LITERAL => self.lower_object_literal(node),
             SyntaxKind::MAP_LITERAL => self.lower_map_literal(node),
             SyntaxKind::LAMBDA_EXPR => self.lower_lambda_expr(node),
+            SyntaxKind::SPAWN_EXPR => self.lower_spawn_expr(node),
+            SyntaxKind::AWAIT_EXPR => self.lower_await_expr(node),
             _ => {
                 if let Some(literal) = self.try_lower_literal_token(node) {
                     literal
@@ -572,6 +711,152 @@ impl LoweringContext {
                 }
             }
         }
+    }
+
+    /// Lower `spawn name_expr? { body }`. The CST shape is
+    /// `SPAWN_EXPR [ KW_SPAWN [expr] BLOCK_EXPR ]`.
+    ///
+    /// To reuse the existing lambda machinery, the body is lowered as a
+    /// fresh 0-arg lambda (its own `ExprBody` + source map). The
+    /// `Expr::Spawn { body }` ID points at an `Expr::Lambda(func_def)`,
+    /// which the MIR lowering then handles via `lower_lambda` to emit
+    /// the proper `MakeClosure`. The name expression is parsed in the
+    /// outer context (where it can reference outer bindings).
+    fn lower_spawn_expr(&mut self, node: &SyntaxNode) -> ExprId {
+        use baml_compiler_syntax::ast as cst_ast;
+
+        let mut name: Option<ExprId> = None;
+        let mut with_exprs: Vec<ExprId> = Vec::new();
+        let mut body_lambda: Option<ExprId> = None;
+        // The CST is flat: `KW_SPAWN [name expr] [KW_WITH expr (COMMA expr)*]
+        // BLOCK_EXPR`. We walk children-with-tokens so the `KW_WITH` token is
+        // visible; everything after it (other than the body) is a `with` expr.
+        let mut seen_with = false;
+
+        for child in node.children_with_tokens() {
+            let kind = child.kind();
+            if kind == SyntaxKind::KW_WITH {
+                seen_with = true;
+                continue;
+            }
+            // Expression NODES and bare expression TOKENS both matter past
+            // here (a literal like `spawn with 42 { .. }` arrives as a plain
+            // token); skip `KW_SPAWN`, commas, and trivia. Dropping tokens
+            // here would silently swallow the expression — the type checker
+            // must see it to reject it with a real diagnostic.
+            let child = match child {
+                rowan::NodeOrToken::Node(n) => n,
+                rowan::NodeOrToken::Token(t) => {
+                    let span = t.text_range();
+                    let expr = match t.kind() {
+                        SyntaxKind::INTEGER_LITERAL => Some(Expr::Literal(Literal::Int(
+                            t.text().parse::<i64>().unwrap_or(0),
+                        ))),
+                        SyntaxKind::FLOAT_LITERAL => {
+                            Some(Expr::Literal(Literal::Float(t.text().to_string())))
+                        }
+                        SyntaxKind::STRING_LITERAL | SyntaxKind::RAW_STRING_LITERAL => Some(
+                            Expr::Literal(Literal::String(strip_string_delimiters(t.text()))),
+                        ),
+                        // `spawn`/`await` pass `is_ident_token` (they're
+                        // valid path SEGMENTS) but here they're the keywords
+                        // themselves — never a name/with expression.
+                        SyntaxKind::KW_SPAWN | SyntaxKind::KW_AWAIT => None,
+                        k if is_ident_token(k) => Some(match t.text() {
+                            "true" => Expr::Literal(Literal::Bool(true)),
+                            "false" => Expr::Literal(Literal::Bool(false)),
+                            "null" => Expr::Null,
+                            other => Expr::Path(vec![Name::new(other)]),
+                        }),
+                        _ => None,
+                    };
+                    if let Some(expr) = expr {
+                        let id = self.alloc_expr(expr, span);
+                        if seen_with {
+                            with_exprs.push(id);
+                        } else if name.is_none() {
+                            name = Some(id);
+                        }
+                    }
+                    continue;
+                }
+            };
+            let child = &child;
+            if kind == SyntaxKind::BLOCK_EXPR {
+                // Synthesize a 0-arg lambda whose body is this block —
+                // mirroring `lower_lambda_expr` so the existing
+                // capture / scope / MIR plumbing applies unchanged.
+                let block = cst_ast::BlockExpr::cast(child.clone());
+                let func_def = block.map(|block| {
+                    let mut lambda_ctx = LoweringContext::new();
+                    let root_expr = lambda_ctx.lower_block_expr(&block);
+                    let (lbody, source_map, lambda_diags, lambda_env_refs) =
+                        lambda_ctx.finish(Some(root_expr));
+                    self.diags.extend(lambda_diags);
+                    self.env_var_refs.extend(lambda_env_refs);
+                    FunctionDef {
+                        name: Name::new("<spawn>"),
+                        generic_params: Vec::new(),
+                        generic_param_bounds: Vec::new(),
+                        params: Vec::new(),
+                        defaults: crate::ast::FunctionDefaults::empty(),
+                        return_type: None,
+                        throws: None,
+                        body: Some(FunctionBodyDef::Expr(lbody, source_map)),
+                        declarative_meta: None,
+                        origin: crate::ast::FunctionOrigin::Internal,
+                        attributes: Vec::new(),
+                        docstring: None,
+                        span: child.text_range(),
+                        name_span: child.text_range(),
+                    }
+                });
+                if let Some(fd) = func_def {
+                    body_lambda =
+                        Some(self.alloc_expr(Expr::Lambda(Box::new(fd)), child.text_range()));
+                }
+            } else if seen_with {
+                with_exprs.push(self.lower_expr(child));
+            } else if name.is_none() {
+                name = Some(self.lower_expr(child));
+            }
+        }
+
+        let body = body_lambda.unwrap_or_else(|| self.alloc_expr(Expr::Missing, node.text_range()));
+        self.alloc_expr(
+            Expr::Spawn {
+                name,
+                with_exprs,
+                body,
+            },
+            node.text_range(),
+        )
+    }
+
+    /// Lower `await expr`. The CST shape is `AWAIT_EXPR [ KW_AWAIT
+    /// (expr_node | ident_token | literal_token) ]`.
+    ///
+    /// Bare identifiers like `await f` are emitted by the parser as a
+    /// raw `WORD` token (not a `PATH_EXPR` node), so we have to scan
+    /// both child nodes and child tokens — analogous to how
+    /// `BlockElement` handles `ExprToken`.
+    fn lower_await_expr(&mut self, node: &SyntaxNode) -> ExprId {
+        for elem in node.children_with_tokens() {
+            match elem {
+                rowan::NodeOrToken::Node(child) if child.kind() != SyntaxKind::KW_AWAIT => {
+                    let future = self.lower_expr(&child);
+                    return self.alloc_expr(Expr::Await { future }, node.text_range());
+                }
+                rowan::NodeOrToken::Token(token) if token.kind() != SyntaxKind::KW_AWAIT => {
+                    if let Some(future) = self.try_lower_bare_token(&token) {
+                        return self.alloc_expr(Expr::Await { future }, node.text_range());
+                    }
+                }
+                _ => {}
+            }
+        }
+        let future = self.alloc_expr(Expr::Missing, node.text_range());
+        self.alloc_expr(Expr::Await { future }, node.text_range())
     }
 
     fn lower_binary_expr(&mut self, node: &SyntaxNode) -> ExprId {
@@ -621,6 +906,16 @@ impl LoweringContext {
                             // The parser emits them as two separate tokens in BINARY_EXPR.
                             // First QUESTION sets a provisional op; second one confirms.
                             op = Some(BinaryOp::NullCoalesce);
+                        }
+                        SyntaxKind::BIGINT_LITERAL => {
+                            let value = crate::parse_bigint_literal_token(token.text());
+                            let expr_id =
+                                self.alloc_expr(Expr::Literal(Literal::Bigint(value)), span);
+                            if lhs.is_none() {
+                                lhs = Some(expr_id);
+                            } else {
+                                rhs = Some(expr_id);
+                            }
                         }
                         SyntaxKind::INTEGER_LITERAL => {
                             let value = token.text().parse::<i64>().unwrap_or(0);
@@ -689,6 +984,72 @@ impl LoweringContext {
         self.alloc_expr(Expr::Binary { op, lhs, rhs }, node.text_range())
     }
 
+    /// Lower `<expr> is <pattern>` to `Expr::Is`. The pattern-test semantics
+    /// (always `bool`, no exhaustiveness, non-matching is fine) are enforced
+    /// downstream by TIR/MIR — this layer just preserves the shape.
+    fn lower_is_expr(&mut self, node: &SyntaxNode) -> ExprId {
+        let mut scrutinee = None;
+        let mut pattern = None;
+
+        for elem in node.children_with_tokens() {
+            match elem {
+                rowan::NodeOrToken::Node(child) => match child.kind() {
+                    SyntaxKind::PATTERN => {
+                        pattern = Some(self.lower_pattern(&child));
+                    }
+                    _ => {
+                        if scrutinee.is_none() {
+                            scrutinee = Some(self.lower_expr(&child));
+                        }
+                    }
+                },
+                rowan::NodeOrToken::Token(token) => {
+                    // The LHS may be a bare token (WORD, INTEGER_LITERAL, …)
+                    // not wrapped in its own node by the Pratt parser.
+                    if scrutinee.is_none() {
+                        let span = token.text_range();
+                        match token.kind() {
+                            SyntaxKind::BIGINT_LITERAL => {
+                                let value = crate::parse_bigint_literal_token(token.text());
+                                scrutinee = Some(
+                                    self.alloc_expr(Expr::Literal(Literal::Bigint(value)), span),
+                                );
+                            }
+                            SyntaxKind::INTEGER_LITERAL => {
+                                let value = token.text().parse::<i64>().unwrap_or(0);
+                                scrutinee =
+                                    Some(self.alloc_expr(Expr::Literal(Literal::Int(value)), span));
+                            }
+                            SyntaxKind::FLOAT_LITERAL => {
+                                scrutinee = Some(self.alloc_expr(
+                                    Expr::Literal(Literal::Float(token.text().to_string())),
+                                    span,
+                                ));
+                            }
+                            k if is_ident_token(k) => {
+                                let text = token.text();
+                                let e = match text {
+                                    "true" => Expr::Literal(Literal::Bool(true)),
+                                    "false" => Expr::Literal(Literal::Bool(false)),
+                                    "null" => Expr::Null,
+                                    _ => Expr::Path(vec![Name::new(text)]),
+                                };
+                                scrutinee = Some(self.alloc_expr(e, span));
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+            }
+        }
+
+        let span = node.text_range();
+        let scrutinee = scrutinee.unwrap_or_else(|| self.alloc_expr(Expr::Missing, span));
+        let pattern = pattern.unwrap_or_else(|| self.alloc_pattern(Pattern::Wildcard, span));
+
+        self.alloc_expr(Expr::Is { scrutinee, pattern }, span)
+    }
+
     fn try_lower_assignment(&mut self, node: &SyntaxNode) -> Option<StmtId> {
         if node.kind() != SyntaxKind::BINARY_EXPR {
             return None;
@@ -734,6 +1095,16 @@ impl LoweringContext {
                 rowan::NodeOrToken::Token(token) => {
                     let span = token.text_range();
                     match token.kind() {
+                        SyntaxKind::BIGINT_LITERAL => {
+                            let value = crate::parse_bigint_literal_token(token.text());
+                            let expr_id =
+                                self.alloc_expr(Expr::Literal(Literal::Bigint(value)), span);
+                            if lhs.is_none() {
+                                lhs = Some(expr_id);
+                            } else {
+                                rhs = Some(expr_id);
+                            }
+                        }
                         SyntaxKind::INTEGER_LITERAL => {
                             let value = token.text().parse::<i64>().unwrap_or(0);
                             let expr_id = self.alloc_expr(Expr::Literal(Literal::Int(value)), span);
@@ -794,6 +1165,11 @@ impl LoweringContext {
                         SyntaxKind::MINUS_MINUS => {
                             op = Some(UnaryOp::Neg);
                             double_op = true;
+                        }
+                        SyntaxKind::BIGINT_LITERAL => {
+                            let value = crate::parse_bigint_literal_token(token.text());
+                            operand =
+                                Some(self.alloc_expr(Expr::Literal(Literal::Bigint(value)), span));
                         }
                         SyntaxKind::INTEGER_LITERAL => {
                             let value = token.text().parse::<i64>().unwrap_or(0);
@@ -877,6 +1253,112 @@ impl LoweringContext {
         )
     }
 
+    fn lower_if_let_expr(&mut self, node: &SyntaxNode) -> ExprId {
+        // CST shape: `if let PATTERN = SCRUTINEE THEN_BLOCK (else (BLOCK | IF_EXPR | IF_LET_EXPR))?`
+        //
+        // Children we care about, in source order:
+        //   1. PATTERN
+        //   2. scrutinee expression (may be a bare WORD/literal token, not a node)
+        //   3. then-branch (BLOCK_EXPR)
+        //   4. else-branch (BLOCK_EXPR | IF_EXPR | IF_LET_EXPR), optional
+        //
+        // The scrutinee can appear as either a wrapper node (PATH_EXPR,
+        // BINARY_EXPR, …) or as a bare token (single identifier / literal), so
+        // we mirror `lower_if_expr` and walk children-with-tokens.
+        self.warn_direct_const_introducers(node);
+
+        let mut pattern = None;
+        let mut exprs: Vec<ExprId> = Vec::new();
+        for elem in node.children_with_tokens() {
+            match elem {
+                rowan::NodeOrToken::Node(child) => {
+                    if child.kind() == SyntaxKind::PATTERN {
+                        if pattern.is_none() {
+                            pattern = Some(self.lower_pattern(&child));
+                        }
+                    } else {
+                        exprs.push(self.lower_expr(&child));
+                    }
+                }
+                rowan::NodeOrToken::Token(token) => {
+                    if let Some(expr_id) = self.try_lower_bare_token(&token) {
+                        exprs.push(expr_id);
+                    }
+                }
+            }
+        }
+
+        let pattern =
+            pattern.unwrap_or_else(|| self.alloc_pattern(Pattern::Wildcard, node.text_range()));
+        let scrutinee = exprs
+            .first()
+            .copied()
+            .unwrap_or_else(|| self.alloc_expr(Expr::Missing, node.text_range()));
+        let then_branch = exprs
+            .get(1)
+            .copied()
+            .unwrap_or_else(|| self.alloc_expr(Expr::Missing, node.text_range()));
+        let else_branch = exprs.get(2).copied();
+
+        self.alloc_expr(
+            Expr::IfLet {
+                pattern,
+                scrutinee,
+                then_branch,
+                else_branch,
+            },
+            node.text_range(),
+        )
+    }
+
+    fn lower_while_let_stmt(&mut self, node: &SyntaxNode) -> StmtId {
+        // CST shape: `while let PATTERN = SCRUTINEE BODY_BLOCK`.
+        // The first PATTERN node is the pattern; remaining children are
+        // [0]=scrutinee, [1]=body (mirrors `lower_if_let_expr` minus else).
+        self.warn_direct_const_introducers(node);
+
+        let mut pattern = None;
+        let mut exprs: Vec<ExprId> = Vec::new();
+        for elem in node.children_with_tokens() {
+            match elem {
+                rowan::NodeOrToken::Node(child) => {
+                    if child.kind() == SyntaxKind::PATTERN {
+                        if pattern.is_none() {
+                            pattern = Some(self.lower_pattern(&child));
+                        }
+                    } else {
+                        exprs.push(self.lower_expr(&child));
+                    }
+                }
+                rowan::NodeOrToken::Token(token) => {
+                    if let Some(expr_id) = self.try_lower_bare_token(&token) {
+                        exprs.push(expr_id);
+                    }
+                }
+            }
+        }
+
+        let pattern =
+            pattern.unwrap_or_else(|| self.alloc_pattern(Pattern::Wildcard, node.text_range()));
+        let scrutinee = exprs
+            .first()
+            .copied()
+            .unwrap_or_else(|| self.alloc_expr(Expr::Missing, node.text_range()));
+        let body = exprs
+            .get(1)
+            .copied()
+            .unwrap_or_else(|| self.alloc_expr(Expr::Missing, node.text_range()));
+
+        self.alloc_stmt(
+            Stmt::WhileLet {
+                pattern,
+                scrutinee,
+                body,
+            },
+            node.text_range(),
+        )
+    }
+
     fn lower_match_expr(&mut self, node: &SyntaxNode) -> ExprId {
         let mut scrutinee = None;
         let mut scrutinee_type = None;
@@ -908,6 +1390,12 @@ impl LoweringContext {
                     if scrutinee.is_none() {
                         let span = token.text_range();
                         match token.kind() {
+                            SyntaxKind::BIGINT_LITERAL => {
+                                let value = crate::parse_bigint_literal_token(token.text());
+                                scrutinee = Some(
+                                    self.alloc_expr(Expr::Literal(Literal::Bigint(value)), span),
+                                );
+                            }
                             SyntaxKind::INTEGER_LITERAL => {
                                 let value = token.text().parse::<i64>().unwrap_or(0);
                                 scrutinee =
@@ -953,8 +1441,8 @@ impl LoweringContext {
         for elem in node.children_with_tokens() {
             match elem {
                 rowan::NodeOrToken::Node(child) => match child.kind() {
-                    SyntaxKind::MATCH_PATTERN => {
-                        pattern = Some(self.lower_match_pattern(&child));
+                    SyntaxKind::PATTERN => {
+                        pattern = Some(self.lower_pattern(&child));
                     }
                     SyntaxKind::MATCH_GUARD => {
                         if let Some(expr_node) = child.children().next() {
@@ -974,6 +1462,14 @@ impl LoweringContext {
                                                 _ => Expr::Path(vec![Name::new(text)]),
                                             };
                                             guard = Some(self.alloc_expr(e, range));
+                                            break;
+                                        }
+                                        SyntaxKind::BIGINT_LITERAL => {
+                                            let value = crate::parse_bigint_literal_token(t.text());
+                                            guard = Some(self.alloc_expr(
+                                                Expr::Literal(Literal::Bigint(value)),
+                                                t.text_range(),
+                                            ));
                                             break;
                                         }
                                         SyntaxKind::INTEGER_LITERAL => {
@@ -1004,6 +1500,14 @@ impl LoweringContext {
                 rowan::NodeOrToken::Token(token) => match token.kind() {
                     SyntaxKind::FAT_ARROW => {
                         seen_fat_arrow = true;
+                    }
+                    SyntaxKind::BIGINT_LITERAL if seen_fat_arrow && body.is_none() => {
+                        let value = crate::parse_bigint_literal_token(token.text());
+                        body =
+                            Some(self.alloc_expr(
+                                Expr::Literal(Literal::Bigint(value)),
+                                token.text_range(),
+                            ));
                     }
                     SyntaxKind::INTEGER_LITERAL if seen_fat_arrow && body.is_none() => {
                         let value = token.text().parse::<i64>().unwrap_or(0);
@@ -1045,7 +1549,7 @@ impl LoweringContext {
         }
 
         let arm = MatchArm {
-            pattern: pattern.unwrap_or_else(|| self.alloc_pattern(Pattern::wildcard(), arm_span)),
+            pattern: pattern.unwrap_or_else(|| self.alloc_pattern(Pattern::Wildcard, arm_span)),
             guard,
             body: body.unwrap_or_else(|| self.alloc_expr(Expr::Missing, arm_span)),
         };
@@ -1053,235 +1557,338 @@ impl LoweringContext {
         self.alloc_match_arm(arm, arm_span)
     }
 
-    fn lower_match_pattern(&mut self, node: &SyntaxNode) -> PatId {
-        let mut elements: Vec<PatId> = Vec::new();
-        let mut current_element: Option<PatternElement> = None;
-        let mut pending_negation = false;
+    // ============ Pattern lowering ============
+    //
+    // Structural walk of the new PATTERN CST. Lowers PATTERN/CHAIN/UNION/etc
+    // nodes into the flat `Pattern` enum.
+    //
+    // Invariants enforced here:
+    //   - 1-element CHAIN_PATTERN / UNION_PATTERN do not allocate a wrapper;
+    //     they collapse to the single inner pattern. (The parser already
+    //     refuses to produce them, but the lowering is defensive.)
+    //   - `_` (in any position) lowers to `Pattern::Wildcard`, never
+    //     `Bind { name: "_" }`.
+    //   - PAREN_PATTERN evaporates — it was a parser disambiguator only.
+    //   - Field shorthand `{ f }` materialises a `Bind { name: f }` pattern
+    //     for `FieldPat.pat`, so consumers never see a missing-pattern shape.
 
-        for elem in node.children_with_tokens() {
-            match elem {
-                rowan::NodeOrToken::Token(token) => {
-                    match token.kind() {
-                        SyntaxKind::PIPE => {
-                            if let Some(el) = current_element.take() {
-                                elements.push(self.finalize_pattern_element(el));
-                            }
-                        }
-                        SyntaxKind::MINUS => {
-                            pending_negation = true;
-                        }
-                        k if is_ident_token(k) => {
-                            let text = token.text().to_string();
+    /// Entry point: lower a `PATTERN` node to a `PatId`.
+    fn lower_pattern(&mut self, node: &SyntaxNode) -> PatId {
+        debug_assert_eq!(node.kind(), SyntaxKind::PATTERN);
+        match node.children().next() {
+            Some(inner) => self.lower_pattern_atom_node(&inner),
+            None => self.alloc_pattern(Pattern::Wildcard, node.text_range()),
+        }
+    }
 
-                            if let Some(PatternElement::SegmentsAwaitingWord(mut segs, start)) =
-                                current_element.take()
-                            {
-                                segs.push(Name::new(&text));
-                                current_element = Some(PatternElement::Segments(segs, start));
-                                continue;
-                            }
+    /// Dispatch on the kind of an atom-shaped pattern node
+    /// (`UNION_PATTERN`, `BINDING_PATTERN`, `WILDCARD_PATTERN`,
+    /// `DESTRUCTURE_PATTERN`, `ARRAY_PATTERN`, `TYPE_PATTERN`,
+    /// `PAREN_PATTERN`). Returns a fresh `PatId`.
+    fn lower_pattern_atom_node(&mut self, node: &SyntaxNode) -> PatId {
+        self.warn_direct_const_introducers(node);
 
-                            if let Some(PatternElement::TypedBindingStart(name, _start)) =
-                                current_element.take()
-                            {
-                                // After `name:`, we expect the type to be a node child (TYPE_EXPR),
-                                // but sometimes parser emits it as a WORD token directly.
-                                // Treat it as a named type.
-                                let pat = Pattern::typed_binding(
-                                    name,
-                                    crate::ast::TypeExpr::Path {
-                                        segments: vec![Name::new(&text)],
-                                        generic_args: vec![],
-                                        attrs: vec![],
-                                    },
-                                );
-                                elements.push(self.alloc_pattern(pat, token.text_range()));
-                                continue;
-                            }
-
-                            match text.as_str() {
-                                "true" => {
-                                    if let Some(el) = current_element.take() {
-                                        elements.push(self.finalize_pattern_element(el));
-                                    }
-                                    elements.push(self.alloc_pattern(
-                                        Pattern::literal(Literal::Bool(true)),
-                                        token.text_range(),
-                                    ));
-                                }
-                                "false" => {
-                                    if let Some(el) = current_element.take() {
-                                        elements.push(self.finalize_pattern_element(el));
-                                    }
-                                    elements.push(self.alloc_pattern(
-                                        Pattern::literal(Literal::Bool(false)),
-                                        token.text_range(),
-                                    ));
-                                }
-                                "null" => {
-                                    if let Some(el) = current_element.take() {
-                                        elements.push(self.finalize_pattern_element(el));
-                                    }
-                                    elements.push(
-                                        self.alloc_pattern(Pattern::null(), token.text_range()),
-                                    );
-                                }
-                                _ => {
-                                    if let Some(el) = current_element.take() {
-                                        elements.push(self.finalize_pattern_element(el));
-                                    }
-                                    current_element = Some(PatternElement::Segments(
-                                        vec![Name::new(&text)],
-                                        token.text_range().start(),
-                                    ));
-                                }
-                            }
-                        }
-                        SyntaxKind::DOT => {
-                            if let Some(PatternElement::Segments(segs, start)) =
-                                current_element.take()
-                            {
-                                current_element =
-                                    Some(PatternElement::SegmentsAwaitingWord(segs, start));
-                            }
-                        }
-                        SyntaxKind::COLON => {
-                            if let Some(PatternElement::Segments(segs, start)) =
-                                current_element.take()
-                            {
-                                if segs.len() == 1 {
-                                    current_element = Some(PatternElement::TypedBindingStart(
-                                        segs.into_iter().next().unwrap(),
-                                        start,
-                                    ));
-                                } else {
-                                    // Multi-segment path followed by colon — not valid; treat as binding
-                                    let name = segs.last().cloned().unwrap_or(Name::new("_"));
-                                    current_element =
-                                        Some(PatternElement::TypedBindingStart(name, start));
-                                }
-                            }
-                        }
-                        SyntaxKind::INTEGER_LITERAL => {
-                            if let Some(el) = current_element.take() {
-                                elements.push(self.finalize_pattern_element(el));
-                            }
-                            let value = token.text().parse::<i64>().unwrap_or(0);
-                            let value = if pending_negation { -value } else { value };
-                            pending_negation = false;
-                            elements.push(self.alloc_pattern(
-                                Pattern::literal(Literal::Int(value)),
-                                token.text_range(),
-                            ));
-                        }
-                        SyntaxKind::FLOAT_LITERAL => {
-                            if let Some(el) = current_element.take() {
-                                elements.push(self.finalize_pattern_element(el));
-                            }
-                            let text = token.text().to_string();
-                            let text = if pending_negation {
-                                format!("-{text}")
-                            } else {
-                                text
-                            };
-                            pending_negation = false;
-                            elements.push(self.alloc_pattern(
-                                Pattern::literal(Literal::Float(text)),
-                                token.text_range(),
-                            ));
-                        }
-                        _ => {}
-                    }
-                }
-                rowan::NodeOrToken::Node(child) => {
-                    match child.kind() {
-                        SyntaxKind::TYPE_EXPR => {
-                            // Could be typed binding's type or part of pattern
-                            if let Some(PatternElement::TypedBindingStart(name, _)) =
-                                current_element.take()
-                            {
-                                if let Some(type_expr) =
-                                    baml_compiler_syntax::ast::TypeExpr::cast(child.clone())
-                                {
-                                    let ty =
-                                        crate::lower_type_expr::lower_type_expr_node(&type_expr);
-                                    let pat = Pattern::typed_binding(name, ty);
-                                    elements.push(self.alloc_pattern(pat, child.text_range()));
-                                }
-                            }
-                        }
-                        SyntaxKind::STRING_LITERAL => {
-                            if let Some(el) = current_element.take() {
-                                elements.push(self.finalize_pattern_element(el));
-                            }
-                            let text = child.text().to_string();
-                            let content = strip_string_delimiters(&text);
-                            elements.push(self.alloc_pattern(
-                                Pattern::literal(Literal::String(content)),
-                                child.text_range(),
-                            ));
-                        }
-                        SyntaxKind::MATCH_PATTERN | SyntaxKind::CATCH_PATTERN => {
-                            if let Some(el) = current_element.take() {
-                                elements.push(self.finalize_pattern_element(el));
-                            }
-                            let nested_pat = self.lower_match_pattern(&child);
-                            match &self.patterns[nested_pat].kind {
-                                crate::ast::PatternKind::Or(sub) => {
-                                    elements.extend(sub.iter().copied());
-                                }
-                                _ => elements.push(nested_pat),
-                            }
-                        }
-                        _ => {}
-                    }
+        match node.kind() {
+            SyntaxKind::UNION_PATTERN => self.lower_union_pattern(node),
+            SyntaxKind::BINDING_PATTERN => self.lower_binding_pattern(node),
+            SyntaxKind::WILDCARD_PATTERN => {
+                self.alloc_pattern(Pattern::Wildcard, node.text_range())
+            }
+            SyntaxKind::DESTRUCTURE_PATTERN => self.lower_destructure_pattern(node),
+            SyntaxKind::ARRAY_PATTERN => self.lower_array_pattern(node),
+            SyntaxKind::TYPE_PATTERN => self.lower_type_pattern(node),
+            SyntaxKind::PAREN_PATTERN => {
+                match node.children().find(|n| n.kind() == SyntaxKind::PATTERN) {
+                    Some(inner) => self.lower_pattern(&inner),
+                    None => self.alloc_pattern(Pattern::Wildcard, node.text_range()),
                 }
             }
+            // Defensive: an unexpected node where a pattern atom should be.
+            // Lower as wildcard so downstream doesn't crash; the parse error
+            // (if any) will surface elsewhere.
+            _ => self.alloc_pattern(Pattern::Wildcard, node.text_range()),
+        }
+    }
+
+    /// Lower a `UNION_PATTERN` node. Children are atom-shaped pattern nodes
+    /// separated by `|` tokens. Length-1 unions collapse to the inner pattern.
+    fn lower_union_pattern(&mut self, node: &SyntaxNode) -> PatId {
+        let parts: Vec<PatId> = node
+            .children()
+            .map(|child| self.lower_pattern_atom_node(&child))
+            .collect();
+        match parts.len() {
+            0 => self.alloc_pattern(Pattern::Wildcard, node.text_range()),
+            1 => parts[0],
+            _ => self.alloc_pattern(Pattern::Or(parts), node.text_range()),
+        }
+    }
+
+    /// Lower a `BINDING_PATTERN` (`let WORD` / `const WORD`). The parser routes
+    /// `let _` / `const _` to
+    /// `WILDCARD_PATTERN` before it ever reaches here, so the WORD's text is
+    /// never `_`. The only defensive case is a malformed `let` without a
+    /// following WORD (parse error like `let = 1`), which we recover as
+    /// wildcard.
+    fn lower_binding_pattern(&mut self, node: &SyntaxNode) -> PatId {
+        let name_token = node
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|t| t.kind() == SyntaxKind::WORD);
+
+        if let Some(token) = &name_token
+            && token.text() == "const"
+        {
+            self.diags
+                .push(LoweringDiagnostic::ReservedConstBindingName {
+                    span: token.text_range(),
+                });
         }
 
-        if let Some(el) = current_element.take() {
-            elements.push(self.finalize_pattern_element(el));
-        }
-        let _ = pending_negation; // consumed above
+        let name = name_token.map(|t| Name::new(t.text()));
 
-        match elements.len() {
-            0 => self.alloc_pattern(Pattern::wildcard(), TextRange::default()),
-            1 => elements.remove(0),
-            _ => {
-                let range = TextRange::default();
-                self.alloc_pattern(Pattern::or(elements), range)
+        // The parser folds `: <pattern>` into BINDING_PATTERN as a
+        // PATTERN child (any pattern).
+        let subpat = node
+            .children()
+            .find(|c| c.kind() == SyntaxKind::PATTERN)
+            .map(|pat_node| self.lower_pattern(&pat_node));
+
+        let pat = match name {
+            Some(name) => Pattern::Bind { name, subpat },
+            None => Pattern::Wildcard,
+        };
+        self.alloc_pattern(pat, node.text_range())
+    }
+
+    /// Walk a pattern and emit `VoidInNonReturnPosition` for any `Pattern::Type`
+    /// whose annotation is `void` (or contains `void` in a wrapper position).
+    fn check_pattern_void_in_annotation(&mut self, pat_id: PatId, context: &str) {
+        match self.patterns[pat_id].clone() {
+            Pattern::Type(ty) => {
+                let span = self.source_map.pattern_span(pat_id);
+                crate::lower_type_expr::check_void_type(
+                    &ty,
+                    context.to_string(),
+                    span,
+                    false,
+                    &mut self.diags,
+                );
+            }
+            Pattern::Or(pats) => {
+                for p in pats {
+                    self.check_pattern_void_in_annotation(p, context);
+                }
+            }
+            Pattern::Class { fields, .. } => {
+                for f in fields {
+                    self.check_pattern_void_in_annotation(f.pat, context);
+                }
+            }
+            Pattern::Array {
+                prefix,
+                rest,
+                suffix,
+                ascription,
+            } => {
+                for p in prefix.into_iter().chain(suffix) {
+                    self.check_pattern_void_in_annotation(p, context);
+                }
+                if let Some(rest) = rest
+                    && let Some(p) = rest.pat
+                {
+                    self.check_pattern_void_in_annotation(p, context);
+                }
+                if let Some(ty) = ascription {
+                    let span = self.source_map.pattern_span(pat_id);
+                    crate::lower_type_expr::check_void_type(
+                        &ty,
+                        context.to_string(),
+                        span,
+                        false,
+                        &mut self.diags,
+                    );
+                }
+            }
+            Pattern::Wildcard => {}
+            Pattern::Bind { subpat, .. } => {
+                if let Some(sp) = subpat {
+                    self.check_pattern_void_in_annotation(sp, context);
+                }
             }
         }
     }
 
-    fn finalize_pattern_element(&mut self, el: PatternElement) -> PatId {
-        match el {
-            PatternElement::Segments(segs, start) => {
-                let range = TextRange::new(start, start);
-                match segs.len() {
-                    0 => self.alloc_pattern(Pattern::wildcard(), range),
-                    1 => self
-                        .alloc_pattern(Pattern::binding(segs.into_iter().next().unwrap()), range),
-                    _ => {
-                        // Multi-segment: last is variant, rest form the enum name path.
-                        let mut collected: Vec<Name> = segs.into_iter().collect();
-                        let variant = collected.pop().unwrap();
-                        self.alloc_pattern(Pattern::enum_variant(collected, variant), range)
-                    }
+    /// Lower a `TYPE_PATTERN`. Normally a `TYPE_EXPR` child is present, but
+    /// error-recovered CSTs (e.g. `let x: = 1`) may emit a `TYPE_PATTERN` with
+    /// no usable type child — fall back to a wildcard so downstream passes
+    /// don't crash on malformed input.
+    fn lower_type_pattern(&mut self, node: &SyntaxNode) -> PatId {
+        let Some(type_expr) = node
+            .children()
+            .find_map(baml_compiler_syntax::ast::TypeExpr::cast)
+        else {
+            return self.alloc_pattern(Pattern::Wildcard, node.text_range());
+        };
+        let ty = crate::lower_type_expr::lower_type_expr_node(&type_expr);
+        self.alloc_pattern(Pattern::Type(ty), node.text_range())
+    }
+
+    /// Lower a `DESTRUCTURE_PATTERN` (`(let|const)? PATH ('<' types '>')? '{' field_list '}'`).
+    fn lower_destructure_pattern(&mut self, node: &SyntaxNode) -> PatId {
+        // Path tokens live between the optional binding introducer
+        // (`KW_LET`/`KW_CONST`) and either
+        // `GENERIC_ARGS`, `TYPE_ARGS`, or `L_BRACE`.
+        // Collect WORD tokens in that range, ignoring DOTs.
+        let mut class: Vec<Name> = Vec::new();
+        for elem in node.children_with_tokens() {
+            match elem {
+                rowan::NodeOrToken::Token(t) => match t.kind() {
+                    SyntaxKind::WORD => class.push(Name::new(t.text())),
+                    SyntaxKind::LESS => break,
+                    SyntaxKind::L_BRACE => break,
+                    _ => {}
+                },
+                rowan::NodeOrToken::Node(n)
+                    if n.kind() == SyntaxKind::GENERIC_ARGS
+                        || n.kind() == SyntaxKind::TYPE_ARGS =>
+                {
+                    break;
                 }
-            }
-            PatternElement::SegmentsAwaitingWord(segs, start) => {
-                // Incomplete dotted path (ended with a dot) — treat as binding
-                let range = TextRange::new(start, start);
-                let name = segs.last().cloned().unwrap_or(Name::new("_"));
-                self.alloc_pattern(Pattern::binding(name), range)
-            }
-            PatternElement::TypedBindingStart(name, start) => {
-                // `name:` with no type — treat as simple binding
-                let range = TextRange::new(start, start);
-                self.alloc_pattern(Pattern::binding(name), range)
+                rowan::NodeOrToken::Node(_) => {}
             }
         }
+
+        let args_node = node
+            .children()
+            .find(|n| n.kind() == SyntaxKind::GENERIC_ARGS || n.kind() == SyntaxKind::TYPE_ARGS);
+
+        let generic_args: Vec<TypeExpr> = args_node
+            .as_ref()
+            .into_iter()
+            .flat_map(rowan::SyntaxNode::children)
+            .filter(|n| n.kind() == SyntaxKind::TYPE_EXPR)
+            .filter_map(baml_compiler_syntax::ast::TypeExpr::cast)
+            .map(|te| crate::lower_type_expr::lower_type_expr_node(&te))
+            .collect();
+
+        let associated_type_bindings = args_node
+            .into_iter()
+            .filter(|args_node| args_node.kind() == SyntaxKind::TYPE_ARGS)
+            .flat_map(|args_node| args_node.children())
+            .filter_map(baml_compiler_syntax::ast::AssociatedTypeDecl::cast)
+            .filter_map(|binding| crate::lower_type_expr::lower_associated_type_binding(&binding))
+            .collect();
+
+        let fields: Vec<FieldPat> = node
+            .children()
+            .filter(|n| n.kind() == SyntaxKind::FIELD_PATTERN)
+            .map(|f| self.lower_field_pattern(&f))
+            .collect();
+
+        self.alloc_pattern(
+            Pattern::Class {
+                class,
+                generic_args,
+                associated_type_bindings,
+                fields,
+            },
+            node.text_range(),
+        )
+    }
+
+    /// Lower a `FIELD_PATTERN`. Shorthand `{ f }` synthesises a
+    /// `Bind { name: f }` so `FieldPat.pat` is always populated.
+    fn lower_field_pattern(&mut self, node: &SyntaxNode) -> FieldPat {
+        let field_token = node
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|t| t.kind() == SyntaxKind::WORD);
+        let field_span = field_token
+            .as_ref()
+            .map(rowan::SyntaxToken::text_range)
+            .unwrap_or_else(|| node.text_range());
+        let field_name = field_token
+            .map(|t| Name::new(t.text()))
+            .unwrap_or_else(|| Name::new("_"));
+
+        let value_pattern = node.children().find(|n| n.kind() == SyntaxKind::PATTERN);
+
+        let pat = match value_pattern {
+            Some(child) => self.lower_pattern(&child),
+            None => {
+                // Shorthand `{ f }` → bind to a local of the same name. `_`
+                // canonicalises to `Wildcard`, same rule as elsewhere.
+                let synth = if field_name.as_str() == "_" {
+                    Pattern::Wildcard
+                } else {
+                    Pattern::Bind {
+                        name: field_name.clone(),
+                        subpat: None,
+                    }
+                };
+                self.alloc_pattern(synth, node.text_range())
+            }
+        };
+
+        FieldPat {
+            field: field_name,
+            field_span,
+            pat,
+        }
+    }
+
+    fn lower_array_pattern(&mut self, node: &SyntaxNode) -> PatId {
+        let mut prefix = Vec::new();
+        let mut rest = None;
+        let mut suffix = Vec::new();
+        let mut seen_rest = false;
+
+        for elem in node
+            .children()
+            .filter(|n| n.kind() == SyntaxKind::ARRAY_PATTERN_ELEMENT)
+        {
+            let is_rest = elem.children_with_tokens().any(|c| {
+                matches!(
+                    c,
+                    rowan::NodeOrToken::Token(t) if t.kind() == SyntaxKind::DOT_DOT
+                )
+            });
+            let pat = elem
+                .children()
+                .find(|n| n.kind() == SyntaxKind::PATTERN)
+                .map(|p| self.lower_pattern(&p));
+
+            if is_rest {
+                seen_rest = true;
+                if rest.is_none() {
+                    rest = Some(ArrayRestPat { pat });
+                }
+            } else if let Some(pat) = pat {
+                if seen_rest {
+                    suffix.push(pat);
+                } else {
+                    prefix.push(pat);
+                }
+            }
+        }
+
+        // Parser folds optional `: T` ascription into ARRAY_PATTERN as
+        // a TYPE_EXPR child.
+        let ascription = node
+            .children()
+            .find_map(baml_compiler_syntax::ast::TypeExpr::cast)
+            .map(|type_expr| crate::lower_type_expr::lower_type_expr_node(&type_expr));
+
+        self.alloc_pattern(
+            Pattern::Array {
+                prefix,
+                rest,
+                suffix,
+                ascription,
+            },
+            node.text_range(),
+        )
     }
 
     fn lower_catch_expr(&mut self, node: &SyntaxNode) -> ExprId {
@@ -1323,8 +1930,22 @@ impl LoweringContext {
                     _ => {}
                 },
                 rowan::NodeOrToken::Node(child) => match child.kind() {
-                    SyntaxKind::CATCH_PATTERN => {
-                        binding = Some(self.lower_catch_pattern(&child));
+                    SyntaxKind::CATCH_BINDING => {
+                        let name = child
+                            .children_with_tokens()
+                            .find_map(|t| match t {
+                                rowan::NodeOrToken::Token(tok)
+                                    if tok.kind() == SyntaxKind::WORD =>
+                                {
+                                    Some(Name::new(tok.text()))
+                                }
+                                _ => None,
+                            })
+                            .unwrap_or_else(|| Name::new("_"));
+                        binding = Some(self.alloc_pattern(
+                            Pattern::Bind { name, subpat: None },
+                            child.text_range(),
+                        ));
                     }
                     SyntaxKind::CATCH_STACK_TRACE_BINDING => {
                         // Extract the identifier name from the node.
@@ -1339,8 +1960,10 @@ impl LoweringContext {
                                 _ => None,
                             })
                             .unwrap_or_else(|| Name::new("_"));
-                        stack_trace_binding =
-                            Some(self.alloc_pattern(Pattern::binding(name), child.text_range()));
+                        stack_trace_binding = Some(self.alloc_pattern(
+                            Pattern::Bind { name, subpat: None },
+                            child.text_range(),
+                        ));
                     }
                     SyntaxKind::CATCH_ARM => {
                         let arm = self.lower_catch_arm(&child);
@@ -1354,7 +1977,7 @@ impl LoweringContext {
         CatchClause {
             kind,
             binding: binding
-                .unwrap_or_else(|| self.alloc_pattern(Pattern::wildcard(), node.text_range())),
+                .unwrap_or_else(|| self.alloc_pattern(Pattern::Wildcard, node.text_range())),
             stack_trace_binding,
             arms,
         }
@@ -1370,8 +1993,8 @@ impl LoweringContext {
         for elem in node.children_with_tokens() {
             match elem {
                 rowan::NodeOrToken::Node(child) => match child.kind() {
-                    SyntaxKind::CATCH_PATTERN => {
-                        pattern = Some(self.lower_catch_pattern(&child));
+                    SyntaxKind::PATTERN => {
+                        pattern = Some(self.lower_pattern(&child));
                     }
                     SyntaxKind::STRING_LITERAL | SyntaxKind::RAW_STRING_LITERAL
                         if seen_fat_arrow && body.is_none() =>
@@ -1385,6 +2008,14 @@ impl LoweringContext {
                 },
                 rowan::NodeOrToken::Token(token) => match token.kind() {
                     SyntaxKind::FAT_ARROW => seen_fat_arrow = true,
+                    SyntaxKind::BIGINT_LITERAL if seen_fat_arrow && body.is_none() => {
+                        let value = crate::parse_bigint_literal_token(token.text());
+                        body =
+                            Some(self.alloc_expr(
+                                Expr::Literal(Literal::Bigint(value)),
+                                token.text_range(),
+                            ));
+                    }
                     SyntaxKind::INTEGER_LITERAL if seen_fat_arrow && body.is_none() => {
                         let value = token.text().parse::<i64>().unwrap_or(0);
                         body = Some(
@@ -1421,7 +2052,7 @@ impl LoweringContext {
 
         let pattern = match pattern {
             Some(pattern) => pattern,
-            None => self.alloc_pattern(Pattern::wildcard(), node.text_range()),
+            None => self.alloc_pattern(Pattern::Wildcard, node.text_range()),
         };
         let body = match body {
             Some(body) => body,
@@ -1429,10 +2060,6 @@ impl LoweringContext {
         };
 
         self.alloc_catch_arm(CatchArm { pattern, body }, node.text_range())
-    }
-
-    fn lower_catch_pattern(&mut self, node: &SyntaxNode) -> PatId {
-        self.lower_match_pattern(node)
     }
 
     fn lower_throw_expr(&mut self, node: &SyntaxNode) -> ExprId {
@@ -1459,9 +2086,11 @@ impl LoweringContext {
                     | SyntaxKind::CALL_EXPR
                     | SyntaxKind::PATH_EXPR
                     | SyntaxKind::FIELD_ACCESS_EXPR
+                    | SyntaxKind::UPCAST_EXPR
                     | SyntaxKind::ENV_ACCESS_EXPR
                     | SyntaxKind::INDEX_EXPR
                     | SyntaxKind::IF_EXPR
+                    | SyntaxKind::IF_LET_EXPR
                     | SyntaxKind::MATCH_EXPR
                     | SyntaxKind::BLOCK_EXPR
                     | SyntaxKind::PAREN_EXPR
@@ -1506,6 +2135,12 @@ impl LoweringContext {
         {
             match token.kind() {
                 SyntaxKind::KW_THROW => continue,
+                SyntaxKind::BIGINT_LITERAL => {
+                    let value = crate::parse_bigint_literal_token(token.text());
+                    return Some(
+                        self.alloc_expr(Expr::Literal(Literal::Bigint(value)), token.text_range()),
+                    );
+                }
                 SyntaxKind::INTEGER_LITERAL => {
                     let value = token.text().parse::<i64>().unwrap_or(0);
                     return Some(
@@ -1543,6 +2178,40 @@ impl LoweringContext {
         // CALL_EXPR structure: callee expr node (or WORD token), then CALL_ARGS node
         let callee_node = node.children().find(|n| n.kind() != SyntaxKind::CALL_ARGS);
 
+        // Extract explicit type arguments from the callee node.
+        //
+        // Two parser shapes produce GENERIC_ARGS we should treat as call-site
+        // type-args:
+        //
+        //   1. `foo<T, U>(args)` — GENERIC_ARGS is a direct child of the
+        //      callee PATH_EXPR.
+        //   2. `Box<Secret>.from_json(args)` — GENERIC_ARGS is on the
+        //      receiver-type PATH_EXPR nested inside the FIELD_ACCESS_EXPR
+        //      callee.  Treat the receiver's type-args as the call's
+        //      type-args so the BEP-039 type-arg channel seeds the static
+        //      method's frame correctly (e.g. `Box.from_json` sees
+        //      `T = Secret`).
+        let callee_generic_args = callee_node.as_ref().and_then(find_callee_generic_args);
+        let type_args: Vec<TypeExpr> = callee_generic_args
+            .as_ref()
+            .map(Self::lower_generic_args_node)
+            .unwrap_or_default();
+        // Mark EVERY `GENERIC_ARGS` node in the callee subtree as consumed, so
+        // lowering the callee/receiver below does not wrap any of them into an
+        // `Expr::GenericApply`. `foo<int>(x)` keeps its callee a plain path (the
+        // `<int>` lives on the `Call`); for `Container<int>.method<U>(x)` the
+        // call uses the method-level `<U>` as its type args while the receiver
+        // `<int>` fills the class's generic params (BEP-039) — neither is a
+        // value-position instantiation, so both must be suppressed here.
+        if let Some(n) = &callee_node {
+            for ga in n
+                .descendants()
+                .filter(|d| d.kind() == SyntaxKind::GENERIC_ARGS)
+            {
+                self.consumed_generic_args.insert(ga.text_range());
+            }
+        }
+
         let callee = if let Some(n) = callee_node {
             self.lower_expr_in_chain(&n)
         } else {
@@ -1562,72 +2231,141 @@ impl LoweringContext {
             }
         };
 
-        // Find CALL_ARGS node and extract arguments
-        let args = node
+        let lowered_args = node
             .children()
             .find(|n| n.kind() == SyntaxKind::CALL_ARGS)
-            .map(|args_node| {
-                let mut args = Vec::new();
-                for element in args_node.children_with_tokens() {
-                    match element {
-                        rowan::NodeOrToken::Node(child_node) => {
-                            // Skip COMMA and other punctuation nodes if any
-                            if is_expr_node_kind(child_node.kind()) {
-                                args.push(self.lower_expr(&child_node));
-                            }
-                        }
-                        rowan::NodeOrToken::Token(token) => {
-                            let span = token.text_range();
-                            match token.kind() {
-                                SyntaxKind::INTEGER_LITERAL => {
-                                    let value = token.text().parse::<i64>().unwrap_or(0);
-                                    args.push(
-                                        self.alloc_expr(Expr::Literal(Literal::Int(value)), span),
-                                    );
-                                }
-                                SyntaxKind::FLOAT_LITERAL => {
-                                    let text = token.text().to_string();
-                                    args.push(
-                                        self.alloc_expr(Expr::Literal(Literal::Float(text)), span),
-                                    );
-                                }
-                                SyntaxKind::STRING_LITERAL | SyntaxKind::RAW_STRING_LITERAL => {
-                                    let content = strip_string_delimiters(token.text());
-                                    args.push(
-                                        self.alloc_expr(
-                                            Expr::Literal(Literal::String(content)),
-                                            span,
-                                        ),
-                                    );
-                                }
-                                k if is_ident_token(k) => {
-                                    let text = token.text();
-                                    let e = match text {
-                                        "true" => Expr::Literal(Literal::Bool(true)),
-                                        "false" => Expr::Literal(Literal::Bool(false)),
-                                        "null" => Expr::Null,
-                                        _ => Expr::Path(vec![Name::new(text)]),
-                                    };
-                                    args.push(self.alloc_expr(e, span));
-                                }
-                                _ => {}
-                            }
-                        }
-                    }
-                }
-                args
-            })
+            .map(|args_node| self.lower_call_args_node(&args_node))
             .unwrap_or_default();
+        let (args, label_spans) = Self::finalize_call_args(lowered_args);
 
-        let id = self.alloc_expr(Expr::Call { callee, args }, node.text_range());
+        let id = self.alloc_expr(
+            Expr::Call {
+                callee,
+                type_args,
+                args,
+            },
+            node.text_range(),
+        );
+        self.record_call_arg_label_spans(id, label_spans);
         if self.needs_chain_wrap.remove(&callee) {
             self.needs_chain_wrap.insert(id);
         }
         id
     }
 
+    fn finalize_call_args(
+        lowered_args: Vec<(CallArg, Option<TextRange>)>,
+    ) -> (Vec<CallArg>, Vec<(ExprId, TextRange)>) {
+        let mut args = Vec::with_capacity(lowered_args.len());
+        let mut label_spans = Vec::with_capacity(lowered_args.len());
+
+        for (arg, label_span) in lowered_args {
+            if let Some(label_span) = label_span {
+                label_spans.push((arg.expr, label_span));
+            }
+            args.push(arg);
+        }
+
+        (args, label_spans)
+    }
+
+    fn record_call_arg_label_spans(
+        &mut self,
+        call_id: ExprId,
+        label_spans: Vec<(ExprId, TextRange)>,
+    ) {
+        for (arg_expr, label_span) in label_spans {
+            self.source_map
+                .call_arg_label_spans
+                .insert((call_id, arg_expr), label_span);
+        }
+    }
+
+    fn lower_call_args_node(
+        &mut self,
+        args_node: &SyntaxNode,
+    ) -> Vec<(CallArg, Option<TextRange>)> {
+        args_node
+            .children()
+            .filter(|n| n.kind() == SyntaxKind::CALL_ARG)
+            .filter_map(|node| self.lower_call_arg_node(&node))
+            .collect()
+    }
+
+    fn lower_call_arg_node(&mut self, node: &SyntaxNode) -> Option<(CallArg, Option<TextRange>)> {
+        let cst_arg = baml_compiler_syntax::ast::CallArg::cast(node.clone())?;
+        let label_token = cst_arg.label();
+        let label = label_token.as_ref().map(|token| Name::new(token.text()));
+        let label_span = label_token.as_ref().map(rowan::SyntaxToken::text_range);
+
+        let expr = if let Some(expr_node) = cst_arg.expr_syntax() {
+            self.lower_expr(&expr_node)
+        } else {
+            let expr_search_start = label_token.as_ref().map(|label_token| {
+                node.children_with_tokens()
+                    .filter_map(rowan::NodeOrToken::into_token)
+                    .filter(|token| !token.kind().is_trivia())
+                    .filter(|token| token.text_range().start() >= label_token.text_range().end())
+                    .find(|token| token.kind() == SyntaxKind::EQUALS)
+                    .map_or(label_token.text_range().end(), |token| {
+                        token.text_range().end()
+                    })
+            });
+            let expr_token = node
+                .children_with_tokens()
+                .filter_map(rowan::NodeOrToken::into_token)
+                .filter(|token| !token.kind().is_trivia())
+                .filter(|token| {
+                    expr_search_start
+                        .map(|start| token.text_range().start() >= start)
+                        .unwrap_or(true)
+                })
+                .find(|token| token.kind() != SyntaxKind::COMMA)?;
+            self.alloc_expr(
+                lower_bare_token_expr(expr_token.kind(), expr_token.text()),
+                expr_token.text_range(),
+            )
+        };
+
+        Some((CallArg { label, expr }, label_span))
+    }
+
+    /// Lower the `TYPE_EXPR` children of a `GENERIC_ARGS` node to `TypeExpr`s.
+    fn lower_generic_args_node(ga: &SyntaxNode) -> Vec<TypeExpr> {
+        ga.children()
+            .filter(|n| n.kind() == SyntaxKind::TYPE_EXPR)
+            .filter_map(baml_compiler_syntax::ast::TypeExpr::cast)
+            .map(|te| crate::lower_type_expr::lower_type_expr_node(&te))
+            .collect()
+    }
+
+    /// If `node` has a direct, unconsumed `GENERIC_ARGS` child, wrap `base` in an
+    /// `Expr::GenericApply` carrying its type args; otherwise return `base`.
+    /// `range` spans the whole instantiation (`foo<int>`).
+    fn wrap_generic_apply(&mut self, node: &SyntaxNode, base: ExprId, range: TextRange) -> ExprId {
+        let Some(ga) = node
+            .children()
+            .find(|n| n.kind() == SyntaxKind::GENERIC_ARGS)
+        else {
+            return base;
+        };
+        if self.consumed_generic_args.contains(&ga.text_range()) {
+            return base;
+        }
+        let type_args = Self::lower_generic_args_node(&ga);
+        if type_args.is_empty() {
+            return base;
+        }
+        self.alloc_expr(Expr::GenericApply { base, type_args }, range)
+    }
+
     fn lower_path_expr(&mut self, node: &SyntaxNode) -> ExprId {
         // PATH_EXPR contains WORD (or keyword-as-ident) tokens joined by DOTs.
+        //
+        // When a PATH_EXPR is wrapped in another PATH_EXPR for generic-arg
+        // annotation (e.g. `reflect.type_of<User>` → outer PATH_EXPR wrapping
+        // inner PATH_EXPR + GENERIC_ARGS), the outer node has no direct token
+        // children. In that case, delegate to the inner PATH_EXPR node.
         let mut segments: Vec<(Name, TextRange)> = Vec::new();
 
         for elem in node.children_with_tokens() {
@@ -1639,6 +2377,22 @@ impl LoweringContext {
         }
 
         if segments.is_empty() {
+            // An outer PATH_EXPR with no direct ident tokens wraps an inner
+            // expression plus a `GENERIC_ARGS` annotation. The parser produces
+            // this for any `<receiver><...>` value whose receiver is itself a
+            // compound expression: `foo.bar<int>` (inner PATH_EXPR), but also
+            // `(b).foo<int>`, `b?.foo<int>`, `arr[0].foo<int>`, `g().foo<int>`
+            // (inner FIELD_ACCESS_EXPR / OPTIONAL_FIELD_ACCESS_EXPR / INDEX_EXPR
+            // / CALL_EXPR / PAREN_EXPR). Lower the inner expression through the
+            // normal chain dispatch and capture the `GENERIC_ARGS` here, so the
+            // receiver and type args are never silently dropped.
+            if let Some(inner) = node
+                .children()
+                .find(|n| n.kind() != SyntaxKind::GENERIC_ARGS)
+            {
+                let base = self.lower_expr_in_chain(&inner);
+                return self.wrap_generic_apply(node, base, node.text_range());
+            }
             return self.alloc_expr(Expr::Missing, node.text_range());
         }
 
@@ -1664,13 +2418,16 @@ impl LoweringContext {
             let spans: Vec<TextRange> = segments.iter().map(|(_, r)| *r).collect();
             self.source_map.path_segment_spans.insert(id, spans);
         }
-        id
+        // `foo<int>` in value position: the GENERIC_ARGS is a direct child of
+        // this PATH_EXPR. Wrap unless an enclosing call already consumed it.
+        self.wrap_generic_apply(node, id, node.text_range())
     }
 
     fn lower_field_access_expr(&mut self, node: &SyntaxNode) -> ExprId {
         let mut base = None;
         let mut field = None;
         let mut field_range = None;
+        let mut seen_accessor = false;
 
         for elem in node.children_with_tokens() {
             match elem {
@@ -1680,9 +2437,18 @@ impl LoweringContext {
                     }
                 }
                 rowan::NodeOrToken::Token(token) => {
-                    if is_ident_token(token.kind()) && base.is_some() {
-                        field = Some(Name::new(token.text()));
-                        field_range = Some(token.text_range());
+                    if matches!(token.kind(), SyntaxKind::DOT | SyntaxKind::DOLLAR) {
+                        seen_accessor = true;
+                    } else if is_ident_token(token.kind()) {
+                        if !seen_accessor && base.is_none() {
+                            // Base is a bare identifier token, e.g.
+                            // `value.implements()` where `implements` lexes as
+                            // a keyword and the parser cannot build a PATH_EXPR.
+                            base = self.try_lower_bare_token(&token);
+                        } else if seen_accessor {
+                            field = Some(Name::new(token.text()));
+                            field_range = Some(token.text_range());
+                        }
                     }
                 }
             }
@@ -1695,6 +2461,41 @@ impl LoweringContext {
         if let Some(range) = field_range {
             self.source_map.member_access_member_spans.insert(id, range);
         }
+        if self.needs_chain_wrap.remove(&base) {
+            self.needs_chain_wrap.insert(id);
+        }
+        id
+    }
+
+    fn lower_upcast_expr(&mut self, node: &SyntaxNode) -> ExprId {
+        let mut base = None;
+        for elem in node.children_with_tokens() {
+            match elem {
+                rowan::NodeOrToken::Node(child)
+                    if child.kind() != SyntaxKind::GENERIC_ARGS && base.is_none() =>
+                {
+                    base = Some(self.lower_expr_in_chain(&child));
+                }
+                rowan::NodeOrToken::Token(token) if base.is_none() => {
+                    base = self.try_lower_bare_token(&token);
+                }
+                _ => {}
+            }
+        }
+        let base = base.unwrap_or_else(|| self.alloc_expr(Expr::Missing, node.text_range()));
+
+        let target = node
+            .children()
+            .find(|child| child.kind() == SyntaxKind::GENERIC_ARGS)
+            .and_then(|args| {
+                args.children()
+                    .find(|child| child.kind() == SyntaxKind::TYPE_EXPR)
+            })
+            .and_then(baml_compiler_syntax::ast::TypeExpr::cast)
+            .map(|te| crate::lower_type_expr::lower_type_expr_node(&te))
+            .unwrap_or_else(|| TypeExpr::Unknown { attrs: Vec::new() });
+
+        let id = self.alloc_expr(Expr::Upcast { base, target }, node.text_range());
         if self.needs_chain_wrap.remove(&base) {
             self.needs_chain_wrap.insert(id);
         }
@@ -1719,6 +2520,10 @@ impl LoweringContext {
         }
 
         let var_name = field_text.unwrap_or_else(|| "_".to_string());
+        self.env_var_refs.push(EnvVarRef {
+            name: var_name.clone(),
+            range,
+        });
         let callee = self.alloc_expr(
             Expr::Path(vec![
                 Name::new("baml"),
@@ -1731,7 +2536,8 @@ impl LoweringContext {
         self.alloc_expr(
             Expr::Call {
                 callee,
-                args: vec![arg],
+                type_args: vec![],
+                args: vec![CallArg::positional(arg)],
             },
             range,
         )
@@ -1885,62 +2691,15 @@ impl LoweringContext {
             }
         };
 
-        let args = node
+        let lowered_args = node
             .children()
             .find(|n| n.kind() == SyntaxKind::CALL_ARGS)
-            .map(|args_node| {
-                let mut args = Vec::new();
-                for element in args_node.children_with_tokens() {
-                    match element {
-                        rowan::NodeOrToken::Node(child_node) => {
-                            if is_expr_node_kind(child_node.kind()) {
-                                args.push(self.lower_expr(&child_node));
-                            }
-                        }
-                        rowan::NodeOrToken::Token(token) => {
-                            let span = token.text_range();
-                            match token.kind() {
-                                SyntaxKind::INTEGER_LITERAL => {
-                                    let value = token.text().parse::<i64>().unwrap_or(0);
-                                    args.push(
-                                        self.alloc_expr(Expr::Literal(Literal::Int(value)), span),
-                                    );
-                                }
-                                SyntaxKind::FLOAT_LITERAL => {
-                                    let text = token.text().to_string();
-                                    args.push(
-                                        self.alloc_expr(Expr::Literal(Literal::Float(text)), span),
-                                    );
-                                }
-                                SyntaxKind::STRING_LITERAL | SyntaxKind::RAW_STRING_LITERAL => {
-                                    let content = strip_string_delimiters(token.text());
-                                    args.push(
-                                        self.alloc_expr(
-                                            Expr::Literal(Literal::String(content)),
-                                            span,
-                                        ),
-                                    );
-                                }
-                                SyntaxKind::WORD => {
-                                    let text = token.text();
-                                    let e = match text {
-                                        "true" => Expr::Literal(Literal::Bool(true)),
-                                        "false" => Expr::Literal(Literal::Bool(false)),
-                                        "null" => Expr::Null,
-                                        _ => Expr::Path(vec![Name::new(text)]),
-                                    };
-                                    args.push(self.alloc_expr(e, span));
-                                }
-                                _ => {}
-                            }
-                        }
-                    }
-                }
-                args
-            })
+            .map(|args_node| self.lower_call_args_node(&args_node))
             .unwrap_or_default();
+        let (args, label_spans) = Self::finalize_call_args(lowered_args);
 
         let id = self.alloc_expr(Expr::OptionalCall { callee, args }, node.text_range());
+        self.record_call_arg_label_spans(id, label_spans);
         self.needs_chain_wrap.remove(&callee);
         self.needs_chain_wrap.insert(id);
         id
@@ -1990,38 +2749,64 @@ impl LoweringContext {
     }
 
     fn lower_object_literal(&mut self, node: &SyntaxNode) -> ExprId {
+        fn collect_constructor_path(
+            node: &SyntaxNode,
+            path_segments: &mut Vec<Name>,
+            type_args: &mut Vec<TypeExpr>,
+        ) {
+            for elem in node.children_with_tokens() {
+                match elem {
+                    rowan::NodeOrToken::Token(token) if is_ident_token(token.kind()) => {
+                        path_segments.push(Name::new(token.text()));
+                    }
+                    rowan::NodeOrToken::Node(args_node)
+                        if args_node.kind() == SyntaxKind::GENERIC_ARGS =>
+                    {
+                        *type_args = args_node
+                            .children()
+                            .filter(|n| n.kind() == SyntaxKind::TYPE_EXPR)
+                            .filter_map(baml_compiler_syntax::ast::TypeExpr::cast)
+                            .map(|te| crate::lower_type_expr::lower_type_expr_node(&te))
+                            .collect();
+                    }
+                    rowan::NodeOrToken::Node(child_node) => {
+                        collect_constructor_path(&child_node, path_segments, type_args);
+                    }
+                    rowan::NodeOrToken::Token(_) => {}
+                }
+            }
+        }
+
         let mut fields = Vec::new();
         let mut spreads = Vec::new();
         let mut position = 0;
         let mut type_name = None;
+        let mut type_args: Vec<TypeExpr> = vec![];
+        let mut type_path_segments: Vec<Name> = vec![];
 
         // Look for the optional type name (first WORD or path before the brace):
         //   - A simple WORD token: `MyClass { ... }` → `TypePath::bare`.
         //   - A qualified path node: `baml.errors.DevOther { ... }` (parsed as
         //     PATH_EXPR) → `TypePath` of all the WORD segments.
-        'outer: for elem in node.children_with_tokens() {
+        //   - A generic path: `Foo<int> { ... }` (parsed as PATH_EXPR with
+        //     GENERIC_ARGS child) → `TypePath::bare("Foo")` + `type_args = [int]`.
+        for elem in node.children_with_tokens() {
             match elem {
                 rowan::NodeOrToken::Token(token) => {
                     if token.kind() == SyntaxKind::L_BRACE {
                         break;
                     }
-                    if is_ident_token(token.kind()) && type_name.is_none() {
-                        type_name = Some(TypePath::bare(Name::new(token.text())));
+                    if is_ident_token(token.kind()) {
+                        type_path_segments.push(Name::new(token.text()));
                     }
                 }
                 rowan::NodeOrToken::Node(child_node) => {
-                    let segments: Vec<Name> = child_node
-                        .children_with_tokens()
-                        .filter_map(rowan::NodeOrToken::into_token)
-                        .filter(|t| is_ident_token(t.kind()))
-                        .map(|t| Name::new(t.text()))
-                        .collect();
-                    if !segments.is_empty() {
-                        type_name = Some(TypePath::new(segments));
-                    }
-                    break 'outer;
+                    collect_constructor_path(&child_node, &mut type_path_segments, &mut type_args);
                 }
             }
+        }
+        if !type_path_segments.is_empty() {
+            type_name = Some(TypePath::new(type_path_segments));
         }
 
         // Object fields are child nodes after L_BRACE
@@ -2029,8 +2814,8 @@ impl LoweringContext {
         for child in node.children() {
             match child.kind() {
                 SyntaxKind::OBJECT_FIELD => {
-                    // OBJECT_FIELD: WORD COLON expr
-                    let mut key = None;
+                    // OBJECT_FIELD: WORD (DOT WORD)* COLON expr
+                    let mut key_segments = Vec::new();
                     let mut val = None;
                     let mut seen_colon = false;
                     for elem in child.children_with_tokens() {
@@ -2041,9 +2826,7 @@ impl LoweringContext {
                             rowan::NodeOrToken::Token(t)
                                 if is_ident_token(t.kind()) && !seen_colon =>
                             {
-                                if key.is_none() {
-                                    key = Some(Name::new(t.text()));
-                                }
+                                key_segments.push(t.text().to_string());
                             }
                             rowan::NodeOrToken::Node(n) if seen_colon && val.is_none() => {
                                 val = Some(self.lower_expr(&n));
@@ -2055,6 +2838,11 @@ impl LoweringContext {
                             rowan::NodeOrToken::Node(_) => {}
                         }
                     }
+                    let key = if key_segments.is_empty() {
+                        None
+                    } else {
+                        Some(Name::new(key_segments.join(".")))
+                    };
                     if let (Some(k), Some(val_id)) = (key, val) {
                         fields.push((k, val_id));
                     }
@@ -2083,6 +2871,7 @@ impl LoweringContext {
         self.alloc_expr(
             Expr::Object {
                 type_name,
+                type_args,
                 fields,
                 spreads,
             },
@@ -2156,12 +2945,21 @@ impl LoweringContext {
         let generic_params = crate::lower_cst::extract_generic_params(node);
 
         // Lower parameter list — gives us Vec<Param>
-        let params = node
+        let (params, defaults) = node
             .children()
             .find(|n| n.kind() == SyntaxKind::PARAMETER_LIST)
             .and_then(ast::ParameterList::cast)
-            .map(|pl| crate::lower_cst::lower_params(&pl, "<lambda>", &mut self.diags))
-            .unwrap_or_default();
+            .map(|pl| {
+                crate::lower_cst::lower_params_with_defaults(
+                    &pl,
+                    "lambda",
+                    "lambda parameters",
+                    &mut self.diags,
+                    false,
+                    &mut self.env_var_refs,
+                )
+            })
+            .unwrap_or_else(|| (Vec::new(), FunctionDefaults::empty()));
 
         let param_names: Vec<Name> = params.iter().map(|p| p.name.clone()).collect();
 
@@ -2215,21 +3013,26 @@ impl LoweringContext {
                     lambda_ctx.names_in_scope.insert(name.to_string());
                 }
                 let root_expr = lambda_ctx.lower_block_expr(&block);
-                let (body, source_map, lambda_diags) = lambda_ctx.finish(Some(root_expr));
+                let (body, source_map, lambda_diags, lambda_env_refs) =
+                    lambda_ctx.finish(Some(root_expr));
                 self.diags.extend(lambda_diags);
+                self.env_var_refs.extend(lambda_env_refs);
                 FunctionBodyDef::Expr(body, source_map)
             });
 
         let func_def = FunctionDef {
             name: Name::new("<anonymous function>"),
             generic_params,
+            generic_param_bounds: Vec::new(),
             params,
+            defaults,
             return_type,
             throws,
             body,
             declarative_meta: None,
             origin: crate::ast::FunctionOrigin::Internal,
             attributes: Vec::new(),
+            docstring: None,
             span: node.text_range(),
             name_span: node.text_range(), // synthetic: use the lambda span
         };
@@ -2252,6 +3055,10 @@ impl LoweringContext {
                             _ => Expr::Path(vec![Name::new(text)]),
                         };
                         return Some(self.alloc_expr(e, span));
+                    }
+                    SyntaxKind::BIGINT_LITERAL => {
+                        let value = crate::parse_bigint_literal_token(token.text());
+                        return Some(self.alloc_expr(Expr::Literal(Literal::Bigint(value)), span));
                     }
                     SyntaxKind::INTEGER_LITERAL => {
                         let value = token.text().parse::<i64>().unwrap_or(0);
@@ -2288,6 +3095,10 @@ impl LoweringContext {
 
         let span = token.text_range();
         match token.kind() {
+            SyntaxKind::BIGINT_LITERAL => {
+                let value = crate::parse_bigint_literal_token(token.text());
+                Some(self.alloc_expr(Expr::Literal(Literal::Bigint(value)), span))
+            }
             SyntaxKind::INTEGER_LITERAL => {
                 let value = token.text().parse::<i64>().unwrap_or(0);
                 Some(self.alloc_expr(Expr::Literal(Literal::Int(value)), span))
@@ -2311,132 +3122,49 @@ impl LoweringContext {
     }
 
     fn lower_let_stmt(&mut self, node: &SyntaxNode, is_watched: bool) -> StmtId {
+        // LET_STMT shape (post-pattern-rewrite):
+        //   KW_WATCH? (KW_LET|KW_CONST)? PATTERN EQUALS <init-expr> (KW_ELSE BLOCK_EXPR)? SEMICOLON?
+        //
+        // The pattern carries its own `: T` narrow as a Chain link, so all we
+        // do here is locate the PATTERN child, the initialiser child, and an
+        // optional trailing `else { … }` block for let-else.
         let mut pattern_id = None;
-        let mut type_annotation = None;
         let mut initializer = None;
-
-        // LET_STMT: KW_LET PATTERN (COLON TYPE)? EQUALS expr SEMICOLON
-        // Walk children_with_tokens to find the pattern and initializer
+        let mut else_branch = None;
         let mut seen_equals = false;
-        let mut seen_colon = false;
+        let mut seen_else = false;
+        self.warn_direct_const_introducers(node);
 
         for elem in node.children_with_tokens() {
             match elem {
                 rowan::NodeOrToken::Token(token) => match token.kind() {
-                    SyntaxKind::EQUALS => {
-                        seen_equals = true;
-                        seen_colon = false;
-                    }
-                    SyntaxKind::COLON => {
-                        seen_colon = true;
-                    }
-                    SyntaxKind::KW_LET | SyntaxKind::KW_WATCH => {}
-                    _ if seen_equals && initializer.is_none() => {
-                        // Token-level initializer (e.g. `let x = 1;` where 1 is INTEGER_LITERAL token)
-                        let span = token.text_range();
-                        match token.kind() {
-                            SyntaxKind::INTEGER_LITERAL => {
-                                let value = token.text().parse::<i64>().unwrap_or(0);
-                                initializer =
-                                    Some(self.alloc_expr(Expr::Literal(Literal::Int(value)), span));
-                            }
-                            SyntaxKind::FLOAT_LITERAL => {
-                                let text = token.text().to_string();
-                                initializer = Some(
-                                    self.alloc_expr(Expr::Literal(Literal::Float(text)), span),
-                                );
-                            }
-                            SyntaxKind::STRING_LITERAL | SyntaxKind::RAW_STRING_LITERAL => {
-                                let content = strip_string_delimiters(token.text());
-                                initializer = Some(
-                                    self.alloc_expr(Expr::Literal(Literal::String(content)), span),
-                                );
-                            }
-                            k if is_ident_token(k) => {
-                                let text = token.text();
-                                let e = match text {
-                                    "true" => Expr::Literal(Literal::Bool(true)),
-                                    "false" => Expr::Literal(Literal::Bool(false)),
-                                    "null" => Expr::Null,
-                                    _ => Expr::Path(vec![Name::new(text)]),
-                                };
-                                initializer = Some(self.alloc_expr(e, span));
-                            }
-                            _ => {}
+                    SyntaxKind::EQUALS => seen_equals = true,
+                    SyntaxKind::KW_ELSE => seen_else = true,
+                    _ if seen_equals && !seen_else && initializer.is_none() => {
+                        if let Some(id) = self.try_lower_bare_token(&token) {
+                            initializer = Some(id);
                         }
                     }
                     _ => {}
                 },
                 rowan::NodeOrToken::Node(child) => {
                     if !seen_equals {
-                        if seen_colon {
-                            // Type annotation
-                            if let Some(type_expr) =
-                                baml_compiler_syntax::ast::TypeExpr::cast(child.clone())
-                            {
-                                let span = child.text_range();
-                                let ty = crate::lower_type_expr::lower_type_expr_node(&type_expr);
-                                crate::lower_type_expr::check_void_type(
-                                    &ty,
-                                    "a let binding annotation".to_string(),
-                                    span,
-                                    false,
-                                    &mut self.diags,
-                                );
-                                type_annotation = Some(self.alloc_type_annot(ty, span));
-                                seen_colon = false;
-                            }
-                        } else if pattern_id.is_none() {
-                            // Pattern comes first, before the colon or equals
-                            if child.kind() == SyntaxKind::MATCH_PATTERN {
-                                pattern_id = Some(self.lower_match_pattern(&child));
-                            } else {
-                                // Simple binding in a let — just a WORD token as the pattern
-                                // Try to get a name from the node
-                                let name = child
-                                    .children_with_tokens()
-                                    .filter_map(rowan::NodeOrToken::into_token)
-                                    .find(|t| is_ident_token(t.kind()))
-                                    .map(|t| Name::new(t.text()))
-                                    .unwrap_or(Name::new("_"));
-                                let range = child.text_range();
-                                pattern_id =
-                                    Some(self.alloc_pattern(Pattern::binding(name), range));
-                            }
+                        if child.kind() == SyntaxKind::PATTERN && pattern_id.is_none() {
+                            pattern_id = Some(self.lower_pattern(&child));
                         }
-                    } else if initializer.is_none() {
+                    } else if !seen_else && initializer.is_none() {
                         initializer = Some(self.lower_expr(&child));
+                    } else if seen_else && else_branch.is_none() {
+                        else_branch = Some(self.lower_expr(&child));
                     }
                 }
             }
         }
 
-        // Also look for a simple WORD pattern in token children (common for `let x = ...`)
-        if pattern_id.is_none() {
-            let mut seen_let_kw = false;
-            for elem in node.children_with_tokens() {
-                if let rowan::NodeOrToken::Token(token) = elem {
-                    match token.kind() {
-                        SyntaxKind::KW_LET | SyntaxKind::KW_WATCH => {
-                            seen_let_kw = true;
-                        }
-                        k if is_ident_token(k) && seen_let_kw && pattern_id.is_none() => {
-                            let range = token.text_range();
-                            pattern_id =
-                                Some(self.alloc_pattern(
-                                    Pattern::binding(Name::new(token.text())),
-                                    range,
-                                ));
-                        }
-                        SyntaxKind::EQUALS | SyntaxKind::COLON => break,
-                        _ => {}
-                    }
-                }
-            }
-        }
+        let pattern =
+            pattern_id.unwrap_or_else(|| self.alloc_pattern(Pattern::Wildcard, node.text_range()));
 
-        let pattern = pattern_id
-            .unwrap_or_else(|| self.alloc_pattern(Pattern::wildcard(), TextRange::default()));
+        self.check_pattern_void_in_annotation(pattern, "a let binding annotation");
 
         let origin = if is_watched {
             // TODO: Handle watched let statements
@@ -2448,10 +3176,10 @@ impl LoweringContext {
         self.alloc_stmt(
             Stmt::Let {
                 pattern,
-                type_annotation,
                 initializer,
                 is_watched,
                 origin,
+                else_branch,
             },
             node.text_range(),
         )
@@ -2470,6 +3198,12 @@ impl LoweringContext {
                     let span = token.text_range();
                     match token.kind() {
                         SyntaxKind::KW_RETURN | SyntaxKind::SEMICOLON => continue,
+                        SyntaxKind::BIGINT_LITERAL => {
+                            let value = crate::parse_bigint_literal_token(token.text());
+                            result =
+                                Some(self.alloc_expr(Expr::Literal(Literal::Bigint(value)), span));
+                            break;
+                        }
                         SyntaxKind::INTEGER_LITERAL => {
                             let value = token.text().parse::<i64>().unwrap_or(0);
                             result =
@@ -2580,21 +3314,20 @@ impl LoweringContext {
         // We emit a first-class Stmt::For (NOT desugared to While here).
         // Desugaring to index-based basic blocks happens at MIR lowering time.
 
-        let mut iter_name = Name::new("_iter_var");
+        // Iterator-style for loop. The parser always wraps the binding in
+        // `LET_STMT > PATTERN` via `parse_for_in_pattern`, so there's exactly
+        // one valid surface form: `for (let <pattern> in <expr>) { <body> }`
+        // (or its non-parenthesized variant `for let <pattern> in <expr>`).
+        let mut binding_id: Option<PatId> = None;
         let mut iter_expr_opt = None;
         let mut body_opt = None;
         let mut seen_in = false;
-        let mut seen_let_stmt = false;
 
         for elem in node.children_with_tokens() {
             match elem {
                 rowan::NodeOrToken::Token(token) => match token.kind() {
                     SyntaxKind::KW_IN => {
                         seen_in = true;
-                    }
-                    // Non-parenthesized form: `for i in xs` — bare WORD before KW_IN
-                    k if is_ident_token(k) && !seen_in => {
-                        iter_name = Name::new(token.text());
                     }
                     _ => {
                         if seen_in && iter_expr_opt.is_none() {
@@ -2603,19 +3336,13 @@ impl LoweringContext {
                     }
                 },
                 rowan::NodeOrToken::Node(child) => {
-                    if !seen_in && !seen_let_stmt && child.kind() == SyntaxKind::LET_STMT {
-                        // Parenthesized form: `for (let var in xs)` — variable is
-                        // inside a LET_STMT child node produced by parse_for_in_pattern.
-                        // Extract the variable name from the first WORD token in the node.
-                        for t in child.children_with_tokens() {
-                            if let rowan::NodeOrToken::Token(tok) = t {
-                                if is_ident_token(tok.kind()) {
-                                    iter_name = Name::new(tok.text());
-                                    break;
-                                }
-                            }
+                    if !seen_in && binding_id.is_none() && child.kind() == SyntaxKind::LET_STMT {
+                        self.warn_direct_const_introducers(&child);
+                        if let Some(pat_node) =
+                            child.children().find(|n| n.kind() == SyntaxKind::PATTERN)
+                        {
+                            binding_id = Some(self.lower_pattern(&pat_node));
                         }
-                        seen_let_stmt = true;
                     } else if seen_in && iter_expr_opt.is_none() {
                         iter_expr_opt = Some(self.lower_expr(&child));
                     } else if iter_expr_opt.is_some() && body_opt.is_none() {
@@ -2627,7 +3354,7 @@ impl LoweringContext {
 
         let collection = iter_expr_opt.unwrap_or_else(|| self.alloc_expr(Expr::Missing, range));
         let body = body_opt.unwrap_or_else(|| self.alloc_expr(Expr::Missing, range));
-        let binding = self.alloc_pattern(Pattern::binding(iter_name), range);
+        let binding = binding_id.unwrap_or_else(|| self.alloc_pattern(Pattern::Wildcard, range));
 
         self.alloc_stmt(
             Stmt::For {
@@ -2753,31 +3480,35 @@ impl LoweringContext {
         // Find the BLOCK_EXPR child (the test body)
         let body_node_opt = node.children().find(|c| c.kind() == SyntaxKind::BLOCK_EXPR);
 
-        let (lambda_body, lambda_source_map, lambda_diags) = if let Some(body_node) = body_node_opt
-        {
-            // Lower the body using a fresh context (no collector var — test bodies don't nest)
-            crate::lower_expr_body::lower_block_node(
-                &body_node,
-                std::slice::from_ref(&collector_name),
-            )
-        } else {
-            // Empty body: produce null
-            let mut sub_ctx = LoweringContext::new();
-            let null_expr = sub_ctx.alloc_expr(Expr::Null, span);
-            sub_ctx.finish(Some(null_expr))
-        };
+        let (lambda_body, lambda_source_map, lambda_diags, lambda_env_refs) =
+            if let Some(body_node) = body_node_opt {
+                // Lower the body using a fresh context (no collector var — test bodies don't nest)
+                crate::lower_expr_body::lower_block_node(
+                    &body_node,
+                    std::slice::from_ref(&collector_name),
+                )
+            } else {
+                // Empty body: produce null
+                let mut sub_ctx = LoweringContext::new();
+                let null_expr = sub_ctx.alloc_expr(Expr::Null, span);
+                sub_ctx.finish(Some(null_expr))
+            };
         self.diags.extend(lambda_diags);
+        self.env_var_refs.extend(lambda_env_refs);
 
         let lambda_def = FunctionDef {
             name: Name::new("<test body>"),
             generic_params: vec![],
+            generic_param_bounds: vec![],
             params: vec![],
+            defaults: FunctionDefaults::empty(),
             return_type: None,
             throws: None,
             body: Some(FunctionBodyDef::Expr(lambda_body, lambda_source_map)),
             declarative_meta: None,
             origin: crate::ast::FunctionOrigin::Internal,
             attributes: vec![],
+            docstring: None,
             span,
             name_span: span,
         };
@@ -2804,7 +3535,12 @@ impl LoweringContext {
         self.alloc_expr(
             Expr::Call {
                 callee: method_target,
-                args: vec![name_expr, lambda_arg, runner_arg],
+                type_args: vec![],
+                args: vec![
+                    CallArg::positional(name_expr),
+                    CallArg::positional(lambda_arg),
+                    CallArg::positional(runner_arg),
+                ],
             },
             span,
         )
@@ -2827,18 +3563,20 @@ impl LoweringContext {
         // Find the BLOCK_EXPR child (the testset body)
         let body_node_opt = node.children().find(|c| c.kind() == SyntaxKind::BLOCK_EXPR);
 
-        let (sub_body, sub_source_map, sub_diags) = if let Some(body_node) = body_node_opt {
-            crate::lower_expr_body::lower_testset_block_node(
-                &body_node,
-                &Name::new("testset"),
-                std::slice::from_ref(&collector_name),
-            )
-        } else {
-            let mut sub_ctx = LoweringContext::new();
-            let null_expr = sub_ctx.alloc_expr(Expr::Null, span);
-            sub_ctx.finish(Some(null_expr))
-        };
+        let (sub_body, sub_source_map, sub_diags, sub_env_refs) =
+            if let Some(body_node) = body_node_opt {
+                crate::lower_expr_body::lower_testset_block_node(
+                    &body_node,
+                    &Name::new("testset"),
+                    std::slice::from_ref(&collector_name),
+                )
+            } else {
+                let mut sub_ctx = LoweringContext::new();
+                let null_expr = sub_ctx.alloc_expr(Expr::Null, span);
+                sub_ctx.finish(Some(null_expr))
+            };
         self.diags.extend(sub_diags);
+        self.env_var_refs.extend(sub_env_refs);
 
         let sub_param = Param {
             name: Name::new("testset"),
@@ -2846,10 +3584,12 @@ impl LoweringContext {
                 expr: TypeExpr::Path {
                     segments: vec![Name::new("testing"), Name::new("TestCollector")],
                     generic_args: vec![],
+                    associated_type_bindings: vec![],
                     attrs: vec![],
                 },
                 span,
             }),
+            default: None,
             span,
             name_span: span,
         };
@@ -2857,13 +3597,16 @@ impl LoweringContext {
         let sub_collector_def = FunctionDef {
             name: Name::new("<testset collector>"),
             generic_params: vec![],
+            generic_param_bounds: vec![],
             params: vec![sub_param],
+            defaults: FunctionDefaults::empty(),
             return_type: None,
             throws: None,
             body: Some(FunctionBodyDef::Expr(sub_body, sub_source_map)),
             declarative_meta: None,
             origin: crate::ast::FunctionOrigin::Internal,
             attributes: vec![],
+            docstring: None,
             span,
             name_span: span,
         };
@@ -2890,7 +3633,12 @@ impl LoweringContext {
         self.alloc_expr(
             Expr::Call {
                 callee: method_target,
-                args: vec![name_expr, sub_collector_arg, runner_arg],
+                type_args: vec![],
+                args: vec![
+                    CallArg::positional(name_expr),
+                    CallArg::positional(sub_collector_arg),
+                    CallArg::positional(runner_arg),
+                ],
             },
             span,
         )
@@ -2944,37 +3692,6 @@ impl LoweringContext {
 
         self.alloc_stmt(Stmt::HeaderComment { name, level }, node.text_range())
     }
-}
-
-/// Check if a `SyntaxKind` represents an expression node (vs. punctuation/keyword).
-fn is_expr_node_kind(kind: SyntaxKind) -> bool {
-    matches!(
-        kind,
-        SyntaxKind::EXPR
-            | SyntaxKind::BINARY_EXPR
-            | SyntaxKind::UNARY_EXPR
-            | SyntaxKind::CALL_EXPR
-            | SyntaxKind::PATH_EXPR
-            | SyntaxKind::FIELD_ACCESS_EXPR
-            | SyntaxKind::OPTIONAL_FIELD_ACCESS_EXPR
-            | SyntaxKind::ENV_ACCESS_EXPR
-            | SyntaxKind::INDEX_EXPR
-            | SyntaxKind::OPTIONAL_INDEX_EXPR
-            | SyntaxKind::OPTIONAL_CALL_EXPR
-            | SyntaxKind::IF_EXPR
-            | SyntaxKind::MATCH_EXPR
-            | SyntaxKind::CATCH_EXPR
-            | SyntaxKind::THROW_EXPR
-            | SyntaxKind::BLOCK_EXPR
-            | SyntaxKind::PAREN_EXPR
-            | SyntaxKind::ARRAY_LITERAL
-            | SyntaxKind::STRING_LITERAL
-            | SyntaxKind::RAW_STRING_LITERAL
-            | SyntaxKind::BYTE_STRING_LITERAL
-            | SyntaxKind::OBJECT_LITERAL
-            | SyntaxKind::MAP_LITERAL
-            | SyntaxKind::LAMBDA_EXPR
-    )
 }
 
 /// Strip string delimiters from raw token text, decoding escape sequences for

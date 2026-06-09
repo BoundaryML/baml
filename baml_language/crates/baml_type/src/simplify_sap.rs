@@ -12,7 +12,7 @@
 ///
 /// ### TopLevel Attributes
 ///
-/// The metadata on each type are shown without their `@sap.` prefixes for brevity. `(def)` is occasionally used for brevity to stand for the default metadata `(Unset, Unset, Unset, [])`
+/// The metadata on each type are shown without their `@sap.` prefixes for brevity. `(def)` is occasionally used for brevity to stand for the default metadata `(Unset, Unset, Unset)`
 ///
 /// Basic types, No Attributes
 ///
@@ -21,13 +21,11 @@
 ///   parse_without_null: Unset,
 ///   pending_never: Unset,
 ///   in_progress_never: Unset,
-///   asserts: [],
 /// ==S()==>
 /// int
 ///   parse_without_null: Unset,
 ///   pending_never: Unset,
 ///   in_progress_never: Unset,
-///   asserts: []
 /// ```
 ///
 /// ```baml
@@ -103,7 +101,6 @@
 ///     parse_without_null: Set,
 ///     pending_never: Unset,
 ///     in_progress_never: Unset
-///     asserts: []
 /// | int
 ///     (def)
 /// ==S()==>
@@ -111,7 +108,6 @@
 ///     parse_without_null: Unset,
 ///     pending_never: Unset,
 ///     in_progress_never: Unset,
-///     asserts: []
 /// ```
 ///
 /// Two types that are different on in metadata may be considered different from the perspective of deduplication. Here the `parse_without_null:Unset` is a supertype of the `parse_without_null:Set` variant, so the latter is removed during variant deduplication, and the result is unwrapped (because only one variant remains)
@@ -151,13 +147,11 @@
 ///   parse_without_null: Unset,
 ///   pending_never: Set,
 ///   in_progress_never: Unset,
-///   asserts: []
 /// ==S()==>
 /// int
 ///   parse_without_null: Unset,
 ///   pending_never: Set,
 ///   in_progress_never: Unset,
-///   asserts: []
 /// ```
 ///
 /// `parse_as` on basic types is passed through directly to the output type.
@@ -169,13 +163,11 @@
 ///   parse_without_null: Unset,
 ///   pending_never: Set,
 ///   in_progress_never: Unset
-///   asserts: []
 /// ==S()==>
 /// int
 ///   parse_without_null: Unset,
 ///   pending_never: Set,
 ///   in_progress_never: Unset,
-///   asserts: []
 /// ```
 ///
 /// `@sap.pending_never` and `@sap.in_progress_never` on simple (non-union) types are carried over directly during type simplification.
@@ -187,74 +179,18 @@
 ///     parse_without_null: Unset,
 ///     pending_never: Set,
 ///     in_progress_never: Unset,
-///     asserts: []
 /// | int
 ///     parse_without_null: Unset,
 ///     pending_never: Set,
 ///     in_progress_never: Unset
-///     asserts: []
 /// ==S()==>
 /// int
 ///   parse_without_null: Unset,
 ///   pending_never: Set,
 ///   in_progress_never: Unset
-///   asserts: []
 /// ```
 ///
 /// Equal `@sap.pending_never` on equal base types still allows subsumption for variant deduping. This would also be true if the second base type was `5` (or any other subtype of `int`)
-///
-/// ---
-///
-/// ```baml
-/// int
-///     asserts: ASSERTS_1,
-///     ..def
-/// | int
-///     asserts: [],
-///     ..def
-/// ==S()==>
-/// int
-///   (def)
-/// ```
-///
-/// A base type with asserts is morally a subtype of the same base type with no asserts, therefore it gets deduped away.
-///
-/// ---
-///
-/// ```baml
-/// int
-///     asserts: ASSERTS_1,
-///     ..def
-/// | int
-///     asserts: ASSERTS_1,
-///     ..def
-/// ==S()==>
-/// int
-///   asserts: ASSERTS_1,
-///   ..def
-/// ```
-///
-/// Equal asserts on both sides of equal base types dedup. (This would also be true for a subtype base type like `5`).
-///
-/// ---
-///
-/// ```baml
-/// int
-///     asserts: ASRTS_1,
-///     ..def
-/// | int
-///     asserts: ASRTS_2,
-///     ..def
-/// ==S()==>
-/// int
-///     asserts: ASRTS_1,
-///     ..def
-/// | int
-///     asserts: ASRTS_2,
-///     ..def
-/// ```
-///
-/// Types annotated with different nonempty sets of asserts are not comparable.
 ///
 /// ---
 ///
@@ -283,7 +219,6 @@
 ///     parse_without_null: Set,
 ///     pending_never: Unset,
 ///     in_progress_never: Unset,
-///     asserts: []
 /// | 5 (def)
 /// ```
 ///
@@ -298,7 +233,6 @@
 ///   parse_without_null: Set,
 ///   pending_never: Unset,
 ///   in_progress_never: Unset
-///   asserts: []
 /// ==S()==>
 /// (int
 ///   parse_without_null: Set,
@@ -309,10 +243,9 @@
 ///   parse_without_null: Set,
 ///   pending_never: Unset,
 ///   in_progress_never: Unset,
-///   asserts: []
 /// ```
 ///
-/// Union-level `parse_without_null` distributes into the variants. Non-assert attributes are preserved at the union level.
+/// Union-level `parse_without_null` distributes into the variants and is preserved at the union level.
 ///
 /// ---
 ///
@@ -321,89 +254,22 @@
 ///   parse_without_null: Unset,
 ///   pending_never: Set,
 ///   in_progress_never: Unset,
-///   asserts: []
 /// ==S()==>
 /// (int
 ///   parse_without_null: Unset,
 ///   pending_never: Set,
 ///   in_progress_never: Unset,
-///   asserts: []
 /// | string
 ///   parse_without_null: Unset,
 ///   pending_never: Set,
 ///   in_progress_never: Unset,
-///   asserts: []
 /// )
 ///   parse_without_null: Unset,
 ///   pending_never: Set,
 ///   in_progress_never: Unset,
-///   asserts: []
 /// ```
 ///
-/// `pending_never` and `in_progress_never` distribute too. Non-assert attributes are preserved at the union level.
-///
-/// ---
-///
-/// ```baml
-/// (int
-///     parse_without_null: Set,
-///     pending_never: Unset,
-///     in_progress_never: Unset
-///     asserts: ASRTS_1
-///  | int
-///     parse_without_null: Set,
-///     pending_never: Unset,
-///     in_progress_never: Unset,
-///     asserts: ASRTS_2
-/// )
-///   parse_without_null: Set,
-///   pending_never: Unset,
-///   in_progress_never: Unset
-///   asserts: []
-/// ==S()==>
-/// (int
-///     parse_without_null: Set,
-///     pending_never: Unset,
-///     in_progress_never: Unset,
-///     asserts: ASRTS_1
-///  | int
-///     parse_without_null: Set,
-///     pending_never: Unset,
-///     in_progress_never: Unset,
-///     asserts: ASRTS_2
-/// )
-///   parse_without_null: Set,
-///   pending_never: Unset,
-///   in_progress_never: Unset,
-///   asserts: []
-/// ```
-///
-/// When distributing SAP attributes and an outer attribute gets applied to an inner type with an attribute, they combine disjunctively - the resulting attribute is `Set` if one or the other is `Set`. Non-assert attributes are preserved at the union level.
-///
-/// ---
-///
-/// ```baml
-/// (5
-///   asserts: A_1,
-///   ..def
-///  | 6
-///   asserts: A_2,
-///   ..def
-/// ) (
-///   asserts: A_TOP,
-///   ..def
-/// )
-/// ==S()==>
-/// (5
-///   asserts: A_1 <> A_TOP,
-///   ..def
-///  | 6
-///   asserts: A_2 <> A_TOP,
-///   ..def
-/// ) (def)
-/// ```
-///
-/// Asserts distribute and `<>` (conjunctively) with each variant. Since asserts are conjunctive lists, `<>` just concatenates the lists. Unlike non-assert attributes, asserts are removed from the union level after distribution.
+/// `pending_never` and `in_progress_never` distribute too and are preserved at the union level.
 ///
 /// ---
 ///
@@ -427,15 +293,13 @@
 ///
 /// `@sap.foo` and `@sap.bar` have no interaction.
 ///
-/// `@assert` attributes don't compose under deduplication. They compose under nesting with `([Assert], concat, [])`, with the precondition that every invocation of `concat` preserves well-typedness. (In chains of asserts, we allow previous asserts to narrow the typing environment of subsequent asserts, so all the resulting compound assert lists must remain well-typed).
-///
 /// **Note on structural subtyping for dedup**: only identical base types and
 /// literal→base-type relationships (e.g. `5 ≤ int`) trigger dedup.  Cross-type
 /// widening like `int → float` is excluded — SAP treats them as distinct parse
 /// candidates with different scoring behavior.
 use std::collections::{HashMap, HashSet};
 
-use crate::{Literal, Ty, TyAssert, TyAttr, TyAttrValue, TypeName};
+use crate::{Literal, Ty, TyAttr, TyAttrValue, TypeName};
 
 /// Simplify a type for SAP processing.
 ///
@@ -469,19 +333,6 @@ fn simplify_impl(ty: Ty, aliases: &HashMap<TypeName, Ty>, recursive: &HashSet<Ty
         Ty::Union(variants, attr) => simplify_union(variants, attr, aliases, recursive),
 
         // Recurse into compound types.
-        Ty::Optional(inner, attr) => {
-            let inner_ty: Ty = inner.as_ref().clone();
-            let optional_as_union = Ty::Union(
-                vec![
-                    inner_ty,
-                    Ty::Null {
-                        attr: TyAttr::default(),
-                    },
-                ],
-                attr,
-            );
-            simplify_impl(optional_as_union, aliases, recursive)
-        }
         Ty::List(inner, attr) => {
             Ty::List(Box::new(simplify_impl(*inner, aliases, recursive)), attr)
         }
@@ -514,7 +365,6 @@ fn simplify_union(
 
     // 2. Distribute outer attrs into variants.
     //    SAP flags: or'd in, kept at union level.
-    //    Asserts: concatenated in, removed from union level.
     let (variants, attr) = distribute_attrs(variants, attr);
 
     // 3. Flatten nested unions.
@@ -544,24 +394,19 @@ fn simplify_union(
 /// Merge an outer attr into an inner attr (nesting semantics).
 ///
 /// SAP flags: disjunctive (`Set` wins via `or`).
-/// Asserts: concatenated (inner first, then outer).
 fn merge_attr_nested(inner: &TyAttr, outer: &TyAttr) -> TyAttr {
-    let mut asserts = inner.asserts.clone();
-    asserts.extend(outer.asserts.iter().cloned());
     TyAttr {
         sap_parse_without_null: inner
             .sap_parse_without_null
             .or(outer.sap_parse_without_null),
         sap_pending_never: inner.sap_pending_never.or(outer.sap_pending_never),
         sap_in_progress_never: inner.sap_in_progress_never.or(outer.sap_in_progress_never),
-        asserts,
     }
 }
 
 /// Distribute union-level attrs into each variant.
 ///
 /// SAP flags are or'd into each variant and preserved at the union level.
-/// Asserts are concatenated into each variant and removed from the union level.
 fn distribute_attrs(variants: Vec<Ty>, union_attr: TyAttr) -> (Vec<Ty>, TyAttr) {
     let distributed = variants
         .into_iter()
@@ -571,13 +416,7 @@ fn distribute_attrs(variants: Vec<Ty>, union_attr: TyAttr) -> (Vec<Ty>, TyAttr) 
         })
         .collect();
 
-    // Keep SAP flags at the union level; clear asserts (already distributed).
-    let cleaned = TyAttr {
-        asserts: Vec::new(),
-        ..union_attr
-    };
-
-    (distributed, cleaned)
+    (distributed, union_attr)
 }
 
 /// Flatten nested unions into a single level.
@@ -643,9 +482,13 @@ fn null_to_end(variants: Vec<Ty>) -> Vec<Ty> {
 /// Check if `sub` is a subtype of `sup`, accounting for `TyAttr`.
 ///
 /// Uses a *restricted* structural check: only identical types and
-/// literal→base-type relationships count.  Cross-type widening
+/// literal→base-type relationships count.  Most cross-type widening
 /// (e.g. `int → float`) is intentionally excluded — SAP treats `int`
 /// and `float` as distinct parse candidates with different scoring.
+///
+/// The one exception is `int → bigint`, which is permitted because it is
+/// lossless (any `int` fits in `bigint`). See the inline comment on the
+/// `Ty::Int → Ty::Bigint` arm of [`is_sap_structural_subtype`].
 fn is_subtype_with_attrs(sub: &Ty, sup: &Ty) -> bool {
     is_sap_structural_subtype(sub, sup) && attr_is_subtype(sub.attr(), sup.attr())
 }
@@ -665,30 +508,28 @@ fn is_sap_structural_subtype(sub: &Ty, sup: &Ty) -> bool {
     matches!(
         (&sub_s, &sup_s),
         (Ty::Literal(Literal::Int(_), _), Ty::Int { .. })
+            | (Ty::Literal(Literal::Int(_), _), Ty::Bigint { .. })
+            | (Ty::Literal(Literal::Bigint(_), _), Ty::Bigint { .. })
             | (Ty::Literal(Literal::Float(_), _), Ty::Float { .. })
             | (Ty::Literal(Literal::String(_), _), Ty::String { .. })
             | (Ty::Literal(Literal::Bool(_), _), Ty::Bool { .. })
+            // The one cross-type widening allowed by SAP: `int → bigint`
+            // is lossless, unlike `int → float` which loses precision past
+            // 2^53.
+            | (Ty::Int { .. }, Ty::Bigint { .. })
     )
 }
 
 /// Attr subtyping: `sub` is narrower-than-or-equal-to `sup`.
 ///
 /// SAP flags: `Set` (narrower) ≤ `Unset` (wider).
-/// Asserts: more asserts = narrower. `sub ≤ sup` iff `sup` has no asserts
-/// or `sub.asserts == sup.asserts`.
 fn attr_is_subtype(sub: &TyAttr, sup: &TyAttr) -> bool {
     flag_leq(sub.sap_parse_without_null, sup.sap_parse_without_null)
         && flag_leq(sub.sap_pending_never, sup.sap_pending_never)
         && flag_leq(sub.sap_in_progress_never, sup.sap_in_progress_never)
-        && asserts_leq(&sub.asserts, &sup.asserts)
 }
 
 /// `Set ≤ Unset`, `Set ≤ Set`, `Unset ≤ Unset`. Only `Unset ≤ Set` is false.
 fn flag_leq(sub: TyAttrValue, sup: TyAttrValue) -> bool {
     !matches!((sub, sup), (TyAttrValue::Unset, TyAttrValue::Set))
-}
-
-/// Assert subtyping: `sub ≤ sup` iff `sup` has no asserts or asserts are equal.
-fn asserts_leq(sub: &[TyAssert], sup: &[TyAssert]) -> bool {
-    sup.is_empty() || sub == sup
 }

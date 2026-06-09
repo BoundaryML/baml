@@ -11,6 +11,11 @@ pub enum SyntaxKind {
     // Top-level declaration keywords
     KW_CLASS,
     KW_ENUM,
+    KW_INTERFACE,
+    KW_IMPLEMENTS,
+    KW_IMPLEMENT,
+    KW_EXTENDS,
+    KW_REQUIRES,
     KW_FUNCTION,
     KW_CLIENT,
     KW_GENERATOR,
@@ -26,6 +31,7 @@ pub enum SyntaxKind {
     KW_FOR,
     KW_WHILE,
     KW_LET,
+    KW_CONST,
     KW_IN,
     KW_BREAK,
     KW_CONTINUE,
@@ -35,15 +41,19 @@ pub enum SyntaxKind {
     KW_CATCH,
     KW_CATCH_ALL,
     KW_THROWS,
+    KW_SPAWN,
+    KW_AWAIT,
 
     // Other keywords
     KW_WATCH,
     KW_INSTANCEOF,
+    KW_IS,
     KW_DYNAMIC,
     KW_WITH,
 
     // Literals
     WORD,            // Any word (non-keyword identifier)
+    BIGINT_LITERAL,  // 42n
     INTEGER_LITERAL, // 123
     FLOAT_LITERAL,   // 123.45
 
@@ -65,6 +75,7 @@ pub enum SyntaxKind {
     COMMA,             // ,
     SEMICOLON,         // ;
     DOT_DOT_DOT,       // ...
+    DOT_DOT,           // ..
     DOT,               // .
     DOLLAR,            // $
     ARROW,             // ->
@@ -140,6 +151,7 @@ pub enum SyntaxKind {
     FUNCTION_DEF,
     CLASS_DEF,
     ENUM_DEF,
+    INTERFACE_DEF,
     CLIENT_DEF,
     GENERATOR_DEF,
     TEST_DEF,
@@ -165,6 +177,17 @@ pub enum SyntaxKind {
     // Class components
     FIELD_LIST,
     FIELD,
+
+    // Interface components
+    METHOD_SIG,            // function name(params) -> ReturnType (no body)
+    ASSOCIATED_TYPE_DECL,  // type Item [extends Bound] [= Default] in interface/implements
+    EXTENDS_CLAUSE,        // reserved legacy node; interfaces use `requires`
+    REQUIRES_CLAUSE,       // requires I1, I2
+    IMPLEMENTS_BLOCK,      // implements I { ... } inside a class
+    IMPLEMENTS_TARGET,     // the interface name (path) in `implements I`
+    INTERFACE_FIELD_LINK,  // interface_field as class_field inside `implements`
+    IMPLEMENTS_FOR,        // implements I for T { ... } at top level
+    IMPLEMENTS_FOR_TARGET, // the `T` in `implements I for T`
 
     // Enum components
     ENUM_VARIANT_LIST,
@@ -196,6 +219,10 @@ pub enum SyntaxKind {
     // Expressions (for attributes and function bodies)
     EXPR,
     BINARY_EXPR,
+    /// `<expr> is <pattern>` — Rust `matches!`-style pattern test, returns bool.
+    ///
+    /// Structure: `<expr> KW_IS <PATTERN>`
+    IS_EXPR,
     UNARY_EXPR,
     CALL_EXPR,
     INDEX_EXPR,
@@ -215,6 +242,8 @@ pub enum SyntaxKind {
     ///   module item, or function reference
     /// - `FIELD_ACCESS_EXPR` is always a field/method access on a computed value
     FIELD_ACCESS_EXPR,
+    /// Explicit interface/static upcast projection: `<expr>.as<T>`.
+    UPCAST_EXPR,
     /// Optional field access: `obj?.field` — short-circuits to null if base is null.
     ///
     /// Structure: `<base_expr> QUESTION_DOT WORD`
@@ -244,6 +273,13 @@ pub enum SyntaxKind {
     PAREN_EXPR,
     BLOCK_EXPR,
     IF_EXPR,
+    /// `if let PATTERN = SCRUTINEE { THEN } (else (BLOCK | IF_EXPR | IF_LET_EXPR))?`
+    ///
+    /// Refutable pattern match in a condition position. Pattern bindings are
+    /// in scope inside `THEN` only — not in `else` or after the `if let`.
+    /// Children, in order: `PATTERN`, scrutinee expr, then `BLOCK_EXPR`,
+    /// optional else `BLOCK_EXPR` / `IF_EXPR` / `IF_LET_EXPR`.
+    IF_LET_EXPR,
     MATCH_EXPR,
     MATCH_ARM,
     MATCH_PATTERN,
@@ -252,11 +288,71 @@ pub enum SyntaxKind {
     CATCH_CLAUSE,
     CATCH_ARM,
     CATCH_PATTERN,
+    CATCH_BINDING,
     CATCH_STACK_TRACE_BINDING,
+
+    // ============ Patterns (unified) ============
+    //
+    // Used by let-statements, match arms, and catch arms. Grammar:
+    //   PATTERN     := CHAIN
+    //   CHAIN       := UNION (':' UNION)*
+    //   UNION       := ATOM ('|' ATOM)*
+    //   ATOM        := BINDING_PATTERN
+    //                | DESTRUCTURE_PATTERN
+    //                | ARRAY_PATTERN
+    //                | TYPE_PATTERN
+    //                | PAREN_PATTERN
+    //
+    // `:` is split before `|`: `let x: int | string` parses as
+    // `let x : (int | string)`.
+    /// Outer wrapper around any pattern. Always present at recursive entry points.
+    PATTERN,
+    /// `pat ':' pat (':' pat)*` — type-narrowing chain.
+    CHAIN_PATTERN,
+    /// `atom ('|' atom)+` — alternation within a single chain link.
+    UNION_PATTERN,
+    /// `'let' WORD` — introduces a name binding.
+    BINDING_PATTERN,
+    /// `('let')? PATH '{' field_pattern (',' field_pattern)* '}'` — class destructure.
+    DESTRUCTURE_PATTERN,
+    /// `WORD` (shorthand) | `WORD ':' PATTERN` (rename / sub-pattern).
+    FIELD_PATTERN,
+    /// `'[' array_pattern_element (',' array_pattern_element)* ']'`.
+    ARRAY_PATTERN,
+    /// `PATTERN` or `'..' PATTERN?`.
+    ARRAY_PATTERN_ELEMENT,
+    /// Bare type expression as a pattern (literals, paths, generics, arrays, …).
+    /// Does NOT consume `|` — that belongs to `UNION_PATTERN` at the pattern level.
+    TYPE_PATTERN,
+    /// `'(' PATTERN ')'` — explicit grouping.
+    PAREN_PATTERN,
+    /// `'_'` (bare) or `'let' '_'` — wildcard / discard. Distinct from
+    /// `BINDING_PATTERN` so downstream code doesn't have to text-match `_`.
+    WILDCARD_PATTERN,
     THROW_EXPR,
+    /// `spawn name_expr? block` — BEP-034 spawn expression.
+    /// Structure: `KW_SPAWN [expr] BLOCK_EXPR`.
+    SPAWN_EXPR,
+    /// `await expr` — BEP-034 await expression.
+    /// Structure: `KW_AWAIT expr`.
+    AWAIT_EXPR,
+    /// `Future<T, E>` — explicit future type expression.
+    /// Structure: `WORD("Future") LESS type_expr COMMA type_expr GREATER`.
+    /// Parsed as a generic path type today; this kind exists for the
+    /// parser to mark the syntactic origin when the surface form should
+    /// resolve to a `Ty::Future`.
+    FUTURE_TYPE_EXPR,
     LAMBDA_EXPR,
     THROWS_CLAUSE,
     WHILE_STMT,
+    /// `while let PATTERN = SCRUTINEE { BODY }`
+    ///
+    /// Loops while the refutable `pattern` matches `scrutinee`, exiting when
+    /// it fails to match. Pattern bindings are in scope inside `BODY` only and
+    /// are rebound each iteration. Produces unit and has no `else` clause
+    /// (unlike `IF_LET_EXPR`). Children, in order: `PATTERN`, scrutinee expr,
+    /// then `BLOCK_EXPR`.
+    WHILE_LET_STMT,
     FOR_EXPR,
     LET_STMT,
     WATCH_LET,
@@ -267,11 +363,16 @@ pub enum SyntaxKind {
 
     // Expression components
     CALL_ARGS,
+    CALL_ARG,
     GENERIC_ARGS,
     /// Declaration-site generic type parameter list: `<T>` or `<K, V>` on class/function defs.
     GENERIC_PARAM_LIST,
     /// A single type parameter name inside a `GENERIC_PARAM_LIST`.
     GENERIC_PARAM,
+    /// BEP-044: optional bounds on a generic parameter, e.g. `T extends
+    /// Iface` or `T extends A & B`. Holds one or more `TYPE_EXPR`
+    /// children — multiple entries form an intersection bound.
+    GENERIC_PARAM_BOUNDS,
     OBJECT_LITERAL,
     OBJECT_FIELD,
     SPREAD_ELEMENT, // ...expr in object/array literals
@@ -328,7 +429,8 @@ impl SyntaxKind {
     pub fn is_literal(self) -> bool {
         matches!(
             self,
-            SyntaxKind::INTEGER_LITERAL
+            SyntaxKind::BIGINT_LITERAL
+                | SyntaxKind::INTEGER_LITERAL
                 | SyntaxKind::FLOAT_LITERAL
                 | SyntaxKind::STRING_LITERAL
                 | SyntaxKind::RAW_STRING_LITERAL
@@ -381,6 +483,11 @@ impl SyntaxKind {
             self,
             Self::KW_CLASS
                 | Self::KW_ENUM
+                | Self::KW_INTERFACE
+                | Self::KW_IMPLEMENTS
+                | Self::KW_IMPLEMENT
+                | Self::KW_EXTENDS
+                | Self::KW_REQUIRES
                 | Self::KW_FUNCTION
                 | Self::KW_CLIENT
                 | Self::KW_GENERATOR
@@ -394,6 +501,7 @@ impl SyntaxKind {
                 | Self::KW_FOR
                 | Self::KW_WHILE
                 | Self::KW_LET
+                | Self::KW_CONST
                 | Self::KW_IN
                 | Self::KW_BREAK
                 | Self::KW_CONTINUE
@@ -403,6 +511,8 @@ impl SyntaxKind {
                 | Self::KW_CATCH
                 | Self::KW_CATCH_ALL
                 | Self::KW_THROWS
+                | Self::KW_SPAWN
+                | Self::KW_AWAIT
                 | Self::KW_WATCH
                 | Self::KW_INSTANCEOF
                 | Self::KW_DYNAMIC

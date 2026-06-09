@@ -12,7 +12,7 @@ class TestClassAlias {
 
 //----
 //- diagnostics
-// Error: field 'we' is missing a type annotation
+// error: field 'we' is missing a type annotation
 //    ╭─[ class_partial_class.baml:2:3 ]
 //    │
 //  2 │   we

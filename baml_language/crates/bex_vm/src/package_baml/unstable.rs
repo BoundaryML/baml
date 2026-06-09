@@ -1,6 +1,9 @@
 use std::fmt::Write;
 
-use bex_vm_types::types::{Object, Value, format_float};
+use bex_vm_types::{
+    ValueKind,
+    types::{Object, Value, format_float},
+};
 
 use super::{BamlNamespaceUnstable, PackageBamlImpl};
 use crate::{
@@ -9,29 +12,26 @@ use crate::{
 };
 
 impl BamlNamespaceUnstable for PackageBamlImpl {
-    fn string(vm: &mut BexVm, value: &Value) -> Result<String, VmRustFnError> {
-        format_value_recursive(vm, value, 0)
+    fn string(vm: &BexVm, value: &Value) -> Result<bex_str::BexStr, VmRustFnError> {
+        format_value_recursive(vm, *value, 0).map(bex_str::BexStr::from)
     }
 }
 
-fn format_value_recursive(
-    vm: &mut BexVm,
-    value: &Value,
-    depth: usize,
-) -> Result<String, VmRustFnError> {
+fn format_value_recursive(vm: &BexVm, value: Value, depth: usize) -> Result<String, VmRustFnError> {
     let available_frames = crate::vm::MAX_FRAMES.saturating_sub(vm.frames.len());
 
     if depth >= available_frames {
         return Err(VmPanic::StackOverflow.into());
     }
 
-    match value {
-        Value::Null => Ok("null".to_string()),
-        Value::Int(i) => Ok(i.to_string()),
-        Value::Float(f) => Ok(format_float(*f)),
-        Value::Bool(b) => Ok(b.to_string()),
+    match value.kind() {
+        ValueKind::OmittedArg => Ok("<omitted>".to_string()),
+        ValueKind::Null => Ok("null".to_string()),
+        ValueKind::Int(i) => Ok(i.to_string()),
+        ValueKind::Bool(b) => Ok(b.to_string()),
 
-        Value::Object(obj_idx) => match vm.get_object(*obj_idx) {
+        ValueKind::Object(obj_idx) => match vm.get_object(obj_idx) {
+            Object::Float(f) => Ok(format_float(*f)),
             Object::Instance(instance) => {
                 let class = vm.get_object(instance.class);
                 let Object::Class(class) = class else {
@@ -48,7 +48,7 @@ fn format_value_recursive(
 
                 let class_name = class.name.clone();
                 let class_fields = class.fields.clone();
-                let fields = instance.fields.clone();
+                let fields: Vec<_> = instance.field_values().collect();
 
                 let mut result = format!("{class_name} {{\n");
                 let field_indent = "    ".repeat(depth + 1);
@@ -59,12 +59,12 @@ fn format_value_recursive(
                         None => {
                             let fallback = format!("field_{i}");
                             let formatted_value =
-                                format_value_recursive(vm, field_value, depth + 1)?;
+                                format_value_recursive(vm, *field_value, depth + 1)?;
                             let _ = writeln!(result, "{field_indent}{fallback}: {formatted_value}");
                             continue;
                         }
                     };
-                    let formatted_value = format_value_recursive(vm, field_value, depth + 1)?;
+                    let formatted_value = format_value_recursive(vm, *field_value, depth + 1)?;
                     let _ = writeln!(result, "{field_indent}{field_name}: {formatted_value}");
                 }
 
@@ -74,25 +74,25 @@ fn format_value_recursive(
             }
 
             Object::Array(values) => {
-                let values = values.clone();
+                let values = values.to_vec();
                 let mut result = String::from("[");
                 for (i, value) in values.iter().enumerate() {
                     if i > 0 {
                         result.push_str(", ");
                     }
-                    result.push_str(&format_value_recursive(vm, value, depth)?);
+                    result.push_str(&format_value_recursive(vm, *value, depth)?);
                 }
                 result.push(']');
                 Ok(result)
             }
 
             Object::Map(map) => {
-                let map = map.clone();
+                let map = map.to_index_map();
                 let mut result = String::from("{\n");
                 let field_indent = "    ".repeat(depth + 1);
 
                 for (key, value) in &map {
-                    let formatted_value = format_value_recursive(vm, value, depth + 1)?;
+                    let formatted_value = format_value_recursive(vm, *value, depth + 1)?;
                     let _ = writeln!(result, "{field_indent}\"{key}\": {formatted_value}");
                 }
 
@@ -101,6 +101,7 @@ fn format_value_recursive(
                 Ok(result)
             }
 
+            Object::Bigint(bi) => Ok(bi.to_string()),
             Object::String(s) => Ok(format!("\"{s}\"")),
             Object::Enum(e) => Ok(e.name.display_name.to_string()),
             Object::Variant(variant) => {
@@ -126,6 +127,7 @@ fn format_value_recursive(
             Object::Function(f) => Ok(format!("<function {}>", f.name)),
             Object::Class(c) => Ok(format!("<class {}>", c.name)),
             Object::Future(_) => Ok("<future>".to_string()),
+            Object::UnscheduledFuture(_) => Ok("<unscheduled future>".to_string()),
             Object::Collector(_) => Ok("<collector>".to_string()),
             Object::Type(ty) => Ok(format!("<type: {ty}>")),
             Object::Uint8Array(bytes) => Ok(format!("<uint8array len={}>", bytes.len())),
@@ -134,7 +136,9 @@ fn format_value_recursive(
                 Ok(format!("<closure captures={}>", closure.captures.len()))
             }
             Object::BoundMethod(_) => Ok("<bound_method>".to_string()),
-            Object::Cell(cell) => Ok(format!("<cell {}>", cell.value)),
+            Object::GenericFunction(_) => Ok("<generic_function>".to_string()),
+            Object::HostClosure(_) => Ok("<host_closure>".to_string()),
+            Object::Cell(cell) => Ok(format!("<cell {}>", cell.load())),
             #[cfg(feature = "heap_debug")]
             Object::Sentinel(_) => Ok("<sentinel>".to_string()),
         },

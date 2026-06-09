@@ -1,0 +1,14 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [type] error: function `from_json` expects 1 type argument(s), got 2
+    ╭─[ json_static_method_arity.baml:34:112 ]
+    │
+ 34 │ ╭─▶ function bad_extra(j: baml.json.json) -> Box<int> throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+ 35 │ ├─▶     Box<int, string>.from_json(j)
+    │ │                                       
+    │ ╰─────────────────────────────────────── function `from_json` expects 1 type argument(s), got 2
+    │     
+    │     Note: Error code: E0005
+────╯

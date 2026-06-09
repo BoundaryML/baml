@@ -32,11 +32,13 @@
 //! **TLS:** Enable exactly one of `native-tls` or `rustls`. CI may build with
 //! `--all-features` (both enabled); prefer one when building the LSP binary.
 
+mod deadlock_watchdog;
 mod native_lsp_sender;
 mod native_vfs;
 pub mod playground_env;
 pub mod playground_event_sink;
 pub mod playground_http;
+pub mod playground_io;
 pub mod playground_sender;
 pub mod playground_server;
 pub mod playground_ws;
@@ -45,11 +47,12 @@ use std::sync::Arc;
 
 use playground_env::{PlaygroundEnv, PlaygroundEnvState};
 use playground_http::{PlaygroundHttp, PlaygroundHttpState};
+use playground_io::{PlaygroundIo, PlaygroundIoState};
 use playground_ws::WsOutMessage;
 use tokio::net::TcpListener;
 
 pub fn version() -> &'static str {
-    env!("CARGO_PKG_VERSION")
+    baml_version::CANONICAL_VERSION
 }
 
 /// Build `SysOps` for a playground-connected project.
@@ -59,6 +62,7 @@ pub fn version() -> &'static str {
 fn build_playground_sys_ops(
     broadcast_tx: &tokio::sync::broadcast::Sender<WsOutMessage>,
     env_state: &Arc<PlaygroundEnvState>,
+    io_state: &Arc<PlaygroundIoState>,
 ) -> sys_ops::SysOps {
     let http_state = Arc::new(PlaygroundHttpState::new(broadcast_tx.clone()));
     sys_ops::SysOpsBuilder::new()
@@ -67,6 +71,7 @@ fn build_playground_sys_ops(
         .with_net::<sys_native::NativeSysOps>()
         .with_http_instance(Arc::new(PlaygroundHttp(http_state)))
         .with_env_instance(Arc::new(PlaygroundEnv(env_state.clone())))
+        .with_io_instance(Arc::new(PlaygroundIo(io_state.clone())))
         .build()
 }
 
@@ -91,23 +96,27 @@ pub fn run_server(playground_via_browser: bool) -> anyhow::Result<()> {
         .init();
 
     tracing::info!("baml-lsp v{} starting", version());
+    deadlock_watchdog::spawn();
 
     let tokio_runtime = tokio::runtime::Runtime::new()?;
 
     // Broadcast channel for playground WS messages (fetch logs, env requests, etc.)
     let (broadcast_tx, _) = tokio::sync::broadcast::channel::<WsOutMessage>(64);
     let env_state = Arc::new(PlaygroundEnvState::new(broadcast_tx.clone()));
+    let io_state = Arc::new(PlaygroundIoState::new(broadcast_tx.clone()));
 
     // Build SysOps with playground interception.
     // The factory creates the same ops for every project.
     let broadcast_tx_for_factory = broadcast_tx.clone();
     let env_state_for_factory = env_state.clone();
+    let io_state_for_factory = io_state.clone();
     #[allow(clippy::type_complexity)]
     let sys_op_factory: Arc<dyn Fn(&vfs::VfsPath) -> Arc<sys_ops::SysOps> + Send + Sync> =
         Arc::new(move |_path: &vfs::VfsPath| {
             Arc::new(build_playground_sys_ops(
                 &broadcast_tx_for_factory,
                 &env_state_for_factory,
+                &io_state_for_factory,
             ))
         });
 
@@ -117,7 +126,7 @@ pub fn run_server(playground_via_browser: bool) -> anyhow::Result<()> {
     let baml_vfs = bex_project::BamlVFS::new(vfs);
 
     // Stdio sender (LSP client sender)
-    let (writer_tx, writer_rx) = crossbeam::channel::unbounded::<lsp_server::Message>();
+    let (writer_tx, writer_rx) = crossbeam_channel::unbounded::<lsp_server::Message>();
     let writer_tx = Arc::new(writer_tx);
     let lsp_sender: Arc<dyn bex_project::LspClientSenderTrait + Send + Sync> =
         Arc::new(native_lsp_sender::NativeLspSender::new(&writer_tx));
@@ -177,8 +186,10 @@ pub fn run_server(playground_via_browser: bool) -> anyhow::Result<()> {
         let bex_for_playground = bex.clone();
         let btx = broadcast_tx.clone();
         let es = env_state.clone();
+        let ios = io_state.clone();
         tokio_runtime.spawn(async move {
-            if let Err(e) = playground_server::run(listener, bex_for_playground, btx, es).await {
+            if let Err(e) = playground_server::run(listener, bex_for_playground, btx, es, ios).await
+            {
                 tracing::error!("Playground server exited: {e}");
             }
         });

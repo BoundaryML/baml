@@ -1,0 +1,13 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [type] error: type mismatch: expected int, got baml.json.json
+   ╭─[ json_alias.baml:5:3 ]
+   │
+ 5 │   j
+   │   ┬  
+   │   ╰── type mismatch: expected int, got baml.json.json
+   │ 
+   │ Note: Error code: E0001
+───╯

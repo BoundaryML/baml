@@ -6,7 +6,7 @@ use rowan::TextRange;
 use crate::{
     ast::{
         BinaryOp, FromCST, KnownKind, MatchPattern, Statement, StrongAstError, SyntaxNodeIter,
-        Token, UnaryOp, tokens as t,
+        Token, Type, UnaryOp, tokens as t,
     },
     printer::{PrintInfo, PrintMultiLine, Printable, Printer, Shape},
     trivia_classifier::TriviaSliceExt,
@@ -17,11 +17,20 @@ pub enum Expression {
     Literal(Literal),
     /// Includes things like `null`, `true`, `false`, `baml.fs`, etc.
     Path(PathExpr),
+    /// A generic instantiation whose base is NOT a plain path — e.g.
+    /// `(<T>(x: T) -> T { x })<int>` or `(foo)<int>`. The path-based form
+    /// (`foo<int>`, `a.b.foo<int>`) is carried by [`PathExpr::generic_args`];
+    /// the parser wraps both in a `PATH_EXPR` node, so this is selected when
+    /// that node's first child is not a word/path.
+    GenericApply(GenericApplyExpr),
     Paren(ParenExpr),
     Binary(BinaryExpr),
+    Is(IsExpr),
     Unary(UnaryExpr),
     If(IfExpr),
+    IfLet(IfLetExpr),
     Match(MatchExpr),
+    Catch(CatchExpr),
     Call(CallExpr),
     Index(IndexExpr),
     FieldAccess(FieldAccessExpr),
@@ -45,6 +54,7 @@ impl Expression {
         !matches!(
             self,
             Expression::If(_)
+                | Expression::IfLet(_)
                 | Expression::Match(_)
                 | Expression::Lambda(_)
                 | Expression::Unknown(_)
@@ -64,14 +74,30 @@ impl FromCST for Expression {
             SyntaxKind::FLOAT_LITERAL => Expression::Literal(Literal::Float(
                 t::FloatLiteral::new_from_span(elem.text_range()),
             )),
-            SyntaxKind::PATH_EXPR | SyntaxKind::WORD => {
-                PathExpr::from_cst(elem).map(Expression::Path)?
+            SyntaxKind::WORD => PathExpr::from_cst(elem).map(Expression::Path)?,
+            SyntaxKind::PATH_EXPR => {
+                // The parser wraps any postfix `<...>` in a PATH_EXPR. When the
+                // base is a plain path (word / nested PATH_EXPR) it is a
+                // `PathExpr`; otherwise (a parenthesized expr, lambda, etc.) it
+                // is a generic instantiation on a non-path base.
+                let node = StrongAstError::assert_is_node(elem.clone())?;
+                let base_is_path = SyntaxNodeIter::new(&node)
+                    .next()
+                    .is_some_and(|c| matches!(c.kind(), SyntaxKind::WORD | SyntaxKind::PATH_EXPR));
+                if base_is_path {
+                    PathExpr::from_cst(elem).map(Expression::Path)?
+                } else {
+                    GenericApplyExpr::from_cst(elem).map(Expression::GenericApply)?
+                }
             }
             SyntaxKind::PAREN_EXPR => ParenExpr::from_cst(elem).map(Expression::Paren)?,
             SyntaxKind::BINARY_EXPR => BinaryExpr::from_cst(elem).map(Expression::Binary)?,
+            SyntaxKind::IS_EXPR => IsExpr::from_cst(elem).map(Expression::Is)?,
             SyntaxKind::UNARY_EXPR => UnaryExpr::from_cst(elem).map(Expression::Unary)?,
             SyntaxKind::IF_EXPR => IfExpr::from_cst(elem).map(Expression::If)?,
+            SyntaxKind::IF_LET_EXPR => IfLetExpr::from_cst(elem).map(Expression::IfLet)?,
             SyntaxKind::MATCH_EXPR => MatchExpr::from_cst(elem).map(Expression::Match)?,
+            SyntaxKind::CATCH_EXPR => CatchExpr::from_cst(elem).map(Expression::Catch)?,
             SyntaxKind::CALL_EXPR => CallExpr::from_cst(elem).map(Expression::Call)?,
             SyntaxKind::INDEX_EXPR => IndexExpr::from_cst(elem).map(Expression::Index)?,
             SyntaxKind::FIELD_ACCESS_EXPR => {
@@ -119,11 +145,15 @@ impl Expression {
         match self {
             Expression::Literal(lit) => lit.single_line_width(input),
             Expression::Path(path) => path.single_line_width(input),
+            Expression::GenericApply(ga) => ga.single_line_width(input),
             Expression::Paren(paren) => paren.single_line_width(input),
             Expression::Binary(binary) => binary.single_line_width(input),
+            Expression::Is(is) => is.single_line_width(input),
             Expression::Unary(unary) => unary.single_line_width(input),
             Expression::If(_) => None,
+            Expression::IfLet(_) => None,
             Expression::Match(_) => None,
+            Expression::Catch(_) => None,
             Expression::Call(call) => call.single_line_width(input),
             Expression::Index(index) => index.single_line_width(input),
             Expression::FieldAccess(fa) => fa.single_line_width(input),
@@ -164,11 +194,15 @@ impl Printable for Expression {
                 let chain = PrintChain::new(chain);
                 chain.print(shape, printer)
             }
+            Expression::GenericApply(ga) => ga.print(shape, printer),
             Expression::Paren(paren) => paren.print(shape, printer),
             Expression::Binary(binary) => binary.print(shape, printer),
+            Expression::Is(is) => is.print(shape, printer),
             Expression::Unary(unary) => unary.print(shape, printer),
             Expression::If(if_expr) => if_expr.print(shape, printer),
+            Expression::IfLet(if_let_expr) => if_let_expr.print(shape, printer),
             Expression::Match(match_expr) => match_expr.print(shape, printer),
+            Expression::Catch(catch_expr) => catch_expr.print(shape, printer),
             Expression::EnvAccess(env) => env.print(shape, printer),
             Expression::Block(block) => block.print(shape, printer),
             Expression::ArrayInitializer(array) => array.print(shape, printer),
@@ -187,11 +221,15 @@ impl Printable for Expression {
         match self {
             Expression::Literal(lit) => lit.leftmost_token(),
             Expression::Path(path) => path.leftmost_token(),
+            Expression::GenericApply(ga) => ga.leftmost_token(),
             Expression::Paren(paren) => paren.leftmost_token(),
             Expression::Binary(binary) => binary.leftmost_token(),
+            Expression::Is(is) => is.leftmost_token(),
             Expression::Unary(unary) => unary.leftmost_token(),
             Expression::If(if_expr) => if_expr.leftmost_token(),
+            Expression::IfLet(if_let_expr) => if_let_expr.leftmost_token(),
             Expression::Match(match_expr) => match_expr.leftmost_token(),
+            Expression::Catch(catch_expr) => catch_expr.leftmost_token(),
             Expression::Call(call) => call.leftmost_token(),
             Expression::Index(index) => index.leftmost_token(),
             Expression::FieldAccess(fa) => fa.base.leftmost_token(),
@@ -213,11 +251,15 @@ impl Printable for Expression {
         match self {
             Expression::Literal(lit) => lit.rightmost_token(),
             Expression::Path(path) => path.rightmost_token(),
+            Expression::GenericApply(ga) => ga.rightmost_token(),
             Expression::Paren(paren) => paren.rightmost_token(),
             Expression::Binary(binary) => binary.rightmost_token(),
+            Expression::Is(is) => is.rightmost_token(),
             Expression::Unary(unary) => unary.rightmost_token(),
             Expression::If(if_expr) => if_expr.rightmost_token(),
+            Expression::IfLet(if_let_expr) => if_let_expr.rightmost_token(),
             Expression::Match(match_expr) => match_expr.rightmost_token(),
+            Expression::Catch(catch_expr) => catch_expr.rightmost_token(),
             Expression::Call(call) => call.rightmost_token(),
             Expression::Index(index) => index.rightmost_token(),
             Expression::FieldAccess(fa) => fa.field.span(),
@@ -449,6 +491,60 @@ impl Printable for PathExpr {
             .last()
             .map_or(&self.first, |(_, word)| word)
             .span()
+    }
+}
+
+/// A generic instantiation whose base is not a plain path, e.g.
+/// `(<T>(x: T) -> T { x })<int>` or `(foo)<int>`. Corresponds to a
+/// [`SyntaxKind::PATH_EXPR`] node whose first child is an arbitrary expression
+/// followed by `GENERIC_ARGS`.
+#[derive(Debug)]
+pub struct GenericApplyExpr {
+    pub base: Box<Expression>,
+    pub generic_args: GenericArgs,
+}
+
+impl FromCST for GenericApplyExpr {
+    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
+        let node = StrongAstError::assert_is_node(elem)?;
+        StrongAstError::assert_kind_node(&node, SyntaxKind::PATH_EXPR)?;
+
+        let mut it = SyntaxNodeIter::new(&node);
+        let base_elem = it
+            .next()
+            .ok_or_else(|| StrongAstError::missing(SyntaxKind::PAREN_EXPR, it.parent))?;
+        let base = Box::new(Expression::from_cst(base_elem)?);
+        let ga_elem = it
+            .next()
+            .ok_or_else(|| StrongAstError::missing(SyntaxKind::GENERIC_ARGS, it.parent))?;
+        let generic_args = GenericArgs::from_cst(ga_elem)?;
+        if let Some(extra) = it.next() {
+            return Err(StrongAstError::UnexpectedAdditionalElement {
+                parent: it.parent,
+                at: extra.text_range(),
+            });
+        }
+        Ok(GenericApplyExpr { base, generic_args })
+    }
+}
+
+impl GenericApplyExpr {
+    pub(crate) fn single_line_width(&self, input: &Printer<'_>) -> Option<usize> {
+        Some(self.base.single_line_width(input)? + self.generic_args.formatted_single_line_width())
+    }
+}
+
+impl Printable for GenericApplyExpr {
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        let info = self.base.print(shape.clone(), printer);
+        printer.print(&self.generic_args, shape);
+        info
+    }
+    fn leftmost_token(&self) -> TextRange {
+        self.base.leftmost_token()
+    }
+    fn rightmost_token(&self) -> TextRange {
+        self.generic_args.close_angle.span()
     }
 }
 
@@ -860,6 +956,103 @@ impl BinaryOpChainingGroup {
     }
 }
 
+/// Corresponds to a [`SyntaxKind::IS_EXPR`] node.
+///
+/// `<expr> is <pattern>` — Rust `matches!`-style pattern test. Structure is
+/// rigid (an expression LHS, a single keyword, a pattern RHS), so the
+/// formatter prints it on a single line whenever it fits and otherwise
+/// keeps the keyword glued to the pattern on the next line.
+#[derive(Debug)]
+pub struct IsExpr {
+    pub lhs: Box<Expression>,
+    pub keyword: t::Is,
+    pub pattern: MatchPattern,
+}
+
+impl FromCST for IsExpr {
+    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
+        let node = StrongAstError::assert_is_node(elem)?;
+        StrongAstError::assert_kind_node(&node, SyntaxKind::IS_EXPR)?;
+
+        let mut it = SyntaxNodeIter::new(&node);
+        let lhs_elem = it.expect_next("`is` left expression")?;
+        let lhs = Expression::from_cst(lhs_elem)?;
+        let kw_elem = it.expect_next("`is` keyword")?;
+        let keyword = t::Is::from_cst(kw_elem)?;
+        let pat_elem = it.expect_next("`is` pattern")?;
+        let pattern = MatchPattern::from_cst(pat_elem)?;
+        it.expect_end()?;
+
+        Ok(IsExpr {
+            lhs: Box::new(lhs),
+            keyword,
+            pattern,
+        })
+    }
+}
+
+impl KnownKind for IsExpr {
+    fn kind() -> SyntaxKind {
+        SyntaxKind::IS_EXPR
+    }
+}
+
+impl IsExpr {
+    /// Returns the width of the expression if it fits on a single line.
+    /// Returns `None` if the LHS can never be single-lined.
+    pub(crate) fn single_line_width(&self, input: &Printer<'_>) -> Option<usize> {
+        let lhs = self.lhs.single_line_width(input)?;
+        // The pattern's width is hard to query precisely without
+        // reimplementing MatchPattern's own width logic, so use the source
+        // span between leftmost and rightmost tokens as an upper bound —
+        // overestimates by leading/trailing trivia, which is fine for the
+        // line-fit check.
+        let pat_left = self.pattern.leftmost_token().start();
+        let pat_right = self.pattern.rightmost_token().end();
+        let pattern_width = usize::from(pat_right - pat_left);
+        // `<lhs> is <pattern>` — lhs + " " + "is" + " " + pattern.
+        Some(lhs + 1 + usize::from(self.keyword.span().len()) + 1 + pattern_width)
+    }
+}
+
+impl Printable for IsExpr {
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        // Mirrors `BinaryExpr::try_print_single_line`'s trivia handling so
+        // comments around the `is` keyword (e.g. `v /*hint*/ is int`) round-
+        // trip instead of being silently dropped.
+        let mut multi_lined = false;
+
+        multi_lined |= printer.print(&*self.lhs, shape.clone()).multi_lined;
+
+        let lhs_trailing = printer.trivia.get_trailing_for_element(&*self.lhs);
+        let (kw_leading, kw_trailing) = printer.trivia.get_for_range_split(self.keyword.span());
+
+        let mut left_trivia_len = printer.print_trivia_squished(lhs_trailing);
+        left_trivia_len += printer.print_trivia_squished(kw_leading);
+        if left_trivia_len == 0 {
+            printer.print_spaces(1);
+        }
+
+        printer.print_raw_token(&self.keyword);
+
+        let pat_leading = printer.trivia.get_leading_for_element(&self.pattern);
+        let mut right_trivia_len = printer.print_trivia_squished(kw_trailing);
+        right_trivia_len += printer.print_trivia_squished(pat_leading);
+        if right_trivia_len == 0 {
+            printer.print_spaces(1);
+        }
+
+        multi_lined |= printer.print(&self.pattern, shape).multi_lined;
+        PrintInfo { multi_lined }
+    }
+    fn leftmost_token(&self) -> TextRange {
+        self.lhs.leftmost_token()
+    }
+    fn rightmost_token(&self) -> TextRange {
+        self.pattern.rightmost_token()
+    }
+}
+
 /// Corresponds to a [`SyntaxKind::UNARY_EXPR`] node.
 #[derive(Debug)]
 pub struct UnaryExpr {
@@ -954,9 +1147,12 @@ impl FromCST for IfExpr {
         let else_branch = if let Some(elem) = it.next() {
             let else_token = t::Else::from_cst(elem)?;
 
-            let else_body_node = it.expect_node("else body (if or block)")?;
+            let else_body_node = it.expect_node("else body (if, if-let, or block)")?;
             let else_body = match else_body_node.kind() {
                 SyntaxKind::IF_EXPR => ElseExpr::If(Box::new(IfExpr::from_cst(
+                    SyntaxElement::Node(else_body_node),
+                )?)),
+                SyntaxKind::IF_LET_EXPR => ElseExpr::IfLet(Box::new(IfLetExpr::from_cst(
                     SyntaxElement::Node(else_body_node),
                 )?)),
                 SyntaxKind::BLOCK_EXPR => ElseExpr::Block(Box::new(BlockExpr::from_cst(
@@ -964,7 +1160,7 @@ impl FromCST for IfExpr {
                 )?)),
                 _ => {
                     return Err(StrongAstError::UnexpectedKindDesc {
-                        expected_desc: "IF_EXPR or BLOCK_EXPR".into(),
+                        expected_desc: "IF_EXPR, IF_LET_EXPR, or BLOCK_EXPR".into(),
                         found: else_body_node.kind(),
                         at: else_body_node.text_range(),
                     });
@@ -1042,11 +1238,13 @@ impl Printable for IfExpr {
     }
 }
 
-/// Used in [`IfExpr`] to represent the else/else-if branch.
+/// Used in [`IfExpr`] / [`IfLetExpr`] to represent the else/else-if branch.
 #[derive(Debug)]
 pub enum ElseExpr {
     /// else if
     If(Box<IfExpr>),
+    /// else if let
+    IfLet(Box<IfLetExpr>),
     /// final else block
     Block(Box<BlockExpr>),
 }
@@ -1055,19 +1253,144 @@ impl Printable for ElseExpr {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
         match self {
             ElseExpr::If(if_expr) => if_expr.print(shape, printer),
+            ElseExpr::IfLet(if_let_expr) => if_let_expr.print(shape, printer),
             ElseExpr::Block(block) => block.print(shape, printer),
         }
     }
     fn leftmost_token(&self) -> TextRange {
         match self {
             ElseExpr::If(if_expr) => if_expr.leftmost_token(),
+            ElseExpr::IfLet(if_let_expr) => if_let_expr.leftmost_token(),
             ElseExpr::Block(block) => block.leftmost_token(),
         }
     }
     fn rightmost_token(&self) -> TextRange {
         match self {
             ElseExpr::If(if_expr) => if_expr.rightmost_token(),
+            ElseExpr::IfLet(if_let_expr) => if_let_expr.rightmost_token(),
             ElseExpr::Block(block) => block.rightmost_token(),
+        }
+    }
+}
+
+/// Corresponds to a [`SyntaxKind::IF_LET_EXPR`] node.
+///
+/// `if let PATTERN = SCRUTINEE BLOCK (else (BLOCK | IF_EXPR | IF_LET_EXPR))?`
+#[derive(Debug)]
+pub struct IfLetExpr {
+    pub keyword: t::If,
+    /// `let PATTERN` — the leading `let` is part of the pattern grammar
+    /// (`parse_let_pattern`), so it's stored inside `pattern` rather than
+    /// as a separate token.
+    pub pattern: MatchPattern,
+    pub equals: t::Equals,
+    pub scrutinee: Box<Expression>,
+    pub block: BlockExpr,
+    pub else_branch: Option<(t::Else, ElseExpr)>,
+}
+
+impl FromCST for IfLetExpr {
+    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
+        let node = StrongAstError::assert_is_node(elem)?;
+        StrongAstError::assert_kind_node(&node, SyntaxKind::IF_LET_EXPR)?;
+
+        let mut it = SyntaxNodeIter::new(&node);
+
+        // KW_IF
+        let keyword = it.expect_parse()?;
+
+        // PATTERN (consumes its own leading `let` token)
+        let pattern = it.expect_parse()?;
+
+        // `=` separator between pattern and scrutinee
+        let equals = it.expect_parse()?;
+
+        // Scrutinee: any expression
+        let scrutinee_elem = it.expect_next("if-let scrutinee expression")?;
+        let scrutinee = Box::new(Expression::from_cst(scrutinee_elem)?);
+
+        // Then block
+        let block: BlockExpr = it.expect_parse()?;
+
+        // Optional else / else-if / else-if-let
+        let else_branch = if let Some(elem) = it.next() {
+            let else_token = t::Else::from_cst(elem)?;
+            let else_body_node = it.expect_node("else body (if, if-let, or block)")?;
+            let else_body = match else_body_node.kind() {
+                SyntaxKind::IF_EXPR => ElseExpr::If(Box::new(IfExpr::from_cst(
+                    SyntaxElement::Node(else_body_node),
+                )?)),
+                SyntaxKind::IF_LET_EXPR => ElseExpr::IfLet(Box::new(IfLetExpr::from_cst(
+                    SyntaxElement::Node(else_body_node),
+                )?)),
+                SyntaxKind::BLOCK_EXPR => ElseExpr::Block(Box::new(BlockExpr::from_cst(
+                    SyntaxElement::Node(else_body_node),
+                )?)),
+                _ => {
+                    return Err(StrongAstError::UnexpectedKindDesc {
+                        expected_desc: "IF_EXPR, IF_LET_EXPR, or BLOCK_EXPR".into(),
+                        found: else_body_node.kind(),
+                        at: else_body_node.text_range(),
+                    });
+                }
+            };
+            Some((else_token, else_body))
+        } else {
+            None
+        };
+
+        it.expect_end()?;
+
+        Ok(IfLetExpr {
+            keyword,
+            pattern,
+            equals,
+            scrutinee,
+            block,
+            else_branch,
+        })
+    }
+}
+
+impl KnownKind for IfLetExpr {
+    fn kind() -> SyntaxKind {
+        SyntaxKind::IF_LET_EXPR
+    }
+}
+
+impl Printable for IfLetExpr {
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        printer.print_raw_token(&self.keyword);
+        printer.print_str(" ");
+        // `if let PATTERN = SCRUTINEE { ... }` — pattern carries its own
+        // leading `let`. No surrounding parens around the pattern or
+        // scrutinee (unlike plain `if`, where parens are canonicalised
+        // around the condition).
+        printer.print(&self.pattern, shape.clone());
+        printer.print_str(" ");
+        printer.print_raw_token(&self.equals);
+        printer.print_str(" ");
+        printer.print(&*self.scrutinee, shape.clone());
+        printer.print_str(" ");
+        printer.print(&self.block, shape.clone());
+
+        if let Some((else_kw, else_expr)) = &self.else_branch {
+            printer.print_str(" ");
+            printer.print_raw_token(else_kw);
+            printer.print_str(" ");
+            printer.print(else_expr, shape);
+        }
+
+        PrintInfo::default_multi_lined()
+    }
+    fn leftmost_token(&self) -> TextRange {
+        self.keyword.span()
+    }
+    fn rightmost_token(&self) -> TextRange {
+        if let Some((_, else_expr)) = &self.else_branch {
+            else_expr.rightmost_token()
+        } else {
+            self.block.rightmost_token()
         }
     }
 }
@@ -1530,6 +1853,350 @@ impl Printable for MatchGuard {
     }
 }
 
+/// Corresponds to a [`SyntaxKind::CATCH_EXPR`] node.
+#[derive(Debug)]
+pub struct CatchExpr {
+    pub base: Box<Expression>,
+    pub clauses: Vec<CatchClause>,
+}
+
+impl FromCST for CatchExpr {
+    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
+        let node = StrongAstError::assert_is_node(elem)?;
+        StrongAstError::assert_kind_node(&node, SyntaxKind::CATCH_EXPR)?;
+
+        let mut it = SyntaxNodeIter::new(&node);
+        let base = Box::new(Expression::from_cst(
+            it.expect_next("catch base expression")?,
+        )?);
+
+        let mut clauses = Vec::new();
+        for elem in it {
+            if elem.kind() != SyntaxKind::CATCH_CLAUSE {
+                return Err(StrongAstError::UnexpectedKindDesc {
+                    expected_desc: "CATCH_CLAUSE".into(),
+                    found: elem.kind(),
+                    at: elem.text_range(),
+                });
+            }
+            clauses.push(CatchClause::from_cst(elem)?);
+        }
+
+        Ok(Self { base, clauses })
+    }
+}
+
+impl KnownKind for CatchExpr {
+    fn kind() -> SyntaxKind {
+        SyntaxKind::CATCH_EXPR
+    }
+}
+
+impl Printable for CatchExpr {
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        let base_info = printer.print(&*self.base, shape.clone());
+        for clause in &self.clauses {
+            printer.print_str(" ");
+            printer.print(clause, shape.clone());
+        }
+        PrintInfo {
+            multi_lined: base_info.multi_lined || !self.clauses.is_empty(),
+        }
+    }
+
+    fn leftmost_token(&self) -> TextRange {
+        self.base.leftmost_token()
+    }
+
+    fn rightmost_token(&self) -> TextRange {
+        self.clauses
+            .last()
+            .map_or_else(|| self.base.rightmost_token(), CatchClause::rightmost_token)
+    }
+}
+
+/// The `catch` or `catch_all` keyword that starts a catch clause.
+#[derive(Debug)]
+pub enum CatchKeyword {
+    Catch(t::Catch),
+    CatchAll(t::CatchAll),
+}
+
+impl FromCST for CatchKeyword {
+    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
+        match elem.kind() {
+            SyntaxKind::KW_CATCH => t::Catch::from_cst(elem).map(Self::Catch),
+            SyntaxKind::KW_CATCH_ALL => t::CatchAll::from_cst(elem).map(Self::CatchAll),
+            found => Err(StrongAstError::UnexpectedKindDesc {
+                expected_desc: "KW_CATCH or KW_CATCH_ALL".into(),
+                found,
+                at: elem.text_range(),
+            }),
+        }
+    }
+}
+
+impl Token for CatchKeyword {
+    fn span(&self) -> TextRange {
+        match self {
+            CatchKeyword::Catch(keyword) => keyword.span(),
+            CatchKeyword::CatchAll(keyword) => keyword.span(),
+        }
+    }
+}
+
+/// `catch (binding)` and optional stack-trace bindings use small wrapper nodes.
+#[derive(Debug)]
+pub struct CatchBinding {
+    pub name: t::Word,
+}
+
+impl CatchBinding {
+    fn from_cst_kind(elem: SyntaxElement, kind: SyntaxKind) -> Result<Self, StrongAstError> {
+        let node = StrongAstError::assert_is_node(elem)?;
+        StrongAstError::assert_kind_node(&node, kind)?;
+
+        let mut it = SyntaxNodeIter::new(&node);
+        let name = it.expect_parse()?;
+        it.expect_end()?;
+        Ok(Self { name })
+    }
+}
+
+impl Printable for CatchBinding {
+    fn print(&self, _shape: Shape, printer: &mut Printer) -> PrintInfo {
+        printer.print_raw_token(&self.name);
+        PrintInfo::default_single_line()
+    }
+
+    fn leftmost_token(&self) -> TextRange {
+        self.name.span()
+    }
+
+    fn rightmost_token(&self) -> TextRange {
+        self.name.span()
+    }
+}
+
+/// Corresponds to a [`SyntaxKind::CATCH_CLAUSE`] node.
+#[derive(Debug)]
+pub struct CatchClause {
+    pub keyword: CatchKeyword,
+    pub open_paren: t::LParen,
+    pub binding: CatchBinding,
+    pub stack_trace_binding: Option<(t::Comma, CatchBinding)>,
+    pub close_paren: t::RParen,
+    pub open_brace: t::LBrace,
+    pub arms: Vec<CatchArm>,
+    pub close_brace: t::RBrace,
+}
+
+impl FromCST for CatchClause {
+    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
+        let node = StrongAstError::assert_is_node(elem)?;
+        StrongAstError::assert_kind_node(&node, SyntaxKind::CATCH_CLAUSE)?;
+
+        let mut it = SyntaxNodeIter::new(&node);
+        let keyword = CatchKeyword::from_cst(it.expect_next("catch keyword")?)?;
+        let open_paren = it.expect_parse()?;
+        let binding = CatchBinding::from_cst_kind(
+            it.expect_next("catch binding")?,
+            SyntaxKind::CATCH_BINDING,
+        )?;
+        let stack_trace_binding = it
+            .next_if_kind(SyntaxKind::COMMA)
+            .map(|comma| {
+                Ok::<_, StrongAstError>((
+                    t::Comma::from_cst(comma)?,
+                    CatchBinding::from_cst_kind(
+                        it.expect_next("catch stack trace binding")?,
+                        SyntaxKind::CATCH_STACK_TRACE_BINDING,
+                    )?,
+                ))
+            })
+            .transpose()?;
+        let close_paren = it.expect_parse()?;
+        let open_brace = it.expect_parse()?;
+
+        let mut arms = Vec::new();
+        let close_brace = loop {
+            let Some(elem) = it.next() else {
+                return Err(StrongAstError::missing(SyntaxKind::R_BRACE, it.parent));
+            };
+            match elem.kind() {
+                SyntaxKind::R_BRACE => break t::RBrace::from_cst(elem)?,
+                SyntaxKind::CATCH_ARM => arms.push(CatchArm::from_cst(elem)?),
+                found => {
+                    return Err(StrongAstError::UnexpectedKindDesc {
+                        expected_desc: "CATCH_ARM or R_BRACE".into(),
+                        found,
+                        at: elem.text_range(),
+                    });
+                }
+            }
+        };
+        it.expect_end()?;
+
+        Ok(Self {
+            keyword,
+            open_paren,
+            binding,
+            stack_trace_binding,
+            close_paren,
+            open_brace,
+            arms,
+            close_brace,
+        })
+    }
+}
+
+impl KnownKind for CatchClause {
+    fn kind() -> SyntaxKind {
+        SyntaxKind::CATCH_CLAUSE
+    }
+}
+
+impl Printable for CatchClause {
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        let inner_indent = shape.indent + printer.config.indent_width;
+
+        printer.print_raw_token(&self.keyword);
+        printer.print_str(" ");
+        printer.print_raw_token(&self.open_paren);
+        printer.print(&self.binding, Shape::unlimited_single_line());
+        if let Some((comma, stack_trace_binding)) = &self.stack_trace_binding {
+            printer.print_raw_token(comma);
+            printer.print_str(" ");
+            printer.print(stack_trace_binding, Shape::unlimited_single_line());
+        }
+        printer.print_raw_token(&self.close_paren);
+        printer.print_str(" ");
+        printer.print_raw_token(&self.open_brace);
+        printer.print_trivia_all_trailing_for(self.open_brace.span());
+        printer.print_newline();
+
+        for arm in &self.arms {
+            printer.print_standalone_with_trivia(arm, inner_indent);
+            printer.print_newline();
+        }
+
+        printer.print_trivia_all_leading_with_newline_for(self.close_brace.span(), inner_indent);
+        printer.print_spaces(shape.indent);
+        printer.print_raw_token(&self.close_brace);
+
+        PrintInfo::default_multi_lined()
+    }
+
+    fn leftmost_token(&self) -> TextRange {
+        self.keyword.span()
+    }
+
+    fn rightmost_token(&self) -> TextRange {
+        self.close_brace.span()
+    }
+}
+
+/// Corresponds to a [`SyntaxKind::CATCH_ARM`] node.
+#[derive(Debug)]
+pub struct CatchArm {
+    pub pattern: MatchPattern,
+    pub fat_arrow: t::FatArrow,
+    pub body: Expression,
+    pub comma: Option<t::Comma>,
+}
+
+impl FromCST for CatchArm {
+    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
+        let node = StrongAstError::assert_is_node(elem)?;
+        StrongAstError::assert_kind_node(&node, SyntaxKind::CATCH_ARM)?;
+
+        let mut it = SyntaxNodeIter::new(&node);
+        let pattern = it.expect_parse()?;
+        let fat_arrow = it.expect_parse()?;
+        let body = Expression::from_cst(it.expect_next("catch arm body")?)?;
+        let comma = it.next().map(t::Comma::from_cst).transpose()?;
+        it.expect_end()?;
+
+        Ok(Self {
+            pattern,
+            fat_arrow,
+            body,
+            comma,
+        })
+    }
+}
+
+impl KnownKind for CatchArm {
+    fn kind() -> SyntaxKind {
+        SyntaxKind::CATCH_ARM
+    }
+}
+
+impl Printable for CatchArm {
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        printer.print(&self.pattern, shape.clone());
+        printer.print_str(" ");
+        printer.print_raw_token(&self.fat_arrow);
+        printer.print_str(" ");
+
+        let line_len_remaining = printer.current_line_remaining_width();
+        if let Expression::Block(block) = &self.body {
+            let body_shape = Shape {
+                width: line_len_remaining,
+                indent: shape.indent,
+                first_line_offset: printer
+                    .config
+                    .line_width
+                    .saturating_sub(shape.indent + line_len_remaining),
+            };
+            let info = printer.print(block, body_shape);
+            if self.comma.is_some() {
+                printer.print_str(",");
+            }
+            return info;
+        }
+
+        let mut try_body = printer.sub_printer();
+        let try_body_info = self
+            .body
+            .print(Shape::unlimited_single_line(), &mut try_body);
+
+        if try_body_info.multi_lined || try_body.len() > line_len_remaining {
+            printer.print_str("{");
+            printer.print_newline();
+            printer.print_standalone_with_trivia(
+                &self.body,
+                shape.indent + printer.config.indent_width,
+            );
+            printer.print_newline();
+            printer.print_spaces(shape.indent);
+            printer.print_str("}");
+            if self.comma.is_some() {
+                printer.print_str(",");
+            }
+            PrintInfo::default_multi_lined()
+        } else {
+            printer.append_from_printer(try_body);
+            if self.comma.is_some() {
+                printer.print_str(",");
+            }
+            PrintInfo::default_single_line()
+        }
+    }
+
+    fn leftmost_token(&self) -> TextRange {
+        self.pattern.leftmost_token()
+    }
+
+    fn rightmost_token(&self) -> TextRange {
+        if let Some(comma) = &self.comma {
+            comma.span()
+        } else {
+            self.body.rightmost_token()
+        }
+    }
+}
+
 /// Corresponds to a [`SyntaxKind::CALL_EXPR`] node.
 #[derive(Debug)]
 pub struct CallExpr {
@@ -1591,7 +2258,7 @@ impl Printable for CallExpr {
 #[derive(Debug)]
 pub struct CallArgs {
     pub open_paren: t::LParen,
-    pub args: Vec<(Expression, Option<t::Comma>)>,
+    pub args: Vec<(CallArg, Option<t::Comma>)>,
     pub close_paren: t::RParen,
 }
 impl FromCST for CallArgs {
@@ -1613,12 +2280,19 @@ impl FromCST for CallArgs {
                 break t::RParen::from_cst(elem)?;
             }
 
-            let expr = Expression::from_cst(elem)?;
+            let arg = if elem.kind() == SyntaxKind::CALL_ARG {
+                CallArg::from_cst(elem)?
+            } else {
+                CallArg {
+                    label: None,
+                    expr: Expression::from_cst(elem)?,
+                }
+            };
             let comma = it
                 .next_if_kind(SyntaxKind::COMMA)
                 .map(t::Comma::from_cst)
                 .transpose()?;
-            args.push((expr, comma));
+            args.push((arg, comma));
         };
 
         it.expect_end()?;
@@ -1628,6 +2302,93 @@ impl FromCST for CallArgs {
             args,
             close_paren,
         })
+    }
+}
+
+/// Corresponds to a [`SyntaxKind::CALL_ARG`] node.
+#[derive(Debug)]
+pub struct CallArg {
+    pub label: Option<(t::Word, t::Equals)>,
+    pub expr: Expression,
+}
+
+impl FromCST for CallArg {
+    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
+        let node = StrongAstError::assert_is_node(elem)?;
+        StrongAstError::assert_kind_node(&node, SyntaxKind::CALL_ARG)?;
+
+        let children: Vec<_> = node
+            .children_with_tokens()
+            .filter(|elem| !elem.kind().is_trivia())
+            .collect();
+
+        let (label, expr_elem) = if children.len() >= 3
+            && matches!(children[0].kind(), SyntaxKind::WORD | SyntaxKind::KW_CLIENT)
+            && children[1].kind() == SyntaxKind::EQUALS
+        {
+            let name = t::Word::new_from_span(children[0].text_range());
+            let equals = t::Equals::from_cst(children[1].clone())?;
+            (Some((name, equals)), children[2].clone())
+        } else {
+            let Some(expr_elem) = children.first().cloned() else {
+                return Err(StrongAstError::missing_desc(
+                    "call argument",
+                    node.text_range(),
+                ));
+            };
+            (None, expr_elem)
+        };
+
+        let expr = Expression::from_cst(expr_elem)?;
+
+        Ok(CallArg { label, expr })
+    }
+}
+
+impl CallArg {
+    pub(crate) fn single_line_width(&self, input: &Printer<'_>) -> Option<usize> {
+        let mut len = 0;
+        if let Some((name, equals)) = &self.label {
+            let (_, name_trailing) = input.trivia.get_for_range_split(name.span());
+            let (equals_leading, equals_trailing) = input.trivia.get_for_range_split(equals.span());
+            let expr_leading = input.trivia.get_leading_for_element(&self.expr);
+            len += usize::from(name.span().len())
+                + name_trailing.try_squished_len(input.input)?
+                + equals_leading.try_squished_len(input.input)?
+                + " = ".len()
+                + equals_trailing.try_squished_len(input.input)?
+                + expr_leading.try_squished_len(input.input)?;
+        }
+        len += self.expr.single_line_width(input)?;
+        Some(len)
+    }
+}
+
+impl Printable for CallArg {
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        if let Some((name, equals)) = &self.label {
+            printer.print_raw_token(name);
+            let (_, name_trailing) = printer.trivia.get_for_range_split(name.span());
+            let (equals_leading, equals_trailing) =
+                printer.trivia.get_for_range_split(equals.span());
+            let expr_leading = printer.trivia.get_leading_for_element(&self.expr);
+            printer.print_trivia_squished(name_trailing);
+            printer.print_trivia_squished(equals_leading);
+            printer.print_str(" = ");
+            printer.print_trivia_squished(equals_trailing);
+            printer.print_trivia_squished(expr_leading);
+        }
+        printer.print(&self.expr, shape)
+    }
+
+    fn leftmost_token(&self) -> TextRange {
+        self.label
+            .as_ref()
+            .map_or_else(|| self.expr.leftmost_token(), |(name, _)| name.span())
+    }
+
+    fn rightmost_token(&self) -> TextRange {
+        self.expr.rightmost_token()
     }
 }
 
@@ -3232,9 +3993,22 @@ impl Printable for ObjectFieldKey {
 #[derive(Debug)]
 pub struct GenericParamList {
     pub open_angle: t::Less,
-    /// Comma-separated type parameter names: `(Word, Comma?)` pairs.
-    pub params: Vec<(t::Word, Option<t::Comma>)>,
+    /// Comma-separated type parameter declarations.
+    pub params: Vec<GenericParam>,
     pub close_angle: t::Greater,
+}
+
+#[derive(Debug)]
+pub struct GenericParam {
+    pub name: t::Word,
+    pub bounds: Option<GenericParamBounds>,
+    pub comma: Option<t::Comma>,
+}
+
+#[derive(Debug)]
+pub struct GenericParamBounds {
+    pub extends: t::Extends,
+    pub bounds: Vec<(Type, Option<t::And>)>,
 }
 
 impl FromCST for GenericParamList {
@@ -3256,15 +4030,27 @@ impl FromCST for GenericParamList {
                     break t::Greater::from_cst(elem)?;
                 }
                 SyntaxKind::GENERIC_PARAM => {
-                    // GENERIC_PARAM contains a single WORD
                     let param_node = StrongAstError::assert_is_node(elem)?;
                     let mut param_it = SyntaxNodeIter::new(&param_node);
-                    let word: t::Word = param_it.expect_parse()?;
+                    let name: t::Word = param_it.expect_parse()?;
+                    let bounds = if param_it.peek().map(SyntaxElement::kind)
+                        == Some(SyntaxKind::GENERIC_PARAM_BOUNDS)
+                    {
+                        let elem = param_it.next().expect("peeked");
+                        Some(GenericParamBounds::from_cst(elem)?)
+                    } else {
+                        None
+                    };
+                    param_it.expect_end()?;
                     let comma = it
                         .next_if_kind(SyntaxKind::COMMA)
                         .map(t::Comma::from_cst)
                         .transpose()?;
-                    params.push((word, comma));
+                    params.push(GenericParam {
+                        name,
+                        bounds,
+                        comma,
+                    });
                 }
                 _ => {
                     return Err(StrongAstError::UnexpectedAdditionalElement {
@@ -3285,6 +4071,28 @@ impl FromCST for GenericParamList {
     }
 }
 
+impl FromCST for GenericParamBounds {
+    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
+        let node = StrongAstError::assert_is_node(elem)?;
+        StrongAstError::assert_kind_node(&node, SyntaxKind::GENERIC_PARAM_BOUNDS)?;
+
+        let mut it = SyntaxNodeIter::new(&node);
+        let extends: t::Extends = it.expect_parse()?;
+        let mut bounds = Vec::new();
+        while it.peek().is_some() {
+            let ty: Type = it.expect_parse()?;
+            let and = it
+                .next_if_kind(SyntaxKind::AND)
+                .map(t::And::from_cst)
+                .transpose()?;
+            bounds.push((ty, and));
+        }
+        it.expect_end()?;
+
+        Ok(GenericParamBounds { extends, bounds })
+    }
+}
+
 impl KnownKind for GenericParamList {
     fn kind() -> SyntaxKind {
         SyntaxKind::GENERIC_PARAM_LIST
@@ -3294,8 +4102,12 @@ impl KnownKind for GenericParamList {
 impl Printable for GenericParamList {
     fn print(&self, _shape: Shape, printer: &mut Printer) -> PrintInfo {
         printer.print_raw_token(&self.open_angle);
-        for (i, (word, _comma)) in self.params.iter().enumerate() {
-            printer.print_raw_token(word);
+        for (i, param) in self.params.iter().enumerate() {
+            printer.print_raw_token(&param.name);
+            if let Some(bounds) = &param.bounds {
+                printer.print_str(" ");
+                printer.print(bounds, Shape::unlimited_single_line());
+            }
             if i + 1 < self.params.len() {
                 printer.print_str(", ");
             }
@@ -3308,6 +4120,30 @@ impl Printable for GenericParamList {
     }
     fn rightmost_token(&self) -> TextRange {
         self.close_angle.span()
+    }
+}
+
+impl Printable for GenericParamBounds {
+    fn print(&self, _shape: Shape, printer: &mut Printer) -> PrintInfo {
+        printer.print_raw_token(&self.extends);
+        for (idx, (bound, _and)) in self.bounds.iter().enumerate() {
+            if idx == 0 {
+                printer.print_str(" ");
+            } else {
+                printer.print_str(" & ");
+            }
+            printer.print(bound, Shape::unlimited_single_line());
+        }
+        PrintInfo::default_single_line()
+    }
+    fn leftmost_token(&self) -> TextRange {
+        self.extends.span()
+    }
+    fn rightmost_token(&self) -> TextRange {
+        self.bounds
+            .last()
+            .map(|(bound, _)| bound.rightmost_token())
+            .unwrap_or_else(|| self.extends.span())
     }
 }
 

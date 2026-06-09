@@ -44,6 +44,13 @@ pub enum WsInMessage {
         value: Option<String>,
         variable: Option<String>,
     },
+    #[serde(rename = "inputResponse")]
+    InputResponse {
+        id: u64,
+        value: String,
+        #[serde(rename = "callId")]
+        call_id: u64,
+    },
     #[serde(rename = "requestState")]
     RequestState,
     #[serde(rename = "requestCollectTests")]
@@ -60,6 +67,12 @@ pub enum WsInMessage {
         line: u32,
         column: u32,
     },
+    /// User set/overrode an env var in the UI.
+    #[serde(rename = "setEnvVar")]
+    SetEnvVar { key: String, value: String },
+    /// User deleted an env var override in the UI.
+    #[serde(rename = "deleteEnvVar")]
+    DeleteEnvVar { key: String },
 }
 
 // ---------------------------------------------------------------------------
@@ -69,6 +82,16 @@ pub enum WsInMessage {
 #[derive(Debug, Serialize, Clone)]
 #[serde(tag = "type")]
 pub enum WsOutMessage {
+    #[serde(rename = "hello")]
+    Hello {
+        #[serde(rename = "toolchainVersion")]
+        toolchain_version: String,
+        #[serde(rename = "playgroundProtocol")]
+        playground_protocol: u32,
+        #[serde(rename = "minClientPlaygroundProtocol")]
+        min_client_playground_protocol: u32,
+        capabilities: Vec<String>,
+    },
     #[serde(rename = "ready")]
     Ready,
     #[serde(rename = "playgroundNotification")]
@@ -88,6 +111,32 @@ pub enum WsOutMessage {
     },
     #[serde(rename = "envVarRequest")]
     EnvVarRequest { id: u64, variable: String },
+    /// Bulk send of all process env vars on session init.
+    #[serde(rename = "processEnvVars")]
+    ProcessEnvVars {
+        vars: std::collections::HashMap<String, String>,
+    },
+    /// An env var was resolved from the server's process environment.
+    #[serde(rename = "envVarFromShell")]
+    EnvVarFromShell { variable: String, value: String },
+    /// Server asks the playground UI to prompt the user for input.
+    #[serde(rename = "inputRequest")]
+    InputRequest {
+        id: u64,
+        prompt: Option<String>,
+        #[serde(rename = "callId")]
+        call_id: u64,
+    },
+    /// Notifies all clients that an input request was already resolved.
+    #[serde(rename = "inputResolved")]
+    InputResolved {
+        id: u64,
+        #[serde(rename = "callId")]
+        call_id: u64,
+    },
+    /// Env var names referenced in BAML source code (from compilation).
+    #[serde(rename = "knownEnvVarNames")]
+    KnownEnvVarNames { names: Vec<String> },
     #[serde(rename = "fetchLogNew")]
     FetchLogNew {
         #[serde(rename = "callId")]

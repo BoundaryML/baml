@@ -34,7 +34,6 @@ pub use check::{CheckResult, collect_compiler2_diagnostics, collect_diagnostics}
 pub use client_codegen::build_symbol_pool;
 pub use db::{CursorContext, EventCallback, ProjectDatabase};
 pub use symbols::{
-    FunctionSymbol, Symbol, SymbolKind, TestSymbol, find_symbol, find_symbol_locations,
-    list_classes, list_clients, list_enums, list_functions, list_functions_with_metadata,
-    list_generators, list_tests, list_tests_with_metadata, list_type_aliases,
+    FunctionOrigin, FunctionSymbol, Symbol, SymbolKind, TestSymbol, list_functions,
+    list_functions_with_metadata, list_tests_with_metadata,
 };

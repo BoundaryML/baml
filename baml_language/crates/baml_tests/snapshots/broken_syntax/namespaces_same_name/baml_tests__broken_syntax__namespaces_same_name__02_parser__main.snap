@@ -123,7 +123,7 @@ SOURCE_FILE
         R_BRACE "}"
 
 === ERRORS ===
-Error: Expected return type (->), found throws
+error: Expected return type (->), found throws
     ╭─[ main.baml:15:31 ]
     │
  15 │ function ThrowsHttpResponse() throws root.http.Response {

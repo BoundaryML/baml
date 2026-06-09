@@ -1,0 +1,208 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== MIR2 ===
+fn user.both_ints(a: int | string, b: int | string) -> bool {
+    // Locals:
+    let _0: bool // _0 // return
+    let _1: int | string // a // param
+    let _2: int | string // b // param
+    let _3: bool
+    let _4: bool
+    let _5: bool
+
+    bb0: {
+        _4 = is_type(copy _1, int);
+        branch copy _4 -> [bb2, bb1];
+    }
+
+    bb1: {
+        _3 = const false;
+        goto -> bb3;
+    }
+
+    bb2: {
+        _3 = const true;
+        goto -> bb3;
+    }
+
+    bb3: {
+        _0 = short_circuit(&&) copy _3 -> [eval: bb4, join: bb7];
+    }
+
+    bb4: {
+        _5 = is_type(copy _2, int);
+        branch copy _5 -> [bb6, bb5];
+    }
+
+    bb5: {
+        _0 = const false;
+        goto -> bb7;
+    }
+
+    bb6: {
+        _0 = const true;
+        goto -> bb7;
+    }
+
+    bb7: {
+        return;
+    }
+}
+
+fn user.classify(v: int | string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: int | string // v // param
+    let _2: bool
+    let _3: bool
+
+    bb0: {
+        _3 = is_type(copy _1, int);
+        branch copy _3 -> [bb2, bb1];
+    }
+
+    bb1: {
+        _2 = const false;
+        goto -> bb3;
+    }
+
+    bb2: {
+        _2 = const true;
+        goto -> bb3;
+    }
+
+    bb3: {
+        branch copy _2 -> [bb5, bb4];
+    }
+
+    bb4: {
+        _0 = const "text";
+        goto -> bb6;
+    }
+
+    bb5: {
+        _0 = const "number";
+        goto -> bb6;
+    }
+
+    bb6: {
+        return;
+    }
+}
+
+fn user.is_int(v: int | string) -> bool {
+    // Locals:
+    let _0: bool // _0 // return
+    let _1: int | string // v // param
+    let _2: bool
+
+    bb0: {
+        _2 = is_type(copy _1, int);
+        branch copy _2 -> [bb2, bb1];
+    }
+
+    bb1: {
+        _0 = const false;
+        goto -> bb3;
+    }
+
+    bb2: {
+        _0 = const true;
+        goto -> bb3;
+    }
+
+    bb3: {
+        return;
+    }
+}
+
+fn user.is_int_or_bool(v: int | string | bool) -> bool {
+    // Locals:
+    let _0: bool // _0 // return
+    let _1: int | string | bool // v // param
+    let _2: bool
+    let _3: bool
+
+    bb0: {
+        _2 = is_type(copy _1, int);
+        branch copy _2 -> [bb3, bb1];
+    }
+
+    bb1: {
+        _3 = is_type(copy _1, bool);
+        branch copy _3 -> [bb3, bb2];
+    }
+
+    bb2: {
+        _0 = const false;
+        goto -> bb4;
+    }
+
+    bb3: {
+        _0 = const true;
+        goto -> bb4;
+    }
+
+    bb4: {
+        return;
+    }
+}
+
+fn user.is_not_string(v: int | string) -> bool {
+    // Locals:
+    let _0: bool // _0 // return
+    let _1: int | string // v // param
+    let _2: bool
+    let _3: bool
+
+    bb0: {
+        _3 = is_type(copy _1, string);
+        branch copy _3 -> [bb2, bb1];
+    }
+
+    bb1: {
+        _2 = const false;
+        goto -> bb3;
+    }
+
+    bb2: {
+        _2 = const true;
+        goto -> bb3;
+    }
+
+    bb3: {
+        _0 = !copy _2;
+        goto -> bb4;
+    }
+
+    bb4: {
+        return;
+    }
+}
+
+fn user.is_zero(n: int) -> bool {
+    // Locals:
+    let _0: bool // _0 // return
+    let _1: int // n // param
+    let _2: bool
+
+    bb0: {
+        _2 = copy _1 == const 0_i64;
+        branch copy _2 -> [bb2, bb1];
+    }
+
+    bb1: {
+        _0 = const false;
+        goto -> bb3;
+    }
+
+    bb2: {
+        _0 = const true;
+        goto -> bb3;
+    }
+
+    bb3: {
+        return;
+    }
+}

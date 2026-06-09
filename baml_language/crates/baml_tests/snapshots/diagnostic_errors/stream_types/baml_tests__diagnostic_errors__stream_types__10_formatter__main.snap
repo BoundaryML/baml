@@ -146,4 +146,5 @@ class Container {
 }
 
 type Foo = int | string;
+
 type Bar = Foo | bool;

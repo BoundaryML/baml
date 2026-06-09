@@ -12,13 +12,13 @@ function CatchWildcardOnly(x: int) -> string {
 // Wildcard with binding name
 function CatchNamedWildcard(x: int) -> string {
   MayFail(x) catch (e) {
-    other => "caught: " + other
+    let other => "caught: " + other
   }
 }
 
 //----
 //- diagnostics
-// Warning: unreachable arm
+// warning: unreachable arm
 //    ╭─[ catch_catch_wildcard_only.baml:8:10 ]
 //    │
 //  8 │     _ => "caught everything"
@@ -27,12 +27,12 @@ function CatchNamedWildcard(x: int) -> string {
 //    │ 
 //    │ Note: Error code: E0063
 // ───╯
-// Warning: unreachable arm
-//     ╭─[ catch_catch_wildcard_only.baml:15:13 ]
+// warning: unreachable arm
+//     ╭─[ catch_catch_wildcard_only.baml:15:17 ]
 //     │
-//  15 │     other => "caught: " + other
-//     │             ─────────┬─────────  
-//     │                      ╰─────────── unreachable arm
+//  15 │     let other => "caught: " + other
+//     │                 ─────────┬─────────  
+//     │                          ╰─────────── unreachable arm
 //     │ 
 //     │ Note: Error code: E0063
 // ────╯

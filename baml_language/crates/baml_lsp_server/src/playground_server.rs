@@ -23,12 +23,14 @@ use axum::{
     routing::get,
 };
 use base64::Engine as _;
+use bex_project::{is_cancelled_engine_error, is_cancelled_runtime_error};
 use futures::{SinkExt, stream::StreamExt};
 use prost::Message;
 use tokio::{net::TcpListener, sync::broadcast};
 
 use crate::{
     playground_env::PlaygroundEnvState,
+    playground_io::PlaygroundIoState,
     playground_ws::{WsInMessage, WsOutMessage},
 };
 
@@ -68,6 +70,7 @@ struct WsState {
     bex: Arc<dyn bex_project::BexLsp>,
     broadcast_tx: broadcast::Sender<WsOutMessage>,
     env_state: Arc<PlaygroundEnvState>,
+    io_state: Arc<PlaygroundIoState>,
 }
 
 /// Start the playground server on the given listener.
@@ -76,8 +79,9 @@ pub async fn run(
     bex: Arc<dyn bex_project::BexLsp>,
     broadcast_tx: broadcast::Sender<WsOutMessage>,
     env_state: Arc<PlaygroundEnvState>,
+    io_state: Arc<PlaygroundIoState>,
 ) -> anyhow::Result<()> {
-    let app = build_router(bex, broadcast_tx, env_state)?;
+    let app = build_router(bex, broadcast_tx, env_state, io_state)?;
 
     tracing::info!(
         "Playground: http://localhost:{}",
@@ -93,11 +97,13 @@ fn build_router(
     bex: Arc<dyn bex_project::BexLsp>,
     broadcast_tx: broadcast::Sender<WsOutMessage>,
     env_state: Arc<PlaygroundEnvState>,
+    io_state: Arc<PlaygroundIoState>,
 ) -> anyhow::Result<Router> {
     let ws_state = WsState {
         bex,
         broadcast_tx,
         env_state,
+        io_state,
     };
 
     let api = Router::new()
@@ -137,12 +143,49 @@ async fn playground_ws_session(socket: WebSocket, state: WsState) {
     tracing::info!("Playground: WS session started");
     let (mut sink, mut stream) = socket.split();
 
+    if let Some(hello) = to_ws_text(&WsOutMessage::Hello {
+        toolchain_version: baml_version::CANONICAL_VERSION.to_string(),
+        playground_protocol: 1,
+        min_client_playground_protocol: 1,
+        capabilities: vec![
+            "playgroundWebSocket.v1".to_string(),
+            "callFunction.v1".to_string(),
+            "collectTests.v1".to_string(),
+        ],
+    }) {
+        if sink.send(hello).await.is_err() {
+            return;
+        }
+    } else {
+        return;
+    }
+
     if let Some(ready) = to_ws_text(&WsOutMessage::Ready) {
         if sink.send(ready).await.is_err() {
             return;
         }
     } else {
         return;
+    }
+
+    // Send all process env vars so the UI can display them immediately.
+    {
+        let vars: std::collections::HashMap<String, String> = std::env::vars().collect();
+        if let Some(msg) = to_ws_text(&WsOutMessage::ProcessEnvVars { vars })
+            && sink.send(msg).await.is_err()
+        {
+            return;
+        }
+    }
+
+    // Send env var names referenced in BAML source code.
+    {
+        let names = state.bex.all_env_var_names();
+        if let Some(msg) = to_ws_text(&WsOutMessage::KnownEnvVarNames { names })
+            && sink.send(msg).await.is_err()
+        {
+            return;
+        }
     }
 
     // Send current playground state.
@@ -217,8 +260,9 @@ async fn handle_ws_in_message(
                 }
             };
 
-            let args = match bridge_ctypes::baml::cffi::CallFunctionArgs::decode(decoded.as_slice())
-            {
+            let args = match bridge_ctypes::baml_core::cffi::CallFunctionArgs::decode(
+                decoded.as_slice(),
+            ) {
                 Ok(a) => a,
                 Err(e) => {
                     let err_msg = WsOutMessage::CallFunctionError {
@@ -274,13 +318,13 @@ async fn handle_ws_in_message(
             };
 
             tokio::spawn(async move {
-                let handle_options = bridge_ctypes::HandleTableOptions::for_wire();
+                let handle_options = bridge_ctypes::CffiHandleTableOptions::for_wire();
                 let out = match bex
                     .call_function(&name, kwargs.into(), function_call_ctx.build())
                     .await
                 {
                     Ok(result) => {
-                        match bridge_ctypes::external_to_baml_value(&result, &handle_options) {
+                        match bridge_ctypes::external_to_outbound(&result, &handle_options) {
                             Ok(baml_val) => {
                                 let b64 = base64::engine::general_purpose::STANDARD
                                     .encode(baml_val.encode_to_vec());
@@ -294,10 +338,7 @@ async fn handle_ws_in_message(
                         }
                     }
                     Err(e) => {
-                        let is_cancelled = matches!(
-                            &e,
-                            bex_project::RuntimeError::Engine(bex_project::EngineError::Cancelled)
-                        );
+                        let is_cancelled = is_cancelled_runtime_error(&e);
                         WsOutMessage::CallFunctionError {
                             id,
                             error: format!("{e}"),
@@ -340,8 +381,8 @@ async fn handle_ws_in_message(
                     .await
                 {
                     Ok(result) => {
-                        let handle_options = bridge_ctypes::HandleTableOptions::for_wire();
-                        match bridge_ctypes::external_to_baml_value(&result, &handle_options) {
+                        let handle_options = bridge_ctypes::CffiHandleTableOptions::for_wire();
+                        match bridge_ctypes::external_to_outbound(&result, &handle_options) {
                             Ok(baml_val) => {
                                 let b64 = base64::engine::general_purpose::STANDARD
                                     .encode(baml_val.encode_to_vec());
@@ -355,7 +396,7 @@ async fn handle_ws_in_message(
                         }
                     }
                     Err(e) => {
-                        let is_cancelled = matches!(&e, bex_project::EngineError::Cancelled);
+                        let is_cancelled = is_cancelled_engine_error(&e);
                         WsOutMessage::CallFunctionError {
                             id,
                             error: format!("{e}"),
@@ -379,6 +420,10 @@ async fn handle_ws_in_message(
 
         WsInMessage::EnvVarResponse { id, value, .. } => {
             state.env_state.resolve(id, value);
+        }
+
+        WsInMessage::InputResponse { id, value, call_id } => {
+            state.io_state.resolve(id, call_id, value);
         }
 
         WsInMessage::RequestState => {
@@ -418,6 +463,14 @@ async fn handle_ws_in_message(
             {
                 tracing::warn!("Failed to send cursor context");
             }
+        }
+
+        WsInMessage::SetEnvVar { key, value } => {
+            state.env_state.set_override(key, value);
+        }
+
+        WsInMessage::DeleteEnvVar { key } => {
+            state.env_state.remove_override(&key);
         }
     }
 }
@@ -475,6 +528,7 @@ async fn proxy_request(upstream: String, req: Request<Body>) -> Response {
         .unwrap_or("/");
     let target_url = format!("{upstream}{uri_path_and_query}");
 
+    ensure_rustls_crypto_provider();
     let mut fwd = reqwest::Client::new().request(method, &target_url);
     for (name, value) in req.headers() {
         if name == header::HOST {
@@ -516,6 +570,19 @@ async fn proxy_request(upstream: String, req: Request<Body>) -> Response {
     let resp_bytes = upstream_resp.bytes().await.unwrap_or_default();
     builder.body(Body::from(resp_bytes)).unwrap()
 }
+
+#[cfg(feature = "ring-crypto")]
+fn ensure_rustls_crypto_provider() {
+    let _ = rustls::crypto::ring::default_provider().install_default();
+}
+
+#[cfg(all(not(feature = "ring-crypto"), feature = "aws-crypto"))]
+fn ensure_rustls_crypto_provider() {
+    let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
+}
+
+#[cfg(all(not(feature = "ring-crypto"), not(feature = "aws-crypto")))]
+fn ensure_rustls_crypto_provider() {}
 
 /// Proxy a WebSocket upgrade request (e.g. Vite HMR) to the upstream dev server.
 async fn proxy_ws(upstream: String, req: Request<Body>) -> Response {

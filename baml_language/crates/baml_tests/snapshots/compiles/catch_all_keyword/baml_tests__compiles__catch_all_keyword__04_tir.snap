@@ -17,7 +17,7 @@ function user.PartialCatch(x: int) -> string throws never {
   { : string | "caught string"
     catch (MayFailIntOrString(x) : string) : unknown
       catch (e)
-        _: string =>
+        string =>
           "caught string" : "caught string"
   }
 }
@@ -33,9 +33,9 @@ function user.CatchAllTyped(x: int) -> string throws never {
   { : string | "caught string" | "caught int"
     catch (MayFailIntOrString(x) : string) : unknown
       catch_all (e)
-        _: string =>
+        string =>
           "caught string" : "caught string"
-        _: int =>
+        int =>
           "caught int" : "caught int"
   }
 }
@@ -43,7 +43,7 @@ function user.CatchThenCatchAll(x: int) -> string throws never {
   { : string | "caught string" | "caught rest"
     catch (MayFailIntOrString(x) : string) : unknown
       catch (e)
-        _: string =>
+        string =>
           "caught string" : "caught string"
       catch_all (e2)
         _ =>

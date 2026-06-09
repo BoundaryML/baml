@@ -6,13 +6,15 @@ use anyhow::{Context, Result, anyhow};
 use baml_db::{baml_compiler_diagnostics::Severity, baml_compiler2_emit};
 use baml_project::ProjectDatabase;
 use bex_engine::{
-    BexEngine, BexExternalValue, CancellationToken, FunctionCallContextBuilder,
+    BexCallArg, BexEngine, BexExternalValue, CancellationToken, FunctionCallContextBuilder,
     test_arg_to_external,
 };
 use clap::Args;
 use sys_native::{CallId, SysOpsExt};
 
-use crate::{project_load::load_project_from, test_filter::TestFilter};
+use crate::{
+    project_load::load_project_from_reporting, reporter::Reporter, test_filter::TestFilter,
+};
 
 #[derive(Args, Clone, Debug)]
 pub struct TestArgs {
@@ -90,10 +92,15 @@ struct RunCtx<'a> {
 
 impl TestArgs {
     pub fn run(&self) -> Result<crate::ExitCode> {
+        let reporter = Reporter::new();
         // ── 1. Load project ────────────────────────────────────────────────
-        let (db, from, baml_files) = load_project_from(&self.from)?;
+        let (db, from, baml_files) = load_project_from_reporting(&self.from, &reporter)?;
         if baml_files.is_empty() {
-            eprintln!("No .baml files found in {}", from.display());
+            reporter.abandon();
+            crate::reporter::print_error(format_args!(
+                "no .baml files found in {}",
+                from.display()
+            ));
             return Ok(crate::ExitCode::NoTestsRun);
         }
         let project = db
@@ -101,6 +108,7 @@ impl TestArgs {
             .ok_or_else(|| anyhow!("No project context"))?;
 
         // ── 2. Diagnostics ─────────────────────────────────────────────────
+        reporter.spin("Checking", format!("{} file(s)", baml_files.len()));
         let source_files = db.get_source_files();
         let diagnostics = baml_project::collect_diagnostics(&db, project, &source_files);
         let errors: Vec<_> = diagnostics
@@ -108,10 +116,24 @@ impl TestArgs {
             .filter(|d| d.severity == Severity::Error)
             .collect();
         if !errors.is_empty() {
-            eprintln!("Compilation errors found ({}):", errors.len());
-            for diag in &errors {
-                eprintln!("  error: {}", diag.message);
+            // Render the full ariadne block so test errors look like
+            // run/pack errors instead of the previous "bullet list of
+            // messages" shape.
+            let mut sources = std::collections::HashMap::new();
+            let mut file_paths = std::collections::HashMap::new();
+            for sf in &source_files {
+                let file_id = sf.file_id(&db);
+                sources.insert(file_id, sf.text(&db).to_string());
+                file_paths.insert(file_id, sf.path(&db));
             }
+            let rendered = baml_db::baml_compiler_diagnostics::render::render_diagnostics(
+                &errors.iter().copied().cloned().collect::<Vec<_>>(),
+                &sources,
+                &file_paths,
+                &baml_db::baml_compiler_diagnostics::render::RenderConfig::cli_auto(),
+            );
+            reporter.abandon();
+            eprintln!("{rendered}");
             return Ok(crate::ExitCode::Other);
         }
 
@@ -119,6 +141,7 @@ impl TestArgs {
         let mut discovered: Vec<DiscoveredTest> = discover_legacy_tests(&db, project);
 
         // ── 4. Compile + engine + runtime (needed for testset discovery) ──
+        reporter.spin("Compiling", format!("{} file(s)", baml_files.len()));
         let compile_options = baml_compiler2_emit::CompileOptions {
             emit_test_cases: true,
         };
@@ -138,14 +161,12 @@ impl TestArgs {
         let cancel = CancellationToken::new();
 
         // ── 5. Discover testset tests via the engine ───────────────────────
-        // Mirrors the LSP collection/expansion path in
-        // `bex_project::bex_lsp::multi_project` (mod.rs:609–911). See also
-        // `BexEngine::collect_tests` at bex_engine/src/lib.rs:1241.
+        reporter.spin("Discovering", "tests");
         let (registry_value, testset_discovered) =
             match discover_testset_tests(&engine, &rt, cancel.clone()) {
                 Ok(x) => x,
                 Err(e) => {
-                    eprintln!("warning: testset discovery failed: {e}");
+                    reporter.warning(format_args!("testset discovery failed: {e}"));
                     (None, Vec::new())
                 }
             };
@@ -162,12 +183,17 @@ impl TestArgs {
             .collect();
 
         if selected.is_empty() {
-            println!("No tests selected.");
+            reporter.finish("Finished", "no tests selected");
             return Ok(crate::ExitCode::NoTestsRun);
         }
 
         if self.list {
-            println!("Selected tests ({}):\n", selected.len());
+            reporter.status("Selected", format!("{} test(s)", selected.len()));
+            // Indented list under the cargo-style status line. These
+            // are content (the actual list), not status updates, so
+            // they go to stdout as plain prints — the reporter only
+            // owns the prefixed status lines above/below.
+            #[allow(clippy::print_stdout)]
             for t in &selected {
                 println!(
                     "  {}::{}  ({})",
@@ -190,6 +216,11 @@ impl TestArgs {
             cancel: &cancel,
         };
 
+        // Test execution writes per-test PASS/FAIL lines to stdout
+        // through the run_legacy_test / run_testset_test helpers.
+        // Clear the spinner so those lines don't fight with the ticks.
+        reporter.abandon();
+
         for t in &selected {
             match &t.kind {
                 TestKind::Legacy { .. } => {
@@ -209,11 +240,15 @@ impl TestArgs {
             }
         }
 
-        println!("\nResults: {passed} passed, {failed} failed, {total} total");
-
+        let summary = format!("{passed} passed, {failed} failed, {total} total");
         if failed > 0 {
+            // `reporter.finish` styles success — print as an error so
+            // the bold-red `Error:` carries the visual weight of "tests
+            // failed" instead of dressing it up as a clean finish.
+            crate::reporter::print_error(format_args!("test failures — {summary}"));
             Ok(crate::ExitCode::TestFailure)
         } else {
+            reporter.finish("Finished", summary);
             Ok(crate::ExitCode::Success)
         }
     }
@@ -246,7 +281,7 @@ fn run_legacy_test(ctx: &RunCtx, t: &DiscoveredTest, passed: &mut usize, failed:
     };
 
     match ctx.rt.block_on(
-        ctx.engine.call_function(
+        ctx.engine.call_function_bound_args(
             &t.function_name,
             ordered_args,
             FunctionCallContextBuilder::new(CallId::next())
@@ -272,19 +307,23 @@ fn build_ordered_args(
     engine: &BexEngine,
     function_name: &str,
     test_case: &bex_vm_types::TestCase,
-) -> Result<Vec<BexExternalValue>> {
+) -> Result<Vec<BexCallArg>> {
     let params = engine
         .function_params(function_name)
         .map_err(|e| anyhow!("failed to get params for {function_name}: {e:?}"))?;
 
-    let ordered: Vec<BexExternalValue> = params
+    let ordered: Vec<BexCallArg> = params
         .into_iter()
-        .map(|(name, _ty)| {
-            test_case
-                .args
-                .get(name)
-                .map(test_arg_to_external)
-                .ok_or_else(|| anyhow!("missing argument '{name}' for function {function_name}"))
+        .map(|(name, _ty, has_default)| {
+            if let Some(value) = test_case.args.get(name) {
+                Ok(BexCallArg::Provided(Box::new(test_arg_to_external(value))))
+            } else if has_default {
+                Ok(BexCallArg::OmittedDefault)
+            } else {
+                Err(anyhow!(
+                    "missing argument '{name}' for function {function_name}"
+                ))
+            }
         })
         .collect::<Result<_>>()?;
 
@@ -379,7 +418,10 @@ fn discover_testset_tests(
                 .build();
             rt.block_on(engine.call_function(
                 "testing.TestRegistry.expand_set",
-                vec![registry.clone(), BexExternalValue::String(name.clone())],
+                vec![
+                    registry.clone(),
+                    BexExternalValue::String(name.as_str().into()),
+                ],
                 ctx,
                 true,
             ))
@@ -500,7 +542,7 @@ fn run_testset_test(
         "testing.TestRegistry.run_test",
         vec![
             registry.clone(),
-            BexExternalValue::String(full_path.to_string()),
+            BexExternalValue::String(full_path.to_string().into()),
         ],
         call_ctx,
         true,

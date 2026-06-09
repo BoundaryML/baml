@@ -120,6 +120,12 @@ pub(crate) async fn assert_engine_executes(input: EngineProgram) -> anyhow::Resu
 /// Extract the full rendered text from a `PromptAst` value.
 pub(crate) fn prompt_ast_to_string(value: &BexExternalValue) -> String {
     match value {
+        BexExternalValue::Instance { class_name, fields } if class_name == "baml.llm.PromptAst" => {
+            let data = fields
+                .get("_data")
+                .expect("PromptAst instance should contain _data");
+            prompt_ast_to_string(data)
+        }
         BexExternalValue::Adt(BexExternalAdt::PromptAst(ast)) => match ast.as_ref() {
             BuiltinPromptAst::Simple(s) => match s.as_ref() {
                 PromptAstSimple::String(s) => s.clone(),
@@ -139,7 +145,13 @@ pub(crate) fn prompt_ast_to_string(value: &BexExternalValue) -> String {
                 parts.join("\n")
             }
             other @ BuiltinPromptAst::Message { .. } => {
-                panic!("Unexpected PromptAst variant: {other:?}")
+                let BuiltinPromptAst::Message { content, .. } = other else {
+                    unreachable!()
+                };
+                match content.as_ref() {
+                    PromptAstSimple::String(s) => s.clone(),
+                    _ => panic!("Expected string content in PromptAst message"),
+                }
             }
         },
         other => panic!("Expected Adt(PromptAst), got {other:?}"),
@@ -195,7 +207,7 @@ function TestFunc(input: string) -> {return_type} {{
 
 function get_prompt() -> baml.llm.PromptAst {{
     let args = {{ "input": "test" }};
-    baml.llm.render_prompt("TestFunc", args)
+    baml.llm.render_prompt(TestClient, "TestFunc", args)
 }}
 "##
     );

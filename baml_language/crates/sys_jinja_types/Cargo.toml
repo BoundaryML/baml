@@ -1,0 +1,16 @@
+[package]
+name = "sys_jinja_types"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+baml_base = { workspace = true }
+indexmap = { workspace = true }
+minijinja = { workspace = true }
+strsim = { workspace = true }
+
+[lints]
+workspace = true

@@ -74,7 +74,7 @@ function MissingLetAfter() -> int {
 
 //----
 //- diagnostics
-// Error: Expected ')', found ';'
+// error: Expected ')', found ';'
 //    ╭─[ loops_header_requires_let_negative.baml:4:19 ]
 //    │
 //  4 │     for (i = 0; i < 3; i += 1) {
@@ -83,7 +83,7 @@ function MissingLetAfter() -> int {
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯
-// Error: Expected block after for expression, found ';'
+// error: Expected block after for expression, found ';'
 //    ╭─[ loops_header_requires_let_negative.baml:4:19 ]
 //    │
 //  4 │     for (i = 0; i < 3; i += 1) {
@@ -92,7 +92,7 @@ function MissingLetAfter() -> int {
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯
-// Error: Expected expression, found ')'
+// error: Expected expression, found ')'
 //    ╭─[ loops_header_requires_let_negative.baml:4:27 ]
 //    │
 //  4 │     for (i = 0; i < 3; i += 1) {
@@ -101,7 +101,7 @@ function MissingLetAfter() -> int {
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯
-// Error: unresolved name: i
+// error: unresolved name: i
 //    ╭─[ loops_header_requires_let_negative.baml:4:14 ]
 //    │
 //  4 │     for (i = 0; i < 3; i += 1) {
@@ -110,7 +110,7 @@ function MissingLetAfter() -> int {
 //    │ 
 //    │ Note: Error code: E0003
 // ───╯
-// Error: unresolved name: i
+// error: unresolved name: i
 //    ╭─[ loops_header_requires_let_negative.baml:4:21 ]
 //    │
 //  4 │     for (i = 0; i < 3; i += 1) {
@@ -119,7 +119,7 @@ function MissingLetAfter() -> int {
 //    │ 
 //    │ Note: Error code: E0003
 // ───╯
-// Error: unresolved name: i
+// error: unresolved name: i
 //    ╭─[ loops_header_requires_let_negative.baml:5:8 ]
 //    │
 //  5 │        s += i;
@@ -128,7 +128,7 @@ function MissingLetAfter() -> int {
 //    │ 
 //    │ Note: Error code: E0003
 // ───╯
-// Error: unresolved name: i
+// error: unresolved name: i
 //     ╭─[ loops_header_requires_let_negative.baml:14:16 ]
 //     │
 //  14 │     for (; s < 2; i += 1) {

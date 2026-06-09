@@ -60,7 +60,7 @@ function SumUnknownType(xs: int, b: string) -> int {
 
 //----
 //- diagnostics
-// Error: cannot iterate over type `int`
+// error: cannot iterate over type `int`
 //     ╭─[ loops_for.baml:28:16 ]
 //     │
 //  28 │     for (let x in xs) {

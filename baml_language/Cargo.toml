@@ -1,9 +1,35 @@
 [workspace]
 members = [
   "crates/*",
-  "rig_tests/crates/*",
+  "forks/*",
+  "sdks/go/sdkgen_go",
+  "sdks/nodejs/bridge_nodejs",
+  "sdks/nodejs/sdkgen_typescript_node",
+  "sdks/python/rust/*",
+  "sdk_tests/harness_setup",
+  "sdk_tests/harness_runner",
+  "sdk_tests/crates/python_pydantic2",
+  # `sdk_tests/crates/typescript_node`'s build.rs runs codegen +
+  # `pnpm install` but soft-fails into `$OUT_DIR/build_diagnostics.txt`
+  # if pnpm is missing or install fails (see
+  # `sdk_tests/harness_setup/src/lib.rs::BuildDiagnostics` —
+  # package name `sdk_test_harness_setup`), so a workspace
+  # `cargo build` / `cargo doc` succeeds without pnpm installed.
+  # The failures surface via `cargo test`'s
+  # `build_diagnostics::no_build_failures` test.
+  "sdk_tests/crates/typescript_node",
+  # Native RUSTC_WRAPPER shim (see tools_sccache/src/main.rs); the Windows
+  # counterpart to the tools/baml-sccache POSIX script, built explicitly in CI.
+  "tools_sccache",
 ]
-exclude = [ "crates/bridge_go" ]
+exclude = [
+  # Live system-test harnesses are intentionally outside the workspace. They
+  # enable native-only tokio/reqwest features such as `fs` and `rt-multi-thread`;
+  # keeping them out prevents workspace wasm builds from inheriting those
+  # unsupported features through resolver feature unification.
+  "forks/aws-config-systest",
+  "forks/google-cloud-auth-systest",
+]
 resolver = "2"
 
 [workspace.package]
@@ -21,14 +47,13 @@ version = "0.0.0-beta"
 
 [workspace.dependencies]
 #  Internal dependencies (baml_*)
+bex_str = { path = "crates/bex_str" }
 baml_base = { path = "crates/baml_base" }
 baml_type = { path = "crates/baml_type" }
-baml_builtins = { path = "crates/baml_builtins" }
-baml_builtins_codegen = { path = "crates/baml_builtins_codegen" }
 baml_builtins2 = { path = "crates/baml_builtins2" }
 baml_builtins2_codegen = { path = "crates/baml_builtins2_codegen" }
-baml_builtins_macros = { path = "crates/baml_builtins_macros" }
-baml_codegen_python = { path = "crates/baml_codegen_python" }
+sdkgen_typescript_node = { path = "sdks/nodejs/sdkgen_typescript_node" }
+sdkgen_python_pydantic2 = { path = "sdks/python/rust/sdkgen_python_pydantic2" }
 baml_codegen_types = { path = "crates/baml_codegen_types" }
 baml_compiler2_ast = { path = "crates/baml_compiler2_ast" }
 baml_compiler2_hir = { path = "crates/baml_compiler2_hir" }
@@ -41,33 +66,36 @@ baml_compiler_diagnostics = { path = "crates/baml_compiler_diagnostics" }
 baml_compiler_lexer = { path = "crates/baml_compiler_lexer" }
 baml_compiler_parser = { path = "crates/baml_compiler_parser" }
 baml_compiler_syntax = { path = "crates/baml_compiler_syntax" }
-bex_project = { path = "crates/bex_project" }
-bex_engine = { path = "crates/bex_engine" }
+bex_project = { path = "crates/bex_project", default-features = false }
+bex_engine = { path = "crates/bex_engine", default-features = false }
 sys_glob = { path = "crates/sys_glob" }
-sys_llm = { path = "crates/sys_llm" }
-sys_ops = { path = "crates/sys_ops" }
+sys_jinja = { path = "crates/sys_jinja" }
+sys_jinja_types = { path = "crates/sys_jinja_types" }
+sys_llm = { path = "crates/sys_llm", default-features = false }
+sys_ops = { path = "crates/sys_ops", default-features = false }
 sys_types = { path = "crates/sys_types" }
-sys_native = { path = "crates/sys_native" }
+sys_native = { path = "crates/sys_native", default-features = false }
 baml_db = { path = "crates/baml_db" }
 baml_fmt = { path = "crates/baml_fmt" }
 baml_lsp2_actions = { path = "crates/baml_lsp2_actions" }
-baml_lsp_server = { path = "crates/baml_lsp_server" }
-baml_lsp_types = { path = "crates/baml_lsp_types" }
+baml_lsp_server = { path = "crates/baml_lsp_server", default-features = false }
 baml_project = { path = "crates/baml_project" }
+baml_release = { path = "crates/baml_release" }
 baml_tests = { path = "crates/baml_tests" }
-tools_onionskin = { path = "crates/tools_onionskin" }
+baml_version = { path = "crates/baml_version" }
 bex_vm = { path = "crates/bex_vm" }
 bex_vm_types = { path = "crates/bex_vm_types" }
 bex_external_types = { path = "crates/bex_external_types" }
 bex_heap = { path = "crates/bex_heap" }
 bex_sap = { path = "crates/bex_sap" }
-bridge_ctypes = { path = "crates/bridge_ctypes" }
-bridge_cffi = { path = "crates/bridge_cffi" }
-bridge_python = { path = "crates/bridge_python" }
-bridge_wasm = { path = "crates/bridge_wasm" }
+bridge_ctypes = { path = "crates/bridge_ctypes", default-features = false }
+bridge_cffi = { path = "crates/bridge_cffi", default-features = false }
+baml_exec = { path = "crates/baml_exec" }
 bex_events = { path = "crates/bex_events" }
 bex_events_native = { path = "crates/bex_events_native" }
 bex_resource_types = { path = "crates/bex_resource_types" }
+darwin-kperf = "0.1.0"
+darwin-kperf-events = "0.1.0"
 
 # External dependency for sys_llm jinja module
 minijinja = { git = "https://github.com/boundaryml/minijinja.git", branch = "value-cmp", default-features = false, features = [
@@ -87,24 +115,31 @@ arboard = "3.4"
 ariadne = { version = "0.6" }
 async-trait = "0.1"
 askama = { version = "0.14.0" }
-aws-config = { git = "https://github.com/boundaryml/aws-sdk-rust.git", rev = "28d4f67bac1214320320905c1f6908ea32b6b0ac", default-features = false, features = [ "behavior-version-latest" ] }
-google-cloud-auth = { git = "https://github.com/BoundaryML/google-cloud-rust.git", rev = "a18d3e42bd304de897990c3d0f3e90ffd4e428fd", package = "google-cloud-auth", default-features = false, features = [ "default-rustls-provider" ] }
-aws-credential-types = { git = "https://github.com/boundaryml/aws-sdk-rust.git", rev = "28d4f67bac1214320320905c1f6908ea32b6b0ac" }
-aws-sdk-bedrockruntime = { git = "https://github.com/boundaryml/aws-sdk-rust.git", rev = "28d4f67bac1214320320905c1f6908ea32b6b0ac", default-features = false, features = [ "behavior-version-latest" ] }
-aws-sigv4 = { git = "https://github.com/boundaryml/aws-sdk-rust.git", rev = "28d4f67bac1214320320905c1f6908ea32b6b0ac", features = [ "sign-http" ] }
-aws-smithy-async = { git = "https://github.com/boundaryml/aws-sdk-rust.git", rev = "28d4f67bac1214320320905c1f6908ea32b6b0ac" }
-aws-smithy-runtime-api = { git = "https://github.com/boundaryml/aws-sdk-rust.git", rev = "28d4f67bac1214320320905c1f6908ea32b6b0ac", features = [ "client" ] }
-aws-smithy-types = { git = "https://github.com/boundaryml/aws-sdk-rust.git", rev = "28d4f67bac1214320320905c1f6908ea32b6b0ac" }
-aws-types = { git = "https://github.com/boundaryml/aws-sdk-rust.git", rev = "28d4f67bac1214320320905c1f6908ea32b6b0ac" }
-axum = { version = "0.8.4", features = [ "ws" ] }
+# Slim, reqwest/serde-based replacements for the AWS SDK + Google Cloud auth
+# crates, living in `forks/`. They cover only what BAML needs (Bedrock Converse,
+# AWS credential sources, and Google Cloud OAuth2 tokens for Vertex AI) without
+# the Smithy runtime or the google-cloud-rust client stack. See
+# `forks/*/Cargo.toml`. The dependency keys keep the upstream crate names so
+# call sites import them unchanged; the `package` is the `forked_*` crate.
+aws-config = { path = "forks/aws-config", package = "forked_aws_config" }
+aws-sigv4 = { path = "forks/aws-sigv4", package = "forked_aws_sigv4" }
+aws-bedrock = { path = "forks/aws-bedrock", package = "forked_aws_bedrock" }
+google-cloud-auth = { path = "forks/google-cloud-auth", package = "forked_google_cloud_auth" }
+axum = { version = "0.8.4", default-features = false, features = [ "http1", "matched-path", "original-uri", "query", "tokio", "ws" ] }
+# Native `borsh` derives on the entire Program type graph (bex_vm_types +
+# baml_type + baml_exec envelope). The pack envelope was previously
+# bitcode-with-serde; borsh's native derive avoids both the bitcode crate
+# and the serde infrastructure for these types, which were otherwise only
+# serde-derived to satisfy bitcode. Custom impls live alongside the
+# derives for the four runtime-only types (Value, Object, FunctionKind,
+# HeapPtr) that need to refuse or proxy their on-disk form.
+borsh = { version = "1.5", features = [ "derive", "indexmap" ] }
 bytes = "1"
 cargo_metadata = { version = "0.23.1" }
-cbindgen = "0.28.0"
 clap = { version = "4.4.6", features = [ "cargo", "derive" ] }
-clap-cargo = "0.14.1"
-colored = { version = "2.1.0" }
+console = "0.16"
 console_error_panic_hook = "0.1"
-crossbeam = { version = "0.8.4", features = [ "crossbeam-channel" ] }
+crossbeam-channel = { version = "0.5" }
 crossterm = "0.28"
 ctrlc = "3.4"
 derive_more = { version = "2.1.1", features = [ "from" ] }
@@ -112,13 +147,17 @@ divan = { package = "codspeed-divan-compat", version = "*" }
 eframe = "0.33.3"
 flate2 = { version = "1" }
 futures = { version = "0.3.30", features = [ "executor" ] }
-futures-timer = { version = "3.0.3", features = [ "wasm-bindgen" ] }
 graphviz-rust = { version = "0.9" }
-indexmap = { version = "2.1.0", features = [ "serde" ] }
+hex = "0.4"
+hmac = "0.12"
+indexmap = { version = "2.13", features = [ "serde" ] }
+indicatif = "0.18"
 infer = "0.16.0"
 insta = { version = "1.34", features = [ "yaml", "redactions" ] }
+jiff = { version = "0.2" }
 la-arena = { version = "0.3" }
 libc = "0.2.169"
+libsui = { version = "0.14" }
 log = "0.4.20"
 logos = { version = "0.15" }
 lsp-server = "0.7.6"
@@ -126,7 +165,7 @@ lsp-types = "0.95.0"
 notify = "7.0"
 once_cell = "1.19"
 ouroboros = "0.18.5"
-parking_lot = { version = "0.12", features = [ "deadlock_detection" ] }
+parking_lot = { version = "0.12" }
 paste = "1.0"
 percent-encoding = "2.3"
 pretty_assertions = { version = "1.4" }
@@ -139,13 +178,14 @@ quote = { version = "1" }
 ratatui = "0.29"
 regex = { version = "1.10.2" }
 base64 = "0.22"
+bytecount = "0.6"
 reqwest = { version = "0.13.1", default-features = false, features = [
-  "json",
   "stream",
 ] }
 rowan = { version = "0.16" }
+rustls = { version = "0.23.37", default-features = false }
 rustc-hash = { version = "2.1" }
-salsa = { git = "https://github.com/salsa-rs/salsa.git", rev = "cdd0b85516a52c18b8a6d17a2279a96ed6c3e198", default-features = false, features = [
+salsa = { version = "0.26", default-features = false, features = [
   "compact_str",
   "macros",
   "salsa_unstable",
@@ -153,24 +193,28 @@ salsa = { git = "https://github.com/salsa-rs/salsa.git", rev = "cdd0b85516a52c18
 ] }
 serde = { version = "1.0.197", features = [ "derive" ] }
 serde-wasm-bindgen = "0.6"
-serde_json = { version = "1.0.113", features = [ "preserve_order" ] }
+serde_json = { version = "1.0.113", features = [ "arbitrary_precision", "preserve_order" ] }
+serde_yaml = "0.9"
+sha1 = "0.10"
 similar = { version = "2.4.0", features = [ "inline" ] }
-smol_str = { version = "0.3" }
+smallvec = { version = "1.15", features = [ "const_generics" ] }
+smol_str = { version = "0.3", features = [ "serde", "borsh" ] }
 strsim = { version = "0.11.1" }
 syn = { version = "2", features = [ "full" ] }
+tar = "0.4"
+zip = { version = "2", default-features = false, features = [ "deflate" ] }
 taplo = { version = "0.13" }
 tempfile = { version = "3" }
-time = { version = "0.3", features = [ "formatting", "macros" ] }
-text-size = { version = "1.1" }
+time = { version = "0.3", features = [ "formatting", "macros", "parsing" ] }
+text-size = { version = "1.1", features = [ "serde" ] }
 thiserror = { version = "2.0.0" }
 toml = { version = "0.8" }
 toml_edit = { version = "0.22" }
 tokio = { version = "1.36" }
-tokio-tungstenite = { version = "0.28.0" }
+tokio-tungstenite = { version = "0.29.0" }
 tokio-util = { version = "0.7" }
-tower-http = { version = "0.6.6", features = [ "fs", "cors" ] }
+tower-http = { version = "0.6.6", features = [ "fs" ] }
 tracing = { version = "0.1.40" }
-tracing-log = "0.2.0"
 tracing-subscriber = { version = "0.3.18", default-features = false, features = [
   "env-filter",
   "fmt",
@@ -186,18 +230,21 @@ wasm-bindgen-test = "0.3"
 js-sys = "0.3"
 webbrowser = "1.0.5"
 strum = { version = "0.26", features = [ "derive" ] }
-pyo3 = { version = "0.23.3", default-features = false }
-pyo3-async-runtimes = { version = "0.23" }
-pyo3-build-config = "0.23"
-napi = { version = "3.8.4", default-features = false }
-napi-derive = "3.5.3"
-napi-build = "2.3.1"
-wee_alloc = "0.4"
+pyo3 = { version = "0.28", default-features = false }
+pyo3-async-runtimes = { version = "0.28" }
+pyo3-build-config = "0.28"
+pyo3-stub-gen = { version = "0.22", default-features = false }
+napi = { version = "3.9.0", default-features = false }
+napi-derive = "3.5.6"
+napi-build = "2.3.2"
 wiremock = "0.6"
 vfs = "0.12"
 wasm-logger = "0.2.0"
 web-time = "1.1.0"
 getrandom = { version = "0.2" }
+getrandom_03 = { package = "getrandom", version = "0.3", features = [ "wasm_js" ] }
+num-bigint = { version = "0.4", features = [ "rand", "serde" ] }
+num-traits = { version = "0.2" }
 rsa = { version = "0.9", default-features = false, features = [ "std", "pem" ] }
 sha2 = { version = "0.10", features = [ "oid" ] }
 
@@ -307,7 +354,7 @@ opt-level = 0
 inherits = "release"
 strip = false
 debug = "full"
-lto = false
+lto = "fat"
 
 # The profile that 'cargo dist' will build with.
 [profile.dist]

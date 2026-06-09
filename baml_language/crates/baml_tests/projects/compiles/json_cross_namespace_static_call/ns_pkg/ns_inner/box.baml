@@ -1,0 +1,20 @@
+// Generic class `Box<T>` in nested namespace `pkg.inner`, referenced from
+// the root namespace via `root.pkg.inner.Box<...>`.  Defines a per-field
+// auto-derive-shaped `from_json` so the static-method receiver path has
+// something to dispatch to.
+class Box<T> {
+    value T
+
+    function from_json(j: baml.json.json) -> Box<T> throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+        Box<T> { value: baml.json.from_json<T>(baml.json.field(j, "value")) }
+    }
+}
+
+// Same shape as `Box<T>` but with NO user `from_json`, so the multi-segment
+// static call dispatches to the AUTO-DERIVED `from_json` body emitted by
+// `auto_derive_json`.  Confirms the cross-namespace + receiver-type-arg
+// fix (`builder.rs` `Expr::MemberAccess` `base_is_value` heuristic) flows
+// the receiver's `<T>` through the synthesizer's frame as well.
+class AutoBox<T> {
+    value T
+}

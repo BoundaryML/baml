@@ -775,7 +775,7 @@ fn build_resolution_map(
 
     // Classify pattern binding names as Variable.
     for (pat_id, pattern) in expr_body.patterns.iter() {
-        let Some(name) = pattern.binding_name() else {
+        let Some(name) = pattern.binding_name(&expr_body.patterns) else {
             continue;
         };
         let name_str = name.as_str();

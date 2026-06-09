@@ -151,7 +151,7 @@ fn extract_system_and_messages(
                 content,
                 metadata,
             } if role == "system" => {
-                let mut parts = anthropic_content_parts(content.as_ref())?;
+                let mut parts = anthropic_content_parts(content.as_ref(), role)?;
                 // Merge metadata into the last content part (e.g. cache_control).
                 merge_metadata_into_last(&mut parts, metadata);
                 system_parts.extend(parts);
@@ -161,7 +161,7 @@ fn extract_system_and_messages(
                 content,
                 metadata,
             } => {
-                let mut parts = anthropic_content_parts(content.as_ref())?;
+                let mut parts = anthropic_content_parts(content.as_ref(), role)?;
                 merge_metadata_into_last(&mut parts, metadata);
 
                 let parts_json = serde_json::to_value(&parts)?;
@@ -203,21 +203,33 @@ fn merge_metadata_into_last(parts: &mut [ContentPart], metadata: &serde_json::Va
 
 fn anthropic_content_parts(
     content: &PromptAstSimple,
+    role: &str,
 ) -> Result<Vec<ContentPart>, super::BuildRequestError> {
     match content {
         PromptAstSimple::String(s) => Ok(vec![ContentPart::Text {
             text: s.clone(),
             extra: serde_json::Map::new(),
         }]),
-        PromptAstSimple::Media(media) => anthropic_media_part(media).map(|part| vec![part]),
+        PromptAstSimple::Media(media) => {
+            if role != "user" {
+                return Err(unsupported_media_role(role, media.kind));
+            }
+            anthropic_media_part(media).map(|part| vec![part])
+        }
         PromptAstSimple::Multiple(items) => {
             let mut parts = Vec::new();
             for item in items {
-                parts.extend(anthropic_content_parts(item)?);
+                parts.extend(anthropic_content_parts(item, role)?);
             }
             Ok(parts)
         }
     }
+}
+
+fn unsupported_media_role(role: &str, kind: MediaKind) -> super::BuildRequestError {
+    super::BuildRequestError::UnsupportedMedia(format!(
+        "Anthropic only supports {kind} input in user messages; found media in a {role} message"
+    ))
 }
 
 fn anthropic_media_part(media: &Arc<MediaValue>) -> Result<ContentPart, super::BuildRequestError> {
@@ -318,7 +330,7 @@ mod tests {
         for (k, v) in options {
             if k == "model" {
                 if let BexExternalValue::String(s) = &v {
-                    model = Some(s.clone());
+                    model = Some(s.to_string());
                 }
             } else {
                 request_body.insert(k.to_string(), v);
@@ -737,6 +749,33 @@ mod tests {
                     }
                 ]
             })
+        );
+    }
+
+    #[test]
+    fn anthropic_rejects_system_image_before_http() {
+        let client = make_client(vec![(
+            "model",
+            BexExternalValue::String("claude-3-haiku-20240307".into()),
+        )]);
+        let media = make_media(
+            MediaKind::Image,
+            MediaContent::Url {
+                url: "https://example.com/img.png".into(),
+                base64_data: None,
+            },
+            Some("image/png"),
+        );
+        let prompt = msg_with_content(
+            "system",
+            PromptAstSimple::Media(media),
+            serde_json::Value::Null,
+        );
+
+        let err = build_request(&client, &prompt).unwrap_err();
+        assert!(
+            err.to_string()
+                .contains("only supports image input in user messages")
         );
     }
 

@@ -2,7 +2,7 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === COMPILER2 DIAGNOSTICS ===
-  [type] Error: type mismatch: expected (x: int) -> int throws never, got 1
+  [type] error: type mismatch: expected (x: int) -> int throws never, got 1
     ╭─[ function_types.baml:25:5 ]
     │
  25 │     1

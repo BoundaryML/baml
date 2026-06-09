@@ -164,7 +164,15 @@ pub fn package_items<'db>(db: &'db dyn crate::Db, package_id: PackageId<'db>) ->
     // Use compiler2_all_files() so that compiler2-only builtin stubs (e.g.
     // Array<T>, Map<K,V>) are visible here without being added to the v1
     // compiler's project.files() list.
-    let mut ns_paths: std::collections::HashSet<Vec<Name>> = std::collections::HashSet::new();
+    //
+    // `IndexSet` (not `HashSet`) so the downstream `namespaces` map is built
+    // in a deterministic insertion order. Without this, when two namespaces
+    // declare items with the same short name (e.g. two `Status` enums in
+    // different `ns_*/` directories), downstream consumers that key by short
+    // name (`baml_compiler2_mir::lower::enum_variants`) see whichever
+    // namespace was inserted last — flipping the choice of bytecode lowering
+    // path across runs.
+    let mut ns_paths: indexmap::IndexSet<Vec<Name>> = indexmap::IndexSet::new();
     for file in crate::compiler2_all_files(db) {
         let pkg_info = crate::file_package::file_package(db, file);
         if pkg_info.package == *package_name {
@@ -229,16 +237,23 @@ pub fn package_dependencies<'db>(
         // "log" has no deps — it only uses primitives, and "baml" depends on
         // it so the stdlib can emit log events.
         "log" => vec![],
-        // "baml" depends on "log" so stdlib code can call log.info/debug/etc.
-        "baml" => vec![PackageId::new(db, Name::new("log"))],
+        // "reflect" has no deps — it only uses the `type` primitive.
+        "reflect" => vec![],
+        // "baml" depends on "log" and "reflect" so stdlib code can call
+        // log.info/debug/etc. and reflect.type_of<T>() inside ns_llm.
+        "baml" => vec![
+            PackageId::new(db, Name::new("log")),
+            PackageId::new(db, Name::new("reflect")),
+        ],
         // The "testing" and "assert" packages depend on "baml" only.
         "testing" | "assert" => vec![PackageId::new(db, Name::new("baml"))],
-        // User packages depend on "baml", "testing", "assert", and "log".
+        // User packages depend on "baml", "testing", "assert", "log", and "reflect".
         _ => vec![
             PackageId::new(db, Name::new("baml")),
             PackageId::new(db, Name::new("testing")),
             PackageId::new(db, Name::new("assert")),
             PackageId::new(db, Name::new("log")),
+            PackageId::new(db, Name::new("reflect")),
         ],
     }
 }

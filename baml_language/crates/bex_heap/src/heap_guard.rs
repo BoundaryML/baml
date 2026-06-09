@@ -4,8 +4,14 @@
 //! These ensure that we have only one of:
 //! - A single exclusive heap access [`HeapGuard`], or
 //! - Any number of non-exclusive tracked active heap permits [`ActiveHeapPermit`].
+//!
+//! Spawn-safety invariant: an active permit excludes moving/collecting GC, but
+//! it does not serialize multiple VM mutators. Heap objects reachable from
+//! spawned VMs must use object-level synchronization for mutable state. Raw
+//! heap/container access is only sound while holding [`HeapGuard`] (all mutators
+//! parked) or during proven single-threaded setup.
 
-use ::bex_vm_types::{HeapPtr, RootHaver};
+use ::bex_vm_types::{HeapPtr, PermitProof, RootHaver};
 use ::core::{
     cell::UnsafeCell,
     marker::PhantomData,
@@ -31,6 +37,25 @@ const MAX_PERMITS: u32 = {
         tokio::sync::Semaphore::MAX_PERMITS as u32
     }
 };
+
+/// The existence of a value that implements this trait proves that the heap is currently accessible for non-exclusive access (e.g. by a VM executor task).
+pub trait HeapPermit<T: RootHaver> {
+    /// Get a reference to the root holder (for example, the active VM)
+    ///
+    /// Callers can also use [`Deref`] which will return the same value.
+    fn holder(&self) -> &T;
+    /// Get a mutable reference to the root holder (for example, the active VM)
+    ///
+    /// Callers can also use [`DerefMut`] which will return the same value.
+    fn holder_mut(&mut self) -> &mut T;
+    /// Get a type-erased [`PermitProof`] tied to this active permit's lifetime.
+    ///
+    /// This lets the GC-exclusion proof flow through APIs (e.g. the sys-op
+    /// dispatch glue) that cannot name the concrete `T`. The returned proof
+    /// is `Copy`, `Send`, and `Sync` and carries no runtime data — the
+    /// guarantee comes purely from the lifetime, which cannot outlive `self`.
+    fn proof(&self) -> PermitProof<'_>;
+}
 
 /// An active heap permit.
 ///
@@ -71,48 +96,29 @@ impl<T: RootHaver> ActiveHeapPermit<T> {
     pub async fn renew(self) -> Self {
         self.release().acquire().await
     }
-
-    /// Get a reference to the root holder (for example, the active VM)
-    ///
-    /// Callers can also use [`Deref`] which will return the same value.
-    #[inline]
-    pub fn holder(&self) -> &T {
+}
+impl<T: RootHaver> HeapPermit<T> for ActiveHeapPermit<T> {
+    fn holder(&self) -> &T {
         // SAFETY: we have a permit to access the heap so we can access the root holder.
         unsafe { self.state.holder() }
     }
-
-    /// Get a mutable reference to the root holder (for example, the active VM)
-    ///
-    /// Callers can also use [`DerefMut`] which will return the same value.
-    #[inline]
-    pub fn holder_mut(&mut self) -> &mut T {
+    fn holder_mut(&mut self) -> &mut T {
         // SAFETY: we have a permit to access the heap so we can access the root holder.
         unsafe { self.state.holder_mut() }
     }
-
-    /// Get a type-erased [`PermitProof`] tied to this active permit's lifetime.
-    ///
-    /// This lets the GC-exclusion proof flow through APIs (e.g. the sys-op
-    /// dispatch glue) that cannot name the concrete `T`. The returned proof
-    /// is `Copy`, `Send`, and `Sync` and carries no runtime data — the
-    /// guarantee comes purely from the lifetime, which cannot outlive `self`.
-    #[inline]
-    pub fn proof(&self) -> PermitProof<'_> {
-        PermitProof {
-            _marker: PhantomData,
+    fn proof(&self) -> PermitProof<'_> {
+        // SAFETY: `&self` proves an `ActiveHeapPermit<T>` is held for the
+        // returned proof's lifetime, which is the very invariant
+        // `PermitProof::new` requires. This is the canonical safe
+        // constructor referenced by `PermitProof`'s docs.
+        #[allow(
+            unsafe_code,
+            reason = "this is the canonical safe constructor of PermitProof"
+        )]
+        unsafe {
+            PermitProof::new()
         }
     }
-}
-
-/// A type-erased proof that an [`ActiveHeapPermit`] is held in the current
-/// scope (for at least lifetime `'a`).
-///
-/// Constructed via [`ActiveHeapPermit::proof`]. Carries no runtime data — the
-/// GC-exclusion guarantee comes from the lifetime, which is bound by the
-/// originating permit's borrow.
-#[derive(Clone, Copy)]
-pub struct PermitProof<'a> {
-    _marker: PhantomData<&'a ()>,
 }
 
 impl<T: RootHaver> Deref for ActiveHeapPermit<T> {
@@ -219,12 +225,18 @@ impl HeapPermitManager {
         permit
     }
     pub async fn request_park(&self) -> HeapGuard<'_> {
-        let mut guard = self.holders.lock().await;
+        // Drain the semaphore BEFORE taking the holders mutex. The semaphore
+        // is the stop-the-world barrier: once we hold all MAX_PERMITS, no
+        // ActiveHeapPermit::acquire() can complete, so no mutator can run.
+        // Taking the mutex first (and then awaiting acquire_many) deadlocks
+        // against new_permit(): a VM mid-spawn holds an active permit and
+        // wants the mutex; we hold the mutex and want its permit.
         let permits = self
             .active
             .acquire_many(MAX_PERMITS)
             .await
             .unwrap_or_else(|_| unreachable!("We do not close the semaphore"));
+        let mut guard = self.holders.lock().await;
         guard.retain(|holder| holder.strong_count() > 0);
         HeapGuard {
             guard,
@@ -298,5 +310,31 @@ impl<T: ?Sized + RootHaver> PermitCell<T> {
 // gain access via a semaphore permit; the GC gains access by draining all permits
 // while holding the manager mutex. `RootHaver: Send` ensures the inner value is safe
 // to move between threads, which is what's actually happening — never true sharing.
+//
+// # `Sync` is unconditional even for `T: !Sync` — why this is sound
+//
+// The unconditional `Sync` impl below is **structurally** load-bearing:
+// `Weak<PermitCell<dyn RootHaver>>` lives in
+// `HeapPermitManager::holders: Mutex<Vec<Weak<...>>>`, and `Mutex<Vec<Weak<U>>>`
+// requires `U: Send + Sync`. Constraining the bound to `T: Sync` would
+// reject every `T: !Sync` `RootHaver` (e.g. `BexVm`, which intentionally
+// is not `Sync`).
+//
+// What rescues soundness is the *safe wrappers* that hand out access to
+// the inner `T`: `ActiveHeapPermit<T>` and `SharedHeapPermitGuard<'_, T>`
+// each carry a `_marker: PhantomData<T>` field that re-ties the wrapper's
+// auto-`Send`/`Sync` derivation to `T`. So while `&PermitCell<T>` is
+// `Sync` regardless of `T`, the only safe way to project a `&T` out of
+// it is through one of those wrappers, and `&Wrapper<T>: Sync` iff
+// `T: Sync`. Two threads cannot simultaneously hold `&Wrapper<T>: Sync`
+// for `T: !Sync`, so two threads cannot simultaneously call `.holder()`
+// to observe `&T`.
+//
+// **Maintenance hazard**: any future safe API that returns `&T` from a
+// `&PermitCell<T>` *without* the `PhantomData<T>` re-tie (or another
+// equivalent `T: Sync` requirement on the consumer) silently breaks the
+// contract above. If you add such an API, also tighten this `Sync` impl
+// to `T: Sync` (and accept that some `RootHaver`s can no longer be
+// holders), or rework the holders Mutex's element type.
 unsafe impl<T: ?Sized + RootHaver> Send for PermitCell<T> {}
 unsafe impl<T: ?Sized + RootHaver> Sync for PermitCell<T> {}

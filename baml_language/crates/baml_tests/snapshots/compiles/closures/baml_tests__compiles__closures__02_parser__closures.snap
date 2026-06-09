@@ -372,8 +372,10 @@ SOURCE_FILE
       BLOCK_EXPR
         L_BRACE "{"
         LET_STMT
-          KW_LET "let"
-          WORD "fmt"
+          PATTERN
+            BINDING_PATTERN "let fmt"
+              KW_LET "let"
+              WORD "fmt"
           EQUALS "="
           OBJECT_LITERAL
             WORD "Formatter"
@@ -388,8 +390,10 @@ SOURCE_FILE
             R_BRACE "}"
           SEMICOLON ";"
         LET_STMT
-          KW_LET "let"
-          WORD "transform"
+          PATTERN
+            BINDING_PATTERN "let transform"
+              KW_LET "let"
+              WORD "transform"
           EQUALS "="
           PATH_EXPR "fmt.format"
             WORD "fmt"
@@ -412,9 +416,10 @@ SOURCE_FILE
               R_BRACKET "]"
             DOT "."
             WORD "map"
-          CALL_ARGS "(transform)"
+          CALL_ARGS
             L_PAREN "("
-            WORD "transform"
+            CALL_ARG "transform"
+              WORD "transform"
             R_PAREN ")"
         R_BRACE "}"
   FUNCTION_DEF
@@ -432,8 +437,10 @@ SOURCE_FILE
       BLOCK_EXPR
         L_BRACE "{"
         LET_STMT
-          KW_LET "let"
-          WORD "employees"
+          PATTERN
+            BINDING_PATTERN "let employees"
+              KW_LET "let"
+              WORD "employees"
           EQUALS "="
           ARRAY_LITERAL
             L_BRACKET "["
@@ -486,10 +493,11 @@ SOURCE_FILE
             WORD "map"
           CALL_ARGS
             L_PAREN "("
-            PATH_EXPR "Employee.full_name"
-              WORD "Employee"
-              DOT "."
-              WORD "full_name"
+            CALL_ARG
+              PATH_EXPR "Employee.full_name"
+                WORD "Employee"
+                DOT "."
+                WORD "full_name"
             R_PAREN ")"
         R_BRACE "}"
   FUNCTION_DEF
@@ -507,8 +515,10 @@ SOURCE_FILE
       BLOCK_EXPR
         L_BRACE "{"
         LET_STMT
-          KW_LET "let"
-          WORD "valid"
+          PATTERN
+            BINDING_PATTERN "let valid"
+              KW_LET "let"
+              WORD "valid"
           EQUALS "="
           OBJECT_LITERAL
             WORD "RangeCheck"
@@ -525,8 +535,10 @@ SOURCE_FILE
             R_BRACE "}"
           SEMICOLON ";"
         LET_STMT
-          KW_LET "let"
-          WORD "check"
+          PATTERN
+            BINDING_PATTERN "let check"
+              KW_LET "let"
+              WORD "check"
           EQUALS "="
           PATH_EXPR "valid.is_valid"
             WORD "valid"
@@ -547,9 +559,10 @@ SOURCE_FILE
               R_BRACKET "]"
             DOT "."
             WORD "map"
-          CALL_ARGS "(check)"
+          CALL_ARGS
             L_PAREN "("
-            WORD "check"
+            CALL_ARG "check"
+              WORD "check"
             R_PAREN ")"
         R_BRACE "}"
   FUNCTION_DEF
@@ -570,8 +583,10 @@ SOURCE_FILE
       BLOCK_EXPR
         L_BRACE "{"
         LET_STMT
-          KW_LET "let"
-          WORD "enc"
+          PATTERN
+            BINDING_PATTERN "let enc"
+              KW_LET "let"
+              WORD "enc"
           EQUALS "="
           PATH_EXPR "cfg.encoder.encode"
             WORD "cfg"
@@ -584,10 +599,11 @@ SOURCE_FILE
           WORD "enc"
           CALL_ARGS
             L_PAREN "("
-            STRING_LITERAL "payload"
-              QUOTE """
-              WORD "payload"
-              QUOTE """
+            CALL_ARG
+              STRING_LITERAL "payload"
+                QUOTE """
+                WORD "payload"
+                QUOTE """
             R_PAREN ")"
         R_BRACE "}"
   FUNCTION_DEF
@@ -632,11 +648,13 @@ SOURCE_FILE
         L_BRACE "{"
         CALL_EXPR
           WORD "f"
-          CALL_ARGS "(a, b)"
+          CALL_ARGS
             L_PAREN "("
-            WORD "a"
+            CALL_ARG "a"
+              WORD "a"
             COMMA ","
-            WORD "b"
+            CALL_ARG "b"
+              WORD "b"
             R_PAREN ")"
         R_BRACE "}"
   FUNCTION_DEF
@@ -654,8 +672,10 @@ SOURCE_FILE
       BLOCK_EXPR
         L_BRACE "{"
         LET_STMT
-          KW_LET "let"
-          WORD "add_calc"
+          PATTERN
+            BINDING_PATTERN "let add_calc"
+              KW_LET "let"
+              WORD "add_calc"
           EQUALS "="
           OBJECT_LITERAL
             WORD "Calculator"
@@ -670,8 +690,10 @@ SOURCE_FILE
             R_BRACE "}"
           SEMICOLON ";"
         LET_STMT
-          KW_LET "let"
-          WORD "mul_calc"
+          PATTERN
+            BINDING_PATTERN "let mul_calc"
+              KW_LET "let"
+              WORD "mul_calc"
           EQUALS "="
           OBJECT_LITERAL
             WORD "Calculator"
@@ -686,8 +708,10 @@ SOURCE_FILE
             R_BRACE "}"
           SEMICOLON ";"
         LET_STMT
-          KW_LET "let"
-          WORD "do_add"
+          PATTERN
+            BINDING_PATTERN "let do_add"
+              KW_LET "let"
+              WORD "do_add"
           EQUALS "="
           PATH_EXPR "add_calc.compute"
             WORD "add_calc"
@@ -695,8 +719,10 @@ SOURCE_FILE
             WORD "compute"
           SEMICOLON ";"
         LET_STMT
-          KW_LET "let"
-          WORD "do_mul"
+          PATTERN
+            BINDING_PATTERN "let do_mul"
+              KW_LET "let"
+              WORD "do_mul"
           EQUALS "="
           PATH_EXPR "mul_calc.compute"
             WORD "mul_calc"
@@ -707,24 +733,30 @@ SOURCE_FILE
           L_BRACKET "["
           CALL_EXPR
             WORD "apply"
-            CALL_ARGS "(do_add, 3, 4)"
+            CALL_ARGS
               L_PAREN "("
-              WORD "do_add"
+              CALL_ARG "do_add"
+                WORD "do_add"
               COMMA ","
-              INTEGER_LITERAL "3"
+              CALL_ARG "3"
+                INTEGER_LITERAL "3"
               COMMA ","
-              INTEGER_LITERAL "4"
+              CALL_ARG "4"
+                INTEGER_LITERAL "4"
               R_PAREN ")"
           COMMA ","
           CALL_EXPR
             WORD "apply"
-            CALL_ARGS "(do_mul, 3, 4)"
+            CALL_ARGS
               L_PAREN "("
-              WORD "do_mul"
+              CALL_ARG "do_mul"
+                WORD "do_mul"
               COMMA ","
-              INTEGER_LITERAL "3"
+              CALL_ARG "3"
+                INTEGER_LITERAL "3"
               COMMA ","
-              INTEGER_LITERAL "4"
+              CALL_ARG "4"
+                INTEGER_LITERAL "4"
               R_PAREN ")"
           R_BRACKET "]"
         R_BRACE "}"
@@ -767,9 +799,10 @@ SOURCE_FILE
             WORD "items"
             DOT "."
             WORD "map"
-          CALL_ARGS "(f)"
+          CALL_ARGS
             L_PAREN "("
-            WORD "f"
+            CALL_ARG "f"
+              WORD "f"
             R_PAREN ")"
         R_BRACE "}"
   FUNCTION_DEF
@@ -787,8 +820,10 @@ SOURCE_FILE
       BLOCK_EXPR
         L_BRACE "{"
         LET_STMT
-          KW_LET "let"
-          WORD "employees"
+          PATTERN
+            BINDING_PATTERN "let employees"
+              KW_LET "let"
+              WORD "employees"
           EQUALS "="
           ARRAY_LITERAL
             L_BRACKET "["
@@ -817,12 +852,14 @@ SOURCE_FILE
           WORD "apply_to_each"
           CALL_ARGS
             L_PAREN "("
-            WORD "employees"
+            CALL_ARG "employees"
+              WORD "employees"
             COMMA ","
-            PATH_EXPR "Employee.full_name"
-              WORD "Employee"
-              DOT "."
-              WORD "full_name"
+            CALL_ARG
+              PATH_EXPR "Employee.full_name"
+                WORD "Employee"
+                DOT "."
+                WORD "full_name"
             R_PAREN ")"
         R_BRACE "}"
   FUNCTION_DEF
@@ -838,8 +875,10 @@ SOURCE_FILE
       BLOCK_EXPR
         L_BRACE "{"
         LET_STMT
-          KW_LET "let"
-          WORD "c"
+          PATTERN
+            BINDING_PATTERN "let c"
+              KW_LET "let"
+              WORD "c"
           EQUALS "="
           OBJECT_LITERAL
             WORD "Counter"
@@ -851,8 +890,10 @@ SOURCE_FILE
             R_BRACE "}"
           SEMICOLON ";"
         LET_STMT
-          KW_LET "let"
-          WORD "inc"
+          PATTERN
+            BINDING_PATTERN "let inc"
+              KW_LET "let"
+              WORD "inc"
           EQUALS "="
           PATH_EXPR "c.increment"
             WORD "c"
@@ -886,8 +927,10 @@ SOURCE_FILE
       BLOCK_EXPR
         L_BRACE "{"
         LET_STMT
-          KW_LET "let"
-          WORD "b"
+          PATTERN
+            BINDING_PATTERN "let b"
+              KW_LET "let"
+              WORD "b"
           EQUALS "="
           OBJECT_LITERAL
             WORD "Box"
@@ -899,8 +942,10 @@ SOURCE_FILE
             R_BRACE "}"
           SEMICOLON ";"
         LET_STMT
-          KW_LET "let"
-          WORD "get"
+          PATTERN
+            BINDING_PATTERN "let get"
+              KW_LET "let"
+              WORD "get"
           EQUALS "="
           PATH_EXPR "b.unwrap"
             WORD "b"
@@ -926,8 +971,10 @@ SOURCE_FILE
       BLOCK_EXPR
         L_BRACE "{"
         LET_STMT
-          KW_LET "let"
-          WORD "emp"
+          PATTERN
+            BINDING_PATTERN "let emp"
+              KW_LET "let"
+              WORD "emp"
           EQUALS "="
           OBJECT_LITERAL
             WORD "Employee"
@@ -950,8 +997,10 @@ SOURCE_FILE
             R_BRACE "}"
           SEMICOLON ";"
         LET_STMT
-          KW_LET "let"
-          WORD "make_greeter"
+          PATTERN
+            BINDING_PATTERN "let make_greeter"
+              KW_LET "let"
+              WORD "make_greeter"
           EQUALS "="
           LAMBDA_EXPR
             PARAMETER_LIST "()"
@@ -967,8 +1016,10 @@ SOURCE_FILE
               R_BRACE "}"
           SEMICOLON ";"
         LET_STMT
-          KW_LET "let"
-          WORD "greeter"
+          PATTERN
+            BINDING_PATTERN "let greeter"
+              KW_LET "let"
+              WORD "greeter"
           EQUALS "="
           CALL_EXPR
             WORD "make_greeter"
@@ -980,10 +1031,11 @@ SOURCE_FILE
           WORD "greeter"
           CALL_ARGS
             L_PAREN "("
-            STRING_LITERAL "Hello"
-              QUOTE """
-              WORD "Hello"
-              QUOTE """
+            CALL_ARG
+              STRING_LITERAL "Hello"
+                QUOTE """
+                WORD "Hello"
+                QUOTE """
             R_PAREN ")"
         R_BRACE "}"
   FUNCTION_DEF
@@ -999,8 +1051,10 @@ SOURCE_FILE
       BLOCK_EXPR
         L_BRACE "{"
         LET_STMT
-          KW_LET "let"
-          WORD "c"
+          PATTERN
+            BINDING_PATTERN "let c"
+              KW_LET "let"
+              WORD "c"
           EQUALS "="
           OBJECT_LITERAL
             WORD "Counter"
@@ -1012,8 +1066,10 @@ SOURCE_FILE
             R_BRACE "}"
           SEMICOLON ";"
         LET_STMT
-          KW_LET "let"
-          WORD "inc"
+          PATTERN
+            BINDING_PATTERN "let inc"
+              KW_LET "let"
+              WORD "inc"
           EQUALS "="
           PATH_EXPR "c.increment"
             WORD "c"

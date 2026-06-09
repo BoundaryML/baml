@@ -2,10 +2,6 @@ version = 1
 revision = 3
 requires-python = ">=3.12"
 
-[options]
-exclude-newer = "2026-04-18T01:45:08.480556Z"
-exclude-newer-span = "-P7D"
-
 [[package]]
 name = "baml-tools"
 version = "0.1.0"

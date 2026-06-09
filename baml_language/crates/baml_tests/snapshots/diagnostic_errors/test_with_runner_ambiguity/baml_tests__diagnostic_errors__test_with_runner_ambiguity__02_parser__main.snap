@@ -19,9 +19,10 @@ SOURCE_FILE
           WORD "assert"
           DOT "."
           WORD "is_true"
-        CALL_ARGS "(true)"
+        CALL_ARGS
           L_PAREN "("
-          WORD "true"
+          CALL_ARG "true"
+            WORD "true"
           R_PAREN ")"
       R_BRACE "}"
   TEST_EXPR_DEF
@@ -37,11 +38,13 @@ SOURCE_FILE
         WORD "testing"
         DOT "."
         WORD "Quorum"
-      CALL_ARGS "(5, 3)"
+      CALL_ARGS
         L_PAREN "("
-        INTEGER_LITERAL "5"
+        CALL_ARG "5"
+          INTEGER_LITERAL "5"
         COMMA ","
-        INTEGER_LITERAL "3"
+        CALL_ARG "3"
+          INTEGER_LITERAL "3"
         R_PAREN ")"
     BLOCK_EXPR
       L_BRACE "{"
@@ -50,9 +53,10 @@ SOURCE_FILE
           WORD "assert"
           DOT "."
           WORD "is_true"
-        CALL_ARGS "(true)"
+        CALL_ARGS
           L_PAREN "("
-          WORD "true"
+          CALL_ARG "true"
+            WORD "true"
           R_PAREN ")"
       R_BRACE "}"
   CLASS_DEF
@@ -87,9 +91,10 @@ SOURCE_FILE
           WORD "assert"
           DOT "."
           WORD "is_true"
-        CALL_ARGS "(true)"
+        CALL_ARGS
           L_PAREN "("
-          WORD "true"
+          CALL_ARG "true"
+            WORD "true"
           R_PAREN ")"
       R_BRACE "}"
 

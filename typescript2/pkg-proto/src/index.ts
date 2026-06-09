@@ -13,8 +13,8 @@ export type {
   InboundListValue,
   InboundMapValue,
   CallFunctionArgs,
-} from './generated/baml/cffi/v1/baml_inbound';
-export type { BamlOutboundValue } from './generated/baml/cffi/v1/baml_outbound';
+} from './generated/baml_core/cffi/v1/baml_inbound';
+export type { BamlOutboundValue } from './generated/baml_core/cffi/v1/baml_outbound';
 
 // Event types (for runtime observability)
 export {
@@ -27,4 +27,4 @@ export {
   type CustomEvent,
   type TagEntry,
   type SourceLocation,
-} from './generated/baml/cffi/v1/baml_events';
+} from './generated/baml_core/cffi/v1/baml_events';

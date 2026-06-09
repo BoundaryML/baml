@@ -20,6 +20,20 @@ function resolve(
   return customRenderers?.[type] ?? getResultRenderer(type);
 }
 
+function stringifyValue(value: unknown, space?: number): string {
+  if (typeof value === 'bigint') return value.toString();
+  try {
+    const json = JSON.stringify(
+      value,
+      (_, nested) => (typeof nested === 'bigint' ? nested.toString() : nested),
+      space,
+    );
+    return json ?? String(value);
+  } catch {
+    return String(value);
+  }
+}
+
 export const ValueRenderer: FC<{
   value: unknown;
   customRenderers?: Record<string, FC<ResultRendererProps>>;
@@ -34,8 +48,9 @@ export const ValueRenderer: FC<{
   if (value == null) return <span className="font-vsc-mono text-xs text-vsc-text-faint">null</span>;
   if (typeof value === 'string') return <span className="font-vsc-mono text-xs text-green-400">"{value}"</span>;
   if (typeof value === 'number') return <span className="font-vsc-mono text-xs text-cyan-400">{value}</span>;
+  if (typeof value === 'bigint') return <span className="font-vsc-mono text-xs text-cyan-400">{`${value}n`}</span>;
   if (typeof value === 'boolean') return <span className="font-vsc-mono text-xs text-yellow-400">{String(value)}</span>;
-  if (typeof value !== 'object') return <span className="font-vsc-mono text-xs text-vsc-text">{JSON.stringify(value)}</span>;
+  if (typeof value !== 'object') return <span className="font-vsc-mono text-xs text-vsc-text">{stringifyValue(value)}</span>;
 
   // $baml.type dispatch
   const type = getBamlType(value);
@@ -83,7 +98,7 @@ export const ValueRenderer: FC<{
             </button>
           )}
           <span className="font-vsc-mono text-xs text-vsc-text-faint">[{value.length}]</span>
-          <CopyButton text={JSON.stringify(value, null, 2)} className="opacity-0 group-hover/node:opacity-100" iconSize={11} />
+          <CopyButton text={stringifyValue(value, 2)} className="opacity-0 group-hover/node:opacity-100" iconSize={11} />
         </div>
         {!collapsed && (
           <div className="space-y-1 pl-3 border-l border-vsc-border-subtle mt-0.5">
@@ -132,7 +147,7 @@ export const ValueRenderer: FC<{
           </button>
         )}
         <span className="font-vsc-mono text-xs text-vsc-text-faint">{'{'}…{'}'} {entries.length} keys</span>
-        <CopyButton text={JSON.stringify(value, null, 2)} className="opacity-0 group-hover/node:opacity-100" iconSize={11} />
+        <CopyButton text={stringifyValue(value, 2)} className="opacity-0 group-hover/node:opacity-100" iconSize={11} />
       </div>
       {!collapsed && (
         <div className="space-y-1 pl-3 mt-0.5">

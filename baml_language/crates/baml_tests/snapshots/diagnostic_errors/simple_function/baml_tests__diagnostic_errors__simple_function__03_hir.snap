@@ -6,18 +6,24 @@ class user.User {
   name: string
   age: int
 }
-function user.HelloWorld(name: string) -> string  [llm] {
-  baml.llm.call_llm_function(GPT4, "HelloWorld", map { "name": name })
+function user.HelloWorld(name: string, client: baml.llm.Client = GPT4) -> string  [llm] {
+  baml.llm.call_llm_function(client, "HelloWorld", map { "name": name })
 }
-function user.HelloWorld$build_request(name: string) -> baml.http.Request  [expr] {
-  baml.llm.build_request(GPT4, "HelloWorld", map { "name": name })
+function user.HelloWorld$build_request(name: string, client: baml.llm.Client = GPT4) -> baml.http.Request  [expr] {
+  baml.llm.build_request(client, "HelloWorld", map { "name": name })
 }
-function user.HelloWorld$build_request_stream(name: string) -> baml.http.Request  [expr] {
-  baml.llm.build_request_stream(GPT4, "HelloWorld", map { "name": name })
+function user.HelloWorld$build_request_stream(name: string, client: baml.llm.Client = GPT4) -> baml.http.Request  [expr] {
+  baml.llm.build_request_stream(client, "HelloWorld", map { "name": name })
 }
-function user.HelloWorld$parse(json: string) -> string  [expr] {
+function user.HelloWorld$parse(json: string, client: baml.llm.Client = GPT4) -> string  [expr] {
   baml.llm.parse("HelloWorld", json)
 }
-function user.HelloWorld$render_prompt(name: string) -> baml.llm.PromptAst  [expr] {
-  baml.llm.render_prompt(GPT4, "HelloWorld", map { "name": name })
+function user.HelloWorld$render_prompt(name: string, client: baml.llm.Client = GPT4) -> baml.llm.PromptAst  [expr] {
+  baml.llm.render_prompt(client, "HelloWorld", map { "name": name })
+}
+function user.from_json(j: baml.json.json) -> user.User  [expr] {
+  user.User { name: baml.json.from_json(baml.json.field(j, "name")), age: baml.json.from_json(baml.json.field(j, "age")) }
+}
+function user.to_json(self: ?) -> baml.json.json  [expr] {
+  map { "name": self.name.to_json(), "age": self.age.to_json() }
 }

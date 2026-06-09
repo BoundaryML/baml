@@ -1,0 +1,21 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== MIR2 ===
+fn user.NestedMapLiteral() -> baml.json.json {
+    // Locals:
+    let _0: baml.json.json // _0 // return
+    let _1: int[]
+    let _2: map<string, null>
+
+    bb0: {
+        _1 = [const 2_i64, const 3_i64];
+        _2 = { const "nested": const null };
+        _0 = { const "a": const 1_i64, const "b": copy _1, const "c": copy _2 };
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}

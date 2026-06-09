@@ -5,7 +5,7 @@ source: crates/baml_tests/src/generated_tests.rs
 fn user.annotatedLiteralUnion() -> int {
     // Locals:
     let _0: int // _0 // return
-    let _1: 1 // x
+    let _1: 1 | 2 // x
 
     bb0: {
         _1 = const 1_i64;

@@ -12,7 +12,7 @@
 import type { ChangeEvent, FC, ReactNode, RefObject } from 'react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { encodeCallArgs } from '@b/pkg-proto';
-import type { BamlJsValue } from '@b/pkg-proto';
+import type { BamlJsMedia, BamlJsValue } from '@b/pkg-proto';
 import { KeyRound, PanelLeft, Square } from 'lucide-react';
 import { Button } from './components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './components/ui/tabs';
@@ -36,6 +36,7 @@ import type {
   FunctionInfo,
   ProjectUpdate,
   RunEntry,
+  SourceNavigationTarget,
   WorkerOutMessage,
 } from './worker-protocol';
 import type { ResultRendererProps } from './result-renderers';
@@ -45,8 +46,14 @@ import { HttpRequestCurlRenderer, isHttpRequest } from './renderers/HttpRequestC
 import { GraphView } from './graph/GraphView';
 import { FunctionSidebar } from './FunctionSidebar';
 import { EventValueDisplay } from './EventValueDisplay';
+import { findImageMedia, mediaToSrc } from './shared/media-values';
+import { companionFunctionName } from './shared/companion-functions';
 
 registerBuiltinResultRenderers();
+
+const LOGS_PANEL_DEFAULT_HEIGHT = 180;
+const LOGS_PANEL_MIN_HEIGHT = 40;
+const LOGS_PANEL_MAX_HEIGHT = 620;
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -64,6 +71,89 @@ function tryFormatJson(str: string): string {
 function stringifyResult(value: BamlJsValue): string {
   return JSON.stringify(value, (_, v) => (typeof v === 'bigint' ? v.toString() : v), 2);
 }
+
+function findLatestGraphRun(runs: RunEntry[], selectedFn: string | null): RunEntry | undefined {
+  if (!selectedFn) return undefined;
+
+  for (let i = runs.length - 1; i >= 0; i -= 1) {
+    const run = runs[i];
+    if (!run) continue;
+    if (run.functionName === selectedFn) return run;
+    if (run.runtimeEvents.some((evt) => {
+      const kind = evt.event;
+      return (kind?.$case === 'functionStart' && kind.functionStart.name === selectedFn)
+        || (kind?.$case === 'functionEnd' && kind.functionEnd.name === selectedFn);
+    })) {
+      return run;
+    }
+  }
+
+  return undefined;
+}
+
+function isInternalFunction(fn: FunctionInfo): boolean {
+  return fn.origin != null && fn.origin !== 'userDefined';
+}
+
+const InlineImageOutputs: FC<{ images: BamlJsMedia[] }> = ({ images }) => {
+  const visible = images.slice(0, 3);
+  const remaining = images.length - visible.length;
+
+  return (
+    <span className="inline-flex items-center gap-0.5 align-middle">
+      {visible.map((image, index) => {
+        const src = mediaToSrc(image);
+        return src ? (
+          <img
+            key={`${image.content_type}-${index}`}
+            src={src}
+            alt="BAML image output"
+            className="inline-block h-7 w-7 rounded border border-vsc-border object-cover align-middle"
+            loading="lazy"
+          />
+        ) : (
+          <span
+            key={`${image.content_type}-${index}`}
+            className="inline-flex h-7 w-10 items-center justify-center rounded border border-vsc-border bg-vsc-bg-secondary text-[9px] text-vsc-text-faint"
+          >
+            image
+          </span>
+        );
+      })}
+      {remaining > 0 && (
+        <span className="inline-flex h-7 items-center rounded border border-vsc-border bg-vsc-bg-secondary px-1 text-[10px] text-vsc-text-muted">
+          +{remaining}
+        </span>
+      )}
+    </span>
+  );
+};
+
+const FunctionEndPayload: FC<{
+  event: { name: string; durationMs: number; result: BamlJsValue | null; error?: string | null };
+  customRenderers?: Record<string, FC<ResultRendererProps>>;
+}> = ({ event, customRenderers }) => {
+  const images = event.result == null ? [] : findImageMedia(event.result);
+
+  return (
+    <span className="inline-flex min-w-0 flex-wrap items-center gap-1 align-middle">
+      <span>{event.name} ({event.durationMs}ms)</span>
+      {event.error && (
+        <>
+          <span className="text-vsc-text-faint">=&gt;</span>
+          <span className="text-vsc-red">error: {event.error}</span>
+        </>
+      )}
+      {event.result != null && (
+        <>
+          <span className="text-vsc-text-faint">=&gt;</span>
+          {images.length > 0 && <InlineImageOutputs images={images} />}
+          <EventValueDisplay value={event.result} customRenderers={customRenderers} />
+        </>
+      )}
+    </span>
+  );
+};
 
 function formatBuildTime(epochSecs: number): { absolute: string; relative: string } {
   const d = new Date(epochSecs * 1000);
@@ -95,17 +185,7 @@ export interface ExecutionPanelProps {
   /** Called when user clicks the WASM panic banner to reload the worker. */
   onReload?: () => void;
   /** Called when user clicks an event with source location to jump to that line. */
-  onNavigateToSource?: (source: { fileId: number; line: number; column: number }) => void;
-  /** Initial value for the function arguments JSON input. Defaults to '{}'. */
-  initialArgsJson?: string;
-  /** Initial function to select once the runtime reports it. */
-  initialFunctionName?: string;
-  /** Optional allow-list for functions shown in the left sidebar. */
-  visibleFunctionNames?: string[];
-  /** Optional per-function example args JSON. When the user selects a function
-   *  from the sidebar and an entry exists here, the args input is pre-filled
-   *  (only when the args field is empty / `{}` so we don't clobber edits). */
-  argsByFunction?: Record<string, string>;
+  onNavigateToSource?: (source: SourceNavigationTarget) => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -209,8 +289,8 @@ const CollectionRunView: FC<CollectionRunViewProps> = ({ run, expandedLogId, set
                     break;
                   case 'functionEnd':
                     label = 'END';
-                    payload = `${kind.functionEnd.name} (${kind.functionEnd.durationMs}ms)`;
-                    colorCls = 'text-vsc-text-muted';
+                    payload = <FunctionEndPayload event={kind.functionEnd} customRenderers={resultRenderers} />;
+                    colorCls = kind.functionEnd.error ? 'text-vsc-red' : 'text-vsc-text-muted';
                     break;
                   case 'log': {
                     const lvl = kind.log.level;
@@ -255,7 +335,7 @@ const CollectionRunView: FC<CollectionRunViewProps> = ({ run, expandedLogId, set
 // Component
 // ---------------------------------------------------------------------------
 
-export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersion, resultRenderers, onReload, onNavigateToSource, initialArgsJson, initialFunctionName, visibleFunctionNames, argsByFunction }) => {
+export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersion, resultRenderers, onReload, onNavigateToSource }) => {
   const [projectRoots, setProjectRoots] = useState<string[]>([]);
   const [projectUpdates, setProjectUpdates] = useState<Record<string, ProjectUpdate>>({});
   const [testTree, setTestTree] = useState<any>(null);
@@ -271,10 +351,9 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
   const [viewingTestRun, setViewingTestRun] = useState(false);
   const [selectedProject, setSelectedProject] = useState<string | null>(null);
 
-  const [selectedFn, setSelectedFn] = useState<string | null>(
-    initialFunctionName ?? null,
-  );
-  const [argsJson, setArgsJson] = useState(initialArgsJson ?? '{}');
+  const [selectedFn, setSelectedFn] = useState<string | null>(null);
+  const [showInternalFunctions, setShowInternalFunctions] = useState(false);
+  const [argsJson, setArgsJson] = useState('{}');
 
   // Run history — each entry is a complete invocation with its logs + result
   const [runs, setRuns] = useState<RunEntry[]>([]);
@@ -300,6 +379,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
   const [previewLoading, setPreviewLoading] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [sidebarWidth, setSidebarWidth] = useState(220);
+  const [logsPanelHeight, setLogsPanelHeight] = useState(LOGS_PANEL_DEFAULT_HEIGHT);
   const resizingRef = useRef(false);
   const [resultModes, setResultModes] = useState<Record<number, 'parsed' | 'raw'>>({});
 
@@ -312,7 +392,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
   const [diagsExpanded, setDiagsExpanded] = useState(false);
   const [buildTime, setBuildTime] = useState<number | null>(null);
   const [wasmPanic, setWasmPanic] = useState<{ message: string; stack?: string } | null>(null);
-  const { envVars, knownRequiredKeys, addEnvVar, removeEnvVar, importEnvVars, addRequiredKey } = useEnvVars(port);
+  const { envVars, knownRequiredKeys, shellEnvVars, shellOverriddenKeys, shellDeletedKeys, addEnvVar, removeEnvVar, importEnvVars, addRequiredKey, addShellEnvVar, importShellEnvVars, revertToShell } = useEnvVars(port);
   // In-flight worker requests waiting for a value: id → variable name. Ref because it doesn't drive renders.
   const pendingEnvRequestsRef = useRef<Map<number, string>>(new Map());
 
@@ -323,21 +403,14 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
   // Ref mirrors for cursor context handler (avoids stale closures in port.onMessage).
   const selectedFnRef = useRef(selectedFn);
   useEffect(() => { selectedFnRef.current = selectedFn; }, [selectedFn]);
-
-  // When the user switches function in the sidebar, fill args from the example
-  // map if the host provided one. Skips the very first run so initialArgsJson
-  // wins on mount.
-  const prevSelectedFnRef = useRef<string | null>(selectedFn);
-  useEffect(() => {
-    const prev = prevSelectedFnRef.current;
-    prevSelectedFnRef.current = selectedFn;
-    if (prev === selectedFn) return;
-    if (!selectedFn || !argsByFunction) return;
-    const example = argsByFunction[selectedFn];
-    if (example != null) setArgsJson(example);
-  }, [selectedFn, argsByFunction]);
   const controlFlowGraphRef = useRef(controlFlowGraph);
   useEffect(() => { controlFlowGraphRef.current = controlFlowGraph; }, [controlFlowGraph]);
+  const graphNavigationRef = useRef<{
+    nodeId: number;
+    startOffset: number;
+    endOffset: number;
+    expiresAt: number;
+  } | null>(null);
 
   const nextCallIdRef = useRef(0);
   const pendingCallsRef = useRef<Map<number, { resolve: (v: BamlJsValue) => void; reject: (e: Error) => void }>>(new Map());
@@ -349,19 +422,38 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
   /** Build a lookup from sourceExpr → nodeId for the cached CFG.
    *  When multiple nodes share a sourceExpr, prefer semantic types
    *  (call/loop/branch/header) over structural ones (branchArm). */
-  function buildSourceExprIndex(graph: ControlFlowGraph | null): Map<number, number> {
-    const map = new Map<number, number>();
-    if (!graph) return map;
+  function graphNodeOwnerFunction(node: ControlFlowGraph['nodes'][string]): string | null {
+    return node.logFilterKey.split('|', 1)[0] || null;
+  }
+
+  function setSourceExprIndexEntry(
+    map: Map<number, number>,
+    sourceExpr: number,
+    nodeId: number,
+    nodeType: string,
+    preferred: Set<string>,
+  ) {
+    if (preferred.has(nodeType) || !map.has(sourceExpr)) {
+      map.set(sourceExpr, nodeId);
+    }
+  }
+
+  function buildSourceExprIndexes(
+    graph: ControlFlowGraph | null,
+    functionName: string | null,
+  ): { owner: Map<number, number>; any: Map<number, number> } {
+    const owner = new Map<number, number>();
+    const any = new Map<number, number>();
+    if (!graph) return { owner, any };
     const preferred = new Set(['otherScope', 'loop', 'branchGroup', 'headerContextEnter']);
     for (const [, node] of Object.entries(graph.nodes)) {
       if (node.sourceExpr == null) continue;
-      if (preferred.has(node.nodeType)) {
-        map.set(node.sourceExpr, node.id);
-      } else if (!map.has(node.sourceExpr)) {
-        map.set(node.sourceExpr, node.id);
+      setSourceExprIndexEntry(any, node.sourceExpr, node.id, node.nodeType, preferred);
+      if (functionName && graphNodeOwnerFunction(node) === functionName) {
+        setSourceExprIndexEntry(owner, node.sourceExpr, node.id, node.nodeType, preferred);
       }
     }
-    return map;
+    return { owner, any };
   }
 
   /** Try each candidate expression ID (most-specific first) against the
@@ -372,35 +464,104 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
   function resolveCandidatesToNodeId(
     graph: ControlFlowGraph | null,
     candidates: number[],
+    functionName: string | null,
   ): number | null {
     if (!graph || candidates.length === 0) return null;
-    const index = buildSourceExprIndex(graph);
+    const index = buildSourceExprIndexes(graph, functionName);
     for (const exprId of candidates) {
-      const nodeId = index.get(exprId);
+      const nodeId = index.owner.get(exprId);
+      if (nodeId != null) return nodeId;
+    }
+    for (const exprId of candidates) {
+      const nodeId = index.any.get(exprId);
       if (nodeId != null) return nodeId;
     }
     return null;
   }
 
-  /** Find a graph node whose label starts with `funcName(` — used when candidate
-   *  matching fails because the cursor is on a callee Path expression but the
-   *  graph stores the Call expression. */
+  function functionNameAliases(functionName: string): string[] {
+    const shortName = functionName.split('.').pop();
+    return shortName && shortName !== functionName ? [functionName, shortName] : [functionName];
+  }
+
+  function labelCalleeName(label: string): string {
+    const trimmed = label.trim();
+    const optionalCallStart = trimmed.indexOf('?.(');
+    if (optionalCallStart >= 0) return trimmed.slice(0, optionalCallStart).trim();
+
+    const callStart = trimmed.indexOf('(');
+    if (callStart >= 0) return trimmed.slice(0, callStart).trim();
+
+    return trimmed;
+  }
+
+  function nodeLabelMatchesFunctionName(label: string, functionName: string): boolean {
+    const calleeName = labelCalleeName(label);
+    return functionNameAliases(functionName).some((name) => calleeName === name);
+  }
+
+  function nodeMatchesFunctionName(
+    node: ControlFlowGraph['nodes'][string],
+    functionName: string,
+  ): boolean {
+    const aliases = functionNameAliases(functionName);
+    if (node.calleeName && aliases.includes(node.calleeName)) return true;
+    return nodeLabelMatchesFunctionName(node.label, functionName);
+  }
+
+  /** Find a graph node for `funcName` — used when candidate matching fails
+   *  because the cursor is on a callee Path expression but the graph stores
+   *  the full Call expression. Prefer runtime-provided callee metadata, with
+   *  label matching only as a compatibility fallback for older graph payloads. */
   function resolveNodeByFunctionName(
     graph: ControlFlowGraph | null,
     funcName: string,
   ): number | null {
     if (!graph || !funcName) return null;
-    const prefix = `${funcName}(`;
     for (const [, node] of Object.entries(graph.nodes)) {
-      if (node.label.startsWith(prefix)) return node.id;
+      if (nodeMatchesFunctionName(node, funcName)) return node.id;
     }
     return null;
   }
 
+  function handleGraphNodeClick(nodeId: number) {
+    setHighlightedNodeId(nodeId);
+
+    const source = (controlFlowGraph ?? controlFlowGraphRef.current)
+      ?.nodes[String(nodeId)]
+      ?.sourceSpan;
+    if (source && onNavigateToSource) {
+      if (source.startOffset != null && source.endOffset != null) {
+        graphNavigationRef.current = {
+          nodeId,
+          startOffset: source.startOffset,
+          endOffset: source.endOffset,
+          expiresAt: performance.now() + 1000,
+        };
+      }
+      onNavigateToSource(source);
+    }
+  }
+
   function handleCursorContext(ctx: CursorContext) {
     // Update cursor offset for event highlighting (cursor ↔ event matching)
-    console.log('[DEBUG] CursorContext:', { cursorOffset: ctx.cursorOffset, functionName: ctx.functionName });
     setCursorOffset(ctx.cursorOffset ?? null);
+
+    const graphNavigation = graphNavigationRef.current;
+    if (
+      graphNavigation
+      && performance.now() <= graphNavigation.expiresAt
+      && ctx.cursorOffset != null
+      && ctx.cursorOffset >= graphNavigation.startOffset
+      && ctx.cursorOffset <= graphNavigation.endOffset
+    ) {
+      setHighlightedNodeId(graphNavigation.nodeId);
+      graphNavigationRef.current = null;
+      return;
+    }
+    if (graphNavigation && performance.now() > graphNavigation.expiresAt) {
+      graphNavigationRef.current = null;
+    }
 
     if (!ctx.functionName) return;
 
@@ -408,11 +569,13 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
     const cachedGraph = controlFlowGraphRef.current;
 
     const candidates = ctx.sourceExprCandidates ?? [];
-    const nodeId = resolveCandidatesToNodeId(cachedGraph, candidates)
+    const sourceExprFunctionName = ctx.sourceExprFunctionName ?? ctx.functionName;
+    const nodeId = resolveCandidatesToNodeId(cachedGraph, candidates, sourceExprFunctionName)
       ?? (ctx.sourceExprId != null ? resolveNodeByFunctionName(cachedGraph, ctx.functionName) : null);
+    const isCallSite = sourceExprFunctionName !== ctx.functionName;
 
     // Rule 1: cursor is on a node in the currently-displayed workflow
-    if (nodeId != null && ctx.functionName === currentFn) {
+    if (nodeId != null && sourceExprFunctionName === currentFn) {
       setHighlightedNodeId(nodeId);
       return;
     }
@@ -423,12 +586,24 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
       return;
     }
 
-    // Rule 3: navigate to the function the cursor is on.
-    // Always show THAT function's own graph — never auto-redirect to a
-    // workflow. If the function is called from workflows, expose them via
-    // the "called from" picker so the user can opt in.
+    // Rule 3: cursor is on a call expression. Keep/show the function body
+    // that owns the call so the top-level workflow remains the primary view.
+    if (isCallSite) {
+      if (sourceExprFunctionName !== currentFn) {
+        setSelectedFn(sourceExprFunctionName);
+        setViewingCollection(false);
+        setViewingTestRun(false);
+        setHighlightedNodeId(null);
+      }
+      setWorkflowContext(null);
+      return;
+    }
+
+    // Rule 4: navigate to the function definition/reference the cursor is on.
     if (ctx.functionName !== currentFn) {
       setSelectedFn(ctx.functionName);
+      setViewingCollection(false);
+      setViewingTestRun(false);
       setHighlightedNodeId(null);
     }
     // Update "called from" context (shown as a picker above the graph).
@@ -507,7 +682,12 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
             }
             case 'openPlayground':
               setSelectedProject(n.project);
-              if (n.functionName) setSelectedFn(n.functionName);
+              if (n.functionName) {
+                setWorkflowContext(null);
+                setSelectedFn(n.functionName);
+                setViewingCollection(false);
+                setViewingTestRun(false);
+              }
               break;
             case 'controlFlowGraphResult':
               if (n.graph) setControlFlowGraph(n.graph);
@@ -597,6 +777,24 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
           break;
         }
 
+        case 'processEnvVars': {
+          importShellEnvVars(data.vars);
+          break;
+        }
+
+        case 'envVarFromShell': {
+          addRequiredKey(data.variable);
+          addShellEnvVar(data.variable, data.value);
+          break;
+        }
+
+        case 'knownEnvVarNames': {
+          for (const name of data.names) {
+            addRequiredKey(name);
+          }
+          break;
+        }
+
         case 'envVarRequest': {
           // Always track as a known required key (proactive indicator)
           addRequiredKey(data.variable);
@@ -620,6 +818,18 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
             const next = new Map(prev);
             const arr = next.get(callId) ?? [];
             next.set(callId, [...arr, { id, prompt }]);
+            return next;
+          });
+          break;
+        }
+
+        case 'inputResolved': {
+          const { id, callId } = data;
+          setPendingInputs((prev) => {
+            const next = new Map(prev);
+            const arr = (next.get(callId) ?? []).filter((r) => r.id !== id);
+            if (arr.length === 0) next.delete(callId);
+            else next.set(callId, arr);
             return next;
           });
           break;
@@ -745,7 +955,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
           port.postMessage({
             type: 'callFunction',
             id: callId,
-            name: `${selectedFn}$${subFn}`,
+            name: companionFunctionName(selectedFn, subFn),
             argsProto: new Uint8Array(argsProto),
             project: selectedProject,
           });
@@ -787,7 +997,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
   }, [port, selectedProject]);
 
   const submitInput = useCallback((id: number, value: string, callId: number) => {
-    port.postMessage({ type: 'inputResponse', id, value });
+    port.postMessage({ type: 'inputResponse', id, value, callId });
     setPendingInputs((prev) => {
       const next = new Map(prev);
       const arr = (next.get(callId) ?? []).filter((r) => r.id !== id);
@@ -823,8 +1033,28 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
     document.addEventListener('mouseup', onMouseUp);
   }, [sidebarWidth]);
 
+  const onLogsResizeStart = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    const startY = e.clientY;
+    const startHeight = logsPanelHeight;
+
+    const onMouseMove = (moveE: MouseEvent) => {
+      const delta = startY - moveE.clientY;
+      const maxHeight = Math.max(LOGS_PANEL_MIN_HEIGHT, Math.min(LOGS_PANEL_MAX_HEIGHT, window.innerHeight - 220));
+      setLogsPanelHeight(Math.max(LOGS_PANEL_MIN_HEIGHT, Math.min(maxHeight, startHeight + delta)));
+    };
+    const onMouseUp = () => {
+      document.removeEventListener('mousemove', onMouseMove);
+      document.removeEventListener('mouseup', onMouseUp);
+    };
+    document.addEventListener('mousemove', onMouseMove);
+    document.addEventListener('mouseup', onMouseUp);
+  }, [logsPanelHeight]);
+
   const onRunFunction = useCallback(async () => {
     if (!selectedFn || !selectedProject || isRunning) return;
+
+    setActiveTab('run');
 
     const runId = nextCallIdRef.current++;
     const startTime = performance.now();
@@ -1002,23 +1232,18 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
 
   const currentUpdate = selectedProject ? projectUpdates[selectedProject] : undefined;
   const functions: FunctionInfo[] = currentUpdate?.functions ?? [];
-  const visibleFunctionNameSet =
-    visibleFunctionNames && visibleFunctionNames.length > 0
-      ? new Set(visibleFunctionNames)
-      : null;
-  const sidebarFunctions = visibleFunctionNameSet
-    ? functions.filter((f) => visibleFunctionNameSet.has(f.name))
-    : functions;
-  const functionNames = sidebarFunctions.map((f) => f.name);
+  const internalFunctionCount = functions.filter(isInternalFunction).length;
+  const visibleFunctions = showInternalFunctions ? functions : functions.filter((fn) => !isInternalFunction(fn));
+  const functionNames = visibleFunctions.map((f) => f.name);
   const engineStale = currentUpdate ? !currentUpdate.isBexCurrent : false;
   const diags = currentUpdate?.diagnostics ?? [];
 
-  const selectedFnInfo = functions.find((f) => f.name === selectedFn);
+  const selectedFnInfo = visibleFunctions.find((f) => f.name === selectedFn);
   const canPreviewPrompt = selectedFnInfo?.capabilities?.renderPrompt ?? false;
   const canPreviewCurl = selectedFnInfo?.capabilities?.buildRequest ?? false;
+  const latestGraphRun = findLatestGraphRun(runs, selectedFn);
 
   useEffect(() => {
-    if (functionNames.length === 0) return;
     setSelectedFn((prev) => prev && !functionNames.includes(prev) ? null : prev);
   }, [functionNames]);
 
@@ -1043,69 +1268,130 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
         <span data-testid="hot-reload-test" style={{ display: 'none' }}>{buildTime}</span>
       )}
 
-      {/* ──── Status bar ──── */}
-      <div className="flex items-center gap-2 px-2.5 py-1 shrink-0 border-b border-vsc-border bg-vsc-surface">
-        {connectionVersion != null && (
-          <code className="text-[10px] font-vsc-mono text-vsc-text-faint">v{connectionVersion}</code>
-        )}
-        {buildTime != null && (() => {
-          const { absolute, relative } = formatBuildTime(buildTime);
-          return (
-            <code className="text-[10px] font-vsc-mono text-vsc-text-faint">
-              {absolute} ({relative})
-            </code>
-          );
-        })()}
-        <div className="flex-1" />
-        <TooltipProvider>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button variant="ghost" size="icon" className="relative h-7 w-7" onClick={() => setShowApiKeysDialog(true)}>
-                <KeyRound size={14} />
-                {hasMissingKeys && (
-                  <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-yellow-400" />
+      <Tabs
+        value={activeTab}
+        onValueChange={(v) => setActiveTab(v as typeof activeTab)}
+        className="flex-1 flex flex-col min-h-0 gap-0"
+      >
+        {/* ──── Combined top bar ──── */}
+        <div className="flex items-center gap-1.5 px-2 py-1 shrink-0 border-b border-vsc-border bg-vsc-surface">
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-6 w-6 shrink-0"
+                  onClick={() => setSidebarOpen((prev) => !prev)}
+                >
+                  <PanelLeft className="h-3.5 w-3.5 text-vsc-text-muted" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>{sidebarOpen ? 'Hide sidebar' : 'Show sidebar'}</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+
+          {selectedFn && !viewingCollection && !viewingTestRun && (
+            <>
+              <span className="text-[11px] font-vsc-mono text-vsc-accent font-semibold whitespace-nowrap">{selectedFn}()</span>
+              <TabsList className="bg-transparent border-b-0 ml-1 h-7">
+                <TabsTrigger value="run" className="py-1 h-7">Run</TabsTrigger>
+                <TabsTrigger value="graph" className="py-1 h-7">Graph</TabsTrigger>
+                {canPreviewPrompt && (
+                  <TabsTrigger value="prompt" className="py-1 h-7">
+                    Prompt
+                    {selectedFnInfo?.capabilities?.clientName && (
+                      <span className="ml-1 px-1 py-0 text-[9px] rounded bg-vsc-bg-secondary text-vsc-text-faint">
+                        {selectedFnInfo.capabilities.clientName}
+                      </span>
+                    )}
+                  </TabsTrigger>
                 )}
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>API Keys</TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
-      </div>
+                {canPreviewCurl && <TabsTrigger value="curl" className="py-1 h-7">cURL</TabsTrigger>}
+              </TabsList>
+            </>
+          )}
 
-      {/* Project selector (shown when multiple projects exist) */}
-      {projectRoots.length > 1 && (
-        <div className="flex items-center gap-1.5 px-2.5 py-1 border-b border-vsc-border shrink-0 bg-vsc-surface">
-          <span className="text-[10px] text-vsc-text-faint font-vsc-mono select-none">PROJECT</span>
-          <ToggleGroup
-            value={selectedProject ?? projectRoots[0]}
-            onValueChange={(v) => setSelectedProject(v)}
-            options={projectRoots.map((root) => ({
-              value: root,
-              label: (
-                <>
-                  {root}
-                  {projectUpdates[root] && !projectUpdates[root].isBexCurrent && (
-                    <span className="ml-0.5 text-vsc-yellow">*</span>
+          <div className="flex-1" />
+
+          {projectRoots.length > 1 && (
+            <ToggleGroup
+              value={selectedProject ?? projectRoots[0]}
+              onValueChange={(v) => setSelectedProject(v)}
+              options={projectRoots.map((root) => ({
+                value: root,
+                label: (
+                  <>
+                    {root}
+                    {projectUpdates[root] && !projectUpdates[root].isBexCurrent && (
+                      <span className="ml-0.5 text-vsc-yellow">*</span>
+                    )}
+                  </>
+                ),
+              }))}
+              size="sm"
+            />
+          )}
+
+          {selectedFn && !viewingCollection && !viewingTestRun && activeTab === 'run' && runs.length > 0 && !isRunning && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 px-2 text-[10px] text-vsc-text-muted hover:text-vsc-text"
+              onClick={() => {
+                const runIds = runs.map((r) => r.id);
+                port.postMessage({ type: 'clearHandles', runIds });
+                setRuns([]);
+              }}
+            >
+              Clear
+            </Button>
+          )}
+
+          {selectedFn && !viewingCollection && !viewingTestRun && (
+            <Button
+              variant="success"
+              size="sm"
+              className="h-7 text-[11px] font-semibold"
+              disabled={hasErrors || isRunning || !selectedProject}
+              onClick={onRunFunction}
+            >
+              {isRunning ? 'Running...' : 'Run'}
+            </Button>
+          )}
+
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="ghost" size="icon" className="relative h-7 w-7 shrink-0" onClick={() => setShowApiKeysDialog(true)}>
+                  <KeyRound size={14} />
+                  {hasMissingKeys && (
+                    <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-yellow-400" />
                   )}
-                </>
-              ),
-            }))}
-            size="sm"
-          />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <div className="flex flex-col gap-0.5">
+                  <span>API Keys</span>
+                  {connectionVersion != null && (
+                    <span className="text-[9px] text-vsc-text-faint font-vsc-mono">v{connectionVersion}</span>
+                  )}
+                  {buildTime != null && (() => {
+                    const { absolute, relative } = formatBuildTime(buildTime);
+                    return (
+                      <span className="text-[9px] text-vsc-text-faint font-vsc-mono">{absolute} ({relative})</span>
+                    );
+                  })()}
+                  {projectRoots.length === 1 && (
+                    <span className="text-[9px] text-vsc-text-faint font-vsc-mono">{projectRoots[0]}</span>
+                  )}
+                </div>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         </div>
-      )}
 
-      {/* Project state info (single project) */}
-      {projectRoots.length === 1 && (
-        <div className="flex items-center gap-1.5 px-2.5 py-1 border-b border-vsc-border shrink-0 bg-vsc-surface">
-          <span className="text-[10px] text-vsc-text-faint font-vsc-mono select-none">PROJECT</span>
-          <span className="text-[10px] font-vsc-mono text-vsc-text-muted">
-            {projectRoots[0]}
-          </span>
-        </div>
-      )}
-
-      {/* WASM Panic banner */}
+        {/* WASM Panic banner */}
       {wasmPanic && (
         <button
           type="button"
@@ -1177,41 +1463,6 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
         </div>
       )}
 
-      {/* Sidebar toggle */}
-      <div className="flex items-center gap-1.5 px-2.5 py-1 border-b border-vsc-border shrink-0 bg-vsc-surface">
-        <TooltipProvider>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-6 w-6"
-                onClick={() => setSidebarOpen((prev) => !prev)}
-              >
-                <PanelLeft className="h-3.5 w-3.5 text-vsc-text-muted" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>{sidebarOpen ? 'Hide sidebar' : 'Show sidebar'}</TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
-        {selectedFn && (
-          <span className="text-[11px] font-vsc-mono text-vsc-accent font-semibold">{selectedFn}()</span>
-        )}
-        {selectedFn && (
-          <div className="flex items-center gap-1 ml-auto">
-            <Button
-              variant="success"
-              size="sm"
-              className="text-[11px] font-semibold"
-              disabled={hasErrors || isRunning || !selectedProject}
-              onClick={onRunFunction}
-            >
-              {isRunning ? 'Running...' : 'Run'}
-            </Button>
-          </div>
-        )}
-      </div>
-
       {/* Main layout: sidebar + content */}
       <div className="flex flex-1 min-h-0">
         {/* Sidebar */}
@@ -1219,7 +1470,10 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
           <>
             <div className="shrink-0 overflow-hidden" style={{ width: sidebarWidth }}>
               <FunctionSidebar
-                functions={sidebarFunctions}
+                functions={visibleFunctions}
+                showInternalFunctions={showInternalFunctions}
+                onShowInternalFunctionsChange={setShowInternalFunctions}
+                internalFunctionCount={internalFunctionCount}
                 testTree={testTree}
                 selectedFn={selectedFn}
                 onSelectFn={(fn) => { setWorkflowContext(null); setSelectedFn(fn); setViewingCollection(false); setViewingTestRun(false); }}
@@ -1354,8 +1608,8 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
                                 break;
                               case 'functionEnd':
                                 label = 'END';
-                                payload = `${kind.functionEnd.name} (${kind.functionEnd.durationMs}ms)`;
-                                colorCls = 'text-vsc-text-muted';
+                                payload = <FunctionEndPayload event={kind.functionEnd} customRenderers={resultRenderers} />;
+                                colorCls = kind.functionEnd.error ? 'text-vsc-red' : 'text-vsc-text-muted';
                                 break;
                               case 'log': {
                                 const lvl = kind.log.level;
@@ -1397,7 +1651,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
                                 onClick={source && onNavigateToSource ? () => onNavigateToSource({ fileId: source.fileId, line: source.line, column: source.column }) : undefined}
                               >
                                 <span className={`${colorCls} font-semibold shrink-0 w-10 uppercase`}>{label}</span>
-                                <span className="text-vsc-text flex-1 font-mono truncate">{payload}</span>
+                                <div className="text-vsc-text flex-1 min-w-0 break-all">{payload}</div>
                               </div>
                             );
                           })}
@@ -1441,43 +1695,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
               })}
             </div>
           ) : selectedFn ? (
-            <Tabs
-              value={activeTab}
-              onValueChange={(v) => setActiveTab(v as typeof activeTab)}
-              className="flex-1 flex flex-col min-h-0"
-            >
-              <div className="flex items-center px-2.5 shrink-0 bg-vsc-surface">
-                <TabsList className="bg-transparent">
-                  <TabsTrigger value="run">Run</TabsTrigger>
-                  <TabsTrigger value="graph">Graph</TabsTrigger>
-                  {canPreviewPrompt && (
-                    <TabsTrigger value="prompt">
-                      Prompt
-                      {selectedFnInfo?.capabilities?.clientName && (
-                        <span className="ml-1 px-1 py-0 text-[9px] rounded bg-vsc-bg-secondary text-vsc-text-faint">
-                          {selectedFnInfo.capabilities.clientName}
-                        </span>
-                      )}
-                    </TabsTrigger>
-                  )}
-                  {canPreviewCurl && <TabsTrigger value="curl">cURL</TabsTrigger>}
-                </TabsList>
-                {runs.length > 0 && !isRunning && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="ml-auto text-[10px] text-vsc-text-muted hover:text-vsc-text"
-                    onClick={() => {
-                      const runIds = runs.map((r) => r.id);
-                      port.postMessage({ type: 'clearHandles', runIds });
-                      setRuns([]);
-                    }}
-                  >
-                    Clear
-                  </Button>
-                )}
-              </div>
-
+            <>
               {/* Graph view */}
               <TabsContent value="graph" className="flex-1 min-h-0 mt-0 flex flex-col" style={{ minHeight: 300 }}>
                 {/* "Called from" bar — shown when the current function is called from workflows */}
@@ -1504,8 +1722,13 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
                 {controlFlowGraph ? (
                   <GraphView
                     graph={controlFlowGraph}
+                    runtimeEvents={latestGraphRun?.runtimeEvents}
+                    runStatus={latestGraphRun?.status}
+                    runError={latestGraphRun?.error}
+                    runFunctionName={latestGraphRun?.functionName}
+                    customRenderers={resultRenderers}
                     selectedNodeId={highlightedNodeId}
-                    onNodeClick={(nodeId) => setHighlightedNodeId(nodeId)}
+                    onNodeClick={handleGraphNodeClick}
                   />
                 ) : (
                   <div className="flex-1 flex items-center justify-center text-vsc-text-faint text-xs bg-vsc-bg h-full">
@@ -1538,7 +1761,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
                       )}
                     </div>
                   </div>
-                  {promptPreviewResult && <PromptStats text={stringifyResult(promptPreviewResult)} />}
+                  {promptPreviewResult != null && <PromptStats text={stringifyResult(promptPreviewResult)} />}
                 </TabsContent>
               )}
 
@@ -1575,8 +1798,58 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
                   />
                 </div>
 
+                {/* Live graph */}
+                <div className="flex-1 min-h-0 flex flex-col bg-vsc-bg border-b border-vsc-border" style={{ minHeight: 180 }}>
+                  {workflowContext && (
+                    <div className="flex items-center gap-1.5 px-2.5 py-1 text-[10px] bg-vsc-bg-secondary border-b border-vsc-border shrink-0">
+                      <span className="text-vsc-text-faint">Called from:</span>
+                      {workflowContext.workflows.map((wf) => (
+                        <Button
+                          key={wf}
+                          variant="outline"
+                          size="sm"
+                          className="h-auto px-1.5 py-0.5 text-[10px]"
+                          onClick={() => {
+                            setWorkflowContext(null);
+                            setSelectedFn(wf);
+                            setHighlightedNodeId(null);
+                          }}
+                        >
+                          {wf}
+                        </Button>
+                      ))}
+                    </div>
+                  )}
+                  {controlFlowGraph ? (
+                    <GraphView
+                      graph={controlFlowGraph}
+                      runtimeEvents={latestGraphRun?.runtimeEvents}
+                      runStatus={latestGraphRun?.status}
+                      runError={latestGraphRun?.error}
+                      runFunctionName={latestGraphRun?.functionName}
+                      customRenderers={resultRenderers}
+                      selectedNodeId={highlightedNodeId}
+                      onNodeClick={handleGraphNodeClick}
+                    />
+                  ) : (
+                    <div className="flex-1 flex items-center justify-center text-vsc-text-faint text-xs bg-vsc-bg h-full">
+                      Loading graph...
+                    </div>
+                  )}
+                </div>
+
+                <div
+                  onMouseDown={onLogsResizeStart}
+                  className="h-1.5 shrink-0 cursor-row-resize bg-vsc-surface hover:bg-vsc-accent/30 transition-colors border-y border-vsc-border"
+                  title="Resize logs"
+                />
+
                 {/* Run history (scrollable) */}
-                <div ref={outputRef} className="flex-1 overflow-auto font-vsc-mono text-xs bg-vsc-bg">
+                <div
+                  ref={outputRef}
+                  className="shrink-0 overflow-auto font-vsc-mono text-xs bg-vsc-bg"
+                  style={{ height: logsPanelHeight }}
+                >
                   {runs.length === 0 && (
                     <div className="p-5 text-center text-vsc-text-faint text-[11px]">
                       Press Run to execute {selectedFn}()
@@ -1689,8 +1962,8 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
                                     break;
                                   case 'functionEnd':
                                     label = 'END';
-                                    payload = `${kind.functionEnd.name} (${kind.functionEnd.durationMs}ms)`;
-                                    colorCls = 'text-vsc-text-muted';
+                                    payload = <FunctionEndPayload event={kind.functionEnd} customRenderers={resultRenderers} />;
+                                    colorCls = kind.functionEnd.error ? 'text-vsc-red' : 'text-vsc-text-muted';
                                     break;
                                   case 'log': {
                                     const lvl = kind.log.level;
@@ -1732,7 +2005,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
                                     onClick={source && onNavigateToSource ? () => onNavigateToSource({ fileId: source.fileId, line: source.line, column: source.column }) : undefined}
                                   >
                                     <span className={`${colorCls} font-semibold shrink-0 w-10 uppercase`}>{label}</span>
-                                    <span className="text-vsc-text flex-1 font-mono truncate">{payload}</span>
+                                    <div className="text-vsc-text flex-1 min-w-0 break-all">{payload}</div>
                                   </div>
                                 );
                               })}
@@ -1803,7 +2076,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
                   })}
                 </div>
               </TabsContent>
-            </Tabs>
+            </>
           ) : (
             <div className="flex-1 flex items-center justify-center text-vsc-text-faint text-xs bg-vsc-bg">
               {viewingCollection ? 'Collection not yet available — click Refresh' : 'Select a function to run'}
@@ -1811,11 +2084,15 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
           )}
         </div>
       </div>
+      </Tabs>
 
       <ApiKeysDialog
         open={showApiKeysDialog}
         envVars={envVars}
         requiredKeys={knownRequiredKeys}
+        shellEnvVars={shellEnvVars}
+        shellOverriddenKeys={shellOverriddenKeys}
+        shellDeletedKeys={shellDeletedKeys}
         onOpenChange={(open) => {
           setShowApiKeysDialog(open);
           showApiKeysDialogRef.current = open;
@@ -1832,6 +2109,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
         onSetEnvVar={addEnvVar}
         onDeleteEnvVar={removeEnvVar}
         onImportEnvVars={importEnvVars}
+        onRevertToShell={revertToShell}
       />
     </>
   );

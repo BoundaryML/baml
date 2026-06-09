@@ -1,19 +1,44 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
 ---
-function user.TypeBuilderFn(from_text: string) -> Resume {
-    alloc_instance baml.llm.Client
+function user.Resume.from_json(j: baml.json.json) -> Resume {
+    load_var j
+    load_const "name"
+    call baml.json.field
+    store_var _3
+    load_type string
+    load_var _3
+    call baml.json.from_json
+    init_instance user.Resume .name
+    return
+}
+
+function user.Resume.to_json(self: Resume) -> baml.json.json {
+    load_var self
+    load_field .name
+    call baml.String.to_json
+    load_const "name"
+    alloc_map 1
+    return
+}
+
+function user.TypeBuilderFn(from_text: string, client: baml.llm.Client) -> Resume {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
     load_const "openai/gpt-4o-mini"
-    init_field .name
     load_const baml.llm.ClientType.Primitive
     alloc_variant baml.llm.ClientType
-    init_field .client_type
     alloc_array 0
-    init_field .sub_clients
     load_const null
-    init_field .retry
     load_const 0
-    init_field .counter
+    init_instance baml.llm.Client .name, .client_type, .sub_clients, .retry, .counter
+    store_var client
+
+  L0:
+    load_type Resume
+    load_var client
     load_const "TypeBuilderFn"
     load_var from_text
     load_const "from_text"
@@ -22,19 +47,22 @@ function user.TypeBuilderFn(from_text: string) -> Resume {
     return
 }
 
-function user.TypeBuilderFn$build_request(from_text: string) -> baml.http.Request {
-    alloc_instance baml.llm.Client
+function user.TypeBuilderFn$build_request(from_text: string, client: baml.llm.Client) -> baml.http.Request {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
     load_const "openai/gpt-4o-mini"
-    init_field .name
     load_const baml.llm.ClientType.Primitive
     alloc_variant baml.llm.ClientType
-    init_field .client_type
     alloc_array 0
-    init_field .sub_clients
     load_const null
-    init_field .retry
     load_const 0
-    init_field .counter
+    init_instance baml.llm.Client .name, .client_type, .sub_clients, .retry, .counter
+    store_var client
+
+  L0:
+    load_var client
     load_const "TypeBuilderFn"
     load_var from_text
     load_const "from_text"
@@ -43,19 +71,22 @@ function user.TypeBuilderFn$build_request(from_text: string) -> baml.http.Reques
     return
 }
 
-function user.TypeBuilderFn$build_request_stream(from_text: string) -> baml.http.Request {
-    alloc_instance baml.llm.Client
+function user.TypeBuilderFn$build_request_stream(from_text: string, client: baml.llm.Client) -> baml.http.Request {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
     load_const "openai/gpt-4o-mini"
-    init_field .name
     load_const baml.llm.ClientType.Primitive
     alloc_variant baml.llm.ClientType
-    init_field .client_type
     alloc_array 0
-    init_field .sub_clients
     load_const null
-    init_field .retry
     load_const 0
-    init_field .counter
+    init_instance baml.llm.Client .name, .client_type, .sub_clients, .retry, .counter
+    store_var client
+
+  L0:
+    load_var client
     load_const "TypeBuilderFn"
     load_var from_text
     load_const "from_text"
@@ -64,45 +95,68 @@ function user.TypeBuilderFn$build_request_stream(from_text: string) -> baml.http
     return
 }
 
-function user.TypeBuilderFn$parse(json: string) -> Resume {
+function user.TypeBuilderFn$parse(json: string, client: baml.llm.Client) -> Resume {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const "openai/gpt-4o-mini"
+    load_const baml.llm.ClientType.Primitive
+    alloc_variant baml.llm.ClientType
+    alloc_array 0
+    load_const null
+    load_const 0
+    init_instance baml.llm.Client .name, .client_type, .sub_clients, .retry, .counter
+    store_var client
+
+  L0:
+    load_type unknown
+    load_type Resume
     load_const "TypeBuilderFn"
     load_var json
     call baml.llm.parse
     return
 }
 
-function user.TypeBuilderFn$parse_stream(sse: baml.http.SseStream) -> baml.llm.Stream {
-    alloc_instance baml.llm.Client
+function user.TypeBuilderFn$parse_stream(sse: baml.http.SseStream, client: baml.llm.Client) -> baml.llm.Stream<Resume$stream | null, Resume> {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
     load_const "openai/gpt-4o-mini"
-    init_field .name
     load_const baml.llm.ClientType.Primitive
     alloc_variant baml.llm.ClientType
-    init_field .client_type
     alloc_array 0
-    init_field .sub_clients
     load_const null
-    init_field .retry
     load_const 0
-    init_field .counter
-    load_var sse
+    init_instance baml.llm.Client .name, .client_type, .sub_clients, .retry, .counter
+    store_var client
+
+  L0:
+    load_type Resume$stream | null
+    load_type Resume
+    load_var2 2 1
     load_const "TypeBuilderFn"
     call baml.llm.Client.__make_stream
     return
 }
 
-function user.TypeBuilderFn$render_prompt(from_text: string) -> baml.llm.PromptAst {
-    alloc_instance baml.llm.Client
+function user.TypeBuilderFn$render_prompt(from_text: string, client: baml.llm.Client) -> baml.llm.PromptAst {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
     load_const "openai/gpt-4o-mini"
-    init_field .name
     load_const baml.llm.ClientType.Primitive
     alloc_variant baml.llm.ClientType
-    init_field .client_type
     alloc_array 0
-    init_field .sub_clients
     load_const null
-    init_field .retry
     load_const 0
-    init_field .counter
+    init_instance baml.llm.Client .name, .client_type, .sub_clients, .retry, .counter
+    store_var client
+
+  L0:
+    load_var client
     load_const "TypeBuilderFn"
     load_var from_text
     load_const "from_text"
@@ -111,19 +165,24 @@ function user.TypeBuilderFn$render_prompt(from_text: string) -> baml.llm.PromptA
     return
 }
 
-function user.TypeBuilderFn$stream(from_text: string) -> baml.llm.Stream {
-    alloc_instance baml.llm.Client
+function user.TypeBuilderFn$stream(from_text: string, client: baml.llm.Client) -> baml.llm.Stream<Resume$stream | null, Resume> {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
     load_const "openai/gpt-4o-mini"
-    init_field .name
     load_const baml.llm.ClientType.Primitive
     alloc_variant baml.llm.ClientType
-    init_field .client_type
     alloc_array 0
-    init_field .sub_clients
     load_const null
-    init_field .retry
     load_const 0
-    init_field .counter
+    init_instance baml.llm.Client .name, .client_type, .sub_clients, .retry, .counter
+    store_var client
+
+  L0:
+    load_type Resume$stream | null
+    load_type Resume
+    load_var client
     load_const "TypeBuilderFn"
     load_var from_text
     load_const "from_text"

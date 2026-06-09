@@ -1,0 +1,313 @@
+// Class destructure pattern diagnostics.
+
+class Address {
+    zip int
+}
+
+class Person {
+    age int
+    flexible_age int | string
+    address Address
+}
+
+class SameNameInner {
+    field int
+}
+
+class SameNameOuter {
+    field SameNameInner
+    other SameNameInner
+}
+
+class Box<T> {
+    value T
+}
+
+// ============================================================================
+// Field validation
+// ============================================================================
+
+function class_destructure_unknown_field_in_let() -> int {
+    let Person { missing } = Person {
+        age: 1,
+        flexible_age: 2,
+        address: Address { zip: 3 }
+    };
+    0
+}
+
+function class_destructure_duplicate_field_key_in_let() -> int {
+    let Person {
+        age: let first,
+        age: let second
+    } = Person {
+        age: 1,
+        flexible_age: 2,
+        address: Address { zip: 3 }
+    };
+    first + second
+}
+
+function class_destructure_duplicate_field_key_with_wildcards() -> int {
+    match (Person { age: 1, flexible_age: 2, address: Address { zip: 3 } }) {
+        Person { age: _, age: _ } => 1
+    }
+}
+
+function class_destructure_duplicate_binding_name_across_fields() -> int {
+    let Person {
+        age,
+        flexible_age: let age
+    } = Person {
+        age: 1,
+        flexible_age: 2,
+        address: Address { zip: 3 }
+    };
+    0
+}
+
+function nested_class_destructure_duplicate_binding_name_in_field_chain() -> int {
+    let SameNameOuter {
+        field: let field: SameNameInner { field }
+    } = SameNameOuter {
+        field: SameNameInner { field: 1 },
+        other: SameNameInner { field: 2 }
+    };
+    0
+}
+
+function nested_class_destructure_duplicate_binding_name_across_nested_fields() -> int {
+    let SameNameOuter {
+        field: SameNameInner { field },
+        other: SameNameInner { field }
+    } = SameNameOuter {
+        field: SameNameInner { field: 1 },
+        other: SameNameInner { field: 2 }
+    };
+    0
+}
+
+function nested_class_destructure_unknown_field_in_let() -> int {
+    let Person {
+        address: Address { missing }
+    } = Person {
+        age: 1,
+        flexible_age: 2,
+        address: Address { zip: 3 }
+    };
+    0
+}
+
+function match_class_destructure_unknown_field() -> int {
+    match (Person { age: 1, flexible_age: 2, address: Address { zip: 3 } }) {
+        Person { missing } => 1,
+        _ => 0
+    }
+}
+
+function class_destructure_unresolved_class() -> int {
+    let MissingClass { age } = Person {
+        age: 1,
+        flexible_age: 2,
+        address: Address { zip: 3 }
+    };
+    0
+}
+
+function class_destructure_field_pattern_type_mismatch() -> int {
+    match (Person { age: 1, flexible_age: 2, address: Address { zip: 3 } }) {
+        Person { age: string } => 1,
+        _ => 0
+    }
+}
+
+function class_destructure_invalid_chain_type() -> int {
+    let Person { age } = Person {
+        age: 1,
+        flexible_age: 2,
+        address: Address { zip: 3 }
+    };
+    age
+}
+
+function generic_class_type_pattern_requires_type_args(boxed: Box<int>) -> int {
+    match (boxed) {
+        Box => 1
+    }
+}
+
+function generic_class_type_pattern_in_chain_requires_type_args(boxed: Box<int>) -> int {
+    match (boxed) {
+        let value: Box => 1
+    }
+}
+
+function generic_class_destructure_requires_type_args(boxed: Box<int>) -> int {
+    let Box { value } = boxed;
+    value
+}
+
+function class_destructure_box(boxed: Box<int>) -> int {
+    let Box<int> { value } = boxed;
+    value
+}
+
+// ============================================================================
+// Refutability
+// ============================================================================
+
+class OptionalPerson {
+    age int?
+}
+
+function let_top_level_class_narrows_union_scrutinee_is_refutable(v: Person | int) -> int {
+    let Person { age } = v;
+    age
+}
+
+function for_top_level_class_narrows_union_element_is_refutable() -> int {
+    for (let Person { age } in [
+        Person { age: 1, flexible_age: 2, address: Address { zip: 3 } },
+        2
+    ]) {
+        age
+    };
+    1
+}
+
+function let_class_field_type_narrower_than_field_is_refutable() -> int {
+    let Person { flexible_age: int } = Person {
+        age: 1,
+        flexible_age: 2,
+        address: Address { zip: 3 }
+    };
+    1
+}
+
+function let_class_field_literal_narrower_than_field_is_refutable() -> int {
+    let Person { age: 1 } = Person {
+        age: 1,
+        flexible_age: 2,
+        address: Address { zip: 3 }
+    };
+    1
+}
+
+function nested_class_field_type_narrower_than_field_is_refutable() -> int {
+    let Person {
+        address: Address { zip: 1 }
+    } = Person {
+        age: 1,
+        flexible_age: 2,
+        address: Address { zip: 3 }
+    };
+    1
+}
+
+function for_class_field_type_narrower_than_field_is_refutable() -> int {
+    for (let Person { flexible_age: int } in [
+        Person { age: 1, flexible_age: 2, address: Address { zip: 3 } }
+    ]) {
+        1
+    };
+    1
+}
+
+function let_optional_class_field_narrower_than_field_is_refutable() -> int {
+    let OptionalPerson { age: int } = OptionalPerson { age: 1 };
+    1
+}
+
+function let_generic_class_field_type_narrower_than_substituted_field_is_refutable() -> int {
+    let boxed: Box<string> = Box { value: "ready" };
+    let Box<string> { value: int } = boxed;
+    1
+}
+
+// ============================================================================
+// Or-patterns
+// ============================================================================
+
+class Admin {
+    age string
+}
+
+function class_destructure_or_pattern_must_bind_same_names(v: Person | int) -> int {
+    match (v) {
+        Person { age } | int => age
+    }
+}
+
+function class_destructure_or_pattern_same_binding_conflicting_types(v: Person | Admin) -> int {
+    match (v) {
+        Person { age } | Admin { age } => 1
+    }
+}
+
+function generic_class_destructure_or_pattern_same_binding_conflicting_types(v: Box<int> | Box<string>) -> int {
+    match (v) {
+        Box<int> { value: let value } | Box<string> { value: let value } => 1
+    }
+}
+
+function nested_generic_class_destructure_duplicate_binding_name() -> int {
+    let boxed: Box<SameNameInner> = Box {
+        value: SameNameInner { field: 1 }
+    };
+    let Box<SameNameInner> {
+        value: let value: SameNameInner { field: let value }
+    } = boxed;
+    0
+}
+
+function nested_class_destructure_field_pattern_type_mismatch() -> int {
+    match (Person { age: 1, flexible_age: 2, address: Address { zip: 3 } }) {
+        Person { address: Address { zip: string } } => 1,
+        _ => 0
+    }
+}
+
+function class_destructure_unknown_renamed_field_span() -> int {
+    let Person {
+        missing: let renamed
+    } = Person {
+        age: 1,
+        flexible_age: 2,
+        address: Address { zip: 3 }
+    };
+    renamed
+}
+
+function lambda_class_destructure_field_pattern_type_mismatch_span() -> int {
+    let f: (Person) -> int = (p: Person) -> int {
+        let Person { age: string } = p;
+        1
+    };
+    f(Person { age: 1, flexible_age: 2, address: Address { zip: 3 } })
+}
+
+// ============================================================================
+// Formatter trivia
+// ============================================================================
+
+function class_destructure_formatter_trivia_preserved() -> int {
+    let input = Person {
+        age: 1,
+        flexible_age: 2,
+        address: Address { zip: 3 }
+    };
+    let Person { /* open */ age /* before colon */ : /* after colon */ let years /* before comma */, /* after comma */ address: Address { /* nested */ zip } /* before close */ } = input;
+    years + zip
+}
+
+function class_destructure_formatter_empty_and_trailing_comma_trivia() -> int {
+    let input = Person {
+        age: 1,
+        flexible_age: 2,
+        address: Address { zip: 3 }
+    };
+    let Person { /* empty */ } = input;
+    match (input) {
+        Person { /* match open */ age: let years /* trailing field */, /* trailing comma */ } => years,
+    }
+}

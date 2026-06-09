@@ -8,6 +8,8 @@ dist/
 .next-dev/
 .turbo/
 .next-build/
+*.vsix
+*.tsbuildinfo
 
 # WASM output (built by wasm-pack)
 pkg-playground/wasm/

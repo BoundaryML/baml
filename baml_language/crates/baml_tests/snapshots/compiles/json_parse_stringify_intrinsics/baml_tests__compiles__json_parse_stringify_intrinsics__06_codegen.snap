@@ -1,0 +1,60 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+function user.match_parsed(s: string) -> string {
+    load_var s
+    call baml.json.parse
+    store_var j
+    load_var j
+    type_tag
+    jump_table [L4, L1, L2, L0, L3, _, L6, L5], default L8
+
+  L0: null
+    load_const "null"
+    jump L7
+
+  L1: string
+    load_var j
+    jump L7
+
+  L2: bool
+    load_const "bool"
+    jump L7
+
+  L3: float
+    load_const "float"
+    jump L7
+
+  L4: int
+    load_const "int"
+    jump L7
+
+  L5: map
+    load_var j
+    call baml.json.stringify
+    jump L7
+
+  L6: list
+    load_var j
+    call baml.json.stringify
+
+  L7:
+    return
+
+  L8:
+    unreachable
+}
+
+function user.parse_and_roundtrip(s: string) -> string {
+    load_var s
+    call baml.json.parse
+    call baml.json.stringify
+    return
+}
+
+function user.parse_and_roundtrip_pretty(s: string) -> string {
+    load_var s
+    call baml.json.parse
+    call baml.json.stringify_pretty
+    return
+}

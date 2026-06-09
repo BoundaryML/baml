@@ -1,0 +1,89 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [type] error: type mismatch: expected root.llm.openai.Box<int>, got root.llm.openai.Box
+   ╭─[ main.baml:2:20 ]
+   │
+ 2 │ ╭─▶     match (boxed) {
+ 3 │ ├─▶         root.llm.openai.Box => 1
+   │ │                                      
+   │ ╰────────────────────────────────────── type mismatch: expected root.llm.openai.Box<int>, got root.llm.openai.Box
+   │     
+   │     Note: Error code: E0001
+───╯
+
+  [type] error: type mismatch: expected root.llm.openai.Box<int>, got root.llm.openai.Box
+   ╭─[ main.baml:8:20 ]
+   │
+ 8 │ ╭─▶     match (boxed) {
+ 9 │ ├─▶         llm.openai.Box => 1
+   │ │                                 
+   │ ╰───────────────────────────────── type mismatch: expected root.llm.openai.Box<int>, got root.llm.openai.Box
+   │     
+   │     Note: Error code: E0001
+───╯
+
+  [type] error: type `Box` expects 1 type argument(s), got 2
+    ╭─[ main.baml:14:20 ]
+    │
+ 14 │ ╭─▶     match (boxed) {
+ 15 │ ├─▶         root.llm.openai.Box<int, string> => 1,
+    │ │                                                    
+    │ ╰──────────────────────────────────────────────────── type `Box` expects 1 type argument(s), got 2
+    │     
+    │     Note: Error code: E0001
+────╯
+
+  [type] error: type mismatch: expected root.llm.openai.Box<int>, got root.llm.openai.Box<int, string>
+    ╭─[ main.baml:14:20 ]
+    │
+ 14 │ ╭─▶     match (boxed) {
+ 15 │ ├─▶         root.llm.openai.Box<int, string> => 1,
+    │ │                                                    
+    │ ╰──────────────────────────────────────────────────── type mismatch: expected root.llm.openai.Box<int>, got root.llm.openai.Box<int, string>
+    │     
+    │     Note: Error code: E0001
+────╯
+
+  [type] error: unreachable arm
+    ╭─[ main.baml:16:14 ]
+    │
+ 16 │         _ => 0
+    │              ┬  
+    │              ╰── unreachable arm
+    │ 
+    │ Note: Error code: E0063
+────╯
+
+  [type] error: type `Response` expects 0 type argument(s), got 1
+    ╭─[ main.baml:21:23 ]
+    │
+ 21 │ ╭─▶     match (response) {
+ 22 │ ├─▶         root.llm.openai.Response<int> => 1
+    │ │                                                
+    │ ╰──────────────────────────────────────────────── type `Response` expects 0 type argument(s), got 1
+    │     
+    │     Note: Error code: E0001
+────╯
+
+  [type] error: type mismatch: expected root.llm.openai.Response, got root.llm.openai.Response<int>
+    ╭─[ main.baml:21:23 ]
+    │
+ 21 │ ╭─▶     match (response) {
+ 22 │ ├─▶         root.llm.openai.Response<int> => 1
+    │ │                                                
+    │ ╰──────────────────────────────────────────────── type mismatch: expected root.llm.openai.Response, got root.llm.openai.Response<int>
+    │     
+    │     Note: Error code: E0001
+────╯
+
+  [type] error: unreachable arm
+    ╭─[ main.baml:29:14 ]
+    │
+ 29 │         _ => 0
+    │              ┬  
+    │              ╰── unreachable arm
+    │ 
+    │ Note: Error code: E0063
+────╯

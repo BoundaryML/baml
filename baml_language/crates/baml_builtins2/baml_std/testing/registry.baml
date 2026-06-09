@@ -6,12 +6,24 @@ class TestRegistration {
   name string
   body TestBody
   runner TestRunner?
+
+  // body/runner are function-type aliases that have no `to_json` method, so we
+  // must use the runtime walker rather than per-field dispatch.
+  function to_json(self) -> json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+    baml.json.parse(baml.json.to_string<TestRegistration>(self))
+  }
 }
 
 class TestSetRegistration {
   name string
   collector TestSetBody
   runner TestSetRunner?
+
+  // collector/runner are function-type aliases that have no `to_json` method, so
+  // we must use the runtime walker rather than per-field dispatch.
+  function to_json(self) -> json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+    baml.json.parse(baml.json.to_string<TestSetRegistration>(self))
+  }
 }
 
 class TestCollector {
@@ -28,7 +40,7 @@ class TestCollector {
     let count = 0
     let hash_prefix = full_name + "#"
     for (let t in self.tests) {
-      if (t.name == full_name || t.name.startsWith(hash_prefix)) { count += 1 } else { null }
+      if (t.name == full_name || t.name.starts_with(hash_prefix)) { count += 1 } else { null }
     }
     let final_name = if (count > 0) { full_name + "#" + baml.unstable.string(count + 1) } else { full_name }
     let _ = self.tests.push(TestRegistration { name: final_name, body: body, runner: runner })
@@ -39,7 +51,7 @@ class TestCollector {
     let count = 0
     let hash_prefix = full_name + "#"
     for (let ts in self.testsets) {
-      if (ts.name == full_name || ts.name.startsWith(hash_prefix)) { count += 1 } else { null }
+      if (ts.name == full_name || ts.name.starts_with(hash_prefix)) { count += 1 } else { null }
     }
     let final_name = if (count > 0) { full_name + "#" + baml.unstable.string(count + 1) } else { full_name }
     let _ = self.testsets.push(TestSetRegistration { name: final_name, collector: collector, runner: runner })
@@ -104,7 +116,7 @@ class TestRegistry {
     for (let ts in self.collector.testsets) {
       let expanded = self.expansions.get(ts.name)
       match (expanded) {
-        sub: TestRegistry => {
+        let sub: TestRegistry => {
           items.push(SerializedTestSet {
             name: ts.name,
             items: sub.serialize(),
@@ -131,7 +143,7 @@ class TestRegistry {
     for (let k in self.expansions.keys()) {
       let sub = self.expansions[k]
       // Check if the name could be in this sub-registry (segment-aware prefix match)
-      if (name.startsWith(k + "/")) {
+      if (name.starts_with(k + "/")) {
         return sub.run_test(name)
       }
     }
@@ -160,7 +172,7 @@ class TestRegistry {
     // Search in expanded sub-registries using segment-aware prefix match
     for (let k in self.expansions.keys()) {
       let sub = self.expansions[k]
-      if (name.startsWith(k + "/")) {
+      if (name.starts_with(k + "/")) {
         return sub.expand_set(name)
       }
     }
@@ -187,7 +199,7 @@ function run_test(body: TestBody, runner: TestRunner?) -> TestReport {
   }
   match (runner) {
     null => base_run(),
-    r: TestRunner => {
+    let r: TestRunner => {
       let wrapped: TestReportThunk = r(base_run)
       wrapped()
     }
@@ -198,7 +210,7 @@ function run_test(body: TestBody, runner: TestRunner?) -> TestReport {
 function run_testset(run_children: TestSetReportThunk, runner: TestSetRunner?) -> TestSetReport {
   match (runner) {
     null => run_children(),
-    r: TestSetRunner => {
+    let r: TestSetRunner => {
       let wrapped: TestSetReportThunk = r(run_children)
       wrapped()
     }

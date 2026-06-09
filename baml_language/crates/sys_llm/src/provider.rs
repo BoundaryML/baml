@@ -29,6 +29,10 @@ pub enum LlmProvider {
     #[strum(serialize = "openai-responses")]
     OpenAiResponses,
 
+    /// Vercel AI Gateway image generation endpoint
+    #[strum(serialize = "ai-gateway-images")]
+    AiGatewayImages,
+
     /// Anthropic API (api.anthropic.com)
     #[strum(serialize = "anthropic")]
     Anthropic,

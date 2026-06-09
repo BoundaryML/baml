@@ -2,7 +2,7 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === COMPILER2 DIAGNOSTICS ===
-  [type] Error: unresolved name: GPT4
+  [type] error: unresolved name: GPT4
    ╭─[ main.baml:1:1 ]
    │
  1 │ ╭─▶ function HelloWorld(name: string) -> string {
@@ -14,7 +14,7 @@ source: crates/baml_tests/src/generated_tests.rs
    │     Note: Error code: E0003
 ───╯
 
-  [type] Error: unresolved name: GPT4
+  [type] error: unresolved name: GPT4
    ╭─[ main.baml:1:44 ]
    │
  1 │ ╭─▶ function HelloWorld(name: string) -> string {

@@ -3,20 +3,20 @@
 use bex_events::{CustomEvent, EventKind, FunctionEvent, LogEvent, RuntimeEvent};
 
 use crate::{
-    HandleTableOptions,
-    baml::cffi::{
+    CffiHandleTableOptions,
+    baml_core::cffi::{
         self, EventKind as ProtoEventKind, FunctionEndEvent, FunctionStartEvent,
         RuntimeEvent as ProtoRuntimeEvent, SetTagsEvent, TagEntry,
         event_kind::Kind as ProtoEventKindVariant,
     },
     error::CtypesError,
-    value_encode::external_to_baml_value,
+    value_encode::external_to_outbound,
 };
 
 /// Convert a `bex_events::RuntimeEvent` to protobuf `RuntimeEvent`.
 pub fn runtime_event_to_proto(
     event: &RuntimeEvent,
-    options: &HandleTableOptions,
+    options: &CffiHandleTableOptions,
 ) -> Result<ProtoRuntimeEvent, CtypesError> {
     let timestamp_ms = event
         .timestamp
@@ -41,14 +41,14 @@ pub fn runtime_event_to_proto(
 
 fn event_kind_to_proto(
     event: &EventKind,
-    options: &HandleTableOptions,
+    options: &CffiHandleTableOptions,
 ) -> Result<ProtoEventKind, CtypesError> {
     let kind = match event {
         EventKind::Function(FunctionEvent::Start(start)) => {
             let args: Result<Vec<_>, _> = start
                 .args
                 .iter()
-                .map(|arg| external_to_baml_value(arg, options))
+                .map(|arg| external_to_outbound(arg, options))
                 .collect();
             let tags: Vec<TagEntry> = start
                 .tags
@@ -65,12 +65,13 @@ fn event_kind_to_proto(
             })
         }
         EventKind::Function(FunctionEvent::End(end)) => {
-            let result = external_to_baml_value(&end.result, options)?;
+            let result = external_to_outbound(&end.result, options)?;
             let duration_ms = u64::try_from(end.duration.as_millis()).unwrap_or(u64::MAX);
             ProtoEventKindVariant::FunctionEnd(FunctionEndEvent {
                 name: end.name.clone(),
                 result: Some(result),
                 duration_ms,
+                error: end.error.clone(),
             })
         }
         EventKind::SetTags(tags) => {
@@ -88,7 +89,7 @@ fn event_kind_to_proto(
             data,
             source,
         }) => {
-            let data_proto = external_to_baml_value(data, options)?;
+            let data_proto = external_to_outbound(data, options)?;
             let source_proto = source.as_ref().map(|s| cffi::SourceLocation {
                 file_id: s.file_id,
                 line: s.line,
@@ -103,7 +104,7 @@ fn event_kind_to_proto(
             })
         }
         EventKind::Custom(CustomEvent { name, data }) => {
-            let data_proto = external_to_baml_value(data, options)?;
+            let data_proto = external_to_outbound(data, options)?;
             ProtoEventKindVariant::Custom(cffi::CustomEvent {
                 name: name.clone(),
                 data: Some(data_proto),
@@ -117,7 +118,7 @@ fn event_kind_to_proto(
 /// Serialize a `RuntimeEvent` to protobuf bytes.
 pub fn runtime_event_to_bytes(
     event: &RuntimeEvent,
-    options: &HandleTableOptions,
+    options: &CffiHandleTableOptions,
 ) -> Result<Vec<u8>, CtypesError> {
     use prost::Message;
     let proto = runtime_event_to_proto(event, options)?;
@@ -158,7 +159,7 @@ mod tests {
             })),
         };
 
-        let options = HandleTableOptions::for_in_process();
+        let options = CffiHandleTableOptions::for_in_process();
         let proto = runtime_event_to_proto(&event, &options).unwrap();
 
         assert!(!proto.span_id.is_empty());
@@ -207,7 +208,7 @@ mod tests {
             }),
         };
 
-        let options = HandleTableOptions::for_in_process();
+        let options = CffiHandleTableOptions::for_in_process();
         let proto = runtime_event_to_proto(&event, &options).unwrap();
 
         if let Some(ProtoEventKind {
@@ -243,10 +244,11 @@ mod tests {
                 name: "my_func".into(),
                 result: BexExternalValue::Bool(true),
                 duration: Duration::from_millis(150),
+                error: None,
             }))),
         };
 
-        let options = HandleTableOptions::for_in_process();
+        let options = CffiHandleTableOptions::for_in_process();
         let proto = runtime_event_to_proto(&event, &options).unwrap();
 
         if let Some(ProtoEventKind {
@@ -255,9 +257,65 @@ mod tests {
         {
             assert_eq!(end.name, "my_func");
             assert_eq!(end.duration_ms, 150);
+            assert_eq!(end.error, None);
             assert!(end.result.is_some());
         } else {
             panic!("Expected FunctionEnd event");
+        }
+    }
+
+    #[test]
+    fn test_function_end_media_serializes_for_wire() {
+        use std::sync::Arc;
+
+        use bex_events::CallId;
+        use bex_project::{BexExternalAdt, MediaContent, MediaKind, MediaValue};
+
+        let span_id = SpanId::new();
+        let media = MediaValue::new(
+            MediaKind::Image,
+            MediaContent::Base64 {
+                base64_data: "aW1hZ2U=".into(),
+            },
+            Some("image/png".into()),
+        );
+        let event = RuntimeEvent {
+            call_id: CallId(0),
+            ctx: SpanContext {
+                span_id: span_id.clone(),
+                parent_span_id: None,
+                root_span_id: span_id.clone(),
+            },
+            call_stack: vec![span_id],
+            timestamp: SystemTime::now(),
+            event: EventKind::Function(FunctionEvent::End(Box::new(FunctionEnd {
+                name: "image_func".into(),
+                result: BexExternalValue::Adt(BexExternalAdt::Media(Arc::new(media))),
+                duration: Duration::from_millis(1),
+                error: None,
+            }))),
+        };
+
+        let options = CffiHandleTableOptions::for_wire();
+        let proto = runtime_event_to_proto(&event, &options).unwrap();
+
+        let Some(ProtoEventKind {
+            kind: Some(ProtoEventKindVariant::FunctionEnd(end)),
+        }) = proto.event
+        else {
+            panic!("Expected FunctionEnd event");
+        };
+        let result = end.result.expect("expected function result");
+        match result.value {
+            Some(crate::baml_core::cffi::baml_outbound_value::Value::MediaValue(media)) => {
+                assert_eq!(
+                    media.value,
+                    Some(crate::baml_core::cffi::baml_value_media::Value::Base64(
+                        "aW1hZ2U=".into()
+                    ))
+                );
+            }
+            other => panic!("Expected media value, got {other:?}"),
         }
     }
 
@@ -282,7 +340,7 @@ mod tests {
             }),
         };
 
-        let options = HandleTableOptions::for_in_process();
+        let options = CffiHandleTableOptions::for_in_process();
         let bytes = runtime_event_to_bytes(&event, &options).unwrap();
 
         let decoded = ProtoRuntimeEvent::decode(bytes.as_slice()).unwrap();

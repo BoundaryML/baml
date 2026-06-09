@@ -40,8 +40,10 @@ SOURCE_FILE
           R_PAREN ")"
           L_BRACE "{"
           MATCH_ARM
-            MATCH_PATTERN "0"
-              INTEGER_LITERAL "0"
+            PATTERN
+              TYPE_PATTERN
+                TYPE_EXPR "0"
+                  INTEGER_LITERAL "0"
             FAT_ARROW "=>"
             THROW_EXPR
               KW_THROW "throw"
@@ -51,8 +53,9 @@ SOURCE_FILE
                 QUOTE """
             COMMA ","
           MATCH_ARM
-            MATCH_PATTERN "_"
-              WORD "_"
+            PATTERN
+              WILDCARD_PATTERN "_"
+                WORD "_"
             FAT_ARROW "=>"
             THROW_EXPR "throw 404"
               KW_THROW "throw"
@@ -78,9 +81,10 @@ SOURCE_FILE
         L_BRACE "{"
         CALL_EXPR
           WORD "AlwaysThrowsStatus"
-          CALL_ARGS "(n)"
+          CALL_ARGS
             L_PAREN "("
-            WORD "n"
+            CALL_ARG "n"
+              WORD "n"
             R_PAREN ")"
         R_BRACE "}"
   FUNCTION_DEF
@@ -103,23 +107,23 @@ SOURCE_FILE
         CATCH_EXPR
           CALL_EXPR
             WORD "WrapperAlwaysThrows"
-            CALL_ARGS "(n)"
+            CALL_ARGS
               L_PAREN "("
-              WORD "n"
+              CALL_ARG "n"
+                WORD "n"
               R_PAREN ")"
           CATCH_CLAUSE
             KW_CATCH "catch"
             L_PAREN "("
-            CATCH_PATTERN "e"
+            CATCH_BINDING "e"
               WORD "e"
             R_PAREN ")"
             L_BRACE "{"
             CATCH_ARM
-              CATCH_PATTERN
-                WORD "_"
-                COLON ":"
-                TYPE_EXPR "string"
-                  WORD "string"
+              PATTERN
+                TYPE_PATTERN
+                  TYPE_EXPR "string"
+                    WORD "string"
               FAT_ARROW "=>"
               STRING_LITERAL "http!"
                 QUOTE """
@@ -130,16 +134,15 @@ SOURCE_FILE
           CATCH_CLAUSE
             KW_CATCH "catch"
             L_PAREN "("
-            CATCH_PATTERN "e2"
+            CATCH_BINDING "e2"
               WORD "e2"
             R_PAREN ")"
             L_BRACE "{"
             CATCH_ARM
-              CATCH_PATTERN
-                WORD "_"
-                COLON ":"
-                TYPE_EXPR "int"
-                  WORD "int"
+              PATTERN
+                TYPE_PATTERN
+                  TYPE_EXPR "int"
+                    WORD "int"
               FAT_ARROW "=>"
               STRING_LITERAL "index!"
                 QUOTE """
@@ -172,8 +175,10 @@ SOURCE_FILE
           R_PAREN ")"
           L_BRACE "{"
           MATCH_ARM
-            MATCH_PATTERN "1"
-              INTEGER_LITERAL "1"
+            PATTERN
+              TYPE_PATTERN
+                TYPE_EXPR "1"
+                  INTEGER_LITERAL "1"
             FAT_ARROW "=>"
             THROW_EXPR
               KW_THROW "throw"
@@ -183,8 +188,10 @@ SOURCE_FILE
                 WORD "HttpError"
             COMMA ","
           MATCH_ARM
-            MATCH_PATTERN "2"
-              INTEGER_LITERAL "2"
+            PATTERN
+              TYPE_PATTERN
+                TYPE_EXPR "2"
+                  INTEGER_LITERAL "2"
             FAT_ARROW "=>"
             THROW_EXPR
               KW_THROW "throw"
@@ -194,8 +201,10 @@ SOURCE_FILE
                 WORD "IndexError"
             COMMA ","
           MATCH_ARM
-            MATCH_PATTERN "3"
-              INTEGER_LITERAL "3"
+            PATTERN
+              TYPE_PATTERN
+                TYPE_EXPR "3"
+                  INTEGER_LITERAL "3"
             FAT_ARROW "=>"
             THROW_EXPR
               KW_THROW "throw"
@@ -205,8 +214,9 @@ SOURCE_FILE
                 WORD "AuthError"
             COMMA ","
           MATCH_ARM
-            MATCH_PATTERN "_"
-              WORD "_"
+            PATTERN
+              WILDCARD_PATTERN "_"
+                WORD "_"
             FAT_ARROW "=>"
             THROW_EXPR
               KW_THROW "throw"
@@ -236,22 +246,25 @@ SOURCE_FILE
         CATCH_EXPR
           CALL_EXPR
             WORD "ThrowsAllStatusVariants"
-            CALL_ARGS "(n)"
+            CALL_ARGS
               L_PAREN "("
-              WORD "n"
+              CALL_ARG "n"
+                WORD "n"
               R_PAREN ")"
           CATCH_CLAUSE
             KW_CATCH "catch"
             L_PAREN "("
-            CATCH_PATTERN "e"
+            CATCH_BINDING "e"
               WORD "e"
             R_PAREN ")"
             L_BRACE "{"
             CATCH_ARM
-              CATCH_PATTERN "Status.HttpError"
-                WORD "Status"
-                DOT "."
-                WORD "HttpError"
+              PATTERN
+                TYPE_PATTERN
+                  TYPE_EXPR "Status.HttpError"
+                    WORD "Status"
+                    DOT "."
+                    WORD "HttpError"
               FAT_ARROW "=>"
               STRING_LITERAL "http!"
                 QUOTE """
@@ -262,15 +275,17 @@ SOURCE_FILE
           CATCH_CLAUSE
             KW_CATCH "catch"
             L_PAREN "("
-            CATCH_PATTERN "e"
+            CATCH_BINDING "e"
               WORD "e"
             R_PAREN ")"
             L_BRACE "{"
             CATCH_ARM
-              CATCH_PATTERN "Status.IndexError"
-                WORD "Status"
-                DOT "."
-                WORD "IndexError"
+              PATTERN
+                TYPE_PATTERN
+                  TYPE_EXPR "Status.IndexError"
+                    WORD "Status"
+                    DOT "."
+                    WORD "IndexError"
               FAT_ARROW "=>"
               STRING_LITERAL "index!"
                 QUOTE """
@@ -281,15 +296,17 @@ SOURCE_FILE
           CATCH_CLAUSE
             KW_CATCH "catch"
             L_PAREN "("
-            CATCH_PATTERN "e"
+            CATCH_BINDING "e"
               WORD "e"
             R_PAREN ")"
             L_BRACE "{"
             CATCH_ARM
-              CATCH_PATTERN "Status.AuthError"
-                WORD "Status"
-                DOT "."
-                WORD "AuthError"
+              PATTERN
+                TYPE_PATTERN
+                  TYPE_EXPR "Status.AuthError"
+                    WORD "Status"
+                    DOT "."
+                    WORD "AuthError"
               FAT_ARROW "=>"
               STRING_LITERAL "auth!"
                 QUOTE """
@@ -300,15 +317,17 @@ SOURCE_FILE
           CATCH_CLAUSE
             KW_CATCH "catch"
             L_PAREN "("
-            CATCH_PATTERN "e"
+            CATCH_BINDING "e"
               WORD "e"
             R_PAREN ")"
             L_BRACE "{"
             CATCH_ARM
-              CATCH_PATTERN "Status.SomeOtherError"
-                WORD "Status"
-                DOT "."
-                WORD "SomeOtherError"
+              PATTERN
+                TYPE_PATTERN
+                  TYPE_EXPR "Status.SomeOtherError"
+                    WORD "Status"
+                    DOT "."
+                    WORD "SomeOtherError"
               FAT_ARROW "=>"
               STRING_LITERAL "other!"
                 QUOTE """
@@ -341,8 +360,10 @@ SOURCE_FILE
           R_PAREN ")"
           L_BRACE "{"
           MATCH_ARM
-            MATCH_PATTERN "0"
-              INTEGER_LITERAL "0"
+            PATTERN
+              TYPE_PATTERN
+                TYPE_EXPR "0"
+                  INTEGER_LITERAL "0"
             FAT_ARROW "=>"
             THROW_EXPR
               KW_THROW "throw"
@@ -352,14 +373,16 @@ SOURCE_FILE
                 QUOTE """
             COMMA ","
           MATCH_ARM
-            MATCH_PATTERN "_"
-              WORD "_"
+            PATTERN
+              WILDCARD_PATTERN "_"
+                WORD "_"
             FAT_ARROW "=>"
             CALL_EXPR
               WORD "RecB"
-              CALL_ARGS "(n)"
+              CALL_ARGS
                 L_PAREN "("
-                WORD "n"
+                CALL_ARG "n"
+                  WORD "n"
                 R_PAREN ")"
           R_BRACE "}"
         R_BRACE "}"
@@ -382,9 +405,10 @@ SOURCE_FILE
         L_BRACE "{"
         CALL_EXPR
           WORD "RecA"
-          CALL_ARGS "(n)"
+          CALL_ARGS
             L_PAREN "("
-            WORD "n"
+            CALL_ARG "n"
+              WORD "n"
             R_PAREN ")"
         R_BRACE "}"
   FUNCTION_DEF
@@ -407,23 +431,23 @@ SOURCE_FILE
         CATCH_EXPR
           CALL_EXPR
             WORD "RecB"
-            CALL_ARGS "(n)"
+            CALL_ARGS
               L_PAREN "("
-              WORD "n"
+              CALL_ARG "n"
+                WORD "n"
               R_PAREN ")"
           CATCH_CLAUSE
             KW_CATCH "catch"
             L_PAREN "("
-            CATCH_PATTERN "e"
+            CATCH_BINDING "e"
               WORD "e"
             R_PAREN ")"
             L_BRACE "{"
             CATCH_ARM
-              CATCH_PATTERN
-                WORD "_"
-                COLON ":"
-                TYPE_EXPR "string"
-                  WORD "string"
+              PATTERN
+                TYPE_PATTERN
+                  TYPE_EXPR "string"
+                    WORD "string"
               FAT_ARROW "=>"
               STRING_LITERAL "handled"
                 QUOTE """
@@ -452,9 +476,11 @@ SOURCE_FILE
                 QUOTE """
                 WORD "error"
                 QUOTE """
-          LET_STMT "let x = 123;"
-            KW_LET "let"
-            WORD "x"
+          LET_STMT
+            PATTERN
+              BINDING_PATTERN "let x"
+                KW_LET "let"
+                WORD "x"
             EQUALS "="
             INTEGER_LITERAL "123"
             SEMICOLON ";"

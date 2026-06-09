@@ -1,0 +1,67 @@
+---
+source: crates/baml_tests/tests/baml_src.rs
+---
+function spawn_throws.$init_test_ns_spawn_throws_spawn_throws(registry: testing.TestCollector) -> null {
+    load_var registry
+    load_const "await_uncaught_bubbles_to_host"
+    make_closure .<lambda($init_test_ns_spawn_throws_spawn_throws, 0)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "await_rethrows_caught_by_user_catch"
+    make_closure .<lambda($init_test_ns_spawn_throws_spawn_throws, 1)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_const null
+    return
+}
+
+function spawn_throws.await_rethrows_caught_by_user_catch_fn() -> int {
+    make_closure .<lambda(await_rethrows_caught_by_user_catch_fn, 0)>, 0
+    load_const null
+    load_const null
+    spawn
+    store_var _3
+    load_var _3
+    await
+    jump L2
+    load_var e
+    is_type baml.errors.Io
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var e
+    throw
+
+  L1:
+    load_const 99
+
+  L2:
+    return
+}
+
+function spawn_throws.await_uncaught_spawns_io_fn() -> int {
+    make_closure .<lambda(await_uncaught_spawns_io_fn, 0)>, 0
+    load_const null
+    load_const null
+    spawn
+    store_var _3
+    load_var _3
+    await
+    return
+}
+
+function spawn_throws.boom_io() -> int {
+    load_const "boom"
+    init_instance baml.errors.Io .message
+    throw
+}
+
+function spawn_throws.boom_io_x() -> int {
+    load_const "x"
+    init_instance baml.errors.Io .message
+    throw
+}

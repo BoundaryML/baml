@@ -27,6 +27,23 @@ fn hir2_type_expr_to_string(ty: &baml_compiler2_ast::TypeExpr) -> String {
     ty.to_string()
 }
 
+fn hir2_signature_param_to_string(
+    param: &baml_compiler2_hir::signature::SignatureParam,
+    default_ref: Option<&baml_compiler2_hir::item_tree::DefaultExprRef>,
+    defaults: &baml_compiler2_ast::FunctionDefaults,
+) -> String {
+    let default = default_ref
+        .map(|default| format!(" = {}", defaults.exprs.display_expr(default.expr.expr())))
+        .unwrap_or_default();
+
+    format!(
+        "{}: {}{}",
+        param.name,
+        hir2_type_expr_to_string(&param.ty),
+        default
+    )
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) enum CompilerPhase {
     Lexer,
@@ -453,6 +470,7 @@ fn expr_desc_spans<'db>(
                     }
                 }
                 Literal::Int(i) => i.to_string(),
+                Literal::Bigint(n) => format!("{n}n"),
                 Literal::Float(f) => f.clone(),
                 Literal::Bool(b) => b.to_string(),
             };
@@ -483,14 +501,17 @@ fn expr_desc_spans<'db>(
             spans.push(DetailSpan::Code(sym.into()));
             spans.extend(expr_desc_spans(*inner, body, inference));
         }
-        Expr::Call { callee, args } => {
+        Expr::Call { callee, args, .. } => {
             spans.extend(expr_desc_spans(*callee, body, inference));
             spans.push(DetailSpan::Code("(".into()));
             for (i, arg) in args.iter().enumerate() {
                 if i > 0 {
                     spans.push(DetailSpan::Code(", ".into()));
                 }
-                spans.extend(expr_desc_spans(*arg, body, inference));
+                if let Some(label) = &arg.label {
+                    spans.push(DetailSpan::Code(format!("{label} = ")));
+                }
+                spans.extend(expr_desc_spans(arg.expr, body, inference));
             }
             spans.push(DetailSpan::Code(")".into()));
         }
@@ -544,6 +565,10 @@ fn expr_desc_spans<'db>(
             spans.extend(expr_desc_spans(*base, body, inference));
             spans.push(DetailSpan::Code(format!(".{member}")));
         }
+        Expr::Upcast { base, target } => {
+            spans.extend(expr_desc_spans(*base, body, inference));
+            spans.push(DetailSpan::Code(format!(".as<{target}>")));
+        }
         Expr::OptionalMemberAccess { base, member } => {
             spans.extend(expr_desc_spans(*base, body, inference));
             spans.push(DetailSpan::Code(format!("?.{member}")));
@@ -567,7 +592,10 @@ fn expr_desc_spans<'db>(
                 if i > 0 {
                     spans.push(DetailSpan::Code(", ".into()));
                 }
-                spans.extend(expr_desc_spans(*arg, body, inference));
+                if let Some(label) = &arg.label {
+                    spans.push(DetailSpan::Code(format!("{label} = ")));
+                }
+                spans.extend(expr_desc_spans(arg.expr, body, inference));
             }
             spans.push(DetailSpan::Code(")".into()));
         }
@@ -576,10 +604,19 @@ fn expr_desc_spans<'db>(
             spans.extend(expr_desc_spans(*condition, body, inference));
             spans.push(DetailSpan::Code(") { ... }".into()));
         }
+        Expr::IfLet { scrutinee, .. } => {
+            spans.push(DetailSpan::Code("if let ... = ".into()));
+            spans.extend(expr_desc_spans(*scrutinee, body, inference));
+            spans.push(DetailSpan::Code(" { ... }".into()));
+        }
         Expr::Match { scrutinee, .. } => {
             spans.push(DetailSpan::Code("match (".into()));
             spans.extend(expr_desc_spans(*scrutinee, body, inference));
             spans.push(DetailSpan::Code(") { ... }".into()));
+        }
+        Expr::Is { scrutinee, .. } => {
+            spans.extend(expr_desc_spans(*scrutinee, body, inference));
+            spans.push(DetailSpan::Code(" is <pattern>".into()));
         }
         Expr::Catch { base, clauses } => {
             spans.extend(expr_desc_spans(*base, body, inference));
@@ -603,6 +640,28 @@ fn expr_desc_spans<'db>(
         Expr::OptionalChain { expr } => {
             spans.extend(expr_desc_spans(*expr, body, inference));
         }
+        Expr::Spawn {
+            name,
+            with_exprs: _,
+            body: spawn_body,
+        } => {
+            spans.push(DetailSpan::Code("spawn ".into()));
+            if let Some(name_id) = name {
+                spans.extend(expr_desc_spans(*name_id, body, inference));
+                spans.push(DetailSpan::Code(" ".into()));
+            }
+            spans.push(DetailSpan::Code("{ ".into()));
+            spans.extend(expr_desc_spans(*spawn_body, body, inference));
+            spans.push(DetailSpan::Code(" }".into()));
+        }
+        Expr::Await { future } => {
+            spans.push(DetailSpan::Code("await ".into()));
+            spans.extend(expr_desc_spans(*future, body, inference));
+        }
+        Expr::GenericApply { base, .. } => {
+            spans.extend(expr_desc_spans(*base, body, inference));
+            spans.push(DetailSpan::Code("<...>".into()));
+        }
         Expr::Missing => {
             spans.push(DetailSpan::Code("<missing>".into()));
         }
@@ -616,45 +675,51 @@ fn expr_desc_spans<'db>(
 }
 
 fn pat_desc(pat_id: baml_compiler2_ast::PatId, body: &baml_compiler2_ast::ExprBody) -> String {
-    use baml_compiler2_ast::PatternKind;
+    use baml_compiler2_ast::Pattern;
     let pat = &body.patterns[pat_id];
-    let base = match &pat.kind {
-        PatternKind::Wildcard => "_".to_string(),
-        // TODO: render inner pattern when bind-with-pattern syntax lands
-        PatternKind::Bind {
-            name,
-            inner: _inner,
-        } => name.to_string(),
-        PatternKind::Literal(lit) => lit.to_string(),
-        PatternKind::Null => "null".into(),
-        PatternKind::EnumVariant { enum_name, variant } => {
-            let path: Vec<_> = enum_name.iter().map(|s| s.as_str()).collect();
-            format!("{}.{variant}", path.join("."))
+    match pat {
+        Pattern::Wildcard => "_".to_string(),
+        Pattern::Bind { name, subpat } => match subpat {
+            Some(sp) => format!("{name}: {}", pat_desc(*sp, body)),
+            None => name.to_string(),
+        },
+        Pattern::Type(ty) => hir2_type_expr_to_string(ty),
+        Pattern::Class { class, fields, .. } => {
+            let class_path: Vec<_> = class.iter().map(|s| s.as_str()).collect();
+            let field_strs: Vec<_> = fields
+                .iter()
+                .map(|f| format!("{}: {}", f.field, pat_desc(f.pat, body)))
+                .collect();
+            format!("{} {{ {} }}", class_path.join("."), field_strs.join(", "))
         }
-        PatternKind::Or(pats) => pats
+        Pattern::Array {
+            prefix,
+            rest,
+            suffix,
+            ascription,
+        } => {
+            let mut parts = prefix
+                .iter()
+                .map(|p| pat_desc(*p, body))
+                .collect::<Vec<_>>();
+            if let Some(rest) = rest {
+                parts.push(match rest.pat {
+                    Some(p) => format!("..{}", pat_desc(p, body)),
+                    None => "..".to_string(),
+                });
+            }
+            parts.extend(suffix.iter().map(|p| pat_desc(*p, body)));
+            let arr = format!("[{}]", parts.join(", "));
+            match ascription {
+                Some(t) => format!("{arr}: {}", hir2_type_expr_to_string(t)),
+                None => arr,
+            }
+        }
+        Pattern::Or(pats) => pats
             .iter()
             .map(|p| pat_desc(*p, body))
             .collect::<Vec<_>>()
             .join(" | "),
-        PatternKind::Type(ty) => hir2_type_expr_to_string(ty),
-        PatternKind::Class { class, fields } => {
-            let field_strs: Vec<_> = fields
-                .iter()
-                .map(|f| {
-                    if let Some(inner) = f.pat {
-                        format!("{}: {}", f.field, pat_desc(inner, body))
-                    } else {
-                        f.field.to_string()
-                    }
-                })
-                .collect();
-            format!("{} {{ {} }}", class, field_strs.join(", "))
-        }
-    };
-    if let Some(narrow) = &pat.narrow {
-        format!("{base}: {}", hir2_type_expr_to_string(narrow))
-    } else {
-        base
     }
 }
 
@@ -1928,49 +1993,55 @@ impl CompilerRunner {
     }
 
     fn run_tir2(&mut self) {
-        use baml_compiler2_ast::{Expr, ExprBody, Literal, PatternKind, Stmt};
+        use baml_compiler2_ast::{Expr, ExprBody, Literal, Pattern, Stmt};
         use baml_compiler2_hir::scope::ScopeKind;
         use baml_compiler2_tir::ty::Ty;
 
         fn pat_desc(pat_id: baml_compiler2_ast::PatId, body: &ExprBody) -> String {
             let pat = &body.patterns[pat_id];
-            let base = match &pat.kind {
-                PatternKind::Wildcard => "_".to_string(),
-                // TODO: render inner pattern when bind-with-pattern syntax lands
-                PatternKind::Bind {
-                    name,
-                    inner: _inner,
-                } => name.to_string(),
-                PatternKind::Literal(lit) => lit.to_string(),
-                PatternKind::Null => "null".into(),
-                PatternKind::EnumVariant { enum_name, variant } => {
-                    let path: Vec<_> = enum_name.iter().map(|s| s.as_str()).collect();
-                    format!("{}.{variant}", path.join("."))
+            match pat {
+                Pattern::Wildcard => "_".to_string(),
+                Pattern::Bind { name, subpat } => match subpat {
+                    Some(sp) => format!("{name}: {}", pat_desc(*sp, body)),
+                    None => name.to_string(),
+                },
+                Pattern::Type(ty) => hir2_type_expr_to_string(ty),
+                Pattern::Class { class, fields, .. } => {
+                    let class_path: Vec<_> = class.iter().map(|s| s.as_str()).collect();
+                    let field_strs: Vec<_> = fields
+                        .iter()
+                        .map(|f| format!("{}: {}", f.field, pat_desc(f.pat, body)))
+                        .collect();
+                    format!("{} {{ {} }}", class_path.join("."), field_strs.join(", "))
                 }
-                PatternKind::Or(pats) => pats
+                Pattern::Array {
+                    prefix,
+                    rest,
+                    suffix,
+                    ascription,
+                } => {
+                    let mut parts = prefix
+                        .iter()
+                        .map(|p| pat_desc(*p, body))
+                        .collect::<Vec<_>>();
+                    if let Some(rest) = rest {
+                        parts.push(match rest.pat {
+                            Some(p) => format!("..{}", pat_desc(p, body)),
+                            None => "..".to_string(),
+                        });
+                    }
+                    parts.extend(suffix.iter().map(|p| pat_desc(*p, body)));
+                    let arr = format!("[{}]", parts.join(", "));
+                    match ascription {
+                        Some(t) => format!("{arr}: {}", hir2_type_expr_to_string(t)),
+                        None => arr,
+                    }
+                }
+                Pattern::Or(pats) => pats
                     .iter()
                     .map(|p| pat_desc(*p, body))
                     .collect::<Vec<_>>()
                     .join(" | "),
-                PatternKind::Type(ty) => hir2_type_expr_to_string(ty),
-                PatternKind::Class { class, fields } => {
-                    let field_strs: Vec<_> = fields
-                        .iter()
-                        .map(|f| {
-                            if let Some(inner) = f.pat {
-                                format!("{}: {}", f.field, pat_desc(inner, body))
-                            } else {
-                                f.field.to_string()
-                            }
-                        })
-                        .collect();
-                    format!("{} {{ {} }}", class, field_strs.join(", "))
-                }
-            };
-            if let Some(narrow) = &pat.narrow {
-                format!("{base}: {}", hir2_type_expr_to_string(narrow))
-            } else {
-                base
             }
         }
 
@@ -1988,6 +2059,7 @@ impl CompilerRunner {
                         format!("\"{}\"", truncated)
                     }
                     Literal::Int(i) => i.to_string(),
+                    Literal::Bigint(n) => format!("{n}n"),
                     Literal::Float(f) => f.clone(),
                     Literal::Bool(b) => b.to_string(),
                 },
@@ -1998,12 +2070,16 @@ impl CompilerRunner {
                     .collect::<Vec<_>>()
                     .join("."),
                 Expr::If { .. } => "if ...".into(),
+                Expr::IfLet { .. } => "if let ...".into(),
                 Expr::Match { .. } => "match ...".into(),
+                Expr::Is { scrutinee, .. } => {
+                    format!("{} is <pattern>", expr_desc(*scrutinee, body))
+                }
                 Expr::Catch { .. } => "catch ...".into(),
                 Expr::Throw { value } => format!("throw {}", expr_desc(*value, body)),
                 Expr::Binary { op, .. } => format!("... {op:?} ..."),
                 Expr::Unary { op, expr: inner } => format!("{op:?} {}", expr_desc(*inner, body)),
-                Expr::Call { callee, args } => {
+                Expr::Call { callee, args, .. } => {
                     let callee_str = expr_desc(*callee, body);
                     format!("{callee_str}({})", if args.is_empty() { "" } else { "..." })
                 }
@@ -2025,6 +2101,9 @@ impl CompilerRunner {
                 Expr::MemberAccess { base, member } => {
                     format!("{}.{member}", expr_desc(*base, body))
                 }
+                Expr::Upcast { base, target } => {
+                    format!("{}.as<{target}>", expr_desc(*base, body))
+                }
                 Expr::OptionalMemberAccess { base, member } => {
                     format!("{}?.{member}", expr_desc(*base, body))
                 }
@@ -2040,6 +2119,13 @@ impl CompilerRunner {
                     )
                 }
                 Expr::OptionalChain { expr } => expr_desc(*expr, body),
+                Expr::Spawn {
+                    body: spawn_body, ..
+                } => {
+                    format!("spawn {{ {} }}", expr_desc(*spawn_body, body))
+                }
+                Expr::Await { future } => format!("await {}", expr_desc(*future, body)),
+                Expr::GenericApply { base, .. } => format!("{}<...>", expr_desc(*base, body)),
                 Expr::Missing => "<missing>".into(),
             }
         }
@@ -2192,11 +2278,20 @@ impl CompilerRunner {
                             func_body =
                                 Some(baml_compiler2_ppir::function_body(&self.db, func_loc));
                             let sig = baml_compiler2_ppir::function_signature(&self.db, func_loc);
+                            let parameter_defaults =
+                                baml_compiler2_ppir::function_parameter_defaults(
+                                    &self.db, func_loc,
+                                );
                             let params: Vec<String> = sig
                                 .params
                                 .iter()
-                                .map(|(pname, ptype)| {
-                                    format!("{}: {}", pname, hir2_type_expr_to_string(ptype))
+                                .enumerate()
+                                .map(|(index, param)| {
+                                    hir2_signature_param_to_string(
+                                        param,
+                                        parameter_defaults.param_default(index),
+                                        &parameter_defaults.defaults,
+                                    )
                                 })
                                 .collect();
                             let ret = sig
@@ -2493,6 +2588,25 @@ impl CompilerRunner {
                                 status,
                             );
                         }
+                        Stmt::WhileLet {
+                            scrutinee,
+                            body: body_expr,
+                            ..
+                        } => {
+                            let scrut_desc = expr_desc(*scrutinee, body);
+                            let line = format!("{pad}while let ... = {scrut_desc}");
+                            writeln!(output, "{line}").ok();
+                            output_annotated.push((line, status));
+                            render_expr(
+                                *body_expr,
+                                body,
+                                inference,
+                                indent + 2,
+                                output,
+                                output_annotated,
+                                status,
+                            );
+                        }
                         Stmt::Assign { target, value } => {
                             let target_desc = expr_desc(*target, body);
                             let val_desc = expr_desc(*value, body);
@@ -2767,11 +2881,18 @@ impl CompilerRunner {
                     );
                     let sig = baml_compiler2_ppir::function_signature(&self.db, func_loc);
 
+                    let parameter_defaults =
+                        baml_compiler2_ppir::function_parameter_defaults(&self.db, func_loc);
                     let params: Vec<String> = sig
                         .params
                         .iter()
-                        .map(|(pname, ptype)| {
-                            format!("{}: {}", pname, hir2_type_expr_to_string(ptype))
+                        .enumerate()
+                        .map(|(index, param)| {
+                            hir2_signature_param_to_string(
+                                param,
+                                parameter_defaults.param_default(index),
+                                &parameter_defaults.defaults,
+                            )
                         })
                         .collect();
                     let ret = sig
@@ -3171,6 +3292,17 @@ impl CompilerRunner {
                             let mut line = vec![DetailSpan::Code(format!("{pad}  while ("))];
                             line.extend(expr_desc_spans(*condition, body, inference));
                             line.push(DetailSpan::Code(")".into()));
+                            lines.push(line);
+                            Self::render_expr_to_lines(*wb, body, inference, indent + 4, lines);
+                        }
+                        Stmt::WhileLet {
+                            scrutinee,
+                            body: wb,
+                            ..
+                        } => {
+                            let mut line =
+                                vec![DetailSpan::Code(format!("{pad}  while let ... = "))];
+                            line.extend(expr_desc_spans(*scrutinee, body, inference));
                             lines.push(line);
                             Self::render_expr_to_lines(*wb, body, inference, indent + 4, lines);
                         }
@@ -3873,9 +4005,22 @@ impl CompilerRunner {
                     ));
                     break;
                 }
-                Ok(VmExecState::ScheduleFuture(_)) => {
+                Ok(VmExecState::AwaitAny(_)) => {
                     self.vm_runner_state.execution_result = Some(VmExecutionResult::Error(
-                        "Function schedules a future (not supported in VM Runner)".to_string(),
+                        "Function awaits any of several futures (not supported in VM Runner)"
+                            .to_string(),
+                    ));
+                    break;
+                }
+                Ok(VmExecState::Spawn(_)) => {
+                    self.vm_runner_state.execution_result = Some(VmExecutionResult::Error(
+                        "Function spawned a future (not supported in VM Runner)".to_string(),
+                    ));
+                    break;
+                }
+                Ok(VmExecState::SysOp { .. }) => {
+                    self.vm_runner_state.execution_result = Some(VmExecutionResult::Error(
+                        "Function invoked a sys-op (not supported in VM Runner)".to_string(),
                     ));
                     break;
                 }
@@ -3888,11 +4033,11 @@ impl CompilerRunner {
                 }
                 Ok(VmExecState::SpanNotify(_)) => {
                     // Span notifications are ignored — push null and continue.
-                    vm.stack.push(Value::Null);
+                    vm.stack.push(Value::NULL);
                 }
                 Ok(VmExecState::Event { .. }) => {
                     // Custom events are not surfaced — push null and continue.
-                    vm.stack.push(Value::Null);
+                    vm.stack.push(Value::NULL);
                 }
                 Ok(VmExecState::EarlyYield) => {
                     // No GC coordinator is wired into the VM runner, so an early
@@ -3968,7 +4113,7 @@ impl CompilerRunner {
 
             // Format the source code using baml_fmt
             let format_options = baml_fmt::FormatOptions::default();
-            match baml_fmt::format_salsa(&self.db, *source_file, &format_options) {
+            match baml_fmt::format_salsa(&self.db, *source_file, format_options) {
                 Ok(formatted) => {
                     writeln!(output, "{}", formatted).ok();
                     let status = if file_recomputed {
@@ -4180,6 +4325,10 @@ fn format_item_tree(item: &AstItem, output: &mut String, indent: usize) {
         Item::Function(func) => format_function(func, output, indent),
         Item::Class(class) => format_class(class, output, indent),
         Item::Enum(enum_def) => format_enum(enum_def, output, indent),
+        Item::Interface(interface) => format_interface(interface, output, indent),
+        Item::ImplementsFor(implements_for) => {
+            format_implements_for(implements_for, output, indent)
+        }
         Item::Client(client) => format_client(client, output, indent),
         Item::Test(test) => format_test(test, output, indent),
         Item::RetryPolicy(policy) => format_retry_policy(policy, output, indent),
@@ -4644,6 +4793,133 @@ fn format_class(class: &baml_compiler_syntax::ast::ClassDef, output: &mut String
     }
 }
 
+fn format_interface(
+    interface: &baml_compiler_syntax::ast::InterfaceDef,
+    output: &mut String,
+    indent: usize,
+) {
+    write_indent(output, indent);
+    writeln!(output, "INTERFACE").ok();
+
+    if let Some(name) = interface.name() {
+        write_indent(output, indent + 1);
+        writeln!(output, "NAME {}", name.text()).ok();
+    }
+
+    let parents: Vec<_> = interface
+        .requires_clause()
+        .map(|requires| requires.parents().collect())
+        .unwrap_or_default();
+    if !parents.is_empty() {
+        write_indent(output, indent + 1);
+        writeln!(output, "REQUIRES").ok();
+        for parent in parents {
+            write_indent(output, indent + 2);
+            writeln!(output, "TYPE {}", parent.syntax().text()).ok();
+        }
+    }
+
+    let fields: Vec<_> = interface.fields().collect();
+    if !fields.is_empty() {
+        write_indent(output, indent + 1);
+        writeln!(output, "FIELDS").ok();
+        for field in fields {
+            format_field(&field, output, indent + 2);
+        }
+    }
+
+    let required_methods: Vec<_> = interface.required_methods().collect();
+    if !required_methods.is_empty() {
+        write_indent(output, indent + 1);
+        writeln!(output, "REQUIRED_METHODS").ok();
+        for method in required_methods {
+            format_method_sig(&method, output, indent + 2);
+        }
+    }
+
+    let default_methods: Vec<_> = interface.default_methods().collect();
+    if !default_methods.is_empty() {
+        write_indent(output, indent + 1);
+        writeln!(output, "DEFAULT_METHODS").ok();
+        for method in default_methods {
+            format_function(&method, output, indent + 2);
+        }
+    }
+}
+
+fn format_method_sig(
+    sig: &baml_compiler_syntax::ast::MethodSig,
+    output: &mut String,
+    indent: usize,
+) {
+    write_indent(output, indent);
+    writeln!(output, "METHOD_SIG").ok();
+
+    if let Some(name) = sig.name() {
+        write_indent(output, indent + 1);
+        writeln!(output, "NAME {}", name.text()).ok();
+    }
+
+    if let Some(param_list) = sig.param_list() {
+        let params: Vec<_> = param_list.params().collect();
+        if !params.is_empty() {
+            write_indent(output, indent + 1);
+            writeln!(output, "PARAMS").ok();
+            for param in params {
+                format_parameter(&param, output, indent + 2);
+            }
+        }
+    }
+
+    if let Some(return_type) = sig.return_type() {
+        write_indent(output, indent + 1);
+        writeln!(output, "RETURN_TYPE {}", return_type.syntax().text()).ok();
+    }
+}
+
+fn format_implements_for(
+    implements_for: &baml_compiler_syntax::ast::ImplementsFor,
+    output: &mut String,
+    indent: usize,
+) {
+    write_indent(output, indent);
+    writeln!(output, "IMPLEMENTS_FOR").ok();
+
+    if let Some(target) = implements_for
+        .target()
+        .and_then(|target| target.type_expr())
+    {
+        write_indent(output, indent + 1);
+        writeln!(output, "INTERFACE {}", target.syntax().text()).ok();
+    }
+
+    if let Some(for_target) = implements_for
+        .for_target()
+        .and_then(|target| target.type_expr())
+    {
+        write_indent(output, indent + 1);
+        writeln!(output, "FOR {}", for_target.syntax().text()).ok();
+    }
+
+    let fields: Vec<_> = implements_for.fields().collect();
+    if !fields.is_empty() {
+        write_indent(output, indent + 1);
+        writeln!(output, "FIELDS").ok();
+        for field in fields {
+            format_field(&field, output, indent + 2);
+        }
+    }
+
+    let methods: Vec<_> = implements_for.methods().collect();
+    if !methods.is_empty() {
+        write_indent(output, indent + 1);
+        writeln!(output, "METHODS").ok();
+        for method in methods {
+            format_function(&method, output, indent + 2);
+        }
+    }
+}
+
 fn format_field(field: &baml_compiler_syntax::ast::Field, output: &mut String, indent: usize) {
     write_indent(output, indent);
     writeln!(output, "FIELD").ok();
@@ -4948,23 +5224,26 @@ pub(crate) fn normalize_files_to_virtual_root(
 
 /// Format a VM value for display
 fn format_vm_value(value: &bex_vm_types::Value, vm: &bex_vm::BexVm) -> String {
-    use bex_vm_types::{Object, Value};
+    use bex_vm_types::{Object, ValueKind};
 
-    match value {
-        Value::Null => "null".to_string(),
-        Value::Int(i) => i.to_string(),
-        Value::Float(f) => bex_vm_types::format_float(*f),
-        Value::Bool(b) => b.to_string(),
-        Value::Object(idx) => {
-            let obj = vm.get_object(*idx);
+    match value.kind() {
+        ValueKind::OmittedArg => "<omitted>".to_string(),
+        ValueKind::Null => "null".to_string(),
+        ValueKind::Int(i) => i.to_string(),
+        ValueKind::Bool(b) => b.to_string(),
+        ValueKind::Object(idx) => {
+            let obj = vm.get_object(idx);
             match obj {
+                Object::Float(f) => bex_vm_types::format_float(*f),
                 Object::String(s) => format!("\"{}\"", s),
                 Object::Array(arr) => {
-                    let items: Vec<String> = arr.iter().map(|v| format_vm_value(v, vm)).collect();
+                    let snap = arr.to_vec();
+                    let items: Vec<String> = snap.iter().map(|v| format_vm_value(v, vm)).collect();
                     format!("[{}]", items.join(", "))
                 }
                 Object::Map(map) => {
-                    let items: Vec<String> = map
+                    let snap = map.to_index_map();
+                    let items: Vec<String> = snap
                         .iter()
                         .map(|(k, v)| format!("\"{}\": {}", k, format_vm_value(v, vm)))
                         .collect();
@@ -4977,7 +5256,9 @@ fn format_vm_value(value: &bex_vm_types::Value, vm: &bex_vm::BexVm) -> String {
                             .fields
                             .iter()
                             .zip(inst.fields.iter())
-                            .map(|(f, val)| format!("{}: {}", f.name, format_vm_value(val, vm)))
+                            .map(|(f, val)| {
+                                format!("{}: {}", f.name, format_vm_value(&val.load(), vm))
+                            })
                             .collect();
                         format!("{}{{ {} }}", class.name, fields.join(", "))
                     } else {
@@ -5000,11 +5281,15 @@ fn format_vm_value(value: &bex_vm_types::Value, vm: &bex_vm::BexVm) -> String {
                 Object::Class(c) => format!("<class {}>", c.name),
                 Object::Enum(e) => format!("<enum {}>", e.name),
                 Object::Future(_) => "<future>".to_string(),
+                Object::UnscheduledFuture(_) => "<unscheduled future>".to_string(),
                 Object::Collector(_) => "<collector>".to_string(),
                 Object::Type(ty) => format!("<type: {ty}>"),
                 Object::Closure(c) => format!("<closure captures={}>", c.captures.len()),
                 Object::BoundMethod(_) => "<bound_method>".to_string(),
-                Object::Cell(c) => format!("<cell {}>", format_vm_value(&c.value, vm)),
+                Object::GenericFunction(_) => "<generic_function>".to_string(),
+                Object::HostClosure(_) => "<host_closure>".to_string(),
+                Object::Cell(c) => format!("<cell {}>", format_vm_value(&c.load(), vm)),
+                Object::Bigint(bi) => bi.to_string(),
                 Object::Uint8Array(bytes) => format!("<uint8array len={}>", bytes.len()),
                 Object::RustData(_) => "<rust_data>".to_string(),
                 #[cfg(feature = "heap_debug")]

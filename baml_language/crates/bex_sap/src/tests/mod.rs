@@ -6,7 +6,6 @@ mod test_basics;
 mod test_class;
 mod test_class_2;
 mod test_code;
-// mod test_constraints; // Assertion::evaluate is todo!()
 mod test_enum;
 mod test_international;
 mod test_lists;

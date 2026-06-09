@@ -21,7 +21,7 @@ impl PlaygroundEventSink {
 impl bex_events::EventSink for PlaygroundEventSink {
     fn send(&self, event: bex_events::RuntimeEvent) {
         let call_id = event.call_id.0;
-        let options = bridge_ctypes::HandleTableOptions::for_in_process();
+        let options = bridge_ctypes::CffiHandleTableOptions::for_wire();
         match bridge_ctypes::runtime_event_to_bytes(&event, &options) {
             Ok(data) => {
                 let b64 = base64::engine::general_purpose::STANDARD.encode(&data);

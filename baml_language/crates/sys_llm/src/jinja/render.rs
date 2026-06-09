@@ -4,10 +4,11 @@ use baml_builtins2::{PromptAst, PromptAstSimple};
 use bex_external_types::BexExternalValue;
 use indexmap::IndexMap;
 use minijinja::Environment;
+use sys_jinja::create_environment;
 
 use super::{
-    MAGIC_CHAT_ROLE_DELIMITER, MAGIC_MEDIA_DELIMITER, filters,
-    output_format_object::OutputFormatObject, value_conversion::external_value_to_jinja,
+    MAGIC_CHAT_ROLE_DELIMITER, MAGIC_MEDIA_DELIMITER, output_format_object::OutputFormatObject,
+    value_conversion::external_value_to_jinja,
 };
 use crate::types::OutputFormatContent;
 
@@ -78,37 +79,6 @@ pub fn render_prompt(
 
     // Parse result into PromptAst
     Ok(parse_rendered_output(&rendered, ctx, &media_handles))
-}
-
-fn create_environment() -> Environment<'static> {
-    let mut env = Environment::new();
-
-    // Configure environment
-    env.set_debug(true);
-    env.set_trim_blocks(true);
-    env.set_lstrip_blocks(true);
-
-    // Add filters
-    env.add_filter("regex_match", filters::regex_match);
-    env.add_filter("sum", filters::sum);
-
-    // Enable Python-compatible methods on primitives (e.g. str.format())
-    env.set_unknown_method_callback(minijinja_contrib::pycompat::unknown_method_callback);
-
-    // Custom formatter: replace 'none' with 'null'
-    env.set_formatter(|out, _state, value| {
-        if value.is_none() || value.is_undefined() {
-            write!(out, "null").map_err(|e| {
-                minijinja::Error::new(minijinja::ErrorKind::WriteFailure, e.to_string())
-            })
-        } else {
-            write!(out, "{value}").map_err(|e| {
-                minijinja::Error::new(minijinja::ErrorKind::WriteFailure, e.to_string())
-            })
-        }
-    });
-
-    env
 }
 
 /// Preprocess template: dedent and trim.
@@ -362,10 +332,7 @@ mod tests {
         let template = "Hello, {{ name }}!";
 
         let mut args = IndexMap::new();
-        args.insert(
-            "name".to_string(),
-            BexExternalValue::String("Alice".to_string()),
-        );
+        args.insert("name".to_string(), BexExternalValue::String("Alice".into()));
 
         let result = render_prompt(template, &args, &test_ctx()).unwrap();
 
@@ -377,10 +344,7 @@ mod tests {
         let template = "Name: {{ person.name }}, Age: {{ person.age }}";
 
         let mut person_fields = IndexMap::new();
-        person_fields.insert(
-            "name".to_string(),
-            BexExternalValue::String("Bob".to_string()),
-        );
+        person_fields.insert("name".to_string(), BexExternalValue::String("Bob".into()));
         person_fields.insert("age".to_string(), BexExternalValue::Int(30));
 
         let mut args = IndexMap::new();
@@ -469,9 +433,9 @@ mod tests {
                     attr: baml_type::TyAttr::default(),
                 },
                 items: vec![
-                    BexExternalValue::String("apple".to_string()),
-                    BexExternalValue::String("banana".to_string()),
-                    BexExternalValue::String("cherry".to_string()),
+                    BexExternalValue::String("apple".into()),
+                    BexExternalValue::String("banana".into()),
+                    BexExternalValue::String("cherry".into()),
                 ],
             },
         );
@@ -838,10 +802,7 @@ mod tests {
     fn test_non_media_instance_not_unwrapped() {
         let template = "{{ person }}";
         let mut fields = IndexMap::new();
-        fields.insert(
-            "name".to_string(),
-            BexExternalValue::String("Alice".to_string()),
-        );
+        fields.insert("name".to_string(), BexExternalValue::String("Alice".into()));
         let mut args = IndexMap::new();
         args.insert(
             "person".to_string(),

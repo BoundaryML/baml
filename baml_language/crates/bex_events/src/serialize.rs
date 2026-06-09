@@ -254,6 +254,8 @@ fn event_content_to_json(event: &EventKind) -> serde_json::Value {
                     "function_display_name": end.name,
                     "result": result_json,
                     "duration_ms": u64::try_from(end.duration.as_millis()).unwrap_or(u64::MAX),
+                    "error": end.error.as_deref(),
+                    "status": if end.error.is_some() { "error" } else { "success" },
                 }
             })
         }
@@ -335,8 +337,10 @@ fn bex_value_to_json_impl(value: &BexExternalValue, depth: usize) -> serde_json:
         BexExternalValue::Null => serde_json::Value::Null,
         BexExternalValue::Bool(b) => serde_json::Value::Bool(*b),
         BexExternalValue::Int(i) => serde_json::json!(i),
+        // Bigints can exceed JSON number precision; emit as a decimal string.
+        BexExternalValue::Bigint(b) => serde_json::json!(b.to_string()),
         BexExternalValue::Float(f) => serde_json::json!(f),
-        BexExternalValue::String(s) => serde_json::Value::String(s.clone()),
+        BexExternalValue::String(s) => serde_json::Value::String(s.to_string()),
         BexExternalValue::Array { items, .. } => bex_value_vec_to_json_impl(items, depth + 1),
         BexExternalValue::Map { entries, .. } => {
             let mut obj = serde_json::Map::new();
@@ -412,6 +416,14 @@ fn bex_value_to_json_impl(value: &BexExternalValue, depth: usize) -> serde_json:
             let meta = BamlMeta::media();
             serde_json::json!({ "$baml": serde_json::to_value(&meta).unwrap_or(serde_json::Value::Null) })
         }
+        BexExternalValue::Adt(BexExternalAdt::TaggedHeapHandle { .. }) => {
+            let meta = BamlMeta::rust_data();
+            serde_json::json!({ "$baml": serde_json::to_value(&meta).unwrap_or(serde_json::Value::Null) })
+        }
+        BexExternalValue::HostValue(_) => {
+            let meta = BamlMeta::handle();
+            serde_json::json!({ "$baml": serde_json::to_value(&meta).unwrap_or(serde_json::Value::Null) })
+        }
     }
 }
 
@@ -437,6 +449,9 @@ fn bex_value_to_debug_impl(value: &BexExternalValue, depth: usize) -> String {
         BexExternalValue::Null => "null".to_string(),
         BexExternalValue::Bool(b) => b.to_string(),
         BexExternalValue::Int(i) => i.to_string(),
+        // Display bigint in decimal so logs are LLM- and human-readable;
+        // the FFI wire format uses hex (see `bridge_ctypes::value_encode`).
+        BexExternalValue::Bigint(bi) => bi.to_string(),
         BexExternalValue::Float(f) => bex_vm_types::format_float(*f),
         BexExternalValue::String(s) => format!("{s:?}"),
         BexExternalValue::Array { items, .. } => {
@@ -483,6 +498,10 @@ fn bex_value_to_debug_impl(value: &BexExternalValue, depth: usize) -> String {
         BexExternalValue::Adt(BexExternalAdt::Type(ty)) => format!("<type: {ty}>"),
         BexExternalValue::Adt(BexExternalAdt::PromptAst(_)) => "<prompt_ast>".to_string(),
         BexExternalValue::Adt(BexExternalAdt::Media(media)) => media_to_debug_string(media),
+        BexExternalValue::Adt(BexExternalAdt::TaggedHeapHandle { ty, heap_handle }) => {
+            format!("<tagged_heap_handle {ty} #{}>", heap_handle.slab_key())
+        }
+        BexExternalValue::HostValue(hv) => format!("<host_value #{}>", hv.key),
     }
 }
 

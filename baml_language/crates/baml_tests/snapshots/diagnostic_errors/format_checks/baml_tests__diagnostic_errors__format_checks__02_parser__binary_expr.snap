@@ -140,10 +140,12 @@ SOURCE_FILE
           GREATER_GREATER ">>"
           WORD "b"
         SEMICOLON ";"
-        LET_STMT "// ===== Assignment operators =====
-    let mut_a = a;"
-          KW_LET "let"
-          WORD "mut_a"
+        LET_STMT
+          PATTERN
+            BINDING_PATTERN "// ===== Assignment operators =====
+    let mut_a"
+              KW_LET "let"
+              WORD "mut_a"
           EQUALS "="
           WORD "a"
           SEMICOLON ";"
@@ -976,7 +978,7 @@ SOURCE_FILE
               WORD "string"
               WORD "prefix"
               WORD "that"
-              WORD "is"
+              KW_IS "is"
               WORD "already"
               WORD "quite"
               WORD "long"

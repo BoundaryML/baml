@@ -1,8 +1,9 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 38208
 ---
 === COMPILER2 DIAGNOSTICS ===
-  [type] Error: type `string` has no member `len`
+  [type] error: type `string` has no member `len`
     ╭─[ chain_expr.baml:83:6 ]
     │
  83 │ ╭─▶     ;
@@ -14,54 +15,54 @@ source: crates/baml_tests/src/generated_tests.rs
     │     Note: Error code: E0007
 ────╯
 
-  [type] Error: type `user.ChainItem[]` has no member `len`
+  [type] error: type `ChainItem[]` has no member `len`
     ╭─[ chain_expr.baml:86:21 ]
     │
  86 │ ╭─▶     user.name.len();
  87 │ ├─▶     items.len();
     │ │                      
-    │ ╰────────────────────── type `user.ChainItem[]` has no member `len`
+    │ ╰────────────────────── type `ChainItem[]` has no member `len`
     │     
     │     Note: Error code: E0007
 ────╯
 
-  [type] Error: type `user.ChainItem[]` has no member `get`
+  [type] error: type `ChainItem[]` has no member `get`
     ╭─[ chain_expr.baml:87:17 ]
     │
  87 │ ╭─▶     items.len();
     ┆ ┆   
  90 │ ├─▶     user.profile.items.get(0);
     │ │                                    
-    │ ╰──────────────────────────────────── type `user.ChainItem[]` has no member `get`
+    │ ╰──────────────────────────────────── type `ChainItem[]` has no member `get`
     │     
     │     Note: Error code: E0007
 ────╯
 
-  [type] Error: type `user.ChainItem[]` has no member `get`
+  [type] error: type `ChainItem[]` has no member `get`
     ╭─[ chain_expr.baml:90:31 ]
     │
  90 │ ╭─▶     user.profile.items.get(0);
     ┆ ┆   
  98 │ ├─▶     get // 6 method trailing
     │ │                                  
-    │ ╰────────────────────────────────── type `user.ChainItem[]` has no member `get`
+    │ ╰────────────────────────────────── type `ChainItem[]` has no member `get`
     │     
     │     Note: Error code: E0007
 ────╯
 
-  [type] Error: type `user.ChainItem[]` has no member `get`
+  [type] error: type `ChainItem[]` has no member `get`
      ╭─[ chain_expr.baml:104:6 ]
      │
  104 │ ╭─▶     ;
      ┆ ┆   
  112 │ ├─▶     get /* 6 method trailing */
      │ │                                     
-     │ ╰───────────────────────────────────── type `user.ChainItem[]` has no member `get`
+     │ ╰───────────────────────────────────── type `ChainItem[]` has no member `get`
      │     
      │     Note: Error code: E0007
 ─────╯
 
-  [type] Error: type `string` has no member `len`
+  [type] error: type `string` has no member `len`
      ╭─[ chain_expr.baml:146:6 ]
      │
  146 │ ╭─▶     ;
@@ -73,7 +74,7 @@ source: crates/baml_tests/src/generated_tests.rs
      │     Note: Error code: E0007
 ─────╯
 
-  [type] Error: type `string` has no member `len`
+  [type] error: type `string` has no member `len`
      ╭─[ chain_expr.baml:149:33 ]
      │
  149 │ ╭─▶     user.name.len().to_string();
@@ -85,7 +86,7 @@ source: crates/baml_tests/src/generated_tests.rs
      │     Note: Error code: E0007
 ─────╯
 
-  [type] Error: type `string` has no member `len`
+  [type] error: type `string` has no member `len`
      ╭─[ chain_expr.baml:155:44 ]
      │
  155 │     user.profile.items[0].metadata.tags[0].len().to_string().len().to_string().len().to_string();
@@ -95,49 +96,49 @@ source: crates/baml_tests/src/generated_tests.rs
      │ Note: Error code: E0007
 ─────╯
 
-  [type] Error: type `user.ChainItem[]` has no member `get`
+  [type] error: type `ChainItem[]` has no member `get`
      ╭─[ chain_expr.baml:155:98 ]
      │
  155 │ ╭─▶     user.profile.items[0].metadata.tags[0].len().to_string().len().to_string().len().to_string();
      ┆ ┆   
  158 │ ├─▶     user.profile.items.get(user.profile.items.len() - 1 + user.profile.items.len() - 2 + user.profile.items.len() - 3).label;
      │ │                                                                                                                                   
-     │ ╰─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── type `user.ChainItem[]` has no member `get`
+     │ ╰─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── type `ChainItem[]` has no member `get`
      │     
      │     Note: Error code: E0007
 ─────╯
 
-  [type] Error: type `user.ChainItem[]` has no member `len`
+  [type] error: type `ChainItem[]` has no member `len`
      ╭─[ chain_expr.baml:158:28 ]
      │
  158 │     user.profile.items.get(user.profile.items.len() - 1 + user.profile.items.len() - 2 + user.profile.items.len() - 3).label;
      │                            ───────────┬──────────  
-     │                                       ╰──────────── type `user.ChainItem[]` has no member `len`
+     │                                       ╰──────────── type `ChainItem[]` has no member `len`
      │ 
      │ Note: Error code: E0007
 ─────╯
 
-  [type] Error: type `user.ChainItem[]` has no member `len`
+  [type] error: type `ChainItem[]` has no member `len`
      ╭─[ chain_expr.baml:158:58 ]
      │
  158 │     user.profile.items.get(user.profile.items.len() - 1 + user.profile.items.len() - 2 + user.profile.items.len() - 3).label;
      │                                                          ───────────┬───────────  
-     │                                                                     ╰───────────── type `user.ChainItem[]` has no member `len`
+     │                                                                     ╰───────────── type `ChainItem[]` has no member `len`
      │ 
      │ Note: Error code: E0007
 ─────╯
 
-  [type] Error: type `user.ChainItem[]` has no member `len`
+  [type] error: type `ChainItem[]` has no member `len`
      ╭─[ chain_expr.baml:158:89 ]
      │
  158 │     user.profile.items.get(user.profile.items.len() - 1 + user.profile.items.len() - 2 + user.profile.items.len() - 3).label;
      │                                                                                         ───────────┬───────────  
-     │                                                                                                    ╰───────────── type `user.ChainItem[]` has no member `len`
+     │                                                                                                    ╰───────────── type `ChainItem[]` has no member `len`
      │ 
      │ Note: Error code: E0007
 ─────╯
 
-  [type] Error: expected 2 argument(s), got 3
+  [type] error: expected 2 argument(s), got 3
      ╭─[ chain_expr.baml:158:126 ]
      │
  158 │ ╭─▶     user.profile.items.get(user.profile.items.len() - 1 + user.profile.items.len() - 2 + user.profile.items.len() - 3).label;
@@ -149,17 +150,17 @@ source: crates/baml_tests/src/generated_tests.rs
      │     Note: Error code: E0005
 ─────╯
 
-  [type] Error: type `user.ChainItem[]` has no member `len`
+  [type] error: type `ChainItem[]` has no member `len`
      ╭─[ chain_expr.baml:161:32 ]
      │
  161 │     user.profile.items.slice(0, user.profile.items.len() - 1, user.profile.settings.preferences.size);
      │                                ───────────┬───────────  
-     │                                           ╰───────────── type `user.ChainItem[]` has no member `len`
+     │                                           ╰───────────── type `ChainItem[]` has no member `len`
      │ 
      │ Note: Error code: E0007
 ─────╯
 
-  [type] Error: type `string` has no member `len`
+  [type] error: type `string` has no member `len`
      ╭─[ chain_expr.baml:161:103 ]
      │
  161 │ ╭─▶     user.profile.items.slice(0, user.profile.items.len() - 1, user.profile.settings.preferences.size);
@@ -171,7 +172,7 @@ source: crates/baml_tests/src/generated_tests.rs
      │     Note: Error code: E0007
 ─────╯
 
-  [type] Error: type `string` has no member `len`
+  [type] error: type `string` has no member `len`
      ╭─[ chain_expr.baml:193:6 ]
      │
  193 │ ╭─▶     ;
@@ -183,41 +184,41 @@ source: crates/baml_tests/src/generated_tests.rs
      │     Note: Error code: E0007
 ─────╯
 
-  [type] Error: type `user.ChainItem[]` has no member `get`
+  [type] error: type `ChainItem[]` has no member `get`
      ╭─[ chain_expr.baml:225:6 ]
      │
  225 │ ╭─▶     ;
      ┆ ┆   
  238 │ ├─▶     get // 11 trailing
      │ │                            
-     │ ╰──────────────────────────── type `user.ChainItem[]` has no member `get`
+     │ ╰──────────────────────────── type `ChainItem[]` has no member `get`
      │     
      │     Note: Error code: E0007
 ─────╯
 
-  [type] Error: type `user.ChainItem[]` has no member `len`
+  [type] error: type `ChainItem[]` has no member `len`
      ╭─[ chain_expr.baml:239:6 ]
      │
  239 │ ╭─▶     ( // 12 trailing
      ┆ ┆   
  241 │ ├─▶     user.profile.items.len() - 1 + user.profile.items.len() - 2 // 14 trailing
      │ │                                                                                    
-     │ ╰──────────────────────────────────────────────────────────────────────────────────── type `user.ChainItem[]` has no member `len`
+     │ ╰──────────────────────────────────────────────────────────────────────────────────── type `ChainItem[]` has no member `len`
      │     
      │     Note: Error code: E0007
 ─────╯
 
-  [type] Error: type `user.ChainItem[]` has no member `len`
+  [type] error: type `ChainItem[]` has no member `len`
      ╭─[ chain_expr.baml:241:35 ]
      │
  241 │     user.profile.items.len() - 1 + user.profile.items.len() - 2 // 14 trailing
      │                                   ───────────┬───────────  
-     │                                              ╰───────────── type `user.ChainItem[]` has no member `len`
+     │                                              ╰───────────── type `ChainItem[]` has no member `len`
      │ 
      │ Note: Error code: E0007
 ─────╯
 
-  [type] Error: type `int[][]` has no member `len`
+  [type] error: type `int[][]` has no member `len`
      ╭─[ chain_expr.baml:251:17 ]
      │
  251 │     user.scores[user.scores.len() - 1][user.scores[0].len() - 1];
@@ -227,7 +228,7 @@ source: crates/baml_tests/src/generated_tests.rs
      │ Note: Error code: E0007
 ─────╯
 
-  [type] Error: type `int[]` has no member `len`
+  [type] error: type `int[]` has no member `len`
      ╭─[ chain_expr.baml:251:55 ]
      │
  251 │     user.scores[user.scores.len() - 1][user.scores[0].len() - 1];
@@ -237,18 +238,18 @@ source: crates/baml_tests/src/generated_tests.rs
      │ Note: Error code: E0007
 ─────╯
 
-  [type] Error: type `user.ChainItem[]` has no member `get`
+  [type] error: type `ChainItem[]` has no member `get`
      ╭─[ chain_expr.baml:255:20 ]
      │
  255 │ ╭─▶     items  [  0  ];
  256 │ ├─▶     items  .  get  (  0  );
      │ │                                 
-     │ ╰───────────────────────────────── type `user.ChainItem[]` has no member `get`
+     │ ╰───────────────────────────────── type `ChainItem[]` has no member `get`
      │     
      │     Note: Error code: E0007
 ─────╯
 
-  [type] Error: type `string` has no member `len`
+  [type] error: type `string` has no member `len`
      ╭─[ chain_expr.baml:259:18 ]
      │
  259 │     user.tags[0].len();
@@ -258,7 +259,7 @@ source: crates/baml_tests/src/generated_tests.rs
      │ Note: Error code: E0007
 ─────╯
 
-  [type] Error: type `string` has no member `len`
+  [type] error: type `string` has no member `len`
      ╭─[ chain_expr.baml:261:20 ]
      │
  261 │     items[0].label.len();
@@ -268,7 +269,7 @@ source: crates/baml_tests/src/generated_tests.rs
      │ Note: Error code: E0007
 ─────╯
 
-  [hir] Error: Unknown attribute `@stream.not_null`
+  [hir] error: Unknown attribute `@stream.not_null`
     ╭─[ class_decls.baml:33:74 ]
     │
  33 │     summary string? @description("A summary") @alias("sum") @stream.done @stream.not_null
@@ -278,7 +279,7 @@ source: crates/baml_tests/src/generated_tests.rs
     │ Note: Error code: E0015
 ────╯
 
-  [hir] Error: Unknown attribute `@stream.not_null`
+  [hir] error: Unknown attribute `@stream.not_null`
      ╭─[ class_decls.baml:291:14 ]
      │
  291 │     e string @stream.not_null
@@ -288,7 +289,7 @@ source: crates/baml_tests/src/generated_tests.rs
      │ Note: Error code: E0015
 ─────╯
 
-  [type] Error: unresolved name: MyRetryPolicy
+  [type] error: unresolved name: MyRetryPolicy
     ╭─[ config_decls.baml:10:2 ]
     │
  10 │ ╭─▶ }
@@ -300,7 +301,7 @@ source: crates/baml_tests/src/generated_tests.rs
     │     Note: Error code: E0003
 ────╯
 
-  [validation] Error: Name `ExtraWhitespace` defined 3 times as: class, enum, type
+  [validation] error: Name `ExtraWhitespace` defined 3 times as: class, enum, type
      ╭─[ class_decls.baml:296:10 ]
      │
  296 │ class    ExtraWhitespace    {
@@ -313,16 +314,16 @@ source: crates/baml_tests/src/generated_tests.rs
      │         ───────┬───────  
      │                ╰───────── duplicate enum definition
      │
-     ├─[ type_alias_decls.baml:393:9 ]
+     ├─[ type_alias_decls.baml:389:9 ]
      │
- 393 │ type    ExtraWhitespace    =    int   |   string   |   bool   |   float   |   null
+ 389 │ type    ExtraWhitespace    =    int   |   string   |   bool   |   float   |   null
      │         ───────┬───────  
      │                ╰───────── duplicate type definition
      │ 
      │ Note: Error code: E0011
 ─────╯
 
-  [type] Error: type mismatch: expected (x: int) -> ((y: int) -> ((z: int) -> ((w: int) -> map<string, int | string | bool> throws never) throws never) throws never) throws never, got 1
+  [type] error: type mismatch: expected (x: int) -> ((y: int) -> ((z: int) -> ((w: int) -> map<string, int | string | bool> throws never) throws never) throws never) throws never, got 1
     ╭─[ function_decls.baml:73:5 ]
     │
  73 │     1
@@ -332,103 +333,103 @@ source: crates/baml_tests/src/generated_tests.rs
     │ Note: Error code: E0001
 ────╯
 
-  [type] Error: unresolved name: GPT4
-     ╭─[ function_decls.baml:457:2 ]
+  [type] error: unresolved name: GPT4
+     ╭─[ function_decls.baml:450:2 ]
      │
- 457 │ ╭─▶ }
+ 450 │ ╭─▶ }
      ┆ ┆   
- 463 │ ├─▶ }
+ 456 │ ├─▶ }
      │ │       
      │ ╰─────── unresolved name: GPT4
      │     
      │     Note: Error code: E0003
 ─────╯
 
-  [type] Error: unresolved name: GPT4
-     ╭─[ function_decls.baml:460:42 ]
+  [type] error: unresolved name: GPT4
+     ╭─[ function_decls.baml:453:42 ]
      │
- 460 │ ╭─▶ function LlmBasic(name: string) -> string {
+ 453 │ ╭─▶ function LlmBasic(name: string) -> string {
      ┆ ┆   
- 463 │ ├─▶ }
+ 456 │ ├─▶ }
      │ │       
      │ ╰─────── unresolved name: GPT4
      │     
      │     Note: Error code: E0003
 ─────╯
 
-  [type] Error: unresolved name: GPT4
-     ╭─[ function_decls.baml:463:2 ]
+  [type] error: unresolved name: GPT4
+     ╭─[ function_decls.baml:456:2 ]
      │
- 463 │ ╭─▶ }
+ 456 │ ╭─▶ }
      ┆ ┆   
- 478 │ ├─▶ }
+ 471 │ ├─▶ }
      │ │       
      │ ╰─────── unresolved name: GPT4
      │     
      │     Note: Error code: E0003
 ─────╯
 
-  [type] Error: unresolved name: GPT4
-     ╭─[ function_decls.baml:471:46 ]
+  [type] error: unresolved name: GPT4
+     ╭─[ function_decls.baml:464:46 ]
      │
- 471 │ ╭─▶ function LlmMultiLine(text: string) -> string {
+ 464 │ ╭─▶ function LlmMultiLine(text: string) -> string {
      ┆ ┆   
- 478 │ ├─▶ }
+ 471 │ ├─▶ }
      │ │       
      │ ╰─────── unresolved name: GPT4
      │     
      │     Note: Error code: E0003
 ─────╯
 
-  [type] Error: unresolved name: GPT4
-     ╭─[ function_decls.baml:484:2 ]
+  [type] error: unresolved name: GPT4
+     ╭─[ function_decls.baml:477:2 ]
      │
- 484 │ ╭─▶ }
+ 477 │ ╭─▶ }
      ┆ ┆   
- 490 │ ├─▶ }
+ 483 │ ├─▶ }
      │ │       
      │ ╰─────── unresolved name: GPT4
      │     
      │     Note: Error code: E0003
 ─────╯
 
-  [type] Error: unresolved name: GPT4
-     ╭─[ function_decls.baml:487:50 ]
+  [type] error: unresolved name: GPT4
+     ╭─[ function_decls.baml:480:50 ]
      │
- 487 │ ╭─▶ function LlmReversedOrder(text: string) -> string {
+ 480 │ ╭─▶ function LlmReversedOrder(text: string) -> string {
      ┆ ┆   
- 490 │ ├─▶ }
+ 483 │ ├─▶ }
      │ │       
      │ ╰─────── unresolved name: GPT4
      │     
      │     Note: Error code: E0003
 ─────╯
 
-  [type] Error: unresolved name: GPT4
-     ╭─[ function_decls.baml:490:2 ]
+  [type] error: unresolved name: GPT4
+     ╭─[ function_decls.baml:483:2 ]
      │
- 490 │ ╭─▶ }
+ 483 │ ╭─▶ }
      ┆ ┆   
- 501 │ ├─▶ }
+ 494 │ ├─▶ }
      │ │       
      │ ╰─────── unresolved name: GPT4
      │     
      │     Note: Error code: E0003
 ─────╯
 
-  [type] Error: unresolved name: GPT4
-     ╭─[ function_decls.baml:495:130 ]
+  [type] error: unresolved name: GPT4
+     ╭─[ function_decls.baml:488:130 ]
      │
- 495 │ ╭─▶ function LlmWithLongSignature(first_context: string, second_context: string, third_context: string, user_query: string) -> string {
+ 488 │ ╭─▶ function LlmWithLongSignature(first_context: string, second_context: string, third_context: string, user_query: string) -> string {
      ┆ ┆   
- 501 │ ├─▶ }
+ 494 │ ├─▶ }
      │ │       
      │ ╰─────── unresolved name: GPT4
      │     
      │     Note: Error code: E0003
 ─────╯
 
-  [type] Warning: unreachable code: 1 statement(s) after diverging statement
+  [type] warning: unreachable code: 1 statement(s) after diverging statement
      ╭─[ loop_stmts.baml:402:23 ]
      │
  402 │ ╭─▶                 0 => {
@@ -439,10 +440,10 @@ source: crates/baml_tests/src/generated_tests.rs
      │     Note: Error code: E0001
 ─────╯
 
-  [type] Warning: unreachable code: 1 statement(s) after diverging statement
-     ╭─[ loop_stmts.baml:406:39 ]
+  [type] warning: unreachable code: 1 statement(s) after diverging statement
+     ╭─[ loop_stmts.baml:406:43 ]
      │
- 406 │ ╭─▶                 n: int if n > 100 => {
+ 406 │ ╭─▶                 let n: int if n > 100 => {
  407 │ ├─▶                     continue;
      │ │                                   
      │ ╰─────────────────────────────────── unreachable code: 1 statement(s) after diverging statement
@@ -450,77 +451,160 @@ source: crates/baml_tests/src/generated_tests.rs
      │     Note: Error code: E0001
 ─────╯
 
-  [type] Error: unreachable arm
-     ╭─[ match_exprs.baml:157:18 ]
+  [type] error: type mismatch: expected "hello", got "bye"
+     ╭─[ match_exprs.baml:160:31 ]
      │
- 157 │         "bye" => "farewell",
+ 160 │ ╭─▶         "hello" => "greeting",
+ 161 │ ├─▶         "bye" => "farewell",
+     │ │                                  
+     │ ╰────────────────────────────────── type mismatch: expected "hello", got "bye"
+     │     
+     │     Note: Error code: E0001
+─────╯
+
+  [type] error: unreachable arm
+     ╭─[ match_exprs.baml:161:18 ]
+     │
+ 161 │         "bye" => "farewell",
      │                  ─────┬────  
      │                       ╰────── unreachable arm
      │ 
      │ Note: Error code: E0063
 ─────╯
 
-  [type] Error: unreachable arm
-     ╭─[ match_exprs.baml:158:14 ]
+  [type] error: unreachable arm
+     ╭─[ match_exprs.baml:162:14 ]
      │
- 158 │         _ => "other"
+ 162 │         _ => "other"
      │              ───┬───  
      │                 ╰───── unreachable arm
      │ 
      │ Note: Error code: E0063
 ─────╯
 
-  [type] Error: operator `Mul` cannot be applied to `bool` and `bool`
-     ╭─[ match_exprs.baml:307:20 ]
+  [type] error: operator `Mul` cannot be applied to `bool` and `bool`
+     ╭─[ match_exprs.baml:311:20 ]
      │
- 307 │     match (x * x + b * b + x * b + x + b + x * x * x + b * b * b + x * b * x + b * x * b) {
+ 311 │     match (x * x + b * b + x * b + x + b + x * x * x + b * b * b + x * b * x + b * x * b) {
      │                    ──┬──  
      │                      ╰──── operator `Mul` cannot be applied to `bool` and `bool`
      │ 
      │ Note: Error code: E0004
 ─────╯
 
-  [type] Error: operator `Mul` cannot be applied to `int` and `bool`
-     ╭─[ match_exprs.baml:307:28 ]
+  [type] error: operator `Mul` cannot be applied to `int` and `bool`
+     ╭─[ match_exprs.baml:311:28 ]
      │
- 307 │     match (x * x + b * b + x * b + x + b + x * x * x + b * b * b + x * b * x + b * x * b) {
+ 311 │     match (x * x + b * b + x * b + x + b + x * x * x + b * b * b + x * b * x + b * x * b) {
      │                            ──┬──  
      │                              ╰──── operator `Mul` cannot be applied to `int` and `bool`
      │ 
      │ Note: Error code: E0004
 ─────╯
 
-  [type] Error: operator `Mul` cannot be applied to `bool` and `bool`
-     ╭─[ match_exprs.baml:307:56 ]
+  [type] error: operator `Mul` cannot be applied to `bool` and `bool`
+     ╭─[ match_exprs.baml:311:56 ]
      │
- 307 │     match (x * x + b * b + x * b + x + b + x * x * x + b * b * b + x * b * x + b * x * b) {
+ 311 │     match (x * x + b * b + x * b + x + b + x * x * x + b * b * b + x * b * x + b * x * b) {
      │                                                        ──┬──  
      │                                                          ╰──── operator `Mul` cannot be applied to `bool` and `bool`
      │ 
      │ Note: Error code: E0004
 ─────╯
 
-  [type] Error: operator `Mul` cannot be applied to `int` and `bool`
-     ╭─[ match_exprs.baml:307:68 ]
+  [type] error: operator `Mul` cannot be applied to `int` and `bool`
+     ╭─[ match_exprs.baml:311:68 ]
      │
- 307 │     match (x * x + b * b + x * b + x + b + x * x * x + b * b * b + x * b * x + b * x * b) {
+ 311 │     match (x * x + b * b + x * b + x + b + x * x * x + b * b * b + x * b * x + b * x * b) {
      │                                                                    ──┬──  
      │                                                                      ╰──── operator `Mul` cannot be applied to `int` and `bool`
      │ 
      │ Note: Error code: E0004
 ─────╯
 
-  [type] Error: operator `Mul` cannot be applied to `bool` and `int`
-     ╭─[ match_exprs.baml:307:80 ]
+  [type] error: operator `Mul` cannot be applied to `bool` and `int`
+     ╭─[ match_exprs.baml:311:80 ]
      │
- 307 │     match (x * x + b * b + x * b + x + b + x * x * x + b * b * b + x * b * x + b * x * b) {
+ 311 │     match (x * x + b * b + x * b + x + b + x * x * x + b * b * b + x * b * x + b * x * b) {
      │                                                                                ──┬──  
      │                                                                                  ╰──── operator `Mul` cannot be applied to `bool` and `int`
      │ 
      │ Note: Error code: E0004
 ─────╯
 
-  [validation] Error: Name `ManyParams` defined 2 times as: function, template_string
+  [type] error: non-exhaustive match on type int; missing: _
+     ╭─[ match_exprs.baml:386:6 ]
+     │
+ 386 │ ╭─▶     }
+     ┆ ┆   
+ 391 │ ├─▶     }
+     │ │           
+     │ ╰─────────── non-exhaustive match on type int; missing: _
+     │     
+     │     Note: Error code: E0062
+─────╯
+
+  [type] error: non-exhaustive match on type int; missing: _
+     ╭─[ match_exprs.baml:391:6 ]
+     │
+ 391 │ ╭─▶     }
+     ┆ ┆   
+ 396 │ ├─▶     }
+     │ │           
+     │ ╰─────────── non-exhaustive match on type int; missing: _
+     │     
+     │     Note: Error code: E0062
+─────╯
+
+  [type] error: non-exhaustive match on type int; missing: _
+     ╭─[ match_exprs.baml:396:6 ]
+     │
+ 396 │ ╭─▶     }
+     ┆ ┆   
+ 401 │ ├─▶     }
+     │ │           
+     │ ╰─────────── non-exhaustive match on type int; missing: _
+     │     
+     │     Note: Error code: E0062
+─────╯
+
+  [type] error: non-exhaustive match on type int; missing: _
+     ╭─[ match_exprs.baml:401:6 ]
+     │
+ 401 │ ╭─▶     }
+     ┆ ┆   
+ 406 │ ├─▶     }
+     │ │           
+     │ ╰─────────── non-exhaustive match on type int; missing: _
+     │     
+     │     Note: Error code: E0062
+─────╯
+
+  [type] error: non-exhaustive match on type int; missing: _
+     ╭─[ match_exprs.baml:416:6 ]
+     │
+ 416 │ ╭─▶     }
+     ┆ ┆   
+ 421 │ ├─▶     }
+     │ │           
+     │ ╰─────────── non-exhaustive match on type int; missing: _
+     │     
+     │     Note: Error code: E0062
+─────╯
+
+  [type] error: type mismatch: expected string, got 0
+     ╭─[ match_exprs.baml:416:6 ]
+     │
+ 416 │ ╭─▶     }
+     ┆ ┆   
+ 421 │ ├─▶     }
+     │ │           
+     │ ╰─────────── type mismatch: expected string, got 0
+     │     
+     │     Note: Error code: E0001
+─────╯
+
+  [validation] error: Name `ManyParams` defined 2 times as: function, template_string
     ╭─[ function_decls.baml:23:10 ]
     │
  23 │ function ManyParams(first_parameter: int, second_parameter: string, third_parameter: bool, fourth_parameter: float) -> string {
@@ -536,10 +620,10 @@ source: crates/baml_tests/src/generated_tests.rs
     │ Note: Error code: E0011
 ────╯
 
-  [validation] Error: Name `MultiParamTrivia` defined 2 times as: function, template_string
-     ╭─[ function_decls.baml:142:10 ]
+  [validation] error: Name `MultiParamTrivia` defined 2 times as: function, template_string
+     ╭─[ function_decls.baml:135:10 ]
      │
- 142 │ function MultiParamTrivia(
+ 135 │ function MultiParamTrivia(
      │          ────────┬───────  
      │                  ╰───────── first defined as function here
      │
@@ -552,10 +636,10 @@ source: crates/baml_tests/src/generated_tests.rs
      │ Note: Error code: E0011
 ─────╯
 
-  [validation] Error: Name `MultiParamTriviaBlock` defined 2 times as: function, template_string
-     ╭─[ function_decls.baml:159:10 ]
+  [validation] error: Name `MultiParamTriviaBlock` defined 2 times as: function, template_string
+     ╭─[ function_decls.baml:152:10 ]
      │
- 159 │ function MultiParamTriviaBlock(
+ 152 │ function MultiParamTriviaBlock(
      │          ──────────┬──────────  
      │                    ╰──────────── first defined as function here
      │
@@ -568,48 +652,32 @@ source: crates/baml_tests/src/generated_tests.rs
      │ Note: Error code: E0011
 ─────╯
 
-  [validation] Error: Name `ConstrainedParams` defined 2 times as: function, template_string
-     ╭─[ function_decls.baml:85:10 ]
-     │
-  85 │ function ConstrainedParams(name: string, score: int @check({{ this > 0 }})) -> string {
-     │          ────────┬────────  
-     │                  ╰────────── first defined as function here
-     │
-     ├─[ template_string_decls.baml:151:17 ]
-     │
- 151 │ template_string ConstrainedParams(value: int @check("positive", {{ this > 0 }}), name: string) #"
-     │                 ────────┬────────  
-     │                         ╰────────── duplicate template_string definition
-     │ 
-     │ Note: Error code: E0011
-─────╯
-
-  [validation] Error: Name `SixLongParams` defined 2 times as: function, template_string
+  [validation] error: Name `SixLongParams` defined 2 times as: function, template_string
      ╭─[ function_decls.baml:37:10 ]
      │
   37 │ function SixLongParams(first_parameter_name: map<string, int>, second_parameter_name: (int | string)[], third_parameter_name: map<string, bool>, fourth_parameter_name: int, fifth_parameter_name: string, sixth_parameter_name: float) -> string {
      │          ──────┬──────  
      │                ╰──────── first defined as function here
      │
-     ├─[ template_string_decls.baml:176:17 ]
+     ├─[ template_string_decls.baml:171:17 ]
      │
- 176 │ template_string SixLongParams(first_param: string, second_param: int, third_param: bool, fourth_param: float, fifth_param: string[], sixth_param: map<string, int>) #"
+ 171 │ template_string SixLongParams(first_param: string, second_param: int, third_param: bool, fourth_param: float, fifth_param: string[], sixth_param: map<string, int>) #"
      │                 ──────┬──────  
      │                       ╰──────── duplicate template_string definition
      │ 
      │ Note: Error code: E0011
 ─────╯
 
-  [validation] Error: Name `ExtraWhitespace` defined 2 times as: function, template_string
-     ╭─[ function_decls.baml:504:13 ]
+  [validation] error: Name `ExtraWhitespace` defined 2 times as: function, template_string
+     ╭─[ function_decls.baml:497:13 ]
      │
- 504 │ function    ExtraWhitespace   (   a   :   int   ,   b   :   int   )   ->   int   {
+ 497 │ function    ExtraWhitespace   (   a   :   int   ,   b   :   int   )   ->   int   {
      │             ───────┬───────  
      │                    ╰───────── first defined as function here
      │
-     ├─[ template_string_decls.baml:369:20 ]
+     ├─[ template_string_decls.baml:364:20 ]
      │
- 369 │ template_string    ExtraWhitespace   (   a   :   string   ,   b   :   int   )   #"
+ 364 │ template_string    ExtraWhitespace   (   a   :   string   ,   b   :   int   )   #"
      │                    ───────┬───────  
      │                           ╰───────── duplicate template_string definition
      │ 

@@ -48,7 +48,7 @@ function MapAssignments() -> int {
 
 //----
 //- diagnostics
-// Error: type mismatch: expected map<string, int>, got map<string, string>
+// error: type mismatch: expected map<string, int>, got map<string, string>
 //     ╭─[ invalid_assignment_maps.baml:28:5 ]
 //     │
 //  28 │     d = {"y": "wrong"};
@@ -57,16 +57,16 @@ function MapAssignments() -> int {
 //     │ 
 //     │ Note: Error code: E0001
 // ────╯
-// Error: type mismatch: expected map<string, user.Person>, got map<string, user.Animal>
+// error: type mismatch: expected map<string, Person>, got map<string, Animal>
 //     ╭─[ invalid_assignment_maps.baml:32:5 ]
 //     │
 //  32 │     e = {"a": Animal { species: "Cat", legs: 4 }};
 //     │        ─────────────────────┬────────────────────  
-//     │                             ╰────────────────────── type mismatch: expected map<string, user.Person>, got map<string, user.Animal>
+//     │                             ╰────────────────────── type mismatch: expected map<string, Person>, got map<string, Animal>
 //     │ 
 //     │ Note: Error code: E0001
 // ────╯
-// Error: type mismatch: expected map<string, int>, got "not a map"
+// error: type mismatch: expected map<string, int>, got "not a map"
 //     ╭─[ invalid_assignment_maps.baml:36:6 ]
 //     │
 //  36 │     f = "not a map";
@@ -75,7 +75,7 @@ function MapAssignments() -> int {
 //     │ 
 //     │ Note: Error code: E0001
 // ────╯
-// Error: type mismatch: expected map<string, int>, got 123
+// error: type mismatch: expected map<string, int>, got 123
 //     ╭─[ invalid_assignment_maps.baml:40:6 ]
 //     │
 //  40 │     g = 123;

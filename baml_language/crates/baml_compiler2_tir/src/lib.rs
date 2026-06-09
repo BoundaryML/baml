@@ -17,16 +17,20 @@
 //! recomputes that lambda's `ScopeInference`, not the enclosing function's.
 
 pub mod analysis;
+pub mod associated_projection;
 pub mod builder;
 pub mod callable;
 pub mod cycle_detector;
+pub mod exhaustiveness;
 pub mod generics;
 pub mod infer_context;
 pub mod inference;
+pub mod interfaces;
 pub mod lower_type_expr;
 pub mod narrowing;
 pub mod normalize;
 pub mod package_interface;
+pub mod pattern_lowering;
 pub mod resolve;
 pub mod throw_inference;
 pub mod throws_analysis;

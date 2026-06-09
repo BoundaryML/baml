@@ -1,7 +1,7 @@
-// Test hover on Socket.close method
+// Test hover on TcpStream.close method
 
-function TestSocketClose() -> string {
-    let s = baml.net.connect("127.0.0.1:8080");
+function TestSocketClose() -> uint8array {
+    let s = baml.net.TcpStream.connect("127.0.0.1:8080");
     let data = s.read();
     s.close<[CURSOR]();
     data

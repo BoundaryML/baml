@@ -4,17 +4,15 @@ import type {
   BamlValueMedia,
   BamlValuePromptAst,
   BamlValuePromptAstSimple,
-} from './generated/baml/cffi/v1/baml_outbound';
-import { BamlOutboundValue, MediaTypeEnum } from './generated/baml/cffi/v1/baml_outbound';
-import { BamlHandleType } from './generated/baml/cffi/v1/baml_inbound';
+} from './generated/baml_core/cffi/v1/baml_outbound';
+import { BamlOutboundValue, MediaTypeEnum } from './generated/baml_core/cffi/v1/baml_outbound';
+import { BamlHandleType } from './generated/baml_core/cffi/v1/baml_inbound';
 import type { BamlJsValue, BamlJsClass, BamlJsHandle, BamlJsMedia, BamlJsPromptAst, BamlJsPromptAstSimple, BamlJsPromptAstMessage } from './types';
 
 const HANDLE_TYPE_NAMES: Record<number, string> = {
   [BamlHandleType.HANDLE_UNSPECIFIED]: 'unspecified',
-  [BamlHandleType.HANDLE_UNKNOWN]: 'unknown',
-  [BamlHandleType.RESOURCE_FILE]: 'file',
-  [BamlHandleType.RESOURCE_SOCKET]: 'socket',
-  [BamlHandleType.RESOURCE_HTTP_RESPONSE]: 'http_response',
+  [BamlHandleType.UNTAGGED_RUST_DATA]: 'rust_data',
+  [BamlHandleType.UNTAGGED_BEX_HEAP]: 'bex_heap',
   [BamlHandleType.FUNCTION_REF]: 'function_ref',
   [BamlHandleType.ADT_MEDIA_IMAGE]: 'image',
   [BamlHandleType.ADT_MEDIA_AUDIO]: 'audio',
@@ -31,6 +29,35 @@ export function handleTypeName(handleType: number): string {
 }
 
 export type WrapHandleFn<T> = (key: bigint, handleType: number, typeName: string) => T;
+
+/**
+ * Decode a base-sixteen hex string (the wire format for bigint values and
+ * literals, produced by Rust's `format!("{:x}")`) into a `bigint`. A leading
+ * `-` denotes a negative value; there is no `0x` prefix on the wire.
+ *
+ * Guards against empty or sign-only input: `BigInt('0x')` throws an opaque
+ * `SyntaxError`, so we surface a clearer error for malformed wire data.
+ */
+// Workspace bigint cap = 2^28 bits ⇒ at most (2^28)/4 hex digits (plus
+// slack), matching the Rust-side `MAX_BIGINT_HEX_LEN` in
+// `bridge_ctypes/src/value_decode.rs`. Reject longer inputs before
+// calling `BigInt()` so a malicious payload can't drive an unbounded
+// allocation on the JS heap.
+const MAX_BIGINT_HEX_LEN = (1 << 28) / 4 + 2;
+function hexToBigInt(hex: string): bigint {
+  const negative = hex.startsWith('-');
+  const magnitude = negative ? hex.slice(1) : hex;
+  if (magnitude.length === 0 || !/^[0-9a-fA-F]+$/.test(magnitude)) {
+    throw new Error(`Invalid bigint hex on the wire: ${JSON.stringify(hex)}`);
+  }
+  if (magnitude.length > MAX_BIGINT_HEX_LEN) {
+    throw new Error(
+      `bigint hex exceeds the workspace cap (${magnitude.length} chars, limit ${MAX_BIGINT_HEX_LEN})`,
+    );
+  }
+  const value = BigInt(`0x${magnitude}`);
+  return negative ? -value : value;
+}
 
 const MEDIA_TYPE_NAMES: Record<number, BamlJsMedia['media_type']> = {
   [MediaTypeEnum.MEDIA_TYPE_UNSPECIFIED]: 'other',
@@ -177,6 +204,8 @@ function deserializeValue<T>(
           return lit.literal.intLiteral.value;
         case 'boolLiteral':
           return lit.literal.boolLiteral.value;
+        case 'bigintLiteral':
+          return hexToBigInt(lit.literal.bigintLiteral.value);
         default: {
           const _exhaustive: never = lit.literal;
           return null;
@@ -187,16 +216,6 @@ function deserializeValue<T>(
     case 'unionVariantValue':
       return holder.value.unionVariantValue.value
         ? deserializeValue(holder.value.unionVariantValue.value, wrapHandle)
-        : null;
-
-    case 'checkedValue':
-      return holder.value.checkedValue.value
-        ? deserializeValue(holder.value.checkedValue.value, wrapHandle)
-        : null;
-
-    case 'streamingStateValue':
-      return holder.value.streamingStateValue.value
-        ? deserializeValue(holder.value.streamingStateValue.value, wrapHandle)
         : null;
 
     case 'handleValue': {
@@ -217,6 +236,9 @@ function deserializeValue<T>(
 
     case 'uint8arrayValue':
       return holder.value.uint8arrayValue;
+
+    case 'bigintValue':
+      return hexToBigInt(holder.value.bigintValue);
 
     default:
       return null;

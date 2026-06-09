@@ -131,8 +131,13 @@ SOURCE_FILE
       BLOCK_EXPR
         L_BRACE "{"
         LET_STMT
-          KW_LET "let"
-          WORD "a1"
+          PATTERN
+            BINDING_PATTERN "// --- Assignment FROM optional chain (read) ---
+
+    // Basic: a?.b
+    let a1"
+              KW_LET "let"
+              WORD "a1"
           EQUALS "="
           OPTIONAL_FIELD_ACCESS_EXPR "user?.id"
             WORD "user"
@@ -140,8 +145,11 @@ SOURCE_FILE
             WORD "id"
           SEMICOLON ";"
         LET_STMT
-          KW_LET "let"
-          WORD "a2"
+          PATTERN
+            BINDING_PATTERN "// Stacked: a?.b?.c
+    let a2"
+              KW_LET "let"
+              WORD "a2"
           EQUALS "="
           OPTIONAL_FIELD_ACCESS_EXPR
             OPTIONAL_FIELD_ACCESS_EXPR "user?.profile"
@@ -152,8 +160,11 @@ SOURCE_FILE
             WORD "name"
           SEMICOLON ";"
         LET_STMT
-          KW_LET "let"
-          WORD "a3"
+          PATTERN
+            BINDING_PATTERN "// Deep chain: a?.b?.c?.d
+    let a3"
+              KW_LET "let"
+              WORD "a3"
           EQUALS "="
           OPTIONAL_FIELD_ACCESS_EXPR
             OPTIONAL_FIELD_ACCESS_EXPR
@@ -167,8 +178,12 @@ SOURCE_FILE
             WORD "street"
           SEMICOLON ";"
         LET_STMT
-          KW_LET "let"
-          WORD "a4"
+          PATTERN
+            BINDING_PATTERN "// Long short-circuit: a?.b.c — entire tail is guarded
+    // If user is null → null. If user non-null but profile null → runtime error on .name
+    let a4"
+              KW_LET "let"
+              WORD "a4"
           EQUALS "="
           FIELD_ACCESS_EXPR
             OPTIONAL_FIELD_ACCESS_EXPR "user?.profile"
@@ -179,8 +194,11 @@ SOURCE_FILE
             WORD "name"
           SEMICOLON ";"
         LET_STMT
-          KW_LET "let"
-          WORD "a5"
+          PATTERN
+            BINDING_PATTERN "// Multiple accesses after ?.: a?.b.c.d
+    let a5"
+              KW_LET "let"
+              WORD "a5"
           EQUALS "="
           FIELD_ACCESS_EXPR
             FIELD_ACCESS_EXPR
@@ -194,8 +212,12 @@ SOURCE_FILE
             WORD "street"
           SEMICOLON ";"
         LET_STMT
-          KW_LET "let"
-          WORD "a6"
+          PATTERN
+            BINDING_PATTERN "// Stacking creates independent checkpoints: a?.b?.c.d
+    // If profile null → null (second ?. guards). If address null → error (.street is not ?.)
+    let a6"
+              KW_LET "let"
+              WORD "a6"
           EQUALS "="
           FIELD_ACCESS_EXPR
             OPTIONAL_FIELD_ACCESS_EXPR
@@ -209,8 +231,11 @@ SOURCE_FILE
             WORD "street"
           SEMICOLON ";"
         LET_STMT
-          KW_LET "let"
-          WORD "a7"
+          PATTERN
+            BINDING_PATTERN "// Parentheses BREAK the chain: (a?.b).c — if a null, (null).c → TypeError
+    let a7"
+              KW_LET "let"
+              WORD "a7"
           EQUALS "="
           FIELD_ACCESS_EXPR
             PAREN_EXPR
@@ -224,8 +249,11 @@ SOURCE_FILE
             WORD "name"
           SEMICOLON ";"
         LET_STMT
-          KW_LET "let"
-          WORD "a8"
+          PATTERN
+            BINDING_PATTERN "// Parentheses around entire chain (no effect on semantics)
+    let a8"
+              KW_LET "let"
+              WORD "a8"
           EQUALS "="
           PAREN_EXPR
             L_PAREN "("
@@ -239,8 +267,11 @@ SOURCE_FILE
             R_PAREN ")"
           SEMICOLON ";"
         LET_STMT
-          KW_LET "let"
-          WORD "a9"
+          PATTERN
+            BINDING_PATTERN "// Nested chains via parenthesized eval order
+    let a9"
+              KW_LET "let"
+              WORD "a9"
           EQUALS "="
           OPTIONAL_FIELD_ACCESS_EXPR
             OPTIONAL_FIELD_ACCESS_EXPR
@@ -254,8 +285,11 @@ SOURCE_FILE
             WORD "zip"
           SEMICOLON ";"
         LET_STMT
-          KW_LET "let"
-          WORD "a10"
+          PATTERN
+            BINDING_PATTERN "// E2: ?. on a non-nullable type (should be error)
+    let a10"
+              KW_LET "let"
+              WORD "a10"
           EQUALS "="
           OPTIONAL_FIELD_ACCESS_EXPR "nonNullUser?.id"
             WORD "nonNullUser"
@@ -318,8 +352,11 @@ SOURCE_FILE
           INTEGER_LITERAL "1"
         SEMICOLON ";"
         LET_STMT
-          KW_LET "let"
-          WORD "a11"
+          PATTERN
+            BINDING_PATTERN "// Return value of safe call assignment: short-circuit → null, otherwise → assigned value
+    let a11"
+              KW_LET "let"
+              WORD "a11"
           EQUALS "="
           PAREN_EXPR
             L_PAREN "("
@@ -401,8 +438,13 @@ SOURCE_FILE
       BLOCK_EXPR
         L_BRACE "{"
         LET_STMT
-          KW_LET "let"
-          WORD "b1"
+          PATTERN
+            BINDING_PATTERN "// --- Assignment FROM optional index (read) ---
+
+    // List: basic a?.[0]
+    let b1"
+              KW_LET "let"
+              WORD "b1"
           EQUALS "="
           OPTIONAL_INDEX_EXPR "items?.[0]"
             WORD "items"
@@ -412,8 +454,11 @@ SOURCE_FILE
             R_BRACKET "]"
           SEMICOLON ";"
         LET_STMT
-          KW_LET "let"
-          WORD "b2"
+          PATTERN
+            BINDING_PATTERN "// List: chained through optional index
+    let b2"
+              KW_LET "let"
+              WORD "b2"
           EQUALS "="
           OPTIONAL_INDEX_EXPR
             OPTIONAL_FIELD_ACCESS_EXPR "node?.children"
@@ -426,8 +471,11 @@ SOURCE_FILE
             R_BRACKET "]"
           SEMICOLON ";"
         LET_STMT
-          KW_LET "let"
-          WORD "b3"
+          PATTERN
+            BINDING_PATTERN "// List: long short-circuit after ?.[idx] — .value guarded by preceding ?.
+    let b3"
+              KW_LET "let"
+              WORD "b3"
           EQUALS "="
           FIELD_ACCESS_EXPR
             OPTIONAL_INDEX_EXPR
@@ -443,8 +491,11 @@ SOURCE_FILE
             WORD "value"
           SEMICOLON ";"
         LET_STMT
-          KW_LET "let"
-          WORD "b4"
+          PATTERN
+            BINDING_PATTERN "// List: stacked — a?.b?.[i].c
+    let b4"
+              KW_LET "let"
+              WORD "b4"
           EQUALS "="
           OPTIONAL_FIELD_ACCESS_EXPR
             FIELD_ACCESS_EXPR
@@ -463,8 +514,11 @@ SOURCE_FILE
             WORD "value"
           SEMICOLON ";"
         LET_STMT
-          KW_LET "let"
-          WORD "b5"
+          PATTERN
+            BINDING_PATTERN "// Map: basic a?.["key"]
+    let b5"
+              KW_LET "let"
+              WORD "b5"
           EQUALS "="
           OPTIONAL_INDEX_EXPR
             WORD "lookup"
@@ -477,8 +531,11 @@ SOURCE_FILE
             R_BRACKET "]"
           SEMICOLON ";"
         LET_STMT
-          KW_LET "let"
-          WORD "b6"
+          PATTERN
+            BINDING_PATTERN "// Map: chained
+    let b6"
+              KW_LET "let"
+              WORD "b6"
           EQUALS "="
           OPTIONAL_INDEX_EXPR
             OPTIONAL_FIELD_ACCESS_EXPR "node?.labels"
@@ -494,8 +551,11 @@ SOURCE_FILE
             R_BRACKET "]"
           SEMICOLON ";"
         LET_STMT
-          KW_LET "let"
-          WORD "b7"
+          PATTERN
+            BINDING_PATTERN "// Map: long short-circuit after ?.["key"]
+    let b7"
+              KW_LET "let"
+              WORD "b7"
           EQUALS "="
           FIELD_ACCESS_EXPR
             OPTIONAL_INDEX_EXPR
@@ -514,8 +574,11 @@ SOURCE_FILE
             WORD "value"
           SEMICOLON ";"
         LET_STMT
-          KW_LET "let"
-          WORD "b8"
+          PATTERN
+            BINDING_PATTERN "// Parentheses break chain: (a?.[i]).prop — TypeError if a null
+    let b8"
+              KW_LET "let"
+              WORD "b8"
           EQUALS "="
           OPTIONAL_INDEX_EXPR
             PAREN_EXPR
@@ -531,8 +594,10 @@ SOURCE_FILE
             R_BRACKET "]"
           SEMICOLON ";"
         LET_STMT
-          KW_LET "let"
-          WORD "b9"
+          PATTERN
+            BINDING_PATTERN "let b9"
+              KW_LET "let"
+              WORD "b9"
           EQUALS "="
           CALL_EXPR
             FIELD_ACCESS_EXPR
@@ -552,8 +617,11 @@ SOURCE_FILE
               R_PAREN ")"
           SEMICOLON ";"
         LET_STMT
-          KW_LET "let"
-          WORD "b10"
+          PATTERN
+            BINDING_PATTERN "// Parentheses for eval order: a?.[b?.c] — nested optional chains in index expr
+    let b10"
+              KW_LET "let"
+              WORD "b10"
           EQUALS "="
           OPTIONAL_INDEX_EXPR
             OPTIONAL_FIELD_ACCESS_EXPR "node?.children"
@@ -569,8 +637,11 @@ SOURCE_FILE
             R_BRACKET "]"
           SEMICOLON ";"
         LET_STMT
-          KW_LET "let"
-          WORD "b11"
+          PATTERN
+            BINDING_PATTERN "// Nested computed access: a?.[b?.[c]]
+    let b11"
+              KW_LET "let"
+              WORD "b11"
           EQUALS "="
           OPTIONAL_INDEX_EXPR
             OPTIONAL_FIELD_ACCESS_EXPR "node?.children"
@@ -592,8 +663,11 @@ SOURCE_FILE
             R_BRACKET "]"
           SEMICOLON ";"
         LET_STMT
-          KW_LET "let"
-          WORD "b12"
+          PATTERN
+            BINDING_PATTERN "// E2: ?. on non-nullable (should be error)
+    let b12"
+              KW_LET "let"
+              WORD "b12"
           EQUALS "="
           OPTIONAL_INDEX_EXPR "nonNullItems?.[0]"
             WORD "nonNullItems"
@@ -684,8 +758,11 @@ SOURCE_FILE
           INTEGER_LITERAL "5"
         SEMICOLON ";"
         LET_STMT
-          KW_LET "let"
-          WORD "b13"
+          PATTERN
+            BINDING_PATTERN "// Return value of safe indexed assignment
+    let b13"
+              KW_LET "let"
+              WORD "b13"
           EQUALS "="
           PAREN_EXPR
             L_PAREN "("
@@ -755,35 +832,51 @@ SOURCE_FILE
       BLOCK_EXPR
         L_BRACE "{"
         LET_STMT
-          KW_LET "let"
-          WORD "c1"
+          PATTERN
+            BINDING_PATTERN "// --- Assignment FROM optional call (read) ---
+
+    // Basic optional call: f?.(args)
+    let c1"
+              KW_LET "let"
+              WORD "c1"
           EQUALS "="
           OPTIONAL_CALL_EXPR
             WORD "callback"
             QUESTION_DOT "?."
-            CALL_ARGS "(42)"
+            CALL_ARGS
               L_PAREN "("
-              INTEGER_LITERAL "42"
+              CALL_ARG "42"
+                INTEGER_LITERAL "42"
               R_PAREN ")"
           SEMICOLON ";"
         LET_STMT
-          KW_LET "let"
-          WORD "c2"
+          PATTERN
+            BINDING_PATTERN "// Long short-circuit after optional call: f?.(x).prop — tail guarded
+    let c2"
+              KW_LET "let"
+              WORD "c2"
           EQUALS "="
           FIELD_ACCESS_EXPR
             OPTIONAL_CALL_EXPR
               WORD "callback"
               QUESTION_DOT "?."
-              CALL_ARGS "(42)"
+              CALL_ARGS
                 L_PAREN "("
-                INTEGER_LITERAL "42"
+                CALL_ARG "42"
+                  INTEGER_LITERAL "42"
                 R_PAREN ")"
             DOT "."
             WORD "length"
           SEMICOLON ";"
         LET_STMT
-          KW_LET "let"
-          WORD "c3"
+          PATTERN
+            BINDING_PATTERN "// Stacking: a?.b?.(x).d — from spec §1.3
+    // If a null → null; if a.b null → null; otherwise a.b(x).d
+
+    // Parentheses break chain: (f?.(x)).prop — TypeError if f null
+    let c3"
+              KW_LET "let"
+              WORD "c3"
           EQUALS "="
           FIELD_ACCESS_EXPR
             PAREN_EXPR
@@ -791,36 +884,45 @@ SOURCE_FILE
               OPTIONAL_CALL_EXPR
                 WORD "callback"
                 QUESTION_DOT "?."
-                CALL_ARGS "(42)"
+                CALL_ARGS
                   L_PAREN "("
-                  INTEGER_LITERAL "42"
+                  CALL_ARG "42"
+                    INTEGER_LITERAL "42"
                   R_PAREN ")"
               R_PAREN ")"
             DOT "."
             WORD "length"
           SEMICOLON ";"
         LET_STMT
-          KW_LET "let"
-          WORD "c4"
+          PATTERN
+            BINDING_PATTERN "// E4: ?.(…) on a non-callable type (should be error)
+    let c4"
+              KW_LET "let"
+              WORD "c4"
           EQUALS "="
           OPTIONAL_CALL_EXPR
             WORD "name"
             QUESTION_DOT "?."
-            CALL_ARGS "(42)"
+            CALL_ARGS
               L_PAREN "("
-              INTEGER_LITERAL "42"
+              CALL_ARG "42"
+                INTEGER_LITERAL "42"
               R_PAREN ")"
           SEMICOLON ";"
         LET_STMT
-          KW_LET "let"
-          WORD "c5"
+          PATTERN
+            BINDING_PATTERN "// E2: ?. on non-nullable callable (should be error)
+    let c5"
+              KW_LET "let"
+              WORD "c5"
           EQUALS "="
           OPTIONAL_CALL_EXPR
             WORD "nonNullCb"
             QUESTION_DOT "?."
-            CALL_ARGS "(42)"
+            CALL_ARGS
               L_PAREN "("
-              INTEGER_LITERAL "42"
+              CALL_ARG "42"
+                INTEGER_LITERAL "42"
               R_PAREN ")"
           SEMICOLON ";"
         RETURN_STMT
@@ -866,8 +968,13 @@ SOURCE_FILE
       BLOCK_EXPR
         L_BRACE "{"
         LET_STMT
-          KW_LET "let"
-          WORD "d1"
+          PATTERN
+            BINDING_PATTERN "// --- Assignment FROM ?? (read) ---
+
+    // Basic: a ?? b
+    let d1"
+              KW_LET "let"
+              WORD "d1"
           EQUALS "="
           BINARY_EXPR
             OPTIONAL_FIELD_ACCESS_EXPR
@@ -885,8 +992,11 @@ SOURCE_FILE
               QUOTE """
           SEMICOLON ";"
         LET_STMT
-          KW_LET "let"
-          WORD "d2"
+          PATTERN
+            BINDING_PATTERN "// Chaining: a ?? b ?? c
+    let d2"
+              KW_LET "let"
+              WORD "d2"
           EQUALS "="
           BINARY_EXPR
             BINARY_EXPR
@@ -917,11 +1027,15 @@ SOURCE_FILE
               QUOTE """
           SEMICOLON ";"
         LET_STMT
-          KW_LET "let"
-          WORD "d3"
-          COLON ":"
-          TYPE_EXPR "string"
-            WORD "string"
+          PATTERN
+            BINDING_PATTERN
+              KW_LET "let"
+              WORD "d3"
+              COLON ":"
+              PATTERN
+                TYPE_PATTERN
+                  TYPE_EXPR "string"
+                    WORD "string"
           EQUALS "="
           BINARY_EXPR
             OPTIONAL_FIELD_ACCESS_EXPR
@@ -936,12 +1050,16 @@ SOURCE_FILE
             WORD "fallback"
           SEMICOLON ";"
         LET_STMT
-          KW_LET "let"
-          WORD "d4"
-          COLON ":"
-          TYPE_EXPR "string?"
-            WORD "string"
-            QUESTION "?"
+          PATTERN
+            BINDING_PATTERN
+              KW_LET "let"
+              WORD "d4"
+              COLON ":"
+              PATTERN
+                TYPE_PATTERN
+                  TYPE_EXPR "string?"
+                    WORD "string"
+                    QUESTION "?"
           EQUALS "="
           BINARY_EXPR
             OPTIONAL_FIELD_ACCESS_EXPR
@@ -965,8 +1083,11 @@ SOURCE_FILE
               WORD "zip"
           SEMICOLON ";"
         LET_STMT
-          KW_LET "let"
-          WORD "d5"
+          PATTERN
+            BINDING_PATTERN "// With optional index
+    let d5"
+              KW_LET "let"
+              WORD "d5"
           EQUALS "="
           BINARY_EXPR
             OPTIONAL_INDEX_EXPR
@@ -986,8 +1107,15 @@ SOURCE_FILE
             INTEGER_LITERAL "0"
           SEMICOLON ";"
         LET_STMT
-          KW_LET "let"
-          WORD "d6"
+          PATTERN
+            BINDING_PATTERN "// With optional call
+    // let d6 = callback?.(1) ?? "no callback";
+
+    // Lazy evaluation: RHS not evaluated if LHS non-null (semantic, but
+    // compile-time type checking should still work)
+    let d6"
+              KW_LET "let"
+              WORD "d6"
           EQUALS "="
           BINARY_EXPR
             OPTIONAL_FIELD_ACCESS_EXPR
@@ -1030,8 +1158,16 @@ SOURCE_FILE
               QUOTE """
         SEMICOLON ";"
         LET_STMT
-          KW_LET "let"
-          WORD "d7"
+          PATTERN
+            BINDING_PATTERN "// --- Diagnostic: E1 — cannot mix ?? with || without parens ---
+    // (uncomment to trigger E1 error)
+    // let d7_err = user?.profile?.name ?? fallback || "other";
+    // let d8_err = user?.profile?.name ?? true && false;
+
+    // OK: explicit parens resolve ambiguity
+    let d7"
+              KW_LET "let"
+              WORD "d7"
           EQUALS "="
           PAREN_EXPR
             L_PAREN "("
@@ -1049,8 +1185,11 @@ SOURCE_FILE
             R_PAREN ")"
           SEMICOLON ";"
         LET_STMT
-          KW_LET "let"
-          WORD "d8"
+          PATTERN
+            BINDING_PATTERN "// --- Diagnostic: E3 — ?? on non-nullable type ---
+    let d8"
+              KW_LET "let"
+              WORD "d8"
           EQUALS "="
           BINARY_EXPR "count ?? 0"
             WORD "count"
@@ -1059,8 +1198,11 @@ SOURCE_FILE
             INTEGER_LITERAL "0"
           SEMICOLON ";"
         LET_STMT
-          KW_LET "let"
-          WORD "d9"
+          PATTERN
+            BINDING_PATTERN "// --- Diagnostic: W2 — ?? null is redundant ---
+    let d9"
+              KW_LET "let"
+              WORD "d9"
           EQUALS "="
           BINARY_EXPR
             OPTIONAL_FIELD_ACCESS_EXPR
@@ -1075,8 +1217,11 @@ SOURCE_FILE
             WORD "null"
           SEMICOLON ";"
         LET_STMT
-          KW_LET "let"
-          WORD "d10"
+          PATTERN
+            BINDING_PATTERN "// --- Diagnostic: W1 — || where ?? was likely intended ---
+    let d10"
+              KW_LET "let"
+              WORD "d10"
           EQUALS "="
           BINARY_EXPR
             OPTIONAL_FIELD_ACCESS_EXPR
@@ -1132,8 +1277,11 @@ SOURCE_FILE
       BLOCK_EXPR
         L_BRACE "{"
         LET_STMT
-          KW_LET "let"
-          WORD "e1"
+          PATTERN
+            BINDING_PATTERN "// Optional chain + null coalescing + index
+    let e1"
+              KW_LET "let"
+              WORD "e1"
           EQUALS "="
           BINARY_EXPR
             OPTIONAL_FIELD_ACCESS_EXPR
@@ -1154,8 +1302,11 @@ SOURCE_FILE
               QUOTE """
           SEMICOLON ";"
         LET_STMT
-          KW_LET "let"
-          WORD "e2"
+          PATTERN
+            BINDING_PATTERN "// Nested optional index with optional chain providing the index
+    let e2"
+              KW_LET "let"
+              WORD "e2"
           EQUALS "="
           OPTIONAL_INDEX_EXPR
             OPTIONAL_FIELD_ACCESS_EXPR "node?.children"
@@ -1175,8 +1326,11 @@ SOURCE_FILE
             R_BRACKET "]"
           SEMICOLON ";"
         LET_STMT
-          KW_LET "let"
-          WORD "e3"
+          PATTERN
+            BINDING_PATTERN "// Multiple ?? in sequence with diverse sources
+    let e3"
+              KW_LET "let"
+              WORD "e3"
           EQUALS "="
           BINARY_EXPR
             BINARY_EXPR
@@ -1262,8 +1416,11 @@ SOURCE_FILE
             INTEGER_LITERAL "1"
         SEMICOLON ";"
         LET_STMT
-          KW_LET "let"
-          WORD "e4"
+          PATTERN
+            BINDING_PATTERN "// Return value of safe call assignment (short-circuit → null)
+    let e4"
+              KW_LET "let"
+              WORD "e4"
           EQUALS "="
           PAREN_EXPR
             L_PAREN "("
@@ -1280,8 +1437,11 @@ SOURCE_FILE
             R_PAREN ")"
           SEMICOLON ";"
         LET_STMT
-          KW_LET "let"
-          WORD "e5"
+          PATTERN
+            BINDING_PATTERN "// Deeply nested parenthesized eval order
+    let e5"
+              KW_LET "let"
+              WORD "e5"
           EQUALS "="
           FIELD_ACCESS_EXPR
             OPTIONAL_INDEX_EXPR
@@ -1315,8 +1475,11 @@ SOURCE_FILE
             WORD "value"
           SEMICOLON ";"
         LET_STMT
-          KW_LET "let"
-          WORD "e6"
+          PATTERN
+            BINDING_PATTERN "// Chain through map then list
+    let e6"
+              KW_LET "let"
+              WORD "e6"
           EQUALS "="
           FIELD_ACCESS_EXPR
             OPTIONAL_INDEX_EXPR

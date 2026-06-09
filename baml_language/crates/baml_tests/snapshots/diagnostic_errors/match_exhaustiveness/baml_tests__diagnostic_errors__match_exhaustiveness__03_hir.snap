@@ -267,7 +267,7 @@ function user.OptionalWithCatchAll(x: int?) -> string  [expr] {
   {  } match (x) { null => "no value", _ => "has value" }
 }
 function user.OverlappingTypedPatterns(r: user.Result) -> string  [expr] {
-  {  } match (r) { _: user.Success => "success", _: user.Success | user.Failure => "covers failure on..." }
+  {  } match (r) { user.Success => "success", user.Success | user.Failure => "covers failure on..." }
 }
 function user.OverlappingWithBindings(r: user.Result) -> string  [expr] {
   {  } match (r) { s: user.Success => s.data, x: user.Success | user.Failure => "remaining" }
@@ -279,7 +279,7 @@ function user.PartialUnionPatternCoverage(r: user.FullResult) -> string  [expr] 
   {  } match (r) { x: user.Success | user.Failure => "not pending" }
 }
 function user.PartialUnionPlusCatchAll(r: user.FullResult) -> string  [expr] {
-  {  } match (r) { x: user.Success | user.Failure => "success or failure", _: user.Pending => "pending" }
+  {  } match (r) { x: user.Success | user.Failure => "success or failure", user.Pending => "pending" }
 }
 function user.StringLiteralAfterStringType(s: string) -> string  [expr] {
   {  } match (s) { x: string => "any string", "hello" => "unreachable" }
@@ -307,4 +307,46 @@ function user.WrongLiteralTypeBoolWithInt(b: bool) -> string  [expr] {
 }
 function user.WrongLiteralTypeIntWithString(x: int) -> string  [expr] {
   {  } match (x) { "hello" => "wrong type" }
+}
+function user.from_json(j: baml.json.json) -> user.Cat  [expr] {
+  user.Cat { name: baml.json.from_json(baml.json.field(j, "name")) }
+}
+function user.from_json(j: baml.json.json) -> user.Pending  [expr] {
+  user.Pending { eta: baml.json.from_json(baml.json.field(j, "eta")) }
+}
+function user.from_json(j: baml.json.json) -> user.Dog  [expr] {
+  user.Dog { name: baml.json.from_json(baml.json.field(j, "name")) }
+}
+function user.from_json(j: baml.json.json) -> user.Failure  [expr] {
+  user.Failure { reason: baml.json.from_json(baml.json.field(j, "reason")) }
+}
+function user.from_json(j: baml.json.json) -> user.Success  [expr] {
+  user.Success { data: baml.json.from_json(baml.json.field(j, "data")) }
+}
+function user.from_json(j: baml.json.json) -> user.Fish  [expr] {
+  user.Fish { name: baml.json.from_json(baml.json.field(j, "name")) }
+}
+function user.from_json(j: baml.json.json) -> user.Bird  [expr] {
+  user.Bird { name: baml.json.from_json(baml.json.field(j, "name")) }
+}
+function user.to_json(self: ?) -> baml.json.json  [expr] {
+  map { "name": self.name.to_json() }
+}
+function user.to_json(self: ?) -> baml.json.json  [expr] {
+  map { "name": self.name.to_json() }
+}
+function user.to_json(self: ?) -> baml.json.json  [expr] {
+  map { "eta": self.eta.to_json() }
+}
+function user.to_json(self: ?) -> baml.json.json  [expr] {
+  map { "reason": self.reason.to_json() }
+}
+function user.to_json(self: ?) -> baml.json.json  [expr] {
+  map { "data": self.data.to_json() }
+}
+function user.to_json(self: ?) -> baml.json.json  [expr] {
+  map { "name": self.name.to_json() }
+}
+function user.to_json(self: ?) -> baml.json.json  [expr] {
+  map { "name": self.name.to_json() }
 }

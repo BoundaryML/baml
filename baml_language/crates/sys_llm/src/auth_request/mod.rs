@@ -34,7 +34,8 @@ pub(crate) async fn auth_request(
         | LlmProvider::AzureOpenAi
         | LlmProvider::Ollama
         | LlmProvider::OpenRouter
-        | LlmProvider::OpenAiResponses => auth_openai(request, client, provider),
+        | LlmProvider::OpenAiResponses
+        | LlmProvider::AiGatewayImages => auth_openai(request, client, provider),
         LlmProvider::AwsBedrock => {
             return bedrock::auth_bedrock(request, client, io).await;
         }
@@ -85,6 +86,11 @@ fn auth_openai(request: &mut HttpRequest, client: &PrimitiveClient, provider: Ll
             request
                 .headers
                 .insert("authorization".to_string(), format!("Bearer {api_key}"));
+            if provider == LlmProvider::AiGatewayImages {
+                request
+                    .headers
+                    .insert("ai-gateway-auth-method".to_string(), "api-key".to_string());
+            }
         }
     }
 }
@@ -197,6 +203,34 @@ mod tests {
         .await
         .unwrap();
         assert!(!req.headers.contains_key("authorization"));
+    }
+
+    #[tokio::test]
+    async fn ai_gateway_images_sets_gateway_auth_method_header() {
+        let client = make_client(
+            "ai-gateway-images",
+            PrimitiveClientOptions {
+                api_key: Some("gateway-test-key".to_string()),
+                ..Default::default()
+            },
+        );
+        let mut req = fake_request();
+        auth_request(
+            LlmProvider::AiGatewayImages,
+            &mut req,
+            &client,
+            Arc::new(::sys_types::runtime_io::NoopRuntimeIo),
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            req.headers.get("authorization").unwrap(),
+            "Bearer gateway-test-key",
+        );
+        assert_eq!(
+            req.headers.get("ai-gateway-auth-method").unwrap(),
+            "api-key",
+        );
     }
 
     #[tokio::test]

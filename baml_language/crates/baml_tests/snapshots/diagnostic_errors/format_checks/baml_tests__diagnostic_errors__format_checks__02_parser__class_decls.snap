@@ -162,7 +162,7 @@ class EmptyClass {
             STRING_LITERAL "This is an extremely long description attribute value that should push the field definition well past the default line width limit of one hundred columns"
               QUOTE """
               WORD "This"
-              WORD "is"
+              KW_IS "is"
               WORD "an"
               WORD "extremely"
               WORD "long"

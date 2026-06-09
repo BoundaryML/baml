@@ -34,6 +34,14 @@ pub struct Function {
     pub arguments: Vec<FunctionArgument>,
     pub return_type: super::Ty,
 
+    /// The function's inferred throws contract as a resolved `Ty`, or `None`
+    /// when the function throws nothing (`callable_throws` → `Never`). A
+    /// declared `throws` clause, when present, wins over inference; otherwise
+    /// this is the inferred escaping-throws set. A `throws A | B` resolves to
+    /// `Ty::Union([A, B])`. Generators derive the unqualified leaf names from
+    /// this for the `Raises:` docstring block (32d).
+    pub throws: Option<super::Ty>,
+
     // TODO: add other APIs here that impact code-gen
     pub watchers: Vec<(baml_base::Name, super::Ty)>,
 
@@ -42,10 +50,26 @@ pub struct Function {
     pub origin: Origin,
 }
 
+#[derive(Clone)]
 pub struct FunctionArgument {
     pub name: baml_base::Name,
     pub docstring: Option<String>,
     pub ty: super::Ty,
+    pub default: Option<FunctionArgumentDefault>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub enum FunctionArgumentDefault {
+    Null,
+    Literal(DefaultLiteral),
+    Expression { source: Option<String> },
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub enum DefaultLiteral {
+    Scalar(baml_base::Literal),
+    EmptyList,
+    EmptyMap,
 }
 
 pub struct Class {
@@ -180,6 +204,7 @@ impl super::Ty {
 
         match self {
             Ty::Int
+            | Ty::Bigint
             | Ty::Float
             | Ty::String
             | Ty::Bool
@@ -190,6 +215,7 @@ impl super::Ty {
             | Ty::Enum(_)
             | Ty::TypeAlias(_)
             | Ty::TypeVar(_)
+            | Ty::RustType
             | Ty::BuiltinUnknown
             // Unions are guaranteed to not have unions thanks to .validate()
             | Ty::Union(_)
@@ -199,12 +225,12 @@ impl super::Ty {
                     unions.extend(a.walk_all_unions());
                 }
             }
-            Ty::Optional(ty) | Ty::List(ty) | Ty::Map { key: _, value: ty } => {
+            Ty::List(ty) | Ty::Map { key: _, value: ty } => {
                 unions.extend(ty.walk_all_unions());
             }
             Ty::Callable { params, ret } => {
                 for p in params {
-                    unions.extend(p.walk_all_unions());
+                    unions.extend(p.ty.walk_all_unions());
                 }
                 unions.extend(ret.walk_all_unions());
             }

@@ -3,6 +3,8 @@
 //! Each sub-module implements one or more generated traits:
 //!
 //! - `array` — `BamlClassArray` (length, push, at, concat, ...)
+//! - `float` — `BamlClassFloat` (predicates, rounding, math, trig, ...)
+//! - `int` — `BamlClassInt` (abs, min, max, clamp, bit ops, ...)
 //! - `string` — `BamlClassString` (length, trim, split, ...)
 //! - `map` — `BamlClassMap` (length, has, keys, values, ...)
 //! - `math` — `BamlNamespaceMath` (trunc)
@@ -16,27 +18,38 @@
 //! 2. Implement the method in the appropriate sub-module's `impl` block
 
 mod array;
+pub(crate) mod bigint;
+mod float;
+mod future;
+mod int;
+pub mod json;
 mod map;
 mod math;
 mod media;
+mod primitives;
 mod root;
+mod spawn;
 mod stack_trace;
 mod string;
 mod sys;
+mod time;
+mod toml;
+mod type_class;
 mod uint8array;
 mod unstable;
 
 use std::collections::HashMap;
 
+use bex_heap::TlabHolder;
 use bex_vm_types::{
-    HeapPtr,
+    ArrayReadGuard, HeapPtr, MapReadGuard,
     types::{Instance, Object, Type, Value},
 };
 use indexmap::IndexMap;
 
 use crate::{
     BexVm,
-    errors::{VmInternalError, VmRustFnError},
+    errors::{VmBamlError, VmInternalError, VmRustFnError},
 };
 
 /// Result type for native functions.
@@ -55,9 +68,16 @@ pub enum NativeCallResult {
     Error(VmRustFnError),
     /// Yield control to call a bytecode function, then invoke the continuation
     /// with its return value.
+    ///
+    /// `type_args` carries explicit BEP-039 type arguments to seed the callee's
+    /// frame.  This is the native counterpart of the `Call` instruction's
+    /// type-arg channel — required so native helpers like `baml.json.from_json`
+    /// can dispatch a generic class' `from_json` (e.g. `Box<Secret>.from_json`)
+    /// with the right `T` substitution.  Pass `vec![]` for non-generic callees.
     YieldToCall {
         callee: HeapPtr,
         args: Vec<Value>,
+        type_args: Vec<baml_type::Ty>,
         continuation: Box<dyn Continuation>,
     },
 }
@@ -89,14 +109,25 @@ pub trait Continuation: Send {
 }
 
 // Generate the BamlClass*/BamlNamespace*/BamlPackageBaml trait hierarchy.
+// `unsafe_code` is intentional: float-boxed Object reads use `ptr.get()`
+// which is unsafe; the surrounding accessors uphold the heap-permit
+// contract (see `BexVm::get_object`).
 #[allow(
     unused_variables,
+    unsafe_code,
     clippy::wildcard_imports,
     clippy::pub_underscore_fields,
     clippy::used_underscore_binding,
     clippy::elidable_lifetime_names,
+    clippy::iter_not_returning_iterator,
     clippy::needless_lifetimes,
-    clippy::redundant_closure_call
+    clippy::redundant_closure_call,
+    // Static builtin constructors (e.g. `baml.spawn.CancelToken.new`) are
+    // generated as trait methods returning `Value` (the heap instance), not
+    // `Self` — that is the codegen contract, not a smell.
+    clippy::new_ret_no_self,
+    clippy::too_many_arguments,
+    non_snake_case
 )]
 mod generated {
     use super::*;
@@ -106,6 +137,72 @@ pub use generated::*;
 
 /// The VM's native function implementations.
 pub struct PackageBamlImpl;
+
+// =============================================================================
+// Shared helper: resolve `to_json` callee for a given value
+// =============================================================================
+
+/// For a given value `v`, look up the appropriate `to_json` function in the VM
+/// globals, create a `BoundMethod { function: to_json_fn_ptr, receiver: v }`,
+/// and return the `HeapPtr` to the bound method.
+///
+/// The bound method has `receiver = v` baked in; the VM inserts the receiver
+/// as `self` when the bound method is dispatched, so `YieldToCall { args: [] }`
+/// is correct (no extra arguments beyond self).
+///
+/// Used by both `Array.to_json` (in `array.rs`) and `Map.to_json` (in `map.rs`).
+pub(super) fn make_to_json_callee(vm: &mut BexVm, v: Value) -> Result<HeapPtr, VmRustFnError> {
+    use bex_vm_types::ValueKind;
+    let fn_name: String = match v.kind() {
+        ValueKind::Null => "baml.Null.to_json".to_string(),
+        ValueKind::Bool(_) => "baml.Bool.to_json".to_string(),
+        ValueKind::Int(_) => "baml.Int.to_json".to_string(),
+        ValueKind::OmittedArg => {
+            return Err(VmRustFnError::BamlError(VmBamlError::InvalidArgument {
+                message: "omitted argument cannot be converted to json".to_string(),
+            }));
+        }
+        ValueKind::Object(ptr) => match vm.get_object(ptr) {
+            Object::Float(_) => "baml.Float.to_json".to_string(),
+            Object::String(_) => "baml.String.to_json".to_string(),
+            Object::Array(_) => "baml.Array.to_json".to_string(),
+            Object::Map(_) => "baml.Map.to_json".to_string(),
+            Object::Instance(inst) => {
+                let class_ptr = inst.class;
+                let fqn = match vm.get_object(class_ptr) {
+                    Object::Class(c) => c.name.display_name.as_str().to_string(),
+                    _ => {
+                        return Err(VmRustFnError::InternalError(
+                            VmInternalError::MissingNativeFunction {
+                                name: "to_json dispatch: instance.class is not a Class".to_string(),
+                            },
+                        ));
+                    }
+                };
+                format!("{fqn}.to_json")
+            }
+            _ => {
+                return Err(VmRustFnError::InternalError(
+                    VmInternalError::MissingNativeFunction {
+                        name: "to_json dispatch: no to_json for this value type".to_string(),
+                    },
+                ));
+            }
+        },
+    };
+
+    let fn_ptr = vm.find_function_by_name(&fn_name).ok_or_else(|| {
+        VmRustFnError::InternalError(VmInternalError::MissingNativeFunction {
+            name: format!("to_json dispatch: function '{fn_name}' not found in globals"),
+        })
+    })?;
+
+    // Allocate a BoundMethod with the value as receiver.
+    Ok(vm.alloc_bound_method(bex_vm_types::BoundMethod {
+        function: fn_ptr,
+        receiver: v,
+    }))
+}
 
 // =============================================================================
 // Public module-level function wrappers
@@ -160,6 +257,10 @@ pub fn attach_builtins(object: Object) -> Result<Object, VmInternalError> {
                 stream_return_type: function.stream_return_type,
                 param_names: function.param_names,
                 param_types: function.param_types,
+                param_has_default: function.param_has_default,
+                display_type_params: function.display_type_params,
+                display_param_types: function.display_param_types,
+                display_return_type: function.display_return_type,
                 throws_type: function.throws_type,
                 origin: function.origin,
                 body_meta: function.body_meta,

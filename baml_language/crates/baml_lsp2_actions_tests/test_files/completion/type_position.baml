@@ -14,7 +14,7 @@ class Test {
 //----
 //- diagnostics
 // (parse error expected - incomplete field)
-// Error: field 'field' is missing a type annotation
+// error: field 'field' is missing a type annotation
 //     ╭─[ type_position.baml:11:5 ]
 //     │
 //  11 │     field :

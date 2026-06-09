@@ -43,10 +43,22 @@ pub enum TypeExpr {
         segments: Vec<Name>,
         /// Generic type arguments (e.g., `<T>` in `Stream<T>`). Empty for non-generic paths.
         generic_args: Vec<TypeExpr>,
+        /// Named associated type bindings in type positions, e.g. `Iterator<Item = int>`.
+        associated_type_bindings: Vec<AssociatedTypeBinding>,
+        attrs: Vec<RawAttribute>,
+    },
+    /// Associated type projection: `Base.Item` or `(Base as Interface).Item`.
+    AssociatedTypeProjection {
+        base: Box<TypeExpr>,
+        interface: Option<Box<TypeExpr>>,
+        member: Name,
         attrs: Vec<RawAttribute>,
     },
     /// Primitive types
     Int {
+        attrs: Vec<RawAttribute>,
+    },
+    Bigint {
         attrs: Vec<RawAttribute>,
     },
     Float {
@@ -105,6 +117,8 @@ pub enum TypeExpr {
     },
     /// Function type: (params) -> return
     Function {
+        generic_params: Vec<Name>,
+        generic_param_bounds: Vec<Option<TypeExpr>>,
         params: Vec<FunctionTypeParam>,
         ret: Box<TypeExpr>,
         throws: Option<Box<TypeExpr>>,
@@ -137,7 +151,9 @@ impl TypeExpr {
     pub fn attrs(&self) -> &[RawAttribute] {
         match self {
             Self::Path { attrs, .. }
+            | Self::AssociatedTypeProjection { attrs, .. }
             | Self::Int { attrs }
+            | Self::Bigint { attrs }
             | Self::Float { attrs }
             | Self::String { attrs }
             | Self::Bool { attrs }
@@ -164,7 +180,9 @@ impl TypeExpr {
     pub fn attrs_mut(&mut self) -> &mut Vec<RawAttribute> {
         match self {
             Self::Path { attrs, .. }
+            | Self::AssociatedTypeProjection { attrs, .. }
             | Self::Int { attrs }
+            | Self::Bigint { attrs }
             | Self::Float { attrs }
             | Self::String { attrs }
             | Self::Bool { attrs }
@@ -206,6 +224,7 @@ impl std::fmt::Display for TypeExpr {
             TypeExpr::Path {
                 segments,
                 generic_args,
+                associated_type_bindings,
                 ..
             } => {
                 let path = segments
@@ -214,19 +233,42 @@ impl std::fmt::Display for TypeExpr {
                     .collect::<Vec<_>>()
                     .join(".");
                 write!(f, "{path}")?;
-                if !generic_args.is_empty() {
+                if !generic_args.is_empty() || !associated_type_bindings.is_empty() {
                     write!(f, "<")?;
-                    for (i, arg) in generic_args.iter().enumerate() {
-                        if i > 0 {
+                    let mut first = true;
+                    for arg in generic_args {
+                        if !first {
                             write!(f, ", ")?;
                         }
+                        first = false;
                         write!(f, "{arg}")?;
+                    }
+                    for binding in associated_type_bindings {
+                        if !first {
+                            write!(f, ", ")?;
+                        }
+                        first = false;
+                        write!(f, "{} = {}", binding.name, binding.ty)?;
                     }
                     write!(f, ">")?;
                 }
                 Ok(())
             }
+            TypeExpr::AssociatedTypeProjection {
+                base,
+                interface,
+                member,
+                ..
+            } => {
+                if let Some(interface) = interface {
+                    write!(f, "({base} as {interface}).{member}")
+                } else {
+                    write_postfix_base(f, base)?;
+                    write!(f, ".{member}")
+                }
+            }
             TypeExpr::Int { .. } => write!(f, "int"),
+            TypeExpr::Bigint { .. } => write!(f, "bigint"),
             TypeExpr::Float { .. } => write!(f, "float"),
             TypeExpr::String { .. } => write!(f, "string"),
             TypeExpr::Bool { .. } => write!(f, "bool"),
@@ -259,18 +301,34 @@ impl std::fmt::Display for TypeExpr {
             }
             TypeExpr::Literal { value, .. } => write!(f, "{value}"),
             TypeExpr::Function {
+                generic_params,
+                generic_param_bounds,
                 params,
                 ret,
                 throws,
                 ..
             } => {
+                if !generic_params.is_empty() {
+                    write!(f, "<")?;
+                    for (i, param) in generic_params.iter().enumerate() {
+                        if i > 0 {
+                            write!(f, ", ")?;
+                        }
+                        write!(f, "{}", param.as_str())?;
+                        if let Some(bound) = generic_param_bounds.get(i).and_then(Option::as_ref) {
+                            write!(f, " extends {bound}")?;
+                        }
+                    }
+                    write!(f, ">")?;
+                }
                 write!(f, "(")?;
                 for (i, p) in params.iter().enumerate() {
                     if i > 0 {
                         write!(f, ", ")?;
                     }
                     if let Some(name) = &p.name {
-                        write!(f, "{}: {}", name.as_str(), p.ty)?;
+                        let optional = if p.optional { "?" } else { "" };
+                        write!(f, "{}{}: {}", name.as_str(), optional, p.ty)?;
                     } else {
                         write!(f, "{}", p.ty)?;
                     }
@@ -299,7 +357,16 @@ impl std::fmt::Display for TypeExpr {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct FunctionTypeParam {
     pub name: Option<Name>,
+    pub optional: bool,
     pub ty: TypeExpr,
+}
+
+/// Named associated type binding used inside type applications:
+/// `Iterator<Item = int>`.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct AssociatedTypeBinding {
+    pub name: Name,
+    pub ty: Box<TypeExpr>,
 }
 
 /// A type expression with its source span — used in item definitions
@@ -338,6 +405,20 @@ pub struct ExprBody {
     pub root_expr: Option<ExprId>,
 }
 
+impl Default for ExprBody {
+    fn default() -> Self {
+        Self {
+            exprs: Arena::new(),
+            stmts: Arena::new(),
+            patterns: Arena::new(),
+            match_arms: Arena::new(),
+            catch_arms: Arena::new(),
+            type_annotations: Arena::new(),
+            root_expr: None,
+        }
+    }
+}
+
 impl ExprBody {
     /// Render a short, human-readable representation of an expression.
     /// Used in diagnostic messages to show the user what they wrote.
@@ -355,11 +436,19 @@ impl ExprBody {
                 .map(smol_str::SmolStr::as_str)
                 .collect::<Vec<_>>()
                 .join("."),
+            Expr::GenericApply { base, type_args } => {
+                let base = self.display_expr_inner(*base, depth + 1);
+                let tys: Vec<String> = type_args.iter().map(ToString::to_string).collect();
+                format!("{base}<{}>", tys.join(", "))
+            }
             Expr::MemberAccess { base, member } => {
                 format!("{}.{member}", self.display_expr_inner(*base, depth + 1))
             }
             Expr::OptionalMemberAccess { base, member } => {
                 format!("{}?.{member}", self.display_expr_inner(*base, depth + 1))
+            }
+            Expr::Upcast { base, target } => {
+                format!("{}.as<{target}>", self.display_expr_inner(*base, depth + 1))
             }
             Expr::Index { base, index } => {
                 format!(
@@ -375,21 +464,44 @@ impl ExprBody {
                     self.display_expr_inner(*index, depth + 1)
                 )
             }
-            Expr::Call { callee, args } => {
+            Expr::Call {
+                callee,
+                type_args,
+                args,
+            } => {
+                let ty_args_str = if type_args.is_empty() {
+                    String::new()
+                } else {
+                    let tys: Vec<_> = type_args.iter().map(ToString::to_string).collect();
+                    format!("<{}>", tys.join(", "))
+                };
                 let args_str: Vec<_> = args
                     .iter()
-                    .map(|a| self.display_expr_inner(*a, depth + 1))
+                    .map(|a| {
+                        let value = self.display_expr_inner(a.expr, depth + 1);
+                        match &a.label {
+                            Some(label) => format!("{label} = {value}"),
+                            None => value,
+                        }
+                    })
                     .collect();
                 format!(
-                    "{}({})",
+                    "{}{}({})",
                     self.display_expr_inner(*callee, depth + 1),
+                    ty_args_str,
                     args_str.join(", ")
                 )
             }
             Expr::OptionalCall { callee, args } => {
                 let args_str: Vec<_> = args
                     .iter()
-                    .map(|a| self.display_expr_inner(*a, depth + 1))
+                    .map(|a| {
+                        let value = self.display_expr_inner(a.expr, depth + 1);
+                        match &a.label {
+                            Some(label) => format!("{label} = {value}"),
+                            None => value,
+                        }
+                    })
                     .collect();
                 format!(
                     "{}?.({})",
@@ -428,6 +540,9 @@ pub struct AstSourceMap {
     /// For multi-segment `Path` expressions, per-segment spans.
     /// `path_segment_spans[expr_id][i]` is the `TextRange` of `segments[i]`.
     pub path_segment_spans: HashMap<ExprId, Vec<TextRange>>,
+    /// For labeled call arguments, the span of the label name keyed by
+    /// `(call_expr_id, argument_expr_id)`.
+    pub call_arg_label_spans: HashMap<(ExprId, ExprId), TextRange>,
 }
 
 impl AstSourceMap {
@@ -441,6 +556,7 @@ impl AstSourceMap {
             catch_arm_spans: Arena::new(),
             member_access_member_spans: HashMap::new(),
             path_segment_spans: HashMap::new(),
+            call_arg_label_spans: HashMap::new(),
         }
     }
 
@@ -484,6 +600,14 @@ impl AstSourceMap {
             .get(&id)
             .and_then(|spans| spans.get(segment_idx).copied())
             .unwrap_or_else(|| self.expr_span(id))
+    }
+
+    /// Look up a labeled call argument's label span.
+    pub fn call_arg_label_span(&self, call: ExprId, arg_expr: ExprId) -> TextRange {
+        self.call_arg_label_spans
+            .get(&(call, arg_expr))
+            .copied()
+            .unwrap_or_else(|| self.expr_span(call))
     }
 
     /// Look up the source span of a pattern by its `PatId`.
@@ -543,8 +667,29 @@ pub enum Expr {
     Null,
     /// Path expression: `x`, `user.name`, `Status.Active`
     Path(Vec<Name>),
+    /// Generic instantiation as a value: `foo<int>` — a generic callable
+    /// referenced with explicit type arguments but NOT called. The result is
+    /// the specialized function value (`(int) -> int`). Distinct from
+    /// `Call { type_args, .. }`, which applies type args *and* invokes.
+    GenericApply {
+        base: ExprId,
+        /// Explicit type arguments, e.g. the `<int>` in `foo<int>`. Never empty
+        /// (a bare path lowers to `Path`, not `GenericApply`).
+        type_args: Vec<TypeExpr>,
+    },
     If {
         condition: ExprId,
+        then_branch: ExprId,
+        else_branch: Option<ExprId>,
+    },
+    /// `if let PATTERN = SCRUTINEE { THEN } else { ELSE }` — refutable
+    /// pattern match in condition position. Bindings introduced by `pattern`
+    /// are in scope inside `then_branch` only (never in `else_branch` and
+    /// never after the `if let`). Unlike `Stmt::Let`, the pattern is
+    /// expected to be *refutable*; an irrefutable pattern earns a warning.
+    IfLet {
+        pattern: PatId,
+        scrutinee: ExprId,
         then_branch: ExprId,
         else_branch: Option<ExprId>,
     },
@@ -553,12 +698,44 @@ pub enum Expr {
         scrutinee_type: Option<TypeAnnotId>,
         arms: Vec<MatchArmId>,
     },
+    /// `<expr> is <pattern>` — Rust `matches!`-style pattern test.
+    ///
+    /// Always evaluates to `bool`: `true` if the scrutinee matches the
+    /// pattern, `false` otherwise. Unlike `Match`, a pattern that cannot
+    /// match the scrutinee's static type is **not** a compile error here —
+    /// it just always evaluates to `false`. Treat it as a one-arm
+    /// pattern-test, not as an exhaustive match.
+    Is {
+        scrutinee: ExprId,
+        pattern: PatId,
+    },
     Catch {
         base: ExprId,
         clauses: Vec<CatchClause>,
     },
     Throw {
         value: ExprId,
+    },
+    /// BEP-034 `spawn name_expr? (with expr (, expr)*)? { body }`. The body is
+    /// always a block expression that runs on a freshly-spawned green thread;
+    /// the optional `name` is any expression that evaluates to a string and
+    /// surfaces in debug / stack traces.
+    Spawn {
+        /// Optional human-readable label for the spawn.
+        name: Option<ExprId>,
+        /// BEP-034 spawn options: the `with expr (, expr)*` clause. Each entry
+        /// is an arbitrary expression; in v1 TIR requires exactly one, a call
+        /// to `baml.spawn.options(...)`. Empty when there is no `with` clause.
+        with_exprs: Vec<ExprId>,
+        /// Body of the spawn (`{...}`) — always an `Expr::Block` after
+        /// CST lowering.
+        body: ExprId,
+    },
+    /// BEP-034 `await expr` — prefix form. Suspends the current thread
+    /// until `expr`'s future settles, then unwraps the value or re-throws
+    /// the future's error.
+    Await {
+        future: ExprId,
     },
     Binary {
         op: BinaryOp,
@@ -571,10 +748,16 @@ pub enum Expr {
     },
     Call {
         callee: ExprId,
-        args: Vec<ExprId>,
+        /// Explicit type arguments at the call site, e.g. `foo<int, string>(x)`.
+        /// Empty vec when no `<...>` was written.
+        type_args: Vec<TypeExpr>,
+        args: Vec<CallArg>,
     },
     Object {
         type_name: Option<TypePath>,
+        /// Explicit generic type args from syntax like `Foo<int> { ... }`.
+        /// Empty when no `<...>` was written (e.g. bare `Foo { ... }`).
+        type_args: Vec<TypeExpr>,
         fields: Vec<(Name, ExprId)>,
         spreads: Vec<SpreadField>,
     },
@@ -594,6 +777,11 @@ pub enum Expr {
     MemberAccess {
         base: ExprId,
         member: Name,
+    },
+    /// Explicit static projection/upcast: `expr.as<T>`.
+    Upcast {
+        base: ExprId,
+        target: TypeExpr,
     },
     /// Optional member access: `obj?.member` — short-circuits to null if base is null.
     OptionalMemberAccess {
@@ -616,7 +804,7 @@ pub enum Expr {
     /// Optional call: `func?.(args)` — short-circuits to null if callee is null.
     OptionalCall {
         callee: ExprId,
-        args: Vec<ExprId>,
+        args: Vec<CallArg>,
     },
     /// Wraps an expression chain containing `?.` operators.
     /// Delimits the scope of null short-circuiting.
@@ -627,22 +815,63 @@ pub enum Expr {
     Missing,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CallArg {
+    pub label: Option<Name>,
+    pub expr: ExprId,
+}
+
+impl CallArg {
+    pub fn positional(expr: ExprId) -> Self {
+        Self { label: None, expr }
+    }
+
+    pub fn named(label: impl Into<Name>, expr: ExprId) -> Self {
+        Self {
+            label: Some(label.into()),
+            expr,
+        }
+    }
+}
+
 /// Statements — modeled after `Stmt` in `body.rs`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Stmt {
     Expr(ExprId),
     Let {
+        /// The binding pattern. A `: T` annotation lives inside the pattern
+        /// as the bind's sub-pattern slot, not as a separate field on
+        /// `Stmt::Let` — see [`Pattern::Bind`].
         pattern: PatId,
-        type_annotation: Option<TypeAnnotId>,
         initializer: Option<ExprId>,
         is_watched: bool,
         origin: LetOrigin,
+        /// `let PATTERN = init else { … };` — refutable binding with a
+        /// diverging else clause. `Some` activates let-else semantics:
+        /// the pattern may be refutable, and the else expression is
+        /// required to have type `Ty::Never`. Pattern bindings flow into
+        /// the enclosing scope on a successful match.
+        else_branch: Option<ExprId>,
     },
     While {
         condition: ExprId,
         body: ExprId,
         after: Option<StmtId>,
         origin: LoopOrigin,
+    },
+    /// `while let PATTERN = SCRUTINEE { BODY }` — loops as long as the
+    /// refutable `pattern` matches `scrutinee`. Bindings introduced by
+    /// `pattern` are in scope inside `body` only and are re-bound each
+    /// iteration. Exits when the pattern fails to match. Like `Stmt::While`
+    /// it produces no value (unit) and supports `break`/`continue`. Unlike
+    /// `Stmt::Let`, the pattern is expected to be *refutable*; an irrefutable
+    /// pattern earns a downstream warning. Has no `else` clause and (unlike
+    /// `Stmt::While`) no `after`/`origin` — those exist only for desugared
+    /// C-style `for` loops.
+    WhileLet {
+        pattern: PatId,
+        scrutinee: ExprId,
+        body: ExprId,
     },
     /// For-in loop: `for let <binding> in <collection> { <body> }`.
     ///
@@ -682,152 +911,164 @@ pub enum Stmt {
     },
 }
 
-/// Patterns — modeled after `Pattern` in `body.rs`.
+/// A pattern in the AST.
 ///
-/// A pattern is `kind` plus an optional trailing `: T` narrow per BEP-015.
-/// Narrow currently carries the type-ascription part of `let x: T = ...`
-/// (and is also where future second-colon narrowing on structural patterns
-/// will land). All other shape lives in [`PatternKind`].
+/// One flat enum. Atoms (`Wildcard`, `Bind`, `Class`, `Type`) describe a
+/// single shape; the only combinator (`Or`) combines other patterns.
+///
+/// Lowering invariants:
+/// - `_` always lowers to [`Pattern::Wildcard`] — never `Bind { name: "_" }`.
+/// - 1-element `Or` is NOT allocated; it collapses to the inner pattern.
+///   So if you see `Or(parts)`, `parts.len() >= 2`.
+/// - The `: T` annotation in `let x: T` is carried as the bind's `subpat`
+///   slot (see [`Pattern::Bind`]) and likewise as `Pattern::Array`'s
+///   `ascription` field for `[…]: T`. `:` is only valid after `let x` or
+///   `[…]` — it is rejected on `_`, `Class { … }`, bare types, and
+///   Or-patterns.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Pattern {
-    pub kind: PatternKind,
-    /// Trailing `: T` narrow. For irrefutable `let`, the scrutinee's static
-    /// type must equal this type; checked in TIR, not at the AST level.
-    pub narrow: Option<TypeExpr>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum PatternKind {
-    /// `_` — wildcard. Always irrefutable. Binds nothing.
+pub enum Pattern {
+    // ── Atoms (single-shape patterns) ────────────────────────────────────
+    /// `_` — wildcard. Always irrefutable. Binds nothing. Cannot carry a
+    /// type ascription.
     Wildcard,
-    /// `x` (with `inner: None`) or `let x: <inner>` (with `inner: Some(_)`).
-    /// Binds `name` to the matched value; if `inner` is set, the value must
-    /// also satisfy the inner pattern.
-    Bind { name: Name, inner: Option<PatId> },
-    /// `User { f1, f2: <pat>, ... }` — class destructure. Future variant,
-    /// not yet emitted by the parser.
-    Class { class: Name, fields: Vec<FieldPat> },
-    /// Bare type-match in pattern position (e.g. an arm `int =>`). Future
-    /// variant, not yet emitted by the parser.
+    /// `let x`, `let x: T`, `let x: [a, b]`, `let x: let y: T` — name
+    /// binding, optionally with a sub-pattern attached via `:`. The
+    /// sub-pattern can be any pattern: a type ascription
+    /// (`Pattern::Type`), another binding (`Pattern::Bind` — chains of
+    /// aliases like `let x: let y`), a structural destructure
+    /// (`Pattern::Array`, `Pattern::Class`), or anything else.
+    /// Progressive widening like `let x: int: float` is naturally
+    /// impossible because `Pattern::Type` doesn't itself have a sub-
+    /// pattern slot.
+    Bind { name: Name, subpat: Option<PatId> },
+    /// `pkg.Foo { a, b: <pat>, ... }` — class destructure. `class` is the
+    /// dotted path as segments (single-element vec for unqualified names).
+    /// Class destructures cannot carry `: T` ascriptions.
+    Class {
+        class: Vec<Name>,
+        generic_args: Vec<TypeExpr>,
+        associated_type_bindings: Vec<AssociatedTypeBinding>,
+        fields: Vec<FieldPat>,
+    },
+    /// `[prefix..., ..rest?, suffix...]` or `[…]: T` — array destructure
+    /// optionally with a type ascription. Each element is a normal
+    /// pattern; `rest` binds the copied middle slice when present. The
+    /// `: T` ascription is captured as a `TypeExpr` (not a sub-pattern),
+    /// so deeper chains like `[…]: T1: T2` and exotic shapes like
+    /// `[…]: let xs` are syntactically rejected at AST lowering.
+    Array {
+        prefix: Vec<PatId>,
+        rest: Option<ArrayRestPat>,
+        suffix: Vec<PatId>,
+        ascription: Option<TypeExpr>,
+    },
+    /// Bare type expression in pattern position. Subsumes literal patterns
+    /// (`42`, `"hi"`, `true`), `null`, enum variants (`Status.Active`),
+    /// path types, generics, function types, etc. — anything in `TypeExpr`.
+    /// Refutability is decided by TIR using the scrutinee type; `Type(int)`
+    /// is irrefutable against scrutinee `int` but refutable against `int|str`.
+    /// Cannot carry a `: T` ascription.
     Type(TypeExpr),
-    /// `42`, `"hi"`, `true`, etc. Refutable.
-    Literal(Literal),
-    /// `null` literal pattern. Refutable.
-    Null,
-    /// `Status.Active` or `baml.panics.DivideByZero` style enum variant.
-    /// `enum_name` carries the dotted path as proper segments (no string
-    /// round-tripping); the trailing identifier is `variant`. Refutable.
-    EnumVariant { enum_name: Vec<Name>, variant: Name },
-    /// `a | b | c` (formerly `Union`). Refutable in general (each part may be).
+
+    // ── Combinators (combine other patterns) ─────────────────────────────
+    /// `p1 | p2 | ...` — alternation. Length always `>= 2`. Every alternative
+    /// must bind the same names (TIR enforces). Cannot carry a `: T`
+    /// ascription.
     Or(Vec<PatId>),
 }
 
-/// Single field inside a class destructure pattern: `{ field: <pat> }`.
-/// `pat: None` is shorthand syntax `{ field }` and lowers to a `Bind` of
-/// `field`.
+/// Single field inside a class destructure pattern.
+///
+/// Shorthand `{ f }` lowers to `FieldPat { field: f, pat: <Bind { name: f }> }`,
+/// so consumers never see the missing-pattern shape.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FieldPat {
     pub field: Name,
+    pub field_span: text_size::TextRange,
+    pub pat: PatId,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ArrayRestPat {
     pub pat: Option<PatId>,
 }
 
 impl Pattern {
-    pub fn wildcard() -> Self {
-        Pattern {
-            kind: PatternKind::Wildcard,
-            narrow: None,
-        }
-    }
-
-    /// Plain binding `x`. Name `"_"` is canonicalized to a wildcard so the
-    /// AST never carries a `Bind { name: "_" }`.
-    pub fn binding(name: Name) -> Self {
-        if name.as_str() == "_" {
-            return Pattern::wildcard();
-        }
-        Pattern {
-            kind: PatternKind::Bind { name, inner: None },
-            narrow: None,
-        }
-    }
-
-    /// `Bind { name }` with `narrow: Some(ty)` — the legacy
-    /// `Pattern::TypedBinding { name, ty }` shape. Same `_`-canonicalization
-    /// rule as [`Pattern::binding`]: `typed_binding("_", T)` is a wildcard
-    /// carrying `narrow: Some(T)` (so `let _: int = e` still asserts `int`).
-    pub fn typed_binding(name: Name, ty: TypeExpr) -> Self {
-        if name.as_str() == "_" {
-            return Pattern {
-                kind: PatternKind::Wildcard,
-                narrow: Some(ty),
-            };
-        }
-        Pattern {
-            kind: PatternKind::Bind { name, inner: None },
-            narrow: Some(ty),
-        }
-    }
-
-    pub fn null() -> Self {
-        Pattern {
-            kind: PatternKind::Null,
-            narrow: None,
-        }
-    }
-
-    pub fn literal(lit: Literal) -> Self {
-        Pattern {
-            kind: PatternKind::Literal(lit),
-            narrow: None,
-        }
-    }
-
-    pub fn enum_variant(enum_name: Vec<Name>, variant: Name) -> Self {
-        Pattern {
-            kind: PatternKind::EnumVariant { enum_name, variant },
-            narrow: None,
-        }
-    }
-
-    pub fn or(parts: Vec<PatId>) -> Self {
-        Pattern {
-            kind: PatternKind::Or(parts),
-            narrow: None,
-        }
-    }
-
-    /// If this pattern is a simple `Bind`, return the bound name.
-    pub fn binding_name(&self) -> Option<&Name> {
-        match &self.kind {
-            PatternKind::Bind { name, .. } => Some(name),
-            _ => None,
-        }
-    }
-
-    /// True iff this pattern is structurally guaranteed to match every value
-    /// at its position. **Pure structural check** — does not consider the
-    /// scrutinee's static type. The TIR layer is responsible for verifying
-    /// `narrow` and `Class`/`Type` assertions against the scrutinee type.
+    /// First name introduced by this pattern, if any. Convenience wrapper
+    /// around [`Pattern::bound_names`] for callers that just need a single
+    /// representative — e.g. inlay-hint anchors, debug names, "does this
+    /// pattern introduce *some* binding?" checks.
     ///
-    /// Used by the let-stmt validator to reject patterns that can fail at
-    /// runtime; refutable patterns belong in `match` / `if let` / `let-else`.
-    pub fn is_irrefutable(&self, body: &ExprBody) -> bool {
-        match &self.kind {
-            PatternKind::Wildcard => true,
-            PatternKind::Bind { inner, .. } => {
-                inner.is_none_or(|id| body.patterns[id].is_irrefutable(body))
+    /// For patterns with multiple bindings (like `let x: let y = 1` or
+    /// destructures), use [`Pattern::bound_names`] instead.
+    pub fn binding_name<'a>(&'a self, patterns: &'a la_arena::Arena<Pattern>) -> Option<&'a Name> {
+        self.bound_names(patterns).into_iter().next()
+    }
+
+    /// Collect every name this pattern introduces into scope, in declaration
+    /// order. Walks down through chains, fields, and Or-branches recursively.
+    ///
+    /// Used by HIR to:
+    ///   - register bindings into the surrounding scope, and
+    ///   - check that every alternative of an `Or` introduces the same name
+    ///     set (otherwise the body would see a name that's only sometimes in
+    ///     scope).
+    ///
+    /// All links of a `Chain` can bind. `let x: let y: let z = 1` is a valid
+    /// pattern (pairwise `never <: never`), so all three names land in scope.
+    ///
+    /// For an `Or` pattern, this returns the names of the *first* alternative.
+    /// HIR's uniformity check compares sibling alternatives' name lists; pick
+    /// any branch as the reference and diff the rest.
+    pub fn bound_names<'a>(&'a self, patterns: &'a la_arena::Arena<Pattern>) -> Vec<&'a Name> {
+        let mut out = Vec::new();
+        self.collect_bound_names(patterns, &mut out);
+        out
+    }
+
+    fn collect_bound_names<'a>(
+        &'a self,
+        patterns: &'a la_arena::Arena<Pattern>,
+        out: &mut Vec<&'a Name>,
+    ) {
+        match self {
+            Pattern::Wildcard | Pattern::Type(_) => {}
+            Pattern::Bind { name, subpat } => {
+                out.push(name);
+                if let Some(sp) = subpat {
+                    patterns[*sp].collect_bound_names(patterns, out);
+                }
             }
-            PatternKind::Class { fields, .. } => fields.iter().all(|f| {
-                f.pat
-                    .is_none_or(|id| body.patterns[id].is_irrefutable(body))
-            }),
-            // `Type(T)` is structurally fine; whether the value is actually
-            // a `T` is a typing concern, not a pattern concern.
-            PatternKind::Type(_) => true,
-            PatternKind::Literal(_)
-            | PatternKind::Null
-            | PatternKind::EnumVariant { .. }
-            | PatternKind::Or(_) => false,
+            Pattern::Class { fields, .. } => {
+                for f in fields {
+                    patterns[f.pat].collect_bound_names(patterns, out);
+                }
+            }
+            Pattern::Array {
+                prefix,
+                rest,
+                suffix,
+                ascription: _,
+            } => {
+                for id in prefix {
+                    patterns[*id].collect_bound_names(patterns, out);
+                }
+                if let Some(rest) = rest
+                    && let Some(id) = rest.pat
+                {
+                    patterns[id].collect_bound_names(patterns, out);
+                }
+                for id in suffix {
+                    patterns[*id].collect_bound_names(patterns, out);
+                }
+            }
+            // Pick any one alternative to report — the uniformity check is
+            // the caller's job.
+            Pattern::Or(parts) => {
+                if let Some(first) = parts.first() {
+                    patterns[*first].collect_bound_names(patterns, out);
+                }
+            }
         }
     }
 }
@@ -883,6 +1124,9 @@ pub enum FunctionOrigin {
     UserDefined,
     Companion,
     Internal,
+    /// Synthesized by the auto-derive pass (e.g. `to_json` / `from_json`
+    /// methods generated on every user class).
+    AutoDerive,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -973,6 +1217,7 @@ pub enum Item {
     Function(FunctionDef),
     Class(ClassDef),
     Enum(EnumDef),
+    Interface(InterfaceDef),
     TypeAlias(TypeAliasDef),
     Client(ClientDef),
     Test(TestDef),
@@ -980,6 +1225,7 @@ pub enum Item {
     TemplateString(TemplateStringDef),
     RetryPolicy(RetryPolicyDef),
     Let(LetDef),
+    ImplementsFor(ImplementsForDef),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -996,15 +1242,41 @@ pub struct FunctionDef {
     pub name: Name,
     /// Generic type parameters (e.g., `["T", "U"]`). Empty for non-generic functions.
     pub generic_params: Vec<Name>,
+    /// BEP-044 generic bounds: parallel to `generic_params`. Each entry
+    /// is the `TypeExpr` after `extends` (e.g. `T extends Named` stores
+    /// `Some(Path(["Named"]))`); `None` for unbounded parameters.
+    pub generic_param_bounds: Vec<Option<TypeExpr>>,
     pub params: Vec<Param>,
+    pub defaults: FunctionDefaults,
     pub return_type: Option<SpannedTypeExpr>,
     pub throws: Option<SpannedTypeExpr>,
     pub body: Option<FunctionBodyDef>,
     pub declarative_meta: Option<DeclarativeMeta>,
     pub origin: FunctionOrigin,
     pub attributes: Vec<RawAttribute>,
+    /// Joined `///` doc-comment lines preceding this declaration.
+    pub docstring: Option<std::string::String>,
     pub span: TextRange,
     pub name_span: TextRange,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FunctionDefaults {
+    pub exprs: ExprBody,
+    pub source_map: AstSourceMap,
+}
+
+impl FunctionDefaults {
+    pub fn empty() -> Self {
+        Self {
+            exprs: ExprBody::default(),
+            source_map: AstSourceMap::new(),
+        }
+    }
+
+    pub fn expr(&self, id: DefaultExprId) -> &Expr {
+        &self.exprs.exprs[id.expr()]
+    }
 }
 
 #[allow(clippy::large_enum_variant)]
@@ -1025,6 +1297,11 @@ pub enum BuiltinKind {
     /// Compiler intrinsic — lowered to `StatementKind::Intrinsic` in MIR,
     /// not compiled as a callable function.
     Intrinsic,
+    /// BEP-034 `baml.future.__await_any` — lowered to a `Terminator::AwaitAny`
+    /// suspend point (like `await`), not a normal call. The single argument is
+    /// the array of futures; the result is the `int` index of the first to
+    /// settle.
+    AwaitAny,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -1045,6 +1322,7 @@ pub struct RawPrompt {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Interpolation {
     pub content: std::string::String,
+    /// Span of the full interpolation, including delimiters.
     pub span: TextRange,
 }
 
@@ -1052,8 +1330,22 @@ pub struct Interpolation {
 pub struct Param {
     pub name: Name,
     pub type_expr: Option<SpannedTypeExpr>,
+    pub default: Option<DefaultExprId>,
     pub span: TextRange,
     pub name_span: TextRange,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct DefaultExprId(ExprId);
+
+impl DefaultExprId {
+    pub fn new(expr: ExprId) -> Self {
+        Self(expr)
+    }
+
+    pub fn expr(self) -> ExprId {
+        self.0
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -1061,9 +1353,140 @@ pub struct ClassDef {
     pub name: Name,
     /// Generic type parameters (e.g., `["T"]` for `Array<T>`). Empty for non-generic classes.
     pub generic_params: Vec<Name>,
+    /// Generic bounds parallel to `generic_params`. `Some(te)` means the
+    /// parameter at the matching index was declared with `T extends <te>`;
+    /// `None` means unbounded.
+    pub generic_param_bounds: Vec<Option<TypeExpr>>,
     pub fields: Vec<FieldDef>,
     pub methods: Vec<FunctionDef>,
+    /// `implements I { ... }` blocks declared inside the class body (BEP-044).
+    pub implements: Vec<ImplementsBlockDef>,
     pub attributes: Vec<RawAttribute>,
+    /// Joined `///` doc-comment lines preceding this declaration.
+    pub docstring: Option<std::string::String>,
+    pub span: TextRange,
+    pub name_span: TextRange,
+}
+
+/// Definition of an `interface` declaration (BEP-044).
+///
+/// Interfaces declare a contract over fields and methods. Classes opt in to
+/// the contract via [`ImplementsBlockDef`] inside the class body.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct InterfaceDef {
+    pub name: Name,
+    /// Generic type parameters (e.g., `["T"]` for `Container<T>`). Empty for non-generic interfaces.
+    pub generic_params: Vec<Name>,
+    /// BEP-044 generic bounds parallel to `generic_params`. `Some(te)`
+    /// means the parameter at the matching index was declared with
+    /// `T extends <te>`; `None` means unbounded.
+    pub generic_param_bounds: Vec<Option<TypeExpr>>,
+    /// Required interfaces from `requires I1, I2, ...`. Each is parsed as a
+    /// `TypeExpr` so we can accept generic requirements like `Container<int>`.
+    pub requires: Vec<SpannedTypeExpr>,
+    /// Field signatures declared on the interface. Interface fields cannot
+    /// have default values — see BEP-044 §"Interface Fields".
+    pub fields: Vec<FieldDef>,
+    /// Associated type declarations on the interface (BEP-057).
+    pub associated_types: Vec<AssociatedTypeDef>,
+    /// Required methods (no body). Implementing classes must provide a body.
+    pub required_methods: Vec<MethodSigDef>,
+    /// Default methods (with body). Implementing classes inherit unless they override.
+    pub default_methods: Vec<FunctionDef>,
+    pub attributes: Vec<RawAttribute>,
+    pub docstring: Option<std::string::String>,
+    pub span: TextRange,
+    pub name_span: TextRange,
+}
+
+/// Method signature declared in an interface body without a body — i.e., a
+/// required method. Mirrors [`FunctionDef`] minus the body.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MethodSigDef {
+    pub name: Name,
+    pub generic_params: Vec<Name>,
+    /// BEP-044 generic bounds parallel to `generic_params`.
+    pub generic_param_bounds: Vec<Option<TypeExpr>>,
+    pub params: Vec<Param>,
+    pub defaults: FunctionDefaults,
+    pub return_type: Option<SpannedTypeExpr>,
+    pub throws: Option<SpannedTypeExpr>,
+    pub attributes: Vec<RawAttribute>,
+    pub docstring: Option<std::string::String>,
+    pub span: TextRange,
+    pub name_span: TextRange,
+}
+
+/// One `implements I { ... }` block inside a class body (BEP-044).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ImplementsBlockDef {
+    /// The target interface, captured as a `TypeExpr` so we can accept generic
+    /// parameterization like `implements Container<int>`. The path's first
+    /// segment is the interface name.
+    pub target: SpannedTypeExpr,
+    /// Explicit mappings from interface fields to class fields:
+    /// `interface_field as class_field`.
+    pub field_links: Vec<InterfaceFieldLinkDef>,
+    /// Associated type bindings, e.g. `type Item = int`.
+    pub associated_type_bindings: Vec<AssociatedTypeBindingDef>,
+    /// Method overrides / definitions inside this `implements` block.
+    pub methods: Vec<FunctionDef>,
+    /// True when this block came from top-level `implements I for T`.
+    pub is_out_of_body: bool,
+    pub span: TextRange,
+}
+
+impl ImplementsBlockDef {
+    /// Convenience: the interface's simple name (last path segment), used for
+    /// diagnostics. Returns `None` if the target is not a simple path.
+    pub fn interface_name(&self) -> Option<&Name> {
+        match &self.target.expr {
+            TypeExpr::Path { segments, .. } => segments.last(),
+            _ => None,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct InterfaceFieldLinkDef {
+    pub interface_field: Name,
+    pub class_field: Name,
+    pub span: TextRange,
+    pub interface_field_span: TextRange,
+    pub class_field_span: TextRange,
+}
+
+/// Top-level `implements I for T { ... }` block (BEP-044).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ImplementsForDef {
+    /// Generic type parameters on the implements block (e.g. `<T>` or `<T extends Named>`).
+    pub generic_params: Vec<(Name, Option<TypeExpr>)>,
+    /// The interface being implemented.
+    pub interface_target: SpannedTypeExpr,
+    /// The type the interface is being implemented for.
+    pub for_target: SpannedTypeExpr,
+    /// Explicit mappings from interface fields to class fields.
+    pub field_links: Vec<InterfaceFieldLinkDef>,
+    /// Associated type bindings, e.g. `type Item = int`.
+    pub associated_type_bindings: Vec<AssociatedTypeBindingDef>,
+    /// Method definitions inside the block.
+    pub methods: Vec<FunctionDef>,
+    pub span: TextRange,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AssociatedTypeDef {
+    pub name: Name,
+    pub bound: Option<SpannedTypeExpr>,
+    pub default: Option<SpannedTypeExpr>,
+    pub span: TextRange,
+    pub name_span: TextRange,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AssociatedTypeBindingDef {
+    pub name: Name,
+    pub type_expr: Option<SpannedTypeExpr>,
     pub span: TextRange,
     pub name_span: TextRange,
 }
@@ -1073,6 +1496,8 @@ pub struct FieldDef {
     pub name: Name,
     pub type_expr: Option<SpannedTypeExpr>,
     pub attributes: Vec<RawAttribute>,
+    /// Joined `///` doc-comment lines preceding this declaration.
+    pub docstring: Option<std::string::String>,
     pub span: TextRange,
     pub name_span: TextRange,
 }
@@ -1082,6 +1507,8 @@ pub struct EnumDef {
     pub name: Name,
     pub variants: Vec<VariantDef>,
     pub attributes: Vec<RawAttribute>,
+    /// Joined `///` doc-comment lines preceding this declaration.
+    pub docstring: Option<std::string::String>,
     pub span: TextRange,
     pub name_span: TextRange,
 }
@@ -1090,6 +1517,8 @@ pub struct EnumDef {
 pub struct VariantDef {
     pub name: Name,
     pub attributes: Vec<RawAttribute>,
+    /// Joined `///` doc-comment lines preceding this declaration.
+    pub docstring: Option<std::string::String>,
     pub span: TextRange,
     pub name_span: TextRange,
 }

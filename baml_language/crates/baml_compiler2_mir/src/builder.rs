@@ -317,6 +317,22 @@ impl MirBuilder {
         target: BlockId,
         unwind: Option<BlockId>,
     ) {
+        self.call_with_type_args(callee, args, 0, destination, target, unwind);
+    }
+
+    /// Emit a function call with an explicit type-argument count.
+    ///
+    /// The first `ntypeargs` entries of `args` must be `Object::Type` values
+    /// produced by `Rvalue::LoadType`.  Regular value args follow after them.
+    pub(crate) fn call_with_type_args(
+        &mut self,
+        callee: Operand,
+        args: Vec<Operand>,
+        ntypeargs: usize,
+        destination: Place,
+        target: BlockId,
+        unwind: Option<BlockId>,
+    ) {
         debug_assert!(
             matches!(destination, Place::Local(_)),
             "Call destination must be a local place"
@@ -324,6 +340,7 @@ impl MirBuilder {
         self.set_terminator(Terminator::Call {
             callee,
             args,
+            ntypeargs,
             destination,
             target,
             unwind,
@@ -346,23 +363,27 @@ impl MirBuilder {
         self.set_terminator(Terminator::ThrowIfPanic { value, otherwise });
     }
 
-    /// Emit a dispatch future (for LLM calls).
-    pub(crate) fn dispatch_future(
+    /// BEP-034 phase D′: emit a sys-op call. The sys-op is invoked
+    /// inline in the engine (single VM↔engine round trip) and its
+    /// return value is bound directly into `destination`.
+    pub(crate) fn sys_op(
         &mut self,
         callee: Operand,
         args: Vec<Operand>,
-        future: Place,
-        resume: BlockId,
+        destination: Place,
+        target: BlockId,
+        unwind: Option<BlockId>,
     ) {
         debug_assert!(
-            matches!(future, Place::Local(_)),
-            "DispatchFuture future handle place must be local"
+            matches!(destination, Place::Local(_)),
+            "SysOp destination must be a local place"
         );
-        self.set_terminator(Terminator::DispatchFuture {
+        self.set_terminator(Terminator::SysOp {
             callee,
             args,
-            future,
-            resume,
+            destination,
+            target,
+            unwind,
         });
     }
 
@@ -387,6 +408,51 @@ impl MirBuilder {
             destination,
             target,
             unwind,
+        });
+    }
+
+    /// BEP-034: emit an `await_any` terminator — suspend until the first of
+    /// the `futures` array settles and bind its `int` index into `destination`.
+    pub(crate) fn await_any(
+        &mut self,
+        futures: Operand,
+        destination: Place,
+        target: BlockId,
+        unwind: Option<BlockId>,
+    ) {
+        debug_assert!(
+            matches!(destination, Place::Local(_)),
+            "AwaitAny destination must be a local place"
+        );
+        self.set_terminator(Terminator::AwaitAny {
+            futures,
+            destination,
+            target,
+            unwind,
+        });
+    }
+
+    /// BEP-034: emit a spawn terminator. Pops a closure operand plus an
+    /// optional name operand and binds the resulting `Future<T, E>`
+    /// handle into `future`.
+    pub(crate) fn spawn(
+        &mut self,
+        closure: Operand,
+        name: Operand,
+        config: Option<Box<Operand>>,
+        future: Place,
+        resume: BlockId,
+    ) {
+        debug_assert!(
+            matches!(future, Place::Local(_)),
+            "Spawn future handle place must be local"
+        );
+        self.set_terminator(Terminator::Spawn {
+            closure,
+            name,
+            config,
+            future,
+            resume,
         });
     }
 

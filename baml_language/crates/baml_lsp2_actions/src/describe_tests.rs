@@ -2,6 +2,83 @@
 
 use crate::testing::ProjectTest;
 
+fn make_multi_ns_project() -> ProjectTest {
+    let mut builder = ProjectTest::builder();
+    builder.source(
+        "types.baml",
+        r#"
+class Point {
+    x int
+    y int
+}
+"#,
+    );
+    builder.source(
+        "ns_llm/models.baml",
+        r#"
+class Config {
+    model string
+    temperature float
+}
+"#,
+    );
+    builder.build()
+}
+
+#[test]
+fn describe_by_definition_class_in_namespace() {
+    let project = make_multi_ns_project();
+    let pkg_id =
+        baml_compiler2_hir::package::PackageId::new(&project.db, baml_base::Name::new("user"));
+    let pkg = baml_compiler2_hir::package::package_items(&project.db, pkg_id);
+
+    let ns_path = vec![baml_base::Name::new("llm")];
+    let item_name = baml_base::Name::new("Config");
+    let def = pkg.lookup_type(&ns_path, &item_name).unwrap();
+
+    let files = baml_compiler2_hir::compiler2_all_files(&project.db);
+    let desc = crate::describe::describe_by_definition(&project.db, &files, def);
+    assert!(desc.is_some());
+    let desc = desc.unwrap();
+    assert_eq!(desc.name, "Config");
+    assert_eq!(desc.kind, crate::DefinitionKind::Class);
+}
+
+#[test]
+fn describe_item_member_field() {
+    let project = make_multi_ns_project();
+    let pkg_id =
+        baml_compiler2_hir::package::PackageId::new(&project.db, baml_base::Name::new("user"));
+    let pkg = baml_compiler2_hir::package::package_items(&project.db, pkg_id);
+
+    let root_ns: Vec<baml_base::Name> = vec![];
+    let item_name = baml_base::Name::new("Point");
+    let def = pkg.lookup_type(&root_ns, &item_name).unwrap();
+
+    let files = baml_compiler2_hir::compiler2_all_files(&project.db);
+    let desc = crate::describe::describe_item_member(&project.db, &files, def, "x");
+    assert!(desc.is_some());
+    let desc = desc.unwrap();
+    assert_eq!(desc.name, "x");
+    assert_eq!(desc.kind, crate::DefinitionKind::Field);
+}
+
+#[test]
+fn describe_item_member_nonexistent() {
+    let project = make_multi_ns_project();
+    let pkg_id =
+        baml_compiler2_hir::package::PackageId::new(&project.db, baml_base::Name::new("user"));
+    let pkg = baml_compiler2_hir::package::package_items(&project.db, pkg_id);
+
+    let root_ns: Vec<baml_base::Name> = vec![];
+    let item_name = baml_base::Name::new("Point");
+    let def = pkg.lookup_type(&root_ns, &item_name).unwrap();
+
+    let files = baml_compiler2_hir::compiler2_all_files(&project.db);
+    let desc = crate::describe::describe_item_member(&project.db, &files, def, "nonexistent");
+    assert!(desc.is_none());
+}
+
 fn make_project() -> ProjectTest {
     let mut builder = ProjectTest::builder();
     builder.source(
@@ -69,6 +146,34 @@ fn describe_class_with_refs() {
 fn describe_enum() {
     let project = make_project();
     let descs = project.describe("Color");
+    assert_eq!(descs.len(), 1);
+    insta::assert_snapshot!(project.format_description(&descs[0]));
+}
+
+#[test]
+fn describe_interface() {
+    let mut builder = ProjectTest::builder();
+    builder.source(
+        "interfaces.baml",
+        r#"
+interface Named {
+    name: string
+    function label(self) -> string
+}
+
+class Person {
+    name: string
+    implements Named {
+        function label(self) -> string {
+            return self.name
+        }
+    }
+}
+"#,
+    );
+    let project = builder.build();
+
+    let descs = project.describe("Named");
     assert_eq!(descs.len(), 1);
     insta::assert_snapshot!(project.format_description(&descs[0]));
 }

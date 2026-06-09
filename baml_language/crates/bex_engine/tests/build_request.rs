@@ -93,6 +93,23 @@ client C {
 }
 "#;
 
+/// Shared Vercel AI Gateway Images API client block.
+const AI_GATEWAY_IMAGES_CLIENT: &str = r#"
+client C {
+    provider ai-gateway-images
+    options {
+        model "bfl/flux-2-pro"
+        api_key "sk-test"
+        n 2
+        providerOptions {
+            blackForestLabs {
+                outputFormat "jpeg"
+            }
+        }
+    }
+}
+"#;
+
 /// Shared `OpenAI` O1 client block.
 const OPENAI_O1_CLIENT: &str = r#"
 client C {
@@ -376,7 +393,6 @@ function get_body() -> string {
 }
 
 #[tokio::test]
-#[ignore = "responses API format (input/input_text) not yet implemented"]
 async fn test_responses_api_multi_turn() {
     let source = [
         OPENAI_RESPONSES_CLIENT,
@@ -480,7 +496,6 @@ function get_body(img: image) -> string {
 // ============================================================================
 
 #[tokio::test]
-#[ignore = "responses API format (input/input_text) not yet implemented"]
 async fn test_responses_api_basic() {
     let source = [
         OPENAI_RESPONSES_CLIENT,
@@ -508,6 +523,141 @@ function get_body() -> string {
                 }
             ]
         })
+    );
+}
+
+#[tokio::test]
+async fn test_ai_gateway_images_builds_image_model_body() {
+    let source = [
+        AI_GATEWAY_IMAGES_CLIENT,
+        r##"
+function F() -> image {
+    client C
+    prompt #"Draw a brass desk lamp on a walnut table."#
+}
+function get_body() -> string {
+    baml.llm.build_request(C, "F", {}).body
+}
+"##,
+    ]
+    .join("\n");
+
+    let body = body_json(&run_baml(&source, "get_body").await);
+    assert_eq!(
+        body,
+        serde_json::json!({
+            "prompt": "Draw a brass desk lamp on a walnut table.",
+            "n": 2,
+            "providerOptions": {
+                "blackForestLabs": {
+                    "outputFormat": "jpeg"
+                }
+            }
+        })
+    );
+}
+
+#[tokio::test]
+async fn test_ai_gateway_images_uses_vercel_gateway_image_model_endpoint() {
+    let source = [
+        AI_GATEWAY_IMAGES_CLIENT,
+        r##"
+function F() -> image {
+    client C
+    prompt #"Draw a brass desk lamp."#
+}
+function get_url() -> string {
+    baml.llm.build_request(C, "F", {}).url
+}
+"##,
+    ]
+    .join("\n");
+
+    let result = run_baml(&source, "get_url").await;
+    assert_eq!(
+        as_string(&result),
+        "https://ai-gateway.vercel.sh/v4/ai/image-model"
+    );
+}
+
+#[tokio::test]
+async fn test_responses_api_image_output_enables_image_generation_tool() {
+    let source = [
+        OPENAI_RESPONSES_CLIENT,
+        r##"
+function F() -> image {
+    client C
+    prompt #"Generate a square logo of a brass desk lamp."#
+}
+function get_body() -> string {
+    baml.llm.build_request(C, "F", {}).body
+}
+"##,
+    ]
+    .join("\n");
+
+    let body = body_json(&run_baml(&source, "get_body").await);
+    assert_eq!(
+        body["tools"],
+        serde_json::json!([{ "type": "image_generation" }])
+    );
+    assert_eq!(
+        body["tool_choice"],
+        serde_json::json!({ "type": "image_generation" })
+    );
+}
+
+#[tokio::test]
+async fn test_responses_api_image_array_output_enables_image_generation_tool() {
+    let source = [
+        OPENAI_RESPONSES_CLIENT,
+        r##"
+function F() -> image[] {
+    client C
+    prompt #"Generate two product photos of a brass desk lamp."#
+}
+function get_body() -> string {
+    baml.llm.build_request(C, "F", {}).body
+}
+"##,
+    ]
+    .join("\n");
+
+    let body = body_json(&run_baml(&source, "get_body").await);
+    assert_eq!(
+        body["tools"],
+        serde_json::json!([{ "type": "image_generation" }])
+    );
+    assert_eq!(
+        body["tool_choice"],
+        serde_json::json!({ "type": "image_generation" })
+    );
+}
+
+#[tokio::test]
+async fn test_responses_api_mixed_text_image_output_enables_tool_and_choice() {
+    let source = [
+        OPENAI_RESPONSES_CLIENT,
+        r##"
+function F() -> (string | image)[] {
+    client C
+    prompt #"Return a caption, then generate an illustration of a brass desk lamp."#
+}
+function get_body() -> string {
+    baml.llm.build_request(C, "F", {}).body
+}
+"##,
+    ]
+    .join("\n");
+
+    let body = body_json(&run_baml(&source, "get_body").await);
+    assert_eq!(
+        body["tools"],
+        serde_json::json!([{ "type": "image_generation" }])
+    );
+    assert_eq!(
+        body["tool_choice"],
+        serde_json::json!({ "type": "image_generation" })
     );
 }
 

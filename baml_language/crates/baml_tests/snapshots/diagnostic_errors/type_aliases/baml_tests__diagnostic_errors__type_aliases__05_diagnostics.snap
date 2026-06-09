@@ -1,28 +1,19 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 49967
 ---
 === COMPILER2 DIAGNOSTICS ===
-  [type] Error: type mismatch: expected user.foo, got true
+  [type] error: type mismatch: expected foo, got true
     ╭─[ type_aliases.baml:11:3 ]
     │
  11 │   true
     │   ──┬─  
-    │     ╰─── type mismatch: expected user.foo, got true
+    │     ╰─── type mismatch: expected foo, got true
     │ 
     │ Note: Error code: E0001
 ────╯
 
-  [type] Error: unresolved type: json
-   ╭─[ type_aliases_json.baml:1:12 ]
-   │
- 1 │ type JSON = int | float | string | bool | JSON[] | map<string,json>
-   │            ────────────────────────────┬───────────────────────────  
-   │                                        ╰───────────────────────────── unresolved type: json
-   │ 
-   │ Note: Error code: E0002
-───╯
-
-  [type] Error: unresolved type: name
+  [type] error: unresolved type: name
    ╭─[ type_aliases_json.baml:4:8 ]
    │
  4 │   inner name
@@ -32,12 +23,12 @@ source: crates/baml_tests/src/generated_tests.rs
    │ Note: Error code: E0002
 ───╯
 
-  [type] Error: unresolved type: name
-   ╭─[ type_aliases_json.baml:4:8 ]
+  [type] error: type mismatch: expected JSON, got NotJSON
+   ╭─[ type_aliases_json.baml:9:3 ]
    │
- 4 │   inner name
-   │        ──┬──  
-   │          ╰──── unresolved type: name
+ 9 │   NotJSON{ inner: "Whoops" }
+   │   ─────────────┬────────────  
+   │                ╰────────────── type mismatch: expected JSON, got NotJSON
    │ 
-   │ Note: Error code: E0002
+   │ Note: Error code: E0001
 ───╯

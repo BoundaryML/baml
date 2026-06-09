@@ -71,7 +71,16 @@ function Foo() -> Bar {
 
 //----
 //- diagnostics
-// Error: unresolved name: a
+// error: type mismatch: expected int, got "hello"
+//    ╭─[ expr_constructors_invalid.baml:7:20 ]
+//    │
+//  7 │   let x = Bar { a: "hello", c: 12 };
+//    │                    ───┬───  
+//    │                       ╰───── type mismatch: expected int, got "hello"
+//    │ 
+//    │ Note: Error code: E0001
+// ───╯
+// error: unresolved name: a
 //     ╭─[ expr_constructors_invalid.baml:11:21 ]
 //     │
 //  11 │     query_params: { a 10 },
@@ -80,7 +89,7 @@ function Foo() -> Bar {
 //     │ 
 //     │ Note: Error code: E0003
 // ────╯
-// Error: unresolved name: Authorization
+// error: unresolved name: Authorization
 //     ╭─[ expr_constructors_invalid.baml:15:16 ]
 //     │
 //  15 │     headers: { Authorization "Bearer mytoken" },
@@ -89,7 +98,7 @@ function Foo() -> Bar {
 //     │ 
 //     │ Note: Error code: E0003
 // ────╯
-// Error: unresolved name: foo
+// error: unresolved name: foo
 //     ╭─[ expr_constructors_invalid.baml:16:21 ]
 //     │
 //  16 │     query_params: { foo "bar" },

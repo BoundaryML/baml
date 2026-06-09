@@ -37,6 +37,7 @@ impl ToBamlTy for TyResolvedRef<'_, TypeName> {
         let attr = baml_type::TyAttr::default();
         match self {
             TyResolvedRef::Int(_) => baml_type::Ty::Int { attr },
+            TyResolvedRef::Bigint(_) => baml_type::Ty::Bigint { attr },
             TyResolvedRef::Float(_) => baml_type::Ty::Float { attr },
             TyResolvedRef::String(_) => baml_type::Ty::String { attr },
             TyResolvedRef::Bool(_) => baml_type::Ty::Bool { attr },
@@ -44,6 +45,9 @@ impl ToBamlTy for TyResolvedRef<'_, TypeName> {
             TyResolvedRef::Media(media) => baml_type::Ty::Media(media.to_baml_media_kind(), attr),
             TyResolvedRef::LiteralInt(v) => {
                 baml_type::Ty::Literal(baml_type::Literal::Int(v.0), attr)
+            }
+            TyResolvedRef::LiteralBigint(v) => {
+                baml_type::Ty::Literal(baml_type::Literal::Bigint(v.0.clone()), attr)
             }
             TyResolvedRef::LiteralString(v) => {
                 baml_type::Ty::Literal(baml_type::Literal::String(v.0.to_string()), attr)
@@ -95,7 +99,7 @@ impl ToBamlTy for MapTy<'_, TypeName> {
 
 impl ToBamlTy for ClassTy<'_, TypeName> {
     fn to_baml_ty(&self) -> baml_type::Ty {
-        baml_type::Ty::Class(self.name.clone(), baml_type::TyAttr::default())
+        baml_type::Ty::Class(self.name.clone(), Vec::new(), baml_type::TyAttr::default())
     }
 }
 
@@ -157,8 +161,9 @@ fn baml_value_inner_to_external(
     ty: &TyWithMeta<TyResolvedRef<'_, TypeName>, &TypeAnnotations<'_, TypeName>>,
 ) -> BexExternalValue {
     match value {
-        BamlValue::String(s) => BexExternalValue::String(s.value.to_string()),
+        BamlValue::String(s) => BexExternalValue::String(bex_str::BexStr::from(s.value.as_ref())),
         BamlValue::Int(i) => BexExternalValue::Int(i.value),
+        BamlValue::Bigint(b) => BexExternalValue::Bigint(b.value.clone()),
         BamlValue::Float(f) => BexExternalValue::Float(f.value),
         BamlValue::Bool(b) => BexExternalValue::Bool(b.value),
         BamlValue::Null(_) => BexExternalValue::Null,
@@ -222,7 +227,7 @@ fn stream_state_to_external(state: &BamlStreamState<'_, '_, '_, TypeName>) -> Be
     fields.insert("value".to_string(), baml_value_to_external(inner));
     fields.insert(
         "state".to_string(),
-        BexExternalValue::String(state_name.to_string()),
+        BexExternalValue::String(bex_str::BexStr::from(state_name)),
     );
     BexExternalValue::Instance {
         class_name: "StreamState".to_string(),

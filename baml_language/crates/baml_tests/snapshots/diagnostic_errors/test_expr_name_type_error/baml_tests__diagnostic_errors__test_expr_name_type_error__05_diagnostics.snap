@@ -2,7 +2,7 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === COMPILER2 DIAGNOSTICS ===
-  [type] Error: type mismatch: expected string, got int
+  [type] error: type mismatch: expected string, got int
    ╭─[ main.baml:1:1 ]
    │
  1 │ // Expression names — type errors: non-string expressions as test names.
@@ -12,7 +12,17 @@ source: crates/baml_tests/src/generated_tests.rs
    │ Note: Error code: E0001
 ───╯
 
-  [type] Error: type mismatch: expected string, got 42
+  [type] error: operator `Add` cannot be applied to `"a"` and `1`
+   ╭─[ main.baml:3:5 ]
+   │
+ 3 │ test "a" + 1 {
+   │     ────┬───  
+   │         ╰───── operator `Add` cannot be applied to `"a"` and `1`
+   │ 
+   │ Note: Error code: E0004
+───╯
+
+  [type] error: type mismatch: expected string, got 42
    ╭─[ main.baml:7:6 ]
    │
  7 │ test 42 {
@@ -22,7 +32,7 @@ source: crates/baml_tests/src/generated_tests.rs
    │ Note: Error code: E0001
 ───╯
 
-  [type] Error: type mismatch: expected string, got int
+  [type] error: type mismatch: expected string, got int
     ╭─[ main.baml:13:11 ]
     │
  13 │     test (5 + i) {

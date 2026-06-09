@@ -10,6 +10,7 @@ import type {
   RmOptions,
   CpOptions,
 } from "just-bash/browser";
+import type { WasmVfsDirEntry } from "@b/bridge_wasm";
 
 /**
  * The wasmVfs property shape exposed by BamlVfs.
@@ -21,6 +22,7 @@ interface WasmVfsLike {
   writeFile(path: string, data: Uint8Array): void;
   exists(path: string): boolean;
   readDir(path: string): string[];
+  readDirEntries(path: string): WasmVfsDirEntry[];
   createDir(path: string): void;
   removeFile(path: string): void;
   removeDir(path: string): void;

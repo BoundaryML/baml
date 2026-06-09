@@ -55,9 +55,10 @@ SOURCE_FILE
         L_BRACE "{"
         CALL_EXPR
           WORD "cb"
-          CALL_ARGS "(1)"
+          CALL_ARGS
             L_PAREN "("
-            INTEGER_LITERAL "1"
+            CALL_ARG "1"
+              INTEGER_LITERAL "1"
             R_PAREN ")"
         R_BRACE "}"
   FUNCTION_DEF
@@ -94,8 +95,10 @@ SOURCE_FILE
       BLOCK_EXPR
         L_BRACE "{"
         LET_STMT
-          KW_LET "let"
-          WORD "inner"
+          PATTERN
+            BINDING_PATTERN "let inner"
+              KW_LET "let"
+              WORD "inner"
           EQUALS "="
           LAMBDA_EXPR
             PARAMETER_LIST
@@ -125,9 +128,10 @@ SOURCE_FILE
               R_BRACE "}"
         CALL_EXPR
           WORD "cb"
-          CALL_ARGS "(inner)"
+          CALL_ARGS
             L_PAREN "("
-            WORD "inner"
+            CALL_ARG "inner"
+              WORD "inner"
             R_PAREN ")"
         R_BRACE "}"
   FUNCTION_DEF
@@ -173,9 +177,10 @@ SOURCE_FILE
         L_BRACE "{"
         CALL_EXPR
           WORD "accept_hidden"
-          CALL_ARGS "(risky)"
+          CALL_ARGS
             L_PAREN "("
-            WORD "risky"
+            CALL_ARG "risky"
+              WORD "risky"
             R_PAREN ")"
         R_BRACE "}"
   FUNCTION_DEF
@@ -221,8 +226,10 @@ SOURCE_FILE
       BLOCK_EXPR
         L_BRACE "{"
         LET_STMT
-          KW_LET "let"
-          WORD "local"
+          PATTERN
+            BINDING_PATTERN "let local"
+              KW_LET "let"
+              WORD "local"
           EQUALS "="
           LAMBDA_EXPR
             PARAMETER_LIST

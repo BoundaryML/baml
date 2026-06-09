@@ -99,18 +99,20 @@ SOURCE_FILE
             WORD "send"
           CALL_ARGS
             L_PAREN "("
-            STRING_LITERAL "user_action"
-              QUOTE """
-              WORD "user_action"
-              QUOTE """
+            CALL_ARG
+              STRING_LITERAL "user_action"
+                QUOTE """
+                WORD "user_action"
+                QUOTE """
             COMMA ","
-            MAP_LITERAL
-              L_BRACE "{"
-              OBJECT_FIELD "action: name"
-                WORD "action"
-                COLON ":"
-                WORD "name"
-              R_BRACE "}"
+            CALL_ARG
+              MAP_LITERAL
+                L_BRACE "{"
+                OBJECT_FIELD "action: name"
+                  WORD "action"
+                  COLON ":"
+                  WORD "name"
+                R_BRACE "}"
             R_PAREN ")"
         R_BRACE "}"
   FUNCTION_DEF
@@ -134,18 +136,20 @@ SOURCE_FILE
             WORD "send"
           CALL_ARGS
             L_PAREN "("
-            STRING_LITERAL "step"
-              QUOTE """
-              WORD "step"
-              QUOTE """
-            COMMA ","
-            MAP_LITERAL
-              L_BRACE "{"
-              OBJECT_FIELD "step: 1"
+            CALL_ARG
+              STRING_LITERAL "step"
+                QUOTE """
                 WORD "step"
-                COLON ":"
-                INTEGER_LITERAL "1"
-              R_BRACE "}"
+                QUOTE """
+            COMMA ","
+            CALL_ARG
+              MAP_LITERAL
+                L_BRACE "{"
+                OBJECT_FIELD "step: 1"
+                  WORD "step"
+                  COLON ":"
+                  INTEGER_LITERAL "1"
+                R_BRACE "}"
             R_PAREN ")"
         CALL_EXPR
           PATH_EXPR "baml.events.send"
@@ -156,18 +160,20 @@ SOURCE_FILE
             WORD "send"
           CALL_ARGS
             L_PAREN "("
-            STRING_LITERAL "step"
-              QUOTE """
-              WORD "step"
-              QUOTE """
-            COMMA ","
-            MAP_LITERAL
-              L_BRACE "{"
-              OBJECT_FIELD "step: 2"
+            CALL_ARG
+              STRING_LITERAL "step"
+                QUOTE """
                 WORD "step"
-                COLON ":"
-                INTEGER_LITERAL "2"
-              R_BRACE "}"
+                QUOTE """
+            COMMA ","
+            CALL_ARG
+              MAP_LITERAL
+                L_BRACE "{"
+                OBJECT_FIELD "step: 2"
+                  WORD "step"
+                  COLON ":"
+                  INTEGER_LITERAL "2"
+                R_BRACE "}"
             R_PAREN ")"
         CALL_EXPR
           PATH_EXPR "baml.events.send"
@@ -178,18 +184,20 @@ SOURCE_FILE
             WORD "send"
           CALL_ARGS
             L_PAREN "("
-            STRING_LITERAL "step"
-              QUOTE """
-              WORD "step"
-              QUOTE """
-            COMMA ","
-            MAP_LITERAL
-              L_BRACE "{"
-              OBJECT_FIELD "step: 3"
+            CALL_ARG
+              STRING_LITERAL "step"
+                QUOTE """
                 WORD "step"
-                COLON ":"
-                INTEGER_LITERAL "3"
-              R_BRACE "}"
+                QUOTE """
+            COMMA ","
+            CALL_ARG
+              MAP_LITERAL
+                L_BRACE "{"
+                OBJECT_FIELD "step: 3"
+                  WORD "step"
+                  COLON ":"
+                  INTEGER_LITERAL "3"
+                R_BRACE "}"
             R_PAREN ")"
         R_BRACE "}"
   FUNCTION_DEF
@@ -205,8 +213,10 @@ SOURCE_FILE
       BLOCK_EXPR
         L_BRACE "{"
         LET_STMT
-          KW_LET "let"
-          WORD "user"
+          PATTERN
+            BINDING_PATTERN "let user"
+              KW_LET "let"
+              WORD "user"
           EQUALS "="
           OBJECT_LITERAL
             WORD "User"
@@ -243,17 +253,18 @@ SOURCE_FILE
             WORD "debug"
           CALL_ARGS
             L_PAREN "("
-            MAP_LITERAL
-              L_BRACE "{"
-              OBJECT_FIELD
-                WORD "message"
-                COLON ":"
-                STRING_LITERAL "Starting process"
-                  QUOTE """
-                  WORD "Starting"
-                  WORD "process"
-                  QUOTE """
-              R_BRACE "}"
+            CALL_ARG
+              MAP_LITERAL
+                L_BRACE "{"
+                OBJECT_FIELD
+                  WORD "message"
+                  COLON ":"
+                  STRING_LITERAL "Starting process"
+                    QUOTE """
+                    WORD "Starting"
+                    WORD "process"
+                    QUOTE """
+                R_BRACE "}"
             R_PAREN ")"
         CALL_EXPR
           PATH_EXPR "log.info"
@@ -262,21 +273,22 @@ SOURCE_FILE
             WORD "info"
           CALL_ARGS
             L_PAREN "("
-            MAP_LITERAL
-              L_BRACE "{"
-              OBJECT_FIELD "user: user"
-                WORD "user"
-                COLON ":"
-                WORD "user"
-              COMMA ","
-              OBJECT_FIELD
-                WORD "status"
-                COLON ":"
-                STRING_LITERAL "processing"
-                  QUOTE """
-                  WORD "processing"
-                  QUOTE """
-              R_BRACE "}"
+            CALL_ARG
+              MAP_LITERAL
+                L_BRACE "{"
+                OBJECT_FIELD "user: user"
+                  WORD "user"
+                  COLON ":"
+                  WORD "user"
+                COMMA ","
+                OBJECT_FIELD
+                  WORD "status"
+                  COLON ":"
+                  STRING_LITERAL "processing"
+                    QUOTE """
+                    WORD "processing"
+                    QUOTE """
+                R_BRACE "}"
             R_PAREN ")"
         CALL_EXPR
           PATH_EXPR "log.warn"
@@ -285,18 +297,19 @@ SOURCE_FILE
             WORD "warn"
           CALL_ARGS
             L_PAREN "("
-            MAP_LITERAL
-              L_BRACE "{"
-              OBJECT_FIELD
-                WORD "warning"
-                COLON ":"
-                STRING_LITERAL "Resource usage high"
-                  QUOTE """
-                  WORD "Resource"
-                  WORD "usage"
-                  WORD "high"
-                  QUOTE """
-              R_BRACE "}"
+            CALL_ARG
+              MAP_LITERAL
+                L_BRACE "{"
+                OBJECT_FIELD
+                  WORD "warning"
+                  COLON ":"
+                  STRING_LITERAL "Resource usage high"
+                    QUOTE """
+                    WORD "Resource"
+                    WORD "usage"
+                    WORD "high"
+                    QUOTE """
+                R_BRACE "}"
             R_PAREN ")"
         CALL_EXPR
           PATH_EXPR "log.error"
@@ -305,21 +318,22 @@ SOURCE_FILE
             WORD "error"
           CALL_ARGS
             L_PAREN "("
-            MAP_LITERAL
-              L_BRACE "{"
-              OBJECT_FIELD
-                WORD "code"
-                COLON ":"
-                STRING_LITERAL "E001"
-                  QUOTE """
-                  WORD "E001"
-                  QUOTE """
-              COMMA ","
-              OBJECT_FIELD "retries: 3"
-                WORD "retries"
-                COLON ":"
-                INTEGER_LITERAL "3"
-              R_BRACE "}"
+            CALL_ARG
+              MAP_LITERAL
+                L_BRACE "{"
+                OBJECT_FIELD
+                  WORD "code"
+                  COLON ":"
+                  STRING_LITERAL "E001"
+                    QUOTE """
+                    WORD "E001"
+                    QUOTE """
+                COMMA ","
+                OBJECT_FIELD "retries: 3"
+                  WORD "retries"
+                  COLON ":"
+                  INTEGER_LITERAL "3"
+                R_BRACE "}"
             R_PAREN ")"
         R_BRACE "}"
   FUNCTION_DEF
@@ -346,21 +360,22 @@ SOURCE_FILE
             WORD "info"
           CALL_ARGS
             L_PAREN "("
-            MAP_LITERAL
-              L_BRACE "{"
-              OBJECT_FIELD
-                WORD "event"
-                COLON ":"
-                STRING_LITERAL "start"
-                  QUOTE """
-                  WORD "start"
-                  QUOTE """
-              COMMA ","
-              OBJECT_FIELD "input: input"
-                WORD "input"
-                COLON ":"
-                WORD "input"
-              R_BRACE "}"
+            CALL_ARG
+              MAP_LITERAL
+                L_BRACE "{"
+                OBJECT_FIELD
+                  WORD "event"
+                  COLON ":"
+                  STRING_LITERAL "start"
+                    QUOTE """
+                    WORD "start"
+                    QUOTE """
+                COMMA ","
+                OBJECT_FIELD "input: input"
+                  WORD "input"
+                  COLON ":"
+                  WORD "input"
+                R_BRACE "}"
             R_PAREN ")"
         CALL_EXPR
           PATH_EXPR "baml.events.send"
@@ -371,25 +386,29 @@ SOURCE_FILE
             WORD "send"
           CALL_ARGS
             L_PAREN "("
-            STRING_LITERAL "processing"
-              QUOTE """
-              WORD "processing"
-              QUOTE """
+            CALL_ARG
+              STRING_LITERAL "processing"
+                QUOTE """
+                WORD "processing"
+                QUOTE """
             COMMA ","
-            MAP_LITERAL
-              L_BRACE "{"
-              OBJECT_FIELD
-                WORD "stage"
-                COLON ":"
-                STRING_LITERAL "start"
-                  QUOTE """
-                  WORD "start"
-                  QUOTE """
-              R_BRACE "}"
+            CALL_ARG
+              MAP_LITERAL
+                L_BRACE "{"
+                OBJECT_FIELD
+                  WORD "stage"
+                  COLON ":"
+                  STRING_LITERAL "start"
+                    QUOTE """
+                    WORD "start"
+                    QUOTE """
+                R_BRACE "}"
             R_PAREN ")"
         LET_STMT
-          KW_LET "let"
-          WORD "result"
+          PATTERN
+            BINDING_PATTERN "let result"
+              KW_LET "let"
+              WORD "result"
           EQUALS "="
           BINARY_EXPR
             STRING_LITERAL "Processed: "
@@ -408,21 +427,23 @@ SOURCE_FILE
             WORD "send"
           CALL_ARGS
             L_PAREN "("
-            STRING_LITERAL "processing"
-              QUOTE """
-              WORD "processing"
-              QUOTE """
+            CALL_ARG
+              STRING_LITERAL "processing"
+                QUOTE """
+                WORD "processing"
+                QUOTE """
             COMMA ","
-            MAP_LITERAL
-              L_BRACE "{"
-              OBJECT_FIELD
-                WORD "stage"
-                COLON ":"
-                STRING_LITERAL "complete"
-                  QUOTE """
-                  WORD "complete"
-                  QUOTE """
-              R_BRACE "}"
+            CALL_ARG
+              MAP_LITERAL
+                L_BRACE "{"
+                OBJECT_FIELD
+                  WORD "stage"
+                  COLON ":"
+                  STRING_LITERAL "complete"
+                    QUOTE """
+                    WORD "complete"
+                    QUOTE """
+                R_BRACE "}"
             R_PAREN ")"
         CALL_EXPR
           PATH_EXPR "log.info"
@@ -431,21 +452,22 @@ SOURCE_FILE
             WORD "info"
           CALL_ARGS
             L_PAREN "("
-            MAP_LITERAL
-              L_BRACE "{"
-              OBJECT_FIELD
-                WORD "event"
-                COLON ":"
-                STRING_LITERAL "complete"
-                  QUOTE """
-                  WORD "complete"
-                  QUOTE """
-              COMMA ","
-              OBJECT_FIELD "result: result"
-                WORD "result"
-                COLON ":"
-                WORD "result"
-              R_BRACE "}"
+            CALL_ARG
+              MAP_LITERAL
+                L_BRACE "{"
+                OBJECT_FIELD
+                  WORD "event"
+                  COLON ":"
+                  STRING_LITERAL "complete"
+                    QUOTE """
+                    WORD "complete"
+                    QUOTE """
+                COMMA ","
+                OBJECT_FIELD "result: result"
+                  WORD "result"
+                  COLON ":"
+                  WORD "result"
+                R_BRACE "}"
             R_PAREN ")"
         WORD "result"
         R_BRACE "}"

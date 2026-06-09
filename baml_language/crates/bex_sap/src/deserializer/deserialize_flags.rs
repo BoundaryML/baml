@@ -73,6 +73,10 @@ where
     ///
     /// If combined with a `Default*` flag, it means the unused json value was a string (not that the default value was a string).
     StringToInt(Cow<'s, str>),
+    /// `bigint` value was converted from a parsed string value.
+    ///
+    /// If combined with a `Default*` flag, it means the unused json value was a string (not that the default value was a string).
+    StringToBigint(Cow<'s, str>),
     /// `bool` value was converted from a parsed string value
     ///
     /// If combined with a `Default*` flag, it means the unused json value was a string (not that the default value was a string).
@@ -93,11 +97,12 @@ where
     /// `int` value was converted from a parsed non-integer number
     FloatToInt(f64),
 
+    /// `bigint` value was converted from a parsed non-integer (float) number.
+    FloatToBigint(f64),
+
     // X -> Object conversions.
     NoFields(Option<Cow<'v, crate::jsonish::Value<'s>>>),
 
-    // /// Constraint results (only contains checks)
-    // ConstraintResults(Vec<(String, JinjaExpression, bool)>),
     /// Completion state for the top-level node of the value is Incomplete.
     Incomplete,
     Pending,
@@ -152,11 +157,13 @@ impl<N: TypeIdent> DeserializerConditions<'_, '_, '_, N> {
                 Flag::DefaultButHadValue(_) => None,
                 Flag::OptionalDefaultFromNoValue => None,
                 Flag::StringToInt(_) => None,
+                Flag::StringToBigint(_) => None,
                 Flag::StringToBool(_) => None,
                 Flag::StringToNull(_) => None,
                 Flag::StringToChar(_) => None,
                 Flag::StringToFloat(_) => None,
                 Flag::FloatToInt(_) => None,
+                Flag::FloatToBigint(_) => None,
                 Flag::NoFields(_) => None,
                 Flag::UnionMatch(_idx, _) => None,
                 Flag::DefaultButHadUnparseableValue(e) => Some(e.clone()),
@@ -165,29 +172,7 @@ impl<N: TypeIdent> DeserializerConditions<'_, '_, '_, N> {
             })
             .collect::<Vec<_>>()
     }
-
-    // pub fn constraint_results(&self) -> Vec<(String, JinjaExpression, bool)> {
-    //     self.flags
-    //         .iter()
-    //         .filter_map(|flag| match flag {
-    //             Flag::ConstraintResults(cs) => Some(cs.clone()),
-    //             _ => None,
-    //         })
-    //         .flatten()
-    //         .collect()
-    // }
 }
-
-// pub fn constraint_results(flags: &[Flag]) -> Vec<(String, JinjaExpression, bool)> {
-//     flags
-//         .iter()
-//         .filter_map(|flag| match flag {
-//             Flag::ConstraintResults(cs) => Some(cs.clone()),
-//             _ => None,
-//         })
-//         .flatten()
-//         .collect()
-// }
 
 impl<N: TypeIdent> std::fmt::Debug for DeserializerConditions<'_, '_, '_, N> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -312,6 +297,9 @@ impl<N: TypeIdent> std::fmt::Display for Flag<'_, '_, '_, N> {
             Flag::StringToInt(value) => {
                 write!(f, "String to int: {value}")?;
             }
+            Flag::StringToBigint(value) => {
+                write!(f, "String to bigint: {value}")?;
+            }
             Flag::StringToBool(value) => {
                 write!(f, "String to bool: {value}")?;
             }
@@ -327,6 +315,9 @@ impl<N: TypeIdent> std::fmt::Display for Flag<'_, '_, '_, N> {
             Flag::FloatToInt(value) => {
                 write!(f, "Float to int: {value}")?;
             }
+            Flag::FloatToBigint(value) => {
+                write!(f, "Float to bigint: {value}")?;
+            }
             Flag::NoFields(value) => {
                 write!(f, "No fields: ")?;
                 if let Some(value) = value {
@@ -335,16 +326,6 @@ impl<N: TypeIdent> std::fmt::Display for Flag<'_, '_, '_, N> {
                     writeln!(f, "<empty>")?;
                 }
             }
-            // Flag::ConstraintResults(cs) => {
-            //     for (label, _, succeeded) in cs.iter() {
-            //         let f_result = if *succeeded { "Succeeded" } else { "Failed" };
-            //         writeln!(
-            //             f,
-            //             "{level:?} {label} {f_result}",
-            //             level = ConstraintLevel::Check
-            //         )?;
-            //     }
-            // }
             Flag::Incomplete => {
                 write!(f, "Value is incompletely streamed")?;
             }

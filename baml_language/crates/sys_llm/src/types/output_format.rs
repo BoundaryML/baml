@@ -118,10 +118,25 @@ impl OutputFormatContent {
     }
 
     fn render_impl(&self, options: &RenderOptions) -> Result<Option<String>, RenderError> {
+        if matches!(options.prefix, RenderSetting::Auto) {
+            if let Some(instruction) = media_output_instruction(&self.target) {
+                return Ok(Some(instruction));
+            }
+        }
+
         // For string target with no explicit prefix, return None
         if matches!(self.target, Ty::String { .. }) && matches!(options.prefix, RenderSetting::Auto)
         {
             return Ok(None);
+        }
+
+        // The `json` type alias is an opaque leaf from the LLM's perspective.
+        // Regardless of rendering options, the only thing we ask the model to produce
+        // is arbitrary JSON — no schema body, no prefix enumeration.
+        if let Ty::TypeAlias(tn, _) = &self.target {
+            if tn.display_name.as_str() == ::baml_base::qualified_name::BAML_JSON_JSON {
+                return Ok(Some("Respond with valid JSON.".to_string()));
+            }
         }
 
         // Compute which classes and enums to hoist
@@ -130,11 +145,11 @@ impl OutputFormatContent {
 
         let prefix = self.get_prefix(options, &hoisted_classes);
 
-        // For simple primitives (int, float, bool) with Auto prefix, the prefix IS the full message
+        // For simple primitives (int, bigint, float, bool) with Auto prefix, the prefix IS the full message
         // But with explicit prefix, we need to append the type
         if matches!(
             self.target,
-            Ty::Int { .. } | Ty::Float { .. } | Ty::Bool { .. }
+            Ty::Int { .. } | Ty::Bigint { .. } | Ty::Float { .. } | Ty::Bool { .. }
         ) && matches!(options.prefix, RenderSetting::Auto)
         {
             return Ok(prefix);
@@ -217,7 +232,7 @@ impl OutputFormatContent {
         }
 
         // Render the target type with hoisting awareness
-        let message = if let Ty::Class(tn, _) = &self.target {
+        let message = if let Ty::Class(tn, _, _) | Ty::Interface(tn, _, _, _) = &self.target {
             if hoisted_classes.contains(tn.display_name.as_str()) {
                 let display_name = self
                     .find_class(tn.display_name.as_str())
@@ -340,41 +355,59 @@ impl OutputFormatContent {
                     _ => "schema",
                 };
 
-                match &self.target {
-                    Ty::String { .. } => None,
-                    Ty::Int { .. } => Some("Answer as an int".to_string()),
-                    Ty::Float { .. } => Some("Answer as a float".to_string()),
-                    Ty::Bool { .. } => Some("Answer as a bool".to_string()),
-                    Ty::List(..) => {
-                        Some("Answer with a JSON Array using this schema:\n".to_string())
-                    }
-                    Ty::Class(tn, _) => {
-                        let end = if hoisted.contains(tn.display_name.as_str()) {
-                            " "
-                        } else {
-                            "\n"
-                        };
-                        Some(format!("Answer in JSON using this {type_word}:{end}"))
-                    }
-                    Ty::Map { .. } => Some(format!("Answer in JSON using this {type_word}:\n")),
-                    Ty::Enum(..) => Some("Answer with any of the categories:\n".to_string()),
-                    Ty::Union(variants, _) => {
-                        // Distinguish optional (1 non-null variant) from true union (multiple)
-                        let non_null_count = variants
-                            .iter()
-                            .filter(|v| !matches!(v, Ty::Null { .. }))
-                            .count();
-                        if non_null_count > 1 {
-                            Some(format!("Answer in JSON using any of these {type_word}s:\n"))
-                        } else {
-                            Some(format!("Answer in JSON using this {type_word}:\n"))
-                        }
-                    }
-                    Ty::TypeAlias(..) => Some(format!("Answer in JSON using this {type_word}: ")),
-                    Ty::Literal(..) => Some("Answer using this specific value:\n".to_string()),
-                    _ => None,
+                Self::auto_prefix(&self.target, type_word, hoisted)
+            }
+        }
+    }
+
+    /// The `Auto`-mode schema prefix for a given target type. A nullable union
+    /// (`T?` == `T | null`) delegates to its non-null part — so `string?` has no
+    /// prefix like `string`, and `Class?` uses the class prefix.
+    fn auto_prefix(
+        ty: &Ty,
+        type_word: &str,
+        hoisted: &indexmap::IndexSet<String>,
+    ) -> Option<String> {
+        match ty {
+            Ty::String { .. } => None,
+            Ty::Int { .. } => Some("Answer as an int".to_string()),
+            Ty::Bigint { .. } => Some("Answer as a bigint".to_string()),
+            Ty::Float { .. } => Some("Answer as a float".to_string()),
+            Ty::Bool { .. } => Some("Answer as a bool".to_string()),
+            Ty::List(..) => Some("Answer with a JSON Array using this schema:\n".to_string()),
+            Ty::Class(tn, _, _) | Ty::Interface(tn, _, _, _) => {
+                let end = if hoisted.contains(tn.display_name.as_str()) {
+                    " "
+                } else {
+                    "\n"
+                };
+                Some(format!("Answer in JSON using this {type_word}:{end}"))
+            }
+            Ty::Map { .. } => Some(format!("Answer in JSON using this {type_word}:\n")),
+            Ty::Enum(..) => Some("Answer with any of the categories:\n".to_string()),
+            Ty::Union(variants, _) => {
+                let non_null: Vec<&Ty> = variants
+                    .iter()
+                    .filter(|v| !matches!(v, Ty::Null { .. }))
+                    .collect();
+                // `T?` (single non-null member + null) follows the inner type's
+                // prefix; a true multi-member union gets the union prefix.
+                if non_null.len() == 1 && non_null.len() < variants.len() {
+                    Self::auto_prefix(non_null[0], type_word, hoisted)
+                } else if non_null.len() > 1 {
+                    Some(format!("Answer in JSON using any of these {type_word}s:\n"))
+                } else {
+                    Some(format!("Answer in JSON using this {type_word}:\n"))
                 }
             }
+            Ty::TypeAlias(tn, _)
+                if tn.display_name.as_str() == ::baml_base::qualified_name::BAML_JSON_JSON =>
+            {
+                None
+            }
+            Ty::TypeAlias(..) => Some(format!("Answer in JSON using this {type_word}: ")),
+            Ty::Literal(..) => Some("Answer using this specific value:\n".to_string()),
+            _ => None,
         }
     }
 
@@ -387,7 +420,7 @@ impl OutputFormatContent {
         hoisted_enums: &indexmap::IndexSet<String>,
     ) -> Result<Option<String>, RenderError> {
         // Intercept hoisted classes: return just the (aliased) name
-        if let Ty::Class(tn, _) = ty {
+        if let Ty::Class(tn, _, _) | Ty::Interface(tn, _, _, _) = ty {
             if hoisted_classes.contains(tn.display_name.as_str()) {
                 let display_name = self
                     .find_class(tn.display_name.as_str())
@@ -405,16 +438,10 @@ impl OutputFormatContent {
         match ty {
             Ty::String { .. } => Ok(Some("string".to_string())),
             Ty::Int { .. } => Ok(Some("int".to_string())),
+            Ty::Bigint { .. } => Ok(Some("bigint".to_string())),
             Ty::Float { .. } => Ok(Some("float".to_string())),
             Ty::Bool { .. } => Ok(Some("bool".to_string())),
             Ty::Null { .. } => Ok(Some("null".to_string())),
-
-            Ty::Optional(inner, _) => {
-                let inner_str = self
-                    .render_type_hoisted(inner, options, hoisted_classes, hoisted_enums)?
-                    .unwrap_or_else(|| "unknown".to_string());
-                Ok(Some(format!("{inner_str}{or_splitter}null")))
-            }
 
             Ty::List(inner, _) => {
                 let inner_str = self
@@ -423,7 +450,9 @@ impl OutputFormatContent {
 
                 // Determine if we need multiline rendering
                 let is_hoisted = match inner.as_ref() {
-                    Ty::Class(tn, _) => hoisted_classes.contains(tn.display_name.as_str()),
+                    Ty::Class(tn, _, _) | Ty::Interface(tn, _, _, _) => {
+                        hoisted_classes.contains(tn.display_name.as_str())
+                    }
                     Ty::TypeAlias(tn, _) => self
                         .recursive_type_aliases
                         .contains_key(tn.display_name.as_str()),
@@ -514,7 +543,7 @@ impl OutputFormatContent {
                 }
             }
 
-            Ty::Class(tn, _) => {
+            Ty::Class(tn, _, _) | Ty::Interface(tn, _, _, _) => {
                 if let Some(cls) = self.find_class(tn.display_name.as_str()) {
                     Ok(Some(self.render_class_hoisted(
                         cls,
@@ -529,7 +558,7 @@ impl OutputFormatContent {
             }
 
             Ty::Uint8Array { .. } => Err(RenderError::UnsupportedType("uint8array".to_string())),
-            Ty::Media(_, _) => Err(RenderError::UnsupportedType("media".to_string())),
+            Ty::Media(kind, _) => Ok(Some(kind.to_string())),
 
             Ty::Literal(lit, _) => Ok(Some(render_literal(lit))),
 
@@ -670,9 +699,71 @@ fn render_literal(lit: &LiteralValue) -> String {
     match lit {
         LiteralValue::String(s) => format!("\"{s}\""),
         LiteralValue::Int(n) => n.to_string(),
+        LiteralValue::Bigint(n) => format!("{n}n"),
         LiteralValue::Float(f) => f.clone(),
         LiteralValue::Bool(b) => b.to_string(),
     }
+}
+
+fn media_output_instruction(target: &Ty) -> Option<String> {
+    match target {
+        Ty::Media(kind, _) => Some(format!("Return an {kind} output.")),
+        Ty::Union(variants, _) if nullable_media_union_kind(variants).is_some() => {
+            let kind = nullable_media_union_kind(variants).expect("checked above");
+            Some(format!("Return an {kind} output or null."))
+        }
+        Ty::List(inner, _) => match inner.as_ref() {
+            Ty::Media(kind, _) => Some(format!("Return one or more {kind} outputs.")),
+            inner if is_text_or_image_union(inner) => {
+                Some("Return an ordered sequence of text and image outputs.".to_string())
+            }
+            _ => None,
+        },
+        target if is_text_or_image_union(target) => {
+            Some("Return either text or an image output.".to_string())
+        }
+        _ => None,
+    }
+}
+
+fn nullable_media_union_kind(variants: &[Ty]) -> Option<baml_base::MediaKind> {
+    let mut kind = None;
+    let mut has_null = false;
+    for variant in variants {
+        match variant {
+            Ty::Media(media_kind, _) => {
+                if kind
+                    .replace(*media_kind)
+                    .is_some_and(|prev| prev != *media_kind)
+                {
+                    return None;
+                }
+            }
+            Ty::Null { .. } => has_null = true,
+            _ => return None,
+        }
+    }
+
+    if has_null { kind } else { None }
+}
+
+pub(crate) fn is_text_or_image_union(target: &Ty) -> bool {
+    let Ty::Union(variants, _) = target else {
+        return false;
+    };
+
+    let mut has_string = false;
+    let mut has_image = false;
+    for variant in variants {
+        match variant {
+            Ty::String { .. } => has_string = true,
+            Ty::Media(baml_base::MediaKind::Image, _) => has_image = true,
+            Ty::Null { .. } => {}
+            _ => return false,
+        }
+    }
+
+    has_string && has_image
 }
 
 /// Tri-state setting: Auto (default behavior), Always(value), or Never.
@@ -754,9 +845,68 @@ impl RenderOptions {
 
 #[cfg(test)]
 mod tests {
-    use baml_type::TyAttr;
+    use baml_type::{TyAttr, TypeName};
 
     use super::*;
+
+    // -------------------------------------------------------------------------
+    // Phase 3: json alias sentinel
+    // -------------------------------------------------------------------------
+
+    /// `Ty::TypeAlias("baml.json.json")` as the target type renders as the static
+    /// literal "Respond with valid JSON." regardless of render options, with no
+    /// schema body appended.
+    #[test]
+    fn test_render_json_alias_sentinel() {
+        let json_tn = TypeName::from_dotted_path(::baml_base::qualified_name::BAML_JSON_JSON);
+        let json_ty = Ty::TypeAlias(json_tn, TyAttr::default());
+        let content = OutputFormatContent::new(json_ty);
+
+        let rendered = content.render(&RenderOptions::default()).unwrap();
+        assert_eq!(
+            rendered,
+            Some("Respond with valid JSON.".to_string()),
+            "json alias should render as the static prompt literal"
+        );
+    }
+
+    /// With `RenderSetting::Always(prefix)`, the sentinel still overrides and
+    /// returns "Respond with valid JSON." — no prefix + no alias body.
+    #[test]
+    fn test_render_json_alias_sentinel_ignores_explicit_prefix() {
+        let json_tn = TypeName::from_dotted_path(::baml_base::qualified_name::BAML_JSON_JSON);
+        let json_ty = Ty::TypeAlias(json_tn, TyAttr::default());
+        let content = OutputFormatContent::new(json_ty);
+
+        let options = RenderOptions {
+            prefix: RenderSetting::Always("CUSTOM PREFIX: ".to_string()),
+            ..RenderOptions::default()
+        };
+        let rendered = content.render(&options).unwrap();
+        assert_eq!(
+            rendered,
+            Some("Respond with valid JSON.".to_string()),
+            "json alias sentinel overrides explicit prefix"
+        );
+    }
+
+    /// A non-json alias does NOT trigger the sentinel and renders normally.
+    #[test]
+    fn test_render_non_json_alias_does_not_sentinel() {
+        let other_tn = TypeName::from_dotted_path("baml.other.SomeAlias");
+        let other_ty = Ty::TypeAlias(other_tn, TyAttr::default());
+        // Without any class/enum definitions or recursive_type_aliases, the alias
+        // renders as just its display name (the existing fallback).
+        let content = OutputFormatContent::new(other_ty);
+        let rendered = content.render(&RenderOptions::default()).unwrap();
+        // Should NOT be "Respond with valid JSON." — exact value depends on the
+        // general TypeAlias rendering path (display name + prefix).
+        assert_ne!(
+            rendered,
+            Some("Respond with valid JSON.".to_string()),
+            "non-json alias should not trigger the json sentinel"
+        );
+    }
 
     #[test]
     fn test_render_string() {
@@ -774,6 +924,15 @@ mod tests {
         });
         let rendered = content.render(&RenderOptions::default()).unwrap();
         assert_eq!(rendered, Some("Answer as an int".to_string()));
+    }
+
+    #[test]
+    fn test_render_bigint() {
+        let content = OutputFormatContent::new(Ty::Bigint {
+            attr: TyAttr::default(),
+        });
+        let rendered = content.render(&RenderOptions::default()).unwrap();
+        assert_eq!(rendered, Some("Answer as a bigint".to_string()));
     }
 
     #[test]
@@ -825,13 +984,80 @@ mod tests {
     }
 
     #[test]
-    fn test_render_optional() {
-        let content = OutputFormatContent::new(Ty::Optional(
-            Box::new(Ty::String {
-                attr: TyAttr::default(),
-            }),
+    fn test_render_media_output_instructions() {
+        let image = Ty::Media(baml_base::MediaKind::Image, TyAttr::default());
+
+        let rendered = OutputFormatContent::new(image.clone())
+            .render(&RenderOptions::default())
+            .unwrap();
+        assert_eq!(rendered, Some("Return an image output.".to_string()));
+
+        let rendered =
+            OutputFormatContent::new(Ty::List(Box::new(image.clone()), TyAttr::default()))
+                .render(&RenderOptions::default())
+                .unwrap();
+        assert_eq!(
+            rendered,
+            Some("Return one or more image outputs.".to_string())
+        );
+
+        let text_or_image = Ty::Union(
+            vec![
+                Ty::String {
+                    attr: TyAttr::default(),
+                },
+                image.clone(),
+            ],
             TyAttr::default(),
-        ));
+        );
+
+        let rendered = OutputFormatContent::new(text_or_image.clone())
+            .render(&RenderOptions::default())
+            .unwrap();
+        assert_eq!(
+            rendered,
+            Some("Return either text or an image output.".to_string())
+        );
+
+        let rendered =
+            OutputFormatContent::new(Ty::List(Box::new(text_or_image), TyAttr::default()))
+                .render(&RenderOptions::default())
+                .unwrap();
+        assert_eq!(
+            rendered,
+            Some("Return an ordered sequence of text and image outputs.".to_string())
+        );
+
+        let rendered = OutputFormatContent::new(Ty::optional(image.clone()))
+            .render(&RenderOptions::default())
+            .unwrap();
+        assert_eq!(
+            rendered,
+            Some("Return an image output or null.".to_string())
+        );
+
+        let rendered = OutputFormatContent::new(Ty::Union(
+            vec![
+                image,
+                Ty::Null {
+                    attr: TyAttr::default(),
+                },
+            ],
+            TyAttr::default(),
+        ))
+        .render(&RenderOptions::default())
+        .unwrap();
+        assert_eq!(
+            rendered,
+            Some("Return an image output or null.".to_string())
+        );
+    }
+
+    #[test]
+    fn test_render_optional() {
+        let content = OutputFormatContent::new(Ty::optional(Ty::String {
+            attr: TyAttr::default(),
+        }));
         let rendered = content.render(&RenderOptions::default()).unwrap();
         assert_eq!(rendered, Some("string or null".to_string()));
     }
@@ -882,6 +1108,7 @@ mod tests {
 
         let content = OutputFormatContent::new(Ty::Class(
             baml_type::TypeName::local("Person".into()),
+            Vec::new(),
             TyAttr::default(),
         ))
         .with_class(cls);
@@ -931,6 +1158,7 @@ mod tests {
 
         let content = OutputFormatContent::new(Ty::Class(
             baml_type::TypeName::local("Point".into()),
+            Vec::new(),
             TyAttr::default(),
         ))
         .with_class(cls);
@@ -1109,10 +1337,14 @@ mod tests {
         }
     }
     fn ty_class(name: &str) -> Ty {
-        Ty::Class(baml_type::TypeName::local(name.into()), TyAttr::default())
+        Ty::Class(
+            baml_type::TypeName::local(name.into()),
+            Vec::new(),
+            TyAttr::default(),
+        )
     }
     fn ty_optional(inner: Ty) -> Ty {
-        Ty::Optional(Box::new(inner), TyAttr::default())
+        Ty::optional(inner)
     }
     fn ty_list(inner: Ty) -> Ty {
         Ty::List(Box::new(inner), TyAttr::default())

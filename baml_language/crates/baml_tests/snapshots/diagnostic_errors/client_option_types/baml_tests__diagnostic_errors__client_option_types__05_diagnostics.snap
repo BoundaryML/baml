@@ -2,7 +2,7 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === COMPILER2 DIAGNOSTICS ===
-  [hir] Error: azure-openai requires either base_url or both resource_name and deployment_id (missing: resource_name and deployment_id)
+  [hir] error: azure-openai requires either base_url or both resource_name and deployment_id (missing: resource_name and deployment_id)
     ╭─[ client_option_types.baml:53:26 ]
     │
  53 │ ╭─▶     provider azure-openai

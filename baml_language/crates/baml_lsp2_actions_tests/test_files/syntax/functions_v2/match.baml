@@ -26,9 +26,9 @@ class Situation {
 function Remand(s: Situation) -> string {
   if (s.pets.length() > 0) {
     match (s.pets[0]) {
-      cat: Cat => "Nice cat you got there.",
-      dog: Dog => "Bowwow",
-      rock: Rock => "...",
+      let cat: Cat => "Nice cat you got there.",
+      let dog: Dog => "Bowwow",
+      let rock: Rock => "...",
       _ => "...",
     }
   }
@@ -37,4 +37,31 @@ function Remand(s: Situation) -> string {
 
 //----
 //- diagnostics
-// <no-diagnostics-expected>
+// error: type mismatch: expected Pet, got Rock
+//     ╭─[ functions_v2_match.baml:30:32 ]
+//     │
+//  30 │ ╭─▶       let dog: Dog => "Bowwow",
+//  31 │ ├─▶       let rock: Rock => "...",
+//     │ │                                    
+//     │ ╰──────────────────────────────────── type mismatch: expected Pet, got Rock
+//     │     
+//     │     Note: Error code: E0001
+// ────╯
+// error: unreachable arm
+//     ╭─[ functions_v2_match.baml:31:25 ]
+//     │
+//  31 │       let rock: Rock => "...",
+//     │                         ──┬──  
+//     │                           ╰──── unreachable arm
+//     │ 
+//     │ Note: Error code: E0063
+// ────╯
+// error: unreachable arm
+//     ╭─[ functions_v2_match.baml:32:12 ]
+//     │
+//  32 │       _ => "...",
+//     │            ──┬──  
+//     │              ╰──── unreachable arm
+//     │ 
+//     │ Note: Error code: E0063
+// ────╯

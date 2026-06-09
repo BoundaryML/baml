@@ -1,8 +1,8 @@
 {
-  "name": "app-vscode-ext",
+  "name": "baml-language",
   "displayName": "BAML",
   "description": "BAML language support — syntax highlighting, hover, completions, diagnostics, go-to-definition",
-  "version": "0.1.0",
+  "version": "0.11.2",
   "publisher": "Boundary",
   "private": true,
   "type": "commonjs",
@@ -80,7 +80,7 @@
         "baml.cliPath": {
           "type": ["string", "null"],
           "default": null,
-          "description": "Path to baml-cli binary. If not set, looks for 'baml-cli' on PATH.",
+          "description": "Path to the baml wrapper. If not set, uses 'baml' on PATH.",
           "scope": "machine-overridable"
         },
         "baml.trace.server": {

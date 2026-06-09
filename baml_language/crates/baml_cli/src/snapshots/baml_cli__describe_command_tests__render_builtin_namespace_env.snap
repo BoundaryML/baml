@@ -1,0 +1,6 @@
+---
+source: crates/baml_cli/src/describe_command_tests.rs
+expression: output
+---
+function         env.get                          <builtin>/baml/ns_env/env.baml:6
+function         env.get_or_panic                 <builtin>/baml/ns_env/env.baml:11
