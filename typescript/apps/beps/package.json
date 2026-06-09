@@ -47,7 +47,7 @@
     "jszip": "^3.10.1",
     "lexical": "^0.39.0",
     "lucide-react": "^0.562.0",
-    "next": "15",
+    "next": "16.3.0-preview.0",
     "react": "19.2.5",
     "react-dom": "19.2.5",
     "react-markdown": "^10.1.0",
@@ -56,7 +56,7 @@
     "shiki": "^3.21.0",
     "tailwind-merge": "^3.4.0",
     "tailwindcss": "^4",
-    "uuid": "^13.0.0"
+    "uuid": "^14.0.0"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.3.5",
