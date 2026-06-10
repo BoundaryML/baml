@@ -37,6 +37,7 @@ mod toml;
 mod type_class;
 mod uint8array;
 mod unstable;
+mod yaml;
 
 use std::collections::HashMap;
 
