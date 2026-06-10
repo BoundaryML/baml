@@ -61,6 +61,14 @@ impl ProfileWriter {
         self.writer.flush()
     }
 
+    /// Flush + `fsync`: survives power loss, not just process exit. Used for
+    /// explicit flush requests and engine closes; the cadence flushes stay
+    /// cheap.
+    pub(crate) fn sync(&mut self) -> io::Result<()> {
+        self.writer.flush()?;
+        self.writer.get_ref().sync_all()
+    }
+
     pub(crate) fn path(&self) -> &Path {
         &self.path
     }
@@ -107,22 +115,46 @@ pub(crate) fn build_header(
     }
 }
 
-/// Reads a whole `.bamlprof` back: the header and every event, in file
-/// order. The reader for tests, gates, and ad-hoc tooling — the M5 renderer
-/// supersedes it for real consumption.
-pub fn read_bamlprof(path: &Path) -> io::Result<(pb::EventFileHeaderV1, Vec<pb::DiskEventV1>)> {
+/// A parsed `.bamlprof` (see [`read_bamlprof`]).
+pub struct BamlprofContents {
+    /// The file header.
+    pub header: pb::EventFileHeaderV1,
+    /// Every whole event, in file order (NOT event order — sort by
+    /// `timestamp_ns` within each `thread_id`; see the .proto header).
+    pub events: Vec<pb::DiskEventV1>,
+    /// The file ended mid-message: a live writer's heartbeat append caught
+    /// in flight, or a crashed process's torn tail. `events` holds the
+    /// whole-message prefix — partial-parseability is a design goal (v2
+    /// core bet 3); a torn tail must not reject the good prefix.
+    pub truncated: bool,
+}
+
+/// Reads a `.bamlprof` back: the header and every whole event, tolerating a
+/// torn trailing message. Errors only when the file or its header is
+/// unreadable. The reader for tests, gates, and ad-hoc tooling — the M5
+/// renderer supersedes it for real consumption.
+pub fn read_bamlprof(path: &Path) -> io::Result<BamlprofContents> {
     let mut bytes = Vec::new();
     File::open(path)?.read_to_end(&mut bytes)?;
     let mut buf = bytes.as_slice();
     let header = pb::EventFileHeaderV1::decode_length_delimited(&mut buf)
         .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
     let mut events = Vec::new();
+    let mut truncated = false;
     while !buf.is_empty() {
-        let event = pb::DiskEventV1::decode_length_delimited(&mut buf)
-            .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
-        events.push(event);
+        match pb::DiskEventV1::decode_length_delimited(&mut buf) {
+            Ok(event) => events.push(event),
+            Err(_) => {
+                truncated = true;
+                break;
+            }
+        }
     }
-    Ok((header, events))
+    Ok(BamlprofContents {
+        header,
+        events,
+        truncated,
+    })
 }
 
 /// Decodes the header's 16-byte little-endian wall anchor.

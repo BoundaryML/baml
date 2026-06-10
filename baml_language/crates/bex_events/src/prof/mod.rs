@@ -54,7 +54,7 @@ mod concurrency_tests;
 
 pub use config::ProfConfig;
 #[cfg(all(not(target_arch = "wasm32"), not(baml_loom)))]
-pub use consumer::{flush_and_join, register_engine_metadata};
+pub use consumer::{engine_closed, flush_and_join, register_engine_metadata};
 #[cfg(not(baml_loom))]
 pub use registry::ring_for_engine;
 pub use ring::{Ring, RingHandle};
@@ -100,3 +100,7 @@ pub fn flush_and_join(_timeout: std::time::Duration) -> bool {
 /// See the native implementation in [`consumer`]. No-op on wasm32.
 #[cfg(target_arch = "wasm32")]
 pub fn register_engine_metadata(_engine_id: u64, _meta: EngineProfileMetadata) {}
+
+/// See the native implementation in [`consumer`]. No-op on wasm32.
+#[cfg(target_arch = "wasm32")]
+pub fn engine_closed(_engine_id: u64) {}

@@ -106,20 +106,14 @@ fn load_profile(marker_fqn: &str) -> (pb::EventFileHeaderV1, Vec<Event>) {
     let mut found = None;
     for entry in std::fs::read_dir(prof_dir()).expect("profile dir exists") {
         let path = entry.unwrap().path();
-        // The consumer keeps every engine's file open and heartbeats it ~1/s;
-        // a read can race a partially flushed trailing message. Whole-message
-        // states recur on the consumer's idle flush, so retry briefly.
-        let mut parsed = None;
-        for _ in 0..25 {
-            match read_bamlprof(&path) {
-                Ok(ok) => {
-                    parsed = Some(ok);
-                    break;
-                }
-                Err(_) => std::thread::sleep(Duration::from_millis(200)),
-            }
-        }
-        let (header, events) = parsed.unwrap_or_else(|| panic!("unparseable profile {path:?}"));
+        // The tolerant reader hands back the whole-message prefix even when
+        // a live heartbeat append tears the tail; our events were synced
+        // whole before the flush ack. A file whose HEADER is unreadable is
+        // mid-creation and cannot be ours — skip it.
+        let Ok(contents) = read_bamlprof(&path) else {
+            continue;
+        };
+        let (header, events) = (contents.header, contents.events);
         let has_marker = header
             .function_table
             .as_ref()
@@ -392,6 +386,65 @@ async fn sysop_pair_emitted() {
         .filter(|e| matches!(e, Event::CallFunction(cf) if sleep_ids.contains(&cf.function_id)))
         .count();
     assert_eq!(sleep_calls, 1, "expected exactly one sleep sysop call");
+}
+
+/// Engine teardown: dropping a `BexEngine` must close its `.bamlprof`
+/// (stopping its heartbeats and freeing the fd) while later engines keep
+/// working. Catches the engine-churn leak class (LSP-shaped hosts).
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn engine_teardown_closes_profile() {
+    let _guard = test_lock().await;
+    init_prof_env();
+    let source = r#"
+        function td_work(n: int) -> int { n + 1 }
+        function main() -> int { td_work(41) }
+    "#;
+    run_main(source).await.expect("td program runs");
+    // run_main dropped its Arc<BexEngine> on return -> EngineClosed was sent
+    // before this flush on the same channel (FIFO), so the ack implies the
+    // close (sync + writer removed) already happened.
+    let (_, events) = load_profile("user.td_work");
+    assert!(!events.is_empty());
+
+    let path = {
+        let mut found = None;
+        for entry in std::fs::read_dir(prof_dir()).unwrap() {
+            let path = entry.unwrap().path();
+            let Ok(contents) = read_bamlprof(&path) else {
+                continue;
+            };
+            let has_marker = contents
+                .header
+                .function_table
+                .as_ref()
+                .is_some_and(|t| t.functions.iter().any(|f| f.fqn == "user.td_work"));
+            if has_marker {
+                found = Some(path);
+            }
+        }
+        found.expect("td profile exists")
+    };
+    let size_before = std::fs::metadata(&path).unwrap().len();
+    // Two heartbeat intervals: a still-open writer would have grown.
+    std::thread::sleep(Duration::from_millis(2_500));
+    assert!(
+        bex_events::prof::flush_and_join(Duration::from_secs(60)),
+        "post-close flush must still ack"
+    );
+    let size_after = std::fs::metadata(&path).unwrap().len();
+    assert_eq!(
+        size_before, size_after,
+        "closed engine's profile kept growing (heartbeats after close)"
+    );
+
+    // Later engines are unaffected.
+    let source2 = r#"
+        function td_after(n: int) -> int { n }
+        function main() -> int { td_after(1) }
+    "#;
+    run_main(source2).await.expect("post-teardown engine runs");
+    let (_, events2) = load_profile("user.td_after");
+    assert!(!events2.is_empty());
 }
 
 /// The unwind path: a thrown error must close every unwound frame with

@@ -589,6 +589,20 @@ pub struct BexEngine {
 /// at 1 and are never reused.
 static NEXT_ENGINE_ID: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
 
+impl Drop for BexEngine {
+    /// Closes the engine's profiling lifecycle: a non-blocking notification;
+    /// the consumer drains the engine's remaining events (every commit
+    /// happened-before the last `Arc` release, hence before this), syncs and
+    /// closes its `.bamlprof`, and frees its metadata. Without this,
+    /// long-lived engine-churning hosts (LSP recompiles) accumulate open
+    /// files and heartbeat work for dead engines.
+    fn drop(&mut self) {
+        if self.prof_enabled {
+            bex_events::prof::engine_closed(self.engine_id);
+        }
+    }
+}
+
 /// The §2.6 interim function-metadata provider: one function-table row per
 /// `Function`, keyed by the per-run id the same pre-heap walk assigns. This
 /// is the single seam the M0 compile-time id table replaces.

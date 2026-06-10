@@ -8,12 +8,13 @@
 //! its own scratch. That is what keeps lossless-by-growth deadlock-free.
 //! It also owns no ring: the heartbeat goes straight to the file writers.
 //!
-//! Known limitations (engine-lifecycle hooks are out of M2–M4 scope): there
-//! is no engine teardown, so per-engine writers stay open (one fd each) and
-//! keep receiving heartbeats for the life of the process, and the metadata
-//! map only grows. Bounded by the number of engines ever created; a
-//! lifecycle hook is the designated follow-up for long-lived multi-engine
-//! hosts.
+//! Engine lifecycle: `BexEngine::drop` sends [`ControlMsg::EngineClosed`],
+//! which drains the engine's remaining events, syncs + closes its file, and
+//! frees its metadata — long-lived engine-churning hosts (LSP recompiles)
+//! don't accumulate fds or heartbeat work. Residual growth per closed
+//! engine: one tombstoned id (8 bytes). Rings claimed by still-live threads
+//! stay registered (idle) until those threads die and the rings pool —
+//! bounded by peak concurrency, by design (plan invariant 7).
 //!
 //! Capacity model (D6): measured drain+transcode+write throughput is
 //! **7.5M events/s on one core** (`prof_drain_throughput`, release, Linux
@@ -65,8 +66,12 @@ pub fn register_engine_metadata(engine_id: u64, meta: EngineProfileMetadata) {
 }
 
 pub(crate) enum ControlMsg {
-    /// Drain everything currently committed, flush files, then ack.
+    /// Drain everything currently committed, sync files durably, then ack.
     Flush(mpsc::SyncSender<()>),
+    /// An engine was dropped: drain its remaining events, sync + close its
+    /// file (freeing the fd and stopping its heartbeats), drop its metadata,
+    /// and tombstone the id. Sent non-blocking from `BexEngine::drop`.
+    EngineClosed(u64),
 }
 
 /// Everything the consumer loop needs; owned so tests can run private
@@ -104,9 +109,8 @@ pub(crate) fn ensure_started() {
 /// to `timeout` for the consumer's ack. Returns whether the ack arrived. A
 /// no-op `true` when profiling never started.
 ///
-/// Durability note: "flushed" means handed to the OS (`BufWriter::flush`),
-/// not `fsync`ed — a power loss can still lose the tail; a process exit
-/// cannot.
+/// Durability: the ack means `fsync`ed (survives power loss). The
+/// consumer's idle-cadence flushes in between are OS-buffer only.
 ///
 /// Call sites should have joined/stopped their VMs first: thread join is a
 /// full sync, so the final commits are visible to the drain (plan §1).
@@ -122,6 +126,20 @@ pub fn flush_and_join(timeout: Duration) -> bool {
     }
     crate::prof::registry::global_ctx().wake().force_wake();
     ack_rx.recv_timeout(timeout).is_ok()
+}
+
+/// Notifies the consumer that an engine was dropped (called from
+/// `BexEngine::drop`): its remaining events are drained, its `.bamlprof` is
+/// synced and closed (freeing the fd and stopping its heartbeats), and its
+/// metadata entry is freed. Non-blocking — safe from `Drop`. A no-op when
+/// profiling never started.
+pub fn engine_closed(engine_id: u64) {
+    let Some(tx) = CONTROL_TX.get() else {
+        return;
+    };
+    if tx.send(ControlMsg::EngineClosed(engine_id)).is_ok() {
+        crate::prof::registry::global_ctx().wake().force_wake();
+    }
 }
 
 /// The consumer loop: §3.4 sweep + §3.6 wake protocol + control messages.
@@ -143,8 +161,19 @@ pub(crate) fn consumer_main(control: &mpsc::Receiver<ControlMsg>, env: &Consumer
                             break;
                         }
                     }
-                    state.flush_files();
+                    state.sync_files();
                     let _ = ack.send(());
+                }
+                ControlMsg::EngineClosed(engine_id) => {
+                    // Every commit for the engine happened-before its last
+                    // Arc release (and so before this message): a bounded
+                    // drain-to-idle collects them all before the close.
+                    for _ in 0..1024 {
+                        if !state.sweep_once(env) {
+                            break;
+                        }
+                    }
+                    state.close_engine(engine_id);
                 }
             }
         }
@@ -168,6 +197,11 @@ struct ConsumerState {
     dir: PathBuf,
     /// `None` = opening or writing failed permanently (already reported).
     writers: HashMap<u64, Option<ProfileWriter>>,
+    /// Engines whose files were closed (8 bytes per engine, forever): a
+    /// record arriving after the close is a logic error — reported once and
+    /// dropped, never silently resurrecting the file.
+    closed_engines: std::collections::HashSet<u64>,
+    closed_reported: std::collections::HashSet<u64>,
     process_id: [u8; 16],
     started_at_epoch_ns: u128,
     last_heartbeat: Instant,
@@ -179,6 +213,8 @@ impl ConsumerState {
         ConsumerState {
             dir,
             writers: HashMap::new(),
+            closed_engines: std::collections::HashSet::new(),
+            closed_reported: std::collections::HashSet::new(),
             process_id: process_id(),
             started_at_epoch_ns: clock::started_at_epoch_ns(),
             last_heartbeat: Instant::now(),
@@ -198,6 +234,14 @@ impl ConsumerState {
     fn transcode(&mut self, ring: &'static Ring, bytes: &[u8]) {
         // SAFETY: bytes in hand are drain progress (Ring::engine_id contract).
         let engine_id = unsafe { ring.engine_id() };
+        if self.closed_engines.contains(&engine_id) {
+            if self.closed_reported.insert(engine_id) {
+                report(format_args!(
+                    "dropping records for closed engine {engine_id} (post-Drop emission?)"
+                ));
+            }
+            return;
+        }
         let Some(writer) = self.writer_for(engine_id) else {
             return;
         };
@@ -298,6 +342,39 @@ impl ConsumerState {
         }
         for engine_id in failed {
             self.fail_writer(engine_id, &io::Error::other("heartbeat write failed"));
+        }
+    }
+
+    /// Sync (engine close / explicit flush) and close one engine's file;
+    /// later records for it are tombstoned.
+    fn close_engine(&mut self, engine_id: u64) {
+        if let Some(Some(mut writer)) = self.writers.remove(&engine_id)
+            && let Err(err) = writer.sync()
+        {
+            report(format_args!(
+                "sync of {} on engine close failed: {err}",
+                writer.path().display()
+            ));
+        }
+        engine_meta()
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .remove(&engine_id);
+        self.closed_engines.insert(engine_id);
+    }
+
+    /// Durable flush of every open file (`fsync`); the explicit-flush path.
+    fn sync_files(&mut self) {
+        let mut failed = Vec::new();
+        for (&engine_id, slot) in &mut self.writers {
+            if let Some(writer) = slot
+                && writer.sync().is_err()
+            {
+                failed.push(engine_id);
+            }
+        }
+        for engine_id in failed {
+            self.fail_writer(engine_id, &io::Error::other("sync failed"));
         }
     }
 
@@ -582,7 +659,10 @@ mod tests {
             Some("bamlprof")
         );
 
-        let (header, events) = read_bamlprof(&paths[0]).expect("parse .bamlprof");
+        let contents = read_bamlprof(&paths[0]).expect("parse .bamlprof");
+        // A live heartbeat append can leave a torn tail at read time; our
+        // events were synced whole before the flush ack.
+        let (header, events) = (contents.header, contents.events);
         assert_eq!(header.engine_id, ENGINE);
         assert_eq!(header.program_id, "test-program");
         assert_eq!(header.process_id.len(), 16);
@@ -779,7 +859,7 @@ mod tests {
             .map(|e| e.unwrap().path())
             .collect();
         assert_eq!(paths.len(), 1);
-        let (_, events) = read_bamlprof(&paths[0]).expect("parse soak profile");
+        let events = read_bamlprof(&paths[0]).expect("parse soak profile").events;
         let calls = events
             .iter()
             .filter(|e| matches!(e.event, Some(pb::disk_event_v1::Event::CallFunction(_))))
