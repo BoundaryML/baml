@@ -70,24 +70,93 @@
   color: var(--l6-accent);
 }
 
-/* ---- sections: a reading column with wide breakouts ---- */
+/* ---- layout: everything left-aligned, "on this page" rail top right ---- */
+.l6 {
+  --l6-left: clamp(1.2rem, 5vw, 4.5rem);
+  --l6-rail: 0px;
+}
+@media (min-width: 1140px) {
+  .l6 {
+    --l6-rail: 232px;
+  }
+}
+/* anchor jumps from the rail land below the sticky header */
+:root:has(.l6) {
+  scroll-behavior: smooth;
+}
 .l6-section {
-  width: min(760px, 94vw);
+  max-width: min(760px, calc(100vw - var(--l6-left) - var(--l6-rail) - 1rem));
   padding: 4.4rem 0 1.2rem;
-  margin: 0 auto;
+  margin: 0 0 0 var(--l6-left);
+  scroll-margin-top: 3.2rem;
 }
 /* Breakout: editors, playgrounds, and side-by-side pairs escape the
-   reading column (which stays one width so all headers align). They are
-   centered on the page via left/translate, so text width never changes. */
+   reading column to the right (the column itself stays one width so all
+   headers stay aligned at the left edge). */
 .l6-breakout,
 .l6-pair {
-  position: relative;
-  left: 50%;
-  width: min(1200px, 96vw);
-  transform: translateX(-50%);
+  width: min(1200px, calc(100vw - var(--l6-left) - var(--l6-rail) - 1.5rem));
 }
 .l6-breakout--xl {
-  width: min(1400px, 97vw);
+  width: min(1400px, calc(100vw - var(--l6-left) - var(--l6-rail) - 1.5rem));
+}
+
+/* ---- "on this page" rail ---- */
+.l6-toc {
+  position: fixed;
+  top: 64px;
+  right: 1.2rem;
+  z-index: 15;
+  display: none;
+  width: 200px;
+}
+@media (min-width: 1140px) {
+  .l6-toc {
+    display: block;
+  }
+}
+.l6-toc-cap {
+  margin: 0 0 0.5rem;
+  font-size: 10.5px;
+  color: var(--l6-soft);
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+}
+.l6-toc ul {
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+.l6-toc a {
+  display: block;
+  padding: 2.5px 9px;
+  font-size: 12px;
+  color: var(--l6-muted);
+  text-decoration: none;
+  border-left: 2px solid var(--l6-rule);
+}
+.l6-toc a:hover {
+  color: var(--l6-ink);
+}
+.l6-toc a.l6-toc-active {
+  font-weight: 550;
+  color: var(--l6-accent);
+  border-left-color: var(--l6-accent);
+}
+.l6-toc a.l6-toc-sub {
+  padding-left: 22px;
+  font-size: 11px;
+}
+/* anchored subsections land below the sticky header too */
+.l6 .l6-sub[id] {
+  scroll-margin-top: 3.2rem;
+}
+
+/* every editor and code block gets the same outline (learn2's border vars
+   don't resolve outside the deck, so set it explicitly here) */
+.l6 .l2-bamled-frame,
+.l6 .l2-code {
+  border: 1px solid #d8cfbd;
 }
 
 .l6 h1 {
@@ -111,6 +180,14 @@
   font-size: 19px;
   font-weight: 620;
   color: var(--l6-ink);
+}
+/* Numbered sub-headers (the AI-workflows 1/2/3) read as top-level entries
+   in their own list — match the size of the numbered section headers. */
+.l6 h3:has(.l6-num) {
+  font-size: clamp(24px, 3vw, 32px);
+  font-weight: 650;
+  line-height: 1.18;
+  letter-spacing: -0.015em;
 }
 .l6-num {
   display: inline-block;
@@ -334,6 +411,65 @@
   }
 }
 
+/* ---- "try it out" install unit: tabs + command in one light frame,
+   styled like the page's code blocks ---- */
+.l6-try {
+  max-width: 560px;
+  overflow: hidden;
+  background: #fffdf7;
+  border: 1px solid #d8cfbd;
+  border-radius: 10px;
+}
+.l6-try-head {
+  display: flex;
+  gap: 0.35rem;
+  align-items: center;
+  padding: 6px 8px;
+  background: #f6f1e4;
+  border-bottom: 1px solid var(--l6-rule);
+}
+.l6-try-tab {
+  padding: 3px 11px;
+  font-size: 11px;
+  color: var(--l6-muted);
+  letter-spacing: 0.06em;
+  cursor: pointer;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+}
+.l6-try-tab:hover {
+  color: var(--l6-ink);
+}
+.l6-try-tab--on {
+  color: var(--l6-accent);
+  background: #fffdf7;
+  border-color: #d8cfbd;
+}
+.l6-try-copy {
+  padding: 3px 9px;
+  margin-left: auto;
+  font-size: 10.5px;
+  color: var(--l6-muted);
+  letter-spacing: 0.06em;
+  cursor: pointer;
+  background: transparent;
+  border: 1px solid #d8cfbd;
+  border-radius: 6px;
+}
+.l6-try-copy:hover {
+  color: var(--l6-ink);
+}
+.l6-try-body {
+  padding: 0.75rem 0.95rem;
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--l6-ink);
+}
+.l6-try-prompt {
+  color: var(--l6-accent);
+}
+
 /* ---- expandable code (details/summary) ---- */
 .l6-details {
   margin: 1rem 0;
@@ -413,6 +549,7 @@
    improvement after pass N and deepen on later passes, then the field
    resets with the loop.
    ========================================================================= */
+/* centered within the text column */
 .l6-si-sweep {
   display: grid;
   grid-template-columns: repeat(16, 8px);
@@ -593,7 +730,7 @@
   position: relative;
   width: min(560px, 100%);
   height: 84px;
-  margin: 1.2rem auto 0.4rem;
+  margin: 1.2rem 0 0.4rem;
 }
 .l6-sch-lane {
   position: absolute;
@@ -651,6 +788,7 @@
 .l6 .l2-live {
   --color-vsc-green: #6d28d9;
   height: min(76vh, 740px);
+  border: 1px solid #d8cfbd;
 }
 
 /* =========================================================================

@@ -1,12 +1,12 @@
 'use client';
 
-import Editor, { type BeforeMount, type OnMount } from '@monaco-editor/react';
 import {
   ExecutionPanel,
   type RuntimePort,
   type SourceNavigationTarget,
   WorkerRuntimePort,
 } from '@b/pkg-playground';
+import Editor, { type BeforeMount, type OnMount } from '@monaco-editor/react';
 import { useCallback, useRef, useState } from 'react';
 import {
   ResizableHandle,
@@ -21,6 +21,8 @@ import '../learn2.css';
 
 interface LivePlaygroundProps {
   initialCode: string;
+  /** Optional filename strip above the editor pane (e.g. "pipeline.baml"). */
+  filename?: string;
   /** Function to preselect in the panel (e.g. the pipeline entrypoint). */
   initialFunction?: string;
   /** Panel tab to open on (default 'graph' — the viz is the point). */
@@ -71,6 +73,7 @@ function severityClass(sev?: number): 'error' | 'warning' | 'info' {
  */
 export default function LivePlayground({
   initialCode,
+  filename,
   initialFunction,
   initialTab = 'graph',
   argsByFunction,
@@ -108,12 +111,12 @@ export default function LivePlayground({
               ? monaco.MarkerSeverity.Info
               : monaco.MarkerSeverity.Error;
         return {
-          startLineNumber: d.range.start.line + 1,
-          startColumn: d.range.start.character + 1,
-          endLineNumber: d.range.end.line + 1,
           endColumn: d.range.end.character + 1,
+          endLineNumber: d.range.end.line + 1,
           message: d.message,
           severity: sev,
+          startColumn: d.range.start.character + 1,
+          startLineNumber: d.range.start.line + 1,
         };
       }),
     );
@@ -132,7 +135,6 @@ export default function LivePlayground({
         const inline =
           d.message.length > 100 ? `${d.message.slice(0, 100)}…` : d.message;
         return {
-          range: new monaco.Range(line, 1, line, endCol),
           options: {
             after: {
               content: `    ${inline}`,
@@ -140,6 +142,7 @@ export default function LivePlayground({
               inlineClassNameAffectsLetterSpacing: true,
             },
           },
+          range: new monaco.Range(line, 1, line, endCol),
         };
       });
       lensRef.current.set(decos);
@@ -158,10 +161,10 @@ export default function LivePlayground({
     const pos = editorRef.current?.getPosition();
     if (!pos) return;
     portRef.current?.postMessage({
-      type: 'cursorPosition',
+      column: pos.column - 1,
       file: 'baml_src/main.baml',
       line: pos.lineNumber - 1,
-      column: pos.column - 1,
+      type: 'cursorPosition',
     });
   }, []);
 
@@ -216,8 +219,8 @@ export default function LivePlayground({
           // re-eval once mounted so functions + diagnostics show without an edit.
           setTimeout(() => {
             p.postMessage({
-              type: 'filesChanged',
               files: { 'baml_src/main.baml': codeRef.current },
+              type: 'filesChanged',
             });
             // Seed the panel selection from the initial caret (best-effort —
             // the project may still be collecting; the first click corrects it).
@@ -236,8 +239,8 @@ export default function LivePlayground({
     // 200ms debounce: rapid keystrokes must coalesce or the runtime panics.
     debounceRef.current = setTimeout(() => {
       portRef.current?.postMessage({
-        type: 'filesChanged',
         files: { 'baml_src/main.baml': codeRef.current },
+        type: 'filesChanged',
       });
     }, 200);
   }, []);
@@ -247,38 +250,58 @@ export default function LivePlayground({
       className={`baml-playground-root l2-live${fill ? ' l2-live--fill' : ''}`}
     >
       <ResizablePanelGroup direction="horizontal">
-        <ResizablePanel className="l2-live-editor" defaultSize={56} minSize={28}>
-        <Editor
-          defaultLanguage="baml"
-          defaultValue={initialCode}
-          theme="baml-paper"
-          beforeMount={beforeMount}
-          onMount={onMount}
-          onChange={onChange}
-          height="100%"
-          options={{
-            minimap: { enabled: false },
-            fontSize: 13,
-            fontFamily: 'var(--font-geist-mono), ui-monospace, monospace',
-            lineNumbers: 'on',
-            scrollBeyondLastLine: false,
-            renderLineHighlight: 'line',
-            overviewRulerLanes: 0,
-            hideCursorInOverviewRuler: true,
-            scrollbar: {
-              verticalSliderSize: 6,
-              horizontalSliderSize: 6,
-              // Don't trap page scroll when the cursor rests on the editor.
-              alwaysConsumeMouseWheel: false,
-            },
-            padding: { top: 12, bottom: 12 },
-            tabSize: 2,
-            wordWrap: 'on',
-            automaticLayout: true,
-            guides: { indentation: false },
-            hover: { above: false },
-          }}
-        />
+        <ResizablePanel
+          className="l2-live-editor"
+          defaultSize={56}
+          minSize={28}
+        >
+          <div
+            style={{ display: 'flex', flexDirection: 'column', height: '100%' }}
+          >
+            {filename ? (
+              <div className="l2-code-head">
+                <span aria-hidden className="l2-code-dots">
+                  <i />
+                  <i />
+                  <i />
+                </span>
+                <span className="l2-code-name font-mono">{filename}</span>
+              </div>
+            ) : null}
+            <div style={{ flex: 1, minHeight: 0 }}>
+              <Editor
+                beforeMount={beforeMount}
+                defaultLanguage="baml"
+                defaultValue={initialCode}
+                height="100%"
+                onChange={onChange}
+                onMount={onMount}
+                options={{
+                  automaticLayout: true,
+                  fontFamily: 'var(--font-geist-mono), ui-monospace, monospace',
+                  fontSize: 13,
+                  guides: { indentation: false },
+                  hideCursorInOverviewRuler: true,
+                  hover: { above: false },
+                  lineNumbers: 'on',
+                  minimap: { enabled: false },
+                  overviewRulerLanes: 0,
+                  padding: { bottom: 12, top: 12 },
+                  renderLineHighlight: 'line',
+                  scrollBeyondLastLine: false,
+                  scrollbar: {
+                    // Don't trap page scroll when the cursor rests on the editor.
+                    alwaysConsumeMouseWheel: false,
+                    horizontalSliderSize: 6,
+                    verticalSliderSize: 6,
+                  },
+                  tabSize: 2,
+                  wordWrap: 'on',
+                }}
+                theme="baml-paper"
+              />
+            </div>
+          </div>
         </ResizablePanel>
         <ResizableHandle className="l2-live-splitter" withHandle />
         <ResizablePanel className="l2-live-panel" defaultSize={44} minSize={22}>
@@ -286,14 +309,14 @@ export default function LivePlayground({
             <div className="l2-live-loading">runtime failed to start</div>
           ) : port ? (
             <ExecutionPanel
-              port={port}
+              argsByFunction={argsByFunction}
               connectionVersion={version}
               initialArgsJson="{}"
-              initialTab={initialTab}
               initialFunctionName={initialFunction}
-              argsByFunction={argsByFunction}
               initialSidebarOpen={initialSidebarOpen}
+              initialTab={initialTab}
               onNavigateToSource={onNavigateToSource}
+              port={port}
             />
           ) : (
             <div className="l2-live-loading">starting runtime…</div>

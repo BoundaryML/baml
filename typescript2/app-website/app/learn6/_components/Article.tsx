@@ -1,11 +1,10 @@
 'use client';
 
 import Image from 'next/image';
-import { type ReactNode, useState } from 'react';
+import { type ReactNode, useCallback, useState } from 'react';
 import { BamlCode } from '../../learn2/_components/BamlCode';
 import BamlEditor from '../../learn2/_components/BamlEditorLazy';
 import LivePlayground from '../../learn2/_components/LivePlaygroundLazy';
-import { Terminal } from '../../learn2/_components/primitives';
 import { InfectionGraph } from '../../learn3/_components/InfectionGraph';
 import { MetricsDag } from '../../learn3/_components/MetricsDag';
 import { TermPlay } from '../../learn3/_components/TermPlay';
@@ -66,16 +65,18 @@ function Section({
 }
 
 function Sub({
+  id,
   num,
   title,
   children,
 }: {
+  id?: string;
   num?: string;
   title: string;
   children: ReactNode;
 }) {
   return (
-    <div className="l6-sub">
+    <div className="l6-sub" id={id}>
       <h3>
         {num ? <span className="l6-num font-mono">{num}</span> : null}
         {title}
@@ -85,13 +86,15 @@ function Sub({
   );
 }
 
-/* "Try it out!" install tabs — humans get brew, agents get the plugin
- * commands (mirrors the homepage hero's install paths). */
+/* "Try it out!" install unit — tabs, command, and copy button in one
+ * editor-like frame. Humans get brew, agents get the plugin commands
+ * (mirrors the homepage hero's install paths). */
 const TRY_TABS = [
   {
     id: 'humans',
     label: 'for humans',
     lines: ['brew install boundaryml/tap/baml'],
+    prompt: '$ ',
   },
   {
     id: 'agents',
@@ -100,36 +103,165 @@ const TRY_TABS = [
       '/plugin marketplace add BoundaryML/baml-skill',
       '/plugin install baml@boundaryml-baml',
     ],
+    prompt: '',
   },
 ] as const;
 
 function TryItTabs() {
   const [tab, setTab] = useState<'humans' | 'agents'>('humans');
+  const [copied, setCopied] = useState(false);
   const active = TRY_TABS.find((t) => t.id === tab) ?? TRY_TABS[0];
   return (
     <div className="l6-block">
-      <div aria-label="Install path" className="l6-sdk-tabs" role="tablist">
-        {TRY_TABS.map((t) => (
+      <div className="l6-try font-mono">
+        <div aria-label="Install path" className="l6-try-head" role="tablist">
+          {TRY_TABS.map((t) => (
+            <button
+              aria-selected={tab === t.id}
+              className={`l6-try-tab font-mono${tab === t.id ? ' l6-try-tab--on' : ''}`}
+              key={t.id}
+              onClick={() => {
+                setTab(t.id);
+                setCopied(false);
+              }}
+              role="tab"
+              type="button"
+            >
+              {t.label}
+            </button>
+          ))}
           <button
-            aria-selected={tab === t.id}
-            className={`l6-sdk-tab font-mono${tab === t.id ? ' l6-sdk-tab--on' : ''}`}
-            key={t.id}
-            onClick={() => setTab(t.id)}
-            role="tab"
+            className="l6-try-copy font-mono"
+            onClick={() => {
+              navigator.clipboard.writeText(active.lines.join('\n'));
+              setCopied(true);
+              setTimeout(() => setCopied(false), 1600);
+            }}
             type="button"
           >
-            {t.label}
+            {copied ? 'copied!' : 'copy'}
           </button>
-        ))}
+        </div>
+        <div className="l6-try-body">
+          {active.lines.map((line) => (
+            <div key={line}>
+              {active.prompt ? (
+                <span className="l6-try-prompt">{active.prompt}</span>
+              ) : null}
+              {line}
+            </div>
+          ))}
+        </div>
       </div>
-      <Terminal lines={[...active.lines]} />
+    </div>
+  );
+}
+
+/* "On this page" rail (top right on wide screens). */
+const TOC: { id: string; label: string; sub?: boolean }[] = [
+  { id: 'types', label: '1 · Type-system' },
+  { id: 'namespaces', label: '2 · Namespaces' },
+  { id: 'testing', label: '3 · Testing framework' },
+  { id: 'describe', label: '4 · baml describe' },
+  { id: 'pack', label: '5 · baml pack' },
+  { id: 'run-e', label: '6 · baml run -e' },
+  { id: 'threads', label: '7 · Green threads' },
+  { id: 'supply-chain', label: '8 · Supply chain' },
+  { id: 'self-improvement', label: '9 · Self-improvement' },
+  { id: 'workflows', label: 'BAML for AI workflows' },
+  { id: 'wf-llm', label: '1 · Native LLM Functions', sub: true },
+  { id: 'wf-tests', label: '2 · BAML Tests', sub: true },
+  { id: 'wf-metrics', label: '3 · Metrics primitive', sub: true },
+  { id: 'adoption', label: 'Incremental Adoption' },
+  { id: 'close', label: 'Try it out!' },
+];
+
+/* BAML Tests examples — one at a time, switched with buttons, at text
+ * width. The CSV one is a live editor; the S3 one is read-only. */
+function TestExampleTabs() {
+  const [tab, setTab] = useState<'csv' | 's3'>('csv');
+  return (
+    <div className="l6-block">
+      <div aria-label="Test source" className="l6-sdk-tabs" role="tablist">
+        <button
+          aria-selected={tab === 'csv'}
+          className={`l6-sdk-tab font-mono${tab === 'csv' ? ' l6-sdk-tab--on' : ''}`}
+          onClick={() => setTab('csv')}
+          role="tab"
+          type="button"
+        >
+          from a CSV · run it here
+        </button>
+        <button
+          aria-selected={tab === 's3'}
+          className={`l6-sdk-tab font-mono${tab === 's3' ? ' l6-sdk-tab--on' : ''}`}
+          onClick={() => setTab('s3')}
+          role="tab"
+          type="button"
+        >
+          from S3, at collection time
+        </button>
+      </div>
+      {tab === 'csv' ? (
+        <BamlEditor filename="csv_tests.baml" initialCode={BAML_CSV_TESTS} />
+      ) : (
+        <BamlCode code={BAML_HTTP_TESTS} filename="golden_tests.baml" />
+      )}
     </div>
   );
 }
 
 export function Article() {
+  const [activeId, setActiveId] = useState('types');
+
+  // Scroll spy for the rail: a band near the top of the viewport decides
+  // the current section. Ref callback with cleanup — no useEffect.
+  const spyRef = useCallback((node: HTMLElement | null) => {
+    if (!node) return undefined;
+    const sections = Array.from(
+      node.querySelectorAll<HTMLElement>('section[id], .l6-sub[id]'),
+    );
+    const order = new Map(sections.map((s, i) => [s.id, i]));
+    const inBand = new Set<string>();
+    const io = new IntersectionObserver(
+      (entries) => {
+        for (const e of entries) {
+          if (e.isIntersecting) inBand.add(e.target.id);
+          else inBand.delete(e.target.id);
+        }
+        let best: string | null = null;
+        for (const id of inBand) {
+          if (best === null || (order.get(id) ?? 0) > (order.get(best) ?? 0)) {
+            best = id;
+          }
+        }
+        if (best) setActiveId(best);
+      },
+      { rootMargin: '0px 0px -70% 0px' },
+    );
+    for (const s of sections) io.observe(s);
+    return () => io.disconnect();
+  }, []);
+
   return (
-    <div className="l6">
+    <div className="l6" ref={spyRef}>
+      <nav aria-label="On this page" className="l6-toc">
+        <p className="l6-toc-cap font-mono">On this page</p>
+        <ul>
+          {TOC.map((item) => (
+            <li key={item.id}>
+              <a
+                className={`${item.sub ? 'l6-toc-sub' : ''}${
+                  activeId === item.id ? ' l6-toc-active' : ''
+                }`}
+                href={`#${item.id}`}
+              >
+                {item.label}
+              </a>
+            </li>
+          ))}
+        </ul>
+      </nav>
       <header className="l6-head">
         <a className="font-mono" href="/">
           BAML <span>· the programming language for agents</span>
@@ -155,7 +287,7 @@ export function Article() {
         <p className="l6-lead">{'BAML is meant to be written by agents'}</p>
         <p>
           {
-            'Every language feature is meant to prevent context pollution and churn when coding with AI. We opt for features that make agents make less mistakes at runtime (like Rust), but without fighting the borrow-checker. BAML should still be comprehensible to the millions of non-technical people now coding with AI.'
+            'Every feature was designed to prevent context pollution and churn when coding with AI. We opt for features that make agents make less mistakes at runtime (like Rust), but without fighting the borrow-checker. BAML should still be comprehensible to the millions of non-technical people now coding with AI.'
           }
         </p>
         <p>
@@ -374,23 +506,18 @@ export function Article() {
             'BAML pack is a CLI that takes your baml program and auto-creates a CLI for you from the function signature. It can compile and run on any target architecture.'
           }
         </p>
-        <div className="l6-pair">
-          <div>
-            <p className="l6-pane-label">the source — one parameter</p>
-            <BamlCode
-              code={BAML_PACKED}
-              filename="main.baml"
-              highlightLines={[1]}
-              notes={[{ line: 1, text: 'name: string → --name <flag>' }]}
-            />
-          </div>
-          <div>
-            <p className="l6-pane-label l6-pane-label--after">
-              pack it, run it, ask it for help
-            </p>
-            <TermPlay events={PACK_EVENTS} title="baml pack" />
-          </div>
+        <div className="l6-block">
+          <TermPlay events={PACK_EVENTS} title="baml pack" />
         </div>
+        <details className="l6-details">
+          <summary>show the source — main.baml</summary>
+          <BamlCode
+            code={BAML_PACKED}
+            filename="main.baml"
+            highlightLines={[1]}
+            notes={[{ line: 1, text: 'name: string → --name <flag>' }]}
+          />
+        </details>
         <Sub title="The packed binary is 87% smaller than Bun’s, and starts ~30% faster">
           <p>
             {
@@ -439,7 +566,7 @@ export function Article() {
             ' in 10 other files everywhere. Easy to parallelize slow LLM http requests and tool calls.'
           }
         </p>
-        <div className="l6-block l6-breakout">
+        <div className="l6-block">
           <BamlEditor
             filename="spawn.baml"
             highlightLines={[4, 8]}
@@ -541,6 +668,7 @@ export function Article() {
         <p style={{ marginTop: '1.2rem' }}>{'Here are some highlights:'}</p>
 
         <Sub
+          id="wf-llm"
           num="1"
           title="Native LLM Functions — composable building blocks for agents and harnesses"
         >
@@ -561,49 +689,35 @@ export function Article() {
           </p>
           <div className="l6-breakout l6-breakout--xl">
             <LivePlayground
+              filename="pipeline.baml"
               initialCode={BAML_IMAGE}
               initialFunction="illustrate"
+              initialSidebarOpen={false}
             />
           </div>
         </Sub>
 
-        <Sub num="2" title="BAML Tests">
+        <Sub id="wf-tests" num="2" title="BAML Tests">
           <p>{'Write tests anywhere, in any file.'}</p>
           <p>
             {
               'Create arbitrary groups and add tests dynamically — generate tests for each item in an array, create tests from a CSV file, or from S3:'
             }
           </p>
-          <div className="l6-pair">
-            <div>
-              <p className="l6-pane-label l6-pane-label--after">
-                tests from a csv · run it here
-              </p>
-              <BamlEditor
-                filename="csv_tests.baml"
-                initialCode={BAML_CSV_TESTS}
-              />
-            </div>
-            <div className="l6-stackv">
-              <div>
-                <p className="l6-pane-label">or from S3, at collection time</p>
-                <BamlCode code={BAML_HTTP_TESTS} filename="golden_tests.baml" />
-              </div>
-              <p className="l6-dim">
-                {
-                  'View tests in the Playground — in case a human needs to see things, we have nice utilities — or just have agents run '
-                }
-                <code>baml test</code>
-                {'.'}
-              </p>
-            </div>
-          </div>
+          <TestExampleTabs />
+          <p className="l6-dim">
+            {
+              'View tests in the Playground — in case a human needs to see things, we have nice utilities — or just have agents run '
+            }
+            <code>baml test</code>
+            {'.'}
+          </p>
           <p>
             {
               'Create evals — LLM-as-judge, statistical analysis, etc. In other frameworks that’s a YAML schema and a hosted UI. In BAML, it’s all just code. Pass a test when at least N% of runs do, using custom test runners:'
             }
           </p>
-          <div className="l6-block l6-breakout">
+          <div className="l6-block">
             <BamlEditor filename="evals.baml" initialCode={BAML_RUNNER} />
           </div>
           <p className="l6-note">
@@ -613,25 +727,29 @@ export function Article() {
           </p>
         </Sub>
 
-        <Sub num="3" title="Built-in metrics primitive (design stage)">
+        <Sub
+          id="wf-metrics"
+          num="3"
+          title="Built-in metrics primitive (design stage)"
+        >
           <p>
             {
               'Metrics today live in dashboards, bound to code by strings — rename a function and the metric dies silently. We are designing metric blocks: attach one to a function and it carries typed measurements, wired into a dependency graph that computes as data arrives — even hours later, when a human label shows up.'
             }
           </p>
           <MetricsDag />
-          <div className="l6-pair" style={{ marginTop: '1.2rem' }}>
+          <div className="l6-block" style={{ marginTop: '1.2rem' }}>
             <BamlCode
               code={BAML_METRIC}
               filename="resume.baml (proposed)"
               highlightLines={[10, 15]}
             />
-            <p className="l6-dim" style={{ marginTop: 0 }}>
-              {
-                'Parameter names are the edges of the graph: quality(judge) depends on judge; f1(precision, recall) waits for both. The function call is the root. This is the part we want torn apart — the runtime already records a trace of every call; this design is the layer on top.'
-              }
-            </p>
           </div>
+          <p className="l6-dim">
+            {
+              'Parameter names are the edges of the graph: quality(judge) depends on judge; f1(precision, recall) waits for both. The function call is the root. This is the part we want torn apart — the runtime already records a trace of every call; this design is the layer on top.'
+            }
+          </p>
         </Sub>
       </Section>
 
@@ -663,11 +781,7 @@ export function Article() {
           }
         </p>
         <TypeTabs />
-        <p>
-          {
-            'Here’s what that looks like in Node, Python, Go, Rust (with many more supported):'
-          }
-        </p>
+        <p>{'It works for many languages!'}</p>
         <div className="l6-breakout">
           <SdkSwitcher />
         </div>
