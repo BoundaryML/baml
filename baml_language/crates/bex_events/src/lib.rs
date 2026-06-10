@@ -1,5 +1,6 @@
 pub mod collector;
 pub mod event_store;
+pub mod prof;
 pub mod serialize;
 mod span_id;
 mod types;
