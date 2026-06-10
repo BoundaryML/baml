@@ -134,7 +134,7 @@ impl OutputFormatContent {
         // Regardless of rendering options, the only thing we ask the model to produce
         // is arbitrary JSON — no schema body, no prefix enumeration.
         if let Ty::TypeAlias(tn, _) = &self.target {
-            if tn.display_name.as_str() == ::baml_base::qualified_name::BAML_JSON_JSON {
+            if tn.display_name().as_str() == ::baml_base::qualified_name::BAML_JSON_JSON {
                 return Ok(Some("Respond with valid JSON.".to_string()));
             }
         }
@@ -157,7 +157,7 @@ impl OutputFormatContent {
 
         // Check if the target is a hoisted enum
         let target_is_hoisted_enum = if let Ty::Enum(tn, _) = &self.target {
-            hoisted_enums.contains(tn.display_name.as_str())
+            hoisted_enums.contains(tn.display_name().as_str())
         } else {
             false
         };
@@ -169,7 +169,12 @@ impl OutputFormatContent {
                 let enm = self.find_enum(name)?;
                 let enum_str = self.render_enum(enm, options);
                 // If this is the target enum, prepend prefix
-                if target_is_hoisted_enum && enm_display_name(&self.target) == Some(name.as_str()) {
+                if target_is_hoisted_enum
+                    && enm_display_name(&self.target)
+                        .as_ref()
+                        .map(baml_type::Name::as_str)
+                        == Some(name.as_str())
+                {
                     match &prefix {
                         Some(p) => Some(format!("{p}{enum_str}")),
                         None => Some(enum_str),
@@ -233,11 +238,12 @@ impl OutputFormatContent {
 
         // Render the target type with hoisting awareness
         let message = if let Ty::Class(tn, _, _) | Ty::Interface(tn, _, _, _) = &self.target {
-            if hoisted_classes.contains(tn.display_name.as_str()) {
+            let tn_display_name = tn.display_name();
+            if hoisted_classes.contains(tn_display_name.as_str()) {
                 let display_name = self
-                    .find_class(tn.display_name.as_str())
+                    .find_class(tn_display_name.as_str())
                     .and_then(|cls| cls.alias.as_deref())
-                    .unwrap_or(tn.display_name.as_str());
+                    .unwrap_or(tn_display_name.as_str());
                 Some(display_name.to_string())
             } else {
                 self.render_type_hoisted(&self.target, options, &hoisted_classes, &hoisted_enums)?
@@ -246,14 +252,14 @@ impl OutputFormatContent {
             if target_is_hoisted_enum {
                 // Hoisted target enum: rendered in enum_definitions block
                 None
-            } else if let Some(enm) = self.find_enum(tn.display_name.as_str()) {
+            } else if let Some(enm) = self.find_enum(tn.display_name().as_str()) {
                 // Non-hoisted target enum: render full block format (not inline)
                 Some(self.render_enum(enm, options))
             } else {
-                Some(tn.display_name.to_string())
+                Some(tn.display_name().to_string())
             }
         } else if let Ty::TypeAlias(fqn, _) = &self.target {
-            Some(fqn.display_name.to_string())
+            Some(fqn.display_name().to_string())
         } else {
             self.render_type_hoisted(&self.target, options, &hoisted_classes, &hoisted_enums)?
         };
@@ -376,7 +382,7 @@ impl OutputFormatContent {
             Ty::Bool { .. } => Some("Answer as a bool".to_string()),
             Ty::List(..) => Some("Answer with a JSON Array using this schema:\n".to_string()),
             Ty::Class(tn, _, _) | Ty::Interface(tn, _, _, _) => {
-                let end = if hoisted.contains(tn.display_name.as_str()) {
+                let end = if hoisted.contains(tn.display_name().as_str()) {
                     " "
                 } else {
                     "\n"
@@ -401,7 +407,7 @@ impl OutputFormatContent {
                 }
             }
             Ty::TypeAlias(tn, _)
-                if tn.display_name.as_str() == ::baml_base::qualified_name::BAML_JSON_JSON =>
+                if tn.display_name().as_str() == ::baml_base::qualified_name::BAML_JSON_JSON =>
             {
                 None
             }
@@ -421,11 +427,12 @@ impl OutputFormatContent {
     ) -> Result<Option<String>, RenderError> {
         // Intercept hoisted classes: return just the (aliased) name
         if let Ty::Class(tn, _, _) | Ty::Interface(tn, _, _, _) = ty {
-            if hoisted_classes.contains(tn.display_name.as_str()) {
+            let tn_display_name = tn.display_name();
+            if hoisted_classes.contains(tn_display_name.as_str()) {
                 let display_name = self
-                    .find_class(tn.display_name.as_str())
+                    .find_class(tn_display_name.as_str())
                     .and_then(|cls| cls.alias.as_deref())
-                    .unwrap_or(tn.display_name.as_str());
+                    .unwrap_or(tn_display_name.as_str());
                 return Ok(Some(display_name.to_string()));
             }
         }
@@ -451,11 +458,11 @@ impl OutputFormatContent {
                 // Determine if we need multiline rendering
                 let is_hoisted = match inner.as_ref() {
                     Ty::Class(tn, _, _) | Ty::Interface(tn, _, _, _) => {
-                        hoisted_classes.contains(tn.display_name.as_str())
+                        hoisted_classes.contains(tn.display_name().as_str())
                     }
                     Ty::TypeAlias(tn, _) => self
                         .recursive_type_aliases
-                        .contains_key(tn.display_name.as_str()),
+                        .contains_key(tn.display_name().as_str()),
                     _ => false,
                 };
                 let needs_multiline = !is_hoisted
@@ -467,7 +474,7 @@ impl OutputFormatContent {
                         | Ty::Null { .. } => false,
                         Ty::Enum(tn, _) => {
                             // Inline enums render short; hoisted ones are just a name
-                            !hoisted_enums.contains(tn.display_name.as_str())
+                            !hoisted_enums.contains(tn.display_name().as_str())
                                 && inner_str.len() > 15
                         }
                         Ty::Union(items, _) => items.iter().all(|t| {
@@ -520,14 +527,15 @@ impl OutputFormatContent {
             }
 
             Ty::Enum(tn, _) => {
-                if hoisted_enums.contains(tn.display_name.as_str()) {
+                let tn_display_name = tn.display_name();
+                if hoisted_enums.contains(tn_display_name.as_str()) {
                     // Hoisted enum: render as just the display name
-                    let enm = self.find_enum(tn.display_name.as_str());
+                    let enm = self.find_enum(tn_display_name.as_str());
                     let display_name = enm
                         .and_then(|e| e.alias.as_deref())
-                        .unwrap_or(tn.display_name.as_str());
+                        .unwrap_or(tn_display_name.as_str());
                     Ok(Some(display_name.to_string()))
-                } else if let Some(enm) = self.find_enum(tn.display_name.as_str()) {
+                } else if let Some(enm) = self.find_enum(tn_display_name.as_str()) {
                     // Inline enum: render as 'val1' or 'val2' or 'val3'
                     let values: Vec<String> = enm
                         .values
@@ -539,12 +547,12 @@ impl OutputFormatContent {
                         .collect();
                     Ok(Some(values.join(or_splitter)))
                 } else {
-                    Ok(Some(tn.display_name.to_string()))
+                    Ok(Some(tn.display_name().to_string()))
                 }
             }
 
             Ty::Class(tn, _, _) | Ty::Interface(tn, _, _, _) => {
-                if let Some(cls) = self.find_class(tn.display_name.as_str()) {
+                if let Some(cls) = self.find_class(tn.display_name().as_str()) {
                     Ok(Some(self.render_class_hoisted(
                         cls,
                         options,
@@ -553,20 +561,29 @@ impl OutputFormatContent {
                         false,
                     )?))
                 } else {
-                    Ok(Some(tn.display_name.to_string()))
+                    Ok(Some(tn.display_name().to_string()))
                 }
             }
 
             Ty::Uint8Array { .. } => Err(RenderError::UnsupportedType("uint8array".to_string())),
             Ty::Media(kind, _) => Ok(Some(kind.to_string())),
 
-            Ty::Literal(lit, _) => Ok(Some(render_literal(lit))),
+            Ty::Literal(lit, _, _) => Ok(Some(render_literal(lit))),
 
-            Ty::Opaque(tn, _) => Err(RenderError::UnsupportedType(tn.to_string())),
+            // Opaque leaf types have no JSON output-format schema. They surface
+            // as `UnsupportedType` named the same way `Ty`'s `Display` renders
+            // them (`type`, or the fixed qualified name).
+            Ty::Type { .. } => Err(RenderError::UnsupportedType("type".to_string())),
+            Ty::Resource { .. } => Err(RenderError::UnsupportedType(
+                "baml.llm.Resource".to_string(),
+            )),
+            Ty::PromptAst { .. } => Err(RenderError::UnsupportedType(
+                "baml.llm.PromptAst".to_string(),
+            )),
 
             Ty::TypeAlias(fqn, _) => {
                 // Recursive type aliases render as just their display name
-                Ok(Some(fqn.display_name.to_string()))
+                Ok(Some(fqn.display_name().to_string()))
             }
 
             Ty::Function { .. }
@@ -574,7 +591,15 @@ impl OutputFormatContent {
             | Ty::WatchAccessor(..)
             | Ty::BuiltinUnknown { .. }
             | Ty::EnumVariant(..)
-            | Ty::Future(..) => {
+            | Ty::Future(..)
+            | Ty::TypeVar(..)
+            | Ty::AssociatedTypeProjection { .. }
+            | Ty::Never { .. }
+            | Ty::Unknown { .. }
+            | Ty::Error { .. }
+            | Ty::EvolvingList(..)
+            | Ty::EvolvingMap(..)
+            | Ty::RustType { .. } => {
                 unreachable!(
                     "compiler-only variant {:?} should not reach output_format",
                     ty
@@ -687,9 +712,9 @@ fn rendered_name<'a>(name: &'a str, alias: Option<&'a String>) -> &'a str {
 }
 
 /// Extract the display name from an enum target type.
-fn enm_display_name(ty: &Ty) -> Option<&str> {
+fn enm_display_name(ty: &Ty) -> Option<baml_type::Name> {
     match ty {
-        Ty::Enum(tn, _) => Some(tn.display_name.as_str()),
+        Ty::Enum(tn, _) => Some(tn.display_name()),
         _ => None,
     }
 }
@@ -845,7 +870,7 @@ impl RenderOptions {
 
 #[cfg(test)]
 mod tests {
-    use baml_type::{TyAttr, TypeName};
+    use baml_type::{Freshness, TyAttr, TypeName};
 
     use super::*;
 
@@ -1274,6 +1299,7 @@ mod tests {
     fn test_render_literal_string() {
         let content = OutputFormatContent::new(Ty::Literal(
             LiteralValue::String("hello".to_string()),
+            Freshness::Regular,
             TyAttr::default(),
         ));
         let rendered = content.render(&RenderOptions::default()).unwrap();
@@ -1285,8 +1311,11 @@ mod tests {
 
     #[test]
     fn test_render_literal_int() {
-        let content =
-            OutputFormatContent::new(Ty::Literal(LiteralValue::Int(42), TyAttr::default()));
+        let content = OutputFormatContent::new(Ty::Literal(
+            LiteralValue::Int(42),
+            Freshness::Regular,
+            TyAttr::default(),
+        ));
         let rendered = content.render(&RenderOptions::default()).unwrap();
         assert_eq!(
             rendered,
@@ -1296,8 +1325,11 @@ mod tests {
 
     #[test]
     fn test_render_literal_bool() {
-        let content =
-            OutputFormatContent::new(Ty::Literal(LiteralValue::Bool(true), TyAttr::default()));
+        let content = OutputFormatContent::new(Ty::Literal(
+            LiteralValue::Bool(true),
+            Freshness::Regular,
+            TyAttr::default(),
+        ));
         let rendered = content.render(&RenderOptions::default()).unwrap();
         assert_eq!(
             rendered,
@@ -2435,6 +2467,7 @@ Answer in JSON using this schema: Ret"#
                         ty_class("Date"),
                         Ty::Literal(
                             LiteralValue::String("current".to_string()),
+                            Freshness::Regular,
                             TyAttr::default(),
                         ),
                     ]),
@@ -2557,6 +2590,7 @@ Answer in JSON using this schema: Ret"#
                         ty_class("Date"),
                         Ty::Literal(
                             LiteralValue::String("current".to_string()),
+                            Freshness::Regular,
                             TyAttr::default(),
                         ),
                     ]),

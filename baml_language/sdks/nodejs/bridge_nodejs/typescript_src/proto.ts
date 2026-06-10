@@ -17,7 +17,7 @@ import {
     completeHostCall,
 } from './native.js';
 import { BamlStream } from './stream.js';
-import { BamlError, BamlPanic } from './errors.js';
+import { BamlAbortError, BamlCancelledError, BamlError, BamlPanic } from './errors.js';
 import {
     registerHostError,
     tryRehydrateFromHandle,
@@ -31,6 +31,7 @@ const InboundValue = baml_core.cffi.v1.InboundValue;
 const InboundClassValue = baml_core.cffi.v1.InboundClassValue;
 const InboundMapEntry = baml_core.cffi.v1.InboundMapEntry;
 const BamlHandleType = baml_core.cffi.v1.BamlHandleType;
+const CANCELLED_PANIC_CLASS = 'baml.panics.Cancelled';
 
 // ─── Inbound (TS → Rust) ───
 
@@ -60,6 +61,11 @@ export class HostCallableSyncError extends Error {
 interface EncodeCtx {
     syncMode: boolean;
     registered: HandleKey[];
+}
+
+export interface EncodeCallArgsOptions {
+    callId: bigint;
+    syncMode?: boolean;
 }
 
 function setInboundValue(iv: baml_core.cffi.v1.IInboundValue, value: unknown, ctx: EncodeCtx): void {
@@ -219,8 +225,12 @@ function setInboundValue(iv: baml_core.cffi.v1.IInboundValue, value: unknown, ct
  * later kwarg fails, the engine never sees (and so never releases) the keys we
  * already registered, so we release them here.
  */
-export function encodeCallArgs(kwargs: Record<string, unknown>, syncMode = false): Buffer {
-    const ctx: EncodeCtx = { syncMode, registered: [] };
+export function encodeCallArgs(kwargs: Record<string, unknown>, options: EncodeCallArgsOptions): Buffer {
+    const callId = options.callId;
+    if (callId === 0n) {
+        throw new TypeError('callId must be a nonzero uint64');
+    }
+    const ctx: EncodeCtx = { syncMode: options.syncMode ?? false, registered: [] };
     try {
         const entries: baml_core.cffi.v1.IInboundMapEntry[] = [];
         for (const [key, value] of Object.entries(kwargs)) {
@@ -230,7 +240,7 @@ export function encodeCallArgs(kwargs: Record<string, unknown>, syncMode = false
             entry.value = iv;
             entries.push(entry);
         }
-        const msg = CallFunctionArgs.create({ kwargs: entries });
+        const msg = CallFunctionArgs.fromObject({ kwargs: entries, callId: callId.toString() });
         return Buffer.from(CallFunctionArgs.encode(msg).finish());
     } catch (err) {
         // Roll back any host callables registered before the failure so
@@ -483,6 +493,12 @@ function formatThrownMessage(kind: string, className: string, message: string, t
     return text;
 }
 
+function cancellationAbortError(message: string): BamlAbortError {
+    return new BamlAbortError(message, {
+        reason: new BamlCancelledError(message),
+    });
+}
+
 /**
  * Decode a `BamlOutboundResult` envelope (the engine's call-result wire shape
  * after 31c/31e). The `ok` arm returns the decoded value; the `error`/`panic`
@@ -513,8 +529,12 @@ export function decodeCallResult(data: Buffer | Uint8Array): unknown {
                     throw original;
                 }
             }
+            const formatted = formatThrownMessage('error', className ?? '', message, trace);
+            if (className === CANCELLED_PANIC_CLASS) {
+                throw cancellationAbortError(formatted);
+            }
             throw new BamlError(
-                formatThrownMessage('error', className ?? '', message, trace),
+                formatted,
                 { value, bamlTrace: trace, className },
             );
         }
@@ -529,8 +549,12 @@ export function decodeCallResult(data: Buffer | Uint8Array): unknown {
             }
             const { value, className, message } = decodeThrown(panic?.value);
             const trace = panic?.trace ?? [];
+            const formatted = formatThrownMessage('panic', className ?? '', message, trace);
+            if (className === CANCELLED_PANIC_CLASS) {
+                throw cancellationAbortError(formatted);
+            }
             throw new BamlPanic(
-                formatThrownMessage('panic', className ?? '', message, trace),
+                formatted,
                 { value, bamlTrace: trace, className },
             );
         }

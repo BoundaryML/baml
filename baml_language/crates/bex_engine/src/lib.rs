@@ -174,6 +174,12 @@ pub enum BexCallArg {
 /// the registry insert are atomic — there is no window during which the
 /// slot exists without an owning guard, so a panic at the registration
 /// site cannot leak entries.
+#[derive(Clone)]
+struct ActiveCall {
+    cancel: CancellationToken,
+    pending: bool,
+}
+
 struct ActiveCallGuard {
     engine: Arc<BexEngine>,
     call_id: CallId,
@@ -187,17 +193,51 @@ impl ActiveCallGuard {
         engine: Arc<BexEngine>,
         call_id: CallId,
         cancel: CancellationToken,
-    ) -> Result<Self, EngineError> {
+    ) -> Result<(Self, CancellationToken), EngineError> {
         let mut map = engine
             .active_calls
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        if map.contains_key(&call_id) {
-            return Err(EngineError::DuplicateCallId { call_id });
-        }
-        map.insert(call_id, cancel);
+        let cancel = match map.get_mut(&call_id) {
+            Some(existing) if existing.pending => {
+                existing.pending = false;
+                existing.cancel.clone()
+            }
+            Some(_) => return Err(EngineError::DuplicateCallId { call_id }),
+            None => {
+                map.insert(
+                    call_id,
+                    ActiveCall {
+                        cancel: cancel.clone(),
+                        pending: false,
+                    },
+                );
+                cancel
+            }
+        };
         drop(map);
-        Ok(Self { engine, call_id })
+        Ok((Self { engine, call_id }, cancel))
+    }
+
+    fn reserve_cancelled(engine: &BexEngine, call_id: CallId) {
+        let mut map = engine
+            .active_calls
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        match map.get(&call_id) {
+            Some(existing) => existing.cancel.cancel(),
+            None => {
+                let cancel = CancellationToken::new();
+                cancel.cancel();
+                map.insert(
+                    call_id,
+                    ActiveCall {
+                        cancel,
+                        pending: true,
+                    },
+                );
+            }
+        }
     }
 }
 
@@ -513,7 +553,7 @@ pub struct BexEngine {
     park_requested: Arc<AtomicBool>,
 
     /// Map of active function calls by ID.
-    active_calls: Mutex<HashMap<CallId, CancellationToken>>,
+    active_calls: Mutex<HashMap<CallId, ActiveCall>>,
 
     futures: FutureManager,
 
@@ -1156,7 +1196,7 @@ impl BexEngine {
                 defs.insert(
                     cls.name.clone(),
                     sys_types::ClassDefinition {
-                        name: cls.name.display_name.to_string(),
+                        name: cls.name.display_name().to_string(),
                         description: cls.description.clone(),
                         alias: cls.alias.clone(),
                         fields: cls
@@ -1189,7 +1229,7 @@ impl BexEngine {
                 defs.insert(
                     enm.name.clone(),
                     sys_types::EnumDefinition {
-                        name: enm.name.display_name.to_string(),
+                        name: enm.name.display_name().to_string(),
                         description: enm.description.clone(),
                         alias: enm.alias.clone(),
                         variants: enm
@@ -1420,7 +1460,13 @@ impl BexEngine {
         }: FunctionCallContext,
         copy_objects: bool,
     ) -> Result<BexExternalValue, EngineError> {
-        // Fail fast if already cancelled — guarantees pre-cancelled tokens
+        // Register this call so `cancel_function_call(call_id)` can target
+        // it. The RAII guard removes the entry on drop (including panic
+        // unwind). Insertion and guard construction are atomic, so a panic
+        // here cannot leak registry entries.
+        let (_call_guard, cancel) = ActiveCallGuard::register(Arc::clone(self), call_id, cancel)?;
+
+        // Fail fast if already cancelled — guarantees pre-cancelled IDs
         // always produce a `baml.panics.Cancelled` panic regardless of
         // function contents.
         if cancel.is_cancelled() {
@@ -1466,33 +1512,8 @@ impl BexEngine {
             })
             .collect::<Result<_, EngineError>>()?;
 
-        // Register this call so `cancel_function_call(call_id)` can target
-        // it. The RAII guard removes the entry on drop (including panic
-        // unwind). Insertion and guard construction are atomic, so a panic
-        // here cannot leak registry entries.
-        let _call_guard = ActiveCallGuard::register(Arc::clone(self), call_id, cancel.clone())?;
-
-        // Create VM with shared heap (each VM gets its own TLAB).
-        // Globals are shared as a frozen `Arc<[Value]>` — cloning is a refcount bump.
-        let vm = BexVm::new(
-            Arc::clone(&self.heap),
-            VmGlobals::Shared(self.globals.clone()),
-            self.resolved_class_names
-                .iter()
-                .chain(self.resolved_enum_names.iter())
-                .map(|(k, v)| (k.clone(), *v))
-                .collect(),
-            #[cfg(not(target_arch = "wasm32"))]
-            Arc::clone(&self.park_requested),
-            Arc::clone(&self.argv),
-            Arc::clone(&self.interface_implementors),
-        );
-        // BEP-034: wrap the root VM in a `BexThread` from the outset so the
-        // permit's `RootHaver` is the thread (delegating to the inner VM).
-        // Spawned children build their own `BexThread`s in `spawn_thread`.
-        let root_thread = BexThread::new_root(vm, cancel.clone());
-        let inactive = self.heap_permit_manager.new_permit(root_thread).await;
-        let mut thread = inactive.acquire().await;
+        // Create the root thread (shared heap, own TLAB) and acquire its permit.
+        let mut thread = self.new_root_thread(cancel.clone()).await;
 
         // Snapshot args for the root FunctionStart event before converting to VM values
         let args_snapshot = args
@@ -1526,12 +1547,81 @@ impl BexEngine {
             })
             .collect::<Result<Vec<_>, _>>()?;
 
-        // Canary moved the root VM into `thread.vm` for BEP-034 spawn
-        // threading; pack/run still needs the generic-function type-args
-        // path. Combine both: typed-args setter on the threaded VM.
+        // `function_index` is the entry function's `HeapPtr`; `type_args` are the
+        // explicit BEP-039 type args from the host (closures/bound methods instead
+        // seed their captured/class type args — see `call_callable`).
+        self.run_entry_point(
+            thread,
+            function_index,
+            vm_args,
+            type_args,
+            return_type,
+            throws_type,
+            function_name.to_string(),
+            args_snapshot,
+            call_id,
+            host_ctx,
+            collectors,
+            cancel,
+            copy_objects,
+        )
+        .await
+    }
+
+    /// Build a fresh root [`BexThread`] over the shared heap and acquire its
+    /// heap permit. Shared by the named-entry (`call_function_bound_args`) and
+    /// callable-entry (`call_callable`) paths.
+    async fn new_root_thread(
+        self: &Arc<Self>,
+        cancel: CancellationToken,
+    ) -> ActiveHeapPermit<BexThread> {
+        // Globals are shared as a frozen `Arc<[Value]>` — cloning is a refcount bump.
+        let vm = BexVm::new(
+            Arc::clone(&self.heap),
+            VmGlobals::Shared(self.globals.clone()),
+            self.resolved_class_names
+                .iter()
+                .chain(self.resolved_enum_names.iter())
+                .map(|(k, v)| (k.clone(), *v))
+                .collect(),
+            #[cfg(not(target_arch = "wasm32"))]
+            Arc::clone(&self.park_requested),
+            Arc::clone(&self.argv),
+            Arc::clone(&self.interface_implementors),
+        );
+        // BEP-034: wrap the root VM in a `BexThread` from the outset so the
+        // permit's `RootHaver` is the thread (delegating to the inner VM).
+        // Spawned children build their own `BexThread`s in `spawn_thread`.
+        let root_thread = BexThread::new_root(vm, cancel);
+        let inactive = self.heap_permit_manager.new_permit(root_thread).await;
+        inactive.acquire().await
+    }
+
+    /// Shared entry-point core: set the VM's entry frame, wire span/collector
+    /// tracking, run the thread event loop, and extract the root value. Used by
+    /// both the named-function path and the closure path; the callers differ
+    /// only in how they resolve the entry pointer and its `return`/`throws`
+    /// types.
+    #[expect(clippy::too_many_arguments)]
+    async fn run_entry_point(
+        self: &Arc<Self>,
+        mut thread: ActiveHeapPermit<BexThread>,
+        entry_ptr: HeapPtr,
+        vm_args: Vec<Value>,
+        type_args: Vec<Ty>,
+        return_type: Ty,
+        throws_type: Option<Ty>,
+        label: String,
+        args_snapshot: Vec<BexExternalValue>,
+        call_id: CallId,
+        host_ctx: Option<bex_events::HostSpanContext>,
+        collectors: Vec<Arc<bex_events::Collector>>,
+        cancel: CancellationToken,
+        copy_objects: bool,
+    ) -> Result<BexExternalValue, EngineError> {
         thread
             .vm
-            .set_entry_point_with_type_args(function_index, &vm_args, type_args);
+            .set_entry_point_with_type_args(entry_ptr, &vm_args, type_args);
 
         // Initialize span tracking for the root call.
         // If host context is provided, nest under the host's span tree.
@@ -1545,14 +1635,12 @@ impl BexEngine {
             None => (None, engine_span_id.clone(), vec![]),
         };
 
-        // Wire up collector tracking before emitting any events.
-        // Track by engine_span_id (unique per call) so each call gets its own log,
-        // even when multiple calls share the same root under @trace.
-        //
-        // The event store routes events to buckets by matching the event's span_id
-        // or parent_span_id against tracked IDs. So the function's own events
-        // (span_id == engine_span_id) and child events like LLM calls
-        // (parent_span_id == engine_span_id) both land in the same bucket.
+        // Wire up collector tracking before emitting any events. Track by
+        // engine_span_id (unique per call) so each call gets its own log, even
+        // when multiple calls share the same root under @trace. The event store
+        // routes events to buckets by matching span_id / parent_span_id against
+        // tracked IDs, so the function's own events and child events (e.g. LLM
+        // calls) both land in the same bucket.
         for collector in &collectors {
             collector.track(&engine_span_id);
         }
@@ -1584,7 +1672,7 @@ impl BexEngine {
             call_stack,
             timestamp: SystemTime::now(),
             event: EventKind::Function(FunctionEvent::Start(FunctionStart {
-                name: function_name.to_string(),
+                name: label.clone(),
                 args: args_snapshot,
                 tags: vec![],
             })),
@@ -1594,7 +1682,7 @@ impl BexEngine {
             stack: vec![EngineSpan {
                 span_id: engine_span_id.clone(),
                 parent_span_id,
-                label: function_name.to_string(),
+                label,
                 started_at: Instant::now(),
             }],
             root_span_id: effective_root_span_id,
@@ -1646,19 +1734,167 @@ impl BexEngine {
         }
     }
 
+    /// Invoke a callable BAML value — a raw function, a closure (with captures),
+    /// or a bound method — referenced by a host [`Handle`](bex_external_types::Handle), as a fresh root call,
+    /// returning its result. This is the by-value counterpart of
+    /// [`Self::call_function`], used to call a BAML callback passed to a sys-op
+    /// (e.g. an HTTP server `handler`). The callee's `return`/`throws` types and
+    /// type args are read from the heap object rather than a name lookup; a bound
+    /// method's receiver is injected as `self` and its instance's class type args
+    /// are seeded — mirroring the VM's normal call path
+    /// (`execute_call_from_locals_offset`).
+    pub async fn call_callable(
+        self: &Arc<Self>,
+        handle: bex_external_types::Handle,
+        args: Vec<BexExternalValue>,
+        FunctionCallContext {
+            call_id,
+            host_ctx,
+            collectors,
+            cancel,
+            type_args: _,
+        }: FunctionCallContext,
+        copy_objects: bool,
+    ) -> Result<BexExternalValue, EngineError> {
+        if cancel.is_cancelled() {
+            return Err(cancelled_unhandled_throw());
+        }
+
+        let _call_guard = ActiveCallGuard::register(Arc::clone(self), call_id, cancel.clone())?;
+        let mut thread = self.new_root_thread(cancel.clone()).await;
+
+        // Resolve the handle to the live heap object. The handle keeps it rooted.
+        let entry_ptr = self
+            .resolve_handle(thread.proof(), &handle)
+            .ok_or_else(|| {
+                EngineError::Other("call_callable: stale callable handle".to_string())
+            })?;
+
+        // Unwrap to the entry pointer to run, the receiver to inject as `self`
+        // (bound methods only), the type args to seed the frame, and the inner
+        // `Function` pointer to read metadata from. `entry` is the closure value
+        // itself (so its captures/upvalues resolve) or, for a bound method, the
+        // inner function (its `self` is supplied positionally).
+        let (entry, receiver, seed_type_args, func_ptr) = match thread.vm.get_object(entry_ptr) {
+            Object::Function(_) => (entry_ptr, None, Vec::new(), entry_ptr),
+            Object::Closure(closure) => (
+                entry_ptr,
+                None,
+                closure.captured_type_args.to_vec(),
+                closure.function,
+            ),
+            Object::BoundMethod(bm) => {
+                let receiver = bm.receiver;
+                let class_type_args = receiver
+                    .as_object_ptr()
+                    .and_then(|ptr| match thread.vm.get_object(ptr) {
+                        Object::Instance(inst) => Some(inst.class_type_args.clone()),
+                        _ => None,
+                    })
+                    .unwrap_or_default();
+                (bm.function, Some(receiver), class_type_args, bm.function)
+            }
+            other => {
+                return Err(EngineError::TypeMismatch {
+                    message: format!("call_callable: handle is not callable ({other:?})"),
+                });
+            }
+        };
+
+        // Read the inner function's metadata. `param_types` carries declared
+        // parameter types (including `self` for methods) for type-directed
+        // coercion; lambdas leave it empty (types inferred, not stored), so the
+        // real arity comes from `arity` and coercion is best-effort.
+        let (return_type, throws_type, arity, param_types) = match thread.vm.get_object(func_ptr) {
+            Object::Function(func) => {
+                // A value referencing an unresolved native builtin can't be an
+                // entry point (parity with `call_function_bound_args`).
+                if matches!(func.kind, bex_vm_types::FunctionKind::NativeUnresolved) {
+                    return Err(EngineError::NotInvokableAsEntry {
+                        name: func.name.clone(),
+                        kind: format!("{:?}", func.kind),
+                    });
+                }
+                (
+                    func.return_type.clone(),
+                    func.throws_type.clone(),
+                    func.arity,
+                    func.param_types.clone(),
+                )
+            }
+            _ => {
+                return Err(EngineError::TypeMismatch {
+                    message: "call_callable: value does not wrap a function".to_string(),
+                });
+            }
+        };
+
+        // A bound method's `arity` counts the implicit `self`; callers don't pass
+        // it (the receiver is injected below), so the visible arity drops by one.
+        let self_offset = usize::from(receiver.is_some());
+        let user_arity = arity.saturating_sub(self_offset);
+        if args.len() != user_arity {
+            return Err(EngineError::TypeMismatch {
+                message: format!(
+                    "callable expects {user_arity} argument(s), got {}",
+                    args.len()
+                ),
+            });
+        }
+
+        // Coerce each provided arg to its declared param type (offset by `self`
+        // for bound methods); snapshot post-coercion for the FunctionStart event,
+        // matching the named-call path.
+        let coerced: Vec<BexExternalValue> = args
+            .into_iter()
+            .enumerate()
+            .map(|(idx, arg)| match param_types.get(idx + self_offset) {
+                Some(ty) => crate::conversion::coerce_arg_to_declared_type(arg, ty),
+                None => Ok(arg),
+            })
+            .collect::<Result<_, _>>()?;
+        let args_snapshot = coerced.clone();
+
+        // Build VM args: the receiver as `self` in slot 0 (bound methods), then
+        // the converted user args.
+        let mut vm_args: Vec<Value> = Vec::with_capacity(coerced.len() + self_offset);
+        if let Some(receiver) = receiver {
+            vm_args.push(receiver);
+        }
+        for (idx, arg) in coerced.into_iter().enumerate() {
+            vm_args.push(self.convert_external_to_vm_value_with_ty(
+                &mut thread,
+                arg,
+                param_types.get(idx + self_offset),
+            )?);
+        }
+
+        self.run_entry_point(
+            thread,
+            entry,
+            vm_args,
+            seed_type_args,
+            return_type,
+            throws_type,
+            "<callable>".to_string(),
+            args_snapshot,
+            call_id,
+            host_ctx,
+            collectors,
+            cancel,
+            copy_objects,
+        )
+        .await
+    }
+
     /// Cancel a function call by its ID.
     ///
     /// If the call is still running, it will be interrupted at the next
-    /// cancellation check point. If the call has already completed or the ID
-    /// is unknown, this will return an error.
+    /// cancellation check point. If the ID is not active yet, reserve it with
+    /// an already-cancelled token so the later call starts cancelled.
     pub fn cancel_function_call(&self, call_id: CallId) -> Result<(), EngineError> {
-        let mut active_calls = self.active_calls.lock().unwrap();
-        if let Some(call) = active_calls.remove(&call_id) {
-            call.cancel();
-            Ok(())
-        } else {
-            Err(EngineError::FunctionCallNotFound { call_id })
-        }
+        ActiveCallGuard::reserve_cancelled(self, call_id);
+        Ok(())
     }
 
     fn validate_bound_args(
@@ -3403,6 +3639,24 @@ impl sys_types::VmSpawner for BexEngine {
     ) -> Result<BexExternalValue, Box<dyn Send + Sync + 'static>> {
         self.call_function(
             &function_name,
+            args,
+            FunctionCallContextBuilder::new(sys_types::CallId::next())
+                .with_cancel_token(cancel)
+                .build(),
+            true,
+        )
+        .await
+        .map_err(|e| Box::new(e) as Box<dyn Send + Sync + 'static>)
+    }
+
+    async fn spawn_with_callable(
+        self: Arc<Self>,
+        callable: bex_external_types::Handle,
+        args: Vec<BexExternalValue>,
+        cancel: CancellationToken,
+    ) -> Result<BexExternalValue, Box<dyn Send + Sync + 'static>> {
+        self.call_callable(
+            callable,
             args,
             FunctionCallContextBuilder::new(sys_types::CallId::next())
                 .with_cancel_token(cancel)

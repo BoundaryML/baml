@@ -31,7 +31,7 @@ pub mod io {
     pub use sys_types::generated::owned;
     pub use sys_types::{
         AsBexExternalValue, BexExternalValue, BexHeap, CallId, OpError, SysOpContext, SysOpFn,
-        SysOpOutput, SysOpResult, VmBamlError, VmRustFnError,
+        SysOpOutput, SysOpResult, VmBamlError, VmPanic, VmRustFnError,
     };
 
     include!(concat!(env!("OUT_DIR"), "/io_generated.rs"));
@@ -1019,6 +1019,69 @@ impl io::IoClassHttpResponse for DefaultIoOps {
             message: "Operation not supported on this platform".to_string(),
         })
     }
+    fn new(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _status_code: i64,
+        _headers: indexmap::IndexMap<String, String>,
+        _body: Vec<u8>,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<io::owned::http::Response> {
+        SysOpOutput::err(VmBamlError::Unsupported {
+            message: "Operation not supported on this platform".to_string(),
+        })
+    }
+}
+
+impl io::IoClassHttpTlsConfig for DefaultIoOps {
+    fn _new(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _cert_pem: Vec<u8>,
+        _key_pem: Vec<u8>,
+        _allow_tls1_2: bool,
+        _handshake_timeout_nanos: Arc<num_bigint::BigInt>,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<io::owned::http::TlsConfig> {
+        SysOpOutput::err(VmBamlError::Unsupported {
+            message: "Operation not supported on this platform".to_string(),
+        })
+    }
+}
+
+impl io::IoClassHttpServer for DefaultIoOps {
+    fn bind(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _addr: String,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<io::owned::http::Server> {
+        SysOpOutput::err(VmBamlError::Unsupported {
+            message: "Operation not supported on this platform".to_string(),
+        })
+    }
+
+    fn _serve(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _server: io::owned::http::Server,
+        _handler: bex_external_types::Handle,
+        _tls_config: Option<io::owned::http::TlsConfig>,
+        _allow_http1: bool,
+        _allow_http2: bool,
+        _max_body_size: i64,
+        _max_connections: i64,
+        _header_read_timeout_nanos: Arc<num_bigint::BigInt>,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        SysOpOutput::err(VmBamlError::Unsupported {
+            message: "Operation not supported on this platform".to_string(),
+        })
+    }
 }
 
 impl io::IoClassHttpSseStream for DefaultIoOps {
@@ -1732,9 +1795,33 @@ impl IoSysOpsBuilder {
             })
         };
         self.inner.baml_http_ssestream_close = {
-            let t = instance;
+            let t = instance.clone();
             Arc::new(move |heap, permit, args, ctx, call_id| {
                 t.__glue_baml_http_ssestream_close(heap, permit, args, ctx, call_id)
+            })
+        };
+        self.inner.baml_http_response_new = {
+            let t = instance.clone();
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_http_response_new(heap, permit, args, ctx, call_id)
+            })
+        };
+        self.inner.baml_http_tlsconfig__new = {
+            let t = instance.clone();
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_http_tlsconfig__new(heap, permit, args, ctx, call_id)
+            })
+        };
+        self.inner.baml_http_server_bind = {
+            let t = instance.clone();
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_http_server_bind(heap, permit, args, ctx, call_id)
+            })
+        };
+        self.inner.baml_http_server__serve = {
+            let t = instance;
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_http_server__serve(heap, permit, args, ctx, call_id)
             })
         };
         self

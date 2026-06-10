@@ -7,7 +7,7 @@
 
 use std::collections::{HashMap, HashSet};
 
-use baml_type::{Literal, Ty, TyAttr, TyAttrValue, TypeName, simplify_sap::simplify};
+use baml_type::{Freshness, Literal, Ty, TyAttr, TyAttrValue, TypeName, simplify_sap::simplify};
 
 // =========================================================================
 // Markdown → TestCase parser
@@ -344,7 +344,7 @@ impl Parser {
             }
             Some(c) if c.is_ascii_digit() || c == '-' => {
                 let n = self.read_int();
-                Ty::Literal(Literal::Int(n), TyAttr::default())
+                Ty::Literal(Literal::Int(n), Freshness::Regular, TyAttr::default())
             }
             Some(c) if c.is_alphabetic() => {
                 let word = self.read_word();
@@ -354,8 +354,12 @@ impl Parser {
                     "string" => Ty::string(),
                     "bool" => Ty::bool(),
                     "null" => Ty::null(),
-                    "true" => Ty::Literal(Literal::Bool(true), TyAttr::default()),
-                    "false" => Ty::Literal(Literal::Bool(false), TyAttr::default()),
+                    "true" => {
+                        Ty::Literal(Literal::Bool(true), Freshness::Regular, TyAttr::default())
+                    }
+                    "false" => {
+                        Ty::Literal(Literal::Bool(false), Freshness::Regular, TyAttr::default())
+                    }
                     "map" => {
                         self.skip_ws();
                         assert_eq!(self.advance(), '<');

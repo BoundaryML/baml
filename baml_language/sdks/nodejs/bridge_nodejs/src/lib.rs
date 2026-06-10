@@ -3,7 +3,7 @@
 //! This crate provides the same API surface as `bridge_python`
 //! but powered by napi-rs instead of PyO3.
 
-mod abort_controller;
+mod baml_call_context;
 mod errors;
 pub mod handle;
 pub mod host_value;
@@ -36,4 +36,20 @@ pub fn get_version() -> &'static str {
 #[napi]
 pub fn flush_events() {
     bridge_cffi::flush_event_sink();
+}
+
+#[napi(js_name = "newFunctionCall")]
+pub fn new_function_call() -> String {
+    bridge_cffi::new_function_call_id().to_string()
+}
+
+#[napi(js_name = "cancelFunctionCall")]
+pub fn cancel_function_call(call_id: String) -> napi::Result<bool> {
+    let id = call_id.parse::<u64>().map_err(|_| {
+        napi::Error::new(
+            napi::Status::InvalidArg,
+            "callId must be a decimal uint64 string",
+        )
+    })?;
+    Ok(bridge_cffi::cancel_function_call_by_id(id))
 }

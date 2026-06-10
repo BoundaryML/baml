@@ -205,11 +205,9 @@ fn primitive_type_name(ty: &baml_type::Ty) -> Option<baml_type::TypeName> {
         baml_type::Ty::Null { .. } => "null",
         _ => return None,
     };
-    Some(baml_type::TypeName {
-        name: baml_type::Name::new(name),
-        module_path: Vec::new(),
-        display_name: baml_type::Name::new(name),
-    })
+    Some(baml_type::QualifiedTypeName::local(baml_type::Name::new(
+        name,
+    )))
 }
 
 /// Project a `Value::Object(Object::Type)` to its underlying `TypeName`,

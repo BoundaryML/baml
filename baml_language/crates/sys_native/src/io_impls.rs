@@ -7,6 +7,10 @@
 use std::sync::{Arc, OnceLock};
 
 use bex_heap::{BexExternalValue, BexHeap};
+// Only the non-`bundle-http` HTTP stubs use `VmPanic` (to surface an
+// unsupported-platform panic); under `bundle-http` the real impls run instead.
+#[cfg(not(feature = "bundle-http"))]
+use sys_ops::io::VmPanic;
 use sys_ops::io::{self, CallId, SysOpContext, SysOpOutput, VmBamlError, VmRustFnError, owned};
 
 // Process-level shared BufReader for stdin, preventing data loss when
@@ -1492,21 +1496,9 @@ impl io::IoClassHttpResponse for NativeSysOps {
         _ctx: &SysOpContext,
     ) -> SysOpOutput<String> {
         SysOpOutput::async_op(async move {
-            let body: Arc<tokio::sync::Mutex<Option<reqwest::Response>>> = response
-                ._body
-                .downcast::<tokio::sync::Mutex<Option<reqwest::Response>>>()
-                .map_err(|_| VmBamlError::DevOther {
-                    message: "Invalid response body handle".into(),
-                })?;
-            let mut guard = body.lock().await;
-            let resp = guard.take().ok_or_else(|| VmBamlError::InvalidArgument {
-                message: "Response body has already been consumed".into(),
-            })?;
-            resp.text()
+            crate::http_server::downcast_body(&response._body)?
+                .read_text()
                 .await
-                .map_err(|e| VmBamlError::Io {
-                    message: format!("Failed to read response body: {e}"),
-                })
                 .map_err(VmRustFnError::from)
         })
     }
@@ -1519,7 +1511,8 @@ impl io::IoClassHttpResponse for NativeSysOps {
         _response: owned::http::Response,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<String> {
-        SysOpOutput::err(VmBamlError::Unsupported {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "http".to_string(),
             message: "Operation not supported on this platform".to_string(),
         })
     }
@@ -1533,22 +1526,10 @@ impl io::IoClassHttpResponse for NativeSysOps {
         _ctx: &SysOpContext,
     ) -> SysOpOutput<Vec<u8>> {
         SysOpOutput::async_op(async move {
-            let body: Arc<tokio::sync::Mutex<Option<reqwest::Response>>> = response
-                ._body
-                .downcast::<tokio::sync::Mutex<Option<reqwest::Response>>>()
-                .map_err(|_| VmBamlError::DevOther {
-                    message: "Invalid response body handle".into(),
-                })?;
-            let mut guard = body.lock().await;
-            let resp = guard.take().ok_or_else(|| VmBamlError::InvalidArgument {
-                message: "Response body has already been consumed".into(),
-            })?;
-            resp.bytes()
+            crate::http_server::downcast_body(&response._body)?
+                .read_bytes()
                 .await
                 .map(|b| b.to_vec())
-                .map_err(|e| VmBamlError::Io {
-                    message: format!("Failed to read response body: {e}"),
-                })
                 .map_err(VmRustFnError::from)
         })
     }
@@ -1561,9 +1542,63 @@ impl io::IoClassHttpResponse for NativeSysOps {
         _response: owned::http::Response,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<Vec<u8>> {
-        SysOpOutput::err(VmBamlError::Unsupported {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "http".to_string(),
             message: "Operation not supported on this platform".to_string(),
         })
+    }
+
+    #[cfg(feature = "bundle-http")]
+    fn new(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        status_code: i64,
+        headers: indexmap::IndexMap<String, String>,
+        body: Vec<u8>,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<owned::http::Response> {
+        SysOpOutput::ok(crate::http_server::build_response(
+            status_code,
+            headers,
+            body,
+        ))
+    }
+
+    #[cfg(not(feature = "bundle-http"))]
+    fn new(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        _status_code: i64,
+        _headers: indexmap::IndexMap<String, String>,
+        _body: Vec<u8>,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<owned::http::Response> {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "http".to_string(),
+            message: "Operation not supported on this platform".to_string(),
+        })
+    }
+}
+
+/// Map a `reqwest` transport error to a category the HTTP ops declare they can
+/// throw (`baml.errors.Io | baml.errors.Timeout`), so BAML `catch` clauses can
+/// handle network failures instead of them surfacing as an uncatchable host
+/// error.
+#[cfg(feature = "bundle-http")]
+fn http_transport_error(context: &str, e: &reqwest::Error) -> VmBamlError {
+    if e.is_timeout() {
+        VmBamlError::Timeout {
+            message: format!("{context}: {e}"),
+            // reqwest doesn't expose the configured timeout on the error, so
+            // the elapsed duration is unknown.
+            duration_ms: None,
+        }
+    } else {
+        VmBamlError::Io {
+            message: format!("{context}: {e}"),
+        }
     }
 }
 
@@ -1575,13 +1610,123 @@ fn build_io_http_response(response: reqwest::Response, url: String) -> owned::ht
         .iter()
         .map(|(k, v)| (k.as_str().to_string(), v.to_str().unwrap_or("").to_string()))
         .collect();
-    let body: Arc<dyn std::any::Any + Send + Sync> =
-        Arc::new(tokio::sync::Mutex::new(Some(response)));
     owned::http::Response {
         status_code: status,
         headers,
         url,
-        _body: body,
+        _body: crate::http_server::HttpBody::client(response),
+    }
+}
+
+#[cfg(feature = "bundle-http")]
+impl io::IoClassHttpTlsConfig for NativeSysOps {
+    fn _new(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        cert_pem: Vec<u8>,
+        key_pem: Vec<u8>,
+        allow_tls1_2: bool,
+        handshake_timeout_nanos: Arc<num_bigint::BigInt>,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<owned::http::TlsConfig> {
+        crate::http_server::tls_config_new(cert_pem, key_pem, allow_tls1_2, handshake_timeout_nanos)
+    }
+}
+
+#[cfg(not(feature = "bundle-http"))]
+impl io::IoClassHttpTlsConfig for NativeSysOps {
+    fn _new(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        _cert_pem: Vec<u8>,
+        _key_pem: Vec<u8>,
+        _allow_tls1_2: bool,
+        _handshake_timeout_nanos: Arc<num_bigint::BigInt>,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<owned::http::TlsConfig> {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "http".to_string(),
+            message: "Operation not supported on this platform".to_string(),
+        })
+    }
+}
+
+#[cfg(feature = "bundle-http")]
+impl io::IoClassHttpServer for NativeSysOps {
+    fn bind(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        addr: String,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<owned::http::Server> {
+        crate::http_server::bind(addr)
+    }
+
+    fn _serve(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        server: owned::http::Server,
+        handler: bex_external_types::Handle,
+        tls_config: Option<owned::http::TlsConfig>,
+        allow_http1: bool,
+        allow_http2: bool,
+        max_body_size: i64,
+        max_connections: i64,
+        header_read_timeout_nanos: Arc<num_bigint::BigInt>,
+        ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        crate::http_server::serve(
+            server,
+            handler,
+            tls_config,
+            allow_http1,
+            allow_http2,
+            max_body_size,
+            max_connections,
+            header_read_timeout_nanos,
+            ctx.spawner.clone(),
+            ctx.cancel.clone(),
+        )
+    }
+}
+
+#[cfg(not(feature = "bundle-http"))]
+impl io::IoClassHttpServer for NativeSysOps {
+    fn bind(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        _addr: String,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<owned::http::Server> {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "http".to_string(),
+            message: "Operation not supported on this platform".to_string(),
+        })
+    }
+
+    fn _serve(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        _server: owned::http::Server,
+        _handler: bex_external_types::Handle,
+        _tls_config: Option<owned::http::TlsConfig>,
+        _allow_http1: bool,
+        _allow_http2: bool,
+        _max_body_size: i64,
+        _max_connections: i64,
+        _header_read_timeout_nanos: Arc<num_bigint::BigInt>,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "http".to_string(),
+            message: "Operation not supported on this platform".to_string(),
+        })
     }
 }
 
@@ -1656,7 +1801,8 @@ impl io::IoClassHttpSseStream for NativeSysOps {
         _sse_stream: owned::http::SseStream,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<Option<String>> {
-        SysOpOutput::err(VmBamlError::Unsupported {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "http".to_string(),
             message: "Operation not supported on this platform".to_string(),
         })
     }
@@ -1686,9 +1832,11 @@ impl io::IoNamespaceHttp for NativeSysOps {
         SysOpOutput::async_op(async move {
             crate::ensure_rustls_crypto_provider();
             let client = reqwest::Client::new();
-            let response = client.get(&url).send().await.map_err(|e| VmBamlError::Io {
-                message: format!("HTTP fetch failed: {e}"),
-            })?;
+            let response = client
+                .get(&url)
+                .send()
+                .await
+                .map_err(|e| http_transport_error("HTTP fetch failed", &e))?;
             let final_url = response.url().to_string();
             Ok(build_io_http_response(response, final_url))
         })
@@ -1702,7 +1850,8 @@ impl io::IoNamespaceHttp for NativeSysOps {
         _url: String,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<owned::http::Response> {
-        SysOpOutput::err(VmBamlError::Unsupported {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "http".to_string(),
             message: "Operation not supported on this platform".to_string(),
         })
     }
@@ -1734,9 +1883,10 @@ impl io::IoNamespaceHttp for NativeSysOps {
                 builder = builder.body(request.body);
             }
 
-            let response = builder.send().await.map_err(|e| VmBamlError::Io {
-                message: format!("HTTP send failed: {e}"),
-            })?;
+            let response = builder
+                .send()
+                .await
+                .map_err(|e| http_transport_error("HTTP send failed", &e))?;
             let final_url = response.url().to_string();
             Ok(build_io_http_response(response, final_url))
         })
@@ -1750,7 +1900,8 @@ impl io::IoNamespaceHttp for NativeSysOps {
         _request: owned::http::Request,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<owned::http::Response> {
-        SysOpOutput::err(VmBamlError::Unsupported {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "http".to_string(),
             message: "Operation not supported on this platform".to_string(),
         })
     }
@@ -1790,9 +1941,10 @@ impl io::IoNamespaceHttp for NativeSysOps {
                 builder = builder.body(request.body.clone());
             }
 
-            let response = builder.send().await.map_err(|e| VmBamlError::Io {
-                message: format!("SSE connection failed: {e}"),
-            })?;
+            let response = builder
+                .send()
+                .await
+                .map_err(|e| http_transport_error("SSE connection failed", &e))?;
 
             if !response.status().is_success() {
                 let status = response.status().as_u16();
@@ -1908,7 +2060,8 @@ impl io::IoNamespaceHttp for NativeSysOps {
         _request: owned::http::Request,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<owned::http::SseStream> {
-        SysOpOutput::err(VmBamlError::Unsupported {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "http".to_string(),
             message: "Operation not supported on this platform".to_string(),
         })
     }

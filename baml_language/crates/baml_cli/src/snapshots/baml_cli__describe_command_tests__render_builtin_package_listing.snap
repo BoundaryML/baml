@@ -1,6 +1,5 @@
 ---
 source: crates/baml_cli/src/describe_command_tests.rs
-assertion_line: 354
 expression: output
 ---
 class            Bigint                           <builtin>/baml/bigint.baml:26
@@ -58,12 +57,14 @@ class            glob.Glob                        <builtin>/baml/ns_glob/glob.ba
 function         glob.new                         <builtin>/baml/ns_glob/glob.baml:34
 function         host.call_host_value             <builtin>/baml/ns_host/host.baml:13
 class            host.HostValue                   <builtin>/baml/ns_host/host.baml:20
-class            http.Request                     <builtin>/baml/ns_http/http.baml:2
-class            http.Response                    <builtin>/baml/ns_http/http.baml:10
-class            http.SseStream                   <builtin>/baml/ns_http/http.baml:33
-function         http.fetch                       <builtin>/baml/ns_http/http.baml:50
-function         http.send                        <builtin>/baml/ns_http/http.baml:55
-function         http.fetch_sse                   <builtin>/baml/ns_http/http.baml:60
+class            http.Request                     <builtin>/baml/ns_http/http.baml:8
+class            http.Response                    <builtin>/baml/ns_http/http.baml:16
+class            http.SseStream                   <builtin>/baml/ns_http/http.baml:51
+function         http.fetch                       <builtin>/baml/ns_http/http.baml:68
+function         http.send                        <builtin>/baml/ns_http/http.baml:73
+function         http.fetch_sse                   <builtin>/baml/ns_http/http.baml:78
+class            http.Server                      <builtin>/baml/ns_http/server.baml:10
+class            http.TlsConfig                   <builtin>/baml/ns_http/server.baml:110
 function         io.input                         <builtin>/baml/ns_io/io.baml:2
 function         io.print                         <builtin>/baml/ns_io/io.baml:8
 function         io.println                       <builtin>/baml/ns_io/io.baml:13
@@ -187,3 +188,6 @@ function         toml.item_to_json                <builtin>/baml/ns_toml/toml.ba
 function         toml.item_from_json              <builtin>/baml/ns_toml/toml.baml:59
 class            toml.TomlParseError              <builtin>/baml/ns_toml/toml.baml:68
 function         unstable.string                  <builtin>/baml/ns_unstable/unstable.baml:5
+class            yaml.YamlParseError              <builtin>/baml/ns_yaml/yaml.baml:3
+function         yaml.parse                       <builtin>/baml/ns_yaml/yaml.baml:15
+function         yaml.deserialize                 <builtin>/baml/ns_yaml/yaml.baml:27

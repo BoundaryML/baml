@@ -15,7 +15,7 @@ use std::{
 
 use async_trait::async_trait;
 // Re-export BexExternalValue and BexValue for ops
-pub use bex_external_types::{AsBexExternalValue, BexExternalValue};
+pub use bex_external_types::{AsBexExternalValue, BexExternalValue, Handle};
 pub use bex_heap::BexHeap;
 // Re-export SysOp for convenience
 pub use bex_vm_types::SysOp;
@@ -592,6 +592,21 @@ pub trait VmSpawner<E: Send + Sync + 'static = Box<dyn Send + Sync + 'static>>:
         args: Vec<BexExternalValue>,
         cancel: CancellationToken,
     ) -> Result<BexExternalValue, E>;
+
+    /// Spawn a new VM that invokes a callable BAML value — a raw function,
+    /// closure, or bound method — referenced by a [`bex_external_types::Handle`]
+    /// obtained from a sys-op's `function`-typed argument, with `args`, and
+    /// return its result.
+    ///
+    /// Unlike [`Self::spawn_with_function`], the callee need not be a named
+    /// global — this is how a sys-op invokes a BAML callback (e.g. an HTTP
+    /// server `handler`). Generally just calls `BexEngine::call_callable`.
+    async fn spawn_with_callable(
+        self: Arc<Self>,
+        callable: bex_external_types::Handle,
+        args: Vec<BexExternalValue>,
+        cancel: CancellationToken,
+    ) -> Result<BexExternalValue, E>;
 }
 
 /// Context available to `sys_ops` that need engine-level information.
@@ -762,6 +777,17 @@ impl SysOpContext {
             ) -> Result<BexExternalValue, Box<dyn Send + Sync + 'static>> {
                 Err(Box::new(
                     "VmSpawner::spawn_with_function called on NeverSpawner (empty/test context)",
+                ))
+            }
+
+            async fn spawn_with_callable(
+                self: Arc<Self>,
+                _callable: bex_external_types::Handle,
+                _args: Vec<BexExternalValue>,
+                _cancel: CancellationToken,
+            ) -> Result<BexExternalValue, Box<dyn Send + Sync + 'static>> {
+                Err(Box::new(
+                    "VmSpawner::spawn_with_callable called on NeverSpawner (empty/test context)",
                 ))
             }
         }

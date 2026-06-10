@@ -514,6 +514,42 @@ fn clean_rust_type(
     }
 }
 
+/// True if `ty` is the builtin top-level `function` type — a callable BAML value
+/// (function, closure, or bound method) passed to a sys-op, which crosses as a
+/// rooted [`Handle`](bex_external_types::Handle) rather than a `BexExternalValue`.
+///
+/// Only matches a top-level `function` (and, via [`clean_param_type`], a
+/// top-level-optional one). A `function` nested in a container (`list<…>` /
+/// `map<…>`) or behind a type alias is NOT detected and would fall back to the
+/// (closure-incompatible) `as_owned_but_very_slow` path — no such sys-op param
+/// exists today; add handling here if one is introduced.
+fn is_callable_param(ty: &BamlType, class_ns_map: &BTreeMap<String, String>) -> bool {
+    matches!(ty, BamlType::Named(name) if name == "function" && !class_ns_map.contains_key(name.as_str()))
+}
+
+/// Like [`clean_rust_type`], but for a sys-op *parameter*. A `function`-typed
+/// parameter is a callable BAML value passed into the op; it crosses as a rooted
+/// heap [`Handle`](bex_external_types::Handle) (extracted via `as_callable_handle`)
+/// that the op later invokes with `VmSpawner::spawn_with_callable`. An optional
+/// callable (`((…) -> …)?`) becomes `Option<Handle>`. (A `function`-typed
+/// *return*, by contrast, is a `FunctionRef` and stays `BexExternalValue` — so
+/// this only diverges on the parameter side.)
+fn clean_param_type(
+    ty: &BamlType,
+    class_ns_map: &BTreeMap<String, String>,
+    paths: &CodegenPaths,
+) -> TokenStream {
+    if is_callable_param(ty, class_ns_map) {
+        return quote! { bex_external_types::Handle };
+    }
+    if let BamlType::Optional(inner) = ty {
+        if is_callable_param(inner, class_ns_map) {
+            return quote! { Option<bex_external_types::Handle> };
+        }
+    }
+    clean_rust_type(ty, class_ns_map, paths)
+}
+
 /// Generate the arg extraction expression for a glue method parameter.
 fn glue_extract_expr(
     arg_ident: &syn::Ident,
@@ -542,11 +578,17 @@ fn glue_extract_expr(
             } else {
                 match name.as_str() {
                     "type" => quote! { #arg_ident.as_baml_type_owned(heap.as_ref(), permit)? },
+                    "function" => quote! { #arg_ident.as_callable_handle(heap.as_ref(), permit)? },
                     _ => quote! { #arg_ident.as_owned_but_very_slow(heap.as_ref(), permit)? },
                 }
             }
         }
         BamlType::RustType => quote! { #arg_ident.as_rust_data(heap.as_ref(), permit)? },
+        // An optional callable param (`((…) -> …)?`): `null` → `None`, else a
+        // rooted handle. Must precede the general `Optional(_)` arm below.
+        BamlType::Optional(inner) if is_callable_param(inner, class_ns_map) => {
+            quote! { #arg_ident.as_optional_callable_handle(heap.as_ref(), permit)? }
+        }
         BamlType::Uint8Array | BamlType::List(_) | BamlType::Map(_, _) | BamlType::Optional(_) => {
             let val = quote! { #arg_ident.as_owned_but_very_slow(heap.as_ref(), permit)? };
             let conv = external_to_typed_expr(&val, ty, class_ns_map, paths);
@@ -1186,7 +1228,7 @@ fn emit_one_class_trait(
                 .iter()
                 .map(|p| {
                     let p_ident = format_ident!("{}", p.name);
-                    let p_ty = clean_rust_type(&p.ty, class_ns_map, paths);
+                    let p_ty = clean_param_type(&p.ty, class_ns_map, paths);
                     quote! { #p_ident: #p_ty }
                 })
                 .collect();
@@ -1463,7 +1505,7 @@ fn emit_one_namespace_trait(
                 .iter()
                 .map(|p| {
                     let p_ident = format_ident!("{}", p.name);
-                    let p_ty = clean_rust_type(&p.ty, class_ns_map, paths);
+                    let p_ty = clean_param_type(&p.ty, class_ns_map, paths);
                     quote! { #p_ident: #p_ty }
                 })
                 .collect();
@@ -2077,6 +2119,11 @@ fn emit_runtime_io_trait(
 
         for p in &builtin.params {
             let p_ident = format_ident!("{}", p.name);
+            // The host-facing `RuntimeIo` path uses `clean_rust_type` (not
+            // `clean_param_type`): a `function` param stays `BexExternalValue`
+            // here on purpose. A host can't synthesize a VM closure `Handle`, so
+            // this path is never used for callbacks — don't "unify" it with the
+            // VM-facing trait's `Handle` mapping.
             let p_ty = clean_rust_type(&p.ty, class_ns_map, paths);
             params.push(quote! { #p_ident: #p_ty });
         }

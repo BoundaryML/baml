@@ -83,7 +83,7 @@ pub fn parse_cli_value(raw: &str, ty: &Ty) -> Result<BexExternalValue> {
         }
 
         Ty::Enum(type_name, _) => Ok(BexExternalValue::Variant {
-            enum_name: type_name.display_name.to_string(),
+            enum_name: type_name.display_name().to_string(),
             variant_name: raw.to_string(),
         }),
 
@@ -140,28 +140,13 @@ mod tests {
         Ty::optional(inner)
     }
     fn ty_enum(name: &str) -> Ty {
-        Ty::Enum(
-            TypeName {
-                name: name.into(),
-                module_path: vec![],
-                display_name: name.into(),
-            },
-            TyAttr::default(),
-        )
+        Ty::Enum(TypeName::local(name.into()), TyAttr::default())
     }
     fn ty_list(elem: Ty) -> Ty {
         Ty::List(Box::new(elem), TyAttr::default())
     }
     fn ty_class(name: &str) -> Ty {
-        Ty::Class(
-            TypeName {
-                name: name.into(),
-                module_path: vec![],
-                display_name: name.into(),
-            },
-            vec![],
-            TyAttr::default(),
-        )
+        Ty::Class(TypeName::local(name.into()), vec![], TyAttr::default())
     }
 
     fn assert_string(raw: &BexExternalValue, expected: &str) {
@@ -310,6 +295,8 @@ mod tests {
     #[test]
     fn parse_cli_value_engine_internal_type_rejected() {
         let ty = Ty::Function {
+            generic_params: vec![],
+            generic_param_bounds: vec![],
             params: vec![],
             ret: Box::new(Ty::Int {
                 attr: TyAttr::default(),

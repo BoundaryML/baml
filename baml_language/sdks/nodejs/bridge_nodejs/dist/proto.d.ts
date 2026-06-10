@@ -5,6 +5,10 @@
 export declare class HostCallableSyncError extends Error {
     constructor(message: string);
 }
+export interface EncodeCallArgsOptions {
+    callId: bigint;
+    syncMode?: boolean;
+}
 /**
  * Encode kwargs into `CallFunctionArgs` bytes.
  *
@@ -22,7 +26,7 @@ export declare class HostCallableSyncError extends Error {
  * later kwarg fails, the engine never sees (and so never releases) the keys we
  * already registered, so we release them here.
  */
-export declare function encodeCallArgs(kwargs: Record<string, unknown>, syncMode?: boolean): Buffer;
+export declare function encodeCallArgs(kwargs: Record<string, unknown>, options: EncodeCallArgsOptions): Buffer;
 /**
  * Decode a bare `BamlOutboundValue` to a JS value. Used for the host-callable
  * args path, where the engine sends a list-shaped `BamlOutboundValue` rather

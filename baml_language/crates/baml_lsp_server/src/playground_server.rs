@@ -239,6 +239,15 @@ async fn handle_ws_in_message(
     sink: &mut futures::stream::SplitSink<WebSocket, AxumWsMsg>,
 ) {
     match msg {
+        WsInMessage::NextFunctionCall { id } => {
+            let msg = WsOutMessage::NextFunctionCallResult {
+                id,
+                call_id: sys_types::CallId::next().0,
+            };
+            if let Some(ws_msg) = to_ws_text(&msg) {
+                let _ = sink.send(ws_msg).await;
+            }
+        }
         WsInMessage::CallFunction {
             id,
             project,
@@ -296,7 +305,7 @@ async fn handle_ws_in_message(
             };
 
             let broadcast_tx = state.broadcast_tx.clone();
-            let call_id = sys_types::CallId(id);
+            let call_id = sys_types::CallId(args.call_id);
             let fs_path = bex_project::FsPath::from_str(project);
 
             let function_call_ctx = bex_project::FunctionCallContextBuilder::new(call_id);

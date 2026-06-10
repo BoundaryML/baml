@@ -5,10 +5,11 @@
 # encoder/decoder, the three factory entry points, and `get_runtime()`.
 
 import atexit
+import asyncio
 from typing import Any, Callable, Dict, List, Literal, Optional, Sequence
 
 from .baml_py import (
-    AbortController,
+    BamlCallContext,
     BamlPyHandle,
     BamlRuntime,
     Collector as _RustCollector,
@@ -18,11 +19,19 @@ from .baml_py import (
     LLMCall,
     Timing,
     Usage,
+    cancel_function_call,
     flush_events,
     get_runtime as _rust_get_runtime,
     get_version,
+    new_function_call,
 )
-from .errors import BamlError, BamlPanic, make_sdk_panic
+from .errors import (
+    BamlCancelledError,
+    BamlError,
+    BamlPanic,
+    attach_baml_traceback,
+    make_sdk_panic,
+)
 from ._stream import BamlStream
 from .ctx_manager import CtxManager as BamlCtxManager
 from .proto import decode_call_result, encode_call_args
@@ -125,6 +134,35 @@ def get_runtime() -> BamlRuntime:
     return _rust_get_runtime()
 
 
+_CANCELLED_PANIC_CLASS = "baml.panics.Cancelled"
+
+
+def _attach_call_ctx(call_ctx: Any, call_id: int) -> None:
+    if call_ctx is not None:
+        call_ctx._attach_call_id(call_id)
+
+
+def _detach_call_ctx(call_ctx: Any, call_id: int) -> None:
+    if call_ctx is not None:
+        call_ctx._detach_call_id(call_id)
+
+
+def _decode_call_result_async(result_bytes: bytes) -> Any:
+    try:
+        return decode_call_result(result_bytes)
+    except (BamlError, BamlPanic) as exc:
+        if getattr(exc, "class_name", None) != _CANCELLED_PANIC_CLASS:
+            raise
+        reason = BamlCancelledError(
+            exc.value,
+            baml_trace=exc.baml_trace,
+            class_name=getattr(exc, "class_name", None),
+        )
+        cancelled = asyncio.CancelledError(str(reason))
+        cancelled.reason = reason  # type: ignore[attr-defined]
+        raise attach_baml_traceback(cancelled) from exc
+
+
 # ---------------------------------------------------------------------------
 # call_function / call_function_sync — explicit-runtime helpers kept for
 # the bridge tests. Generated code uses the three-arg factories below
@@ -132,20 +170,30 @@ def get_runtime() -> BamlRuntime:
 # ---------------------------------------------------------------------------
 
 
-def call_function_sync(rt, function_name, kwargs, ctx=None, collectors=None, abort_controller=None):
-    args_proto = encode_call_args(kwargs)
-    result_bytes = rt.call_function_sync(
-        function_name, args_proto, ctx, collectors, abort_controller
-    )
+def call_function_sync(rt, function_name, kwargs, ctx=None, collectors=None, _ctx=None):
+    call_id = new_function_call()
+    args_proto = encode_call_args(kwargs, call_id)
+    _attach_call_ctx(_ctx, call_id)
+    try:
+        result_bytes = rt.call_function_sync(function_name, args_proto, ctx, collectors)
+    finally:
+        _detach_call_ctx(_ctx, call_id)
     return FunctionResult(decode_call_result(result_bytes))
 
 
-async def call_function(rt, function_name, kwargs, ctx=None, collectors=None, abort_controller=None):
-    args_proto = encode_call_args(kwargs)
-    result_bytes = await rt.call_function(
-        function_name, args_proto, ctx, collectors, abort_controller
-    )
-    return FunctionResult(decode_call_result(result_bytes))
+async def call_function(rt, function_name, kwargs, ctx=None, collectors=None, _ctx=None):
+    call_id = new_function_call()
+    args_proto = encode_call_args(kwargs, call_id)
+    _attach_call_ctx(_ctx, call_id)
+    try:
+        try:
+            result_bytes = await rt.call_function(function_name, args_proto, ctx, collectors)
+        except asyncio.CancelledError:
+            cancel_function_call(call_id)
+            raise
+    finally:
+        _detach_call_ctx(_ctx, call_id)
+    return FunctionResult(_decode_call_result_async(result_bytes))
 
 
 # ---------------------------------------------------------------------------
@@ -230,26 +278,42 @@ def define_function(
     optional_names = list(optional_param_names or [])
     if mode == "sync":
         def _sync(*args: Any, **kwargs: Any) -> Any:
+            call_ctx = kwargs.pop("_ctx", None)
             merged = _build_kwargs(args, kwargs, required_names, optional_names)
             rt = get_runtime()
-            args_proto = encode_call_args(merged)
-            result_bytes = rt.call_function_sync(baml_fqn, args_proto, None, None, None)
+            call_id = new_function_call()
+            args_proto = encode_call_args(merged, call_id)
+            _attach_call_ctx(call_ctx, call_id)
+            try:
+                result_bytes = rt.call_function_sync(baml_fqn, args_proto, None, None)
+            finally:
+                _detach_call_ctx(call_ctx, call_id)
             return decode_call_result(result_bytes)
         return _sync
     elif mode == "async":
         async def _async(*args: Any, **kwargs: Any) -> Any:
+            call_ctx = kwargs.pop("_ctx", None)
             merged = _build_kwargs(args, kwargs, required_names, optional_names)
             rt = get_runtime()
-            args_proto = encode_call_args(merged)
-            result_bytes = await rt.call_function(baml_fqn, args_proto, None, None, None)
-            return decode_call_result(result_bytes)
+            call_id = new_function_call()
+            args_proto = encode_call_args(merged, call_id)
+            _attach_call_ctx(call_ctx, call_id)
+            try:
+                try:
+                    result_bytes = await rt.call_function(baml_fqn, args_proto, None, None)
+                except asyncio.CancelledError:
+                    cancel_function_call(call_id)
+                    raise
+            finally:
+                _detach_call_ctx(call_ctx, call_id)
+            return _decode_call_result_async(result_bytes)
         return _async
     else:
         raise ValueError(f"mode must be 'sync' or 'async', got {mode!r}")
 
 
 __all__ = [
-    "AbortController",
+    "BamlCallContext",
     "BamlPyHandle",
     "BamlRuntime",
     "BamlStream",
@@ -263,12 +327,15 @@ __all__ = [
     "UNSET",
     "Usage",
     "BamlCtxManager",
+    "BamlCancelledError",
     "BamlError",
     "BamlPanic",
     "make_sdk_panic",
     "flush_events",
     "get_runtime",
     "get_version",
+    "new_function_call",
+    "cancel_function_call",
     "encode_call_args",
     "decode_call_result",
     "call_function",

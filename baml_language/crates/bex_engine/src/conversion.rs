@@ -144,7 +144,7 @@ impl BexEngine {
                 // once at lift time and carried inline on the variant so
                 // the wire encoder doesn't need a heap permit. See plan
                 // 23a §"Engine-side ripple effects".
-                if class.name.display_name.as_str() == "baml.llm.Stream" {
+                if class.name.display_name().as_str() == "baml.llm.Stream" {
                     let handle = self.heap.create_handle(ptr);
                     let ty = Ty::Class(
                         class.name.clone(),
@@ -740,13 +740,13 @@ pub(crate) fn maybe_wrap_union(
 /// inbound `BexExternalValue::HostValue` can be bound to it as an
 /// `Object::HostClosure`.
 /// Returns `Some(())` if `ty` is the runtime representation of
-/// `$rust_type` — i.e. `Ty::Opaque("baml.rust.RustType", _)` — possibly
+/// `$rust_type` — i.e. `Ty::RustType` — possibly
 /// wrapped in a `Union` (the post-`Ty::Optional`-removal encoding of
 /// `T?` is `Ty::Union([T, Null], _)`, so nullable forms flow through
 /// the union arm). Mirrors [`peel_function_ty`] for the `$rust_type`
 /// field shape that a `HostValue` argument can land in.
 pub(crate) fn peel_to_rust_type(ty: &Ty) -> Option<()> {
-    if ty.is_opaque("baml.rust.RustType") {
+    if matches!(ty, Ty::RustType { .. }) {
         return Some(());
     }
     match ty {
@@ -833,23 +833,8 @@ fn find_matching_member(value: &BexExternalValue, members: &[Ty]) -> Result<Ty, 
 }
 
 fn type_name_matches_external_name(external_name: &str, type_name: &baml_type::TypeName) -> bool {
-    if external_name == type_name.display_name.as_str() {
-        return true;
-    }
-
-    if type_name.module_path.is_empty() {
-        return external_name == type_name.name.as_str();
-    }
-
-    let qualified_name = type_name
-        .module_path
-        .iter()
-        .map(baml_type::Name::as_str)
-        .chain(std::iter::once(type_name.name.as_str()))
-        .collect::<Vec<_>>()
-        .join(".");
-
-    external_name == qualified_name
+    external_name == type_name.display_name().as_str()
+        || external_name == type_name.render_dotted(false)
 }
 
 fn resolve_named_object<'a>(
@@ -861,8 +846,8 @@ fn resolve_named_object<'a>(
     if let Some(found) = objects.get(name) {
         return Some(found);
     }
-    // MIR's `qtn_to_type_name` strips the `user.` prefix from
-    // `display_name` for user-package types, so an `Instance` arriving
+    // MIR uses `display_name`, which strips the `user.` prefix for
+    // user-package types, so an `Instance` arriving
     // from `coerce_arg_to_declared_type` may carry `lorem.MyLorem` while
     // the engine registered `user.lorem.MyLorem`. Try the `user.`
     // prefix as a fallback before giving up. Builtin/vendor types keep
@@ -890,12 +875,12 @@ fn value_matches_type(value: &BexExternalValue, ty: &Ty) -> bool {
         (BexExternalValue::Bool(_), Ty::Bool { .. }) => true,
         (BexExternalValue::String(_), Ty::String { .. }) => true,
         // Literal types match their corresponding runtime values
-        (BexExternalValue::Int(_), Ty::Literal(Literal::Int(_), _)) => true,
-        (BexExternalValue::Bigint(_), Ty::Literal(Literal::Bigint(_), _)) => true,
-        (BexExternalValue::Float(_), Ty::Literal(Literal::Float(_), _)) => true,
+        (BexExternalValue::Int(_), Ty::Literal(Literal::Int(_), _, _)) => true,
+        (BexExternalValue::Bigint(_), Ty::Literal(Literal::Bigint(_), _, _)) => true,
+        (BexExternalValue::Float(_), Ty::Literal(Literal::Float(_), _, _)) => true,
         (BexExternalValue::Uint8Array(_), Ty::Uint8Array { .. }) => true,
-        (BexExternalValue::String(_), Ty::Literal(Literal::String(_), _)) => true,
-        (BexExternalValue::Bool(_), Ty::Literal(Literal::Bool(_), _)) => true,
+        (BexExternalValue::String(_), Ty::Literal(Literal::String(_), _, _)) => true,
+        (BexExternalValue::Bool(_), Ty::Literal(Literal::Bool(_), _, _)) => true,
         (BexExternalValue::Array { .. }, Ty::List(_, _)) => true,
         (BexExternalValue::Map { .. }, Ty::Map { .. }) => true,
         // A host-encoded object arrives as a bare `Map` (the JS encoder emits
@@ -917,11 +902,7 @@ fn value_matches_type(value: &BexExternalValue, ty: &Ty) -> bool {
             type_name_matches_external_name(enum_name, tn)
         }
         (BexExternalValue::Adt(BexExternalAdt::Collector(_)), _) => false,
-        (BexExternalValue::Adt(BexExternalAdt::Type(_)), ty)
-            if ty.is_opaque("baml.reflect.Type") =>
-        {
-            true
-        }
+        (BexExternalValue::Adt(BexExternalAdt::Type(_)), Ty::Type { .. }) => true,
         (BexExternalValue::Union { value, .. }, ty) => value_matches_type(value, ty),
         // Handle nested unions (including nullable `T | null`) in the type.
         (value, Ty::Union(members, _)) => members.iter().any(|m| value_matches_type(value, m)),
@@ -1144,19 +1125,19 @@ fn find_matching_union_member(value: Value, members: &[Ty]) -> Option<&Ty> {
         ValueKind::Null => members.iter().find(|m| matches!(m, Ty::Null { .. })),
         ValueKind::Int(_) => members
             .iter()
-            .find(|m| matches!(m, Ty::Int { .. } | Ty::Literal(Literal::Int(_), _))),
+            .find(|m| matches!(m, Ty::Int { .. } | Ty::Literal(Literal::Int(_), _, _))),
         ValueKind::Bool(_) => members
             .iter()
-            .find(|m| matches!(m, Ty::Bool { .. } | Ty::Literal(Literal::Bool(_), _))),
+            .find(|m| matches!(m, Ty::Bool { .. } | Ty::Literal(Literal::Bool(_), _, _))),
         ValueKind::Object(ptr) => {
             let obj = unsafe { ptr.get() };
             match obj {
                 Object::Float(_) => members
                     .iter()
-                    .find(|m| matches!(m, Ty::Float { .. } | Ty::Literal(Literal::Float(_), _))),
-                Object::String(_) => members
-                    .iter()
-                    .find(|m| matches!(m, Ty::String { .. } | Ty::Literal(Literal::String(_), _))),
+                    .find(|m| matches!(m, Ty::Float { .. } | Ty::Literal(Literal::Float(_), _, _))),
+                Object::String(_) => members.iter().find(|m| {
+                    matches!(m, Ty::String { .. } | Ty::Literal(Literal::String(_), _, _))
+                }),
                 Object::Instance(inst) => {
                     let class_obj = unsafe { inst.class.get() };
                     if let Object::Class(class) = class_obj {
@@ -1207,9 +1188,9 @@ fn find_matching_union_member(value: Value, members: &[Ty]) -> Option<&Ty> {
                 Object::Uint8Array(_) => {
                     members.iter().find(|m| matches!(m, Ty::Uint8Array { .. }))
                 }
-                Object::Bigint(_) => members
-                    .iter()
-                    .find(|m| matches!(m, Ty::Bigint { .. } | Ty::Literal(Literal::Bigint(_), _))),
+                Object::Bigint(_) => members.iter().find(|m| {
+                    matches!(m, Ty::Bigint { .. } | Ty::Literal(Literal::Bigint(_), _, _))
+                }),
                 // Types that don't participate in union discrimination.
                 Object::Function(_)
                 | Object::Closure(_)
@@ -1454,14 +1435,14 @@ fn coerce_numeric_to_declared_type(
     match (value, ty) {
         // Int → Bigint widening (FFI boundary only — `int` is not a subtype of
         // `bigint` in the type system).
-        (BexExternalValue::Int(i), Ty::Bigint { .. } | Ty::Literal(Literal::Bigint(_), _)) => {
+        (BexExternalValue::Int(i), Ty::Bigint { .. } | Ty::Literal(Literal::Bigint(_), _, _)) => {
             Ok(BexExternalValue::Bigint(num_bigint::BigInt::from(i)))
         }
 
         // Bigint → Int narrowing: host-supplied bigint must fit in i64, otherwise
         // there is no safe representation in the `int` slot and we reject the
         // call rather than silently truncate.
-        (BexExternalValue::Bigint(bi), Ty::Int { .. } | Ty::Literal(Literal::Int(_), _)) => {
+        (BexExternalValue::Bigint(bi), Ty::Int { .. } | Ty::Literal(Literal::Int(_), _, _)) => {
             i64::try_from(&bi)
                 .map(BexExternalValue::Int)
                 .map_err(|_| EngineError::TypeMismatch {
@@ -1478,10 +1459,10 @@ fn coerce_numeric_to_declared_type(
         (v, Ty::Union(members, _)) => {
             let has_int = members
                 .iter()
-                .any(|m| matches!(m, Ty::Int { .. } | Ty::Literal(Literal::Int(_), _)));
+                .any(|m| matches!(m, Ty::Int { .. } | Ty::Literal(Literal::Int(_), _, _)));
             let has_bigint = members
                 .iter()
-                .any(|m| matches!(m, Ty::Bigint { .. } | Ty::Literal(Literal::Bigint(_), _)));
+                .any(|m| matches!(m, Ty::Bigint { .. } | Ty::Literal(Literal::Bigint(_), _, _)));
             if has_int == has_bigint {
                 Ok(v)
             } else if let Some(target) = members.iter().find(|m| {
@@ -1489,7 +1470,7 @@ fn coerce_numeric_to_declared_type(
                     m,
                     Ty::Int { .. }
                         | Ty::Bigint { .. }
-                        | Ty::Literal(Literal::Int(_) | Literal::Bigint(_), _)
+                        | Ty::Literal(Literal::Int(_) | Literal::Bigint(_), _, _)
                 )
             }) {
                 coerce_numeric_to_declared_type(v, target)
@@ -1534,16 +1515,15 @@ pub fn test_arg_to_external(v: &bex_vm_types::TestArgValue) -> BexExternalValue 
 
 #[cfg(test)]
 mod peel_to_rust_type_tests {
-    use baml_type::{TyAttr, TypeName};
+    use baml_type::TyAttr;
 
     use super::*;
 
-    /// `Ty::Opaque("baml.rust.RustType", _)` — the canonical shape.
+    /// `Ty::RustType` — the canonical `$rust_type` shape.
     fn rust_type() -> Ty {
-        Ty::Opaque(
-            TypeName::from_dotted_path("baml.rust.RustType"),
-            TyAttr::default(),
-        )
+        Ty::RustType {
+            attr: TyAttr::default(),
+        }
     }
 
     #[test]
@@ -1624,12 +1604,11 @@ mod peel_to_rust_type_tests {
 
     #[test]
     fn unrelated_opaque_does_not_match() {
-        // A different opaque type — e.g. `baml.llm.PromptAst` — must
-        // not be confused with `baml.rust.RustType`.
-        let ty = Ty::Opaque(
-            TypeName::from_dotted_path("baml.llm.PromptAst"),
-            TyAttr::default(),
-        );
+        // A different opaque leaf type — e.g. `baml.llm.PromptAst` — must
+        // not be confused with `$rust_type`.
+        let ty = Ty::PromptAst {
+            attr: TyAttr::default(),
+        };
         assert_eq!(peel_to_rust_type(&ty), None);
     }
 
@@ -1660,16 +1639,21 @@ mod peel_to_rust_type_tests {
 
 #[cfg(test)]
 mod peel_function_ty_tests {
-    use baml_type::TyAttr;
+    use baml_type::{FunctionParamTy, TyAttr};
 
     use super::*;
 
     /// `(int) -> string` — the canonical concrete function shape.
     fn fn_ty() -> Ty {
         Ty::Function {
-            params: vec![Ty::Int {
-                attr: TyAttr::default(),
-            }],
+            generic_params: vec![],
+            generic_param_bounds: vec![],
+            params: vec![FunctionParamTy::required(
+                None,
+                Ty::Int {
+                    attr: TyAttr::default(),
+                },
+            )],
             ret: Box::new(Ty::String {
                 attr: TyAttr::default(),
             }),
@@ -1684,6 +1668,8 @@ mod peel_function_ty_tests {
     /// uniqueness rule rejects two function members in a union.
     fn other_fn_ty() -> Ty {
         Ty::Function {
+            generic_params: vec![],
+            generic_param_bounds: vec![],
             params: vec![],
             ret: Box::new(Ty::Int {
                 attr: TyAttr::default(),

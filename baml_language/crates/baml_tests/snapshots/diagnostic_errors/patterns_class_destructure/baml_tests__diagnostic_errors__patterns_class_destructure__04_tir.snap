@@ -146,10 +146,9 @@ function user.generic_class_type_pattern_in_chain_requires_type_args(boxed: user
 }
 function user.generic_class_destructure_requires_type_args(boxed: user.Box<int>) -> int throws never {
   { : T
-    let Box { value: value } = boxed : user.Box<int> -> user.Box
+    let Box { value: value } = boxed : user.Box<int> -> user.Box<T>
     value : T
   }
-  !! 3318..3340: type mismatch: expected Box<int>, got Box
   !! 3343..3348: generic class destructure `Box { ... }` must specify type arguments
   !! 3354..3359: type mismatch: expected int, got T
 }
