@@ -1,19 +1,28 @@
-/// Log an info-level event with structured data.
-function info(data: map<string, unknown>) -> void {
+/// Log an info-level event.
+///
+/// Pass a string for a simple message or a map for structured data.
+/// `log.info("hello")` is equivalent to `log.info({ message: "hello" })`.
+function info(data: string | map<string, unknown>) -> void {
   $compiler_intrinsic
 }
 
-/// Log a debug-level event with structured data.
-function debug(data: map<string, unknown>) -> void {
+/// Log a debug-level event.
+///
+/// Pass a string for a simple message or a map for structured data.
+function debug(data: string | map<string, unknown>) -> void {
   $compiler_intrinsic
 }
 
-/// Log a warning-level event with structured data.
-function warn(data: map<string, unknown>) -> void {
+/// Log a warning-level event.
+///
+/// Pass a string for a simple message or a map for structured data.
+function warn(data: string | map<string, unknown>) -> void {
   $compiler_intrinsic
 }
 
-/// Log an error-level event with structured data.
-function error(data: map<string, unknown>) -> void {
+/// Log an error-level event.
+///
+/// Pass a string for a simple message or a map for structured data.
+function error(data: string | map<string, unknown>) -> void {
   $compiler_intrinsic
 }

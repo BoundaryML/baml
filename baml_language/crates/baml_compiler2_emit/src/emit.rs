@@ -37,6 +37,13 @@ enum ArithTyClass {
     Bigint,
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum LogDataArgKind {
+    String,
+    Map,
+    Dynamic,
+}
+
 // ============================================================================
 // Switch Strategy Analysis
 // ============================================================================
@@ -378,6 +385,17 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
         format!("{value:?}")
     }
 
+    fn emit_string_constant(&mut self, value: &str) {
+        let obj_idx = self.objects.len();
+        self.objects.push(Object::String(value.into()));
+        let const_idx = self.add_constant(ConstValue::Object(ObjectIndex::from_raw(obj_idx)));
+        let inst = self.emit(Instruction::LoadConst(const_idx));
+        self.set_operand(
+            inst,
+            OperandMeta::Const(Self::display_string_operand(value)),
+        );
+    }
+
     /// Create a new stackification codegen instance.
     #[allow(clippy::needless_pass_by_value)] // ctx is destructured into self fields
     fn new(
@@ -492,6 +510,16 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 _ => None,
             },
             Operand::Copy(place) | Operand::Move(place) => self.resolve_place_type(place),
+        }
+    }
+
+    fn classify_log_data_arg(&self, args: &[Operand]) -> LogDataArgKind {
+        match args.first().and_then(|arg| self.resolve_operand_type(arg)) {
+            Some(Ty::String { .. } | Ty::Literal(baml_base::Literal::String(_), _, _)) => {
+                LogDataArgKind::String
+            }
+            Some(Ty::Map { .. }) => LogDataArgKind::Map,
+            _ => LogDataArgKind::Dynamic,
         }
     }
 
@@ -1458,80 +1486,70 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                         self.emit(Instruction::Pop(1));
                     }
                     IntrinsicOp::Log(level) => {
-                        // Same bytecode as the old log.* string-match arm:
-                        // Synthesize SendEvent with "$baml_log" event name and
-                        // { level: "<level>", data: <user_arg> } payload.
-
-                        // Save call-site span — walking args may overwrite current_debug_span
-                        let call_site_span = self.current_debug_span;
-
-                        // 1. Push event name "$baml_log"
-                        let log_str_idx = self.objects.len();
-                        self.objects.push(Object::String("$baml_log".into()));
-                        let log_const_idx = self
-                            .add_constant(ConstValue::Object(ObjectIndex::from_raw(log_str_idx)));
-                        let inst = self.emit(Instruction::LoadConst(log_const_idx));
-                        self.set_operand(
-                            inst,
-                            OperandMeta::Const(Self::display_string_operand("$baml_log")),
-                        );
-
-                        // 2. Push level value string
-                        let level_str = match level {
-                            LogLevel::Info => "info",
-                            LogLevel::Debug => "debug",
-                            LogLevel::Warn => "warn",
-                            LogLevel::Error => "error",
-                        };
-                        let level_val_idx = self.objects.len();
-                        self.objects.push(Object::String(level_str.into()));
-                        let level_val_const_idx = self
-                            .add_constant(ConstValue::Object(ObjectIndex::from_raw(level_val_idx)));
-                        let inst = self.emit(Instruction::LoadConst(level_val_const_idx));
-                        self.set_operand(
-                            inst,
-                            OperandMeta::Const(Self::display_string_operand(level_str)),
-                        );
-
-                        // 3. Push user data argument
-                        unwrap_infallible(pull_semantics::walk_call_direct_args(self, args));
-
-                        // 4. Push key "level"
-                        let level_key_idx = self.objects.len();
-                        self.objects.push(Object::String("level".into()));
-                        let level_key_const_idx = self
-                            .add_constant(ConstValue::Object(ObjectIndex::from_raw(level_key_idx)));
-                        let inst = self.emit(Instruction::LoadConst(level_key_const_idx));
-                        self.set_operand(
-                            inst,
-                            OperandMeta::Const(Self::display_string_operand("level")),
-                        );
-
-                        // 5. Push key "data"
-                        let data_key_idx = self.objects.len();
-                        self.objects.push(Object::String("data".into()));
-                        let data_key_const_idx = self
-                            .add_constant(ConstValue::Object(ObjectIndex::from_raw(data_key_idx)));
-                        let inst = self.emit(Instruction::LoadConst(data_key_const_idx));
-                        self.set_operand(
-                            inst,
-                            OperandMeta::Const(Self::display_string_operand("data")),
-                        );
-
-                        // 6. AllocMap(2) -> { level: "info", data: <user_data> }
-                        self.emit(Instruction::AllocMap(2));
-
-                        // 7. Restore call-site span and emit SendEvent
-                        self.set_debug_span(call_site_span, true);
-                        self.emit(Instruction::SendEvent);
-                        // The engine pushes `null` after resuming from SendEvent.
-                        // Since this is a statement (not an rvalue), discard it.
-                        self.emit(Instruction::Pop(1));
+                        self.emit_log_intrinsic(*level, args);
                     }
                 }
             }
             StatementKind::Nop => {}
         }
+    }
+
+    fn emit_log_intrinsic(&mut self, level: LogLevel, args: &[Operand]) {
+        // Save call-site span: walking args may overwrite current_debug_span.
+        let call_site_span = self.current_debug_span;
+
+        self.emit_string_constant("$baml_log");
+        self.emit_log_level(level);
+        self.emit_normalized_log_data(args);
+        self.emit_string_constant("level");
+        self.emit_string_constant("data");
+        self.emit(Instruction::AllocMap(2));
+
+        self.set_debug_span(call_site_span, true);
+        self.emit(Instruction::SendEvent);
+        // The engine pushes `null` after resuming from SendEvent. Since this is
+        // a statement (not an rvalue), discard it.
+        self.emit(Instruction::Pop(1));
+    }
+
+    fn emit_log_level(&mut self, level: LogLevel) {
+        let level_str = match level {
+            LogLevel::Info => "info",
+            LogLevel::Debug => "debug",
+            LogLevel::Warn => "warn",
+            LogLevel::Error => "error",
+        };
+        self.emit_string_constant(level_str);
+    }
+
+    fn emit_normalized_log_data(&mut self, args: &[Operand]) {
+        unwrap_infallible(pull_semantics::walk_call_direct_args(self, args));
+
+        match self.classify_log_data_arg(args) {
+            LogDataArgKind::String => self.emit_wrap_log_string_data(),
+            LogDataArgKind::Map => {}
+            LogDataArgKind::Dynamic => self.emit_runtime_log_data_normalization(),
+        }
+    }
+
+    fn emit_wrap_log_string_data(&mut self) {
+        self.emit_string_constant("message");
+        self.emit(Instruction::AllocMap(1));
+    }
+
+    fn emit_runtime_log_data_normalization(&mut self) {
+        self.emit(Instruction::Copy(0));
+        let string_tag = self.add_constant(ConstValue::Int(baml_type::typetag::STRING));
+        let inst = self.emit(Instruction::IsType(string_tag));
+        self.set_operand(inst, OperandMeta::Const("string".to_string()));
+
+        let non_string_jump = self.emit(Instruction::PopJumpIfFalse(0));
+        self.emit_wrap_log_string_data();
+        let join_jump = self.emit(Instruction::Jump(0));
+        let non_string_pc = self.bytecode.instructions.len();
+        self.patch_jump_to(non_string_jump, non_string_pc);
+        let join_pc = self.bytecode.instructions.len();
+        self.patch_jump_to(join_jump, join_pc);
     }
 
     // ========================================================================

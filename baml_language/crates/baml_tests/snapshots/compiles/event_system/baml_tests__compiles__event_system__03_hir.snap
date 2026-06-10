@@ -29,7 +29,7 @@ function user.simple_function() -> int  [expr] {
   {  } 42
 }
 function user.test_logging() -> void  [expr] {
-  { let user = user.User { id: 123, name: "Alice", email: "alice@example.com" }; log.debug(map { "message": "Starting process" }); log.info(map { "user": user, "status": "processing" }); log.warn(map { "warning": "Resource usage high" }) } log.error(map { "code": "E001", "retries": 3 })
+  { let user = user.User { id: 123, name: "Alice", email: "alice@example.com" }; log.debug("Starting process"); log.info("Processing user"); log.warn("Resource usage high"); log.error("Failed processing"); log.debug(map { "message": "Starting process" }); log.info(map { "user": user, "status": "processing" }); log.warn(map { "warning": "Resource usage high" }) } log.error(map { "code": "E001", "retries": 3 })
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
   map { "id": self.id.to_json(), "name": self.name.to_json(), "email": self.email.to_json() }

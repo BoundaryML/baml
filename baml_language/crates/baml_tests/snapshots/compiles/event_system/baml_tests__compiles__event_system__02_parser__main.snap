@@ -254,6 +254,63 @@ SOURCE_FILE
           CALL_ARGS
             L_PAREN "("
             CALL_ARG
+              STRING_LITERAL "Starting process"
+                QUOTE """
+                WORD "Starting"
+                WORD "process"
+                QUOTE """
+            R_PAREN ")"
+        CALL_EXPR
+          PATH_EXPR "log.info"
+            WORD "log"
+            DOT "."
+            WORD "info"
+          CALL_ARGS
+            L_PAREN "("
+            CALL_ARG
+              STRING_LITERAL "Processing user"
+                QUOTE """
+                WORD "Processing"
+                WORD "user"
+                QUOTE """
+            R_PAREN ")"
+        CALL_EXPR
+          PATH_EXPR "log.warn"
+            WORD "log"
+            DOT "."
+            WORD "warn"
+          CALL_ARGS
+            L_PAREN "("
+            CALL_ARG
+              STRING_LITERAL "Resource usage high"
+                QUOTE """
+                WORD "Resource"
+                WORD "usage"
+                WORD "high"
+                QUOTE """
+            R_PAREN ")"
+        CALL_EXPR
+          PATH_EXPR "log.error"
+            WORD "log"
+            DOT "."
+            WORD "error"
+          CALL_ARGS
+            L_PAREN "("
+            CALL_ARG
+              STRING_LITERAL "Failed processing"
+                QUOTE """
+                WORD "Failed"
+                WORD "processing"
+                QUOTE """
+            R_PAREN ")"
+        CALL_EXPR
+          PATH_EXPR "log.debug"
+            WORD "log"
+            DOT "."
+            WORD "debug"
+          CALL_ARGS
+            L_PAREN "("
+            CALL_ARG
               MAP_LITERAL
                 L_BRACE "{"
                 OBJECT_FIELD

@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 8414
 ---
 function user.User.from_json(j: baml.json.json) -> User {
     load_var j
@@ -147,6 +146,46 @@ function user.test_logging() -> void {
     load_const "alice@example.com"
     init_instance user.User .id, .name, .email
     store_var user
+    load_const "$baml_log"
+    load_const "debug"
+    load_const "Starting process"
+    load_const "message"
+    alloc_map 1
+    load_const "level"
+    load_const "data"
+    alloc_map 2
+    send_event
+    pop 1
+    load_const "$baml_log"
+    load_const "info"
+    load_const "Processing user"
+    load_const "message"
+    alloc_map 1
+    load_const "level"
+    load_const "data"
+    alloc_map 2
+    send_event
+    pop 1
+    load_const "$baml_log"
+    load_const "warn"
+    load_const "Resource usage high"
+    load_const "message"
+    alloc_map 1
+    load_const "level"
+    load_const "data"
+    alloc_map 2
+    send_event
+    pop 1
+    load_const "$baml_log"
+    load_const "error"
+    load_const "Failed processing"
+    load_const "message"
+    alloc_map 1
+    load_const "level"
+    load_const "data"
+    alloc_map 2
+    send_event
+    pop 1
     load_const "$baml_log"
     load_const "debug"
     load_const "Starting process"

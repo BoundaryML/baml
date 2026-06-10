@@ -35,6 +35,10 @@ function emit_multiple_events() -> void {
 // Test logging at different levels
 function test_logging() -> void {
     let user = User { id: 123, name: "Alice", email: "alice@example.com" }
+    log.debug("Starting process")
+    log.info("Processing user")
+    log.warn("Resource usage high")
+    log.error("Failed processing")
     log.debug({ message: "Starting process" })
     log.info({ user: user, status: "processing" })
     log.warn({ warning: "Resource usage high" })

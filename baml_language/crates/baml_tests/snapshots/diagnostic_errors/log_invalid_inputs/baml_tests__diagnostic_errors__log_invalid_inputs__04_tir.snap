@@ -1,0 +1,16 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== TIR2 ===
+function user.invalid_log_inputs() -> void throws never {
+  { : void
+    log.info(123) : void
+    log.debug(123) : void
+    log.warn(123) : void
+    log.error(123) : void
+  }
+  !! 160..163: type mismatch: expected string | map<string, unknown>, got 123
+  !! 179..182: type mismatch: expected string | map<string, unknown>, got 123
+  !! 197..200: type mismatch: expected string | map<string, unknown>, got 123
+  !! 216..219: type mismatch: expected string | map<string, unknown>, got 123
+}

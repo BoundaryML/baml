@@ -1,0 +1,7 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== HIR2 ===
+function user.invalid_log_inputs() -> void  [expr] {
+  { log.info(123); log.debug(123); log.warn(123) } log.error(123)
+}

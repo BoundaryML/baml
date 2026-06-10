@@ -43,6 +43,10 @@ function user.emit_multiple_events() -> void throws never {
 function user.test_logging() -> void throws never {
   { : void
     let user = User { id: 123, name: "Alice", email: "alice@example.com" } : user.User
+    log.debug("Starting process") : void
+    log.info("Processing user") : void
+    log.warn("Resource usage high") : void
+    log.error("Failed processing") : void
     log.debug(map { "message": "Starting process" }) : void
     log.info(map { "user": user, "status": "processing" }) : void
     log.warn(map { "warning": "Resource usage high" }) : void

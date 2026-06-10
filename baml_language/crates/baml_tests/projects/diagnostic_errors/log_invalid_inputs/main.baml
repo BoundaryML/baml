@@ -1,0 +1,9 @@
+// Invalid log inputs should remain type errors. `log.*` accepts only
+// `string | map<string, unknown>`.
+
+function invalid_log_inputs() -> void {
+    log.info(123)
+    log.debug(123)
+    log.warn(123)
+    log.error(123)
+}

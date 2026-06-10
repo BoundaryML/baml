@@ -615,12 +615,18 @@ async fn test_log_info_event_emission() {
 
     assert_eq!(log_event.level, "info");
 
-    // Check data contains step and message
+    // Structured map data stays unwrapped.
     match &log_event.data {
         bex_external_types::BexExternalValue::Map { entries, .. } => {
             assert_eq!(
                 entries.get("step"),
                 Some(&bex_external_types::BexExternalValue::Int(1))
+            );
+            assert_eq!(
+                entries.get("message"),
+                Some(&bex_external_types::BexExternalValue::String(
+                    "Processing started".into()
+                ))
             );
         }
         other => panic!("Expected Map data in LogEvent, got {other:?}"),
@@ -633,20 +639,21 @@ async fn test_log_info_event_emission() {
     );
 }
 
-/// Verify that all log levels (debug, warn, error) emit the correct "level" field.
+/// Verify that string log arguments are normalized to `{ message: <string> }`.
 #[tokio::test]
-async fn test_log_all_levels() {
+async fn test_log_string_data_all_levels() {
     let levels = [
-        ("log.debug", "debug"),
-        ("log.warn", "warn"),
-        ("log.error", "error"),
+        ("log.info", "info", "hello"),
+        ("log.debug", "debug", "debug message"),
+        ("log.warn", "warn", "warning message"),
+        ("log.error", "error", "error message"),
     ];
 
-    for (fn_call, expected_level) in levels {
+    for (fn_call, expected_level, expected_message) in levels {
         let source = format!(
             r#"
             function emit_log() -> void {{
-                {fn_call}({{ msg: "level check" }})
+                {fn_call}("{expected_message}")
             }}
             "#
         );
@@ -686,11 +693,163 @@ async fn test_log_all_levels() {
             "Wrong level for {fn_call} call"
         );
 
-        // Verify source location is captured
+        match &log_event.data {
+            bex_external_types::BexExternalValue::Map { entries, .. } => {
+                assert_eq!(entries.len(), 1);
+                assert_eq!(
+                    entries.get("message"),
+                    Some(&bex_external_types::BexExternalValue::String(
+                        expected_message.into()
+                    ))
+                );
+            }
+            other => panic!("Expected normalized Map data for {fn_call}, got {other:?}"),
+        }
+
         assert!(
             log_event.source.is_some(),
             "Expected source location for {fn_call} call"
         );
+
+        let source = log_event.source.as_ref().unwrap();
+        assert!(
+            source.line >= 3 && source.line <= 4,
+            "Expected source location to point at user callsite for {fn_call}, got {source:?}"
+        );
+    }
+}
+
+/// Verify that structured map data is not wrapped as `{ message: <map> }`.
+#[tokio::test]
+async fn test_log_structured_data_remains_unwrapped() {
+    let source = r#"
+        function emit_log() -> void {
+            log.info({ step: 1, message: "started" })
+        }
+    "#;
+
+    let snapshot = compile_for_engine(source);
+    let engine = std::sync::Arc::new(
+        BexEngine::new(
+            snapshot,
+            std::sync::Arc::new(sys_native::SysOps::native()),
+            None,
+            vec![],
+        )
+        .unwrap(),
+    );
+
+    let (host_ctx, guard) = setup_tracking();
+    let call_ctx = FunctionCallContextBuilder::new(sys_types::CallId::next())
+        .with_host_ctx(host_ctx)
+        .build();
+
+    engine
+        .call_function("emit_log", vec![], call_ctx, true)
+        .await
+        .unwrap();
+
+    let events = collect_events(&guard);
+    let log_event = events
+        .iter()
+        .find_map(|e| match &e.event {
+            EventKind::Log(log) => Some(log),
+            _ => None,
+        })
+        .expect("Expected LogEvent");
+
+    assert_eq!(log_event.level, "info");
+    match &log_event.data {
+        bex_external_types::BexExternalValue::Map { entries, .. } => {
+            assert_eq!(entries.len(), 2);
+            assert_eq!(
+                entries.get("step"),
+                Some(&bex_external_types::BexExternalValue::Int(1))
+            );
+            assert_eq!(
+                entries.get("message"),
+                Some(&bex_external_types::BexExternalValue::String(
+                    "started".into()
+                ))
+            );
+        }
+        other => panic!("Expected unwrapped Map data in LogEvent, got {other:?}"),
+    }
+}
+
+/// Verify that union-typed log data is normalized at runtime.
+#[tokio::test]
+async fn test_log_union_data_runtime_normalization() {
+    let source = r#"
+        function emit_log(data: string | map<string, unknown>) -> void {
+            log.info(data)
+        }
+
+        function emit_both() -> void {
+            emit_log("runtime string")
+            emit_log({ step: 2, message: "runtime map" })
+        }
+    "#;
+
+    let snapshot = compile_for_engine(source);
+    let engine = std::sync::Arc::new(
+        BexEngine::new(
+            snapshot,
+            std::sync::Arc::new(sys_native::SysOps::native()),
+            None,
+            vec![],
+        )
+        .unwrap(),
+    );
+
+    let (host_ctx, guard) = setup_tracking();
+    let call_ctx = FunctionCallContextBuilder::new(sys_types::CallId::next())
+        .with_host_ctx(host_ctx)
+        .build();
+
+    engine
+        .call_function("emit_both", vec![], call_ctx, true)
+        .await
+        .unwrap();
+
+    let events = collect_events(&guard);
+    let log_events = events
+        .iter()
+        .filter_map(|e| match &e.event {
+            EventKind::Log(log) => Some(log),
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+
+    assert_eq!(log_events.len(), 2);
+
+    match &log_events[0].data {
+        bex_external_types::BexExternalValue::Map { entries, .. } => {
+            assert_eq!(
+                entries.get("message"),
+                Some(&bex_external_types::BexExternalValue::String(
+                    "runtime string".into()
+                ))
+            );
+        }
+        other => panic!("Expected normalized Map data for runtime string, got {other:?}"),
+    }
+
+    match &log_events[1].data {
+        bex_external_types::BexExternalValue::Map { entries, .. } => {
+            assert_eq!(entries.len(), 2);
+            assert_eq!(
+                entries.get("step"),
+                Some(&bex_external_types::BexExternalValue::Int(2))
+            );
+            assert_eq!(
+                entries.get("message"),
+                Some(&bex_external_types::BexExternalValue::String(
+                    "runtime map".into()
+                ))
+            );
+        }
+        other => panic!("Expected unwrapped Map data for runtime map, got {other:?}"),
     }
 }
 

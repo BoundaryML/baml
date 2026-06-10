@@ -1,0 +1,61 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== SYNTAX TREE ===
+SOURCE_FILE
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "invalid_log_inputs"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "void"
+      WORD "void"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        CALL_EXPR
+          PATH_EXPR "log.info"
+            WORD "log"
+            DOT "."
+            WORD "info"
+          CALL_ARGS
+            L_PAREN "("
+            CALL_ARG "123"
+              INTEGER_LITERAL "123"
+            R_PAREN ")"
+        CALL_EXPR
+          PATH_EXPR "log.debug"
+            WORD "log"
+            DOT "."
+            WORD "debug"
+          CALL_ARGS
+            L_PAREN "("
+            CALL_ARG "123"
+              INTEGER_LITERAL "123"
+            R_PAREN ")"
+        CALL_EXPR
+          PATH_EXPR "log.warn"
+            WORD "log"
+            DOT "."
+            WORD "warn"
+          CALL_ARGS
+            L_PAREN "("
+            CALL_ARG "123"
+              INTEGER_LITERAL "123"
+            R_PAREN ")"
+        CALL_EXPR
+          PATH_EXPR "log.error"
+            WORD "log"
+            DOT "."
+            WORD "error"
+          CALL_ARGS
+            L_PAREN "("
+            CALL_ARG "123"
+              INTEGER_LITERAL "123"
+            R_PAREN ")"
+        R_BRACE "}"
+
+=== ERRORS ===
+None

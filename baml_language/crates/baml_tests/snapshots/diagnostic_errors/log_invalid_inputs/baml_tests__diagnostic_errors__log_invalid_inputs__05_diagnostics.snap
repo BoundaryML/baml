@@ -1,0 +1,43 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [type] error: type mismatch: expected string | map<string, unknown>, got 123
+   ╭─[ main.baml:5:14 ]
+   │
+ 5 │     log.info(123)
+   │              ─┬─  
+   │               ╰─── type mismatch: expected string | map<string, unknown>, got 123
+   │ 
+   │ Note: Error code: E0001
+───╯
+
+  [type] error: type mismatch: expected string | map<string, unknown>, got 123
+   ╭─[ main.baml:6:15 ]
+   │
+ 6 │     log.debug(123)
+   │               ─┬─  
+   │                ╰─── type mismatch: expected string | map<string, unknown>, got 123
+   │ 
+   │ Note: Error code: E0001
+───╯
+
+  [type] error: type mismatch: expected string | map<string, unknown>, got 123
+   ╭─[ main.baml:7:14 ]
+   │
+ 7 │     log.warn(123)
+   │              ─┬─  
+   │               ╰─── type mismatch: expected string | map<string, unknown>, got 123
+   │ 
+   │ Note: Error code: E0001
+───╯
+
+  [type] error: type mismatch: expected string | map<string, unknown>, got 123
+   ╭─[ main.baml:8:15 ]
+   │
+ 8 │     log.error(123)
+   │               ─┬─  
+   │                ╰─── type mismatch: expected string | map<string, unknown>, got 123
+   │ 
+   │ Note: Error code: E0001
+───╯

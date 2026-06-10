@@ -137,11 +137,11 @@ fn user.process_with_logging(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: map<string, unknown>
+    let _2: map<string, string>
     let _3: map<string, unknown>
     let _4: string // result
     let _5: map<string, unknown>
-    let _6: map<string, unknown>
+    let _6: map<string, string>
     let _7: string
 
     bb0: {
@@ -198,39 +198,59 @@ fn user.test_logging() -> void {
     // Locals:
     let _0: void // _0 // return
     let _1: User // user
-    let _2: map<string, unknown>
-    let _3: map<string, unknown>
+    let _2: map<string, string>
+    let _3: map<string, User | string>
     let _4: User
-    let _5: map<string, unknown>
-    let _6: map<string, unknown>
+    let _5: map<string, string>
+    let _6: map<string, string | int>
 
     bb0: {
         _1 = user.User { const 123_i64, const "Alice", const "alice@example.com" };
-        _2 = { const "message": const "Starting process" };
-        intrinsic log_debug(copy _2);
+        intrinsic log_debug(const "Starting process");
         goto -> bb1;
     }
 
     bb1: {
-        _4 = copy _1;
-        _3 = { const "user": copy _4, const "status": const "processing" };
-        intrinsic log_info(copy _3);
+        intrinsic log_info(const "Processing user");
         goto -> bb2;
     }
 
     bb2: {
-        _5 = { const "warning": const "Resource usage high" };
-        intrinsic log_warn(copy _5);
+        intrinsic log_warn(const "Resource usage high");
         goto -> bb3;
     }
 
     bb3: {
-        _6 = { const "code": const "E001", const "retries": const 3_i64 };
-        intrinsic log_error(copy _6);
+        intrinsic log_error(const "Failed processing");
         goto -> bb4;
     }
 
     bb4: {
+        _2 = { const "message": const "Starting process" };
+        intrinsic log_debug(copy _2);
+        goto -> bb5;
+    }
+
+    bb5: {
+        _4 = copy _1;
+        _3 = { const "user": copy _4, const "status": const "processing" };
+        intrinsic log_info(copy _3);
+        goto -> bb6;
+    }
+
+    bb6: {
+        _5 = { const "warning": const "Resource usage high" };
+        intrinsic log_warn(copy _5);
+        goto -> bb7;
+    }
+
+    bb7: {
+        _6 = { const "code": const "E001", const "retries": const 3_i64 };
+        intrinsic log_error(copy _6);
+        goto -> bb8;
+    }
+
+    bb8: {
         return;
     }
 }

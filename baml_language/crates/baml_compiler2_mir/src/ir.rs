@@ -243,7 +243,8 @@ pub enum LogLevel {
 /// control-flow graph.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum IntrinsicOp {
-    /// `log.info`, `log.debug`, `log.warn`, `log.error` — emit a `$baml_log` event.
+    /// `log.info`, `log.debug`, `log.warn`, `log.error` — emit a `$baml_log`
+    /// event after normalizing string-or-map user data.
     Log(LogLevel),
     /// `baml.events.send` — emit a custom user event.
     SendEvent,
