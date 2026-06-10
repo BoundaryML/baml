@@ -616,6 +616,7 @@ mod tests {
             node_type,
             llm_client: None,
             callee_name: None,
+            callee_names: Vec::new(),
             source_span: None,
             is_container: false,
         }

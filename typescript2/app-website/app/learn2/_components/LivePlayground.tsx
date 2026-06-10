@@ -4,11 +4,20 @@ import Editor, { type BeforeMount, type OnMount } from '@monaco-editor/react';
 import {
   ExecutionPanel,
   type RuntimePort,
+  type SourceNavigationTarget,
   WorkerRuntimePort,
 } from '@b/pkg-playground';
 import { useCallback, useRef, useState } from 'react';
+import {
+  ResizableHandle,
+  ResizablePanel,
+  ResizablePanelGroup,
+} from '@/components/ui/resizable';
 import { getBamlWorker } from '@/playground/spawnBamlWorker';
 import { registerBaml } from '../_lib/baml-monarch';
+// Self-contained styling: embeds outside the /learn decks (homepage hero)
+// don't import learn2.css at the page level, so bring the l2-live styles in.
+import '../learn2.css';
 
 interface LivePlaygroundProps {
   initialCode: string;
@@ -16,6 +25,12 @@ interface LivePlaygroundProps {
   initialFunction?: string;
   /** Panel tab to open on (default 'graph' — the viz is the point). */
   initialTab?: 'run' | 'graph' | 'prompt' | 'curl';
+  /** Per-function example args, seeded into the args editor on selection. */
+  argsByFunction?: Record<string, string>;
+  /** Fill the parent instead of the deck-slide height cap (hero embeds). */
+  fill?: boolean;
+  /** Whether the panel's function/tests sidebar starts open (default true). */
+  initialSidebarOpen?: boolean;
 }
 
 type EditorInstance = Parameters<OnMount>[0];
@@ -58,6 +73,9 @@ export default function LivePlayground({
   initialCode,
   initialFunction,
   initialTab = 'graph',
+  argsByFunction,
+  fill,
+  initialSidebarOpen,
 }: LivePlaygroundProps) {
   const [port, setPort] = useState<RuntimePort | null>(null);
   const [version, setVersion] = useState(0);
@@ -147,6 +165,23 @@ export default function LivePlayground({
     });
   }, []);
 
+  // Graph node click → select that node's source span in the editor. Spans
+  // are 0-indexed LSP positions; Monaco is 1-indexed. No focus() — selection
+  // renders unfocused, and stealing focus would swallow deck arrow keys.
+  const onNavigateToSource = useCallback((src: SourceNavigationTarget) => {
+    const editor = editorRef.current;
+    const monaco = monacoRef.current;
+    if (!editor || !monaco) return;
+    const range = new monaco.Range(
+      src.line + 1,
+      src.column + 1,
+      (src.endLine ?? src.line) + 1,
+      (src.endColumn ?? src.column) + 1,
+    );
+    editor.setSelection(range);
+    editor.revealRangeInCenterIfOutsideViewport(range);
+  }, []);
+
   const beforeMount: BeforeMount = useCallback((monaco) => {
     registerBaml(monaco);
   }, []);
@@ -208,8 +243,11 @@ export default function LivePlayground({
   }, []);
 
   return (
-    <div className="baml-playground-root l2-live">
-      <div className="l2-live-editor">
+    <div
+      className={`baml-playground-root l2-live${fill ? ' l2-live--fill' : ''}`}
+    >
+      <ResizablePanelGroup direction="horizontal">
+        <ResizablePanel className="l2-live-editor" defaultSize={56} minSize={28}>
         <Editor
           defaultLanguage="baml"
           defaultValue={initialCode}
@@ -241,22 +279,27 @@ export default function LivePlayground({
             hover: { above: false },
           }}
         />
-      </div>
-      <div className="l2-live-panel">
-        {failed ? (
-          <div className="l2-live-loading">runtime failed to start</div>
-        ) : port ? (
-          <ExecutionPanel
-            port={port}
-            connectionVersion={version}
-            initialArgsJson="{}"
-            initialTab={initialTab}
-            initialFunctionName={initialFunction}
-          />
-        ) : (
-          <div className="l2-live-loading">starting runtime…</div>
-        )}
-      </div>
+        </ResizablePanel>
+        <ResizableHandle className="l2-live-splitter" withHandle />
+        <ResizablePanel className="l2-live-panel" defaultSize={44} minSize={22}>
+          {failed ? (
+            <div className="l2-live-loading">runtime failed to start</div>
+          ) : port ? (
+            <ExecutionPanel
+              port={port}
+              connectionVersion={version}
+              initialArgsJson="{}"
+              initialTab={initialTab}
+              initialFunctionName={initialFunction}
+              argsByFunction={argsByFunction}
+              initialSidebarOpen={initialSidebarOpen}
+              onNavigateToSource={onNavigateToSource}
+            />
+          ) : (
+            <div className="l2-live-loading">starting runtime…</div>
+          )}
+        </ResizablePanel>
+      </ResizablePanelGroup>
     </div>
   );
 }

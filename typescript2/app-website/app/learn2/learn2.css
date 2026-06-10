@@ -607,13 +607,22 @@
   overflow: hidden;
   background: #fffdf7;
 }
+/* Panes are sized by the shadcn Resizable (react-resizable-panels) group;
+   these classes only handle inner layout + the handle's paper styling. */
 .l2-live-editor {
-  width: 56%;
   min-width: 0;
-  border-right: 1px solid var(--l2-rule);
+}
+.l2-live-splitter {
+  width: 5px;
+  background: var(--l2-rule, #e2ddcf);
+  transition: background 120ms ease;
+}
+.l2-live-splitter:hover,
+.l2-live-splitter[data-resize-handle-state='hover'],
+.l2-live-splitter[data-resize-handle-state='drag'] {
+  background: var(--l2-violet, #6d28d9);
 }
 .l2-live-panel {
-  width: 44%;
   min-width: 0;
   display: flex;
   flex-direction: column;
@@ -629,6 +638,13 @@
   width: 100%;
   color: var(--l2-soft);
   font-size: 12px;
+}
+/* Hero/full-bleed embeds (homepage): fill the parent box instead of the
+   deck-slide height cap, and let the parent own the frame. */
+.l2-live--fill {
+  height: 100%;
+  border: none;
+  border-radius: 0;
 }
 
 /* Slides containing the live playground get every pixel we can spare:
@@ -955,10 +971,10 @@
 }
 .l2-el-msg {
   font-style: italic;
-  opacity: 0.85;
+  font-weight: 700;
 }
 .l2-el-msg-error {
-  color: #b42318 !important;
+  color: #dc2014 !important;
 }
 .l2-el-msg-warning {
   color: #b45309 !important;

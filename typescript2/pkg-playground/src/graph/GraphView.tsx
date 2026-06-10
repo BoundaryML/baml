@@ -61,6 +61,9 @@ function GraphViewInner({
   const [direction, setDirection] = useState<'horizontal' | 'vertical'>(
     'horizontal',
   );
+  // Set when the user toggles layout direction — the next completed layout
+  // re-fits the viewport so the rotated graph is fully visible.
+  const refitAfterLayoutRef = useRef(false);
   const selectedNodeIdRef = useRef(selectedNodeId);
 
   useEffect(() => {
@@ -166,6 +169,13 @@ function GraphViewInner({
         if (layoutRunId !== layoutRunIdRef.current) return;
         setNodes(decorateNodesWithRuntime(laid));
         setEdges(laidEdges);
+        if (refitAfterLayoutRef.current) {
+          refitAfterLayoutRef.current = false;
+          // Wait a frame so ReactFlow has measured the re-laid nodes.
+          requestAnimationFrame(() => {
+            fitView({ padding: 0.2, minZoom: 0.3, maxZoom: 0.85, duration: 250 });
+          });
+        }
       })
       .catch((err) => {
         console.error('[GraphView] Layout failed:', err);
@@ -207,7 +217,7 @@ function GraphViewInner({
   }, [selectedNodeId, setNodes]);
 
   // Auto-pan viewport to center the selected node — only when it's off-screen
-  const { setCenter, getNode, getViewport } = useReactFlow();
+  const { setCenter, getNode, getViewport, fitView } = useReactFlow();
   const containerWidth = useStore((s) => s.width);
   const containerHeight = useStore((s) => s.height);
   const prevGraphRef = useRef(graph);
@@ -298,12 +308,14 @@ function GraphViewInner({
           border: none !important;
           box-shadow: none !important;
         }
+        /* Nodes draw their own selection ring (nodeShadow); suppress the
+           wrapper's focus ring so selection doesn't render twice. */
         .react-flow__node:focus,
         .react-flow__node:focus-visible,
         .react-flow__node.selectable:focus,
         .react-flow__node.selectable:focus-visible {
           outline: none !important;
-          box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.55) !important;
+          box-shadow: none !important;
         }
         .react-flow.dark {
           --xy-controls-button-background-color-default: rgba(24, 24, 27, 0.92);
@@ -368,9 +380,10 @@ function GraphViewInner({
         <ColorfulMarkerDefinitions />
       </ReactFlow>
       <button
-        onClick={() =>
-          setDirection((d) => (d === 'horizontal' ? 'vertical' : 'horizontal'))
-        }
+        onClick={() => {
+          refitAfterLayoutRef.current = true;
+          setDirection((d) => (d === 'horizontal' ? 'vertical' : 'horizontal'));
+        }}
         style={{
           position: 'absolute',
           top: 10,

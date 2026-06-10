@@ -2,6 +2,7 @@
 
 import { AnimatePresence, motion } from 'motion/react';
 import dynamic from 'next/dynamic';
+import { DEFAULT_BAML, EXAMPLE_ARGS } from '@/playground/homepage-example';
 import Image from 'next/image';
 import Link from 'next/link';
 import posthog from 'posthog-js';
@@ -13,8 +14,10 @@ import Marquee from '../magicui/marquee';
 import { ScriptCopyBtn } from '../magicui/script-copy-btn';
 import { Navbar } from '../navbar';
 
-const BamlPlayground = dynamic(
-  () => import('@/playground/BamlPlayground').then((m) => m.BamlPlayground),
+// Same editor/playground as the /learn decks: Monaco (baml-paper theme,
+// BAML grammar, LSP diagnostics) + ExecutionPanel sharing one worker.
+const LivePlayground = dynamic(
+  () => import('@/app/learn2/_components/LivePlayground'),
   {
     loading: () => (
       <div className="flex h-full w-full items-center justify-center text-sm text-[#5C5852]">
@@ -696,25 +699,40 @@ const HeroSection = () => {
         style={customStyles.heroRight}
       >
         <div className="absolute inset-0 min-h-0 overflow-hidden">
-          {isDesktop ? (
-            <BamlPlayground />
-          ) : (
-            <Link
-              className="group relative block h-full w-full"
-              href="/how-the-playground-works"
-            >
-              <Image
-                alt="BAML playground preview"
-                className="object-cover object-top"
+          {/* CSS decides what's VISIBLE (so desktop never flashes the mobile
+              screenshot before hydration), `isDesktop` only decides whether
+              to MOUNT the heavy playground (wasm worker) at all. */}
+          <div className="hidden h-full w-full lg:block">
+            {isDesktop ? (
+              <LivePlayground
+                argsByFunction={EXAMPLE_ARGS}
                 fill
-                sizes="100vw"
-                src="/bamlPlaygroundLightScreenshot.png"
+                initialCode={DEFAULT_BAML}
+                initialFunction="Main"
+                initialSidebarOpen={false}
+                initialTab="run"
               />
-              <div className="absolute inset-x-0 bottom-0 bg-white/90 px-4 py-3 text-center text-[13px] text-[#1A1612]">
-                Open on desktop to try the playground live
+            ) : (
+              <div className="flex h-full w-full items-center justify-center text-sm text-[#5C5852]">
+                Loading playground...
               </div>
-            </Link>
-          )}
+            )}
+          </div>
+          <Link
+            className="group relative block h-full w-full lg:hidden"
+            href="/how-the-playground-works"
+          >
+            <Image
+              alt="BAML playground preview"
+              className="object-cover object-top"
+              fill
+              sizes="100vw"
+              src="/bamlPlaygroundLightScreenshot.png"
+            />
+            <div className="absolute inset-x-0 bottom-0 bg-white/90 px-4 py-3 text-center text-[13px] text-[#1A1612]">
+              Open on desktop to try the playground live
+            </div>
+          </Link>
         </div>
       </div>
     </section>

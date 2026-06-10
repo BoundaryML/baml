@@ -10,7 +10,7 @@
  */
 
 import type { ChangeEvent, FC, ReactNode, RefObject } from 'react';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { encodeCallArgs } from '@b/pkg-proto';
 import type { BamlJsMedia, BamlJsValue } from '@b/pkg-proto';
 import { KeyRound, PanelLeft, Square } from 'lucide-react';
@@ -235,6 +235,8 @@ export interface ExecutionPanelProps {
       function name. Applied when a function is selected; args the user typed
       for a function this session take precedence over its seed. */
   argsByFunction?: Record<string, string>;
+  /** Whether the function/tests sidebar starts open (default true). */
+  initialSidebarOpen?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -474,6 +476,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
   initialFunctionName,
   initialArgsJson,
   argsByFunction,
+  initialSidebarOpen = true,
 }) => {
   const [projectRoots, setProjectRoots] = useState<string[]>([]);
   const [projectUpdates, setProjectUpdates] = useState<
@@ -509,6 +512,10 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
 
   const [controlFlowGraph, setControlFlowGraph] =
     useState<ControlFlowGraph | null>(null);
+  // CFGs for EVERY function in the project (prefetched) — powers the
+  // workflow-root heuristic when a function is picked from the list.
+  const workflowCfgCacheRef = useRef<Map<string, ControlFlowGraph>>(new Map());
+  const [workflowCacheVersion, setWorkflowCacheVersion] = useState(0);
   const [activeTab, setActiveTab] = useState<
     'run' | 'graph' | 'prompt' | 'curl'
   >(initialTab ?? 'run');
@@ -532,7 +539,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
   );
   const [curlPreviewError, setCurlPreviewError] = useState<string | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(initialSidebarOpen);
   const [sidebarWidth, setSidebarWidth] = useState(220);
   const [logsPanelHeight, setLogsPanelHeight] = useState(
     LOGS_PANEL_DEFAULT_HEIGHT,
@@ -580,6 +587,16 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
   }, [envVars]);
 
   // Ref mirrors for cursor context handler (avoids stale closures in port.onMessage).
+  // workflowRouteFor is defined further down (it needs the function list);
+  // the cursor handler only runs on messages, after the mirror is set.
+  const workflowRouteForRef = useRef<
+    (fn: string) => { roots: string[]; firstHop: Map<string, string> }
+  >(() => ({ roots: [], firstHop: new Map() }));
+  // Highlight to apply once the promoted workflow's graph arrives (the
+  // selection-change effect clears highlights, so apply after, not before).
+  const pendingHighlightRef = useRef<{ fn: string; nodeId: number } | null>(
+    null,
+  );
   const selectedFnRef = useRef(selectedFn);
   useEffect(() => {
     selectedFnRef.current = selectedFn;
@@ -822,17 +839,41 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
       return;
     }
 
-    // Rule 4: navigate to the function definition/reference the cursor is on.
+    // Rule 4: navigate to the function the cursor is on — promoted to its
+    // TOPMOST workflow when it unambiguously belongs to one (same heuristic
+    // as clicking the function in the list). LineTotal inside
+    // Main→Review→ValidateInvoice shows Main's graph, not LineTotal's,
+    // with the call-site node on the path highlighted.
+    const route = workflowRouteForRef.current(ctx.functionName);
+    const roots = route.roots;
+    if (roots.length === 1 && roots[0]) {
+      const root = roots[0];
+      const hop = route.firstHop.get(root);
+      const target = hop ? findCallSiteNode(root, hop) : null;
+      if (root !== currentFn) {
+        pendingHighlightRef.current =
+          target != null ? { fn: root, nodeId: target } : null;
+        setSelectedFn(root);
+        setViewingCollection(false);
+        setViewingTestRun(false);
+        setHighlightedNodeId(null);
+      } else if (target != null) {
+        setHighlightedNodeId(target);
+      }
+      setWorkflowContext(null);
+      return;
+    }
     if (ctx.functionName !== currentFn) {
       setSelectedFn(ctx.functionName);
       setViewingCollection(false);
       setViewingTestRun(false);
       setHighlightedNodeId(null);
     }
-    // Update "called from" context (shown as a picker above the graph).
-    // Set on every navigation, including when already on the function,
-    // so it reflects the current membership info.
-    if (ctx.workflowMemberships.length > 0) {
+    // Ambiguous membership: ask via the picker above the graph. Prefer our
+    // whole-call-graph roots; fall back to the worker's membership info.
+    if (roots.length > 1) {
+      setWorkflowContext({ functionName: ctx.functionName, workflows: roots });
+    } else if (ctx.workflowMemberships.length > 0) {
       setWorkflowContext({
         functionName: ctx.functionName,
         workflows: ctx.workflowMemberships,
@@ -915,7 +956,20 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
               }
               break;
             case 'controlFlowGraphResult':
-              if (n.graph) setControlFlowGraph(n.graph);
+              if (n.graph) {
+                workflowCfgCacheRef.current.set(n.functionName, n.graph);
+                setWorkflowCacheVersion((v) => v + 1);
+                // Only the selected function's graph drives the display —
+                // prefetched graphs for other functions just fill the cache.
+                if (n.functionName === selectedFnRef.current) {
+                  setControlFlowGraph(n.graph);
+                  const pending = pendingHighlightRef.current;
+                  if (pending && pending.fn === n.functionName) {
+                    pendingHighlightRef.current = null;
+                    setHighlightedNodeId(pending.nodeId);
+                  }
+                }
+              }
               break;
           }
           break;
@@ -1089,7 +1143,18 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
           break;
 
         case 'controlFlowGraphResult':
-          if (data.graph) setControlFlowGraph(data.graph);
+          if (data.graph) {
+            workflowCfgCacheRef.current.set(data.functionName, data.graph);
+            setWorkflowCacheVersion((v) => v + 1);
+            if (data.functionName === selectedFnRef.current) {
+              setControlFlowGraph(data.graph);
+              const pending = pendingHighlightRef.current;
+              if (pending && pending.fn === data.functionName) {
+                pendingHighlightRef.current = null;
+                setHighlightedNodeId(pending.nodeId);
+              }
+            }
+          }
           break;
 
         case 'cursorContext':
@@ -1620,6 +1685,133 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
     );
   }, [functionNames]);
 
+  // Prefetch every visible function's CFG once per project build so the
+  // workflow-root heuristic can see the whole call graph. The responses
+  // land in workflowCfgCacheRef (display is guarded by selectedFn).
+  const prefetchedCfgRef = useRef<{ version: unknown; names: Set<string> }>({
+    version: undefined,
+    names: new Set(),
+  });
+  useEffect(() => {
+    if (!selectedProject) return;
+    const slot = prefetchedCfgRef.current;
+    if (slot.version !== projectUpdateVersion) {
+      slot.version = projectUpdateVersion;
+      slot.names = new Set();
+      workflowCfgCacheRef.current = new Map();
+    }
+    for (const name of functionNames) {
+      if (slot.names.has(name)) continue;
+      slot.names.add(name);
+      port.postMessage({
+        type: 'requestControlFlowGraph',
+        project: selectedProject,
+        functionName: name,
+      });
+    }
+  }, [functionNames, selectedProject, projectUpdateVersion, port]);
+
+  // Reverse call map over the cached CFGs: callee -> the functions that
+  // call it. calleeName may be bare while function names are qualified
+  // (`main.illustrate`), so resolve by exact match or trailing segment.
+  const workflowCallers = useMemo(() => {
+    void workflowCacheVersion;
+    const resolve = (callee: string): string | null =>
+      functionNames.find(
+        (n) =>
+          n === callee || n.endsWith(`.${callee}`) || callee.endsWith(`.${n}`),
+      ) ?? null;
+    const callers = new Map<string, Set<string>>();
+    for (const [fn, g] of workflowCfgCacheRef.current) {
+      for (const node of Object.values(g.nodes)) {
+        // calleeNames covers calls nested inside conditions/arguments;
+        // calleeName alone only covers nodes that ARE a call.
+        const names =
+          node.calleeNames && node.calleeNames.length > 0
+            ? node.calleeNames
+            : node.calleeName
+              ? [node.calleeName]
+              : [];
+        for (const raw of names) {
+          const callee = resolve(raw);
+          if (!callee || callee === fn) continue;
+          let set = callers.get(callee);
+          if (!set) {
+            set = new Set();
+            callers.set(callee, set);
+          }
+          set.add(fn);
+        }
+      }
+    }
+    return callers;
+  }, [workflowCacheVersion, functionNames]);
+
+  // The topmost workflows containing fn: walk the caller chain upward to
+  // functions nobody else calls. Tests never appear — they are not in the
+  // function list, so their call sites are not in the cache. The input may
+  // be a bare name (cursor context) while the map keys are the qualified
+  // list names, so canonicalize first. Alongside the roots, report each
+  // root's "first hop" — the function the root calls on the path down to
+  // fn — so the call-site node can be highlighted after promotion.
+  const workflowRouteFor = useCallback(
+    (rawFn: string): { roots: string[]; firstHop: Map<string, string> } => {
+      const fn =
+        functionNames.find(
+          (n) =>
+            n === rawFn || n.endsWith(`.${rawFn}`) || rawFn.endsWith(`.${n}`),
+        ) ?? rawFn;
+      const roots = new Set<string>();
+      const firstHop = new Map<string, string>();
+      const seen = new Set<string>([fn]);
+      const stack: Array<{ node: string; via: string }> = [
+        ...(workflowCallers.get(fn) ?? []),
+      ].map((c) => ({ node: c, via: fn }));
+      while (stack.length > 0) {
+        const entry = stack.pop();
+        if (!entry || seen.has(entry.node)) continue;
+        seen.add(entry.node);
+        const ups = workflowCallers.get(entry.node);
+        if (!ups || ups.size === 0) {
+          roots.add(entry.node);
+          if (!firstHop.has(entry.node)) firstHop.set(entry.node, entry.via);
+        } else {
+          stack.push(...[...ups].map((u) => ({ node: u, via: entry.node })));
+        }
+      }
+      return { roots: [...roots], firstHop };
+    },
+    [workflowCallers, functionNames],
+  );
+  useEffect(() => {
+    workflowRouteForRef.current = workflowRouteFor;
+  }, [workflowRouteFor]);
+
+  // The node in rootFn's CFG whose expression calls hopFn — what to
+  // highlight after promoting to the workflow root.
+  const findCallSiteNode = useCallback(
+    (rootFn: string, hopFn: string): number | null => {
+      const g = workflowCfgCacheRef.current.get(rootFn);
+      if (!g) return null;
+      const matches = (raw: string) =>
+        raw === hopFn || hopFn.endsWith(`.${raw}`) || raw.endsWith(`.${hopFn}`);
+      let fallback: number | null = null;
+      for (const node of Object.values(g.nodes)) {
+        const names =
+          node.calleeNames && node.calleeNames.length > 0
+            ? node.calleeNames
+            : node.calleeName
+              ? [node.calleeName]
+              : [];
+        if (!names.some(matches)) continue;
+        if (!node.isContainer) return node.id;
+        fallback = fallback ?? node.id;
+      }
+      return fallback;
+    },
+    [],
+  );
+
   // Apply the caller's initial function selection once, as soon as the
   // project reports a matching function. Function names may arrive
   // namespace-qualified (e.g. `main.illustrate`), so match by exact name
@@ -1915,10 +2107,39 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
                   testTree={testTree}
                   selectedFn={selectedFn}
                   onSelectFn={(fn) => {
-                    setWorkflowContext(null);
-                    setSelectedFn(fn);
                     setViewingCollection(false);
                     setViewingTestRun(false);
+                    setHighlightedNodeId(null);
+                    if (!fn) {
+                      setWorkflowContext(null);
+                      setSelectedFn(fn);
+                      return;
+                    }
+                    // Workflow heuristic: a helper that lives inside exactly
+                    // one workflow shows that whole workflow (with its call
+                    // site highlighted); an ambiguous one keeps itself
+                    // selected and asks via the picker bar.
+                    const route = workflowRouteFor(fn);
+                    const roots = route.roots;
+                    if (roots.length === 1 && roots[0]) {
+                      const root = roots[0];
+                      const hop = route.firstHop.get(root);
+                      const target = hop ? findCallSiteNode(root, hop) : null;
+                      setWorkflowContext(null);
+                      if (root !== selectedFn) {
+                        pendingHighlightRef.current =
+                          target != null ? { fn: root, nodeId: target } : null;
+                        setSelectedFn(root);
+                      } else if (target != null) {
+                        setHighlightedNodeId(target);
+                      }
+                    } else if (roots.length > 1) {
+                      setSelectedFn(fn);
+                      setWorkflowContext({ functionName: fn, workflows: roots });
+                    } else {
+                      setWorkflowContext(null);
+                      setSelectedFn(fn);
+                    }
                   }}
                   onRefreshTests={handleRefreshTests}
                   onRunTest={handleRunTest}

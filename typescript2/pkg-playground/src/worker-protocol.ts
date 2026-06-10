@@ -160,6 +160,10 @@ export interface CfgNode {
   nodeType: CfgNodeType;
   llmClient?: string;
   calleeName?: string;
+  /** ALL functions called anywhere inside this node's expression subtree
+   *  (e.g. an if-condition `Abs(LineTotal(x))` reports both). Superset of
+   *  calleeName. Absent on older runtimes. */
+  calleeNames?: string[];
   isContainer: boolean;
 }
 

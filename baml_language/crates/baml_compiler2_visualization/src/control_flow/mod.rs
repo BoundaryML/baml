@@ -98,6 +98,15 @@ pub struct Node {
     pub llm_client: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub callee_name: Option<String>,
+    /// Names of ALL functions called anywhere within this node's source
+    /// expression subtree (nested calls, call arguments, binary operands,
+    /// block statements, …). Unlike `callee_name` — which is set only when
+    /// the node itself IS a call — this surfaces calls embedded inside
+    /// conditions, return values, and other compound expressions.
+    /// Serialized as `calleeNames`; omitted when empty (clients treat
+    /// missing as `[]`).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub callee_names: Vec<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub source_span: Option<SourceSpan>,
     #[serde(default)]
@@ -122,6 +131,7 @@ impl Node {
             node_type,
             llm_client: None,
             callee_name: None,
+            callee_names: Vec::new(),
             source_span: None,
             is_container: false,
         }
@@ -147,6 +157,12 @@ impl Node {
     #[must_use]
     pub fn with_callee_name(mut self, callee_name: impl Into<String>) -> Self {
         self.callee_name = Some(callee_name.into());
+        self
+    }
+
+    #[must_use]
+    pub fn with_callee_names(mut self, callee_names: Vec<String>) -> Self {
+        self.callee_names = callee_names;
         self
     }
 }

@@ -15,6 +15,38 @@
   display: none; /* Safari and Chrome */
 }
 
+/* ---- Site-wide scrollbars ----
+ * Slim, rounded, ink-tinted thumb on a transparent track — matches the paper
+ * register instead of the chunky native chrome. Tinting from --foreground
+ * means every theme scope (.dark, .baml-playground-root) gets a matching
+ * thumb for free.
+ * Two mechanisms: scrollbar-{width,color} for Firefox + Chromium 121+,
+ * ::-webkit-scrollbar for Safari/older Chromium (ignored when the standard
+ * properties are supported). */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--foreground) 26%, transparent)
+    transparent;
+}
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track,
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background-color: color-mix(in srgb, var(--foreground) 26%, transparent);
+  border-radius: 999px;
+  /* Transparent border + padding-box clip = inset pill thumb. */
+  border: 3px solid transparent;
+  background-clip: padding-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background-color: color-mix(in srgb, var(--foreground) 42%, transparent);
+}
+
 /* Scan pkg-playground TSX sources so its bg-vsc-*, text-vsc-*, etc. utilities
  * and the shadcn classes it uses (bg-card, text-foreground, …) are emitted. */
 @source "../../pkg-playground/src/**/*.tsx";
