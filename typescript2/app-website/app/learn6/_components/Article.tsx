@@ -308,10 +308,10 @@ export function Article() {
       >
         <p>
           {
-            'BAML supports advanced features like generics on day 1. Types also exist at runtime, so you don’t need to choose between 5 different schema validation libraries. Your objects always match their annotated type. And there is no '
+            'BAML supports advanced features like generics on day 1. And because types exist at runtime, variables always match their annotated type — no need to choose between 5 different schema validation libraries. There is no '
           }
           <code>any</code>
-          {' — all code must be fully typed.'}
+          {'; all code must be fully typed.'}
         </p>
         <div className="l6-pair">
           <div>
