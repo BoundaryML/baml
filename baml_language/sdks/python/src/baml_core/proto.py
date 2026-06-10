@@ -377,7 +377,84 @@ def _set_inbound_map_entry(
     _set_inbound_value(entry.value, value, kwarg_name=kwarg_name, registered=registered, opaque_keys=opaque_keys)
 
 
-def encode_call_args(kwargs: Dict[str, Any]) -> bytes:
+def _set_type_ref(ref, token: Any) -> None:
+    """Populate an `InboundTypeRef` from a Python type token ($types).
+
+    Accepted tokens:
+    - builtins: `str`, `int`, `float`, `bool`, `bytes`/`bytearray`,
+      `type(None)`
+    - strings: passed through verbatim — builtin keywords ("bigint",
+      "unknown", ...) or a BAML class/enum FQN ("user.generics.Wrapper")
+    - generated pydantic classes (resolved to their BAML FQN via the typemap)
+    - `typing` forms: `list[X]`, `dict[str, X]`, `typing.Optional[X]`,
+      `typing.Union[...]`
+    """
+    if token is str:
+        ref.name = "string"
+        return
+    if token is bool:  # before int: bool is a subclass of int
+        ref.name = "bool"
+        return
+    if token is int:
+        ref.name = "int"
+        return
+    if token is float:
+        ref.name = "float"
+        return
+    if token in (bytes, bytearray):
+        ref.name = "uint8array"
+        return
+    if token is type(None) or token is None:
+        ref.name = "null"
+        return
+    if isinstance(token, str):
+        ref.name = token
+        return
+
+    origin = typing.get_origin(token)
+    if origin is not None:
+        type_args = typing.get_args(token)
+        if origin is list:
+            ref.name = "list"
+            _set_type_ref(ref.args.add(), type_args[0] if type_args else "unknown")
+            return
+        if origin is dict:
+            ref.name = "map"
+            _set_type_ref(ref.args.add(), type_args[0] if type_args else "string")
+            _set_type_ref(ref.args.add(), type_args[1] if len(type_args) > 1 else "unknown")
+            return
+        if origin is typing.Union:
+            non_none = [a for a in type_args if a is not type(None)]
+            if len(non_none) == len(type_args) - 1:
+                # Optional[X] / X | None
+                if len(non_none) == 1:
+                    ref.name = "optional"
+                    _set_type_ref(ref.args.add(), non_none[0])
+                    return
+                ref.name = "union"
+                for a in type_args:
+                    _set_type_ref(ref.args.add(), a)
+                return
+            ref.name = "union"
+            for a in type_args:
+                _set_type_ref(ref.args.add(), a)
+            return
+        # Pydantic generic alias (e.g. Wrapper[int]) — encode base FQN + args.
+        if isinstance(origin, type) and _is_pydantic_model_class(origin):
+            ref.name = get_type_map().py_type_to_baml_type(origin)
+            for a in type_args:
+                _set_type_ref(ref.args.add(), a)
+            return
+        raise TypeError(f"Unsupported $types token: {token!r}")
+
+    if isinstance(token, type):
+        if _is_pydantic_model_class(token) or issubclass(token, enum.Enum):
+            ref.name = get_type_map().py_type_to_baml_type(_base_class_for_fqn(token))
+            return
+    raise TypeError(f"Unsupported $types token: {token!r}")
+
+
+def encode_call_args(kwargs: Dict[str, Any], type_args: Optional[List[Any]] = None) -> bytes:
     """Encode function keyword arguments as `CallFunctionArgs` protobuf.
 
     Release tradeoff: a callable that encodes successfully is registered in
@@ -399,6 +476,8 @@ def encode_call_args(kwargs: Dict[str, Any]) -> bytes:
             _set_inbound_map_entry(
                 args.kwargs.add(), key, value, kwarg_name=key, registered=registered, opaque_keys=opaque_keys
             )
+        for token in type_args or []:
+            _set_type_ref(args.type_args.add(), token)
         return args.SerializeToString()
     except BaseException:
         # Roll back any host callables registered before the failure.

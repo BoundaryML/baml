@@ -132,16 +132,20 @@ def get_runtime() -> BamlRuntime:
 # ---------------------------------------------------------------------------
 
 
-def call_function_sync(rt, function_name, kwargs, ctx=None, collectors=None, abort_controller=None):
-    args_proto = encode_call_args(kwargs)
+def call_function_sync(
+    rt, function_name, kwargs, ctx=None, collectors=None, abort_controller=None, type_args=None
+):
+    args_proto = encode_call_args(kwargs, type_args=type_args)
     result_bytes = rt.call_function_sync(
         function_name, args_proto, ctx, collectors, abort_controller
     )
     return FunctionResult(decode_call_result(result_bytes))
 
 
-async def call_function(rt, function_name, kwargs, ctx=None, collectors=None, abort_controller=None):
-    args_proto = encode_call_args(kwargs)
+async def call_function(
+    rt, function_name, kwargs, ctx=None, collectors=None, abort_controller=None, type_args=None
+):
+    args_proto = encode_call_args(kwargs, type_args=type_args)
     result_bytes = await rt.call_function(
         function_name, args_proto, ctx, collectors, abort_controller
     )

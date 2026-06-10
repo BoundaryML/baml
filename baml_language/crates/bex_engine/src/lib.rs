@@ -1979,6 +1979,121 @@ impl BexEngine {
         self.resolve_function_name(name).is_some()
     }
 
+    /// Resolve a host-supplied structural type reference ($types / BEP-039)
+    /// to a runtime `Ty`.
+    ///
+    /// `name` is a builtin keyword (`"string"`, `"int"`, `"list"`, ...) or a
+    /// class/enum name resolved against the engine's registries (exact FQN,
+    /// then `user.`-prefixed -- same fallback as function lookup). `args` are
+    /// the already-resolved structural children.
+    pub fn resolve_host_type_ref(&self, name: &str, args: Vec<Ty>) -> Result<Ty, EngineError> {
+        let attr = baml_type::TyAttr::default();
+        let arity_error = |expected: usize, got: usize| EngineError::TypeMismatch {
+            message: format!("$types: `{name}` expects {expected} type argument(s), got {got}"),
+        };
+        let mut args = args;
+        let ty = match name {
+            "string" => Ty::String { attr },
+            "int" => Ty::Int { attr },
+            "float" => Ty::Float { attr },
+            "bool" => Ty::Bool { attr },
+            "null" => Ty::Null { attr },
+            "bigint" => Ty::Bigint { attr },
+            "uint8array" => Ty::Uint8Array { attr },
+            "unknown" => Ty::BuiltinUnknown { attr },
+            "list" => {
+                if args.len() != 1 {
+                    return Err(arity_error(1, args.len()));
+                }
+                Ty::List(Box::new(args.remove(0)), attr)
+            }
+            "map" => {
+                if args.len() != 2 {
+                    return Err(arity_error(2, args.len()));
+                }
+                let value = args.remove(1);
+                let key = args.remove(0);
+                Ty::Map {
+                    key: Box::new(key),
+                    value: Box::new(value),
+                    attr,
+                }
+            }
+            "optional" => {
+                if args.len() != 1 {
+                    return Err(arity_error(1, args.len()));
+                }
+                // `T?` is represented as `T | null` (see `peel_to_rust_type`).
+                Ty::Union(
+                    vec![
+                        args.remove(0),
+                        Ty::Null {
+                            attr: baml_type::TyAttr::default(),
+                        },
+                    ],
+                    attr,
+                )
+            }
+            "union" => {
+                if args.is_empty() {
+                    return Err(EngineError::TypeMismatch {
+                        message: "$types: `union` requires at least one member".to_string(),
+                    });
+                }
+                Ty::Union(args, attr)
+            }
+            class_or_enum => {
+                let resolve = |objects: &indexmap::IndexMap<String, HeapPtr>| -> Option<HeapPtr> {
+                    objects
+                        .get(class_or_enum)
+                        .or_else(|| objects.get(&format!("user.{class_or_enum}")))
+                        .copied()
+                };
+                if let Some(ptr) = resolve(&self.resolved_class_names) {
+                    // SAFETY: compile-time class object
+                    match unsafe { ptr.get() } {
+                        Object::Class(class) => Ty::Class(class.name.clone(), args, attr),
+                        other => {
+                            return Err(EngineError::TypeMismatch {
+                                message: format!(
+                                    "$types: `{class_or_enum}` resolved to a non-class                                      object: {other:?}"
+                                ),
+                            });
+                        }
+                    }
+                } else if let Some(ptr) = resolve(&self.resolved_enum_names) {
+                    // SAFETY: compile-time enum object
+                    match unsafe { ptr.get() } {
+                        Object::Enum(enm) => {
+                            if !args.is_empty() {
+                                return Err(EngineError::TypeMismatch {
+                                    message: format!(
+                                        "$types: enum `{class_or_enum}` takes no type arguments"
+                                    ),
+                                });
+                            }
+                            Ty::Enum(enm.name.clone(), attr)
+                        }
+                        other => {
+                            return Err(EngineError::TypeMismatch {
+                                message: format!(
+                                    "$types: `{class_or_enum}` resolved to a non-enum                                      object: {other:?}"
+                                ),
+                            });
+                        }
+                    }
+                } else {
+                    return Err(EngineError::TypeMismatch {
+                        message: format!(
+                            "$types: unknown type `{class_or_enum}` (not a builtin keyword,                              class, or enum)"
+                        ),
+                    });
+                }
+            }
+        };
+        Ok(ty)
+    }
+
     /// Boundary-facing `(param_types, return_type, throws_type)` for a host
     /// call.
     ///

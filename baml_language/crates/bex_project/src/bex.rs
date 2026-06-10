@@ -22,6 +22,15 @@ pub trait Bex: Send + Sync {
 
     /// Event sink for this runtime (if any). Used by bridges for flush and `HostSpanManager`.
     fn event_sink(&self) -> Option<std::sync::Arc<dyn bex_events::EventSink>>;
+
+    /// Resolve a host-supplied structural type reference ($types / BEP-039
+    /// explicit type arguments) to a runtime `Ty`. `name` is a builtin
+    /// keyword or class/enum FQN; `args` are already-resolved children.
+    fn resolve_host_type_ref(
+        &self,
+        name: &str,
+        args: Vec<crate::Ty>,
+    ) -> Result<crate::Ty, RuntimeError>;
 }
 
 #[async_trait]
@@ -44,6 +53,15 @@ impl Bex for BexProject {
 
     fn event_sink(&self) -> Option<std::sync::Arc<dyn bex_events::EventSink>> {
         self.event_sink()
+    }
+
+    fn resolve_host_type_ref(
+        &self,
+        name: &str,
+        args: Vec<crate::Ty>,
+    ) -> Result<crate::Ty, RuntimeError> {
+        let bex = self.get_bex()?;
+        Bex::resolve_host_type_ref(&*bex, name, args)
     }
 }
 
@@ -109,5 +127,13 @@ impl Bex for BexEngine {
 
     fn event_sink(&self) -> Option<std::sync::Arc<dyn bex_events::EventSink>> {
         BexEngine::event_sink(self)
+    }
+
+    fn resolve_host_type_ref(
+        &self,
+        name: &str,
+        args: Vec<crate::Ty>,
+    ) -> Result<crate::Ty, RuntimeError> {
+        BexEngine::resolve_host_type_ref(self, name, args).map_err(RuntimeError::from)
     }
 }

@@ -74,6 +74,29 @@ pub fn get_tokio_runtime() -> Result<Arc<Runtime>, BridgeError> {
 }
 
 /// Get a clone of the global runtime, or error if not initialized.
+/// Resolve host-supplied `$types` wire refs ([`InboundTypeRef`]) to runtime
+/// `Ty`s, in order. Shared by the C-ABI entry point and the per-language
+/// bridges (Python/Node call paths decode `CallFunctionArgs` themselves).
+pub fn resolve_type_args(
+    runtime: &Arc<dyn Bex>,
+    refs: Vec<bridge_ctypes::baml_core::cffi::InboundTypeRef>,
+) -> Result<Vec<bex_project::Ty>, BridgeError> {
+    fn resolve_one(
+        runtime: &Arc<dyn Bex>,
+        r: bridge_ctypes::baml_core::cffi::InboundTypeRef,
+    ) -> Result<bex_project::Ty, BridgeError> {
+        let args = r
+            .args
+            .into_iter()
+            .map(|a| resolve_one(runtime, a))
+            .collect::<Result<Vec<_>, _>>()?;
+        runtime
+            .resolve_host_type_ref(&r.name, args)
+            .map_err(BridgeError::from)
+    }
+    refs.into_iter().map(|r| resolve_one(runtime, r)).collect()
+}
+
 pub fn get_runtime() -> Result<Arc<dyn Bex>, BridgeError> {
     RUNTIME_INSTANCE
         .read()
@@ -211,8 +234,10 @@ fn call_function_inner(
         unsafe { CallFunctionArgs::from_c_buffer(encoded_args, length) }?
     };
     let kwargs = kwargs_to_bex_values(args.kwargs, &HANDLE_TABLE)?;
+    let type_args = resolve_type_args(&runtime, args.type_args)?;
 
-    let call_ctx = bex_project::FunctionCallContextBuilder::new(sys_types::CallId(id.into()));
+    let call_ctx = bex_project::FunctionCallContextBuilder::new(sys_types::CallId(id.into()))
+        .with_type_args(type_args);
 
     get_tokio_runtime()?.spawn(async move {
         // `call_and_encode` already wraps the engine call in its own

@@ -121,8 +121,27 @@ message InboundEnumValue {
 // Function call protocol
 // -----------------------------------------------------------------------------
 
+// Structural reference to a BAML type, used to bind generic TypeVars from
+// the host ($types / BEP-039 explicit type arguments).
+//
+// `name` is either a builtin keyword ("string", "int", "float", "bool",
+// "null", "bigint", "uint8array", "unknown", "list", "map", "optional",
+// "union") or a class/enum FQN resolved against the engine's registry
+// (e.g. "user.generics.Wrapper"). `args` carries structural children:
+// element type for "list", [key, value] for "map", the inner type for
+// "optional", members for "union", and generic args for a class FQN.
+message InboundTypeRef {
+  string name = 1;
+  repeated InboundTypeRef args = 2;
+}
+
 message CallFunctionArgs {
   repeated InboundMapEntry kwargs = 1;
+  // Explicit generic type arguments, in declaration order (enclosing
+  // class/interface params first, then function-level params — matching
+  // the entry frame's `type_args` slot). Empty = unbound (TypeVars erase
+  // to `unknown` at the boundary).
+  repeated InboundTypeRef type_args = 2;
 }
 
 // CallAck is the engine's acknowledgment of an inbound call. It flows

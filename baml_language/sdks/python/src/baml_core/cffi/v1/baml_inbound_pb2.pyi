@@ -118,11 +118,21 @@ class InboundEnumValue(_message.Message):
     value: str
     def __init__(self, name: _Optional[str] = ..., value: _Optional[str] = ...) -> None: ...
 
+class InboundTypeRef(_message.Message):
+    __slots__ = ("name", "args")
+    NAME_FIELD_NUMBER: _ClassVar[int]
+    ARGS_FIELD_NUMBER: _ClassVar[int]
+    name: str
+    args: _containers.RepeatedCompositeFieldContainer[InboundTypeRef]
+    def __init__(self, name: _Optional[str] = ..., args: _Optional[_Iterable[_Union[InboundTypeRef, _Mapping]]] = ...) -> None: ...
+
 class CallFunctionArgs(_message.Message):
-    __slots__ = ("kwargs",)
+    __slots__ = ("kwargs", "type_args")
     KWARGS_FIELD_NUMBER: _ClassVar[int]
+    TYPE_ARGS_FIELD_NUMBER: _ClassVar[int]
     kwargs: _containers.RepeatedCompositeFieldContainer[InboundMapEntry]
-    def __init__(self, kwargs: _Optional[_Iterable[_Union[InboundMapEntry, _Mapping]]] = ...) -> None: ...
+    type_args: _containers.RepeatedCompositeFieldContainer[InboundTypeRef]
+    def __init__(self, kwargs: _Optional[_Iterable[_Union[InboundMapEntry, _Mapping]]] = ..., type_args: _Optional[_Iterable[_Union[InboundTypeRef, _Mapping]]] = ...) -> None: ...
 
 class CallAck(_message.Message):
     __slots__ = ("error",)
