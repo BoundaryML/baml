@@ -113,6 +113,11 @@ pub enum TirTypeError {
         scrutinee_type: Ty,
         missing_cases: Vec<String>,
     },
+    /// `catch_all` is missing arms for one or more caught throw types.
+    NonExhaustiveCatchAll {
+        caught_type: Ty,
+        missing_cases: Vec<String>,
+    },
     /// A `match`/`catch` arm can never execute because previous arms are exhaustive.
     UnreachableArm,
     /// Or-pattern alternatives bind the same name with conflicting narrow
@@ -468,6 +473,17 @@ impl fmt::Display for TirTypeError {
                     f,
                     "non-exhaustive match on `{}`; missing: {}",
                     scrutinee_type.render_user_facing(),
+                    missing_cases.join(", ")
+                )
+            }
+            TirTypeError::NonExhaustiveCatchAll {
+                caught_type,
+                missing_cases,
+            } => {
+                write!(
+                    f,
+                    "non-exhaustive catch_all on `{}`; missing: {}",
+                    caught_type.render_user_facing(),
                     missing_cases.join(", ")
                 )
             }
