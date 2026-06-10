@@ -5072,6 +5072,10 @@ impl<'db> LoweringContext<'db> {
         }
 
         let name = &segments[0];
+        if name.as_str() == "$id" {
+            self.lower_current_runtime_id(dest);
+            return;
+        }
 
         let span_start = self
             .source_map
@@ -7484,6 +7488,39 @@ impl<'db> LoweringContext<'db> {
         // Start a new block for any code after this (dead code)
         let dead = self.builder.create_block();
         self.builder.set_current_block(dead);
+    }
+
+    fn lower_current_runtime_id(&mut self, dest: Place) {
+        let callee = Operand::Constant(Constant::Function(ItemRef::Free {
+            package: Name::new("baml"),
+            namespace: vec![Name::new("id")],
+            name: Name::new("current"),
+        }));
+        let resume = self.builder.create_block();
+        let unwind = self.catch_context.as_ref().map(|c| c.unwind_target);
+        self.builder.call(callee, Vec::new(), dest, resume, unwind);
+        self.builder.set_current_block(resume);
+    }
+
+    fn lower_set_runtime_id(&mut self, value: AstExprId) {
+        let callee = Operand::Constant(Constant::Function(ItemRef::Free {
+            package: Name::new("baml"),
+            namespace: vec![Name::new("id")],
+            name: Name::new("set"),
+        }));
+        let arg = self.lower_to_operand(value);
+        let dest = self.builder.temp(Ty::String {
+            attr: TyAttr::default(),
+        });
+        let resume = self.builder.create_block();
+        let unwind = self.catch_context.as_ref().map(|c| c.unwind_target);
+        self.builder
+            .call(callee, vec![arg], Place::local(dest), resume, unwind);
+        self.builder.set_current_block(resume);
+    }
+
+    fn is_runtime_id_path(expr: &AstExpr) -> bool {
+        matches!(expr, AstExpr::Path(segments) if segments.len() == 1 && segments[0].as_str() == "$id")
     }
 
     fn lower_if(
@@ -11098,7 +11135,9 @@ impl LoweringContext<'_> {
 
             AstStmt::Assign { target, value } => {
                 let target_expr = &self.body.exprs[target];
-                if let AstExpr::OptionalChain { expr: inner } = target_expr {
+                if Self::is_runtime_id_path(target_expr) {
+                    self.lower_set_runtime_id(value);
+                } else if let AstExpr::OptionalChain { expr: inner } = target_expr {
                     let inner = *inner;
                     self.lower_assign_optional_chain(inner, value);
                 } else {

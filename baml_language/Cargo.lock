@@ -1227,6 +1227,7 @@ name = "bex_events"
 version = "0.0.0-beta"
 dependencies = [
  "baml_builtins2",
+ "base64",
  "bex_external_types",
  "bex_vm_types",
  "indexmap",

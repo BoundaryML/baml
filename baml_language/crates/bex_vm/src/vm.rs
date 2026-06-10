@@ -37,6 +37,14 @@ fn unlikely(b: bool) -> bool {
     b
 }
 
+/// BEX runtime identity for the function invocation currently visible to the VM.
+#[derive(Clone, Debug)]
+pub struct CurrentBexIdentity {
+    pub thread_id: bex_events::ids::BexThreadId,
+    pub call_id: bex_events::ids::CallId,
+    pub runtime_id: String,
+}
+
 fn guard_template_matches(
     template: &baml_type::TyTemplate,
     frame_type_args: &[baml_type::Ty],
@@ -292,7 +300,10 @@ mod tests {
             watched_vars: HashMap::new(),
             interrupt_frame: None,
             traced_frames: Vec::new(),
+            runtime_call_frames: Vec::new(),
             current_span_context: None,
+            current_bex_identity: None,
+            pending_disk_events: Vec::new(),
             argv: Arc::from([]),
             pending_call_type_args: Vec::new(),
             interface_implementors: Arc::new(indexmap::IndexMap::new()),
@@ -688,10 +699,20 @@ pub struct BexVm {
     /// Checked on `Return` to yield `FunctionExit` notifications.
     traced_frames: Vec<usize>,
 
+    /// Frame depths for non-traced bytecode calls that still need compact
+    /// runtime identity events.
+    runtime_call_frames: Vec<usize>,
+
     /// Current span context, set by the engine before each VM execution step.
     /// Available to `//baml:mut_vm` native functions that need to emit events
     /// with the correct span context.
     pub current_span_context: Option<bex_events::SpanContext>,
+
+    /// Current BEX runtime ID state, set by the engine before each VM execution step.
+    pub current_bex_identity: Option<CurrentBexIdentity>,
+
+    /// Compact BEX events emitted by native VM helpers for the engine to persist.
+    pub pending_disk_events: Vec<bex_events::DiskEventV1>,
 
     /// Process argv passed to the engine at startup. Exposed to BAML via
     /// `baml.sys.argv()`. Shared (cheap to clone) across VMs.
@@ -803,6 +824,9 @@ pub enum VmExecState {
     /// Notify about span lifecycle (from traced `Call` / `Return`).
     SpanNotify(SpanNotification),
 
+    /// Notify about compact runtime call lifecycle for non-traced bytecode calls.
+    RuntimeCallNotify(RuntimeCallNotification),
+
     /// The VM is yielding a custom event to be emitted.
     ///
     /// The engine handles this by converting both values to `BexExternalValue`
@@ -852,6 +876,19 @@ pub enum SpanNotification {
     FunctionExit {
         function_name: String,
         result: Value,
+    },
+}
+
+/// Compact call lifecycle notifications yielded for bytecode calls that are not
+/// part of the user-facing trace stream.
+#[derive(Clone, Debug, PartialEq)]
+pub enum RuntimeCallNotification {
+    FunctionEnter {
+        function_name: String,
+        frame_depth: usize,
+    },
+    FunctionExit {
+        function_name: String,
     },
 }
 
@@ -1132,7 +1169,10 @@ impl BexVm {
             watched_vars: HashMap::new(),
             interrupt_frame: None,
             traced_frames: Vec::new(),
+            runtime_call_frames: Vec::new(),
             current_span_context: None,
+            current_bex_identity: None,
+            pending_disk_events: Vec::new(),
             argv,
             pending_call_type_args: Vec::new(),
             interface_implementors,
@@ -2643,6 +2683,13 @@ impl BexVm {
                 {
                     self.traced_frames.pop();
                 }
+                while self
+                    .runtime_call_frames
+                    .last()
+                    .is_some_and(|d| *d >= self.frames.len())
+                {
+                    self.runtime_call_frames.pop();
+                }
                 if let Some(interrupt_depth) = self.interrupt_frame
                     && interrupt_depth >= self.frames.len()
                 {
@@ -2742,6 +2789,13 @@ impl BexVm {
                 .is_some_and(|d| *d >= self.frames.len())
             {
                 self.traced_frames.pop();
+            }
+            while self
+                .runtime_call_frames
+                .last()
+                .is_some_and(|d| *d >= self.frames.len())
+            {
+                self.runtime_call_frames.pop();
             }
 
             if let Some(interrupt_depth) = self.interrupt_frame
@@ -3169,11 +3223,11 @@ impl BexVm {
             }
 
             FunctionKind::Bytecode => {
+                let callee_name = callee.name.clone();
                 // For traced functions, snapshot args before pushing the frame.
                 let trace_data = if is_traced {
                     let args: Vec<Value> = self.stack[locals_offset..].to_owned();
-                    let callee_name = callee.name.clone();
-                    Some((callee_name, args))
+                    Some((callee_name.clone(), args))
                 } else {
                     None
                 };
@@ -3226,8 +3280,13 @@ impl BexVm {
                     )));
                 }
 
-                // SAFETY: See `load_function` doc comment.
-                *function = unsafe { self.load_function(*frame_idx)? };
+                self.runtime_call_frames.push(*frame_idx);
+                return Ok(Some(VmExecState::RuntimeCallNotify(
+                    RuntimeCallNotification::FunctionEnter {
+                        function_name: callee_name,
+                        frame_depth: *frame_idx,
+                    },
+                )));
             }
 
             FunctionKind::SysOp(_) => {
@@ -5038,6 +5097,17 @@ impl BexVm {
                     } else {
                         None
                     };
+                    let runtime_call_exit = if self.runtime_call_frames.last() == Some(frame_idx) {
+                        let func_name = self
+                            .get_object(self.frames[*frame_idx].function())
+                            .as_callable()
+                            .map(|f| f.name.clone())
+                            .ok();
+                        self.runtime_call_frames.pop();
+                        func_name
+                    } else {
+                        None
+                    };
                     let Frame::Bytecode(bf) = &self.frames[*frame_idx] else {
                         unreachable!()
                     };
@@ -5061,6 +5131,13 @@ impl BexVm {
                             SpanNotification::FunctionExit {
                                 function_name: name,
                                 result,
+                            },
+                        )));
+                    }
+                    if let Some(name) = runtime_call_exit {
+                        return Ok(Some(VmExecState::RuntimeCallNotify(
+                            RuntimeCallNotification::FunctionExit {
+                                function_name: name,
                             },
                         )));
                     }

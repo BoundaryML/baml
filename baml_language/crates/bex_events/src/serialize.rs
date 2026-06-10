@@ -4,7 +4,11 @@ use baml_builtins2::MediaContent;
 use bex_external_types::{BexExternalAdt, BexExternalValue, MediaKind};
 use serde::Serialize;
 
-use crate::{CustomEvent, EventKind, FunctionEvent, LogEvent, RuntimeEvent};
+use crate::{
+    CustomEvent, DiskEventV1, EventFileHeaderV1, EventKind, FunctionEndStatus, FunctionEvent,
+    LogEvent, RuntimeEvent, ThreadEndStatus,
+    metadata::{RuntimeFunctionKind, RuntimeFunctionOrigin},
+};
 
 const MAX_SERIALIZATION_DEPTH: usize = 15;
 
@@ -210,6 +214,13 @@ pub fn event_to_jsonl(event: &RuntimeEvent) -> String {
 
     let event_json = serde_json::json!({
         "call_id": call_id,
+        "bex_identity": event.identity.as_ref().map(|identity| serde_json::json!({
+            "thread_id": identity.thread_id.0,
+            "call_id": identity.call_id.0,
+            "parent_call_id": identity.parent_call_id.map(|id| id.0),
+            "function_id": identity.function_id.map(|id| id.0),
+            "call_ref": identity.call_ref.encode(),
+        })),
         "function_event_id": function_event_id,
         "parent_span_id": parent_span_id,
         "root_span_id": root_span_id,
@@ -225,6 +236,185 @@ pub fn event_to_jsonl(event: &RuntimeEvent) -> String {
         }
         String::new()
     })
+}
+
+/// Serialize a compact disk/batch BEX event to a single-line JSON string.
+pub fn disk_event_to_jsonl(event: &DiskEventV1) -> String {
+    let event_json = match event {
+        DiskEventV1::StartThread {
+            thread_id,
+            parent_thread_id,
+            parent_call_id,
+            name,
+            timestamp_ns,
+        } => serde_json::json!({
+            "type": "bex_start_thread",
+            "thread_id": thread_id.0,
+            "parent_thread_id": parent_thread_id.map(|id| id.0),
+            "parent_call_id": parent_call_id.map(|id| id.0),
+            "name": name,
+            "timestamp_ns": timestamp_ns,
+        }),
+        DiskEventV1::CallFunction {
+            thread_id,
+            call_id,
+            parent_call_id,
+            function_id,
+            timestamp_ns,
+        } => serde_json::json!({
+            "type": "bex_call_function",
+            "thread_id": thread_id.0,
+            "call_id": call_id.0,
+            "parent_call_id": parent_call_id.map(|id| id.0),
+            "function_id": function_id.0,
+            "timestamp_ns": timestamp_ns,
+        }),
+        DiskEventV1::SetId {
+            thread_id,
+            call_id,
+            id,
+            timestamp_ns,
+        } => serde_json::json!({
+            "type": "bex_set_id",
+            "thread_id": thread_id.0,
+            "call_id": call_id.0,
+            "id": base64_url(id),
+            "timestamp_ns": timestamp_ns,
+        }),
+        DiskEventV1::EndFunction {
+            thread_id,
+            call_id,
+            status,
+            timestamp_ns,
+        } => serde_json::json!({
+            "type": "bex_end_function",
+            "thread_id": thread_id.0,
+            "call_id": call_id.0,
+            "status": function_end_status(status),
+            "timestamp_ns": timestamp_ns,
+        }),
+        DiskEventV1::EndThread {
+            thread_id,
+            status,
+            timestamp_ns,
+        } => serde_json::json!({
+            "type": "bex_end_thread",
+            "thread_id": thread_id.0,
+            "status": thread_end_status(status),
+            "timestamp_ns": timestamp_ns,
+        }),
+        DiskEventV1::Heartbeat { timestamp_ns } => serde_json::json!({
+            "type": "bex_heartbeat",
+            "timestamp_ns": timestamp_ns,
+        }),
+    };
+
+    serde_json::to_string(&event_json).unwrap_or_else(|e| {
+        #[allow(clippy::print_stderr)]
+        {
+            eprintln!("Failed to serialize BEX disk event: {e}");
+        }
+        String::new()
+    })
+}
+
+/// Serialize a BEX event file/batch header to a single-line JSON string.
+pub fn event_file_header_to_jsonl(header: &EventFileHeaderV1) -> String {
+    let functions: Vec<_> = header
+        .function_table
+        .functions
+        .iter()
+        .map(|function| {
+            serde_json::json!({
+                "function_id": function.function_id.0,
+                "fqn": function.fqn,
+                "display_name": function.display_name,
+                "source_file": function.source_file,
+                "source_span": function.source_span.as_ref().map(|span| serde_json::json!({
+                    "file_id": span.file_id,
+                    "start": span.start,
+                    "end": span.end,
+                })),
+                "kind": runtime_function_kind(&function.kind),
+                "origin": runtime_function_origin(&function.origin),
+                "owner_type": function.owner_type.as_ref().map(|key| key.0.as_str()),
+                "parent_function": function.parent_function.as_ref().map(|key| key.0.as_str()),
+                "lambda_path": function.lambda_path,
+                "definition_key": function.definition_key.as_ref().map(|key| key.0.as_str()),
+                "package_name": function.package_name,
+                "namespace": function.namespace,
+                "source_snapshot_id": function.source_snapshot_id.as_ref().map(|id| base64_url(&id.0)),
+                "revision_id": function.revision_id.as_ref().map(|id| id.0.as_str()),
+                "semantic_lanes": function.semantic_lanes.as_ref().map(|lanes| serde_json::json!({
+                    "direct_interface": base64_url(&lanes.direct_interface.0),
+                    "effective_interface": base64_url(&lanes.effective_interface.0),
+                    "direct_implementation": lanes.direct_implementation.as_ref().map(|hash| base64_url(&hash.0)),
+                    "effective_implementation": lanes.effective_implementation.as_ref().map(|hash| base64_url(&hash.0)),
+                })),
+            })
+        })
+        .collect();
+
+    let event_json = serde_json::json!({
+        "type": "bex_header_v1",
+        "process_euid": base64_url(&header.process_euid.0),
+        "engine_id": header.engine_id.0,
+        "program_id": base64_url(&header.program_id.0),
+        "source_snapshot_id": header.source_snapshot_id.as_ref().map(|id| base64_url(&id.0)),
+        "revision_id": header.revision_id.as_ref().map(|id| id.0.as_str()),
+        "started_at_epoch_ns": header.started_at_epoch_ns.to_string(),
+        "function_table": functions,
+    });
+
+    serde_json::to_string(&event_json).unwrap_or_else(|e| {
+        #[allow(clippy::print_stderr)]
+        {
+            eprintln!("Failed to serialize BEX event header: {e}");
+        }
+        String::new()
+    })
+}
+
+fn runtime_function_kind(kind: &RuntimeFunctionKind) -> serde_json::Value {
+    match kind {
+        RuntimeFunctionKind::Bytecode => serde_json::json!({"type": "bytecode"}),
+        RuntimeFunctionKind::SysOp(op) => serde_json::json!({"type": "sys_op", "op": op}),
+        RuntimeFunctionKind::Native => serde_json::json!({"type": "native"}),
+        RuntimeFunctionKind::NativeUnresolved => {
+            serde_json::json!({"type": "native_unresolved"})
+        }
+    }
+}
+
+fn runtime_function_origin(origin: &RuntimeFunctionOrigin) -> &'static str {
+    match origin {
+        RuntimeFunctionOrigin::UserDefined => "user_defined",
+        RuntimeFunctionOrigin::Companion => "companion",
+        RuntimeFunctionOrigin::Internal => "internal",
+        RuntimeFunctionOrigin::Builtin => "builtin",
+        RuntimeFunctionOrigin::AutoDerive => "auto_derive",
+    }
+}
+
+fn function_end_status(status: &FunctionEndStatus) -> &'static str {
+    match status {
+        FunctionEndStatus::Ok => "ok",
+        FunctionEndStatus::Error => "error",
+        FunctionEndStatus::Cancelled => "cancelled",
+    }
+}
+
+fn thread_end_status(status: &ThreadEndStatus) -> &'static str {
+    match status {
+        ThreadEndStatus::Completed => "completed",
+        ThreadEndStatus::Error => "error",
+        ThreadEndStatus::Cancelled => "cancelled",
+    }
+}
+
+fn base64_url(bytes: &[u8]) -> String {
+    use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
+    URL_SAFE_NO_PAD.encode(bytes)
 }
 
 /// Serialize the event content (the `EventKind` portion) to JSON.
@@ -529,7 +719,12 @@ mod tests {
     use bex_external_types::{Handle, MediaKind, Ty, WeakHeapRef};
     use indexmap::IndexMap;
 
-    use super::bex_value_to_debug_string;
+    use super::{bex_value_to_debug_string, disk_event_to_jsonl, event_file_header_to_jsonl};
+    use crate::{
+        DefinitionKey, DiskEventV1, EventFileHeaderV1, FunctionMetadata, FunctionMetadataTable,
+        RuntimeFunctionKind, RuntimeFunctionOrigin,
+        ids::{BexThreadId, CallId as BexCallId, EngineId, FunctionId, ProcessEuid, ProgramId},
+    };
 
     struct NoopHeap;
 
@@ -635,6 +830,70 @@ mod tests {
                 bex_external_types::BexExternalAdt::Media(Arc::new(media)),
             )),
             "<image: https://example.com/cat.png>"
+        );
+    }
+
+    #[test]
+    fn disk_set_id_serializes_override_uuid_payload() {
+        let json: serde_json::Value =
+            serde_json::from_str(&disk_event_to_jsonl(&DiskEventV1::SetId {
+                thread_id: BexThreadId(7),
+                call_id: BexCallId(8),
+                id: [1; 16],
+                timestamp_ns: 9,
+            }))
+            .unwrap();
+
+        assert_eq!(json["type"], "bex_set_id");
+        assert_eq!(json["thread_id"], 7);
+        assert_eq!(json["call_id"], 8);
+        assert_eq!(json["id"], "AQEBAQEBAQEBAQEBAQEBAQ");
+        assert_eq!(json["timestamp_ns"], 9);
+    }
+
+    #[test]
+    fn event_file_header_serializes_scoping_and_function_table() {
+        let json: serde_json::Value =
+            serde_json::from_str(&event_file_header_to_jsonl(&EventFileHeaderV1 {
+                process_euid: ProcessEuid([1; 16]),
+                engine_id: EngineId(2),
+                program_id: ProgramId([3; 16]),
+                source_snapshot_id: None,
+                revision_id: None,
+                started_at_epoch_ns: 4,
+                function_table: FunctionMetadataTable {
+                    functions: vec![FunctionMetadata {
+                        function_id: FunctionId(5),
+                        fqn: "user.main".to_string(),
+                        display_name: "main".to_string(),
+                        source_file: Some("main.baml".to_string()),
+                        source_span: None,
+                        kind: RuntimeFunctionKind::Bytecode,
+                        origin: RuntimeFunctionOrigin::UserDefined,
+                        owner_type: None,
+                        parent_function: None,
+                        lambda_path: None,
+                        definition_key: Some(DefinitionKey("function:user.main".to_string())),
+                        package_name: Some("user".to_string()),
+                        namespace: Vec::new(),
+                        source_snapshot_id: None,
+                        revision_id: None,
+                        semantic_lanes: None,
+                    }],
+                },
+            }))
+            .unwrap();
+
+        assert_eq!(json["type"], "bex_header_v1");
+        assert_eq!(json["process_euid"], "AQEBAQEBAQEBAQEBAQEBAQ");
+        assert_eq!(json["engine_id"], 2);
+        assert_eq!(json["program_id"], "AwMDAwMDAwMDAwMDAwMDAw");
+        assert_eq!(json["started_at_epoch_ns"], "4");
+        assert_eq!(json["function_table"][0]["function_id"], 5);
+        assert_eq!(json["function_table"][0]["fqn"], "user.main");
+        assert_eq!(
+            json["function_table"][0]["definition_key"],
+            "function:user.main"
         );
     }
 }
