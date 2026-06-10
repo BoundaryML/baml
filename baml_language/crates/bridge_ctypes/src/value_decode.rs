@@ -63,6 +63,8 @@ pub fn inbound_to_external(
                         Some(bex_project::HostValueKind::Callable)
                     } else if handle.handle_type == BamlHandleType::HostValueError as i32 {
                         Some(bex_project::HostValueKind::Error)
+                    } else if handle.handle_type == BamlHandleType::HostValueOpaque as i32 {
+                        Some(bex_project::HostValueKind::Opaque)
                     } else {
                         None
                     };

@@ -25,6 +25,7 @@ from baml_core import (
     call_function,
     flush_events,
 )
+from baml_core.errors import BamlPanic
 
 
 CALLBACK_BAML = """\
@@ -174,37 +175,39 @@ async def test_async_outer_call_with_sync_callback():
 # ---------------------------------------------------------------------------
 
 
-def test_callable_returning_unencodable_surfaces_as_error():
-    """A callback whose *result* cannot be encoded must surface as a BAML
-    error, not hang the engine. `object()` has no inbound encoding, so
-    `encode_result_inbound` raises a `TypeError`; the dispatch path turns it
-    into a thrown `baml.errors.HostCallable` Instance and completes the call."""
+def test_callable_returning_host_only_value_violates_contract():
+    """A callback that returns a host-only value (no BAML representation)
+    where the declared return type is `string` must surface as a
+    HostContractViolation, not hang the engine. (Bridge generics: arbitrary
+    objects now encode as opaque HOST_VALUE_OPAQUE handles instead of
+    raising a host-side TypeError, so the rejection moved engine-side where
+    it is validated against the declared return type.)"""
     rt = _make_runtime()
 
     def cb(_x: int):
-        return object()  # not encodable by _set_inbound_value
+        return object()  # host-only: encodes as an opaque handle
 
-    with pytest.raises(Exception) as exc_info:
+    with pytest.raises(BamlPanic, match="does not match the declared return type"):
         call_function_sync(rt, "CallCb", {"callback": cb, "x": 1})
-    # The important property is that it raised (completed) rather than hung.
-    assert exc_info.value is not None
 
 
-def test_callable_raising_during_result_property_still_completes():
-    """A callback that returns an object whose attribute access raises while
-    being encoded must still complete the call with an error."""
+def test_callable_raising_during_result_encode_still_completes():
+    """A callback whose result raises *during encoding* must still complete
+    the call with an error (engine never hangs). A `list` subclass with a
+    hostile `__iter__` takes the list encode branch and explodes mid-walk —
+    arbitrary non-container objects no longer fail encode (they become
+    opaque host-only handles), so the hostility has to live inside a
+    recognized container type."""
     rt = _make_runtime()
 
-    class Hostile:
+    class HostileList(list):
         def __iter__(self):
             raise RuntimeError("hostile iter")
 
     def cb(_x: int):
-        # A non-dict, non-list object with no inbound mapping → TypeError in
-        # the encoder; completes as an error.
-        return Hostile()
+        return HostileList([1, 2])
 
-    with pytest.raises(Exception):
+    with pytest.raises((Exception, BamlPanic)):
         call_function_sync(rt, "CallCb", {"callback": cb, "x": 1})
 
 
@@ -232,11 +235,17 @@ def test_encode_error_releases_registered_callables(monkeypatch):
     def cb(x: int) -> str:
         return str(x)
 
-    # `bad` is an un-encodable value (an arbitrary object). Dict iteration
+    # `bad` fails mid-encode: a `list` subclass with a hostile `__iter__`
+    # takes the list branch and raises. (An arbitrary `object()` no longer
+    # fails — it encodes as an opaque host-only handle.) Dict iteration
     # order in CPython 3.7+ is insertion order, so `callback` (registered
-    # first) is followed by `bad` (which fails) — exercising the rollback.
+    # first) is followed by `bad` — exercising the rollback.
+    class HostileList(list):
+        def __iter__(self):
+            raise RuntimeError("hostile iter")
+
     with pytest.raises(Exception):
-        _proto.encode_call_args({"callback": cb, "bad": object()})
+        _proto.encode_call_args({"callback": cb, "bad": HostileList([1])})
 
     assert len(released) == 1, (
         f"expected exactly one callable to be released on rollback, got {released}"

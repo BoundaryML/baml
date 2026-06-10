@@ -30,6 +30,11 @@ pub use indexable::{
 };
 pub use roots::{PermitProof, RootHaver, WriteBarrier};
 pub use task_group::{TaskGroupInner, TaskGroupPermit, TaskGroupTicket};
+/// Re-export so downstream crates (e.g. `bex_vm`) can downcast
+/// `Object::RustData` payloads to host-value handles without depending on
+/// `bex_resource_types` directly.
+pub use bex_resource_types::{HostValueArc, HostValueKind};
+
 pub use types::{
     ArrayContainer, ArrayReadGuard, ArrayWriteGuard, AtomicValueSlot, BoundMethod, Class,
     ClassField, ClientBuildMeta, ClientBuildType, CollectorRef, ConstValue, Enum, EnumVariant,

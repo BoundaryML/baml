@@ -500,33 +500,80 @@ impl BexEngine {
                 slice[global_index]
             }
             BexExternalValue::HostValue(arc) => {
-                // A `HostValue` lands in one of two declared shapes:
+                // A `HostValue` lands in one of three declared shapes:
                 //
                 // - `Ty::RustType` (opaque `$rust_type` field, e.g. the
                 //   `_handle` slot on `baml.errors.HostCallable`): wrap the
                 //   arc in `Object::RustData` so the BAML→host decoder can
                 //   later downcast it back to a `HostValueArc`. No
                 //   function signature involved.
+                // - `unknown` (including an erased/unbound generic TypeVar
+                //   position, possibly under Optional/Union): the value is
+                //   host-only and opaque to BAML. Wrap as `Object::RustData`
+                //   so the outbound path round-trips the original handle.
                 // - `Ty::Function` (host callable passed as a function
                 //   argument): build a `HostClosure` bound to the declared
                 //   signature so the call site can invoke it.
-                let ty = expected_ty.ok_or_else(|| EngineError::CannotConvert {
-                    type_name: "host_value (no declared type in context)".to_string(),
-                })?;
+                // No declared type in context (e.g. an element of a container
+                // whose declared type was erased to `unknown`, like a generic
+                // `T[]` param): the position is untyped, which is exactly the
+                // opaque/host-only situation. Seal non-callable host values
+                // as `Object::RustData`; callables still require a declared
+                // function type to bind, so they keep the explicit error.
+                let Some(ty) = expected_ty else {
+                    if !matches!(arc.kind, bex_external_types::HostValueKind::Callable) {
+                        let dyn_arc: std::sync::Arc<dyn std::any::Any + Send + Sync> = arc;
+                        return Ok(Value::object(
+                            holder.holder_mut().tlab_mut().alloc_rust_data(dyn_arc),
+                        ));
+                    }
+                    return Err(EngineError::CannotConvert {
+                        type_name: "host_value (no declared type in context)".to_string(),
+                    });
+                };
                 if matches!(peel_to_rust_type(ty), Some(())) {
                     let dyn_arc: std::sync::Arc<dyn std::any::Any + Send + Sync> = arc;
                     return Ok(Value::object(
                         holder.holder_mut().tlab_mut().alloc_rust_data(dyn_arc),
                     ));
                 }
+                // Host-only values (Opaque kind) only ever bind to unknown
+                // positions. Callables prefer a declared function type, but
+                // fall back to the opaque binding when the position is
+                // unknown (a callable passed as a generic `T` is sealed, not
+                // invocable). Checked before `peel_function_ty` for
+                // Opaque/Error kinds so a pathological `unknown | (fn)` union
+                // still seals non-callables.
+                let accepts_unknown = ty_accepts_opaque_host_value(ty);
+                let prefers_opaque = !matches!(
+                    arc.kind,
+                    bex_external_types::HostValueKind::Callable
+                ) || peel_function_ty(ty).is_none();
+                if accepts_unknown && prefers_opaque {
+                    let dyn_arc: std::sync::Arc<dyn std::any::Any + Send + Sync> = arc;
+                    return Ok(Value::object(
+                        holder.holder_mut().tlab_mut().alloc_rust_data(dyn_arc),
+                    ));
+                }
                 // Peel through Optional / Union to land on the function type.
-                let function_ty =
-                    peel_function_ty(ty).ok_or_else(|| EngineError::TypeMismatch {
-                        message: format!(
+                let function_ty = peel_function_ty(ty).ok_or_else(|| {
+                    let message = if matches!(
+                        arc.kind,
+                        bex_external_types::HostValueKind::Callable
+                    ) {
+                        format!(
                             "host callable cannot be passed where the declared type \
                              is `{ty}`; expected a function type or `$rust_type`",
-                        ),
-                    })?;
+                        )
+                    } else {
+                        format!(
+                            "host-only value cannot be passed where the declared type \
+                             is `{ty}`; host-only values bind only to generic/unknown \
+                             positions",
+                        )
+                    };
+                    EngineError::TypeMismatch { message }
+                })?;
                 let (params, ret, throws) = match function_ty {
                     Ty::Function {
                         params,
@@ -745,6 +792,19 @@ pub(crate) fn maybe_wrap_union(
 /// `T?` is `Ty::Union([T, Null], _)`, so nullable forms flow through
 /// the union arm). Mirrors [`peel_function_ty`] for the `$rust_type`
 /// field shape that a `HostValue` argument can land in.
+/// Whether a declared type has an `unknown` position an opaque host value
+/// can bind to: `BuiltinUnknown` directly, or inside a `Union` arm (which
+/// also covers `T?` — `Ty::Union([T, Null], _)`). An erased/unbound generic
+/// TypeVar is `BuiltinUnknown` at the boundary, so this is exactly the
+/// "host-only value bound to a generic position" test (bridge generics).
+pub(crate) fn ty_accepts_opaque_host_value(ty: &Ty) -> bool {
+    match ty {
+        Ty::BuiltinUnknown { .. } => true,
+        Ty::Union(members, _) => members.iter().any(ty_accepts_opaque_host_value),
+        _ => false,
+    }
+}
+
 pub(crate) fn peel_to_rust_type(ty: &Ty) -> Option<()> {
     if matches!(ty, Ty::RustType { .. }) {
         return Some(());

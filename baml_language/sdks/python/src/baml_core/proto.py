@@ -26,6 +26,7 @@ from .baml_py import (
     BamlPyHandle,
     BamlVideo,
     register_host_callable,
+    register_host_opaque,
     release_host_callable,
 )
 from ._stream import BamlStream
@@ -143,6 +144,7 @@ def _set_inbound_value(
     *,
     kwarg_name: str,
     registered: Optional[List[int]] = None,
+    opaque_keys: Optional[Dict[int, int]] = None,
 ) -> None:
     """Populate an `InboundValue` oneof from a Python value per 09d §2.
 
@@ -195,7 +197,7 @@ def _set_inbound_value(
         list_val.SetInParent()
         for item in value:
             _set_inbound_value(
-                list_val.values.add(), item, kwarg_name=kwarg_name, registered=registered
+                list_val.values.add(), item, kwarg_name=kwarg_name, registered=registered, opaque_keys=opaque_keys
             )
         return
     if isinstance(value, dict):
@@ -205,7 +207,7 @@ def _set_inbound_value(
         map_val.SetInParent()
         for k, v in value.items():
             _set_inbound_map_entry(
-                map_val.entries.add(), k, v, kwarg_name=kwarg_name, registered=registered
+                map_val.entries.add(), k, v, kwarg_name=kwarg_name, registered=registered, opaque_keys=opaque_keys
             )
         return
     if isinstance(value, enum.Enum):
@@ -241,7 +243,7 @@ def _set_inbound_value(
     # engine's `HANDLE_TABLE` row already carries the receiver's `ty`.
     if isinstance(value, BamlStream):
         return _set_inbound_value(
-            inbound_value, value._to_pyhandle(), kwarg_name=kwarg_name, registered=registered
+            inbound_value, value._to_pyhandle(), kwarg_name=kwarg_name, registered=registered, opaque_keys=opaque_keys
         )
 
     # Media PyO3 types — wrap into an `InboundClassValue` per 15b. The
@@ -254,7 +256,7 @@ def _set_inbound_value(
         data_entry = cv.fields.add()
         data_entry.string_key = "_data"
         _set_inbound_value(
-            data_entry.value, value._to_pyhandle(), kwarg_name=kwarg_name, registered=registered
+            data_entry.value, value._to_pyhandle(), kwarg_name=kwarg_name, registered=registered, opaque_keys=opaque_keys
         )
         return
 
@@ -299,7 +301,7 @@ def _set_inbound_value(
         # second level.
         for k, v in dict(value).items():
             _set_inbound_map_entry(
-                cv.fields.add(), k, v, kwarg_name=kwarg_name, registered=registered
+                cv.fields.add(), k, v, kwarg_name=kwarg_name, registered=registered, opaque_keys=opaque_keys
             )
         # Private attrs aren't iterated by `dict(value)`. Codegen emits
         # `$rust_type` fields as private attrs (single-underscore names);
@@ -310,18 +312,50 @@ def _set_inbound_value(
         for k, v in private.items():
             if isinstance(v, BamlPyHandle):
                 _set_inbound_map_entry(
-                    cv.fields.add(), k, v, kwarg_name=kwarg_name, registered=registered
+                    cv.fields.add(), k, v, kwarg_name=kwarg_name, registered=registered, opaque_keys=opaque_keys
                 )
         return
 
-    raise TypeError(
-        f"Cannot encode argument {kwarg_name!r} of type "
-        f"{type(value).__name__} into baml_inbound.proto"
+    # Anything else is a host-only value: a Python object with no BAML
+    # representation (bridge generics). Register it in the host-value table
+    # and emit an opaque `HOST_VALUE_OPAQUE` handle. The engine seals it
+    # (no introspection from BAML; `==` is host-object identity) and the
+    # outbound decoder rehydrates the original object by key. Typed
+    # (non-`unknown`) parameter positions reject the handle engine-side
+    # with a type mismatch.
+    # Dedup within one encode pass: the same live Python object appearing in
+    # several argument positions gets ONE registry key, so in-BAML `==`
+    # (host-object identity by key) holds for e.g. `Eq(a=obj, b=obj)`. Keyed
+    # by `id(value)`, which is stable here because the kwargs keep every
+    # encoded object alive for the duration of the pass.
+    if opaque_keys is not None and id(value) in opaque_keys:
+        inbound_value.handle.key = opaque_keys[id(value)]
+        inbound_value.handle.handle_type = typing.cast(
+            baml_inbound_pb2.BamlHandleType,
+            baml_inbound_pb2.BamlHandleType.HOST_VALUE_OPAQUE,
+        )
+        return
+    key = register_host_opaque(value)
+    if registered is not None:
+        registered.append(key)
+    if opaque_keys is not None:
+        opaque_keys[id(value)] = key
+    inbound_value.handle.key = key
+    inbound_value.handle.handle_type = typing.cast(
+        baml_inbound_pb2.BamlHandleType,
+        baml_inbound_pb2.BamlHandleType.HOST_VALUE_OPAQUE,
     )
+    return
 
 
 def _set_inbound_map_entry(
-    entry, key: Any, value: Any, *, kwarg_name: str, registered: Optional[List[int]] = None
+    entry,
+    key: Any,
+    value: Any,
+    *,
+    kwarg_name: str,
+    registered: Optional[List[int]] = None,
+    opaque_keys: Optional[Dict[int, int]] = None,
 ) -> None:
     """Populate an `InboundMapEntry` from a (key, value) pair. Key-oneof
     dispatch follows 09d §2 "Map keys"; `bool` precedes `int` (subclass).
@@ -340,7 +374,7 @@ def _set_inbound_map_entry(
         ek.value = key.name
     else:
         entry.string_key = str(key)  # best-effort fallback
-    _set_inbound_value(entry.value, value, kwarg_name=kwarg_name, registered=registered)
+    _set_inbound_value(entry.value, value, kwarg_name=kwarg_name, registered=registered, opaque_keys=opaque_keys)
 
 
 def encode_call_args(kwargs: Dict[str, Any]) -> bytes:
@@ -358,11 +392,12 @@ def encode_call_args(kwargs: Dict[str, Any]) -> bytes:
     encode and release them all if any kwarg fails.
     """
     registered: List[int] = []
+    opaque_keys: Dict[int, int] = {}
     try:
         args = baml_inbound_pb2.CallFunctionArgs()
         for key, value in kwargs.items():
             _set_inbound_map_entry(
-                args.kwargs.add(), key, value, kwarg_name=key, registered=registered
+                args.kwargs.add(), key, value, kwarg_name=key, registered=registered, opaque_keys=opaque_keys
             )
         return args.SerializeToString()
     except BaseException:
@@ -584,6 +619,19 @@ def _decode_handle(handle, type_map: BamlTypeMap) -> Any:
         class_fqn = name.name if name is not None else ""
         cls = type_map.get_class(class_fqn)
         return cls._from_pyhandle(pyhandle)
+    if ht in (HT.HOST_VALUE_OPAQUE, HT.HOST_VALUE_CALLABLE):
+        # Same-host rehydration (bridge generics): a host-only value (or a
+        # callable that round-tripped through a generic/unknown position)
+        # whose key still resolves in this process's host-value registry
+        # decodes back to the *original* Python object — preserving
+        # `id(out) == id(arg)` for identity round-trips. A dead or
+        # foreign-process key degrades to the bare `BamlPyHandle`.
+        from .baml_py import lookup_host_value
+
+        original = lookup_host_value(pyhandle)
+        if original is not None:
+            return original
+        return pyhandle
     if ht == HT.HANDLE_UNSPECIFIED:
         raise BamlError("BEX emitted HANDLE_UNSPECIFIED (Rust-side bug)")
 

@@ -27,6 +27,13 @@ pub enum HostValueKind {
     /// so the originating host can recover the exact native exception on
     /// round-trip. Surfaced in BAML as `baml.errors.HostCallable`.
     Error,
+    /// An opaque non-callable, non-error host value with no BAML
+    /// representation (bridge generics: a "host-only" value bound to an
+    /// `unknown`/unbound-TypeVar position). BAML treats it as a sealed
+    /// handle — field access/iteration/comparison beyond `==`/`!=` are not
+    /// available — and the originating host recovers the original object by
+    /// key on round-trip.
+    Opaque,
 }
 
 /// Drop-on-last-clone notification fired to the host language.

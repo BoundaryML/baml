@@ -3807,6 +3807,33 @@ impl BexVm {
                         .into());
                     }
                 }),
+                // Opaque host values (bridge generics): `==` is host-object
+                // identity. Two handles are equal iff they refer to the same
+                // host registry entry — compare interned `HostValueArc`s by
+                // `(key, kind)`. Non-host-value RustData falls back to Arc
+                // pointer identity. Ordering comparisons are not defined for
+                // sealed host values.
+                (Object::RustData(l), Object::RustData(r)) => {
+                    let eq = match (
+                        l.downcast_ref::<bex_vm_types::HostValueArc>(),
+                        r.downcast_ref::<bex_vm_types::HostValueArc>(),
+                    ) {
+                        (Some(lh), Some(rh)) => lh == rh,
+                        _ => std::sync::Arc::ptr_eq(l, r),
+                    };
+                    Value::bool(match op {
+                        CmpOp::Eq => eq,
+                        CmpOp::NotEq => !eq,
+                        _ => {
+                            return Err(VmInternalError::CannotApplyCmpOp {
+                                left: bex_vm_types::types::Type::Object(ObjectType::RustData),
+                                right: bex_vm_types::types::Type::Object(ObjectType::RustData),
+                                op,
+                            }
+                            .into());
+                        }
+                    })
+                }
                 // (Bigint, Bigint) — and any bigint/int mix — is handled by the
                 // `value_as_bigint_cow` branch above, before this object match.
                 _ => Value::bool(match op {

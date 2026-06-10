@@ -23,6 +23,7 @@ __all__ = [
     "get_version",
     "lookup_host_value",
     "register_host_callable",
+    "register_host_opaque",
     "release_host_callable",
 ]
 
@@ -464,6 +465,17 @@ def register_host_callable(callable: typing.Any) -> builtins.int:
     Exposed to Python as `baml_py.register_host_callable(callable) -> int`.
     Called from the inbound encoder in `baml_core.proto` whenever a Python
     callable appears as a kwarg.
+    """
+
+def register_host_opaque(value: typing.Any) -> builtins.int:
+    r"""
+    Insert an arbitrary Python object into the registry as an opaque
+    host-only value and return its key.
+
+    Exposed to Python as `baml_py.register_host_opaque(value) -> int`.
+    Called from the inbound encoder in `baml_core.proto` when a value has no
+    BAML representation (bridge generics: a "host-only" value bound to an
+    `unknown`/unbound-TypeVar position).
     """
 
 def release_host_callable(host_value_key: builtins.int) -> None:

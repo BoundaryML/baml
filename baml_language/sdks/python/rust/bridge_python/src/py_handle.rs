@@ -111,7 +111,8 @@ impl Drop for BamlPyHandle {
         use bridge_ctypes::baml_core::cffi::BamlHandleType;
         let ht_i32 = i32::try_from(self.handle_type).unwrap_or(-1);
         let is_host_value = ht_i32 == BamlHandleType::HostValueCallable as i32
-            || ht_i32 == BamlHandleType::HostValueError as i32;
+            || ht_i32 == BamlHandleType::HostValueError as i32
+            || ht_i32 == BamlHandleType::HostValueOpaque as i32;
         if !is_host_value {
             let _ = unsafe { baml_handle_release(self.handle_key) };
         }

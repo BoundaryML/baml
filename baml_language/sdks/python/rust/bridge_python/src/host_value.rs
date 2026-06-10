@@ -99,6 +99,23 @@ pub fn register_host_callable(callable: Py<PyAny>) -> u64 {
     key
 }
 
+/// Insert an arbitrary Python object into the registry as an opaque
+/// host-only value and return its key.
+///
+/// Exposed to Python as `baml_py.register_host_opaque(value) -> int`.
+/// Called from the inbound encoder in `baml_core.proto` when a value has no
+/// BAML representation (bridge generics: a "host-only" value bound to an
+/// `unknown`/unbound-TypeVar position). The table is shared with callable
+/// and error entries (keys are globally unique), and the same
+/// `host_release_callback` releases any kind on last-Arc-drop.
+#[gen_stub_pyfunction]
+#[pyfunction]
+pub fn register_host_opaque(value: Py<PyAny>) -> u64 {
+    let key = next_key();
+    REGISTRY.table.lock().unwrap().insert(key, value);
+    key
+}
+
 /// Insert a Python exception object into the registry and return its key.
 ///
 /// Used by the host-throw path to register the originating native
@@ -173,6 +190,7 @@ pub fn lookup_host_value(
     let ht_i32 = i32::try_from(handle.handle_type).ok()?;
     if ht_i32 != BamlHandleType::HostValueCallable as i32
         && ht_i32 != BamlHandleType::HostValueError as i32
+        && ht_i32 != BamlHandleType::HostValueOpaque as i32
     {
         return None;
     }

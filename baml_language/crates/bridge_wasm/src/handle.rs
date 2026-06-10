@@ -24,6 +24,9 @@ fn type_name(ht: BamlHandleType) -> &'static str {
         BamlHandleType::HostValueCallable => "host_value_callable",
         // Host-owned opaque error values: same per-bridge tracking as callables.
         BamlHandleType::HostValueError => "host_value_error",
+        // Host-owned opaque non-callable values (bridge generics): same
+        // per-bridge tracking as callables.
+        BamlHandleType::HostValueOpaque => "host_value_opaque",
     }
 }
 
@@ -118,7 +121,9 @@ impl Drop for BamlHandle {
         // it. Skip the table release for those variants; their owners drop
         // them through their own release path.
         match self.handle_type {
-            BamlHandleType::HostValueCallable | BamlHandleType::HostValueError => {}
+            BamlHandleType::HostValueCallable
+            | BamlHandleType::HostValueError
+            | BamlHandleType::HostValueOpaque => {}
             _ => {
                 let _ = HANDLE_TABLE.release(self.key);
             }

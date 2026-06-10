@@ -51,6 +51,7 @@ fn baml_py(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_wrapped(wrap_pyfunction!(flush_events))?;
     m.add_wrapped(wrap_pyfunction!(runtime::get_runtime))?;
     m.add_wrapped(wrap_pyfunction!(host_value::register_host_callable))?;
+    m.add_wrapped(wrap_pyfunction!(host_value::register_host_opaque))?;
     m.add_wrapped(wrap_pyfunction!(host_value::release_host_callable))?;
     m.add_wrapped(wrap_pyfunction!(host_value::lookup_host_value))?;
 

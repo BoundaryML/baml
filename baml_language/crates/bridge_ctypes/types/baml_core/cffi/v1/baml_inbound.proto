@@ -52,6 +52,11 @@ enum BamlHandleType {
   // HostReleaseFn lifetime as HOST_VALUE_CALLABLE. Surfaced in BAML as
   // baml.errors.HostCallable. See bex_external_types::host_value.
   HOST_VALUE_ERROR = 16;
+  // Host-owned opaque non-callable value (bridge generics: a "host-only"
+  // value bound to an unknown/unbound-TypeVar position). Same per-bridge
+  // registry and HostReleaseFn lifetime as HOST_VALUE_CALLABLE. Opaque to
+  // BAML; the originating host rehydrates the original object by key.
+  HOST_VALUE_OPAQUE = 17;
 }
 
 message BamlHandle {

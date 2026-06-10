@@ -147,6 +147,7 @@ pub fn external_to_outbound(
             let ht = match arc.kind {
                 bex_project::HostValueKind::Callable => BamlHandleType::HostValueCallable as i32,
                 bex_project::HostValueKind::Error => BamlHandleType::HostValueError as i32,
+                bex_project::HostValueKind::Opaque => BamlHandleType::HostValueOpaque as i32,
             };
             Some(BamlValueVariant::HandleValue(BamlOutboundHandle {
                 key: arc.key,
