@@ -1,17 +1,8 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 48781
 ---
 === COMPILER2 DIAGNOSTICS ===
-  [type] error: type mismatch: expected string, got int
-   ╭─[ main.baml:1:1 ]
-   │
- 1 │ // Expression names — type errors: non-string expressions as test names.
-   │ │ 
-   │ ╰─ type mismatch: expected string, got int
-   │ 
-   │ Note: Error code: E0001
-───╯
-
   [type] error: operator `Add` cannot be applied to `"a"` and `1`
    ╭─[ main.baml:3:5 ]
    │

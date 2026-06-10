@@ -530,7 +530,7 @@ class Stream<TStream, TFinal> {
     }
     match (self._acc.finish_reason()) {
       null => {
-        throw root.errors.LlmClientError { message: "Streaming finished without finish_reason" };
+        throw root.errors.LlmClient { message: "Streaming finished without finish_reason" };
       },
       let reason: string => self._client.validate_finish_reason(reason),
     }
