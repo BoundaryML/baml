@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/compiler2_tir/phase5.rs
-assertion_line: 389
 expression: output
 ---
 namespace baml:
@@ -212,3 +211,7 @@ namespace baml.toml:
   function item_to_json
 namespace baml.unstable:
   function string<T>
+namespace baml.yaml:
+  class YamlParseError { methods: [to_json, from_json] }
+  function deserialize<T>
+  function parse
