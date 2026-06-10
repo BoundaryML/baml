@@ -2175,7 +2175,7 @@ fn lower_template_string(
 
 /// Synthesize an `Item::Let` for a `retry_policy` declaration.
 ///
-/// Produces: `RetryPolicy { max_retries: N, initial_delay_ms: N, multiplier: F, max_delay_ms: N }`
+/// Produces: `baml.llm.RetryPolicy { max_retries: N, initial_delay_ms: N, multiplier: F, max_delay_ms: N }`
 ///
 /// Each config field is lowered generically via `lower_config_item::lower_config_value`,
 /// then wrapped in a typed `Expr::Object`.
@@ -2233,7 +2233,7 @@ fn synthesize_retry_policy_let(
         .collect();
 
     let root = alloc(Expr::Object {
-        type_name: Some(TypePath::bare(Name::new("RetryPolicy"))),
+        type_name: Some(TypePath::from_dotted("baml.llm.RetryPolicy")),
         type_args: vec![],
         fields,
         spreads: vec![],
@@ -2357,7 +2357,7 @@ fn synthesize_client_items(
 
 /// Build the `Client` identity let binding.
 ///
-/// Produces: `Client { name, client_type, sub_clients, retry, counter }`
+/// Produces: `baml.llm.Client { name, client_type, sub_clients, retry, counter }`
 ///
 /// - Composite clients (fallback/round-robin) get sub-client `Expr::Path` references
 ///   from `options { strategy [A, B] }`, enabling TIR name validation and
@@ -2470,9 +2470,9 @@ fn synthesize_client_let(
     let counter_val = if is_round_robin { round_robin_start } else { 0 };
     let counter_expr = alloc(Expr::Literal(Literal::Int(counter_val)));
 
-    // Client { name, client_type, sub_clients, retry, counter }
+    // baml.llm.Client { name, client_type, sub_clients, retry, counter }
     let root = alloc(Expr::Object {
-        type_name: Some(TypePath::bare(Name::new("Client"))),
+        type_name: Some(TypePath::from_dotted("baml.llm.Client")),
         type_args: vec![],
         fields: vec![
             (Name::new("name"), name_expr),

@@ -15946,8 +15946,7 @@ function baml.llm.Stream.final(self: baml.llm.Stream<unknown, unknown>) -> unkno
 
   L4:
     load_const "Streaming finished without finish_reason"
-    pop 1
-    load_const null /* unknown class: root.errors.LlmClientError */
+    init_instance baml.errors.LlmClient .message
     throw
 }
 

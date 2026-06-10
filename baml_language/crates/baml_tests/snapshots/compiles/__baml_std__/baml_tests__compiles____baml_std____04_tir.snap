@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 4198
 ---
 === TIR2 ===
 
@@ -2208,7 +2209,7 @@ function baml.llm.Stream.final(self: baml.llm.Stream) -> unknown throws never {
     match (self._acc.finish_reason() : string | null) : null
       null =>
         { : never
-          throw root.errors.LlmClientError { message: "Streaming finishe..." } : unknown
+          throw root.errors.LlmClient { message: "Streaming finishe..." } : baml.errors.LlmClient
         }
       reason: string =>
         self._client.validate_finish_reason(reason) : null
@@ -3355,7 +3356,7 @@ function baml.toml.Table.from_json(json: baml.json.json) -> baml.toml.Table thro
     match (json : baml.json.json) : baml.toml.Table
       map<string, baml.json.json> =>
         { : baml.toml.Table
-          let items: map<string, Item> = map {  } : unknown -> map<string, baml.toml.Item>
+          let items: map<string, Item> = map {  } : map<string, baml.toml.Item>
           for key in json.keys()
             { : void
               items[key] = match (json[key]) { null => { 1 stmts }, item => item_from_json(item) } : baml.toml.Item

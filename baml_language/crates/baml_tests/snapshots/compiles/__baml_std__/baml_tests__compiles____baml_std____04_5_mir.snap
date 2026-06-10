@@ -15192,7 +15192,7 @@ fn baml.llm.Stream.final(self: baml.llm.Stream) -> void {
     let _18: string | null
     let _19: () -> string | null throws baml.errors.LlmClient
     let _20: bool
-    let _21: void
+    let _21: baml.errors.LlmClient
     let _22: string // reason
     let _23: (string) -> null throws baml.errors.LlmClient
     let _24: string
@@ -15288,7 +15288,7 @@ fn baml.llm.Stream.final(self: baml.llm.Stream) -> void {
     }
 
     bb16: {
-        _21 = root.errors.LlmClientError { const "Streaming finished without finish_reason" };
+        _21 = baml.errors.LlmClient { const "Streaming finished without finish_reason" };
         throw copy _21;
     }
 }

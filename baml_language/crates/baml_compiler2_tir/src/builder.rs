@@ -3967,6 +3967,15 @@ impl<'db> TypeInferenceBuilder<'db> {
                 type_name,
                 type_args: obj_type_args,
                 fields,
+                spreads,
+                ..
+            } if Self::is_map_object_literal(type_name.as_ref(), obj_type_args, spreads) => {
+                self.infer_map_object_expr(body, fields)
+            }
+            Expr::Object {
+                type_name,
+                type_args: obj_type_args,
+                fields,
                 ..
             } => self.infer_object_expr(expr_id, body, type_name.as_ref(), obj_type_args, fields),
             Expr::Index { base, index } => self.infer_index_expr(expr_id, body, *base, *index),
@@ -4628,6 +4637,98 @@ impl<'db> TypeInferenceBuilder<'db> {
         result
     }
 
+    fn lower_object_type_name(
+        &mut self,
+        expr_id: ExprId,
+        path: &baml_base::core_types::TypePath,
+        obj_type_args: &[TypeExpr],
+    ) -> Ty {
+        let mut diags = Vec::new();
+        let ty_expr = TypeExpr::Path {
+            segments: path.segments().to_vec(),
+            generic_args: obj_type_args.to_vec(),
+            associated_type_bindings: Vec::new(),
+            attrs: Vec::new(),
+        };
+        let ty = self.lower_type_expr_in_current_body(&ty_expr, &mut diags);
+        for diag in diags {
+            self.context.report_simple(diag, expr_id);
+        }
+        ty
+    }
+
+    fn is_map_object_literal(
+        type_name: Option<&baml_base::core_types::TypePath>,
+        obj_type_args: &[TypeExpr],
+        spreads: &[ast::SpreadField],
+    ) -> bool {
+        obj_type_args.is_empty()
+            && spreads.is_empty()
+            && matches!(
+                type_name.map(|path| path.segments()),
+                Some([name]) if name.as_str() == "map"
+            )
+    }
+
+    fn infer_map_object_expr(&mut self, body: &ExprBody, fields: &[(Name, ExprId)]) -> Ty {
+        let key_ty = if fields.is_empty() {
+            Ty::Never {
+                attr: TyAttr::default(),
+            }
+        } else {
+            Ty::Primitive(PrimitiveType::String, TyAttr::default())
+        };
+        let val_types: Vec<Ty> = fields
+            .iter()
+            .map(|(_, value)| self.infer_expr(*value, body))
+            .collect();
+        let val_ty = Self::join_all(&val_types).widen_fresh();
+        Ty::Map(Box::new(key_ty), Box::new(val_ty), TyAttr::default())
+    }
+
+    fn check_map_object_expr(
+        &mut self,
+        expr_id: ExprId,
+        body: &ExprBody,
+        expected: &Ty,
+        fields: &[(Name, ExprId)],
+    ) -> Ty {
+        if let Ty::Map(key_ty, val_ty, _) | Ty::EvolvingMap(key_ty, val_ty, _) = expected {
+            let string_ty = Ty::Primitive(PrimitiveType::String, TyAttr::default());
+            if !fields.is_empty() && !self.is_subtype(&string_ty, key_ty) {
+                self.context.report(
+                    TirTypeError::TypeMismatch {
+                        expected: key_ty.as_ref().clone(),
+                        got: string_ty,
+                    },
+                    expr_id,
+                    Vec::new(),
+                );
+            }
+            for (_, value) in fields {
+                self.check_expr(*value, body, val_ty);
+            }
+            let ty = expected.clone();
+            self.record_expr_type(expr_id, ty.clone());
+            ty
+        } else {
+            let inferred = self.infer_map_object_expr(body, fields);
+            if !matches!(expected, Ty::Unknown { .. } | Ty::Error { .. })
+                && !self.is_subtype(&inferred, expected)
+            {
+                self.context.report(
+                    TirTypeError::TypeMismatch {
+                        expected: expected.clone(),
+                        got: inferred.clone(),
+                    },
+                    expr_id,
+                    Vec::new(),
+                );
+            }
+            inferred
+        }
+    }
+
     #[inline(never)]
     fn infer_object_expr(
         &mut self,
@@ -4638,16 +4739,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         fields: &[(Name, ExprId)],
     ) -> Ty {
         let ty = type_name
-            .map(|path| {
-                let mut diags = Vec::new();
-                let ty_expr = TypeExpr::Path {
-                    segments: path.segments().to_vec(),
-                    generic_args: obj_type_args.to_vec(),
-                    associated_type_bindings: Vec::new(),
-                    attrs: Vec::new(),
-                };
-                self.lower_type_expr_in_current_body(&ty_expr, &mut diags)
-            })
+            .map(|path| self.lower_object_type_name(expr_id, path, obj_type_args))
             .unwrap_or(Ty::Unknown {
                 attr: TyAttr::default(),
             });
@@ -4764,6 +4856,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         body: &ExprBody,
         expected: &Ty,
         type_name: Option<&baml_base::core_types::TypePath>,
+        obj_type_args: &[TypeExpr],
     ) -> Option<Ty> {
         // BEP-044 wf3 #G15: when the literal explicitly names a concrete
         // class that differs from the expected class, it must be a subtype.
@@ -4773,20 +4866,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             return None;
         };
 
-        let mut diags = Vec::new();
-        let lit_ty = crate::lower_type_expr::lower_type_expr_in_ns(
-            self.context.db(),
-            &TypeExpr::Path {
-                segments: path.segments().to_vec(),
-                generic_args: Vec::new(),
-                associated_type_bindings: Vec::new(),
-                attrs: Vec::new(),
-            },
-            self.package_items,
-            &self.ns_context,
-            &self.generic_params,
-            &mut diags,
-        );
+        let lit_ty = self.lower_object_type_name(expr_id, path, obj_type_args);
         if let Ty::Class(lit_qtn, _, _) = &lit_ty
             && lit_qtn != expected_qtn
         {
@@ -4817,10 +4897,15 @@ impl<'db> TypeInferenceBuilder<'db> {
         expected: &Ty,
         fields: &[(Name, ExprId)],
         type_name: Option<&baml_base::core_types::TypePath>,
+        obj_type_args: &[TypeExpr],
     ) -> Ty {
-        if let Some(inferred) =
-            self.check_object_literal_declared_class_mismatch(expr_id, body, expected, type_name)
-        {
+        if let Some(inferred) = self.check_object_literal_declared_class_mismatch(
+            expr_id,
+            body,
+            expected,
+            type_name,
+            obj_type_args,
+        ) {
             return inferred;
         }
         self.validate_type_generic_bounds(expr_id, expected);
@@ -5397,8 +5482,27 @@ impl<'db> TypeInferenceBuilder<'db> {
             // is not a subtype of `bigint`, and the runtime does no field-level
             // widening, so it must be written `1n`).
             Expr::Object {
-                fields, type_name, ..
-            } => self.check_object_expr(expr_id, body, expected, fields, type_name.as_ref()),
+                fields,
+                type_name,
+                type_args,
+                spreads,
+                ..
+            } if Self::is_map_object_literal(type_name.as_ref(), type_args, spreads) => {
+                self.check_map_object_expr(expr_id, body, expected, fields)
+            }
+            Expr::Object {
+                fields,
+                type_name,
+                type_args,
+                ..
+            } => self.check_object_expr(
+                expr_id,
+                body,
+                expected,
+                fields,
+                type_name.as_ref(),
+                type_args,
+            ),
             Expr::Map { entries } => {
                 let kv = match expected {
                     Ty::Map(k, v, _) | Ty::EvolvingMap(k, v, _) => Some((k, v)),
@@ -15077,6 +15181,8 @@ impl<'db> TypeInferenceBuilder<'db> {
             self.declared_return_ty = None;
         }
 
+        let lambda_diagnostics_start = self.context.diagnostic_count();
+
         // Infer or check the lambda body
         let ret_ty = if let Some(expected) = expected_ret {
             if matches!(expected, Ty::Unknown { .. } | Ty::TypeVar(_, _)) {
@@ -15095,6 +15201,9 @@ impl<'db> TypeInferenceBuilder<'db> {
             throws_report_span,
             warn_extraneous_throws,
         );
+        self.context
+            .remap_diagnostics_after(lambda_diagnostics_start, lambda_source_map);
+
         let effective_facts = self.collect_effective_throws(lambda_body);
         let lambda_effective_throws = Self::ty_from_concrete_facts(&effective_facts)
             .or_else(|| {
