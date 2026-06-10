@@ -4709,14 +4709,18 @@ impl<'db> TypeInferenceBuilder<'db> {
                 attr: TyAttr::default(),
             }
         } else {
-            Ty::Primitive(PrimitiveType::String, TyAttr::default())
+            Ty::string()
         };
         let val_types: Vec<Ty> = fields
             .iter()
             .map(|(_, value)| self.infer_expr(*value, body))
             .collect();
         let val_ty = Self::join_all(&val_types).widen_fresh();
-        Ty::Map(Box::new(key_ty), Box::new(val_ty), TyAttr::default())
+        Ty::Map {
+            key: Box::new(key_ty),
+            value: Box::new(val_ty),
+            attr: TyAttr::default(),
+        }
     }
 
     fn check_map_object_expr(
@@ -4726,8 +4730,14 @@ impl<'db> TypeInferenceBuilder<'db> {
         expected: &Ty,
         fields: &[(Name, ExprId)],
     ) -> Ty {
-        if let Ty::Map(key_ty, val_ty, _) | Ty::EvolvingMap(key_ty, val_ty, _) = expected {
-            let string_ty = Ty::Primitive(PrimitiveType::String, TyAttr::default());
+        if let Ty::Map {
+            key: key_ty,
+            value: val_ty,
+            ..
+        }
+        | Ty::EvolvingMap(key_ty, val_ty, _) = expected
+        {
+            let string_ty = Ty::string();
             if !fields.is_empty() && !self.is_subtype(&string_ty, key_ty) {
                 self.context.report(
                     TirTypeError::TypeMismatch {
