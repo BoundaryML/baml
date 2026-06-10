@@ -231,27 +231,27 @@ function testing.TestCollector.find_testset(self: testing.TestCollector, name: s
        48    pop_jump_if_false +176   (to 224)
        49    load_type 11             
        50    load_var 3               (_3)
-       51    call 528 ntypeargs=1     (baml.iter.Iterable$for$T[].iter)
+       51    call 532 ntypeargs=1     (baml.iter.Iterable$for$T[].iter)
        52    store_var 4              (_4)
        53    jump +61                 (to 114)
        54    load_type 11             
        55    load_var 3               (_3)
-       56    call 528 ntypeargs=1     (baml.iter.Iterable$for$T[].iter)
+       56    call 532 ntypeargs=1     (baml.iter.Iterable$for$T[].iter)
        57    store_var 4              (_4)
        58    jump +56                 (to 114)
        59    load_type 11             
        60    load_type 12             
        61    load_var 3               (_3)
-       62    call 575 ntypeargs=2     (baml.iter.Peekable.Iterable.iter)
+       62    call 579 ntypeargs=2     (baml.iter.Peekable.Iterable.iter)
        63    store_var 4              (_4)
        64    jump +50                 (to 114)
        65    load_var 3               (_3)
-       66    make_bound_method 510    
+       66    make_bound_method 514    
        67    call_indirect            
        68    store_var 4              (_4)
        69    jump +45                 (to 114)
        70    load_var 3               (_3)
-       71    make_bound_method 523    
+       71    make_bound_method 527    
        72    call_indirect            
        73    store_var 4              (_4)
        74    jump +40                 (to 114)
@@ -259,39 +259,39 @@ function testing.TestCollector.find_testset(self: testing.TestCollector, name: s
        76    load_type 12             
        77    load_type 12             
        78    load_var 3               (_3)
-       79    call 537 ntypeargs=3     (baml.iter.Filter.Iterable.iter)
+       79    call 541 ntypeargs=3     (baml.iter.Filter.Iterable.iter)
        80    store_var 4              (_4)
        81    jump +33                 (to 114)
        82    load_var 3               (_3)
-       83    make_bound_method 553    
+       83    make_bound_method 557    
        84    call_indirect            
        85    store_var 4              (_4)
        86    jump +28                 (to 114)
        87    load_type 11             
        88    load_var 3               (_3)
-       89    call 571 ntypeargs=1     (baml.iter.Repeat.Iterable.iter)
+       89    call 575 ntypeargs=1     (baml.iter.Repeat.Iterable.iter)
        90    store_var 4              (_4)
        91    jump +23                 (to 114)
        92    load_type 11             
        93    load_type 12             
        94    load_type 12             
        95    load_var 3               (_3)
-       96    call 546 ntypeargs=3     (baml.iter.Chain.Iterable.iter)
+       96    call 550 ntypeargs=3     (baml.iter.Chain.Iterable.iter)
        97    store_var 4              (_4)
        98    jump +16                 (to 114)
        99    load_type 11             
        100   load_type 12             
        101   load_var 3               (_3)
-       102   call 561 ntypeargs=2     (baml.iter.StepBy.Iterable.iter)
+       102   call 565 ntypeargs=2     (baml.iter.StepBy.Iterable.iter)
        103   store_var 4              (_4)
        104   jump +10                 (to 114)
        105   load_type 11             
        106   load_var 3               (_3)
-       107   call 506 ntypeargs=1     (baml.iter.ArrayIterator.Iterable.iter)
+       107   call 510 ntypeargs=1     (baml.iter.ArrayIterator.Iterable.iter)
        108   store_var 4              (_4)
        109   jump +5                  (to 114)
        110   load_var 3               (_3)
-       111   make_bound_method 584    
+       111   make_bound_method 588    
        112   call_indirect            
        113   store_var 4              (_4)
        114   load_var 4               (_4)
@@ -336,16 +336,16 @@ function testing.TestCollector.find_testset(self: testing.TestCollector, name: s
        153   load_type 11             
        154   load_type 12             
        155   load_var 4               (_4)
-       156   call 533 ntypeargs=2     (baml.iter.Peekable.Iterator.next)
+       156   call 537 ntypeargs=2     (baml.iter.Peekable.Iterator.next)
        157   store_var 5              (_35)
        158   jump +50                 (to 208)
        159   load_var 4               (_4)
-       160   make_bound_method 564    
+       160   make_bound_method 568    
        161   call_indirect            
        162   store_var 5              (_35)
        163   jump +45                 (to 208)
        164   load_var 4               (_4)
-       165   make_bound_method 577    
+       165   make_bound_method 581    
        166   call_indirect            
        167   store_var 5              (_35)
        168   jump +40                 (to 208)
@@ -353,39 +353,39 @@ function testing.TestCollector.find_testset(self: testing.TestCollector, name: s
        170   load_type 12             
        171   load_type 12             
        172   load_var 4               (_4)
-       173   call 500 ntypeargs=3     (baml.iter.Filter.Iterator.next)
+       173   call 504 ntypeargs=3     (baml.iter.Filter.Iterator.next)
        174   store_var 5              (_35)
        175   jump +33                 (to 208)
        176   load_var 4               (_4)
-       177   make_bound_method 513    
+       177   make_bound_method 517    
        178   call_indirect            
        179   store_var 5              (_35)
        180   jump +28                 (to 208)
        181   load_type 11             
        182   load_var 4               (_4)
-       183   call 527 ntypeargs=1     (baml.iter.Repeat.Iterator.next)
+       183   call 531 ntypeargs=1     (baml.iter.Repeat.Iterator.next)
        184   store_var 5              (_35)
        185   jump +23                 (to 208)
        186   load_type 11             
        187   load_type 12             
        188   load_type 12             
        189   load_var 4               (_4)
-       190   call 503 ntypeargs=3     (baml.iter.Chain.Iterator.next)
+       190   call 507 ntypeargs=3     (baml.iter.Chain.Iterator.next)
        191   store_var 5              (_35)
        192   jump +16                 (to 208)
        193   load_type 11             
        194   load_type 12             
        195   load_var 4               (_4)
-       196   call 517 ntypeargs=2     (baml.iter.StepBy.Iterator.next)
+       196   call 521 ntypeargs=2     (baml.iter.StepBy.Iterator.next)
        197   store_var 5              (_35)
        198   jump +10                 (to 208)
        199   load_type 11             
        200   load_var 4               (_4)
-       201   call 559 ntypeargs=1     (baml.iter.ArrayIterator.Iterator.next)
+       201   call 563 ntypeargs=1     (baml.iter.ArrayIterator.Iterator.next)
        202   store_var 5              (_35)
        203   jump +5                  (to 208)
        204   load_var 4               (_4)
-       205   make_bound_method 548    
+       205   make_bound_method 552    
        206   call_indirect            
        207   store_var 5              (_35)
        208   load_var 5               (_35)
@@ -521,27 +521,27 @@ function testing.TestCollector.register_test(self: testing.TestCollector, name: 
        70    pop_jump_if_false +213   (to 283)
        71    load_type 15             
        72    load_var 8               (_13)
-       73    call 528 ntypeargs=1     (baml.iter.Iterable$for$T[].iter)
+       73    call 532 ntypeargs=1     (baml.iter.Iterable$for$T[].iter)
        74    store_var 9              (_14)
        75    jump +61                 (to 136)
        76    load_type 15             
        77    load_var 8               (_13)
-       78    call 528 ntypeargs=1     (baml.iter.Iterable$for$T[].iter)
+       78    call 532 ntypeargs=1     (baml.iter.Iterable$for$T[].iter)
        79    store_var 9              (_14)
        80    jump +56                 (to 136)
        81    load_type 15             
        82    load_type 16             
        83    load_var 8               (_13)
-       84    call 575 ntypeargs=2     (baml.iter.Peekable.Iterable.iter)
+       84    call 579 ntypeargs=2     (baml.iter.Peekable.Iterable.iter)
        85    store_var 9              (_14)
        86    jump +50                 (to 136)
        87    load_var 8               (_13)
-       88    make_bound_method 510    
+       88    make_bound_method 514    
        89    call_indirect            
        90    store_var 9              (_14)
        91    jump +45                 (to 136)
        92    load_var 8               (_13)
-       93    make_bound_method 523    
+       93    make_bound_method 527    
        94    call_indirect            
        95    store_var 9              (_14)
        96    jump +40                 (to 136)
@@ -549,39 +549,39 @@ function testing.TestCollector.register_test(self: testing.TestCollector, name: 
        98    load_type 16             
        99    load_type 16             
        100   load_var 8               (_13)
-       101   call 537 ntypeargs=3     (baml.iter.Filter.Iterable.iter)
+       101   call 541 ntypeargs=3     (baml.iter.Filter.Iterable.iter)
        102   store_var 9              (_14)
        103   jump +33                 (to 136)
        104   load_var 8               (_13)
-       105   make_bound_method 553    
+       105   make_bound_method 557    
        106   call_indirect            
        107   store_var 9              (_14)
        108   jump +28                 (to 136)
        109   load_type 15             
        110   load_var 8               (_13)
-       111   call 571 ntypeargs=1     (baml.iter.Repeat.Iterable.iter)
+       111   call 575 ntypeargs=1     (baml.iter.Repeat.Iterable.iter)
        112   store_var 9              (_14)
        113   jump +23                 (to 136)
        114   load_type 15             
        115   load_type 16             
        116   load_type 16             
        117   load_var 8               (_13)
-       118   call 546 ntypeargs=3     (baml.iter.Chain.Iterable.iter)
+       118   call 550 ntypeargs=3     (baml.iter.Chain.Iterable.iter)
        119   store_var 9              (_14)
        120   jump +16                 (to 136)
        121   load_type 15             
        122   load_type 16             
        123   load_var 8               (_13)
-       124   call 561 ntypeargs=2     (baml.iter.StepBy.Iterable.iter)
+       124   call 565 ntypeargs=2     (baml.iter.StepBy.Iterable.iter)
        125   store_var 9              (_14)
        126   jump +10                 (to 136)
        127   load_type 15             
        128   load_var 8               (_13)
-       129   call 506 ntypeargs=1     (baml.iter.ArrayIterator.Iterable.iter)
+       129   call 510 ntypeargs=1     (baml.iter.ArrayIterator.Iterable.iter)
        130   store_var 9              (_14)
        131   jump +5                  (to 136)
        132   load_var 8               (_13)
-       133   make_bound_method 584    
+       133   make_bound_method 588    
        134   call_indirect            
        135   store_var 9              (_14)
        136   load_var 9               (_14)
@@ -626,16 +626,16 @@ function testing.TestCollector.register_test(self: testing.TestCollector, name: 
        175   load_type 15             
        176   load_type 16             
        177   load_var 9               (_14)
-       178   call 533 ntypeargs=2     (baml.iter.Peekable.Iterator.next)
+       178   call 537 ntypeargs=2     (baml.iter.Peekable.Iterator.next)
        179   store_var 10             (_45)
        180   jump +50                 (to 230)
        181   load_var 9               (_14)
-       182   make_bound_method 564    
+       182   make_bound_method 568    
        183   call_indirect            
        184   store_var 10             (_45)
        185   jump +45                 (to 230)
        186   load_var 9               (_14)
-       187   make_bound_method 577    
+       187   make_bound_method 581    
        188   call_indirect            
        189   store_var 10             (_45)
        190   jump +40                 (to 230)
@@ -643,39 +643,39 @@ function testing.TestCollector.register_test(self: testing.TestCollector, name: 
        192   load_type 16             
        193   load_type 16             
        194   load_var 9               (_14)
-       195   call 500 ntypeargs=3     (baml.iter.Filter.Iterator.next)
+       195   call 504 ntypeargs=3     (baml.iter.Filter.Iterator.next)
        196   store_var 10             (_45)
        197   jump +33                 (to 230)
        198   load_var 9               (_14)
-       199   make_bound_method 513    
+       199   make_bound_method 517    
        200   call_indirect            
        201   store_var 10             (_45)
        202   jump +28                 (to 230)
        203   load_type 15             
        204   load_var 9               (_14)
-       205   call 527 ntypeargs=1     (baml.iter.Repeat.Iterator.next)
+       205   call 531 ntypeargs=1     (baml.iter.Repeat.Iterator.next)
        206   store_var 10             (_45)
        207   jump +23                 (to 230)
        208   load_type 15             
        209   load_type 16             
        210   load_type 16             
        211   load_var 9               (_14)
-       212   call 503 ntypeargs=3     (baml.iter.Chain.Iterator.next)
+       212   call 507 ntypeargs=3     (baml.iter.Chain.Iterator.next)
        213   store_var 10             (_45)
        214   jump +16                 (to 230)
        215   load_type 15             
        216   load_type 16             
        217   load_var 9               (_14)
-       218   call 517 ntypeargs=2     (baml.iter.StepBy.Iterator.next)
+       218   call 521 ntypeargs=2     (baml.iter.StepBy.Iterator.next)
        219   store_var 10             (_45)
        220   jump +10                 (to 230)
        221   load_type 15             
        222   load_var 9               (_14)
-       223   call 559 ntypeargs=1     (baml.iter.ArrayIterator.Iterator.next)
+       223   call 563 ntypeargs=1     (baml.iter.ArrayIterator.Iterator.next)
        224   store_var 10             (_45)
        225   jump +5                  (to 230)
        226   load_var 9               (_14)
-       227   make_bound_method 548    
+       227   make_bound_method 552    
        228   call_indirect            
        229   store_var 10             (_45)
        230   load_var 10              (_45)
@@ -718,7 +718,7 @@ function testing.TestCollector.register_test(self: testing.TestCollector, name: 
        265   load_var 6               (count)
        266   load_const 18            (1)
        267   add_int                  
-       268   call 419 ntypeargs=1     (baml.unstable.string)
+       268   call 423 ntypeargs=1     (baml.unstable.string)
        269   store_var 14             (_86)
        270   load_var2 13 14          
        271   bin_op +                 
@@ -815,27 +815,27 @@ function testing.TestCollector.register_test_set(self: testing.TestCollector, na
        70    pop_jump_if_false +213   (to 283)
        71    load_type 15             
        72    load_var 8               (_13)
-       73    call 528 ntypeargs=1     (baml.iter.Iterable$for$T[].iter)
+       73    call 532 ntypeargs=1     (baml.iter.Iterable$for$T[].iter)
        74    store_var 9              (_14)
        75    jump +61                 (to 136)
        76    load_type 15             
        77    load_var 8               (_13)
-       78    call 528 ntypeargs=1     (baml.iter.Iterable$for$T[].iter)
+       78    call 532 ntypeargs=1     (baml.iter.Iterable$for$T[].iter)
        79    store_var 9              (_14)
        80    jump +56                 (to 136)
        81    load_type 15             
        82    load_type 16             
        83    load_var 8               (_13)
-       84    call 575 ntypeargs=2     (baml.iter.Peekable.Iterable.iter)
+       84    call 579 ntypeargs=2     (baml.iter.Peekable.Iterable.iter)
        85    store_var 9              (_14)
        86    jump +50                 (to 136)
        87    load_var 8               (_13)
-       88    make_bound_method 510    
+       88    make_bound_method 514    
        89    call_indirect            
        90    store_var 9              (_14)
        91    jump +45                 (to 136)
        92    load_var 8               (_13)
-       93    make_bound_method 523    
+       93    make_bound_method 527    
        94    call_indirect            
        95    store_var 9              (_14)
        96    jump +40                 (to 136)
@@ -843,39 +843,39 @@ function testing.TestCollector.register_test_set(self: testing.TestCollector, na
        98    load_type 16             
        99    load_type 16             
        100   load_var 8               (_13)
-       101   call 537 ntypeargs=3     (baml.iter.Filter.Iterable.iter)
+       101   call 541 ntypeargs=3     (baml.iter.Filter.Iterable.iter)
        102   store_var 9              (_14)
        103   jump +33                 (to 136)
        104   load_var 8               (_13)
-       105   make_bound_method 553    
+       105   make_bound_method 557    
        106   call_indirect            
        107   store_var 9              (_14)
        108   jump +28                 (to 136)
        109   load_type 15             
        110   load_var 8               (_13)
-       111   call 571 ntypeargs=1     (baml.iter.Repeat.Iterable.iter)
+       111   call 575 ntypeargs=1     (baml.iter.Repeat.Iterable.iter)
        112   store_var 9              (_14)
        113   jump +23                 (to 136)
        114   load_type 15             
        115   load_type 16             
        116   load_type 16             
        117   load_var 8               (_13)
-       118   call 546 ntypeargs=3     (baml.iter.Chain.Iterable.iter)
+       118   call 550 ntypeargs=3     (baml.iter.Chain.Iterable.iter)
        119   store_var 9              (_14)
        120   jump +16                 (to 136)
        121   load_type 15             
        122   load_type 16             
        123   load_var 8               (_13)
-       124   call 561 ntypeargs=2     (baml.iter.StepBy.Iterable.iter)
+       124   call 565 ntypeargs=2     (baml.iter.StepBy.Iterable.iter)
        125   store_var 9              (_14)
        126   jump +10                 (to 136)
        127   load_type 15             
        128   load_var 8               (_13)
-       129   call 506 ntypeargs=1     (baml.iter.ArrayIterator.Iterable.iter)
+       129   call 510 ntypeargs=1     (baml.iter.ArrayIterator.Iterable.iter)
        130   store_var 9              (_14)
        131   jump +5                  (to 136)
        132   load_var 8               (_13)
-       133   make_bound_method 584    
+       133   make_bound_method 588    
        134   call_indirect            
        135   store_var 9              (_14)
        136   load_var 9               (_14)
@@ -920,16 +920,16 @@ function testing.TestCollector.register_test_set(self: testing.TestCollector, na
        175   load_type 15             
        176   load_type 16             
        177   load_var 9               (_14)
-       178   call 533 ntypeargs=2     (baml.iter.Peekable.Iterator.next)
+       178   call 537 ntypeargs=2     (baml.iter.Peekable.Iterator.next)
        179   store_var 10             (_45)
        180   jump +50                 (to 230)
        181   load_var 9               (_14)
-       182   make_bound_method 564    
+       182   make_bound_method 568    
        183   call_indirect            
        184   store_var 10             (_45)
        185   jump +45                 (to 230)
        186   load_var 9               (_14)
-       187   make_bound_method 577    
+       187   make_bound_method 581    
        188   call_indirect            
        189   store_var 10             (_45)
        190   jump +40                 (to 230)
@@ -937,39 +937,39 @@ function testing.TestCollector.register_test_set(self: testing.TestCollector, na
        192   load_type 16             
        193   load_type 16             
        194   load_var 9               (_14)
-       195   call 500 ntypeargs=3     (baml.iter.Filter.Iterator.next)
+       195   call 504 ntypeargs=3     (baml.iter.Filter.Iterator.next)
        196   store_var 10             (_45)
        197   jump +33                 (to 230)
        198   load_var 9               (_14)
-       199   make_bound_method 513    
+       199   make_bound_method 517    
        200   call_indirect            
        201   store_var 10             (_45)
        202   jump +28                 (to 230)
        203   load_type 15             
        204   load_var 9               (_14)
-       205   call 527 ntypeargs=1     (baml.iter.Repeat.Iterator.next)
+       205   call 531 ntypeargs=1     (baml.iter.Repeat.Iterator.next)
        206   store_var 10             (_45)
        207   jump +23                 (to 230)
        208   load_type 15             
        209   load_type 16             
        210   load_type 16             
        211   load_var 9               (_14)
-       212   call 503 ntypeargs=3     (baml.iter.Chain.Iterator.next)
+       212   call 507 ntypeargs=3     (baml.iter.Chain.Iterator.next)
        213   store_var 10             (_45)
        214   jump +16                 (to 230)
        215   load_type 15             
        216   load_type 16             
        217   load_var 9               (_14)
-       218   call 517 ntypeargs=2     (baml.iter.StepBy.Iterator.next)
+       218   call 521 ntypeargs=2     (baml.iter.StepBy.Iterator.next)
        219   store_var 10             (_45)
        220   jump +10                 (to 230)
        221   load_type 15             
        222   load_var 9               (_14)
-       223   call 559 ntypeargs=1     (baml.iter.ArrayIterator.Iterator.next)
+       223   call 563 ntypeargs=1     (baml.iter.ArrayIterator.Iterator.next)
        224   store_var 10             (_45)
        225   jump +5                  (to 230)
        226   load_var 9               (_14)
-       227   make_bound_method 548    
+       227   make_bound_method 552    
        228   call_indirect            
        229   store_var 10             (_45)
        230   load_var 10              (_45)
@@ -1012,7 +1012,7 @@ function testing.TestCollector.register_test_set(self: testing.TestCollector, na
        265   load_var 6               (count)
        266   load_const 18            (1)
        267   add_int                  
-       268   call 419 ntypeargs=1     (baml.unstable.string)
+       268   call 423 ntypeargs=1     (baml.unstable.string)
        269   store_var 14             (_86)
        270   load_var2 13 14          
        271   bin_op +                 
@@ -1139,27 +1139,27 @@ function testing.TestRegistry.expand_set(self: testing.TestRegistry, name: strin
         49    pop_jump_if_false +432   (to 481)
         50    load_type 11             
         51    load_var 3               (_3)
-        52    call 528 ntypeargs=1     (baml.iter.Iterable$for$T[].iter)
+        52    call 532 ntypeargs=1     (baml.iter.Iterable$for$T[].iter)
         53    store_var 4              (_4)
         54    jump +61                 (to 115)
         55    load_type 11             
         56    load_var 3               (_3)
-        57    call 528 ntypeargs=1     (baml.iter.Iterable$for$T[].iter)
+        57    call 532 ntypeargs=1     (baml.iter.Iterable$for$T[].iter)
         58    store_var 4              (_4)
         59    jump +56                 (to 115)
         60    load_type 11             
         61    load_type 12             
         62    load_var 3               (_3)
-        63    call 575 ntypeargs=2     (baml.iter.Peekable.Iterable.iter)
+        63    call 579 ntypeargs=2     (baml.iter.Peekable.Iterable.iter)
         64    store_var 4              (_4)
         65    jump +50                 (to 115)
         66    load_var 3               (_3)
-        67    make_bound_method 510    
+        67    make_bound_method 514    
         68    call_indirect            
         69    store_var 4              (_4)
         70    jump +45                 (to 115)
         71    load_var 3               (_3)
-        72    make_bound_method 523    
+        72    make_bound_method 527    
         73    call_indirect            
         74    store_var 4              (_4)
         75    jump +40                 (to 115)
@@ -1167,39 +1167,39 @@ function testing.TestRegistry.expand_set(self: testing.TestRegistry, name: strin
         77    load_type 12             
         78    load_type 12             
         79    load_var 3               (_3)
-        80    call 537 ntypeargs=3     (baml.iter.Filter.Iterable.iter)
+        80    call 541 ntypeargs=3     (baml.iter.Filter.Iterable.iter)
         81    store_var 4              (_4)
         82    jump +33                 (to 115)
         83    load_var 3               (_3)
-        84    make_bound_method 553    
+        84    make_bound_method 557    
         85    call_indirect            
         86    store_var 4              (_4)
         87    jump +28                 (to 115)
         88    load_type 11             
         89    load_var 3               (_3)
-        90    call 571 ntypeargs=1     (baml.iter.Repeat.Iterable.iter)
+        90    call 575 ntypeargs=1     (baml.iter.Repeat.Iterable.iter)
         91    store_var 4              (_4)
         92    jump +23                 (to 115)
         93    load_type 11             
         94    load_type 12             
         95    load_type 12             
         96    load_var 3               (_3)
-        97    call 546 ntypeargs=3     (baml.iter.Chain.Iterable.iter)
+        97    call 550 ntypeargs=3     (baml.iter.Chain.Iterable.iter)
         98    store_var 4              (_4)
         99    jump +16                 (to 115)
         100   load_type 11             
         101   load_type 12             
         102   load_var 3               (_3)
-        103   call 561 ntypeargs=2     (baml.iter.StepBy.Iterable.iter)
+        103   call 565 ntypeargs=2     (baml.iter.StepBy.Iterable.iter)
         104   store_var 4              (_4)
         105   jump +10                 (to 115)
         106   load_type 11             
         107   load_var 3               (_3)
-        108   call 506 ntypeargs=1     (baml.iter.ArrayIterator.Iterable.iter)
+        108   call 510 ntypeargs=1     (baml.iter.ArrayIterator.Iterable.iter)
         109   store_var 4              (_4)
         110   jump +5                  (to 115)
         111   load_var 3               (_3)
-        112   make_bound_method 584    
+        112   make_bound_method 588    
         113   call_indirect            
         114   store_var 4              (_4)
         115   load_var 4               (_4)
@@ -1244,16 +1244,16 @@ function testing.TestRegistry.expand_set(self: testing.TestRegistry, name: strin
         154   load_type 11             
         155   load_type 12             
         156   load_var 4               (_4)
-        157   call 533 ntypeargs=2     (baml.iter.Peekable.Iterator.next)
+        157   call 537 ntypeargs=2     (baml.iter.Peekable.Iterator.next)
         158   store_var 5              (_35)
         159   jump +50                 (to 209)
         160   load_var 4               (_4)
-        161   make_bound_method 564    
+        161   make_bound_method 568    
         162   call_indirect            
         163   store_var 5              (_35)
         164   jump +45                 (to 209)
         165   load_var 4               (_4)
-        166   make_bound_method 577    
+        166   make_bound_method 581    
         167   call_indirect            
         168   store_var 5              (_35)
         169   jump +40                 (to 209)
@@ -1261,39 +1261,39 @@ function testing.TestRegistry.expand_set(self: testing.TestRegistry, name: strin
         171   load_type 12             
         172   load_type 12             
         173   load_var 4               (_4)
-        174   call 500 ntypeargs=3     (baml.iter.Filter.Iterator.next)
+        174   call 504 ntypeargs=3     (baml.iter.Filter.Iterator.next)
         175   store_var 5              (_35)
         176   jump +33                 (to 209)
         177   load_var 4               (_4)
-        178   make_bound_method 513    
+        178   make_bound_method 517    
         179   call_indirect            
         180   store_var 5              (_35)
         181   jump +28                 (to 209)
         182   load_type 11             
         183   load_var 4               (_4)
-        184   call 527 ntypeargs=1     (baml.iter.Repeat.Iterator.next)
+        184   call 531 ntypeargs=1     (baml.iter.Repeat.Iterator.next)
         185   store_var 5              (_35)
         186   jump +23                 (to 209)
         187   load_type 11             
         188   load_type 12             
         189   load_type 12             
         190   load_var 4               (_4)
-        191   call 503 ntypeargs=3     (baml.iter.Chain.Iterator.next)
+        191   call 507 ntypeargs=3     (baml.iter.Chain.Iterator.next)
         192   store_var 5              (_35)
         193   jump +16                 (to 209)
         194   load_type 11             
         195   load_type 12             
         196   load_var 4               (_4)
-        197   call 517 ntypeargs=2     (baml.iter.StepBy.Iterator.next)
+        197   call 521 ntypeargs=2     (baml.iter.StepBy.Iterator.next)
         198   store_var 5              (_35)
         199   jump +10                 (to 209)
         200   load_type 11             
         201   load_var 4               (_4)
-        202   call 559 ntypeargs=1     (baml.iter.ArrayIterator.Iterator.next)
+        202   call 563 ntypeargs=1     (baml.iter.ArrayIterator.Iterator.next)
         203   store_var 5              (_35)
         204   jump +5                  (to 209)
         205   load_var 4               (_4)
-        206   make_bound_method 548    
+        206   make_bound_method 552    
         207   call_indirect            
         208   store_var 5              (_35)
         209   load_var 5               (_35)
@@ -1340,7 +1340,7 @@ function testing.TestRegistry.expand_set(self: testing.TestRegistry, name: strin
         242   pop 1                    
 
   169   243   load_var 1               (self)
-        244   call 742 ntypeargs=0     (testing.TestRegistry.serialize)
+        244   call 746 ntypeargs=0     (testing.TestRegistry.serialize)
         245   jump +231                (to 476)
 
   173   246   load_type 14             
@@ -1399,27 +1399,27 @@ function testing.TestRegistry.expand_set(self: testing.TestRegistry, name: strin
         298   pop_jump_if_false +183   (to 481)
         299   load_type 14             
         300   load_var 10              (_86)
-        301   call 528 ntypeargs=1     (baml.iter.Iterable$for$T[].iter)
+        301   call 532 ntypeargs=1     (baml.iter.Iterable$for$T[].iter)
         302   store_var 11             (_90)
         303   jump +61                 (to 364)
         304   load_type 14             
         305   load_var 10              (_86)
-        306   call 528 ntypeargs=1     (baml.iter.Iterable$for$T[].iter)
+        306   call 532 ntypeargs=1     (baml.iter.Iterable$for$T[].iter)
         307   store_var 11             (_90)
         308   jump +56                 (to 364)
         309   load_type 14             
         310   load_type 12             
         311   load_var 10              (_86)
-        312   call 575 ntypeargs=2     (baml.iter.Peekable.Iterable.iter)
+        312   call 579 ntypeargs=2     (baml.iter.Peekable.Iterable.iter)
         313   store_var 11             (_90)
         314   jump +50                 (to 364)
         315   load_var 10              (_86)
-        316   make_bound_method 510    
+        316   make_bound_method 514    
         317   call_indirect            
         318   store_var 11             (_90)
         319   jump +45                 (to 364)
         320   load_var 10              (_86)
-        321   make_bound_method 523    
+        321   make_bound_method 527    
         322   call_indirect            
         323   store_var 11             (_90)
         324   jump +40                 (to 364)
@@ -1427,39 +1427,39 @@ function testing.TestRegistry.expand_set(self: testing.TestRegistry, name: strin
         326   load_type 12             
         327   load_type 12             
         328   load_var 10              (_86)
-        329   call 537 ntypeargs=3     (baml.iter.Filter.Iterable.iter)
+        329   call 541 ntypeargs=3     (baml.iter.Filter.Iterable.iter)
         330   store_var 11             (_90)
         331   jump +33                 (to 364)
         332   load_var 10              (_86)
-        333   make_bound_method 553    
+        333   make_bound_method 557    
         334   call_indirect            
         335   store_var 11             (_90)
         336   jump +28                 (to 364)
         337   load_type 14             
         338   load_var 10              (_86)
-        339   call 571 ntypeargs=1     (baml.iter.Repeat.Iterable.iter)
+        339   call 575 ntypeargs=1     (baml.iter.Repeat.Iterable.iter)
         340   store_var 11             (_90)
         341   jump +23                 (to 364)
         342   load_type 14             
         343   load_type 12             
         344   load_type 12             
         345   load_var 10              (_86)
-        346   call 546 ntypeargs=3     (baml.iter.Chain.Iterable.iter)
+        346   call 550 ntypeargs=3     (baml.iter.Chain.Iterable.iter)
         347   store_var 11             (_90)
         348   jump +16                 (to 364)
         349   load_type 14             
         350   load_type 12             
         351   load_var 10              (_86)
-        352   call 561 ntypeargs=2     (baml.iter.StepBy.Iterable.iter)
+        352   call 565 ntypeargs=2     (baml.iter.StepBy.Iterable.iter)
         353   store_var 11             (_90)
         354   jump +10                 (to 364)
         355   load_type 14             
         356   load_var 10              (_86)
-        357   call 506 ntypeargs=1     (baml.iter.ArrayIterator.Iterable.iter)
+        357   call 510 ntypeargs=1     (baml.iter.ArrayIterator.Iterable.iter)
         358   store_var 11             (_90)
         359   jump +5                  (to 364)
         360   load_var 10              (_86)
-        361   make_bound_method 584    
+        361   make_bound_method 588    
         362   call_indirect            
         363   store_var 11             (_90)
         364   load_var 11              (_90)
@@ -1504,16 +1504,16 @@ function testing.TestRegistry.expand_set(self: testing.TestRegistry, name: strin
         403   load_type 14             
         404   load_type 12             
         405   load_var 11              (_90)
-        406   call 533 ntypeargs=2     (baml.iter.Peekable.Iterator.next)
+        406   call 537 ntypeargs=2     (baml.iter.Peekable.Iterator.next)
         407   store_var 12             (_121)
         408   jump +50                 (to 458)
         409   load_var 11              (_90)
-        410   make_bound_method 564    
+        410   make_bound_method 568    
         411   call_indirect            
         412   store_var 12             (_121)
         413   jump +45                 (to 458)
         414   load_var 11              (_90)
-        415   make_bound_method 577    
+        415   make_bound_method 581    
         416   call_indirect            
         417   store_var 12             (_121)
         418   jump +40                 (to 458)
@@ -1521,39 +1521,39 @@ function testing.TestRegistry.expand_set(self: testing.TestRegistry, name: strin
         420   load_type 12             
         421   load_type 12             
         422   load_var 11              (_90)
-        423   call 500 ntypeargs=3     (baml.iter.Filter.Iterator.next)
+        423   call 504 ntypeargs=3     (baml.iter.Filter.Iterator.next)
         424   store_var 12             (_121)
         425   jump +33                 (to 458)
         426   load_var 11              (_90)
-        427   make_bound_method 513    
+        427   make_bound_method 517    
         428   call_indirect            
         429   store_var 12             (_121)
         430   jump +28                 (to 458)
         431   load_type 14             
         432   load_var 11              (_90)
-        433   call 527 ntypeargs=1     (baml.iter.Repeat.Iterator.next)
+        433   call 531 ntypeargs=1     (baml.iter.Repeat.Iterator.next)
         434   store_var 12             (_121)
         435   jump +23                 (to 458)
         436   load_type 14             
         437   load_type 12             
         438   load_type 12             
         439   load_var 11              (_90)
-        440   call 503 ntypeargs=3     (baml.iter.Chain.Iterator.next)
+        440   call 507 ntypeargs=3     (baml.iter.Chain.Iterator.next)
         441   store_var 12             (_121)
         442   jump +16                 (to 458)
         443   load_type 14             
         444   load_type 12             
         445   load_var 11              (_90)
-        446   call 517 ntypeargs=2     (baml.iter.StepBy.Iterator.next)
+        446   call 521 ntypeargs=2     (baml.iter.StepBy.Iterator.next)
         447   store_var 12             (_121)
         448   jump +10                 (to 458)
         449   load_type 14             
         450   load_var 11              (_90)
-        451   call 559 ntypeargs=1     (baml.iter.ArrayIterator.Iterator.next)
+        451   call 563 ntypeargs=1     (baml.iter.ArrayIterator.Iterator.next)
         452   store_var 12             (_121)
         453   jump +5                  (to 458)
         454   load_var 11              (_90)
-        455   make_bound_method 548    
+        455   make_bound_method 552    
         456   call_indirect            
         457   store_var 12             (_121)
         458   load_var 12              (_121)
@@ -1576,7 +1576,7 @@ function testing.TestRegistry.expand_set(self: testing.TestRegistry, name: strin
         473   pop_jump_if_false -109   (to 364)
 
   176   474   load_var2 14 2           
-        475   call 747 ntypeargs=0     (testing.TestRegistry.expand_set)
+        475   call 751 ntypeargs=0     (testing.TestRegistry.expand_set)
         476   return                   
 
   179   477   load_const 27            ("TestSet not found for expansion: ")
@@ -1675,27 +1675,27 @@ function testing.TestRegistry.run_test(self: testing.TestRegistry, name: string)
         49    pop_jump_if_false +411   (to 460)
         50    load_type 11             
         51    load_var 3               (_3)
-        52    call 528 ntypeargs=1     (baml.iter.Iterable$for$T[].iter)
+        52    call 532 ntypeargs=1     (baml.iter.Iterable$for$T[].iter)
         53    store_var 4              (_4)
         54    jump +61                 (to 115)
         55    load_type 11             
         56    load_var 3               (_3)
-        57    call 528 ntypeargs=1     (baml.iter.Iterable$for$T[].iter)
+        57    call 532 ntypeargs=1     (baml.iter.Iterable$for$T[].iter)
         58    store_var 4              (_4)
         59    jump +56                 (to 115)
         60    load_type 11             
         61    load_type 12             
         62    load_var 3               (_3)
-        63    call 575 ntypeargs=2     (baml.iter.Peekable.Iterable.iter)
+        63    call 579 ntypeargs=2     (baml.iter.Peekable.Iterable.iter)
         64    store_var 4              (_4)
         65    jump +50                 (to 115)
         66    load_var 3               (_3)
-        67    make_bound_method 510    
+        67    make_bound_method 514    
         68    call_indirect            
         69    store_var 4              (_4)
         70    jump +45                 (to 115)
         71    load_var 3               (_3)
-        72    make_bound_method 523    
+        72    make_bound_method 527    
         73    call_indirect            
         74    store_var 4              (_4)
         75    jump +40                 (to 115)
@@ -1703,39 +1703,39 @@ function testing.TestRegistry.run_test(self: testing.TestRegistry, name: string)
         77    load_type 12             
         78    load_type 12             
         79    load_var 3               (_3)
-        80    call 537 ntypeargs=3     (baml.iter.Filter.Iterable.iter)
+        80    call 541 ntypeargs=3     (baml.iter.Filter.Iterable.iter)
         81    store_var 4              (_4)
         82    jump +33                 (to 115)
         83    load_var 3               (_3)
-        84    make_bound_method 553    
+        84    make_bound_method 557    
         85    call_indirect            
         86    store_var 4              (_4)
         87    jump +28                 (to 115)
         88    load_type 11             
         89    load_var 3               (_3)
-        90    call 571 ntypeargs=1     (baml.iter.Repeat.Iterable.iter)
+        90    call 575 ntypeargs=1     (baml.iter.Repeat.Iterable.iter)
         91    store_var 4              (_4)
         92    jump +23                 (to 115)
         93    load_type 11             
         94    load_type 12             
         95    load_type 12             
         96    load_var 3               (_3)
-        97    call 546 ntypeargs=3     (baml.iter.Chain.Iterable.iter)
+        97    call 550 ntypeargs=3     (baml.iter.Chain.Iterable.iter)
         98    store_var 4              (_4)
         99    jump +16                 (to 115)
         100   load_type 11             
         101   load_type 12             
         102   load_var 3               (_3)
-        103   call 561 ntypeargs=2     (baml.iter.StepBy.Iterable.iter)
+        103   call 565 ntypeargs=2     (baml.iter.StepBy.Iterable.iter)
         104   store_var 4              (_4)
         105   jump +10                 (to 115)
         106   load_type 11             
         107   load_var 3               (_3)
-        108   call 506 ntypeargs=1     (baml.iter.ArrayIterator.Iterable.iter)
+        108   call 510 ntypeargs=1     (baml.iter.ArrayIterator.Iterable.iter)
         109   store_var 4              (_4)
         110   jump +5                  (to 115)
         111   load_var 3               (_3)
-        112   make_bound_method 584    
+        112   make_bound_method 588    
         113   call_indirect            
         114   store_var 4              (_4)
         115   load_var 4               (_4)
@@ -1780,16 +1780,16 @@ function testing.TestRegistry.run_test(self: testing.TestRegistry, name: string)
         154   load_type 11             
         155   load_type 12             
         156   load_var 4               (_4)
-        157   call 533 ntypeargs=2     (baml.iter.Peekable.Iterator.next)
+        157   call 537 ntypeargs=2     (baml.iter.Peekable.Iterator.next)
         158   store_var 5              (_35)
         159   jump +50                 (to 209)
         160   load_var 4               (_4)
-        161   make_bound_method 564    
+        161   make_bound_method 568    
         162   call_indirect            
         163   store_var 5              (_35)
         164   jump +45                 (to 209)
         165   load_var 4               (_4)
-        166   make_bound_method 577    
+        166   make_bound_method 581    
         167   call_indirect            
         168   store_var 5              (_35)
         169   jump +40                 (to 209)
@@ -1797,39 +1797,39 @@ function testing.TestRegistry.run_test(self: testing.TestRegistry, name: string)
         171   load_type 12             
         172   load_type 12             
         173   load_var 4               (_4)
-        174   call 500 ntypeargs=3     (baml.iter.Filter.Iterator.next)
+        174   call 504 ntypeargs=3     (baml.iter.Filter.Iterator.next)
         175   store_var 5              (_35)
         176   jump +33                 (to 209)
         177   load_var 4               (_4)
-        178   make_bound_method 513    
+        178   make_bound_method 517    
         179   call_indirect            
         180   store_var 5              (_35)
         181   jump +28                 (to 209)
         182   load_type 11             
         183   load_var 4               (_4)
-        184   call 527 ntypeargs=1     (baml.iter.Repeat.Iterator.next)
+        184   call 531 ntypeargs=1     (baml.iter.Repeat.Iterator.next)
         185   store_var 5              (_35)
         186   jump +23                 (to 209)
         187   load_type 11             
         188   load_type 12             
         189   load_type 12             
         190   load_var 4               (_4)
-        191   call 503 ntypeargs=3     (baml.iter.Chain.Iterator.next)
+        191   call 507 ntypeargs=3     (baml.iter.Chain.Iterator.next)
         192   store_var 5              (_35)
         193   jump +16                 (to 209)
         194   load_type 11             
         195   load_type 12             
         196   load_var 4               (_4)
-        197   call 517 ntypeargs=2     (baml.iter.StepBy.Iterator.next)
+        197   call 521 ntypeargs=2     (baml.iter.StepBy.Iterator.next)
         198   store_var 5              (_35)
         199   jump +10                 (to 209)
         200   load_type 11             
         201   load_var 4               (_4)
-        202   call 559 ntypeargs=1     (baml.iter.ArrayIterator.Iterator.next)
+        202   call 563 ntypeargs=1     (baml.iter.ArrayIterator.Iterator.next)
         203   store_var 5              (_35)
         204   jump +5                  (to 209)
         205   load_var 4               (_4)
-        206   make_bound_method 548    
+        206   make_bound_method 552    
         207   call_indirect            
         208   store_var 5              (_35)
         209   load_var 5               (_35)
@@ -1848,7 +1848,7 @@ function testing.TestRegistry.run_test(self: testing.TestRegistry, name: string)
         220   load_field 1             (body)
         221   load_var 6               (t)
         222   load_field 2             (runner)
-        223   call 753 ntypeargs=0     (testing.run_test)
+        223   call 757 ntypeargs=0     (testing.run_test)
         224   jump +231                (to 455)
 
   143   225   load_type 14             
@@ -1907,27 +1907,27 @@ function testing.TestRegistry.run_test(self: testing.TestRegistry, name: string)
         277   pop_jump_if_false +183   (to 460)
         278   load_type 14             
         279   load_var 7               (_69)
-        280   call 528 ntypeargs=1     (baml.iter.Iterable$for$T[].iter)
+        280   call 532 ntypeargs=1     (baml.iter.Iterable$for$T[].iter)
         281   store_var 8              (_73)
         282   jump +61                 (to 343)
         283   load_type 14             
         284   load_var 7               (_69)
-        285   call 528 ntypeargs=1     (baml.iter.Iterable$for$T[].iter)
+        285   call 532 ntypeargs=1     (baml.iter.Iterable$for$T[].iter)
         286   store_var 8              (_73)
         287   jump +56                 (to 343)
         288   load_type 14             
         289   load_type 12             
         290   load_var 7               (_69)
-        291   call 575 ntypeargs=2     (baml.iter.Peekable.Iterable.iter)
+        291   call 579 ntypeargs=2     (baml.iter.Peekable.Iterable.iter)
         292   store_var 8              (_73)
         293   jump +50                 (to 343)
         294   load_var 7               (_69)
-        295   make_bound_method 510    
+        295   make_bound_method 514    
         296   call_indirect            
         297   store_var 8              (_73)
         298   jump +45                 (to 343)
         299   load_var 7               (_69)
-        300   make_bound_method 523    
+        300   make_bound_method 527    
         301   call_indirect            
         302   store_var 8              (_73)
         303   jump +40                 (to 343)
@@ -1935,39 +1935,39 @@ function testing.TestRegistry.run_test(self: testing.TestRegistry, name: string)
         305   load_type 12             
         306   load_type 12             
         307   load_var 7               (_69)
-        308   call 537 ntypeargs=3     (baml.iter.Filter.Iterable.iter)
+        308   call 541 ntypeargs=3     (baml.iter.Filter.Iterable.iter)
         309   store_var 8              (_73)
         310   jump +33                 (to 343)
         311   load_var 7               (_69)
-        312   make_bound_method 553    
+        312   make_bound_method 557    
         313   call_indirect            
         314   store_var 8              (_73)
         315   jump +28                 (to 343)
         316   load_type 14             
         317   load_var 7               (_69)
-        318   call 571 ntypeargs=1     (baml.iter.Repeat.Iterable.iter)
+        318   call 575 ntypeargs=1     (baml.iter.Repeat.Iterable.iter)
         319   store_var 8              (_73)
         320   jump +23                 (to 343)
         321   load_type 14             
         322   load_type 12             
         323   load_type 12             
         324   load_var 7               (_69)
-        325   call 546 ntypeargs=3     (baml.iter.Chain.Iterable.iter)
+        325   call 550 ntypeargs=3     (baml.iter.Chain.Iterable.iter)
         326   store_var 8              (_73)
         327   jump +16                 (to 343)
         328   load_type 14             
         329   load_type 12             
         330   load_var 7               (_69)
-        331   call 561 ntypeargs=2     (baml.iter.StepBy.Iterable.iter)
+        331   call 565 ntypeargs=2     (baml.iter.StepBy.Iterable.iter)
         332   store_var 8              (_73)
         333   jump +10                 (to 343)
         334   load_type 14             
         335   load_var 7               (_69)
-        336   call 506 ntypeargs=1     (baml.iter.ArrayIterator.Iterable.iter)
+        336   call 510 ntypeargs=1     (baml.iter.ArrayIterator.Iterable.iter)
         337   store_var 8              (_73)
         338   jump +5                  (to 343)
         339   load_var 7               (_69)
-        340   make_bound_method 584    
+        340   make_bound_method 588    
         341   call_indirect            
         342   store_var 8              (_73)
         343   load_var 8               (_73)
@@ -2012,16 +2012,16 @@ function testing.TestRegistry.run_test(self: testing.TestRegistry, name: string)
         382   load_type 14             
         383   load_type 12             
         384   load_var 8               (_73)
-        385   call 533 ntypeargs=2     (baml.iter.Peekable.Iterator.next)
+        385   call 537 ntypeargs=2     (baml.iter.Peekable.Iterator.next)
         386   store_var 9              (_104)
         387   jump +50                 (to 437)
         388   load_var 8               (_73)
-        389   make_bound_method 564    
+        389   make_bound_method 568    
         390   call_indirect            
         391   store_var 9              (_104)
         392   jump +45                 (to 437)
         393   load_var 8               (_73)
-        394   make_bound_method 577    
+        394   make_bound_method 581    
         395   call_indirect            
         396   store_var 9              (_104)
         397   jump +40                 (to 437)
@@ -2029,39 +2029,39 @@ function testing.TestRegistry.run_test(self: testing.TestRegistry, name: string)
         399   load_type 12             
         400   load_type 12             
         401   load_var 8               (_73)
-        402   call 500 ntypeargs=3     (baml.iter.Filter.Iterator.next)
+        402   call 504 ntypeargs=3     (baml.iter.Filter.Iterator.next)
         403   store_var 9              (_104)
         404   jump +33                 (to 437)
         405   load_var 8               (_73)
-        406   make_bound_method 513    
+        406   make_bound_method 517    
         407   call_indirect            
         408   store_var 9              (_104)
         409   jump +28                 (to 437)
         410   load_type 14             
         411   load_var 8               (_73)
-        412   call 527 ntypeargs=1     (baml.iter.Repeat.Iterator.next)
+        412   call 531 ntypeargs=1     (baml.iter.Repeat.Iterator.next)
         413   store_var 9              (_104)
         414   jump +23                 (to 437)
         415   load_type 14             
         416   load_type 12             
         417   load_type 12             
         418   load_var 8               (_73)
-        419   call 503 ntypeargs=3     (baml.iter.Chain.Iterator.next)
+        419   call 507 ntypeargs=3     (baml.iter.Chain.Iterator.next)
         420   store_var 9              (_104)
         421   jump +16                 (to 437)
         422   load_type 14             
         423   load_type 12             
         424   load_var 8               (_73)
-        425   call 517 ntypeargs=2     (baml.iter.StepBy.Iterator.next)
+        425   call 521 ntypeargs=2     (baml.iter.StepBy.Iterator.next)
         426   store_var 9              (_104)
         427   jump +10                 (to 437)
         428   load_type 14             
         429   load_var 8               (_73)
-        430   call 559 ntypeargs=1     (baml.iter.ArrayIterator.Iterator.next)
+        430   call 563 ntypeargs=1     (baml.iter.ArrayIterator.Iterator.next)
         431   store_var 9              (_104)
         432   jump +5                  (to 437)
         433   load_var 8               (_73)
-        434   make_bound_method 548    
+        434   make_bound_method 552    
         435   call_indirect            
         436   store_var 9              (_104)
         437   load_var 9               (_104)
@@ -2085,7 +2085,7 @@ function testing.TestRegistry.run_test(self: testing.TestRegistry, name: string)
   145   452   pop_jump_if_false -109   (to 343)
 
   147   453   load_var2 11 2           
-        454   call 746 ntypeargs=0     (testing.TestRegistry.run_test)
+        454   call 750 ntypeargs=0     (testing.TestRegistry.run_test)
         455   return                   
 
   150   456   load_const 27            ("Test not found: ")
@@ -2151,27 +2151,27 @@ function testing.TestRegistry.serialize(self: testing.TestRegistry) -> (testing.
         51    pop_jump_if_false +424   (to 475)
         52    load_type 11             
         53    load_var 3               (_3)
-        54    call 528 ntypeargs=1     (baml.iter.Iterable$for$T[].iter)
+        54    call 532 ntypeargs=1     (baml.iter.Iterable$for$T[].iter)
         55    store_var 4              (_4)
         56    jump +61                 (to 117)
         57    load_type 11             
         58    load_var 3               (_3)
-        59    call 528 ntypeargs=1     (baml.iter.Iterable$for$T[].iter)
+        59    call 532 ntypeargs=1     (baml.iter.Iterable$for$T[].iter)
         60    store_var 4              (_4)
         61    jump +56                 (to 117)
         62    load_type 11             
         63    load_type 12             
         64    load_var 3               (_3)
-        65    call 575 ntypeargs=2     (baml.iter.Peekable.Iterable.iter)
+        65    call 579 ntypeargs=2     (baml.iter.Peekable.Iterable.iter)
         66    store_var 4              (_4)
         67    jump +50                 (to 117)
         68    load_var 3               (_3)
-        69    make_bound_method 510    
+        69    make_bound_method 514    
         70    call_indirect            
         71    store_var 4              (_4)
         72    jump +45                 (to 117)
         73    load_var 3               (_3)
-        74    make_bound_method 523    
+        74    make_bound_method 527    
         75    call_indirect            
         76    store_var 4              (_4)
         77    jump +40                 (to 117)
@@ -2179,39 +2179,39 @@ function testing.TestRegistry.serialize(self: testing.TestRegistry) -> (testing.
         79    load_type 12             
         80    load_type 12             
         81    load_var 3               (_3)
-        82    call 537 ntypeargs=3     (baml.iter.Filter.Iterable.iter)
+        82    call 541 ntypeargs=3     (baml.iter.Filter.Iterable.iter)
         83    store_var 4              (_4)
         84    jump +33                 (to 117)
         85    load_var 3               (_3)
-        86    make_bound_method 553    
+        86    make_bound_method 557    
         87    call_indirect            
         88    store_var 4              (_4)
         89    jump +28                 (to 117)
         90    load_type 11             
         91    load_var 3               (_3)
-        92    call 571 ntypeargs=1     (baml.iter.Repeat.Iterable.iter)
+        92    call 575 ntypeargs=1     (baml.iter.Repeat.Iterable.iter)
         93    store_var 4              (_4)
         94    jump +23                 (to 117)
         95    load_type 11             
         96    load_type 12             
         97    load_type 12             
         98    load_var 3               (_3)
-        99    call 546 ntypeargs=3     (baml.iter.Chain.Iterable.iter)
+        99    call 550 ntypeargs=3     (baml.iter.Chain.Iterable.iter)
         100   store_var 4              (_4)
         101   jump +16                 (to 117)
         102   load_type 11             
         103   load_type 12             
         104   load_var 3               (_3)
-        105   call 561 ntypeargs=2     (baml.iter.StepBy.Iterable.iter)
+        105   call 565 ntypeargs=2     (baml.iter.StepBy.Iterable.iter)
         106   store_var 4              (_4)
         107   jump +10                 (to 117)
         108   load_type 11             
         109   load_var 3               (_3)
-        110   call 506 ntypeargs=1     (baml.iter.ArrayIterator.Iterable.iter)
+        110   call 510 ntypeargs=1     (baml.iter.ArrayIterator.Iterable.iter)
         111   store_var 4              (_4)
         112   jump +5                  (to 117)
         113   load_var 3               (_3)
-        114   make_bound_method 584    
+        114   make_bound_method 588    
         115   call_indirect            
         116   store_var 4              (_4)
         117   load_var 4               (_4)
@@ -2256,16 +2256,16 @@ function testing.TestRegistry.serialize(self: testing.TestRegistry) -> (testing.
         156   load_type 11             
         157   load_type 12             
         158   load_var 4               (_4)
-        159   call 533 ntypeargs=2     (baml.iter.Peekable.Iterator.next)
+        159   call 537 ntypeargs=2     (baml.iter.Peekable.Iterator.next)
         160   store_var 5              (_35)
         161   jump +50                 (to 211)
         162   load_var 4               (_4)
-        163   make_bound_method 564    
+        163   make_bound_method 568    
         164   call_indirect            
         165   store_var 5              (_35)
         166   jump +45                 (to 211)
         167   load_var 4               (_4)
-        168   make_bound_method 577    
+        168   make_bound_method 581    
         169   call_indirect            
         170   store_var 5              (_35)
         171   jump +40                 (to 211)
@@ -2273,39 +2273,39 @@ function testing.TestRegistry.serialize(self: testing.TestRegistry) -> (testing.
         173   load_type 12             
         174   load_type 12             
         175   load_var 4               (_4)
-        176   call 500 ntypeargs=3     (baml.iter.Filter.Iterator.next)
+        176   call 504 ntypeargs=3     (baml.iter.Filter.Iterator.next)
         177   store_var 5              (_35)
         178   jump +33                 (to 211)
         179   load_var 4               (_4)
-        180   make_bound_method 513    
+        180   make_bound_method 517    
         181   call_indirect            
         182   store_var 5              (_35)
         183   jump +28                 (to 211)
         184   load_type 11             
         185   load_var 4               (_4)
-        186   call 527 ntypeargs=1     (baml.iter.Repeat.Iterator.next)
+        186   call 531 ntypeargs=1     (baml.iter.Repeat.Iterator.next)
         187   store_var 5              (_35)
         188   jump +23                 (to 211)
         189   load_type 11             
         190   load_type 12             
         191   load_type 12             
         192   load_var 4               (_4)
-        193   call 503 ntypeargs=3     (baml.iter.Chain.Iterator.next)
+        193   call 507 ntypeargs=3     (baml.iter.Chain.Iterator.next)
         194   store_var 5              (_35)
         195   jump +16                 (to 211)
         196   load_type 11             
         197   load_type 12             
         198   load_var 4               (_4)
-        199   call 517 ntypeargs=2     (baml.iter.StepBy.Iterator.next)
+        199   call 521 ntypeargs=2     (baml.iter.StepBy.Iterator.next)
         200   store_var 5              (_35)
         201   jump +10                 (to 211)
         202   load_type 11             
         203   load_var 4               (_4)
-        204   call 559 ntypeargs=1     (baml.iter.ArrayIterator.Iterator.next)
+        204   call 563 ntypeargs=1     (baml.iter.ArrayIterator.Iterator.next)
         205   store_var 5              (_35)
         206   jump +5                  (to 211)
         207   load_var 4               (_4)
-        208   make_bound_method 548    
+        208   make_bound_method 552    
         209   call_indirect            
         210   store_var 5              (_35)
         211   load_var 5               (_35)
@@ -2375,27 +2375,27 @@ function testing.TestRegistry.serialize(self: testing.TestRegistry) -> (testing.
         272   pop_jump_if_false +203   (to 475)
         273   load_type 25             
         274   load_var 6               (_68)
-        275   call 528 ntypeargs=1     (baml.iter.Iterable$for$T[].iter)
+        275   call 532 ntypeargs=1     (baml.iter.Iterable$for$T[].iter)
         276   store_var 7              (_69)
         277   jump +61                 (to 338)
         278   load_type 25             
         279   load_var 6               (_68)
-        280   call 528 ntypeargs=1     (baml.iter.Iterable$for$T[].iter)
+        280   call 532 ntypeargs=1     (baml.iter.Iterable$for$T[].iter)
         281   store_var 7              (_69)
         282   jump +56                 (to 338)
         283   load_type 25             
         284   load_type 12             
         285   load_var 6               (_68)
-        286   call 575 ntypeargs=2     (baml.iter.Peekable.Iterable.iter)
+        286   call 579 ntypeargs=2     (baml.iter.Peekable.Iterable.iter)
         287   store_var 7              (_69)
         288   jump +50                 (to 338)
         289   load_var 6               (_68)
-        290   make_bound_method 510    
+        290   make_bound_method 514    
         291   call_indirect            
         292   store_var 7              (_69)
         293   jump +45                 (to 338)
         294   load_var 6               (_68)
-        295   make_bound_method 523    
+        295   make_bound_method 527    
         296   call_indirect            
         297   store_var 7              (_69)
         298   jump +40                 (to 338)
@@ -2403,39 +2403,39 @@ function testing.TestRegistry.serialize(self: testing.TestRegistry) -> (testing.
         300   load_type 12             
         301   load_type 12             
         302   load_var 6               (_68)
-        303   call 537 ntypeargs=3     (baml.iter.Filter.Iterable.iter)
+        303   call 541 ntypeargs=3     (baml.iter.Filter.Iterable.iter)
         304   store_var 7              (_69)
         305   jump +33                 (to 338)
         306   load_var 6               (_68)
-        307   make_bound_method 553    
+        307   make_bound_method 557    
         308   call_indirect            
         309   store_var 7              (_69)
         310   jump +28                 (to 338)
         311   load_type 25             
         312   load_var 6               (_68)
-        313   call 571 ntypeargs=1     (baml.iter.Repeat.Iterable.iter)
+        313   call 575 ntypeargs=1     (baml.iter.Repeat.Iterable.iter)
         314   store_var 7              (_69)
         315   jump +23                 (to 338)
         316   load_type 25             
         317   load_type 12             
         318   load_type 12             
         319   load_var 6               (_68)
-        320   call 546 ntypeargs=3     (baml.iter.Chain.Iterable.iter)
+        320   call 550 ntypeargs=3     (baml.iter.Chain.Iterable.iter)
         321   store_var 7              (_69)
         322   jump +16                 (to 338)
         323   load_type 25             
         324   load_type 12             
         325   load_var 6               (_68)
-        326   call 561 ntypeargs=2     (baml.iter.StepBy.Iterable.iter)
+        326   call 565 ntypeargs=2     (baml.iter.StepBy.Iterable.iter)
         327   store_var 7              (_69)
         328   jump +10                 (to 338)
         329   load_type 25             
         330   load_var 6               (_68)
-        331   call 506 ntypeargs=1     (baml.iter.ArrayIterator.Iterable.iter)
+        331   call 510 ntypeargs=1     (baml.iter.ArrayIterator.Iterable.iter)
         332   store_var 7              (_69)
         333   jump +5                  (to 338)
         334   load_var 6               (_68)
-        335   make_bound_method 584    
+        335   make_bound_method 588    
         336   call_indirect            
         337   store_var 7              (_69)
         338   load_var 7               (_69)
@@ -2480,16 +2480,16 @@ function testing.TestRegistry.serialize(self: testing.TestRegistry) -> (testing.
         377   load_type 25             
         378   load_type 12             
         379   load_var 7               (_69)
-        380   call 533 ntypeargs=2     (baml.iter.Peekable.Iterator.next)
+        380   call 537 ntypeargs=2     (baml.iter.Peekable.Iterator.next)
         381   store_var 8              (_100)
         382   jump +50                 (to 432)
         383   load_var 7               (_69)
-        384   make_bound_method 564    
+        384   make_bound_method 568    
         385   call_indirect            
         386   store_var 8              (_100)
         387   jump +45                 (to 432)
         388   load_var 7               (_69)
-        389   make_bound_method 577    
+        389   make_bound_method 581    
         390   call_indirect            
         391   store_var 8              (_100)
         392   jump +40                 (to 432)
@@ -2497,39 +2497,39 @@ function testing.TestRegistry.serialize(self: testing.TestRegistry) -> (testing.
         394   load_type 12             
         395   load_type 12             
         396   load_var 7               (_69)
-        397   call 500 ntypeargs=3     (baml.iter.Filter.Iterator.next)
+        397   call 504 ntypeargs=3     (baml.iter.Filter.Iterator.next)
         398   store_var 8              (_100)
         399   jump +33                 (to 432)
         400   load_var 7               (_69)
-        401   make_bound_method 513    
+        401   make_bound_method 517    
         402   call_indirect            
         403   store_var 8              (_100)
         404   jump +28                 (to 432)
         405   load_type 25             
         406   load_var 7               (_69)
-        407   call 527 ntypeargs=1     (baml.iter.Repeat.Iterator.next)
+        407   call 531 ntypeargs=1     (baml.iter.Repeat.Iterator.next)
         408   store_var 8              (_100)
         409   jump +23                 (to 432)
         410   load_type 25             
         411   load_type 12             
         412   load_type 12             
         413   load_var 7               (_69)
-        414   call 503 ntypeargs=3     (baml.iter.Chain.Iterator.next)
+        414   call 507 ntypeargs=3     (baml.iter.Chain.Iterator.next)
         415   store_var 8              (_100)
         416   jump +16                 (to 432)
         417   load_type 25             
         418   load_type 12             
         419   load_var 7               (_69)
-        420   call 517 ntypeargs=2     (baml.iter.StepBy.Iterator.next)
+        420   call 521 ntypeargs=2     (baml.iter.StepBy.Iterator.next)
         421   store_var 8              (_100)
         422   jump +10                 (to 432)
         423   load_type 25             
         424   load_var 7               (_69)
-        425   call 559 ntypeargs=1     (baml.iter.ArrayIterator.Iterator.next)
+        425   call 563 ntypeargs=1     (baml.iter.ArrayIterator.Iterator.next)
         426   store_var 8              (_100)
         427   jump +5                  (to 432)
         428   load_var 7               (_69)
-        429   make_bound_method 548    
+        429   make_bound_method 552    
         430   call_indirect            
         431   store_var 8              (_100)
         432   load_var 8               (_100)
@@ -2570,7 +2570,7 @@ function testing.TestRegistry.serialize(self: testing.TestRegistry) -> (testing.
         462   store_var 12             (_139)
 
   122   463   load_var 11              (sub)
-        464   call 742 ntypeargs=0     (testing.TestRegistry.serialize)
+        464   call 746 ntypeargs=0     (testing.TestRegistry.serialize)
         465   store_var 13             (_140)
 
   120   466   load_var2 2 12           
@@ -2590,7 +2590,7 @@ function testing.TestRegistry.serialize(self: testing.TestRegistry) -> (testing.
 function testing.TestRegistry.to_json(self: testing.TestRegistry) -> baml.json.json {
   93   0    load_var 1             (self)
        1    load_field 0           (collector)
-       2    call 754 ntypeargs=0   (testing.TestCollector.to_json)
+       2    call 758 ntypeargs=0   (testing.TestCollector.to_json)
        3    load_type 0            
        4    load_type 1            
        5    load_var 1             (self)
@@ -2749,7 +2749,7 @@ function testing.run_test(body: () -> void throws unknown, runner: ((() -> testi
         2    store_var 1            
 
   185   3    load_var 1             (body)
-        4    make_closure 1396 1    
+        4    make_closure 1405 1    
         5    store_var 3            (base_run)
 
   200   6    load_var 2             (runner)
