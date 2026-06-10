@@ -26,9 +26,6 @@
 //! - Hitting the live-memory cap is a hard process error with a clear
 //!   message (D6), never a silent drop.
 #![allow(unsafe_code)]
-// The consumer-side half (drain/retire/lifecycle) is exercised only by the
-// in-crate suites until the PR3 consumer thread lands. Remove with PR3.
-#![cfg_attr(not(test), allow(dead_code))]
 
 use std::{marker::PhantomData, ptr::null_mut};
 
@@ -91,7 +88,9 @@ impl RingCtx {
     }
 
     /// Currently allocated ring-segment bytes (approximate bookkeeping unit:
-    /// buffer + segment header).
+    /// buffer + segment header). Test/telemetry surface — production code
+    /// only writes the budget.
+    #[cfg_attr(not(test), allow(dead_code, reason = "test/telemetry accessor"))]
     pub(crate) fn live_bytes(&self) -> usize {
         self.budget.live()
     }
@@ -131,6 +130,7 @@ impl MemBudget {
         self.live.fetch_sub(bytes, Ordering::Relaxed);
     }
 
+    #[cfg_attr(not(test), allow(dead_code, reason = "test/telemetry accessor"))]
     fn live(&self) -> usize {
         self.live.load(Ordering::Relaxed)
     }

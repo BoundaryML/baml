@@ -3029,9 +3029,8 @@ impl BexVm {
         ts_start: u64,
         status: bex_events::prof::record::FunctionEndStatus,
     ) {
-        if self.prof_ring.is_none() {
-            return;
-        }
+        // Mint before the ring gate: call ids are `$id` semantics and must
+        // not depend on whether profiling is on (plan §6, invariant 5).
         let parent_call_id = self.current_call_id;
         let call_id = self.mint_call_id();
         let Some(ring) = self.prof_ring else { return };

@@ -122,7 +122,17 @@ pub(crate) enum ThreadOutcome {
     /// Root thread completed normally; return this value to the host.
     RootValue(BexExternalValue),
     /// Spawned child thread settled — `FutureManager` already updated.
-    SettledChild,
+    SettledChild(ChildSettleKind),
+}
+
+/// How a spawned child settled its future — drives the profiling
+/// `EndThread` status (children settle as `Ok(SettledChild)` even when
+/// cancelled or errored, so the kind must travel in the outcome).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ChildSettleKind {
+    Fulfilled,
+    Cancelled,
+    Errored,
 }
 
 // ============================================================================
@@ -579,6 +589,29 @@ pub struct BexEngine {
 /// at 1 and are never reused.
 static NEXT_ENGINE_ID: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
 
+/// The §2.6 interim function-metadata provider: one function-table row per
+/// `Function`, keyed by the per-run id the same pre-heap walk assigns. This
+/// is the single seam the M0 compile-time id table replaces.
+fn prof_function_meta_entry(
+    func: &bex_vm_types::Function,
+    function_id: u32,
+) -> bex_events::prof::FunctionMetaEntry {
+    bex_events::prof::FunctionMetaEntry {
+        function_id,
+        fqn: func.name.clone(),
+        source_file: func.source_file.clone(),
+        span_start: func.span.range.start().into(),
+        span_end: func.span.range.end().into(),
+        kind: match func.kind {
+            bex_vm_types::FunctionKind::Bytecode => "bytecode",
+            bex_vm_types::FunctionKind::SysOp(_) => "sysop",
+            bex_vm_types::FunctionKind::Native(_)
+            | bex_vm_types::FunctionKind::NativeUnresolved => "native",
+        }
+        .to_string(),
+    }
+}
+
 #[cfg(target_arch = "wasm32")]
 fn _default_round_robin_start() -> usize {
     // Keep wasm deterministic for tooling (matches legacy behavior).
@@ -908,20 +941,7 @@ impl BexEngine {
                     next_function_id += 1;
                     func.function_id = next_function_id;
                     if prof_enabled {
-                        prof_function_table.push(bex_events::prof::FunctionMetaEntry {
-                            function_id: next_function_id,
-                            fqn: func.name.clone(),
-                            source_file: func.source_file.clone(),
-                            span_start: func.span.range.start().into(),
-                            span_end: func.span.range.end().into(),
-                            kind: match func.kind {
-                                bex_vm_types::FunctionKind::Bytecode => "bytecode",
-                                bex_vm_types::FunctionKind::SysOp(_) => "sysop",
-                                bex_vm_types::FunctionKind::Native(_)
-                                | bex_vm_types::FunctionKind::NativeUnresolved => "native",
-                            }
-                            .to_string(),
-                        });
+                        prof_function_table.push(prof_function_meta_entry(func, next_function_id));
                     }
                 }
                 obj
@@ -1198,6 +1218,19 @@ impl BexEngine {
         // SAFETY: the handle was claimed via this live thread's TLS lookup
         // on the line above; engine arms never run from TLS destructors.
         unsafe { handle.push(&buf[..len]) };
+    }
+
+    /// Re-snapshots the VM's ring from the *current* OS thread's TLS (D5a).
+    /// MUST run after every heap-permit re-acquire (the task may have
+    /// migrated OS threads across the await) and before any engine-driven VM
+    /// re-entry that can emit — `set_entry_point`, the loop-head exec, and
+    /// `inject_sysop_throw`'s unwind all push through this snapshot.
+    fn prof_refresh_vm_ring(&self, vm: &mut bex_vm::BexVm) {
+        vm.prof_ring = if self.prof_enabled {
+            Some(bex_events::prof::ring_for_engine(self.engine_id).ring())
+        } else {
+            None
+        };
     }
 
     /// Closes the sys-op call pair opened at the VM's `VmExecState::SysOp`
@@ -1699,21 +1732,13 @@ impl BexEngine {
         // Spawned children build their own `BexThread`s in `spawn_thread`.
         let mut vm = vm;
         vm.prof_thread_id = self.next_prof_thread_id();
-        if self.prof_enabled {
-            // Snapshot the ring now (claimed on this thread) so the entry
-            // frame's CallFunction — emitted by set_entry_point, before the
-            // first loop-head refresh — has somewhere to land. The refresh
-            // re-snapshots on whatever thread each resume runs on.
-            vm.prof_ring = Some(bex_events::prof::ring_for_engine(self.engine_id).ring());
-            self.prof_emit(&bex_events::prof::record::RawRecord::StartThread {
-                flags: 0,
-                thread_id: vm.prof_thread_id,
-                parent_thread_id: 0, // engine-root thread
-                parent_call_id: 0,
-                ts_ns: bex_events::prof::clock::now_ns(),
-                name: b"",
-            });
-        }
+        // No ring snapshot and no StartThread here: the permit acquisition
+        // below awaits (the snapshot would go stale across an OS-thread
+        // migration), and early-error returns between here and the run loop
+        // would leak a StartThread with no EndThread. Both happen at
+        // guaranteed-balanced points instead: the StartThread in the
+        // run_thread_event_loop wrapper, the snapshot right before
+        // set_entry_point (run_entry_point) and at each loop-head resume.
         let root_thread = BexThread::new_root(vm, cancel);
         let inactive = self.heap_permit_manager.new_permit(root_thread).await;
         inactive.acquire().await
@@ -1741,6 +1766,9 @@ impl BexEngine {
         cancel: CancellationToken,
         copy_objects: bool,
     ) -> Result<BexExternalValue, EngineError> {
+        // D5a: the entry-frame CallFunction below pushes into the snapshot;
+        // take it on THIS thread, after the last await before the push.
+        self.prof_refresh_vm_ring(&mut thread.vm);
         thread
             .vm
             .set_entry_point_with_type_args(entry_ptr, &vm_args, type_args);
@@ -1845,7 +1873,7 @@ impl BexEngine {
         // `cancelled_unhandled_throw`).
         match result {
             Ok(ThreadOutcome::RootValue(value)) => Ok(value),
-            Ok(ThreadOutcome::SettledChild) => {
+            Ok(ThreadOutcome::SettledChild(_)) => {
                 // Root threads should never produce SettledChild; treat as an
                 // engine invariant violation rather than silently returning Null.
                 Err(EngineError::Other(
@@ -2439,13 +2467,14 @@ impl BexEngine {
                 thread.vm_thread_cancel().is_cancelled() && self.is_cancelled_panic(value);
             if is_cancel_panic {
                 self.settle_child_cancelled(thread, future_id).await?;
-            } else {
-                self.settle_child_errored(thread, future_id, value).await?;
+                // Trace info for the child is dropped on the floor — engine-local
+                // since v1 spans for spawned bodies are TODO.
+                let _ = trace;
+                return Ok(ThreadOutcome::SettledChild(ChildSettleKind::Cancelled));
             }
-            // Trace info for the child is dropped on the floor — engine-local
-            // since v1 spans for spawned bodies are TODO.
+            self.settle_child_errored(thread, future_id, value).await?;
             let _ = trace;
-            return Ok(ThreadOutcome::SettledChild);
+            return Ok(ThreadOutcome::SettledChild(ChildSettleKind::Errored));
         }
         let external = if let Some(ty) = throws_type {
             self.convert_vm_value_to_external_with_type(value, ty, thread.proof())?
@@ -2738,13 +2767,10 @@ impl BexEngine {
             Arc::clone(&self.interface_implementors),
         );
         child_vm.prof_thread_id = prof_thread_id;
-        if self.prof_enabled {
-            // Snapshot the ring on the spawning thread so the entry frame's
-            // CallFunction (emitted by set_entry_point below) lands; the
-            // loop-head refresh re-snapshots on the child task's own thread
-            // before its first exec.
-            child_vm.prof_ring = Some(bex_events::prof::ring_for_engine(self.engine_id).ring());
-        }
+        // Snapshot on the spawning thread, immediately before the entry
+        // frame's CallFunction lands (no await in between); the loop-head
+        // refresh re-snapshots on the child task's own thread later.
+        self.prof_refresh_vm_ring(&mut child_vm);
         child_vm.set_entry_point(closure, &[]);
 
         // Register a new (inactive) permit for the child. `new_permit` only
@@ -2790,6 +2816,30 @@ impl BexEngine {
                                 ?future_id,
                                 "failed to settle queued-then-cancelled spawn"
                             );
+                        }
+                        // Close the profiling lifecycle: the StartThread
+                        // (spawn edge) and the entry CallFunction were
+                        // already emitted, and the event loop that would
+                        // close them never runs for a queued-then-cancelled
+                        // spawn.
+                        if engine.prof_enabled {
+                            let vm = &permit.vm;
+                            let entry_call = vm.current_call_id();
+                            if entry_call != 0 {
+                                engine.prof_emit(
+                                    &bex_events::prof::record::RawRecord::EndFunction {
+                                        status: bex_events::prof::record::FunctionEndStatus::Error,
+                                        thread_id: vm.prof_thread_id,
+                                        call_id: entry_call,
+                                        ts_ns: bex_events::prof::clock::now_ns(),
+                                    },
+                                );
+                            }
+                            engine.prof_emit(&bex_events::prof::record::RawRecord::EndThread {
+                                status: bex_events::prof::record::ThreadEndStatus::Cancelled,
+                                thread_id: vm.prof_thread_id,
+                                ts_ns: bex_events::prof::clock::now_ns(),
+                            });
                         }
                         return;
                     }
@@ -2870,6 +2920,21 @@ impl BexEngine {
         copy_objects: bool,
     ) -> Result<ThreadOutcome, EngineError> {
         let prof_thread_id = thread.vm.prof_thread_id;
+        // Root threads get their StartThread here — the same function that
+        // emits the EndThread — so every emitted start is closed on every
+        // exit path. (Children get theirs at the Spawn arm, where the spawn
+        // edge is in hand; their queued-then-cancelled early exit closes the
+        // lifecycle in spawn_thread_inner's task body.)
+        if self.prof_enabled && thread.vm_thread_settles_future().is_none() {
+            self.prof_emit(&bex_events::prof::record::RawRecord::StartThread {
+                flags: 0,
+                thread_id: prof_thread_id,
+                parent_thread_id: 0, // engine-root thread
+                parent_call_id: 0,
+                ts_ns: bex_events::prof::clock::now_ns(),
+                name: b"",
+            });
+        }
         let result = self
             .run_thread_event_loop_inner(
                 return_type,
@@ -2883,6 +2948,12 @@ impl BexEngine {
             .await;
         if self.prof_enabled {
             let status = match &result {
+                Ok(ThreadOutcome::SettledChild(ChildSettleKind::Cancelled)) => {
+                    bex_events::prof::record::ThreadEndStatus::Cancelled
+                }
+                Ok(ThreadOutcome::SettledChild(ChildSettleKind::Errored)) => {
+                    bex_events::prof::record::ThreadEndStatus::Errored
+                }
                 Ok(_) | Err(EngineError::Exit { .. }) => {
                     bex_events::prof::record::ThreadEndStatus::Completed
                 }
@@ -2937,11 +3008,7 @@ impl BexEngine {
             // .await points, so one refresh covers OS-thread migration
             // (plan §6, invariant 4: if exec ever yields mid-step, this
             // model must be revisited).
-            thread.vm.prof_ring = if self.prof_enabled {
-                Some(bex_events::prof::ring_for_engine(self.engine_id).ring())
-            } else {
-                None
-            };
+            self.prof_refresh_vm_ring(&mut thread.vm);
 
             let exec_result = match thread.vm.exec() {
                 Ok(state) => state,
@@ -2965,13 +3032,15 @@ impl BexEngine {
                     if let Some(future_id) = thread.vm_thread_settles_future() {
                         let is_cancel_panic = thread.vm_thread_cancel().is_cancelled()
                             && self.is_cancelled_panic(value);
-                        if is_cancel_panic {
+                        let kind = if is_cancel_panic {
                             self.settle_child_cancelled(&mut thread, future_id).await?;
+                            ChildSettleKind::Cancelled
                         } else {
                             self.settle_child_errored(&mut thread, future_id, value)
                                 .await?;
-                        }
-                        return Ok(ThreadOutcome::SettledChild);
+                            ChildSettleKind::Errored
+                        };
+                        return Ok(ThreadOutcome::SettledChild(kind));
                     }
                     let external = self.vm_value_to_owned(thread.proof(), value);
                     if let Some(code) = extract_exit_code(&external) {
@@ -2989,7 +3058,7 @@ impl BexEngine {
                             .internal_error_future(future_id, EngineError::VmInternalError(err))?;
                         drop(guard);
                         thread.vm_thread_cancel().cancel();
-                        return Ok(ThreadOutcome::SettledChild);
+                        return Ok(ThreadOutcome::SettledChild(ChildSettleKind::Errored));
                     }
                     return Err(EngineError::VmInternalError(err));
                 }
@@ -3002,7 +3071,7 @@ impl BexEngine {
                         )?;
                         drop(guard);
                         thread.vm_thread_cancel().cancel();
-                        return Ok(ThreadOutcome::SettledChild);
+                        return Ok(ThreadOutcome::SettledChild(ChildSettleKind::Errored));
                     }
                     return Err(EngineError::TracedVmInternalError { source, trace });
                 }
@@ -3015,7 +3084,7 @@ impl BexEngine {
                     if let Some(future_id) = thread.vm_thread_settles_future() {
                         let mut guard = self.futures.acquire(thread.proof()).await;
                         guard.fulfill_future(future_id, value)?;
-                        return Ok(ThreadOutcome::SettledChild);
+                        return Ok(ThreadOutcome::SettledChild(ChildSettleKind::Fulfilled));
                     }
                     // "Cancel wins" semantics: if cancellation races with a
                     // completed VM step, report a cancellation panic rather
@@ -3174,7 +3243,7 @@ impl BexEngine {
                         self.prof_end_sysop(&mut thread.vm, false);
                         if let Some(future_id) = thread.vm_thread_settles_future() {
                             self.settle_child_cancelled(&mut thread, future_id).await?;
-                            return Ok(ThreadOutcome::SettledChild);
+                            return Ok(ThreadOutcome::SettledChild(ChildSettleKind::Cancelled));
                         }
                         return Err(cancelled_unhandled_throw());
                     }
@@ -3196,12 +3265,19 @@ impl BexEngine {
                                 r = fut                  => SysOpOutcome::Result(r),
                             };
                             thread = inactive.acquire().await;
+                            // Re-snapshot post-await (D5a): the task may be on a different
+                            // OS thread now, and engine-driven VM re-entries before the
+                            // next loop-head refresh (inject_sysop_throw's unwind) push
+                            // through this snapshot.
+                            self.prof_refresh_vm_ring(&mut thread.vm);
                             match outcome {
                                 SysOpOutcome::Cancelled => {
                                     self.prof_end_sysop(&mut thread.vm, false);
                                     if let Some(future_id) = thread.vm_thread_settles_future() {
                                         self.settle_child_cancelled(&mut thread, future_id).await?;
-                                        return Ok(ThreadOutcome::SettledChild);
+                                        return Ok(ThreadOutcome::SettledChild(
+                                            ChildSettleKind::Cancelled,
+                                        ));
                                     }
                                     return Err(cancelled_unhandled_throw());
                                 }
@@ -3443,7 +3519,7 @@ impl BexEngine {
                     if cancel.is_cancelled() {
                         if let Some(future_id) = thread.vm_thread_settles_future() {
                             self.settle_child_cancelled(&mut thread, future_id).await?;
-                            return Ok(ThreadOutcome::SettledChild);
+                            return Ok(ThreadOutcome::SettledChild(ChildSettleKind::Cancelled));
                         }
                         return Err(cancelled_unhandled_throw());
                     }
@@ -3482,11 +3558,16 @@ impl BexEngine {
                         r = future              => AwaitOutcome::Done(r),
                     };
                     thread = inactive.acquire().await;
+                    // Re-snapshot post-await (D5a): the task may be on a different
+                    // OS thread now, and engine-driven VM re-entries before the
+                    // next loop-head refresh (inject_sysop_throw's unwind) push
+                    // through this snapshot.
+                    self.prof_refresh_vm_ring(&mut thread.vm);
                     match outcome {
                         AwaitOutcome::Cancelled => {
                             if let Some(future_id) = thread.vm_thread_settles_future() {
                                 self.settle_child_cancelled(&mut thread, future_id).await?;
-                                return Ok(ThreadOutcome::SettledChild);
+                                return Ok(ThreadOutcome::SettledChild(ChildSettleKind::Cancelled));
                             }
                             return Err(cancelled_unhandled_throw());
                         }
@@ -3512,7 +3593,7 @@ impl BexEngine {
                         if let Some(our_future_id) = thread.vm_thread_settles_future() {
                             self.settle_child_errored(&mut thread, our_future_id, value)
                                 .await?;
-                            return Ok(ThreadOutcome::SettledChild);
+                            return Ok(ThreadOutcome::SettledChild(ChildSettleKind::Errored));
                         }
                         let external = self.vm_value_to_owned(thread.proof(), value);
                         return Err(EngineError::UnhandledThrow {
@@ -3537,7 +3618,7 @@ impl BexEngine {
                     if cancel.is_cancelled() {
                         if let Some(future_id) = thread.vm_thread_settles_future() {
                             self.settle_child_cancelled(&mut thread, future_id).await?;
-                            return Ok(ThreadOutcome::SettledChild);
+                            return Ok(ThreadOutcome::SettledChild(ChildSettleKind::Cancelled));
                         }
                         return Err(cancelled_unhandled_throw());
                     }
@@ -3581,11 +3662,16 @@ impl BexEngine {
                         }
                     };
                     thread = inactive.acquire().await;
+                    // Re-snapshot post-await (D5a): the task may be on a different
+                    // OS thread now, and engine-driven VM re-entries before the
+                    // next loop-head refresh (inject_sysop_throw's unwind) push
+                    // through this snapshot.
+                    self.prof_refresh_vm_ring(&mut thread.vm);
                     match outcome {
                         AwaitAnyOutcome::Cancelled => {
                             if let Some(future_id) = thread.vm_thread_settles_future() {
                                 self.settle_child_cancelled(&mut thread, future_id).await?;
-                                return Ok(ThreadOutcome::SettledChild);
+                                return Ok(ThreadOutcome::SettledChild(ChildSettleKind::Cancelled));
                             }
                             return Err(cancelled_unhandled_throw());
                         }

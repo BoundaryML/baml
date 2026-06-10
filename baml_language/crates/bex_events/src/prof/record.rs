@@ -82,7 +82,9 @@ pub enum RawRecord<'a> {
         flags: u8,
         /// Logical BEX thread id (not the OS thread).
         thread_id: u64,
-        /// Per-engine call id; counters start at 1.
+        /// Per-logical-thread call id (counters start at 1; always
+        /// interpret together with `thread_id` — `(thread_id, call_id)` is
+        /// the unique key).
         call_id: u64,
         /// Intra-thread caller; `0` = thread-root call.
         parent_call_id: u64,

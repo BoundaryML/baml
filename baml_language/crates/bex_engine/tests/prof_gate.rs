@@ -31,7 +31,16 @@ use pb::disk_event_v1::Event;
 use sys_native::SysOpsExt;
 
 fn prof_dir() -> PathBuf {
-    std::env::temp_dir().join(format!("bamlprof-gate-{}", std::process::id()))
+    // pid + startup nonce: pid reuse must not let a stale run's profiles
+    // satisfy (or trip) this run's marker demux.
+    static NONCE: std::sync::OnceLock<u128> = std::sync::OnceLock::new();
+    let nonce = NONCE.get_or_init(|| {
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_nanos())
+            .unwrap_or(0)
+    });
+    std::env::temp_dir().join(format!("bamlprof-gate-{}-{nonce}", std::process::id()))
 }
 
 /// Serializes the gate tests: they share one profile directory and one

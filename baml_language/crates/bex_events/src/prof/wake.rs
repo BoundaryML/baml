@@ -12,10 +12,6 @@
 //! grows losslessly, it never drops). Bounding that race is why the timeout
 //! exists — do not "fix" the race by adding producer-side blocking.
 
-// The consumer-side calls (register/park) are exercised only by the in-crate
-// suites until the PR3 consumer thread lands. Remove with PR3.
-#![cfg_attr(not(test), allow(dead_code))]
-
 pub(crate) use imp::Wake;
 
 #[cfg(not(baml_loom))]

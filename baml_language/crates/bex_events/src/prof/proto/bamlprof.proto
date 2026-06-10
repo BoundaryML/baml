@@ -7,6 +7,11 @@
 // Content mirrors the raw ring records exactly (transcoding is a pure
 // encoding change, no enrichment); `0 = none` ring conventions become
 // optional fields here.
+//
+// Ordering: events appear in per-ring drain order, and one logical thread's
+// events can arrive via several rings (tasks migrate OS threads), so FILE
+// ORDER IS NOT EVENT ORDER. Readers must sort by timestamp_ns within each
+// thread_id before reconstructing call trees.
 syntax = "proto3";
 
 package baml.prof.v1;

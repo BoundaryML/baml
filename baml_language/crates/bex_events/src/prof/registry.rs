@@ -9,9 +9,6 @@
 //! tokio blocking-pool threads die after their idle timeout, so the
 //! orphan/pool/claim path is routine, not exotic.
 #![allow(unsafe_code)]
-// The consumer-side half (for_each/sweep) is exercised only by the in-crate
-// suites until the PR3 consumer thread lands. Remove with PR3.
-#![cfg_attr(not(test), allow(dead_code))]
 
 use std::ptr::null_mut;
 

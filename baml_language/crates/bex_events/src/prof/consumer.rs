@@ -8,6 +8,13 @@
 //! its own scratch. That is what keeps lossless-by-growth deadlock-free.
 //! It also owns no ring: the heartbeat goes straight to the file writers.
 //!
+//! Known limitations (engine-lifecycle hooks are out of M2–M4 scope): there
+//! is no engine teardown, so per-engine writers stay open (one fd each) and
+//! keep receiving heartbeats for the life of the process, and the metadata
+//! map only grows. Bounded by the number of engines ever created; a
+//! lifecycle hook is the designated follow-up for long-lived multi-engine
+//! hosts.
+//!
 //! Capacity model (D6): measured drain+transcode+write throughput is
 //! **7.5M events/s on one core** (`prof_drain_throughput`, release, Linux
 //! dev workstation, 2026-06; ~285 MB/s of `.bamlprof` output). The
@@ -53,7 +60,7 @@ fn engine_meta() -> &'static Mutex<HashMap<u64, EngineProfileMetadata>> {
 pub fn register_engine_metadata(engine_id: u64, meta: EngineProfileMetadata) {
     engine_meta()
         .lock()
-        .expect("engine metadata lock poisoned")
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
         .insert(engine_id, meta);
 }
 
@@ -93,9 +100,13 @@ pub(crate) fn ensure_started() {
     });
 }
 
-/// Drains everything committed so far to disk and flushes the writers,
-/// waiting up to `timeout` for the consumer's ack. Returns whether the ack
-/// arrived. A no-op `true` when profiling never started.
+/// Drains everything committed so far and flushes the writers, waiting up
+/// to `timeout` for the consumer's ack. Returns whether the ack arrived. A
+/// no-op `true` when profiling never started.
+///
+/// Durability note: "flushed" means handed to the OS (`BufWriter::flush`),
+/// not `fsync`ed — a power loss can still lose the tail; a process exit
+/// cannot.
 ///
 /// Call sites should have joined/stopped their VMs first: thread join is a
 /// full sync, so the final commits are visible to the drain (plan §1).
@@ -121,9 +132,17 @@ pub(crate) fn consumer_main(control: &mpsc::Receiver<ControlMsg>, env: &Consumer
         while let Ok(msg) = control.try_recv() {
             match msg {
                 ControlMsg::Flush(ack) => {
-                    // Drain until a sweep makes no progress: everything
-                    // committed before the request is on disk after this.
-                    while state.sweep_once(env) {}
+                    // Drain until a sweep makes no progress — everything
+                    // committed before the request is then on disk — but
+                    // bounded: with a producer outrunning the drain, an
+                    // unbounded loop would starve the control channel (and
+                    // the ack) forever. The bound only cuts work the flush
+                    // contract never promised (post-request events).
+                    for _ in 0..1024 {
+                        if !state.sweep_once(env) {
+                            break;
+                        }
+                    }
                     state.flush_files();
                     let _ = ack.send(());
                 }
@@ -183,7 +202,6 @@ impl ConsumerState {
             return;
         };
         let mut io_result = Ok(());
-        let mut corrupt = false;
         for rec in record::iter(bytes) {
             match rec {
                 Ok(raw) => {
@@ -203,12 +221,10 @@ impl ConsumerState {
                             "corrupt profiling record in committed range (engine {engine_id}): {err:?}"
                         ));
                     }
-                    corrupt = true;
                     break;
                 }
             }
         }
-        let _ = corrupt;
         if let Err(err) = io_result {
             self.fail_writer(engine_id, &err);
         }
@@ -220,7 +236,7 @@ impl ConsumerState {
             .or_insert_with(|| {
                 let meta = engine_meta()
                     .lock()
-                    .expect("engine metadata lock poisoned")
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
                     .get(&engine_id)
                     .cloned();
                 let header = build_header(
@@ -383,10 +399,11 @@ fn process_id() -> [u8; 16] {
 
 /// Consumer-side diagnostics. The consumer must never panic (it would die
 /// silently and the rings would grow to the cap), so problems are reported
-/// and degraded around.
-#[expect(clippy::print_stderr, reason = "consumer has no logger dependency")]
+/// and degraded around — including reporting itself: `eprintln!` panics on a
+/// closed stderr, so write errors are swallowed instead.
 fn report(msg: std::fmt::Arguments<'_>) {
-    eprintln!("bex-prof-consumer: {msg}");
+    use std::io::Write as _;
+    let _ = writeln!(std::io::stderr(), "bex-prof-consumer: {msg}");
 }
 
 #[cfg(test)]
