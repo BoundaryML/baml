@@ -4698,7 +4698,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         obj_type_args.is_empty()
             && spreads.is_empty()
             && matches!(
-                type_name.map(|path| path.segments()),
+                type_name.map(baml_base::TypePath::segments),
                 Some([name]) if name.as_str() == "map"
             )
     }
