@@ -65,6 +65,9 @@ function         http.send                        <builtin>/baml/ns_http/http.ba
 function         http.fetch_sse                   <builtin>/baml/ns_http/http.baml:78
 class            http.Server                      <builtin>/baml/ns_http/server.baml:10
 class            http.TlsConfig                   <builtin>/baml/ns_http/server.baml:110
+function         id.current                       <builtin>/baml/ns_id/id.baml:3
+function         id.new                           <builtin>/baml/ns_id/id.baml:9
+function         id.set                           <builtin>/baml/ns_id/id.baml:16
 function         io.input                         <builtin>/baml/ns_io/io.baml:2
 function         io.print                         <builtin>/baml/ns_io/io.baml:8
 function         io.println                       <builtin>/baml/ns_io/io.baml:13

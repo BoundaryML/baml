@@ -4206,6 +4206,12 @@ fn baml.http.Server.to_json(self: baml.http.Server) -> baml.json.json {
     }
 }
 
+fn baml.id.current = builtin(vm)
+
+fn baml.id.new = builtin(vm)
+
+fn baml.id.set = builtin(vm)
+
 fn baml.io.eprint = builtin(io)
 
 fn baml.io.eprintln = builtin(io)

@@ -9,6 +9,10 @@
 //! tokio blocking-pool threads die after their idle timeout, so the
 //! orphan/pool/claim path is routine, not exotic.
 #![allow(unsafe_code)]
+// On wasm32 the consumer half of this module is compiled but unreachable —
+// profiling is forced off there (no consumer thread, no TSC clock), and the
+// designed-but-deferred cooperative drain would be its caller (v2 §6.5).
+#![cfg_attr(target_arch = "wasm32", allow(dead_code))]
 
 use std::ptr::null_mut;
 

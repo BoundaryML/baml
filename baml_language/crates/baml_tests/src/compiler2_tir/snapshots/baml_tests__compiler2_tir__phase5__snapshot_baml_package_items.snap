@@ -74,6 +74,10 @@ namespace baml.http:
   function fetch
   function fetch_sse
   function send
+namespace baml.id:
+  function current
+  function new
+  function set
 namespace baml.io:
   function eprint
   function eprintln

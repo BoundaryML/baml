@@ -26,6 +26,10 @@
 //! - Hitting the live-memory cap is a hard process error with a clear
 //!   message (D6), never a silent drop.
 #![allow(unsafe_code)]
+// On wasm32 the consumer half of this module is compiled but unreachable —
+// profiling is forced off there (no consumer thread, no TSC clock), and the
+// designed-but-deferred cooperative drain would be its caller (v2 §6.5).
+#![cfg_attr(target_arch = "wasm32", allow(dead_code))]
 
 use std::{marker::PhantomData, ptr::null_mut};
 
