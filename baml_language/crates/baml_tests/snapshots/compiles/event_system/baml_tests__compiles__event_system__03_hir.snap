@@ -7,6 +7,7 @@ class user.User {
   name: string
   email: string
 }
+enum user.LogStatus {Active}
 function user.emit_custom_event(name: string) -> void  [expr] {
   {  } baml.events.send("user_action", map { "action": name })
 }
@@ -30,6 +31,9 @@ function user.simple_function() -> int  [expr] {
 }
 function user.test_logging() -> void  [expr] {
   { let user = user.User { id: 123, name: "Alice", email: "alice@example.com" }; log.debug(map { "message": "Starting process" }); log.info(map { "user": user, "status": "processing" }); log.warn(map { "warning": "Resource usage high" }) } log.error(map { "code": "E001", "retries": 3 })
+}
+function user.test_logging_any_values() -> void  [expr] {
+  { let user = user.User { id: 123, name: "Alice", email: "alice@example.com" }; log.info("plain message"); log.debug(2); log.warn(true); log.error(null); log.info(["a", "b"]); log.info(user); log.info(LogStatus.Active) } log.info(map { "event": "structured", "user": user })
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
   map { "id": self.id.to_json(), "name": self.name.to_json(), "email": self.email.to_json() }

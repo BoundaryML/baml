@@ -570,9 +570,7 @@ async fn test_custom_event_emission() {
 
 // === Phase 5: log Package ===
 
-/// Verify that `log.info()` emits a custom event with name="log" and the expected
-/// level/data fields. The `log.*` functions are pure BAML wrappers around
-/// `baml.events.send("log", { level, data })`.
+/// Verify that `log.info()` emits a `LogEvent` with the expected level/data fields.
 #[tokio::test]
 async fn test_log_info_event_emission() {
     let source = r#"
@@ -631,6 +629,120 @@ async fn test_log_info_event_emission() {
         log_event.source.is_some(),
         "Expected source location in LogEvent"
     );
+}
+
+#[tokio::test]
+async fn test_log_any_values_preserved_directly() {
+    let source = r#"
+        class User {
+            id int
+            name string
+        }
+
+        enum LogStatus {
+            Active
+        }
+
+        function log_values() -> void {
+            let user = User { id: 123, name: "Alice" }
+            log.info("hello")
+            log.debug(2)
+            log.warn(true)
+            log.error(null)
+            log.info([1, 2, 3])
+            log.info(user)
+            log.info(LogStatus.Active)
+            log.info({ step: 1 })
+        }
+    "#;
+
+    let snapshot = compile_for_engine(source);
+    let engine = std::sync::Arc::new(
+        BexEngine::new(
+            snapshot,
+            std::sync::Arc::new(sys_native::SysOps::native()),
+            None,
+            vec![],
+        )
+        .unwrap(),
+    );
+
+    let (host_ctx, guard) = setup_tracking();
+    let call_ctx = FunctionCallContextBuilder::new(sys_types::CallId::next())
+        .with_host_ctx(host_ctx)
+        .build();
+
+    engine
+        .call_function("log_values", vec![], call_ctx, true)
+        .await
+        .unwrap();
+
+    let events = collect_events(&guard);
+    let log_events: Vec<_> = events
+        .iter()
+        .filter_map(|e| match &e.event {
+            EventKind::Log(log) => Some(log),
+            _ => None,
+        })
+        .collect();
+
+    assert_eq!(log_events.len(), 8);
+
+    assert_eq!(log_events[0].level, "info");
+    assert_eq!(log_events[0].data, BexExternalValue::String("hello".into()));
+
+    assert_eq!(log_events[1].level, "debug");
+    assert_eq!(log_events[1].data, BexExternalValue::Int(2));
+
+    assert_eq!(log_events[2].level, "warn");
+    assert_eq!(log_events[2].data, BexExternalValue::Bool(true));
+
+    assert_eq!(log_events[3].level, "error");
+    assert_eq!(log_events[3].data, BexExternalValue::Null);
+
+    match &log_events[4].data {
+        BexExternalValue::Array { items, .. } => {
+            assert_eq!(
+                items,
+                &[
+                    BexExternalValue::Int(1),
+                    BexExternalValue::Int(2),
+                    BexExternalValue::Int(3),
+                ]
+            );
+        }
+        other => panic!("Expected Array data in LogEvent, got {other:?}"),
+    }
+
+    match &log_events[5].data {
+        BexExternalValue::Instance { class_name, fields } => {
+            assert_eq!(class_name, "user.User");
+            assert_eq!(fields.get("id"), Some(&BexExternalValue::Int(123)));
+            assert_eq!(
+                fields.get("name"),
+                Some(&BexExternalValue::String("Alice".into()))
+            );
+        }
+        other => panic!("Expected Instance data in LogEvent, got {other:?}"),
+    }
+
+    match &log_events[6].data {
+        BexExternalValue::Variant {
+            enum_name,
+            variant_name,
+        } => {
+            assert_eq!(enum_name, "user.LogStatus");
+            assert_eq!(variant_name, "Active");
+        }
+        other => panic!("Expected Variant data in LogEvent, got {other:?}"),
+    }
+
+    match &log_events[7].data {
+        BexExternalValue::Map { entries, .. } => {
+            assert_eq!(entries.get("step"), Some(&BexExternalValue::Int(1)));
+        }
+        other => panic!("Expected Map data in LogEvent, got {other:?}"),
+    }
 }
 
 /// Verify that all log levels (debug, warn, error) emit the correct "level" field.
@@ -700,7 +812,7 @@ async fn test_log_all_levels() {
 async fn test_collector_log_events_extraction() {
     let source = r#"
         function do_logging() -> void {
-            log.info({ step: 1, message: "first message" })
+            log.info("first message")
         }
     "#;
 
@@ -738,16 +850,10 @@ async fn test_collector_log_events_extraction() {
 
     assert_eq!(log.log_events.len(), 1, "Expected one log event");
     assert_eq!(log.log_events[0].level, "info");
-    // Check that data contains expected fields
-    match &log.log_events[0].data {
-        bex_external_types::BexExternalValue::Map { entries, .. } => {
-            assert_eq!(
-                entries.get("step"),
-                Some(&bex_external_types::BexExternalValue::Int(1))
-            );
-        }
-        other => panic!("Expected Map data, got {other:?}"),
-    }
+    assert_eq!(
+        log.log_events[0].data,
+        BexExternalValue::String("first message".into())
+    );
 
     bex_events::event_store::untrack(&root);
 }

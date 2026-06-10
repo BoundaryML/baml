@@ -13,6 +13,7 @@ function user.User.to_json(self: user.User) -> baml.json.json throws baml.json.J
 function user.User.from_json(j: baml.json.json) -> user.User throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   User { id: baml.json.from_json<int>(baml.json.field(j, "id")), name: baml.json.from_json<string>(baml.json.field(j, "name")), email: baml.json.from_json<string>(baml.json.field(j, "email")) } : user.User
 }
+enum user.LogStatus
 function user.simple_function() -> int throws never {
   { : 42
     42 : 42
@@ -47,6 +48,19 @@ function user.test_logging() -> void throws never {
     log.info(map { "user": user, "status": "processing" }) : void
     log.warn(map { "warning": "Resource usage high" }) : void
     log.error(map { "code": "E001", "retries": 3 }) : void
+  }
+}
+function user.test_logging_any_values() -> void throws never {
+  { : void
+    let user = User { id: 123, name: "Alice", email: "alice@example.com" } : user.User
+    log.info("plain message") : void
+    log.debug(2) : void
+    log.warn(true) : void
+    log.error(null) : void
+    log.info(["a", "b"]) : void
+    log.info(user) : void
+    log.info(LogStatus.Active) : void
+    log.info(map { "event": "structured", "user": user }) : void
   }
 }
 function user.process_with_logging(input: string) -> string throws never {
