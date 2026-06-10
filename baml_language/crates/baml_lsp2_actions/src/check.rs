@@ -444,6 +444,9 @@ fn check_interfaces<'db>(
 
     let mut diagnostics = Vec::new();
 
+    // The package these impls live in — the orphan rule's notion of "local".
+    let current_package = baml_compiler2_hir::file_package::file_package(db, file).package;
+
     // Detect direct + transitive cycles in interface `extends`.
     for item in items {
         if let baml_compiler2_ast::Item::Interface(iface) = item
@@ -587,6 +590,7 @@ fn check_interfaces<'db>(
             validate_implements_for(
                 db,
                 file_id,
+                &current_package,
                 imp,
                 items,
                 pkg_items,
@@ -4384,9 +4388,56 @@ fn expand_type_alias(ty: &Ty, aliases: &std::collections::HashMap<QualifiedTypeN
 }
 
 #[allow(clippy::too_many_arguments)]
+/// Outcome of the BEP-044 orphan-rule check for an out-of-body impl.
+enum OrphanCheck<'a> {
+    Ok,
+    /// An uncovered type parameter appears before any local type in `[for, args]`.
+    UncoveredParam(&'a Name),
+    /// No type local to the impl's package appears anywhere in `[for, args]`.
+    NoLocalType,
+}
+
+/// The orphan rule — Rust's RFC 2451 "covered" rule, per BEP-044. An out-of-body
+/// `implement<P..> I<args..> for T` is allowed only if `I` is local to
+/// `current_package`, or — scanning the input types `[T, args..]` left to right —
+/// a type local to `current_package` appears before any *uncovered* type
+/// parameter. This keeps interface coherence checkable per package (a foreign
+/// interface can only be implemented when anchored on a local type, so two
+/// packages can never author colliding impls).
+///
+/// BAML has no fundamental (transparent-wrapper) types, so a parameter is
+/// "uncovered" exactly when it is an input's own root, and non-local
+/// constructors are opaque (their type args don't participate). Associated
+/// bindings are excluded (they're outputs). In-body impls are exempt — their
+/// `for` type is the enclosing class, which is always local — so this is applied
+/// only to out-of-body `implement … for …`.
+fn orphan_check<'a>(
+    current_package: &Name,
+    iface_qtn: &QualifiedTypeName,
+    for_ty: &'a Ty,
+    iface_args: &'a [Ty],
+) -> OrphanCheck<'a> {
+    // Implementing your own interface is always allowed, for any type.
+    if iface_qtn.package() == current_package {
+        return OrphanCheck::Ok;
+    }
+    for input in std::iter::once(for_ty).chain(iface_args.iter()) {
+        match input {
+            Ty::Class(tn, ..) | Ty::Enum(tn, ..) if tn.package() == current_package => {
+                return OrphanCheck::Ok;
+            }
+            Ty::TypeVar(name, _) => return OrphanCheck::UncoveredParam(name),
+            _ => {}
+        }
+    }
+    OrphanCheck::NoLocalType
+}
+
+#[expect(clippy::too_many_arguments)]
 fn validate_implements_for<'db>(
     db: &'db dyn Db,
     file_id: FileId,
+    current_package: &Name,
     imp: &baml_compiler2_ast::ImplementsForDef,
     all_items: &[baml_compiler2_ast::Item],
     pkg_items: &baml_compiler2_hir::package::PackageItems<'db>,
@@ -4534,6 +4585,53 @@ fn validate_implements_for<'db>(
 
     let iface_display_name = resolved_iface.display_name();
     let iface_qtn = resolved_iface.qtn.clone();
+
+    // BEP-044 orphan rule (RFC 2451 covered rule): a foreign interface may only be
+    // implemented out-of-body when anchored on a type local to this package,
+    // before any uncovered type parameter — see `orphan_check`.
+    {
+        let mut iface_lower_errs = Vec::new();
+        let iface_ty = baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns(
+            db,
+            &imp.interface_target.expr,
+            pkg_items,
+            namespace_path,
+            &generic_param_names,
+            &mut iface_lower_errs,
+        );
+        let iface_args: Vec<Ty> = match expand_type_alias(&iface_ty, aliases) {
+            Ty::Interface(_, args, _, _) => {
+                args.iter().map(|a| expand_type_alias(a, aliases)).collect()
+            }
+            _ => Vec::new(),
+        };
+        let orphan_diag = |detail: String| {
+            Diagnostic::error(
+                DiagnosticId::ImplViolatesOrphanRule,
+                format!(
+                    "cannot implement foreign interface `{}` for `{}`: {detail} (orphan rule)",
+                    imp.interface_target.expr, imp.for_target.expr
+                ),
+            )
+            .with_primary_span(Span {
+                file_id,
+                range: imp.for_target.span,
+            })
+            .with_phase(DiagnosticPhase::Type)
+        };
+        match orphan_check(current_package, &iface_qtn, &resolved_target, &iface_args) {
+            OrphanCheck::Ok => {}
+            OrphanCheck::UncoveredParam(param) => diagnostics.push(orphan_diag(format!(
+                "the type parameter `{param}` is not covered by a type local to this package; \
+                 a local type must appear before any uncovered type parameter"
+            ))),
+            OrphanCheck::NoLocalType => diagnostics.push(orphan_diag(
+                "neither the interface nor any type in the impl is defined in this package"
+                    .to_string(),
+            )),
+        }
+    }
+
     let iface_file = resolved_iface.loc.file(db);
     let iface = resolved_iface.iface;
     let iface_pkg_info = baml_compiler2_hir::file_package::file_package(db, iface_file);

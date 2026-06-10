@@ -364,6 +364,42 @@ fn implementing_an_enum_is_not_allowed() {
 }
 
 #[test]
+fn orphan_rule_rejects_blanket_impl_of_foreign_interface() {
+    // BEP-044 orphan rule (E0139): a blanket impl of a *foreign* interface
+    // (`baml.ops.Equals`) over a bare type parameter is the classic violation (the
+    // "smuggling" shape) — `T` is uncovered and no local type anchors the impl.
+    assert_compile_error_code(
+        r#"
+        implement<T> baml.ops.Equals for T {}
+        "#,
+        "E0139",
+    );
+}
+
+#[test]
+fn orphan_rule_rejects_foreign_interface_for_foreign_type() {
+    // Foreign interface + foreign type (`int`): neither is local to this package.
+    assert_compile_error_code(
+        r#"
+        implement baml.ops.Equals for int {}
+        "#,
+        "E0139",
+    );
+}
+
+#[test]
+fn orphan_rule_allows_local_interface_blanket() {
+    // Implementing your *own* interface is always allowed, even as a blanket over
+    // a bare type parameter — the interface being local satisfies the orphan rule.
+    assert_no_compile_errors(
+        r#"
+        interface Marker {}
+        implement<T> Marker for T {}
+        "#,
+    );
+}
+
+#[test]
 fn unknown_method_in_implements_block_is_compile_error() {
     assert_compile_error_code(
         r#"
