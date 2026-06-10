@@ -129,7 +129,14 @@ impl ProfConfig {
 }
 
 fn parse_usize(value: Option<String>) -> Option<usize> {
-    value.and_then(|v| v.trim().parse::<usize>().ok())
+    // Saturating on purpose: a numeric value beyond usize::MAX is an explicit
+    // "huge" request, not garbage. Falling back to a default instead would
+    // invert the user's intent — most dangerously for
+    // BAML_RING_MAX_OVERFLOW_BYTES, where silently shrinking to the default
+    // arms the very hard-error abort the user was trying to move away.
+    value
+        .and_then(|v| v.trim().parse::<u128>().ok())
+        .map(|v| usize::try_from(v).unwrap_or(usize::MAX))
 }
 
 #[cfg(test)]
@@ -196,6 +203,19 @@ mod tests {
     fn overflow_cap_keeps_segment_headroom() {
         let cfg = ProfConfig::from_lookup(lookup(&[(ENV_MAX_OVERFLOW_BYTES, "1")]));
         assert_eq!(cfg.max_overflow_bytes, cfg.seg_bytes * 4);
+    }
+
+    #[test]
+    fn oversized_values_saturate_instead_of_shrinking_to_default() {
+        // 2^64: beyond usize::MAX on every supported target. Must saturate —
+        // falling back to the (smaller) default would arm the D6 abort the
+        // user was raising the cap to avoid.
+        let cfg =
+            ProfConfig::from_lookup(lookup(&[(ENV_MAX_OVERFLOW_BYTES, "18446744073709551616")]));
+        assert_eq!(cfg.max_overflow_bytes, usize::MAX);
+        // seg_bytes still clamps to its documented range.
+        let cfg = ProfConfig::from_lookup(lookup(&[(ENV_SEG_BYTES, "18446744073709551616")]));
+        assert_eq!(cfg.seg_bytes, MAX_SEG_BYTES);
     }
 
     #[test]

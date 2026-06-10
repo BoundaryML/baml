@@ -290,10 +290,19 @@ impl Ring {
     /// `0 < rec.len() <= seg_bytes`.
     pub(crate) unsafe fn push(&self, rec: &[u8]) {
         debug_assert!(!rec.is_empty());
-        debug_assert!(rec.len() <= self.seg_bytes, "record larger than a segment");
         self.p.with_mut(|p| {
             let p = unsafe { &mut *p };
             if p.head_pos + rec.len() > self.seg_bytes {
+                // An oversized record necessarily lands here (head_pos ≥ 0),
+                // so this release-mode check costs one compare per segment
+                // fill — never per push — and is what keeps the memcpy below
+                // in bounds for arbitrary input.
+                assert!(
+                    rec.len() <= self.seg_bytes,
+                    "profiling record ({} bytes) exceeds the ring segment size ({} bytes)",
+                    rec.len(),
+                    self.seg_bytes
+                );
                 // Slow path: link a recycled or fresh segment.
                 let seg = match unsafe { self.free_pop() } {
                     Some(seg) => seg,
@@ -444,6 +453,11 @@ impl Ring {
     /// The Release pairs with the consumer's `state` Acquire: every record
     /// pushed before death is visible to the post-orphan drain.
     pub(crate) fn orphan(&self) {
+        debug_assert_eq!(
+            self.state(),
+            RingState::Active,
+            "only the live claimant's thread death orphans a ring"
+        );
         self.s
             .state
             .store(RingState::Orphaned as u8, Ordering::Release);
@@ -457,6 +471,11 @@ impl Ring {
     /// Caller is the consumer thread and just drained this ring to empty
     /// after observing it `Orphaned`.
     pub(crate) unsafe fn mark_pooled(&self) {
+        debug_assert_eq!(
+            self.state(),
+            RingState::Orphaned,
+            "only a drained orphan can be pooled"
+        );
         self.s
             .state
             .store(RingState::Pooled as u8, Ordering::Release);
@@ -552,11 +571,23 @@ impl RingHandle {
         }
     }
 
-    /// Push one whole encoded record (≤ segment size). Never blocks.
+    /// Push one whole encoded record. Never blocks. Oversized records
+    /// (> segment size) panic on the slow path rather than corrupting the
+    /// ring.
+    ///
+    /// # Safety
+    /// The calling thread must still be the ring's live claimant: not after
+    /// its `ThreadRings` TLS destructor ran (which orphans the ring and lets
+    /// a new thread claim it — a later push would race the new producer).
+    /// `!Send` pins the handle to the claiming thread, but TLS destructor
+    /// ordering is unspecified, so "before TLS teardown" cannot be enforced
+    /// by the type. The engine upholds this via the per-resume refresh
+    /// (D5a): handles are re-fetched from live TLS each exec resume and
+    /// never used from destructors.
     #[inline]
-    pub fn push(&self, rec: &[u8]) {
-        // SAFETY: handles only exist on the claiming thread (!Send), so this
-        // thread is the unique producer.
+    pub unsafe fn push(self, rec: &[u8]) {
+        // SAFETY: !Send pins us to the claiming thread; the caller vouches
+        // the claim is still live (contract above).
         unsafe { self.ring.push(rec) }
     }
 

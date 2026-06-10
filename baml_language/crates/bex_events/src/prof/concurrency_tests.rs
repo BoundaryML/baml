@@ -148,6 +148,11 @@ mod scenarios {
             ring.drain(&mut |b| collect_seqs(b, &mut seen));
             assert_eq!(seen, vec![3, 4]);
         }
+        // Behavioral leak check (miri's leak checker is off for these tests):
+        // Ring::drop must walk both the live chain and the free list back to
+        // a zero balance.
+        drop(tr);
+        assert_eq!(ctx.live_bytes(), 0, "Ring::drop leaked segments");
     }
 
     /// (3) Free-list SPSC integrity: heavier producer/consumer traffic so
@@ -260,12 +265,16 @@ mod scenarios {
 
         let t1 = thread::spawn(move || {
             let h = reg.acquire(ctx, 16, 8, 1);
-            h.push(&rec(101));
+            // SAFETY: the claiming thread is alive for the whole call (no TLS
+            // teardown in flight).
+            unsafe { h.push(&rec(101)) };
             std::ptr::from_ref(h.ring()) as usize
         });
         let t2 = thread::spawn(move || {
             let h = reg.acquire(ctx, 16, 8, 2);
-            h.push(&rec(202));
+            // SAFETY: the claiming thread is alive for the whole call (no TLS
+            // teardown in flight).
+            unsafe { h.push(&rec(202)) };
             std::ptr::from_ref(h.ring()) as usize
         });
         let (p1, p2) = (t1.join().unwrap(), t2.join().unwrap());
@@ -315,7 +324,9 @@ mod scenarios {
         // Producer 1 lives and dies on a spawned thread.
         let p1 = thread::spawn(move || {
             let h = reg.acquire(ctx, 16, 8, 1);
-            h.push(&rec(7));
+            // SAFETY: the claiming thread is alive for the whole call (no TLS
+            // teardown in flight).
+            unsafe { h.push(&rec(7)) };
             h.ring().orphan(); // TLS-destructor stand-in
             std::ptr::from_ref(h.ring()) as usize
         })
@@ -329,7 +340,9 @@ mod scenarios {
         // Producer 2 claims while the consumer keeps sweeping.
         let t = thread::spawn(move || {
             let h = reg.acquire(ctx, 16, 8, 2);
-            h.push(&rec(8));
+            // SAFETY: the claiming thread is alive for the whole call (no TLS
+            // teardown in flight).
+            unsafe { h.push(&rec(8)) };
             std::ptr::from_ref(h.ring()) as usize
         });
         sweep(&mut tagged);
@@ -343,6 +356,48 @@ mod scenarios {
         assert_eq!(tagged, vec![(1, 7), (2, 8)]);
 
         drop(unsafe { Box::from_raw(reg_ptr) });
+        assert_eq!(ctx.live_bytes(), 0, "Registry::drop leaked segments");
+    }
+
+    /// (4c) `Registry::sweep` racing `orphan()`: the sweep may load `Active`
+    /// in the very step the producer dies, or see the orphan mid-walk. Every
+    /// such stale observation must be benign — no record is lost and a later
+    /// sweep pools the ring.
+    pub(super) fn sweep_races_orphan() {
+        let ctx = leak_ctx(BIG_CAP);
+        let reg_ptr = Box::into_raw(Box::new(Registry::new()));
+        let reg: &'static Registry = unsafe { &*reg_ptr };
+
+        let producer = thread::spawn(move || {
+            let h = reg.acquire(ctx, 16, 8, 1);
+            // SAFETY: the claiming thread is alive for the whole call (no TLS
+            // teardown in flight).
+            unsafe {
+                h.push(&rec(0));
+                h.push(&rec(1));
+            }
+            h.ring().orphan(); // TLS-destructor stand-in
+        });
+        let mut seen = Vec::new();
+        let sweep = |seen: &mut Vec<u64>| {
+            // SAFETY: this thread is the single consumer.
+            unsafe { reg.sweep(&mut |_, bytes| collect_seqs(bytes, seen)) };
+        };
+        for _ in 0..2 {
+            sweep(&mut seen); // concurrent with pushes and the orphan store
+        }
+        producer.join().unwrap();
+        // Post-join, a sweep observes Orphaned (or an earlier one already
+        // pooled): drain to empty, pool; the next sweep must skip it.
+        sweep(&mut seen);
+        sweep(&mut seen);
+        assert_eq!(seen, vec![0, 1]);
+        let mut state = None;
+        reg.for_each(|ring| state = Some(ring.state()));
+        assert_eq!(state, Some(RingState::Pooled));
+
+        drop(unsafe { Box::from_raw(reg_ptr) });
+        assert_eq!(ctx.live_bytes(), 0, "Registry::drop leaked segments");
     }
 }
 
@@ -398,6 +453,11 @@ mod loom_suite {
     fn registry_pool_reuse() {
         model(scenarios::registry_pool_reuse);
     }
+
+    #[test]
+    fn sweep_races_orphan() {
+        model(scenarios::sweep_races_orphan);
+    }
 }
 
 /// The same scenarios on real threads. miri executes these (checking the
@@ -452,6 +512,11 @@ mod std_suite {
     #[test]
     fn registry_pool_reuse() {
         many(scenarios::registry_pool_reuse);
+    }
+
+    #[test]
+    fn sweep_races_orphan() {
+        many(scenarios::sweep_races_orphan);
     }
 }
 
@@ -510,7 +575,9 @@ mod stress {
                             ts_ns: seq,
                         }
                         .encode(&mut buf);
-                        h.push(&buf[..len]);
+                        // SAFETY: the claiming thread is alive for the whole call (no TLS
+                        // teardown in flight).
+                        unsafe { h.push(&buf[..len]) };
                         // Two bursts with pauses: lets the consumer catch up
                         // (recycle path) and then fall behind again (growth
                         // path).
@@ -595,6 +662,56 @@ mod stress {
         );
 
         drop(unsafe { Box::from_raw(reg_ptr) });
+        assert_eq!(ctx.live_bytes(), 0, "Registry::drop leaked segments");
+    }
+
+    /// Wake delivery, not just wake survival: a parked consumer must be
+    /// unparked by a producer's segment fill. The producer keeps filling
+    /// segments, so the benign D4 lost-wakeup window cannot swallow every
+    /// wake — only a broken path (consumer never registered, dead flag, no
+    /// unpark call) leaves the consumer asleep for the full long timeout.
+    /// The flood test alone cannot catch that: its 1 ms park timeout makes
+    /// a broken Wake merely slow, not failing.
+    #[test]
+    #[cfg(not(miri))] // wall-clock timing under miri is meaningless
+    fn unpark_delivery() {
+        use std::sync::atomic::AtomicBool;
+
+        let ctx = leak_ctx(BIG_CAP);
+        let tr = super::TestRing::new(ctx, 16, 4, 1);
+        let ring = tr.get();
+        ctx.wake().register_consumer();
+
+        let stop = Arc::new(AtomicBool::new(false));
+        let producer = {
+            let stop = Arc::clone(&stop);
+            std::thread::spawn(move || {
+                while !stop.load(Ordering::Acquire) {
+                    // Two 8-byte records fill a 16-byte segment: every pair
+                    // takes the slow path and calls wake_if_parked.
+                    // SAFETY: creator-claimant thread, alive throughout.
+                    unsafe {
+                        ring.push(&rec(0));
+                        ring.push(&rec(1));
+                    }
+                    std::thread::sleep(Duration::from_micros(200));
+                }
+            })
+        };
+
+        let start = std::time::Instant::now();
+        ctx.wake().pre_park();
+        ctx.wake().park(Duration::from_secs(10));
+        ctx.wake().post_park();
+        let waited = start.elapsed();
+
+        stop.store(true, Ordering::Release);
+        producer.join().unwrap();
+
+        assert!(
+            waited < Duration::from_secs(5),
+            "consumer slept {waited:?}: segment-fill unpark was never delivered"
+        );
     }
 
     /// Orphan churn: short-lived producer threads in sequence must recycle
@@ -610,7 +727,9 @@ mod stress {
         for round in 1..=rounds {
             std::thread::spawn(move || {
                 let h = reg.acquire(ctx, 64, 4, round);
-                h.push(&rec(round));
+                // SAFETY: the claiming thread is alive for the whole call (no TLS
+                // teardown in flight).
+                unsafe { h.push(&rec(round)) };
                 h.ring().orphan(); // TLS-destructor stand-in
             })
             .join()
@@ -645,7 +764,9 @@ mod stress {
 
         let ptr1 = std::thread::spawn(|| {
             let h = ring_for_engine(ENGINE);
-            h.push(&rec(1));
+            // SAFETY: the claiming thread is alive for the whole call (no TLS
+            // teardown in flight).
+            unsafe { h.push(&rec(1)) };
             std::ptr::from_ref(h.ring()) as usize
         })
         .join()
@@ -676,7 +797,9 @@ mod stress {
         // The next thread asking for any engine must claim the pooled ring.
         let ptr2 = std::thread::spawn(|| {
             let h = ring_for_engine(ENGINE + 1);
-            h.push(&rec(2));
+            // SAFETY: the claiming thread is alive for the whole call (no TLS
+            // teardown in flight).
+            unsafe { h.push(&rec(2)) };
             std::ptr::from_ref(h.ring()) as usize
         })
         .join()

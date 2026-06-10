@@ -235,6 +235,12 @@ jobs:
             echo "changed=true" >> "$GITHUB_OUTPUT"
           fi
 
+      # Includes the job's own inputs (workspace manifest with the
+      # loom/minstant dep versions + check-cfg list, the pinned toolchain,
+      # and this workflow file) so a change that can break the loom/miri
+      # build re-runs the gate. Cargo.lock is deliberately excluded: it
+      # churns on every dep bump and the cargo-tests job already covers the
+      # std halves of the suite.
       - name: Check if profiling ring code changed
         id: check_prof
         env:
@@ -242,6 +248,9 @@ jobs:
         run: |
           if git diff --quiet "${MERGE_BASE}...HEAD" -- \
             ':baml_language/crates/bex_events/**' \
+            ':baml_language/Cargo.toml' \
+            ':baml_language/rust-toolchain.toml' \
+            ':.github/workflows/ci.yaml' \
           ; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
           else
