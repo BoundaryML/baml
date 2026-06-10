@@ -28,5 +28,15 @@
 pub mod clock;
 pub mod config;
 pub mod record;
+pub(crate) mod registry;
+pub(crate) mod ring;
+pub(crate) mod sync;
+pub(crate) mod wake;
+
+#[cfg(test)]
+mod concurrency_tests;
 
 pub use config::ProfConfig;
+#[cfg(not(baml_loom))]
+pub use registry::ring_for_engine;
+pub use ring::{Ring, RingHandle};

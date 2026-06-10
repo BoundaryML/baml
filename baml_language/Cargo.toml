@@ -167,8 +167,8 @@ libsui = { version = "0.14" }
 log = "0.4.20"
 logos = { version = "0.15" }
 # Concurrency model checker for the profiling ring (bex_events::prof). Only a
-# dependency when building with `RUSTFLAGS="--cfg loom"` (see the
-# `[target.'cfg(loom)'.dependencies]` section of bex_events).
+# dependency when building with `RUSTFLAGS="--cfg baml_loom"` (see the
+# `[target.'cfg(baml_loom)'.dependencies]` section of bex_events).
 loom = { version = "0.7" }
 lsp-server = "0.7.6"
 lsp-types = "0.95.0"
@@ -271,8 +271,8 @@ unreachable_pub = "warn"
 unexpected_cfgs = { level = "warn", check-cfg = [
   "cfg(fuzzing)",
   "cfg(codspeed)",
-  # Loom model-checked builds of bex_events::prof (RUSTFLAGS="--cfg loom").
-  "cfg(loom)",
+  # Loom model-checked builds of bex_events::prof (RUSTFLAGS="--cfg baml_loom").
+  "cfg(baml_loom)",
 ] }
 
 [workspace.lints.clippy]

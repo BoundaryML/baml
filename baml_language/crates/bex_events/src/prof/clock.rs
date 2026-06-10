@@ -15,7 +15,7 @@
 
 pub use imp::{init, now_ns, started_at_epoch_ns};
 
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(not(any(target_arch = "wasm32", miri)))]
 mod imp {
     use std::sync::OnceLock;
 
@@ -64,18 +64,21 @@ mod imp {
     }
 }
 
-#[cfg(target_arch = "wasm32")]
+// wasm32: profiling is forced off, nothing reads the clock. miri: minstant
+// cannot run there (its ctor probes the TSC), and the concurrency tests miri
+// executes stamp their own ts values.
+#[cfg(any(target_arch = "wasm32", miri))]
 mod imp {
-    /// No-op on wasm32 (profiling is forced off).
+    /// No-op in stub builds (profiling is forced off).
     pub fn init() {}
 
-    /// Always `0` on wasm32 (profiling is forced off; nothing reads this).
+    /// Always `0` in stub builds (nothing reads this).
     #[inline]
     pub fn now_ns() -> u64 {
         0
     }
 
-    /// Always `0` on wasm32 (profiling is forced off; nothing reads this).
+    /// Always `0` in stub builds (nothing reads this).
     pub fn started_at_epoch_ns() -> u128 {
         0
     }

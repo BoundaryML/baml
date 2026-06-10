@@ -1235,6 +1235,7 @@ dependencies = [
  "minstant",
  "serde",
  "serde_json",
+ "smallvec",
  "sys_types",
  "uuid",
  "web-time",
