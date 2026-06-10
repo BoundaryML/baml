@@ -116,7 +116,7 @@ function user.CatchAllMissingString(ok: bool) -> string throws never {
         BuildError =>
           "recovered: " + e.reason : string
   }
-  !! 2151..2248: non-exhaustive catch_all on `BuildError | string`; missing: string
+  !! 2151..2248: non-exhaustive catch_all on `string | BuildError`; missing: string
 }
 function user.UnreachableTailStillChecked() -> string throws never {
   { : never

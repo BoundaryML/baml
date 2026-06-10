@@ -22,14 +22,14 @@ source: crates/baml_tests/src/generated_tests.rs
     │ Note: Error code: E0001
 ────╯
 
-  [type] error: non-exhaustive catch_all on type BuildError | string; missing: string
+  [type] error: non-exhaustive catch_all on type string | BuildError; missing: string
     ╭─[ regressions.baml:92:1 ]
     │
  92 │ ╭─▶     BuildWithBuildError(ok) catch_all (e) {
     ┆ ┆   
  94 │ ├─▶     }
     │ │           
-    │ ╰─────────── non-exhaustive catch_all on type BuildError | string; missing: string
+    │ ╰─────────── non-exhaustive catch_all on type string | BuildError; missing: string
     │     
     │     Note: Error code: E0062
 ────╯
