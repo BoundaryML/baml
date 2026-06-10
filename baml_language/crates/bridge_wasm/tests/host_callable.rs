@@ -263,6 +263,7 @@ fn build_callback_args(callback_key: u64, x: i64) -> Vec<u8> {
                 value: Some(x_value),
             },
         ],
+        call_id: 0,
     };
     args.encode_to_vec()
 }

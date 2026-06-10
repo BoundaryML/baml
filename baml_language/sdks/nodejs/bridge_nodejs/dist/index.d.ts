@@ -5,8 +5,8 @@
  * Proto:  baml_language/crates/bridge_ctypes/types/baml_core/cffi/v1/*.proto
  * Build:  cd baml_language/crates/bridge_nodejs && pnpm build:debug
  */
-import { BamlRuntime, AbortController, HostSpanManager, Collector as NativeCollector, FunctionLog as NativeFunctionLog, Timing, Usage, LLMCall } from './native.js';
-export { BamlRuntime, AbortController, BamlHandle, HostSpanManager, getRuntime, getVersion, flushEvents } from './native.js';
+import { BamlRuntime, BamlCallContext, HostSpanManager, Collector as NativeCollector, FunctionLog as NativeFunctionLog, Timing, Usage, LLMCall } from './native.js';
+export { BamlRuntime, BamlCallContext, BamlHandle, HostSpanManager, getRuntime, getVersion, flushEvents, } from './native.js';
 export { Timing, Usage, LLMCall } from './native.js';
 export { _seedFunctionRefHandle, _seedGenericMediaHandle } from './native.js';
 export { BamlImage, BamlAudio, BamlVideo, BamlPdf } from './native.js';
@@ -28,6 +28,8 @@ export declare function initializeRuntime(srcDir: string, files: Record<string, 
  */
 export declare function initializeRuntimeFromBytecode(bytecode: Buffer | Uint8Array): void;
 export { BamlError, BamlInvalidArgumentError, BamlClientError, BamlCancelledError, BamlPanic, wrapNativeError, } from './errors.js';
+export declare function newFunctionCall(): bigint;
+export declare function cancelFunctionCall(callId: bigint): boolean;
 export declare class FunctionResult {
     private _value;
     constructor(value: unknown);
@@ -57,6 +59,6 @@ export declare class Collector {
     /** Internal: get native collector for passing to Rust */
     _native(): NativeCollector;
 }
-export declare function callFunctionSync(rt: BamlRuntime, functionName: string, kwargs: Record<string, unknown>, ctx?: HostSpanManager, collectors?: Collector[], abortController?: AbortController): FunctionResult;
-export declare function callFunction(rt: BamlRuntime, functionName: string, kwargs: Record<string, unknown>, ctx?: HostSpanManager, collectors?: Collector[], abortController?: AbortController): Promise<FunctionResult>;
+export declare function callFunctionSync(rt: BamlRuntime, functionName: string, kwargs: Record<string, unknown>, ctx?: HostSpanManager, collectors?: Collector[], callCtx?: BamlCallContext): FunctionResult;
+export declare function callFunction(rt: BamlRuntime, functionName: string, kwargs: Record<string, unknown>, ctx?: HostSpanManager, collectors?: Collector[], callCtx?: BamlCallContext): Promise<FunctionResult>;
 //# sourceMappingURL=index.d.ts.map

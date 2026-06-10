@@ -117,10 +117,12 @@ class InboundEnumValue(_message.Message):
     def __init__(self, name: _Optional[str] = ..., value: _Optional[str] = ...) -> None: ...
 
 class CallFunctionArgs(_message.Message):
-    __slots__ = ("kwargs",)
+    __slots__ = ("kwargs", "call_id")
     KWARGS_FIELD_NUMBER: _ClassVar[int]
+    CALL_ID_FIELD_NUMBER: _ClassVar[int]
     kwargs: _containers.RepeatedCompositeFieldContainer[InboundMapEntry]
-    def __init__(self, kwargs: _Optional[_Iterable[_Union[InboundMapEntry, _Mapping]]] = ...) -> None: ...
+    call_id: int
+    def __init__(self, kwargs: _Optional[_Iterable[_Union[InboundMapEntry, _Mapping]]] = ..., call_id: _Optional[int] = ...) -> None: ...
 
 class CallAck(_message.Message):
     __slots__ = ("error",)

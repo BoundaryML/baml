@@ -827,6 +827,9 @@ export namespace baml_core {
 
                 /** CallFunctionArgs kwargs */
                 kwargs?: (baml_core.cffi.v1.IInboundMapEntry[]|null);
+
+                /** CallFunctionArgs callId */
+                callId?: (number|Long|null);
             }
 
             /** Represents a CallFunctionArgs. */
@@ -840,6 +843,9 @@ export namespace baml_core {
 
                 /** CallFunctionArgs kwargs. */
                 public kwargs: baml_core.cffi.v1.IInboundMapEntry[];
+
+                /** CallFunctionArgs callId. */
+                public callId: (number|Long);
 
                 /**
                  * Creates a new CallFunctionArgs instance using the specified properties.

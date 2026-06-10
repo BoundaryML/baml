@@ -35,7 +35,10 @@ pub enum BridgeError {
     NotImplemented(String),
 
     #[error("call_id {0} is already in use by an active call")]
-    DuplicateCallId(u32),
+    DuplicateCallId(u64),
+
+    #[error("call_id must be a nonzero uint64")]
+    InvalidCallId,
 
     #[error("Internal error: {0}")]
     Internal(String),

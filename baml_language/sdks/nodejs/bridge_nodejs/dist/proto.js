@@ -13,7 +13,7 @@
 import { baml_core } from './proto/baml_cffi.js';
 import { BamlHandle, BamlImage, BamlAudio, BamlVideo, BamlPdf, registerHostCallable, releaseHostCallable, completeHostCall, } from './native.js';
 import { BamlStream } from './stream.js';
-import { BamlError, BamlPanic } from './errors.js';
+import { BamlAbortError, BamlCancelledError, BamlError, BamlPanic } from './errors.js';
 import { registerHostError, tryRehydrateFromHandle, } from './host_error_registry.js';
 import { getTypeMap } from './typemap.js';
 const CallFunctionArgs = baml_core.cffi.v1.CallFunctionArgs;
@@ -23,6 +23,7 @@ const InboundValue = baml_core.cffi.v1.InboundValue;
 const InboundClassValue = baml_core.cffi.v1.InboundClassValue;
 const InboundMapEntry = baml_core.cffi.v1.InboundMapEntry;
 const BamlHandleType = baml_core.cffi.v1.BamlHandleType;
+const CANCELLED_PANIC_CLASS = 'baml.panics.Cancelled';
 // ─── Inbound (TS → Rust) ───
 /**
  * Error thrown when a host callable (a JS `function`) is passed to the
@@ -196,8 +197,12 @@ function setInboundValue(iv, value, ctx) {
  * later kwarg fails, the engine never sees (and so never releases) the keys we
  * already registered, so we release them here.
  */
-export function encodeCallArgs(kwargs, syncMode = false) {
-    const ctx = { syncMode, registered: [] };
+export function encodeCallArgs(kwargs, options) {
+    const callId = options.callId;
+    if (callId === 0n) {
+        throw new TypeError('callId must be a nonzero uint64');
+    }
+    const ctx = { syncMode: options.syncMode ?? false, registered: [] };
     try {
         const entries = [];
         for (const [key, value] of Object.entries(kwargs)) {
@@ -207,7 +212,7 @@ export function encodeCallArgs(kwargs, syncMode = false) {
             entry.value = iv;
             entries.push(entry);
         }
-        const msg = CallFunctionArgs.create({ kwargs: entries });
+        const msg = CallFunctionArgs.fromObject({ kwargs: entries, callId: callId.toString() });
         return Buffer.from(CallFunctionArgs.encode(msg).finish());
     }
     catch (err) {
@@ -452,6 +457,11 @@ function formatThrownMessage(kind, className, message, trace) {
         text += '\n' + trace.map(l => '    ' + l).join('\n');
     return text;
 }
+function cancellationAbortError(message) {
+    return new BamlAbortError(message, {
+        reason: new BamlCancelledError(message),
+    });
+}
 /**
  * Decode a `BamlOutboundResult` envelope (the engine's call-result wire shape
  * after 31c/31e). The `ok` arm returns the decoded value; the `error`/`panic`
@@ -482,7 +492,11 @@ export function decodeCallResult(data) {
                     throw original;
                 }
             }
-            throw new BamlError(formatThrownMessage('error', className ?? '', message, trace), { value, bamlTrace: trace, className });
+            const formatted = formatThrownMessage('error', className ?? '', message, trace);
+            if (className === CANCELLED_PANIC_CLASS) {
+                throw cancellationAbortError(formatted);
+            }
+            throw new BamlError(formatted, { value, bamlTrace: trace, className });
         }
         case 'panic': {
             const panic = result.panic;
@@ -495,7 +509,11 @@ export function decodeCallResult(data) {
             }
             const { value, className, message } = decodeThrown(panic?.value);
             const trace = panic?.trace ?? [];
-            throw new BamlPanic(formatThrownMessage('panic', className ?? '', message, trace), { value, bamlTrace: trace, className });
+            const formatted = formatThrownMessage('panic', className ?? '', message, trace);
+            if (className === CANCELLED_PANIC_CLASS) {
+                throw cancellationAbortError(formatted);
+            }
+            throw new BamlPanic(formatted, { value, bamlTrace: trace, className });
         }
         case 'ok':
         default:
