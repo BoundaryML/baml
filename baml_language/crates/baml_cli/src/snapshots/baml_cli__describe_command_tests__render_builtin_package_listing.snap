@@ -1,6 +1,5 @@
 ---
 source: crates/baml_cli/src/describe_command_tests.rs
-assertion_line: 354
 expression: output
 ---
 class            Bigint                           <builtin>/baml/bigint.baml:26
@@ -189,3 +188,6 @@ function         toml.item_to_json                <builtin>/baml/ns_toml/toml.ba
 function         toml.item_from_json              <builtin>/baml/ns_toml/toml.baml:59
 class            toml.TomlParseError              <builtin>/baml/ns_toml/toml.baml:68
 function         unstable.string                  <builtin>/baml/ns_unstable/unstable.baml:5
+class            yaml.YamlParseError              <builtin>/baml/ns_yaml/yaml.baml:3
+function         yaml.parse                       <builtin>/baml/ns_yaml/yaml.baml:15
+function         yaml.deserialize                 <builtin>/baml/ns_yaml/yaml.baml:27
