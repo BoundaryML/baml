@@ -82,6 +82,7 @@ macro_rules! builtin {
 pub const ALL: &[BuiltinFile] = &[
     // --- Root namespace (no ns_* prefix) ---
     builtin!("baml", "containers.baml"),
+    builtin!("baml", "comparable.baml"),
     builtin!("baml", "core.baml"),
     builtin!("baml", "int.baml"),
     builtin!("baml", "bigint.baml"),
