@@ -307,6 +307,8 @@ mod tests {
             call_id_counter: 0,
             current_call_id: 0,
             pending_sysop_call_id: None,
+            bex_ref_seed: None,
+            current_id_override: None,
             argv: Arc::from([]),
             pending_call_type_args: Vec::new(),
             interface_implementors: Arc::new(indexmap::IndexMap::new()),
@@ -733,6 +735,16 @@ pub struct BexVm {
     /// matching `EndFunction` once the op completes — possibly on a
     /// different OS thread, hence engine-side via its TLS ring lookup.
     pub pending_sysop_call_id: Option<u64>,
+
+    /// Constants for building BEX `CallRef`s on demand (the `$id` surface):
+    /// `(process_euid, engine_id)`, set once by the engine when it attaches
+    /// identity to this VM. Unconditional — `$id` works with profiling off.
+    pub bex_ref_seed: Option<(bex_events::ids::ProcessEuid, bex_events::ids::EngineId)>,
+
+    /// `baml.id.set()` override for the *current* call: `(call_id, encoded
+    /// override string, override uuid)`. Self-invalidating — read only while
+    /// `current_call_id` still matches, so it dies with the call.
+    pub(crate) current_id_override: Option<(u64, String)>,
 
     /// Process argv passed to the engine at startup. Exposed to BAML via
     /// `baml.sys.argv()`. Shared (cheap to clone) across VMs.
@@ -1179,6 +1191,8 @@ impl BexVm {
             call_id_counter: 0,
             current_call_id: 0,
             pending_sysop_call_id: None,
+            bex_ref_seed: None,
+            current_id_override: None,
             argv,
             pending_call_type_args: Vec::new(),
             interface_implementors,
@@ -2935,12 +2949,13 @@ impl BexVm {
 
     /// Encodes and pushes one profiling record into the per-resume ring
     /// snapshot. No-op when profiling is off. The buffer is sized by
-    /// `CALL_FUNCTION_LEN` (the largest fixed record the VM emits) — the
-    /// 292-byte `MAX_RECORD_LEN` zeroing is measurable at per-call rates.
+    /// `SET_FUNCTION_ID_LEN` (41 B — the largest fixed record the VM emits:
+    /// `CallFunction` 38, `EndFunction` 26, `SetFunctionId` 41) — the 292-byte
+    /// `MAX_RECORD_LEN` zeroing is measurable at per-call rates.
     #[inline]
     fn prof_push_record(&self, rec: &bex_events::prof::record::RawRecord<'_>) {
         if let Some(ring) = self.prof_ring {
-            let mut buf = [0u8; bex_events::prof::record::CALL_FUNCTION_LEN];
+            let mut buf = [0u8; bex_events::prof::record::SET_FUNCTION_ID_LEN];
             let len = rec.encode_to(&mut buf);
             // SAFETY: the engine refreshed `prof_ring` from this OS thread's
             // TLS at the top of the current exec resume (D5a), and exec
@@ -3013,6 +3028,20 @@ impl BexVm {
                 ts_ns: bex_events::prof::clock::now_ns(),
             });
             self.pending_sysop_call_id = Some(call_id);
+        }
+    }
+
+    /// `baml.id.set()` support: records the `$id` override in the event
+    /// stream (tag 0x05). Gated on the ring like every emission; the
+    /// override semantics themselves work with profiling off.
+    pub(crate) fn prof_push_set_function_id(&mut self, call_id: u64, id: [u8; 16]) {
+        if self.prof_ring.is_some() {
+            self.prof_push_record(&bex_events::prof::record::RawRecord::SetFunctionId {
+                thread_id: self.prof_thread_id,
+                call_id,
+                id,
+                ts_ns: bex_events::prof::clock::now_ns(),
+            });
         }
     }
 
@@ -3430,8 +3459,7 @@ impl BexVm {
                 // For traced functions, snapshot args before pushing the frame.
                 let trace_data = if is_traced {
                     let args: Vec<Value> = self.stack[locals_offset..].to_owned();
-                    let callee_name = callee.name.clone();
-                    Some((callee_name, args))
+                    Some((callee.name.clone(), args))
                 } else {
                     None
                 };
@@ -3486,6 +3514,11 @@ impl BexVm {
                         },
                     )));
                 }
+
+                // No per-call engine yield here: per-call lifecycle flows
+                // through the profiling ring (prof_enter_call above), which
+                // costs one memcpy + one Release store instead of breaking
+                // out of the exec loop on every call.
 
                 // SAFETY: See `load_function` doc comment.
                 *function = unsafe { self.load_function(*frame_idx)? };

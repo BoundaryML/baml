@@ -9,10 +9,14 @@
 
 mod common;
 
+use std::sync::{Arc, Mutex};
+
 use bex_engine::{
     BexEngine, BexExternalValue, FunctionCallContextBuilder, HostSpanContext, RuntimeEvent, SpanId,
 };
-use bex_events::{EventKind, FunctionEvent};
+use bex_events::{
+    DiskEventV1, EventFileHeaderV1, EventKind, EventSink, FunctionEvent, ids::RuntimeId,
+};
 use common::compile_for_engine;
 use sys_native::SysOpsExt;
 
@@ -63,6 +67,33 @@ fn collect_events(guard: &TrackingGuard) -> Vec<RuntimeEvent> {
     bex_events::event_store::events_for_span(&guard.root).unwrap_or_default()
 }
 
+#[derive(Default)]
+struct CapturingSink {
+    disk_events: Mutex<Vec<DiskEventV1>>,
+    headers: Mutex<Vec<EventFileHeaderV1>>,
+}
+
+impl EventSink for CapturingSink {
+    fn send(&self, _event: RuntimeEvent) {}
+
+    fn send_disk_event(&self, event: DiskEventV1) {
+        self.disk_events.lock().unwrap().push(event);
+    }
+
+    fn send_event_file_header(&self, header: EventFileHeaderV1) {
+        self.headers.lock().unwrap().push(header);
+    }
+
+    fn flush(&self) {}
+}
+
+// NOTE: the per-call disk-event stream (StartThread/CallFunction/
+// EndFunction/EndThread/SetId) no longer flows through the EventSink — it is
+// written lock-free into the profiling ring and lands in .bamlprof files.
+// Lifecycle/linkage coverage lives in bex_engine/tests/prof_gate.rs (G3
+// balance, reconstruction, spawn edges, $id overrides) against the real
+// artifact.
+
 #[tokio::test]
 async fn trace_single_function() {
     let source = r#"
@@ -104,6 +135,244 @@ async fn trace_single_function() {
 
     // Both should share the same span_id (same span)
     assert_eq!(events[0].ctx.span_id, events[1].ctx.span_id);
+
+    let start_identity = events[0]
+        .identity
+        .as_ref()
+        .expect("root start event should carry BEX identity");
+    let end_identity = events[1]
+        .identity
+        .as_ref()
+        .expect("root end event should carry BEX identity");
+    assert_eq!(start_identity, end_identity);
+    assert_eq!(start_identity.thread_id, bex_engine::BexThreadId(1));
+    assert_eq!(start_identity.call_id, bex_engine::BexCallId(1));
+    assert_eq!(start_identity.parent_call_id, None);
+    assert_eq!(
+        bex_engine::CallRef::decode(&start_identity.call_ref.encode()).unwrap(),
+        start_identity.call_ref
+    );
+    assert_eq!(start_identity.call_ref.process_euid, engine.process_euid());
+    assert_eq!(start_identity.call_ref.engine_id, engine.engine_id());
+
+    let function_id = start_identity
+        .function_id
+        .expect("root function should resolve to function metadata");
+    let metadata = engine
+        .program_metadata()
+        .function_table
+        .get(function_id)
+        .expect("function_id should resolve in metadata table");
+    assert_eq!(metadata.display_name, "main");
+    assert!(metadata.fqn.ends_with("main"));
+}
+
+#[tokio::test]
+async fn baml_id_inside_spawn_uses_child_thread_root_call() {
+    let source = r#"
+        function main() -> string {
+            let f = spawn { $id };
+            await f
+        }
+    "#;
+
+    let snapshot = compile_for_engine(source);
+    let engine = Arc::new(
+        BexEngine::new(
+            snapshot,
+            Arc::new(sys_native::SysOps::native()),
+            None,
+            Vec::new(),
+        )
+        .unwrap(),
+    );
+
+    let call_ctx = FunctionCallContextBuilder::new(sys_types::CallId::next()).build();
+    let value = engine
+        .call_function("main", vec![], call_ctx, true)
+        .await
+        .unwrap();
+
+    let BexExternalValue::String(id) = value else {
+        panic!("expected spawned $id string");
+    };
+    let RuntimeId::DefaultCall(call_ref) = RuntimeId::decode(id.as_str()).unwrap() else {
+        panic!("expected default call runtime ID");
+    };
+    assert_eq!(call_ref.process_euid, engine.process_euid());
+    assert_eq!(call_ref.engine_id, engine.engine_id());
+    assert_eq!(call_ref.thread_id, bex_engine::BexThreadId(2));
+    assert_eq!(call_ref.call_id, bex_engine::BexCallId(1));
+}
+
+#[tokio::test]
+async fn baml_id_inside_nested_expression_call_uses_nested_call_id() {
+    let source = r#"
+        function inner() -> string {
+            $id
+        }
+
+        function main() -> string {
+            inner()
+        }
+    "#;
+
+    let snapshot = compile_for_engine(source);
+    let engine = Arc::new(
+        BexEngine::new(
+            snapshot,
+            Arc::new(sys_native::SysOps::native()),
+            None,
+            Vec::new(),
+        )
+        .unwrap(),
+    );
+
+    let call_ctx = FunctionCallContextBuilder::new(sys_types::CallId::next()).build();
+    let value = engine
+        .call_function("main", vec![], call_ctx, true)
+        .await
+        .unwrap();
+
+    let BexExternalValue::String(id) = value else {
+        panic!("expected nested $id string");
+    };
+    let RuntimeId::DefaultCall(call_ref) = RuntimeId::decode(id.as_str()).unwrap() else {
+        panic!("expected default call runtime ID");
+    };
+    assert_eq!(call_ref.process_euid, engine.process_euid());
+    assert_eq!(call_ref.engine_id, engine.engine_id());
+    assert_eq!(call_ref.thread_id, bex_engine::BexThreadId(1));
+    assert_eq!(call_ref.call_id, bex_engine::BexCallId(2));
+}
+
+#[tokio::test]
+async fn bex_identity_exposes_event_header_metadata() {
+    let source = r#"
+        function inner() -> int {
+            10
+        }
+
+        function main() -> int {
+            inner() + 1
+        }
+    "#;
+
+    let snapshot = compile_for_engine(source);
+    let engine = std::sync::Arc::new(
+        BexEngine::new(
+            snapshot,
+            std::sync::Arc::new(sys_native::SysOps::native()),
+            None,
+            Vec::new(),
+        )
+        .unwrap(),
+    );
+
+    let header = engine.event_file_header_v1();
+    assert_eq!(header.process_euid, engine.process_euid());
+    assert_eq!(header.engine_id, engine.engine_id());
+    assert!(
+        header
+            .function_table
+            .functions
+            .iter()
+            .any(|f| f.display_name == "main")
+    );
+    assert!(
+        header
+            .function_table
+            .functions
+            .iter()
+            .any(|f| f.display_name == "inner")
+    );
+
+    let (host_ctx, guard) = setup_tracking();
+    let call_ctx = FunctionCallContextBuilder::new(sys_types::CallId::next())
+        .with_host_ctx(host_ctx)
+        .build();
+    let value = engine
+        .call_function("main", vec![], call_ctx, true)
+        .await
+        .unwrap();
+    assert_eq!(value, BexExternalValue::Int(11));
+
+    let events = collect_events(&guard);
+    assert_eq!(event_names(&events), vec!["start:main", "end:main"]);
+
+    let main_start = events[0].identity.as_ref().unwrap();
+    let main_end = events[1].identity.as_ref().unwrap();
+    assert_eq!(main_start.call_id, bex_engine::BexCallId(1));
+    assert_eq!(main_start.parent_call_id, None);
+    assert_eq!(main_end.call_id, main_start.call_id);
+    assert_eq!(main_start.call_ref.engine_id, engine.engine_id());
+}
+
+#[test]
+fn engine_emits_event_file_header_to_sink_on_create() {
+    let source = r#"
+        function main() -> int {
+            1
+        }
+    "#;
+
+    let snapshot = compile_for_engine(source);
+    let sink = Arc::new(CapturingSink::default());
+    let event_sink: Arc<dyn EventSink> = sink.clone();
+    let engine = BexEngine::new(
+        snapshot,
+        Arc::new(sys_native::SysOps::native()),
+        Some(event_sink),
+        Vec::new(),
+    )
+    .unwrap();
+
+    let headers = sink.headers.lock().unwrap();
+    assert_eq!(headers.len(), 1);
+    assert_eq!(headers[0].process_euid, engine.process_euid());
+    assert_eq!(headers[0].engine_id, engine.engine_id());
+    assert_eq!(headers[0].program_id, engine.program_metadata().program_id);
+    assert!(
+        headers[0]
+            .function_table
+            .functions
+            .iter()
+            .any(|metadata| metadata.fqn == "user.main")
+    );
+}
+
+#[test]
+fn function_metadata_derives_owner_type_for_class_methods() {
+    let source = r#"
+        class Holder {
+            value int
+
+            function unwrap(self) -> int {
+                self.value
+            }
+        }
+    "#;
+
+    let snapshot = compile_for_engine(source);
+    let engine = BexEngine::new(
+        snapshot,
+        Arc::new(sys_native::SysOps::native()),
+        None,
+        Vec::new(),
+    )
+    .unwrap();
+
+    let method = engine
+        .program_metadata()
+        .function_table
+        .functions
+        .iter()
+        .find(|metadata| metadata.fqn == "user.Holder.unwrap")
+        .expect("expected method metadata");
+    assert_eq!(
+        method.owner_type,
+        Some(bex_events::DefinitionKey("class:user.Holder".to_string()))
+    );
 }
 
 #[tokio::test]
@@ -401,4 +670,117 @@ fn llm_functions_have_trace_flag() {
             "Expression function {name} should have trace: false"
         );
     }
+}
+
+#[tokio::test]
+async fn baml_id_current_new_and_set_emit_set_id_event() {
+    let source = r#"
+        function main() -> string {
+            let before = $id;
+            let next = baml.id.new();
+            let set_result = baml.id.set(next);
+            let after = $id;
+            before + "|" + next + "|" + set_result + "|" + after
+        }
+    "#;
+
+    let snapshot = compile_for_engine(source);
+    let sink = Arc::new(CapturingSink::default());
+    let engine = Arc::new(
+        BexEngine::new(
+            snapshot,
+            Arc::new(sys_native::SysOps::native()),
+            Some(sink.clone()),
+            Vec::new(),
+        )
+        .unwrap(),
+    );
+
+    let (host_ctx, _guard) = setup_tracking();
+    let call_ctx = FunctionCallContextBuilder::new(sys_types::CallId::next())
+        .with_host_ctx(host_ctx)
+        .build();
+    let value = engine
+        .call_function("main", vec![], call_ctx, true)
+        .await
+        .unwrap();
+
+    let BexExternalValue::String(result) = value else {
+        panic!("expected string result");
+    };
+    let parts: Vec<&str> = result.as_str().split('|').collect();
+    assert_eq!(parts.len(), 4);
+
+    let RuntimeId::DefaultCall(call_ref) = RuntimeId::decode(parts[0]).unwrap() else {
+        panic!("expected default call runtime ID");
+    };
+    assert_eq!(call_ref.process_euid, engine.process_euid());
+    assert_eq!(call_ref.engine_id, engine.engine_id());
+    assert_eq!(call_ref.thread_id, bex_engine::BexThreadId(1));
+    assert_eq!(call_ref.call_id, bex_engine::BexCallId(1));
+
+    assert_eq!(parts[1], parts[2]);
+    assert_eq!(parts[2], parts[3]);
+    let RuntimeId::OverrideUuid(_override_id) = RuntimeId::decode(parts[3]).unwrap() else {
+        panic!("expected override runtime ID");
+    };
+
+    // The SetFunctionId record assertion lives in prof_gate.rs
+    // (set_function_id_recorded) against the .bamlprof stream.
+}
+
+#[tokio::test]
+async fn baml_id_assignment_overrides_current_id() {
+    let source = r#"
+        function main() -> string {
+            let before = $id;
+            let next = baml.id.new();
+            $id = next;
+            let after = $id;
+            before + "|" + next + "|" + after
+        }
+    "#;
+
+    let snapshot = compile_for_engine(source);
+    let sink = Arc::new(CapturingSink::default());
+    let engine = Arc::new(
+        BexEngine::new(
+            snapshot,
+            Arc::new(sys_native::SysOps::native()),
+            Some(sink.clone()),
+            Vec::new(),
+        )
+        .unwrap(),
+    );
+
+    let (host_ctx, _guard) = setup_tracking();
+    let call_ctx = FunctionCallContextBuilder::new(sys_types::CallId::next())
+        .with_host_ctx(host_ctx)
+        .build();
+    let value = engine
+        .call_function("main", vec![], call_ctx, true)
+        .await
+        .unwrap();
+
+    let BexExternalValue::String(result) = value else {
+        panic!("expected string result");
+    };
+    let parts: Vec<&str> = result.as_str().split('|').collect();
+    assert_eq!(parts.len(), 3);
+
+    let RuntimeId::DefaultCall(call_ref) = RuntimeId::decode(parts[0]).unwrap() else {
+        panic!("expected default call runtime ID");
+    };
+    assert_eq!(call_ref.process_euid, engine.process_euid());
+    assert_eq!(call_ref.engine_id, engine.engine_id());
+    assert_eq!(call_ref.thread_id, bex_engine::BexThreadId(1));
+    assert_eq!(call_ref.call_id, bex_engine::BexCallId(1));
+
+    assert_eq!(parts[1], parts[2]);
+    let RuntimeId::OverrideUuid(_override_id) = RuntimeId::decode(parts[2]).unwrap() else {
+        panic!("expected override runtime ID");
+    };
+
+    // The SetFunctionId record assertion lives in prof_gate.rs
+    // (set_function_id_recorded) against the .bamlprof stream.
 }

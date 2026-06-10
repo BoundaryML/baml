@@ -74,7 +74,10 @@ mod future;
 mod thread;
 use std::{
     collections::HashMap,
-    sync::{Arc, Mutex, atomic::Ordering},
+    sync::{
+        Arc, Mutex,
+        atomic::{AtomicU64, Ordering},
+    },
 };
 
 use ::bex_heap::{HeapPermit as _, Tlab};
@@ -85,8 +88,17 @@ use ::bex_vm_types::{
 };
 use ::core::sync::atomic::AtomicBool;
 use async_trait::async_trait;
-use bex_events::{EventKind, FunctionEnd, FunctionEvent, FunctionStart, SpanContext};
-pub use bex_events::{HostSpanContext, RuntimeEvent, SpanId};
+use bex_events::{
+    EventKind, FunctionEnd, FunctionEndStatus, FunctionEvent, FunctionStart, RuntimeEventIdentity,
+    SpanContext,
+};
+pub use bex_events::{
+    FunctionMetadataTable, HostSpanContext, ProgramMetadata, RuntimeEvent, SpanId,
+    ids::{
+        BexThreadId, CallId as BexCallId, CallRef, EngineId, FunctionId, ProcessEuid, ProgramId,
+        ThreadRef,
+    },
+};
 pub use bex_external_types::{BexExternalValue, Ty, TypeName, UnionMetadata};
 // Re-export GcStats for users of the engine
 pub use bex_heap::GcStats;
@@ -110,6 +122,9 @@ pub use crate::{
     future::{FutureManager, FutureManagerGuard, FutureManagerInner},
     thread::{BexThread, ChildErrorQueue},
 };
+
+const SPAWN_CLOSURE_FQN: &str = "baml.<spawn-closure>";
+const SPAWN_CLOSURE_DISPLAY_NAME: &str = "<spawn-closure>";
 
 /// Outcome of running a single [`BexThread`] to termination.
 ///
@@ -268,6 +283,10 @@ impl Drop for ActiveCallGuard {
 struct EngineSpan {
     span_id: SpanId,
     parent_span_id: Option<SpanId>,
+    runtime_call_id: BexCallId,
+    parent_call_id: Option<BexCallId>,
+    function_id: Option<FunctionId>,
+    emit_runtime_events: bool,
     /// The BAML function name this span represents.
     label: String,
     started_at: Instant,
@@ -278,6 +297,7 @@ struct EngineSpan {
 /// Created as a local in `call_function` and threaded through the event
 /// loop. NOT stored on the shared `BexEngine`.
 struct SpanState {
+    thread_id: BexThreadId,
     /// Stack of active spans (LIFO).
     stack: Vec<EngineSpan>,
     /// Root span ID for the entire call tree.
@@ -514,6 +534,11 @@ pub fn cancelled_unhandled_throw() -> EngineError {
 ///         └── Tlab ─── exclusive allocation region from shared heap
 /// ```
 pub struct BexEngine {
+    process_euid: ProcessEuid,
+    engine_id: EngineId,
+    started_at_epoch_ns: u128,
+    program_metadata: ProgramMetadata,
+    next_thread_id: AtomicU64,
     /// The unified heap (shared across all VM instances)
     heap: Arc<BexHeap>,
     /// Frozen global variables shared across every post-`$init` VM.
@@ -572,22 +597,11 @@ pub struct BexEngine {
     /// without cloning the underlying `IndexMap`.
     interface_implementors: Arc<InterfaceImplementors>,
 
-    /// Process-unique id for the BEX profiling event stream: demuxes this
-    /// engine's `.bamlprof` file (multiple `Arc<BexEngine>` per process are
-    /// legal). Minted from [`NEXT_ENGINE_ID`].
-    engine_id: u64,
     /// Snapshot of the `BAML_PROFILE` master switch, taken once at
     /// construction (the config is read-once per process). Gates every
     /// profiling emission and the per-resume ring refresh.
     prof_enabled: bool,
-    /// Mints logical BEX thread ids (one per root call or spawn; not OS
-    /// threads), starting at 1 — `0` means "root" in `parent_thread_id`.
-    prof_thread_counter: std::sync::atomic::AtomicU64,
 }
-
-/// Process-global engine-id mint for the profiling event stream. Ids start
-/// at 1 and are never reused.
-static NEXT_ENGINE_ID: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
 
 impl Drop for BexEngine {
     /// Closes the engine's profiling lifecycle: a non-blocking notification;
@@ -598,31 +612,41 @@ impl Drop for BexEngine {
     /// files and heartbeat work for dead engines.
     fn drop(&mut self) {
         if self.prof_enabled {
-            bex_events::prof::engine_closed(self.engine_id);
+            bex_events::prof::engine_closed(self.engine_id.0);
         }
     }
 }
 
-/// The §2.6 interim function-metadata provider: one function-table row per
-/// `Function`, keyed by the per-run id the same pre-heap walk assigns. This
-/// is the single seam the M0 compile-time id table replaces.
-fn prof_function_meta_entry(
-    func: &bex_vm_types::Function,
-    function_id: u32,
-) -> bex_events::prof::FunctionMetaEntry {
-    bex_events::prof::FunctionMetaEntry {
-        function_id,
-        fqn: func.name.clone(),
-        source_file: func.source_file.clone(),
-        span_start: func.span.range.start().into(),
-        span_end: func.span.range.end().into(),
-        kind: match func.kind {
-            bex_vm_types::FunctionKind::Bytecode => "bytecode",
-            bex_vm_types::FunctionKind::SysOp(_) => "sysop",
-            bex_vm_types::FunctionKind::Native(_)
-            | bex_vm_types::FunctionKind::NativeUnresolved => "native",
-        }
-        .to_string(),
+/// Maps the M0 [`ProgramMetadata`] (the canonical per-run function table)
+/// into the `.bamlprof` header rows. The thin proto row is a subset of the
+/// rich table for now; extending the proto with display names / definition
+/// keys is a follow-up.
+fn prof_engine_metadata(meta: &ProgramMetadata) -> bex_events::prof::EngineProfileMetadata {
+    use std::fmt::Write as _;
+    let mut program_id = String::with_capacity(32);
+    for byte in meta.program_id.0 {
+        let _ = write!(program_id, "{byte:02x}");
+    }
+    bex_events::prof::EngineProfileMetadata {
+        program_id,
+        functions: meta
+            .function_table
+            .functions
+            .iter()
+            .map(|f| bex_events::prof::FunctionMetaEntry {
+                function_id: f.function_id.0,
+                fqn: f.fqn.clone(),
+                source_file: f.source_file.clone().unwrap_or_default(),
+                span_start: f.source_span.as_ref().map_or(0, |sp| sp.start),
+                span_end: f.source_span.as_ref().map_or(0, |sp| sp.end),
+                kind: match &f.kind {
+                    bex_events::RuntimeFunctionKind::Bytecode => "bytecode".to_string(),
+                    bex_events::RuntimeFunctionKind::SysOp(_) => "sysop".to_string(),
+                    bex_events::RuntimeFunctionKind::Native
+                    | bex_events::RuntimeFunctionKind::NativeUnresolved => "native".to_string(),
+                },
+            })
+            .collect(),
     }
 }
 
@@ -887,7 +911,134 @@ fn extract_host_diagnostics_from_value(
     )
 }
 
+fn derive_owner_type_definition_key(fqn: &str) -> Option<bex_events::DefinitionKey> {
+    let parts = fqn.split('.').collect::<Vec<_>>();
+    if parts.len() < 3 {
+        return None;
+    }
+
+    let owner = parts[parts.len() - 2];
+    if !owner
+        .chars()
+        .next()
+        .is_some_and(|ch| ch.is_ascii_uppercase())
+    {
+        return None;
+    }
+
+    Some(bex_events::DefinitionKey(format!(
+        "class:{}",
+        parts[..parts.len() - 1].join(".")
+    )))
+}
+
+fn derive_lambda_metadata(fqn: &str) -> (Option<bex_events::DefinitionKey>, Option<String>) {
+    let Some(lambda_start) = fqn.find("<lambda") else {
+        return (None, None);
+    };
+
+    let parent = fqn[..lambda_start].trim_end_matches(['.', ':']).to_string();
+    let parent_function =
+        (!parent.is_empty()).then(|| bex_events::DefinitionKey(format!("function:{parent}")));
+    let lambda_path = Some(fqn[lambda_start..].to_string());
+    (parent_function, lambda_path)
+}
+
 impl BexEngine {
+    fn next_engine_id() -> EngineId {
+        static NEXT_ENGINE_ID: AtomicU64 = AtomicU64::new(1);
+        EngineId(NEXT_ENGINE_ID.fetch_add(1, Ordering::Relaxed))
+    }
+
+    fn build_program_metadata(program: &bex_vm_types::Program) -> ProgramMetadata {
+        // Ids are 1-based sequential in pool order (`0` = unassigned) — the
+        // exact sequence the pre-heap walk in `new()` stamps onto each
+        // `Function.function_id`, so the table and the `.bamlprof` records
+        // agree byte-for-byte. M0 moves this to compile time.
+        let mut next_function_id: u32 = 0;
+        let mut functions: Vec<bex_events::FunctionMetadata> = program
+            .objects
+            .iter()
+            .filter_map(|obj| {
+                let Object::Function(function) = obj else {
+                    return None;
+                };
+
+                next_function_id += 1;
+                let function_id = FunctionId(next_function_id);
+                let fqn = function.name.clone();
+                let owner_type = derive_owner_type_definition_key(&fqn);
+                let (parent_function, lambda_path) = derive_lambda_metadata(&fqn);
+                let mut parts = fqn.split('.').map(str::to_string).collect::<Vec<_>>();
+                let display_name = parts.last().cloned().unwrap_or_else(|| fqn.clone());
+                let package_name = if parts.len() > 1 {
+                    Some(parts.remove(0))
+                } else {
+                    None
+                };
+                let namespace = if parts.len() > 1 {
+                    parts[..parts.len() - 1].to_vec()
+                } else {
+                    Vec::new()
+                };
+                let source_file =
+                    (!function.source_file.is_empty()).then(|| function.source_file.clone());
+                let source_span = Some(bex_events::SourceSpan {
+                    file_id: function.span.file_id.as_u32(),
+                    start: function.span.range.start().into(),
+                    end: function.span.range.end().into(),
+                });
+
+                Some(bex_events::FunctionMetadata {
+                    function_id,
+                    fqn: fqn.clone(),
+                    display_name,
+                    source_file,
+                    source_span,
+                    kind: function.kind.into(),
+                    origin: function.origin.into(),
+                    owner_type,
+                    parent_function,
+                    lambda_path,
+                    definition_key: Some(bex_events::DefinitionKey(format!("function:{fqn}"))),
+                    package_name,
+                    namespace,
+                    source_snapshot_id: None,
+                    revision_id: None,
+                    semantic_lanes: None,
+                })
+            })
+            .collect();
+
+        functions.push(bex_events::FunctionMetadata {
+            function_id: FunctionId(next_function_id + 1),
+            fqn: SPAWN_CLOSURE_FQN.to_string(),
+            display_name: SPAWN_CLOSURE_DISPLAY_NAME.to_string(),
+            source_file: None,
+            source_span: None,
+            kind: bex_events::RuntimeFunctionKind::Bytecode,
+            origin: bex_events::RuntimeFunctionOrigin::Internal,
+            owner_type: None,
+            parent_function: None,
+            lambda_path: Some(SPAWN_CLOSURE_DISPLAY_NAME.to_string()),
+            definition_key: Some(bex_events::DefinitionKey(format!(
+                "function:{SPAWN_CLOSURE_FQN}"
+            ))),
+            package_name: Some("baml".to_string()),
+            namespace: Vec::new(),
+            source_snapshot_id: None,
+            revision_id: None,
+            semantic_lanes: None,
+        });
+
+        ProgramMetadata {
+            program_id: ProgramId::new_random(),
+            source_snapshot_id: None,
+            revision_id: None,
+            function_table: FunctionMetadataTable { functions },
+        }
+    }
+
     /// Create a new engine with the given program.
     ///
     /// The engine creates a unified heap containing compile-time objects
@@ -908,10 +1059,16 @@ impl BexEngine {
         argv: Vec<String>,
     ) -> Result<Self, EngineError> {
         let argv: Arc<[String]> = Arc::from(argv);
+        let process_euid = ProcessEuid::current();
+        let engine_id = Self::next_engine_id();
+        let started_at_epoch_ns = SystemTime::now()
+            .duration_since(web_time::UNIX_EPOCH)
+            .map_or(0, |d| d.as_nanos());
+        let program_metadata = Self::build_program_metadata(&bytecode_program);
 
-        // BEX profiling event stream: mint the engine id and snapshot the
-        // master switch once (plan §2.2).
-        let engine_id = NEXT_ENGINE_ID.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        // BEX profiling event stream: snapshot the master switch once
+        // (plan §2.2). The engine id minted above demuxes both the host
+        // event identity and this engine's `.bamlprof`.
         let prof_enabled = bex_events::prof::ProfConfig::global().enabled;
 
         // Extract package_init_order before consuming bytecode_program.
@@ -945,7 +1102,6 @@ impl BexEngine {
         // unassigned), assigned unconditionally so ids are deterministic,
         // with the header metadata table built only when profiling is on.
         // M0 moves assignment to compile time and replaces this seam.
-        let mut prof_function_table: Vec<bex_events::prof::FunctionMetaEntry> = Vec::new();
         let mut next_function_id: u32 = 0;
         let compile_time_objects: Vec<Object> = compile_time_objects
             .into_iter()
@@ -954,22 +1110,17 @@ impl BexEngine {
                     func.bytecode.compact = Some(func.bytecode.lower_to_compact());
                     next_function_id += 1;
                     func.function_id = next_function_id;
-                    if prof_enabled {
-                        prof_function_table.push(prof_function_meta_entry(func, next_function_id));
-                    }
                 }
                 obj
             })
             .collect();
         if prof_enabled {
+            // The .bamlprof header consumes the M0 metadata table (its ids
+            // match the ids stamped on each Function above — same walk
+            // order, same 1-based sequence).
             bex_events::prof::register_engine_metadata(
-                engine_id,
-                bex_events::prof::EngineProfileMetadata {
-                    // What identifies a Program is still open (M0
-                    // coordination); empty for now.
-                    program_id: String::new(),
-                    functions: prof_function_table,
-                },
+                engine_id.0,
+                prof_engine_metadata(&program_metadata),
             );
         }
 
@@ -1174,7 +1325,24 @@ impl BexEngine {
             runtime_io,
         };
 
+        if let Some(sink) = &event_sink {
+            sink.send_event_file_header(bex_events::EventFileHeaderV1 {
+                process_euid,
+                engine_id,
+                program_id: program_metadata.program_id,
+                source_snapshot_id: program_metadata.source_snapshot_id,
+                revision_id: program_metadata.revision_id.clone(),
+                started_at_epoch_ns,
+                function_table: program_metadata.function_table.clone(),
+            });
+        }
+
         Ok(Self {
+            process_euid,
+            engine_id,
+            started_at_epoch_ns,
+            program_metadata,
+            next_thread_id: AtomicU64::new(1),
             heap,
             globals,
             _globals_permit: globals_permit,
@@ -1193,9 +1361,7 @@ impl BexEngine {
             active_calls: Mutex::new(HashMap::new()),
             futures: FutureManager::new(futures_permit),
             interface_implementors,
-            engine_id,
             prof_enabled,
-            prof_thread_counter: std::sync::atomic::AtomicU64::new(1),
         })
     }
 
@@ -1208,12 +1374,85 @@ impl BexEngine {
         }
     }
 
+    #[must_use]
+    pub fn process_euid(&self) -> ProcessEuid {
+        self.process_euid
+    }
+
+    #[must_use]
+    pub fn engine_id(&self) -> EngineId {
+        self.engine_id
+    }
+
+    #[must_use]
+    pub fn program_metadata(&self) -> &ProgramMetadata {
+        &self.program_metadata
+    }
+
+    #[must_use]
+    pub fn event_file_header_v1(&self) -> bex_events::EventFileHeaderV1 {
+        bex_events::EventFileHeaderV1 {
+            process_euid: self.process_euid,
+            engine_id: self.engine_id,
+            program_id: self.program_metadata.program_id,
+            source_snapshot_id: self.program_metadata.source_snapshot_id,
+            revision_id: self.program_metadata.revision_id.clone(),
+            started_at_epoch_ns: self.started_at_epoch_ns,
+            function_table: self.program_metadata.function_table.clone(),
+        }
+    }
+
+    fn next_bex_thread_id(&self) -> BexThreadId {
+        BexThreadId(self.next_thread_id.fetch_add(1, Ordering::Relaxed))
+    }
+
+    fn function_id_for_name(&self, name: &str) -> Option<FunctionId> {
+        self.program_metadata
+            .function_table
+            .function_id_for_fqn(name)
+            .or_else(|| {
+                self.program_metadata
+                    .function_table
+                    .functions
+                    .iter()
+                    .find(|f| f.display_name == name)
+                    .map(|f| f.function_id)
+            })
+    }
+
+    fn spawn_closure_function_id(&self) -> Option<FunctionId> {
+        self.program_metadata
+            .function_table
+            .function_id_for_fqn(SPAWN_CLOSURE_FQN)
+    }
+
+    fn runtime_event_identity(
+        &self,
+        thread_id: BexThreadId,
+        call_id: BexCallId,
+        parent_call_id: Option<BexCallId>,
+        function_id: Option<FunctionId>,
+    ) -> RuntimeEventIdentity {
+        RuntimeEventIdentity {
+            thread_id,
+            call_id,
+            parent_call_id,
+            function_id,
+            call_ref: CallRef {
+                process_euid: self.process_euid,
+                engine_id: self.engine_id,
+                thread_id,
+                call_id,
+            },
+        }
+    }
+
     // ── BEX profiling event stream (bex_events::prof) ──────────────────
 
-    /// Mints the next logical BEX thread id for the profiling stream.
+    /// Mints the next logical BEX thread id — shared by the profiling
+    /// stream and the host-event identity (one id universe).
     fn next_prof_thread_id(&self) -> u64 {
-        self.prof_thread_counter
-            .fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+        self.next_bex_thread_id().0
     }
 
     /// Engine-side profiling emission — thread lifecycle and sys-op
@@ -1226,7 +1465,7 @@ impl BexEngine {
         if !self.prof_enabled {
             return;
         }
-        let handle = bex_events::prof::ring_for_engine(self.engine_id);
+        let handle = bex_events::prof::ring_for_engine(self.engine_id.0);
         let mut buf = [0u8; bex_events::prof::record::MAX_RECORD_LEN];
         let len = rec.encode(&mut buf);
         // SAFETY: the handle was claimed via this live thread's TLS lookup
@@ -1241,7 +1480,7 @@ impl BexEngine {
     /// `inject_sysop_throw`'s unwind all push through this snapshot.
     fn prof_refresh_vm_ring(&self, vm: &mut bex_vm::BexVm) {
         vm.prof_ring = if self.prof_enabled {
-            Some(bex_events::prof::ring_for_engine(self.engine_id).ring())
+            Some(bex_events::prof::ring_for_engine(self.engine_id.0).ring())
         } else {
             None
         };
@@ -1271,6 +1510,23 @@ impl BexEngine {
         span_state: &mut Option<SpanState>,
         error: &str,
     ) {
+        self.emit_function_end_events_with_status(
+            call_id,
+            span_state,
+            FunctionEndStatus::Error,
+            Some(error),
+        );
+    }
+
+    fn emit_function_end_events_with_status(
+        &self,
+        call_id: CallId,
+        span_state: &mut Option<SpanState>,
+        // The disk-stream status now travels via the ring's EndFunction
+        // records; the span events distinguish outcomes by `error`.
+        _status: FunctionEndStatus,
+        error: Option<&str>,
+    ) {
         let Some(state) = span_state.as_mut() else {
             return;
         };
@@ -1279,24 +1535,71 @@ impl BexEngine {
             let mut call_stack = state.host_call_stack.clone();
             call_stack.extend(state.stack.iter().map(|s| s.span_id.clone()));
             call_stack.push(span.span_id.clone());
-
-            self.emit(RuntimeEvent {
-                call_id,
-                ctx: SpanContext {
-                    span_id: span.span_id,
-                    parent_span_id: span.parent_span_id,
-                    root_span_id: state.root_span_id.clone(),
-                },
-                call_stack,
-                timestamp: SystemTime::now(),
-                event: EventKind::Function(FunctionEvent::End(Box::new(FunctionEnd {
-                    name: span.label,
-                    result: BexExternalValue::Null,
-                    duration: span.started_at.elapsed(),
-                    error: Some(error.to_string()),
-                }))),
-            });
+            if span.emit_runtime_events {
+                self.emit(RuntimeEvent {
+                    call_id,
+                    identity: Some(self.runtime_event_identity(
+                        state.thread_id,
+                        span.runtime_call_id,
+                        span.parent_call_id,
+                        span.function_id,
+                    )),
+                    ctx: SpanContext {
+                        span_id: span.span_id,
+                        parent_span_id: span.parent_span_id,
+                        root_span_id: state.root_span_id.clone(),
+                    },
+                    call_stack,
+                    timestamp: SystemTime::now(),
+                    event: EventKind::Function(FunctionEvent::End(Box::new(FunctionEnd {
+                        name: span.label,
+                        result: BexExternalValue::Null,
+                        duration: span.started_at.elapsed(),
+                        error: error.map(str::to_string),
+                    }))),
+                });
+            }
         }
+    }
+
+    fn emit_completed_top_function_end(
+        &self,
+        call_id: CallId,
+        span_state: &mut Option<SpanState>,
+        result: BexExternalValue,
+    ) {
+        let Some(state) = span_state.as_mut() else {
+            return;
+        };
+        let Some(span) = state.stack.pop() else {
+            return;
+        };
+
+        let mut call_stack = state.host_call_stack.clone();
+        call_stack.extend(state.stack.iter().map(|s| s.span_id.clone()));
+        call_stack.push(span.span_id.clone());
+        self.emit(RuntimeEvent {
+            call_id,
+            identity: Some(self.runtime_event_identity(
+                state.thread_id,
+                span.runtime_call_id,
+                span.parent_call_id,
+                span.function_id,
+            )),
+            ctx: SpanContext {
+                span_id: span.span_id,
+                parent_span_id: span.parent_span_id,
+                root_span_id: state.root_span_id.clone(),
+            },
+            call_stack,
+            timestamp: SystemTime::now(),
+            event: EventKind::Function(FunctionEvent::End(Box::new(FunctionEnd {
+                name: span.label,
+                result,
+                duration: span.started_at.elapsed(),
+                error: None,
+            }))),
+        });
     }
 
     /// Return the event sink for this engine (if any). Used by bridges for flush / `HostSpanManager`.
@@ -1746,6 +2049,10 @@ impl BexEngine {
         // Spawned children build their own `BexThread`s in `spawn_thread`.
         let mut vm = vm;
         vm.prof_thread_id = self.next_prof_thread_id();
+        // Identity seed for the `$id` surface (baml.id.*): unconditional —
+        // `$id` works with profiling off, and the ids it exposes are the
+        // VM-minted ids the event stream records.
+        vm.bex_ref_seed = Some((self.process_euid, self.engine_id));
         // No ring snapshot and no StartThread here: the permit acquisition
         // below awaits (the snapshot would go stale across an OS-thread
         // migration), and early-error returns between here and the run loop
@@ -1829,9 +2136,21 @@ impl BexEngine {
             parent_span_id: parent_span_id.clone(),
             root_span_id: effective_root_span_id.clone(),
         };
+        // One id universe: the host-event identity reads the same VM-minted
+        // ids the .bamlprof stream records (the StartThread/CallFunction
+        // disk events flow through the profiling ring, not the sink).
+        let thread_id = BexThreadId(thread.vm.prof_thread_id);
+        let root_call_id = BexCallId(thread.vm.current_call_id());
+        let root_function_id = self.function_id_for_name(&label);
 
         self.emit(RuntimeEvent {
             call_id,
+            identity: Some(self.runtime_event_identity(
+                thread_id,
+                root_call_id,
+                None,
+                root_function_id,
+            )),
             ctx: root_ctx,
             call_stack,
             timestamp: SystemTime::now(),
@@ -1843,9 +2162,14 @@ impl BexEngine {
         });
 
         let mut span_state = Some(SpanState {
+            thread_id,
             stack: vec![EngineSpan {
                 span_id: engine_span_id.clone(),
                 parent_span_id,
+                runtime_call_id: root_call_id,
+                parent_call_id: None,
+                function_id: root_function_id,
+                emit_runtime_events: true,
                 label,
                 started_at: Instant::now(),
             }],
@@ -1870,7 +2194,6 @@ impl BexEngine {
             let error = err.to_string();
             self.emit_error_function_end_events(call_id, &mut span_state, &error);
         }
-
         // Flush any host-value releases queued during this call. The root
         // thread's `ActiveHeapPermit` was consumed by `run_thread_event_loop`
         // (taken by value) and has been dropped by the time it returns, so we
@@ -2472,6 +2795,8 @@ impl BexEngine {
     async fn route_unhandled_vm_throw(
         self: &Arc<Self>,
         thread: &mut ActiveHeapPermit<BexThread>,
+        call_id: CallId,
+        span_state: &mut Option<SpanState>,
         value: Value,
         trace: Vec<bex_vm::StackFrame>,
         throws_type: Option<&Ty>,
@@ -2480,12 +2805,24 @@ impl BexEngine {
             let is_cancel_panic =
                 thread.vm_thread_cancel().is_cancelled() && self.is_cancelled_panic(value);
             if is_cancel_panic {
+                self.emit_function_end_events_with_status(
+                    call_id,
+                    span_state,
+                    FunctionEndStatus::Cancelled,
+                    Some("cancelled"),
+                );
                 self.settle_child_cancelled(thread, future_id).await?;
                 // Trace info for the child is dropped on the floor — engine-local
                 // since v1 spans for spawned bodies are TODO.
                 let _ = trace;
                 return Ok(ThreadOutcome::SettledChild(ChildSettleKind::Cancelled));
             }
+            self.emit_function_end_events_with_status(
+                call_id,
+                span_state,
+                FunctionEndStatus::Error,
+                Some("unhandled throw in spawned thread"),
+            );
             self.settle_child_errored(thread, future_id, value).await?;
             let _ = trace;
             return Ok(ThreadOutcome::SettledChild(ChildSettleKind::Errored));
@@ -2549,6 +2886,8 @@ impl BexEngine {
     async fn inject_sysop_throw(
         self: &Arc<Self>,
         thread: &mut ActiveHeapPermit<BexThread>,
+        call_id: CallId,
+        span_state: &mut Option<SpanState>,
         op_err: OpError,
         throws_type: Option<&Ty>,
         host_callable_throws_contract: Option<&Ty>,
@@ -2568,14 +2907,21 @@ impl BexEngine {
         match thread.vm.try_handle_external_exception(vm_value) {
             Ok(()) => Ok(None),
             Err(bex_vm::errors::VmError::ThrownUnhandled { value, trace }) => Ok(Some(
-                self.route_unhandled_vm_throw(thread, value, trace, throws_type)
-                    .await?,
+                self.route_unhandled_vm_throw(
+                    thread,
+                    call_id,
+                    span_state,
+                    value,
+                    trace,
+                    throws_type,
+                )
+                .await?,
             )),
             // Degenerate frame stack (e.g. all-Native at root): mirror the
             // existing `VmError::Thrown` arm by routing with no trace and no
             // `throws_type`-driven re-typing.
             Err(bex_vm::errors::VmError::Thrown(value)) => Ok(Some(
-                self.route_unhandled_vm_throw(thread, value, Vec::new(), None)
+                self.route_unhandled_vm_throw(thread, call_id, span_state, value, Vec::new(), None)
                     .await?,
             )),
             Err(bex_vm::errors::VmError::InternalError(err)) => {
@@ -2679,7 +3025,6 @@ impl BexEngine {
     ///
     /// The future the child settles is pre-allocated by the caller (under the
     /// parent's permit) and identified by `future_id`.
-    #[allow(clippy::too_many_arguments)]
     #[expect(
         clippy::too_many_arguments,
         reason = "spawn edge carries the full context"
@@ -2781,11 +3126,16 @@ impl BexEngine {
             Arc::clone(&self.interface_implementors),
         );
         child_vm.prof_thread_id = prof_thread_id;
+        child_vm.bex_ref_seed = Some((self.process_euid, self.engine_id));
         // Snapshot on the spawning thread, immediately before the entry
         // frame's CallFunction lands (no await in between); the loop-head
-        // refresh re-snapshots on the child task's own thread later.
+        // refresh re-snapshots on the child task's own thread later. The
+        // StartThread (with the spawn edge) was already emitted into the
+        // ring at the Spawn arm.
         self.prof_refresh_vm_ring(&mut child_vm);
         child_vm.set_entry_point(closure, &[]);
+        let child_thread_id = BexThreadId(prof_thread_id);
+        let child_entry_call_id = BexCallId(child_vm.current_call_id());
 
         // Register a new (inactive) permit for the child. `new_permit` only
         // takes the holders mutex — it does NOT acquire a semaphore permit —
@@ -2801,11 +3151,8 @@ impl BexEngine {
         );
         let inactive = self.heap_permit_manager.new_permit(child_thread).await;
 
-        // Phase B note: v1 spans for spawned bodies are deferred. We pass
-        // `None` for `span_state` so the child does not emit FunctionStart/
-        // FunctionEnd events through the engine span machinery.
-        // Return type / throws type are also approximated; the future's
-        // value is converted via `vm_value_to_owned` on the awaiter side.
+        // Return type / throws type are approximated for the child root; the
+        // future's value is converted via `vm_value_to_owned` on the awaiter side.
         let engine = self;
         let return_type = Ty::Null {
             attr: baml_type::TyAttr::default(),
@@ -2861,7 +3208,50 @@ impl BexEngine {
                 None => None,
             };
             let permit = inactive.acquire().await;
-            let mut local_span_state: Option<SpanState> = None;
+            // The entry call's id was minted by set_entry_point on the
+            // spawning thread; its CallFunction is already in the ring.
+            let child_call_id = child_entry_call_id;
+            let child_function_id = engine.spawn_closure_function_id();
+            let child_span_id = SpanId::new();
+            let child_label = SPAWN_CLOSURE_DISPLAY_NAME.to_string();
+            engine.emit(RuntimeEvent {
+                call_id,
+                identity: Some(engine.runtime_event_identity(
+                    child_thread_id,
+                    child_call_id,
+                    None,
+                    child_function_id,
+                )),
+                ctx: SpanContext {
+                    span_id: child_span_id.clone(),
+                    parent_span_id: None,
+                    root_span_id: child_span_id.clone(),
+                },
+                call_stack: vec![child_span_id.clone()],
+                timestamp: SystemTime::now(),
+                event: EventKind::Function(FunctionEvent::Start(FunctionStart {
+                    name: child_label.clone(),
+                    args: vec![],
+                    tags: vec![],
+                })),
+            });
+            let mut local_span_state = Some(SpanState {
+                thread_id: child_thread_id,
+                stack: vec![EngineSpan {
+                    span_id: child_span_id.clone(),
+                    parent_span_id: None,
+                    runtime_call_id: child_call_id,
+                    parent_call_id: None,
+                    function_id: child_function_id,
+                    emit_runtime_events: true,
+                    label: child_label,
+                    started_at: Instant::now(),
+                }],
+                root_span_id: child_span_id,
+                host_call_stack: vec![],
+            });
+            // EndThread (ring) is emitted by the run_thread_event_loop
+            // wrapper on every exit path.
             match engine
                 .run_thread_event_loop(
                     return_type,
@@ -2874,7 +3264,13 @@ impl BexEngine {
                 )
                 .await
             {
-                Ok(_) => {}
+                Ok(ThreadOutcome::SettledChild(_)) => {}
+                Ok(ThreadOutcome::RootValue(_)) => {
+                    tracing::error!(
+                        ?future_id,
+                        "spawn thread returned a root value instead of settling its future"
+                    );
+                }
                 Err(err) => {
                     tracing::error!(
                         ?err,
@@ -3015,7 +3411,6 @@ impl BexEngine {
             // Update the VM's span context so native functions can read it.
             thread.vm.current_span_context =
                 span_state.as_ref().map(Self::build_span_context_from_state);
-
             // D5a: refresh the profiling ring snapshot once per exec resume
             // — a TLS lookup here, never per push. Sound because exec()
             // never crosses an .await and tokio migrates tasks only at
@@ -3028,7 +3423,14 @@ impl BexEngine {
                 Ok(state) => state,
                 Err(bex_vm::errors::VmError::ThrownUnhandled { value, trace }) => {
                     return self
-                        .route_unhandled_vm_throw(&mut thread, value, trace, throws_type.as_ref())
+                        .route_unhandled_vm_throw(
+                            &mut thread,
+                            call_id,
+                            span_state,
+                            value,
+                            trace,
+                            throws_type.as_ref(),
+                        )
                         .await;
                 }
                 Err(bex_vm::errors::VmError::Thrown(value)) => {
@@ -3046,10 +3448,31 @@ impl BexEngine {
                     if let Some(future_id) = thread.vm_thread_settles_future() {
                         let is_cancel_panic = thread.vm_thread_cancel().is_cancelled()
                             && self.is_cancelled_panic(value);
+                        if is_cancel_panic {
+                            self.emit_function_end_events_with_status(
+                                call_id,
+                                span_state,
+                                FunctionEndStatus::Cancelled,
+                                Some("cancelled"),
+                            );
+                        } else {
+                            self.emit_function_end_events_with_status(
+                                call_id,
+                                span_state,
+                                FunctionEndStatus::Error,
+                                Some("unhandled throw in spawned thread"),
+                            );
+                        }
                         let kind = if is_cancel_panic {
                             self.settle_child_cancelled(&mut thread, future_id).await?;
                             ChildSettleKind::Cancelled
                         } else {
+                            self.emit_function_end_events_with_status(
+                                call_id,
+                                span_state,
+                                FunctionEndStatus::Error,
+                                Some("unhandled throw in spawned thread"),
+                            );
                             self.settle_child_errored(&mut thread, future_id, value)
                                 .await?;
                             ChildSettleKind::Errored
@@ -3067,6 +3490,12 @@ impl BexEngine {
                 }
                 Err(bex_vm::errors::VmError::InternalError(err)) => {
                     if let Some(future_id) = thread.vm_thread_settles_future() {
+                        self.emit_function_end_events_with_status(
+                            call_id,
+                            span_state,
+                            FunctionEndStatus::Error,
+                            Some(&err.to_string()),
+                        );
                         let mut guard = self.futures.acquire(thread.proof()).await;
                         guard
                             .internal_error_future(future_id, EngineError::VmInternalError(err))?;
@@ -3078,6 +3507,12 @@ impl BexEngine {
                 }
                 Err(bex_vm::errors::VmError::TracedInternalError { source, trace }) => {
                     if let Some(future_id) = thread.vm_thread_settles_future() {
+                        self.emit_function_end_events_with_status(
+                            call_id,
+                            span_state,
+                            FunctionEndStatus::Error,
+                            Some(&source.to_string()),
+                        );
                         let mut guard = self.futures.acquire(thread.proof()).await;
                         guard.internal_error_future(
                             future_id,
@@ -3096,6 +3531,8 @@ impl BexEngine {
                     // registry and return SettledChild. The awaiter's
                     // next `Await` instruction picks up `FutureRead::Ready`.
                     if let Some(future_id) = thread.vm_thread_settles_future() {
+                        let event_result = self.vm_value_to_owned(thread.proof(), value);
+                        self.emit_completed_top_function_end(call_id, span_state, event_result);
                         let mut guard = self.futures.acquire(thread.proof()).await;
                         guard.fulfill_future(future_id, value)?;
                         return Ok(ThreadOutcome::SettledChild(ChildSettleKind::Fulfilled));
@@ -3171,6 +3608,12 @@ impl BexEngine {
                             full_call_stack.push(root_span.span_id.clone());
                             let end_event = RuntimeEvent {
                                 call_id,
+                                identity: Some(self.runtime_event_identity(
+                                    state.thread_id,
+                                    root_span.runtime_call_id,
+                                    root_span.parent_call_id,
+                                    root_span.function_id,
+                                )),
                                 ctx: SpanContext {
                                     span_id: root_span.span_id,
                                     parent_span_id: root_span.parent_span_id,
@@ -3256,6 +3699,12 @@ impl BexEngine {
                         // to the host.
                         self.prof_end_sysop(&mut thread.vm, false);
                         if let Some(future_id) = thread.vm_thread_settles_future() {
+                            self.emit_function_end_events_with_status(
+                                call_id,
+                                span_state,
+                                FunctionEndStatus::Cancelled,
+                                Some("cancelled"),
+                            );
                             self.settle_child_cancelled(&mut thread, future_id).await?;
                             return Ok(ThreadOutcome::SettledChild(ChildSettleKind::Cancelled));
                         }
@@ -3288,6 +3737,12 @@ impl BexEngine {
                                 SysOpOutcome::Cancelled => {
                                     self.prof_end_sysop(&mut thread.vm, false);
                                     if let Some(future_id) = thread.vm_thread_settles_future() {
+                                        self.emit_function_end_events_with_status(
+                                            call_id,
+                                            span_state,
+                                            FunctionEndStatus::Cancelled,
+                                            Some("cancelled"),
+                                        );
                                         self.settle_child_cancelled(&mut thread, future_id).await?;
                                         return Ok(ThreadOutcome::SettledChild(
                                             ChildSettleKind::Cancelled,
@@ -3342,6 +3797,8 @@ impl BexEngine {
                                 if let Some(outcome) = self
                                     .inject_sysop_throw(
                                         &mut thread,
+                                        call_id,
+                                        span_state,
                                         op_err,
                                         throws_type.as_ref(),
                                         host_throws_ty.as_ref(),
@@ -3383,6 +3840,8 @@ impl BexEngine {
                             if let Some(outcome) = self
                                 .inject_sysop_throw(
                                     &mut thread,
+                                    call_id,
+                                    span_state,
                                     op_err,
                                     throws_type.as_ref(),
                                     host_throws_ty.as_ref(),
@@ -3452,7 +3911,6 @@ impl BexEngine {
                     } else {
                         cancel.child_token()
                     };
-
                     // Allocate the child's future under the parent's
                     // already-held permit, then hand the id to `spawn_thread`.
                     //
@@ -3532,6 +3990,12 @@ impl BexEngine {
                     // arm above for a Cancelled panic from the VM side.
                     if cancel.is_cancelled() {
                         if let Some(future_id) = thread.vm_thread_settles_future() {
+                            self.emit_function_end_events_with_status(
+                                call_id,
+                                span_state,
+                                FunctionEndStatus::Cancelled,
+                                Some("cancelled"),
+                            );
                             self.settle_child_cancelled(&mut thread, future_id).await?;
                             return Ok(ThreadOutcome::SettledChild(ChildSettleKind::Cancelled));
                         }
@@ -3580,6 +4044,12 @@ impl BexEngine {
                     match outcome {
                         AwaitOutcome::Cancelled => {
                             if let Some(future_id) = thread.vm_thread_settles_future() {
+                                self.emit_function_end_events_with_status(
+                                    call_id,
+                                    span_state,
+                                    FunctionEndStatus::Cancelled,
+                                    Some("cancelled"),
+                                );
                                 self.settle_child_cancelled(&mut thread, future_id).await?;
                                 return Ok(ThreadOutcome::SettledChild(ChildSettleKind::Cancelled));
                             }
@@ -3605,6 +4075,12 @@ impl BexEngine {
                     thread.vm_thread_consume_pending_child_error_for(future_id);
                     if let Some(value) = self.drain_one_pending_child_error(&mut thread).await? {
                         if let Some(our_future_id) = thread.vm_thread_settles_future() {
+                            self.emit_function_end_events_with_status(
+                                call_id,
+                                span_state,
+                                FunctionEndStatus::Error,
+                                Some("unhandled child error in spawned thread"),
+                            );
                             self.settle_child_errored(&mut thread, our_future_id, value)
                                 .await?;
                             return Ok(ThreadOutcome::SettledChild(ChildSettleKind::Errored));
@@ -3631,6 +4107,12 @@ impl BexEngine {
                     // must surface `Cancelled`.
                     if cancel.is_cancelled() {
                         if let Some(future_id) = thread.vm_thread_settles_future() {
+                            self.emit_function_end_events_with_status(
+                                call_id,
+                                span_state,
+                                FunctionEndStatus::Cancelled,
+                                Some("cancelled"),
+                            );
                             self.settle_child_cancelled(&mut thread, future_id).await?;
                             return Ok(ThreadOutcome::SettledChild(ChildSettleKind::Cancelled));
                         }
@@ -3684,6 +4166,12 @@ impl BexEngine {
                     match outcome {
                         AwaitAnyOutcome::Cancelled => {
                             if let Some(future_id) = thread.vm_thread_settles_future() {
+                                self.emit_function_end_events_with_status(
+                                    call_id,
+                                    span_state,
+                                    FunctionEndStatus::Cancelled,
+                                    Some("cancelled"),
+                                );
                                 self.settle_child_cancelled(&mut thread, future_id).await?;
                                 return Ok(ThreadOutcome::SettledChild(ChildSettleKind::Cancelled));
                             }
@@ -3763,6 +4251,14 @@ impl BexEngine {
 
                         self.emit(RuntimeEvent {
                             call_id,
+                            identity: state.stack.last().map(|span| {
+                                self.runtime_event_identity(
+                                    state.thread_id,
+                                    span.runtime_call_id,
+                                    span.parent_call_id,
+                                    span.function_id,
+                                )
+                            }),
                             ctx,
                             call_stack,
                             timestamp: SystemTime::now(),
@@ -3790,6 +4286,13 @@ impl BexEngine {
                             } => {
                                 let span_id = SpanId::new();
                                 let parent_span_id = state.stack.last().map(|s| s.span_id.clone());
+                                let parent_call_id = state.stack.last().map(|s| s.runtime_call_id);
+                                // One id universe: the traced frame was just
+                                // pushed, so its VM-minted call id is the
+                                // current call — the same id its CallFunction
+                                // carries in the .bamlprof stream.
+                                let runtime_call_id = BexCallId(thread.vm.current_call_id());
+                                let function_id = self.function_id_for_name(&function_name);
 
                                 // Build call_stack: host prefix + existing engine spans + new span
                                 let mut call_stack = state.host_call_stack.clone();
@@ -3805,6 +4308,12 @@ impl BexEngine {
 
                                 let enter_event = RuntimeEvent {
                                     call_id,
+                                    identity: Some(self.runtime_event_identity(
+                                        state.thread_id,
+                                        runtime_call_id,
+                                        parent_call_id,
+                                        function_id,
+                                    )),
                                     ctx: SpanContext {
                                         span_id: span_id.clone(),
                                         parent_span_id: parent_span_id.clone(),
@@ -3825,6 +4334,10 @@ impl BexEngine {
                                 state.stack.push(EngineSpan {
                                     span_id,
                                     parent_span_id,
+                                    runtime_call_id,
+                                    parent_call_id,
+                                    function_id,
+                                    emit_runtime_events: true,
                                     label: function_name,
                                     started_at: Instant::now(),
                                 });
@@ -3843,6 +4356,12 @@ impl BexEngine {
                                     call_stack.push(span.span_id.clone());
                                     let exit_event = RuntimeEvent {
                                         call_id,
+                                        identity: Some(self.runtime_event_identity(
+                                            state.thread_id,
+                                            span.runtime_call_id,
+                                            span.parent_call_id,
+                                            span.function_id,
+                                        )),
                                         ctx: SpanContext {
                                             span_id: span.span_id,
                                             parent_span_id: span.parent_span_id,

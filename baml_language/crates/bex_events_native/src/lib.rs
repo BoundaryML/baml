@@ -25,16 +25,23 @@ use std::{
     time::Duration,
 };
 
-use bex_events::{EventKind, EventSink, RuntimeEvent};
+use bex_events::{DiskEventV1, EventFileHeaderV1, EventKind, EventSink, RuntimeEvent};
 use time::{OffsetDateTime, format_description::FormatItem, macros::format_description};
 
 /// Messages sent to the publisher thread.
 #[allow(clippy::large_enum_variant)]
 enum PublisherMessage {
     /// A new event to buffer.
-    Event(RuntimeEvent),
+    Event(BufferedEvent),
     /// Flush buffered events to disk; ack when done.
     Flush(mpsc::SyncSender<()>),
+}
+
+#[derive(Clone)]
+enum BufferedEvent {
+    Header(Box<EventFileHeaderV1>),
+    Runtime(Box<RuntimeEvent>),
+    Disk(DiskEventV1),
 }
 
 const AUTO_FLUSH_INTERVAL: Duration = Duration::from_secs(5);
@@ -54,7 +61,35 @@ pub struct NativeEventSink {
 
 impl EventSink for NativeEventSink {
     fn send(&self, event: RuntimeEvent) {
-        if self.tx.try_send(PublisherMessage::Event(event)).is_err() {
+        if self
+            .tx
+            .try_send(PublisherMessage::Event(BufferedEvent::Runtime(Box::new(
+                event,
+            ))))
+            .is_err()
+        {
+            self.dropped.fetch_add(1, Ordering::Relaxed);
+        }
+    }
+
+    fn send_disk_event(&self, event: DiskEventV1) {
+        if self
+            .tx
+            .try_send(PublisherMessage::Event(BufferedEvent::Disk(event)))
+            .is_err()
+        {
+            self.dropped.fetch_add(1, Ordering::Relaxed);
+        }
+    }
+
+    fn send_event_file_header(&self, header: EventFileHeaderV1) {
+        if self
+            .tx
+            .try_send(PublisherMessage::Event(BufferedEvent::Header(Box::new(
+                header,
+            ))))
+            .is_err()
+        {
             self.dropped.fetch_add(1, Ordering::Relaxed);
         }
     }
@@ -104,7 +139,7 @@ fn start_inner(trace_file: Option<PathBuf>) -> Arc<dyn EventSink> {
 /// unbounded buffer growth.
 #[allow(clippy::needless_pass_by_value)] // rx is moved into this thread and must be owned
 fn publisher_loop(rx: mpsc::Receiver<PublisherMessage>, trace_file: Option<PathBuf>) {
-    let mut buffer: Vec<RuntimeEvent> = Vec::new();
+    let mut buffer: Vec<BufferedEvent> = Vec::new();
 
     // Block on the first message so we don't spin when idle.
     let first = rx.recv();
@@ -160,14 +195,17 @@ fn publisher_loop(rx: mpsc::Receiver<PublisherMessage>, trace_file: Option<PathB
     }
 }
 
-fn flush_buffer(buffer: &mut Vec<RuntimeEvent>, trace_file: Option<&Path>) {
+fn flush_buffer(buffer: &mut Vec<BufferedEvent>, trace_file: Option<&Path>) {
     if let Some(trace_file) = trace_file {
         write_jsonl_to_file(buffer, trace_file);
     }
     buffer.clear();
 }
 
-fn write_log_event_to_stderr(event: &RuntimeEvent) {
+fn write_log_event_to_stderr(event: &BufferedEvent) {
+    let BufferedEvent::Runtime(event) = event else {
+        return;
+    };
     if let Some(line) = format_log_event_for_stderr(event) {
         #[allow(clippy::print_stderr)]
         {
@@ -210,7 +248,7 @@ fn format_timestamp(timestamp: web_time::SystemTime) -> String {
 }
 
 /// Write buffered events to the given JSONL file (append mode).
-fn write_jsonl_to_file(events: &[RuntimeEvent], trace_file: &Path) {
+fn write_jsonl_to_file(events: &[BufferedEvent], trace_file: &Path) {
     if events.is_empty() {
         return;
     }
@@ -227,7 +265,13 @@ fn write_jsonl_to_file(events: &[RuntimeEvent], trace_file: &Path) {
         return;
     };
     for event in events {
-        let line = bex_events::serialize::event_to_jsonl(event);
+        let line = match event {
+            BufferedEvent::Header(header) => {
+                bex_events::serialize::event_file_header_to_jsonl(header)
+            }
+            BufferedEvent::Runtime(event) => bex_events::serialize::event_to_jsonl(event),
+            BufferedEvent::Disk(event) => bex_events::serialize::disk_event_to_jsonl(event),
+        };
         let _ = writeln!(file, "{line}");
     }
 }
@@ -237,7 +281,9 @@ mod tests {
     use std::time::Duration;
 
     use bex_events::{
-        CallId, EventKind, FunctionEvent, FunctionStart, RuntimeEvent, SpanContext, SpanId,
+        CallId, EventFileHeaderV1, EventKind, FunctionEvent, FunctionMetadataTable, FunctionStart,
+        RuntimeEvent, SpanContext, SpanId,
+        ids::{EngineId, ProcessEuid, ProgramId},
     };
     use web_time::SystemTime;
 
@@ -246,6 +292,7 @@ mod tests {
     fn make_event(span_id: SpanId) -> RuntimeEvent {
         RuntimeEvent {
             call_id: CallId(0),
+            identity: None,
             ctx: SpanContext {
                 span_id: span_id.clone(),
                 parent_span_id: None,
@@ -277,10 +324,33 @@ mod tests {
     }
 
     #[test]
+    fn test_emit_header_and_flush_to_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let trace_path = dir.path().join("trace.jsonl");
+
+        let sink = start(trace_path.clone());
+        sink.send_event_file_header(EventFileHeaderV1 {
+            process_euid: ProcessEuid([1; 16]),
+            engine_id: EngineId(2),
+            program_id: ProgramId([3; 16]),
+            source_snapshot_id: None,
+            revision_id: None,
+            started_at_epoch_ns: 4,
+            function_table: FunctionMetadataTable::default(),
+        });
+        sink.flush();
+
+        let contents = std::fs::read_to_string(&trace_path).unwrap();
+        assert!(contents.contains("\"type\":\"bex_header_v1\""));
+        assert!(contents.contains("\"engine_id\":2"));
+    }
+
+    #[test]
     fn test_format_log_event_for_stderr() {
         let span_id = SpanId::new();
         let event = RuntimeEvent {
             call_id: CallId(0),
+            identity: None,
             ctx: SpanContext {
                 span_id: span_id.clone(),
                 parent_span_id: None,
@@ -332,6 +402,7 @@ mod tests {
         let span_id = SpanId::new();
         let event = RuntimeEvent {
             call_id: CallId(0),
+            identity: None,
             ctx: SpanContext {
                 span_id: span_id.clone(),
                 parent_span_id: None,

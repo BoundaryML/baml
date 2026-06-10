@@ -447,6 +447,63 @@ async fn engine_teardown_closes_profile() {
     assert!(!events2.is_empty());
 }
 
+/// `$id` overrides (M1): `baml.id.set()` must land a `SetFunctionId` record
+/// in the stream, keyed by the same (thread, call) ids as the call's
+/// `CallFunction` — one id universe across `$id` and the artifact.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn set_function_id_recorded() {
+    let _guard = test_lock().await;
+    init_prof_env();
+    let source = r#"
+        function sid_work() -> string {
+            let next = baml.id.new();
+            baml.id.set(next);
+            $id
+        }
+        function main() -> string { sid_work() }
+    "#;
+    let value = run_main(source).await.expect("sid program runs");
+    let bex_engine::BexExternalValue::String(returned_id) = value else {
+        panic!("expected the overridden $id string");
+    };
+
+    let (header, events) = load_profile("user.sid_work");
+    assert_balance(&header, &events);
+
+    let set_events: Vec<_> = events
+        .iter()
+        .filter_map(|e| match e {
+            Event::SetFunctionId(s) => Some(s),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(set_events.len(), 1, "exactly one SetFunctionId expected");
+    let set = set_events[0];
+    assert_eq!(set.id.len(), 16);
+
+    // The override belongs to an open call on the same thread.
+    assert!(
+        events.iter().any(|e| matches!(
+            e,
+            Event::CallFunction(cf)
+                if cf.thread_id == set.thread_id && cf.call_id == set.call_id
+        )),
+        "SetFunctionId must reference a recorded call"
+    );
+
+    // And the returned $id is that override (the encoded uuid matches).
+    let decoded =
+        bex_events::ids::RuntimeId::decode(returned_id.as_str()).expect("returned $id decodes");
+    match decoded {
+        bex_events::ids::RuntimeId::OverrideUuid(uuid) => {
+            assert_eq!(uuid.as_slice(), set.id.as_slice());
+        }
+        other @ bex_events::ids::RuntimeId::DefaultCall(_) => {
+            panic!("expected an override id, got {other:?}")
+        }
+    }
+}
+
 /// The unwind path: a thrown error must close every unwound frame with
 /// `EndFunction{Error}` and the thread with `EndThread{Errored}`.
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]

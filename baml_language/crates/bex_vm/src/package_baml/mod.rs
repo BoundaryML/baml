@@ -21,6 +21,7 @@ mod array;
 pub(crate) mod bigint;
 mod float;
 mod future;
+mod id;
 mod int;
 pub mod json;
 mod map;

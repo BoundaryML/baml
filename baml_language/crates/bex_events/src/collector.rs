@@ -339,6 +339,7 @@ mod tests {
     ) -> RuntimeEvent {
         RuntimeEvent {
             call_id: CallId(0),
+            identity: None,
             ctx: SpanContext {
                 span_id,
                 parent_span_id: parent,
@@ -364,6 +365,7 @@ mod tests {
     ) -> RuntimeEvent {
         RuntimeEvent {
             call_id: CallId(0),
+            identity: None,
             ctx: SpanContext {
                 span_id,
                 parent_span_id: parent,
@@ -484,6 +486,7 @@ mod tests {
             ),
             RuntimeEvent {
                 call_id: CallId(0),
+                identity: None,
                 ctx: SpanContext {
                     span_id: root.clone(),
                     parent_span_id: None,

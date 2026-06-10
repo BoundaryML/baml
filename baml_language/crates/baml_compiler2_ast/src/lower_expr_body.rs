@@ -2406,6 +2406,24 @@ impl LoweringContext {
                     return self.alloc_expr(Expr::Literal(Literal::Bool(false)), node.text_range());
                 }
                 "null" => return self.alloc_expr(Expr::Null, node.text_range()),
+                "$id" => {
+                    let callee = self.alloc_expr(
+                        Expr::Path(vec![
+                            Name::new("baml"),
+                            Name::new("id"),
+                            Name::new("current"),
+                        ]),
+                        node.text_range(),
+                    );
+                    return self.alloc_expr(
+                        Expr::Call {
+                            callee,
+                            type_args: Vec::new(),
+                            args: Vec::new(),
+                        },
+                        node.text_range(),
+                    );
+                }
                 _ => {}
             }
         }

@@ -7740,6 +7740,11 @@ impl<'db> TypeInferenceBuilder<'db> {
         }
         if segments.len() == 1 {
             let name = &segments[0];
+            if name.as_str() == "$id" {
+                return Ty::String {
+                    attr: TyAttr::default(),
+                };
+            }
             let ty = self.infer_single_name(name);
             // Record free-function resolution so that explicit type-arg binding
             // (`resolve_explicit_type_args`) can later retrieve the `FunctionLoc`
