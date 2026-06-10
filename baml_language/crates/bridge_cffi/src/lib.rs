@@ -210,9 +210,10 @@ fn call_function_inner(
     } else {
         unsafe { CallFunctionArgs::from_c_buffer(encoded_args, length) }?
     };
+    let call_id = decoded_call_id(args.call_id)?;
     let kwargs = kwargs_to_bex_values(args.kwargs, &HANDLE_TABLE)?;
 
-    let call_ctx = bex_project::FunctionCallContextBuilder::new(sys_types::CallId(id.into()));
+    let call_ctx = function_call_context_builder(call_id);
 
     get_tokio_runtime()?.spawn(async move {
         // `call_and_encode` already wraps the engine call in its own
@@ -240,17 +241,51 @@ fn call_function_inner(
     Ok(())
 }
 
+fn decoded_call_id(id: u64) -> Result<sys_types::CallId, BridgeError> {
+    if id == 0 {
+        return Err(BridgeError::InvalidCallId);
+    }
+    Ok(sys_types::CallId(id))
+}
+
+/// Allocate a new process-unique function-call ID.
+pub fn new_function_call_id() -> u64 {
+    sys_types::CallId::next().0
+}
+
+/// Build a function-call context builder for a CFFI-owned call id.
+pub fn function_call_context_builder(
+    call_id: sys_types::CallId,
+) -> bex_project::FunctionCallContextBuilder {
+    bex_project::FunctionCallContextBuilder::new(call_id)
+}
+
+/// Cancel an in-flight function call by ID.
+///
+/// Returns true on success, false if the runtime is not initialized.
+pub fn cancel_function_call_by_id(id: u64) -> bool {
+    if id == 0 {
+        return false;
+    }
+    get_runtime()
+        .and_then(|runtime| {
+            runtime
+                .cancel_function_call(sys_types::CallId(id))
+                .map_err(BridgeError::from)
+        })
+        .is_ok()
+}
+
+/// Allocate a new process-unique function-call ID.
+#[unsafe(no_mangle)]
+pub extern "C" fn new_function_call() -> u64 {
+    new_function_call_id()
+}
+
 /// Cancel an in-flight function call.
 ///
 /// Returns 0 on success, 1 if the call ID is unknown or already completed.
 #[unsafe(no_mangle)]
-pub extern "C" fn cancel_function_call(id: u32) -> i32 {
-    let runtime = match get_runtime() {
-        Ok(rt) => rt,
-        Err(_) => return 1,
-    };
-    match runtime.cancel_function_call(sys_types::CallId(id.into())) {
-        Ok(()) => 0,
-        Err(_) => 1,
-    }
+pub extern "C" fn cancel_function_call(id: u64) -> i32 {
+    if cancel_function_call_by_id(id) { 0 } else { 1 }
 }

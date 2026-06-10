@@ -703,6 +703,31 @@ self.onmessage = async (event: MessageEvent) => {
   const msg = data as WorkerInMessage;
 
   switch (msg.type) {
+    case "nextFunctionCall": {
+      if (!runtime) {
+        postOut({
+          type: "nextFunctionCallError",
+          id: msg.id,
+          error: "Runtime not initialized",
+        });
+        return;
+      }
+      try {
+        postOut({
+          type: "nextFunctionCallResult",
+          id: msg.id,
+          callId: (runtime as { nextFunctionCall(): number }).nextFunctionCall(),
+        });
+      } catch (e) {
+        postOut({
+          type: "nextFunctionCallError",
+          id: msg.id,
+          error: e instanceof Error ? e.message : String(e),
+        });
+      }
+      return;
+    }
+
     case "callFunction": {
       // Clear previous decorations when starting a new call
       clearLogDecorations();

@@ -149,11 +149,11 @@ impl<'a, 'db, B: TypeVarBounds + ?Sized> AssociatedProjectionResolver<'a, 'db, B
                 Box::new(self.resolve_deep_inner(inner, resolving)),
                 attr.clone(),
             ),
-            Ty::Map(key, value, attr) => Ty::Map(
-                Box::new(self.resolve_deep_inner(key, resolving)),
-                Box::new(self.resolve_deep_inner(value, resolving)),
-                attr.clone(),
-            ),
+            Ty::Map { key, value, attr } => Ty::Map {
+                key: Box::new(self.resolve_deep_inner(key, resolving)),
+                value: Box::new(self.resolve_deep_inner(value, resolving)),
+                attr: attr.clone(),
+            },
             Ty::EvolvingMap(key, value, attr) => Ty::EvolvingMap(
                 Box::new(self.resolve_deep_inner(key, resolving)),
                 Box::new(self.resolve_deep_inner(value, resolving)),

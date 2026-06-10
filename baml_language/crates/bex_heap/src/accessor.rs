@@ -58,10 +58,10 @@ pub enum BexVariant<'a> {
 }
 
 impl<'a> BexClass<'a> {
-    pub fn class_name(&self) -> &str {
+    pub fn class_name(&self) -> String {
         match self {
-            BexClass::ExternalClass { name, .. } => name,
-            BexClass::Value(class, ..) => class.name.display_name.as_str(),
+            BexClass::ExternalClass { name, .. } => (*name).clone(),
+            BexClass::Value(class, ..) => class.name.display_name().to_string(),
         }
     }
 
@@ -95,10 +95,10 @@ impl<'a> BexClass<'a> {
 }
 
 impl<'a> BexVariant<'a> {
-    pub fn enum_name(&self) -> &str {
+    pub fn enum_name(&self) -> String {
         match self {
-            BexVariant::ExternalVariant { name, .. } => name,
-            BexVariant::Value(enum_, ..) => enum_.name.display_name.as_str(),
+            BexVariant::ExternalVariant { name, .. } => (*name).clone(),
+            BexVariant::Value(enum_, ..) => enum_.name.display_name().to_string(),
         }
     }
 
@@ -255,6 +255,45 @@ impl<'a> BexValue<'a> {
         }
     }
 
+    /// Extract a rooted host [`Handle`](bex_external_types::Handle) to a callable
+    /// BAML value (function, closure, or bound method).
+    ///
+    /// Used for `function`-typed sys-op arguments: a callable cannot be
+    /// serialized into a `BexExternalValue`, but it crosses the boundary as a
+    /// `BexExternalValue::Handle` (a GC root into the shared heap). The sys-op
+    /// holds the handle and later invokes it via `VmSpawner::spawn_with_callable`,
+    /// which validates that the handle actually points at a callable object.
+    pub fn as_callable_handle(
+        self,
+        _heap: &BexHeap,
+        _permit: PermitProof<'a>,
+    ) -> Result<bex_external_types::Handle, AccessError> {
+        match self {
+            BexValue::ExternalValue(BexExternalValue::Handle(handle)) => Ok(handle.clone()),
+            other => Err(AccessError::TypeMismatch {
+                expected: "function",
+                actual: other.type_name(),
+            }),
+        }
+    }
+
+    /// Like [`Self::as_callable_handle`], but for an optional callable param:
+    /// `null` yields `None`, a callable handle yields `Some`.
+    pub fn as_optional_callable_handle(
+        self,
+        _heap: &BexHeap,
+        _permit: PermitProof<'a>,
+    ) -> Result<Option<bex_external_types::Handle>, AccessError> {
+        match self {
+            BexValue::ExternalValue(BexExternalValue::Null) => Ok(None),
+            BexValue::ExternalValue(BexExternalValue::Handle(handle)) => Ok(Some(handle.clone())),
+            other => Err(AccessError::TypeMismatch {
+                expected: "function?",
+                actual: other.type_name(),
+            }),
+        }
+    }
+
     pub fn as_string(
         self,
         heap: &BexHeap,
@@ -387,7 +426,7 @@ impl<'a> BexValue<'a> {
                         actual: class_obj.to_string(),
                     });
                 };
-                if class.name.display_name.as_str() != expected_class_name {
+                if class.name.display_name().as_str() != expected_class_name {
                     return Err(AccessError::TypeMismatch {
                         expected: expected_class_name,
                         actual: class.name.to_string(),
@@ -458,7 +497,7 @@ impl<'a> BexValue<'a> {
                         actual: enum_obj.to_string(),
                     });
                 };
-                if enum_.name.display_name.as_str() != expected_enum_name {
+                if enum_.name.display_name().as_str() != expected_enum_name {
                     return Err(AccessError::TypeMismatch {
                         expected: expected_enum_name,
                         actual: enum_.name.to_string(),

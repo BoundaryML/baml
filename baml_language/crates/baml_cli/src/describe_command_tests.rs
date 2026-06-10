@@ -848,12 +848,10 @@ fn definition_line_range_comment_only_span_does_not_reverse() {
 
 // ── Truncation / budget tests ────────────────────────────────────────────────
 
-/// Methods are always discoverable. They are rendered after the body and
-/// bypass the body budget entirely, so even at budget 5 every method of
-/// `String` (40+) is still present, and the `methods:`/`static_methods:`
-/// sections are byte-identical regardless of budget.
+/// Methods remain discoverable under tight budgets, but their entries consume
+/// the remaining section budget and overflow is summarized explicitly.
 #[test]
-fn render_describe_methods_never_truncated() {
+fn render_describe_methods_share_remaining_budget() {
     let db = simple_project();
     let files = baml_compiler2_hir::compiler2_all_files(&db);
     let descs = baml_lsp2_actions::describe(&db, &files, "String");
@@ -864,9 +862,8 @@ fn render_describe_methods_never_truncated() {
 
     for needle in [
         "methods:",
-        "function to_json(self) -> json",
         "static_methods:",
-        "function from_code_points(unicode: int[]) -> string",
+        "more lines (re-run with a higher --budget)",
     ] {
         assert!(
             tight.contains(needle),
@@ -874,14 +871,19 @@ fn render_describe_methods_never_truncated() {
         );
     }
 
-    // The method sections are unaffected by the budget (only the body block is).
-    let methods_onward = |s: &str| s[s.find("\nmethods:").expect("methods section")..].to_string();
-    assert_eq!(methods_onward(&tight), methods_onward(&full));
+    assert!(
+        !tight.contains("function to_json(self) -> json"),
+        "late methods should be elided under budget 5:\n{tight}"
+    );
+    assert!(
+        full.contains("function to_json(self) -> json")
+            && full.contains("function from_code_points(unicode: int[]) -> string"),
+        "generous budgets should still show full method details:\n{full}"
+    );
 }
 
-/// A class with a fields-only body (no docstring) renders identically at a tight
-/// budget and a generous one — the body fits any reasonable budget. This is the
-/// spec's `baml describe User --budget 5` guarantee.
+/// A class with a fields-only body (no docstring) still fits that body under a
+/// tight budget, while later method sections use elision markers as needed.
 #[test]
 fn render_describe_fields_only_body_fits_tight_budget() {
     let db = methods_project();
@@ -895,7 +897,21 @@ fn render_describe_fields_only_body_fits_tight_budget() {
         !tight.contains("[INFO] Showing"),
         "fields-only body must not truncate at budget 5:\n{tight}"
     );
-    assert_eq!(tight, full);
+    for needle in ["class User {", "    name: string,", "    age: int,", "}"] {
+        assert!(
+            tight.contains(needle),
+            "`{needle}` missing from fields-only body under budget 5:\n{tight}"
+        );
+    }
+    assert!(
+        tight.contains("methods:\n  … 2 more lines"),
+        "methods should be summarized after the tight body budget is spent:\n{tight}"
+    );
+    assert!(
+        full.contains("function Greet(self) -> string")
+            && full.contains("function IsAdult(self) -> bool"),
+        "generous budgets should still show full methods:\n{full}"
+    );
 }
 
 /// Full budget shows no truncation hint.

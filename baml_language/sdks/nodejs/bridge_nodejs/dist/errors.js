@@ -6,8 +6,6 @@
  * Build:  cd baml_language/crates/bridge_nodejs && pnpm build:debug
  */
 // errors.ts — mirrors bridge_python/python_src/baml_py/errors.py
-// Error types are encoded as prefixed strings in napi::Error messages.
-// This module provides helpers to identify error types from native errors.
 export class BamlError extends Error {
     /** The decoded thrown BAML value, or `undefined` for SDK-internal errors. */
     value;
@@ -41,6 +39,14 @@ export class BamlCancelledError extends BamlError {
         this.name = 'BamlCancelledError';
     }
 }
+export class BamlAbortError extends Error {
+    reason;
+    constructor(message, options) {
+        super(message);
+        this.name = 'AbortError';
+        this.reason = options?.reason;
+    }
+}
 /**
  * Raised for SDK-setup failures and BAML-runtime panics — the Node analog of
  * `bridge_python`'s `BamlPanic`. The in-call panic path (`decodeCallResult`'s
@@ -53,23 +59,9 @@ export class BamlPanic extends BamlError {
         this.name = 'BamlPanic';
     }
 }
-// Native errors are encoded as prefixed strings in napi::Error messages, e.g.
-// `BamlError: BamlCancelledError: <detail>`. Match on the exact prefix rather
-// than a substring so a user-supplied message that merely *contains* the words
-// can't be misclassified.
-const PREFIX_MAP = [
-    ['BamlError: BamlCancelledError:', BamlCancelledError],
-    ['BamlError: BamlInvalidArgumentError:', BamlInvalidArgumentError],
-    ['BamlError: BamlClientError:', BamlClientError],
-];
 export function wrapNativeError(err) {
     if (!(err instanceof Error))
         return new BamlError(String(err));
-    const msg = err.message;
-    for (const [prefix, Ctor] of PREFIX_MAP) {
-        if (msg.startsWith(prefix))
-            return new Ctor(msg);
-    }
-    return new BamlError(msg);
+    return new BamlError(err.message);
 }
 //# sourceMappingURL=errors.js.map

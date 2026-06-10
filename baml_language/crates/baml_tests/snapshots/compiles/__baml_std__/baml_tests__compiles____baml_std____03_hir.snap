@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 4158
 ---
 === HIR2 ===
 
@@ -509,12 +508,13 @@ function baml.http.fetch_sse(request: baml.http.Request) -> baml.http.SseStream 
 function baml.http.from_json(j: baml.json.json) -> baml.http.Request  [expr] {
   baml.http.Request { method: baml.json.from_json(baml.json.field(j, "method")), url: baml.json.from_json(baml.json.field(j, "url")), headers: baml.json.from_json(baml.json.field(j, "headers")), body: baml.json.from_json(baml.json.field(j, "body")) }
 }
-function baml.http.from_json(j: baml.json.json) -> baml.http.SseStream  [expr] {
-  baml.json.from_string(baml.json.stringify(j))
-}
 function baml.http.from_json(j: baml.json.json) -> baml.http.Response  [expr] {
   baml.json.from_string(baml.json.stringify(j))
 }
+function baml.http.from_json(j: baml.json.json) -> baml.http.SseStream  [expr] {
+  baml.json.from_string(baml.json.stringify(j))
+}
+function baml.http.new(status_code: int, headers: map<string, string>, body: uint8array) -> baml.http.Response  [builtin]
 function baml.http.next(self: ?) -> string?  [builtin]
 function baml.http.ok(self: ?) -> bool  [expr] {
   {  } self.status_code Ge 200 And self.status_code Lt 300
@@ -522,10 +522,43 @@ function baml.http.ok(self: ?) -> bool  [expr] {
 function baml.http.send(request: baml.http.Request) -> baml.http.Response  [builtin]
 function baml.http.text(self: ?) -> string  [builtin]
 function baml.http.to_json(self: ?) -> baml.json.json  [expr] {
+  map { "method": self.method.to_json(), "url": self.url.to_json(), "headers": self.headers.to_json(), "body": self.body.to_json() }
+}
+function baml.http.to_json(self: ?) -> baml.json.json  [expr] {
   baml.json.parse(baml.json.to_string(self))
 }
 function baml.http.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "method": self.method.to_json(), "url": self.url.to_json(), "headers": self.headers.to_json(), "body": self.body.to_json() }
+  baml.json.parse(baml.json.to_string(self))
+}
+
+--- <builtin>/baml/ns_http/server.baml ---
+class baml.http.Server {
+  addr: string
+  _state: $rust_type
+}
+class baml.http.TlsConfig {
+  allow_tls1_2: bool
+  _certificate: $rust_type
+  _private_key: $rust_type
+  _handshake_timeout_nanos: bigint
+}
+function baml.http._new(cert_pem: uint8array, key_pem: uint8array, allow_tls1_2: bool, handshake_timeout_nanos: bigint) -> baml.http.TlsConfig  [builtin]
+function baml.http._serve(self: ?, handler: (req: Request) -> Response throws never, tls_config: baml.http.TlsConfig?, allow_http1: bool, allow_http2: bool, max_body_size: int, max_connections: int, header_read_timeout_nanos: bigint) -> never  [builtin]
+function baml.http.bind(addr: string) -> baml.http.Server  [builtin]
+function baml.http.from_json(j: baml.json.json) -> baml.http.Server  [expr] {
+  baml.json.from_string(baml.json.stringify(j))
+}
+function baml.http.from_json(j: baml.json.json) -> baml.http.TlsConfig  [expr] {
+  baml.json.from_string(baml.json.stringify(j))
+}
+function baml.http.new(cert_pem: uint8array, key_pem: uint8array, allow_tls1_2: bool = true, handshake_timeout: root.time.Duration = root.time.Duration.from_seconds(10n)) -> baml.http.TlsConfig  [expr] {
+  {  } TlsConfig._new(cert_pem, key_pem, allow_tls1_2, handshake_timeout.to_nanoseconds())
+}
+function baml.http.serve(self: ?, handler: (req: Request) -> Response throws never, tls_config: baml.http.TlsConfig? = null, allow_http1: bool = true, allow_http2: bool = true, max_body_size: int = 104857600, max_connections: int = 1024, header_read_timeout: root.time.Duration = root.time.Duration.from_seconds(30n)) -> never  [expr] {
+  {  } self._serve(handler, tls_config, allow_http1, allow_http2, max_body_size, max_connections, header_read_timeout.to_nanoseconds())
+}
+function baml.http.to_json(self: ?) -> baml.json.json  [expr] {
+  baml.json.parse(baml.json.to_string(self))
 }
 function baml.http.to_json(self: ?) -> baml.json.json  [expr] {
   baml.json.parse(baml.json.to_string(self))
@@ -1819,6 +1852,21 @@ function baml.toml.to_json(self: ?) -> baml.json.json  [expr] {
 
 --- <builtin>/baml/ns_unstable/unstable.baml ---
 function baml.unstable.string(value: T) -> string  [builtin]
+
+--- <builtin>/baml/ns_yaml/yaml.baml ---
+class baml.yaml.YamlParseError {
+  message: string
+}
+function baml.yaml.deserialize(s: string) -> T  [expr] {
+  {  } baml.json.from_json(parse(s)) catch (e) { err: baml.json.JsonParseError => throw baml.json.JsonDecodeError { message: err.message, path: "" } }
+}
+function baml.yaml.from_json(j: baml.json.json) -> baml.yaml.YamlParseError  [expr] {
+  baml.yaml.YamlParseError { message: baml.json.from_json(baml.json.field(j, "message")) }
+}
+function baml.yaml.parse(s: string) -> baml.json.json  [builtin]
+function baml.yaml.to_json(self: ?) -> baml.json.json  [expr] {
+  map { "message": self.message.to_json() }
+}
 
 --- <builtin>/baml/null.baml ---
 class baml.Null {

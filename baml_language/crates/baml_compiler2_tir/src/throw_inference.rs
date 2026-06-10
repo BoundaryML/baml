@@ -308,7 +308,14 @@ pub fn collect_direct_throws<'db>(
 /// Get a display name for a throw fact, used for the catch binding name filter.
 fn fact_display_name(fact: &Ty) -> String {
     match fact {
-        Ty::Primitive(p, _) => p.to_string(),
+        Ty::Int { .. } => PrimitiveType::Int.to_string(),
+        Ty::Bigint { .. } => PrimitiveType::Bigint.to_string(),
+        Ty::Float { .. } => PrimitiveType::Float.to_string(),
+        Ty::String { .. } => PrimitiveType::String.to_string(),
+        Ty::Bool { .. } => PrimitiveType::Bool.to_string(),
+        Ty::Null { .. } => PrimitiveType::Null.to_string(),
+        Ty::Uint8Array { .. } => PrimitiveType::Uint8Array.to_string(),
+        Ty::Media(kind, _) => kind.to_string(),
         Ty::Class(qn, _, _) | Ty::Enum(qn, _) | Ty::TypeAlias(qn, _) => qn.to_string(),
         Ty::EnumVariant(qn, variant, _) => format!("{qn}.{variant}"),
         Ty::Unknown { .. } => "unknown".to_string(),
@@ -339,13 +346,21 @@ fn throw_fact_from_expr<'db>(
     body: &ExprBody,
 ) -> Ty {
     match &body.exprs[expr_id] {
-        Expr::Literal(Literal::String(_)) => {
-            Ty::Primitive(PrimitiveType::String, TyAttr::default())
-        }
-        Expr::Literal(Literal::Int(_)) => Ty::Primitive(PrimitiveType::Int, TyAttr::default()),
-        Expr::Literal(Literal::Float(_)) => Ty::Primitive(PrimitiveType::Float, TyAttr::default()),
-        Expr::Literal(Literal::Bool(_)) => Ty::Primitive(PrimitiveType::Bool, TyAttr::default()),
-        Expr::Null => Ty::Primitive(PrimitiveType::Null, TyAttr::default()),
+        Expr::Literal(Literal::String(_)) => Ty::String {
+            attr: TyAttr::default(),
+        },
+        Expr::Literal(Literal::Int(_)) => Ty::Int {
+            attr: TyAttr::default(),
+        },
+        Expr::Literal(Literal::Float(_)) => Ty::Float {
+            attr: TyAttr::default(),
+        },
+        Expr::Literal(Literal::Bool(_)) => Ty::Bool {
+            attr: TyAttr::default(),
+        },
+        Expr::Null => Ty::Null {
+            attr: TyAttr::default(),
+        },
         Expr::Path(segments) if !segments.is_empty() => {
             resolve_path_to_ty(db, pkg_items, ns_context, segments)
         }
@@ -501,10 +516,14 @@ fn collect_leaf_types(ty: &Ty, out: &mut BTreeSet<Ty>) {
         }
         // Literal types: widen to primitive for throw fact purposes
         Ty::Literal(lit, _, _) => {
-            out.insert(Ty::Primitive(
-                PrimitiveType::from_literal(lit),
-                TyAttr::default(),
-            ));
+            let attr = TyAttr::default();
+            out.insert(match lit {
+                Literal::Int(_) => Ty::Int { attr },
+                Literal::Bigint(_) => Ty::Bigint { attr },
+                Literal::Float(_) => Ty::Float { attr },
+                Literal::String(_) => Ty::String { attr },
+                Literal::Bool(_) => Ty::Bool { attr },
+            });
         }
         // Bottom/void: no facts
         Ty::Never { .. } | Ty::Void { .. } => {}

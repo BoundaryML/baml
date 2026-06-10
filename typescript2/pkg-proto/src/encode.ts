@@ -80,6 +80,7 @@ function serializeValue(val: unknown): InboundValue {
 
 export function encodeCallArgs(
   kwargs: Record<string, unknown>,
+  callId: number,
 ): Uint8Array {
   const entries: InboundMapEntry[] = Object.entries(kwargs).map(
     ([k, v]) => ({
@@ -90,6 +91,7 @@ export function encodeCallArgs(
 
   const args: CallFunctionArgsType = {
     kwargs: entries,
+    callId,
   };
 
   return CallFunctionArgs.encode(args).finish();

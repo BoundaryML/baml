@@ -34,7 +34,7 @@ use rustc_hash::FxHashMap;
 
 use crate::{
     builder::LocalBinding,
-    ty::{PrimitiveType, Ty, TyAttr},
+    ty::{Ty, TyAttr},
 };
 
 // ── Narrowing descriptor ──────────────────────────────────────────────────────
@@ -106,13 +106,17 @@ fn collect_narrowings(
                 let (then_ty, else_ty) = if negated {
                     // !(x != null) == x == null
                     (
-                        Ty::Primitive(PrimitiveType::Null, TyAttr::default()),
+                        Ty::Null {
+                            attr: TyAttr::default(),
+                        },
                         remove_null(&original_ty),
                     )
                 } else {
                     (
                         remove_null(&original_ty),
-                        Ty::Primitive(PrimitiveType::Null, TyAttr::default()),
+                        Ty::Null {
+                            attr: TyAttr::default(),
+                        },
                     )
                 };
                 out.push(Narrowing {
@@ -134,11 +138,15 @@ fn collect_narrowings(
                     // !(x == null) == x != null
                     (
                         remove_null(&original_ty),
-                        Ty::Primitive(PrimitiveType::Null, TyAttr::default()),
+                        Ty::Null {
+                            attr: TyAttr::default(),
+                        },
                     )
                 } else {
                     (
-                        Ty::Primitive(PrimitiveType::Null, TyAttr::default()),
+                        Ty::Null {
+                            attr: TyAttr::default(),
+                        },
                         remove_null(&original_ty),
                     )
                 };
@@ -258,10 +266,8 @@ fn null_check_name(
 /// with null) or is directly `Null`.
 fn is_nullable(ty: &Ty) -> bool {
     match ty {
-        Ty::Primitive(PrimitiveType::Null, _) => true,
-        Ty::Union(members, _) => members
-            .iter()
-            .any(|m| matches!(m, Ty::Primitive(PrimitiveType::Null, _))),
+        Ty::Null { .. } => true,
+        Ty::Union(members, _) => members.iter().any(|m| matches!(m, Ty::Null { .. })),
         _ => false,
     }
 }
@@ -332,7 +338,14 @@ pub(crate) fn subtract_pattern_type(scrutinee: &Ty, matched: &Ty) -> Ty {
 /// (less narrowing, never unsound).
 fn ty_shape_eq(a: &Ty, b: &Ty) -> bool {
     match (a, b) {
-        (Ty::Primitive(p1, _), Ty::Primitive(p2, _)) => p1 == p2,
+        (Ty::Int { .. }, Ty::Int { .. })
+        | (Ty::Bigint { .. }, Ty::Bigint { .. })
+        | (Ty::Float { .. }, Ty::Float { .. })
+        | (Ty::String { .. }, Ty::String { .. })
+        | (Ty::Bool { .. }, Ty::Bool { .. })
+        | (Ty::Null { .. }, Ty::Null { .. })
+        | (Ty::Uint8Array { .. }, Ty::Uint8Array { .. }) => true,
+        (Ty::Media(k1, _), Ty::Media(k2, _)) => k1 == k2,
         (Ty::Class(n1, args1, _), Ty::Class(n2, args2, _)) => {
             n1 == n2
                 && args1.len() == args2.len()
@@ -342,7 +355,14 @@ fn ty_shape_eq(a: &Ty, b: &Ty) -> bool {
         (Ty::EnumVariant(n1, v1, _), Ty::EnumVariant(n2, v2, _)) => n1 == n2 && v1 == v2,
         (Ty::TypeAlias(n1, _), Ty::TypeAlias(n2, _)) => n1 == n2,
         (Ty::List(t1, _), Ty::List(t2, _)) => ty_shape_eq(t1, t2),
-        (Ty::Map(k1, v1, _), Ty::Map(k2, v2, _)) => ty_shape_eq(k1, k2) && ty_shape_eq(v1, v2),
+        (
+            Ty::Map {
+                key: k1, value: v1, ..
+            },
+            Ty::Map {
+                key: k2, value: v2, ..
+            },
+        ) => ty_shape_eq(k1, k2) && ty_shape_eq(v1, v2),
         (Ty::Literal(l1, _, _), Ty::Literal(l2, _, _)) => l1 == l2,
         _ => false,
     }
@@ -361,7 +381,7 @@ pub fn remove_null(ty: &Ty) -> Ty {
         Ty::Union(members, _) => {
             let filtered: Vec<Ty> = members
                 .iter()
-                .filter(|m| !matches!(m, Ty::Primitive(PrimitiveType::Null, _)))
+                .filter(|m| !matches!(m, Ty::Null { .. }))
                 .cloned()
                 .collect();
             match filtered.len() {
@@ -372,7 +392,7 @@ pub fn remove_null(ty: &Ty) -> Ty {
                 _ => Ty::Union(filtered, TyAttr::default()),
             }
         }
-        Ty::Primitive(PrimitiveType::Null, _) => Ty::Never {
+        Ty::Null { .. } => Ty::Never {
             attr: TyAttr::default(),
         },
         _ => ty.clone(),

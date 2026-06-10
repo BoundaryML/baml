@@ -74,20 +74,22 @@ class BamlStream(Generic[TStream, TFinal]):
     # have to be method-local to avoid a circular import.
     def _call_sync(self, fqn: str) -> Any:
         from . import get_runtime
+        from .baml_py import new_function_call
         from .proto import decode_call_result, encode_call_args
 
         rt = get_runtime()
-        args_proto = encode_call_args({"self": self})
-        result_bytes = rt.call_function_sync(fqn, args_proto, None, None, None)
+        args_proto = encode_call_args({"self": self}, new_function_call())
+        result_bytes = rt.call_function_sync(fqn, args_proto, None, None)
         return decode_call_result(result_bytes)
 
     async def _call_async(self, fqn: str) -> Any:
         from . import get_runtime
+        from .baml_py import new_function_call
         from .proto import decode_call_result, encode_call_args
 
         rt = get_runtime()
-        args_proto = encode_call_args({"self": self})
-        result_bytes = await rt.call_function(fqn, args_proto, None, None, None)
+        args_proto = encode_call_args({"self": self}, new_function_call())
+        result_bytes = await rt.call_function(fqn, args_proto, None, None)
         return decode_call_result(result_bytes)
 
     @classmethod

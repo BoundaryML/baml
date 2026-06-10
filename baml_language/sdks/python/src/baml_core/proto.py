@@ -343,7 +343,7 @@ def _set_inbound_map_entry(
     _set_inbound_value(entry.value, value, kwarg_name=kwarg_name, registered=registered)
 
 
-def encode_call_args(kwargs: Dict[str, Any]) -> bytes:
+def encode_call_args(kwargs: Dict[str, Any], call_id: int) -> bytes:
     """Encode function keyword arguments as `CallFunctionArgs` protobuf.
 
     Release tradeoff: a callable that encodes successfully is registered in
@@ -357,9 +357,12 @@ def encode_call_args(kwargs: Dict[str, Any]) -> bytes:
     for the life of the process, we track every key registered during this
     encode and release them all if any kwarg fails.
     """
+    if call_id == 0:
+        raise ValueError("call_id must be a nonzero uint64")
     registered: List[int] = []
     try:
         args = baml_inbound_pb2.CallFunctionArgs()
+        args.call_id = call_id
         for key, value in kwargs.items():
             _set_inbound_map_entry(
                 args.kwargs.add(), key, value, kwarg_name=key, registered=registered

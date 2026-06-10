@@ -576,10 +576,7 @@ fn function_param_matches_effect_slot(ty: &baml_compiler2_tir::ty::Ty, effect_na
         Ty::Union(members, _) => {
             let mut matched = false;
             for member in members {
-                if matches!(
-                    member,
-                    Ty::Primitive(baml_compiler2_tir::ty::PrimitiveType::Null, _)
-                ) {
+                if matches!(member, Ty::Null { .. }) {
                     continue;
                 }
                 if !function_param_matches_effect_slot(member, effect_name) {

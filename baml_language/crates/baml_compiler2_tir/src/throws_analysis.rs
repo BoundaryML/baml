@@ -5,7 +5,7 @@ use baml_compiler2_ast::{Expr, ExprBody, ExprId, Stmt, StmtId};
 
 use crate::{
     throw_inference::flatten_ty_to_facts,
-    ty::{PrimitiveType, Ty, TyAttr},
+    ty::{Ty, TyAttr},
 };
 
 pub(crate) trait ThrowsAnalysisContext {
@@ -320,7 +320,7 @@ fn collect_from_expr<C: ThrowsAnalysisContext>(
                 if let Some(Ty::Function { throws, .. }) = context.expression_type(*with_id) {
                     match throws.as_ref() {
                         Ty::Never { .. } | Ty::Unknown { .. } | Ty::Error { .. } => {}
-                        Ty::Primitive(PrimitiveType::Null, _) => {}
+                        Ty::Null { .. } => {}
                         t => out.extend(flatten_ty_to_facts(t)),
                     }
                 }
@@ -337,7 +337,7 @@ fn collect_from_expr<C: ThrowsAnalysisContext>(
             fn add_error_facts(error: &Ty, out: &mut BTreeSet<Ty>) {
                 match error {
                     Ty::Never { .. } | Ty::Unknown { .. } | Ty::Error { .. } => {}
-                    Ty::Primitive(PrimitiveType::Null, _) => {}
+                    Ty::Null { .. } => {}
                     e => out.extend(flatten_ty_to_facts(e)),
                 }
             }
