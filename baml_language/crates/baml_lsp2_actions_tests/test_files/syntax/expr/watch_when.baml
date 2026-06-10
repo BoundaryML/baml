@@ -49,28 +49,55 @@ function BadFunction2(i: string) -> bool {
 //    │
 //  2 │ ╭─▶   watch let x = 10;
 //  3 │ ├─▶   x.$watch.options(baml.WatchOptions{ when: GoodFunction });
-//    │ │                                                                  
+//    │ │
 //    │ ╰────────────────────────────────────────────────────────────────── type `int` has no member `$watch`
-//    │     
+//    │
 //    │     Note: Error code: E0007
+// ───╯
+// error: unresolved type: baml.WatchOptions
+//    ╭─[ expr_watch_when.baml:3:20 ]
+//    │
+//  3 │   x.$watch.options(baml.WatchOptions{ when: GoodFunction });
+//    │                    ───────────────────┬───────────────────
+//    │                                       ╰───────────────────── unresolved type: baml.WatchOptions
+//    │
+//    │ Note: Error code: E0002
 // ───╯
 // error: type `int` has no member `$watch`
 //    ╭─[ expr_watch_when.baml:3:61 ]
 //    │
 //  3 │ ╭─▶   x.$watch.options(baml.WatchOptions{ when: GoodFunction });
 //  4 │ ├─▶   x.$watch.options(baml.WatchOptions{ when: BadFunction1 });
-//    │ │                                                                  
+//    │ │
 //    │ ╰────────────────────────────────────────────────────────────────── type `int` has no member `$watch`
-//    │     
+//    │
 //    │     Note: Error code: E0007
+// ───╯
+// error: unresolved type: baml.WatchOptions
+//    ╭─[ expr_watch_when.baml:4:20 ]
+//    │
+//  4 │   x.$watch.options(baml.WatchOptions{ when: BadFunction1 });
+//    │                    ───────────────────┬───────────────────
+//    │                                       ╰───────────────────── unresolved type: baml.WatchOptions
+//    │
+//    │ Note: Error code: E0002
 // ───╯
 // error: type `int` has no member `$watch`
 //    ╭─[ expr_watch_when.baml:4:61 ]
 //    │
 //  4 │ ╭─▶   x.$watch.options(baml.WatchOptions{ when: BadFunction1 });
 //  5 │ ├─▶   x.$watch.options(baml.WatchOptions{ when: BadFunction2 });
-//    │ │                                                                  
+//    │ │
 //    │ ╰────────────────────────────────────────────────────────────────── type `int` has no member `$watch`
-//    │     
+//    │
 //    │     Note: Error code: E0007
+// ───╯
+// error: unresolved type: baml.WatchOptions
+//    ╭─[ expr_watch_when.baml:5:20 ]
+//    │
+//  5 │   x.$watch.options(baml.WatchOptions{ when: BadFunction2 });
+//    │                    ───────────────────┬───────────────────
+//    │                                       ╰───────────────────── unresolved type: baml.WatchOptions
+//    │
+//    │ Note: Error code: E0002
 // ───╯
