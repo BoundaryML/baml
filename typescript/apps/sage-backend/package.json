@@ -15,6 +15,7 @@
     "@boundaryml/baml-nextjs-plugin": "^0.1.0",
     "@notionhq/client": "^4.0.1",
     "@pinecone-database/pinecone": "^6.1.2",
+    "@qdrant/js-client-rest": "^1.18.0",
     "@slack/web-api": "^7.9.3",
     "async-sema": "^3.1.1",
     "cheerio": "^1.1.2",

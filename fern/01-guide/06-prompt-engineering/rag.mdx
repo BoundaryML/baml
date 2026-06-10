@@ -370,4 +370,104 @@ The BAML functions (`RAG` and `RAGWithCitations`) remain exactly the same, demon
 
 When you run this code, you'll get the same type of responses as before, but now you're using a production-ready serverless vector database that can scale automatically based on your usage.
 
+### Using Qdrant as Vector Database
 
+[Qdrant](https://qdrant.tech/) is an open-source vector database you can run locally or in the cloud. Here's how to implement the same RAG pipeline using Qdrant:
+
+First, install the required packages:
+
+```bash
+pip install qdrant-client sentence-transformers
+```
+
+Start a local Qdrant instance with Docker (or use [Qdrant Cloud](https://cloud.qdrant.io/)):
+
+```bash
+docker run -p 6333:6333 qdrant/qdrant
+```
+
+Now, let's modify our Python code to use Qdrant:
+
+```py rag_qdrant.py
+from qdrant_client import QdrantClient
+from qdrant_client.models import Distance, VectorParams, PointStruct
+from sentence_transformers import SentenceTransformer
+from baml_client import b
+
+client = QdrantClient(url="http://localhost:6333")
+# For Qdrant Cloud: QdrantClient(url="YOUR_CLUSTER_URL", api_key="YOUR_API_KEY")
+
+class QdrantStore:
+    def __init__(self, collection_name: str):
+        self.collection_name = collection_name
+        self.encoder = SentenceTransformer('all-MiniLM-L6-v2')
+        dimension = self.encoder.get_sentence_embedding_dimension()
+
+        if not client.collection_exists(collection_name):
+            client.create_collection(
+                collection_name=collection_name,
+                vectors_config=VectorParams(size=dimension, distance=Distance.COSINE),
+            )
+
+    def add_documents(self, documents: list[str], ids: list[int] = None):
+        if ids is None:
+            ids = list(range(len(documents)))
+
+        embeddings = self.encoder.encode(documents)
+
+        points = [
+            PointStruct(id=id, vector=emb.tolist(), payload={"text": doc})
+            for id, emb, doc in zip(ids, embeddings, documents)
+        ]
+        client.upsert(collection_name=self.collection_name, points=points)
+
+    def retrieve_context(self, query: str, k: int = 2) -> str:
+        query_embedding = self.encoder.encode(query).tolist()
+
+        results = client.query_points(
+            collection_name=self.collection_name,
+            query=query_embedding,
+            limit=k,
+            with_payload=True,
+        )
+
+        contexts = [hit.payload["text"] for hit in results.points]
+        return "\n".join(contexts)
+
+if __name__ == "__main__":
+    vector_store = QdrantStore("baml-rag-demo")
+
+    documents = [
+        "SpaceX is an American spacecraft manufacturer and space transportation company founded by Elon Musk in 2002.",
+        "Fiji is a country in the South Pacific known for its rugged landscapes, palm-lined beaches, and coral reefs with clear lagoons.",
+        "Dunkirk is a 2017 war film depicting the Dunkirk evacuation of World War II, featuring intense aerial combat scenes with Spitfire aircraft.",
+        "BoundaryML is the company that makes BAML, the best way to get structured outputs with LLMs."
+    ]
+
+    vector_store.add_documents(documents)
+
+    questions = [
+        "What is BAML?",
+        "Which aircraft was featured in Dunkirk?",
+        "When was SpaceX founded?",
+        "Where is Fiji located?",
+        "What is the capital of Fiji?"
+    ]
+
+    for question in questions:
+        context = vector_store.retrieve_context(question)
+        response = b.RAGWithCitations(question, context)
+        print(response)
+        print("-" * 10)
+```
+
+The key differences when using Qdrant are:
+
+1. Documents are stored in Qdrant's persistent storage (local or cloud) instead of in memory
+2. You can run Qdrant locally with Docker at no cost, making it easy to develop and test without an account
+
+Note that you'll need to:
+1. Start a local Qdrant instance (`docker run -p 6333:6333 qdrant/qdrant`) or [create a free Qdrant Cloud cluster](https://cloud.qdrant.io/)
+2. For cloud usage, replace the `QdrantClient` URL and provide your API key
+
+The BAML functions (`RAG` and `RAGWithCitations`) remain exactly the same — BAML cleanly separates prompt engineering from the choice of vector database.

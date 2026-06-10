@@ -3,42 +3,30 @@
 import type { QueryRequest, QueryResponse } from '@baml/sage-interface';
 import { b } from '../../baml_client';
 import { searchPinecone } from '../../lib/pinecone-api';
+import { searchQdrant } from '../../lib/qdrant-api';
+
+const searchDocs = process.env.VECTOR_DB === 'qdrant' ? searchQdrant : searchPinecone;
 
 export async function submitQuery(request: QueryRequest): Promise<QueryResponse> {
-  const docs = await searchPinecone(request.message.text);
-  const pineconeRankedDocs = docs.map((doc) => ({
-    title: doc.title,
-    url: doc.url,
-    body: doc.body,
-  }));
+  const contextDocs = await searchDocs(request.message.text);
 
   const plan = await b.PlanQuery({
     text: request.message.text,
     language_preference: request.message.language_preference,
-    context_docs: pineconeRankedDocs.map((doc) => ({
-      title: doc.title,
-      body: doc.body,
-    })),
+    context_docs: contextDocs.map(({ title, body }) => ({ title, body })),
     prev_messages: request.prev_messages.map((msg) => {
       if (msg.role === 'assistant') {
-        return {
-          role: 'assistant',
-          text: msg.text ?? '',
-        };
+        return { role: 'assistant', text: msg.text ?? '' };
       }
       return msg;
     }),
   });
 
-  // Merge titles from rankedDocs into plan.ranked_docs
-  const relevantDocs = (plan.ranked_docs ?? []).map((planDoc) => {
-    const matchingRankedDoc = pineconeRankedDocs.find((rd) => rd.title === planDoc.title);
-    return {
-      title: planDoc.title,
-      url: matchingRankedDoc?.url ?? '',
-      relevance: planDoc.relevance,
-    };
-  });
+  const relevantDocs = (plan.ranked_docs ?? []).map((planDoc) => ({
+    title: planDoc.title,
+    url: contextDocs.find((d) => d.title === planDoc.title)?.url ?? '',
+    relevance: planDoc.relevance,
+  }));
 
   return {
     session_id: request.session_id,
