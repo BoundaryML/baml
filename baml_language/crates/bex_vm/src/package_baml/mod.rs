@@ -265,6 +265,7 @@ pub fn attach_builtins(object: Object) -> Result<Object, VmInternalError> {
                 display_param_types: function.display_param_types,
                 display_return_type: function.display_return_type,
                 throws_type: function.throws_type,
+                signature_template: function.signature_template,
                 origin: function.origin,
                 body_meta: function.body_meta,
                 trace: function.trace,

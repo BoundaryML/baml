@@ -372,6 +372,24 @@ impl FunctionOrigin {
     }
 }
 
+/// Template form of a function signature, kept alongside the erased runtime
+/// metadata so the host boundary can substitute explicit type arguments.
+///
+/// `param_types` / `return_type` mirror [`Function::param_types`] /
+/// [`Function::return_type`] but keep generic positions as
+/// `TyTemplate::TypeArgRef(N)` instead of erasing them to `BuiltinUnknown`.
+/// `N` indexes the function's scoped generic params in the same order the
+/// entry frame's `type_args` use: enclosing class/interface/impl params
+/// first, then function-level params (see
+/// `MirLowerer::enclosing_generic_params`).
+#[derive(Clone, Debug, BorshSerialize, BorshDeserialize)]
+pub struct FunctionSignatureTemplate {
+    /// One template per parameter, in declaration order.
+    pub param_types: Vec<baml_type::TyTemplate>,
+    /// Template for the declared return type.
+    pub return_type: baml_type::TyTemplate,
+}
+
 /// Represents any Baml function.
 #[derive(Clone, Debug, BorshSerialize, BorshDeserialize)]
 pub struct Function {
@@ -462,6 +480,13 @@ pub struct Function {
     /// may throw. `None` if the function never throws. Used by the engine to convert
     /// uncaught throw values to `BexExternalValue`.
     pub throws_type: Option<Ty>,
+
+    /// Un-erased signature template for host-boundary type-arg substitution.
+    ///
+    /// `None` when the signature contains no generic positions (the common
+    /// case) or for builtins/synthesized functions; the erased
+    /// `param_types`/`return_type` are then authoritative as-is.
+    pub signature_template: Option<FunctionSignatureTemplate>,
 
     /// Provenance of this function in the compiler/runtime pipeline.
     pub origin: FunctionOrigin,

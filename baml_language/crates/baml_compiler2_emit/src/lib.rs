@@ -623,6 +623,7 @@ pub fn generate_project_bytecode_with_opt(
                         display_param_types: Vec::new(),
                         display_return_type: "null".to_string(),
                         throws_type: None,
+                        signature_template: None,
                         origin: FunctionOrigin::Builtin,
                         body_meta: None,
                         trace: false,
@@ -653,6 +654,7 @@ pub fn generate_project_bytecode_with_opt(
                     display_param_types: Vec::new(),
                     display_return_type: "null".to_string(),
                     throws_type: None,
+                    signature_template: None,
                     origin: FunctionOrigin::Builtin,
                     body_meta: None,
                     trace: false,
@@ -676,6 +678,7 @@ pub fn generate_project_bytecode_with_opt(
             compiled_fn.display_type_params = signature_metadata.display_type_params;
             compiled_fn.display_param_types = signature_metadata.display_param_types;
             compiled_fn.display_return_type = signature_metadata.display_return_type;
+            compiled_fn.signature_template = signature_metadata.signature_template;
 
             // Set inferred throws type from TIR throw inference
             compiled_fn.throws_type = compute_throws_type(db, *file, &func_data.name, cache_pass4);
@@ -894,6 +897,7 @@ pub fn generate_project_bytecode_with_opt(
                 display_param_types: vec!["unknown".to_string()],
                 display_return_type: "null".to_string(),
                 throws_type: None,
+                signature_template: None,
                 origin: FunctionOrigin::Internal,
                 body_meta: None,
                 trace: false,
@@ -1252,6 +1256,9 @@ struct FunctionSignatureMetadata {
     display_type_params: Vec<String>,
     display_param_types: Vec<String>,
     display_return_type: String,
+    /// Un-erased signature template (`TypeArgRef(N)` leaves) when the
+    /// signature mentions generic params; `None` otherwise.
+    signature_template: Option<bex_vm_types::FunctionSignatureTemplate>,
 }
 
 fn type_expr_for_name_with_generic_args(name: Name, generic_params: &[Name]) -> TypeExpr {
@@ -1444,6 +1451,8 @@ fn compute_function_metadata_from_item_tree(
 
     let mut param_types = Vec::with_capacity(func_data.params.len());
     let mut display_param_types = Vec::with_capacity(func_data.params.len());
+    let mut param_templates = Vec::with_capacity(func_data.params.len());
+    let mut signature_has_type_var = false;
     for param in &func_data.params {
         let resolved = if let Some(te) = &param.type_expr {
             Some(resolve_display_tir(&te.expr))
@@ -1455,9 +1464,16 @@ fn compute_function_metadata_from_item_tree(
         if let Some(tir_ty) = resolved {
             display_param_types.push(tir_ty.render_user_facing());
             param_types.push(runtime_from_display_tir(&tir_ty));
+            signature_has_type_var |= contains_tir_type_var(&tir_ty);
+            param_templates.push(baml_compiler2_mir::tir2_to_template(
+                &tir_ty,
+                cache,
+                &scoped_generic_param_names,
+            ));
         } else {
             display_param_types.push("null".to_string());
             param_types.push(null_ty());
+            param_templates.push(baml_type::TyTemplate::Concrete(null_ty()));
         }
     }
 
@@ -1465,14 +1481,35 @@ fn compute_function_metadata_from_item_tree(
         .return_type
         .as_ref()
         .map(|te| resolve_display_tir(&te.expr));
-    let (return_type, display_return_type) = if let Some(tir_ty) = resolved_return_type {
-        (
-            runtime_from_display_tir(&tir_ty),
-            tir_ty.render_user_facing(),
-        )
-    } else {
-        (null_ty(), "null".to_string())
-    };
+    let (return_type, display_return_type, return_template) =
+        if let Some(tir_ty) = resolved_return_type {
+            signature_has_type_var |= contains_tir_type_var(&tir_ty);
+            let template = baml_compiler2_mir::tir2_to_template(
+                &tir_ty,
+                cache,
+                &scoped_generic_param_names,
+            );
+            (
+                runtime_from_display_tir(&tir_ty),
+                tir_ty.render_user_facing(),
+                template,
+            )
+        } else {
+            (
+                null_ty(),
+                "null".to_string(),
+                baml_type::TyTemplate::Concrete(null_ty()),
+            )
+        };
+
+    // Only carry a template when some signature position actually references
+    // a generic parameter — the erased `param_types`/`return_type` are
+    // authoritative otherwise, and most functions stay template-free.
+    let signature_template =
+        signature_has_type_var.then(|| bex_vm_types::FunctionSignatureTemplate {
+            param_types: param_templates,
+            return_type: return_template,
+        });
 
     FunctionSignatureMetadata {
         param_names,
@@ -1482,6 +1519,7 @@ fn compute_function_metadata_from_item_tree(
         display_type_params,
         display_param_types,
         display_return_type,
+        signature_template,
     }
 }
 
@@ -2084,6 +2122,7 @@ fn compile_init_function<'db>(
                     display_param_types: Vec::new(),
                     display_return_type: "null".to_string(),
                     throws_type: None,
+                    signature_template: None,
                     origin: FunctionOrigin::Internal,
                     body_meta: None,
                     trace: false,
@@ -2161,6 +2200,7 @@ fn compile_init_function<'db>(
         display_param_types: Vec::new(),
         display_return_type: "null".to_string(),
         throws_type: None,
+        signature_template: None,
         origin: FunctionOrigin::Internal,
         body_meta: None,
         trace: false,

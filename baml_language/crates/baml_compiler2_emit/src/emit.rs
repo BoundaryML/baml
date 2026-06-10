@@ -997,6 +997,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             display_param_types: Vec::new(),
             display_return_type: "null".to_string(),
             throws_type: None,
+            signature_template: None,
             origin: FunctionOrigin::Internal,
             body_meta: None,
             trace: false,

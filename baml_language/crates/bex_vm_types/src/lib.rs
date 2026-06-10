@@ -33,7 +33,8 @@ pub use task_group::{TaskGroupInner, TaskGroupPermit, TaskGroupTicket};
 pub use types::{
     ArrayContainer, ArrayReadGuard, ArrayWriteGuard, AtomicValueSlot, BoundMethod, Class,
     ClassField, ClientBuildMeta, ClientBuildType, CollectorRef, ConstValue, Enum, EnumVariant,
-    Function, FunctionKind, FunctionMeta, FunctionOrigin, Future, FutureRead, GenericFunction,
+    Function, FunctionKind, FunctionMeta, FunctionOrigin, FunctionSignatureTemplate, Future,
+    FutureRead, GenericFunction,
     HostClosure, Instance, LockedContainer, LockedReadGuard, LockedWriteGuard, MapContainer,
     MapReadGuard, MapWriteGuard, MediaValue, Object, ObjectType, PanicClass, Program, PromptAst,
     RetryPolicyMeta, SysOp, SysOpErrorCategory, SysOpPanicCategory, TestArgValue, TestCase,

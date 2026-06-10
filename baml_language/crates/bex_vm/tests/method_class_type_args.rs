@@ -61,6 +61,7 @@ fn inject_function(
         display_param_types: vec![],
         display_return_type: "int".to_string(),
         throws_type: None,
+        signature_template: None,
         origin: FunctionOrigin::UserDefined,
         body_meta: None,
         trace: false,

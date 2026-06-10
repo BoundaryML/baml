@@ -1435,12 +1435,14 @@ impl BexEngine {
             });
         }
         self.validate_bound_args(function_name, &args)?;
-        let return_type = self
-            .function_return_type(function_name)
-            .unwrap_or(Ty::Null {
-                attr: baml_type::TyAttr::default(),
-            });
-        let throws_type = self.function_throws_type(function_name);
+
+        // Boundary-facing signature: with explicit type args and a stored
+        // signature template, TypeVar positions are substituted so they
+        // behave exactly like concrete declarations (BEP-039 / bridge
+        // generics). Without type args, the erased metadata (TypeVar →
+        // `BuiltinUnknown`) is used unchanged.
+        let (param_types, return_type, throws_type) =
+            self.boundary_signature(function_name, &type_args)?;
 
         // Type-directed coercion for each provided arg: lets host SDKs send
         // `int(42)` to a `bigint` slot (and vice versa) without re-encoding,
@@ -1448,11 +1450,6 @@ impl BexEngine {
         // `Map`/`Instance`/`Variant` values. Idempotent for already-matching
         // values, so callers that already coerced (e.g. `BexProject::Bex`
         // kwargs entry) aren't double-charged.
-        let param_types: Vec<Ty> = self
-            .function_params(function_name)?
-            .into_iter()
-            .map(|(_, ty, _)| ty.clone())
-            .collect();
         let args: Vec<BexCallArg> = args
             .into_iter()
             .enumerate()
@@ -1484,16 +1481,11 @@ impl BexEngine {
             })
             .collect();
 
-        // Snapshot the declared parameter types so we can thread the
-        // expected `Ty` into per-arg conversion. Binding a `HostValue` to an
+        // The declared parameter types also thread the expected `Ty` into
+        // per-arg conversion. Binding a `HostValue` to an
         // `Object::HostClosure` needs it: the closure carries the declared
         // `Ty::Function`'s arity and return type, extracted from the parameter
         // type.
-        let param_types: Vec<Ty> = self
-            .function_params(function_name)?
-            .into_iter()
-            .map(|(_, ty, _)| ty.clone())
-            .collect();
         let vm_args: Vec<Value> = args
             .into_iter()
             .enumerate()
@@ -1933,18 +1925,6 @@ impl BexEngine {
         }
     }
 
-    /// Get the inferred throws type for a function by dereferencing its heap object.
-    fn function_throws_type(&self, name: &str) -> Option<Ty> {
-        let resolved = self.resolve_function_name(name)?;
-        let (ptr, _kind) = self.resolved_function_names.get(resolved)?;
-        // SAFETY: ptr is from resolved_function_names, a compile-time object
-        let obj = unsafe { ptr.get() };
-        match obj {
-            Object::Function(func) => func.throws_type.clone(),
-            _ => None,
-        }
-    }
-
     /// All class field schemas known to the engine, keyed by `TypeName`.
     ///
     /// Used by callers that walk a `Ty` tree and need to resolve nested
@@ -1997,6 +1977,61 @@ impl BexEngine {
     /// Check if a function exists by name (tries exact then "user." prefix).
     pub fn function_exists(&self, name: &str) -> bool {
         self.resolve_function_name(name).is_some()
+    }
+
+    /// Boundary-facing `(param_types, return_type, throws_type)` for a host
+    /// call.
+    ///
+    /// When the host supplies explicit `type_args` and the function carries a
+    /// `signature_template`, each `TypeArgRef(N)` position is substituted
+    /// with `type_args[N]` (missing indices fall back to `unknown`, matching
+    /// the frame-side default). The substituted types then drive inbound
+    /// coercion and return validation exactly as if the signature had been
+    /// declared with those concrete types.
+    ///
+    /// Without explicit type args — or for functions whose signatures have no
+    /// generic positions — the erased runtime metadata (TypeVar →
+    /// `BuiltinUnknown`) is returned unchanged, preserving the permissive
+    /// "unbound generics accept anything" boundary semantics.
+    fn boundary_signature(
+        &self,
+        name: &str,
+        type_args: &[Ty],
+    ) -> Result<(Vec<Ty>, Ty, Option<Ty>), EngineError> {
+        let resolved = self
+            .resolve_function_name(name)
+            .ok_or(EngineError::FunctionNotFound {
+                name: name.to_string(),
+            })?;
+        let (ptr, _kind) =
+            self.resolved_function_names
+                .get(resolved)
+                .ok_or(EngineError::FunctionNotFound {
+                    name: name.to_string(),
+                })?;
+        // SAFETY: ptr is from resolved_function_names, a compile-time object
+        let obj = unsafe { ptr.get() };
+        let Object::Function(func) = obj else {
+            return Err(EngineError::TypeMismatch {
+                message: format!("Expected Function, got {obj:?}"),
+            });
+        };
+        if !type_args.is_empty()
+            && let Some(template) = &func.signature_template
+        {
+            let param_types = template
+                .param_types
+                .iter()
+                .map(|t| t.substitute(type_args))
+                .collect();
+            let return_type = template.return_type.substitute(type_args);
+            return Ok((param_types, return_type, func.throws_type.clone()));
+        }
+        Ok((
+            func.param_types.clone(),
+            func.return_type.clone(),
+            func.throws_type.clone(),
+        ))
     }
 
     /// Replace the process argv exposed to BAML via `baml.sys.argv()`.
