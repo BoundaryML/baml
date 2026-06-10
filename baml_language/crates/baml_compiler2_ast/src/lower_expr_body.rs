@@ -2803,7 +2803,6 @@ impl LoweringContext {
         let mut fields = Vec::new();
         let mut spreads = Vec::new();
         let mut position = 0;
-        let mut type_name = None;
         let mut type_args: Vec<TypeExpr> = vec![];
         let mut type_path_segments: Vec<Name> = vec![];
 
@@ -2828,9 +2827,10 @@ impl LoweringContext {
                 }
             }
         }
-        if !type_path_segments.is_empty() {
-            type_name = Some(TypePath::new(type_path_segments));
-        }
+        debug_assert!(!type_path_segments.is_empty());
+        // The parser only emits an object literal when a type name precedes the
+        // brace, so the segments are always present.
+        let type_name = TypePath::new(type_path_segments);
 
         // Object fields are child nodes after L_BRACE
         // They come as key-value pairs: WORD COLON expr or SPREAD expr

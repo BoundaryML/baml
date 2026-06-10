@@ -1156,17 +1156,7 @@ fn render_expr_compact_ast(body: &ast::ExprBody, id: ast::ExprId) -> String {
             }
             out
         }
-        ast::Expr::Object {
-            type_name, fields, ..
-        } => {
-            if let Some(name) = type_name {
-                format!("{name} {{ ... }}")
-            } else if fields.is_empty() {
-                "{ }".to_string()
-            } else {
-                "{ ... }".to_string()
-            }
-        }
+        ast::Expr::Object { type_name, .. } => format!("{type_name} {{ ... }}"),
         ast::Expr::Array { elements } => {
             if elements.is_empty() {
                 "[]".to_string()
@@ -1811,7 +1801,7 @@ mod tests {
         let body = make_ast_body(|exprs, stmts, _, _| {
             let field_val = exprs.alloc(ast::Expr::Literal(ast::Literal::Bool(true)));
             let obj = exprs.alloc(ast::Expr::Object {
-                type_name: Some(TypePath::bare("MyResponse".into())),
+                type_name: TypePath::bare("MyResponse".into()),
                 type_args: vec![],
                 fields: vec![("ok".into(), field_val)],
                 spreads: vec![],
@@ -1977,7 +1967,7 @@ mod tests {
         let body = make_ast_body(|exprs, stmts, _, _| {
             let cond = exprs.alloc(ast::Expr::Literal(ast::Literal::Bool(true)));
             let obj_true = exprs.alloc(ast::Expr::Object {
-                type_name: Some(TypePath::bare("Result".into())),
+                type_name: TypePath::bare("Result".into()),
                 type_args: vec![],
                 fields: vec![],
                 spreads: vec![],
@@ -1990,7 +1980,7 @@ mod tests {
 
             let err_val = exprs.alloc(ast::Expr::Literal(ast::Literal::Bool(false)));
             let obj_false = exprs.alloc(ast::Expr::Object {
-                type_name: Some(TypePath::bare("Result".into())),
+                type_name: TypePath::bare("Result".into()),
                 type_args: vec![],
                 fields: vec![("err".into(), err_val)],
                 spreads: vec![],
@@ -2030,7 +2020,7 @@ mod tests {
 
         let field_val = exprs.alloc(ast::Expr::Literal(ast::Literal::Bool(true)));
         let obj = exprs.alloc(ast::Expr::Object {
-            type_name: Some(TypePath::bare("Resp".into())),
+            type_name: TypePath::bare("Resp".into()),
             type_args: vec![],
             fields: vec![("ok".into(), field_val)],
             spreads: vec![],

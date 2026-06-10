@@ -4021,7 +4021,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 fields,
                 spreads,
                 ..
-            } if Self::is_map_object_literal(type_name.as_ref(), obj_type_args, spreads) => {
+            } if Self::is_map_object_literal(type_name, obj_type_args, spreads) => {
                 self.infer_map_object_expr(body, fields)
             }
             Expr::Object {
@@ -4029,7 +4029,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 type_args: obj_type_args,
                 fields,
                 ..
-            } => self.infer_object_expr(expr_id, body, type_name.as_ref(), obj_type_args, fields),
+            } => self.infer_object_expr(expr_id, body, type_name, obj_type_args, fields),
             Expr::Index { base, index } => self.infer_index_expr(expr_id, body, *base, *index),
             Expr::OptionalIndex { base, index } => {
                 self.infer_optional_index_expr(expr_id, body, *base, *index)
@@ -4742,34 +4742,51 @@ impl<'db> TypeInferenceBuilder<'db> {
         ty
     }
 
+    /// `map {}` parses as an object literal named by the reserved `map` keyword
+    /// (the keyword form lets an *empty* map be written where a bare `{}` would
+    /// read as an empty block). Non-empty maps parse as `Expr::Map`, so an
+    /// object literal named `map` is recognized here and routed to map — not
+    /// class — inference rather than a construction of a non-existent class.
     fn is_map_object_literal(
-        type_name: Option<&baml_base::core_types::TypePath>,
+        type_name: &baml_base::core_types::TypePath,
         obj_type_args: &[TypeExpr],
         spreads: &[ast::SpreadField],
     ) -> bool {
         obj_type_args.is_empty()
             && spreads.is_empty()
-            && matches!(
-                type_name.map(baml_base::TypePath::segments),
-                Some([name]) if name.as_str() == "map"
-            )
+            && matches!(type_name.segments(), [name] if name.as_str() == "map")
+    }
+
+    /// The type of an empty map literal: an `EvolvingMap` over `never`. An empty
+    /// map has no entries to fix its key/value types, so — like the empty array
+    /// `[]` — it evolves to fit its use (annotation or later mutation) rather
+    /// than committing to the unsound `map<never, never>`: generics are
+    /// invariant, so `map<never, never>` is a subtype of no other map type.
+    fn empty_evolving_map() -> Ty {
+        Ty::EvolvingMap(
+            Box::new(Ty::Never {
+                attr: TyAttr::default(),
+            }),
+            Box::new(Ty::Never {
+                attr: TyAttr::default(),
+            }),
+            TyAttr::default(),
+        )
     }
 
     fn infer_map_object_expr(&mut self, body: &ExprBody, fields: &[(Name, ExprId)]) -> Ty {
-        let key_ty = if fields.is_empty() {
-            Ty::Never {
-                attr: TyAttr::default(),
-            }
-        } else {
-            Ty::string()
-        };
+        // An empty map literal evolves to fit its use rather than committing to
+        // the unsound `map<never, never>` (see `empty_evolving_map`).
+        if fields.is_empty() {
+            return Self::empty_evolving_map();
+        }
         let val_types: Vec<Ty> = fields
             .iter()
             .map(|(_, value)| self.infer_expr(*value, body))
             .collect();
         let val_ty = Self::join_all(&val_types).widen_fresh();
         Ty::Map {
-            key: Box::new(key_ty),
+            key: Box::new(Ty::string()),
             value: Box::new(val_ty),
             attr: TyAttr::default(),
         }
@@ -4829,15 +4846,19 @@ impl<'db> TypeInferenceBuilder<'db> {
         &mut self,
         expr_id: ExprId,
         body: &ExprBody,
-        type_name: Option<&baml_base::core_types::TypePath>,
+        type_name: &baml_base::core_types::TypePath,
         obj_type_args: &[TypeExpr],
         fields: &[(Name, ExprId)],
     ) -> Ty {
-        let ty = type_name
-            .map(|path| self.lower_object_type_name(expr_id, path, obj_type_args))
-            .unwrap_or(Ty::Unknown {
-                attr: TyAttr::default(),
-            });
+        // Class-instance literals only: map literals (`map { .. }`) are routed
+        // to `infer_map_object_expr` by the `is_map_object_literal` guard in the
+        // `Expr::Object` arm before reaching here. The parser only emits an
+        // object literal when a type name precedes the brace, so the name is
+        // always present, and `lower_object_type_name` surfaces any
+        // type-resolution diagnostics (undefined class, wrong arg count, …) as
+        // user-visible compiler errors rather than a silently-discarded
+        // `Unknown` that later erases to `Void` or trips the runtime boundary.
+        let ty = self.lower_object_type_name(expr_id, type_name, obj_type_args);
         let ty = match ty {
             Ty::Class(class_name, type_args, attr) => {
                 if type_args.is_empty()
@@ -4950,16 +4971,17 @@ impl<'db> TypeInferenceBuilder<'db> {
         expr_id: ExprId,
         body: &ExprBody,
         expected: &Ty,
-        type_name: Option<&baml_base::core_types::TypePath>,
+        type_name: &baml_base::core_types::TypePath,
         obj_type_args: &[TypeExpr],
     ) -> Option<Ty> {
         // BEP-044 wf3 #G15: when the literal explicitly names a concrete
         // class that differs from the expected class, it must be a subtype.
         // Keep this out of `check_expr` proper so its temporary lowering
         // state doesn't bloat every recursive checking frame in debug builds.
-        let (Ty::Class(expected_qtn, _, _), Some(path)) = (expected, type_name) else {
+        let Ty::Class(expected_qtn, _, _) = expected else {
             return None;
         };
+        let path = type_name;
 
         let lit_ty = self.lower_object_type_name(expr_id, path, obj_type_args);
         if let Ty::Class(lit_qtn, _, _) = &lit_ty
@@ -4991,9 +5013,13 @@ impl<'db> TypeInferenceBuilder<'db> {
         body: &ExprBody,
         expected: &Ty,
         fields: &[(Name, ExprId)],
-        type_name: Option<&baml_base::core_types::TypePath>,
+        type_name: &baml_base::core_types::TypePath,
         obj_type_args: &[TypeExpr],
     ) -> Ty {
+        // Class-instance literals only: map literals (`map { .. }`) are routed
+        // to `check_map_object_expr` by the `is_map_object_literal` guard in the
+        // `Expr::Object` arm of `check_expr` before reaching here — including the
+        // empty `map {}`, which bidirectionally adopts the expected map type.
         if let Some(inferred) = self.check_object_literal_declared_class_mismatch(
             expr_id,
             body,
@@ -5582,7 +5608,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 type_args,
                 spreads,
                 ..
-            } if Self::is_map_object_literal(type_name.as_ref(), type_args, spreads) => {
+            } if Self::is_map_object_literal(type_name, type_args, spreads) => {
                 self.check_map_object_expr(expr_id, body, expected, fields)
             }
             Expr::Object {
@@ -5590,14 +5616,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 type_name,
                 type_args,
                 ..
-            } => self.check_object_expr(
-                expr_id,
-                body,
-                expected,
-                fields,
-                type_name.as_ref(),
-                type_args,
-            ),
+            } => self.check_object_expr(expr_id, body, expected, fields, type_name, type_args),
             Expr::Map { entries } => {
                 let kv = match expected {
                     Ty::Map {
@@ -8580,6 +8599,44 @@ impl<'db> TypeInferenceBuilder<'db> {
                         ),
                         throws: Box::new(crate::callable::callable_throws(db, func_loc).clone()),
                         attr: TyAttr::default(),
+                    }
+                }
+                // A top-level `let` value reference — including the synthetic
+                // binding that a `client<llm> ...` declaration lowers to — has
+                // the type of its inferred initializer. Resolve it through the
+                // let's own scope inference so the reference doesn't fall through
+                // to `Ty::Unknown` (which would trip the runtime lowering
+                // boundary when the value is used, e.g. a client passed to
+                // `stream_llm_function`).
+                Definition::Let(let_loc) => {
+                    let db = self.context.db();
+                    let file = let_loc.file(db);
+                    let item_tree = baml_compiler2_ppir::file_item_tree(db, file);
+                    let let_data = &item_tree[let_loc.id(db)];
+                    let index = baml_compiler2_ppir::file_semantic_index(db, file);
+                    let fsi = index.scope_at_offset(let_data.span.start(), Some(&let_data.name));
+                    let scope_id = index.scope_ids[fsi.index() as usize];
+                    let inference = crate::inference::infer_scope_types(db, scope_id);
+                    let body = baml_compiler2_hir::body::let_body(db, let_loc);
+                    if let baml_compiler2_hir::body::LetBody::Expr(expr_body) = body.as_ref()
+                        && let Some(root) = expr_body.root_expr
+                        && let Some(ty) = inference.expression_type(root)
+                    {
+                        // Freeze evolving empties the same way a local reference
+                        // does — a referenced binding is no longer open.
+                        match ty {
+                            Ty::EvolvingList(inner, attr) => Ty::List(inner.clone(), attr.clone()),
+                            Ty::EvolvingMap(k, v, attr) => Ty::Map {
+                                key: k.clone(),
+                                value: v.clone(),
+                                attr: attr.clone(),
+                            },
+                            other => other.clone(),
+                        }
+                    } else {
+                        Ty::Unknown {
+                            attr: TyAttr::default(),
+                        }
                     }
                 }
                 _ => Ty::Unknown {

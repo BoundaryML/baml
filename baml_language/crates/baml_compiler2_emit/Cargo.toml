@@ -24,4 +24,5 @@ baml_workspace = { workspace = true }
 bex_vm_types = { workspace = true }
 indexmap = { workspace = true }
 log = { workspace = true }
+rustc-hash = { workspace = true }
 salsa = { workspace = true }

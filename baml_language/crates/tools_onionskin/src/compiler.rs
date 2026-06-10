@@ -518,10 +518,7 @@ fn expr_desc_spans<'db>(
         Expr::Object {
             type_name, fields, ..
         } => {
-            let tn = type_name
-                .as_ref()
-                .map(ToString::to_string)
-                .unwrap_or_else(|| "_".to_string());
+            let tn = type_name.to_string();
             spans.push(DetailSpan::Code(format!("{tn} {{ ")));
             for (i, (name, val)) in fields.iter().enumerate() {
                 if i > 0 {
@@ -2086,10 +2083,7 @@ impl CompilerRunner {
                 Expr::Object {
                     type_name, fields, ..
                 } => {
-                    let tn = type_name
-                        .as_ref()
-                        .map(ToString::to_string)
-                        .unwrap_or_else(|| "_".to_string());
+                    let tn = type_name.to_string();
                     format!("{tn} {{ {} fields }}", fields.len())
                 }
                 Expr::Array { elements } => format!("[{} items]", elements.len()),

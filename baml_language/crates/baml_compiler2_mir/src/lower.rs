@@ -4502,14 +4502,7 @@ impl LoweringContext<'_> {
                 spreads,
                 ..
             } => {
-                self.lower_object(
-                    expr_id,
-                    type_name.as_ref(),
-                    &type_args,
-                    &fields,
-                    &spreads,
-                    dest,
-                );
+                self.lower_object(expr_id, &type_name, &type_args, &fields, &spreads, dest);
             }
 
             AstExpr::MemberAccess { base, member } => {
@@ -7628,7 +7621,7 @@ impl<'db> LoweringContext<'db> {
     fn lower_object(
         &mut self,
         expr_id: AstExprId,
-        type_name: Option<&TypePath>,
+        type_name: &TypePath,
         type_args: &[AstTypeExpr],
         fields: &[(Name, AstExprId)],
         spreads: &[baml_compiler2_ast::SpreadField],
@@ -7656,7 +7649,7 @@ impl<'db> LoweringContext<'db> {
         let class_name = if let Some(tn) = &type_name_key {
             tn.render_dotted(false)
         } else {
-            type_name.map(ToString::to_string).unwrap_or_default()
+            type_name.to_string()
         };
         let field_slot_count = |field_name_to_idx: &IndexMap<String, usize>| {
             field_name_to_idx

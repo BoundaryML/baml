@@ -370,8 +370,7 @@ fn throw_fact_from_expr<'db>(
                 attr: TyAttr::default(),
             }),
         Expr::Object {
-            type_name: Some(path),
-            ..
+            type_name: path, ..
         } => resolve_path_to_ty(db, pkg_items, ns_context, path.segments()),
         _ => Ty::Unknown {
             attr: TyAttr::default(),

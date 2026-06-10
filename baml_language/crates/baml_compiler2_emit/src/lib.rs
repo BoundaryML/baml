@@ -1333,8 +1333,70 @@ fn compute_function_metadata_from_item_tree(
     };
     let enclosing_generics = scoped_generic_param_names.clone();
 
+    // A method declared inside an interface resolves its associated types
+    // (`Item`/`Error`) and `Self` against the rigid `Self` type variable, the
+    // same way the method body does (`infer_scope_types`). Build those bindings
+    // once so the signature keeps associated-type references as faithful
+    // `Self.<name>` projections; a bare `lower_type_expr_in_ns` would erase each
+    // one to `Ty::Unknown`, which then trips the runtime lowering boundary.
+    // Empty for non-interface methods (the `self_replacement` path below
+    // handles class/impl receivers).
+    let interface_signature_bindings: rustc_hash::FxHashMap<Name, baml_compiler2_tir::ty::Ty> =
+        match enclosing_interface.and_then(|iface_data| {
+            item_tree
+                .interfaces
+                .iter()
+                .find(|(_, data)| data.default_methods.contains(&func_id))
+                .map(|(iface_id, _)| {
+                    (
+                        baml_compiler2_hir::loc::InterfaceLoc::new(db, file, *iface_id),
+                        iface_data,
+                    )
+                })
+        }) {
+            Some((iface_loc, iface_data)) => {
+                let mut bindings: rustc_hash::FxHashMap<Name, baml_compiler2_tir::ty::Ty> =
+                    enclosing_generics
+                        .iter()
+                        .map(|p| {
+                            (
+                                p.clone(),
+                                baml_compiler2_tir::ty::Ty::TypeVar(
+                                    p.clone(),
+                                    baml_type::TyAttr::default(),
+                                ),
+                            )
+                        })
+                        .collect();
+                bindings.extend(
+                    baml_compiler2_tir::inference::interface_self_projection_bindings(
+                        db,
+                        iface_loc,
+                        iface_data,
+                        pkg_items,
+                        &pkg_info.namespace_path,
+                    ),
+                );
+                bindings
+            }
+            None => rustc_hash::FxHashMap::default(),
+        };
+
     let lower_tir_type = |te: &TypeExpr| -> baml_compiler2_tir::ty::Ty {
         let mut diags = Vec::new();
+        if enclosing_interface.is_some() {
+            // Interface method: lower with the `Self`/associated-type bindings so
+            // `Item`/`Error`/`Self` resolve to projections and type variables
+            // rather than `Ty::Unknown`.
+            return baml_compiler2_tir::generics::lower_type_expr_with_generics(
+                db,
+                te,
+                pkg_items,
+                &pkg_info.namespace_path,
+                &interface_signature_bindings,
+                &mut diags,
+            );
+        }
         // Use `lower_type_expr_in_ns` so unqualified references (e.g. `MyLorem`
         // in a function signature under `ns_lorem/`) resolve against the
         // defining file's namespace before falling back to the package root.

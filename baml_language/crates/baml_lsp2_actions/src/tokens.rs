@@ -736,22 +736,20 @@ fn build_resolution_map(
                 let span_text = &file_text[span_start..span_end];
 
                 // Classify the constructor type name.
-                if let Some(path) = type_name {
-                    let name_str = path.to_string();
-                    if let Some(offset) = span_text.find(&name_str) {
-                        let name_start = span_start + offset;
-                        let name_end = name_start + name_str.len();
-                        let name_range = TextRange::new(
-                            name_start.try_into().unwrap_or_default(),
-                            name_end.try_into().unwrap_or_default(),
-                        );
-                        // Use the expression type if available.
-                        let token_type = inference
-                            .expression_type(expr_id)
-                            .and_then(ty_to_token_type)
-                            .unwrap_or(SemanticTokenType::Class);
-                        map.insert(name_range, token_type);
-                    }
+                let name_str = type_name.to_string();
+                if let Some(offset) = span_text.find(&name_str) {
+                    let name_start = span_start + offset;
+                    let name_end = name_start + name_str.len();
+                    let name_range = TextRange::new(
+                        name_start.try_into().unwrap_or_default(),
+                        name_end.try_into().unwrap_or_default(),
+                    );
+                    // Use the expression type if available.
+                    let token_type = inference
+                        .expression_type(expr_id)
+                        .and_then(ty_to_token_type)
+                        .unwrap_or(SemanticTokenType::Class);
+                    map.insert(name_range, token_type);
                 }
 
                 // Classify field names as Property.
