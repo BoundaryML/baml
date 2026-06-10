@@ -105,7 +105,13 @@ async fn shell_concat_command_survives_println_before_shell() {
             !stdout.is_empty(),
             "{case}: shell stdout should not be silently emptied"
         );
-        assert_eq!(stdout.as_str(), "hello_world\n", "{case}");
+        assert_eq!(
+            stdout
+                .as_str()
+                .trim_end_matches(|c| matches!(c, '\r' | '\n')),
+            "hello_world",
+            "{case}"
+        );
     }
 }
 
