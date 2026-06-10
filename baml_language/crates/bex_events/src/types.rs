@@ -27,7 +27,7 @@ pub enum EventKind {
     Function(FunctionEvent),
     /// Metadata/tag updates on the current span.
     SetTags(TraceTags),
-    /// A structured log event emitted via `log.info()`, `log.debug()`, etc.
+    /// A log event emitted via `log.info()`, `log.debug()`, etc.
     Log(LogEvent),
     /// A custom user-defined event emitted via `baml.events.send()`.
     Custom(CustomEvent),
@@ -53,7 +53,7 @@ pub struct SourceLocation {
 pub struct LogEvent {
     /// Log level: "info", "debug", "warn", "error"
     pub level: String,
-    /// Structured data
+    /// Logged value; maps represent structured fields, other values are preserved directly.
     pub data: BexExternalValue,
     /// Source location where the log was called (if available).
     pub source: Option<SourceLocation>,

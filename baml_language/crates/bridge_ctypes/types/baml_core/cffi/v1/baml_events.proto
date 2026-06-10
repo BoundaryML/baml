@@ -60,7 +60,7 @@ message SourceLocation {
   uint32 end_offset = 5;
 }
 
-/// A structured log event emitted via `log.info()`, `log.debug()`, etc.
+/// A log event emitted via `log.info()`, `log.debug()`, etc.
 message LogEvent {
   string level = 1;
   BamlOutboundValue data = 2;

@@ -1458,9 +1458,9 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                         self.emit(Instruction::Pop(1));
                     }
                     IntrinsicOp::Log(level) => {
-                        // Same bytecode as the old log.* string-match arm:
-                        // Synthesize SendEvent with "$baml_log" event name and
-                        // { level: "<level>", data: <user_arg> } payload.
+                        // Emit the reserved "$baml_log" event with payload
+                        // { level: "<level>", data: <user_arg> }, where
+                        // <user_arg> may be any BAML value.
 
                         // Save call-site span — walking args may overwrite current_debug_span
                         let call_site_span = self.current_debug_span;

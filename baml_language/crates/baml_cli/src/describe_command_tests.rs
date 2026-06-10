@@ -434,6 +434,13 @@ fn render_describe_builtin_deep_copy() {
     insta::assert_snapshot!(output);
 }
 
+#[test]
+fn render_describe_log_info_builtin() {
+    let db = simple_project();
+    let output = describe_via_dispatch(&db, "log.info");
+    insta::assert_snapshot!(output);
+}
+
 /// Describe a builtin item via describe_by_definition (baml.String).
 #[test]
 fn render_describe_builtin_item_by_definition() {
